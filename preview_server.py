@@ -5,7 +5,7 @@ sys.path.insert(0, '/config')
 from build_lovelace import (
     render_server_grid, render_expandable_detail, render_farming_table, render_tab_html,
     SERVER_GRID_CSS, EXPANDABLE_DETAIL_CSS, FARMING_TABLE_CSS, SHARED_CSS,
-    CARD_CORE_CSS, TABLE_CORE_CSS, BASE_RAW_CSS
+    CARD_CORE_CSS, TABLE_CORE_CSS, BASE_RAW_CSS, strip_and_append_empty_rows
 )
 
 DATA_DIR = '/config/www/asa-data'
@@ -200,11 +200,11 @@ def main():
                             icon = '<img src=\"'+row.get('device_icon_url','')+'\" alt=\"'+row.get('device_name','')+'\" />' if row.get('device_icon_url') else ''
                             rows_html.append('<tr><td class=\"border border-gray-300 p-2 text-left align-top\"><div class=\"device-container\"><div class=\"materials-box\"><span class=\"bio-capacity-tag-bottom\">'+cap+'</span><div class=\"materials-box-inner\"><div class=\"device-icon-wrapper\">'+icon+'</div></div></div></div></td><td class=\"border border-gray-300 p-2 text-left align-top\" colspan=\"2\"></td></tr>')
                         body_parts.append('<table id=\"base-table\" class=\"table-fixed border-collapse w-full min-w-max\"><thead><tr><th class=\"border border-gray-300 p-2\">设备</th><th class=\"border border-gray-300 p-2\" colspan=\"2\">存储</th></tr></thead><tbody>'+''.join(rows_html)+'</tbody></table>')
-                sec_html_list.append('<div id="{}-body" class="accordion-body{}">{}</div>'.format(sid, collapsed, '\n'.join(body_parts)))
+                sec_html_list.append('<div id="{}-body" class="accordion-body borderr-none{}">{}</div>'.format(sid, collapsed, '\n'.join(body_parts)))
             parts.extend(sec_html_list)
-            html = '\n'.join(parts)
+            html = strip_and_append_empty_rows('\n'.join(parts))
         else:
-            html = tab.get('html', '<p>暂无数据</p>')
+            html = strip_and_append_empty_rows(tab.get('html', '<p>暂无数据</p>'))
         css = CARD_CORE_CSS + BASE_RAW_CSS
     elif ttype == 'reference_table':
         html = render_tab_html(tab)
