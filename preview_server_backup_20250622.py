@@ -376,11 +376,6 @@ def main():
 </head><body style="background:var(--lovelace-background,var(--primary-background-color));color:var(--primary-text-color);padding:10px;margin:0">
 <ha-card>%s</ha-card>
 <script>
-// Apply theme from URL param on load (for new window opens)
-(function(){
-  var m = new URLSearchParams(location.search).get('theme');
-  if (m) document.documentElement.setAttribute('data-theme', m);
-})();
 // Listen for theme changes from parent (asa-admin.html)
 window.addEventListener('message', function(e) {
   if (e.data && e.data.type === 'set-theme') {
