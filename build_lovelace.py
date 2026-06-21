@@ -231,7 +231,6 @@ BASE_RAW_CSS = """/* Theme variables removed; using direct values below */ ha-ca
 } #base-table tbody td:has(.device-container) {
   width: 0% !important;
   min-width: 60px !important;
-  text-align: center !important;
 } #base-table thead th:nth-child(n+2), #base-table tbody td:nth-child(n+2) {
   min-width: 0 !important;
   white-space: normal !important;
@@ -1043,9 +1042,8 @@ BASE_RAW_CSS = """/* Theme variables removed; using direct values below */ ha-ca
   background-color: var(--primary-background-color, #f5f5f5) !important;
 }
 /* borderr-none表的第一列居中对齐 */ ha-card .borderr-none tbody > tr > td:has(.device-container) {
-  text-align: center !important;
   vertical-align: middle !important;
-} ha-card .borderr-none tbody > tr > td:has(.device-container) > div {
+} ha-card .borderr-none tbody > tr > td:has(.device-container) > div.device-container {
   justify-content: center !important;
   align-items: center !important;
   height: 100% !important;
@@ -1065,6 +1063,8 @@ BASE_RAW_CSS = """/* Theme variables removed; using direct values below */ ha-ca
   right: 0 !important;
 } ha-card .borderr-none table:not(:has(> thead th[colspan="3"])) tbody > tr > td:first-child:has(.materials-box-inner-vertical) .materials-box {
   height: calc(100% - 16px) !important;
+} .borderr-none table:not(:has(> thead th[colspan="3"])) tbody > tr > td:first-child:has(.materials-box-inner-vertical) .materials-box {
+  height: calc(100% - 16px) !important;
 }
 /* 存储表（有colspan="3"的表）的纵向框规则 */ /* 存储表第一列纵向框：撑满高度 */ ha-card .borderr-none table:has(> thead th[colspan="3"]) tbody > tr > td:has(.device-container) {
   vertical-align: stretch !important;
@@ -1082,13 +1082,16 @@ BASE_RAW_CSS = """/* Theme variables removed; using direct values below */ ha-ca
   right: 0 !important;
 } ha-card .borderr-none table:has(> thead th[colspan="3"]) tbody > tr > td:first-child:has(.materials-box-inner-vertical) .materials-box {
   height: calc(100% - 16px) !important;
+} .borderr-none table:has(> thead th[colspan="3"]) tbody > tr > td:first-child:has(.materials-box-inner-vertical) .materials-box {
+  height: calc(100% - 16px) !important;
 } /* 空行样式 */ ha-card tr.empty-row {
   height: var(--ha-card-border-radius, 12px) !important;
-
-} ha-card tr.empty-row > td {
+} ha-card .borderr-none tbody tr.empty-row > td {
   padding: 0 !important;
   border: none !important;
   background-color: var(--primary-background-color, #f5f5f5) !important;
+  border-bottom-left-radius: var(--ha-card-border-radius, 12px) !important;
+  border-bottom-right-radius: var(--ha-card-border-radius, 12px) !important;
 }
 @supports (-webkit-touch-callout: none) {
 
@@ -1931,6 +1934,17 @@ def render_server_rules(data):
     parts.append('</div>')
     return '\n'.join(parts)
 
+def strip_and_append_empty_rows(html):
+    """Remove all existing empty-row tr elements, then append one before the LAST </tbody> only."""
+    import re
+    # Strip all existing empty-row tr elements
+    html = re.sub(r'<tr\s+class="empty-row"\s*>\s*<td>\s*</td>\s*</tr>', '', html)
+    # Append empty-row before the LAST </tbody> only
+    last_tbody = html.rfind('</tbody>')
+    if last_tbody != -1:
+        html = html[:last_tbody] + '<tr class="empty-row"><td></td></tr>' + html[last_tbody:]
+    return html
+
 def render_tab_html(tab):
     """Render a single tab's content to HTML."""
     ttype = tab.get('type',''); parts = []
@@ -2258,7 +2272,7 @@ def render_tab_html(tab):
     elif ttype == 'raw_html':
         parts.append(tab.get('html',''))
     parts.append('</div>')
-    return '\n'.join(parts)
+    return strip_and_append_empty_rows('\n'.join(parts))
 
 
 def render_server_grid(tab):
@@ -2840,7 +2854,7 @@ if __name__ == "__main__":
         for i, sec in enumerate(sections):
             sid = 'section-' + str(i)
             collapsed = '' if i == 0 else ' collapsed'
-            parts.append(f'<div id="{sid}-body" class="accordion-body{collapsed}">{sec.get("html","")}</div>')
+            parts.append(f'<div id="{sid}-body" class="accordion-body borderr-none{collapsed}">{sec.get("html","")}</div>')
         return '\n'.join(parts)
 
     yl_html = build_section_html(yl_data) if yl_data.get('sections') else yl_data.get('html', '<p>暂无数据</p>')
