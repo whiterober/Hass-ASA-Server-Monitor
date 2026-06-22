@@ -21,6 +21,7 @@
 5. **除非必要，直接的代码改动只动预览区代码**。同步实页只走"保存Tab"逻辑。要直接动实页文件（SFTP 上传 lovelace）必须暂停、说明原因、等用户确认
 6. **🚨 数据文件改动必须先拉后推**。涉及 `tribe_ops.json`、`asa_server_rules.json`、`asa_base_quick_ref.json` 等数据文件时：先用 SFTP 从服务器拉取最新版本 → 本地修改 → 再上传。**禁止**假设本地文件是最新、禁止直接用本地文件覆盖服务器。因为用户可能通过 ASA 管理页手动改过数据。
 7. **以上规则与其他规则冲突时，以以上规则为准**
+8. **🚨 改前必备份**：修改任何文件前，必须先 `Copy-Item` 备份到 `www/` 目录，命名格式 `asa-admin_backup_YYYYMMDD_HHMMSS.html`。**禁止**在无备份的情况下直接修改。防止改坏后被迫从基线重新开始。
 
 | 改动层 | 实页（HA lovelace） | 预览（preview_tab.html） |
 |--------|-------------------|------------------------|
@@ -141,7 +142,7 @@
 │   ├── 核心岛 / Cen (核心岛 . 端口7781)
 │   ├── 畸变 / Abe (畸变 . 端口7783)
 │   ├── 灭绝 / Ext (灭绝 . 端口7785)
-│   ├── 星辰 / Ast (星辰 . 端口7787)
+│   ├── 繁星 / Ast (繁星 . 端口7787)
 │   ├── 仙境 / Rag (仙境 . 端口7789)
 │   ├── 瓦尔盖罗 / Val (瓦尔盖罗 . 端口7791)
 │   ├── 俱乐部 / Bob (俱乐部 . 端口7775)
@@ -294,11 +295,26 @@ template:
 | Cen | 核心岛 | 7781 | — |
 | Abe | 畸变 | 7783 | — |
 | Ext | 灭绝 | 7785 | — |
-| Ast | 星辰 | 7787 | — |
+| Ast | 繁星 | 7787 | — |
 | Rag | 仙境 | 7789 | — |
 | Val | 瓦尔盖罗 | 7791 | — |
 | Bob | 俱乐部 | 7775 | — |
 | Los | 失落地 | 7793 | — |
+
+### 服务器 MDI 图标 + emoji（lovelace 按钮 + apps.yaml 主题用）
+
+| Profile ID | 图标 | MDI | emoji |
+|-----------|------|-----|:---:|
+| Isl | 🏝️ 岛屿 | `mdi:island` | 🏝️ |
+| Sco | 🌋 火山 | `mdi:volcano` | 🔥 |
+| Cen | 💎 水晶 | `mdi:diamond-stone` | 💎 |
+| Abe | ☢️ 辐射 | `mdi:radioactive` | ☢️ |
+| Ext | ☄️ 陨石 | `mdi:meteor` | ☄️ |
+| Ast | ✨ 繁星 | `mdi:star-four-points` | ✨ |
+| Rag | 🗼 灯塔 | `mdi:lighthouse-on` | 🗼 |
+| Val | 🌲 针叶林 | `mdi:forest` | 🌲 |
+| Bob | 🎉 派对 | `mdi:party-popper` | 🎉 |
+| Los | 🏰 城堡 | `mdi:castle` | 🏰 |
 
 ---
 
@@ -365,6 +381,7 @@ template:
 - 每次部署使用 `_upload_v173.py`，自动递增版本号
 - **服务器保留最近 10 个版本**（`len > 10` → 删最旧的），防止误删后无法回退
 - 重大改动前备份基线：`Copy-Item` → `asa-admin-baseline-vXXX.html`
+- **部署后自动打开新版本**：每次 `_upload_v173.py` 成功后，必须用 `open_browser_page` 打开新版本的 URL，无需用户要求
 
 > 最后更新：2026-06-20
 > 本文件由 Claude Code 智能体维护，随项目演进持续更新。
