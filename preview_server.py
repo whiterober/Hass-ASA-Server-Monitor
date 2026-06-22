@@ -363,6 +363,7 @@ def main():
 
     full_html = """<!DOCTYPE html>
 <html data-theme="dark"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <link href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css" rel="stylesheet"/>
 <link href="/local/asa-data/vendor.css" rel="stylesheet"/>
 <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.23/dist/full.css" rel="stylesheet"/>
