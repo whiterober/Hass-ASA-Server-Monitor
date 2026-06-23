@@ -2073,15 +2073,13 @@ def render_tab_html(tab):
                 parts.append('</div>')
                 for desc in ic_descs:
                     if isinstance(desc, dict) and desc.get('type') == 'br':
-                        parts.append('<div style="flex-basis:100%;height:0"></div>')
+                        parts.append('<br>')
                         continue
                     dtext = desc.get('text', '') if isinstance(desc, dict) else str(desc)
                     dbold = desc.get('bold', False) if isinstance(desc, dict) else False
-                    dcolor = desc.get('color', '') if isinstance(desc, dict) else ''
                     dopacity = desc.get('opacity', 1.0) if isinstance(desc, dict) else 1.0
                     dstyle = ''
                     if dbold: dstyle += 'font-weight:bold;'
-                    if dcolor and dcolor != '#000000': dstyle += 'color:{};'.format(dcolor)
                     if dopacity != 1.0: dstyle += 'opacity:{};'.format(dopacity)
                     if dstyle: dstyle = ' style="{}"'.format(dstyle)
                     parts.append('<div class="ic-text"{}>{}</div>'.format(dstyle, esc(dtext)))
