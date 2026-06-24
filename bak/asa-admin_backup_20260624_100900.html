@@ -543,7 +543,7 @@ label:has([id^=brCatBold]), label:has([id^=brCatSubLabelBold]) { display:none !i
 
 .cat-bold-btn.active { opacity:1 !important;color:var(--accent) !important;font-weight:bold !important; }
 
-.cat-color-dot { width:8px;height:8px;border-radius:50%;flex-shrink:0;cursor:pointer;border:1px solid rgba(0,0,0,0.3);background-clip:padding-box !important; }
+.cat-color-dot { width:8px;height:8px;border-radius:50%;flex-shrink:0;cursor:pointer;border:1px solid rgba(0,0,0,0.3); }
 .cat-color-dot.auto-theme { outline:1px solid #000; outline-offset:-1px; }
 
 .cat-color-popup { display:none;position:fixed;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:4px 6px;z-index:99999;box-shadow:0 4px 16px rgba(0,0,0,0.45);gap:4px;align-items:center; }
@@ -557,8 +557,10 @@ label:has([id^=brCatBold]), label:has([id^=brCatSubLabelBold]) { display:none !i
 
 .cat-color-opt.active { border-color:var(--accent);box-shadow:0 0 0 1px var(--accent); }
 
-.cat-opacity-dot { display:inline-block;width:8px;height:8px;margin:0 6px;vertical-align:middle;flex-shrink:0;cursor:pointer;user-select:none;border-radius:0;border:1px solid rgba(255,255,255,0.4);transition:opacity .15s; }
+.cat-opacity-dot { display:inline-block;width:8px;height:8px;margin:0 6px;vertical-align:middle;flex-shrink:0;cursor:pointer;user-select:none;border-radius:0;transition:opacity .15s; }
 .cat-opacity-dot:hover { opacity:0.75; }
+
+[data-theme="dark"] .cat-opacity-dot { background: #ffffff !important; }
 
 .cat-opacity-popup { display:none;position:fixed;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:4px 6px;z-index:99999;box-shadow:0 4px 16px rgba(0,0,0,0.45);gap:4px;align-items:center; }
 .cat-opacity-popup.show { display:flex; }
@@ -1306,14 +1308,11 @@ function renderMixedEditor(title) {
 
   setTimeout(function(){ var s = document.querySelector('.server-tabs'); if (s) s.scrollLeft = _sl; }, 0);
 
-  // Inject drag handles into sub-section headers (only check header level, not deep into block body)
+  // Inject drag handles into sub-sections
 
   document.querySelectorAll('#mcBlocks .sub-section').forEach(function(sub) {
 
-    var header = sub.firstElementChild;
-
-    // Only check for drag-handle at the header level, not deep inside block body (e.g. mcICDescs)
-    if (!header || !header.querySelector('.drag-handle')) {
+    if (!sub.querySelector('.drag-handle')) {
 
       var handle = document.createElement('span');
 
@@ -1321,7 +1320,9 @@ function renderMixedEditor(title) {
 
       handle.textContent = '⋮⋮';
 
-      if (header) { header.insertBefore(handle, header.firstChild); }
+      var first = sub.firstElementChild;
+
+      if (first) { first.insertBefore(handle, first.firstChild); }
 
       else { sub.insertBefore(handle, sub.firstChild); }
 
@@ -1758,14 +1759,11 @@ function renderTribeOps() {
 
   setTimeout(function(){ var s = document.querySelector('.server-tabs'); if (s) s.scrollLeft = _sl; }, 0);
 
-  // Inject drag handles into sub-section headers (only check header level, not deep into block body)
+  // Inject drag handles into sub-sections
 
   document.querySelectorAll('#mcBlocks .sub-section').forEach(function(sub) {
 
-    var header = sub.firstElementChild;
-
-    // Only check for drag-handle at the header level, not deep inside block body (e.g. mcICDescs)
-    if (!header || !header.querySelector('.drag-handle')) {
+    if (!sub.querySelector('.drag-handle')) {
 
       var handle = document.createElement('span');
 
@@ -1773,7 +1771,9 @@ function renderTribeOps() {
 
       handle.textContent = '⋮⋮';
 
-      if (header) { header.insertBefore(handle, header.firstChild); }
+      var first = sub.firstElementChild;
+
+      if (first) { first.insertBefore(handle, first.firstChild); }
 
       else { sub.insertBefore(handle, sub.firstChild); }
 
@@ -2055,7 +2055,7 @@ const MC_TYPE_LABELS = {
 
   server_grid:'服务器矩阵', expandable_detail:'可展开卡片',
 
-  supply_card:'补给卡片', map_filter:'地图筛选', info_card:'卡片',
+  supply_card:'补给卡片', map_filter:'地图筛选', info_card:'静态卡片',
 
   card_grid:'卡片网格', table:'表格', text:'文本', divider:'分隔线',
 
@@ -2352,7 +2352,17 @@ function renderMixedContent(tab) {
             h += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><span class="cat-color-wrap" style="flex-shrink:0" title="引用块色条颜色"><span class="cat-color-dot" id="mcICQuoteDot'+bi+'" style="background:'+(b.quote_color&&b.quote_color!=='auto'?esc(b.quote_color):'linear-gradient(to right, #000 50%, #fff 50%)')+'" data-target="mcICQuoteColor'+bi+'" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><input type="hidden" id="mcICQuoteColor'+bi+'" value="'+esc(b.quote_color||'auto')+'"><input id="mcICMdi'+bi+'" value="'+esc(b.mdi_icon||'')+'" placeholder="MDI" style="box-sizing:border-box;width:28px;height:28px;padding:4px;font-size:0.7em;border-radius:4px;text-align:center;flex-shrink:0">'+(b.icon_url?'<img src="'+esc(b.icon_url)+'" id="mcICIconPreview'+bi+'" style="width:28px;height:28px;object-fit:contain;cursor:pointer;flex-shrink:0" onclick="event.stopPropagation();openIconPicker_ic('+bi+')" title="点击换图标" onerror="this.hidden=true">':'<span id="mcICIconPlaceholder'+bi+'" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px 0 0 3px" onclick="event.stopPropagation();openIconPicker_ic('+bi+')" title="选择图标">+</span>')+'<span style="display:flex;flex-shrink:0;margin-left:-8px"><input type="hidden" id="mcICIcon'+bi+'" value="'+esc(b.icon_url||'')+'">'+(function(){var ac=b.icon_auto_color;var s=ac?'background:var(--accent);color:#fff;border:none;':'background:transparent;color:var(--primary-text-color);opacity:0.5;border:1px solid var(--border);';return '<button title="图片跟随主题自动反色：'+(ac?'已开启':'已关闭')+'" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICAutoColor'+bi+'\');cb.checked=!cb.checked;var a=cb.checked;this.title=a?\'图片跟随主题自动反色：已开启\':\'图片跟随主题自动反色：已关闭\';this.style.cssText=a?\'width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;border-radius:0 3px 3px 0;background:var(--accent);color:#fff;border:none\':\'width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;border-radius:0 3px 3px 0;background:transparent;color:var(--primary-text-color);opacity:0.5;border:1px solid var(--border)\';" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;border-radius:3px;'+s+'"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12,2C6.49,2 2,6.49 2,12S6.49,22 12,22C13.38,22 14.5,20.88 14.5,19.5C14.5,18.87 14.29,18.29 13.94,17.82C13.58,17.36 13.5,16.76 13.5,16.25C13.5,15.15 14.35,14.25 15.45,14.25H17.42C19.86,14.25 22,12.28 22,9.75C22,5.41 17.43,2 12,2M6.5,9A1.5,1.5 0 0,1 8,10.5A1.5,1.5 0 0,1 6.5,12A1.5,1.5 0 0,1 5,10.5A1.5,1.5 0 0,1 6.5,9M9.5,6A1.5,1.5 0 0,1 11,7.5A1.5,1.5 0 0,1 9.5,9A1.5,1.5 0 0,1 8,7.5A1.5,1.5 0 0,1 9.5,6M14.5,6A1.5,1.5 0 0,1 16,7.5A1.5,1.5 0 0,1 14.5,9A1.5,1.5 0 0,1 13,7.5A1.5,1.5 0 0,1 14.5,6M17.5,9A1.5,1.5 0 0,1 19,10.5A1.5,1.5 0 0,1 17.5,12A1.5,1.5 0 0,1 16,10.5A1.5,1.5 0 0,1 17.5,9Z"/></svg></button></span>';}())+'<input id="mcICTitle'+bi+'" value="'+esc(b.title||'')+'" placeholder="标题" style="box-sizing:border-box;flex:1;padding:4px 8px;font-size:0.85em;border-radius:4px"></div>';      
       var selectedMaps = (document.getElementById('mcICHL'+bi)?.value || b.highlight||'').split(',').filter(function(x){ return x; });
       h += '<input type="hidden" id="mcICHL'+bi+'" value="'+esc(b.highlight||'')+'">';
-      // Server assigned per description (popup) — card-level server buttons removed
+      h += '<div style="display:flex;align-items:center;gap:4px;margin-bottom:6px;flex-wrap:wrap">';
+      // Server buttons
+      var servers = {'Isl':{c:'#4CAF50',n:'island'},'Sco':{c:'#FF5722',n:'volcano'},'Cen':{c:'#009688',n:'diamond-stone'},'Abe':{c:'#9C27B0',n:'radioactive'},'Ext':{c:'#00BCD4',n:'meteor'},'Ast':{c:'#FF9800',n:'star-four-points'},'Rag':{c:'#E91E63',n:'lighthouse-on'},'Val':{c:'#4E9F62',n:'forest'},'Bob':{c:'#FFC107',n:'party-popper'},'Los':{c:'#607D8B',n:'castle'}};
+      Object.keys(servers).forEach(function(k) {
+        var sel = selectedMaps.indexOf(k) >= 0;
+        var style = sel
+          ? 'font-size:0.75em;padding:4px 9px;border-radius:999px;background:'+servers[k].c+';color:#fff;border:none;flex-shrink:0;cursor:pointer'
+          : 'font-size:0.75em;padding:4px 9px;border-radius:999px;background:transparent;color:'+servers[k].c+';opacity:0.6;border:1px solid '+servers[k].c+';flex-shrink:0;cursor:pointer';
+        h += '<button class="btn-small" style="'+style+'" onclick="event.stopPropagation();event.preventDefault();toggleICMap('+bi+',\''+k+'\');"><i class="mdi mdi-'+servers[k].n+'" style="font-size:16px;line-height:1;pointer-events:none"></i></button>';
+      });
+      h += '</div>';
       var descs = b.descriptions || [];
       if (!b.descriptions && b.body) descs = [{text: b.body, bold: false, color: ''}];
       if (!descs.length) descs = [{text: '', bold: false, color: ''}];
@@ -2364,7 +2374,7 @@ function renderMixedContent(tab) {
         if (d.type === 'br') {
           h += '<div class="sr-cat-card" style="border:1px dashed var(--border);border-radius:3px;padding:2px 6px;margin-bottom:3px;text-align:center;font-size:0.75em;opacity:0.6"><span class="drag-handle" style="cursor:grab;float:left;opacity:0.4">\u22ee\u22ee</span>\u21b5 \u6362\u884c <button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div>';
         } else {
-          h += '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:'+(d.color&&d.color!=='auto'?esc(d.color):'linear-gradient(to right, #000 50%, #fff 50%)')+';cursor:pointer" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:'+(d.opacity||1.0)+';background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="'+(d.opacity||1.0)+'"><span class="cat-bold-btn'+(d.bold?' active':'')+'" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="'+esc(d.text||'')+'" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" '+(d.bold?'checked':'')+' style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="'+esc(d.color||'auto')+'" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value="'+esc(d.server||'')+'"></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:1px 4px;border-radius:3px;flex-shrink:0;min-width:20px;text-align:center" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+(d.server?getServerBadge(d.server):getServerBadge(''))+'</button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
+          h += '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:'+(d.color&&d.color!=='auto'?esc(d.color):'linear-gradient(to right, #000 50%, #fff 50%)')+';cursor:pointer" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:'+(d.opacity||1.0)+';background:'+(d.color&&d.color!=='auto'?esc(d.color):'#000000')+'" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="'+(d.opacity||1.0)+'"><span class="cat-bold-btn'+(d.bold?' active':'')+'" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="'+esc(d.text||'')+'" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" '+(d.bold?'checked':'')+' style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="'+esc(d.color||'auto')+'" style="display:none"></span></span><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
         }
       }
 
@@ -2531,41 +2541,12 @@ function removeICDesc(el, bi) {
 
   if (!confirm(DEL)) return;
 
-  var card = el.closest('.sr-cat-card');
+  el.parentElement.parentElement.remove();
 
-  if (card) card.remove();
+  var c = document.getElementById('mcICDescs'+bi);
 
-  // Also remove from editorData if the block exists
-  var tab = editorData.tabs[editorSelectedTab];
-  var block = tab && tab.content_blocks ? tab.content_blocks[bi] : null;
-  if (block && block.descriptions) {
-    // Find and remove the matching description by DOM position
-    var container = document.getElementById('mcICDescs'+bi);
-    if (container) {
-      var descs = [];
-      for (var ci = 0; ci < container.children.length; ci++) {
-        var child = container.children[ci];
-        var textInput = child.querySelector('input[id^="mcICDescText'+bi+'_"]');
-        if (!textInput) {
-          descs.push({type:'br'});
-        } else {
-          var idMatch = textInput.id.match(/^mcICDescText\d+_(\d+)$/);
-          var origDi = idMatch ? parseInt(idMatch[1]) : 0;
-          descs.push({
-            text: textInput.value || '',
-            bold: document.getElementById('mcICDescBold'+bi+'_'+origDi)?.checked || false,
-            color: document.getElementById('mcICDescColor'+bi+'_'+origDi)?.value || 'auto',
-            opacity: parseFloat(document.getElementById('mcICDescOpacity'+bi+'_'+origDi)?.value) || 1.0,
-            server: document.getElementById('mcICDescServer'+bi+'_'+origDi)?.value || ''
-          });
-        }
-      }
-      block.descriptions = descs;
-    }
-  }
+  c = document.getElementById('mcEDDescs'+bi);
 
-  // Update ED desc count if applicable
-  var c = document.getElementById('mcEDDescs'+bi);
   if (c) { var cnt = document.getElementById('mcEDDescCount'+bi); if (cnt) cnt.textContent = c.children.length; }
 
 }
@@ -2578,7 +2559,7 @@ function addICDesc(bi) {
 
   const di = container.children.length;
 
-  const h = '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:linear-gradient(to right, #000 50%, #fff 50%);cursor:pointer" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:1.0;background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="1.0"><span class="cat-bold-btn" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="auto" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value=""></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:1px 4px;border-radius:3px;flex-shrink:0;min-width:20px;text-align:center" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+getServerBadge('')+'</button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
+  const h = '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:linear-gradient(to right, #000 50%, #fff 50%);cursor:pointer" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:1.0;background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="1.0"><span class="cat-bold-btn" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="auto" style="display:none"></span></span><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
 
   container.insertAdjacentHTML('beforeend', h);
 
@@ -2852,8 +2833,7 @@ function saveMCBlocks(tab) {
               text: textInput.value || '',
               bold: document.getElementById('mcICDescBold'+bi+'_'+origDi)?.checked || false,
               color: document.getElementById('mcICDescColor'+bi+'_'+origDi)?.value || 'auto',
-              opacity: parseFloat(document.getElementById('mcICDescOpacity'+bi+'_'+origDi)?.value) || 1.0,
-              server: document.getElementById('mcICDescServer'+bi+'_'+origDi)?.value || ''
+              opacity: parseFloat(document.getElementById('mcICDescOpacity'+bi+'_'+origDi)?.value) || 1.0
             });
           }
         }
@@ -3527,8 +3507,6 @@ function saveTabToMemory(tab) {
 }
 
 async function saveTOTab() {
-
-  if (document.querySelector('nav button.active')?.dataset.panel !== 'tribe-ops') return;
 
   const tab = editorData.tabs[editorSelectedTab];
 
@@ -5184,7 +5162,7 @@ function upgradeICDescControls() {
     odot.id = 'mcICDescODot'+bi+'_'+di;
     odot.setAttribute('data-target', 'mcICDescOpacity'+bi+'_'+di);
     odot.style.opacity = curOpacity;
-    odot.style.background = '#000000';
+    odot.style.background = curColor && curColor!=='auto' ? curColor : '#000000';
     odot.onclick = function(e){ e.stopPropagation(); toggleOpacityPopup(this); };
     owrap.appendChild(odot);
     merged.appendChild(owrap);
@@ -5195,16 +5173,6 @@ function upgradeICDescControls() {
     // Ensure ✕ button is outside cat-merged
     var xBtn = flexRow.querySelector('.btn-danger');
     if (xBtn && xBtn.closest('.cat-merged')) { flexRow.appendChild(xBtn); }
-    // Inject server button + hidden input if not present
-    if (!flexRow.querySelector('.btn-server')) {
-      var srvHid = document.createElement('input'); srvHid.type = 'hidden'; srvHid.id = 'mcICDescServer'+bi+'_'+di; srvHid.value = '';
-      flexRow.appendChild(srvHid);
-      var srvBtn = document.createElement('button'); srvBtn.className = 'btn-small btn-server'; srvBtn.id = 'mcICDescSrvBtn'+bi+'_'+di;
-      srvBtn.style.cssText = 'font-size:0.7em;padding:1px 4px;border-radius:3px;flex-shrink:0;min-width:20px;text-align:center';
-      srvBtn.innerHTML = getServerBadge('');
-      srvBtn.onclick = function(e){ e.stopPropagation(); toggleDescServerPopup(this,'+bi+','+di+'); };
-      flexRow.insertBefore(srvBtn, xBtn);
-    }
   });
 }
 
@@ -5347,64 +5315,6 @@ function buildCatColBQPill(card) {
 var CAT_COLORS = ["#ccc","#ff9800","#4caf50","#f44336","#2196f3","#ffffff"];
 
 var CAT_LABEL_COLORS = ["auto","#000000","#4CAF50","#FF5722","#009688","#9C27B0","#00BCD4","#FF9800","#E91E63","#4E9F62","#FFC107","#607D8B"];
-
-// Server map for desc popup
-var SERVER_MAP = {'Isl':{c:'#4CAF50',n:'island',emoji:'🏝️'},'Sco':{c:'#FF5722',n:'volcano',emoji:'🔥'},'Cen':{c:'#009688',n:'diamond-stone',emoji:'💎'},'Abe':{c:'#9C27B0',n:'radioactive',emoji:'☢️'},'Ext':{c:'#00BCD4',n:'meteor',emoji:'☄️'},'Ast':{c:'#FF9800',n:'star-four-points',emoji:'✨'},'Rag':{c:'#E91E63',n:'lighthouse-on',emoji:'🗼'},'Val':{c:'#4E9F62',n:'forest',emoji:'🌲'},'Bob':{c:'#FFC107',n:'party-popper',emoji:'🎉'},'Los':{c:'#607D8B',n:'castle',emoji:'🏰'}};
-
-function getServerBadge(sid) {
-  var s = SERVER_MAP[sid];
-  var mapSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle"><path d="M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4zM8 2v16M16 6v16"/></svg>';
-  return s ? '<i class="mdi mdi-'+s.n+'" style="font-size:14px;line-height:1;color:'+s.c+'"></i>' : mapSvg;
-}
-
-function toggleDescServerPopup(el, bi, di) {
-  var popup = document.getElementById('descServerPopup');
-  if (popup) { popup.remove(); if (popup._triggerEl === el) return; }
-  popup = document.createElement('div'); popup.id = 'descServerPopup'; popup.className = 'server-select-popup';
-  popup._triggerEl = el;
-  var cur = document.getElementById('mcICDescServer'+bi+'_'+di)?.value || '';
-  Object.keys(SERVER_MAP).forEach(function(k){
-    var s = SERVER_MAP[k];
-    var isSel = k === cur;
-    var btn = document.createElement('button');
-    btn.className = 'btn-small';
-    btn.style.cssText = 'font-size:0.75em;padding:4px 9px;border-radius:999px;width:36px;min-width:36px;height:28px;justify-content:center;'+(isSel?'background:'+s.c+';color:#fff;border:none;':'background:transparent;color:'+s.c+';opacity:0.6;border:1px solid '+s.c+';')+'flex-shrink:0;cursor:pointer;white-space:nowrap';
-    btn.innerHTML = '<i class="mdi mdi-'+s.n+'" style="font-size:14px;line-height:1;pointer-events:none"></i>';
-    btn.onclick = function(e){ e.stopPropagation(); selectDescServer(bi, di, k); popup.remove(); };
-    popup.appendChild(btn);
-  });
-  // Clear button
-  var clr = document.createElement('button');
-  clr.className = 'btn-small'; clr.textContent = '✕'; clr.style.cssText = 'font-size:0.75em;padding:4px 9px;border-radius:999px;width:36px;min-width:36px;height:28px;justify-content:center;cursor:pointer;color:#e53935;border:1px solid #e53935;background:transparent';
-  clr.onclick = function(e){ e.stopPropagation(); selectDescServer(bi, di, ''); popup.remove(); };
-  popup.appendChild(clr);
-  document.body.appendChild(popup);
-  var rect = el.getBoundingClientRect();
-  popup.style.position = 'fixed'; popup.style.zIndex = '9999'; popup.style.background = 'var(--card)'; popup.style.border = '1px solid var(--border)'; popup.style.borderRadius = '8px'; popup.style.padding = '6px'; popup.style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)'; popup.style.display = 'flex'; popup.style.flexWrap = 'wrap'; popup.style.gap = '4px'; popup.style.maxWidth = '332px';
-  popup.style.top = (rect.bottom + 4) + 'px'; popup.style.left = Math.min(rect.left, window.innerWidth - 352) + 'px';
-  // Click outside to close
-  setTimeout(function(){
-    var h = function(e){ if (!popup.contains(e.target) && e.target !== el) { popup.remove(); document.removeEventListener('click', h); } };
-    document.addEventListener('click', h);
-  }, 50);
-}
-
-function selectDescServer(bi, di, sid) {
-  var hid = document.getElementById('mcICDescServer'+bi+'_'+di);
-  if (hid) hid.value = sid;
-  var btn = document.getElementById('mcICDescSrvBtn'+bi+'_'+di);
-  if (btn) btn.innerHTML = sid ? getServerBadge(sid) : getServerBadge('');
-  // Auto-set color to server theme color
-  if (sid) {
-    var s = SERVER_MAP[sid];
-    if (s) {
-      var colorInput = document.getElementById('mcICDescColor'+bi+'_'+di);
-      if (colorInput) colorInput.value = s.c;
-      var dot = document.getElementById('mcICDescCDot'+bi+'_'+di);
-      if (dot) { dot.style.background = s.c; dot.classList.remove('auto-theme'); }
-    }
-  }
-}
 
 function toggleColorPopup(el) {
 

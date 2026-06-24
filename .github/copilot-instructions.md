@@ -1,100 +1,39 @@
 ﻿# 🔥 强制执行规则（每回合自动加载）
 
+> 📖 **名词表**：本文件及所有 `.github` 子文件的术语均对齐 `.github/glossary.md`。修改前先查表。
+
 以下规则不依赖 skill 判断，每回合自动执行：
-
-## 🚫 严禁调用 pylance MCP（缓存杀手）
-**禁止使用 `mcp_provides_tool_pylanceRunCodeSnippet` 工具。** 该工具每次调用将完整 Python 代码+输出注入上下文，触发 `cacheTraceKey` 重置 → 缓存清零 → 单条 ¥1.23。所有 Python 执行改用 `run_in_terminal`。
-
-## 📋 前置提醒（每回合第一步，预测本回合）
-> **无论任何情况都必须输出。**
-
-前置格式：`📋 进✓ 安✗ 省✓(r2,r3,r6)`
-
-- `进/安` = 预测本回合是否会调用 progress-tracking / safety-approval
-- `省(r2,r3,r6)` = 预测本回合会应用哪些 R 规则
-
-> 📄 **回合报告流程详见 `.github/report-flow.md`，每回合强制执行。**
-
-## 💰 结束报告 → 详见 `.github/report-flow.md`
-1. 小白解释
-2. 写进度
-3. 模型输出：`📋 进✓/✗ 安✗/✓ 省(r2,r3) 省 ~¥X.XXX`
-   - `进✓`=进度已写回 / `进✗`=未写回（严禁虚报）
-4. `python .github/_token_report.py end` → **完整粘贴脚本输出，逐行原样，禁止摘要/代码块/仅引用**
-5. **结算监控**：对比脚本输出的 `本回合费`/`缓存%` 与前 3 轮均值，按表格标记异常
-**结算监控输出后即本轮结束。**
 
 ## 🗣️ 复述+确认（动手前第二步）
 任何任务/改动，**必须先**：
 1. 复述理解
 2. #vscode/askQuestions 确认
-> 禁止跳过复述直接执行。
+> 禁止跳过复述直接执行。**askQuestions 后必须等待用户选择，不可自行结束回合。**
 
-## � 二选一确认（不可口头问完就结束回合）
-任何"要不要做 X？""需不需要 Y？""是否 Z？"等需要用户决策的问题，**必须**调用 `#vscode/askQuestions` 弹出可点击选项。禁止纯文本提问后直接结束回合。
+## 二选一确认（不可口头问完就结束回合）
+任何需要用户决策或确认的问题（包括但不限于："要不要…""对吗？""确认…""可以吗…""行不行…""要我动手吗？""开始改吗？""执行吗？"等），**必须**调用 `#vscode/askQuestions` 弹出可点击选项。禁止纯文本提问后直接结束回合。
 
-## �💾 改前必备份
-修改任何文件前，先 Copy-Item 备份到 www/，命名 *_backup_YYYYMMDD_HHMMSS.*
+## 💾 改前必备份
+修改任何文件前，先 Copy-Item 备份到 bak/，命名 *_backup_YYYYMMDD_HHMMSS.*
 
-## � 禁止直接修改 lovelace JSON
-/config/lovelace、/config/lovelace.lovelace、/homeassistant/.storage/lovelace.lovelace 等 lovelace JSON 文件**禁止直接编辑**，除非用户明确要求。修改 lovelace 输出应通过 build_lovelace.py 源码进行。build_lovelace.py 明确豁免，不受此限。
-
-## �📝 进度写盘（结论后最后一步）
-顺序：结论 → 告知 接下来将写进度 → 写入 → 写完即止。复用同一文件。
+## 📝 进度写盘（结论后最后一步）
+> 必须调用 `progress-tracking` skill 写入进度。具体流程见 `.github/skills/progress-tracking/SKILL.md`。
 
 ## 💬 小白总结（每次最终报告末尾）
 每次最终报告末尾，必须追加 1 句小白解释，用非术语语言说明当前现况与下一步。
 
-## ⚠️ 安全审批（改前、执行前必须）
-### 核心流程
-1. 自动检测操作是否涉及系统操作
-2. 风险分析（低/中/高/严重）
-3. 低/中风险 → 自动执行并报告；高/严重 → #vscode/askQuestions 确认
-4. 确认后二次校验参数再执行
+## 🔢 Token 审计（风险预测触发）
+> 预测到大量 token 消耗风险时调用。禁止全文回读，3-6 行摘要。详见 `.github/skills/token-audit/SKILL.md`。
 
-### 审批状态机（硬约束）
-- 高/严重风险动作须绑定唯一 operationId
-- 用户选择取消 → 标记 Denied（终态），禁止执行
-- 新动作必须新 operationId，禁止复用已拒绝的旧 ID
-- 执行报告记录：operationId、用户选择、审批状态、结果
+
+## � 脚本替换（大文件编辑优先）
+> 编辑 >10KB 的文件时，优先用 `python .github/_replace.py <文件> '[{"o":"旧","n":"新"},...]'` 替代 `multi_replace_string_in_file`。脚本自动校验唯一性、备份、仅返回 `{"ok":N,"fail":N}`，体积压缩 99%+。替换后仍需检查空行规范。
+
+## �📄 HTML 空行规范
+> `www/asa-admin.html` 禁止连续空行（`\n{3,}`）。编辑后检查：`python -c "import re;c=open('www/asa-admin.html').read();print(len(re.findall(r'\n{3,}',c)))"` → 必须为 0。
+
+## ⚠️ 安全审批（改前、执行前必须）
+> 自动检测风险等级，高/严重需 `#vscode/askQuestions` 确认。详细流程见 `.github/skills/safety-approval/SKILL.md`。
 
 ## 🗑️ 删除操作安全审计（强制）
-> **任何删除操作（文件/目录/批量清理）执行前，必须调用 safety-approval skill 完成安全审计并提交报告。**
-
-### 审计流程（不可跳过）
-1. **触发条件**：任何 Remove-Item、
-m、del、
-mdir、robocopy /MIR（镜像覆盖）、清空目录等操作
-2. **审计内容**（必须逐项报告）：
-   - 删除目标清单（绝对路径 + 大小）
-   - 备份状态（是否已有备份？位置？）
-   - Git 状态（是否在版本控制中？git status 确认）
-   - GitHub 风险（是否会导致仓库膨胀？是否有 .gitignore 覆盖？）
-   - 依赖检查（其他文件/配置是否引用这些路径？）
-3. **审计报告格式**：
-   `
-   🗑️ 删除安全审计报告
-   - operationId: <唯一ID>
-   - 目标清单: <N> 项
-   - 备份状态: ✅ 已备份 / ⚠️ 部分 / ❌ 无
-   - Git 风险: 🟢/🟡/🔴
-   - 依赖风险: 🟢/🟡/🔴
-   - 结论: ✅ 可安全删除 / ⚠️ 需确认 / 🔴 禁止
-   `
-4. **批准门槛**：🔴 禁止 → 立即停止；⚠️ 需确认 → #vscode/askQuestions；✅ 安全 → 可执行
-
-## 📊 结算监控（每回合）
-> VS Code 上下文压缩是进程级共享，非会话隔离。重启可清空压缩池。
-
-每回合 `_token_report.py end` 后，逐项检查并追加到 `/memories/session/ctx-tax-log.md`：
-
-| 检查项 | 阈值 | 标记 |
-|--------|------|------|
-| 解压缩税 | 上下文 >100K 且缓存率 <50% | 🔴 异常 |
-| 费用突增 | 本回合费 > 前3轮均值 ×3 | 🟡 注意 |
-| 缓存率滑坡 | 连续3轮缓存率下降且累计 >10% | 🟡 注意 |
-| 上下文膨胀 | 单轮增量 >100K | 🟡 注意 |
-
-- 全部正常 → 追加 `回合N 缓存XX%` ✅
-- 任一命中 → 追加标记 + 简要建议
-- 同一会话复用同一文件，禁止按轮新建
+> **任何删除操作执行前，必须调用 `safety-approval` skill 完成安全审计。** 具体审计流程、报告格式、批准门槛详见 `.github/skills/safety-approval/SKILL.md`。

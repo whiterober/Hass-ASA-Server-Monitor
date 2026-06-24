@@ -221,7 +221,7 @@ def main():
             css = SERVER_GRID_CSS
         if 'expandable_detail' in block_types:
             css += EXPANDABLE_DETAIL_CSS.replace(SHARED_CSS, '')
-        if 'supply_card' in block_types or 'filtered_cards' in block_types or 'map_filter' in block_types:
+        if 'supply_card' in block_types or 'filtered_cards' in block_types:
             css += 'ha-card .supply-card{border-radius:12px!important;border-left:4px solid var(--divider-color)!important;margin-bottom:8px!important;padding:12px!important;display:flex!important;gap:12px!important;background:var(--primary-background-color)!important}'
             css += 'ha-card .supply-card .sc-icon{width:48px!important;height:48px!important;flex-shrink:0!important;object-fit:contain!important;border-radius:8px!important}'
             css += 'ha-card .supply-card .sc-body{flex:1!important;min-width:0!important}'
@@ -258,7 +258,7 @@ def main():
             css += 'ha-card:has(.filter-radio[value=\"Abe\"]:checked) .filterable[data-filter-maps*=Abe]{display:flex!important}'
             css += 'ha-card:has(.filter-radio[value=\"Ext\"]:checked) .filterable{display:none!important}'
             css += 'ha-card:has(.filter-radio[value=\"Ext\"]:checked) .filterable[data-filter-maps*=Ext]{display:flex!important}'
-        if 'supply_card' in block_types or 'filtered_cards' in block_types or 'map_filter' in block_types:
+        if 'supply_card' in block_types or 'filtered_cards' in block_types:
             css += 'ha-card .supply-card{border-radius:12px!important;border-left:4px solid var(--divider-color)!important;margin-bottom:8px!important;padding:12px!important;display:flex!important;gap:12px!important;background:var(--primary-background-color)!important}'
             css += 'ha-card .supply-card .sc-icon{width:48px!important;height:48px!important;flex-shrink:0!important;object-fit:contain!important;border-radius:8px!important}'
             css += 'ha-card .supply-card .sc-body{flex:1!important;min-width:0!important}'
