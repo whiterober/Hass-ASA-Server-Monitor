@@ -2079,19 +2079,12 @@ def render_tab_html(tab):
                     dbold = desc.get('bold', False) if isinstance(desc, dict) else False
                     dcolor = desc.get('color', '') if isinstance(desc, dict) else ''
                     dopacity = desc.get('opacity', 1.0) if isinstance(desc, dict) else 1.0
-                    dserver = desc.get('server', '') if isinstance(desc, dict) else ''
                     dstyle = ''
                     if dbold: dstyle += 'font-weight:bold;'
-                    if dcolor and dcolor not in ('#000000', 'auto'): dstyle += 'color:{};'.format(dcolor)
+                    if dcolor and dcolor != '#000000': dstyle += 'color:{};'.format(dcolor)
                     if dopacity != 1.0: dstyle += 'opacity:{};'.format(dopacity)
                     if dstyle: dstyle = ' style="{}"'.format(dstyle)
-                    # Server icon prefix
-                    srv_icon = ''
-                    if dserver:
-                        _icon_map = {'Isl':'mdi:island','Sco':'mdi:volcano','Cen':'mdi:diamond-stone','Abe':'mdi:radioactive','Ext':'mdi:meteor','Ast':'mdi:star-four-points','Rag':'mdi:lighthouse-on','Val':'mdi:forest','Bob':'mdi:party-popper','Los':'mdi:castle'}
-                        _icon = _icon_map.get(dserver, 'mdi:map')
-                        srv_icon = '<i class="mdi {}" style="font-size:14px;vertical-align:middle;margin-right:2px"></i>'.format(_icon.replace('mdi:','mdi-'))
-                    parts.append('<div class="ic-text"{}>{}{}</div>'.format(dstyle, srv_icon, esc(dtext)))
+                    parts.append('<div class="ic-text"{}>{}</div>'.format(dstyle, esc(dtext)))
                 parts.append('</div>')
                 parts.append('</div>')
             elif bt=='supply_card':
