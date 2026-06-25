@@ -428,7 +428,7 @@ button { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; f
 
   line-height: 1.2;
 
-  min-width: 22px;
+  min-width: 1.8em;
 
   text-align: center;
 
@@ -1728,7 +1728,7 @@ function renderTribeOps() {
 
   tab.type = 'mixed_content';
 
-  html += `<div style="flex-shrink:0"><div style="display:flex;align-items:center;gap:4px"><button class="mobile-tab-icon" id="mobileTabIcon" title="切换TAB"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" style="font-size:16px;line-height:1"></i></button><input id="toTabName" value="${esc(tab.name)}" placeholder="名称" style="max-width:160px;font-weight:bold;font-size:1.1em;min-width:0;padding-top:1px;padding-bottom:1px"><input id="toTabDesc" value="${esc(tab.description||'')}" placeholder="描述" style="min-width:0;font-size:0.85em;padding-top:4px;padding-bottom:4px"><span class="count-badge">${(tab.content_blocks||[]).length}</span></div></div>`;
+  html += `<div style="flex-shrink:0"><div style="display:flex;align-items:center;gap:4px"><button class="mobile-tab-icon" id="mobileTabIcon" title="切换TAB"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" style="font-size:16px;line-height:1"></i></button><input id="toTabName" value="${esc(tab.name)}" placeholder="名称" style="max-width:160px;font-weight:bold;font-size:1.1em;min-width:0;padding-top:1px;padding-bottom:1px"><input id="toTabDesc" value="${esc(tab.description||'')}" placeholder="描述" style="max-width:160px;min-width:0;font-size:0.85em;padding-top:4px;padding-bottom:4px"><span class="count-badge">${(tab.content_blocks||[]).length}</span></div></div>`;
 
   // Scrollable middle: content blocks — card with internal flex (fixed header/footer, scrollable blocks)
 
@@ -2364,7 +2364,7 @@ function renderMixedContent(tab) {
         if (d.type === 'br') {
           h += '<div class="sr-cat-card" style="border:1px dashed var(--border);border-radius:3px;padding:2px 6px;margin-bottom:3px;text-align:center;font-size:0.75em;opacity:0.6"><span class="drag-handle" style="cursor:grab;float:left;opacity:0.4">\u22ee\u22ee</span>\u21b5 \u6362\u884c <button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div>';
         } else {
-          h += '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:'+(d.color&&d.color!=='auto'?esc(d.color):'linear-gradient(to right, #000 50%, #fff 50%)')+';cursor:pointer" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:'+(d.opacity||1.0)+';background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="'+(d.opacity||1.0)+'"><span class="cat-bold-btn'+(d.bold?' active':'')+'" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="'+esc(d.text||'')+'" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" '+(d.bold?'checked':'')+' style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="'+esc(d.color||'auto')+'" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value="'+esc(d.server||'')+'"><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="'+esc(JSON.stringify(d.server_states||(d.server?{[d.server]:2}:{})))+'"></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return 'background:transparent;border:1px solid transparent';var sm=SERVER_MAP[ak];if(!sm)return 'background:transparent;border:1px solid transparent';if(ast===2)return 'background:'+sm.c+';border:none';return 'background:transparent;border:1px solid transparent';})()+'" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return getServerBadge('');var sm=SERVER_MAP[ak];if(!sm)return getServerBadge('');if(ast===1)return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:'+sm.c+'"></i>';return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:#fff"></i>';})()+'</button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
+          h += '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:'+(d.color&&d.color!=='auto'?esc(d.color):'linear-gradient(to right, #000 50%, #fff 50%)')+';cursor:pointer" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:'+(d.opacity||1.0)+';background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="'+(d.opacity||1.0)+'"><span class="cat-bold-btn'+(d.bold?' active':'')+'" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="'+esc(d.text||'')+'" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" '+(d.bold?'checked':'')+' style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="'+esc(d.color||'auto')+'" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value="'+esc(d.server||'')+'"></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:1px 4px;border-radius:3px;flex-shrink:0;min-width:20px;text-align:center" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+(d.server?getServerBadge(d.server):getServerBadge(''))+'</button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
         }
       }
 
@@ -2554,8 +2554,7 @@ function removeICDesc(el, bi) {
             bold: document.getElementById('mcICDescBold'+bi+'_'+origDi)?.checked || false,
             color: document.getElementById('mcICDescColor'+bi+'_'+origDi)?.value || 'auto',
             opacity: parseFloat(document.getElementById('mcICDescOpacity'+bi+'_'+origDi)?.value) || 1.0,
-            server: document.getElementById('mcICDescServer'+bi+'_'+origDi)?.value || '',
-            server_states: JSON.parse(document.getElementById('mcICDescSrvStates'+bi+'_'+origDi)?.value || '{}')
+            server: document.getElementById('mcICDescServer'+bi+'_'+origDi)?.value || ''
           });
         }
       }
@@ -2577,7 +2576,7 @@ function addICDesc(bi) {
 
   const di = container.children.length;
 
-  const h = '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:linear-gradient(to right, #000 50%, #fff 50%);cursor:pointer" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:1.0;background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="1.0"><span class="cat-bold-btn" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="auto" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value=""><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="{}"></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid transparent" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+getServerBadge('')+'</button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
+  const h = '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:linear-gradient(to right, #000 50%, #fff 50%);cursor:pointer" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:1.0;background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="1.0"><span class="cat-bold-btn" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="auto" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value=""></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:1px 4px;border-radius:3px;flex-shrink:0;min-width:20px;text-align:center" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+getServerBadge('')+'</button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
 
   container.insertAdjacentHTML('beforeend', h);
 
@@ -2852,8 +2851,7 @@ function saveMCBlocks(tab) {
               bold: document.getElementById('mcICDescBold'+bi+'_'+origDi)?.checked || false,
               color: document.getElementById('mcICDescColor'+bi+'_'+origDi)?.value || 'auto',
               opacity: parseFloat(document.getElementById('mcICDescOpacity'+bi+'_'+origDi)?.value) || 1.0,
-              server: document.getElementById('mcICDescServer'+bi+'_'+origDi)?.value || '',
-              server_states: JSON.parse(document.getElementById('mcICDescSrvStates'+bi+'_'+origDi)?.value || '{}')
+              server: document.getElementById('mcICDescServer'+bi+'_'+origDi)?.value || ''
             });
           }
         }
@@ -5200,7 +5198,7 @@ function upgradeICDescControls() {
       var srvHid = document.createElement('input'); srvHid.type = 'hidden'; srvHid.id = 'mcICDescServer'+bi+'_'+di; srvHid.value = '';
       flexRow.appendChild(srvHid);
       var srvBtn = document.createElement('button'); srvBtn.className = 'btn-small btn-server'; srvBtn.id = 'mcICDescSrvBtn'+bi+'_'+di;
-      srvBtn.style.cssText = 'font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center';
+      srvBtn.style.cssText = 'font-size:0.7em;padding:1px 4px;border-radius:3px;flex-shrink:0;min-width:20px;text-align:center';
       srvBtn.innerHTML = getServerBadge('');
       srvBtn.onclick = function(e){ e.stopPropagation(); toggleDescServerPopup(this,'+bi+','+di+'); };
       flexRow.insertBefore(srvBtn, xBtn);
@@ -5362,28 +5360,22 @@ function toggleDescServerPopup(el, bi, di) {
   if (popup) { popup.remove(); if (popup._triggerEl === el) return; }
   popup = document.createElement('div'); popup.id = 'descServerPopup'; popup.className = 'server-select-popup';
   popup._triggerEl = el;
-  var statesEl = document.getElementById('mcICDescSrvStates'+bi+'_'+di);
-  var curStates = {};
-  try { curStates = JSON.parse(statesEl?.value || '{}'); } catch(e) {}
+  var cur = document.getElementById('mcICDescServer'+bi+'_'+di)?.value || '';
   Object.keys(SERVER_MAP).forEach(function(k){
     var s = SERVER_MAP[k];
-    var st = curStates[k] || 0;
+    var isSel = k === cur;
     var btn = document.createElement('button');
     btn.className = 'btn-small';
-    btn._srvId = k; btn._state = st;
-    var css = 'font-size:0.75em;padding:4px 9px;border-radius:999px;width:36px;min-width:36px;height:28px;justify-content:center;flex-shrink:0;cursor:pointer;white-space:nowrap;';
-    if (st === 0) {
-      css += 'background:transparent;color:'+s.c+';opacity:0.35;border:1px solid '+s.c+';';
-    } else if (st === 1) {
-      css += 'background:transparent;color:'+s.c+';opacity:1;border:1px solid '+s.c+';box-shadow:0 0 0 1px '+s.c+';';
-    } else {
-      css += 'background:'+s.c+';color:#fff;border:none;opacity:1;';
-    }
-    btn.style.cssText = css;
+    btn.style.cssText = 'font-size:0.75em;padding:4px 9px;border-radius:999px;width:36px;min-width:36px;height:28px;justify-content:center;'+(isSel?'background:'+s.c+';color:#fff;border:none;':'background:transparent;color:'+s.c+';opacity:0.6;border:1px solid '+s.c+';')+'flex-shrink:0;cursor:pointer;white-space:nowrap';
     btn.innerHTML = '<i class="mdi mdi-'+s.n+'" style="font-size:14px;line-height:1;pointer-events:none"></i>';
     btn.onclick = function(e){ e.stopPropagation(); selectDescServer(bi, di, k); popup.remove(); };
     popup.appendChild(btn);
   });
+  // Clear button
+  var clr = document.createElement('button');
+  clr.className = 'btn-small'; clr.textContent = '✕'; clr.style.cssText = 'font-size:0.75em;padding:4px 9px;border-radius:999px;width:36px;min-width:36px;height:28px;justify-content:center;cursor:pointer;color:#e53935;border:1px solid #e53935;background:transparent';
+  clr.onclick = function(e){ e.stopPropagation(); selectDescServer(bi, di, ''); popup.remove(); };
+  popup.appendChild(clr);
   document.body.appendChild(popup);
   var rect = el.getBoundingClientRect();
   popup.style.position = 'fixed'; popup.style.zIndex = '9999'; popup.style.background = 'var(--card)'; popup.style.border = '1px solid var(--border)'; popup.style.borderRadius = '8px'; popup.style.padding = '6px'; popup.style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)'; popup.style.display = 'flex'; popup.style.flexWrap = 'wrap'; popup.style.gap = '4px'; popup.style.maxWidth = '332px';
@@ -5396,86 +5388,19 @@ function toggleDescServerPopup(el, bi, di) {
 }
 
 function selectDescServer(bi, di, sid) {
-  // Backward compat: keep old hidden field in sync
   var hid = document.getElementById('mcICDescServer'+bi+'_'+di);
-  // 3-state toggle via server_states — SINGLE-SELECT (only one map active at a time)
-  var statesEl = document.getElementById('mcICDescSrvStates'+bi+'_'+di);
-  var curStates = {};
-  try { curStates = JSON.parse(statesEl?.value || '{}'); } catch(e) {}
-  if (sid) {
-    // Read previous state BEFORE clearing
-    var prevSt = curStates[sid] || 0;
-    // Clear ALL other maps first (single-select)
-    curStates = {};
-    // Cycle: 0→1→2→0
-    var st = (prevSt + 1) % 3;
-    if (st > 0) {
-      curStates[sid] = st;
-      if (hid) hid.value = sid;
-    } else {
-      if (hid) hid.value = '';
-    }
-    // Auto-set color to server theme color (or reset to default when cleared)
-    if (st > 0) {
-      var s = SERVER_MAP[sid];
-      if (s) {
-        var colorInput = document.getElementById('mcICDescColor'+bi+'_'+di);
-        if (colorInput) colorInput.value = s.c;
-        var dot = document.getElementById('mcICDescCDot'+bi+'_'+di);
-        if (dot) { dot.style.background = s.c; dot.classList.remove('auto-theme'); }
-      }
-    } else {
-      // Reset color to default (auto)
-      var colorInput = document.getElementById('mcICDescColor'+bi+'_'+di);
-      if (colorInput) colorInput.value = 'auto';
-      var dot = document.getElementById('mcICDescCDot'+bi+'_'+di);
-      if (dot) { dot.style.background = 'linear-gradient(to right, #000 50%, #fff 50%)'; dot.classList.add('auto-theme'); }
-    }
-  } else {
-    curStates = {};
-    if (hid) hid.value = '';
-    // Reset color to default (auto)
-    var colorInput = document.getElementById('mcICDescColor'+bi+'_'+di);
-    if (colorInput) colorInput.value = 'auto';
-    var dot = document.getElementById('mcICDescCDot'+bi+'_'+di);
-    if (dot) { dot.style.background = 'linear-gradient(to right, #000 50%, #fff 50%)'; dot.classList.add('auto-theme'); }
-  }
-  if (statesEl) statesEl.value = JSON.stringify(curStates);
-  // Update badge: show map icon with state-appropriate styling
-  updateDescSrvBadge(bi, di, curStates);
-}
-
-function updateDescSrvBadge(bi, di, states) {
+  if (hid) hid.value = sid;
   var btn = document.getElementById('mcICDescSrvBtn'+bi+'_'+di);
-  if (!btn) return;
-  var activeK = null, activeSt = 0;
-  Object.keys(states).forEach(function(k){
-    if (states[k] > 0) { activeK = k; activeSt = states[k]; }
-  });
-  // Common square box + centering
-  btn.style.width = '26px'; btn.style.height = '26px';
-  btn.style.borderRadius = '4px';
-  btn.style.display = 'inline-flex';
-  btn.style.alignItems = 'center';
-  btn.style.justifyContent = 'center';
-  if (!activeK) {
-    btn.innerHTML = getServerBadge('');
-    btn.style.background = 'transparent';
-    btn.style.border = '1px solid transparent';
-    return;
-  }
-  var s = SERVER_MAP[activeK];
-  if (!s) { btn.innerHTML = getServerBadge(''); return; }
-  if (activeSt === 1) {
-    // Linear: colored icon, transparent bg + border
-    btn.innerHTML = '<i class="mdi mdi-'+s.n+'" style="font-size:14px;line-height:1;color:'+s.c+'"></i>';
-    btn.style.background = 'transparent';
-    btn.style.border = '1px solid transparent';
-  } else {
-    // Block: white icon on colored bg
-    btn.innerHTML = '<i class="mdi mdi-'+s.n+'" style="font-size:14px;line-height:1;color:#fff"></i>';
-    btn.style.background = s.c;
-    btn.style.border = 'none';
+  if (btn) btn.innerHTML = sid ? getServerBadge(sid) : getServerBadge('');
+  // Auto-set color to server theme color
+  if (sid) {
+    var s = SERVER_MAP[sid];
+    if (s) {
+      var colorInput = document.getElementById('mcICDescColor'+bi+'_'+di);
+      if (colorInput) colorInput.value = s.c;
+      var dot = document.getElementById('mcICDescCDot'+bi+'_'+di);
+      if (dot) { dot.style.background = s.c; dot.classList.remove('auto-theme'); }
+    }
   }
 }
 
