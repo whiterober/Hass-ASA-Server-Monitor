@@ -1,7 +1,7 @@
 # 会话交接 — 2026-06-23 22:15
 
 ## 当前版本
-- **asa-admin**: v658 (最新)
+- **asa-admin**: v705 (最新)
 - **build_lovelace**: 已支持描述文字 color 渲染
 - **Token**: 0K/1000K（新会话）
 
@@ -28,7 +28,7 @@
 
 | 文件 | 路径 |
 |------|------|
-| asa-admin | `b:\项目\Hass ASA Server Monitor\www\asa-admin.html` (v658) |
+| asa-admin | `b:\项目\Hass ASA Server Monitor\www\asa-admin.html` (v705) |
 | build_lovelace | `b:\项目\Hass ASA Server Monitor\build_lovelace.py` |
 | 智能体 | `.github\agents\asa-server-monitor.agent.md` |
 | 通用指令 | `.github\copilot-instructions.md` |
@@ -37,11 +37,11 @@
 ## 连接信息
 - HA: `http://192.168.197.253:8123`
 - SSH: `root@192.168.197.253:22` (密码 `1219Wu1219@`)
-- ASA: `https://hass.whiterober.com/local/asa-data/asa-admin-v658.html`
+- ASA: `https://hass.whiterober.com/local/asa-data/asa-admin-v705.html`
 - 部署: `python _upload_v173.py`
 
 ## 最后更新
-- 2026-06-23 22:30 — 进度查询，无代码改动。当前 v658，mcICDesc 整合控件 + 色条 + 换行块修复全部完成。
+- 2026-06-23 22:30 — 进度查询，无代码改动。当前 v705，mcICDesc 整合控件 + 色条 + 换行块修复全部完成。
 
 ## 速查：给下一个对话
 1. 编辑 HTML 后检查空行：`python -c "import re;c=open('www/asa-admin.html').read();print(len(re.findall(r'\n{3,}',c)))"` → 必须 0

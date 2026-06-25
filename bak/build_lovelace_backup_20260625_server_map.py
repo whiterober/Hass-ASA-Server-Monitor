@@ -9,20 +9,6 @@ DATA_DIR = _SERVER_DATA if os.path.isdir(_SERVER_DATA) else os.path.join(os.path
 def esc(s):
     return str(s).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
 
-# Single source of truth for all server metadata
-SERVER_MAP = {
-    'Isl':{'label':'孤岛','icon':'mdi:island'},
-    'Sco':{'label':'焦土','icon':'mdi:volcano'},
-    'Cen':{'label':'核心岛','icon':'mdi:diamond-stone'},
-    'Abe':{'label':'畸变','icon':'mdi:radioactive'},
-    'Ext':{'label':'灭绝','icon':'mdi:meteor'},
-    'Ast':{'label':'繁星','icon':'mdi:star-four-points'},
-    'Rag':{'label':'仙境','icon':'mdi:lighthouse-on'},
-    'Val':{'label':'瓦尔盖罗','icon':'mdi:forest'},
-    'Bob':{'label':'俱乐部','icon':'mdi:party-popper'},
-    'Los':{'label':'失落地','icon':'mdi:castle'},
-}
-
 
 # -------------------------------------------------------
 # CSS modules — composed into card-type-specific stylesheets
@@ -2133,7 +2119,8 @@ def render_tab_html(tab):
                     # Server icon prefix
                     srv_icon = ''
                     if dserver:
-                        _icon = SERVER_MAP.get(dserver,{}).get('icon','mdi:map')
+                        _icon_map = {'Isl':'mdi:island','Sco':'mdi:volcano','Cen':'mdi:diamond-stone','Abe':'mdi:radioactive','Ext':'mdi:meteor','Ast':'mdi:star-four-points','Rag':'mdi:lighthouse-on','Val':'mdi:forest','Bob':'mdi:party-popper','Los':'mdi:castle'}
+                        _icon = _icon_map.get(dserver, 'mdi:map')
                         srv_icon = '<i class="mdi {}" style="font-size:14px;vertical-align:middle;margin-right:2px"></i>'.format(_icon.replace('mdi:','mdi-'))
                     dserver_attr=' data-server="{}"'.format(dserver)
                     parts.append('<div class="ic-text"{}{}>{}{}</div>'.format(dstyle,dserver_attr, srv_icon, esc(dtext)))
@@ -2181,7 +2168,8 @@ def render_tab_html(tab):
                     parts.append('</div></div></div>')
             elif bt=='map_filter':
                 # Dynamic filter buttons based on actual server references in this tab
-
+                srv_icons={'Isl':'mdi:island','Sco':'mdi:volcano','Cen':'mdi:diamond-stone','Abe':'mdi:radioactive','Ext':'mdi:meteor','Ast':'mdi:star-four-points','Rag':'mdi:lighthouse-on','Val':'mdi:forest','Bob':'mdi:party-popper','Los':'mdi:castle'}
+                srv_labels={'Isl':'孤岛','Sco':'焦土','Cen':'核心岛','Abe':'畸变','Ext':'灭绝','Ast':'繁星','Rag':'仙境','Val':'瓦尔盖罗','Bob':'俱乐部','Los':'失落地'}
                 filter_js=(
                     "var s=this;var r=s.getRootNode();"
                     "if(s._w){s.checked=false;s._w=false;s.parentElement.classList.remove('active');"
@@ -2198,8 +2186,8 @@ def render_tab_html(tab):
                 else:
                     parts.append('<div class="filter-bar" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">')
                     for srv_id in sorted(active_maps):
-                        icn=SERVER_MAP.get(srv_id,{}).get('icon','mdi:server')
-                        label=SERVER_MAP.get(srv_id,{}).get('label',srv_id)
+                        icn=srv_icons.get(srv_id,'mdi:server')
+                        label=srv_labels.get(srv_id,srv_id)
                         parts.append('<label class="filter-label" data-map="{}"><input type="radio" name="map-filter" class="filter-radio" value="{}" onclick="{}"><ha-icon icon="{}"></ha-icon> {}</label>'.format(srv_id,srv_id,filter_js,icn,label))
                     parts.append('</div>')
             elif bt=='server_grid':
@@ -2270,7 +2258,8 @@ def render_tab_html(tab):
                 mh=md.get('highlight','')
                 st=sd.get('text','')
                 iu=od.get('icon_url','') if isinstance(od,dict) else ''
-                mi=SERVER_MAP.get(mh,{}).get('icon','mdi:map-marker')
+                im={'Isl':'mdi:island','Cen':'mdi:earth','Sco':'mdi:volcano','Abe':'mdi:radioactive','Ext':'mdi:meteor'}
+                mi=im.get(mh,'mdi:map-marker')
                 blks=fd.get('blocks',[]) if isinstance(fd,dict) else []
                 hb=bool(blks)
                 eext='' if not has_map_filter else ' filterable'
@@ -2437,6 +2426,7 @@ def render_server_grid(tab):
 def render_expandable_detail(tab):
     """Render expandable detail blocks with large output icons and map theming."""
     rows = tab.get('rows', [])
+    iconmap = {'Isl': 'mdi:island', 'Cen': 'mdi:earth', 'Sco': 'mdi:volcano', 'Abe': 'mdi:radioactive', 'Ext': 'mdi:meteor'}
     parts = ['<div class="flex flex-col gap-2">']
 
     for row in rows:
@@ -2449,7 +2439,7 @@ def render_expandable_detail(tab):
         map_hl = map_data.get('highlight', '')
         spot_text = spot_data.get('text', '')
         icon_url = output_data.get('icon_url', '') if isinstance(output_data, dict) else ''
-        mdi = SERVER_MAP.get(map_hl,{}).get('icon','mdi:map-marker')
+        mdi = iconmap.get(map_hl, 'mdi:map-marker')
         blocks = flow_data.get('blocks', []) if isinstance(flow_data, dict) else []
 
         has_body = bool(blocks)
@@ -2552,7 +2542,8 @@ def render_farming_table(tab):
             parts.append(f'<td{attrs}>')
             if highlight and not no_badge:
                 # Map server ID to icon
-                icon=SERVER_MAP.get(highlight,{}).get('icon','mdi:server')
+                iconmap={'Isl':'mdi:island','Cen':'mdi:earth','Sco':'mdi:volcano','Abe':'mdi:radioactive','Ext':'mdi:meteor'}
+                icon=iconmap.get(highlight, 'mdi:server')
                 parts.append(f'<div class="map-badge"><ha-icon icon="{icon}"></ha-icon><div>{esc(text)}</div></div>')
             else:
                 parts.append(esc(text))
