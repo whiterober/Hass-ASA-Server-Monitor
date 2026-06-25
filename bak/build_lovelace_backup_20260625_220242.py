@@ -11,16 +11,16 @@ def esc(s):
 
 # Single source of truth for all server metadata
 SERVER_MAP = {
-    'Isl':{'label':'孤岛','icon':'mdi:island','color':'#4CAF50'},
-    'Sco':{'label':'焦土','icon':'mdi:volcano','color':'#FF5722'},
-    'Cen':{'label':'核心岛','icon':'mdi:diamond-stone','color':'#009688'},
-    'Abe':{'label':'畸变','icon':'mdi:radioactive','color':'#9C27B0'},
-    'Ext':{'label':'灭绝','icon':'mdi:meteor','color':'#00BCD4'},
-    'Ast':{'label':'繁星','icon':'mdi:star-four-points','color':'#FF9800'},
-    'Rag':{'label':'仙境','icon':'mdi:lighthouse-on','color':'#E91E63'},
-    'Val':{'label':'瓦尔盖罗','icon':'mdi:forest','color':'#4E9F62'},
-    'Bob':{'label':'俱乐部','icon':'mdi:party-popper','color':'#FFC107'},
-    'Los':{'label':'失落地','icon':'mdi:castle','color':'#607D8B'},
+    'Isl':{'label':'孤岛','icon':'mdi:island'},
+    'Sco':{'label':'焦土','icon':'mdi:volcano'},
+    'Cen':{'label':'核心岛','icon':'mdi:diamond-stone'},
+    'Abe':{'label':'畸变','icon':'mdi:radioactive'},
+    'Ext':{'label':'灭绝','icon':'mdi:meteor'},
+    'Ast':{'label':'繁星','icon':'mdi:star-four-points'},
+    'Rag':{'label':'仙境','icon':'mdi:lighthouse-on'},
+    'Val':{'label':'瓦尔盖罗','icon':'mdi:forest'},
+    'Bob':{'label':'俱乐部','icon':'mdi:party-popper'},
+    'Los':{'label':'失落地','icon':'mdi:castle'},
 }
 
 
@@ -2036,10 +2036,6 @@ def render_tab_html(tab):
                     for desc in blk.get('descriptions',[]):
                         if isinstance(desc,dict) and desc.get('server'):
                             active_maps.add(desc['server'])
-                        sst=desc.get('server_states',{}) if isinstance(desc,dict) else {}
-                        for k,v in sst.items():
-                            if v in (1,2):
-                                active_maps.add(k)
                 elif bbt=='supply_card':
                     fm=blk.get('filter_maps','')
                     if fm: active_maps.update(fm.split(','))
@@ -2097,19 +2093,13 @@ def render_tab_html(tab):
                     qc_style = ' style="border-left-color:{} !important"'.format(qc)
                 else:
                     qc_style = ''
-                # Auto-compute filter_maps from descriptions' server attributes (incl server_states)
+                # Auto-compute filter_maps from descriptions' server attributes
                 ic_fmaps=block.get('filter_maps','')
                 if not ic_fmaps and has_map_filter:
                     fmaps=set()
                     for desc in ic_descs:
-                        if isinstance(desc,dict):
-                            if desc.get('server'):
-                                fmaps.add(desc['server'])
-                            sst=desc.get('server_states',{})
-                            if sst:
-                                for k in sst:
-                                    if sst[k] in (1,2):
-                                        fmaps.add(k)
+                        if isinstance(desc,dict) and desc.get('server'):
+                            fmaps.add(desc['server'])
                     ic_fmaps=','.join(sorted(fmaps))
                 ext='' if not has_map_filter else ' filterable'
                 eattrs='' if not has_map_filter else ' data-filter-maps="{}"'.format(ic_fmaps)
@@ -2135,37 +2125,18 @@ def render_tab_html(tab):
                     dcolor = desc.get('color', '') if isinstance(desc, dict) else ''
                     dopacity = desc.get('opacity', 1.0) if isinstance(desc, dict) else 1.0
                     dserver = desc.get('server', '') if isinstance(desc, dict) else ''
-                    # 3-state: server_states per-map (0=off, 1=linear, 2=block)
-                    srv_states = desc.get('server_states', {}) if isinstance(desc, dict) else {}
-                    if not srv_states and dserver:
-                        srv_states = {dserver: 2}  # backward compat
-                    states_json = json.dumps(srv_states) if srv_states else '{}'
-                    # Build linear/block CSS classes
-                    linear_maps = [k for k,v in srv_states.items() if v == 1]
-                    block_maps = [k for k,v in srv_states.items() if v == 2]
-                    ic_cls = 'ic-text'
-                    if linear_maps:
-                        ic_cls += ' ' + ' '.join('ic-linear-'+m for m in linear_maps)
-                    if block_maps:
-                        ic_cls += ' ' + ' '.join('ic-block-'+m for m in block_maps)
                     dstyle = ''
                     if dbold: dstyle += 'font-weight:bold;'
                     if dcolor and dcolor not in ('#000000', 'auto'): dstyle += 'color:{};'.format(dcolor)
                     if dopacity != 1.0: dstyle += 'opacity:{};'.format(dopacity)
                     if dstyle: dstyle = ' style="{}"'.format(dstyle)
-                    # Server icon prefix (show highest-priority map icon)
+                    # Server icon prefix
                     srv_icon = ''
-                    _show_maps = block_maps + linear_maps
-                    if _show_maps and has_map_filter:
-                        _sid = _show_maps[0]
-                        _icon = SERVER_MAP.get(_sid,{}).get('icon','mdi:map')
-                        _clr = SERVER_MAP.get(_sid,{}).get('color','')
-                        srv_icon = '<i class="mdi {}" style="font-size:14px;vertical-align:middle;margin-right:2px;color:{}"></i>'.format(_icon.replace('mdi:','mdi-'), _clr)
-                    elif dserver:
+                    if dserver:
                         _icon = SERVER_MAP.get(dserver,{}).get('icon','mdi:map')
                         srv_icon = '<i class="mdi {}" style="font-size:14px;vertical-align:middle;margin-right:2px"></i>'.format(_icon.replace('mdi:','mdi-'))
-                    dserver_attr=' data-server="{}" data-server-states=\'{}\''.format(dserver, states_json)
-                    parts.append('<div class="{}"{{}}{{}}>{{}}{{}}</div>'.format(ic_cls).format(dstyle, dserver_attr, srv_icon, esc(dtext)))
+                    dserver_attr=' data-server="{}"'.format(dserver)
+                    parts.append('<div class="ic-text"{}{}>{}{}</div>'.format(dstyle,dserver_attr, srv_icon, esc(dtext)))
                 parts.append('</div>')
                 parts.append('</div>')
             elif bt=='supply_card':
@@ -2220,7 +2191,7 @@ def render_tab_html(tab):
                     "s._w=true;s.parentElement.classList.add('active');"
                     "r.querySelectorAll('.filterable').forEach(function(e){var fm=e.getAttribute('data-filter-maps')||'';var v=!fm||fm.indexOf(s.value)>=0;e.style.setProperty('display',v?'':'none',v?'':'important')});"
                     "r.querySelectorAll('.sc-srv').forEach(function(e){var v=e.getAttribute('data-map')===s.value;e.style.setProperty('display',v?'':'none',v?'':'important')});"
-                    "r.querySelectorAll('.ic-text[data-server-states]').forEach(function(e){var ss=JSON.parse(e.getAttribute('data-server-states')||'{}');var st=(ss[s.value]||0);if(st===0){e.style.setProperty('display','none','important')}else if(st===1){e.style.setProperty('display','','');e.classList.add('ic-linear-'+s.value)}else{e.style.setProperty('display','','');e.classList.add('ic-block-'+s.value)}})"
+                    "r.querySelectorAll('.ic-text[data-server]').forEach(function(e){var v=e.getAttribute('data-server')===s.value;e.style.setProperty('display',v?'':'none',v?'':'important')})"
                 )
                 if not active_maps:
                     parts.append('<div class="filter-bar" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;border:2px dashed var(--border);border-radius:8px;padding:8px 12px;color:var(--secondary-text-color);font-size:.85em;justify-content:center">暂无地图标记 — 为板块/描述指定归属服务器后出现筛选按钮</div>')
@@ -2747,12 +2718,6 @@ if __name__ == "__main__":
                 IC_CSS += 'ha-card .info-card-block ha-icon.ic-auto-color{color:var(--primary-text-color)!important;fill:var(--primary-text-color)!important}'
                 IC_CSS += 'ha-card .info-card-block img.ic-auto-color{filter:var(--ic-icon-filter,none)}'
                 css += IC_CSS
-                # 3-state map filter: linear (icon color) + block (background) per-map
-                if has_map_filter and active_maps:
-                    for m in sorted(active_maps):
-                        mc = SERVER_MAP.get(m,{}).get('color','#888')
-                        css += 'ha-card .ic-linear-'+m+' .mdi,ha-card .ic-linear-'+m+' ha-icon{color:'+mc+'!important}'
-                        css += 'ha-card .ic-block-'+m+'{background:rgba('+','.join(str(int(mc.lstrip('#')[i:i+2],16)) for i in (0,2,4))+',0.1)!important;border-radius:6px!important;padding:2px 6px!important}'
             if 'card_grid' in block_types:
                 css += 'ha-card .info-card{background:var(--primary-background-color);border-radius:8px;overflow:hidden;text-align:center;padding:0 0 8px 0}ha-card .info-card img{width:100%;aspect-ratio:1;object-fit:cover}ha-card .card-name{font-weight:600;margin:4px 0}ha-card .card-feature{font-size:0.85em;color:var(--secondary-text-color)}ha-card .card-grid{display:grid;gap:12px}'
         elif tab_type == 'server_grid':
