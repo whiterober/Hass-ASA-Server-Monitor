@@ -5,8 +5,7 @@ sys.path.insert(0, '/config')
 from build_lovelace import (
     render_server_grid, render_expandable_detail, render_farming_table, render_tab_html,
     SERVER_GRID_CSS, EXPANDABLE_DETAIL_CSS, FARMING_TABLE_CSS, SHARED_CSS,
-    CARD_CORE_CSS, TABLE_CORE_CSS, BASE_RAW_CSS, strip_and_append_empty_rows,
-    SERVER_MAP
+    CARD_CORE_CSS, TABLE_CORE_CSS, BASE_RAW_CSS, strip_and_append_empty_rows
 )
 
 DATA_DIR = '/config/www/asa-data'
@@ -231,46 +230,116 @@ def main():
             css += 'ha-card .supply-card .sc-body .sc-srv{display:flex!important;align-items:center!important;gap:4px!important;font-size:.85em!important}'
             css += ''
             css += 'ha-card .supply-card .sc-body .sc-srv img{width:20px!important;height:20px!important;object-fit:contain!important;border-radius:2px!important}'
-            for sid, sm in SERVER_MAP.items():
-                css += 'ha-card .supply-card .sc-srv[data-map={}]{{color:{}!important}}'.format(sid, sm['color'])
+            css += 'ha-card .supply-card .sc-srv[data-map=Isl]{color:#4CAF50!important}'
+            css += 'ha-card .supply-card .sc-srv[data-map=Sco]{color:#FF5722!important}'
+            css += 'ha-card .supply-card .sc-srv[data-map=Cen]{color:#009688!important}'
+            css += 'ha-card .supply-card .sc-srv[data-map=Abe]{color:#9C27B0!important}'
+            css += 'ha-card .supply-card .sc-srv[data-map=Ext]{color:#00BCD4!important}'
             css += 'ha-card .filter-bar{display:flex!important;flex-wrap:wrap!important;gap:6px!important;margin-bottom:12px!important}'
             css += 'ha-card .filter-radio{position:absolute!important;opacity:0!important;pointer-events:none!important}'
             css += 'ha-card .filter-bar{display:flex!important;flex-wrap:wrap!important;gap:0!important;margin-bottom:12px!important}'
             css += 'ha-card .filter-radio{position:absolute!important;opacity:0!important;width:0!important;height:0!important}'
             css += 'ha-card .filter-label{display:inline-flex!important;align-items:center!important;gap:4px!important;padding:4px 12px!important;border-radius:16px!important;border:1px solid var(--divider-color)!important;font-size:.85em!important;cursor:pointer!important;user-select:none!important;line-height:1.4!important;white-space:nowrap!important;min-height:28px!important;margin-right:6px!important}'
-            for sid, sm in SERVER_MAP.items():
-                css += 'ha-card .filter-label[data-map={}]{{background:{}!important;color:var(--primary-background-color)!important;border-color:{}!important}}'.format(sid, sm['color'], sm['color'])
+            css += 'ha-card .filter-label[data-map=Isl]{background:#4CAF50!important;color:#fff!important;border-color:#4CAF50!important}'
+            css += 'ha-card .filter-label[data-map=Sco]{background:#FF5722!important;color:#fff!important;border-color:#FF5722!important}'
+            css += 'ha-card .filter-label[data-map=Cen]{background:#009688!important;color:#fff!important;border-color:#009688!important}'
+            css += 'ha-card .filter-label[data-map=Abe]{background:#9C27B0!important;color:#fff!important;border-color:#9C27B0!important}'
+            css += 'ha-card .filter-label[data-map=Ext]{background:#00BCD4!important;color:#fff!important;border-color:#00BCD4!important}'
             css += 'ha-card .filter-label.active{box-shadow:0 0 0 2px var(--primary-text-color)!important}'
             css += 'ha-card .filter-label ha-icon{pointer-events:none!important}'
             css += 'ha-card:has(.filter-radio[value=\"\"]:checked) .filterable{display:flex!important}'
-            for sid in SERVER_MAP:
-                css += 'ha-card:has(.filter-radio[value="{}"]:checked) .filterable{{display:none!important}}'.format(sid)
-                css += 'ha-card:has(.filter-radio[value="{}"]:checked) .filterable[data-filter-maps*={}]{{display:flex!important}}'.format(sid, sid)
+            css += 'ha-card:has(.filter-radio[value=\"Isl\"]:checked) .filterable{display:none!important}'
+            css += 'ha-card:has(.filter-radio[value=\"Isl\"]:checked) .filterable[data-filter-maps*=Isl]{display:flex!important}'
+            css += 'ha-card:has(.filter-radio[value=\"Sco\"]:checked) .filterable{display:none!important}'
+            css += 'ha-card:has(.filter-radio[value=\"Sco\"]:checked) .filterable[data-filter-maps*=Sco]{display:flex!important}'
+            css += 'ha-card:has(.filter-radio[value=\"Cen\"]:checked) .filterable{display:none!important}'
+            css += 'ha-card:has(.filter-radio[value=\"Cen\"]:checked) .filterable[data-filter-maps*=Cen]{display:flex!important}'
+            css += 'ha-card:has(.filter-radio[value=\"Abe\"]:checked) .filterable{display:none!important}'
+            css += 'ha-card:has(.filter-radio[value=\"Abe\"]:checked) .filterable[data-filter-maps*=Abe]{display:flex!important}'
+            css += 'ha-card:has(.filter-radio[value=\"Ext\"]:checked) .filterable{display:none!important}'
+            css += 'ha-card:has(.filter-radio[value=\"Ext\"]:checked) .filterable[data-filter-maps*=Ext]{display:flex!important}'
+        if 'supply_card' in block_types or 'filtered_cards' in block_types or 'map_filter' in block_types:
+            css += 'ha-card .supply-card{border-radius:12px!important;border-left:4px solid var(--divider-color)!important;margin-bottom:8px!important;padding:12px!important;display:flex!important;gap:12px!important;background:var(--primary-background-color)!important}'
+            css += 'ha-card .supply-card .sc-icon{width:48px!important;height:48px!important;flex-shrink:0!important;object-fit:contain!important;border-radius:8px!important}'
+            css += 'ha-card .supply-card .sc-body{flex:1!important;min-width:0!important}'
+            css += 'ha-card .supply-card .sc-body .sc-title{font-weight:600!important;font-size:1.05em!important;margin-bottom:6px!important}'
+            css += 'ha-card .supply-card .sc-body .sc-servers{display:flex!important;flex-wrap:wrap!important;gap:6px 12px!important}'
+            css += 'ha-card .supply-card .sc-body .sc-srv{display:flex!important;align-items:center!important;gap:4px!important;font-size:.85em!important}'
+            css += ''
+            css += 'ha-card .supply-card .sc-body .sc-srv img{width:20px!important;height:20px!important;object-fit:contain!important;border-radius:2px!important}'
+            css += 'ha-card .supply-card .sc-srv[data-map=Isl]{color:#4CAF50!important}'
+            css += 'ha-card .supply-card .sc-srv[data-map=Sco]{color:#FF5722!important}'
+            css += 'ha-card .supply-card .sc-srv[data-map=Cen]{color:#009688!important}'
+            css += 'ha-card .supply-card .sc-srv[data-map=Abe]{color:#9C27B0!important}'
+            css += 'ha-card .supply-card .sc-srv[data-map=Ext]{color:#00BCD4!important}'
+            css += 'ha-card .filter-bar{display:flex!important;flex-wrap:wrap!important;gap:6px!important;margin-bottom:12px!important}'
+            css += 'ha-card .filter-radio{position:absolute!important;opacity:0!important;pointer-events:none!important}'
+            css += 'ha-card .filter-bar{display:flex!important;flex-wrap:wrap!important;gap:0!important;margin-bottom:12px!important}'
+            css += 'ha-card .filter-radio{position:absolute!important;opacity:0!important;width:0!important;height:0!important}'
+            css += 'ha-card .filter-label{display:inline-flex!important;align-items:center!important;gap:4px!important;padding:4px 12px!important;border-radius:16px!important;border:1px solid var(--divider-color)!important;font-size:.85em!important;cursor:pointer!important;user-select:none!important;line-height:1.4!important;white-space:nowrap!important;min-height:28px!important;margin-right:6px!important}'
+            css += 'ha-card .filter-label[data-map=Isl]{background:#4CAF50!important;color:#fff!important;border-color:#4CAF50!important}'
+            css += 'ha-card .filter-label[data-map=Sco]{background:#FF5722!important;color:#fff!important;border-color:#FF5722!important}'
+            css += 'ha-card .filter-label[data-map=Cen]{background:#009688!important;color:#fff!important;border-color:#009688!important}'
+            css += 'ha-card .filter-label[data-map=Abe]{background:#9C27B0!important;color:#fff!important;border-color:#9C27B0!important}'
+            css += 'ha-card .filter-label[data-map=Ext]{background:#00BCD4!important;color:#fff!important;border-color:#00BCD4!important}'
+            css += 'ha-card .filter-label.active{box-shadow:0 0 0 2px var(--primary-text-color)!important}'
+            css += 'ha-card .filter-label ha-icon{pointer-events:none!important}'
+            css += 'ha-card:has(.filter-radio[value=\"\"]:checked) .filterable{display:flex!important}'
+            css += 'ha-card:has(.filter-radio[value=\"Isl\"]:checked) .filterable{display:none!important}'
+            css += 'ha-card:has(.filter-radio[value=\"Isl\"]:checked) .filterable[data-filter-maps*=Isl]{display:flex!important}'
+            css += 'ha-card:has(.filter-radio[value=\"Sco\"]:checked) .filterable{display:none!important}'
+            css += 'ha-card:has(.filter-radio[value=\"Sco\"]:checked) .filterable[data-filter-maps*=Sco]{display:flex!important}'
+            css += 'ha-card:has(.filter-radio[value=\"Cen\"]:checked) .filterable{display:none!important}'
+            css += 'ha-card:has(.filter-radio[value=\"Cen\"]:checked) .filterable[data-filter-maps*=Cen]{display:flex!important}'
+            css += 'ha-card:has(.filter-radio[value=\"Abe\"]:checked) .filterable{display:none!important}'
+            css += 'ha-card:has(.filter-radio[value=\"Abe\"]:checked) .filterable[data-filter-maps*=Abe]{display:flex!important}'
+            css += 'ha-card:has(.filter-radio[value=\"Ext\"]:checked) .filterable{display:none!important}'
+            css += 'ha-card:has(.filter-radio[value=\"Ext\"]:checked) .filterable[data-filter-maps*=Ext]{display:flex!important}'
         if 'info_card' in block_types:
             IC_CSS = 'ha-card .info-card-block{border-radius:12px!important;border-left:4px solid!important;margin-bottom:8px!important;padding:12px!important;display:flex!important;align-items:flex-start!important;gap:12px!important}'
-            for sid, sm in SERVER_MAP.items():
-                IC_CSS += 'ha-card .info-card-block[data-map={}]{{border-color:{}!important;background:transparent!important}}'.format(sid, sm['color'])
+            IC_CSS += 'ha-card .info-card-block[data-map=Isl]{border-color:#4CAF50!important;background:transparent!important}'
+            IC_CSS += 'ha-card .info-card-block[data-map=Sco]{border-color:#FF5722!important;background:transparent!important}'
+            IC_CSS += 'ha-card .info-card-block[data-map=Cen]{border-color:#009688!important;background:transparent!important}'
+            IC_CSS += 'ha-card .info-card-block[data-map=Abe]{border-color:#9C27B0!important;background:transparent!important}'
+            IC_CSS += 'ha-card .info-card-block[data-map=Ext]{border-color:#00BCD4!important;background:transparent!important}'
             IC_CSS += 'ha-card .info-card-block .ic-icon{width:48px!important;height:48px!important;flex-shrink:0!important;object-fit:contain!important;border-radius:8px!important;background:transparent!important}'
             IC_CSS += 'ha-card .info-card-block .ic-body{flex:1!important;min-width:0!important}'
             IC_CSS += 'ha-card .info-card-block .ic-body .ic-title{font-weight:600!important;font-size:1.05em!important;margin-bottom:4px!important;display:flex;align-items:center;gap:4px}'
             IC_CSS += 'ha-card .info-card-block .ic-body .ic-title ha-icon{flex-shrink:0}'
             IC_CSS += 'ha-card .info-card-block .ic-body .ic-text{font-size:.9em!important;line-height:1.5!important}'
-            IC_CSS += 'ha-card .info-card-block .ic-sum-end{display:none}'
-            IC_CSS += 'ha-card .info-card-block details[open] .ic-sum-top{display:none!important}'
-            IC_CSS += 'ha-card .info-card-block details[open] .ic-sum-end{display:block!important}'
-            IC_CSS += 'ha-card .info-card-block ha-icon.ic-auto-color{color:var(--primary-background-color)!important;fill:var(--primary-text-color)!important}'
+            IC_CSS += 'ha-card .info-card-block ha-icon.ic-auto-color{color:var(--primary-text-color)!important;fill:var(--primary-text-color)!important}'
             IC_CSS += 'ha-card .info-card-block img.ic-auto-color{filter:var(--ic-icon-filter,none)}'
-            # 3-state map filter: linear (icon color) + block (background) per-map — auto-generated from SERVER_MAP
-            for sid, sm in SERVER_MAP.items():
-                IC_CSS += 'ha-card .ic-linear-{} .mdi,ha-card .ic-linear-{} ha-icon{{color:{}!important}}'.format(sid, sid, sm['color'])
-            for sid, sm in SERVER_MAP.items():
-                IC_CSS += 'ha-card .ic-text.ic-block-{}{{background:{}!important;border-radius:6px!important;padding:2px 6px!important;color:var(--primary-background-color)!important}}'.format(sid, sm['color'])
-            for sid in SERVER_MAP:
-                IC_CSS += 'ha-card .ic-text.ic-block-{} .mdi,ha-card .ic-text.ic-block-{} ha-icon{{color:var(--primary-background-color)!important}}'.format(sid, sid)
-            # Block-level card light-tint backgrounds (for server_states block=2)
-            for sid, sm in SERVER_MAP.items():
-                r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)
-                IC_CSS += 'ha-card .info-card-block.ic-block-{}{{background:rgba({},{},{},0.08)!important}}'.format(sid, r, g, b)
+            # 3-state map filter: linear (icon color) + block (background) per-map
+            IC_CSS += 'ha-card .ic-linear-Isl .mdi,ha-card .ic-linear-Isl ha-icon{color:#4CAF50!important}'
+            IC_CSS += 'ha-card .ic-linear-Sco .mdi,ha-card .ic-linear-Sco ha-icon{color:#FF5722!important}'
+            IC_CSS += 'ha-card .ic-linear-Cen .mdi,ha-card .ic-linear-Cen ha-icon{color:#009688!important}'
+            IC_CSS += 'ha-card .ic-linear-Abe .mdi,ha-card .ic-linear-Abe ha-icon{color:#9C27B0!important}'
+            IC_CSS += 'ha-card .ic-linear-Ext .mdi,ha-card .ic-linear-Ext ha-icon{color:#00BCD4!important}'
+            IC_CSS += 'ha-card .ic-linear-Ast .mdi,ha-card .ic-linear-Ast ha-icon{color:#FF9800!important}'
+            IC_CSS += 'ha-card .ic-linear-Rag .mdi,ha-card .ic-linear-Rag ha-icon{color:#E91E63!important}'
+            IC_CSS += 'ha-card .ic-linear-Val .mdi,ha-card .ic-linear-Val ha-icon{color:#4E9F62!important}'
+            IC_CSS += 'ha-card .ic-linear-Bob .mdi,ha-card .ic-linear-Bob ha-icon{color:#FFC107!important}'
+            IC_CSS += 'ha-card .ic-linear-Los .mdi,ha-card .ic-linear-Los ha-icon{color:#607D8B!important}'
+            IC_CSS += 'ha-card .ic-block-Isl{background:#4CAF50!important;border-radius:6px!important;padding:2px 6px!important;color:#fff!important}'
+            IC_CSS += 'ha-card .ic-block-Sco{background:#FF5722!important;border-radius:6px!important;padding:2px 6px!important;color:#fff!important}'
+            IC_CSS += 'ha-card .ic-block-Cen{background:#009688!important;border-radius:6px!important;padding:2px 6px!important;color:#fff!important}'
+            IC_CSS += 'ha-card .ic-block-Abe{background:#9C27B0!important;border-radius:6px!important;padding:2px 6px!important;color:#fff!important}'
+            IC_CSS += 'ha-card .ic-block-Ext{background:#00BCD4!important;border-radius:6px!important;padding:2px 6px!important;color:#fff!important}'
+            IC_CSS += 'ha-card .ic-block-Ast{background:#FF9800!important;border-radius:6px!important;padding:2px 6px!important;color:#fff!important}'
+            IC_CSS += 'ha-card .ic-block-Rag{background:#E91E63!important;border-radius:6px!important;padding:2px 6px!important;color:#fff!important}'
+            IC_CSS += 'ha-card .ic-block-Val{background:#4E9F62!important;border-radius:6px!important;padding:2px 6px!important;color:#fff!important}'
+            IC_CSS += 'ha-card .ic-block-Bob{background:#FFC107!important;border-radius:6px!important;padding:2px 6px!important;color:#fff!important}'
+            IC_CSS += 'ha-card .ic-block-Los{background:#607D8B!important;border-radius:6px!important;padding:2px 6px!important;color:#fff!important}'
+            IC_CSS += 'ha-card .ic-block-Isl .mdi,ha-card .ic-block-Isl ha-icon{color:#fff!important}'
+            IC_CSS += 'ha-card .ic-block-Sco .mdi,ha-card .ic-block-Sco ha-icon{color:#fff!important}'
+            IC_CSS += 'ha-card .ic-block-Cen .mdi,ha-card .ic-block-Cen ha-icon{color:#fff!important}'
+            IC_CSS += 'ha-card .ic-block-Abe .mdi,ha-card .ic-block-Abe ha-icon{color:#fff!important}'
+            IC_CSS += 'ha-card .ic-block-Ext .mdi,ha-card .ic-block-Ext ha-icon{color:#fff!important}'
+            IC_CSS += 'ha-card .ic-block-Ast .mdi,ha-card .ic-block-Ast ha-icon{color:#fff!important}'
+            IC_CSS += 'ha-card .ic-block-Rag .mdi,ha-card .ic-block-Rag ha-icon{color:#fff!important}'
+            IC_CSS += 'ha-card .ic-block-Val .mdi,ha-card .ic-block-Val ha-icon{color:#fff!important}'
+            IC_CSS += 'ha-card .ic-block-Bob .mdi,ha-card .ic-block-Bob ha-icon{color:#fff!important}'
+            IC_CSS += 'ha-card .ic-block-Los .mdi,ha-card .ic-block-Los ha-icon{color:#fff!important}'
             css += IC_CSS
         if 'card_grid' in block_types:
             css += 'ha-card .info-card{background:var(--primary-background-color);border-radius:8px;overflow:hidden;text-align:center;padding:0 0 8px 0}ha-card .info-card img{width:100%;aspect-ratio:1;object-fit:cover}ha-card .card-name{font-weight:600;margin:4px 0}ha-card .card-feature{font-size:0.85em;color:var(--secondary-text-color)}ha-card .card-grid{display:grid;gap:12px}'
@@ -318,9 +387,9 @@ def main():
     # which all have classed wrappers). On the actual HA page, daisyui inside
     # custom:tailwindcss-template-card provides typography defaults.
     # The preview has no daisyui, so we add equivalent typography for unclassed elements.
-    css += 'ha-card div.flex.flex-col>div:not([class]){line-height:1.6!important;margin-bottom:8px!important;color:var(--primary-background-color)!important}'
-    css += 'ha-card div.flex.flex-col>details:not([class]){line-height:1.6!important;margin-bottom:8px!important;color:var(--primary-background-color)!important;cursor:pointer!important}'
-    css += 'ha-card div.flex.flex-col>details:not([class]) summary{font-weight:600!important;color:var(--primary-background-color)!important;padding:4px 0!important}'
+    css += 'ha-card div.flex.flex-col>div:not([class]){line-height:1.6!important;margin-bottom:8px!important;color:var(--primary-text-color)!important}'
+    css += 'ha-card div.flex.flex-col>details:not([class]){line-height:1.6!important;margin-bottom:8px!important;color:var(--primary-text-color)!important;cursor:pointer!important}'
+    css += 'ha-card div.flex.flex-col>details:not([class]) summary{font-weight:600!important;color:var(--primary-text-color)!important;padding:4px 0!important}'
     # === End preview-only typography ===
 
     full_html = """<!DOCTYPE html>

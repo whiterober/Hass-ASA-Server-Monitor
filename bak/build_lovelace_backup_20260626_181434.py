@@ -1819,9 +1819,6 @@ ha-card .info-card-block .ic-body .ic-title { font-weight: 600 !important; font-
 ha-card .info-card-block .ic-body .ic-title ha-icon { flex-shrink: 0; }
 ha-card .info-card-block .ic-body .ic-title .ic-emoji { flex-shrink: 0; font-size: 1.2em; }
 ha-card .info-card-block .ic-body .ic-text { font-size: 0.9em !important; line-height: 1.5 !important; }
-ha-card .info-card-block .ic-sum-end { display: none; }
-ha-card .info-card-block details[open] .ic-sum-top { display: none !important; }
-ha-card .info-card-block details[open] .ic-sum-end { display: block !important; }
 ha-card .info-card-block ha-icon.ic-auto-color { color: var(--primary-text-color) !important; fill: var(--primary-text-color) !important; }
 ha-card .info-card-block img.ic-auto-color { filter: var(--ic-icon-filter, none); }
 
@@ -2163,9 +2160,6 @@ def render_tab_html(tab):
                         parts.append('<i class="mdi {}" style="font-size:16px;vertical-align:middle;margin-right:4px;color:{}"></i>'.format(_bicon.replace('mdi:','mdi-'), _bcolor))
                 parts.append('<span{}>{}</span>'.format(title_color_style, esc(ic_title)))
                 parts.append('</div>')
-                ic_collapse = block.get('collapse_descriptions', False)
-                if ic_collapse:
-                    parts.append('<details name="ic-acc" style="cursor:pointer;margin:0;padding:0;width:100%"><summary class="ic-sum-top" style="display:block;font-size:0.65em;background:rgba(128,128,128,0.12);border:1px solid var(--border);border-radius:10px;padding:1px 7px;margin-bottom:2px;list-style:none;cursor:pointer;width:100%;box-sizing:border-box">···</summary><div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;width:100%">')
                 for desc in ic_descs:
                     if isinstance(desc, dict) and desc.get('type') == 'br':
                         parts.append('<div style="flex-basis:100%;height:0"></div>')
@@ -2190,7 +2184,7 @@ def render_tab_html(tab):
                         ic_cls += ' ' + ' '.join('ic-block-'+m for m in block_maps)
                     dstyle = ''
                     if dbold: dstyle += 'font-weight:bold;'
-                    if dcolor and dcolor not in ('#000000', 'auto') and not block_maps: dstyle += 'color:{};'.format(dcolor)
+                    if dcolor and dcolor not in ('#000000', 'auto'): dstyle += 'color:{};'.format(dcolor)
                     if dopacity != 1.0: dstyle += 'opacity:{};'.format(dopacity)
                     if dstyle: dstyle = ' style="{}"'.format(dstyle)
                     # Server icon prefix (show highest-priority map icon)
@@ -2200,14 +2194,12 @@ def render_tab_html(tab):
                         _sid = _show_maps[0]
                         _icon = SERVER_MAP.get(_sid,{}).get('icon','mdi:map')
                         _clr = SERVER_MAP.get(_sid,{}).get('color','')
-                        srv_icon = '<i class="mdi {}" style="font-size:14px;vertical-align:middle;margin-right:2px;color:oklch(var(--pc))"></i>'.format(_icon.replace('mdi:','mdi-'))
+                        srv_icon = '<i class="mdi {}" style="font-size:14px;vertical-align:middle;margin-right:2px;color:{}"></i>'.format(_icon.replace('mdi:','mdi-'), _clr)
                     elif dserver:
                         _icon = SERVER_MAP.get(dserver,{}).get('icon','mdi:map')
-                        srv_icon = '<i class="mdi {}" style="font-size:14px;vertical-align:middle;margin-right:2px;color:oklch(var(--pc))"></i>'.format(_icon.replace('mdi:','mdi-'))
+                        srv_icon = '<i class="mdi {}" style="font-size:14px;vertical-align:middle;margin-right:2px"></i>'.format(_icon.replace('mdi:','mdi-'))
                     dserver_attr=' data-server="{}" data-server-states=\'{}\''.format(dserver, states_json)
                     parts.append('<div class="{}"{{}}{{}}>{{}}{{}}</div>'.format(ic_cls).format(dstyle, dserver_attr, srv_icon, esc(dtext)))
-                if ic_collapse:
-                    parts.append('<span class="ic-sum-end" style="font-size:0.65em;background:rgba(128,128,128,0.12);border:1px solid var(--border);border-radius:10px;padding:1px 7px;margin-top:2px;flex-basis:100%;cursor:pointer" onclick="event.stopPropagation();this.closest(\'details\').open=false">···</span></div></details>')
                 parts.append('</div>')
                 parts.append('</div>')
             elif bt=='supply_card':
@@ -2261,8 +2253,8 @@ def render_tab_html(tab):
                     "r.querySelectorAll('.filter-radio').forEach(function(o){o._w=false;o.parentElement.classList.remove('active')});"
                     "s._w=true;s.parentElement.classList.add('active');"
                     "r.querySelectorAll('.filterable').forEach(function(e){var fm=e.getAttribute('data-filter-maps')||'';var v=!fm||fm.indexOf(s.value)>=0;e.style.setProperty('display',v?'':'none',v?'':'important')});"
-                    "r.querySelectorAll('.sc-srv').forEach(function(e){var pf=e.closest('.filterable');if(pf&&(pf.classList.contains('ic-block-'+s.value)||pf.classList.contains('ic-linear-'+s.value))){e.style.setProperty('display','','');return}var v=e.getAttribute('data-map')===s.value;e.style.setProperty('display',v?'':'none',v?'':'important')});"
-                    "r.querySelectorAll('.ic-text[data-server-states]').forEach(function(e){var pf=e.closest('.filterable');if(pf&&(pf.classList.contains('ic-block-'+s.value)||pf.classList.contains('ic-linear-'+s.value))){e.style.setProperty('display','','');return}var ss=JSON.parse(e.getAttribute('data-server-states')||'{}');var st=(ss[s.value]||0);if(st===0){e.style.setProperty('display','none','important')}else{e.style.setProperty('display','','');if(st===1){e.classList.add('ic-linear-'+s.value)}else{e.classList.add('ic-block-'+s.value)}}})"
+                    "r.querySelectorAll('.sc-srv').forEach(function(e){var pf=e.closest('.filterable');if(pf){var pfm=pf.getAttribute('data-filter-maps')||'';if(pfm&&pfm.indexOf(s.value)>=0){e.style.setProperty('display','','');return}}var v=e.getAttribute('data-map')===s.value;e.style.setProperty('display',v?'':'none',v?'':'important')});"
+                    "r.querySelectorAll('.ic-text[data-server-states]').forEach(function(e){var pf=e.closest('.filterable');if(pf){var pfm=pf.getAttribute('data-filter-maps')||'';if(pfm&&pfm.indexOf(s.value)>=0){e.style.setProperty('display','','');return}}var ss=JSON.parse(e.getAttribute('data-server-states')||'{}');var st=(ss[s.value]||0);if(st===0){e.style.setProperty('display','none','important')}else{e.style.setProperty('display','','');if(st===1){e.classList.add('ic-linear-'+s.value)}else{e.classList.add('ic-block-'+s.value)}}})"
                 )
                 if not active_maps:
                     parts.append('<div class="filter-bar" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;border:2px dashed var(--border);border-radius:8px;padding:8px 12px;color:var(--secondary-text-color);font-size:.85em;justify-content:center">暂无地图标记 — 为板块/描述指定归属服务器后出现筛选按钮</div>')
@@ -2782,11 +2774,11 @@ if __name__ == "__main__":
                 css += 'ha-card .filter-bar{display:flex!important;flex-wrap:wrap!important;gap:0!important;margin-bottom:12px!important}'
                 css += 'ha-card .filter-radio{position:absolute!important;opacity:0!important;width:0!important;height:0!important}'
                 css += 'ha-card .filter-label{display:inline-flex!important;align-items:center!important;gap:4px!important;padding:4px 12px!important;border-radius:16px!important;border:1px solid var(--divider-color)!important;font-size:.85em!important;cursor:pointer!important;user-select:none!important;line-height:1.4!important;white-space:nowrap!important;min-height:28px!important;margin-right:6px!important}'
-                css += 'ha-card .filter-label[data-map=Isl]{background:#4CAF50!important;color:var(--primary-background-color)!important;border-color:#4CAF50!important}'
-                css += 'ha-card .filter-label[data-map=Sco]{background:#FF5722!important;color:var(--primary-background-color)!important;border-color:#FF5722!important}'
-                css += 'ha-card .filter-label[data-map=Cen]{background:#009688!important;color:var(--primary-background-color)!important;border-color:#009688!important}'
-                css += 'ha-card .filter-label[data-map=Abe]{background:#9C27B0!important;color:var(--primary-background-color)!important;border-color:#9C27B0!important}'
-                css += 'ha-card .filter-label[data-map=Ext]{background:#00BCD4!important;color:var(--primary-background-color)!important;border-color:#00BCD4!important}'
+                css += 'ha-card .filter-label[data-map=Isl]{background:#4CAF50!important;color:#fff!important;border-color:#4CAF50!important}'
+                css += 'ha-card .filter-label[data-map=Sco]{background:#FF5722!important;color:#fff!important;border-color:#FF5722!important}'
+                css += 'ha-card .filter-label[data-map=Cen]{background:#009688!important;color:#fff!important;border-color:#009688!important}'
+                css += 'ha-card .filter-label[data-map=Abe]{background:#9C27B0!important;color:#fff!important;border-color:#9C27B0!important}'
+                css += 'ha-card .filter-label[data-map=Ext]{background:#00BCD4!important;color:#fff!important;border-color:#00BCD4!important}'
                 css += 'ha-card .filter-label.active{box-shadow:0 0 0 2px var(--primary-text-color)!important}'
                 css += 'ha-card .filter-label ha-icon{pointer-events:none!important}'
                 css += 'ha-card:has(.filter-radio[value=\"\"]:checked) .filterable{display:flex!important}'
@@ -2812,10 +2804,7 @@ if __name__ == "__main__":
                 IC_CSS += 'ha-card .info-card-block .ic-body .ic-title{font-weight:600!important;font-size:1.05em!important;margin-bottom:4px!important;display:flex;align-items:center;gap:4px}'
                 IC_CSS += 'ha-card .info-card-block .ic-body .ic-title ha-icon{flex-shrink:0}'
                 IC_CSS += 'ha-card .info-card-block .ic-body .ic-text{font-size:.9em!important;line-height:1.5!important}'
-                IC_CSS += 'ha-card .info-card-block .ic-sum-end{display:none}'
-                IC_CSS += 'ha-card .info-card-block details[open] .ic-sum-top{display:none!important}'
-                IC_CSS += 'ha-card .info-card-block details[open] .ic-sum-end{display:block!important}'
-                IC_CSS += 'ha-card .info-card-block ha-icon.ic-auto-color{color:var(--primary-background-color)!important;fill:var(--primary-text-color)!important}'
+                IC_CSS += 'ha-card .info-card-block ha-icon.ic-auto-color{color:var(--primary-text-color)!important;fill:var(--primary-text-color)!important}'
                 IC_CSS += 'ha-card .info-card-block img.ic-auto-color{filter:var(--ic-icon-filter,none)}'
                 css += IC_CSS
                 # 3-state map filter: linear (icon color) + block (background) per-map
@@ -2823,8 +2812,8 @@ if __name__ == "__main__":
                     for m in sorted(active_maps):
                         mc = SERVER_MAP.get(m,{}).get('color','#888')
                         css += 'ha-card .ic-linear-'+m+' .mdi,ha-card .ic-linear-'+m+' ha-icon{color:'+mc+'!important}'
-                        css += 'ha-card .ic-block-'+m+'{background:'+mc+'!important;border-radius:6px!important;padding:2px 6px!important;color:var(--primary-background-color)!important}'
-                        css += 'ha-card .ic-block-'+m+' .mdi,ha-card .ic-block-'+m+' ha-icon{color:var(--primary-background-color)!important}'
+                        css += 'ha-card .ic-block-'+m+'{background:'+mc+'!important;border-radius:6px!important;padding:2px 6px!important;color:#fff!important}'
+                        css += 'ha-card .ic-block-'+m+' .mdi,ha-card .ic-block-'+m+' ha-icon{color:#fff!important}'
             if 'card_grid' in block_types:
                 css += 'ha-card .info-card{background:var(--primary-background-color);border-radius:8px;overflow:hidden;text-align:center;padding:0 0 8px 0}ha-card .info-card img{width:100%;aspect-ratio:1;object-fit:cover}ha-card .card-name{font-weight:600;margin:4px 0}ha-card .card-feature{font-size:0.85em;color:var(--secondary-text-color)}ha-card .card-grid{display:grid;gap:12px}'
         elif tab_type == 'server_grid':
