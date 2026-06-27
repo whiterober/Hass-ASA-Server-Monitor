@@ -539,7 +539,7 @@ button { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; f
 
 .sr-cat-card > div > label:empty, .sr-cat-card > div > label:has(+ .cat-col-bq) { display:none !important; }
 
-.cat-bold-btn { font-size:0.55em;cursor:pointer;color:var(--text);opacity:.4;user-select:none;margin-left:6px;margin-right:4px;line-height:1;transition:opacity .15s,color .15s; }
+.cat-bold-btn { font-size:0.55em;cursor:pointer;color:var(--text);opacity:.4;user-select:none;margin-left:1px;line-height:1;transition:opacity .15s,color .15s; }
 
 .cat-bold-btn:hover { opacity:.7; }
 
@@ -2062,7 +2062,11 @@ function addSGLocation(itemIdx, serverId) {
 
 const MC_TYPE_LABELS = {
 
-  map_filter:'地图筛选', info_card:'卡片', divider:'分隔线',
+  server_grid:'服务器矩阵', expandable_detail:'可展开卡片',
+
+  supply_card:'补给卡片', map_filter:'地图筛选', info_card:'卡片',
+
+  card_grid:'卡片网格', table:'表格', text:'文本', divider:'分隔线',
 
   base_storage:'存储', base_device:'设备', base_other_device:'其它设备',
 
@@ -2084,9 +2088,9 @@ function renderMixedContent(tab) {
 
     const bt = b.block_type || 'text';
 
-    const colors = {map_filter:'#795548', info_card:'#FF9800', divider:'#607D8B'};
+    const colors = {server_grid:'#4CAF50', expandable_detail:'#00BCD4', supply_card:'#E91E63', map_filter:'#795548', info_card:'#FF9800', card_grid:'#FF5722', table:'#9C27B0', text:'#009688', divider:'#607D8B'};
 
-    h += '<div class="sub-section" data-bi="'+bi+'" style="border-left:4px solid '+((bt==='info_card'&&b.quote_color&&b.quote_color!=='auto')?b.quote_color:(bt==='divider'&&b.color&&b.color!=='auto')?b.color:'var(--text)')+(bt==='map_filter'?';cursor:default':'')+'">';
+    h += '<div class="sub-section" data-bi="'+bi+'" style="border-left:4px solid '+((bt==='info_card'&&b.quote_color&&b.quote_color!=='auto')?b.quote_color:'var(--text)')+(bt==='map_filter'?';cursor:default':'')+'">';
 
     h += '<div style="display:flex;align-items:center;margin-bottom:0;min-height:28px">';
 
@@ -2110,7 +2114,7 @@ function renderMixedContent(tab) {
             else { bg = 'background:transparent;border:1px solid transparent'; icn = '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:'+sm.c+'"></i>'; }
           }
         }
-        return '<button class="btn-small btn-server" id="mcBlockSrvBtn'+bi+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;'+bg+'" title="选择服务器" onclick="event.stopPropagation();toggleBlockServerPopup(this,'+bi+');">'+icn+'</button>';
+        return '<button class="btn-small btn-server" id="mcBlockSrvBtn'+bi+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;'+bg+'" onclick="event.stopPropagation();toggleBlockServerPopup(this,'+bi+');">'+icn+'</button>';
       })();
     }
 
@@ -2144,15 +2148,9 @@ function renderMixedContent(tab) {
 
     else if (bt === 'divider') {
 
-      h += '<div class="form-group" style="display:flex;align-items:center;gap:8px"><span class="cat-color-wrap" style="padding:0;margin:0"><span class="cat-color-dot" id="mcDivColorDot'+bi+'" data-target="mcDivColor'+bi+'" style="background:'+(b.color&&b.color!=='auto'?esc(b.color):'linear-gradient(to right, #000 50%, #fff 50%)')+';cursor:pointer" title="选择颜色" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-bold-btn'+(b.title_bold?' active':'')+'" title="加粗" onclick="event.stopPropagation();var cb=document.getElementById(\'mcDivTitleBold'+bi+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcDivTitle'+bi+'" value="'+esc(b.title||'')+'" placeholder="标题" style="box-sizing:border-box;flex:1;padding:4px 8px;font-size:0.85em;border-radius:0;border:none"><input type="checkbox" id="mcDivTitleBold'+bi+'" '+(b.title_bold?'checked':'')+' style="display:none"></span></span><input type="hidden" id="mcDivColor'+bi+'" value="'+esc(b.color||'auto')+'"></div>';
+      h += '<div class="form-group"><label>线型</label><select id="mcDivStyle'+bi+'">';
 
-      h += '<div class="form-group"><span class="cat-col-bq" id="mcDivStyleSeg'+bi+'">';
-
-      (function(){var ls=[{v:'solid',h:'实线'},{v:'dashed',h:'虚线'},{v:'wavy',h:'波浪'},{v:'double',h:'双线'}];ls.forEach(function(o){h+='<span class="cat-col-seg'+((b.style||'solid')===o.v?' active':'')+'" data-val="'+o.v+'" onclick="var t=this,p=t.parentElement;p.querySelectorAll(\'.cat-col-seg\').forEach(function(s){s.classList.toggle(\'active\',s===t)});document.getElementById(\'mcDivStyle'+bi+'\').value=t.dataset.val" style="cursor:pointer;min-width:30px;text-align:center;line-height:24px">'+o.h+'</span>';});})();
-
-      h += '</span><select id="mcDivStyle'+bi+'" style="display:none">';
-
-      [{v:'solid',l:'实线'},{v:'dashed',l:'虚线'},{v:'wavy',l:'波浪'},{v:'double',l:'双线'}].forEach(function(o){
+      [{v:'solid',l:'实线'},{v:'dashed',l:'虚线'},{v:'wavy',l:'波浪线'},{v:'double',l:'双线'}].forEach(o => {
 
         h += '<option value="'+o.v+'" '+((b.style||'solid')===o.v?'selected':'')+'>'+o.l+'</option>';
 
@@ -2380,7 +2378,7 @@ function renderMixedContent(tab) {
 
     else if (bt === 'info_card') {
 
-            h += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><span class="cat-color-wrap" style="flex-shrink:0" title="引用块色条颜色"><span class="cat-color-dot" id="mcICQuoteDot'+bi+'" style="background:'+(b.quote_color&&b.quote_color!=='auto'?esc(b.quote_color):'linear-gradient(to right, #000 50%, #fff 50%)')+'" data-target="mcICQuoteColor'+bi+'" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><input type="hidden" id="mcICQuoteColor'+bi+'" value="'+esc(b.quote_color||'auto')+'"><input id="mcICMdi'+bi+'" value="'+esc(b.mdi_icon||'')+'" placeholder="MDI" title="MDI 图标" style="box-sizing:border-box;width:28px;height:28px;padding:4px;font-size:0.7em;border-radius:4px;text-align:center;flex-shrink:0">'+(b.icon_url?'<img src="'+esc(b.icon_url)+'" id="mcICIconPreview'+bi+'" style="width:28px;height:28px;object-fit:contain;cursor:pointer;flex-shrink:0;filter:'+(b.icon_auto_color?'var(--ic-icon-filter,invert(1))':'none')+'" onclick="event.stopPropagation();openIconPicker_ic('+bi+')" title="点击换图标" onerror="this.hidden=true">':'<span id="mcICIconPlaceholder'+bi+'" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px 0 0 3px" onclick="event.stopPropagation();openIconPicker_ic('+bi+')" title="选择图标">+</span>')+'<span style="display:flex;flex-shrink:0;margin-left:-8px"><input type="hidden" id="mcICIcon'+bi+'" value="'+esc(b.icon_url||'')+'">'+(function(){var ac=b.icon_auto_color;var s=ac?'background:transparent;color:var(--accent);border:none;':'background:transparent;color:var(--primary-text-color);opacity:0.5;border:1px solid var(--border);';return '<button title="图片跟随主题自动反色：'+(ac?'已开启':'已关闭')+'" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICAutoColor'+bi+'\');cb.checked=!cb.checked;var a=cb.checked;this.title=a?\'图片跟随主题自动反色：已开启\':\'图片跟随主题自动反色：已关闭\';this.style.cssText=a?\'width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;border-radius:0 3px 3px 0;background:transparent;color:var(--accent);border:none\':\'width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;border-radius:0 3px 3px 0;background:transparent;color:var(--primary-text-color);opacity:0.5;border:1px solid var(--border)\';var img=document.getElementById(\'mcICIconPreview'+bi+'\');if(img)img.style.filter=a?\'var(--ic-icon-filter,invert(1))\':\'none\';" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;border-radius:0 3px 3px 0;'+s+'"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12,2C6.49,2 2,6.49 2,12S6.49,22 12,22C13.38,22 14.5,20.88 14.5,19.5C14.5,18.87 14.29,18.29 13.94,17.82C13.58,17.36 13.5,16.76 13.5,16.25C13.5,15.15 14.35,14.25 15.45,14.25H17.42C19.86,14.25 22,12.28 22,9.75C22,5.41 17.43,2 12,2M6.5,9A1.5,1.5 0 0,1 8,10.5A1.5,1.5 0 0,1 6.5,12A1.5,1.5 0 0,1 5,10.5A1.5,1.5 0 0,1 6.5,9M9.5,6A1.5,1.5 0 0,1 11,7.5A1.5,1.5 0 0,1 9.5,9A1.5,1.5 0 0,1 8,7.5A1.5,1.5 0 0,1 9.5,6M14.5,6A1.5,1.5 0 0,1 16,7.5A1.5,1.5 0 0,1 14.5,9A1.5,1.5 0 0,1 13,7.5A1.5,1.5 0 0,1 14.5,6M17.5,9A1.5,1.5 0 0,1 19,10.5A1.5,1.5 0 0,1 17.5,12A1.5,1.5 0 0,1 16,10.5A1.5,1.5 0 0,1 17.5,9Z"/></svg></button></span>';}())+'<span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap" title="标题颜色"><span class="cat-color-dot" id="mcICTitleCDot'+bi+'" style="background:'+(b.title_color&&b.title_color!=='auto'?esc(b.title_color):'linear-gradient(to right, #000 50%, #fff 50%)')+'" data-target="mcICTitleColor'+bi+'" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><input id="mcICTitle'+bi+'" value="'+esc(b.title||'')+'" placeholder="标题" style="box-sizing:border-box;flex:1;padding:4px 8px;font-size:0.85em;border-radius:0;border:none"></span></span><input type="hidden" id="mcICTitleColor'+bi+'" value="'+esc(b.title_color||'auto')+'"></div>';      
+            h += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><span class="cat-color-wrap" style="flex-shrink:0" title="引用块色条颜色"><span class="cat-color-dot" id="mcICQuoteDot'+bi+'" style="background:'+(b.quote_color&&b.quote_color!=='auto'?esc(b.quote_color):'linear-gradient(to right, #000 50%, #fff 50%)')+'" data-target="mcICQuoteColor'+bi+'" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><input type="hidden" id="mcICQuoteColor'+bi+'" value="'+esc(b.quote_color||'auto')+'"><input id="mcICMdi'+bi+'" value="'+esc(b.mdi_icon||'')+'" placeholder="MDI" style="box-sizing:border-box;width:28px;height:28px;padding:4px;font-size:0.7em;border-radius:4px;text-align:center;flex-shrink:0">'+(b.icon_url?'<img src="'+esc(b.icon_url)+'" id="mcICIconPreview'+bi+'" style="width:28px;height:28px;object-fit:contain;cursor:pointer;flex-shrink:0;filter:'+(b.icon_auto_color?'var(--ic-icon-filter,invert(1))':'none')+'" onclick="event.stopPropagation();openIconPicker_ic('+bi+')" title="点击换图标" onerror="this.hidden=true">':'<span id="mcICIconPlaceholder'+bi+'" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px 0 0 3px" onclick="event.stopPropagation();openIconPicker_ic('+bi+')" title="选择图标">+</span>')+'<span style="display:flex;flex-shrink:0;margin-left:-8px"><input type="hidden" id="mcICIcon'+bi+'" value="'+esc(b.icon_url||'')+'">'+(function(){var ac=b.icon_auto_color;var s=ac?'background:transparent;color:var(--accent);border:none;':'background:transparent;color:var(--primary-text-color);opacity:0.5;border:1px solid var(--border);';return '<button title="图片跟随主题自动反色：'+(ac?'已开启':'已关闭')+'" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICAutoColor'+bi+'\');cb.checked=!cb.checked;var a=cb.checked;this.title=a?\'图片跟随主题自动反色：已开启\':\'图片跟随主题自动反色：已关闭\';this.style.cssText=a?\'width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;border-radius:0 3px 3px 0;background:transparent;color:var(--accent);border:none\':\'width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;border-radius:0 3px 3px 0;background:transparent;color:var(--primary-text-color);opacity:0.5;border:1px solid var(--border)\';var img=document.getElementById(\'mcICIconPreview'+bi+'\');if(img)img.style.filter=a?\'var(--ic-icon-filter,invert(1))\':\'none\';" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;border-radius:0 3px 3px 0;'+s+'"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12,2C6.49,2 2,6.49 2,12S6.49,22 12,22C13.38,22 14.5,20.88 14.5,19.5C14.5,18.87 14.29,18.29 13.94,17.82C13.58,17.36 13.5,16.76 13.5,16.25C13.5,15.15 14.35,14.25 15.45,14.25H17.42C19.86,14.25 22,12.28 22,9.75C22,5.41 17.43,2 12,2M6.5,9A1.5,1.5 0 0,1 8,10.5A1.5,1.5 0 0,1 6.5,12A1.5,1.5 0 0,1 5,10.5A1.5,1.5 0 0,1 6.5,9M9.5,6A1.5,1.5 0 0,1 11,7.5A1.5,1.5 0 0,1 9.5,9A1.5,1.5 0 0,1 8,7.5A1.5,1.5 0 0,1 9.5,6M14.5,6A1.5,1.5 0 0,1 16,7.5A1.5,1.5 0 0,1 14.5,9A1.5,1.5 0 0,1 13,7.5A1.5,1.5 0 0,1 14.5,6M17.5,9A1.5,1.5 0 0,1 19,10.5A1.5,1.5 0 0,1 17.5,12A1.5,1.5 0 0,1 16,10.5A1.5,1.5 0 0,1 17.5,9Z"/></svg></button></span>';}())+'<span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap" title="标题颜色"><span class="cat-color-dot" id="mcICTitleCDot'+bi+'" style="background:'+(b.title_color&&b.title_color!=='auto'?esc(b.title_color):'linear-gradient(to right, #000 50%, #fff 50%)')+'" data-target="mcICTitleColor'+bi+'" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><input id="mcICTitle'+bi+'" value="'+esc(b.title||'')+'" placeholder="标题" style="box-sizing:border-box;flex:1;padding:4px 8px;font-size:0.85em;border-radius:0;border:none"></span></span><input type="hidden" id="mcICTitleColor'+bi+'" value="'+esc(b.title_color||'auto')+'"></div>';      
       var selectedMaps = (document.getElementById('mcICHL'+bi)?.value || b.highlight||'').split(',').filter(function(x){ return x; });
       h += '<input type="hidden" id="mcICHL'+bi+'" value="'+esc(b.highlight||'')+'">';
       h += '<input type="hidden" id="mcBlockSrvStates'+bi+'" value="'+esc(JSON.stringify(b.server_states||(b.highlight?{[b.highlight]:2}:{})))+'">';
@@ -2396,7 +2394,7 @@ function renderMixedContent(tab) {
         if (d.type === 'br') {
           h += '<div class="sr-cat-card" style="border:1px dashed var(--border);border-radius:3px;padding:2px 6px;margin-bottom:3px;text-align:center;font-size:0.75em;opacity:0.6"><span class="drag-handle" style="cursor:grab;float:left;opacity:0.4">\u22ee\u22ee</span>\u21b5 \u6362\u884c <button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div>';
         } else {
-          h += '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:'+(d.color&&d.color!=='auto'?esc(d.color):'linear-gradient(to right, #000 50%, #fff 50%)')+';cursor:pointer" title="选择颜色" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" title="选择透明度" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:'+(d.opacity||1.0)+';background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="'+(d.opacity||1.0)+'"><span class="cat-bold-btn'+(d.bold?' active':'')+'" title="加粗" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="'+esc(d.text||'')+'" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" '+(d.bold?'checked':'')+' style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="'+esc(d.color||'auto')+'" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value="'+esc(d.server||'')+'"><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="'+esc(JSON.stringify(d.server_states||(d.server?{[d.server]:2}:{})))+'"></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return 'background:transparent;border:1px solid transparent';var sm=SERVER_MAP[ak];if(!sm)return 'background:transparent;border:1px solid transparent';if(ast===2)return 'background:'+sm.c+';border:none';return 'background:transparent;border:1px solid transparent';})()+'" title="选择服务器" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return getServerBadge('');var sm=SERVER_MAP[ak];if(!sm)return getServerBadge('');if(ast===1)return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:'+sm.c+'"></i>';return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:var(--primary-background-color)"></i>';})()+'</button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
+          h += '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:'+(d.color&&d.color!=='auto'?esc(d.color):'linear-gradient(to right, #000 50%, #fff 50%)')+';cursor:pointer" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:'+(d.opacity||1.0)+';background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="'+(d.opacity||1.0)+'"><span class="cat-bold-btn'+(d.bold?' active':'')+'" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="'+esc(d.text||'')+'" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" '+(d.bold?'checked':'')+' style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="'+esc(d.color||'auto')+'" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value="'+esc(d.server||'')+'"><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="'+esc(JSON.stringify(d.server_states||(d.server?{[d.server]:2}:{})))+'"></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return 'background:transparent;border:1px solid transparent';var sm=SERVER_MAP[ak];if(!sm)return 'background:transparent;border:1px solid transparent';if(ast===2)return 'background:'+sm.c+';border:none';return 'background:transparent;border:1px solid transparent';})()+'" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return getServerBadge('');var sm=SERVER_MAP[ak];if(!sm)return getServerBadge('');if(ast===1)return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:'+sm.c+'"></i>';return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:var(--primary-background-color)"></i>';})()+'</button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
         }
       }
 
@@ -2421,7 +2419,7 @@ function renderMixedContent(tab) {
 
   h += '<div class="add-block-panel" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:0">';
 
-  Object.entries(MC_TYPE_LABELS).filter(function(e){return['map_filter','info_card','divider'].includes(e[0])}).forEach(([k,v]) => {
+  Object.entries(MC_TYPE_LABELS).forEach(([k,v]) => {
 
     h += '<button class="btn-small btn-primary" style="white-space:nowrap;flex-shrink:0" onclick="addMCBlock(\''+k+'\')">+ '+v+'</button>';
 
@@ -2609,7 +2607,7 @@ function addICDesc(bi) {
 
   const di = container.children.length;
 
-  const h = '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:linear-gradient(to right, #000 50%, #fff 50%);cursor:pointer" title="选择颜色" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" title="选择透明度" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:1.0;background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="1.0"><span class="cat-bold-btn" title="加粗" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="auto" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value=""><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="{}"></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid transparent" title="选择服务器" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+getServerBadge('')+'</button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
+  const h = '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:linear-gradient(to right, #000 50%, #fff 50%);cursor:pointer" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:1.0;background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="1.0"><span class="cat-bold-btn" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="auto" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value=""><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="{}"></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid transparent" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+getServerBadge('')+'</button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
 
   container.insertAdjacentHTML('beforeend', h);
 
@@ -2675,7 +2673,19 @@ function addMCBlock(type) {
 
   const defaults = {
 
-    divider: {block_type:'divider', style:'solid', title:'', color:'auto', title_bold:false},
+    text: {block_type:'text', style:'default', text:'', collapsed:false},
+
+    divider: {block_type:'divider', style:'solid'},
+
+    table: {block_type:'table', title:'', columns:['列1','2'], rows:[]},
+
+    server_grid: {block_type:'server_grid', first_col_label:'', hide_first_col:false, columns:[], items:[]},
+
+    card_grid: {block_type:'card_grid', columns:4, cards:[]},
+
+    expandable_detail: {block_type:'expandable_detail', map:{}, spot:{}, output:{}, flow:{blocks:[]}},
+
+    supply_card: {block_type:'supply_card', columns:[], item:{name:'',icon_url:'',locations:{}}},
 
     map_filter: {block_type:'map_filter'},
 
@@ -2782,12 +2792,6 @@ function saveMCBlocks(tab) {
     } else if (bt === 'divider') {
 
       b.style = (document.getElementById('mcDivStyle'+bi)?.value) || 'solid';
-
-      b.title = document.getElementById('mcDivTitle'+bi)?.value || '';
-
-      b.color = (document.getElementById('mcDivColor'+bi)?.value) || 'auto';
-
-      b.title_bold = document.getElementById('mcDivTitleBold'+bi)?.checked || false;
 
     } else if (bt === 'table') {
 
@@ -4009,22 +4013,6 @@ html += '</div>'; // sr-items
 
             html += '<div class=\"block-title-row\" style=\"display:flex;align-items:center;gap:6px\"><strong style=\"font-size:0.85em\">'+(MC_TYPE_LABELS[bt]||bt)+'</strong><button class=\"btn-small btn-danger\" onclick=\"event.stopPropagation();if(confirm(DEL))rmBlock(this);\" style=\"padding:2px 6px;font-size:0.6em;margin-left:auto\">✕</button></div>';
 
-            html += '<div class=\"form-group\" style=\"display:flex;align-items:center;gap:8px\"><span class=\"cat-color-wrap\" style=\"padding:0;margin:0\"><span class=\"cat-color-dot\" id=\"mcDivColorDot'+bi+'\" data-target=\"mcDivColor'+bi+'\" style=\"background:'+(b.color&&b.color!=='auto'?esc(b.color):'linear-gradient(to right, #000 50%, #fff 50%)')+';cursor:pointer\" title=\"选择颜色\" onclick=\"event.stopPropagation();toggleColorPopup(this)\"></span></span><span class=\"cat-merged\" style=\"flex:1;min-width:0\"><span class=\"cat-input-wrap\"><span class=\"cat-bold-btn'+(b.title_bold?' active':'')+'\" title=\"加粗\" onclick=\"event.stopPropagation();var cb=document.getElementById(\'mcDivTitleBold'+bi+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)\">B</span><input id=\"mcDivTitle'+bi+'\" value=\"'+esc(b.title||'')+'\" placeholder=\"标题\" style=\"box-sizing:border-box;flex:1;padding:4px 8px;font-size:0.85em;border-radius:0;border:none\"><input type=\"checkbox\" id=\"mcDivTitleBold'+bi+'\" '+(b.title_bold?'checked':'')+' style=\"display:none\"></span></span><input type=\"hidden\" id=\"mcDivColor'+bi+'\" value=\"'+esc(b.color||'auto')+'\"></div>';
-
-            html += '<div class=\"form-group\"><span class=\"cat-col-bq\" id=\"mcDivStyleSeg'+bi+'\">';
-
-            (function(){var ls=[{v:'solid',h:'实线'},{v:'dashed',h:'虚线'},{v:'wavy',h:'波浪'},{v:'double',h:'双线'}];ls.forEach(function(o){html+='<span class=\"cat-col-seg'+((b.style||'solid')===o.v?' active':'')+'\" data-val=\"'+o.v+'\" onclick=\"var t=this,p=t.parentElement;p.querySelectorAll(\'.cat-col-seg\').forEach(function(s){s.classList.toggle(\'active\',s===t)});document.getElementById(\'mcDivStyle'+bi+'\').value=t.dataset.val\" style=\"cursor:pointer;min-width:30px;text-align:center;line-height:24px\">'+o.h+'</span>';});})();
-
-            html += '</span><select id=\"mcDivStyle'+bi+'\" style=\"display:none\">';
-
-            [{v:'solid',l:'实线'},{v:'dashed',l:'虚线'},{v:'wavy',l:'波浪'},{v:'double',l:'双线'}].forEach(function(o){
-
-              html += '<option value=\"'+o.v+'\" '+((b.style||'solid')===o.v?'selected':'')+'>'+o.l+'</option>';
-
-            });
-
-            html += '</select></div>';
-
           }
 
           html += '</div>';
@@ -4039,7 +4027,7 @@ html += '</div>'; // sr-items
 
         html += '<div style=\"display:flex;gap:4px;flex-wrap:wrap;margin:4px 0\">';
 
-        ['base_storage','base_device','base_other_device','base_creature','base_other_creature','base_badge'].forEach(function(k){
+        ['base_storage','base_device','base_other_device','base_creature','base_other_creature','base_badge','text','divider'].forEach(function(k){
 
           html += '<button class=\"btn-small btn-primary\" onclick=\"addBRSecBlock('+si+',\''+k+'\')\">+ '+MC_TYPE_LABELS[k]+'</button>';
 
@@ -4386,14 +4374,6 @@ async function saveBaseTab() {
             if (inpIcon) block.icon_url = inpIcon.value || '';
 
             if (inpBody) { if (bt === 'text') block.text = inpBody.value; else block.body = inpBody.value; }
-
-            // Divider-specific
-            if (bt === 'divider') {
-              block.style = bd.querySelector('[id^=mcDivStyle]')?.value || 'solid';
-              block.title = bd.querySelector('[id^=mcDivTitle]')?.value || '';
-              block.color = bd.querySelector('[id^=mcDivColor]')?.value || 'auto';
-              block.title_bold = bd.querySelector('[id^=mcDivTitleBold]')?.checked || false;
-            }
 
             // Storage-specific: read rows
 
@@ -5011,8 +4991,6 @@ function mergeLabelInputs(card) {
 
     if (bEl.checked) bSpan.classList.add('active');
 
-    bSpan.title = '加粗';
-    bSpan.title = '加粗';
     bSpan.onclick = function(e){ e.stopPropagation(); bEl.checked = !bEl.checked; bSpan.classList.toggle('active', bEl.checked); };
 
     lw.insertBefore(bSpan, lw.firstChild);
@@ -5079,7 +5057,6 @@ function mergeLabelInputs(card) {
 
     if (sbEl.checked) sbSpan.classList.add('active');
 
-    sbSpan.title = '加粗';
     sbSpan.onclick = function(e){ e.stopPropagation(); sbEl.checked = !sbEl.checked; sbSpan.classList.toggle('active', sbEl.checked); };
 
     sw.insertBefore(sbSpan, sw.firstChild);
@@ -5106,7 +5083,6 @@ function mergeLabelInputs(card) {
 
     sclrDot.setAttribute('data-target', sclr.id);
 
-    sclrDot.title = '选择颜色';
     sclrDot.onclick = function(e){ e.stopPropagation(); toggleColorPopup(this); };
 
     var sclrWrap = document.createElement('span');
@@ -5155,13 +5131,29 @@ function mergeLabelInputs(card) {
 
     document.addEventListener('click', function(e){
 
-      if (e.target.closest('.cat-color-popup, .cat-opacity-popup, .cat-bc-popup, .icon-picker-overlay, .mobile-tab-popup, .custom-prompt-overlay, .server-select-popup')) return;
+      if (!e.target.closest('.cat-input-wrap')) {
 
-      if (e.target.closest('.cat-color-dot, .cat-opacity-dot')) return;
+        document.querySelectorAll('.cat-bc-popup.show').forEach(function(p){ p.classList.remove('show'); });
 
-      closeAllPopups();
+      }
 
-    }, true);
+      if (!e.target.closest('.cat-color-dot') && !e.target.closest('.cat-color-popup')) {
+
+        var cp = document.getElementById('catColorPopup');
+
+        if (cp) cp.classList.remove('show');
+
+      }
+
+      if (!e.target.closest('.cat-opacity-dot') && !e.target.closest('.cat-opacity-popup')) {
+
+        var op = document.getElementById('catOpacityPopup');
+
+        if (op) op.classList.remove('show');
+
+      }
+
+    });
 
   }
 
@@ -5197,7 +5189,6 @@ function upgradeICDescControls() {
     cDot.setAttribute('data-target', 'mcICDescColor'+bi+'_'+di);
     cDot.style.background = colorEl ? (colorEl.value==='auto'?'linear-gradient(to right, #000 50%, #fff 50%)':colorEl.value) : 'linear-gradient(to right, #000 50%, #fff 50%)';
     cDot.style.cursor = 'pointer';
-    cDot.title = '选择颜色';
     cDot.onclick = function(e){ e.stopPropagation(); toggleColorPopup(this); };
     cWrap.appendChild(cDot);
     twrap.appendChild(cWrap);
@@ -5205,7 +5196,6 @@ function upgradeICDescControls() {
     var bSpan = document.createElement('span');
     bSpan.className = 'cat-bold-btn' + (boldChecked ? ' active' : '');
     bSpan.textContent = 'B';
-    bSpan.title = '加粗';
     bSpan.onclick = function(e){
       e.stopPropagation();
       var cb = document.getElementById('mcICDescBold'+bi+'_'+di);
@@ -5238,7 +5228,6 @@ function upgradeICDescControls() {
     odot.setAttribute('data-target', 'mcICDescOpacity'+bi+'_'+di);
     odot.style.opacity = curOpacity;
     odot.style.background = '#000000';
-    odot.title = '选择透明度';
     odot.onclick = function(e){ e.stopPropagation(); toggleOpacityPopup(this); };
     owrap.appendChild(odot);
     merged.appendChild(owrap);
@@ -5256,7 +5245,6 @@ function upgradeICDescControls() {
       var srvBtn = document.createElement('button'); srvBtn.className = 'btn-small btn-server'; srvBtn.id = 'mcICDescSrvBtn'+bi+'_'+di;
       srvBtn.style.cssText = 'font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center';
       srvBtn.innerHTML = getServerBadge('');
-      srvBtn.title = '选择服务器';
       srvBtn.onclick = function(e){ e.stopPropagation(); toggleDescServerPopup(this,'+bi+','+di+'); };
       flexRow.insertBefore(srvBtn, xBtn);
     }
@@ -5825,12 +5813,6 @@ function selectMarkerColor(dot, clr) {
     var qc = clr === 'auto' ? 'var(--text)' : clr;
     var sub = dot.closest('.sub-section');
     if (sub) sub.style.borderLeftColor = qc;
-  }
-  // Update divider sub-section left border to reflect divider color
-  if (targetId && targetId.indexOf('mcDivColor') === 0) {
-    var dc = clr === 'auto' ? 'var(--text)' : clr;
-    var dsub = dot.closest('.sub-section');
-    if (dsub) dsub.style.borderLeftColor = dc;
   }
 }
 

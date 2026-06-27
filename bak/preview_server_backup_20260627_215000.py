@@ -304,8 +304,6 @@ def main():
 
     # Keep <ha-icon> elements as-is — polyfilled by JS in the browser
 
-    css += ' ha-card ha-icon{line-height:0!important}'
-
     # HA platform font-scale defaults (injected by HA frontend, not in theme files)
     ha_font_vars = (
         ':root{--ha-font-size-xl:14px;--ha-font-size-l:12.25px;'

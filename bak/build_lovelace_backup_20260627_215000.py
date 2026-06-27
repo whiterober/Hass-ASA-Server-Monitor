@@ -2853,8 +2853,6 @@ if __name__ == "__main__":
         else:
             css = CARD_CORE_CSS
 
-        css += ' ha-card ha-icon{line-height:0!important}'
-
         inner_card = {
             "entity": "",
             "content": html_content,
