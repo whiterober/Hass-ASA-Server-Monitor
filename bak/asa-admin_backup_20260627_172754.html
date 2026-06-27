@@ -539,7 +539,7 @@ button { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; f
 
 .sr-cat-card > div > label:empty, .sr-cat-card > div > label:has(+ .cat-col-bq) { display:none !important; }
 
-.cat-bold-btn { font-size:0.55em;cursor:pointer;color:var(--text);opacity:.4;user-select:none;margin-left:6px;margin-right:4px;line-height:1;transition:opacity .15s,color .15s; }
+.cat-bold-btn { font-size:0.55em;cursor:pointer;color:var(--text);opacity:.4;user-select:none;margin:0 4px;line-height:1;transition:opacity .15s,color .15s; }
 
 .cat-bold-btn:hover { opacity:.7; }
 
@@ -2062,7 +2062,11 @@ function addSGLocation(itemIdx, serverId) {
 
 const MC_TYPE_LABELS = {
 
-  map_filter:'地图筛选', info_card:'卡片', divider:'分隔线',
+  server_grid:'服务器矩阵', expandable_detail:'可展开卡片',
+
+  supply_card:'补给卡片', map_filter:'地图筛选', info_card:'卡片',
+
+  card_grid:'卡片网格', table:'表格', text:'文本', divider:'分隔线',
 
   base_storage:'存储', base_device:'设备', base_other_device:'其它设备',
 
@@ -2084,7 +2088,7 @@ function renderMixedContent(tab) {
 
     const bt = b.block_type || 'text';
 
-    const colors = {map_filter:'#795548', info_card:'#FF9800', divider:'#607D8B'};
+    const colors = {server_grid:'#4CAF50', expandable_detail:'#00BCD4', supply_card:'#E91E63', map_filter:'#795548', info_card:'#FF9800', card_grid:'#FF5722', table:'#9C27B0', text:'#009688', divider:'#607D8B'};
 
     h += '<div class="sub-section" data-bi="'+bi+'" style="border-left:4px solid '+((bt==='info_card'&&b.quote_color&&b.quote_color!=='auto')?b.quote_color:(bt==='divider'&&b.color&&b.color!=='auto')?b.color:'var(--text)')+(bt==='map_filter'?';cursor:default':'')+'">';
 
@@ -2421,7 +2425,7 @@ function renderMixedContent(tab) {
 
   h += '<div class="add-block-panel" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:0">';
 
-  Object.entries(MC_TYPE_LABELS).filter(function(e){return['map_filter','info_card','divider'].includes(e[0])}).forEach(([k,v]) => {
+  Object.entries(MC_TYPE_LABELS).forEach(([k,v]) => {
 
     h += '<button class="btn-small btn-primary" style="white-space:nowrap;flex-shrink:0" onclick="addMCBlock(\''+k+'\')">+ '+v+'</button>';
 
@@ -2675,7 +2679,19 @@ function addMCBlock(type) {
 
   const defaults = {
 
+    text: {block_type:'text', style:'default', text:'', collapsed:false},
+
     divider: {block_type:'divider', style:'solid', title:'', color:'auto', title_bold:false},
+
+    table: {block_type:'table', title:'', columns:['列1','2'], rows:[]},
+
+    server_grid: {block_type:'server_grid', first_col_label:'', hide_first_col:false, columns:[], items:[]},
+
+    card_grid: {block_type:'card_grid', columns:4, cards:[]},
+
+    expandable_detail: {block_type:'expandable_detail', map:{}, spot:{}, output:{}, flow:{blocks:[]}},
+
+    supply_card: {block_type:'supply_card', columns:[], item:{name:'',icon_url:'',locations:{}}},
 
     map_filter: {block_type:'map_filter'},
 
@@ -4039,7 +4055,7 @@ html += '</div>'; // sr-items
 
         html += '<div style=\"display:flex;gap:4px;flex-wrap:wrap;margin:4px 0\">';
 
-        ['base_storage','base_device','base_other_device','base_creature','base_other_creature','base_badge'].forEach(function(k){
+        ['base_storage','base_device','base_other_device','base_creature','base_other_creature','base_badge','text','divider'].forEach(function(k){
 
           html += '<button class=\"btn-small btn-primary\" onclick=\"addBRSecBlock('+si+',\''+k+'\')\">+ '+MC_TYPE_LABELS[k]+'</button>';
 
@@ -5825,12 +5841,6 @@ function selectMarkerColor(dot, clr) {
     var qc = clr === 'auto' ? 'var(--text)' : clr;
     var sub = dot.closest('.sub-section');
     if (sub) sub.style.borderLeftColor = qc;
-  }
-  // Update divider sub-section left border to reflect divider color
-  if (targetId && targetId.indexOf('mcDivColor') === 0) {
-    var dc = clr === 'auto' ? 'var(--text)' : clr;
-    var dsub = dot.closest('.sub-section');
-    if (dsub) dsub.style.borderLeftColor = dc;
   }
 }
 

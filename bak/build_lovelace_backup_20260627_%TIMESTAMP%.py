@@ -2813,8 +2813,7 @@ if __name__ == "__main__":
                 IC_CSS += 'ha-card .info-card-block .ic-body{flex:1!important;min-width:0!important}'
                 IC_CSS += 'ha-card .info-card-block .ic-body .ic-title{font-weight:600!important;font-size:1.05em!important;margin-bottom:4px!important;display:flex;align-items:center;gap:4px}'
                 IC_CSS += 'ha-card .info-card-block .ic-body .ic-title ha-icon{flex-shrink:0}'
-                IC_CSS += 'ha-card .info-card-block .ic-body .ic-text{font-size:.9em!important;line-height:1.5!important;display:flex!important;align-items:center!important;gap:2px!important;flex-wrap:wrap!important}'
-                IC_CSS += 'ha-card .info-card-block .ic-body .ic-text ha-icon,ha-card .info-card-block .ic-body .ic-text i.mdi{flex-shrink:0!important}'
+                IC_CSS += 'ha-card .info-card-block .ic-body .ic-text{font-size:.9em!important;line-height:1.5!important}'
                 IC_CSS += 'ha-card .info-card-block .ic-sum-end{display:none}'
                 IC_CSS += 'ha-card .info-card-block details[open] .ic-sum-top{display:none!important}'
                 IC_CSS += 'ha-card .info-card-block details[open] .ic-sum-end{display:block!important}'
@@ -2852,8 +2851,6 @@ if __name__ == "__main__":
             css = CARD_CORE_CSS + TABLE_CORE_CSS
         else:
             css = CARD_CORE_CSS
-
-        css += ' ha-card ha-icon{line-height:0!important}'
 
         inner_card = {
             "entity": "",

@@ -53,30 +53,30 @@ ha-card h2 {
 ha-card img {
   flex-shrink: 0 !important;
 }
-ha-card .tb-divider, .tb-divider {
+ha-card .tb-divider {
   border: none !important;
   margin: 12px 0 !important;
 }
 /* Use --div-color / --div-opacity custom props for overrides; fallback to primary-text-color */
-ha-card .tb-div-solid, .tb-div-solid {
+ha-card .tb-div-solid {
   border-top: 1px solid var(--div-color, var(--primary-text-color)) !important;
   opacity: var(--div-opacity, 0.15) !important;
 }
-ha-card .tb-div-dashed, .tb-div-dashed {
+ha-card .tb-div-dashed {
   border-top: 1px dashed var(--div-color, var(--primary-text-color)) !important;
   opacity: var(--div-opacity, 0.15) !important;
 }
-ha-card .tb-div-double, .tb-div-double {
+ha-card .tb-div-double {
   border-top: 3px double var(--div-color, var(--primary-text-color)) !important;
   opacity: var(--div-opacity, 0.18) !important;
 }
-ha-card .tb-div-wavy, .tb-div-wavy {
+ha-card .tb-div-wavy {
   position: relative !important;
   height: 10px !important;
   overflow: hidden !important;
   opacity: var(--div-opacity, 0.2) !important;
 }
-ha-card .tb-div-wavy::after, .tb-div-wavy::after {
+ha-card .tb-div-wavy::after {
   content: '' !important;
   position: absolute !important;
   left: 0 !important;
@@ -2085,10 +2085,10 @@ def render_tab_html(tab):
                 div_color = block.get('color','auto')
                 div_title = block.get('title','')
                 div_title_bold = block.get('title_bold',False)
-                color_style = f'--div-color:{div_color};--div-opacity:1' if div_color and div_color != 'auto' else '--div-color:var(--primary-text-color)'
+                color_style = f'--div-color:{div_color};--div-opacity:1' if div_color and div_color != 'auto' else ''
                 if div_title:
                     title_html = f'<strong>{esc(div_title)}</strong>' if div_title_bold else esc(div_title)
-                    title_color = f'color:{div_color};' if div_color and div_color != 'auto' else 'color:var(--primary-text-color);'
+                    title_color = f'color:{div_color};' if div_color and div_color != 'auto' else ''
                     parts.append(f'<div style="display:flex;align-items:center;gap:10px;margin:12px 0"><hr class="tb-divider tb-div-{line_style}" style="flex:1;min-width:0;{color_style}" /><span style="white-space:nowrap;font-size:0.85em;{title_color}">{title_html}</span><hr class="tb-divider tb-div-{line_style}" style="flex:1;min-width:0;{color_style}" /></div>')
                 else:
                     parts.append(f'<hr class="tb-divider tb-div-{line_style}" style="{color_style}" />')
@@ -2174,9 +2174,9 @@ def render_tab_html(tab):
                     _bicon = _bstyle.get('icon','mdi:map')
                     _bcolor = _bstyle.get('color','')
                     if blk_st == 1:
-                        parts.append('<ha-icon icon="{}" style="--mdc-icon-size:16px;width:16px;height:16px;margin-right:4px;color:{}"></ha-icon>'.format(_bicon, _bcolor))
+                        parts.append('<i class="mdi {}" style="font-size:16px;vertical-align:middle;margin-right:4px;color:{}"></i>'.format(_bicon.replace('mdi:','mdi-'), _bcolor))
                     elif blk_st == 2:
-                        parts.append('<ha-icon icon="{}" style="--mdc-icon-size:16px;width:16px;height:16px;margin-right:4px;color:{}"></ha-icon>'.format(_bicon, _bcolor))
+                        parts.append('<i class="mdi {}" style="font-size:16px;vertical-align:middle;margin-right:4px;color:{}"></i>'.format(_bicon.replace('mdi:','mdi-'), _bcolor))
                 parts.append('<span{}>{}</span>'.format(title_color_style, esc(ic_title)))
                 parts.append('</div>')
                 ic_collapse = block.get('collapse_descriptions', False)
@@ -2217,11 +2217,11 @@ def render_tab_html(tab):
                         _style = _lookup_style(_sid)
                         _icon = _style.get('icon','mdi:map')
                         _clr = _style.get('color','')
-                        srv_icon = '<ha-icon icon="{}" style="--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;color:oklch(var(--pc))"></ha-icon>'.format(_icon)
+                        srv_icon = '<i class="mdi {}" style="font-size:14px;vertical-align:middle;margin-right:2px;color:oklch(var(--pc))"></i>'.format(_icon.replace('mdi:','mdi-'))
                     elif dserver:
                         _style = _lookup_style(dserver)
                         _icon = _style.get('icon','mdi:map')
-                        srv_icon = '<ha-icon icon="{}" style="--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;color:oklch(var(--pc))"></ha-icon>'.format(_icon)
+                        srv_icon = '<i class="mdi {}" style="font-size:14px;vertical-align:middle;margin-right:2px;color:oklch(var(--pc))"></i>'.format(_icon.replace('mdi:','mdi-'))
                     dserver_attr=' data-server="{}" data-server-states=\'{}\''.format(dserver, states_json)
                     parts.append('<div class="{}"{{}}{{}}>{{}}{{}}</div>'.format(ic_cls).format(dstyle, dserver_attr, srv_icon, esc(dtext)))
                 if ic_collapse:
@@ -2733,7 +2733,7 @@ VERSION = 'v20260611-1'
 # -------------------------------------------------------
 if __name__ == "__main__":
     # -------------------------------------------------------
-    with open(os.path.join(DATA_DIR, 'server_rules.json'), 'r', encoding='utf-8') as f:
+    with open(os.path.join(DATA_DIR, 'asa_server_rules.json'), 'r', encoding='utf-8') as f:
         sr_data = json.load(f)
     with open(os.path.join(DATA_DIR, 'tribe_ops.json'), 'r', encoding='utf-8') as f:
         to_data = json.load(f)
@@ -2792,54 +2792,63 @@ if __name__ == "__main__":
                 css += 'ha-card .supply-card .sc-body .sc-servers{display:flex!important;flex-wrap:wrap!important;gap:6px 12px!important}'
                 css += 'ha-card .supply-card .sc-body .sc-srv{display:flex!important;align-items:center!important;gap:4px!important;font-size:.85em!important}'
                 css += 'ha-card .supply-card .sc-body .sc-srv img{width:20px!important;height:20px!important;object-fit:contain!important;border-radius:2px!important}'
-                for sid, sm in SERVER_MAP.items():
-                    css += 'ha-card .supply-card .sc-srv[data-map='+sid+']{color:'+sm['color']+'!important}'
+                css += 'ha-card .supply-card .sc-srv[data-map=Isl]{color:#4CAF50!important}'
+                css += 'ha-card .supply-card .sc-srv[data-map=Sco]{color:#FF5722!important}'
+                css += 'ha-card .supply-card .sc-srv[data-map=Cen]{color:#009688!important}'
+                css += 'ha-card .supply-card .sc-srv[data-map=Abe]{color:#9C27B0!important}'
+                css += 'ha-card .supply-card .sc-srv[data-map=Ext]{color:#00BCD4!important}'
                 css += 'ha-card .filter-bar{display:flex!important;flex-wrap:wrap!important;gap:0!important;margin-bottom:12px!important}'
                 css += 'ha-card .filter-radio{position:absolute!important;opacity:0!important;width:0!important;height:0!important}'
                 css += 'ha-card .filter-label{display:inline-flex!important;align-items:center!important;gap:4px!important;padding:4px 12px!important;border-radius:16px!important;border:1px solid var(--divider-color)!important;font-size:.85em!important;cursor:pointer!important;user-select:none!important;line-height:1.4!important;white-space:nowrap!important;min-height:28px!important;margin-right:6px!important}'
-                for sid, sm in SERVER_MAP.items():
-                    css += 'ha-card .filter-label[data-map='+sid+']{background:'+sm['color']+'!important;color:var(--primary-background-color)!important;border-color:'+sm['color']+'!important}'
+                css += 'ha-card .filter-label[data-map=Isl]{background:#4CAF50!important;color:var(--primary-background-color)!important;border-color:#4CAF50!important}'
+                css += 'ha-card .filter-label[data-map=Sco]{background:#FF5722!important;color:var(--primary-background-color)!important;border-color:#FF5722!important}'
+                css += 'ha-card .filter-label[data-map=Cen]{background:#009688!important;color:var(--primary-background-color)!important;border-color:#009688!important}'
+                css += 'ha-card .filter-label[data-map=Abe]{background:#9C27B0!important;color:var(--primary-background-color)!important;border-color:#9C27B0!important}'
+                css += 'ha-card .filter-label[data-map=Ext]{background:#00BCD4!important;color:var(--primary-background-color)!important;border-color:#00BCD4!important}'
                 css += 'ha-card .filter-label.active{box-shadow:0 0 0 2px var(--primary-text-color)!important}'
                 css += 'ha-card .filter-label ha-icon{pointer-events:none!important}'
                 css += 'ha-card:has(.filter-radio[value=\"\"]:checked) .filterable{display:flex!important}'
-                for sid in SERVER_MAP:
-                    css += 'ha-card:has(.filter-radio[value=\"'+sid+'\"]:checked) .filterable{display:none!important}'
-                    css += 'ha-card:has(.filter-radio[value=\"'+sid+'\"]:checked) .filterable[data-filter-maps*='+sid+']{display:flex!important}'
+                css += 'ha-card:has(.filter-radio[value=\"Isl\"]:checked) .filterable{display:none!important}'
+                css += 'ha-card:has(.filter-radio[value=\"Isl\"]:checked) .filterable[data-filter-maps*=Isl]{display:flex!important}'
+                css += 'ha-card:has(.filter-radio[value=\"Sco\"]:checked) .filterable{display:none!important}'
+                css += 'ha-card:has(.filter-radio[value=\"Sco\"]:checked) .filterable[data-filter-maps*=Sco]{display:flex!important}'
+                css += 'ha-card:has(.filter-radio[value=\"Cen\"]:checked) .filterable{display:none!important}'
+                css += 'ha-card:has(.filter-radio[value=\"Cen\"]:checked) .filterable[data-filter-maps*=Cen]{display:flex!important}'
+                css += 'ha-card:has(.filter-radio[value=\"Abe\"]:checked) .filterable{display:none!important}'
+                css += 'ha-card:has(.filter-radio[value=\"Abe\"]:checked) .filterable[data-filter-maps*=Abe]{display:flex!important}'
+                css += 'ha-card:has(.filter-radio[value=\"Ext\"]:checked) .filterable{display:none!important}'
+                css += 'ha-card:has(.filter-radio[value=\"Ext\"]:checked) .filterable[data-filter-maps*=Ext]{display:flex!important}'
             if 'info_card' in block_types:
                 IC_CSS = 'ha-card .info-card-block{border-radius:12px!important;border-left:4px solid!important;margin-bottom:8px!important;padding:12px!important;display:flex!important;align-items:flex-start!important;gap:12px!important}'
-                for sid, sm in SERVER_MAP.items():
-                    IC_CSS += 'ha-card .info-card-block[data-map='+sid+']{border-color:'+sm['color']+'!important;background:transparent!important}'
+                IC_CSS += 'ha-card .info-card-block[data-map=Isl]{border-color:#4CAF50!important;background:transparent!important}'
+                IC_CSS += 'ha-card .info-card-block[data-map=Sco]{border-color:#FF5722!important;background:transparent!important}'
+                IC_CSS += 'ha-card .info-card-block[data-map=Cen]{border-color:#009688!important;background:transparent!important}'
+                IC_CSS += 'ha-card .info-card-block[data-map=Abe]{border-color:#9C27B0!important;background:transparent!important}'
+                IC_CSS += 'ha-card .info-card-block[data-map=Ext]{border-color:#00BCD4!important;background:transparent!important}'
                 IC_CSS += 'ha-card .info-card-block .ic-icon{width:48px!important;height:48px!important;flex-shrink:0!important;object-fit:contain!important;border-radius:8px!important;background:transparent!important}'
                 IC_CSS += 'ha-card .info-card-block .ic-body{flex:1!important;min-width:0!important}'
                 IC_CSS += 'ha-card .info-card-block .ic-body .ic-title{font-weight:600!important;font-size:1.05em!important;margin-bottom:4px!important;display:flex;align-items:center;gap:4px}'
                 IC_CSS += 'ha-card .info-card-block .ic-body .ic-title ha-icon{flex-shrink:0}'
-                IC_CSS += 'ha-card .info-card-block .ic-body .ic-text{font-size:.9em!important;line-height:1.5!important;display:flex!important;align-items:center!important;gap:2px!important;flex-wrap:wrap!important}'
-                IC_CSS += 'ha-card .info-card-block .ic-body .ic-text ha-icon,ha-card .info-card-block .ic-body .ic-text i.mdi{flex-shrink:0!important}'
+                IC_CSS += 'ha-card .info-card-block .ic-body .ic-text{font-size:.9em!important;line-height:1.5!important}'
                 IC_CSS += 'ha-card .info-card-block .ic-sum-end{display:none}'
                 IC_CSS += 'ha-card .info-card-block details[open] .ic-sum-top{display:none!important}'
                 IC_CSS += 'ha-card .info-card-block details[open] .ic-sum-end{display:block!important}'
                 IC_CSS += 'ha-card .info-card-block ha-icon.ic-auto-color{color:var(--primary-background-color)!important;fill:var(--primary-text-color)!important}'
                 IC_CSS += 'ha-card .info-card-block img.ic-auto-color{filter:var(--ic-icon-filter,none)}'
                 css += IC_CSS
-                # 3-state map filter: linear (icon color) + block (background) per-map — auto-generated from SERVER_MAP
-                for sid, sm in SERVER_MAP.items():
-                    css += 'ha-card .ic-linear-'+sid+' .mdi,ha-card .ic-linear-'+sid+' ha-icon{color:'+sm['color']+'!important}'
-                for sid, sm in SERVER_MAP.items():
-                    css += 'ha-card .ic-text.ic-block-'+sid+'{background:'+sm['color']+'!important;border-radius:6px!important;padding:2px 6px!important;color:var(--primary-background-color)!important}'
-                for sid in SERVER_MAP:
-                    css += 'ha-card .ic-text.ic-block-'+sid+' .mdi,ha-card .ic-text.ic-block-'+sid+' ha-icon{color:var(--primary-background-color)!important}'
-                # Block-level card light-tint backgrounds (for server_states block=2)
-                for sid, sm in SERVER_MAP.items():
-                    r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)
-                    css += 'ha-card .info-card-block.ic-block-'+sid+'{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.08)!important}'
-                # Fixed styles: hint + warning (same as preview_server.py)
+                # 3-state map filter: linear (icon color) + block (background) per-map
+                if has_map_filter and active_maps:
+                    for m in sorted(active_maps):
+                        mc = SERVER_MAP.get(m,{}).get('color','#888')
+                        css += 'ha-card .ic-linear-'+m+' .mdi,ha-card .ic-linear-'+m+' ha-icon{color:'+mc+'!important}'
+                        css += 'ha-card .ic-block-'+m+'{background:'+mc+'!important;border-radius:6px!important;padding:2px 6px!important;color:var(--primary-background-color)!important}'
+                        css += 'ha-card .ic-block-'+m+' .mdi,ha-card .ic-block-'+m+' ha-icon{color:var(--primary-background-color)!important}'
+                # Fixed styles (always available): hint + warning
                 for fk, fv in FIXED_STYLES_MAP.items():
                     fc = fv['color']
                     css += 'ha-card .ic-linear-'+fk+' .mdi,ha-card .ic-linear-'+fk+' ha-icon{color:'+fc+'!important}'
-                    css += 'ha-card .ic-text.ic-block-'+fk+'{background:'+fc+'!important;border-radius:6px!important;padding:2px 6px!important;color:var(--primary-background-color)!important}'
-                    css += 'ha-card .ic-text.ic-block-'+fk+' .mdi,ha-card .ic-text.ic-block-'+fk+' ha-icon{color:var(--primary-background-color)!important}'
-                    r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
-                    css += 'ha-card .info-card-block.ic-block-'+fk+'{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.08)!important}'
+                    css += 'ha-card .ic-block-'+fk+'{background:'+fc+'!important;border-radius:6px!important;padding:2px 6px!important;color:var(--primary-background-color)!important}'
+                    css += 'ha-card .ic-block-'+fk+' .mdi,ha-card .ic-block-'+fk+' ha-icon{color:var(--primary-background-color)!important}'
             if 'card_grid' in block_types:
                 css += 'ha-card .info-card{background:var(--primary-background-color);border-radius:8px;overflow:hidden;text-align:center;padding:0 0 8px 0}ha-card .info-card img{width:100%;aspect-ratio:1;object-fit:cover}ha-card .card-name{font-weight:600;margin:4px 0}ha-card .card-feature{font-size:0.85em;color:var(--secondary-text-color)}ha-card .card-grid{display:grid;gap:12px}'
         elif tab_type == 'server_grid':
@@ -2852,8 +2861,6 @@ if __name__ == "__main__":
             css = CARD_CORE_CSS + TABLE_CORE_CSS
         else:
             css = CARD_CORE_CSS
-
-        css += ' ha-card ha-icon{line-height:0!important}'
 
         inner_card = {
             "entity": "",

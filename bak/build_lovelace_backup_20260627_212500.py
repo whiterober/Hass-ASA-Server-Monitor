@@ -2174,9 +2174,9 @@ def render_tab_html(tab):
                     _bicon = _bstyle.get('icon','mdi:map')
                     _bcolor = _bstyle.get('color','')
                     if blk_st == 1:
-                        parts.append('<ha-icon icon="{}" style="--mdc-icon-size:16px;width:16px;height:16px;margin-right:4px;color:{}"></ha-icon>'.format(_bicon, _bcolor))
+                        parts.append('<i class="mdi {}" style="font-size:16px;vertical-align:middle;margin-right:4px;color:{}"></i>'.format(_bicon.replace('mdi:','mdi-'), _bcolor))
                     elif blk_st == 2:
-                        parts.append('<ha-icon icon="{}" style="--mdc-icon-size:16px;width:16px;height:16px;margin-right:4px;color:{}"></ha-icon>'.format(_bicon, _bcolor))
+                        parts.append('<i class="mdi {}" style="font-size:16px;vertical-align:middle;margin-right:4px;color:{}"></i>'.format(_bicon.replace('mdi:','mdi-'), _bcolor))
                 parts.append('<span{}>{}</span>'.format(title_color_style, esc(ic_title)))
                 parts.append('</div>')
                 ic_collapse = block.get('collapse_descriptions', False)
@@ -2217,11 +2217,11 @@ def render_tab_html(tab):
                         _style = _lookup_style(_sid)
                         _icon = _style.get('icon','mdi:map')
                         _clr = _style.get('color','')
-                        srv_icon = '<ha-icon icon="{}" style="--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;color:oklch(var(--pc))"></ha-icon>'.format(_icon)
+                        srv_icon = '<i class="mdi {}" style="font-size:14px;vertical-align:middle;margin-right:2px;color:oklch(var(--pc))"></i>'.format(_icon.replace('mdi:','mdi-'))
                     elif dserver:
                         _style = _lookup_style(dserver)
                         _icon = _style.get('icon','mdi:map')
-                        srv_icon = '<ha-icon icon="{}" style="--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;color:oklch(var(--pc))"></ha-icon>'.format(_icon)
+                        srv_icon = '<i class="mdi {}" style="font-size:14px;vertical-align:middle;margin-right:2px;color:oklch(var(--pc))"></i>'.format(_icon.replace('mdi:','mdi-'))
                     dserver_attr=' data-server="{}" data-server-states=\'{}\''.format(dserver, states_json)
                     parts.append('<div class="{}"{{}}{{}}>{{}}{{}}</div>'.format(ic_cls).format(dstyle, dserver_attr, srv_icon, esc(dtext)))
                 if ic_collapse:
@@ -2748,6 +2748,20 @@ if __name__ == "__main__":
 
     # --- Helper: content card matching OLD pattern ---
     def make_content_card(html_content, tab_type=None, tab=None):
+        # Convert <i class="mdi"> to <ha-icon> for lovelace Shadow DOM
+        import re as _re
+        def _to_haicon(m):
+            mdi_cls = m.group(1); style = m.group(2)
+            icon = 'mdi:' + mdi_cls.replace('mdi-','')
+            fs = _re.search(r'font-size:(\d+)px', style)
+            if fs:
+                sz = fs.group(1)
+                style = _re.sub(r'font-size:\d+px','',style)
+                style = '--mdc-icon-size:'+sz+'px;width:'+sz+'px;height:'+sz+'px;'+style
+            style = _re.sub(r'vertical-align:[^;]+;?','',style).strip().rstrip(';')
+            return '<ha-icon icon="'+icon+'" style="'+style+'"></ha-icon>'
+        html_content = _re.sub(r'<i class="mdi ([^"]+)" style="([^"]*)">', _to_haicon, html_content)
+        html_content = html_content.replace('</i>', '</ha-icon>')
         if tab_type == 'mixed_content' and tab:
             # Compose CSS from block types present
             block_types = {b.get('block_type','') for b in tab.get('content_blocks',[])}
@@ -2813,8 +2827,7 @@ if __name__ == "__main__":
                 IC_CSS += 'ha-card .info-card-block .ic-body{flex:1!important;min-width:0!important}'
                 IC_CSS += 'ha-card .info-card-block .ic-body .ic-title{font-weight:600!important;font-size:1.05em!important;margin-bottom:4px!important;display:flex;align-items:center;gap:4px}'
                 IC_CSS += 'ha-card .info-card-block .ic-body .ic-title ha-icon{flex-shrink:0}'
-                IC_CSS += 'ha-card .info-card-block .ic-body .ic-text{font-size:.9em!important;line-height:1.5!important;display:flex!important;align-items:center!important;gap:2px!important;flex-wrap:wrap!important}'
-                IC_CSS += 'ha-card .info-card-block .ic-body .ic-text ha-icon,ha-card .info-card-block .ic-body .ic-text i.mdi{flex-shrink:0!important}'
+                IC_CSS += 'ha-card .info-card-block .ic-body .ic-text{font-size:.9em!important;line-height:1.5!important}'
                 IC_CSS += 'ha-card .info-card-block .ic-sum-end{display:none}'
                 IC_CSS += 'ha-card .info-card-block details[open] .ic-sum-top{display:none!important}'
                 IC_CSS += 'ha-card .info-card-block details[open] .ic-sum-end{display:block!important}'
@@ -2852,8 +2865,6 @@ if __name__ == "__main__":
             css = CARD_CORE_CSS + TABLE_CORE_CSS
         else:
             css = CARD_CORE_CSS
-
-        css += ' ha-card ha-icon{line-height:0!important}'
 
         inner_card = {
             "entity": "",
