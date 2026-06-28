@@ -262,7 +262,7 @@ def main():
             IC_CSS += 'ha-card .info-card-block .ic-body{flex:1!important;min-width:0!important}'
             IC_CSS += 'ha-card .info-card-block .ic-body .ic-title{font-weight:600!important;font-size:1.05em!important;margin-bottom:4px!important;display:flex;align-items:center;gap:4px}'
             IC_CSS += 'ha-card .info-card-block .ic-body .ic-title ha-icon{flex-shrink:0}'
-            IC_CSS += 'ha-card .info-card-block .ic-body .ic-text{font-size:.9em!important;line-height:1.5!important;word-break:break-all!important;display:flex!important;align-items:center!important;gap:2px!important;flex-wrap:wrap!important}'
+            IC_CSS += 'ha-card .info-card-block .ic-body .ic-text{font-size:.9em!important;line-height:1.5!important;display:flex!important;align-items:center!important;gap:2px!important;flex-wrap:wrap!important}'
             IC_CSS += 'ha-card .info-card-block .ic-body .ic-text ha-icon,ha-card .info-card-block .ic-body .ic-text i.mdi{flex-shrink:0!important}'
             IC_CSS += 'ha-card .info-card-block .ic-sum-end{display:none}'
             IC_CSS += 'ha-card .info-card-block details[open] .ic-sum-top{display:none!important}'
@@ -337,7 +337,7 @@ def main():
     # which all have classed wrappers). On the actual HA page, daisyui inside
     # custom:tailwindcss-template-card provides typography defaults.
     # The preview has no daisyui, so we add equivalent typography for unclassed elements.
-    css += 'ha-card div.flex.flex-col>div:not([class]){line-height:1.6!important;margin-top:0!important;margin-bottom:8px!important;color:var(--primary-background-color)!important}'
+    css += 'ha-card div.flex.flex-col>div:not([class]){line-height:1.6!important;margin-bottom:8px!important;color:var(--primary-background-color)!important}'
     css += 'ha-card div.flex.flex-col>details:not([class]){line-height:1.6!important;margin-bottom:8px!important;color:var(--primary-background-color)!important;cursor:pointer!important}'
     css += 'ha-card div.flex.flex-col>details:not([class]) summary{font-weight:600!important;color:var(--primary-background-color)!important;padding:4px 0!important}'
     # === End preview-only typography ===

@@ -25,7 +25,6 @@ SERVER_MAP = {
 FIXED_STYLES_MAP = {
     '_hint':{'label':'提示','icon':'mdi:information','color':'#2196F3'},
     '_warn':{'label':'警告','icon':'mdi:alert','color':'#FF9800'},
-    '_remark':{'label':'备注','icon':'mdi:comment-text-outline','color':'#757575'},
 }
 def _lookup_style(key):
     return SERVER_MAP.get(key) or FIXED_STYLES_MAP.get(key) or {}
@@ -1825,7 +1824,7 @@ ha-card .info-card-block .ic-body { flex: 1 !important; min-width: 0 !important;
 ha-card .info-card-block .ic-body .ic-title { font-weight: 600 !important; font-size: 1.05em !important; margin-bottom: 4px !important; display: flex; align-items: center; gap: 4px; }
 ha-card .info-card-block .ic-body .ic-title ha-icon { flex-shrink: 0; }
 ha-card .info-card-block .ic-body .ic-title .ic-emoji { flex-shrink: 0; font-size: 1.2em; }
-ha-card .info-card-block .ic-body .ic-text { font-size: 0.9em !important; line-height: 1.5 !important; word-break: break-all !important; }
+ha-card .info-card-block .ic-body .ic-text { font-size: 0.9em !important; line-height: 1.5 !important; }
 ha-card .info-card-block .ic-sum-end { display: none; }
 ha-card .info-card-block details[open] .ic-sum-top { display: none !important; }
 ha-card .info-card-block details[open] .ic-sum-end { display: block !important; }

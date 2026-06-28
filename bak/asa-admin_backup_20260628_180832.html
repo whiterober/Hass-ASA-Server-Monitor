@@ -31,6 +31,8 @@
 
   --input-bg: #0f0f23;
 
+  --primary-background-color: #1c1c1c;
+
 }
 
 [data-theme="light"] {
@@ -48,6 +50,8 @@
   --success: #388e3c;
 
   --border: #d0d0d8;
+
+  --primary-background-color: #fafafa;
 
   --input-bg: #ffffff;
 
@@ -119,6 +123,8 @@ button { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; f
 @media (max-width: 768px) {
 
   .grid-2 { grid-template-columns: 1fr !important; }
+
+  .grid-2 > * { min-width: 0 !important; }
 
   .grid-2 > .tab-sidebar, .grid-2 > .resize-handle { display: none !important; }
 
@@ -377,6 +383,7 @@ button { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; f
 .block-preview { user-select: none; min-width: 0; }
 
 .block-indicator:hover { background: var(--accent) !important; color: #000; }
+.badge[data-mc-type]:hover { filter: brightness(1.2); cursor: pointer; }
 
 :root { --ic-icon-filter: none; }
 
@@ -535,7 +542,7 @@ button { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; f
 
 .sr-cat-card > div > label:empty, .sr-cat-card > div > label:has(+ .cat-col-bq) { display:none !important; }
 
-.cat-bold-btn { font-size:0.55em;cursor:pointer;color:var(--text);opacity:.4;user-select:none;margin-left:1px;line-height:1;transition:opacity .15s,color .15s; }
+.cat-bold-btn { font-size:0.55em;cursor:pointer;color:var(--text);opacity:.4;user-select:none;margin-left:6px;margin-right:4px;line-height:1;transition:opacity .15s,color .15s; }
 
 .cat-bold-btn:hover { opacity:.7; }
 
@@ -1140,30 +1147,34 @@ async function saveJSON(filename, data, skipPending) {
 
   const bytes = new TextEncoder().encode(json);
 
-  let b64 = '';
-
-  for (let i = 0; i < bytes.length; i += 8192) {
-
-    b64 += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
-
+  // Build base64 in binary chunks to avoid charcode overflow
+  const CHUNK = 8192;
+  let b64Parts = [];
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    const slice = bytes.subarray(i, i + CHUNK);
+    let bin = '';
+    for (let j = 0; j < slice.length; j++) bin += String.fromCharCode(slice[j]);
+    b64Parts.push(btoa(bin));
   }
 
-  b64 = btoa(b64);
-
   try {
-
-    await WS.callService('shell_command', 'save_asa_data', {
-
+    // Clear file first (empty data = delete)
+    await WS.callService('shell_command', 'save_data_chunk', {
       filename: filename,
-
-      b64data: b64
-
+      b64data: ''
     });
 
+    // Upload each base64 part as a standalone chunk
+    // Each part is independently valid base64 (encoded from a binary slice)
+    for (let i = 0; i < b64Parts.length; i++) {
+      await WS.callService('shell_command', 'save_data_chunk', {
+        filename: filename,
+        b64data: b64Parts[i]
+      });
+    }
+
     await WS.callService('shell_command', 'render_asa', {
-
       filename: filename
-
     });
 
     await WS.callService('shell_command', 'build_lovelace', {});
@@ -1434,6 +1445,7 @@ function renderMixedEditor(title) {
 }
 
 function showCustomPrompt(opts, cb) {
+  closeAllPopups();
   var old = document.querySelector('.custom-prompt-overlay');
   if (old) old.remove();
   var overlay = document.createElement('div');
@@ -1648,7 +1660,7 @@ function dragRegister(opts) {
 
     // Skip if click originated from any native toggle element or its parent
 
-    if (e.target.closest('.block-indicator, .br-sec-arrow, [onclick*="toggleBRSection"], [onclick*="toggleBlockBody"]')) return;
+    if (e.target.closest('.br-sec-arrow, [onclick*="toggleBRSection"], [onclick*="toggleBlockBody"]')) return;
 
     if (e.target.closest('input, select, textarea, button, label, [onclick*="clearIconSelection"], [onclick*="toggleICMap"]')) return;
 
@@ -1658,11 +1670,11 @@ function dragRegister(opts) {
 
     if (!sub) return;
 
-    var toggle = sub.querySelector('.block-indicator, .br-sec-arrow');
+    var toggle = sub.querySelector('.badge[data-mc-type], .br-sec-arrow');
 
     if (!toggle) return;
 
-    if (typeof toggleBlockBody === 'function' && toggle.classList.contains('block-indicator')) {
+    if (typeof toggleBlockBody === 'function' && toggle.classList.contains('badge')) {
 
       toggleBlockBody(toggle);
 
@@ -2053,11 +2065,7 @@ function addSGLocation(itemIdx, serverId) {
 
 const MC_TYPE_LABELS = {
 
-  server_grid:'服务器矩阵', expandable_detail:'可展开卡片',
-
-  supply_card:'补给卡片', map_filter:'地图筛选', info_card:'卡片',
-
-  card_grid:'卡片网格', table:'表格', text:'文本', divider:'分隔线',
+  map_filter:'地图筛选', info_card:'卡片', divider:'分隔线',
 
   base_storage:'存储', base_device:'设备', base_other_device:'其它设备',
 
@@ -2079,13 +2087,13 @@ function renderMixedContent(tab) {
 
     const bt = b.block_type || 'text';
 
-    const colors = {server_grid:'#4CAF50', expandable_detail:'#00BCD4', supply_card:'#E91E63', map_filter:'#795548', info_card:'#FF9800', card_grid:'#FF5722', table:'#9C27B0', text:'#009688', divider:'#607D8B'};
+    const colors = {map_filter:'#795548', info_card:'#FF9800', divider:'#607D8B'};
 
-    h += '<div class="sub-section" data-bi="'+bi+'" style="border-left:4px solid '+((bt==='info_card'&&b.quote_color&&b.quote_color!=='auto')?b.quote_color:'var(--text)')+(bt==='map_filter'?';cursor:default':'')+'">';
+    h += '<div class="sub-section" data-bi="'+bi+'" style="border-left:4px solid '+((bt==='info_card'&&b.quote_color&&b.quote_color!=='auto')?b.quote_color:(bt==='divider'&&b.color&&b.color!=='auto')?b.color:'var(--text)')+(bt==='map_filter'?';cursor:default':'')+'">';
 
     h += '<div style="display:flex;align-items:center;margin-bottom:0;min-height:28px">';
 
-    h += '<strong style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">'+(bt==='map_filter'?'':('<span class="block-indicator" onclick="toggleBlockBody(this)" style="cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:4px;background:var(--border);font-size:0.8em;flex-shrink:0">+</span>'+(b.title||MC_TYPE_LABELS[bt]||bt)+' '))+'<span class="badge" style="font-size:0.65em;background:var(--accent);color:oklch(var(--b1));margin-left:2px;flex-shrink:0;padding:1px 6px;border-radius:3px">'+(MC_TYPE_LABELS[bt]||bt)+'</span></strong>';
+    h += '<strong style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">'+(bt==='map_filter'?'':('<span class="badge" data-mc-type="'+esc(MC_TYPE_LABELS[bt]||bt)+'" onclick="toggleBlockBody(this)" style="font-size:0.65em;background:var(--accent);color:oklch(var(--b1));margin-right:2px;flex-shrink:0;padding:1px 6px;border-radius:3px;cursor:pointer">'+(MC_TYPE_LABELS[bt]||bt)+'⏵</span>'+(bt==='info_card'&&b.icon_url?'<img src="'+esc(b.icon_url)+'" style="width:20px;height:20px;object-fit:contain;flex-shrink:0;'+(b.icon_auto_color?'filter:var(--ic-icon-filter,none)':'')+'" onerror="this.style.display=none">':(b.title||MC_TYPE_LABELS[bt]||bt))))+'</strong>';
 
     h += ' <span class="block-preview" style="display:none" style="display:inline-block;max-width:260px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;vertical-align:middle;font-size:0.8em;color:var(--secondary-text-color);flex-shrink:1"></span>';
 
@@ -2101,13 +2109,15 @@ function renderMixedContent(tab) {
         if (ak) {
           var sm = SERVER_MAP[ak];
           if (sm) {
-            if (ast === 2) { bg = 'background:'+sm.c+';border:none'; icn = '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:#fff"></i>'; }
+            if (ast === 2) { bg = 'background:'+sm.c+';border:none'; icn = '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:var(--primary-background-color)"></i>'; }
             else { bg = 'background:transparent;border:1px solid transparent'; icn = '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:'+sm.c+'"></i>'; }
           }
         }
-        return '<button class="btn-small btn-server" id="mcBlockSrvBtn'+bi+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;'+bg+'" onclick="event.stopPropagation();toggleBlockServerPopup(this,'+bi+');">'+icn+'</button>';
+        return '<button class="btn-small btn-server" id="mcBlockSrvBtn'+bi+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;'+bg+'" title="选择服务器" onclick="event.stopPropagation();toggleBlockServerPopup(this,'+bi+');">'+icn+'</button>';
       })();
     }
+
+    h += '<button class="btn-small" style="color:var(--success);border-radius:4px;padding:1px 5px;font-size:0.75em;line-height:1;border:none" onclick="event.stopPropagation();duplicateBlock('+bi+')" title="复制"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>';
 
     h += '<button class="btn-small btn-danger" onclick="if(confirm(DEL)){editorData.tabs[editorSelectedTab].content_blocks.splice('+bi+',1);reRender();}">✕</button>';
 
@@ -2137,9 +2147,15 @@ function renderMixedContent(tab) {
 
     else if (bt === 'divider') {
 
-      h += '<div class="form-group"><label>线型</label><select id="mcDivStyle'+bi+'">';
+      h += '<div class="form-group" style="display:flex;align-items:center;gap:8px"><span class="cat-color-wrap" style="padding:0;margin:0"><span class="cat-color-dot" id="mcDivColorDot'+bi+'" data-target="mcDivColor'+bi+'" style="background:'+(b.color&&b.color!=='auto'?esc(b.color):'linear-gradient(to right, #000 50%, #fff 50%)')+';cursor:pointer" title="选择颜色" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-bold-btn'+(b.title_bold?' active':'')+'" title="加粗" onclick="event.stopPropagation();var cb=document.getElementById(\'mcDivTitleBold'+bi+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcDivTitle'+bi+'" value="'+esc(b.title||'')+'" placeholder="标题" style="box-sizing:border-box;flex:1;padding:4px 8px;font-size:0.85em;border-radius:0;border:none"><input type="checkbox" id="mcDivTitleBold'+bi+'" '+(b.title_bold?'checked':'')+' style="display:none"></span></span><input type="hidden" id="mcDivColor'+bi+'" value="'+esc(b.color||'auto')+'"></div>';
 
-      [{v:'solid',l:'实线'},{v:'dashed',l:'虚线'},{v:'wavy',l:'波浪线'},{v:'double',l:'双线'}].forEach(o => {
+      h += '<div class="form-group"><span class="cat-col-bq" id="mcDivStyleSeg'+bi+'">';
+
+      (function(){var ls=[{v:'solid',h:'实线'},{v:'dashed',h:'虚线'},{v:'wavy',h:'波浪'},{v:'double',h:'双线'}];ls.forEach(function(o){h+='<span class="cat-col-seg'+((b.style||'solid')===o.v?' active':'')+'" data-val="'+o.v+'" onclick="var t=this,p=t.parentElement;p.querySelectorAll(\'.cat-col-seg\').forEach(function(s){s.classList.toggle(\'active\',s===t)});document.getElementById(\'mcDivStyle'+bi+'\').value=t.dataset.val" style="cursor:pointer;min-width:30px;text-align:center;line-height:24px">'+o.h+'</span>';});})();
+
+      h += '</span><select id="mcDivStyle'+bi+'" style="display:none">';
+
+      [{v:'solid',l:'实线'},{v:'dashed',l:'虚线'},{v:'wavy',l:'波浪'},{v:'double',l:'双线'}].forEach(function(o){
 
         h += '<option value="'+o.v+'" '+((b.style||'solid')===o.v?'selected':'')+'>'+o.l+'</option>';
 
@@ -2367,7 +2383,7 @@ function renderMixedContent(tab) {
 
     else if (bt === 'info_card') {
 
-            h += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><span class="cat-color-wrap" style="flex-shrink:0" title="引用块色条颜色"><span class="cat-color-dot" id="mcICQuoteDot'+bi+'" style="background:'+(b.quote_color&&b.quote_color!=='auto'?esc(b.quote_color):'linear-gradient(to right, #000 50%, #fff 50%)')+'" data-target="mcICQuoteColor'+bi+'" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><input type="hidden" id="mcICQuoteColor'+bi+'" value="'+esc(b.quote_color||'auto')+'"><input id="mcICMdi'+bi+'" value="'+esc(b.mdi_icon||'')+'" placeholder="MDI" style="box-sizing:border-box;width:28px;height:28px;padding:4px;font-size:0.7em;border-radius:4px;text-align:center;flex-shrink:0">'+(b.icon_url?'<img src="'+esc(b.icon_url)+'" id="mcICIconPreview'+bi+'" style="width:28px;height:28px;object-fit:contain;cursor:pointer;flex-shrink:0" onclick="event.stopPropagation();openIconPicker_ic('+bi+')" title="点击换图标" onerror="this.hidden=true">':'<span id="mcICIconPlaceholder'+bi+'" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px 0 0 3px" onclick="event.stopPropagation();openIconPicker_ic('+bi+')" title="选择图标">+</span>')+'<span style="display:flex;flex-shrink:0;margin-left:-8px"><input type="hidden" id="mcICIcon'+bi+'" value="'+esc(b.icon_url||'')+'">'+(function(){var ac=b.icon_auto_color;var s=ac?'background:var(--accent);color:#fff;border:none;':'background:transparent;color:var(--primary-text-color);opacity:0.5;border:1px solid var(--border);';return '<button title="图片跟随主题自动反色：'+(ac?'已开启':'已关闭')+'" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICAutoColor'+bi+'\');cb.checked=!cb.checked;var a=cb.checked;this.title=a?\'图片跟随主题自动反色：已开启\':\'图片跟随主题自动反色：已关闭\';this.style.cssText=a?\'width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;border-radius:0 3px 3px 0;background:var(--accent);color:#fff;border:none\':\'width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;border-radius:0 3px 3px 0;background:transparent;color:var(--primary-text-color);opacity:0.5;border:1px solid var(--border)\';" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;border-radius:0 3px 3px 0;'+s+'"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12,2C6.49,2 2,6.49 2,12S6.49,22 12,22C13.38,22 14.5,20.88 14.5,19.5C14.5,18.87 14.29,18.29 13.94,17.82C13.58,17.36 13.5,16.76 13.5,16.25C13.5,15.15 14.35,14.25 15.45,14.25H17.42C19.86,14.25 22,12.28 22,9.75C22,5.41 17.43,2 12,2M6.5,9A1.5,1.5 0 0,1 8,10.5A1.5,1.5 0 0,1 6.5,12A1.5,1.5 0 0,1 5,10.5A1.5,1.5 0 0,1 6.5,9M9.5,6A1.5,1.5 0 0,1 11,7.5A1.5,1.5 0 0,1 9.5,9A1.5,1.5 0 0,1 8,7.5A1.5,1.5 0 0,1 9.5,6M14.5,6A1.5,1.5 0 0,1 16,7.5A1.5,1.5 0 0,1 14.5,9A1.5,1.5 0 0,1 13,7.5A1.5,1.5 0 0,1 14.5,6M17.5,9A1.5,1.5 0 0,1 19,10.5A1.5,1.5 0 0,1 17.5,12A1.5,1.5 0 0,1 16,10.5A1.5,1.5 0 0,1 17.5,9Z"/></svg></button></span>';}())+'<span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap" title="标题颜色"><span class="cat-color-dot" id="mcICTitleCDot'+bi+'" style="background:'+(b.title_color&&b.title_color!=='auto'?esc(b.title_color):'linear-gradient(to right, #000 50%, #fff 50%)')+'" data-target="mcICTitleColor'+bi+'" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><input id="mcICTitle'+bi+'" value="'+esc(b.title||'')+'" placeholder="标题" style="box-sizing:border-box;flex:1;padding:4px 8px;font-size:0.85em;border-radius:0;border:none"></span></span><input type="hidden" id="mcICTitleColor'+bi+'" value="'+esc(b.title_color||'auto')+'"></div>';      
+            h += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><span class="cat-color-wrap" style="flex-shrink:0" title="引用块色条颜色"><span class="cat-color-dot" id="mcICQuoteDot'+bi+'" style="background:'+(b.quote_color&&b.quote_color!=='auto'?esc(b.quote_color):'linear-gradient(to right, #000 50%, #fff 50%)')+'" data-target="mcICQuoteColor'+bi+'" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><input type="hidden" id="mcICQuoteColor'+bi+'" value="'+esc(b.quote_color||'auto')+'"><input id="mcICMdi'+bi+'" value="'+esc(b.mdi_icon||'')+'" placeholder="MDI" title="MDI 图标" style="box-sizing:border-box;width:28px;height:28px;padding:4px;font-size:0.7em;border-radius:4px;text-align:center;flex-shrink:0">'+(b.icon_url?'<img src="'+esc(b.icon_url)+'" id="mcICIconPreview'+bi+'" style="width:28px;height:28px;object-fit:contain;cursor:pointer;flex-shrink:0;filter:'+(b.icon_auto_color?'var(--ic-icon-filter,invert(1))':'none')+'" onclick="event.stopPropagation();openIconPicker_ic('+bi+')" title="点击换图标" onerror="this.hidden=true">':'<span id="mcICIconPlaceholder'+bi+'" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px 0 0 3px" onclick="event.stopPropagation();openIconPicker_ic('+bi+')" title="选择图标">+</span>')+'<span style="display:flex;flex-shrink:0;margin-left:-8px"><input type="hidden" id="mcICIcon'+bi+'" value="'+esc(b.icon_url||'')+'">'+(function(){var ac=b.icon_auto_color;var s=ac?'background:transparent;color:var(--accent);border:none;':'background:transparent;color:var(--primary-text-color);opacity:0.5;border:1px solid var(--border);';return '<button title="图片跟随主题自动反色：'+(ac?'已开启':'已关闭')+'" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICAutoColor'+bi+'\');cb.checked=!cb.checked;var a=cb.checked;this.title=a?\'图片跟随主题自动反色：已开启\':\'图片跟随主题自动反色：已关闭\';this.style.cssText=a?\'width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;border-radius:0 3px 3px 0;background:transparent;color:var(--accent);border:none\':\'width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;border-radius:0 3px 3px 0;background:transparent;color:var(--primary-text-color);opacity:0.5;border:1px solid var(--border)\';var img=document.getElementById(\'mcICIconPreview'+bi+'\');if(img)img.style.filter=a?\'var(--ic-icon-filter,invert(1))\':\'none\';" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;border-radius:0 3px 3px 0;'+s+'"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12,2C6.49,2 2,6.49 2,12S6.49,22 12,22C13.38,22 14.5,20.88 14.5,19.5C14.5,18.87 14.29,18.29 13.94,17.82C13.58,17.36 13.5,16.76 13.5,16.25C13.5,15.15 14.35,14.25 15.45,14.25H17.42C19.86,14.25 22,12.28 22,9.75C22,5.41 17.43,2 12,2M6.5,9A1.5,1.5 0 0,1 8,10.5A1.5,1.5 0 0,1 6.5,12A1.5,1.5 0 0,1 5,10.5A1.5,1.5 0 0,1 6.5,9M9.5,6A1.5,1.5 0 0,1 11,7.5A1.5,1.5 0 0,1 9.5,9A1.5,1.5 0 0,1 8,7.5A1.5,1.5 0 0,1 9.5,6M14.5,6A1.5,1.5 0 0,1 16,7.5A1.5,1.5 0 0,1 14.5,9A1.5,1.5 0 0,1 13,7.5A1.5,1.5 0 0,1 14.5,6M17.5,9A1.5,1.5 0 0,1 19,10.5A1.5,1.5 0 0,1 17.5,12A1.5,1.5 0 0,1 16,10.5A1.5,1.5 0 0,1 17.5,9Z"/></svg></button></span>';}())+'<span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap" title="标题颜色"><span class="cat-color-dot" id="mcICTitleCDot'+bi+'" style="background:'+(b.title_color&&b.title_color!=='auto'?esc(b.title_color):'linear-gradient(to right, #000 50%, #fff 50%)')+'" data-target="mcICTitleColor'+bi+'" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><input id="mcICTitle'+bi+'" value="'+esc(b.title||'')+'" placeholder="标题" style="box-sizing:border-box;flex:1;padding:4px 8px;font-size:0.85em;border-radius:0;border:none"></span></span><input type="hidden" id="mcICTitleColor'+bi+'" value="'+esc(b.title_color||'auto')+'"></div>';      
       var selectedMaps = (document.getElementById('mcICHL'+bi)?.value || b.highlight||'').split(',').filter(function(x){ return x; });
       h += '<input type="hidden" id="mcICHL'+bi+'" value="'+esc(b.highlight||'')+'">';
       h += '<input type="hidden" id="mcBlockSrvStates'+bi+'" value="'+esc(JSON.stringify(b.server_states||(b.highlight?{[b.highlight]:2}:{})))+'">';
@@ -2383,11 +2399,11 @@ function renderMixedContent(tab) {
         if (d.type === 'br') {
           h += '<div class="sr-cat-card" style="border:1px dashed var(--border);border-radius:3px;padding:2px 6px;margin-bottom:3px;text-align:center;font-size:0.75em;opacity:0.6"><span class="drag-handle" style="cursor:grab;float:left;opacity:0.4">\u22ee\u22ee</span>\u21b5 \u6362\u884c <button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div>';
         } else {
-          h += '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:'+(d.color&&d.color!=='auto'?esc(d.color):'linear-gradient(to right, #000 50%, #fff 50%)')+';cursor:pointer" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:'+(d.opacity||1.0)+';background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="'+(d.opacity||1.0)+'"><span class="cat-bold-btn'+(d.bold?' active':'')+'" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="'+esc(d.text||'')+'" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" '+(d.bold?'checked':'')+' style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="'+esc(d.color||'auto')+'" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value="'+esc(d.server||'')+'"><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="'+esc(JSON.stringify(d.server_states||(d.server?{[d.server]:2}:{})))+'"></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return 'background:transparent;border:1px solid transparent';var sm=SERVER_MAP[ak];if(!sm)return 'background:transparent;border:1px solid transparent';if(ast===2)return 'background:'+sm.c+';border:none';return 'background:transparent;border:1px solid transparent';})()+'" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return getServerBadge('');var sm=SERVER_MAP[ak];if(!sm)return getServerBadge('');if(ast===1)return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:'+sm.c+'"></i>';return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:#fff"></i>';})()+'</button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
+          h += '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:'+(d.color&&d.color!=='auto'?esc(d.color):'linear-gradient(to right, #000 50%, #fff 50%)')+';cursor:pointer" title="选择颜色" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" title="选择透明度" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:'+(d.opacity||1.0)+';background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="'+(d.opacity||1.0)+'"><span class="cat-bold-btn'+(d.bold?' active':'')+'" title="加粗" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="'+esc(d.text||'')+'" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" '+(d.bold?'checked':'')+' style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="'+esc(d.color||'auto')+'" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value="'+esc(d.server||'')+'"><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="'+esc(JSON.stringify(d.server_states||(d.server?{[d.server]:2}:{})))+'"></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return 'background:transparent;border:1px solid transparent';var sm=SERVER_MAP[ak];if(!sm)return 'background:transparent;border:1px solid transparent';if(ast===2)return 'background:'+sm.c+';border:none';return 'background:transparent;border:1px solid transparent';})()+'" title="选择服务器" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return getServerBadge('');var sm=SERVER_MAP[ak];if(!sm)return getServerBadge('');if(ast===1)return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:'+sm.c+'"></i>';return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:var(--primary-background-color)"></i>';})()+'</button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
         }
       }
 
-      h += '</div><div style="display:flex;align-items:center;gap:8px;margin-top:4px"><button class="btn-small btn-primary" style="font-size:0.75em;padding:4px 10px" onclick="event.stopPropagation();addICDesc('+bi+');">+ 描述</button><button class="btn-small btn-primary" style="font-size:0.75em;padding:4px 10px" onclick="event.stopPropagation();addICBr('+bi+');">+ 换行</button><button type="button" class="ic-collapse-toggle'+(b.collapse_descriptions?' active':'')+'" style="font-size:0.7em;margin-left:auto;padding:4px 7px;border-radius:10px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;min-width:22px;border:1px solid var(--border);background:'+(b.collapse_descriptions?'var(--accent)':'transparent')+';color:'+(b.collapse_descriptions?'oklch(var(--pc))':'var(--bc)')+'" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICCollapseDescs'+bi+'\');cb.checked=!cb.checked;var a=cb.checked;this.classList.toggle(\'active\',a);this.style.background=a?\'var(--accent)\':\'transparent\';this.style.color=a?\'oklch(var(--pc))\':\'var(--bc)\'" title="'+(b.collapse_descriptions?'折叠描述：已开启':'折叠描述：已关闭')+'">…</button><input type="checkbox" id="mcICCollapseDescs'+bi+'" '+(b.collapse_descriptions?'checked':'')+' style="display:none"></div></div>';
+      h += '</div><div style="display:flex;align-items:center;gap:8px;margin-top:4px"><button class="btn-small btn-primary" style="font-size:0.75em;padding:4px 10px" onclick="event.stopPropagation();addICDesc('+bi+');">+ 描述</button><button class="btn-small btn-primary" style="font-size:0.75em;padding:4px 10px" onclick="event.stopPropagation();addICBr('+bi+');">+ 换行</button><button type="button" class="ic-collapse-toggle'+(b.collapse_descriptions?' active':'')+'" style="font-size:0.7em;margin-left:auto;padding:4px 7px;border-radius:10px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;min-width:22px;border:1px solid var(--border);background:'+(b.collapse_descriptions?'var(--accent)':'transparent')+';color:'+(b.collapse_descriptions?'var(--primary-background-color)':'var(--bc)')+'" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICCollapseDescs'+bi+'\');cb.checked=!cb.checked;var a=cb.checked;this.classList.toggle(\'active\',a);this.style.background=a?\'var(--accent)\' : \'transparent\';this.style.color=a?\'var(--primary-background-color)\' : \'var(--bc)\';" title="'+(b.collapse_descriptions?'折叠描述：已开启':'折叠描述：已关闭')+'">\u2026</button><input type="checkbox" id="mcICCollapseDescs'+bi+'" '+(b.collapse_descriptions?'checked':'')+' style="display:none"></div></div>';
       h += '<label style="display:none"><input type="checkbox" id="mcICAutoColor'+bi+'" '+(b.icon_auto_color?'checked':'')+'> 图标跟随主题</label>';
 
     }
@@ -2408,7 +2424,7 @@ function renderMixedContent(tab) {
 
   h += '<div class="add-block-panel" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:0">';
 
-  Object.entries(MC_TYPE_LABELS).forEach(([k,v]) => {
+  Object.entries(MC_TYPE_LABELS).filter(function(e){return['map_filter','info_card','divider'].includes(e[0])}).forEach(([k,v]) => {
 
     h += '<button class="btn-small btn-primary" style="white-space:nowrap;flex-shrink:0" onclick="addMCBlock(\''+k+'\')">+ '+v+'</button>';
 
@@ -2432,10 +2448,12 @@ function toggleBlockBody(el) {
     allBodies.forEach(function(b) { b.classList.add('collapsed'); });
   }
   body.classList.toggle('collapsed');
-  // Update indicator
-  var indicator = section.querySelector('.block-indicator');
-
-  if (indicator) indicator.textContent = body.classList.contains('collapsed') ? '+' : '−';
+  // Update badge indicator
+  var badge = section.querySelector('.badge[data-mc-type]');
+  if (badge) {
+    var type = badge.getAttribute('data-mc-type') || '';
+    badge.textContent = type + (body.classList.contains('collapsed') ? '⏵' : '⏷');
+  }
 
   // Populate preview
 
@@ -2596,7 +2614,7 @@ function addICDesc(bi) {
 
   const di = container.children.length;
 
-  const h = '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:linear-gradient(to right, #000 50%, #fff 50%);cursor:pointer" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:1.0;background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="1.0"><span class="cat-bold-btn" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="auto" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value=""><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="{}"></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid transparent" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+getServerBadge('')+'</button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
+  const h = '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:linear-gradient(to right, #000 50%, #fff 50%);cursor:pointer" title="选择颜色" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" title="选择透明度" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:1.0;background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="1.0"><span class="cat-bold-btn" title="加粗" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="auto" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value=""><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="{}"></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid transparent" title="选择服务器" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+getServerBadge('')+'</button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
 
   container.insertAdjacentHTML('beforeend', h);
 
@@ -2644,6 +2662,16 @@ function addEDDesc(bi) {
 
 }
 
+function duplicateBlock(bi) {
+  const tab = editorData.tabs[editorSelectedTab];
+  if (!tab.content_blocks) return;
+  const src = tab.content_blocks[bi];
+  if (!src) return;
+  const clone = JSON.parse(JSON.stringify(src));
+  tab.content_blocks.splice(bi + 1, 0, clone);
+  reRender();
+}
+
 function addMCBlock(type) {
 
   const tab = editorData.tabs[editorSelectedTab];
@@ -2652,19 +2680,7 @@ function addMCBlock(type) {
 
   const defaults = {
 
-    text: {block_type:'text', style:'default', text:'', collapsed:false},
-
-    divider: {block_type:'divider', style:'solid'},
-
-    table: {block_type:'table', title:'', columns:['列1','2'], rows:[]},
-
-    server_grid: {block_type:'server_grid', first_col_label:'', hide_first_col:false, columns:[], items:[]},
-
-    card_grid: {block_type:'card_grid', columns:4, cards:[]},
-
-    expandable_detail: {block_type:'expandable_detail', map:{}, spot:{}, output:{}, flow:{blocks:[]}},
-
-    supply_card: {block_type:'supply_card', columns:[], item:{name:'',icon_url:'',locations:{}}},
+    divider: {block_type:'divider', style:'solid', title:'', color:'auto', title_bold:false},
 
     map_filter: {block_type:'map_filter'},
 
@@ -2771,6 +2787,12 @@ function saveMCBlocks(tab) {
     } else if (bt === 'divider') {
 
       b.style = (document.getElementById('mcDivStyle'+bi)?.value) || 'solid';
+
+      b.title = document.getElementById('mcDivTitle'+bi)?.value || '';
+
+      b.color = (document.getElementById('mcDivColor'+bi)?.value) || 'auto';
+
+      b.title_bold = document.getElementById('mcDivTitleBold'+bi)?.checked || false;
 
     } else if (bt === 'table') {
 
@@ -3992,6 +4014,22 @@ html += '</div>'; // sr-items
 
             html += '<div class=\"block-title-row\" style=\"display:flex;align-items:center;gap:6px\"><strong style=\"font-size:0.85em\">'+(MC_TYPE_LABELS[bt]||bt)+'</strong><button class=\"btn-small btn-danger\" onclick=\"event.stopPropagation();if(confirm(DEL))rmBlock(this);\" style=\"padding:2px 6px;font-size:0.6em;margin-left:auto\">✕</button></div>';
 
+            html += '<div class=\"form-group\" style=\"display:flex;align-items:center;gap:8px\"><span class=\"cat-color-wrap\" style=\"padding:0;margin:0\"><span class=\"cat-color-dot\" id=\"mcDivColorDot'+bi+'\" data-target=\"mcDivColor'+bi+'\" style=\"background:'+(b.color&&b.color!=='auto'?esc(b.color):'linear-gradient(to right, #000 50%, #fff 50%)')+';cursor:pointer\" title=\"选择颜色\" onclick=\"event.stopPropagation();toggleColorPopup(this)\"></span></span><span class=\"cat-merged\" style=\"flex:1;min-width:0\"><span class=\"cat-input-wrap\"><span class=\"cat-bold-btn'+(b.title_bold?' active':'')+'\" title=\"加粗\" onclick=\"event.stopPropagation();var cb=document.getElementById(\'mcDivTitleBold'+bi+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)\">B</span><input id=\"mcDivTitle'+bi+'\" value=\"'+esc(b.title||'')+'\" placeholder=\"标题\" style=\"box-sizing:border-box;flex:1;padding:4px 8px;font-size:0.85em;border-radius:0;border:none\"><input type=\"checkbox\" id=\"mcDivTitleBold'+bi+'\" '+(b.title_bold?'checked':'')+' style=\"display:none\"></span></span><input type=\"hidden\" id=\"mcDivColor'+bi+'\" value=\"'+esc(b.color||'auto')+'\"></div>';
+
+            html += '<div class=\"form-group\"><span class=\"cat-col-bq\" id=\"mcDivStyleSeg'+bi+'\">';
+
+            (function(){var ls=[{v:'solid',h:'实线'},{v:'dashed',h:'虚线'},{v:'wavy',h:'波浪'},{v:'double',h:'双线'}];ls.forEach(function(o){html+='<span class=\"cat-col-seg'+((b.style||'solid')===o.v?' active':'')+'\" data-val=\"'+o.v+'\" onclick=\"var t=this,p=t.parentElement;p.querySelectorAll(\'.cat-col-seg\').forEach(function(s){s.classList.toggle(\'active\',s===t)});document.getElementById(\'mcDivStyle'+bi+'\').value=t.dataset.val\" style=\"cursor:pointer;min-width:30px;text-align:center;line-height:24px\">'+o.h+'</span>';});})();
+
+            html += '</span><select id=\"mcDivStyle'+bi+'\" style=\"display:none\">';
+
+            [{v:'solid',l:'实线'},{v:'dashed',l:'虚线'},{v:'wavy',l:'波浪'},{v:'double',l:'双线'}].forEach(function(o){
+
+              html += '<option value=\"'+o.v+'\" '+((b.style||'solid')===o.v?'selected':'')+'>'+o.l+'</option>';
+
+            });
+
+            html += '</select></div>';
+
           }
 
           html += '</div>';
@@ -4006,7 +4044,7 @@ html += '</div>'; // sr-items
 
         html += '<div style=\"display:flex;gap:4px;flex-wrap:wrap;margin:4px 0\">';
 
-        ['base_storage','base_device','base_other_device','base_creature','base_other_creature','base_badge','text','divider'].forEach(function(k){
+        ['base_storage','base_device','base_other_device','base_creature','base_other_creature','base_badge'].forEach(function(k){
 
           html += '<button class=\"btn-small btn-primary\" onclick=\"addBRSecBlock('+si+',\''+k+'\')\">+ '+MC_TYPE_LABELS[k]+'</button>';
 
@@ -4353,6 +4391,14 @@ async function saveBaseTab() {
             if (inpIcon) block.icon_url = inpIcon.value || '';
 
             if (inpBody) { if (bt === 'text') block.text = inpBody.value; else block.body = inpBody.value; }
+
+            // Divider-specific
+            if (bt === 'divider') {
+              block.style = bd.querySelector('[id^=mcDivStyle]')?.value || 'solid';
+              block.title = bd.querySelector('[id^=mcDivTitle]')?.value || '';
+              block.color = bd.querySelector('[id^=mcDivColor]')?.value || 'auto';
+              block.title_bold = bd.querySelector('[id^=mcDivTitleBold]')?.checked || false;
+            }
 
             // Storage-specific: read rows
 
@@ -4970,6 +5016,8 @@ function mergeLabelInputs(card) {
 
     if (bEl.checked) bSpan.classList.add('active');
 
+    bSpan.title = '加粗';
+    bSpan.title = '加粗';
     bSpan.onclick = function(e){ e.stopPropagation(); bEl.checked = !bEl.checked; bSpan.classList.toggle('active', bEl.checked); };
 
     lw.insertBefore(bSpan, lw.firstChild);
@@ -5036,6 +5084,7 @@ function mergeLabelInputs(card) {
 
     if (sbEl.checked) sbSpan.classList.add('active');
 
+    sbSpan.title = '加粗';
     sbSpan.onclick = function(e){ e.stopPropagation(); sbEl.checked = !sbEl.checked; sbSpan.classList.toggle('active', sbEl.checked); };
 
     sw.insertBefore(sbSpan, sw.firstChild);
@@ -5062,6 +5111,7 @@ function mergeLabelInputs(card) {
 
     sclrDot.setAttribute('data-target', sclr.id);
 
+    sclrDot.title = '选择颜色';
     sclrDot.onclick = function(e){ e.stopPropagation(); toggleColorPopup(this); };
 
     var sclrWrap = document.createElement('span');
@@ -5110,29 +5160,13 @@ function mergeLabelInputs(card) {
 
     document.addEventListener('click', function(e){
 
-      if (!e.target.closest('.cat-input-wrap')) {
+      if (e.target.closest('.cat-color-popup, .cat-opacity-popup, .cat-bc-popup, .icon-picker-overlay, .mobile-tab-popup, .custom-prompt-overlay, .server-select-popup')) return;
 
-        document.querySelectorAll('.cat-bc-popup.show').forEach(function(p){ p.classList.remove('show'); });
+      if (e.target.closest('.cat-color-dot, .cat-opacity-dot')) return;
 
-      }
+      closeAllPopups();
 
-      if (!e.target.closest('.cat-color-dot') && !e.target.closest('.cat-color-popup')) {
-
-        var cp = document.getElementById('catColorPopup');
-
-        if (cp) cp.classList.remove('show');
-
-      }
-
-      if (!e.target.closest('.cat-opacity-dot') && !e.target.closest('.cat-opacity-popup')) {
-
-        var op = document.getElementById('catOpacityPopup');
-
-        if (op) op.classList.remove('show');
-
-      }
-
-    });
+    }, true);
 
   }
 
@@ -5168,6 +5202,7 @@ function upgradeICDescControls() {
     cDot.setAttribute('data-target', 'mcICDescColor'+bi+'_'+di);
     cDot.style.background = colorEl ? (colorEl.value==='auto'?'linear-gradient(to right, #000 50%, #fff 50%)':colorEl.value) : 'linear-gradient(to right, #000 50%, #fff 50%)';
     cDot.style.cursor = 'pointer';
+    cDot.title = '选择颜色';
     cDot.onclick = function(e){ e.stopPropagation(); toggleColorPopup(this); };
     cWrap.appendChild(cDot);
     twrap.appendChild(cWrap);
@@ -5175,6 +5210,7 @@ function upgradeICDescControls() {
     var bSpan = document.createElement('span');
     bSpan.className = 'cat-bold-btn' + (boldChecked ? ' active' : '');
     bSpan.textContent = 'B';
+    bSpan.title = '加粗';
     bSpan.onclick = function(e){
       e.stopPropagation();
       var cb = document.getElementById('mcICDescBold'+bi+'_'+di);
@@ -5207,6 +5243,7 @@ function upgradeICDescControls() {
     odot.setAttribute('data-target', 'mcICDescOpacity'+bi+'_'+di);
     odot.style.opacity = curOpacity;
     odot.style.background = '#000000';
+    odot.title = '选择透明度';
     odot.onclick = function(e){ e.stopPropagation(); toggleOpacityPopup(this); };
     owrap.appendChild(odot);
     merged.appendChild(owrap);
@@ -5224,6 +5261,7 @@ function upgradeICDescControls() {
       var srvBtn = document.createElement('button'); srvBtn.className = 'btn-small btn-server'; srvBtn.id = 'mcICDescSrvBtn'+bi+'_'+di;
       srvBtn.style.cssText = 'font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center';
       srvBtn.innerHTML = getServerBadge('');
+      srvBtn.title = '选择服务器';
       srvBtn.onclick = function(e){ e.stopPropagation(); toggleDescServerPopup(this,'+bi+','+di+'); };
       flexRow.insertBefore(srvBtn, xBtn);
     }
@@ -5372,6 +5410,7 @@ var CAT_LABEL_COLORS = ["auto","#000000","#4CAF50","#FF5722","#009688","#9C27B0"
 
 // Server map for desc popup
 var SERVER_MAP = {'Isl':{c:'#4CAF50',n:'island',emoji:'🏝️'},'Sco':{c:'#FF5722',n:'volcano',emoji:'🔥'},'Cen':{c:'#009688',n:'diamond-stone',emoji:'💎'},'Abe':{c:'#9C27B0',n:'radioactive',emoji:'☢️'},'Ext':{c:'#00BCD4',n:'meteor',emoji:'☄️'},'Ast':{c:'#FF9800',n:'star-four-points',emoji:'✨'},'Rag':{c:'#E91E63',n:'lighthouse-on',emoji:'🗼'},'Val':{c:'#4E9F62',n:'forest',emoji:'🌲'},'Bob':{c:'#FFC107',n:'party-popper',emoji:'🎉'},'Los':{c:'#607D8B',n:'castle',emoji:'🏰'}};
+var FIXED_STYLES = {'_hint':{c:'#2196F3',n:'information',label:'提示'},'_warn':{c:'#FF9800',n:'alert',label:'警告'}};
 
 function getServerBadge(sid) {
   var s = SERVER_MAP[sid];
@@ -5380,6 +5419,7 @@ function getServerBadge(sid) {
 }
 
 function toggleDescServerPopup(el, bi, di) {
+  closeAllPopups();
   var popup = document.getElementById('descServerPopup');
   if (popup) { popup.remove(); if (popup._triggerEl === el) return; }
   popup = document.createElement('div'); popup.id = 'descServerPopup'; popup.className = 'server-select-popup';
@@ -5399,7 +5439,7 @@ function toggleDescServerPopup(el, bi, di) {
     } else if (st === 1) {
       css += 'background:transparent;color:'+s.c+';opacity:1;border:1px solid '+s.c+';box-shadow:0 0 0 1px '+s.c+';';
     } else {
-      css += 'background:'+s.c+';color:#fff;border:none;opacity:1;';
+      css += 'background:'+s.c+';color:var(--primary-background-color);border:none;opacity:1;';
     }
     btn.style.cssText = css;
     btn.innerHTML = '<i class="mdi mdi-'+s.n+'" style="font-size:14px;line-height:1;pointer-events:none"></i>';
@@ -5494,8 +5534,8 @@ function updateDescSrvBadge(bi, di, states) {
     btn.style.background = 'transparent';
     btn.style.border = '1px solid transparent';
   } else {
-    // Block: white icon on colored bg
-    btn.innerHTML = '<i class="mdi mdi-'+s.n+'" style="font-size:14px;line-height:1;color:#fff"></i>';
+    // Block: theme-adaptive icon on colored bg
+    btn.innerHTML = '<i class="mdi mdi-'+s.n+'" style="font-size:14px;line-height:1;color:var(--primary-background-color)"></i>';
     btn.style.background = s.c;
     btn.style.border = 'none';
   }
@@ -5504,6 +5544,7 @@ function updateDescSrvBadge(bi, di, states) {
 // --- Block-level map selector (same 3-state logic as description-level) ---
 
 function toggleBlockServerPopup(el, bi) {
+  closeAllPopups();
   var popup = document.getElementById('blockServerPopup');
   if (popup) { popup.remove(); if (popup._triggerEl === el) return; }
   popup = document.createElement('div'); popup.id = 'blockServerPopup'; popup.className = 'server-select-popup';
@@ -5523,10 +5564,34 @@ function toggleBlockServerPopup(el, bi) {
     } else if (st === 1) {
       css += 'background:transparent;color:'+s.c+';opacity:1;border:1px solid '+s.c+';box-shadow:0 0 0 1px '+s.c+';';
     } else {
-      css += 'background:'+s.c+';color:#fff;border:none;opacity:1;';
+      css += 'background:'+s.c+';color:var(--primary-background-color);border:none;opacity:1;';
     }
     btn.style.cssText = css;
     btn.innerHTML = '<i class="mdi mdi-'+s.n+'" style="font-size:14px;line-height:1;pointer-events:none"></i>';
+    btn.onclick = function(e){ e.stopPropagation(); selectBlockServer(bi, k); popup.remove(); };
+    popup.appendChild(btn);
+  });
+  // Fixed styles: hint + warning
+  var sep = document.createElement('span');
+  sep.style.cssText = 'width:100%;height:1px;background:var(--border);margin:2px 0;flex-basis:100%';
+  popup.appendChild(sep);
+  Object.keys(FIXED_STYLES).forEach(function(k){
+    var s = FIXED_STYLES[k];
+    var st = curStates[k] || 0;
+    var btn = document.createElement('button');
+    btn.className = 'btn-small';
+    btn._srvId = k; btn._state = st;
+    btn.title = s.label;
+    var css = 'font-size:0.7em;padding:3px 8px;border-radius:999px;min-width:36px;height:26px;display:inline-flex;align-items:center;justify-content:center;gap:3px;cursor:pointer;white-space:nowrap;';
+    if (st === 0) {
+      css += 'background:transparent;color:'+s.c+';opacity:0.35;border:1px solid '+s.c+';';
+    } else if (st === 1) {
+      css += 'background:transparent;color:'+s.c+';opacity:1;border:1px solid '+s.c+';box-shadow:0 0 0 1px '+s.c+';';
+    } else {
+      css += 'background:'+s.c+';color:var(--primary-background-color);border:none;opacity:1;';
+    }
+    btn.style.cssText = css;
+    btn.innerHTML = '<i class="mdi mdi-'+s.n+'" style="font-size:13px;line-height:1;pointer-events:none"></i><span style="font-size:0.65em">'+s.label+'</span>';
     btn.onclick = function(e){ e.stopPropagation(); selectBlockServer(bi, k); popup.remove(); };
     popup.appendChild(btn);
   });
@@ -5549,16 +5614,17 @@ function selectBlockServer(bi, sid) {
     var prevSt = curStates[sid] || 0;
     // Clear ALL other maps first (single-select)
     curStates = {};
+    var isFixed = sid && sid.charAt(0) === '_';
     var st = (prevSt + 1) % 3;  // 0→1→2→0
     if (st > 0) {
       curStates[sid] = st;
-      if (hid) hid.value = sid;
+      if (!isFixed && hid) hid.value = sid;
     } else {
-      if (hid) hid.value = '';
+      if (!isFixed && hid) hid.value = '';
     }
     // Auto-set quote_color to server theme color (or reset)
     if (st > 0) {
-      var s = SERVER_MAP[sid];
+      var s = SERVER_MAP[sid] || FIXED_STYLES[sid];
       if (s) {
         var qcInput = document.getElementById('mcICQuoteColor'+bi);
         if (qcInput) qcInput.value = s.c;
@@ -5612,17 +5678,29 @@ function updateBlockSrvBadge(bi, states) {
     btn.style.border = '1px solid transparent';
     return;
   }
-  var s = SERVER_MAP[activeK];
+  var s = SERVER_MAP[activeK] || FIXED_STYLES[activeK];
   if (!s) { btn.innerHTML = getServerBadge(''); return; }
   if (activeSt === 1) {
     btn.innerHTML = '<i class="mdi mdi-'+s.n+'" style="font-size:14px;line-height:1;color:'+s.c+'"></i>';
     btn.style.background = 'transparent';
     btn.style.border = '1px solid transparent';
   } else {
-    btn.innerHTML = '<i class="mdi mdi-'+s.n+'" style="font-size:14px;line-height:1;color:#fff"></i>';
+    btn.innerHTML = '<i class="mdi mdi-'+s.n+'" style="font-size:14px;line-height:1;color:var(--primary-background-color)"></i>';
     btn.style.background = s.c;
     btn.style.border = 'none';
   }
+}
+
+function closeAllPopups() {
+  var cp = document.getElementById('catColorPopup');
+  if (cp) cp.classList.remove('show');
+  var op = document.getElementById('catOpacityPopup');
+  if (op) op.classList.remove('show');
+  document.querySelectorAll('.cat-bc-popup.show').forEach(function(p){ p.classList.remove('show'); });
+  document.querySelectorAll('.icon-picker-overlay').forEach(function(o){ o.remove(); });
+  document.querySelectorAll('.mobile-tab-popup.show').forEach(function(p){ p.classList.remove('show'); });
+  document.querySelectorAll('.custom-prompt-overlay').forEach(function(o){ o.remove(); });
+  document.querySelectorAll('.server-select-popup').forEach(function(o){ o.remove(); });
 }
 
 function toggleColorPopup(el) {
@@ -5635,7 +5713,8 @@ function toggleColorPopup(el) {
 
   var existing = document.querySelector(".cat-color-popup.show");
 
-  if (existing) { existing.classList.remove("show"); if (existing.dataset.dotId === el.id) return; }
+  closeAllPopups();
+  if (existing && existing.dataset.dotId === el.id) return;
 
   var popup = document.getElementById("catColorPopup");
 
@@ -5686,7 +5765,8 @@ function toggleOpacityPopup(el) {
   var sel = document.getElementById(targetId);
   var cur = sel ? parseFloat(sel.value) || 1.0 : 1.0;
   var existing = document.querySelector('.cat-opacity-popup.show');
-  if (existing) { existing.classList.remove('show'); if (existing.dataset.dotId === el.id) return; }
+  closeAllPopups();
+  if (existing && existing.dataset.dotId === el.id) return;
   var popup = document.getElementById('catOpacityPopup');
   if (popup) popup.remove();
   popup = document.createElement('span'); popup.id = 'catOpacityPopup'; popup.className = 'cat-opacity-popup'; document.body.appendChild(popup);
@@ -5750,6 +5830,12 @@ function selectMarkerColor(dot, clr) {
     var qc = clr === 'auto' ? 'var(--text)' : clr;
     var sub = dot.closest('.sub-section');
     if (sub) sub.style.borderLeftColor = qc;
+  }
+  // Update divider sub-section left border to reflect divider color
+  if (targetId && targetId.indexOf('mcDivColor') === 0) {
+    var dc = clr === 'auto' ? 'var(--text)' : clr;
+    var dsub = dot.closest('.sub-section');
+    if (dsub) dsub.style.borderLeftColor = dc;
   }
 }
 
@@ -6388,7 +6474,7 @@ function _initMobileTabSelect() {
 
   popup.onclick = function(e){ if (e.target === popup) popup.classList.remove('show'); };
 
-  iconBtn.onclick = function(e){ e.preventDefault(); popup.classList.add('show'); };
+  iconBtn.onclick = function(e){ e.preventDefault(); var wasShown = popup.classList.contains('show'); closeAllPopups(); if (!wasShown) popup.classList.add('show'); };
 
   document.body.appendChild(popup);
 
@@ -6509,6 +6595,7 @@ function addBRSecBlock(si, type) {
 }
 
 function showCustomPromptRadio(opts, cb) {
+  closeAllPopups();
   var old = document.querySelector('.custom-prompt-overlay');
   if (old) old.remove();
   var overlay = document.createElement('div');
@@ -6608,6 +6695,8 @@ var iconListLoaded = false;
 
 function openIconPicker(si, bi, ri, ci, ii) {
 
+  closeAllPopups();
+
   loadIconList(function(list){
 
     var cats = {}; var catOrder = [];
@@ -6673,6 +6762,7 @@ function openIconPicker(si, bi, ri, ci, ii) {
 var iconPickerCat = "";
 
 function openIconPicker_ic(bi) {
+  closeAllPopups();
   loadIconList(function(list){
     var cats = {}; var catOrder = [];
     list.forEach(function(item){
