@@ -124,6 +124,8 @@ button { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; f
 
   .grid-2 { grid-template-columns: 1fr !important; }
 
+  .grid-2 > * { min-width: 0 !important; }
+
   .grid-2 > .tab-sidebar, .grid-2 > .resize-handle { display: none !important; }
 
   .mobile-tab-icon { display: inline-flex !important; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 2px; border: 1px solid var(--border); border-radius: 4px; background: var(--card); color: var(--accent); cursor: pointer; flex-shrink: 0; }
@@ -156,6 +158,10 @@ button { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; f
 
   .mobile-only { display: flex !important; }
   .mobile-only button { white-space: nowrap; }
+
+  /* 移动端：保存TAB 居中，预览移至左侧 */
+  #main [style*="space-between"] { justify-content: center !important; gap: 8px; }
+  #btnTogglePreview { order: -1; }
 }
 
 .mobile-tab-icon { display: none; }
@@ -217,6 +223,9 @@ button { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; f
 .server-tab { padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border); cursor: pointer; font-size: 0.85em; background: var(--input-bg); color: var(--text); }
 
 .server-tab.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+
+.icon-cat-tab { width: 80px; min-width: 80px; text-align: center; white-space: nowrap; position: relative; overflow: visible !important; padding-bottom: 16px !important; }
+.cat-count-badge { position: absolute; bottom: 2px; right: 4px; font-size: 0.6em; opacity: 0.5; line-height: 1; }
 
 .icon-preview { width: 40px; height: 40px; border-radius: 4px; object-fit: contain; background: var(--input-bg); }
 
@@ -381,6 +390,7 @@ button { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; f
 .block-preview { user-select: none; min-width: 0; }
 
 .block-indicator:hover { background: var(--accent) !important; color: #000; }
+.badge[data-mc-type]:hover { filter: brightness(1.2); cursor: pointer; }
 
 :root { --ic-icon-filter: none; }
 
@@ -1657,7 +1667,7 @@ function dragRegister(opts) {
 
     // Skip if click originated from any native toggle element or its parent
 
-    if (e.target.closest('.block-indicator, .br-sec-arrow, [onclick*="toggleBRSection"], [onclick*="toggleBlockBody"]')) return;
+    if (e.target.closest('.br-sec-arrow, [onclick*="toggleBRSection"], [onclick*="toggleBlockBody"]')) return;
 
     if (e.target.closest('input, select, textarea, button, label, [onclick*="clearIconSelection"], [onclick*="toggleICMap"]')) return;
 
@@ -1667,17 +1677,32 @@ function dragRegister(opts) {
 
     if (!sub) return;
 
-    var toggle = sub.querySelector('.block-indicator, .br-sec-arrow');
+    var toggle = sub.querySelector('.badge[data-mc-type], .br-sec-arrow');
 
-    if (!toggle) return;
+    if (toggle) {
 
-    if (typeof toggleBlockBody === 'function' && toggle.classList.contains('block-indicator')) {
+      if (typeof toggleBlockBody === 'function' && toggle.classList.contains('badge')) {
 
-      toggleBlockBody(toggle);
+        toggleBlockBody(toggle);
+
+      } else {
+
+        toggle.click();
+
+      }
 
     } else {
 
-      toggle.click();
+      var body = sub.querySelector('.block-body');
+
+      if (body) {
+        if (body.classList.contains('collapsed')) {
+          var container = sub.parentElement;
+          var allBodies = container.querySelectorAll('.block-body');
+          allBodies.forEach(function(b) { b.classList.add('collapsed'); });
+        }
+        body.classList.toggle('collapsed');
+      }
 
     }
 
@@ -2090,7 +2115,7 @@ function renderMixedContent(tab) {
 
     h += '<div style="display:flex;align-items:center;margin-bottom:0;min-height:28px">';
 
-    h += '<strong style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">'+(bt==='map_filter'?'':('<span class="block-indicator" onclick="toggleBlockBody(this)" style="cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:4px;background:var(--border);font-size:0.8em;flex-shrink:0">+</span>'+(bt==='info_card'&&b.icon_url?'<img src="'+esc(b.icon_url)+'" style="width:20px;height:20px;object-fit:contain;flex-shrink:0;'+(b.icon_auto_color?'filter:var(--ic-icon-filter,none)':'')+'" onerror="this.style.display=none">':(b.title||MC_TYPE_LABELS[bt]||bt))+' '))+'<span class="badge" style="font-size:0.65em;background:var(--accent);color:oklch(var(--b1));margin-left:2px;flex-shrink:0;padding:1px 6px;border-radius:3px">'+(MC_TYPE_LABELS[bt]||bt)+'</span></strong>';
+    h += '<strong style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">'+(bt==='map_filter'?'<span class="badge" style="font-size:0.65em;background:var(--accent);color:oklch(var(--b1));margin-right:2px;flex-shrink:0;padding:1px 6px;border-radius:3px">'+(MC_TYPE_LABELS[bt]||bt)+'</span>':((bt==='info_card'?'':'<span class="badge" data-mc-type="'+esc(MC_TYPE_LABELS[bt]||bt)+'" onclick="toggleBlockBody(this)" style="font-size:0.65em;background:var(--accent);color:oklch(var(--b1));margin-right:2px;flex-shrink:0;padding:1px 6px;border-radius:3px;cursor:pointer">'+(MC_TYPE_LABELS[bt]||bt)+'</span>')+(bt==='info_card'&&b.icon_url?'<img src="'+esc(b.icon_url)+'" style="width:20px;height:20px;object-fit:contain;flex-shrink:0;'+(b.icon_auto_color?'filter:var(--ic-icon-filter,none)':'')+'" onerror="this.style.display=none">':(b.title||MC_TYPE_LABELS[bt]||bt))))+'</strong>';
 
     h += ' <span class="block-preview" style="display:none" style="display:inline-block;max-width:260px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;vertical-align:middle;font-size:0.8em;color:var(--secondary-text-color);flex-shrink:1"></span>';
 
@@ -2104,7 +2129,7 @@ function renderMixedContent(tab) {
         var bg = 'background:transparent;border:1px solid transparent';
         var icn = getServerBadge('');
         if (ak) {
-          var sm = SERVER_MAP[ak];
+          var sm = SERVER_MAP[ak] || FIXED_STYLES[ak];
           if (sm) {
             if (ast === 2) { bg = 'background:'+sm.c+';border:none'; icn = '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:var(--primary-background-color)"></i>'; }
             else { bg = 'background:transparent;border:1px solid transparent'; icn = '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:'+sm.c+'"></i>'; }
@@ -2396,11 +2421,11 @@ function renderMixedContent(tab) {
         if (d.type === 'br') {
           h += '<div class="sr-cat-card" style="border:1px dashed var(--border);border-radius:3px;padding:2px 6px;margin-bottom:3px;text-align:center;font-size:0.75em;opacity:0.6"><span class="drag-handle" style="cursor:grab;float:left;opacity:0.4">\u22ee\u22ee</span>\u21b5 \u6362\u884c <button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div>';
         } else {
-          h += '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:'+(d.color&&d.color!=='auto'?esc(d.color):'linear-gradient(to right, #000 50%, #fff 50%)')+';cursor:pointer" title="选择颜色" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" title="选择透明度" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:'+(d.opacity||1.0)+';background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="'+(d.opacity||1.0)+'"><span class="cat-bold-btn'+(d.bold?' active':'')+'" title="加粗" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="'+esc(d.text||'')+'" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" '+(d.bold?'checked':'')+' style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="'+esc(d.color||'auto')+'" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value="'+esc(d.server||'')+'"><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="'+esc(JSON.stringify(d.server_states||(d.server?{[d.server]:2}:{})))+'"></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return 'background:transparent;border:1px solid transparent';var sm=SERVER_MAP[ak];if(!sm)return 'background:transparent;border:1px solid transparent';if(ast===2)return 'background:'+sm.c+';border:none';return 'background:transparent;border:1px solid transparent';})()+'" title="选择服务器" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return getServerBadge('');var sm=SERVER_MAP[ak];if(!sm)return getServerBadge('');if(ast===1)return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:'+sm.c+'"></i>';return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:var(--primary-background-color)"></i>';})()+'</button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
+          h += '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:'+(d.color&&d.color!=='auto'?esc(d.color):'linear-gradient(to right, #000 50%, #fff 50%)')+';cursor:pointer" title="选择颜色" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" title="选择透明度" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:'+(d.opacity||1.0)+';background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="'+(d.opacity||1.0)+'"><span class="cat-bold-btn'+(d.bold?' active':'')+'" title="加粗" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="'+esc(d.text||'')+'" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" '+(d.bold?'checked':'')+' style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="'+esc(d.color||'auto')+'" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value="'+esc(d.server||'')+'"><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="'+esc(JSON.stringify(d.server_states||(d.server?{[d.server]:2}:{})))+'"></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return 'background:transparent;border:1px solid transparent';var sm=SERVER_MAP[ak]||FIXED_STYLES[ak];if(!sm)return 'background:transparent;border:1px solid transparent';if(ast===2)return 'background:'+sm.c+';border:none';return 'background:transparent;border:1px solid transparent';})()+'" title="选择服务器" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return getServerBadge('');var sm=SERVER_MAP[ak]||FIXED_STYLES[ak];if(!sm)return getServerBadge('');if(ast===1)return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:'+sm.c+'"></i>';return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:var(--primary-background-color)"></i>';})()+'</button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
         }
       }
 
-      h += '</div><div style="display:flex;align-items:center;gap:8px;margin-top:4px"><button class="btn-small btn-primary" style="font-size:0.75em;padding:4px 10px" onclick="event.stopPropagation();addICDesc('+bi+');">+ 描述</button><button class="btn-small btn-primary" style="font-size:0.75em;padding:4px 10px" onclick="event.stopPropagation();addICBr('+bi+');">+ 换行</button><button type="button" class="ic-collapse-toggle'+(b.collapse_descriptions?' active':'')+'" style="font-size:0.7em;margin-left:auto;padding:4px 7px;border-radius:10px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;min-width:22px;border:1px solid var(--border);background:'+(b.collapse_descriptions?'var(--accent)':'transparent')+';color:'+(b.collapse_descriptions?'var(--primary-background-color)':'var(--bc)')+'" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICCollapseDescs'+bi+'\');cb.checked=!cb.checked;var a=cb.checked;this.classList.toggle(\'active\',a);this.style.background=a?\'var(--accent)\' : \'transparent\';this.style.color=a?\'var(--primary-background-color)\' : \'var(--bc)\';" title="'+(b.collapse_descriptions?'折叠描述：已开启':'折叠描述：已关闭')+'">\u2026</button><input type="checkbox" id="mcICCollapseDescs'+bi+'" '+(b.collapse_descriptions?'checked':'')+' style="display:none"></div></div>';
+      h += '</div><div style="display:flex;align-items:center;gap:8px;margin-top:4px"><button class="btn-small btn-primary" style="font-size:0.75em;padding:4px 10px;height:24px" onclick="event.stopPropagation();addICDesc('+bi+');">+ 描述</button><button class="btn-small btn-primary" style="font-size:0.75em;padding:4px 10px;height:24px" onclick="event.stopPropagation();addICBr('+bi+');">+ 换行</button><button type="button" class="ic-collapse-toggle'+(b.collapse_descriptions?' active':'')+'" style="font-size:0.7em;margin-left:auto;padding:4px 7px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:24px;line-height:1;border:1px solid var(--border);background:'+(b.collapse_descriptions?'var(--accent)':'transparent')+';color:'+(b.collapse_descriptions?'var(--primary-background-color)':'var(--bc)')+'" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICCollapseDescs'+bi+'\');cb.checked=!cb.checked;var a=cb.checked;this.classList.toggle(\'active\',a);this.style.background=a?\'var(--accent)\' : \'transparent\';this.style.color=a?\'var(--primary-background-color)\' : \'var(--bc)\';" title="'+(b.collapse_descriptions?'折叠描述：已开启':'折叠描述：已关闭')+'">\u2026</button><input type="checkbox" id="mcICCollapseDescs'+bi+'" '+(b.collapse_descriptions?'checked':'')+' style="display:none"></div></div>';
       h += '<label style="display:none"><input type="checkbox" id="mcICAutoColor'+bi+'" '+(b.icon_auto_color?'checked':'')+'> 图标跟随主题</label>';
 
     }
@@ -2421,7 +2446,8 @@ function renderMixedContent(tab) {
 
   h += '<div class="add-block-panel" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:0">';
 
-  Object.entries(MC_TYPE_LABELS).filter(function(e){return['map_filter','info_card','divider'].includes(e[0])}).forEach(([k,v]) => {
+  ['info_card','map_filter','divider'].forEach(function(k) {
+    var v = MC_TYPE_LABELS[k];
 
     h += '<button class="btn-small btn-primary" style="white-space:nowrap;flex-shrink:0" onclick="addMCBlock(\''+k+'\')">+ '+v+'</button>';
 
@@ -2445,10 +2471,12 @@ function toggleBlockBody(el) {
     allBodies.forEach(function(b) { b.classList.add('collapsed'); });
   }
   body.classList.toggle('collapsed');
-  // Update indicator
-  var indicator = section.querySelector('.block-indicator');
-
-  if (indicator) indicator.textContent = body.classList.contains('collapsed') ? '+' : '−';
+  // Update badge indicator
+  var badge = section.querySelector('.badge[data-mc-type]');
+  if (badge) {
+    var type = badge.getAttribute('data-mc-type') || '';
+    badge.textContent = type;
+  }
 
   // Populate preview
 
@@ -2685,7 +2713,7 @@ function addMCBlock(type) {
 
   tab.content_blocks.push(JSON.parse(JSON.stringify(defaults[type]||defaults.text)));
 
-  renderTribeOps();
+  reRender();
 
 }
 
@@ -3709,8 +3737,6 @@ function renderBaseRef() {
 
         html += '<div style="display:flex;align-items:center;gap:4px;cursor:pointer;margin-bottom:4px;position:sticky;top:0;background:var(--card);z-index:5;padding:4px 0" onclick="toggleBRSection(this)">';
 
-        html += '<span class=\"br-sec-arrow\" style=\"cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:4px;background:var(--border);font-size:0.8em;flex-shrink:0\">'+(collapsed?'+':'−')+'</span>';
-
         html += '<input id=\"brSecName'+si+'\" value=\"'+esc(sec.name||'')+'\" placeholder=\"模块名\" style=\"width:100px;margin:0;font-size:1em\" onclick=\"event.stopPropagation()\">';
 
         html += '<span class=\"count-badge\">'+cbs.length+'</span>';
@@ -3754,8 +3780,6 @@ function renderBaseRef() {
               // HEADER BAR
 
               html += '<div class=\"sr-row-header\" onclick=\"toggleSRBody(this)\" style=\"display:flex;align-items:center;gap:6px;padding:4px 0 4px 8px;cursor:pointer\">';
-
-              html += '<span class=\"sr-toggle\" style=\"cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:4px;background:var(--border);font-size:0.8em;flex-shrink:0\">+</span>';
 
               if (row.device_icon_url) {
 
@@ -4167,7 +4191,7 @@ html += '</div>'; // sr-items
 
         renderBaseRef();
 
-        document.querySelectorAll('.br-sec-body').forEach(function(b, i){ if (expandedSections.indexOf(i) !== -1) { b.classList.remove('collapsed'); var a = b.parentElement.querySelector('.br-sec-arrow'); if (a) a.textContent = '−'; window._initBlockSortable(b, i); } });
+        document.querySelectorAll('.br-sec-body').forEach(function(b, i){ if (expandedSections.indexOf(i) !== -1) { b.classList.remove('collapsed'); var a = b.parentElement.querySelector('.br-sec-arrow'); if (a) a.textContent = '⏷'; window._initBlockSortable(b, i); } });
 
       }
 
@@ -4699,7 +4723,7 @@ function toggleBRSection(el) {
 
     document.querySelectorAll('.br-sec-body').forEach(function(b){ b.classList.add('collapsed'); });
 
-    document.querySelectorAll('.br-sec-arrow').forEach(function(a){ a.textContent = '+'; });
+    document.querySelectorAll('.br-sec-arrow').forEach(function(a){ a.textContent = '⏵'; });
 
     body.classList.remove('collapsed');
 
@@ -4709,13 +4733,13 @@ function toggleBRSection(el) {
 
     window._initBlockSortable(body, si);
 
-    if (arrow) arrow.textContent = '−';
+    if (arrow) arrow.textContent = '⏷';
 
   } else {
 
     body.classList.add('collapsed');
 
-    if (arrow) arrow.textContent = '+';
+    if (arrow) arrow.textContent = '⏵';
 
   }
 
@@ -5405,7 +5429,7 @@ var CAT_LABEL_COLORS = ["auto","#000000","#4CAF50","#FF5722","#009688","#9C27B0"
 
 // Server map for desc popup
 var SERVER_MAP = {'Isl':{c:'#4CAF50',n:'island',emoji:'🏝️'},'Sco':{c:'#FF5722',n:'volcano',emoji:'🔥'},'Cen':{c:'#009688',n:'diamond-stone',emoji:'💎'},'Abe':{c:'#9C27B0',n:'radioactive',emoji:'☢️'},'Ext':{c:'#00BCD4',n:'meteor',emoji:'☄️'},'Ast':{c:'#FF9800',n:'star-four-points',emoji:'✨'},'Rag':{c:'#E91E63',n:'lighthouse-on',emoji:'🗼'},'Val':{c:'#4E9F62',n:'forest',emoji:'🌲'},'Bob':{c:'#FFC107',n:'party-popper',emoji:'🎉'},'Los':{c:'#607D8B',n:'castle',emoji:'🏰'}};
-var FIXED_STYLES = {'_hint':{c:'#2196F3',n:'information',label:'提示'},'_warn':{c:'#FF9800',n:'alert',label:'警告'}};
+var FIXED_STYLES = {'_hint':{c:'#2196F3',n:'information',label:'提示'},'_warn':{c:'#FF9800',n:'alert',label:'警告'},'_remark':{c:'#757575',n:'comment-text-outline',label:'备注'}};
 
 function getServerBadge(sid) {
   var s = SERVER_MAP[sid];
@@ -5434,10 +5458,34 @@ function toggleDescServerPopup(el, bi, di) {
     } else if (st === 1) {
       css += 'background:transparent;color:'+s.c+';opacity:1;border:1px solid '+s.c+';box-shadow:0 0 0 1px '+s.c+';';
     } else {
-      css += 'background:'+s.c+';color:#fff;border:none;opacity:1;';
+      css += 'background:'+s.c+';color:var(--primary-background-color);border:none;opacity:1;';
     }
     btn.style.cssText = css;
     btn.innerHTML = '<i class="mdi mdi-'+s.n+'" style="font-size:14px;line-height:1;pointer-events:none"></i>';
+    btn.onclick = function(e){ e.stopPropagation(); selectDescServer(bi, di, k); popup.remove(); };
+    popup.appendChild(btn);
+  });
+  // Fixed styles: hint + warning
+  var sep = document.createElement('span');
+  sep.style.cssText = 'width:100%;height:1px;background:var(--border);margin:2px 0;flex-basis:100%';
+  popup.appendChild(sep);
+  Object.keys(FIXED_STYLES).forEach(function(k){
+    var s = FIXED_STYLES[k];
+    var st = curStates[k] || 0;
+    var btn = document.createElement('button');
+    btn.className = 'btn-small';
+    btn._srvId = k; btn._state = st;
+    btn.title = s.label;
+    var css = 'font-size:0.7em;padding:3px 8px;border-radius:999px;min-width:36px;height:26px;display:inline-flex;align-items:center;justify-content:center;gap:3px;cursor:pointer;white-space:nowrap;';
+    if (st === 0) {
+      css += 'background:transparent;color:'+s.c+';opacity:0.35;border:1px solid '+s.c+';';
+    } else if (st === 1) {
+      css += 'background:transparent;color:'+s.c+';opacity:1;border:1px solid '+s.c+';box-shadow:0 0 0 1px '+s.c+';';
+    } else {
+      css += 'background:'+s.c+';color:var(--primary-background-color);border:none;opacity:1;';
+    }
+    btn.style.cssText = css;
+    btn.innerHTML = '<i class="mdi mdi-'+s.n+'" style="font-size:13px;line-height:1;pointer-events:none"></i><span style="font-size:0.65em">'+s.label+'</span>';
     btn.onclick = function(e){ e.stopPropagation(); selectDescServer(bi, di, k); popup.remove(); };
     popup.appendChild(btn);
   });
@@ -5465,16 +5513,17 @@ function selectDescServer(bi, di, sid) {
     // Clear ALL other maps first (single-select)
     curStates = {};
     // Cycle: 0→1→2→0
+    var isFixed = sid && sid.charAt(0) === '_';
     var st = (prevSt + 1) % 3;
     if (st > 0) {
       curStates[sid] = st;
-      if (hid) hid.value = sid;
+      if (!isFixed && hid) hid.value = sid;
     } else {
-      if (hid) hid.value = '';
+      if (!isFixed && hid) hid.value = '';
     }
     // Auto-set color to server theme color (or reset to default when cleared)
     if (st > 0) {
-      var s = SERVER_MAP[sid];
+      var s = SERVER_MAP[sid] || FIXED_STYLES[sid];
       if (s) {
         var colorInput = document.getElementById('mcICDescColor'+bi+'_'+di);
         if (colorInput) colorInput.value = s.c;
@@ -5521,7 +5570,7 @@ function updateDescSrvBadge(bi, di, states) {
     btn.style.border = '1px solid transparent';
     return;
   }
-  var s = SERVER_MAP[activeK];
+  var s = SERVER_MAP[activeK] || FIXED_STYLES[activeK];
   if (!s) { btn.innerHTML = getServerBadge(''); return; }
   if (activeSt === 1) {
     // Linear: colored icon, transparent bg + border
@@ -5529,8 +5578,8 @@ function updateDescSrvBadge(bi, di, states) {
     btn.style.background = 'transparent';
     btn.style.border = '1px solid transparent';
   } else {
-    // Block: white icon on colored bg
-    btn.innerHTML = '<i class="mdi mdi-'+s.n+'" style="font-size:14px;line-height:1;color:#fff"></i>';
+    // Block: theme-adaptive icon on colored bg
+    btn.innerHTML = '<i class="mdi mdi-'+s.n+'" style="font-size:14px;line-height:1;color:var(--primary-background-color)"></i>';
     btn.style.background = s.c;
     btn.style.border = 'none';
   }
@@ -5559,7 +5608,7 @@ function toggleBlockServerPopup(el, bi) {
     } else if (st === 1) {
       css += 'background:transparent;color:'+s.c+';opacity:1;border:1px solid '+s.c+';box-shadow:0 0 0 1px '+s.c+';';
     } else {
-      css += 'background:'+s.c+';color:#fff;border:none;opacity:1;';
+      css += 'background:'+s.c+';color:var(--primary-background-color);border:none;opacity:1;';
     }
     btn.style.cssText = css;
     btn.innerHTML = '<i class="mdi mdi-'+s.n+'" style="font-size:14px;line-height:1;pointer-events:none"></i>';
@@ -5583,7 +5632,7 @@ function toggleBlockServerPopup(el, bi) {
     } else if (st === 1) {
       css += 'background:transparent;color:'+s.c+';opacity:1;border:1px solid '+s.c+';box-shadow:0 0 0 1px '+s.c+';';
     } else {
-      css += 'background:'+s.c+';color:#fff;border:none;opacity:1;';
+      css += 'background:'+s.c+';color:var(--primary-background-color);border:none;opacity:1;';
     }
     btn.style.cssText = css;
     btn.innerHTML = '<i class="mdi mdi-'+s.n+'" style="font-size:13px;line-height:1;pointer-events:none"></i><span style="font-size:0.65em">'+s.label+'</span>';
@@ -5680,7 +5729,7 @@ function updateBlockSrvBadge(bi, states) {
     btn.style.background = 'transparent';
     btn.style.border = '1px solid transparent';
   } else {
-    btn.innerHTML = '<i class="mdi mdi-'+s.n+'" style="font-size:14px;line-height:1;color:#fff"></i>';
+    btn.innerHTML = '<i class="mdi mdi-'+s.n+'" style="font-size:14px;line-height:1;color:var(--primary-background-color)"></i>';
     btn.style.background = s.c;
     btn.style.border = 'none';
   }
@@ -5856,7 +5905,7 @@ function toggleSRBody(header) {
 
     container.querySelectorAll('.sr-row-body').forEach(function(b){ b.style.display = 'none'; });
 
-    container.querySelectorAll('.sr-toggle').forEach(function(t){ t.textContent = '+'; });
+    container.querySelectorAll('.sr-toggle').forEach(function(t){ t.textContent = '⏵'; });
 
   }
 
@@ -5922,7 +5971,7 @@ function toggleSRBody(header) {
 
     }
 
-    if (toggle) { toggle.textContent = '−'; }
+    if (toggle) { toggle.textContent = '⏷'; }
 
   }
 
@@ -5992,9 +6041,9 @@ function addStorageRow(si, bi) {
 
   setTimeout(function(){
 
-    document.querySelectorAll('.br-sec-body').forEach(function(b, i){ if (expandedSections.indexOf(i) !== -1) { b.classList.remove('collapsed'); var a = b.parentElement.querySelector('.br-sec-arrow'); if (a) a.textContent = '−'; window._initBlockSortable(b, i); } });
+    document.querySelectorAll('.br-sec-body').forEach(function(b, i){ if (expandedSections.indexOf(i) !== -1) { b.classList.remove('collapsed'); var a = b.parentElement.querySelector('.br-sec-arrow'); if (a) a.textContent = '⏷'; window._initBlockSortable(b, i); } });
 
-    document.querySelectorAll('.sr-row-body').forEach(function(rb,i){ if(expandedRows.indexOf(i)!==-1){ rb.style.display='block'; var t=rb.parentElement.querySelector('.sr-toggle'); if(t) t.textContent='−'; } });
+    document.querySelectorAll('.sr-row-body').forEach(function(rb,i){ if(expandedRows.indexOf(i)!==-1){ rb.style.display='block'; var t=rb.parentElement.querySelector('.sr-toggle'); if(t) t.textContent='⏷'; } });
 
     document.querySelectorAll('.block-body').forEach(function(bb,i){ if(expandedBlocks.indexOf(i)!==-1) bb.classList.remove('collapsed'); });
 
@@ -6076,19 +6125,11 @@ function enhanceBlockCollapse() {
 
     block.appendChild(body);
 
-    var toggle = document.createElement('span');
-
-    toggle.className = 'block-toggle';
-
-    toggle.style.cssText = 'cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:4px;background:var(--border);font-size:0.8em;flex-shrink:0';
-
-    toggle.textContent = '+';
-
-    toggle.style.pointerEvents = 'none';
-
     titleRow.style.cursor = 'pointer';
 
     titleRow.onclick = function(e){
+
+      e.stopPropagation();
 
       if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
 
@@ -6102,15 +6143,11 @@ function enhanceBlockCollapse() {
 
           section.querySelectorAll('.block-body').forEach(function(sib){ sib.classList.add('collapsed'); });
 
-          section.querySelectorAll('.block-toggle').forEach(function(t){ t.textContent = '+'; });
-
         }
 
-        if (isOpening) { b.classList.remove('collapsed'); this.querySelector('.block-toggle').textContent = '−'; }
+        if (isOpening) { b.classList.remove('collapsed'); }
 
     };
-
-    titleRow.insertBefore(toggle, strong);
 
   });
 
@@ -6369,9 +6406,9 @@ function rmBRTab() {
 
 function _restoreExpandState(expandedSections, expandedRows, expandedBlocks) {
 
-  document.querySelectorAll(".br-sec-body").forEach(function(b,i){ if(expandedSections.indexOf(i)!==-1){ b.classList.remove("collapsed"); var a=b.parentElement.querySelector(".br-sec-arrow"); if(a) a.textContent="−"; window._initBlockSortable(b,i); } });
+  document.querySelectorAll(".br-sec-body").forEach(function(b,i){ if(expandedSections.indexOf(i)!==-1){ b.classList.remove("collapsed"); var a=b.parentElement.querySelector(".br-sec-arrow"); if(a) a.textContent="⏷"; window._initBlockSortable(b,i); } });
 
-  document.querySelectorAll(".sr-row-body").forEach(function(rb,i){ if(expandedRows.indexOf(i)!==-1){ rb.style.display="block"; var t=rb.parentElement.querySelector(".sr-toggle"); if(t) t.textContent="−"; } });
+  document.querySelectorAll(".sr-row-body").forEach(function(rb,i){ if(expandedRows.indexOf(i)!==-1){ rb.style.display="block"; var t=rb.parentElement.querySelector(".sr-toggle"); if(t) t.textContent="⏷"; } });
 
   document.querySelectorAll(".block-body").forEach(function(bb,i){ if(expandedBlocks.indexOf(i)!==-1) bb.classList.remove("collapsed"); });
 
@@ -6529,7 +6566,7 @@ function addBRSection() {
 
     document.querySelectorAll(".br-sec-body").forEach(function(b){ b.classList.add("collapsed"); });
 
-    document.querySelectorAll(".br-sec-arrow").forEach(function(a){ a.textContent = "+"; });
+    document.querySelectorAll(".br-sec-arrow").forEach(function(a){ a.textContent = "⏵"; });
 
     var bodies = document.querySelectorAll(".br-sec-body");
 
@@ -6541,7 +6578,7 @@ function addBRSection() {
 
       var arrow = body.parentElement.querySelector(".br-sec-arrow");
 
-      if (arrow) arrow.textContent = "−";
+      if (arrow) arrow.textContent = "⏷";
 
       if (typeof window._initBlockSortable === "function") window._initBlockSortable(body, newSi);
 
@@ -6579,7 +6616,7 @@ function addBRSecBlock(si, type) {
 
       var arrow = bodies[si].parentElement.querySelector(".br-sec-arrow");
 
-      if (arrow) arrow.textContent = "−";
+      if (arrow) arrow.textContent = "⏷";
 
       if (typeof window._initBlockSortable === "function") window._initBlockSortable(bodies[si], si);
 
@@ -6708,7 +6745,7 @@ function openIconPicker(si, bi, ri, ci, ii) {
 
     });
 
-    var catLabels = {items:"📦 物品", biology:"🧬 生物", egg:"🥚 蛋"};
+    var catLabels = {armor:"🛡️ 护甲", biology:"🧬 生物", consumables:"🍖 消耗品", egg:"🥚 蛋", items:"📦 物品", misc:"📁 杂项", resources:"⛏️ 资源", saddles:"🐎 鞍具", skins:"🎨 皮肤", structures:"🏗️ 建筑", weapons:"⚔️ 武器", "其他":"🗂️ 其他"};
 
     var overlay = document.createElement("div"); overlay.className = "icon-picker-overlay";
 
@@ -6724,7 +6761,7 @@ function openIconPicker(si, bi, ri, ci, ii) {
 
     catOrder.forEach(function(cat){
 
-      html += "<span class='server-tab' data-cat='"+cat+"' onclick='filterIconPickerCat(this)'>"+(catLabels[cat]||cat)+" ("+cats[cat].length+")</span>";
+      html += "<span class='server-tab icon-cat-tab' data-cat='"+cat+"' onclick='filterIconPickerCat(this)'><span>"+(catLabels[cat]||cat)+"</span><span class='cat-count-badge'>"+cats[cat].length+"</span></span>";
 
     });
 
@@ -6766,7 +6803,7 @@ function openIconPicker_ic(bi) {
       if (!cats[cat]) { cats[cat] = []; catOrder.push(cat); }
       cats[cat].push(item);
     });
-    var catLabels = {items:"📦 物品", biology:"🧬 生物", egg:"🥚 蛋"};
+    var catLabels = {armor:"🛡️ 护甲", biology:"🧬 生物", consumables:"🍖 消耗品", egg:"🥚 蛋", items:"📦 物品", misc:"📁 杂项", resources:"⛏️ 资源", saddles:"🐎 鞍具", skins:"🎨 皮肤", structures:"🏗️ 建筑", weapons:"⚔️ 武器", "其他":"🗂️ 其他"};
     var overlay = document.createElement("div");
     overlay.className = "icon-picker-overlay";
     overlay.onclick = function(e){ if (e.target === overlay) overlay.remove(); };
@@ -6774,7 +6811,7 @@ function openIconPicker_ic(bi) {
     html += "<div class='icon-picker-header' style='border-bottom:none;display:flex;gap:6px;align-items:center;padding:8px 12px'><input id='iconPickerSearch' placeholder='搜索图标...' style='flex:1;margin:0;padding:6px 10px;font-size:0.85em' oninput='filterIconPicker()'><button style='width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);cursor:pointer;flex-shrink:0' onclick='refreshIconList()' title='刷新'><svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M23 4v6h-6'/><path d='M1 20v-6h6'/><path d='M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15'/></svg></button><button style='width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);cursor:pointer;flex-shrink:0' onclick='clearIconSelection(this)' title='清空'><svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M3 6h18'/><path d='M8 6V4h8v2'/><path d='M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6'/><line x1='10' y1='11' x2='10' y2='17'/><line x1='14' y1='11' x2='14' y2='17'/></svg></button><button style='width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;margin-left:auto;flex-shrink:0;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);cursor:pointer' onclick='var o=this.closest(\".icon-picker-overlay\");if(o)o.remove();' title='关闭'>✕</button></div>";
     html += "<div style='display:flex;gap:4px;padding:0 12px 6px;overflow-x:auto;flex-shrink:0' id='iconPickerCats'>";
     catOrder.forEach(function(cat){
-      html += "<span class='server-tab' data-cat='"+cat+"' onclick='filterIconPickerCat(this)'>"+(catLabels[cat]||cat)+" ("+cats[cat].length+")</span>";
+      html += "<span class='server-tab icon-cat-tab' data-cat='"+cat+"' onclick='filterIconPickerCat(this)'><span>"+(catLabels[cat]||cat)+"</span><span class='cat-count-badge'>"+cats[cat].length+"</span></span>";
     });
     html += "</div>";
     html += "<div class='icon-picker-grid' id='iconPickerGrid'>";
