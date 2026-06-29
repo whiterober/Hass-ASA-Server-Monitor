@@ -1830,10 +1830,6 @@ ha-card .info-card-block .ic-sum-end { display: none; }
 ha-card .info-card-block details[open] .ic-sum-top { display: none !important; }
 ha-card .info-card-block details[open] .ic-sum-end { display: block !important; }
 ha-card .info-card-block ha-icon.ic-auto-color { color: var(--primary-text-color) !important; fill: var(--primary-text-color) !important; }
-ha-card .info-card-block img.ic-auto-dark { filter: none; }
-ha-card .info-card-block img.ic-auto-light { filter: none; }
-[data-theme="dark"] ha-card .info-card-block img.ic-auto-dark { filter: invert(1); }
-[data-theme="light"] ha-card .info-card-block img.ic-auto-light { filter: invert(1); }
 ha-card .info-card-block img.ic-auto-color { filter: var(--ic-icon-filter, none); }
 
 ha-card .exp-summary {
@@ -2146,14 +2142,7 @@ def render_tab_html(tab):
                     ic_fmaps=','.join(sorted(fmaps))
                 ext='' if not has_map_filter else ' filterable'
                 eattrs='' if not has_map_filter else ' data-filter-maps="{}"'.format(ic_fmaps)
-                if block.get('icon_auto_color'):
-                    lum = block.get('icon_native_luminance')
-                    if lum is not None and lum != 0.5:
-                        auto_cls = ' ic-auto-light' if lum > 0.5 else ' ic-auto-dark'
-                    else:
-                        auto_cls = ' ic-auto-color'
-                else:
-                    auto_cls = ''
+                auto_cls = ' ic-auto-color' if block.get('icon_auto_color') else ''
                 # Block-level server_states (for card bg + title mdi)
                 blk_states = block.get('server_states', {})
                 blk_active = None; blk_st = 0
@@ -2196,7 +2185,7 @@ def render_tab_html(tab):
                     parts.append('<details name="ic-acc" style="cursor:pointer;margin:0;padding:0;width:100%"><summary class="ic-sum-top" style="display:block;font-size:0.65em;background:rgba(128,128,128,0.12);border:1px solid var(--border);border-radius:10px;padding:1px 7px;margin-bottom:2px;list-style:none;cursor:pointer;width:100%;box-sizing:border-box">···</summary><div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;width:100%">')
                 for desc in ic_descs:
                     if isinstance(desc, dict) and desc.get('type') == 'br':
-                        parts.append('<div class="ic-br" style="flex-basis:100%;height:0"></div>')
+                        parts.append('<div style="flex-basis:100%;height:0"></div>')
                         continue
                     dtext = desc.get('text', '') if isinstance(desc, dict) else str(desc)
                     dbold = desc.get('bold', False) if isinstance(desc, dict) else False
@@ -2286,14 +2275,13 @@ def render_tab_html(tab):
                 filter_js=(
                     "var s=this;var r=s.getRootNode();"
                     "if(s._w){s.checked=false;s._w=false;s.parentElement.classList.remove('active');"
-                    "r.querySelectorAll('.filterable,.sc-srv,.ic-text[data-server-states],.ic-br').forEach(function(e){e.style.setProperty('display','','')});"
+                    "r.querySelectorAll('.filterable,.sc-srv,.ic-text[data-server-states]').forEach(function(e){e.style.setProperty('display','','')});"
                     "return}"
                     "r.querySelectorAll('.filter-radio').forEach(function(o){o._w=false;o.parentElement.classList.remove('active')});"
                     "s._w=true;s.parentElement.classList.add('active');"
                     "r.querySelectorAll('.filterable').forEach(function(e){var fm=e.getAttribute('data-filter-maps')||'';var v=!fm||fm.indexOf(s.value)>=0;e.style.setProperty('display',v?'':'none',v?'':'important')});"
                     "r.querySelectorAll('.sc-srv').forEach(function(e){var pf=e.closest('.filterable');if(pf&&(pf.classList.contains('ic-block-'+s.value)||pf.classList.contains('ic-linear-'+s.value))){e.style.setProperty('display','','');return}var v=e.getAttribute('data-map')===s.value;e.style.setProperty('display',v?'':'none',v?'':'important')});"
-                    "r.querySelectorAll('.ic-text[data-server-states]').forEach(function(e){var pf=e.closest('.filterable');if(pf&&(pf.classList.contains('ic-block-'+s.value)||pf.classList.contains('ic-linear-'+s.value))){e.style.setProperty('display','','');return}var ss=JSON.parse(e.getAttribute('data-server-states')||'{}');var st=(ss[s.value]||0);if(st===0){e.style.setProperty('display','none','important')}else{e.style.setProperty('display','','');if(st===1){e.classList.add('ic-linear-'+s.value)}else{e.classList.add('ic-block-'+s.value)}}});"
-                    "r.querySelectorAll('.ic-br').forEach(function(e){var nxt=e.nextElementSibling;while(nxt&&nxt.nodeType===1&&!nxt.classList.contains('ic-text')&&!nxt.classList.contains('ic-br'))nxt=nxt.nextElementSibling;var prev=e.previousElementSibling;while(prev&&prev.nodeType===1&&!prev.classList.contains('ic-text')&&!prev.classList.contains('ic-br'))prev=prev.previousElementSibling;var nxtOk=nxt&&nxt.classList.contains('ic-text')&&nxt.style.getPropertyValue('display')!=='none';var prevOk=prev&&prev.classList.contains('ic-text')&&prev.style.getPropertyValue('display')!=='none';var show=nxtOk&&prevOk;e.style.setProperty('display',show?'':'none',show?'':'important')})"
+                    "r.querySelectorAll('.ic-text[data-server-states]').forEach(function(e){var pf=e.closest('.filterable');if(pf&&(pf.classList.contains('ic-block-'+s.value)||pf.classList.contains('ic-linear-'+s.value))){e.style.setProperty('display','','');return}var ss=JSON.parse(e.getAttribute('data-server-states')||'{}');var st=(ss[s.value]||0);if(st===0){e.style.setProperty('display','none','important')}else{e.style.setProperty('display','','');if(st===1){e.classList.add('ic-linear-'+s.value)}else{e.classList.add('ic-block-'+s.value)}}})"
                 )
                 if not active_maps:
                     parts.append('<div class="filter-bar" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;border:2px dashed var(--border);border-radius:8px;padding:8px 12px;color:var(--secondary-text-color);font-size:.85em;justify-content:center">暂无地图标记 — 为板块/描述指定归属服务器后出现筛选按钮</div>')
@@ -2832,10 +2820,6 @@ if __name__ == "__main__":
                 IC_CSS += 'ha-card .info-card-block details[open] .ic-sum-top{display:none!important}'
                 IC_CSS += 'ha-card .info-card-block details[open] .ic-sum-end{display:block!important}'
                 IC_CSS += 'ha-card .info-card-block ha-icon.ic-auto-color{color:var(--primary-background-color)!important;fill:var(--primary-text-color)!important}'
-                IC_CSS += 'ha-card .info-card-block img.ic-auto-dark{filter:none}'
-                IC_CSS += 'ha-card .info-card-block img.ic-auto-light{filter:none}'
-                IC_CSS += '[data-theme="dark"] ha-card .info-card-block img.ic-auto-dark{filter:invert(1)}'
-                IC_CSS += '[data-theme="light"] ha-card .info-card-block img.ic-auto-light{filter:invert(1)}'
                 IC_CSS += 'ha-card .info-card-block img.ic-auto-color{filter:var(--ic-icon-filter,none)}'
                 css += IC_CSS
                 # 3-state map filter: linear (icon color) + block (background) per-map — auto-generated from SERVER_MAP
