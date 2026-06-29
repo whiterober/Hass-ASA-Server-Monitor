@@ -210,8 +210,6 @@ button { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; f
 
 .toast.error { background: var(--danger); }
 
-@media (max-width: 768px) { .toast { bottom: 80px; right: 10px; left: 10px; text-align: center; font-size: 0.85em; padding: 8px 12px; } }
-
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
 .loading { text-align: center; padding: 40px; color: var(--text); opacity: 0.4; }
@@ -226,7 +224,7 @@ button { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; f
 
 .server-tab.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
 
-.icon-cat-tab { width: 80px; min-width: 80px; text-align: center; white-space: nowrap; position: relative; overflow: visible !important; padding-bottom: 16px !important; display: flex; justify-content: center; }
+.icon-cat-tab { width: 80px; min-width: 80px; text-align: center; white-space: nowrap; position: relative; overflow: visible !important; padding-bottom: 16px !important; }
 .cat-count-badge { position: absolute; bottom: 2px; right: 4px; font-size: 0.6em; opacity: 0.5; line-height: 1; }
 
 .icon-preview { width: 40px; height: 40px; border-radius: 4px; object-fit: contain; background: var(--input-bg); }
@@ -424,8 +422,6 @@ img.ic-auto-color { filter: none; }
 .icon-picker-item.selected { border-color: var(--accent); background: rgba(79,195,247,0.1); }
 
 .icon-picker-item img { width: 48px; height: 48px; object-fit: contain; }
-.icon-picker-img { background: var(--border); border-radius: 3px; }
-.icon-picker-img.loaded { background: transparent; }
 
 .icon-picker-item span { font-size: 0.6em; text-align: center; margin-top: 2px; word-break: break-all; line-height: 1.2; max-width: 100%; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 
@@ -637,7 +633,6 @@ td, th { padding: 4px 6px; }
 <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.23/dist/full.css" rel="stylesheet" type="text/css" />
 
 <script src="https://cdn.tailwindcss.com"></script>
-<script src="/local/asa-data/icon_thumbs.js"></script>
 
 </hea
 
@@ -1302,7 +1297,7 @@ async function saveJSON(filename, data, skipPending) {
 
     await WS.callService('shell_command', 'build_lovelace', {});
 
-    WS.toast('已保存', 'success');
+    WS.toast(`已保存并同步到页面 ${filename}`, 'success');
 
     if (!skipPending) incPending();
 
@@ -1423,7 +1418,7 @@ function renderMixedEditor(title) {
 
   html += '</div>';
 
-  html += '<div style="flex-shrink:0;padding-top:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:nowrap"><span style="display:flex;gap:4px"><button class="btn-success" onclick="saveMixedEditor()" style="display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:0.85em;font-weight:bold;color:#fff"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>保存TAB</button> <button class="btn-danger" onclick="_delSRTab()" style="display:inline-flex;align-items:center;border:1px solid var(--danger);border-radius:6px;padding:4px 10px;font-size:0.85em;font-weight:bold;color:var(--danger);margin:0 4px">删除TAB</button></span> <button onclick="window.innerWidth<=768?(window._previewWin&&!window._previewWin.closed?window._previewWin.location=\'/local/preview_tab.html?t=\'+Date.now()+\'&theme=\'+(localStorage.getItem(\'asa-theme\')||\'dark\'):window._previewWin=window.open(\'/local/preview_tab.html?t=\'+Date.now()+\'&theme=\'+(localStorage.getItem(\'asa-theme\')||\'dark\'),\'_blank\')):togglePreview()" id="btnTogglePreview" style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.85em" title="预览">折叠预览</button></div> ';
+  html += '<div style="flex-shrink:0;padding-top:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:nowrap"><span style="display:flex;gap:4px"><button class="btn-success" onclick="saveMixedEditor()" style="display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:0.85em;font-weight:bold;color:#fff"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>保存TAB</button> <button class="btn-danger" onclick="_delSRTab()" style="display:inline-flex;align-items:center;border:1px solid var(--danger);border-radius:6px;padding:4px 10px;font-size:0.85em;font-weight:bold;color:var(--danger);margin:0 4px">删除TAB</button></span> <button onclick="window.innerWidth<=768?window.open(\'/local/preview_tab.html?theme=\'+(localStorage.getItem(\'asa-theme\')||\'dark\'),\'_blank\'):togglePreview()" id="btnTogglePreview" style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.85em" title="预览">折叠预览</button></div> ';
 
   html += '</div>';
 
@@ -1892,7 +1887,7 @@ function renderTribeOps() {
 
   // Fixed bottom: save/delete
 
-  html += '<div style="flex-shrink:0;padding-top:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:nowrap"><span style="display:flex;gap:4px"><button class="btn-success" onclick="saveTOTab()" style="display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:0.85em;font-weight:bold;color:#fff"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>保存TAB</button> <button class="btn-danger" onclick="_delTOTab()" style="display:inline-flex;align-items:center;border:1px solid var(--danger);border-radius:6px;padding:4px 10px;font-size:0.85em;font-weight:bold;color:var(--danger);margin:0 4px">删除TAB</button></span> <button onclick="window.innerWidth<=768?(window._previewWin&&!window._previewWin.closed?window._previewWin.location=\'/local/preview_tab.html?t=\'+Date.now()+\'&theme=\'+(localStorage.getItem(\'asa-theme\')||\'dark\'):window._previewWin=window.open(\'/local/preview_tab.html?t=\'+Date.now()+\'&theme=\'+(localStorage.getItem(\'asa-theme\')||\'dark\'),\'_blank\')):togglePreview()" id="btnTogglePreview" style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.85em" title="预览">折叠预览</button></div> ';
+  html += '<div style="flex-shrink:0;padding-top:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:nowrap"><span style="display:flex;gap:4px"><button class="btn-success" onclick="saveTOTab()" style="display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:0.85em;font-weight:bold;color:#fff"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>保存TAB</button> <button class="btn-danger" onclick="_delTOTab()" style="display:inline-flex;align-items:center;border:1px solid var(--danger);border-radius:6px;padding:4px 10px;font-size:0.85em;font-weight:bold;color:var(--danger);margin:0 4px">删除TAB</button></span> <button onclick="window.innerWidth<=768?window.open(\'/local/preview_tab.html?theme=\'+(localStorage.getItem(\'asa-theme\')||\'dark\'),\'_blank\'):togglePreview()" id="btnTogglePreview" style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.85em" title="预览">折叠预览</button></div> ';
 
   html += '</div>';
 
@@ -2233,7 +2228,7 @@ function renderMixedContent(tab) {
 
     h += '<div style="display:flex;align-items:center;margin-bottom:0;min-height:28px">';
 
-    h += '<strong style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">'+(bt==='map_filter'?'<span class="badge" style="font-size:0.65em;background:var(--accent);color:oklch(var(--b1));margin-right:2px;flex-shrink:0;padding:1px 6px;border-radius:3px">'+(MC_TYPE_LABELS[bt]||bt)+'</span>':((bt==='info_card'?'':'<span class="badge" data-mc-type="'+esc(MC_TYPE_LABELS[bt]||bt)+'" onclick="toggleBlockBody(this)" style="font-size:0.65em;background:var(--accent);color:oklch(var(--b1));margin-right:2px;flex-shrink:0;padding:1px 6px;border-radius:3px;cursor:pointer">'+(MC_TYPE_LABELS[bt]||bt)+'</span>')+(bt==='info_card'&&b.icon_url?'<img src="'+esc(thumbUrl(b.icon_url,56))+'" style="width:20px;height:20px;object-fit:contain;flex-shrink:0" class="'+(b.icon_auto_color&&typeof b.icon_native_luminance==='number'&&b.icon_native_luminance!==0.5?' ic-auto-'+(b.icon_native_luminance>0.5?'light':'dark'):(b.icon_auto_color?' ic-auto-color':''))+'" onerror="this.style.opacity=0">':(b.title||MC_TYPE_LABELS[bt]||bt))))+'</strong>';
+    h += '<strong style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">'+(bt==='map_filter'?'<span class="badge" style="font-size:0.65em;background:var(--accent);color:oklch(var(--b1));margin-right:2px;flex-shrink:0;padding:1px 6px;border-radius:3px">'+(MC_TYPE_LABELS[bt]||bt)+'</span>':((bt==='info_card'?'':'<span class="badge" data-mc-type="'+esc(MC_TYPE_LABELS[bt]||bt)+'" onclick="toggleBlockBody(this)" style="font-size:0.65em;background:var(--accent);color:oklch(var(--b1));margin-right:2px;flex-shrink:0;padding:1px 6px;border-radius:3px;cursor:pointer">'+(MC_TYPE_LABELS[bt]||bt)+'</span>')+(bt==='info_card'&&b.icon_url?'<img src="'+esc(b.icon_url)+'" style="width:20px;height:20px;object-fit:contain;flex-shrink:0" class="'+(b.icon_auto_color&&typeof b.icon_native_luminance==='number'&&b.icon_native_luminance!==0.5?' ic-auto-'+(b.icon_native_luminance>0.5?'light':'dark'):(b.icon_auto_color?' ic-auto-color':''))+'" onerror="this.style.display=none">':(b.title||MC_TYPE_LABELS[bt]||bt))))+'</strong>';
 
     h += ' <span class="block-preview" style="display:none" style="display:inline-block;max-width:260px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;vertical-align:middle;font-size:0.8em;color:var(--secondary-text-color);flex-shrink:1"></span>';
 
@@ -2523,7 +2518,7 @@ function renderMixedContent(tab) {
 
     else if (bt === 'info_card') {
 
-            h += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><span class="cat-color-wrap" style="flex-shrink:0" title="引用块色条颜色"><span class="cat-color-dot" id="mcICQuoteDot'+bi+'" style="background:'+(b.quote_color&&b.quote_color!=='auto'?esc(b.quote_color):'linear-gradient(to right, #000 50%, #fff 50%)')+'" data-target="mcICQuoteColor'+bi+'" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><input type="hidden" id="mcICQuoteColor'+bi+'" value="'+esc(b.quote_color||'auto')+'"><input id="mcICMdi'+bi+'" value="'+esc(b.mdi_icon||'')+'" placeholder="MDI" title="MDI 图标" style="box-sizing:border-box;width:28px;height:28px;padding:4px;font-size:0.7em;border-radius:4px;text-align:center;flex-shrink:0">'+(b.icon_url?'<img src="'+esc(thumbUrl(b.icon_url,56))+'" id="mcICIconPreview'+bi+'" style="width:28px;height:28px;object-fit:contain;cursor:pointer;flex-shrink:0" class="'+(b.icon_auto_color&&typeof b.icon_native_luminance==='number'&&b.icon_native_luminance!==0.5?(b.icon_native_luminance>0.5?'ic-auto-light':'ic-auto-dark'):(b.icon_auto_color?'ic-auto-color':''))+'" onclick="event.stopPropagation();openIconPicker_ic('+bi+')" title="点击换图标" onerror="this.style.opacity=0">':'<span id="mcICIconPlaceholder'+bi+'" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px 0 0 3px" onclick="event.stopPropagation();openIconPicker_ic('+bi+')" title="选择图标">+</span>')+'<span style="display:flex;flex-shrink:0;margin-left:-8px"><input type="hidden" id="mcICIcon'+bi+'" value="'+esc(b.icon_url||'')+'">'+(function(){var ac=b.icon_auto_color;var s=ac?'background:transparent;color:var(--accent);border:none;':'background:transparent;color:var(--primary-text-color);opacity:0.5;border:1px solid var(--border);';return '<button title="图片跟随主题自动反色：'+(ac?'已开启':'已关闭')+'" onclick="event.stopPropagation();toggleAutoColor('+bi+',this)" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;border-radius:0 3px 3px 0;'+s+'"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12,2C6.49,2 2,6.49 2,12S6.49,22 12,22C13.38,22 14.5,20.88 14.5,19.5C14.5,18.87 14.29,18.29 13.94,17.82C13.58,17.36 13.5,16.76 13.5,16.25C13.5,15.15 14.35,14.25 15.45,14.25H17.42C19.86,14.25 22,12.28 22,9.75C22,5.41 17.43,2 12,2M6.5,9A1.5,1.5 0 0,1 8,10.5A1.5,1.5 0 0,1 6.5,12A1.5,1.5 0 0,1 5,10.5A1.5,1.5 0 0,1 6.5,9M9.5,6A1.5,1.5 0 0,1 11,7.5A1.5,1.5 0 0,1 9.5,9A1.5,1.5 0 0,1 8,7.5A1.5,1.5 0 0,1 9.5,6M14.5,6A1.5,1.5 0 0,1 16,7.5A1.5,1.5 0 0,1 14.5,9A1.5,1.5 0 0,1 13,7.5A1.5,1.5 0 0,1 14.5,6M17.5,9A1.5,1.5 0 0,1 19,10.5A1.5,1.5 0 0,1 17.5,12A1.5,1.5 0 0,1 16,10.5A1.5,1.5 0 0,1 17.5,9Z"/></svg></button></span>';}())+'<span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap" title="标题颜色"><span class="cat-color-dot" id="mcICTitleCDot'+bi+'" style="background:'+(b.title_color&&b.title_color!=='auto'?esc(b.title_color):'linear-gradient(to right, #000 50%, #fff 50%)')+'" data-target="mcICTitleColor'+bi+'" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><input id="mcICTitle'+bi+'" value="'+esc(b.title||'')+'" placeholder="标题" style="box-sizing:border-box;flex:1;padding:4px 8px;font-size:0.85em;border-radius:0;border:none"></span></span><input type="hidden" id="mcICTitleColor'+bi+'" value="'+esc(b.title_color||'auto')+'"></div>';      
+            h += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><span class="cat-color-wrap" style="flex-shrink:0" title="引用块色条颜色"><span class="cat-color-dot" id="mcICQuoteDot'+bi+'" style="background:'+(b.quote_color&&b.quote_color!=='auto'?esc(b.quote_color):'linear-gradient(to right, #000 50%, #fff 50%)')+'" data-target="mcICQuoteColor'+bi+'" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><input type="hidden" id="mcICQuoteColor'+bi+'" value="'+esc(b.quote_color||'auto')+'"><input id="mcICMdi'+bi+'" value="'+esc(b.mdi_icon||'')+'" placeholder="MDI" title="MDI 图标" style="box-sizing:border-box;width:28px;height:28px;padding:4px;font-size:0.7em;border-radius:4px;text-align:center;flex-shrink:0">'+(b.icon_url?'<img src="'+esc(b.icon_url)+'" id="mcICIconPreview'+bi+'" style="width:28px;height:28px;object-fit:contain;cursor:pointer;flex-shrink:0" class="'+(b.icon_auto_color&&typeof b.icon_native_luminance==='number'&&b.icon_native_luminance!==0.5?(b.icon_native_luminance>0.5?'ic-auto-light':'ic-auto-dark'):(b.icon_auto_color?'ic-auto-color':''))+'" onclick="event.stopPropagation();openIconPicker_ic('+bi+')" title="点击换图标" onerror="this.hidden=true">':'<span id="mcICIconPlaceholder'+bi+'" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px 0 0 3px" onclick="event.stopPropagation();openIconPicker_ic('+bi+')" title="选择图标">+</span>')+'<span style="display:flex;flex-shrink:0;margin-left:-8px"><input type="hidden" id="mcICIcon'+bi+'" value="'+esc(b.icon_url||'')+'">'+(function(){var ac=b.icon_auto_color;var s=ac?'background:transparent;color:var(--accent);border:none;':'background:transparent;color:var(--primary-text-color);opacity:0.5;border:1px solid var(--border);';return '<button title="图片跟随主题自动反色：'+(ac?'已开启':'已关闭')+'" onclick="event.stopPropagation();toggleAutoColor('+bi+',this)" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;border-radius:0 3px 3px 0;'+s+'"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12,2C6.49,2 2,6.49 2,12S6.49,22 12,22C13.38,22 14.5,20.88 14.5,19.5C14.5,18.87 14.29,18.29 13.94,17.82C13.58,17.36 13.5,16.76 13.5,16.25C13.5,15.15 14.35,14.25 15.45,14.25H17.42C19.86,14.25 22,12.28 22,9.75C22,5.41 17.43,2 12,2M6.5,9A1.5,1.5 0 0,1 8,10.5A1.5,1.5 0 0,1 6.5,12A1.5,1.5 0 0,1 5,10.5A1.5,1.5 0 0,1 6.5,9M9.5,6A1.5,1.5 0 0,1 11,7.5A1.5,1.5 0 0,1 9.5,9A1.5,1.5 0 0,1 8,7.5A1.5,1.5 0 0,1 9.5,6M14.5,6A1.5,1.5 0 0,1 16,7.5A1.5,1.5 0 0,1 14.5,9A1.5,1.5 0 0,1 13,7.5A1.5,1.5 0 0,1 14.5,6M17.5,9A1.5,1.5 0 0,1 19,10.5A1.5,1.5 0 0,1 17.5,12A1.5,1.5 0 0,1 16,10.5A1.5,1.5 0 0,1 17.5,9Z"/></svg></button></span>';}())+'<span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap" title="标题颜色"><span class="cat-color-dot" id="mcICTitleCDot'+bi+'" style="background:'+(b.title_color&&b.title_color!=='auto'?esc(b.title_color):'linear-gradient(to right, #000 50%, #fff 50%)')+'" data-target="mcICTitleColor'+bi+'" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><input id="mcICTitle'+bi+'" value="'+esc(b.title||'')+'" placeholder="标题" style="box-sizing:border-box;flex:1;padding:4px 8px;font-size:0.85em;border-radius:0;border:none"></span></span><input type="hidden" id="mcICTitleColor'+bi+'" value="'+esc(b.title_color||'auto')+'"></div>';      
       var selectedMaps = (document.getElementById('mcICHL'+bi)?.value || b.highlight||'').split(',').filter(function(x){ return x; });
       h += '<input type="hidden" id="mcICHL'+bi+'" value="'+esc(b.highlight||'')+'">';
       h += '<input type="hidden" id="mcBlockSrvStates'+bi+'" value="'+esc(JSON.stringify(b.server_states||(b.highlight?{[b.highlight]:2}:{})))+'">';
@@ -3910,7 +3905,7 @@ function renderBaseRef() {
 
               if (row.device_icon_url) {
 
-                html += '<img src=\"'+esc(thumbUrl(row.device_icon_url,56))+'\" style=\"width:22px;height:22px;object-fit:contain;cursor:pointer\" onerror=\"this.hidden=true\" onclick=\"event.stopPropagation();openIconPicker('+si+','+bi+','+ri+')\" title=\"点击更换图标\">';
+                html += '<img src=\"'+esc(row.device_icon_url)+'\" style=\"width:22px;height:22px;object-fit:contain;cursor:pointer\" onerror=\"this.hidden=true\" onclick=\"event.stopPropagation();openIconPicker('+si+','+bi+','+ri+')\" title=\"点击更换图标\">';
 
               } else {
 
@@ -4070,7 +4065,7 @@ function renderBaseRef() {
 
                 if (item.icon_url) {
 
-                  html += '<img src=\"'+esc(thumbUrl(item.icon_url,56))+'\" style=\"width:28px;height:28px;object-fit:contain;cursor:pointer;flex-shrink:0\" onclick=\"event.stopPropagation();openIconPicker('+si+','+bi+','+ri+','+ci+','+ii+')\" title=\"点击换图标\" onerror=\"this.hidden=true\">';
+                  html += '<img src=\"'+esc(item.icon_url)+'\" style=\"width:28px;height:28px;object-fit:contain;cursor:pointer;flex-shrink:0\" onclick=\"event.stopPropagation();openIconPicker('+si+','+bi+','+ri+','+ci+','+ii+')\" title=\"点击换图标\" onerror=\"this.hidden=true\">';
 
                 } else {
 
@@ -4218,7 +4213,7 @@ html += '</div>'; // sr-items
 
   // Fixed footer: save button
 
-  if (tab) html += '<div style="flex-shrink:0;padding-top:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:nowrap"><span style="display:flex;gap:4px"><button class="btn-success" onclick="saveBaseTab()" style="display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:0.85em;font-weight:bold;color:#fff"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>保存TAB</button><button class="btn-danger" onclick="rmBRTab()" style="display:inline-flex;align-items:center;border:1px solid var(--danger);border-radius:6px;padding:4px 10px;font-size:0.85em;font-weight:bold;color:var(--danger);margin:0 4px">删除TAB</button></span><button onclick="window.innerWidth<=768?(window._previewWin&&!window._previewWin.closed?window._previewWin.location=\'/local/preview_tab.html?t=\'+Date.now()+\'&theme=\'+(localStorage.getItem(\'asa-theme\')||\'dark\'):window._previewWin=window.open(\'/local/preview_tab.html?t=\'+Date.now()+\'&theme=\'+(localStorage.getItem(\'asa-theme\')||\'dark\'),\'_blank\')):togglePreview()" id="btnTogglePreview" style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.85em" title="预览">折叠预览</button></div>';
+  if (tab) html += '<div style="flex-shrink:0;padding-top:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:nowrap"><span style="display:flex;gap:4px"><button class="btn-success" onclick="saveBaseTab()" style="display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:0.85em;font-weight:bold;color:#fff"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>保存TAB</button><button class="btn-danger" onclick="rmBRTab()" style="display:inline-flex;align-items:center;border:1px solid var(--danger);border-radius:6px;padding:4px 10px;font-size:0.85em;font-weight:bold;color:var(--danger);margin:0 4px">删除TAB</button></span><button onclick="window.innerWidth<=768?window.open(\'/local/preview_tab.html?theme=\'+(localStorage.getItem(\'asa-theme\')||\'dark\'),\'_blank\'):togglePreview()" id="btnTogglePreview" style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.85em" title="预览">折叠预览</button></div>';
 
   html += '</div></div></div>';
 
@@ -6852,15 +6847,6 @@ var iconList = [];
 
 var iconListLoaded = false;
 
-// 缩略图 URL 辅助：根据原图 URL + 显示宽度返回对应缩略图路径
-// 宽度档位: 56 (编辑器 28px@2x), 96 (浮窗 48px@2x), 192 (预览/实页)
-function thumbUrl(originalUrl, width) {
-  var map = window.__iconThumbs || {};
-  var sizes = map[originalUrl];
-  if (sizes && sizes[String(width)]) return sizes[String(width)];
-  return originalUrl;
-}
-
 function openIconPicker(si, bi, ri, ci, ii) {
 
   closeAllPopups();
@@ -6881,7 +6867,7 @@ function openIconPicker(si, bi, ri, ci, ii) {
 
     });
 
-    var catLabels = {armor:"🛡️ 护甲", biology:"🧬 生物", consumables:"🍖 消耗品", egg:"🥚 蛋", illustrations:"🖼️ 立绘", items:"📦 物品", misc:"📁 杂项", resources:"⛏️ 资源", saddles:"🐎 鞍具", skins:"🎨 皮肤", structures:"🏗️ 建筑", weapons:"⚔️ 武器", "其他":"🗂️ 其他"};
+    var catLabels = {armor:"🛡️ 护甲", biology:"🧬 生物", consumables:"🍖 消耗品", egg:"🥚 蛋", items:"📦 物品", misc:"📁 杂项", resources:"⛏️ 资源", saddles:"🐎 鞍具", skins:"🎨 皮肤", structures:"🏗️ 建筑", weapons:"⚔️ 武器", "其他":"🗂️ 其他"};
 
     var overlay = document.createElement("div"); overlay.className = "icon-picker-overlay";
 
@@ -6913,7 +6899,7 @@ function openIconPicker(si, bi, ri, ci, ii) {
 
       var cbArgs = (ci !== undefined && ii !== undefined) ? ","+(ci||0)+","+(ii||0) : "";
 
-      html += "<div class='icon-picker-item' data-url='"+item.url+"' data-cat='"+cat+"' onclick='selectDeviceIconFromEl(this,"+si+","+bi+","+ri+cbArgs+")' title='"+item.name+"'><img src='"+thumbUrl(item.url,96)+"' loading='lazy' decoding='async' class='icon-picker-img' onload='this.classList.add(\"loaded\")' onerror='this.src=this.getAttribute(\"data-src\")||\"\";this.hidden=true' data-src='"+item.url+"'><span>"+item.name+"</span></div>";
+      html += "<div class='icon-picker-item' data-url='"+item.url+"' data-cat='"+cat+"' onclick='selectDeviceIconFromEl(this,"+si+","+bi+","+ri+cbArgs+")' title='"+item.name+"'><img src='"+item.url+"' loading='lazy' onerror='this.hidden=true'><span>"+item.name+"</span></div>";
 
     });
 
@@ -6939,7 +6925,7 @@ function openIconPicker_ic(bi) {
       if (!cats[cat]) { cats[cat] = []; catOrder.push(cat); }
       cats[cat].push(item);
     });
-    var catLabels = {armor:"🛡️ 护甲", biology:"🧬 生物", consumables:"🍖 消耗品", egg:"🥚 蛋", illustrations:"🖼️ 立绘", items:"📦 物品", misc:"📁 杂项", resources:"⛏️ 资源", saddles:"🐎 鞍具", skins:"🎨 皮肤", structures:"🏗️ 建筑", weapons:"⚔️ 武器", "其他":"🗂️ 其他"};
+    var catLabels = {armor:"🛡️ 护甲", biology:"🧬 生物", consumables:"🍖 消耗品", egg:"🥚 蛋", items:"📦 物品", misc:"📁 杂项", resources:"⛏️ 资源", saddles:"🐎 鞍具", skins:"🎨 皮肤", structures:"🏗️ 建筑", weapons:"⚔️ 武器", "其他":"🗂️ 其他"};
     var overlay = document.createElement("div");
     overlay.className = "icon-picker-overlay";
     overlay.onclick = function(e){ if (e.target === overlay) overlay.remove(); };
@@ -6954,7 +6940,7 @@ function openIconPicker_ic(bi) {
     list.forEach(function(item){
       var parts = item.url.split("ASA/")[1]?.split("/");
       var cat = (parts && parts.length > 1) ? parts[0] : "其他";
-      html += "<div class='icon-picker-item' data-url='"+item.url+"' data-cat='"+cat+"' onclick='selectInfoCardIcon(this,"+bi+")' title='"+item.name+"'><img src='"+thumbUrl(item.url,96)+"' loading='lazy' decoding='async' class='icon-picker-img' onload='this.classList.add(\"loaded\")' onerror='this.src=this.getAttribute(\"data-src\")||\"\";this.hidden=true' data-src='"+item.url+"'><span>"+item.name+"</span></div>";
+      html += "<div class='icon-picker-item' data-url='"+item.url+"' data-cat='"+cat+"' onclick='selectInfoCardIcon(this,"+bi+")' title='"+item.name+"'><img src='"+item.url+"' loading='lazy' onerror='this.hidden=true'><span>"+item.name+"</span></div>";
     });
     html += "</div></div>";
     overlay.innerHTML = html;
@@ -7029,7 +7015,7 @@ function selectInfoCardIcon(el, bi) {
   var preview = document.getElementById('mcICIconPreview'+bi);
   var placeholder = document.getElementById('mcICIconPlaceholder'+bi);
   if (url) {
-    if (preview) { preview.src = thumbUrl(url, 56); preview.style.display = ''; }
+    if (preview) { preview.src = url; preview.style.display = ''; }
     else {
       var container = placeholder ? placeholder.parentNode : null;
       if (container) {
@@ -7207,60 +7193,43 @@ function selectDeviceIcon(url, si, bi, ri) {
 }
 
 function refreshIconList() {
-  var btn = document.querySelector('button[onclick="refreshIconList()"]');
-  var origHTML = btn ? btn.innerHTML : '';
-  var origWidth = btn ? btn.style.width : '';
-
-  // 按钮内嵌进度条
-  function showProgress(pct, text) {
-    if (!btn) return;
-    btn.style.position = 'relative';
-    btn.style.overflow = 'hidden';
-    btn.style.width = origWidth || '220px';
-    btn.innerHTML = '<span style="position:relative;z-index:1;font-size:0.85em">' + text + '</span>'
-      + '<span style="position:absolute;left:0;top:0;bottom:0;width:' + pct + '%;background:var(--accent);opacity:0.15;transition:width .3s;z-index:0;border-radius:6px"></span>';
-  }
-
-  showProgress(0, '刷新中...');
 
   WS.callService("shell_command", "list_r2_icons", {}).then(function(){
-    WS.callService("shell_command", "gen_icon_thumbs", {});
-    // 轮询进度文件
-    var pollTimer = setInterval(function(){
-      fetch('/local/asa-data/thumbs_progress.json?t=' + Date.now())
-        .then(function(r){ return r.json(); })
-        .then(function(p){
-          if (p.total > 0) {
-            var pct = Math.round(p.done * 100 / p.total);
-            var txt = pct + '% (' + p.done + '/' + p.total + ')';
-            if (p.new) txt += ' +' + p.new + '新';
-            showProgress(pct, txt);
-          }
-          if (p.status === 'done') {
-            clearInterval(pollTimer);
-            showProgress(100, '完成!');
-            setTimeout(function(){
-              if (btn) { btn.innerHTML = origHTML; btn.style.width = origWidth; }
-            }, 1500);
-            // 重新加载
-            iconListLoaded = false; iconList = [];
-            var old = document.querySelector('script[src*="icon_thumbs.js"]');
-            if (old) old.remove();
-            var s = document.createElement('script');
-            s.src = '/local/asa-data/icon_thumbs.js?t=' + Date.now();
-            document.head.appendChild(s);
-            loadIconList(function(list){
-              var cnt = document.getElementById("r2IconCount");
-              if (cnt) cnt.textContent = list.length;
-              WS.toast("已刷新 " + list.length + " 个图标", "success");
-            });
-          }
-        }).catch(function(){});
-    }, 600);
-  }, function(){
-    if (btn) { btn.innerHTML = origHTML; btn.style.width = origWidth; }
-    WS.toast("刷新失败", "error");
-  });
+
+    setTimeout(function(){
+
+      iconListLoaded = false; iconList = [];
+
+      loadIconList(function(list){
+
+        var overlay = document.querySelector(".icon-picker-overlay");
+
+        if (overlay) {
+
+          var si = parseInt(overlay.dataset.si) || 0;
+
+          var bi = parseInt(overlay.dataset.bi) || 0;
+
+          var ri = parseInt(overlay.dataset.ri) || 0;
+
+          overlay.remove();
+
+          iconPickerCat = "";
+
+          openIconPicker(si, bi, ri);
+
+        }
+
+        WS.toast("已刷新 "+list.length+" 个图标", "success");
+          var cnt = document.getElementById("r2IconCount");
+          if (cnt) cnt.textContent = list.length;
+
+      });
+
+    }, 2000);
+
+  }, function(){ WS.toast("刷新失败", "error"); });
+
 }
 
 function renderR2Config() {

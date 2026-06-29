@@ -268,10 +268,6 @@ def main():
             IC_CSS += 'ha-card .info-card-block details[open] .ic-sum-top{display:none!important}'
             IC_CSS += 'ha-card .info-card-block details[open] .ic-sum-end{display:block!important}'
             IC_CSS += 'ha-card .info-card-block ha-icon.ic-auto-color{color:var(--primary-background-color)!important;fill:var(--primary-text-color)!important}'
-            IC_CSS += 'ha-card .info-card-block img.ic-auto-dark{filter:none}'
-            IC_CSS += 'ha-card .info-card-block img.ic-auto-light{filter:none}'
-            IC_CSS += '[data-theme="dark"] ha-card .info-card-block img.ic-auto-dark{filter:invert(1)}'
-            IC_CSS += '[data-theme="light"] ha-card .info-card-block img.ic-auto-light{filter:invert(1)}'
             IC_CSS += 'ha-card .info-card-block img.ic-auto-color{filter:var(--ic-icon-filter,none)}'
             # 3-state map filter: linear (icon color) + block (background) per-map — auto-generated from SERVER_MAP
             for sid, sm in SERVER_MAP.items():
