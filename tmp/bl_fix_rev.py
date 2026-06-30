@@ -1444,10 +1444,11 @@ tr[data-food="Energy Cake"] .food-modal {
   font-size: 0.9em;
   color: rgba(255,255,255,0.5);
 } .section-tab + .section-tab { border-left: 1px solid rgba(255,255,255,0.4); } .section-tab.tab-active { color: rgb(255, 255, 255); } .section-tab:not(.tab-active):hover { color: rgba(255,255,255,0.85); }
-/* Auto-color for info_card icons via data-theme (set by MutationObserver JS) */
-img.ic-auto-light{filter:none} img.ic-auto-dark{filter:none}
-[data-theme="dark"] img.ic-auto-dark,[data-theme="dark"] .ic-auto-dark img{filter:invert(1)}
-[data-theme="light"] img.ic-auto-light,[data-theme="light"] .ic-auto-light img{filter:invert(1)}
+/* 图标自动反色：暗主题深色图反白，亮主题浅色图反色 */
+img.ic-auto-light { filter: none; }
+img.ic-auto-dark { filter: none; }
+[data-theme="dark"] img.ic-auto-dark { filter: invert(1); }
+[data-theme="light"] img.ic-auto-light { filter: invert(1); }
 """
 
 # Table-level rules (any tab with tabular content — reference_table, mixed_content, server_grid, farming_table)
@@ -1967,7 +1968,7 @@ def render_server_rules(data):
         parts.append(f'<h3 style="margin:12px 0 4px">{esc(tab.get("name",""))}</h3>')
         parts.append(render_tab_html(tab))
     parts.append('</div>')
-    return '<svg onload="var d=this.parentElement;function A(){var b=getComputedStyle(document.documentElement).getPropertyValue(\'--primary-background-color\');var m=b.match(/\\d+/g);if(m){d.setAttribute(\'data-theme\',(0.299*m[0]+0.587*m[1]+0.114*m[2])<50?\'dark\':\'light\')}}A();new MutationObserver(A).observe(document.documentElement,{attributes:true,attributeFilter:[\'style\']})" style=display:none></svg>' + '\n'.join(parts)
+    return '\n'.join(parts)
 
 def strip_and_append_empty_rows(html):
     """Remove all existing empty-row tr elements, then append one before the LAST </tbody> in each section."""
@@ -2272,14 +2273,17 @@ def render_tab_html(tab):
                                 _use_lum = (1 - _dac_lum) if _is_rev else _dac_lum
                                 _dac_cls = ' ic-auto-light' if _use_lum > 0.5 else ' ic-auto-dark'
                             else:
-                                _dac_cls = ' ic-auto-color'
+                                _dac_cls = ' ic-auto-dark' if _is_rev else ' ic-auto-color'
                             _dac_mode_cls = ' ic-mode-reverse' if _is_rev else ' ic-mode-normal'
                         _qty_tag = '<span class="ic-qty">×{}</span>'.format(_qty) if _qty else ''
                         _img_tag = '<img src="{}" class="ic-desc-img{}" onerror="this.remove()" />'.format(esc(_dimg_url), _dac_cls)
                         if block_maps:
                             _img_tag = '<img src="{}" class="ic-block-img{}" onerror="this.remove()" />'.format(esc(_dimg_url), _dac_cls)
                         if _dac_mode_cls:
-                            _img_tag = '<span class="ic-desc-wrap{}" style="position:relative;display:inline-flex;flex-shrink:0">{}</span>'.format(_dac_mode_cls, _img_tag)
+                            if block_maps:
+                                _img_tag = '<img src="{}" class="ic-block-img{}{}" onerror="this.remove()" />'.format(esc(_dimg_url), _dac_cls, _dac_mode_cls)
+                            else:
+                                _img_tag = '<span class="ic-desc-wrap{}" style="position:relative;display:inline-flex;flex-shrink:0">{}</span>'.format(_dac_mode_cls, _img_tag)
                         _dimg = _img_tag + _qty_tag
                     parts.append('<div class="{}"{{}}{{}}>{{}}{{}}{{}}</div>'.format(ic_cls).format(dstyle, dserver_attr, srv_icon, esc(dtext), _dimg))
                 if ic_collapse:
@@ -2880,18 +2884,10 @@ if __name__ == "__main__":
                 IC_CSS += 'ha-card .info-card-block ha-icon.ic-auto-color{color:var(--primary-background-color)!important;fill:var(--primary-text-color)!important}'
                 IC_CSS += 'ha-card .info-card-block img.ic-auto-dark{filter:none}'
                 IC_CSS += 'ha-card .info-card-block img.ic-auto-light{filter:none}'
-                IC_CSS += '[data-theme="dark"] ha-card .info-card-block img.ic-auto-dark{filter:invert(1)}'
-                IC_CSS += '[data-theme="light"] ha-card .info-card-block img.ic-auto-light{filter:invert(1)}'
+                IC_CSS += '[data-theme="dark"] .info-card-block img.ic-auto-dark{filter:invert(1)}'
+                IC_CSS += '[data-theme="light"] .info-card-block img.ic-auto-light{filter:invert(1)}'
                 IC_CSS += 'ha-card .info-card-block img.ic-auto-color{filter:var(--ic-icon-filter,none)}'
-                # Color mode badge dots (小圆点角标)
-                IC_CSS += '.ic-mode-normal::after,.ic-mode-reverse::after{content:"";position:absolute;top:-2px;right:-2px;width:6px;height:6px;border-radius:50%}'
-                IC_CSS += '.ic-mode-normal::after{background:var(--accent-color)}'
-                IC_CSS += '.ic-mode-reverse::after{background:var(--warning-color,orange)}'
                 IC_CSS += 'ha-card .ic-desc-img{width:24px!important;height:24px!important;object-fit:contain!important;vertical-align:middle!important;margin:0 1px 0 1px!important;flex-shrink:0!important}'
-                # Desc image color mode badge
-                IC_CSS += '.ic-desc-wrap.ic-mode-normal::after,.ic-desc-wrap.ic-mode-reverse::after{content:"";position:absolute;top:-2px;right:-2px;width:6px;height:6px;border-radius:50%}'
-                IC_CSS += '.ic-desc-wrap.ic-mode-normal::after{background:var(--accent-color)}'
-                IC_CSS += '.ic-desc-wrap.ic-mode-reverse::after{background:var(--warning-color,orange)}'
                 IC_CSS += 'ha-card .ic-qty{font-size:0.75em!important;font-weight:600!important;margin-left:0!important;flex-shrink:0!important;line-height:1!important}'
                 # Per-map qty badge: semi-transparent block color (works for both themes)
                 for sid, sm in SERVER_MAP.items():
@@ -2940,9 +2936,7 @@ if __name__ == "__main__":
             css = CARD_CORE_CSS
 
         css += ' ha-card ha-icon{line-height:0!important}'
-        # MutationObserver JS: detect HA theme via html style changes, set data-theme for CSS selectors
-        observer_js = '<svg onload="var d=this.parentElement;function A(){var b=getComputedStyle(document.documentElement).getPropertyValue(\'--primary-background-color\');var m=b.match(/\\d+/g);if(m){d.setAttribute(\'data-theme\',(0.299*m[0]+0.587*m[1]+0.114*m[2])<50?\'dark\':\'light\')}}A();new MutationObserver(A).observe(document.documentElement,{attributes:true,attributeFilter:[\'style\']})" style=display:none></svg>'
-        html_content = observer_js + html_content
+        css += ' ha-card div.flex.flex-col>div:not([class]){margin-top:0!important}'
 
         inner_card = {
             "entity": "",
@@ -2954,7 +2948,7 @@ if __name__ == "__main__":
             "entities": [],
             "bindings": [],
             "actions": [],
-            "plugins": {"daisyui": {"enabled": True, "url": "https://cdn.jsdelivr.net/npm/daisyui@latest/dist/full.css", "theme": "dark - dark", "overrideCardBackground": False}, "tailwindElements": {"enabled": False}},
+            "plugins": {"daisyui": {"enabled": True, "url": "https://cdn.jsdelivr.net/npm/daisyui@latest/dist/full.css", "theme": "dark", "overrideCardBackground": False}, "tailwindElements": {"enabled": False}},
             "debounceChangePeriod": 500,
             "type": "custom:tailwindcss-template-card",
             "card_mod": {"style": css}
@@ -3008,6 +3002,8 @@ if __name__ == "__main__":
         tname = t['name']
         ttype = t.get('type','')
         t_html = render_tab_html(t)
+        # Inject inline theme detection (MutationObserver on html style, threshold=50 for visionOS)
+        t_html = '<img src=x onerror="var d=this.parentElement;function A(){var b=getComputedStyle(document.documentElement).getPropertyValue(\'--primary-background-color\');var m=b.match(/\\d+/g);if(m){d.setAttribute(\'data-theme\',(0.299*m[0]+0.587*m[1]+0.114*m[2])<50?\'dark\':\'light\')}}A();new MutationObserver(A).observe(document.documentElement,{attributes:true,attributeFilter:[\'style\']})" style=display:none>'+t_html
         cond = {
             "type": "conditional",
             "conditions": [{"condition": "state", "entity": "input_select.info_server_rules_tab", "state": tname}],
@@ -3059,6 +3055,8 @@ if __name__ == "__main__":
             t_html = render_farming_table(t)
         else:
             t_html = render_tab_html(t)
+        # Inject inline theme detection (MutationObserver on html style, threshold=50 for visionOS)
+        t_html = '<img src=x onerror="var d=this.parentElement;function A(){var b=getComputedStyle(document.documentElement).getPropertyValue(\'--primary-background-color\');var m=b.match(/\\d+/g);if(m){d.setAttribute(\'data-theme\',(0.299*m[0]+0.587*m[1]+0.114*m[2])<50?\'dark\':\'light\')}}A();new MutationObserver(A).observe(document.documentElement,{attributes:true,attributeFilter:[\'style\']})" style=display:none>'+t_html
         cond = {
             "type": "conditional",
             "conditions": [{"condition": "state", "entity": "input_select.info_tribe_tab", "state": tname}],
@@ -3110,7 +3108,7 @@ if __name__ == "__main__":
                 "entity": "", "content": html_content, "ignore_line_breaks": True,
                 "always_update": False, "parse_jinja": True, "code_editor": "Ace",
                 "entities": [], "bindings": [], "actions": [],
-                "plugins": {"daisyui": {"enabled": True, "url": "https://cdn.jsdelivr.net/npm/daisyui@latest/dist/full.css", "theme": "dark - dark", "overrideCardBackground": False}, "tailwindElements": {"enabled": False}},
+                "plugins": {"daisyui": {"enabled": True, "url": "https://cdn.jsdelivr.net/npm/daisyui@latest/dist/full.css", "theme": "dark", "overrideCardBackground": False}, "tailwindElements": {"enabled": False}},
                 "debounceChangePeriod": 500,
                 "type": "custom:tailwindcss-template-card",
                 "card_mod": {"style": CARD_CORE_CSS + BASE_RAW_CSS}
@@ -3164,6 +3162,10 @@ if __name__ == "__main__":
 
     yl_html = build_section_html(yl_data) if yl_data.get('sections') else yl_data.get('html', '<p>暂无数据</p>')
     gh_html = build_section_html(gh_data) if gh_data.get('sections') else gh_data.get('html', '<p>暂无数据</p>')
+    # Inject inline theme detection for base cards
+    TJS = '<img src=x onerror="var d=this.parentElement;function A(){var b=getComputedStyle(document.documentElement).getPropertyValue(\'--primary-background-color\');var m=b.match(/\\d+/g);if(m){d.setAttribute(\'data-theme\',(0.299*m[0]+0.587*m[1]+0.114*m[2])<50?\'dark\':\'light\')}}A();new MutationObserver(A).observe(document.documentElement,{attributes:true,attributeFilter:[\'style\']})" style=display:none>'
+    yl_html = TJS + yl_html if '<img src=x' not in yl_html else yl_html
+    gh_html = TJS + gh_html if '<img src=x' not in gh_html else gh_html
 
     bq_tab_cards = [
         {"type": "conditional", "conditions": [{"condition": "state", "entity": "input_select.info_tribe_tab", "state": "英灵殿"}],

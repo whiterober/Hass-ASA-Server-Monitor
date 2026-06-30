@@ -1444,10 +1444,6 @@ tr[data-food="Energy Cake"] .food-modal {
   font-size: 0.9em;
   color: rgba(255,255,255,0.5);
 } .section-tab + .section-tab { border-left: 1px solid rgba(255,255,255,0.4); } .section-tab.tab-active { color: rgb(255, 255, 255); } .section-tab:not(.tab-active):hover { color: rgba(255,255,255,0.85); }
-/* Auto-color for info_card icons via data-theme (set by MutationObserver JS) */
-img.ic-auto-light{filter:none} img.ic-auto-dark{filter:none}
-[data-theme="dark"] img.ic-auto-dark,[data-theme="dark"] .ic-auto-dark img{filter:invert(1)}
-[data-theme="light"] img.ic-auto-light,[data-theme="light"] .ic-auto-light img{filter:invert(1)}
 """
 
 # Table-level rules (any tab with tabular content — reference_table, mixed_content, server_grid, farming_table)
@@ -1967,7 +1963,7 @@ def render_server_rules(data):
         parts.append(f'<h3 style="margin:12px 0 4px">{esc(tab.get("name",""))}</h3>')
         parts.append(render_tab_html(tab))
     parts.append('</div>')
-    return '<svg onload="var d=this.parentElement;function A(){var b=getComputedStyle(document.documentElement).getPropertyValue(\'--primary-background-color\');var m=b.match(/\\d+/g);if(m){d.setAttribute(\'data-theme\',(0.299*m[0]+0.587*m[1]+0.114*m[2])<50?\'dark\':\'light\')}}A();new MutationObserver(A).observe(document.documentElement,{attributes:true,attributeFilter:[\'style\']})" style=display:none></svg>' + '\n'.join(parts)
+    return '\n'.join(parts)
 
 def strip_and_append_empty_rows(html):
     """Remove all existing empty-row tr elements, then append one before the LAST </tbody> in each section."""
@@ -2150,24 +2146,14 @@ def render_tab_html(tab):
                     ic_fmaps=','.join(sorted(fmaps))
                 ext='' if not has_map_filter else ' filterable'
                 eattrs='' if not has_map_filter else ' data-filter-maps="{}"'.format(ic_fmaps)
-                if block.get('icon_auto_color_mode') and block.get('icon_auto_color_mode') != 'off':
-                    ac_mode = block.get('icon_auto_color_mode')
-                elif block.get('icon_auto_color'):
-                    ac_mode = 'normal'
-                else:
-                    ac_mode = 'off'
-                if ac_mode != 'off':
+                if block.get('icon_auto_color'):
                     lum = block.get('icon_native_luminance')
-                    is_rev = (ac_mode == 'reverse')
                     if lum is not None and lum != 0.5:
-                        use_lum = (1 - lum) if is_rev else lum
-                        auto_cls = ' ic-auto-light' if use_lum > 0.5 else ' ic-auto-dark'
+                        auto_cls = ' ic-auto-light' if lum > 0.5 else ' ic-auto-dark'
                     else:
                         auto_cls = ' ic-auto-color'
-                    mode_cls = ' ic-mode-reverse' if is_rev else ' ic-mode-normal'
                 else:
                     auto_cls = ''
-                    mode_cls = ''
                 # Block-level server_states (for card bg + title mdi)
                 blk_states = block.get('server_states', {})
                 blk_active = None; blk_st = 0
@@ -2186,10 +2172,7 @@ def render_tab_html(tab):
                     title_color_style = ' style="color:{};"'.format(ic_title_color)
                 parts.append('<div class="info-card-block{}{}" data-map="{}"{}{}>'.format(ext,blk_cls,ic_hl,eattrs,qc_style))
                 if ic_icon:
-                    if mode_cls:
-                        parts.append('<span class="ic-icon-wrap{}" style="position:relative;display:inline-flex;flex-shrink:0"><img src="{}" class="ic-icon{}" loading="lazy" /></span>'.format(mode_cls, esc(ic_icon), auto_cls))
-                    else:
-                        parts.append('<img src="{}" class="ic-icon{}" loading="lazy" />'.format(esc(ic_icon), auto_cls))
+                    parts.append('<img src="{}" class="ic-icon{}" loading="lazy" />'.format(esc(ic_icon), auto_cls))
                 parts.append('<div class="ic-body" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center">')
                 parts.append('<div class="ic-title" style="flex-basis:100%">')
                 if ic_mdi:
@@ -2235,13 +2218,7 @@ def render_tab_html(tab):
                         ic_cls += ' ' + ' '.join('ic-block-'+m for m in block_maps)
                     dstyle = ''
                     if dbold: dstyle += 'font-weight:bold;'
-                    if not block_maps:
-                        if dcolor and dcolor not in ('#000000', 'auto'):
-                            dstyle += 'color:{};'.format(dcolor)
-                        elif linear_maps:
-                            _lm_color = _lookup_style(linear_maps[0]).get('color', '')
-                            if _lm_color:
-                                dstyle += 'color:{};'.format(_lm_color)
+                    if dcolor and dcolor not in ('#000000', 'auto') and not block_maps: dstyle += 'color:{};'.format(dcolor)
                     if dopacity != 1.0: dstyle += 'opacity:{};'.format(dopacity)
                     if dstyle: dstyle = ' style="{}"'.format(dstyle)
                     # Server icon prefix (show highest-priority map icon)
@@ -2262,25 +2239,11 @@ def render_tab_html(tab):
                     _dimg_url = desc.get('image_url','')
                     _qty = desc.get('quantity',0)
                     if _dimg_url:
-                        _dac_mode = desc.get('image_auto_color_mode','off')
-                        _dac_lum = desc.get('image_native_luminance')
-                        _dac_cls = ''
-                        _dac_mode_cls = ''
-                        if _dac_mode != 'off':
-                            _is_rev = (_dac_mode == 'reverse')
-                            if _dac_lum is not None and _dac_lum != 0.5:
-                                _use_lum = (1 - _dac_lum) if _is_rev else _dac_lum
-                                _dac_cls = ' ic-auto-light' if _use_lum > 0.5 else ' ic-auto-dark'
-                            else:
-                                _dac_cls = ' ic-auto-color'
-                            _dac_mode_cls = ' ic-mode-reverse' if _is_rev else ' ic-mode-normal'
                         _qty_tag = '<span class="ic-qty">×{}</span>'.format(_qty) if _qty else ''
-                        _img_tag = '<img src="{}" class="ic-desc-img{}" onerror="this.remove()" />'.format(esc(_dimg_url), _dac_cls)
                         if block_maps:
-                            _img_tag = '<img src="{}" class="ic-block-img{}" onerror="this.remove()" />'.format(esc(_dimg_url), _dac_cls)
-                        if _dac_mode_cls:
-                            _img_tag = '<span class="ic-desc-wrap{}" style="position:relative;display:inline-flex;flex-shrink:0">{}</span>'.format(_dac_mode_cls, _img_tag)
-                        _dimg = _img_tag + _qty_tag
+                            _dimg = '<img src="{}" class="ic-block-img" onerror="this.remove()" />'.format(esc(_dimg_url)) + _qty_tag
+                        else:
+                            _dimg = '<img src="{}" class="ic-desc-img" onerror="this.remove()" />'.format(esc(_dimg_url)) + _qty_tag
                     parts.append('<div class="{}"{{}}{{}}>{{}}{{}}{{}}</div>'.format(ic_cls).format(dstyle, dserver_attr, srv_icon, esc(dtext), _dimg))
                 if ic_collapse:
                     parts.append('<span class="ic-sum-end" style="font-size:0.65em;background:rgba(128,128,128,0.12);border:1px solid var(--border);border-radius:10px;padding:1px 7px;margin-top:2px;flex-basis:100%;cursor:pointer" onclick="event.stopPropagation();var d=this.closest(\'details\');var root=d.getRootNode();root.querySelectorAll(\'details[name=ic-acc]\').forEach(function(o){o.open=false});">···</span></div></details>')
@@ -2883,29 +2846,12 @@ if __name__ == "__main__":
                 IC_CSS += '[data-theme="dark"] ha-card .info-card-block img.ic-auto-dark{filter:invert(1)}'
                 IC_CSS += '[data-theme="light"] ha-card .info-card-block img.ic-auto-light{filter:invert(1)}'
                 IC_CSS += 'ha-card .info-card-block img.ic-auto-color{filter:var(--ic-icon-filter,none)}'
-                # Color mode badge dots (小圆点角标)
-                IC_CSS += '.ic-mode-normal::after,.ic-mode-reverse::after{content:"";position:absolute;top:-2px;right:-2px;width:6px;height:6px;border-radius:50%}'
-                IC_CSS += '.ic-mode-normal::after{background:var(--accent-color)}'
-                IC_CSS += '.ic-mode-reverse::after{background:var(--warning-color,orange)}'
                 IC_CSS += 'ha-card .ic-desc-img{width:24px!important;height:24px!important;object-fit:contain!important;vertical-align:middle!important;margin:0 1px 0 1px!important;flex-shrink:0!important}'
-                # Desc image color mode badge
-                IC_CSS += '.ic-desc-wrap.ic-mode-normal::after,.ic-desc-wrap.ic-mode-reverse::after{content:"";position:absolute;top:-2px;right:-2px;width:6px;height:6px;border-radius:50%}'
-                IC_CSS += '.ic-desc-wrap.ic-mode-normal::after{background:var(--accent-color)}'
-                IC_CSS += '.ic-desc-wrap.ic-mode-reverse::after{background:var(--warning-color,orange)}'
-                IC_CSS += 'ha-card .ic-qty{font-size:0.75em!important;font-weight:600!important;margin-left:0!important;flex-shrink:0!important;line-height:1!important}'
-                # Per-map qty badge: semi-transparent block color (works for both themes)
-                for sid, sm in SERVER_MAP.items():
-                    r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)
-                    IC_CSS += 'ha-card .ic-text.ic-block-{} .ic-qty{{background:rgba({},{},{},0.25)!important}}'.format(sid, r, g, b)
-                    IC_CSS += 'ha-card .ic-text.ic-block-'+sid+'{position:relative!important;overflow:hidden!important}'
-                    IC_CSS += 'ha-card .ic-text.ic-block-'+sid+' .ic-qty{position:absolute!important;right:0!important;bottom:0!important;color:var(--primary-background-color)!important;font-size:0.7em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important}'
-                for fk, fv in FIXED_STYLES_MAP.items():
-                    fc = fv['color']; r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
-                    IC_CSS += 'ha-card .ic-text.ic-block-{} .ic-qty{{background:rgba({},{},{},0.25)!important}}'.format(fk, r, g, b)
-                    IC_CSS += 'ha-card .ic-text.ic-block-'+fk+'{position:relative!important;overflow:hidden!important}'
-                    IC_CSS += 'ha-card .ic-text.ic-block-'+fk+' .ic-qty{position:absolute!important;right:0!important;bottom:0!important;color:var(--primary-background-color)!important;font-size:0.7em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important}'
+                IC_CSS += 'ha-card .ic-qty{font-size:0.75em!important;font-weight:600!important;color:var(--primary-background-color)!important;margin-left:0!important;flex-shrink:0!important;line-height:1!important}'
+                IC_CSS += 'ha-card .ic-text[class*="ic-block-"] .ic-qty{position:absolute!important;right:0!important;bottom:0!important;color:var(--primary-background-color)!important;font-size:0.7em!important;background:rgba(0,0,0,0.3)!important;padding:1px 5px!important;border-radius:4px 0 0 0!important}'
+                IC_CSS += '[data-theme="dark"] ha-card .ic-text[class*="ic-block-"] .ic-qty{background:rgba(255,255,255,0.25)!important}'
+                IC_CSS += 'ha-card .ic-text[class*="ic-block-"]{position:relative!important;overflow:hidden!important;padding-right:34px!important}'
                 IC_CSS += 'ha-card .ic-block-img{position:absolute!important;right:2px!important;top:50%!important;transform:translateY(-50%)!important;width:30px!important;height:30px!important;object-fit:cover!important;border-radius:0 4px 4px 0!important;flex-shrink:0!important}'
-                IC_CSS += 'ha-card .ic-text[class*="ic-block-"]:has(.ic-block-img){padding-right:34px!important}'
                 css += IC_CSS
                 # 3-state map filter: linear (icon color) + block (background) per-map — auto-generated from SERVER_MAP
                 for sid, sm in SERVER_MAP.items():
@@ -2940,9 +2886,7 @@ if __name__ == "__main__":
             css = CARD_CORE_CSS
 
         css += ' ha-card ha-icon{line-height:0!important}'
-        # MutationObserver JS: detect HA theme via html style changes, set data-theme for CSS selectors
-        observer_js = '<svg onload="var d=this.parentElement;function A(){var b=getComputedStyle(document.documentElement).getPropertyValue(\'--primary-background-color\');var m=b.match(/\\d+/g);if(m){d.setAttribute(\'data-theme\',(0.299*m[0]+0.587*m[1]+0.114*m[2])<50?\'dark\':\'light\')}}A();new MutationObserver(A).observe(document.documentElement,{attributes:true,attributeFilter:[\'style\']})" style=display:none></svg>'
-        html_content = observer_js + html_content
+        css += ' ha-card div.flex.flex-col>div:not([class]){margin-top:0!important}'
 
         inner_card = {
             "entity": "",

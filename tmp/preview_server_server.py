@@ -288,15 +288,7 @@ def main():
             IC_CSS += '[data-theme="dark"] ha-card .info-card-block img.ic-auto-dark{filter:invert(1)}'
             IC_CSS += '[data-theme="light"] ha-card .info-card-block img.ic-auto-light{filter:invert(1)}'
             IC_CSS += 'ha-card .info-card-block img.ic-auto-color{filter:var(--ic-icon-filter,none)}'
-            # Color mode badge dots (小圆点角标)
-            IC_CSS += '.ic-mode-normal::after,.ic-mode-reverse::after{content:"";position:absolute;top:-2px;right:-2px;width:6px;height:6px;border-radius:50%}'
-            IC_CSS += '.ic-mode-normal::after{background:var(--accent-color)}'
-            IC_CSS += '.ic-mode-reverse::after{background:var(--warning-color,orange)}'
             IC_CSS += 'ha-card .ic-desc-img{width:24px!important;height:24px!important;object-fit:contain!important;vertical-align:middle!important;margin:0 2px!important;flex-shrink:0!important}'
-            # Desc image color mode badge
-            IC_CSS += '.ic-desc-wrap.ic-mode-normal::after,.ic-desc-wrap.ic-mode-reverse::after{content:"";position:absolute;top:-2px;right:-2px;width:6px;height:6px;border-radius:50%}'
-            IC_CSS += '.ic-desc-wrap.ic-mode-normal::after{background:var(--accent-color)}'
-            IC_CSS += '.ic-desc-wrap.ic-mode-reverse::after{background:var(--warning-color,orange)}'
             IC_CSS += 'ha-card .ic-text[class*="ic-block-"]{position:relative!important;overflow:hidden!important}'
             IC_CSS += 'ha-card .ic-block-img{position:absolute!important;right:0!important;top:0!important;height:100%!important;width:auto!important;max-width:35%!important;object-fit:cover!important;border-radius:0 6px 6px 0!important;flex-shrink:0!important}'
             IC_CSS += 'ha-card .ic-text[class*="ic-block-"]:has(.ic-block-img){padding-right:34px!important}'
