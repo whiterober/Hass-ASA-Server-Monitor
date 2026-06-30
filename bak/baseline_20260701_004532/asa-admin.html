@@ -405,17 +405,25 @@ img.ic-auto-color { filter: none; }
 :root { --ic-icon-filter: none; }
 [data-theme="light"] { --ic-icon-filter: invert(1); }
 
-/* 反色角标：小圆点 */
+/* 反色模式角标：预览图右上角小圆点 */
 .ic-mode-normal::after,
 .ic-mode-reverse::after {
   content: '';
   position: absolute;
-  top: -1px; right: -1px;
-  width: 4px; height: 4px;
+  top: -2px; right: -2px;
+  width: 6px; height: 6px;
   border-radius: 50%;
 }
-.ic-mode-normal::after { background: var(--accent); }
-.ic-mode-reverse::after { background: var(--warning, orange); }
+.ic-mode-normal::after {
+  background: var(--accent);
+}
+.ic-mode-reverse::after {
+  background: var(--warning, orange);
+}
+/* 逆反色模式预览图对比背景 */
+.ic-mode-reverse {
+  background: color-mix(in oklch, var(--primary-text-color) 15%, transparent);
+}
 
 /* Icon Picker */
 
@@ -1229,28 +1237,46 @@ function toggleAutoColor(bi, btn) {
 }
 
 function toggleIconColorMode(bi, btn) {
-  // 2-state toggle: off ↔ normal
+  // 3-state cycle: off → normal → reverse → off
+  var modes = ['off', 'normal', 'reverse'];
+  var labels = ['反色：关', '正反色', '逆反色'];
   var current = btn.getAttribute('data-mode') || 'off';
-  var next = (current === 'off') ? 'normal' : 'off';
+  var idx = modes.indexOf(current);
+  var next = modes[(idx + 1) % 3];
   btn.setAttribute('data-mode', next);
-  btn.textContent = (next === 'off') ? '反色：关' : '反色';
+  btn.textContent = labels[(idx + 1) % 3];
   
+  // Update button style
   if (next === 'off') {
-    btn.style.opacity = '0.5'; btn.style.color = '';
-    btn.style.borderColor = 'var(--border)'; btn.style.background = 'var(--input-bg)';
-    btn.title = '反色：关闭';
+    btn.style.opacity = '0.5';
+    btn.style.color = '';
+    btn.style.borderColor = 'var(--border)';
+    btn.style.background = 'var(--input-bg)';
+    btn.title = '反色模式：关闭';
+  } else if (next === 'normal') {
+    btn.style.opacity = '1';
+    btn.style.color = 'var(--accent)';
+    btn.style.borderColor = 'var(--accent)';
+    btn.style.background = 'var(--input-bg)';
+    btn.title = '反色模式：正反色（暗→亮，亮→暗）';
   } else {
-    btn.style.opacity = '1'; btn.style.color = 'var(--accent)';
-    btn.style.borderColor = 'var(--accent)'; btn.style.background = 'var(--input-bg)';
-    btn.title = '反色：自动适应主题';
+    btn.style.opacity = '1';
+    btn.style.color = 'var(--warning, orange)';
+    btn.style.borderColor = 'var(--warning, orange)';
+    btn.style.background = 'var(--input-bg)';
+    btn.title = '反色模式：逆反色（暗→暗，亮→亮）';
   }
   
+  // Sync hidden checkbox for backward compat
   var cb = document.getElementById('mcICAutoColor'+bi);
   if (cb) cb.checked = (next !== 'off');
   
+  // Apply to preview image (mode classes go on wrapper span for ::after)
   var img = document.getElementById('mcICIconPreview'+bi);
   if (!img) return;
+  var wrapper = img.parentElement;
   
+  // Persist to editorData helper
   function _persistICMode(mode, lum) {
     var tab = editorData.tabs[editorSelectedTab];
     if (tab && tab.content_blocks && tab.content_blocks[bi]) {
@@ -1262,19 +1288,29 @@ function toggleIconColorMode(bi, btn) {
   if (next === 'off') {
     applyAutoColorClass(img, null);
     img.style.filter = 'none';
-    if (wrapper) wrapper.classList.remove('ic-mode-normal');
+    if (wrapper) wrapper.classList.remove('ic-mode-normal', 'ic-mode-reverse');
     _persistICMode('off');
   } else {
     detectImageBrightness(img.src, function(luminance) {
       if (luminance >= 0) {
-        applyAutoColorClassWithLum(img, luminance);
+        // For reverse mode, invert the luminance decision
+        var useLum = (next === 'reverse') ? (1 - luminance) : luminance;
+        applyAutoColorClassWithLum(img, useLum);
         var lumInput = document.getElementById('mcICIconLum'+bi);
         if (lumInput) lumInput.value = luminance.toFixed(3);
-        if (wrapper) wrapper.classList.add('ic-mode-normal');
-        _persistICMode('normal', luminance);
+        // Mode badge class on wrapper span
+        if (wrapper) {
+          wrapper.classList.remove('ic-mode-normal', 'ic-mode-reverse');
+          wrapper.classList.add(next === 'normal' ? 'ic-mode-normal' : 'ic-mode-reverse');
+        }
+        _persistICMode(next, luminance);
       } else {
         img.className = (img.className || '').replace(/\bic-auto-(dark|light)\b/g, '').trim() + ' ic-auto-color';
-        _persistICMode('normal');
+        if (wrapper) {
+          wrapper.classList.remove('ic-mode-normal', 'ic-mode-reverse');
+          wrapper.classList.add(next === 'normal' ? 'ic-mode-normal' : 'ic-mode-reverse');
+        }
+        _persistICMode(next);
       }
     });
   }
@@ -1292,20 +1328,26 @@ function applyAutoColorClassWithLum(img, luminance) {
 
 // Color mode for description-row images (targets mcICDescImg{bi}_{di})
 function toggleIconColorModeDesc(bi, di, btn) {
-  // 2-state toggle: off ↔ normal
+  var modes = ['off', 'normal', 'reverse'];
+  var labels = ['反色：关', '正反色', '逆反色'];
   var current = btn.getAttribute('data-mode') || 'off';
-  var next = (current === 'off') ? 'normal' : 'off';
+  var idx = modes.indexOf(current);
+  var next = modes[(idx + 1) % 3];
   btn.setAttribute('data-mode', next);
-  btn.textContent = (next === 'off') ? '反色：关' : '反色';
+  btn.textContent = labels[(idx + 1) % 3];
   
   if (next === 'off') {
     btn.style.opacity = '0.5'; btn.style.color = '';
     btn.style.borderColor = 'var(--border)'; btn.style.background = 'var(--input-bg)';
-    btn.title = '反色：关闭';
-  } else {
+    btn.title = '反色模式：关闭';
+  } else if (next === 'normal') {
     btn.style.opacity = '1'; btn.style.color = 'var(--accent)';
     btn.style.borderColor = 'var(--accent)'; btn.style.background = 'var(--input-bg)';
-    btn.title = '反色：自动适应主题';
+    btn.title = '反色模式：正反色';
+  } else {
+    btn.style.opacity = '1'; btn.style.color = 'var(--warning, orange)';
+    btn.style.borderColor = 'var(--warning, orange)'; btn.style.background = 'var(--input-bg)';
+    btn.title = '反色模式：逆反色';
   }
   
   var descImg = document.getElementById('mcICDescImg'+bi+'_'+di);
@@ -1317,6 +1359,7 @@ function toggleIconColorModeDesc(bi, di, btn) {
   if (!descImg) return;
   var wrapper = descImg.parentElement;
   
+  // Persist to editorData
   function _persistDescMode(mode, lum) {
     var tab = editorData.tabs[editorSelectedTab];
     if (tab && tab.content_blocks && tab.content_blocks[bi]) {
@@ -1330,17 +1373,21 @@ function toggleIconColorModeDesc(bi, di, btn) {
   if (next === 'off') {
     applyAutoColorClass(descImg, null);
     descImg.style.filter = 'none';
-    if (wrapper) wrapper.classList.remove('ic-mode-normal');
+    if (wrapper) wrapper.classList.remove('ic-mode-normal', 'ic-mode-reverse');
     _persistDescMode('off');
   } else {
-    _persistDescMode('normal');
+    // Immediately set wrapper class + persist mode (sync, before async luminance detection)
+    if (wrapper) {
+      wrapper.classList.remove('ic-mode-normal', 'ic-mode-reverse');
+      wrapper.classList.add(next === 'normal' ? 'ic-mode-normal' : 'ic-mode-reverse');
+    }
+    _persistDescMode(next);
     detectImageBrightness(descImg.src, function(luminance) {
       if (luminance >= 0) {
-        applyAutoColorClassWithLum(descImg, luminance);
-        if (wrapper) {
-          wrapper.setAttribute('data-lum', luminance.toFixed(3));
-          wrapper.classList.add('ic-mode-normal');
-        }
+        var useLum = (next === 'reverse') ? (1 - luminance) : luminance;
+        applyAutoColorClassWithLum(descImg, useLum);
+        if (wrapper) wrapper.setAttribute('data-lum', luminance.toFixed(3));
+        // Update luminance in editorData
         var tab = editorData.tabs[editorSelectedTab];
         if (tab && tab.content_blocks && tab.content_blocks[bi]) {
           var block = tab.content_blocks[bi];
@@ -1362,12 +1409,13 @@ function autoDetectLegacyIcons() {
     if (!m) { pending--; return; }
     var bi = m[1];
     var wrapper = img.parentElement;
+    var hasMode = wrapper && (wrapper.classList.contains('ic-mode-normal') || wrapper.classList.contains('ic-mode-reverse'));
     var hasLegacy = img.classList.contains('ic-auto-color');
-    if (!hasLegacy) { pending--; return; }
-    var isRev = false;
+    if (!hasMode && !hasLegacy) { pending--; return; }
+    var isRev = wrapper ? wrapper.classList.contains('ic-mode-reverse') : false;
     detectImageBrightness(img.src, function(lum) {
       if (lum >= 0) {
-        var useLum = lum;
+        var useLum = isRev ? (1 - lum) : lum;
         applyAutoColorClassWithLum(img, useLum);
         var lumInput = document.getElementById('mcICIconLum'+bi);
         if (lumInput) lumInput.value = lum.toFixed(3);
@@ -2381,7 +2429,7 @@ function renderMixedContent(tab) {
 
     h += '<div style="display:flex;align-items:center;margin-bottom:0;min-height:28px">';
 
-    h += '<strong style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">'+(bt==='map_filter'?'<span class="badge" style="font-size:0.65em;background:var(--accent);color:oklch(var(--b1));margin-right:2px;flex-shrink:0;padding:1px 6px;border-radius:3px">'+(MC_TYPE_LABELS[bt]||bt)+'</span>':((bt==='info_card'?'':'<span class="badge" data-mc-type="'+esc(MC_TYPE_LABELS[bt]||bt)+'" onclick="toggleBlockBody(this)" style="font-size:0.65em;background:var(--accent);color:oklch(var(--b1));margin-right:2px;flex-shrink:0;padding:1px 6px;border-radius:3px;cursor:pointer">'+(MC_TYPE_LABELS[bt]||bt)+'</span>')+(bt==='info_card'&&b.icon_url?'<img src="'+esc(thumbUrl(b.icon_url,56))+'" style="width:20px;height:20px;object-fit:contain;flex-shrink:0" class="'+(function(){var m=b.icon_auto_color_mode||(b.icon_auto_color?'normal':'off');if(m==='off')return'';var l=b.icon_native_luminance;var isRev=m==='reverse';var lum=(l!=null&&l!==0.5)?(isRev?1-l:l):null;var ac=lum!=null?' ic-auto-'+(lum>0.5?'light':'dark'):' ic-auto-color';var badge=m==='normal'?' ic-mode-normal':'';return ac+badge;})()+'" onerror="this.style.opacity=0">':(b.title||MC_TYPE_LABELS[bt]||bt))))+'</strong>';
+    h += '<strong style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">'+(bt==='map_filter'?'<span class="badge" style="font-size:0.65em;background:var(--accent);color:oklch(var(--b1));margin-right:2px;flex-shrink:0;padding:1px 6px;border-radius:3px">'+(MC_TYPE_LABELS[bt]||bt)+'</span>':((bt==='info_card'?'':'<span class="badge" data-mc-type="'+esc(MC_TYPE_LABELS[bt]||bt)+'" onclick="toggleBlockBody(this)" style="font-size:0.65em;background:var(--accent);color:oklch(var(--b1));margin-right:2px;flex-shrink:0;padding:1px 6px;border-radius:3px;cursor:pointer">'+(MC_TYPE_LABELS[bt]||bt)+'</span>')+(bt==='info_card'&&b.icon_url?'<img src="'+esc(thumbUrl(b.icon_url,56))+'" style="width:20px;height:20px;object-fit:contain;flex-shrink:0" class="'+(function(){var m=b.icon_auto_color_mode||(b.icon_auto_color?'normal':'off');if(m==='off')return'';var l=b.icon_native_luminance;var isRev=m==='reverse';var lum=(l!=null&&l!==0.5)?(isRev?1-l:l):null;var ac=lum!=null?' ic-auto-'+(lum>0.5?'light':'dark'):' ic-auto-color';var badge=m==='normal'?' ic-mode-normal':' ic-mode-reverse';return ac+badge;})()+'" onerror="this.style.opacity=0">':(b.title||MC_TYPE_LABELS[bt]||bt))))+'</strong>';
 
     h += ' <span class="block-preview" style="display:none" style="display:inline-block;max-width:260px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;vertical-align:middle;font-size:0.8em;color:var(--secondary-text-color);flex-shrink:1"></span>';
 
@@ -2671,7 +2719,7 @@ function renderMixedContent(tab) {
 
     else if (bt === 'info_card') {
 
-            h += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><span class="cat-color-wrap" style="flex-shrink:0" title="引用块色条颜色"><span class="cat-color-dot" id="mcICQuoteDot'+bi+'" style="background:'+(b.quote_color&&b.quote_color!=='auto'?esc(b.quote_color):'linear-gradient(to right, #000 50%, #fff 50%)')+'" data-target="mcICQuoteColor'+bi+'" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><input type="hidden" id="mcICQuoteColor'+bi+'" value="'+esc(b.quote_color||'auto')+'"><input id="mcICMdi'+bi+'" value="'+esc(b.mdi_icon||'')+'" placeholder="MDI" title="MDI 图标" style="box-sizing:border-box;width:28px;height:28px;padding:4px;font-size:0.7em;border-radius:4px;text-align:center;flex-shrink:0">'+(b.icon_url?'<span style="position:relative;display:inline-flex;flex-shrink:0" class="'+(function(){var m=b.icon_auto_color_mode||(b.icon_auto_color?'normal':'off');if(m==='off')return'';var l=b.icon_native_luminance;var isRev=m==='reverse';var lum=(l!=null&&l!==0.5)?(isRev?1-l:l):null;var ac=lum!=null?(lum>0.5?'ic-auto-light':'ic-auto-dark'):'ic-auto-color';var badge=m==='normal'?' ic-mode-normal':'';return ac+badge;})()+'" ><img src="'+esc(thumbUrl(b.icon_url,56))+'" id="mcICIconPreview'+bi+'" style="width:28px;height:28px;object-fit:contain;cursor:pointer" onclick="event.stopPropagation();openIconPicker_ic('+bi+')" title="点击换图标" onerror="this.style.opacity=0"></span>':'<span id="mcICIconPlaceholder'+bi+'" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px" onclick="event.stopPropagation();openIconPicker_ic('+bi+')" title="选择图标">+</span>')+'<input type="hidden" id="mcICIcon'+bi+'" value="'+esc(b.icon_url||'')+'">'+'<span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap" title="标题颜色"><span class="cat-color-dot" id="mcICTitleCDot'+bi+'" style="background:'+(b.title_color&&b.title_color!=='auto'?esc(b.title_color):'linear-gradient(to right, #000 50%, #fff 50%)')+'" data-target="mcICTitleColor'+bi+'" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><input id="mcICTitle'+bi+'" value="'+esc(b.title||'')+'" placeholder="标题" style="box-sizing:border-box;flex:1;padding:4px 8px;font-size:0.85em;border-radius:0;border:none"></span></span><input type="hidden" id="mcICTitleColor'+bi+'" value="'+esc(b.title_color||'auto')+'"></div>';      
+            h += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><span class="cat-color-wrap" style="flex-shrink:0" title="引用块色条颜色"><span class="cat-color-dot" id="mcICQuoteDot'+bi+'" style="background:'+(b.quote_color&&b.quote_color!=='auto'?esc(b.quote_color):'linear-gradient(to right, #000 50%, #fff 50%)')+'" data-target="mcICQuoteColor'+bi+'" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><input type="hidden" id="mcICQuoteColor'+bi+'" value="'+esc(b.quote_color||'auto')+'"><input id="mcICMdi'+bi+'" value="'+esc(b.mdi_icon||'')+'" placeholder="MDI" title="MDI 图标" style="box-sizing:border-box;width:28px;height:28px;padding:4px;font-size:0.7em;border-radius:4px;text-align:center;flex-shrink:0">'+(b.icon_url?'<span style="position:relative;display:inline-flex;flex-shrink:0" class="'+(function(){var m=b.icon_auto_color_mode||(b.icon_auto_color?'normal':'off');if(m==='off')return'';var l=b.icon_native_luminance;var isRev=m==='reverse';var lum=(l!=null&&l!==0.5)?(isRev?1-l:l):null;var ac=lum!=null?(lum>0.5?'ic-auto-light':'ic-auto-dark'):'ic-auto-color';var badge=m==='normal'?' ic-mode-normal':' ic-mode-reverse';return ac+badge;})()+'" ><img src="'+esc(thumbUrl(b.icon_url,56))+'" id="mcICIconPreview'+bi+'" style="width:28px;height:28px;object-fit:contain;cursor:pointer" onclick="event.stopPropagation();openIconPicker_ic('+bi+')" title="点击换图标" onerror="this.style.opacity=0"></span>':'<span id="mcICIconPlaceholder'+bi+'" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px 0 0 3px" onclick="event.stopPropagation();openIconPicker_ic('+bi+')" title="选择图标">+</span>')+'<input type="hidden" id="mcICIcon'+bi+'" value="'+esc(b.icon_url||'')+'">'+'<span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap" title="标题颜色"><span class="cat-color-dot" id="mcICTitleCDot'+bi+'" style="background:'+(b.title_color&&b.title_color!=='auto'?esc(b.title_color):'linear-gradient(to right, #000 50%, #fff 50%)')+'" data-target="mcICTitleColor'+bi+'" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><input id="mcICTitle'+bi+'" value="'+esc(b.title||'')+'" placeholder="标题" style="box-sizing:border-box;flex:1;padding:4px 8px;font-size:0.85em;border-radius:0;border:none"></span></span><input type="hidden" id="mcICTitleColor'+bi+'" value="'+esc(b.title_color||'auto')+'"></div>';      
       var selectedMaps = (document.getElementById('mcICHL'+bi)?.value || b.highlight||'').split(',').filter(function(x){ return x; });
       h += '<input type="hidden" id="mcICHL'+bi+'" value="'+esc(b.highlight||'')+'">';
       h += '<input type="hidden" id="mcBlockSrvStates'+bi+'" value="'+esc(JSON.stringify(b.server_states||(b.highlight?{[b.highlight]:2}:{})))+'">';
@@ -2687,7 +2735,7 @@ function renderMixedContent(tab) {
         if (d.type === 'br') {
           h += '<div class="sr-cat-card" style="border:1px dashed var(--border);border-radius:3px;padding:2px 6px;margin-bottom:3px;text-align:center;font-size:0.75em;opacity:0.6"><span class="drag-handle" style="cursor:grab;float:left;opacity:0.4">\u22ee\u22ee</span>\u21b5 \u6362\u884c <button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div>';
         } else {
-          h += '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:'+(d.color&&d.color!=='auto'?esc(d.color):'linear-gradient(to right, #000 50%, #fff 50%)')+';cursor:pointer" title="选择颜色" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" title="选择透明度" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:'+(d.opacity||1.0)+';background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="'+(d.opacity||1.0)+'"><span class="cat-bold-btn'+(d.bold?' active':'')+'" title="加粗" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="'+esc(d.text||'')+'" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" '+(d.bold?'checked':'')+' style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="'+esc(d.color||'auto')+'" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value="'+esc(d.server||'')+'"><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="'+esc(JSON.stringify(d.server_states||(d.server?{[d.server]:2}:{})))+'"></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return 'background:transparent;border:1px solid transparent';var sm=SERVER_MAP[ak]||FIXED_STYLES[ak];if(!sm)return 'background:transparent;border:1px solid transparent';if(ast===2)return 'background:'+sm.c+';border:none';return 'background:transparent;border:1px solid transparent';})()+'" title="选择服务器" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return getServerBadge('');var sm=SERVER_MAP[ak]||FIXED_STYLES[ak];if(!sm)return getServerBadge('');if(ast===1)return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:'+sm.c+'"></i>';return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:var(--primary-background-color)"></i>';})()+'</button><input type="hidden" id="mcICDescImg'+bi+'_'+di+'" value="'+esc(d.image_url||'')+'">'+(d.image_url?'<span style="position:relative;display:inline-flex;flex-shrink:0" class="'+(function(){var m=d.image_auto_color_mode||'off';if(m==='off')return'';var l=d.image_native_luminance;var isRev=m==='reverse';var lum=(l!=null&&l!==0.5)?(isRev?1-l:l):null;var ac=lum!=null?(lum>0.5?'ic-auto-light':'ic-auto-dark'):'ic-auto-color';var badge=m==='normal'?' ic-mode-normal':'';return ac+badge;})()+'" ><img src="'+esc(thumbUrl(d.image_url,56))+'" onclick="event.stopPropagation();openIconPicker_desc('+bi+','+di+')" title="点击换图" style="width:24px;height:24px;object-fit:contain;cursor:pointer;flex-shrink:0;border-radius:3px"></span>':'<span onclick="event.stopPropagation();openIconPicker_desc('+bi+','+di+')" title="选择图片" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px">+</span>')+'<input type="hidden" id="mcICDescQty'+bi+'_'+di+'" value="'+(d.quantity||'')+'"><button class="qty-btn" id="mcICDescQtyBtn'+bi+'_'+di+'" onclick="event.stopPropagation();toggleQtyPopup(this,'+bi+','+di+')" title="选择数量" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.6em;opacity:0.4;border:1px dashed var(--border);border-radius:3px;background:transparent;color:var(--text);padding:0;font-size:0.5em">'+(d.quantity?'\u00d7'+d.quantity:'\u00d7N')+'</button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
+          h += '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:'+(d.color&&d.color!=='auto'?esc(d.color):'linear-gradient(to right, #000 50%, #fff 50%)')+';cursor:pointer" title="选择颜色" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" title="选择透明度" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:'+(d.opacity||1.0)+';background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="'+(d.opacity||1.0)+'"><span class="cat-bold-btn'+(d.bold?' active':'')+'" title="加粗" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="'+esc(d.text||'')+'" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" '+(d.bold?'checked':'')+' style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="'+esc(d.color||'auto')+'" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value="'+esc(d.server||'')+'"><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="'+esc(JSON.stringify(d.server_states||(d.server?{[d.server]:2}:{})))+'"></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return 'background:transparent;border:1px solid transparent';var sm=SERVER_MAP[ak]||FIXED_STYLES[ak];if(!sm)return 'background:transparent;border:1px solid transparent';if(ast===2)return 'background:'+sm.c+';border:none';return 'background:transparent;border:1px solid transparent';})()+'" title="选择服务器" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return getServerBadge('');var sm=SERVER_MAP[ak]||FIXED_STYLES[ak];if(!sm)return getServerBadge('');if(ast===1)return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:'+sm.c+'"></i>';return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:var(--primary-background-color)"></i>';})()+'</button><input type="hidden" id="mcICDescImg'+bi+'_'+di+'" value="'+esc(d.image_url||'')+'">'+(d.image_url?'<span style="position:relative;display:inline-flex;flex-shrink:0" class="'+(function(){var m=d.image_auto_color_mode||'off';if(m==='off')return'';var l=d.image_native_luminance;var isRev=m==='reverse';var lum=(l!=null&&l!==0.5)?(isRev?1-l:l):null;var ac=lum!=null?(lum>0.5?'ic-auto-light':'ic-auto-dark'):'ic-auto-color';var badge=m==='normal'?' ic-mode-normal':' ic-mode-reverse';return ac+badge;})()+'" ><img src="'+esc(thumbUrl(d.image_url,56))+'" onclick="event.stopPropagation();openIconPicker_desc('+bi+','+di+')" title="点击换图" style="width:24px;height:24px;object-fit:contain;cursor:pointer;flex-shrink:0;border-radius:3px"></span>':'<span onclick="event.stopPropagation();openIconPicker_desc('+bi+','+di+')" title="选择图片" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px">+</span>')+'<input type="hidden" id="mcICDescQty'+bi+'_'+di+'" value="'+(d.quantity||'')+'"><button class="qty-btn" id="mcICDescQtyBtn'+bi+'_'+di+'" onclick="event.stopPropagation();toggleQtyPopup(this,'+bi+','+di+')" title="选择数量" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.6em;opacity:0.4;border:1px dashed var(--border);border-radius:3px;background:transparent;color:var(--text);padding:0;font-size:0.5em">'+(d.quantity?'\u00d7'+d.quantity:'\u00d7N')+'</button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
 
         }
       }
@@ -3177,7 +3225,6 @@ function saveMCBlocks(tab) {
       b.quote_color = document.getElementById('mcICQuoteColor'+bi)?.value || '#FF9800';
       b.collapse_descriptions = document.getElementById('mcICCollapseDescs'+bi)?.checked || false;
 
-      var _oldDescs = b.descriptions;  // cache before clearing
       b.descriptions = [];
       var icContainer = document.getElementById('mcICDescs'+bi);
       if (icContainer) {
@@ -3199,28 +3246,19 @@ function saveMCBlocks(tab) {
               image_url: document.getElementById('mcICDescImg'+bi+'_'+origDi)?.value || '',
               quantity: parseInt(document.getElementById('mcICDescQty'+bi+'_'+origDi)?.value) || 0,
               image_auto_color_mode: (function(){
-                // Read from editorData (persisted by toggleIconColorModeDesc)
-                var mode = 'off';
-                if (_oldDescs && _oldDescs[origDi]) {
-                  mode = _oldDescs[origDi].image_auto_color_mode || 'off';
+                var descImg = document.getElementById('mcICDescText'+bi+'_'+origDi)?.closest('.sr-cat-card')?.querySelector('img[onclick*=\"openIconPicker_desc\"]');
+                if (descImg) {
+                  var dw = descImg.parentElement;
+                  if (dw && dw.classList.contains('ic-mode-reverse')) return 'reverse';
+                  if (dw && dw.classList.contains('ic-mode-normal')) return 'normal';
                 }
-                // For desc in block mode (色块态): normal → reverse
-                if (mode === 'normal') {
-                  var descSrv = document.getElementById('mcICDescServer'+bi+'_'+origDi)?.value || '';
-                  if (descSrv) mode = 'reverse';
-                }
-                return mode;
+                return 'off';
               })(),
               image_native_luminance: (function(){
                 var descImg = document.getElementById('mcICDescText'+bi+'_'+origDi)?.closest('.sr-cat-card')?.querySelector('img[onclick*=\"openIconPicker_desc\"]');
                 if (descImg && descImg.parentElement) {
                   var lumVal = descImg.parentElement.getAttribute('data-lum');
                   if (lumVal && lumVal !== '0.500') return parseFloat(lumVal);
-                }
-                // Fallback: read from cached old descriptions
-                if (_oldDescs && _oldDescs[origDi]) {
-                    var edLum = _oldDescs[origDi].image_native_luminance;
-                    if (edLum != null) return edLum;
                 }
                 return null;
               })()
@@ -7294,7 +7332,7 @@ function openIconPicker_desc(bi, di) {
     overlay.className = "icon-picker-overlay";
     overlay.onclick = function(e){ if (e.target === overlay) overlay.remove(); };
     var html = "<div class='icon-picker-panel' onclick='event.stopPropagation()'>";
-    html += "<div class='icon-picker-header' style='border-bottom:none;display:flex;gap:6px;align-items:center;padding:8px 12px'><input id='iconPickerSearch' placeholder='搜索图标...' style='flex:1;margin:0;padding:6px 10px;font-size:0.85em' oninput='filterIconPicker()'><button style='width:auto;height:28px;padding:0 8px;display:inline-flex;align-items:center;justify-content:center;gap:4px;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);cursor:pointer;flex-shrink:0;font-size:0.8em' onclick='event.stopPropagation();toggleComboMode(this)' title='组合图标'><svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round'><path d='M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71'/><path d='M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71'/></svg> 组合</button><button style='width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);cursor:pointer;flex-shrink:0' onclick='refreshIconList()' title='刷新'><svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M23 4v6h-6'/><path d='M1 20v-6h6'/><path d='M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15'/></svg></button><button style='width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);cursor:pointer;flex-shrink:0' onclick='clearDescImageSelection(this,"+bi+","+di+")' title='清空'><svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M3 6h18'/><path d='M8 6V4h8v2'/><path d='M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6'/><line x1='10' y1='11' x2='10' y2='17'/><line x1='14' y1='11' x2='14' y2='17'/></svg></button><button id=\"mcICDescColorModeBtn"+bi+"_"+di+"\" data-mode=\"off\" style=\"width:auto;height:28px;padding:0 6px;display:inline-flex;align-items:center;justify-content:center;gap:2px;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);cursor:pointer;flex-shrink:0;font-size:0.75em;opacity:0.5\" onclick=\"event.stopPropagation();toggleIconColorModeDesc("+bi+","+di+",this)\" title=\"反色模式：关闭\">反色：关</button><button style='width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;margin-left:auto;flex-shrink:0;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);cursor:pointer' onclick='var o=this.closest(\".icon-picker-overlay\");if(o)o.remove();' title='关闭'>✕</button></div>";
+    html += "<div class='icon-picker-header' style='border-bottom:none;display:flex;gap:6px;align-items:center;padding:8px 12px'><input id='iconPickerSearch' placeholder='搜索图标...' style='flex:1;margin:0;padding:6px 10px;font-size:0.85em' oninput='filterIconPicker()'><button style='width:auto;height:28px;padding:0 8px;display:inline-flex;align-items:center;justify-content:center;gap:4px;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);cursor:pointer;flex-shrink:0;font-size:0.8em' onclick='event.stopPropagation();toggleComboMode(this)' title='组合图标'><svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round'><path d='M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71'/><path d='M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71'/></svg> 组合</button><button style='width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);cursor:pointer;flex-shrink:0' onclick='refreshIconList()' title='刷新'><svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M23 4v6h-6'/><path d='M1 20v-6h6'/><path d='M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15'/></svg></button><button style='width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);cursor:pointer;flex-shrink:0' onclick='clearDescImageSelection(this,"+bi+","+di+")' title='清空'><svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M3 6h18'/><path d='M8 6V4h8v2'/><path d='M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6'/><line x1='10' y1='11' x2='10' y2='17'/><line x1='14' y1='11' x2='14' y2='17'/></svg></button><button id=\"mcICColorModeBtn"+bi+"\" data-mode=\"off\" style=\"width:auto;height:28px;padding:0 6px;display:inline-flex;align-items:center;justify-content:center;gap:2px;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);cursor:pointer;flex-shrink:0;font-size:0.75em;opacity:0.5\" onclick=\"event.stopPropagation();toggleIconColorModeDesc("+bi+","+di+",this)\" title=\"反色模式：关闭\">反色：关</button><button style='width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;margin-left:auto;flex-shrink:0;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);cursor:pointer' onclick='var o=this.closest(\".icon-picker-overlay\");if(o)o.remove();' title='关闭'>✕</button></div>";
 html += "<div class='combo-bar'><div class='combo-thumbs'></div><button class='combo-confirm-btn' onclick='event.stopPropagation();composeIcons(this)'><svg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round'><circle cx='8' cy='8' r='5'/><circle cx='16' cy='16' r='5'/><line x1='11' y1='11' x2='15' y2='15'/></svg> 合并</button></div>";
     html += "<div style='display:flex;gap:4px;padding:0 12px 6px;overflow-x:auto;flex-shrink:0' id='iconPickerCats'>";
     catOrder.forEach(function(cat){
@@ -7337,11 +7375,13 @@ function selectDescImage(el, bi, di) {
             dw.appendChild(existingImg);
             wrapper = dw;
           }
-          // Always sync color mode from desc-specific button
-          var modeBtn2 = document.getElementById('mcICDescColorModeBtn'+bi+'_'+di);
+          // Always sync color mode from button
+          var modeBtn2 = document.getElementById('mcICColorModeBtn'+bi);
           if (modeBtn2 && wrapper) {
             var m2 = modeBtn2.getAttribute('data-mode') || 'off';
-            // color mode synced from editorData
+            wrapper.classList.remove('ic-mode-normal', 'ic-mode-reverse');
+            if (m2 === 'normal') wrapper.classList.add('ic-mode-normal');
+            else if (m2 === 'reverse') wrapper.classList.add('ic-mode-reverse');
           }
         } else {
           var descWrapper = document.createElement('span');
@@ -7354,7 +7394,7 @@ function selectDescImage(el, bi, di) {
           descWrapper.appendChild(newImg);
           if (existingBtn) existingBtn.before(descWrapper);
           // Sync color mode from button
-          var modeBtn = document.getElementById('mcICDescColorModeBtn'+bi+'_'+di);
+          var modeBtn = document.getElementById('mcICColorModeBtn'+bi);
           if (modeBtn) {
             var mode = modeBtn.getAttribute('data-mode') || 'off';
             if (mode === 'normal') descWrapper.classList.add('ic-mode-normal');
@@ -7369,7 +7409,7 @@ function selectDescImage(el, bi, di) {
       var descImg2 = container.querySelector('img[onclick*="openIconPicker_desc"]');
       if (descImg2 && descImg2.style.display !== 'none') {
         var dw2 = descImg2.parentElement;
-        if (dw2) {
+        if (dw2 && (dw2.classList.contains('ic-mode-normal') || dw2.classList.contains('ic-mode-reverse'))) {
           var isRev2 = dw2.classList.contains('ic-mode-reverse');
           applyAutoColorClass(descImg2, null);
           detectImageBrightness(descImg2.src, function(lum) {
@@ -7398,20 +7438,8 @@ function clearDescImageSelection(el, bi, di) {
     if (container) {
       var existingImg = container.querySelector('img[onclick*="openIconPicker_desc"]');
       var existingBtn = container.querySelector('button[onclick*="openIconPicker_desc"]');
-      if (existingImg) { existingImg.style.display = 'none'; var dw = existingImg.parentElement; if (dw) dw.classList.remove('ic-mode-normal'); }
+      if (existingImg) existingImg.style.display = 'none';
       if (existingBtn) existingBtn.style.display = '';
-      // Reset color mode button
-      var modeBtn = document.getElementById('mcICDescColorModeBtn'+bi+'_'+di);
-      if (modeBtn) { modeBtn.setAttribute('data-mode','off'); modeBtn.textContent='反色：关'; modeBtn.style.opacity='0.5'; }
-      // Reset mode in editorData
-      var edTab = editorData.tabs[editorSelectedTab];
-      if (edTab && edTab.content_blocks && edTab.content_blocks[bi]) {
-        var edBlock = edTab.content_blocks[bi];
-        if (edBlock.descriptions && edBlock.descriptions[di]) {
-          edBlock.descriptions[di].image_auto_color_mode = 'off';
-          edBlock.descriptions[di].image_native_luminance = null;
-        }
-      }
     }
   }
   var overlay = el.closest('.icon-picker-overlay');
@@ -7430,13 +7458,6 @@ function clearIconSelection(el) {
     var bi = m ? parseInt(m[1]) : undefined;
     if (bi !== undefined) {
       document.getElementById('mcICIcon'+bi).value = '';
-      // Reset color mode button
-      var modeBtn = document.getElementById('mcICColorModeBtn'+bi);
-      if (modeBtn) { modeBtn.setAttribute('data-mode','off'); modeBtn.textContent='反色：关'; modeBtn.style.opacity='0.5'; }
-      var cb = document.getElementById('mcICAutoColor'+bi); if (cb) cb.checked = false;
-      // Remove badge
-      var pvWrap = document.getElementById('mcICIconPreview'+bi)?.parentElement;
-      if (pvWrap) pvWrap.classList.remove('ic-mode-normal');
       var ph = document.getElementById('mcICIconPlaceholder'+bi);
       var pv = document.getElementById('mcICIconPreview'+bi);
       if (pv) pv.style.display = 'none';
@@ -7508,18 +7529,21 @@ function selectInfoCardIcon(el, bi) {
         wrapper.appendChild(newImg);
         placeholder.before(wrapper);
         preview = newImg;
+        // Sync color mode from button state to new wrapper
+        var modeBtn = document.getElementById('mcICColorModeBtn'+bi);
+        if (modeBtn) {
+          var mode = modeBtn.getAttribute('data-mode') || 'off';
+          if (mode === 'normal') wrapper.classList.add('ic-mode-normal');
+          else if (mode === 'reverse') wrapper.classList.add('ic-mode-reverse');
+        }
       }
     }
-    // Sync color mode to wrapper (both new and existing preview)
+    // Re-apply auto-color to the img based on current mode
     var img = document.getElementById('mcICIconPreview'+bi);
     if (img) {
       var w = img.parentElement;
-      if (w) {
-        var modeBtn = document.getElementById('mcICColorModeBtn'+bi);
-        var mode = modeBtn ? modeBtn.getAttribute('data-mode') || 'off' : 'off';
-        w.classList.remove('ic-mode-normal', 'ic-mode-reverse');
-        if (mode === 'normal') w.classList.add('ic-mode-normal');
-        else if (mode === 'reverse') w.classList.add('ic-mode-reverse');
+      if (w && (w.classList.contains('ic-mode-normal') || w.classList.contains('ic-mode-reverse'))) {
+        var isRev = w.classList.contains('ic-mode-reverse');
         applyAutoColorClass(img, null);  // clear old classes
         detectImageBrightness(img.src, function(lum) {
           if (lum >= 0) {

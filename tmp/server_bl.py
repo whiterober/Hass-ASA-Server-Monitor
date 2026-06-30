@@ -1445,9 +1445,10 @@ tr[data-food="Energy Cake"] .food-modal {
   color: rgba(255,255,255,0.5);
 } .section-tab + .section-tab { border-left: 1px solid rgba(255,255,255,0.4); } .section-tab.tab-active { color: rgb(255, 255, 255); } .section-tab:not(.tab-active):hover { color: rgba(255,255,255,0.85); }
 /* Auto-color for info_card icons via data-theme (set by MutationObserver JS) */
-img.ic-auto-light{filter:none} img.ic-auto-dark{filter:none}
-[data-theme="dark"] img.ic-auto-dark,[data-theme="dark"] .ic-auto-dark img{filter:invert(1)}
-[data-theme="light"] img.ic-auto-light,[data-theme="light"] .ic-auto-light img{filter:invert(1)}
+img.ic-auto-light { filter: none; }
+img.ic-auto-dark { filter: none; }
+[data-theme="dark"] img.ic-auto-dark { filter: invert(1); }
+[data-theme="light"] img.ic-auto-light { filter: invert(1); }
 """
 
 # Table-level rules (any tab with tabular content — reference_table, mixed_content, server_grid, farming_table)
