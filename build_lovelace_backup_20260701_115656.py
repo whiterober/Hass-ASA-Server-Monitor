@@ -2892,12 +2892,12 @@ if __name__ == "__main__":
                 # Per-map qty badge: semi-transparent block color (works for both themes)
                 for sid, sm in SERVER_MAP.items():
                     r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)
-                    IC_CSS += 'ha-card .ic-text.ic-block-{} .ic-qty{{background:rgba({},{},{},0)!important;-webkit-text-stroke:1px rgb({},{},{})!important;paint-order:stroke fill!important}}'.format(sid, r, g, b, r, g, b)
+                    IC_CSS += 'ha-card .ic-text.ic-block-{} .ic-qty{{background:rgba({},{},{},0.25)!important}}'.format(sid, r, g, b)
                     IC_CSS += 'ha-card .ic-text.ic-block-'+sid+'{position:relative!important;overflow:hidden!important}'
                     IC_CSS += 'ha-card .ic-text.ic-block-'+sid+' .ic-qty{position:absolute!important;right:0!important;bottom:0!important;color:var(--primary-background-color)!important;font-size:0.7em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important}'
                 for fk, fv in FIXED_STYLES_MAP.items():
                     fc = fv['color']; r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
-                    IC_CSS += 'ha-card .ic-text.ic-block-{} .ic-qty{{background:rgba({},{},{},0)!important;-webkit-text-stroke:1px rgb({},{},{})!important;paint-order:stroke fill!important}}'.format(fk, r, g, b, r, g, b)
+                    IC_CSS += 'ha-card .ic-text.ic-block-{} .ic-qty{{background:rgba({},{},{},0.25)!important}}'.format(fk, r, g, b)
                     IC_CSS += 'ha-card .ic-text.ic-block-'+fk+'{position:relative!important;overflow:hidden!important}'
                     IC_CSS += 'ha-card .ic-text.ic-block-'+fk+' .ic-qty{position:absolute!important;right:0!important;bottom:0!important;color:var(--primary-background-color)!important;font-size:0.7em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important}'
                 IC_CSS += 'ha-card .ic-block-img{position:absolute!important;right:2px!important;top:50%!important;transform:translateY(-50%)!important;width:30px!important;height:30px!important;object-fit:cover!important;border-radius:0 4px 4px 0!important;flex-shrink:0!important}'

@@ -234,10 +234,10 @@ def main():
         css += 'ha-card .ic-text[class*="ic-block-"]:has(.ic-block-img){padding-right:34px!important}'
         for sid, sm in SERVER_MAP.items():
             r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)
-            css += 'ha-card .ic-text.ic-block-{} .ic-qty{{background:rgba({},{},{},0)!important;-webkit-text-stroke:1px rgb({},{},{})!important;paint-order:stroke fill!important}}'.format(sid, r, g, b, r, g, b)
+            css += 'ha-card .ic-text.ic-block-{} .ic-qty{{background:rgba({},{},{},0.25)!important}}'.format(sid, r, g, b)
         for fk, fv in FIXED_STYLES_MAP.items():
             fc = fv['color']; r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
-            css += 'ha-card .ic-text.ic-block-{} .ic-qty{{background:rgba({},{},{},0)!important;-webkit-text-stroke:1px rgb({},{},{})!important;paint-order:stroke fill!important}}'.format(fk, r, g, b, r, g, b)
+            css += 'ha-card .ic-text.ic-block-{} .ic-qty{{background:rgba({},{},{},0.25)!important}}'.format(fk, r, g, b)
         # === End unconditional image CSS ===
         if block_types & {'server_grid','table','reference_table'}:
             css += TABLE_CORE_CSS
@@ -338,10 +338,10 @@ def main():
     css += 'ha-card .ic-text[class*="ic-block-"] .ic-qty{position:absolute!important;right:0!important;bottom:0!important;color:var(--primary-background-color)!important;font-size:0.7em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important}'
     for sid, sm in SERVER_MAP.items():
         r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)
-        css += 'ha-card .ic-text.ic-block-{} .ic-qty{{background:rgba({},{},{},0)!important;-webkit-text-stroke:1px rgb({},{},{})!important;paint-order:stroke fill!important}}'.format(sid, r, g, b, r, g, b)
+        css += 'ha-card .ic-text.ic-block-{} .ic-qty{{background:rgba({},{},{},0.25)!important}}'.format(sid, r, g, b)
     for fk, fv in FIXED_STYLES_MAP.items():
         fc = fv['color']; r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
-        css += 'ha-card .ic-text.ic-block-{} .ic-qty{{background:rgba({},{},{},0)!important;-webkit-text-stroke:1px rgb({},{},{})!important;paint-order:stroke fill!important}}'.format(fk, r, g, b, r, g, b)
+        css += 'ha-card .ic-text.ic-block-{} .ic-qty{{background:rgba({},{},{},0.25)!important}}'.format(fk, r, g, b)
 
     # HA platform font-scale defaults (injected by HA frontend, not in theme files)
     ha_font_vars = (
