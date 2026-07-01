@@ -210,8 +210,6 @@ button { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; f
 
 .toast.error { background: var(--danger); }
 
-.toast.warning { background: #f59e0b; }
-
 @media (max-width: 768px) { .toast { bottom: 80px; right: 10px; left: 10px; text-align: center; font-size: 0.85em; padding: 8px 12px; } }
 
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
@@ -409,8 +407,7 @@ img.ic-auto-color { filter: none; }
 
 /* 反色角标：小圆点 */
 .ic-mode-normal::after,
-.ic-mode-reverse::after,
-.ic-mode-failed::after {
+.ic-mode-reverse::after {
   content: '';
   position: absolute;
   top: -1px; right: -1px;
@@ -419,7 +416,6 @@ img.ic-auto-color { filter: none; }
 }
 .ic-mode-normal::after { background: var(--accent); }
 .ic-mode-reverse::after { background: var(--warning, orange); }
-.ic-mode-failed::after { background: #ef4444; }
 
 /* Icon Picker */
 
@@ -1160,11 +1156,7 @@ document.querySelectorAll('nav button').forEach(btn => {
 
 // ============================================================
 
-var _pendingBrightnessChecks = 0;
-var _failedItems = [];
-
-function detectImageBrightness(imgUrl, callback, retries) {
-  if (retries === undefined) retries = 2;
+function detectImageBrightness(imgUrl, callback) {
   if (!imgUrl) { callback(-1); return; }
   // Use fetch with CORS for cross-origin images (bypass img tag caching issues)
   fetch(imgUrl, {mode: 'cors', cache: 'no-store'}).then(function(resp) {
@@ -1197,85 +1189,7 @@ function detectImageBrightness(imgUrl, callback, retries) {
     };
     img.onerror = function() { URL.revokeObjectURL(url); callback(-1); };
     img.src = url;
-  }).catch(function(e) {
-    if (retries > 0) {
-      setTimeout(function() { detectImageBrightness(imgUrl, callback, retries - 1); }, 1000);
-      return;
-    }
-    callback(-1, e.message || '网络错误');
-  });
-}
-
-// Save button state management (2-state: detecting / ready)
-function _updateSaveBtnState() {
-  var btn = document.querySelector('.save-tab-btn');
-  if (!btn) return;
-  var pending = _pendingBrightnessChecks;
-  if (pending > 0) {
-    btn.disabled = true;
-    btn.style.opacity = '0.5';
-    btn.title = '亮度检测中... (' + pending + ')';
-  } else {
-    btn.disabled = false;
-    btn.style.opacity = '1';
-    btn.title = '';
-  }
-}
-
-// Show save result in shared toast area
-function _detectToast(success, reason) {
-  var container = document.getElementById('toastContainer');
-  if (!container) return;
-  var d = document.createElement('div');
-  if (success) {
-    d.className = 'toast success';
-    d.textContent = '亮度检测成功';
-  } else {
-    d.className = 'toast warning';
-    d.textContent = '亮度检测失败：' + (reason || '未知错误');
-  }
-  container.appendChild(d);
-  setTimeout(function() { if (d.parentNode) d.parentNode.removeChild(d); }, 3000);
-}
-
-function _showSaveResult() {
-  var container = document.getElementById('toastContainer');
-  var failed = _failedItems.length;
-  var pending = _pendingBrightnessChecks;
-
-  function show(msg, type) {
-    if (!container) return;
-    var d = document.createElement('div');
-    d.className = 'toast ' + type;
-    d.innerHTML = msg;
-    container.appendChild(d);
-    setTimeout(function() { if (d.parentNode) d.parentNode.removeChild(d); }, 5000);
-  }
-
-  if (pending > 0) {
-    show('\u274C \u8FD8\u6709 ' + pending + ' \u9879\u4EAE\u5EA6\u68C0\u6D4B\u672A\u5B8C\u6210\uFF0C\u8BF7\u7A0D\u5019\u518D\u4FDD\u5B58', 'error');
-  } else if (failed === 0) {
-    show('\u2705 \u5DF2\u4FDD\u5B58', 'success');
-  } else {
-    var lines = _failedItems.map(function(item) {
-      return item.serverName + ' \u00B7 ' + (item.di != null ? '\u63CF\u8FF0\u884C #' + item.di : '\u677F\u5757\u56FE\u6807') + '\uFF08' + item.reason + '\uFF09';
-    });
-    show('\u26A0\uFE0F \u5DF2\u4FDD\u5B58 \u2014 ' + failed + ' \u9879\u4EAE\u5EA6\u68C0\u6D4B\u5931\u8D25<br>' + lines.join('<br>'), 'warning');
-  }
-  _failedItems = [];
-}
-
-// Sync ic-mode-* class across editor DOM elements after brightness detection
-function _syncIconModeClass(bi, di, mode) {
-  var cls = mode === 'off' ? '' : 'ic-mode-' + mode;
-  // 1. Block icon wrapper
-  var icWrap = document.querySelector('#block-' + bi + ' .ic-wrapper');
-  if (icWrap) { icWrap.className = 'ic-wrapper ' + cls; }
-  // 2. Description row wrapper (normal/linear mode, exists in editor DOM)
-  if (di != null) {
-    var descWrap = document.querySelector('#block-' + bi + ' .ic-desc-wrap[data-di=\"' + di + '\"]');
-    if (descWrap) { descWrap.className = 'ic-desc-wrap ' + cls; }
-  }
+  }).catch(function() { callback(-1); });
 }
 
 function applyAutoColorClass(img, luminance) {
@@ -1319,7 +1233,7 @@ function toggleIconColorMode(bi, btn) {
   var current = btn.getAttribute('data-mode') || 'off';
   var next = (current === 'off') ? 'normal' : 'off';
   btn.setAttribute('data-mode', next);
-  btn.textContent = (next === 'off') ? '反色：关' : '反色：开';
+  btn.textContent = (next === 'off') ? '反色：关' : '反色';
   
   if (next === 'off') {
     btn.style.opacity = '0.5'; btn.style.color = '';
@@ -1337,8 +1251,6 @@ function toggleIconColorMode(bi, btn) {
   var img = document.getElementById('mcICIconPreview'+bi);
   if (!img) return;
   
-  var wrapper = img.parentElement;
-  
   function _persistICMode(mode, lum) {
     var tab = editorData.tabs[editorSelectedTab];
     if (tab && tab.content_blocks && tab.content_blocks[bi]) {
@@ -1353,29 +1265,17 @@ function toggleIconColorMode(bi, btn) {
     if (wrapper) wrapper.classList.remove('ic-mode-normal');
     _persistICMode('off');
   } else {
-    _pendingBrightnessChecks++;
-    _updateSaveBtnState();
-    detectImageBrightness(img.src, function(luminance, errMsg) {
-      _pendingBrightnessChecks--;
+    detectImageBrightness(img.src, function(luminance) {
       if (luminance >= 0) {
         applyAutoColorClassWithLum(img, luminance);
         var lumInput = document.getElementById('mcICIconLum'+bi);
         if (lumInput) lumInput.value = luminance.toFixed(3);
-        if (wrapper) { wrapper.classList.add('ic-mode-normal'); wrapper.removeAttribute('data-failed'); }
+        if (wrapper) wrapper.classList.add('ic-mode-normal');
         _persistICMode('normal', luminance);
-        _detectToast(true);
       } else {
-        if (errMsg) {
-          wrapper.classList.add('ic-mode-failed');
-          wrapper.setAttribute('data-failed', errMsg);
-          _failedItems.push({bi:bi, di:null, url:img.src, reason:errMsg, serverName:(editorData.tabs[editorSelectedTab]||{}).label||''});
-          _detectToast(false, errMsg);
-        } else {
-          img.className = (img.className || '').replace(/\bic-auto-(dark|light)\b/g, '').trim() + ' ic-auto-color';
-          _persistICMode('normal');
-        }
+        img.className = (img.className || '').replace(/\bic-auto-(dark|light)\b/g, '').trim() + ' ic-auto-color';
+        _persistICMode('normal');
       }
-      _updateSaveBtnState();
     });
   }
 }
@@ -1396,7 +1296,7 @@ function toggleIconColorModeDesc(bi, di, btn) {
   var current = btn.getAttribute('data-mode') || 'off';
   var next = (current === 'off') ? 'normal' : 'off';
   btn.setAttribute('data-mode', next);
-  btn.textContent = (next === 'off') ? '反色：关' : '反色：开';
+  btn.textContent = (next === 'off') ? '反色：关' : '反色';
   
   if (next === 'off') {
     btn.style.opacity = '0.5'; btn.style.color = '';
@@ -1434,16 +1334,12 @@ function toggleIconColorModeDesc(bi, di, btn) {
     _persistDescMode('off');
   } else {
     _persistDescMode('normal');
-    _pendingBrightnessChecks++;
-    _updateSaveBtnState();
-    detectImageBrightness(descImg.src, function(luminance, errMsg) {
-      _pendingBrightnessChecks--;
+    detectImageBrightness(descImg.src, function(luminance) {
       if (luminance >= 0) {
         applyAutoColorClassWithLum(descImg, luminance);
         if (wrapper) {
           wrapper.setAttribute('data-lum', luminance.toFixed(3));
           wrapper.classList.add('ic-mode-normal');
-          wrapper.removeAttribute('data-failed');
         }
         var tab = editorData.tabs[editorSelectedTab];
         if (tab && tab.content_blocks && tab.content_blocks[bi]) {
@@ -1452,16 +1348,7 @@ function toggleIconColorModeDesc(bi, di, btn) {
             block.descriptions[di].image_native_luminance = luminance;
           }
         }
-        _detectToast(true);
-      } else if (errMsg) {
-        if (wrapper) {
-          wrapper.classList.add('ic-mode-failed');
-          wrapper.setAttribute('data-failed', errMsg);
-        }
-        _failedItems.push({bi:bi, di:di, url:descImg.src, reason:errMsg, serverName:(editorData.tabs[editorSelectedTab]||{}).label||''});
-        _detectToast(false, errMsg);
       }
-      _updateSaveBtnState();
     });
   }
 }
@@ -1563,7 +1450,7 @@ async function saveJSON(filename, data, skipPending) {
 
     await WS.callService('shell_command', 'build_lovelace', {});
 
-    _showSaveResult();
+    WS.toast('已保存', 'success');
 
     if (!skipPending) incPending();
 
@@ -1893,33 +1780,11 @@ async function saveMixedEditor() {
 
   tab.description = document.getElementById('editorTabDesc')?.value || '';
 
-  // Cache original desc modes before saveMCBlocks flips them for server
-  var _savedDescModes = [];
-  (tab.content_blocks||[]).forEach(function(b) {
-    if (b.block_type === 'info_card' && b.descriptions) {
-      _savedDescModes.push(b.descriptions.map(function(d) { return d.image_auto_color_mode; }));
-    } else {
-      _savedDescModes.push(null);
-    }
-  });
-
   saveMCBlocks(tab);
 
   if (editorData === serverRulesData) {
 
     await saveJSON('server_rules.json', editorData);
-
-    // Restore editorData desc modes to user selection (server got flipped values)
-    (tab.content_blocks||[]).forEach(function(b, bi) {
-      var modes = _savedDescModes[bi];
-      if (modes && b.descriptions) {
-        for (var di = 0; di < Math.min(modes.length, b.descriptions.length); di++) {
-          if (modes[di] && b.descriptions[di].type !== 'br') {
-            b.descriptions[di].image_auto_color_mode = modes[di];
-          }
-        }
-      }
-    });
 
     setTimeout(showPreview, 500);
 
@@ -2516,7 +2381,7 @@ function renderMixedContent(tab) {
 
     h += '<div style="display:flex;align-items:center;margin-bottom:0;min-height:28px">';
 
-    h += '<strong style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">'+(bt==='map_filter'?'<span class="badge" style="font-size:0.65em;background:var(--accent);color:oklch(var(--b1));margin-right:2px;flex-shrink:0;padding:1px 6px;border-radius:3px">'+(MC_TYPE_LABELS[bt]||bt)+'</span>':((bt==='info_card'?'':'<span class="badge" data-mc-type="'+esc(MC_TYPE_LABELS[bt]||bt)+'" onclick="toggleBlockBody(this)" style="font-size:0.65em;background:var(--accent);color:oklch(var(--b1));margin-right:2px;flex-shrink:0;padding:1px 6px;border-radius:3px;cursor:pointer">'+(MC_TYPE_LABELS[bt]||bt)+'</span>')+(bt==='info_card'&&b.icon_url?'<img src="'+esc(thumbUrl(b.icon_url,56))+'" style="width:20px;height:20px;object-fit:contain;flex-shrink:0" class="'+(function(){var m=b.icon_auto_color_mode||(b.icon_auto_color?'normal':'off');if(m==='off')return'';var l=b.icon_native_luminance;var isRev=m==='reverse';var lum=(l!=null&&l!==0.5)?l:null;var ac=lum!=null?' ic-auto-'+(lum>0.5?'light':'dark'):' ic-auto-color';var badge=(m==='normal'||m==='reverse')?' ic-mode-normal':'';return ac+badge;})()+'" onerror="this.style.opacity=0">':(b.title||MC_TYPE_LABELS[bt]||bt))))+'</strong>';
+    h += '<strong style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">'+(bt==='map_filter'?'<span class="badge" style="font-size:0.65em;background:var(--accent);color:oklch(var(--b1));margin-right:2px;flex-shrink:0;padding:1px 6px;border-radius:3px">'+(MC_TYPE_LABELS[bt]||bt)+'</span>':((bt==='info_card'?'':'<span class="badge" data-mc-type="'+esc(MC_TYPE_LABELS[bt]||bt)+'" onclick="toggleBlockBody(this)" style="font-size:0.65em;background:var(--accent);color:oklch(var(--b1));margin-right:2px;flex-shrink:0;padding:1px 6px;border-radius:3px;cursor:pointer">'+(MC_TYPE_LABELS[bt]||bt)+'</span>')+(bt==='info_card'&&b.icon_url?'<img src="'+esc(thumbUrl(b.icon_url,56))+'" style="width:20px;height:20px;object-fit:contain;flex-shrink:0" class="'+(function(){var m=b.icon_auto_color_mode||(b.icon_auto_color?'normal':'off');if(m==='off')return'';var l=b.icon_native_luminance;var isRev=m==='reverse';var lum=(l!=null&&l!==0.5)?(isRev?1-l:l):null;var ac=lum!=null?' ic-auto-'+(lum>0.5?'light':'dark'):' ic-auto-color';var badge=m==='normal'?' ic-mode-normal':'';return ac+badge;})()+'" onerror="this.style.opacity=0">':(b.title||MC_TYPE_LABELS[bt]||bt))))+'</strong>';
 
     h += ' <span class="block-preview" style="display:none" style="display:inline-block;max-width:260px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;vertical-align:middle;font-size:0.8em;color:var(--secondary-text-color);flex-shrink:1"></span>';
 
@@ -2806,7 +2671,7 @@ function renderMixedContent(tab) {
 
     else if (bt === 'info_card') {
 
-            h += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><span class="cat-color-wrap" style="flex-shrink:0" title="引用块色条颜色"><span class="cat-color-dot" id="mcICQuoteDot'+bi+'" style="background:'+(b.quote_color&&b.quote_color!=='auto'?esc(b.quote_color):'linear-gradient(to right, #000 50%, #fff 50%)')+'" data-target="mcICQuoteColor'+bi+'" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><input type="hidden" id="mcICQuoteColor'+bi+'" value="'+esc(b.quote_color||'auto')+'"><input id="mcICMdi'+bi+'" value="'+esc(b.mdi_icon||'')+'" placeholder="MDI" title="MDI 图标" style="box-sizing:border-box;width:28px;height:28px;padding:4px;font-size:0.7em;border-radius:4px;text-align:center;flex-shrink:0">'+(b.icon_url?'<span style="position:relative;display:inline-flex;flex-shrink:0" class="'+(function(){var m=b.icon_auto_color_mode||(b.icon_auto_color?'normal':'off');if(m==='off')return'';var l=b.icon_native_luminance;var isRev=m==='reverse';var lum=(l!=null&&l!==0.5)?l:null;var ac=lum!=null?(lum>0.5?'ic-auto-light':'ic-auto-dark'):'ic-auto-color';var badge=(m==='normal'||m==='reverse')?' ic-mode-normal':'';return ac+badge;})()+'" ><img src="'+esc(thumbUrl(b.icon_url,56))+'" id="mcICIconPreview'+bi+'" style="width:28px;height:28px;object-fit:contain;cursor:pointer" onclick="event.stopPropagation();openIconPicker_ic('+bi+')" title="点击换图标" onerror="this.style.opacity=0"></span>':'<span id="mcICIconPlaceholder'+bi+'" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px" onclick="event.stopPropagation();openIconPicker_ic('+bi+')" title="选择图标">+</span>')+'<input type="hidden" id="mcICIcon'+bi+'" value="'+esc(b.icon_url||'')+'">'+'<span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap" title="标题颜色"><span class="cat-color-dot" id="mcICTitleCDot'+bi+'" style="background:'+(b.title_color&&b.title_color!=='auto'?esc(b.title_color):'linear-gradient(to right, #000 50%, #fff 50%)')+'" data-target="mcICTitleColor'+bi+'" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><input id="mcICTitle'+bi+'" value="'+esc(b.title||'')+'" placeholder="标题" style="box-sizing:border-box;flex:1;padding:4px 8px;font-size:0.85em;border-radius:0;border:none"></span></span><input type="hidden" id="mcICTitleColor'+bi+'" value="'+esc(b.title_color||'auto')+'"></div>';      
+            h += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><span class="cat-color-wrap" style="flex-shrink:0" title="引用块色条颜色"><span class="cat-color-dot" id="mcICQuoteDot'+bi+'" style="background:'+(b.quote_color&&b.quote_color!=='auto'?esc(b.quote_color):'linear-gradient(to right, #000 50%, #fff 50%)')+'" data-target="mcICQuoteColor'+bi+'" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><input type="hidden" id="mcICQuoteColor'+bi+'" value="'+esc(b.quote_color||'auto')+'"><input id="mcICMdi'+bi+'" value="'+esc(b.mdi_icon||'')+'" placeholder="MDI" title="MDI 图标" style="box-sizing:border-box;width:28px;height:28px;padding:4px;font-size:0.7em;border-radius:4px;text-align:center;flex-shrink:0">'+(b.icon_url?'<span style="position:relative;display:inline-flex;flex-shrink:0" class="'+(function(){var m=b.icon_auto_color_mode||(b.icon_auto_color?'normal':'off');if(m==='off')return'';var l=b.icon_native_luminance;var isRev=m==='reverse';var lum=(l!=null&&l!==0.5)?(isRev?1-l:l):null;var ac=lum!=null?(lum>0.5?'ic-auto-light':'ic-auto-dark'):'ic-auto-color';var badge=m==='normal'?' ic-mode-normal':'';return ac+badge;})()+'" ><img src="'+esc(thumbUrl(b.icon_url,56))+'" id="mcICIconPreview'+bi+'" style="width:28px;height:28px;object-fit:contain;cursor:pointer" onclick="event.stopPropagation();openIconPicker_ic('+bi+')" title="点击换图标" onerror="this.style.opacity=0"></span>':'<span id="mcICIconPlaceholder'+bi+'" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px" onclick="event.stopPropagation();openIconPicker_ic('+bi+')" title="选择图标">+</span>')+'<input type="hidden" id="mcICIcon'+bi+'" value="'+esc(b.icon_url||'')+'">'+'<span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap" title="标题颜色"><span class="cat-color-dot" id="mcICTitleCDot'+bi+'" style="background:'+(b.title_color&&b.title_color!=='auto'?esc(b.title_color):'linear-gradient(to right, #000 50%, #fff 50%)')+'" data-target="mcICTitleColor'+bi+'" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><input id="mcICTitle'+bi+'" value="'+esc(b.title||'')+'" placeholder="标题" style="box-sizing:border-box;flex:1;padding:4px 8px;font-size:0.85em;border-radius:0;border:none"></span></span><input type="hidden" id="mcICTitleColor'+bi+'" value="'+esc(b.title_color||'auto')+'"></div>';      
       var selectedMaps = (document.getElementById('mcICHL'+bi)?.value || b.highlight||'').split(',').filter(function(x){ return x; });
       h += '<input type="hidden" id="mcICHL'+bi+'" value="'+esc(b.highlight||'')+'">';
       h += '<input type="hidden" id="mcBlockSrvStates'+bi+'" value="'+esc(JSON.stringify(b.server_states||(b.highlight?{[b.highlight]:2}:{})))+'">';
@@ -2822,7 +2687,7 @@ function renderMixedContent(tab) {
         if (d.type === 'br') {
           h += '<div class="sr-cat-card" style="border:1px dashed var(--border);border-radius:3px;padding:2px 6px;margin-bottom:3px;text-align:center;font-size:0.75em;opacity:0.6"><span class="drag-handle" style="cursor:grab;float:left;opacity:0.4">\u22ee\u22ee</span>\u21b5 \u6362\u884c <button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div>';
         } else {
-          h += '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:'+(d.color&&d.color!=='auto'?esc(d.color):'linear-gradient(to right, #000 50%, #fff 50%)')+';cursor:pointer" title="选择颜色" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" title="选择透明度" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:'+(d.opacity||1.0)+';background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="'+(d.opacity||1.0)+'"><span class="cat-bold-btn'+(d.bold?' active':'')+'" title="加粗" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="'+esc(d.text||'')+'" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" '+(d.bold?'checked':'')+' style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="'+esc(d.color||'auto')+'" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value="'+esc(d.server||'')+'"><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="'+esc(JSON.stringify(d.server_states||(d.server?{[d.server]:2}:{})))+'"></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return 'background:transparent;border:1px solid transparent';var sm=SERVER_MAP[ak]||FIXED_STYLES[ak];if(!sm)return 'background:transparent;border:1px solid transparent';if(ast===2)return 'background:'+sm.c+';border:none';return 'background:transparent;border:1px solid transparent';})()+'" title="选择服务器" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return getServerBadge('');var sm=SERVER_MAP[ak]||FIXED_STYLES[ak];if(!sm)return getServerBadge('');if(ast===1)return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:'+sm.c+'"></i>';return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:var(--primary-background-color)"></i>';})()+'</button><input type="hidden" id="mcICDescImg'+bi+'_'+di+'" value="'+esc(d.image_url||'')+'">'+(d.image_url?'<span style="position:relative;display:inline-flex;flex-shrink:0" class="'+(function(){var m=d.image_auto_color_mode||'off';if(m==='off')return'';var l=d.image_native_luminance;var isRev=m==='reverse';var lum=(l!=null&&l!==0.5)?l:null;var ac=lum!=null?(lum>0.5?'ic-auto-light':'ic-auto-dark'):'ic-auto-color';var badge=(m==='normal'||m==='reverse')?' ic-mode-normal':'';return ac+badge;})()+'" ><img src="'+esc(thumbUrl(d.image_url,56))+'" onclick="event.stopPropagation();openIconPicker_desc('+bi+','+di+')" title="点击换图" style="width:24px;height:24px;object-fit:contain;cursor:pointer;flex-shrink:0;border-radius:3px"></span>':'<span onclick="event.stopPropagation();openIconPicker_desc('+bi+','+di+')" title="选择图片" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px">+</span>')+'<input type="hidden" id="mcICDescQty'+bi+'_'+di+'" value="'+(d.quantity||'')+'"><button class="qty-btn" id="mcICDescQtyBtn'+bi+'_'+di+'" onclick="event.stopPropagation();toggleQtyPopup(this,'+bi+','+di+')" title="选择数量" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.6em;opacity:0.4;border:1px dashed var(--border);border-radius:3px;background:transparent;color:var(--text);padding:0;font-size:0.5em">'+(d.quantity?'\u00d7'+d.quantity:'\u00d7N')+'</button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
+          h += '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:'+(d.color&&d.color!=='auto'?esc(d.color):'linear-gradient(to right, #000 50%, #fff 50%)')+';cursor:pointer" title="选择颜色" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" title="选择透明度" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:'+(d.opacity||1.0)+';background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="'+(d.opacity||1.0)+'"><span class="cat-bold-btn'+(d.bold?' active':'')+'" title="加粗" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="'+esc(d.text||'')+'" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" '+(d.bold?'checked':'')+' style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="'+esc(d.color||'auto')+'" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value="'+esc(d.server||'')+'"><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="'+esc(JSON.stringify(d.server_states||(d.server?{[d.server]:2}:{})))+'"></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return 'background:transparent;border:1px solid transparent';var sm=SERVER_MAP[ak]||FIXED_STYLES[ak];if(!sm)return 'background:transparent;border:1px solid transparent';if(ast===2)return 'background:'+sm.c+';border:none';return 'background:transparent;border:1px solid transparent';})()+'" title="选择服务器" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return getServerBadge('');var sm=SERVER_MAP[ak]||FIXED_STYLES[ak];if(!sm)return getServerBadge('');if(ast===1)return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:'+sm.c+'"></i>';return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:var(--primary-background-color)"></i>';})()+'</button><input type="hidden" id="mcICDescImg'+bi+'_'+di+'" value="'+esc(d.image_url||'')+'">'+(d.image_url?'<span style="position:relative;display:inline-flex;flex-shrink:0" class="'+(function(){var m=d.image_auto_color_mode||'off';if(m==='off')return'';var l=d.image_native_luminance;var isRev=m==='reverse';var lum=(l!=null&&l!==0.5)?(isRev?1-l:l):null;var ac=lum!=null?(lum>0.5?'ic-auto-light':'ic-auto-dark'):'ic-auto-color';var badge=m==='normal'?' ic-mode-normal':'';return ac+badge;})()+'" ><img src="'+esc(thumbUrl(d.image_url,56))+'" onclick="event.stopPropagation();openIconPicker_desc('+bi+','+di+')" title="点击换图" style="width:24px;height:24px;object-fit:contain;cursor:pointer;flex-shrink:0;border-radius:3px"></span>':'<span onclick="event.stopPropagation();openIconPicker_desc('+bi+','+di+')" title="选择图片" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px">+</span>')+'<input type="hidden" id="mcICDescQty'+bi+'_'+di+'" value="'+(d.quantity||'')+'"><button class="qty-btn" id="mcICDescQtyBtn'+bi+'_'+di+'" onclick="event.stopPropagation();toggleQtyPopup(this,'+bi+','+di+')" title="选择数量" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.6em;opacity:0.4;border:1px dashed var(--border);border-radius:3px;background:transparent;color:var(--text);padding:0;font-size:0.5em">'+(d.quantity?'\u00d7'+d.quantity:'\u00d7N')+'</button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
 
         }
       }
@@ -5083,7 +4948,7 @@ async function saveBaseTab() {
 
     });
 
-    _showSaveResult();
+    WS.toast('已保存', 'success');
 
     incPending();
 
@@ -7331,7 +7196,7 @@ function openIconPicker(si, bi, ri, ci, ii) {
 
     });
 
-    var catLabels = {armor:"🛡️ 护甲", biology:"🧬 生物", consumables:"🍖 消耗品", drops:"💧 掉落物", egg:"🥚 蛋", eggs:"🥚 蛋", illustrations:"🖼️ 立绘", items:"📦 物品", misc:"📁 杂项", resources:"⛏️ 资源", saddles:"🐎 鞍具", skins:"🎨 皮肤", structures:"🏗️ 建筑", tools:"🔧 工具", weapons:"⚔️ 武器", "其他":"🗂️ 其他"};
+    var catLabels = {armor:"🛡️ 护甲", biology:"🧬 生物", consumables:"🍖 消耗品", egg:"🥚 蛋", illustrations:"🖼️ 立绘", items:"📦 物品", misc:"📁 杂项", resources:"⛏️ 资源", saddles:"🐎 鞍具", skins:"🎨 皮肤", structures:"🏗️ 建筑", weapons:"⚔️ 武器", "其他":"🗂️ 其他"};
 
     var overlay = document.createElement("div"); overlay.className = "icon-picker-overlay";
 
@@ -7389,7 +7254,7 @@ function openIconPicker_ic(bi) {
       if (!cats[cat]) { cats[cat] = []; catOrder.push(cat); }
       cats[cat].push(item);
     });
-    var catLabels = {armor:"🛡️ 护甲", biology:"🧬 生物", consumables:"🍖 消耗品", drops:"💧 掉落物", egg:"🥚 蛋", eggs:"🥚 蛋", illustrations:"🖼️ 立绘", items:"📦 物品", misc:"📁 杂项", resources:"⛏️ 资源", saddles:"🐎 鞍具", skins:"🎨 皮肤", structures:"🏗️ 建筑", tools:"🔧 工具", weapons:"⚔️ 武器", "其他":"🗂️ 其他"};
+    var catLabels = {armor:"🛡️ 护甲", biology:"🧬 生物", consumables:"🍖 消耗品", egg:"🥚 蛋", illustrations:"🖼️ 立绘", items:"📦 物品", misc:"📁 杂项", resources:"⛏️ 资源", saddles:"🐎 鞍具", skins:"🎨 皮肤", structures:"🏗️ 建筑", weapons:"⚔️ 武器", "其他":"🗂️ 其他"};
     var overlay = document.createElement("div");
     overlay.className = "icon-picker-overlay";
     overlay.onclick = function(e){ if (e.target === overlay) overlay.remove(); };
@@ -7424,7 +7289,7 @@ function openIconPicker_desc(bi, di) {
       if (!cats[cat]) { cats[cat] = []; catOrder.push(cat); }
       cats[cat].push(item);
     });
-    var catLabels = {armor:"🛡️ 护甲", biology:"🧬 生物", consumables:"🍖 消耗品", drops:"💧 掉落物", egg:"🥚 蛋", eggs:"🥚 蛋", illustrations:"🖼️ 立绘", items:"📦 物品", misc:"📁 杂项", resources:"⛏️ 资源", saddles:"🐎 鞍具", skins:"🎨 皮肤", structures:"🏗️ 建筑", tools:"🔧 工具", weapons:"⚔️ 武器", "其他":"🗂️ 其他"};
+    var catLabels = {armor:"🛡️ 护甲", biology:"🧬 生物", consumables:"🍖 消耗品", egg:"🥚 蛋", illustrations:"🖼️ 立绘", items:"📦 物品", misc:"📁 杂项", resources:"⛏️ 资源", saddles:"🐎 鞍具", skins:"🎨 皮肤", structures:"🏗️ 建筑", weapons:"⚔️ 武器", "其他":"🗂️ 其他"};
     var overlay = document.createElement("div");
     overlay.className = "icon-picker-overlay";
     overlay.onclick = function(e){ if (e.target === overlay) overlay.remove(); };
@@ -7472,18 +7337,6 @@ function selectDescImage(el, bi, di) {
             dw.appendChild(existingImg);
             wrapper = dw;
           }
-          // Restore wrapper display (may have been hidden by clearDescImageSelection)
-          if (wrapper && wrapper.style.display === 'none') wrapper.style.display = '';
-          // Clean up duplicate placeholder spans (from v906 clearDescImageSelection fix)
-          if (existingBtn && existingBtn.style.display === 'none') {
-            var allBtns = container.querySelectorAll('span[onclick*=\"openIconPicker_desc\"]');
-            for (var bi2 = allBtns.length - 1; bi2 >= 0; bi2--) {
-              var s = allBtns[bi2];
-              if (s !== existingBtn && s.style.display === 'none' && s.textContent.trim() === '+') {
-                s.remove();
-              }
-            }
-          }
           // Always sync color mode from desc-specific button
           var modeBtn2 = document.getElementById('mcICDescColorModeBtn'+bi+'_'+di);
           if (modeBtn2 && wrapper) {
@@ -7517,49 +7370,16 @@ function selectDescImage(el, bi, di) {
       if (descImg2 && descImg2.style.display !== 'none') {
         var dw2 = descImg2.parentElement;
         if (dw2) {
-          // Sync mode class from button immediately (for badge dot)
-          var modeBtn3 = document.getElementById('mcICDescColorModeBtn'+bi+'_'+di);
-          if (modeBtn3) {
-            var m3 = modeBtn3.getAttribute('data-mode') || 'off';
-            dw2.classList.remove('ic-mode-normal','ic-mode-reverse','ic-mode-failed');
-            if (m3 === 'normal') dw2.classList.add('ic-mode-normal');
-            else if (m3 === 'reverse') dw2.classList.add('ic-mode-reverse');
-            // Write mode to editorData immediately
-            var edTab3 = editorData.tabs[editorSelectedTab];
-            if (edTab3 && edTab3.content_blocks && edTab3.content_blocks[bi]) {
-              var edBlock3 = edTab3.content_blocks[bi];
-              if (edBlock3.descriptions && edBlock3.descriptions[di]) {
-                edBlock3.descriptions[di].image_auto_color_mode = m3;
-              }
-            }
-          }
           var isRev2 = dw2.classList.contains('ic-mode-reverse');
           applyAutoColorClass(descImg2, null);
-          // Only run brightness detection when mode is active
-          if (m3 !== 'off') {
           detectImageBrightness(descImg2.src, function(lum) {
             if (lum >= 0) {
               applyAutoColorClassWithLum(descImg2, isRev2 ? (1-lum) : lum);
               dw2.setAttribute('data-lum', lum.toFixed(3));
-              // Sync wrapper ic-auto-* class to match img
-              dw2.classList.remove('ic-auto-light','ic-auto-dark','ic-auto-color');
-              var imgCls = descImg2.className.match(/ic-auto-(light|dark|color)/);
-              if (imgCls) dw2.classList.add(imgCls[0]);
-              // Write back to editorData so re-render uses correct luminance
-              var edTab = editorData.tabs[editorSelectedTab];
-              if (edTab && edTab.content_blocks && edTab.content_blocks[bi]) {
-                var edBlock = edTab.content_blocks[bi];
-                if (edBlock.descriptions && edBlock.descriptions[di]) {
-                  edBlock.descriptions[di].image_native_luminance = lum;
-                }
-              }
-              if (m3 !== 'off') _detectToast(true);
             } else {
               descImg2.className = (descImg2.className || '').replace(/\bic-auto-(dark|light|color)\b/g, '').trim() + ' ic-auto-color';
-              if (m3 !== 'off') _detectToast(false, '网络错误或图片无法访问');
             }
           });
-          } // end if m3 !== 'off'
         }
       }
     }
@@ -7578,18 +7398,8 @@ function clearDescImageSelection(el, bi, di) {
     if (container) {
       var existingImg = container.querySelector('img[onclick*="openIconPicker_desc"]');
       var existingBtn = container.querySelector('button[onclick*="openIconPicker_desc"]');
-      if (existingImg) { existingImg.style.display = 'none'; var dw = existingImg.parentElement; if (dw) { dw.classList.remove('ic-mode-normal','ic-mode-failed'); dw.style.display = 'none'; } }
-      if (existingBtn) { existingBtn.style.display = ''; }
-      else if (existingImg) {
-        // Placeholder not in DOM (image existed at render time, template skipped it)
-        // Create identical placeholder matching rendering template
-        var ph = document.createElement('span');
-        ph.setAttribute('onclick', 'event.stopPropagation();openIconPicker_desc('+bi+','+di+')');
-        ph.setAttribute('title', '选择图片');
-        ph.style.cssText = 'width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px';
-        ph.textContent = '+';
-        existingImg.parentElement.after(ph);
-      }
+      if (existingImg) { existingImg.style.display = 'none'; var dw = existingImg.parentElement; if (dw) dw.classList.remove('ic-mode-normal'); }
+      if (existingBtn) existingBtn.style.display = '';
       // Reset color mode button
       var modeBtn = document.getElementById('mcICDescColorModeBtn'+bi+'_'+di);
       if (modeBtn) { modeBtn.setAttribute('data-mode','off'); modeBtn.textContent='反色：关'; modeBtn.style.opacity='0.5'; }
@@ -7707,38 +7517,17 @@ function selectInfoCardIcon(el, bi) {
       if (w) {
         var modeBtn = document.getElementById('mcICColorModeBtn'+bi);
         var mode = modeBtn ? modeBtn.getAttribute('data-mode') || 'off' : 'off';
-        // Sync mode class to wrapper immediately (for badge dot)
-        w.classList.remove('ic-mode-normal','ic-mode-reverse','ic-mode-failed');
+        w.classList.remove('ic-mode-normal', 'ic-mode-reverse');
         if (mode === 'normal') w.classList.add('ic-mode-normal');
         else if (mode === 'reverse') w.classList.add('ic-mode-reverse');
-        // Write mode to editorData immediately
-        var edTab4 = editorData.tabs[editorSelectedTab];
-        if (edTab4 && edTab4.content_blocks && edTab4.content_blocks[bi]) {
-          edTab4.content_blocks[bi].icon_auto_color_mode = mode;
-        }
-        var isRev = (mode === 'reverse');
         applyAutoColorClass(img, null);  // clear old classes
-        // Only run brightness detection when mode is active
-        if (mode !== 'off') {
         detectImageBrightness(img.src, function(lum) {
           if (lum >= 0) {
             applyAutoColorClassWithLum(img, isRev ? (1-lum) : lum);
-            // Sync wrapper ic-auto-* class to match img
-            w.classList.remove('ic-auto-light','ic-auto-dark','ic-auto-color');
-            var imgCls2 = img.className.match(/ic-auto-(light|dark|color)/);
-            if (imgCls2) w.classList.add(imgCls2[0]);
-            // Write back to editorData so re-render uses correct luminance
-            var edTab2 = editorData.tabs[editorSelectedTab];
-            if (edTab2 && edTab2.content_blocks && edTab2.content_blocks[bi]) {
-              edTab2.content_blocks[bi].icon_native_luminance = lum;
-            }
-            if (mode !== 'off') _detectToast(true);
           } else {
             img.className = (img.className || '').replace(/\bic-auto-(dark|light|color)\b/g, '').trim() + ' ic-auto-color';
-            if (mode !== 'off') _detectToast(false, '网络错误或图片无法访问');
           }
         });
-        } // end if mode !== 'off'
       }
     }
     if (placeholder) placeholder.style.display = 'none';
@@ -7940,13 +7729,6 @@ function selectDeviceIcon(url, si, bi, ri) {
 }
 
 function refreshIconList() {
-  // Guard: prevent double-click concurrent runs
-  if (window._iconRefreshRunning) {
-    WS.toast('\u5237\u65b0\u5df2\u5728\u8fdb\u884c\u4e2d\uff0c\u8bf7\u7a0d\u5019', 'warning');
-    return;
-  }
-  window._iconRefreshRunning = true;
-
   var btn = document.querySelector('button[onclick="refreshIconList()"]');
   var origHTML = btn ? btn.innerHTML : '';
   var origWidth = btn ? btn.style.width : '';
@@ -7965,32 +7747,24 @@ function refreshIconList() {
 
   WS.callService("shell_command", "list_r2_icons", {}).then(function(){
     WS.callService("shell_command", "gen_icon_thumbs", {});
-    // 轮询进度文件（带停滞检测 + 超时）
-    var pollCount = 0;
-    var lastDone = -1;
-    var stallCount = 0;
-    var STALL_MAX = 20;
+    // 轮询进度文件
     var pollTimer = setInterval(function(){
-      pollCount++;
       fetch('/local/asa-data/thumbs_progress.json?t=' + Date.now())
         .then(function(r){ return r.json(); })
         .then(function(p){
           if (p.total > 0) {
             var pct = Math.round(p.done * 100 / p.total);
             var txt = pct + '% (' + p.done + '/' + p.total + ')';
-            if (p.new) txt += ' +' + p.new + '\u65B0';
-            if (p.done === lastDone) {
-              stallCount++;
-              if (stallCount >= STALL_MAX) txt += ' \u26A0\uFE0F\u505C\u6EDE';
-            } else { lastDone = p.done; stallCount = 0; }
+            if (p.new) txt += ' +' + p.new + '新';
             showProgress(pct, txt);
           }
           if (p.status === 'done') {
             clearInterval(pollTimer);
-            showProgress(100, '\u5B8C\u6210!');
+            showProgress(100, '完成!');
             setTimeout(function(){
               if (btn) { btn.innerHTML = origHTML; btn.style.width = origWidth; }
             }, 1500);
+            // 重新加载
             iconListLoaded = false; iconList = [];
             var old = document.querySelector('script[src*="icon_thumbs.js"]');
             if (old) old.remove();
@@ -7998,18 +7772,16 @@ function refreshIconList() {
             s.src = '/local/asa-data/icon_thumbs.js?t=' + Date.now();
             document.head.appendChild(s);
             loadIconList(function(list){
-              window._iconRefreshRunning = false;
               var cnt = document.getElementById("r2IconCount");
               if (cnt) cnt.textContent = list.length;
-              WS.toast("\u5df2\u5237\u65b0 " + list.length + " \u4e2a\u56fe\u6807", "success");
+              WS.toast("已刷新 " + list.length + " 个图标", "success");
             });
           }
         }).catch(function(){});
     }, 600);
   }, function(){
-    window._iconRefreshRunning = false;
     if (btn) { btn.innerHTML = origHTML; btn.style.width = origWidth; }
-    WS.toast("\u5237\u65b0\u5931\u8d25\uff08list_r2_icons \u8fd4\u56de\u9519\u8bef\uff09", "error");
+    WS.toast("刷新失败", "error");
   });
 }
 
