@@ -2222,7 +2222,7 @@ def render_tab_html(tab):
                 # Pre-count ^-prefixed descriptions for auto-numbering within this block
                 _hat_n = 0
                 for desc in ic_descs:
-                    if isinstance(desc, dict) and desc.get('type') in ('br', 'icon_group'):
+                    if isinstance(desc, dict) and desc.get('type') == 'br':
                         continue
                     _dt = desc.get('text', '') if isinstance(desc, dict) else str(desc)
                     if _dt.startswith('^'):
@@ -2231,68 +2231,6 @@ def render_tab_html(tab):
                 for desc in ic_descs:
                     if isinstance(desc, dict) and desc.get('type') == 'br':
                         parts.append('<div class="ic-br" style="flex-basis:100%;height:0"></div>')
-                        continue
-                    if isinstance(desc, dict) and desc.get('type') == 'icon_group':
-                        ig_icons = desc.get('icons', [])
-                        ig_title = desc.get('title', '')
-                        dserver = desc.get('server', '')
-                        srv_states = desc.get('server_states', {})
-                        if not srv_states and dserver:
-                            srv_states = {dserver: 2}
-                        linear_maps = [k for k,v in srv_states.items() if v == 1]
-                        block_maps = [k for k,v in srv_states.items() if v == 2]
-                        # Build wrapper
-                        if block_maps:
-                            for bm in block_maps:
-                                parts.append('<div class="ic-text ic-block-{}">'.format(bm))
-                        elif linear_maps:
-                            parts.append('<div class="ig-row-wrapper ic-linear-{}">'.format(linear_maps[0]))
-                        else:
-                            parts.append('<div class="ig-row-wrapper">')
-                        # Title row
-                        if ig_title:
-                            title_icon_html = ''
-                            if linear_maps:
-                                sm = SERVER_MAP.get(linear_maps[0], {})
-                                icon = sm.get('icon', 'mdi:map')
-                                title_icon_html = '<ha-icon icon="{}" style="--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;vertical-align:middle"></ha-icon>'.format(icon)
-                            elif block_maps:
-                                sm = SERVER_MAP.get(block_maps[0], {})
-                                icon = sm.get('icon', 'mdi:map')
-                                title_icon_html = '<ha-icon icon="{}" style="--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;vertical-align:middle"></ha-icon>'.format(icon)
-                            if block_maps:
-                                # Block mode: no hr, text inherits white color from .ic-text.ic-block-{sid}
-                                parts.append('<div class="ig-title-row" style="display:flex;align-items:center;gap:8px;margin-bottom:4px">')
-                                parts.append('<span style="white-space:nowrap;font-size:0.85em">{}{}</span>'.format(title_icon_html, esc(ig_title)))
-                                parts.append('</div>')
-                            else:
-                                parts.append('<div class="ig-title-row" style="display:flex;align-items:center;gap:8px;margin-bottom:4px">')
-                                parts.append('<span class="ig-title-badge" style="white-space:nowrap;font-size:0.85em">{}{}</span>'.format(title_icon_html, esc(ig_title)))
-                                parts.append('<hr class="ig-title-line" style="flex:1;min-width:0" />')
-                                parts.append('</div>')
-                        # Icon row
-                        parts.append('<span class="ig-row" style="display:inline-flex;flex-wrap:wrap;gap:6px;align-items:center;flex-basis:100%">')
-                        for icon in ig_icons:
-                            iu = icon.get('image_url', '')
-                            if not iu:
-                                continue
-                            iq = icon.get('quantity', 0)
-                            iac = icon.get('image_auto_color_mode', 'off')
-                            ilum = icon.get('image_native_luminance')
-                            ac_cls = ''
-                            mode_cls = ''
-                            if iac != 'off':
-                                is_rev = (iac == 'reverse')
-                                if ilum is not None and ilum != 0.5:
-                                    use_lum = (1 - ilum) if is_rev else ilum
-                                    ac_cls = ' ic-auto-light' if use_lum > 0.5 else ' ic-auto-dark'
-                                else:
-                                    ac_cls = ' ic-auto-dark' if is_rev else ' ic-auto-color'
-                                mode_cls = ' ic-mode-reverse' if is_rev else ' ic-mode-normal'
-                            qty = '<span class="ic-qty">x{}</span>'.format(iq) if iq else ''
-                            parts.append('<span class="ig-item{}" style="position:relative;display:inline-flex;flex-shrink:0">{}{}</span>'.format(mode_cls, '<img src="' + esc(iu) + '" class="ig-img' + ac_cls + '" style="width:28px;height:28px;object-fit:contain;border-radius:4px" onerror="this.remove()" />', qty))
-                        parts.append('</span>')
-                        parts.append('</div>')  # close wrapper (ic-text or ig-row-wrapper)
                         continue
                     dtext = desc.get('text', '') if isinstance(desc, dict) else str(desc)
                     # Flag ^ prefix for auto-numbering (badge rendered later after block_maps known)
@@ -2371,8 +2309,7 @@ def render_tab_html(tab):
                         _dimg = _qty_tag
                     # Compute rendered text (after block_maps is known for _render_badges)
                     if _is_hat:
-                        hat_cls = 'ic-badge ic-badge-num ic-badge-hollow' if block_maps else 'ic-badge ic-badge-num'
-                        dtext_rendered = '<span class="' + hat_cls + '">' + str(_hat_idx) + '</span> ' + _render_badges(esc(dtext[1:].lstrip()), bool(block_maps))
+                        dtext_rendered = '<span class="ic-badge ic-badge-num">' + str(_hat_idx) + '</span> ' + _render_badges(esc(dtext[1:].lstrip()), bool(block_maps))
                     else:
                         dtext_rendered = _render_badges(esc(dtext), bool(block_maps))
                     parts.append('<div class="{}"{{}}{{}}>{{}}{{}}{{}}</div>'.format(ic_cls).format(dstyle, dserver_attr, srv_icon, dtext_rendered, _dimg))
@@ -2907,11 +2844,6 @@ if __name__ == "__main__":
             # Compose CSS from block types present
             block_types = {b.get('block_type','') for b in tab.get('content_blocks',[])}
             has_map_filter = 'map_filter' in block_types
-            has_icon_group = any(
-                isinstance(d, dict) and d.get('type') == 'icon_group'
-                for b in tab.get('content_blocks', [])
-                for d in b.get('descriptions', [])
-            )
             active_maps = set()
             if has_map_filter:
                 for blk in tab.get('content_blocks',[]):
@@ -3013,30 +2945,9 @@ if __name__ == "__main__":
                 # Block mode: cutout matching page bg (adapts to light/dark theme)
                 IC_CSS += 'ha-card .ic-text[class*="ic-block-"] .ic-badge-hollow{background:color-mix(in srgb,var(--primary-background-color) 20%,transparent)!important;color:var(--primary-background-color)!important}'
                 css += IC_CSS
-            if has_icon_group:
-                css += 'ha-card .ig-title-badge{display:inline-flex!important;align-items:baseline!important;font-size:0.65em!important;padding:2px 6px!important;border-radius:6px!important;background:color-mix(in srgb,var(--primary-color) 15%,transparent)!important;color:var(--primary-text-color)!important;line-height:1!important}'
-                css += 'ha-card .icon-group{gap:8px!important}'
-                css += 'ha-card .ig-item{position:relative!important;display:inline-flex!important;flex-shrink:0!important}'
-                css += 'ha-card .ig-img{width:28px!important;height:28px!important;object-fit:contain!important;border-radius:4px!important}'
-                css += 'ha-card .ig-item .ic-qty{position:absolute!important;right:-2px!important;bottom:-2px!important;font-size:0.65em!important}'
-                css += 'ha-card .ig-img.ic-auto-color{color:var(--primary-background-color)!important;fill:var(--primary-text-color)!important}'
-                css += 'ha-card .ig-img.ic-auto-dark{filter:none!important}'
-                css += 'ha-card .ig-img.ic-auto-light{filter:none!important}'
-                css += '[data-theme="dark"] ha-card .ig-img.ic-auto-dark{filter:invert(1)!important}'
-                css += '[data-theme="light"] ha-card .ig-img.ic-auto-light{filter:invert(1)!important}'
-                css += 'ha-card .ig-img.ic-auto-color{filter:var(--ic-icon-filter,none)!important}'
-                # ig-title-line + ::after separator for icon_group rows
-                css += 'ha-card .ig-title-line{border:none!important;margin:0!important;border-top:1px solid var(--primary-text-color)!important;opacity:0.15!important}'
-                css += 'ha-card .ig-row-wrapper::after{content:\'\'!important;display:block!important;width:100%!important;border-top:1px solid var(--primary-text-color)!important;opacity:0.15!important;margin-top:6px!important}'
                 # 3-state map filter: linear (icon color) + block (background) per-map — auto-generated from SERVER_MAP
                 for sid, sm in SERVER_MAP.items():
                     css += 'ha-card .ic-linear-'+sid+' .mdi,ha-card .ic-linear-'+sid+' ha-icon{color:'+sm['color']+'!important}'
-                # ig-row-wrapper linear mode: per-map title badge + separator colors
-                for sid, sm in SERVER_MAP.items():
-                    r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)
-                    css += 'ha-card .ig-row-wrapper.ic-linear-'+sid+' .ig-title-badge{color:'+sm['color']+'!important;background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important}'
-                    css += 'ha-card .ig-row-wrapper.ic-linear-'+sid+' .ig-title-line{border-top-color:'+sm['color']+'!important;opacity:0.4!important}'
-                    css += 'ha-card .ig-row-wrapper.ic-linear-'+sid+'::after{border-top-color:'+sm['color']+'!important;opacity:0.4!important}'
                 for sid, sm in SERVER_MAP.items():
                     css += 'ha-card .ic-text.ic-block-'+sid+'{background:'+sm['color']+'!important;border-radius:6px!important;padding:2px 6px!important;color:var(--primary-background-color)!important}'
                 for sid in SERVER_MAP:

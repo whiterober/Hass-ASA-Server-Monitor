@@ -3104,11 +3104,6 @@ function addICDesc(bi) {
 
   if (!container) return;
 
-  const tab = editorData.tabs[editorSelectedTab];
-  const block = tab.content_blocks[bi];
-  if (!block.descriptions) block.descriptions = [];
-  block.descriptions.push({text:'', bold:false, color:'auto', opacity:1.0, server:'', server_states:{}, image_url:'', quantity:0, image_auto_color_mode:'off', image_native_luminance:null});
-
   const di = container.children.length;
 
   const h = '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:linear-gradient(to right, #000 50%, #fff 50%);cursor:pointer" title="选择颜色" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" title="选择透明度" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:1.0;background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="1.0"><span class="cat-bold-btn" title="加粗" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="auto" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value=""><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="{}"></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid transparent" title="选择服务器" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+getServerBadge('')+'</button><input type="hidden" id="mcICDescImg'+bi+'_'+di+'" value=""><span onclick="event.stopPropagation();openIconPicker_desc('+bi+','+di+')" title="选择图片" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px">+</span><input type="hidden" id="mcICDescQty'+bi+'_'+di+'" value=""><button class="qty-btn" id="mcICDescQtyBtn'+bi+'_'+di+'" onclick="event.stopPropagation();toggleQtyPopup(this,'+bi+','+di+')" title="选择数量" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px;background:transparent;color:var(--text);padding:0">×N</button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
@@ -3478,7 +3473,6 @@ function saveMCBlocks(tab) {
             spans.forEach(function(span) {
               var img = span.querySelector('img');
               var imgUrl = img ? img.src : '';
-              if (!imgUrl) return;
               var oldMeta = oldLookup[imgUrl] || {};
               igIcons.push({
                 image_url: imgUrl,
@@ -7472,26 +7466,14 @@ function saveComboDesc(dataUrl,bi,di,overlay){
     var container=descRow.closest('.sr-cat-card');
     if(container){
       var img=container.querySelector('img[onclick*="openIconPicker_desc"]');
-      if(img){
-        // Ensure img is wrapped in a SPAN for CSS pseudo-elements (小兰点)
-        var existWrapper = img.parentElement;
-        if (existWrapper && existWrapper.tagName !== 'SPAN') {
-          var wrapSpan = document.createElement('span');
-          wrapSpan.style.cssText = 'position:relative;display:inline-flex;flex-shrink:0';
-          existWrapper.insertBefore(wrapSpan, img);
-          wrapSpan.appendChild(img);
-        }
-        img.src=thumbUrl(dataUrl,56);img.style.display=''}
+      if(img){img.src=thumbUrl(dataUrl,56);img.style.display=''}
       else{
-        var descWrapper = document.createElement('span');
-        descWrapper.style.cssText = 'position:relative;display:inline-flex;flex-shrink:0';
         var newImg=document.createElement('img');
         newImg.src=thumbUrl(dataUrl,56);
         newImg.setAttribute('onclick','event.stopPropagation();openIconPicker_desc('+bi+','+di+')');
         newImg.title='点击换图';newImg.style.cssText='width:22px;height:22px;object-fit:contain;cursor:pointer;flex-shrink:0;border-radius:3px';
-        descWrapper.appendChild(newImg);
         var btn=container.querySelector('span[onclick*="openIconPicker_desc"]');
-        if(btn){btn.style.display='none';btn.before(descWrapper)}
+        if(btn){btn.style.display='none';btn.before(newImg)}
       }
     }
   }
@@ -7516,24 +7498,6 @@ function saveComboDesc(dataUrl,bi,di,overlay){
         }
       }
     });
-  }
-  // Persist color mode to editorData (align with selectDescImage)
-  var tabCombo = editorData.tabs[editorSelectedTab];
-  if (tabCombo && tabCombo.content_blocks && tabCombo.content_blocks[bi] && tabCombo.content_blocks[bi].descriptions && tabCombo.content_blocks[bi].descriptions[di]) {
-    tabCombo.content_blocks[bi].descriptions[di].image_auto_color_mode = (modeBtn && modeBtn.getAttribute('data-mode')) || 'off';
-  }
-  // Clean up visual classes when mode is off (remove stale ic-mode-normal from previous toggle)
-  if (!modeBtn || modeBtn.getAttribute('data-mode') !== 'normal') {
-    var descImgOff = document.querySelector('#mcICDescs'+bi+' .sr-cat-card img[onclick*=\"openIconPicker_desc('+bi+','+di+')\"]');
-    if (descImgOff) {
-      applyAutoColorClass(descImgOff, null);
-      descImgOff.style.filter = 'none';
-      var dwOff = descImgOff.parentElement;
-      if (dwOff && dwOff.tagName === 'SPAN') {
-        dwOff.classList.remove('ic-mode-normal', 'ic-mode-reverse');
-        dwOff.removeAttribute('data-lum');
-      }
-    }
   }
   comboMode=false;comboSelected=[];overlay.remove();
 }
@@ -8024,7 +7988,7 @@ function selectDescImage(el, bi, di) {
                   edBlock.descriptions[di].image_native_luminance = lum;
                 }
               }
-              if (m3 !== 'off') _detectToast(true, lum.toFixed(3));
+              if (m3 !== 'off') _detectToast(true);
             } else {
               descImg2.className = (descImg2.className || '').replace(/\bic-auto-(dark|light|color)\b/g, '').trim() + ' ic-auto-color';
               if (m3 !== 'off') _detectToast(false, '网络错误或图片无法访问');

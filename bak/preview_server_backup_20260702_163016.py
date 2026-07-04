@@ -223,11 +223,6 @@ def main():
         html = render_tab_html(tab)
         # Compose CSS from block types
         block_types = {b.get('block_type','') for b in tab.get('content_blocks',[])}
-        has_icon_group = any(
-            isinstance(d, dict) and d.get('type') == 'icon_group'
-            for b in tab.get('content_blocks', [])
-            for d in b.get('descriptions', [])
-        )
         css = CARD_CORE_CSS
 
         # === Unconditional image CSS for info_card descriptions ===
@@ -268,7 +263,7 @@ def main():
             css += 'ha-card .filter-label{display:inline-flex!important;align-items:center!important;gap:4px!important;padding:4px 12px!important;border-radius:16px!important;border:1px solid var(--divider-color)!important;font-size:.85em!important;cursor:pointer!important;user-select:none!important;line-height:1.4!important;white-space:nowrap!important;min-height:28px!important;margin-right:6px!important}'
             for sid, sm in SERVER_MAP.items():
                 css += 'ha-card .filter-label[data-map={}]{{background:{}!important;color:var(--primary-background-color)!important;border-color:{}!important}}'.format(sid, sm['color'], sm['color'])
-            css += 'ha-card .filter-label{transition:opacity .2s!important}'
+            css += 'ha-card .filter-label.active{box-shadow:0 0 0 2px var(--primary-text-color)!important}'
             css += 'ha-card .filter-label ha-icon{pointer-events:none!important}'
             css += 'ha-card:has(.filter-radio[value=\"\"]:checked) .filterable{display:flex!important}'
             for sid in SERVER_MAP:
@@ -307,7 +302,6 @@ def main():
                 IC_CSS += 'ha-card .ic-text.ic-linear-'+fk+' .ic-badge{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important;color:'+fc+'!important}'
             # Default badge (no map): subtle primary color bg, text matches body
             IC_CSS += 'ha-card .ic-badge{display:inline-block!important;padding:1px 6px!important;border-radius:10px!important;font-size:0.75em!important;background:color-mix(in srgb,var(--primary-color) 25%,transparent)!important;color:var(--primary-text-color)!important;line-height:1.5!important}'
-            IC_CSS += 'ha-card .ic-badge-num{border-radius:3px!important;display:inline-flex!important;justify-content:center!important;width:16px!important;white-space:nowrap!important}'
             # Block mode: cutout matching page bg (adapts to light/dark theme)
             IC_CSS += 'ha-card .ic-text[class*="ic-block-"] .ic-badge-hollow{background:color-mix(in srgb,var(--primary-background-color) 20%,transparent)!important;color:var(--primary-background-color)!important}'
             # 3-state map filter: linear (icon color) + block (background) per-map — auto-generated from SERVER_MAP
@@ -330,34 +324,6 @@ def main():
                 r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
                 IC_CSS += 'ha-card .info-card-block.ic-block-{}{{background:rgba({},{},{},0.08)!important}}'.format(fk, r, g, b)
             css += IC_CSS
-        if has_icon_group:
-            css += 'ha-card .ig-title-badge{display:inline-flex!important;align-items:baseline!important;font-size:0.65em!important;padding:2px 6px!important;border-radius:6px!important;background:color-mix(in srgb,var(--primary-color) 15%,transparent)!important;color:var(--primary-text-color)!important;line-height:1!important}'
-            css += 'ha-card .icon-group{gap:8px!important}'
-            css += 'ha-card .ig-item{position:relative!important;display:inline-flex!important;flex-shrink:0!important}'
-            css += 'ha-card .ig-img{width:28px!important;height:28px!important;object-fit:contain!important;border-radius:4px!important}'
-            css += 'ha-card .ig-item .ic-qty{position:absolute!important;right:-2px!important;bottom:-2px!important;font-size:0.65em!important}'
-            css += 'ha-card .ig-img.ic-auto-color{color:var(--primary-background-color)!important;fill:var(--primary-text-color)!important}'
-            css += 'ha-card .ig-img.ic-auto-dark{filter:none!important}'
-            css += 'ha-card .ig-img.ic-auto-light{filter:none!important}'
-            css += '[data-theme="dark"] ha-card .ig-img.ic-auto-dark{filter:invert(1)!important}'
-            css += '[data-theme="light"] ha-card .ig-img.ic-auto-light{filter:invert(1)!important}'
-            css += 'ha-card .ig-img.ic-auto-color{filter:var(--ic-icon-filter,none)!important}'
-            # ig-title-line + ::after separator for icon_group rows
-            css += 'ha-card .ig-title-line{border:none!important;margin:0!important;border-top:1px solid var(--primary-text-color)!important;opacity:0.15!important}'
-            css += 'ha-card .ig-row-wrapper::after{content:\'\'!important;display:block!important;width:100%!important;border-top:1px solid var(--primary-text-color)!important;opacity:0.15!important;margin-top:6px!important}'
-            # 3-state map filter: linear (icon color) + block (background) per-map
-            for sid, sm in SERVER_MAP.items():
-                css += 'ha-card .ic-linear-'+sid+' .mdi,ha-card .ic-linear-'+sid+' ha-icon{color:'+sm['color']+'!important}'
-            # ig-row-wrapper linear mode: per-map title badge + separator colors
-            for sid, sm in SERVER_MAP.items():
-                r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)
-                css += 'ha-card .ig-row-wrapper.ic-linear-'+sid+' .ig-title-badge{color:'+sm['color']+'!important;background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important}'
-                css += 'ha-card .ig-row-wrapper.ic-linear-'+sid+' .ig-title-line{border-top-color:'+sm['color']+'!important;opacity:0.4!important}'
-                css += 'ha-card .ig-row-wrapper.ic-linear-'+sid+'::after{border-top-color:'+sm['color']+'!important;opacity:0.4!important}'
-            for sid, sm in SERVER_MAP.items():
-                css += 'ha-card .ic-text.ic-block-'+sid+'{background:'+sm['color']+'!important;border-radius:6px!important;padding:2px 6px!important;color:var(--primary-background-color)!important}'
-            for sid in SERVER_MAP:
-                css += 'ha-card .ic-text.ic-block-'+sid+' .mdi,ha-card .ic-text.ic-block-'+sid+' ha-icon{color:var(--primary-background-color)!important}'
         if 'card_grid' in block_types:
             css += 'ha-card .info-card{background:var(--primary-background-color);border-radius:8px;overflow:hidden;text-align:center;padding:0 0 8px 0}ha-card .info-card img{width:100%;aspect-ratio:1;object-fit:cover}ha-card .card-name{font-weight:600;margin:4px 0}ha-card .card-feature{font-size:0.85em;color:var(--secondary-text-color)}ha-card .card-grid{display:grid;gap:12px}'
     elif ttype == 'server_grid':
