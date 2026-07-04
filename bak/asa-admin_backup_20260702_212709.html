@@ -646,6 +646,7 @@ td, th { padding: 4px 6px; }
 
 .sr-cats { }
 
+
 /* Qty Popup */
 .qty-popup-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999}
 .qty-popup-panel{background:var(--card);border-radius:8px;border:1px solid var(--border);padding:4px}
@@ -1228,7 +1229,7 @@ function _detectToast(success, reason) {
   var d = document.createElement('div');
   if (success) {
     d.className = 'toast success';
-    d.textContent = reason ? ('亮度检测成功 [' + reason + ']') : '亮度检测成功';
+    d.textContent = '亮度检测成功';
   } else {
     d.className = 'toast warning';
     d.textContent = '亮度检测失败：' + (reason || '未知错误');
@@ -1406,53 +1407,33 @@ function toggleIconColorModeDesc(bi, di, btn) {
     btn.style.borderColor = 'var(--accent)'; btn.style.background = 'var(--input-bg)';
     btn.title = '反色：自动适应主题';
   }
-
+  
   var descImg = document.getElementById('mcICDescImg'+bi+'_'+di);
   var descRow = document.getElementById('mcICDescText'+bi+'_'+di);
   if (!descImg && descRow) {
     var container = descRow.closest('.sr-cat-card');
     descImg = container ? container.querySelector('img[onclick*="openIconPicker_desc"]') : null;
   }
-  // icon_group mode: find image via mcIGIcons container, matching icon index di
-  var _isIG = false, _igRowDi = -1;
-  if (!descImg) {
-    var popupIG = btn.closest('.icon-picker-overlay');
-    var _igRowDi2 = popupIG ? popupIG._igRowDi : null;
-    if (_igRowDi2 != null) {
-      var igContainer = document.getElementById('mcIGIcons'+bi+'_'+_igRowDi2);
-      if (igContainer) {
-        var igSpan = igContainer.querySelector('.ig-item[onclick*="openIconPicker_desc(this,'+bi+','+di+')"]');
-        if (igSpan) { descImg = igSpan.querySelector('img'); wrapper = igSpan; _isIG = true; _igRowDi = _igRowDi2; }
-      }
-    }
-  }
-  // Persist mode to editorData immediately (even without image — user might select image later)
+  if (!descImg) return;
+  var wrapper = descImg.parentElement;
+  
   function _persistDescMode(mode, lum) {
     var tab = editorData.tabs[editorSelectedTab];
     if (tab && tab.content_blocks && tab.content_blocks[bi]) {
       var block = tab.content_blocks[bi];
-      if (_isIG) {
-        if (block.descriptions && block.descriptions[_igRowDi] && block.descriptions[_igRowDi].icons && block.descriptions[_igRowDi].icons[di]) {
-          block.descriptions[_igRowDi].icons[di].image_auto_color_mode = mode;
-          if (lum != null) block.descriptions[_igRowDi].icons[di].image_native_luminance = lum;
-        }
-      } else {
-        if (block.descriptions && block.descriptions[di]) {
-          block.descriptions[di].image_auto_color_mode = mode;
-          if (lum != null) block.descriptions[di].image_native_luminance = lum;
-        }
+      if (block.descriptions && block.descriptions[di]) {
+        block.descriptions[di].image_auto_color_mode = mode;
+        if (lum != null) block.descriptions[di].image_native_luminance = lum;
       }
     }
   }
-  _persistDescMode(next);
-  if (!descImg) return;
-  if (!wrapper) var wrapper = descImg.parentElement;
-  
   if (next === 'off') {
     applyAutoColorClass(descImg, null);
     descImg.style.filter = 'none';
     if (wrapper) wrapper.classList.remove('ic-mode-normal');
+    _persistDescMode('off');
   } else {
+    _persistDescMode('normal');
     _pendingBrightnessChecks++;
     _updateSaveBtnState();
     detectImageBrightness(descImg.src, function(luminance, errMsg) {
@@ -1467,14 +1448,8 @@ function toggleIconColorModeDesc(bi, di, btn) {
         var tab = editorData.tabs[editorSelectedTab];
         if (tab && tab.content_blocks && tab.content_blocks[bi]) {
           var block = tab.content_blocks[bi];
-          if (_isIG) {
-            if (block.descriptions && block.descriptions[_igRowDi] && block.descriptions[_igRowDi].icons && block.descriptions[_igRowDi].icons[di]) {
-              block.descriptions[_igRowDi].icons[di].image_native_luminance = luminance;
-            }
-          } else {
-            if (block.descriptions && block.descriptions[di]) {
-              block.descriptions[di].image_native_luminance = luminance;
-            }
+          if (block.descriptions && block.descriptions[di]) {
+            block.descriptions[di].image_native_luminance = luminance;
           }
         }
         _detectToast(true);
@@ -1622,7 +1597,6 @@ function currentTab() { return (editorData.tabs||[])[editorSelectedTab] || (edit
 
 function currentBlocks() { const t = currentTab(); if (!t.content_blocks) t.content_blocks = []; return t.content_blocks; }
 
-// Save block expand states, reRender, restore, re-init Sortables
 function reRender() {
 
   if (editorData === serverRulesData) {
@@ -1770,7 +1744,6 @@ function renderMixedEditor(title) {
       onReorder: function(){ _mixedSortable = null; renderMixedEditor("服务器规则"); }
 
     });
-    setTimeout(function() { initIGSortables(); }, 200);
 
   }
 
@@ -2005,8 +1978,6 @@ function dragRegister(opts) {
 
     dragClass: 'drag-dragging',
 
-    forceFallback: opts.forceFallback || false,
-
     scroll: true,
 
     scrollSensitivity: 60,
@@ -2065,7 +2036,6 @@ function dragRegister(opts) {
 
       list.splice(evt.newIndex, 0, item);
 
-      // Sync rebuild — SortableJS may leave spans moved but inputs stale
       if (opts.onReorder) opts.onReorder();
 
     }
@@ -2518,7 +2488,7 @@ function addSGLocation(itemIdx, serverId) {
 
 const MC_TYPE_LABELS = {
 
-  map_filter:'地图筛选', info_card:'卡片', divider:'分隔线',
+  map_filter:'地图筛选', info_card:'卡片', icon_group:'图标组', divider:'分隔线',
 
   base_storage:'存储', base_device:'设备', base_other_device:'其它设备',
 
@@ -2851,45 +2821,34 @@ function renderMixedContent(tab) {
         var d = descs[di];
         if (d.type === 'br') {
           h += '<div class="sr-cat-card" style="border:1px dashed var(--border);border-radius:3px;padding:2px 6px;margin-bottom:3px;text-align:center;font-size:0.75em;opacity:0.6"><span class="drag-handle" style="cursor:grab;float:left;opacity:0.4">\u22ee\u22ee</span>\u21b5 \u6362\u884c <button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div>';
-        } else if (d.type === 'icon_group') {
-          var igTitle = d.title || '';
-          h += '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px;min-width:0"><span class="drag-handle" style="cursor:grab;opacity:0.4;font-size:0.9em;flex-shrink:0">\u22ee\u22ee</span><div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:4px;margin-bottom:4px"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><input id="mcIGTitle'+bi+'_'+di+'" value="'+esc(igTitle)+'" placeholder="图标组标题"></span></span><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value="'+esc(d.server||'')+'"><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="'+esc(JSON.stringify(d.server_states||(d.server?{[d.server]:2}:{})))+'"><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="'+((function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return 'font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid transparent';var sm=SERVER_MAP[ak]||FIXED_STYLES[ak];if(!sm)return 'font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid transparent';if(ast===2)return 'font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;background:'+sm.c+';border:none';return 'font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid transparent'})())+'" title="选择服务器" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+((function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return getServerBadge('');var sm=SERVER_MAP[ak]||FIXED_STYLES[ak];if(!sm)return getServerBadge('');if(ast===1)return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:'+sm.c+'"></i>';return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:var(--primary-background-color)"></i>'})())+'</button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div><div id="mcIGIcons'+bi+'_'+di+'" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;min-width:0">';
-          var igIcons = d.icons || [];
-          for (var ii=0; ii<igIcons.length; ii++) {
-            var igIcon = igIcons[ii];
-            var igIu = igIcon.image_url || '';
-            var igIac = igIcon.image_auto_color_mode || 'off';
-            var igIlum = igIcon.image_native_luminance;
-            if (igIu) {
-              var igAcCls = '';
-              var igModeCls = '';
-              if (igIac !== 'off') {
-                var igIsRev = (igIac === 'reverse');
-                if (igIlum != null && igIlum !== 0.5) {
-                  var igUseLum = igIsRev ? (1 - igIlum) : igIlum;
-                  igAcCls = igUseLum > 0.5 ? ' ic-auto-light' : ' ic-auto-dark';
-                } else {
-                  igAcCls = igIsRev ? ' ic-auto-dark' : ' ic-auto-color';
-                }
-                igModeCls = igIsRev ? ' ic-mode-reverse' : ' ic-mode-normal';
-              }
-              var igWrapCls = (igModeCls + igAcCls).trim();
-              h += '<span class="ig-item '+igWrapCls+'" style="position:relative;display:inline-flex;flex-shrink:0;cursor:grab"'+(igIlum!=null?' data-lum="'+igIlum.toFixed(3)+'"':'')+'><img src="'+esc(thumbUrl(igIu,56))+'" onclick="event.stopPropagation();openIconPicker_desc(this,'+bi+','+ii+')" title="点击换图" style="width:28px;height:28px;object-fit:contain;cursor:pointer;border-radius:3px"></span>';
-            } else {
-              h += '<span class="ig-item ig-placeholder" onclick="event.stopPropagation();openIconPicker_desc(this,'+bi+','+ii+')" title="选择图片" style="width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;opacity:0.4;border:1px dashed var(--border);border-radius:3px;font-size:0.8em">+</span>';
-            }
-            h += '<input type="hidden" id="mcIGImg'+bi+'_'+ii+'" value="'+esc(igIu)+'"><input type="hidden" id="mcIGMode'+bi+'_'+ii+'" value="'+esc(igIac)+'"><input type="hidden" id="mcIGLum'+bi+'_'+ii+'" value="'+(igIlum!=null?igIlum:'')+'">';
-          }
-          h += '</div></div></div>';
         } else {
           h += '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:'+(d.color&&d.color!=='auto'?esc(d.color):'linear-gradient(to right, #000 50%, #fff 50%)')+';cursor:pointer" title="选择颜色" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" title="选择透明度" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:'+(d.opacity||1.0)+';background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="'+(d.opacity||1.0)+'"><span class="cat-bold-btn'+(d.bold?' active':'')+'" title="加粗" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="'+esc(d.text||'')+'" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" '+(d.bold?'checked':'')+' style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="'+esc(d.color||'auto')+'" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value="'+esc(d.server||'')+'"><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="'+esc(JSON.stringify(d.server_states||(d.server?{[d.server]:2}:{})))+'"></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return 'background:transparent;border:1px solid transparent';var sm=SERVER_MAP[ak]||FIXED_STYLES[ak];if(!sm)return 'background:transparent;border:1px solid transparent';if(ast===2)return 'background:'+sm.c+';border:none';return 'background:transparent;border:1px solid transparent';})()+'" title="选择服务器" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return getServerBadge('');var sm=SERVER_MAP[ak]||FIXED_STYLES[ak];if(!sm)return getServerBadge('');if(ast===1)return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:'+sm.c+'"></i>';return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:var(--primary-background-color)"></i>';})()+'</button><input type="hidden" id="mcICDescImg'+bi+'_'+di+'" value="'+esc(d.image_url||'')+'">'+(d.image_url?'<span style="position:relative;display:inline-flex;flex-shrink:0" class="'+(function(){var m=d.image_auto_color_mode||'off';if(m==='off')return'';var l=d.image_native_luminance;var isRev=m==='reverse';var lum=(l!=null&&l!==0.5)?l:null;var ac=lum!=null?(lum>0.5?'ic-auto-light':'ic-auto-dark'):'ic-auto-color';var badge=(m==='normal'||m==='reverse')?' ic-mode-normal':'';return ac+badge;})()+'" ><img src="'+esc(thumbUrl(d.image_url,56))+'" onclick="event.stopPropagation();openIconPicker_desc('+bi+','+di+')" title="点击换图" style="width:24px;height:24px;object-fit:contain;cursor:pointer;flex-shrink:0;border-radius:3px"></span>':'<span onclick="event.stopPropagation();openIconPicker_desc('+bi+','+di+')" title="选择图片" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px">+</span>')+'<input type="hidden" id="mcICDescQty'+bi+'_'+di+'" value="'+(d.quantity||'')+'"><button class="qty-btn" id="mcICDescQtyBtn'+bi+'_'+di+'" onclick="event.stopPropagation();toggleQtyPopup(this,'+bi+','+di+')" title="选择数量" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:'+(d.quantity?'1':'0.4')+';border:'+(d.quantity?'1px solid var(--accent)':'1px dashed var(--border)')+';border-radius:3px;background:'+(d.quantity?'var(--accent)':'transparent')+';color:'+(d.quantity?'var(--bg)':'var(--text)')+';padding:0">'+(d.quantity?'\u00d7'+d.quantity:'\u00d7N')+'</button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
 
         }
       }
 
-      h += '</div><div style="display:flex;align-items:center;gap:8px;margin-top:4px"><button class="btn-small btn-primary" style="font-size:0.75em;padding:4px 10px;height:24px" onclick="event.stopPropagation();addICDesc('+bi+');">+ 描述</button><button class="btn-small btn-primary" style="font-size:0.75em;padding:4px 10px;height:24px" onclick="event.stopPropagation();addICBr('+bi+');">+ 换行</button><button class="btn-small btn-primary" style="font-size:0.75em;padding:4px 10px;height:24px" onclick="event.stopPropagation();addICIconGroup('+bi+');">+ 图标组</button><button type="button" class="ic-collapse-toggle'+(b.collapse_descriptions?' active':'')+'" style="font-size:0.7em;margin-left:auto;padding:4px 7px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:24px;line-height:1;border:1px solid var(--border);background:'+(b.collapse_descriptions?'var(--accent)':'transparent')+';color:'+(b.collapse_descriptions?'var(--primary-background-color)':'var(--bc)')+'" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICCollapseDescs'+bi+'\');cb.checked=!cb.checked;var a=cb.checked;this.classList.toggle(\'active\',a);this.style.background=a?\'var(--accent)\' : \'transparent\';this.style.color=a?\'var(--primary-background-color)\' : \'var(--bc)\';" title="'+(b.collapse_descriptions?'折叠描述：已开启':'折叠描述：已关闭')+'">\u2026</button><input type="checkbox" id="mcICCollapseDescs'+bi+'" '+(b.collapse_descriptions?'checked':'')+' style="display:none"></div></div>';
+      h += '</div><div style="display:flex;align-items:center;gap:8px;margin-top:4px"><button class="btn-small btn-primary" style="font-size:0.75em;padding:4px 10px;height:24px" onclick="event.stopPropagation();addICDesc('+bi+');">+ 描述</button><button class="btn-small btn-primary" style="font-size:0.75em;padding:4px 10px;height:24px" onclick="event.stopPropagation();addICBr('+bi+');">+ 换行</button><button type="button" class="ic-collapse-toggle'+(b.collapse_descriptions?' active':'')+'" style="font-size:0.7em;margin-left:auto;padding:4px 7px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:24px;line-height:1;border:1px solid var(--border);background:'+(b.collapse_descriptions?'var(--accent)':'transparent')+';color:'+(b.collapse_descriptions?'var(--primary-background-color)':'var(--bc)')+'" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICCollapseDescs'+bi+'\');cb.checked=!cb.checked;var a=cb.checked;this.classList.toggle(\'active\',a);this.style.background=a?\'var(--accent)\' : \'transparent\';this.style.color=a?\'var(--primary-background-color)\' : \'var(--bc)\';" title="'+(b.collapse_descriptions?'折叠描述：已开启':'折叠描述：已关闭')+'">\u2026</button><input type="checkbox" id="mcICCollapseDescs'+bi+'" '+(b.collapse_descriptions?'checked':'')+' style="display:none"></div></div>';
       h += '<label style="display:none"><input type="checkbox" id="mcICAutoColor'+bi+'" '+((b.icon_auto_color_mode&&b.icon_auto_color_mode!=='off')||b.icon_auto_color?'checked':'')+'> 图标跟随主题</label>';h += '<input type="hidden" id="mcICIconLum'+bi+'" value="'+esc(b.icon_native_luminance!=null?String(b.icon_native_luminance):'')+'">';
 
+    }
+
+    else if (bt === 'icon_group') {
+      h += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><input id="mcIGTitle'+bi+'" value="'+esc(b.title||'')+'" placeholder="携带装备"></span></span></div>';
+      h += '<div id="mcIGIcons'+bi+'" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:4px">';
+      var icons = b.icons || [];
+      for (var ii=0; ii<icons.length; ii++) {
+        var icon = icons[ii];
+        var iu = icon.image_url || '';
+        var iac = icon.image_auto_color_mode || 'off';
+        var ilum = icon.image_native_luminance;
+        if (iu) {
+          h += '<img src="'+esc(thumbUrl(iu,56))+'" onclick="event.stopPropagation();openIconPicker_desc('+bi+','+ii+')" title="点击换图" style="width:28px;height:28px;object-fit:contain;cursor:pointer;border-radius:3px">';
+        } else {
+          h += '<span onclick="event.stopPropagation();openIconPicker_desc('+bi+','+ii+')" title="选择图片" style="width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;opacity:0.4;border:1px dashed var(--border);border-radius:3px;font-size:0.8em">+</span>';
+        }
+        h += '<input type="hidden" id="mcIGImg'+bi+'_'+ii+'" value="'+esc(iu)+'"><input type="hidden" id="mcIGMode'+bi+'_'+ii+'" value="'+esc(iac)+'"><input type="hidden" id="mcIGLum'+bi+'_'+ii+'" value="'+(ilum!=null?ilum:'')+'">';
+      }
+      h += '</div>';
     }
 
     else if (bt === 'map_filter') {
@@ -2908,7 +2867,7 @@ function renderMixedContent(tab) {
 
   h += '<div class="add-block-panel" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:0">';
 
-  ['info_card','map_filter','divider'].forEach(function(k) {
+  ['info_card','map_filter','icon_group','divider'].forEach(function(k) {
     var v = MC_TYPE_LABELS[k];
 
     h += '<button class="btn-small btn-primary" style="white-space:nowrap;flex-shrink:0" onclick="addMCBlock(\''+k+'\')">+ '+v+'</button>';
@@ -3104,11 +3063,6 @@ function addICDesc(bi) {
 
   if (!container) return;
 
-  const tab = editorData.tabs[editorSelectedTab];
-  const block = tab.content_blocks[bi];
-  if (!block.descriptions) block.descriptions = [];
-  block.descriptions.push({text:'', bold:false, color:'auto', opacity:1.0, server:'', server_states:{}, image_url:'', quantity:0, image_auto_color_mode:'off', image_native_luminance:null});
-
   const di = container.children.length;
 
   const h = '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:linear-gradient(to right, #000 50%, #fff 50%);cursor:pointer" title="选择颜色" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" title="选择透明度" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:1.0;background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="1.0"><span class="cat-bold-btn" title="加粗" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="auto" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value=""><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="{}"></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid transparent" title="选择服务器" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+getServerBadge('')+'</button><input type="hidden" id="mcICDescImg'+bi+'_'+di+'" value=""><span onclick="event.stopPropagation();openIconPicker_desc('+bi+','+di+')" title="选择图片" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px">+</span><input type="hidden" id="mcICDescQty'+bi+'_'+di+'" value=""><button class="qty-btn" id="mcICDescQtyBtn'+bi+'_'+di+'" onclick="event.stopPropagation();toggleQtyPopup(this,'+bi+','+di+')" title="选择数量" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px;background:transparent;color:var(--text);padding:0">×N</button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
@@ -3131,81 +3085,21 @@ function addICBr(bi) {
   c.appendChild(d);
 }
 
-function addICIconGroup(bi) {
+function addIGIcon(bi) {
   const tab = editorData.tabs[editorSelectedTab];
   const block = tab.content_blocks[bi];
-  if (!block.descriptions) block.descriptions = [];
-  block.descriptions.push({type:'icon_group', icons:[{image_url:'', quantity:0, image_auto_color_mode:'off', image_native_luminance:null}]});
-  const c = document.getElementById('mcICDescs'+bi);
-  if (!c) return;
-  const di = c.children.length;
-  const d = document.createElement('div');
-  d.className = 'sr-cat-card';
-  d.style.cssText = 'border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px;min-width:0';
-  d.innerHTML = '<span class="drag-handle" style="cursor:grab;opacity:0.4;font-size:0.9em;flex-shrink:0">\u22ee\u22ee</span><div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:4px;margin-bottom:4px"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><input id="mcIGTitle'+bi+'_'+di+'" value="" placeholder="图标组标题"></span></span><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value=""><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="{}"><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid transparent" title="选择服务器" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+getServerBadge('')+'</button><button class="btn-small btn-danger" style="" onclick="removeICDesc(this,'+bi+')">✕</button></div><div id="mcIGIcons'+bi+'_'+di+'" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;min-width:0"><span class="ig-item ig-placeholder" onclick="event.stopPropagation();openIconPicker_desc(this,'+bi+',0)" title="选择图片" style="width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;opacity:0.4;border:1px dashed var(--border);border-radius:3px;font-size:0.8em">+</span><input type="hidden" id="mcIGImg'+bi+'_0" value=""><input type="hidden" id="mcIGMode'+bi+'_0" value="off"><input type="hidden" id="mcIGLum'+bi+'_0" value=""></div></div>';
-  c.appendChild(d);
+  if (!block.icons) block.icons = [];
+  block.icons.push({image_url:'', quantity:0, image_auto_color_mode:'off', image_native_luminance:null});
+  reRender();
 }
 
-// Icon group row-level drag reorder (SortableJS)
-window._igSortables = {};
-function initIGSortable(container) {
-  if (!container || !Sortable) return;
-  var key = container.id;
-  if (window._igSortables[key]) {
-    try { window._igSortables[key].destroy(); } catch(e) {}
-  }
-  var bi, rowDi;
-  var m = key.match(/^mcIGIcons(\d+)_(\d+)$/);
-  if (m) { bi = parseInt(m[1]); rowDi = parseInt(m[2]); }
-  if (bi == null) return;
-  window._igSortables[key] = dragRegister({
-    _label: 'ig-icon',
-    container: container,
-    itemSelector: '.ig-item:not(.ig-placeholder)',
-    handle: 'img',
-    glowClass: 'drag-target-glow-item',
-    getList: function() { return []; },
-    onReorder: function() {}
-  });
+function removeIGIcon(bi, ii) {
+  const tab = editorData.tabs[editorSelectedTab];
+  const block = tab.content_blocks[bi];
+  block.icons.splice(ii, 1);
+  reRender();
 }
-function initIGSortables() {
-  document.querySelectorAll('[id^="mcIGIcons"]').forEach(function(c) {
-    if (!c.id.match(/^mcIGIcons\d+_\d+$/)) return;
-    // Ensure all direct span children have ig-item class
-    c.querySelectorAll(':scope > span').forEach(function(s) {
-      if (!s.classList.contains('ig-item')) s.classList.add('ig-item');
-    });
-    initIGSortable(c);
-  });
-}
-function rebuildIGContainer(container, bi, icons) {
-  var h = '', seq = 0;
-  for (var ii = 0; ii < icons.length; ii++) {
-    var icon2 = icons[ii];
-    if (!icon2) continue;
-    var iu2 = icon2.image_url || '';
-    var iac2 = icon2.image_auto_color_mode || 'off';
-    var ilum2 = icon2.image_native_luminance;
-    if (iu2) {
-      var acCls = '', modeCls = '';
-      if (iac2 !== 'off') {
-        var isRev2 = (iac2 === 'reverse');
-        if (ilum2 != null && ilum2 !== 0.5) {
-          var useLum2 = isRev2 ? (1 - ilum2) : ilum2;
-          acCls = useLum2 > 0.5 ? ' ic-auto-light' : ' ic-auto-dark';
-        } else { acCls = isRev2 ? ' ic-auto-dark' : ' ic-auto-color'; }
-        modeCls = isRev2 ? ' ic-mode-reverse' : ' ic-mode-normal';
-      }
-      h += '<span class="ig-item ' + (modeCls + acCls).trim() + '" style="position:relative;display:inline-flex;flex-shrink:0"' + (ilum2 != null ? ' data-lum="' + ilum2.toFixed(3) + '"' : '') + '><img src="' + thumbUrl(iu2, 56) + '" onclick="event.stopPropagation();openIconPicker_desc(this,' + bi + ',' + seq + ')" title="点击换图" style="width:28px;height:28px;object-fit:contain;cursor:pointer;border-radius:3px"></span>';
-    } else {
-      h += '<span class="ig-item ig-placeholder" onclick="event.stopPropagation();openIconPicker_desc(this,' + bi + ',' + seq + ')" title="选择图片" style="width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;opacity:0.4;border:1px dashed var(--border);border-radius:3px;font-size:0.8em">+</span>';
-    }
-    h += '<input type="hidden" id="mcIGImg' + bi + '_' + seq + '" value="' + (iu2 || '') + '"><input type="hidden" id="mcIGMode' + bi + '_' + seq + '" value="' + (iac2 || 'off') + '"><input type="hidden" id="mcIGLum' + bi + '_' + seq + '" value="' + (ilum2 != null ? ilum2 : '') + '">';
-    seq++;
-  }
-  container.innerHTML = h;
-  setTimeout(function() { initIGSortable(container); }, 100);
-}
+
 
 function addEDDesc(bi) {
 
@@ -3257,7 +3151,8 @@ function addMCBlock(type) {
 
     map_filter: {block_type:'map_filter'},
 
-    info_card: {block_type:'info_card', title:'', icon_url:'', mdi_icon:'', highlight:'', descriptions:[{text:'',bold:false,color:''}], icon_auto_color:false, icon_auto_color_mode:'off', quote_color:'auto', collapse_descriptions:false}
+    info_card: {block_type:'info_card', title:'', icon_url:'', mdi_icon:'', highlight:'', descriptions:[{text:'',bold:false,color:''}], icon_auto_color:false, icon_auto_color_mode:'off', quote_color:'auto', collapse_descriptions:false},
+    icon_group: {block_type:'icon_group', title:'', icons:[{image_url:'', quantity:0, image_auto_color_mode:'off', image_native_luminance:null}], gap:8}
 
   };
 
@@ -3435,6 +3330,28 @@ function saveMCBlocks(tab) {
 
       }
 
+    } else if (bt === 'icon_group') {
+      b.title = document.getElementById('mcIGTitle'+bi)?.value || '';
+      b.gap = 8;
+      // Iterate from editorData icons (not DOM children, since each icon has multiple DOM nodes)
+      var icons = b.icons || [];
+      b.icons = [];
+      for (var ii = 0; ii < icons.length; ii++) {
+        var iu = document.getElementById('mcIGImg'+bi+'_'+ii)?.value || '';
+        b.icons.push({
+          image_url: iu,
+          quantity: 0,
+          image_auto_color_mode: document.getElementById('mcIGMode'+bi+'_'+ii)?.value || 'off',
+          image_native_luminance: (function(){
+            var v = document.getElementById('mcIGLum'+bi+'_'+ii)?.value;
+            return v ? parseFloat(v) : null;
+          })()
+        });
+      }
+      // Trim trailing empty icons (keep at most one at end for "next" slot)
+      while (b.icons.length > 1 && !b.icons[b.icons.length-1].image_url && !b.icons[b.icons.length-2].image_url) {
+        b.icons.pop();
+      }
     } else if (bt === 'map_filter') {
 
       // No config needed — pure UI element
@@ -3460,46 +3377,7 @@ function saveMCBlocks(tab) {
         for (var ci = 0; ci < icContainer.children.length; ci++) {
           var child = icContainer.children[ci];
           var textInput = child.querySelector('input[id^="mcICDescText'+bi+'_"]');
-          var igContainer = child.querySelector('[id^="mcIGIcons'+bi+'_"]');
-          if (igContainer) {
-            // Read icons from visual span order (SortableJS moves spans, not hidden inputs).
-            // Mirror tribe base: save reads DOM visual order.
-            var igContainerId = igContainer.id;
-            var igDiMatch = igContainerId.match(/^mcIGIcons\d+_(\d+)$/);
-            var igDi = igDiMatch ? parseInt(igDiMatch[1]) : 0;
-            var igIcons = [];
-            var spans = igContainer.querySelectorAll(':scope > .ig-item');
-            // Build lookup from old descriptions by image_url (handles drag reorder)
-            // Use ci (visual position) instead of igDi (container ID index) — container IDs
-            // become stale after .sr-cat-card drag reorder, but ci matches editorData order
-            var oldIcons = (_oldDescs && _oldDescs[ci] && _oldDescs[ci].icons) ? _oldDescs[ci].icons : [];
-            var oldLookup = {};
-            oldIcons.forEach(function(oi){ if(oi.image_url) oldLookup[oi.image_url] = oi; });
-            spans.forEach(function(span) {
-              var img = span.querySelector('img');
-              var imgUrl = img ? img.src : '';
-              if (!imgUrl) return;
-              var oldMeta = oldLookup[imgUrl] || {};
-              igIcons.push({
-                image_url: imgUrl,
-                quantity: 0,
-                image_auto_color_mode: oldMeta.image_auto_color_mode || 'off',
-                image_native_luminance: oldMeta.image_native_luminance != null ? oldMeta.image_native_luminance : null
-              });
-            });
-            // Block mode auto-reverse: same as description row (L3486-3490)
-            var igSrvStates = {};
-            try { igSrvStates = JSON.parse(document.getElementById('mcICDescSrvStates'+bi+'_'+igDi)?.value || '{}'); } catch(e) {}
-            var hasBlock = false;
-            for (var k in igSrvStates) { if (igSrvStates[k] === 2) { hasBlock = true; break; } }
-            if (hasBlock) {
-              igIcons.forEach(function(icon){
-                if (icon.image_auto_color_mode === 'normal') icon.image_auto_color_mode = 'reverse';
-              });
-            }
-            var igTitle = document.getElementById('mcIGTitle'+bi+'_'+igDi)?.value || '';
-            b.descriptions.push({type:'icon_group', title: igTitle, icons: igIcons, server: document.getElementById('mcICDescServer'+bi+'_'+igDi)?.value || '', server_states: igSrvStates});
-          } else if (!textInput) {
+          if (!textInput) {
             b.descriptions.push({type:'br'});
           } else {
             var idMatch = textInput.id.match(/^mcICDescText\d+_(\d+)$/);
@@ -7448,14 +7326,7 @@ function composeIcons(btn){
     var onclick=item?.getAttribute('onclick')||'';
     if(onclick.includes('selectDescImage')){
       var m=onclick.match(/selectDescImage\(this,(\d+),(\d+)\)/);
-      if(m){var bi=parseInt(m[1]),di=parseInt(m[2]);
-        // Check if this is icon_group (mcIGImg exists) or description (mcICDescImg)
-        var igRowDi4 = overlay._igRowDi;
-        if (igRowDi4 != null) {
-          saveComboIG(dataUrl,bi,di,overlay);
-        } else {
-          saveComboDesc(dataUrl,bi,di,overlay);
-        }}
+      if(m){var bi=parseInt(m[1]),di=parseInt(m[2]);saveComboDesc(dataUrl,bi,di,overlay)}
     }else if(onclick.includes('selectInfoCardIcon')){
       var m=onclick.match(/selectInfoCardIcon\(this,(\d+)\)/);
       if(m){var bi=parseInt(m[1]);saveComboIC(dataUrl,bi,overlay)}
@@ -7472,179 +7343,15 @@ function saveComboDesc(dataUrl,bi,di,overlay){
     var container=descRow.closest('.sr-cat-card');
     if(container){
       var img=container.querySelector('img[onclick*="openIconPicker_desc"]');
-      if(img){
-        // Ensure img is wrapped in a SPAN for CSS pseudo-elements (小兰点)
-        var existWrapper = img.parentElement;
-        if (existWrapper && existWrapper.tagName !== 'SPAN') {
-          var wrapSpan = document.createElement('span');
-          wrapSpan.style.cssText = 'position:relative;display:inline-flex;flex-shrink:0';
-          existWrapper.insertBefore(wrapSpan, img);
-          wrapSpan.appendChild(img);
-        }
-        img.src=thumbUrl(dataUrl,56);img.style.display=''}
+      if(img){img.src=thumbUrl(dataUrl,56);img.style.display=''}
       else{
-        var descWrapper = document.createElement('span');
-        descWrapper.style.cssText = 'position:relative;display:inline-flex;flex-shrink:0';
         var newImg=document.createElement('img');
         newImg.src=thumbUrl(dataUrl,56);
         newImg.setAttribute('onclick','event.stopPropagation();openIconPicker_desc('+bi+','+di+')');
         newImg.title='点击换图';newImg.style.cssText='width:22px;height:22px;object-fit:contain;cursor:pointer;flex-shrink:0;border-radius:3px';
-        descWrapper.appendChild(newImg);
         var btn=container.querySelector('span[onclick*="openIconPicker_desc"]');
-        if(btn){btn.style.display='none';btn.before(descWrapper)}
-      }
-    }
-  }
-  // Check color mode for combo result
-  var modeBtn = document.getElementById('mcICDescColorModeBtn'+bi+'_'+di);
-  if (modeBtn && modeBtn.getAttribute('data-mode') === 'normal') {
-    _detectComboBrightness(dataUrl, function(luminance){
-      if (luminance >= 0) {
-        var descImg = document.querySelector('#mcICDescs'+bi+' .sr-cat-card img[onclick*=\"openIconPicker_desc('+bi+','+di+')\"]');
-        if (descImg) {
-          applyAutoColorClassWithLum(descImg, luminance);
-          var dw = descImg.parentElement;
-          if (dw && dw.tagName === 'SPAN') {
-            dw.classList.add('ic-mode-normal');
-            dw.setAttribute('data-lum', luminance.toFixed(3));
-          }
-        }
-        // Persist to editorData
-        var tab = editorData.tabs[editorSelectedTab];
-        if (tab && tab.content_blocks && tab.content_blocks[bi] && tab.content_blocks[bi].descriptions && tab.content_blocks[bi].descriptions[di]) {
-          tab.content_blocks[bi].descriptions[di].image_native_luminance = luminance;
-        }
-      }
-    });
-  }
-  // Persist color mode to editorData (align with selectDescImage)
-  var tabCombo = editorData.tabs[editorSelectedTab];
-  if (tabCombo && tabCombo.content_blocks && tabCombo.content_blocks[bi] && tabCombo.content_blocks[bi].descriptions && tabCombo.content_blocks[bi].descriptions[di]) {
-    tabCombo.content_blocks[bi].descriptions[di].image_auto_color_mode = (modeBtn && modeBtn.getAttribute('data-mode')) || 'off';
-  }
-  // Clean up visual classes when mode is off (remove stale ic-mode-normal from previous toggle)
-  if (!modeBtn || modeBtn.getAttribute('data-mode') !== 'normal') {
-    var descImgOff = document.querySelector('#mcICDescs'+bi+' .sr-cat-card img[onclick*=\"openIconPicker_desc('+bi+','+di+')\"]');
-    if (descImgOff) {
-      applyAutoColorClass(descImgOff, null);
-      descImgOff.style.filter = 'none';
-      var dwOff = descImgOff.parentElement;
-      if (dwOff && dwOff.tagName === 'SPAN') {
-        dwOff.classList.remove('ic-mode-normal', 'ic-mode-reverse');
-        dwOff.removeAttribute('data-lum');
-      }
-    }
-  }
-  comboMode=false;comboSelected=[];overlay.remove();
-}
-function saveComboIG(dataUrl, bi, di, overlay){
-  var tab = editorData.tabs[editorSelectedTab];
-  var block = tab.content_blocks[bi];
-  // Update DOM: find container via overlay._igRowDi
-  var igRowDi = overlay._igRowDi;
-  var container = igRowDi != null ? document.getElementById('mcIGIcons'+bi+'_'+igRowDi) : null;
-  // Row-level data persistence
-  var igContainerId2 = container ? container.id : '';
-  var diMatch2 = igContainerId2.match(/^mcIGIcons\d+_(\d+)$/);
-  if (diMatch2 && block && block.descriptions) {
-    var rowDi4 = parseInt(diMatch2[1]);
-    var desc = block.descriptions[rowDi4];
-    if (desc && desc.type === 'icon_group' && desc.icons && desc.icons[di]) {
-      desc.icons[di].image_url = dataUrl;
-      if (di === desc.icons.length - 1) {
-        desc.icons.push({image_url:'', quantity:0, image_auto_color_mode:'off', image_native_luminance:null});
-      }
-    }
-  }
-  if (container) {
-    var pos = di * 4;
-    var picker = container.children[pos];
-    var newImg = document.createElement('img');
-    newImg.src = thumbUrl(dataUrl, 56);
-    newImg.setAttribute('onclick', 'event.stopPropagation();openIconPicker_desc('+bi+','+di+')');
-    newImg.setAttribute('title', '点击换图');
-    newImg.style.cssText = 'width:28px;height:28px;object-fit:contain;cursor:pointer;border-radius:3px';
-    var wrapper = document.createElement('span');
-    wrapper.className = 'ig-item';
-    wrapper.setAttribute('onclick', 'event.stopPropagation();openIconPicker_desc('+bi+','+di+')');
-    wrapper.style.cssText = 'position:relative;display:inline-flex;flex-shrink:0';
-    wrapper.appendChild(newImg);
-    if (picker) picker.replaceWith(wrapper);
-    // Update hidden input
-    var igInput = container ? container.querySelector('#mcIGImg'+bi+'_'+di) : document.getElementById('mcIGImg'+bi+'_'+di);
-    if (igInput && container) igInput.value = dataUrl;
-    // Auto-append empty slot
-    var isLastIcon = false;
-    var igContainerId2 = container ? container.id : '';
-    var diMatch2 = igContainerId2.match(/^mcIGIcons\d+_(\d+)$/);
-    // Row-level: check if this was the last icon in this container
-    if (!isLastIcon && container) {
-      var existingIcons2 = container.querySelectorAll('input[id^="mcIGImg'+bi+'_"]');
-      if (di === existingIcons2.length - 1) isLastIcon = true;
-    }
-    if (isLastIcon) {
-      var newDi = di + 1;
-      // Row-level: update editorData if applicable
-      if (diMatch2) {
-        var rowDi2 = parseInt(diMatch2[1]);
-        if (block && block.descriptions && block.descriptions[rowDi2] && block.descriptions[rowDi2].type === 'icon_group') {
-          if (!block.descriptions[rowDi2].icons) block.descriptions[rowDi2].icons = [];
-          block.descriptions[rowDi2].icons.push({image_url:'', quantity:0, image_auto_color_mode:'off', image_native_luminance:null});
-        }
-      }
-      var newSpan = document.createElement('span');
-      newSpan.className = 'ig-item ig-placeholder';
-      newSpan.setAttribute('onclick', 'event.stopPropagation();openIconPicker_desc(this,'+bi+','+newDi+')');
-      newSpan.setAttribute('title', '选择图片');
-      newSpan.style.cssText = 'width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;opacity:0.4;border:1px dashed var(--border);border-radius:3px;font-size:0.8em';
-      newSpan.textContent = '+';
-      container.appendChild(newSpan);
-      var h1 = document.createElement('input'); h1.type='hidden'; h1.id='mcIGImg'+bi+'_'+newDi; h1.value=''; container.appendChild(h1);
-      var h2 = document.createElement('input'); h2.type='hidden'; h2.id='mcIGMode'+bi+'_'+newDi; h2.value='off'; container.appendChild(h2);
-      var h3 = document.createElement('input'); h3.type='hidden'; h3.id='mcIGLum'+bi+'_'+newDi; h3.value=''; container.appendChild(h3);
-    }
-  }
-  // Persist color mode for combo result (all modes: off/normal/reverse)
-  var modeBtn3 = document.getElementById('mcICDescColorModeBtn'+bi+'_'+di);
-  var modeVal = modeBtn3 ? modeBtn3.getAttribute('data-mode') || 'off' : 'off';
-  if (modeVal === 'normal') {
-    var modeInput2 = container ? container.querySelector('#mcIGMode'+bi+'_'+di) : document.getElementById('mcIGMode'+bi+'_'+di);
-    var lumInput2 = container ? container.querySelector('#mcIGLum'+bi+'_'+di) : document.getElementById('mcIGLum'+bi+'_'+di);
-    _detectComboBrightness(dataUrl, function(luminance){
-      if (luminance >= 0 && wrapper) {
-        applyAutoColorClassWithLum(newImg, luminance);
-        wrapper.classList.add('ic-mode-normal');
-        wrapper.setAttribute('data-lum', luminance.toFixed(3));
-        // Persist to editorData AND hidden inputs
-        // Row-level: persist to descriptions
-        if (block && block.descriptions && igContainerId2) {
-          var diMatch3 = igContainerId2.match(/^mcIGIcons\d+_(\d+)$/);
-          if (diMatch3) {
-            var rowDi3 = parseInt(diMatch3[1]);
-            if (block.descriptions[rowDi3] && block.descriptions[rowDi3].type === 'icon_group' && block.descriptions[rowDi3].icons && block.descriptions[rowDi3].icons[di]) {
-              block.descriptions[rowDi3].icons[di].image_native_luminance = luminance;
-              block.descriptions[rowDi3].icons[di].image_auto_color_mode = 'normal';
-            }
-          }
-        }
-        var lumInput = container ? container.querySelector('#mcIGLum'+bi+'_'+di) : document.getElementById('mcIGLum'+bi+'_'+di);
-        if (lumInput) lumInput.value = luminance.toFixed(3);
-        var modeInput = container ? container.querySelector('#mcIGMode'+bi+'_'+di) : document.getElementById('mcIGMode'+bi+'_'+di);
-        if (modeInput) modeInput.value = 'normal';
-      }
-    });
-  } else {
-    // off or reverse: persist mode directly (no brightness detection needed)
-    var modeInput2 = container ? container.querySelector('#mcIGMode'+bi+'_'+di) : document.getElementById('mcIGMode'+bi+'_'+di);
-    if (modeInput2) modeInput2.value = modeVal;
-    // Update row-level editorData
-    if (block && block.descriptions && igContainerId2) {
-      var diMatch4 = igContainerId2.match(/^mcIGIcons\d+_(\d+)$/);
-      if (diMatch4) {
-        var rowDi5 = parseInt(diMatch4[1]);
-        if (block.descriptions[rowDi5] && block.descriptions[rowDi5].type === 'icon_group' && block.descriptions[rowDi5].icons && block.descriptions[rowDi5].icons[di]) {
-          block.descriptions[rowDi5].icons[di].image_auto_color_mode = modeVal;
-        }
+        if(btn)btn.style.display='none';
+        container.querySelector('div').appendChild(newImg);
       }
     }
   }
@@ -7655,49 +7362,9 @@ function saveComboIC(dataUrl,bi,overlay){
   if(input)input.value=dataUrl;
   var pv=document.getElementById('mcICIconPreview'+bi);
   var ph=document.getElementById('mcICIconPlaceholder'+bi);
-  if(pv){pv.src=dataUrl;pv.style.display='';pv.style.opacity=''}
-  else if(ph){
-    var newImg2=document.createElement('img');
-    newImg2.id='mcICIconPreview'+bi;newImg2.src=dataUrl;
-    newImg2.style.cssText='width:28px;height:28px;object-fit:contain;cursor:pointer;border-radius:3px';
-    newImg2.setAttribute('onclick','event.stopPropagation();openIconPicker_ic('+bi+')');
-    newImg2.setAttribute('title','点击换图');
-    newImg2.onerror=function(){this.style.opacity=0};
-    ph.parentElement.insertBefore(newImg2, ph);
-    ph.style.display='none';
-    pv=newImg2;
-  }
-  // Check color mode for combo result
-  var modeBtn2 = document.getElementById('mcICColorModeBtn'+bi);
-  if (modeBtn2 && modeBtn2.getAttribute('data-mode') !== 'off') {
-    _detectComboBrightness(dataUrl, function(luminance){
-      if (luminance >= 0 && pv) {
-        applyAutoColorClassWithLum(pv, luminance);
-        var wrapper2 = pv.parentElement;
-        if (wrapper2 && wrapper2.tagName === 'SPAN') {
-          wrapper2.classList.add('ic-mode-normal');
-          wrapper2.setAttribute('data-lum', luminance.toFixed(3));
-        }
-        var lumInput = document.getElementById('mcICIconLum'+bi);
-        if (lumInput) lumInput.value = luminance.toFixed(3);
-      }
-    });
-  }
+  if(pv){pv.src=thumbUrl(dataUrl,64);pv.style.display=''}
+  if(ph)ph.style.display='none';
   comboMode=false;comboSelected=[];overlay.remove();
-}
-// Shared helper: detect brightness for combo result images
-function _detectComboBrightness(dataUrl, callback){
-  _pendingBrightnessChecks++;
-  _updateSaveBtnState();
-  // Pass raw combined image directly to detectImageBrightness (it already excludes transparent pixels)
-  detectImageBrightness(dataUrl, function(luminance, errMsg){
-    _pendingBrightnessChecks--;
-    if (luminance >= 0) {
-      _detectToast(true, luminance.toFixed(3));
-      if (callback) callback(luminance);
-    }
-    _updateSaveBtnState();
-  });
 }
 function saveComboDevice(dataUrl,overlay){
   // Generic save: store in a data attribute on overlay and let the existing onclick handle it
@@ -7813,9 +7480,7 @@ html += "<div class='combo-bar'><div class='combo-thumbs'></div><button class='c
   });
 }
 
-function openIconPicker_desc(el, bi, di) {
-  // backward compat: internal calls without this (bi, di only)
-  if (arguments.length === 2 || typeof el === 'number') { di = bi; bi = el; el = null; }
+function openIconPicker_desc(bi, di) {
   closeAllPopups();
   loadIconList(function(list){
     var cats = {}; var catOrder = [];
@@ -7828,9 +7493,6 @@ function openIconPicker_desc(el, bi, di) {
     var catLabels = {armor:"🛡️ 护甲", biology:"🧬 生物", consumables:"🍖 消耗品", drops:"💧 掉落物", egg:"🥚 蛋", eggs:"🥚 蛋", illustrations:"🖼️ 立绘", items:"📦 物品", misc:"📁 杂项", resources:"⛏️ 资源", saddles:"🐎 鞍具", skins:"🎨 皮肤", structures:"🏗️ 建筑", tools:"🔧 工具", weapons:"⚔️ 武器", "其他":"🗂️ 其他"};
     var overlay = document.createElement("div");
     overlay.className = "icon-picker-overlay";
-    // icon_group: store rowDi for downstream selectDescImage/clearDescImageSelection
-    var igRowEl = el && el.closest ? el.closest('[id^="mcIGIcons"]') : null;
-    if (igRowEl) { var rm = igRowEl.id.match(/^mcIGIcons\d+_(\d+)$/); if (rm) overlay._igRowDi = parseInt(rm[1]); }
     overlay.onclick = function(e){ if (e.target === overlay) overlay.remove(); };
     var html = "<div class='icon-picker-panel' onclick='event.stopPropagation()'>";
     html += "<div class='icon-picker-header' style='border-bottom:none;display:flex;gap:6px;align-items:center;padding:8px 12px'><input id='iconPickerSearch' placeholder='搜索图标...' style='flex:1;margin:0;padding:6px 10px;font-size:0.85em' oninput='filterIconPicker()'><button style='width:auto;height:28px;padding:0 8px;display:inline-flex;align-items:center;justify-content:center;gap:4px;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);cursor:pointer;flex-shrink:0;font-size:0.8em' onclick='event.stopPropagation();toggleComboMode(this)' title='组合图标'><svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round'><path d='M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71'/><path d='M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71'/></svg> 组合</button><button style='width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);cursor:pointer;flex-shrink:0' onclick='refreshIconList()' title='刷新'><svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M23 4v6h-6'/><path d='M1 20v-6h6'/><path d='M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15'/></svg></button><button style='width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);cursor:pointer;flex-shrink:0' onclick='clearDescImageSelection(this,"+bi+","+di+")' title='清空'><svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M3 6h18'/><path d='M8 6V4h8v2'/><path d='M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6'/><line x1='10' y1='11' x2='10' y2='17'/><line x1='14' y1='11' x2='14' y2='17'/></svg></button><button id=\"mcICDescColorModeBtn"+bi+"_"+di+"\" data-mode=\"off\" style=\"width:auto;height:28px;padding:0 6px;display:inline-flex;align-items:center;justify-content:center;gap:2px;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);cursor:pointer;flex-shrink:0;font-size:0.75em;opacity:0.5\" onclick=\"event.stopPropagation();toggleIconColorModeDesc("+bi+","+di+",this)\" title=\"反色模式：关闭\">反色：关</button><button style='width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;margin-left:auto;flex-shrink:0;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);cursor:pointer' onclick='var o=this.closest(\".icon-picker-overlay\");if(o)o.remove();' title='关闭'>✕</button></div>";
@@ -7854,71 +7516,20 @@ html += "<div class='combo-bar'><div class='combo-thumbs'></div><button class='c
 
 function selectDescImage(el, bi, di) {
   var url = el.getAttribute("data-url") || "";
-  // icon_group mode: update editorData and re-render
-  var popup2 = el.closest('.icon-picker-overlay'); var igRowDi2 = popup2 ? popup2._igRowDi : null;
-  var igInput = igRowDi2 != null ? document.querySelector('#mcIGIcons'+bi+'_'+igRowDi2+' #mcIGImg'+bi+'_'+di) : document.getElementById('mcIGImg'+bi+'_'+di);
-  if (igInput && igRowDi2 != null) {
-    igInput.value = url;
+  // icon_group mode: update mcIGImg and reRender
+  var igInput = document.getElementById('mcIGImg'+bi+'_'+di);
+  if (igInput) {
     var tab = editorData.tabs[editorSelectedTab];
     var block = tab.content_blocks[bi];
-    var modeBtn = document.getElementById('mcICDescColorModeBtn'+bi+'_'+di);
-    var mode = modeBtn ? modeBtn.getAttribute('data-mode') || 'off' : 'off';
-    // Row-level: update editorData descriptions
-    var igContainer2 = document.getElementById('mcIGIcons'+bi+'_'+igRowDi2);
-    if (igContainer2) {
-      var igDiMatch = igContainer2.id.match(/^mcIGIcons\d+_(\d+)$/);
-      if (igDiMatch) {
-        var rowDi = parseInt(igDiMatch[1]);
-        if (block && block.descriptions && block.descriptions[rowDi] && block.descriptions[rowDi].type === 'icon_group') {
-          var desc = block.descriptions[rowDi];
-          if (desc.icons && desc.icons[di]) {
-            desc.icons[di].image_url = url;
-            desc.icons[di].image_auto_color_mode = mode;
-          }
-          // Brightness detection for 反色 mode (must run before popup closes)
-          if (mode === 'normal' && url) {
-            _pendingBrightnessChecks++;
-            _updateSaveBtnState();
-            var _bi = bi, _di2 = di, _rowDi = rowDi, _igContainer2 = igContainer2;
-            detectImageBrightness(url, function(luminance, errMsg) {
-              _pendingBrightnessChecks--;
-              if (luminance >= 0 && block && block.descriptions[_rowDi] && block.descriptions[_rowDi].icons && block.descriptions[_rowDi].icons[_di2]) {
-                block.descriptions[_rowDi].icons[_di2].image_native_luminance = luminance;
-                var lumInput3 = _igContainer2 ? _igContainer2.querySelector('#mcIGLum'+_bi+'_'+_di2) : null;
-                if (lumInput3) lumInput3.value = luminance.toFixed(3);
-                var modeInput3 = _igContainer2 ? _igContainer2.querySelector('#mcIGMode'+_bi+'_'+_di2) : null;
-                if (modeInput3) modeInput3.value = 'normal';
-                // Re-apply visual class after luminance is known
-                var igItem3 = _igContainer2 ? _igContainer2.querySelector('.ig-item img[onclick*=\"openIconPicker_desc(this,'+_bi+','+_di2+')\"]') : null;
-                if (igItem3) {
-                  var wrapper3 = igItem3.parentElement;
-                  applyAutoColorClassWithLum(igItem3, luminance);
-                  if (wrapper3) {
-                    wrapper3.setAttribute('data-lum', luminance.toFixed(3));
-                    wrapper3.classList.add('ic-mode-normal');
-                  }
-                }
-                _detectToast(true, luminance.toFixed(3));
-              } else if (errMsg) {
-                _detectToast(false, errMsg);
-              }
-              _updateSaveBtnState();
-            });
-          }
-          // Auto-append empty slot if this was the last icon
-          if (di === desc.icons.length - 1) {
-            desc.icons.push({image_url:'', quantity:0, image_auto_color_mode:'off', image_native_luminance:null});
-          }
-        }
+    if (block && block.icons && block.icons[di]) {
+      block.icons[di].image_url = url;
+      if (di === block.icons.length - 1) {
+        block.icons.push({image_url:'', quantity:0, image_auto_color_mode:'off', image_native_luminance:null});
       }
     }
     var overlay = el.closest('.icon-picker-overlay');
     if (overlay) overlay.remove();
-    // Row-level: rebuild only this icon container
-    if (igContainer2 && rowDi != null) {
-      var descRef = block.descriptions[rowDi];
-      if (descRef && descRef.icons) rebuildIGContainer(igContainer2, bi, descRef.icons);
-    }
+    reRender();
     return;
   }
   var input = document.getElementById('mcICDescImg'+bi+'_'+di);
@@ -8024,7 +7635,7 @@ function selectDescImage(el, bi, di) {
                   edBlock.descriptions[di].image_native_luminance = lum;
                 }
               }
-              if (m3 !== 'off') _detectToast(true, lum.toFixed(3));
+              if (m3 !== 'off') _detectToast(true);
             } else {
               descImg2.className = (descImg2.className || '').replace(/\bic-auto-(dark|light|color)\b/g, '').trim() + ' ic-auto-color';
               if (m3 !== 'off') _detectToast(false, '网络错误或图片无法访问');
@@ -8042,41 +7653,19 @@ function selectDescImage(el, bi, di) {
 function clearDescImageSelection(el, bi, di) {
   event.stopPropagation();
   // icon_group mode: clear mcIGImg and trim trailing
-  var popup3 = el.closest('.icon-picker-overlay'); var igRowDi3 = popup3 ? popup3._igRowDi : null;
-  var igInput = igRowDi3 != null ? document.querySelector('#mcIGIcons'+bi+'_'+igRowDi3+' #mcIGImg'+bi+'_'+di) : document.getElementById('mcIGImg'+bi+'_'+di);
-  if (igInput && igRowDi3 != null) {
+  var igInput = document.getElementById('mcIGImg'+bi+'_'+di);
+  if (igInput) {
     igInput.value = '';
     var tab = editorData.tabs[editorSelectedTab];
     var block = tab.content_blocks[bi];
-    // Row-level: find which description row this icon belongs to
-    var igContainer = igInput.closest('[id^="mcIGIcons'+bi+'_"]');
-    if (igContainer) {
-      var diMatch = igContainer.id.match(/^mcIGIcons\d+_(\d+)$/);
-      if (diMatch && block && block.descriptions) {
-        var rowDi = parseInt(diMatch[1]);
-        var desc = block.descriptions[rowDi];
-        if (desc && desc.type === 'icon_group' && desc.icons && desc.icons[di]) {
-          desc.icons[di].image_url = '';
-          // Remove emptied icon (unless it's the only one left, keep one empty slot)
-          if (desc.icons.length > 1) {
-            desc.icons.splice(di, 1);
-          }
-          while (desc.icons.length > 1 && !desc.icons[desc.icons.length-1].image_url && !desc.icons[desc.icons.length-2].image_url) {
-            desc.icons.pop();
-          }
-        }
+    if (block && block.icons && block.icons[di]) {
+      block.icons[di].image_url = '';
+      while (block.icons.length > 1 && !block.icons[block.icons.length-1].image_url && !block.icons[block.icons.length-2].image_url) {
+        block.icons.pop();
       }
     }
     var overlay = el.closest('.icon-picker-overlay');
     if (overlay) overlay.remove();
-    // Row-level: rebuild only this icon container
-    if (igContainer) {
-      var desc2 = block.descriptions[rowDi];
-      if (desc2 && desc2.icons) {
-        rebuildIGContainer(igContainer, bi, desc2.icons);
-      }
-      return;
-    }
     reRender();
     return;
   }
@@ -8301,6 +7890,7 @@ function loadIconList(cb) {
   });
 
 }
+
 
 function toggleQtyPopup(el, bi, di) {
   closeAllPopups();
