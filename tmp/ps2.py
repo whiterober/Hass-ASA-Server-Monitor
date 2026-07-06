@@ -206,7 +206,7 @@ def main():
                         rows_html = []
                         for row in b['rows']:
                             cap = str(row.get('capacity_main',''))+'<sub>'+str(row.get('capacity_sub',''))+'</sub>'
-                            icon_url = row.get('images',[{}])[0].get('image_url','') if row.get('images') else ''
+                            images_raw = row.get('images'); print('DEBUG images:', repr(images_raw)[:100] if images_raw else 'NONE', file=__import__('sys').stderr); icon_url = (images_raw[0].get('image_url','') if images_raw and len(images_raw)>0 else '')
                             icon = '<img src=\"'+icon_url+'\" alt=\"'+row.get('device_name','')+'\" />' if icon_url else ''
                             rows_html.append('<tr><td class=\"border border-gray-300 p-2 text-left align-top\"><div class=\"device-container\"><div class=\"materials-box\"><span class=\"bio-capacity-tag-bottom\">'+cap+'</span><div class=\"materials-box-inner\"><div class=\"device-icon-wrapper\">'+icon+'</div></div></div></div></td><td class=\"border border-gray-300 p-2 text-left align-top\" colspan=\"2\"></td></tr>')
                         body_parts.append('<table id=\"base-table\" class=\"table-fixed border-collapse w-full min-w-max\"><thead><tr><th class=\"border border-gray-300 p-2\">设备</th><th class=\"border border-gray-300 p-2\" colspan=\"2\">存储</th></tr></thead><tbody>'+''.join(rows_html)+'</tbody></table>')
