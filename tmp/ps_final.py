@@ -207,6 +207,7 @@ def main():
                         for row in b['rows']:
                             cap = str(row.get('capacity_main',''))+'<sub>'+str(row.get('capacity_sub',''))+'</sub>'
                             icon_url = row.get('images',[{}])[0].get('image_url','') if row.get('images') else ''
+                            if icon_url: sys.stderr.write('ICON: '+icon_url[:60]+chr(10))
                             icon = '<img src=\"'+icon_url+'\" alt=\"'+row.get('device_name','')+'\" />' if icon_url else ''
                             rows_html.append('<tr><td class=\"border border-gray-300 p-2 text-left align-top\"><div class=\"device-container\"><div class=\"materials-box\"><span class=\"bio-capacity-tag-bottom\">'+cap+'</span><div class=\"materials-box-inner\"><div class=\"device-icon-wrapper\">'+icon+'</div></div></div></div></td><td class=\"border border-gray-300 p-2 text-left align-top\" colspan=\"2\"></td></tr>')
                         body_parts.append('<table id=\"base-table\" class=\"table-fixed border-collapse w-full min-w-max\"><thead><tr><th class=\"border border-gray-300 p-2\">设备</th><th class=\"border border-gray-300 p-2\" colspan=\"2\">存储</th></tr></thead><tbody>'+''.join(rows_html)+'</tbody></table>')

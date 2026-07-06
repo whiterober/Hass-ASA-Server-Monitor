@@ -1,0 +1,9 @@
+import paramiko
+h='192.168.197.253';p=22;u='root';pw='1219Wu1219@'
+c=paramiko.SSHClient();c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+c.connect(h,port=p,username=u,password=pw,look_for_keys=False,allow_agent=False)
+sin,sout,serr=c.exec_command("wc -c /config/www/asa-data/asa-admin-v1095.html /config/www/asa-data/asa-admin-v1097.html",timeout=10)
+print("Sizes:\n"+sout.read().decode())
+sin,sout,serr=c.exec_command("grep -c 'function selectBaseIcon' /config/www/asa-data/asa-admin-v1097.html; grep -c 'openIconPicker_ic' /config/www/asa-data/asa-admin-v1097.html",timeout=10)
+print("Checks:\n"+sout.read().decode())
+c.close()

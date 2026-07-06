@@ -200,7 +200,7 @@ def main():
                 for b in sec.get('content_blocks', []):
                     bt = b.get('block_type', '')
                     # Generate body from structured data, or fallback to body
-                    if b.get('body'):
+                    if bt != 'base_storage' and b.get('body'):
                         body_parts.append(b['body'])
                     elif bt == 'base_storage' and b.get('rows'):
                         rows_html = []

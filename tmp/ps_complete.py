@@ -200,19 +200,19 @@ def main():
                 for b in sec.get('content_blocks', []):
                     bt = b.get('block_type', '')
                     # Generate body from structured data, or fallback to body
-                    if b.get('body'):
+                    if bt != 'base_storage' and b.get('body'):
                         body_parts.append(b['body'])
                     elif bt == 'base_storage' and b.get('rows'):
                         rows_html = []
                         for row in b['rows']:
                             cap = str(row.get('capacity_main',''))+'<sub>'+str(row.get('capacity_sub',''))+'</sub>'
-                            icon_url = row.get('images',[{}])[0].get('image_url','') if row.get('images') else ''
-                            icon = '<img src=\"'+icon_url+'\" alt=\"'+row.get('device_name','')+'\" />' if icon_url else ''
-                            rows_html.append('<tr><td class=\"border border-gray-300 p-2 text-left align-top\"><div class=\"device-container\"><div class=\"materials-box\"><span class=\"bio-capacity-tag-bottom\">'+cap+'</span><div class=\"materials-box-inner\"><div class=\"device-icon-wrapper\">'+icon+'</div></div></div></div></td><td class=\"border border-gray-300 p-2 text-left align-top\" colspan=\"2\"></td></tr>')
+                        icon_url = row.get('images',[{}])[0].get('image_url','') if row.get('images') else ''
+                        icon = '<img src=\"'+icon_url+'\" alt=\"'+row.get('device_name','')+'\" />' if icon_url else ''
+                        rows_html.append('<tr><td class="border border-gray-300 p-2 text-left align-top"><div class="device-container"><div class="materials-box"><span class="bio-capacity-tag-bottom">'+cap+'</span><div class="materials-box-inner"><div class="device-icon-wrapper">'+icon+'</div></div></div></div></td><td class="border border-gray-300 p-2 text-left align-top" colspan="2">'+(''.join(['<blockquote class="quote" style="border-left-color:'+(c.get('marker_color','#ccc') if c.get('marker_color','#ccc')!='#ccc' else '#ff9800')+'!important"><div>'+('<span class="text-bold">'+c.get('label','')+'</span><br>' if c.get('label') else '')+'<br>'.join([i.get('name','') for i in c.get('items',[])])+'</div></blockquote>' for c in row.get('categories',[])]))+'</td></tr>')
                         body_parts.append('<table id=\"base-table\" class=\"table-fixed border-collapse w-full min-w-max\"><thead><tr><th class=\"border border-gray-300 p-2\">设备</th><th class=\"border border-gray-300 p-2\" colspan=\"2\">存储</th></tr></thead><tbody>'+''.join(rows_html)+'</tbody></table>')
-                sec_html_list.append('<div id="{}-body" class="accordion-body borderr-none{}">{}</div>'.format(sid, collapsed, '\n'.join(body_parts)))
-            parts.extend(sec_html_list)
-            html = strip_and_append_empty_rows('\n'.join(parts))
+                        sec_html_list.append('<div id="{}-body" class="accordion-body borderr-none{}">{}</div>'.format(sid, collapsed, '\n'.join(body_parts)))
+                        parts.extend(sec_html_list)
+                        html = strip_and_append_empty_rows('\n'.join(parts))
         else:
             html = strip_and_append_empty_rows(tab.get('html', '<p>暂无数据</p>'))
         css = CARD_CORE_CSS + BASE_RAW_CSS

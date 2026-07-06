@@ -208,7 +208,15 @@ def main():
                             cap = str(row.get('capacity_main',''))+'<sub>'+str(row.get('capacity_sub',''))+'</sub>'
                             icon_url = row.get('images',[{}])[0].get('image_url','') if row.get('images') else ''
                             icon = '<img src=\"'+icon_url+'\" alt=\"'+row.get('device_name','')+'\" />' if icon_url else ''
-                            rows_html.append('<tr><td class=\"border border-gray-300 p-2 text-left align-top\"><div class=\"device-container\"><div class=\"materials-box\"><span class=\"bio-capacity-tag-bottom\">'+cap+'</span><div class=\"materials-box-inner\"><div class=\"device-icon-wrapper\">'+icon+'</div></div></div></div></td><td class=\"border border-gray-300 p-2 text-left align-top\" colspan=\"2\"></td></tr>')
+                                                    # Render categories for storage columns
+                                                    cat_items = []
+                                                    for c in row.get('categories', []):
+                                                        items_html = '<br>'.join([(i.get('name','') or '') for i in c.get('items', [])])
+                                                        if items_html:
+                                                            label = c.get('label','')
+                                                            cat_items.append(('<span class="text-bold">'+label+'</span><br>'+items_html) if label else items_html)
+                                                    col2 = '<br>'.join(cat_items) if cat_items else ''
+                                                    rows_html.append('<tr><td class="border border-gray-300 p-2 text-left align-top"><div class="device-container"><div class="materials-box"><span class="bio-capacity-tag-bottom">'+cap+'</span><div class="materials-box-inner"><div class="device-icon-wrapper">'+icon+'</div></div></div></div></td><td class="border border-gray-300 p-2 text-left align-top" colspan="2">'+col2+'</td></tr>')
                         body_parts.append('<table id=\"base-table\" class=\"table-fixed border-collapse w-full min-w-max\"><thead><tr><th class=\"border border-gray-300 p-2\">设备</th><th class=\"border border-gray-300 p-2\" colspan=\"2\">存储</th></tr></thead><tbody>'+''.join(rows_html)+'</tbody></table>')
                 sec_html_list.append('<div id="{}-body" class="accordion-body borderr-none{}">{}</div>'.format(sid, collapsed, '\n'.join(body_parts)))
             parts.extend(sec_html_list)

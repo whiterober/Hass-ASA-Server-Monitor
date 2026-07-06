@@ -192,27 +192,51 @@ def main():
                 parts.append('<div class="section-tab{}" onclick="{}">{}</div>'.format(active, onclick_js, sec.get('name', '')))
             parts.append('</div>')
             # Section bodies
-            sec_html_list = []
             for i, sec in enumerate(sections):
+                sec_html_list = []
                 sid = 'section-' + str(i)
                 collapsed = '' if i == 0 else ' collapsed'
                 body_parts = []
                 for b in sec.get('content_blocks', []):
                     bt = b.get('block_type', '')
                     # Generate body from structured data, or fallback to body
-                    if b.get('body'):
+                    if bt != 'base_storage' and b.get('body'):
                         body_parts.append(b['body'])
                     elif bt == 'base_storage' and b.get('rows'):
                         rows_html = []
                         for row in b['rows']:
                             cap = str(row.get('capacity_main',''))+'<sub>'+str(row.get('capacity_sub',''))+'</sub>'
-                            icon_url = row.get('images',[{}])[0].get('image_url','') if row.get('images') else ''
-                            icon = '<img src=\"'+icon_url+'\" alt=\"'+row.get('device_name','')+'\" />' if icon_url else ''
-                            rows_html.append('<tr><td class=\"border border-gray-300 p-2 text-left align-top\"><div class=\"device-container\"><div class=\"materials-box\"><span class=\"bio-capacity-tag-bottom\">'+cap+'</span><div class=\"materials-box-inner\"><div class=\"device-icon-wrapper\">'+icon+'</div></div></div></div></td><td class=\"border border-gray-300 p-2 text-left align-top\" colspan=\"2\"></td></tr>')
+                            img0 = row.get('images',[{}])[0] if row.get('images') else {}
+                            icon_url = img0.get('image_url','')
+                            mode = img0.get('image_auto_color_mode','off')
+                            lum = img0.get('image_native_luminance')
+                            if mode in ('normal','reverse') and icon_url:
+                                is_rev = (mode == 'reverse')
+                                if lum is not None and lum >= 0:
+                                    eff_lum = (1 - lum) if is_rev else lum
+                                    auto_cls = 'ic-auto-light' if eff_lum > 0.5 else 'ic-auto-dark'
+                                else:
+                                    auto_cls = 'ic-auto-color'
+                                icon = '<img src=\"'+icon_url+'\" alt=\"'+row.get('device_name','')+'\" class=\"'+auto_cls+'\" />'
+                            else:
+                                icon = '<img src=\"'+icon_url+'\" alt=\"'+row.get('device_name','')+'\" />' if icon_url else ''
+                            # Build category items HTML with optional icons
+                            def _render_cat_html(c):
+                                def _render_item(i):
+                                    name = i.get('name','')
+                                    ii0 = (i.get('images',[{}]) or [{}])[0]
+                                    iurl = ii0.get('image_url','') or i.get('icon_url','')
+                                    if iurl:
+                                        return '<img src=\"'+iurl+'\" style=\"width:16px;height:16px;object-fit:contain;vertical-align:middle;margin-right:2px\" /> '+name
+                                    return name
+                                cat_items_html = '<br>'.join([_render_item(i) for i in c.get('items',[])])
+                                cat_div = '<div>'+('<span class="text-bold">'+c.get('label','')+'</span><br>' if c.get('label') else '')+cat_items_html+'</div>'
+                                return '<blockquote class="quote" style="border-left-color:'+(c.get('marker_color','#ccc') if c.get('marker_color','#ccc')!='#ccc' else '#ff9800')+'!important">'+cat_div+'</blockquote>'
+                            rows_html.append('<tr><td class="border border-gray-300 p-2 text-left align-top"><div class="device-container"><div class="materials-box"><span class="bio-capacity-tag-bottom">'+cap+'</span><div class="materials-box-inner"><div class="device-icon-wrapper">'+icon+'</div></div></div></div></td><td class="border border-gray-300 p-2 text-left align-top" colspan="2">'+(''.join([_render_cat_html(c) for c in row.get('categories',[])]))+'</td></tr>')
                         body_parts.append('<table id=\"base-table\" class=\"table-fixed border-collapse w-full min-w-max\"><thead><tr><th class=\"border border-gray-300 p-2\">设备</th><th class=\"border border-gray-300 p-2\" colspan=\"2\">存储</th></tr></thead><tbody>'+''.join(rows_html)+'</tbody></table>')
                 sec_html_list.append('<div id="{}-body" class="accordion-body borderr-none{}">{}</div>'.format(sid, collapsed, '\n'.join(body_parts)))
-            parts.extend(sec_html_list)
-            html = strip_and_append_empty_rows('\n'.join(parts))
+                parts.extend(sec_html_list)
+                html = strip_and_append_empty_rows('\n'.join(parts))
         else:
             html = strip_and_append_empty_rows(tab.get('html', '<p>暂无数据</p>'))
         css = CARD_CORE_CSS + BASE_RAW_CSS
@@ -236,6 +260,12 @@ def main():
         css += 'ha-card .ic-text[class*="ic-block-"]{position:relative!important;overflow:hidden!important}'
         css += 'ha-card .ic-block-img{position:absolute!important;right:2px!important;top:50%!important;transform:translateY(-50%)!important;width:30px!important;height:30px!important;object-fit:cover!important;border-radius:0 4px 4px 0!important;flex-shrink:0!important}'
         css += 'ha-card .ic-qty{font-size:0.75em!important;font-weight:600!important;margin-left:0!important;flex-shrink:0!important;line-height:1!important}'
+        # === Base table image auto-color CSS (for base_storage device icons) ===
+        css += 'ha-card #base-table img.ic-auto-dark{filter:none}'
+        css += 'ha-card #base-table img.ic-auto-light{filter:none}'
+        css += '[data-theme="dark"] ha-card #base-table img.ic-auto-dark{filter:invert(1)}'
+        css += '[data-theme="light"] ha-card #base-table img.ic-auto-light{filter:invert(1)}'
+        css += 'ha-card #base-table img.ic-auto-color{filter:var(--ic-icon-filter,none)}'
         css += 'ha-card .ic-text[class*="ic-block-"] .ic-qty{position:absolute!important;right:0!important;bottom:0!important;color:var(--primary-background-color)!important;font-size:0.8em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important}'
         css += 'ha-card .ic-text[class*="ic-block-"]:has(.ic-block-img){padding-right:34px!important}'
         for sid, sm in SERVER_MAP.items():
