@@ -192,8 +192,8 @@ def main():
                 parts.append('<div class="section-tab{}" onclick="{}">{}</div>'.format(active, onclick_js, sec.get('name', '')))
             parts.append('</div>')
             # Section bodies
-            sec_html_list = []
             for i, sec in enumerate(sections):
+                sec_html_list = []
                 sid = 'section-' + str(i)
                 collapsed = '' if i == 0 else ' collapsed'
                 body_parts = []
@@ -206,12 +206,14 @@ def main():
                         rows_html = []
                         for row in b['rows']:
                             cap = str(row.get('capacity_main',''))+'<sub>'+str(row.get('capacity_sub',''))+'</sub>'
-                            icon = '<img src=\"'+row.get('device_icon_url','')+'\" alt=\"'+row.get('device_name','')+'\" />' if row.get('device_icon_url') else ''
-                            rows_html.append('<tr><td class=\"border border-gray-300 p-2 text-left align-top\"><div class=\"device-container\"><div class=\"materials-box\"><span class=\"bio-capacity-tag-bottom\">'+cap+'</span><div class=\"materials-box-inner\"><div class=\"device-icon-wrapper\">'+icon+'</div></div></div></div></td><td class=\"border border-gray-300 p-2 text-left align-top\" colspan=\"2\"></td></tr>')
+                            img0 = row.get('images',[{}])[0] if row.get('images') else {}
+                            icon_url = img0.get('image_url','')
+                            icon = '<img src=\"'+icon_url+'\" alt=\"'+row.get('device_name','')+'\" />' if icon_url else ''
+                            rows_html.append('<tr><td class="border border-gray-300 p-2 text-left align-top"><div class="device-container"><div class="materials-box"><span class="bio-capacity-tag-bottom">'+cap+'</span><div class="materials-box-inner"><div class="device-icon-wrapper">'+icon+'</div></div></div></div></td><td class="border border-gray-300 p-2 text-left align-top" colspan="2"></td></tr>')
                         body_parts.append('<table id=\"base-table\" class=\"table-fixed border-collapse w-full min-w-max\"><thead><tr><th class=\"border border-gray-300 p-2\">设备</th><th class=\"border border-gray-300 p-2\" colspan=\"2\">存储</th></tr></thead><tbody>'+''.join(rows_html)+'</tbody></table>')
                 sec_html_list.append('<div id="{}-body" class="accordion-body borderr-none{}">{}</div>'.format(sid, collapsed, '\n'.join(body_parts)))
-            parts.extend(sec_html_list)
-            html = strip_and_append_empty_rows('\n'.join(parts))
+                parts.extend(sec_html_list)
+                html = strip_and_append_empty_rows('\n'.join(parts))
         else:
             html = strip_and_append_empty_rows(tab.get('html', '<p>暂无数据</p>'))
         css = CARD_CORE_CSS + BASE_RAW_CSS
@@ -235,6 +237,12 @@ def main():
         css += 'ha-card .ic-text[class*="ic-block-"]{position:relative!important;overflow:hidden!important}'
         css += 'ha-card .ic-block-img{position:absolute!important;right:2px!important;top:50%!important;transform:translateY(-50%)!important;width:30px!important;height:30px!important;object-fit:cover!important;border-radius:0 4px 4px 0!important;flex-shrink:0!important}'
         css += 'ha-card .ic-qty{font-size:0.75em!important;font-weight:600!important;margin-left:0!important;flex-shrink:0!important;line-height:1!important}'
+        # === Base table image auto-color CSS (for base_storage device icons) ===
+        css += 'ha-card #base-table img.ic-auto-dark{filter:none}'
+        css += 'ha-card #base-table img.ic-auto-light{filter:none}'
+        css += '[data-theme="dark"] ha-card #base-table img.ic-auto-dark{filter:invert(1)}'
+        css += '[data-theme="light"] ha-card #base-table img.ic-auto-light{filter:invert(1)}'
+        css += 'ha-card #base-table img.ic-auto-color{filter:var(--ic-icon-filter,none)}'
         css += 'ha-card .ic-text[class*="ic-block-"] .ic-qty{position:absolute!important;right:0!important;bottom:0!important;color:var(--primary-background-color)!important;font-size:0.8em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important}'
         css += 'ha-card .ic-text[class*="ic-block-"]:has(.ic-block-img){padding-right:34px!important}'
         for sid, sm in SERVER_MAP.items():
@@ -339,8 +347,8 @@ def main():
             css += 'ha-card .ig-img.ic-auto-color{color:var(--primary-background-color)!important;fill:var(--primary-text-color)!important}'
             css += 'ha-card .ig-img.ic-auto-dark{filter:none!important}'
             css += 'ha-card .ig-img.ic-auto-light{filter:none!important}'
-            css += '[data-theme="dark"] .ig-img.ic-auto-dark{filter:invert(1)!important}'
-            css += '[data-theme="light"] .ig-img.ic-auto-light{filter:invert(1)!important}'
+            css += '[data-theme="dark"] ha-card .ig-img.ic-auto-dark{filter:invert(1)!important}'
+            css += '[data-theme="light"] ha-card .ig-img.ic-auto-light{filter:invert(1)!important}'
             css += 'ha-card .ig-img.ic-auto-color{filter:var(--ic-icon-filter,none)!important}'
             # ig-title-line + ::after separator for icon_group rows
             css += 'ha-card .ig-title-line{border:none!important;margin:0!important;border-top:1px solid var(--primary-text-color)!important;opacity:0.15!important}'
