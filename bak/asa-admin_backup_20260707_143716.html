@@ -945,26 +945,15 @@ function applyAllChanges() {
 
   resetPending();
 
-  // ① Pull latest lovelace from server
   var xhr = new XMLHttpRequest();
-  xhr.open('POST', '/api/services/shell_command/sync_lovelace_base', false);
+
+  xhr.open('POST', '/api/services/homeassistant/restart', false);
+
   xhr.setRequestHeader('Content-Type', 'application/json');
+
   xhr.setRequestHeader('Authorization', 'Bearer ' + WS._token);
+
   try { xhr.send('{}'); } catch(e) {}
-
-  // ② Rebuild lovelace from saved data
-  var xhrb = new XMLHttpRequest();
-  xhrb.open('POST', '/api/services/shell_command/build_lovelace', false);
-  xhrb.setRequestHeader('Content-Type', 'application/json');
-  xhrb.setRequestHeader('Authorization', 'Bearer ' + WS._token);
-  try { xhrb.send('{}'); } catch(e) {}
-
-  // ③ Restart HA to apply
-  var xhr2 = new XMLHttpRequest();
-  xhr2.open('POST', '/api/services/homeassistant/restart', false);
-  xhr2.setRequestHeader('Content-Type', 'application/json');
-  xhr2.setRequestHeader('Authorization', 'Bearer ' + WS._token);
-  try { xhr2.send('{}'); } catch(e) {}
 
   setTimeout(function() { window.location.href = window.location.href; }, 30000);
 
@@ -2902,12 +2891,14 @@ function renderMixedContent(tab) {
               var igAcCls = '';
               var igModeCls = '';
               if (igIac !== 'off') {
+                var igIsRev = (igIac === 'reverse');
                 if (igIlum != null && igIlum !== 0.5) {
-                  igAcCls = igIlum > 0.5 ? ' ic-auto-light' : ' ic-auto-dark';
+                  var igUseLum = igIsRev ? (1 - igIlum) : igIlum;
+                  igAcCls = igUseLum > 0.5 ? ' ic-auto-light' : ' ic-auto-dark';
                 } else {
-                  igAcCls = ' ic-auto-color';
+                  igAcCls = igIsRev ? ' ic-auto-dark' : ' ic-auto-color';
                 }
-                igModeCls = ' ic-mode-normal';
+                igModeCls = igIsRev ? ' ic-mode-reverse' : ' ic-mode-normal';
               }
               var igWrapCls = (igModeCls + igAcCls).trim();
               h += '<span class="ig-item '+igWrapCls+'" style="position:relative;display:inline-flex;flex-shrink:0;cursor:grab"'+(igIlum!=null?' data-lum="'+igIlum.toFixed(3)+'"':'')+'><img src="'+esc(thumbUrl(igIu,56))+'" onclick="event.stopPropagation();openIconPicker({mode:\'icon_group\',bi:'+bi+',ii:'+ii+',di:'+di+'})" title="点击换图" style="width:28px;height:28px;object-fit:contain;cursor:pointer;border-radius:3px"></span>';
@@ -3212,10 +3203,12 @@ function rebuildIGContainer(container, bi, igRowDi, icons) {
     if (iu2) {
       var acCls = '', modeCls = '';
       if (iac2 !== 'off') {
+        var isRev2 = (iac2 === 'reverse');
         if (ilum2 != null && ilum2 !== 0.5) {
-          acCls = ilum2 > 0.5 ? ' ic-auto-light' : ' ic-auto-dark';
-        } else { acCls = ' ic-auto-color'; }
-        modeCls = ' ic-mode-normal';
+          var useLum2 = isRev2 ? (1 - ilum2) : ilum2;
+          acCls = useLum2 > 0.5 ? ' ic-auto-light' : ' ic-auto-dark';
+        } else { acCls = isRev2 ? ' ic-auto-dark' : ' ic-auto-color'; }
+        modeCls = isRev2 ? ' ic-mode-reverse' : ' ic-mode-normal';
       }
       h += '<span class="ig-item ' + (modeCls + acCls).trim() + '" style="position:relative;display:inline-flex;flex-shrink:0"' + (ilum2 != null ? ' data-lum="' + ilum2.toFixed(3) + '"' : '') + '><img src="' + thumbUrl(iu2, 56) + '" onclick="event.stopPropagation();openIconPicker({mode:\'icon_group\',bi:'+bi+',ii:'+seq+',di:'+igRowDi+'})" title="点击换图" style="width:28px;height:28px;object-fit:contain;cursor:pointer;border-radius:3px"></span>';
     } else {
@@ -4520,17 +4513,17 @@ function renderBaseRef() {
 
               var pngIcons = [
 
-                ['https://img.whiterober.ccwu.cc/ASA/resources/Element_Shard.png','碎片'],
+                ['https://img.whiterober.ccwu.cc/ASA/items/Element%20Shard.png','碎片'],
 
-                ['https://img.whiterober.ccwu.cc/ASA/resources/Gasoline.png','汽油'],
+                ['https://img.whiterober.ccwu.cc/ASA/items/Gasoline.png','汽油'],
 
-                ['https://img.whiterober.ccwu.cc/ASA/consumables/Fertilizer.png','肥料'],
+                ['https://img.whiterober.ccwu.cc/ASA/items/Fertilizer.png','肥料'],
 
-                ['https://img.whiterober.ccwu.cc/ASA/consumables/Massive_Animal_Feces.png','粪便'],
+                ['https://img.whiterober.ccwu.cc/ASA/items/Feces.png.png','粪便'],
 
-                ['https://img.whiterober.ccwu.cc/ASA/consumables/Raw_Meat.png','生肉'],
+                ['https://img.whiterober.ccwu.cc/ASA/items/Raw%20Meat.png','生肉'],
 
-                ['https://img.whiterober.ccwu.cc/ASA/consumables/Mejoberry.png','紫莓']
+                ['https://img.whiterober.ccwu.cc/ASA/items/Mejoberry.png','紫莓']
 
               ];
 
@@ -4634,6 +4627,10 @@ function renderBaseRef() {
                 var _bicls = _biac + _bibadge;
                 html += '<span class=\"'+_bicls+'\" style=\"position:relative;display:inline-flex;flex-shrink:0\"' + (_bilum != null ? ' data-lum=\"'+_bilum.toFixed(3)+'\"' : '') + '><img src=\"'+esc(thumbUrl(item.icon_url,56))+'\" style=\"width:28px;height:28px;object-fit:contain;cursor:pointer;flex-shrink:0\" onclick=\"event.stopPropagation();openIconPicker({mode:\'base_item\',si:'+si+',bi:'+bi+',ri:'+ri+',ci:'+ci+',ii:'+ii+'})\" title=\"点击换图标\" onerror=\"this.hidden=true\"></span>';
 
+                } else {
+
+                  html += '<span style=\"width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px\" onclick=\"event.stopPropagation();openIconPicker({mode:\'base_item\',si:'+si+',bi:'+bi+',ri:'+ri+',ci:'+ci+',ii:'+ii+'})\" title=\"选择图标\">+</span>';
+
                 }
 
                   html += '<input type=\"hidden\" id=\"brItemName'+si+'_'+bi+'_'+ri+'_'+ci+'_'+ii+'\" value=\"'+esc(item.name||'')+'\">';
@@ -4642,11 +4639,13 @@ function renderBaseRef() {
 
                   html += '<input type=\"hidden\" id=\"brItemBold'+si+'_'+bi+'_'+ri+'_'+ci+'_'+ii+'\" value=\"'+(item.bold?'1':'0')+'\">';
 
+                  html += '<button class=\"btn-small btn-danger\" onclick=\"if(confirm(DEL))this.parentElement.remove()\" style=\"margin-left:auto;padding:2px 6px;font-size:0.6em\">✕</button>';
+
                   html += '</div>';
 
                 }
 
-                                html += '<span onclick=\"pickNewItemIcon('+si+','+bi+','+ri+','+ci+')\" style=\"display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;cursor:pointer;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px\" title=\"添加物品\">+</span>';
+                                html += '<button class=\"btn-small btn-primary\" onclick=\"addStorageItem('+si+','+bi+','+ri+','+ci+')\" style=\"padding:1px 6px;font-size:0.6em;\">+ 物品 </button>';
 
 html += '</div>'; // sr-items
 
@@ -5547,16 +5546,16 @@ function buildStorageBody(rows) {
         if (cat.label) {
 
           var lc = cat.label_color || cat.color || '';
-          var lcs = (lc && lc !== 'auto') ? ' style="color:'+lc+'"' : '';
+
           var lb = cat.label_bold || cat.bold;
 
           if (lb) {
 
-            h += '<div'+lcs+'><span class="text-bold">'+cat.label+'</span>';
+            h += '<div><span class="text-bold">'+cat.label+'</span>';
 
           } else {
 
-            h += '<div'+lcs+'>'+cat.label;
+            h += '<div>'+cat.label;
 
           }
           // Sub-label
@@ -6182,7 +6181,7 @@ var CAT_COLORS = ["#ccc","#ff9800","#4caf50","#f44336","#2196f3","#ffffff"];
 var CAT_LABEL_COLORS = ["auto","#000000","#4CAF50","#FF5722","#009688","#9C27B0","#00BCD4","#FF9800","#E91E63","#4E9F62","#FFC107","#607D8B"];
 
 // Server map for desc popup
-var SERVER_MAP = {'Isl':{c:'#4CAF50',n:'island',emoji:'🏝️'},'Sco':{c:'#FF5722',n:'volcano',emoji:'🔥'},'Cen':{c:'#009688',n:'orbit',emoji:'💎'},'Abe':{c:'#9C27B0',n:'radioactive',emoji:'☢️'},'Ext':{c:'#00BCD4',n:'meteor',emoji:'☄️'},'Ast':{c:'#FF9800',n:'star-four-points',emoji:'✨'},'Rag':{c:'#E91E63',n:'lighthouse-on',emoji:'🗼'},'Val':{c:'#4E9F62',n:'forest',emoji:'🌲'},'Bob':{c:'#FFC107',n:'party-popper',emoji:'🎉'},'Los':{c:'#607D8B',n:'castle',emoji:'🏰'}};
+var SERVER_MAP = {'Isl':{c:'#4CAF50',n:'island',emoji:'🏝️'},'Sco':{c:'#FF5722',n:'volcano',emoji:'🔥'},'Cen':{c:'#009688',n:'diamond-stone',emoji:'💎'},'Abe':{c:'#9C27B0',n:'radioactive',emoji:'☢️'},'Ext':{c:'#00BCD4',n:'meteor',emoji:'☄️'},'Ast':{c:'#FF9800',n:'star-four-points',emoji:'✨'},'Rag':{c:'#E91E63',n:'lighthouse-on',emoji:'🗼'},'Val':{c:'#4E9F62',n:'forest',emoji:'🌲'},'Bob':{c:'#FFC107',n:'party-popper',emoji:'🎉'},'Los':{c:'#607D8B',n:'castle',emoji:'🏰'}};
 var FIXED_STYLES = {'_hint':{c:'#2196F3',n:'information',label:'提示'},'_warn':{c:'#FF9800',n:'alert',label:'警告'},'_remark':{c:'#757575',n:'comment-text-outline',label:'备注'}};
 
 function getServerBadge(sid) {
@@ -6651,8 +6650,6 @@ function _initItemSortable(itemsDiv) {
     glowClass: 'drag-target-glow-item',
     getList: function(){ return []; },
     onReorder: function(){
-      // Close any open icon picker overlays (their _ctx.ii is stale after reorder)
-      document.querySelectorAll('.icon-picker-overlay').forEach(function(o){ o.remove(); });
       var newOrder = [];
       itemsDiv.querySelectorAll('.sr-item').forEach(function(el){
         var iconInp = el.querySelector('[id^=brItemIcon]');
@@ -6662,33 +6659,16 @@ function _initItemSortable(itemsDiv) {
         var catCard = itemsDiv.closest('.sr-cat-card');
         var catLabel = catCard.querySelector('[id^=brCatLabel]');
         if (catLabel) {
-          var idSfx = catLabel.id.replace('brCatLabel', '');
-          var parts = idSfx.split('_');
-          var si = parseInt(parts[0]), bi = parseInt(parts[1]), ri = parseInt(parts[2]), ci = parseInt(parts[3]);
+          var cp = catLabel.id.split('_');
+          var _si = parseInt(cp[1]), _bi = parseInt(cp[2]), _ri = parseInt(cp[3]), _ci = parseInt(cp[4]);
           var srv = baseData.servers[brSelectedServer];
           var tab = (srv.tabs||[])[brSelectedTab];
-          var cat = tab.sections[si].content_blocks[bi].rows[ri].categories[ci];
+          var blk = tab.sections[_si].content_blocks[_bi];
+          var row = blk.rows[_ri];
+          var cat = (row.categories||[])[_ci];
           if (cat && cat.items) {
             cat.items = newOrder.map(function(ii){ return cat.items[ii]; }).filter(function(x){ return x; });
           }
-          // Update DOM IDs in-place (no renderBaseRef to maintain SortableJS integrity)
-          var pfx = si + '_' + bi + '_' + ri + '_' + ci + '_';
-          itemsDiv.querySelectorAll('.sr-item').forEach(function(el, newIi){
-            var inp = el.querySelector('[id^=brItemIcon]');
-            if (inp) inp.id = 'brItemIcon' + pfx + newIi;
-            inp = el.querySelector('[id^=brItemName]');
-            if (inp) inp.id = 'brItemName' + pfx + newIi;
-            inp = el.querySelector('[id^=brItemColor]');
-            if (inp) inp.id = 'brItemColor' + pfx + newIi;
-            inp = el.querySelector('[id^=brItemBold]');
-            if (inp) inp.id = 'brItemBold' + pfx + newIi;
-            var img = el.querySelector('img[onclick*="openIconPicker"]');
-            if (img) {
-              var oc = img.getAttribute('onclick');
-              oc = oc.replace(/ii:\s*\d+/, 'ii:' + newIi);
-              img.setAttribute('onclick', oc);
-            }
-          });
         }
       } catch(e) { console.error('item reorder failed', e); }
     }
@@ -7157,49 +7137,6 @@ function addStorageItem(si, bi, ri, ci) {
 
 }
 
-function addStorageItemWithPicker(si, bi, ri, ci) {
-  var srv = baseData.servers[brSelectedServer];
-  var tab = (srv.tabs||[])[brSelectedTab];
-  if (!tab) return;
-  var block = tab.sections[si].content_blocks[bi];
-  if (!block || !block.rows) return;
-  var row = block.rows[ri];
-  if (!row || !row.categories) return;
-  var cat = row.categories[ci];
-  if (!cat) return;
-  if (!cat.items) cat.items = [];
-  cat.items.push({name:"", icon_url:"", color:"", bold:false});
-  var newIi = cat.items.length - 1;
-
-  var expandedSections = [];
-  document.querySelectorAll(".br-sec-body").forEach(function(b,i){ if(!b.classList.contains("collapsed")) expandedSections.push(i); });
-  var expandedRows = [];
-  document.querySelectorAll(".sr-row-body").forEach(function(rb,i){ if(rb.style.display==="block") expandedRows.push(i); });
-  var expandedBlocks = [];
-  document.querySelectorAll(".block-body").forEach(function(bb,i){ if(!bb.classList.contains("collapsed")) expandedBlocks.push(i); });
-
-  renderBaseRef();
-
-  setTimeout(function(){ _restoreExpandState(expandedSections, expandedRows, expandedBlocks);
-    setTimeout(function(){
-      document.querySelectorAll('.sr-items').forEach(function(d){ _initItemSortable(d); });
-      // Auto-open icon picker for the new item
-      openIconPicker({mode:'base_item', si:si, bi:bi, ri:ri, ci:ci, ii:newIi});
-    }, 200);
-  }, 120);
-}
-
-function pickNewItemIcon(si, bi, ri, ci) {
-  try {
-    var srv = baseData.servers[brSelectedServer];
-    var tab = (srv.tabs||[])[brSelectedTab];
-    var row = tab.sections[si].content_blocks[bi].rows[ri];
-    var cat = (row.categories||[])[ci];
-    var newIi = (cat && cat.items) ? cat.items.length : 0;
-    openIconPicker({mode:'base_item', si:si, bi:bi, ri:ri, ci:ci, ii:newIi});
-  } catch(e) { console.error('pickNewItemIcon failed:', e); }
-}
-
 function rmBRSection(el) {
 
   if (!confirm(DEL)) return;
@@ -7650,7 +7587,7 @@ function openIconPicker(ctx) {
 
     // Clear button (mode-specific)
     if (cfg.clearFn === 'clearDescImageSelection') {
-      html += "<button style='width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);cursor:pointer;flex-shrink:0' onclick='clearDescImageSelection(this,"+ctx.bi+","+(cfg.igRowDi ? ctx.ii : (ctx.di||ctx.ii||0))+")' title='清空'><svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M3 6h18'/><path d='M8 6V4h8v2'/><path d='M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6'/><line x1='10' y1='11' x2='10' y2='17'/><line x1='14' y1='11' x2='14' y2='17'/></svg></button>";
+      html += "<button style='width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);cursor:pointer;flex-shrink:0' onclick='clearDescImageSelection(this,"+ctx.bi+","+(ctx.di||ctx.ii||0)+")' title='清空'><svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M3 6h18'/><path d='M8 6V4h8v2'/><path d='M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6'/><line x1='10' y1='11' x2='10' y2='17'/><line x1='14' y1='11' x2='14' y2='17'/></svg></button>";
     } else if (cfg.clearFn === 'clearBaseIconSelection') {
       html += "<button style='width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);cursor:pointer;flex-shrink:0' onclick='clearBaseIconSelection(this)' title='清空' data-si='"+ctx.si+"' data-bi='"+ctx.bi+"' data-ri='"+ctx.ri+"'><svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M3 6h18'/><path d='M8 6V4h8v2'/><path d='M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6'/><line x1='10' y1='11' x2='10' y2='17'/><line x1='14' y1='11' x2='14' y2='17'/></svg></button>";
     } else if (cfg.clearFn === 'clearBaseItemIconSelection') {
@@ -7764,16 +7701,9 @@ function selectBaseIcon(item, ctx) {
           row.images = [{ image_url: url, quantity: 0, image_auto_color_mode: mode, image_native_luminance: null }];
         } else {
           var cat = (row.categories || [])[ctx.ci];
-          if (cat) {
-            if (!cat.items) cat.items = [];
-            if (ctx.ii >= cat.items.length) {
-              cat.items.push({name:"", icon_url:"", color:"", bold:false});
-            }
-            if (cat.items[ctx.ii]) {
-              cat.items[ctx.ii].icon_url = url;
-              cat.items[ctx.ii].images = [{ image_url: url, quantity: 0, image_auto_color_mode: mode, image_native_luminance: null }];
-              cat.items[ctx.ii]._item_icon_mode = mode;
-            }
+          if (cat && cat.items && cat.items[ctx.ii]) {
+            cat.items[ctx.ii].icon_url = url;
+            cat.items[ctx.ii].images = [{ image_url: url, quantity: 0, image_auto_color_mode: mode, image_native_luminance: null }];
           }
         }
       }
@@ -7793,7 +7723,7 @@ function selectBaseIcon(item, ctx) {
   }
 
   // Brightness detection (align with selectInfoCardIcon)
-  if (mode !== "off" && url) {
+  if (mode !== "off" && url && img) {
     _pendingBrightnessChecks++;
     _updateSaveBtnState();
     var _ctx = ctx;
@@ -7825,22 +7755,10 @@ function selectBaseIcon(item, ctx) {
             var c2 = (r2.categories || [])[_ctx.ci];
             if (c2 && c2.items && c2.items[_ctx.ii] && c2.items[_ctx.ii].images && c2.items[_ctx.ii].images[0]) {
               c2.items[_ctx.ii].images[0].image_native_luminance = luminance;
-              c2.items[_ctx.ii]._item_icon_lum = luminance;
             }
           }
         } catch(e) {}
         _detectToast(true, luminance.toFixed(3));
-        // Rebuild DOM with correct auto-color (luminance now known)
-        var _es = []; document.querySelectorAll(".br-sec-body").forEach(function(b,i){ if(!b.classList.contains("collapsed")) _es.push(i); });
-        var _er = []; document.querySelectorAll(".sr-row-body").forEach(function(rb,i){ if(rb.style.display==="block") _er.push(i); });
-        var _eb = []; document.querySelectorAll(".block-body").forEach(function(bb,i){ if(!bb.classList.contains("collapsed")) _eb.push(i); });
-        renderBaseRef();
-        setTimeout(function(){
-          _restoreExpandState(_es, _er, _eb);
-          setTimeout(function(){
-            document.querySelectorAll('.sr-items').forEach(function(d){ _initItemSortable(d); });
-          }, 200);
-        }, 120);
       } else {
         if (errMsg) {
           if (_curImg && _curImg.parentElement && _curImg.parentElement.tagName === "SPAN") {
@@ -7849,17 +7767,6 @@ function selectBaseIcon(item, ctx) {
           }
         }
         _detectToast(false, errMsg || "\u7f51\u7edc\u9519\u8bef\u6216\u56fe\u7247\u65e0\u6cd5\u8bbf\u95ee");
-        // Still rebuild DOM even if detection failed
-        var _es2 = []; document.querySelectorAll(".br-sec-body").forEach(function(b,i){ if(!b.classList.contains("collapsed")) _es2.push(i); });
-        var _er2 = []; document.querySelectorAll(".sr-row-body").forEach(function(rb,i){ if(rb.style.display==="block") _er2.push(i); });
-        var _eb2 = []; document.querySelectorAll(".block-body").forEach(function(bb,i){ if(!bb.classList.contains("collapsed")) _eb2.push(i); });
-        renderBaseRef();
-        setTimeout(function(){
-          _restoreExpandState(_es2, _er2, _eb2);
-          setTimeout(function(){
-            document.querySelectorAll('.sr-items').forEach(function(d){ _initItemSortable(d); });
-          }, 200);
-        }, 120);
       }
       _updateSaveBtnState();
     });
@@ -7869,26 +7776,21 @@ function selectBaseIcon(item, ctx) {
   var overlay = item.closest(".icon-picker-overlay");
   if (overlay) overlay.remove();
 
-  // Helper: renderBaseRef with expand state save/restore + SortableJS reinit
-  function _doRenderBaseRefAfterSelect() {
-    var _es = []; document.querySelectorAll(".br-sec-body").forEach(function(b,i){ if(!b.classList.contains("collapsed")) _es.push(i); });
-    var _er = []; document.querySelectorAll(".sr-row-body").forEach(function(rb,i){ if(rb.style.display==="block") _er.push(i); });
-    var _eb = []; document.querySelectorAll(".block-body").forEach(function(bb,i){ if(!bb.classList.contains("collapsed")) _eb.push(i); });
-    renderBaseRef();
-    setTimeout(function(){
-      _restoreExpandState(_es, _er, _eb);
-      setTimeout(function(){
-        document.querySelectorAll('.sr-items').forEach(function(d){ _initItemSortable(d); });
-      }, 200);
-    }, 120);
-    setTimeout(showPreview, 200);
-  }
+  // Save expand state before full DOM rebuild (align with old selectDeviceIcon)
+  var _expSecs = [];
+  document.querySelectorAll(".br-sec-body").forEach(function(b,i){ if(!b.classList.contains("collapsed")) _expSecs.push(i); });
+  var _expRows = [];
+  document.querySelectorAll(".sr-row-body").forEach(function(rb,i){ if(rb.style.display==="block") _expRows.push(i); });
+  var _expBlks = [];
+  document.querySelectorAll(".block-body").forEach(function(bb,i){ if(!bb.classList.contains("collapsed")) _expBlks.push(i); });
 
-  // If auto-color mode is off, render immediately; otherwise wait for brightness callback
-  if (mode === "off" || !url) {
-    _doRenderBaseRefAfterSelect();
-  }
-  // else: renderBaseRef happens inside brightness callback below
+  renderBaseRef();
+
+  setTimeout(function(){
+    _restoreExpandState(_expSecs, _expRows, _expBlks);
+  }, 120);
+
+  setTimeout(showPreview, 200);
 }
 
 function clearBaseIconSelection(el) {
@@ -7906,31 +7808,21 @@ function clearBaseItemIconSelection(el) {
   var overlay = el.closest(".icon-picker-overlay");
   var oCtx = overlay ? overlay._ctx : null;
   if (!oCtx) return;
-  // Remove item entirely from baseData (clear icon = delete item row)
+  var inputId = "brItemIcon" + oCtx.si + "_" + oCtx.bi + "_" + oCtx.ri + "_" + oCtx.ci + "_" + oCtx.ii;
+  var inputEl = document.getElementById(inputId);
+  if (inputEl) inputEl.value = "";
+  // Clear icon in baseData too (renderBaseRef reads from it)
   try {
     var srv = baseData.servers[brSelectedServer];
     var tab = (srv.tabs||[])[brSelectedTab];
     var blk = tab.sections[oCtx.si].content_blocks[oCtx.bi];
     var row = blk.rows[oCtx.ri];
     var cat = (row.categories||[])[oCtx.ci];
-    if (cat && cat.items && oCtx.ii < cat.items.length) {
-      cat.items.splice(oCtx.ii, 1);
-    }
+    var item = (cat.items||[])[oCtx.ii];
+    if (item) { item.icon_url = ''; item.images = []; }
   } catch(e) {}
   if (overlay) overlay.remove();
-  // Save expand state, rebuild, restore (same pattern as addStorageItem)
-  var expandedSections = [];
-  document.querySelectorAll(".br-sec-body").forEach(function(b,i){ if(!b.classList.contains("collapsed")) expandedSections.push(i); });
-  var expandedRows = [];
-  document.querySelectorAll(".sr-row-body").forEach(function(rb,i){ if(rb.style.display==="block") expandedRows.push(i); });
-  var expandedBlocks = [];
-  document.querySelectorAll(".block-body").forEach(function(bb,i){ if(!bb.classList.contains("collapsed")) expandedBlocks.push(i); });
   renderBaseRef();
-  setTimeout(function(){ _restoreExpandState(expandedSections, expandedRows, expandedBlocks);
-    setTimeout(function(){
-      document.querySelectorAll('.sr-items').forEach(function(d){ _initItemSortable(d); });
-    }, 200);
-  }, 120);
 }
 // === End Base editor icon handlers ===
 

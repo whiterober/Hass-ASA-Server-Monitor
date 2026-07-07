@@ -1,0 +1,680 @@
+# Configure a default setup of Home Assistant (frontend, api, etc)
+default_config:
+
+frontend:
+  extra_module_url:
+    - /local/asa-theme-detect.js
+
+#havcs:
+#  platform:
+#    - aligenie
+#  http:
+#    clients:
+#      aligeniewhiterober: whiterober
+#      aligenie_ignore: ignore
+#    expire_in_hours: 99999
+#  device_config: ui
+
+http:
+  server_port: 8124
+#  开启https
+#  ssl_certificate: /config/your.pem
+  
+#  ssl_key: /config/your.key
+#  cors_allowed_origins:
+#    - https://mio.chishibaba.cn:8124
+#  ip_ban_enabled: True
+#  login_attempts_threshold: 999
+  use_x_forwarded_for: true
+  trusted_proxies:
+    - 10.16.100.0/24
+    - 192.168.199.0/24
+
+mqtt:
+#  discovery: true
+#  discovery_prefix: homeassistant
+#  broker: 192.168.199.253
+#  port: 1883
+#  username: whiterober
+#  password: 1219wu1219
+#  discovery: true
+
+template:
+  - sensor:
+      - name: "123pan_jump_tile"
+        state: "123网盘"
+        attributes:
+          entity_picture: "https://pp.myapp.com/ma_icon/0/icon_54190090_1753492095/256"
+      - name: "补丁说明"
+        default_entity_id: sensor.patch_description
+        icon: mdi:file-document
+        state: >
+          {{ states('sensor.patch_cache') if states('sensor.patch_cache') != 'unknown' else '暂无补丁说明' }}
+
+      - name: "Patch频道补丁说明"
+        default_entity_id: sensor.patch_description_patch
+        icon: mdi:file-document
+        state: >
+          {{ states('sensor.patch_channel_cache') if states('sensor.patch_channel_cache') != 'unknown' else '暂无Patch频道补丁说明' }}
+
+      - name: "新闻频道补丁说明"
+        default_entity_id: sensor.news_patch_description
+        icon: mdi:file-document
+        state: >
+          {{ states('sensor.news_cache') if states('sensor.news_cache') != 'unknown' else '暂无新闻频道补丁说明' }}
+
+      - name: "贴吧楼主摘要"
+        default_entity_id: sensor.tieba_lz_summary
+        icon: mdi:forum
+        state: >
+          {{ states('sensor.tieba_cache') if states('sensor.tieba_cache') != 'unknown' else '暂无贴吧信息' }}
+
+      - name: "ADM预告摘要"
+        default_entity_id: sensor.adm_preview_summary
+        icon: mdi:bullhorn
+        state: >
+          {{ states('sensor.adm_cache') if states('sensor.adm_cache') != 'unknown' else '暂无ADM预告信息' }}
+
+      - name: "ASB摘要"
+        default_entity_id: sensor.asb_summary
+        icon: mdi:information
+        state: >
+          {{ states('sensor.asb_cache') if states('sensor.asb_cache') != 'unknown' else '暂无ASB信息' }}
+
+      - name: "贴吧楼主全文"
+        default_entity_id: sensor.tieba_lz_full
+        icon: mdi:forum
+        state: >
+          {{ states('sensor.tieba_lz_full') if states('sensor.tieba_lz_full') != 'unknown' else '暂无贴吧全文' }}
+
+      - name: "ADM预告全文"
+        default_entity_id: sensor.adm_preview_full
+        icon: mdi:bullhorn
+        state: "暂无ADM预告信息"
+
+      - name: "ASB全文"
+        default_entity_id: sensor.asb_full
+        icon: mdi:information
+        state: >
+          {{ states('sensor.asb_full') if states('sensor.asb_full') != 'unknown' else '暂无ASB全文' }}
+
+      - name: "补丁说明全文"
+        default_entity_id: sensor.patch_description_full
+        icon: mdi:file-document
+        state: "暂无补丁说明"
+
+      - name: "Patch频道补丁信息"
+        default_entity_id: sensor.patch_channel_patch_info
+        icon: mdi:file-document
+        state: "Patch Channel Info"
+        attributes:
+          content: "暂无Patch频道补丁信息"
+
+      - name: "新闻频道补丁信息"
+        default_entity_id: sensor.news_patch_channel_info
+        icon: mdi:file-document
+        state: "暂无新闻频道补丁信息"
+        attributes:
+          content: "暂无新闻频道补丁信息"
+
+      - name: "官方服务器版本"
+        default_entity_id: sensor.official_server_version
+        icon: mdi:tag
+        state: >
+          {{ state_attr('sensor.asa_server_status', 'official_version') | default('N/A') }}
+
+      - name: "弹窗服务器状态"
+        default_entity_id: sensor.dialog_server_status
+        icon: >
+          {% set server_id = states('input_select.selected_server') %}
+          {% set servers = state_attr('sensor.asa_server_details', 'servers') %}
+          {% if servers and server_id %}
+            {% set matches = servers | selectattr('ProfileName','equalto', server_id) | list %}
+            {% set server = matches[0] if matches|length > 0 else None %}
+            {% if server and server.Status == 'Running' %}
+              mdi:server
+            {% else %}
+              mdi:server-off
+            {% endif %}
+          {% else %}
+            mdi:help-circle
+          {% endif %}
+        state: >
+          {% set server_id = states('input_select.selected_server') %}
+          {% set servers = state_attr('sensor.asa_server_details', 'servers') %}
+          {% if servers and server_id %}
+            {% set matches = servers | selectattr('ProfileName','equalto', server_id) | list %}
+            {% set server = matches[0] if matches|length > 0 else None %}
+            {% if server %}
+              {% if server.Status == 'Running' %}在线{% else %}离线{% endif %}
+            {% else %}未找到
+            {% endif %}
+          {% else %}请选择服务器
+          {% endif %}
+
+      - name: "弹窗服务器版本"
+        default_entity_id: sensor.dialog_server_version
+        icon: mdi:tag
+        state: >
+          {% set server_id = states('input_select.selected_server') %}
+          {% set servers = state_attr('sensor.asa_server_details', 'servers') %}
+          {% if servers and server_id %}
+            {% set matches = servers | selectattr('ProfileName','equalto', server_id) | list %}
+            {% set server = matches[0] if matches|length > 0 else None %}
+            {% if server and server.ServerVersion is defined and server.ServerVersion != 'N/A' %}
+              {% set found = server.ServerVersion | regex_findall('(\\d+\\.?\\d*)') %}
+              {% set version = found[0] if found | length > 0 else 'N/A' %}
+              {{ version }}
+            {% else %}N/A
+            {% endif %}
+          {% else %}请选择服务器
+          {% endif %}
+
+      - name: "弹窗服务器玩家数"
+        default_entity_id: sensor.dialog_server_players
+        icon: mdi:account-group
+        state: >
+          {% set server_id = states('input_select.selected_server') %}
+          {% set server_players = state_attr('sensor.asa_server_details', 'server_players') %}
+          {% if server_players and server_id in server_players %}
+            {{ server_players[server_id] | length }}
+          {% else %}0
+          {% endif %}
+
+      - name: "补丁说明版本号"
+        default_entity_id: sensor.patch_description_version
+        icon: mdi:tag
+        state: >
+          {% set value = states('sensor.patch_description') %}
+          {% set result = value | regex_findall('(?i)(?:v|version|版本)[\\s:：]*([\\d\\.]+)') %}
+          {{ result[0] if result else 'N/A' }}
+
+      - name: "Patch频道补丁版本号"
+        default_entity_id: sensor.patch_description_patch_version
+        icon: mdi:tag
+        state: >
+          {% set value = states('sensor.patch_description_patch') %}
+          {% set result = value | regex_findall('\\d+\\.\\d+\\.\\d+\\.\\d+') %}
+          {{ result[0] if result else 'N/A' }}
+
+      - name: "贴吧楼主摘要版本号"
+        default_entity_id: sensor.tieba_lz_summary_version
+        icon: mdi:tag
+        state: >
+          {% set value = states('sensor.tieba_lz_summary') %}
+          {% set result = value | regex_findall('(?i)(?:v|version|版本)[\\s:：]*([\\d\\.]+)') %}
+          {{ result[0] if result else 'N/A' }}
+
+      - name: "ASB版本号"
+        default_entity_id: sensor.asb_version
+        icon: mdi:tag
+        state: >
+          {% set value = states('sensor.asb_summary') %}
+          {% set result = value | regex_findall('\\b\\d+\\.\\d+\\.\\d+(?:\\.\\d+)?\\b') %}
+          {{ result[0] if result else 'N/A' }}
+
+      - name: "最新摘要"
+        default_entity_id: sensor.latest_summary_sensor
+        icon: mdi:file-document
+        state: >
+          {% set entities = [
+            states.sensor.patch_cache,
+            states.sensor.patch_channel_cache,
+            states.sensor.news_cache,
+            states.sensor.tieba_cache,
+            states.sensor.adm_cache,
+            states.sensor.asb_cache
+          ] %}
+          {% set latest = entities
+            | selectattr('attributes.created_at', 'defined')
+            | sort(attribute='attributes.created_at', reverse=True)
+            | list
+            | first %}
+          {{ latest.state if latest is not none and latest.state not in ['unknown', 'unavailable', ''] else '暂无摘要' }}
+
+      - name: "当前服务器端口"
+        default_entity_id: sensor.profile_port
+        icon: mdi:lan
+        state: "{{ states('sensor.profile_port') }}"
+
+      - name: "当前地图安全点坐标"
+        default_entity_id: sensor.safe_point_coords
+        icon: mdi:map-marker
+        state: "{{ state_attr('sensor.safe_point_coords', 'coords') | default('') }}"
+        attributes:
+          coords: ""
+
+      - name: "弹窗服务器游戏内时间"
+        default_entity_id: sensor.dialog_server_ingame_time
+        icon: mdi:clock
+        state: >
+          {% set server_id = states('input_select.selected_server') %}
+          {% set times = state_attr('sensor.ingame_time_cache', 'server_times') %}
+          {% if times and server_id in times %}
+            {{ times[server_id] }}
+          {% else %}
+            N/A
+          {% endif %}
+
+      - name: "服务器状态与版本"
+        default_entity_id: sensor.dialog_server_combined
+        icon: >
+          {% if is_state('sensor.dialog_server_status', '在线') %}
+            mdi:server
+          {% else %}
+            mdi:server-off
+          {% endif %}
+        state: >
+          {% if is_state('sensor.dialog_server_status', '在线') %}
+            {{ states('sensor.dialog_server_version') }}
+          {% else %}
+            离线 ({{ states('sensor.dialog_server_version') }})
+          {% endif %}
+        attributes:
+          status: "{{ states('sensor.dialog_server_status') }}"
+          version: "{{ states('sensor.dialog_server_version') }}"
+  - switch:
+      - name: "客厅制冷"
+        state: "{{ not is_state('climate.aux_ac', 'off') }}"
+        turn_on:
+          service: climate.set_hvac_mode
+          data:
+            entity_id: climate.aux_ac
+            hvac_mode: 'cool'
+        turn_off:
+          service: climate.set_hvac_mode
+          data:
+            entity_id: climate.aux_ac
+            hvac_mode: 'off'
+  - switch:
+      - name: "工作室制冷"
+        state: >
+          {{ not (
+            is_state('climate.lumi_mcn04_c490_air_conditioner_2', 'off') and
+            is_state('climate.lumi_mcn02_e4a7_air_conditioner_2', 'off')
+          ) }}
+        turn_on:
+          - service: climate.set_hvac_mode
+            data:
+              entity_id: climate.lumi_mcn04_c490_air_conditioner_2
+              hvac_mode: 'cool'
+          - service: climate.set_hvac_mode
+            data:
+              entity_id: climate.lumi_mcn02_e4a7_air_conditioner_2
+              hvac_mode: 'cool'
+        turn_off:
+          - service: climate.set_hvac_mode
+            data:
+              entity_id: climate.lumi_mcn04_c490_air_conditioner_2
+              hvac_mode: 'off'
+          - service: climate.set_hvac_mode
+            data:
+              entity_id: climate.lumi_mcn02_e4a7_air_conditioner_2
+              hvac_mode: 'off'
+  - switch:
+      - name: "客厅制热"
+        state: "{{ not is_state('climate.aux_ac', 'off') }}"
+        turn_on:
+          service: climate.set_hvac_mode
+          data:
+            entity_id: climate.aux_ac
+            hvac_mode: 'heat'
+        turn_off:
+          service: climate.set_hvac_mode
+          data:
+            entity_id: climate.aux_ac
+            hvac_mode: 'off'
+  - switch:
+      - name: "工作室制热"
+        state: >
+          {{ not (
+            is_state('climate.lumi_mcn04_c490_air_conditioner_2', 'off') and
+            is_state('climate.lumi_mcn02_e4a7_air_conditioner_2', 'off')
+          ) }}
+        turn_on:
+          - service: climate.set_hvac_mode
+            data:
+              entity_id: climate.lumi_mcn04_c490_air_conditioner_2
+              hvac_mode: 'heat'
+          - service: climate.set_hvac_mode
+            data:
+              entity_id: climate.lumi_mcn02_e4a7_air_conditioner_2
+              hvac_mode: 'heat'
+        turn_off:
+          - service: climate.set_hvac_mode
+            data:
+              entity_id: climate.lumi_mcn04_c490_air_conditioner_2
+              hvac_mode: 'off'
+          - service: climate.set_hvac_mode
+            data:
+              entity_id: climate.lumi_mcn02_e4a7_air_conditioner_2
+              hvac_mode: 'off'
+  - switch:
+      - name: "GAME主机集成"
+        unique_id: game_console_switch
+        state: "{{ is_state('switch.pc', 'on') }}"
+        turn_on:
+          - service: switch.turn_on
+            target:
+              entity_id: switch.pc
+          - delay: "00:00:01"  # 可选延迟，确保 电视 启动
+          - service: media_player.turn_on
+            target:
+              entity_id: media_player.sony_bravia_tv
+          - delay: "00:00:02"  # 可选延迟，确保 PC 启动
+          - service: media_player.select_source
+            target:
+              entity_id: media_player.sony_bravia_tv
+            data:
+              source: "HDMI 4"
+          - delay: "00:00:03"  # 可选延迟，确保输入切换完成
+          - service: media_player.media_play_pause
+            target:
+              entity_id: media_player.sony_bravia_tv
+        turn_off:
+          - service: switch.turn_off
+            target:
+              entity_id: switch.pc
+
+  - sensor:
+      - name: "ASA 服务器规则 HTML"
+        unique_id: asa_server_rules_html
+        state: "OK"
+        icon: mdi:gavel
+        attributes:
+          rendered_rules: !include www/asa-data/server_rules.yaml
+      - name: "ASA 部落运维速查 HTML"
+        unique_id: asa_tribe_ops_html
+        state: "OK"
+        icon: mdi:table-cog
+        attributes:
+          rendered_tribe_ops: !include www/asa-data/tribe_ops.yaml
+      - name: "ASA 部落基地速查 HTML"
+        unique_id: asa_base_quick_ref_html
+        state: "OK"
+        icon: mdi:home-map-marker
+        attributes:
+          rendered_base: !include www/asa-data/base_quick_ref.yaml
+
+input_boolean:
+  rcon_commands_expanded:
+    name: "RCON命令展开状态"
+    initial: false
+    icon: mdi:chevron-down
+
+input_button:
+  refresh_server_status:
+    name: "刷新服务器状态"
+    icon: mdi:refresh
+  execute_server_action:
+    name: "执行服务器操作"
+    icon: mdi:play
+  quan_tu_cun_dang_hou_zhong_zhi:
+    name: "全图存档后终止"
+    icon: mdi:stop-circle-outline
+  quan_tu_qing_li_kong_long:
+    name: "全图清理恐龙"
+    icon: mdi:delete-variant
+  execute_player_action:
+    name: "执行玩家操作"
+    icon: mdi:account-cog
+
+# 添加 var 组件配置
+var:
+  rcon_message:
+    initial_value: ""
+    restore: true
+    attributes:
+      icon: mdi:console
+      friendly_name: "RCON消息"
+  
+  # 新增：玩家操作相关变量
+  player_action_message:
+    initial_value: ""
+    restore: true
+    attributes:
+      icon: mdi:message-text
+      friendly_name: "玩家操作消息"
+  
+  player_action_selected_type:
+    initial_value: "踢出玩家"
+    restore: true
+    attributes:
+      icon: mdi:account-cog
+      friendly_name: "选中的玩家操作类型"
+
+  asa_server_rules:
+    initial_value: ''
+    restore: true
+    attributes:
+      icon: mdi:gavel
+      friendly_name: "ASA 服务器规则"
+  asa_tribe_ops_ref:
+    initial_value: ''
+    restore: true
+    attributes:
+      icon: mdi:table-cog
+      friendly_name: "ASA 部落运维速查"
+  asa_base_quick_ref:
+    initial_value: '{"servers":{"*":{"name":"默认","tabs":[{"id":"placeholder","name":"暂无数据","description":"该服务器暂无基地配置","locations":[]}]}},"default_server":"*"}'
+    restore: true
+    attributes:
+      icon: mdi:home-map-marker
+      friendly_name: "ASA 部落基地速查"
+
+input_select:
+  selected_action:
+    name: "选择操作"
+    options:
+      - "start"
+      - "stop"
+      - "kill"
+      - "update"
+      - "saveworld"
+      - "fullbackup"
+      - "destroy"
+      - "rcon"
+    initial: "start"
+  info_square_tab:
+    name: "资讯广场选项卡"
+    options:
+      - "ASA PC版本"
+      - "方舟新闻"
+      - "ADM版本"
+      - "ADM预告"
+      - "汉化版本"
+      - "ASB版本"
+    initial: "ASA PC版本"
+  info_tribe_tab:
+    name: "部落运维选项卡"
+    options:
+      - "经验获取速查"
+      - "设备部署速查"
+      - "畸变发光肩宠速查"
+      - "铠护犬功能速查"
+      - "补给速查"
+      - "采集速查"
+      - "英灵殿"
+      - "孤岛号"
+    initial: "补给速查"
+
+  info_server_rules_tab:
+    name: "服务器规则选项卡"
+    options:
+      - "基础倍率设置"
+      - "附加配置项"
+      - "制造调整项"
+      - "拾取调整项"
+    initial: "基础倍率设置"
+
+  # 新增：选中的服务器
+  selected_server:
+    name: "选中的服务器"
+    options:
+      - ""
+    initial: ""
+
+  # 新增：对话框服务器名称显示
+  dialog_server_name:
+    name: "对话框服务器名称"
+    options:
+      - "请选择服务器"
+    initial: "请选择服务器"
+
+  rcon_quick_commands:
+    name: "RCON快捷命令"
+    options:
+      - ""
+      - "broadcast 服务器即将重启，请及时保存进度！"
+      - "broadcast 服务器将在5分钟后重启进行维护，请玩家提前做好准备。"  
+      - "broadcast 服务器正在进行例行维护，预计10分钟后恢复正常。"
+      - "settimeofday 12:00"
+      - "settimeofday 18:00"
+      - "settimeofday 06:00"
+      - "destroywilddinos"
+      - "saveworld"
+      - "自定义命令"
+    initial: ""
+    icon: mdi:console
+
+  player_action_type:
+    name: "玩家操作类型"
+    options:
+      - "踢出玩家"
+      - "封禁玩家"
+      - "传送到玩家"
+      - "传送玩家到我"
+      - "发送私信"
+    initial: "踢出玩家"
+    icon: mdi:account-cog
+
+input_text:
+  current_operator:
+    name: "当前操作者"
+    initial: ""
+    max: 255
+    icon: mdi:account-key
+
+
+timer:
+  operator_lock_timeout:
+    name: "操作锁超时"
+    duration: "00:05:00"
+    icon: mdi:timer-lock
+
+#aligenie:
+#  ex_hours: 65565
+
+logger:
+  default: warning
+  logs:
+    homeassistant.components.http.ban: critical
+
+# Text to speech
+tts:
+  - platform: google_translate
+
+#homekit:
+
+#input_boolean:
+#  tmall_pcq:
+#    name: 主电脑
+#    initial: true
+ 
+#fan:
+#  - platform: xiaomi_miio
+#    name: Xiaomi Air Purifier Pro
+#    host: 192.168.199.52
+#    token: 476b9a08b07e8e673987879b0018fbde
+#    model: zhimi.airpurifier.v6
+#  - platform: xiaomi_miio
+#    name: Xiaomi Air Purifier 2S
+#    host: 192.168.199.51
+#    token: 5094173b09be0b188b72a9af2796c3cc
+#    model: zhimi.airpurifier.ma2
+    
+#sensor:
+#  - platform: template
+#    sensors:
+# 空气净化器pro部分
+#      xiaomi_ap_aqipro:
+#        friendly_name: 空气质量
+#        value_template: "{{ states.fan.xiaomi_air_purifier_pro.attributes.aqi }}"
+#        unit_of_measurement: AQI
+#      xiaomi_ap_temppro:
+#        friendly_name: 温度
+#        value_template: "{{ states.fan.xiaomi_air_purifier_pro.attributes.temperature }}"
+#        unit_of_measurement: °C
+#     xiaomi_ap_humidpro:
+#        friendly_name: 湿度
+#        value_template: "{{ states.fan.xiaomi_air_purifier_pro.attributes.humidity }}"
+#        unit_of_measurement: "%"
+
+#binary_sensor:
+#  - platform: ping
+#    host: 192.168.198.15        # 用于状态检测的穿透地址
+#    name: 剪辑主机在线状态
+#    count: 2
+#    scan_interval: 30           # 每30秒检测一次
+#  - platform: ping
+#    host: 192.168.199.11        # 主机地址，建议用固定IP
+#    name: 主机在线状态
+#    count: 2
+#    scan_interval: 30
+
+switch:
+  - platform: wake_on_lan
+    mac: "04:7c:16:4a:e9:58"
+    name: 剪辑主机
+    host: 192.168.198.15
+    broadcast_address: work.whiterober.cn
+    broadcast_port: 9999
+    turn_off:
+      service: hassio.addon_stdin
+      data:
+        addon: core_rpc_shutdown
+        input: VC
+  - platform: wake_on_lan
+    mac: "04:7c:16:19:2a:12"
+    name: 主机
+    host: 192.168.199.11
+    turn_off:
+      service: hassio.addon_stdin
+      data:
+        addon: core_rpc_shutdown
+        input: GAME
+#  - platform: orvibo
+#    discovery: false
+#    switches:
+#      - host: 192.168.199.200
+#        mac: 48:d8:90:79:d1:f9
+#      - name: "小欧管家"
+
+
+frontend:
+    themes: !include_dir_merge_named themes
+
+homeassistant:
+    customize: !include customize.yaml
+      
+shell_command:
+    save_r2_config: "python3 /config/save_r2_config.py {{ b64data }}"
+    gen_icon_thumbs: "nohup python3 /config/_gen_thumbs_ha.py --resume > /dev/null 2>&1 &"
+    command_timeout: 600
+    list_r2_icons: "python3 /config/www/asa-data/list_icons.py > /config/www/asa-data/icons2.json"
+    save_asa_data: "python3 /config/save_data.py /config/www/asa-data/{{ filename }} '{{ b64data }}'"
+    render_asa: "python3 /config/render_asa.py {{ filename }}"
+    save_data_chunk: python3 /config/save_chunk.py {{ filename }} '{{ b64data }}'
+    save_data_copy: python3 -c "import shutil;shutil.copy('/config/www/asa-data/{{ src }}','/config/www/asa-data/{{ dst }}')"
+    build_lovelace: "python3 /config/build_lovelace.py"
+    preview_tab: "python3 /config/preview_server.py '{{ tab_name }}' '{{ source }}'"
+#关机备选方案  turn_off_yourpc: ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i /config/.ssh/id_rsa white@192.168.199.11 shutdown /s
+    log_off_yourpc: ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i /config/.ssh/id_rsa white@192.168.199.11 'query session >session.txt || for /f "skip=2 tokens=3," %i in (session.txt) DO logoff %i || del session.txt'
+    lock_yourpc: ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i /config/.ssh/id_rsa white@192.168.199.11 'rundll32.exe user32.dll,LockWorkStation'
+#副机注销方案，需配置副机SSH及其密钥  log_off_yourpcb: ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i /config/.ssh/id_rsa white@192.168.199.10 'query session >session.txt || for /f "skip=2 tokens=3," %i in (session.txt) DO logoff %i || del session.txt'
+#副机锁屏方案，需配置副机SSH及其密钥  lock_yourpcb: ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i /config/.ssh/id_rsa white@192.168.199.10 'rundll32.exe user32.dll,LockWorkStation'
+
+group: !include groups.yaml
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml

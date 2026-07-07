@@ -2244,7 +2244,7 @@ def render_tab_html(tab):
                         # Build wrapper
                         if block_maps:
                             for bm in block_maps:
-                                parts.append('<div class="ic-text ic-block-{}" style="flex-direction:column;align-items:flex-start!important">'.format(bm))
+                                parts.append('<div class="ic-text ic-block-{}">'.format(bm))
                         elif linear_maps:
                             parts.append('<div class="ig-row-wrapper ic-linear-{}">'.format(linear_maps[0]))
                         else:
@@ -2271,7 +2271,7 @@ def render_tab_html(tab):
                                 parts.append('<hr class="ig-title-line" style="flex:1;min-width:0" />')
                                 parts.append('</div>')
                         # Icon row
-                        parts.append('<span class="ig-row" style="display:inline-flex;flex-wrap:wrap;gap:6px;align-items:center">')
+                        parts.append('<span class="ig-row" style="display:inline-flex;flex-wrap:wrap;gap:6px;align-items:center;flex-basis:100%">')
                         for icon in ig_icons:
                             iu = icon.get('image_url', '')
                             if not iu:
@@ -3022,8 +3022,8 @@ if __name__ == "__main__":
                 css += 'ha-card .ig-img.ic-auto-color{color:var(--primary-background-color)!important;fill:var(--primary-text-color)!important}'
                 css += 'ha-card .ig-img.ic-auto-dark{filter:none!important}'
                 css += 'ha-card .ig-img.ic-auto-light{filter:none!important}'
-                css += '[data-theme="dark"] .ig-img.ic-auto-dark{filter:invert(1)!important}'
-                css += '[data-theme="light"] .ig-img.ic-auto-light{filter:invert(1)!important}'
+                css += '[data-theme="dark"] ha-card .ig-img.ic-auto-dark{filter:invert(1)!important}'
+                css += '[data-theme="light"] ha-card .ig-img.ic-auto-light{filter:invert(1)!important}'
                 css += 'ha-card .ig-img.ic-auto-color{filter:var(--ic-icon-filter,none)!important}'
                 # ig-title-line + ::after separator for icon_group rows
                 css += 'ha-card .ig-title-line{border:none!important;margin:0!important;border-top:1px solid var(--primary-text-color)!important;opacity:0.15!important}'

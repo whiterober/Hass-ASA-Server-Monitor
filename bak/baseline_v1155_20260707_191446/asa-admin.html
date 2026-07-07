@@ -945,26 +945,15 @@ function applyAllChanges() {
 
   resetPending();
 
-  // ① Pull latest lovelace from server
   var xhr = new XMLHttpRequest();
-  xhr.open('POST', '/api/services/shell_command/sync_lovelace_base', false);
+
+  xhr.open('POST', '/api/services/homeassistant/restart', false);
+
   xhr.setRequestHeader('Content-Type', 'application/json');
+
   xhr.setRequestHeader('Authorization', 'Bearer ' + WS._token);
+
   try { xhr.send('{}'); } catch(e) {}
-
-  // ② Rebuild lovelace from saved data
-  var xhrb = new XMLHttpRequest();
-  xhrb.open('POST', '/api/services/shell_command/build_lovelace', false);
-  xhrb.setRequestHeader('Content-Type', 'application/json');
-  xhrb.setRequestHeader('Authorization', 'Bearer ' + WS._token);
-  try { xhrb.send('{}'); } catch(e) {}
-
-  // ③ Restart HA to apply
-  var xhr2 = new XMLHttpRequest();
-  xhr2.open('POST', '/api/services/homeassistant/restart', false);
-  xhr2.setRequestHeader('Content-Type', 'application/json');
-  xhr2.setRequestHeader('Authorization', 'Bearer ' + WS._token);
-  try { xhr2.send('{}'); } catch(e) {}
 
   setTimeout(function() { window.location.href = window.location.href; }, 30000);
 
@@ -4520,17 +4509,17 @@ function renderBaseRef() {
 
               var pngIcons = [
 
-                ['https://img.whiterober.ccwu.cc/ASA/resources/Element_Shard.png','碎片'],
+                ['https://img.whiterober.ccwu.cc/ASA/items/Element%20Shard.png','碎片'],
 
-                ['https://img.whiterober.ccwu.cc/ASA/resources/Gasoline.png','汽油'],
+                ['https://img.whiterober.ccwu.cc/ASA/items/Gasoline.png','汽油'],
 
-                ['https://img.whiterober.ccwu.cc/ASA/consumables/Fertilizer.png','肥料'],
+                ['https://img.whiterober.ccwu.cc/ASA/items/Fertilizer.png','肥料'],
 
-                ['https://img.whiterober.ccwu.cc/ASA/consumables/Massive_Animal_Feces.png','粪便'],
+                ['https://img.whiterober.ccwu.cc/ASA/items/Feces.png.png','粪便'],
 
-                ['https://img.whiterober.ccwu.cc/ASA/consumables/Raw_Meat.png','生肉'],
+                ['https://img.whiterober.ccwu.cc/ASA/items/Raw%20Meat.png','生肉'],
 
-                ['https://img.whiterober.ccwu.cc/ASA/consumables/Mejoberry.png','紫莓']
+                ['https://img.whiterober.ccwu.cc/ASA/items/Mejoberry.png','紫莓']
 
               ];
 
@@ -5547,16 +5536,16 @@ function buildStorageBody(rows) {
         if (cat.label) {
 
           var lc = cat.label_color || cat.color || '';
-          var lcs = (lc && lc !== 'auto') ? ' style="color:'+lc+'"' : '';
+
           var lb = cat.label_bold || cat.bold;
 
           if (lb) {
 
-            h += '<div'+lcs+'><span class="text-bold">'+cat.label+'</span>';
+            h += '<div><span class="text-bold">'+cat.label+'</span>';
 
           } else {
 
-            h += '<div'+lcs+'>'+cat.label;
+            h += '<div>'+cat.label;
 
           }
           // Sub-label

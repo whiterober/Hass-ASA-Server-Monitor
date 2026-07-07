@@ -339,8 +339,8 @@ def main():
             css += 'ha-card .ig-img.ic-auto-color{color:var(--primary-background-color)!important;fill:var(--primary-text-color)!important}'
             css += 'ha-card .ig-img.ic-auto-dark{filter:none!important}'
             css += 'ha-card .ig-img.ic-auto-light{filter:none!important}'
-            css += '[data-theme="dark"] .ig-img.ic-auto-dark{filter:invert(1)!important}'
-            css += '[data-theme="light"] .ig-img.ic-auto-light{filter:invert(1)!important}'
+            css += '[data-theme="dark"] ha-card .ig-img.ic-auto-dark{filter:invert(1)!important}'
+            css += '[data-theme="light"] ha-card .ig-img.ic-auto-light{filter:invert(1)!important}'
             css += 'ha-card .ig-img.ic-auto-color{filter:var(--ic-icon-filter,none)!important}'
             # ig-title-line + ::after separator for icon_group rows
             css += 'ha-card .ig-title-line{border:none!important;margin:0!important;border-top:1px solid var(--primary-text-color)!important;opacity:0.15!important}'
