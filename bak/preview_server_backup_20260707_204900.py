@@ -233,7 +233,7 @@ def main():
         # === Unconditional image CSS for info_card descriptions ===
         css += 'ha-card .ic-desc-img{width:24px!important;height:24px!important;object-fit:contain!important;vertical-align:middle!important;margin:0 2px!important;flex-shrink:0!important}'
         css += 'ha-card .ic-text[class*="ic-block-"]{position:relative!important;overflow:hidden!important}'
-        css += 'ha-card .ic-block-img{position:absolute!important;right:2px!important;top:50%!important;transform:translateY(-50%)!important;width:30px!important;height:30px!important;object-fit:contain!important;border-radius:0 4px 4px 0!important;flex-shrink:0!important}'
+        css += 'ha-card .ic-block-img{position:absolute!important;right:2px!important;top:50%!important;transform:translateY(-50%)!important;width:30px!important;height:30px!important;object-fit:cover!important;border-radius:0 4px 4px 0!important;flex-shrink:0!important}'
         css += 'ha-card .ic-qty{font-size:0.75em!important;font-weight:600!important;margin-left:0!important;flex-shrink:0!important;line-height:1!important}'
         css += 'ha-card .ic-text[class*="ic-block-"] .ic-qty{position:absolute!important;right:0!important;bottom:0!important;color:var(--primary-background-color)!important;font-size:0.8em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important}'
         css += 'ha-card .ic-text[class*="ic-block-"]:has(.ic-block-img){padding-right:34px!important}'
@@ -329,21 +329,9 @@ def main():
                 IC_CSS += 'ha-card .ic-text.ic-block-{} .mdi,ha-card .ic-text.ic-block-{} ha-icon{{color:var(--primary-background-color)!important}}'.format(fk, fk)
                 r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
                 IC_CSS += 'ha-card .info-card-block.ic-block-{}{{background:rgba({},{},{},0.08)!important}}'.format(fk, r, g, b)
-            # 3-state map filter: linear (icon color) + block (background) per-map
-            for sid, sm in SERVER_MAP.items():
-                IC_CSS += 'ha-card .ic-linear-'+sid+' .mdi,ha-card .ic-linear-'+sid+' ha-icon{color:'+sm['color']+'!important}'
-            for sid, sm in SERVER_MAP.items():
-                IC_CSS += 'ha-card .ic-text.ic-block-'+sid+'{background:'+sm['color']+'!important;border-radius:6px!important;padding:2px 6px!important;color:var(--primary-background-color)!important}'
-            for sid in SERVER_MAP:
-                IC_CSS += 'ha-card .ic-text.ic-block-'+sid+' .mdi,ha-card .ic-text.ic-block-'+sid+' ha-icon{color:var(--primary-background-color)!important}'
-            # Block-level card light-tint backgrounds (for server_states block=2)
-            for sid, sm in SERVER_MAP.items():
-                r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)
-                IC_CSS += 'ha-card .info-card-block.ic-block-'+sid+'{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.08)!important}'
             css += IC_CSS
         if has_icon_group:
             css += 'ha-card .ig-title-badge{display:inline-flex!important;align-items:baseline!important;font-size:0.65em!important;padding:2px 6px!important;border-radius:6px!important;background:color-mix(in srgb,var(--primary-color) 15%,transparent)!important;color:var(--primary-text-color)!important;line-height:1!important}'
-            css += 'ha-card .ig-badge-text{position:relative!important;top:1px!important}'
             css += 'ha-card .icon-group{gap:8px!important}'
             css += 'ha-card .ig-item{position:relative!important;display:inline-flex!important;flex-shrink:0!important}'
             css += 'ha-card .ig-img{width:28px!important;height:28px!important;object-fit:contain!important;border-radius:4px!important}'
@@ -357,12 +345,19 @@ def main():
             # ig-title-line + ::after separator for icon_group rows
             css += 'ha-card .ig-title-line{border:none!important;margin:0!important;border-top:1px solid var(--primary-text-color)!important;opacity:0.15!important}'
             css += 'ha-card .ig-row-wrapper::after{content:\'\'!important;display:block!important;width:100%!important;border-top:1px solid var(--primary-text-color)!important;opacity:0.15!important;margin-top:6px!important}'
+            # 3-state map filter: linear (icon color) + block (background) per-map
+            for sid, sm in SERVER_MAP.items():
+                css += 'ha-card .ic-linear-'+sid+' .mdi,ha-card .ic-linear-'+sid+' ha-icon{color:'+sm['color']+'!important}'
             # ig-row-wrapper linear mode: per-map title badge + separator colors
             for sid, sm in SERVER_MAP.items():
                 r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)
                 css += 'ha-card .ig-row-wrapper.ic-linear-'+sid+' .ig-title-badge{color:'+sm['color']+'!important;background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important}'
                 css += 'ha-card .ig-row-wrapper.ic-linear-'+sid+' .ig-title-line{border-top-color:'+sm['color']+'!important;opacity:0.4!important}'
                 css += 'ha-card .ig-row-wrapper.ic-linear-'+sid+'::after{border-top-color:'+sm['color']+'!important;opacity:0.4!important}'
+            for sid, sm in SERVER_MAP.items():
+                css += 'ha-card .ic-text.ic-block-'+sid+'{background:'+sm['color']+'!important;border-radius:6px!important;padding:2px 6px!important;color:var(--primary-background-color)!important}'
+            for sid in SERVER_MAP:
+                css += 'ha-card .ic-text.ic-block-'+sid+' .mdi,ha-card .ic-text.ic-block-'+sid+' ha-icon{color:var(--primary-background-color)!important}'
         if 'card_grid' in block_types:
             css += 'ha-card .info-card{background:var(--primary-background-color);border-radius:8px;overflow:hidden;text-align:center;padding:0 0 8px 0}ha-card .info-card img{width:100%;aspect-ratio:1;object-fit:cover}ha-card .card-name{font-weight:600;margin:4px 0}ha-card .card-feature{font-size:0.85em;color:var(--secondary-text-color)}ha-card .card-grid{display:grid;gap:12px}'
     elif ttype == 'server_grid':
@@ -383,7 +378,7 @@ def main():
     # === Image sizing for info_card descriptions (unconditional, safe) ===
     css += 'ha-card .ic-desc-img{width:24px!important;height:24px!important;object-fit:contain!important;vertical-align:middle!important;margin:0 1px!important;flex-shrink:0!important}'
     css += 'ha-card .ic-text[class*="ic-block-"]{position:relative!important;overflow:hidden!important}'
-    css += 'ha-card .ic-block-img{position:absolute!important;right:2px!important;top:50%!important;transform:translateY(-50%)!important;width:30px!important;height:30px!important;object-fit:contain!important;border-radius:0 4px 4px 0!important;flex-shrink:0!important}'
+    css += 'ha-card .ic-block-img{position:absolute!important;right:2px!important;top:50%!important;transform:translateY(-50%)!important;width:30px!important;height:30px!important;object-fit:cover!important;border-radius:0 4px 4px 0!important;flex-shrink:0!important}'
     css += 'ha-card .ic-text[class*="ic-block-"]:has(.ic-block-img){padding-right:34px!important}'
     css += 'ha-card .ic-qty{font-size:0.75em!important;font-weight:600!important;margin-left:0!important;flex-shrink:0!important;line-height:1!important}'
     css += 'ha-card .ic-text[class*="ic-block-"] .ic-qty{position:absolute!important;right:0!important;bottom:0!important;color:var(--primary-background-color)!important;font-size:0.8em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important}'

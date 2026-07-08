@@ -1,5 +1,5 @@
 """Build lovelace with embedded HTML from JSON data using tailwindcss-template-card."""
-import json, os, re
+import json, os
 from datetime import datetime
 
 # Server: /config/www/asa-data (absolute, avoids symlink issues). Local: ./data
@@ -9,33 +9,18 @@ DATA_DIR = _SERVER_DATA if os.path.isdir(_SERVER_DATA) else os.path.join(os.path
 def esc(s):
     return str(s).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
 
-def _render_mdi_inline(text, extra_class=''):
-    """将文本中所有 mdi:xxx 替换为 <ha-icon>，其余文本 escape"""
-    result = []
-    last = 0
-    for m in re.finditer(r'mdi:([\w-]+)', text):
-        if m.start() > last:
-            result.append(esc(text[last:m.start()]))
-        cls = ' class=\"{}\"'.format(extra_class) if extra_class else ''
-        result.append('<ha-icon icon=\"mdi:{}\"{}></ha-icon>'.format(m.group(1), cls))
-        last = m.end()
-    if last < len(text):
-        result.append(esc(text[last:]))
-    return ''.join(result)
-
 # Single source of truth for all server metadata
 SERVER_MAP = {
     'Isl':{'label':'孤岛','icon':'mdi:island','color':'#4CAF50'},
     'Sco':{'label':'焦土','icon':'mdi:volcano','color':'#FF5722'},
     'Cen':{'label':'核心岛','icon':'mdi:orbit','color':'#009688'},
     'Abe':{'label':'畸变','icon':'mdi:radioactive','color':'#9C27B0'},
-    'Ast':{'label':'繁星','icon':'mdi:star-four-points','color':'#FF9800'},
     'Ext':{'label':'灭绝','icon':'mdi:meteor','color':'#00BCD4'},
+    'Ast':{'label':'繁星','icon':'mdi:star-four-points','color':'#FF9800'},
     'Rag':{'label':'仙境','icon':'mdi:lighthouse-on','color':'#E91E63'},
     'Val':{'label':'瓦尔盖罗','icon':'mdi:forest','color':'#4E9F62'},
-    'Los':{'label':'失落地','icon':'mdi:castle','color':'#607D8B'},
-    'Gen':{'label':'创世模拟','icon':'mdi:dna','color':'#3F51B5'},
     'Bob':{'label':'俱乐部','icon':'mdi:party-popper','color':'#FFC107'},
+    'Los':{'label':'失落地','icon':'mdi:castle','color':'#607D8B'},
 }
 FIXED_STYLES_MAP = {
     '_hint':{'label':'提示','icon':'mdi:information','color':'#2196F3'},
@@ -2146,7 +2131,7 @@ def render_tab_html(tab):
                 if not ic_descs and block.get('body'):
                     ic_descs = [{'text': block['body'], 'bold': False, 'color': ''}]
                 ic_icon = (block.get('images', [{}])[0] or {}).get('image_url', '')
-
+                ic_mdi = block.get('mdi_icon', '')
                 ic_hl = block.get('highlight', '')
                 qc = block.get('quote_color', 'auto')
                 if qc and qc != 'auto':
@@ -2215,7 +2200,11 @@ def render_tab_html(tab):
                         parts.append('<img src="{}" class="ic-icon{}" loading="lazy" />'.format(esc(ic_icon), auto_cls))
                 parts.append('<div class="ic-body" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center">')
                 parts.append('<div class="ic-title" style="flex-basis:100%">')
-
+                if ic_mdi:
+                    if ic_mdi.startswith('mdi:'):
+                        parts.append('<ha-icon icon="{}" class="{}"></ha-icon> '.format(ic_mdi, auto_cls))
+                    else:
+                        parts.append('<span class="ic-emoji">{}</span> '.format(esc(ic_mdi)))
                 # Block-level map mdi icon for linear/block states
                 if blk_active:
                     _bstyle = _lookup_style(blk_active)
@@ -2225,7 +2214,7 @@ def render_tab_html(tab):
                         parts.append('<ha-icon icon="{}" style="--mdc-icon-size:16px;width:16px;height:16px;margin-right:4px;color:{}"></ha-icon>'.format(_bicon, _bcolor))
                     elif blk_st == 2:
                         parts.append('<ha-icon icon="{}" style="--mdc-icon-size:16px;width:16px;height:16px;margin-right:4px;color:{}"></ha-icon>'.format(_bicon, _bcolor))
-                parts.append('<span{}>{}</span>'.format(title_color_style, _render_mdi_inline(ic_title, auto_cls)))
+                parts.append('<span{}>{}</span>'.format(title_color_style, esc(ic_title)))
                 parts.append('</div>')
                 ic_collapse = block.get('collapse_descriptions', False)
                 if ic_collapse:
@@ -2263,28 +2252,22 @@ def render_tab_html(tab):
                         # Title row
                         if ig_title:
                             title_icon_html = ''
-                            _ig_title_text = ig_title
-                            # Check for explicit mdi: prefix in title
-                            _ig_mdi = re.match(r'mdi:([\w-]+)', ig_title)
-                            if _ig_mdi:
-                                title_icon_html = '<ha-icon icon="mdi:{}" style="--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;vertical-align:middle"></ha-icon>'.format(_ig_mdi.group(1))
-                                _ig_title_text = ig_title[_ig_mdi.end():].strip()
-                            elif linear_maps:
-                                sm = _lookup_style(linear_maps[0])
+                            if linear_maps:
+                                sm = SERVER_MAP.get(linear_maps[0], {})
                                 icon = sm.get('icon', 'mdi:map')
                                 title_icon_html = '<ha-icon icon="{}" style="--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;vertical-align:middle"></ha-icon>'.format(icon)
                             elif block_maps:
-                                sm = _lookup_style(block_maps[0])
+                                sm = SERVER_MAP.get(block_maps[0], {})
                                 icon = sm.get('icon', 'mdi:map')
                                 title_icon_html = '<ha-icon icon="{}" style="--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;vertical-align:middle"></ha-icon>'.format(icon)
                             if block_maps:
                                 # Block mode: no hr, text inherits white color from .ic-text.ic-block-{sid}
                                 parts.append('<div class="ig-title-row" style="display:flex;align-items:center;gap:8px;margin-bottom:4px">')
-                                parts.append('<span style="white-space:nowrap;font-size:0.85em">{}{}</span>'.format(title_icon_html, _render_mdi_inline(_ig_title_text)))
+                                parts.append('<span style="white-space:nowrap;font-size:0.85em">{}{}</span>'.format(title_icon_html, esc(ig_title)))
                                 parts.append('</div>')
                             else:
                                 parts.append('<div class="ig-title-row" style="display:flex;align-items:center;gap:8px;margin-bottom:4px">')
-                                parts.append('<span class="ig-title-badge" style="white-space:nowrap;font-size:0.85em">{}<span class="ig-badge-text">{}</span></span>'.format(title_icon_html, _render_mdi_inline(_ig_title_text)))
+                                parts.append('<span class="ig-title-badge" style="white-space:nowrap;font-size:0.85em">{}{}</span>'.format(title_icon_html, esc(ig_title)))
                                 parts.append('<hr class="ig-title-line" style="flex:1;min-width:0" />')
                                 parts.append('</div>')
                         # Icon row
@@ -2360,7 +2343,7 @@ def render_tab_html(tab):
                     dserver_attr=' data-server="{}" data-server-states=\'{}\''.format(dserver, states_json)
                     _dimg = ''
                     _dimg_url = (desc.get('images', [{}])[0] or {}).get('image_url','')
-                    _qty = (desc.get('images', [{}])[0] or {}).get('quantity', 0) or desc.get('quantity', 0)
+                    _qty = desc.get('quantity',0)
                     _qty_tag = '<span class="ic-qty">×{}</span>'.format(_qty) if _qty else ''
                     if _dimg_url:
                         _dac_mode = (desc.get('images', [{}])[0] or {}).get('image_auto_color_mode','off')
@@ -2389,9 +2372,9 @@ def render_tab_html(tab):
                     # Compute rendered text (after block_maps is known for _render_badges)
                     if _is_hat:
                         hat_cls = 'ic-badge ic-badge-num ic-badge-hollow' if block_maps else 'ic-badge ic-badge-num'
-                        dtext_rendered = '<span class="' + hat_cls + '">' + str(_hat_idx) + '</span> ' + _render_badges(_render_mdi_inline(dtext[1:].lstrip()), bool(block_maps))
+                        dtext_rendered = '<span class="' + hat_cls + '">' + str(_hat_idx) + '</span> ' + _render_badges(esc(dtext[1:].lstrip()), bool(block_maps))
                     else:
-                        dtext_rendered = _render_badges(_render_mdi_inline(dtext), bool(block_maps))
+                        dtext_rendered = _render_badges(esc(dtext), bool(block_maps))
                     parts.append('<div class="{}"{{}}{{}}>{{}}{{}}{{}}</div>'.format(ic_cls).format(dstyle, dserver_attr, srv_icon, dtext_rendered, _dimg))
                 if ic_collapse:
                     parts.append('<span class="ic-sum-end" style="font-size:0.65em;background:rgba(128,128,128,0.12);border:1px solid var(--border);border-radius:10px;padding:1px 7px;margin-top:2px;flex-basis:100%;cursor:pointer" onclick="event.stopPropagation();var d=this.closest(\'details\');var root=d.getRootNode();root.querySelectorAll(\'details[name=ic-acc]\').forEach(function(o){o.open=false});">···</span></div></details>')
@@ -2914,35 +2897,9 @@ if __name__ == "__main__":
 
     lovelace_path = '/config/lovelace' if os.path.exists('/config') else r'A:\NetSarang\Xftp 8\Temporary\lovelace'
     lovelace_ll_path = '/config/lovelace.lovelace' if os.path.exists('/config') else r'A:\NetSarang\Xftp 8\Temporary\lovelace.lovelace'
-    # Read from HA's storage first to capture any manual edits (HA UI writes here)
-    storage_src = '/homeassistant/.storage/lovelace.lovelace' if os.path.exists('/config') else lovelace_path
-    with open(storage_src, 'r', encoding='utf-8') as f:
+    with open(lovelace_path, 'r', encoding='utf-8') as f:
         lovelace = json.load(f)
     views = lovelace['data']['config']['views']
-    # Build timestamp footer for all ASA pages
-    build_ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    BLD_FOOTER = f'<div style="text-align:right;opacity:0.12;font-size:0.6em;margin-top:20px;user-select:none">build {build_ts}</div>'
-    # Rebuild clean view list: keep HA-manual views [0:6], drop stale ASA copies, append old originals
-    new_views = list(views[0:6])  # 0-5: HA manual, untouched
-    # Remove all stale ASA copies from the array (anywhere they appear)
-    keep_after = []
-    for v in views[6:]:
-        p = v.get('path', '')
-        if p == 'info_whiterober_old' or p == 'base_whiterober_old':
-            keep_after.append(v)
-        # Drop everything else (stale ASA views, old padding)
-    # Pad to target length
-    while len(new_views) < 21:
-        new_views.append({})
-    views = new_views
-    lovelace['data']['config']['views'] = views  # CRITICAL: update lovelace dict!
-
-    # Helper: find view index by path, or return default index
-    def _find_view(path, default_idx):
-        for i, v in enumerate(views):
-            if v.get('path') == path:
-                return i
-        return default_idx
 
     # --- Helper: content card matching OLD pattern ---
     def make_content_card(html_content, tab_type=None, tab=None):
@@ -3040,7 +2997,7 @@ if __name__ == "__main__":
                     IC_CSS += 'ha-card .ic-text.ic-block-{} .ic-qty{{background:rgba({},{},{},0)!important;-webkit-text-stroke:2px rgb({},{},{})!important;paint-order:stroke fill!important}}'.format(fk, r, g, b, r, g, b)
                     IC_CSS += 'ha-card .ic-text.ic-block-'+fk+'{position:relative!important;overflow:hidden!important}'
                     IC_CSS += 'ha-card .ic-text.ic-block-'+fk+' .ic-qty{position:absolute!important;right:0!important;bottom:0!important;color:var(--primary-background-color)!important;font-size:0.8em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important}'
-                IC_CSS += 'ha-card .ic-block-img{position:absolute!important;right:2px!important;top:50%!important;transform:translateY(-50%)!important;width:30px!important;height:30px!important;object-fit:contain!important;border-radius:0 4px 4px 0!important;flex-shrink:0!important}'
+                IC_CSS += 'ha-card .ic-block-img{position:absolute!important;right:2px!important;top:50%!important;transform:translateY(-50%)!important;width:30px!important;height:30px!important;object-fit:cover!important;border-radius:0 4px 4px 0!important;flex-shrink:0!important}'
                 IC_CSS += 'ha-card .ic-text[class*="ic-block-"]:has(.ic-block-img){padding-right:34px!important}'
                 # [xxx] badge rendering — per-map colors
                 # Linear mode: light tint bg + map color text
@@ -3055,29 +3012,9 @@ if __name__ == "__main__":
                 IC_CSS += 'ha-card .ic-badge-num{border-radius:3px!important;display:inline-flex!important;justify-content:center!important;width:16px!important;white-space:nowrap!important}'
                 # Block mode: cutout matching page bg (adapts to light/dark theme)
                 IC_CSS += 'ha-card .ic-text[class*="ic-block-"] .ic-badge-hollow{background:color-mix(in srgb,var(--primary-background-color) 20%,transparent)!important;color:var(--primary-background-color)!important}'
-                # 3-state map filter: linear (icon color) + block (background) per-map — auto-generated from SERVER_MAP
-                for sid, sm in SERVER_MAP.items():
-                    IC_CSS += 'ha-card .ic-linear-'+sid+' .mdi,ha-card .ic-linear-'+sid+' ha-icon{color:'+sm['color']+'!important}'
-                for sid, sm in SERVER_MAP.items():
-                    IC_CSS += 'ha-card .ic-text.ic-block-'+sid+'{background:'+sm['color']+'!important;border-radius:6px!important;padding:2px 6px!important;color:var(--primary-background-color)!important}'
-                for sid in SERVER_MAP:
-                    IC_CSS += 'ha-card .ic-text.ic-block-'+sid+' .mdi,ha-card .ic-text.ic-block-'+sid+' ha-icon{color:var(--primary-background-color)!important}'
-                # Block-level card light-tint backgrounds (for server_states block=2)
-                for sid, sm in SERVER_MAP.items():
-                    r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)
-                    IC_CSS += 'ha-card .info-card-block.ic-block-'+sid+'{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.08)!important}'
-                # Fixed styles: hint + warning (same as preview_server.py)
-                for fk, fv in FIXED_STYLES_MAP.items():
-                    fc = fv['color']
-                    IC_CSS += 'ha-card .ic-linear-'+fk+' .mdi,ha-card .ic-linear-'+fk+' ha-icon{color:'+fc+'!important}'
-                    IC_CSS += 'ha-card .ic-text.ic-block-'+fk+'{background:'+fc+'!important;border-radius:6px!important;padding:2px 6px!important;color:var(--primary-background-color)!important}'
-                    IC_CSS += 'ha-card .ic-text.ic-block-'+fk+' .mdi,ha-card .ic-text.ic-block-'+fk+' ha-icon{color:var(--primary-background-color)!important}'
-                    r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
-                    IC_CSS += 'ha-card .info-card-block.ic-block-'+fk+'{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.08)!important}'
                 css += IC_CSS
             if has_icon_group:
                 css += 'ha-card .ig-title-badge{display:inline-flex!important;align-items:baseline!important;font-size:0.65em!important;padding:2px 6px!important;border-radius:6px!important;background:color-mix(in srgb,var(--primary-color) 15%,transparent)!important;color:var(--primary-text-color)!important;line-height:1!important}'
-                css += 'ha-card .ig-badge-text{position:relative!important;top:1px!important}'
                 css += 'ha-card .icon-group{gap:8px!important}'
                 css += 'ha-card .ig-item{position:relative!important;display:inline-flex!important;flex-shrink:0!important}'
                 css += 'ha-card .ig-img{width:28px!important;height:28px!important;object-fit:contain!important;border-radius:4px!important}'
@@ -3091,12 +3028,31 @@ if __name__ == "__main__":
                 # ig-title-line + ::after separator for icon_group rows
                 css += 'ha-card .ig-title-line{border:none!important;margin:0!important;border-top:1px solid var(--primary-text-color)!important;opacity:0.15!important}'
                 css += 'ha-card .ig-row-wrapper::after{content:\'\'!important;display:block!important;width:100%!important;border-top:1px solid var(--primary-text-color)!important;opacity:0.15!important;margin-top:6px!important}'
+                # 3-state map filter: linear (icon color) + block (background) per-map — auto-generated from SERVER_MAP
+                for sid, sm in SERVER_MAP.items():
+                    css += 'ha-card .ic-linear-'+sid+' .mdi,ha-card .ic-linear-'+sid+' ha-icon{color:'+sm['color']+'!important}'
                 # ig-row-wrapper linear mode: per-map title badge + separator colors
                 for sid, sm in SERVER_MAP.items():
                     r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)
                     css += 'ha-card .ig-row-wrapper.ic-linear-'+sid+' .ig-title-badge{color:'+sm['color']+'!important;background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important}'
                     css += 'ha-card .ig-row-wrapper.ic-linear-'+sid+' .ig-title-line{border-top-color:'+sm['color']+'!important;opacity:0.4!important}'
                     css += 'ha-card .ig-row-wrapper.ic-linear-'+sid+'::after{border-top-color:'+sm['color']+'!important;opacity:0.4!important}'
+                for sid, sm in SERVER_MAP.items():
+                    css += 'ha-card .ic-text.ic-block-'+sid+'{background:'+sm['color']+'!important;border-radius:6px!important;padding:2px 6px!important;color:var(--primary-background-color)!important}'
+                for sid in SERVER_MAP:
+                    css += 'ha-card .ic-text.ic-block-'+sid+' .mdi,ha-card .ic-text.ic-block-'+sid+' ha-icon{color:var(--primary-background-color)!important}'
+                # Block-level card light-tint backgrounds (for server_states block=2)
+                for sid, sm in SERVER_MAP.items():
+                    r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)
+                    css += 'ha-card .info-card-block.ic-block-'+sid+'{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.08)!important}'
+                # Fixed styles: hint + warning (same as preview_server.py)
+                for fk, fv in FIXED_STYLES_MAP.items():
+                    fc = fv['color']
+                    css += 'ha-card .ic-linear-'+fk+' .mdi,ha-card .ic-linear-'+fk+' ha-icon{color:'+fc+'!important}'
+                    css += 'ha-card .ic-text.ic-block-'+fk+'{background:'+fc+'!important;border-radius:6px!important;padding:2px 6px!important;color:var(--primary-background-color)!important}'
+                    css += 'ha-card .ic-text.ic-block-'+fk+' .mdi,ha-card .ic-text.ic-block-'+fk+' ha-icon{color:var(--primary-background-color)!important}'
+                    r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
+                    css += 'ha-card .info-card-block.ic-block-'+fk+'{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.08)!important}'
             if 'card_grid' in block_types:
                 css += 'ha-card .info-card{background:var(--primary-background-color);border-radius:8px;overflow:hidden;text-align:center;padding:0 0 8px 0}ha-card .info-card img{width:100%;aspect-ratio:1;object-fit:cover}ha-card .card-name{font-weight:600;margin:4px 0}ha-card .card-feature{font-size:0.85em;color:var(--secondary-text-color)}ha-card .card-grid{display:grid;gap:12px}'
         elif tab_type == 'server_grid':
@@ -3169,7 +3125,7 @@ if __name__ == "__main__":
             "card_mod": {"style": "#tabcontent {\n  grid-area: unset !important;\n}\n"}
         }
 
-    # 1. SERVER RULES → views[40] — tabbed layout, same as tribe ops
+    # 1. SERVER RULES (views[8]) — tabbed layout, same as tribe ops
     sr_tabs = sr_data.get('tabs', [])
     sr_tab_buttons = [make_tab_button(t['name'], t.get('description',''), 'input_select.info_server_rules_tab') for t in sr_tabs]
     sr_tab_cards = []
@@ -3179,7 +3135,6 @@ if __name__ == "__main__":
         t_html = render_tab_html(t)
         # Inject inline theme detection (MutationObserver on html style, threshold=50 for visionOS)
         t_html = '<img src=x onerror="var d=this.parentElement;function A(){var b=getComputedStyle(document.documentElement).getPropertyValue(\'--primary-background-color\');var m=b.match(/\\d+/g);if(m){d.setAttribute(\'data-theme\',(0.299*m[0]+0.587*m[1]+0.114*m[2])<50?\'dark\':\'light\')}}A();new MutationObserver(A).observe(document.documentElement,{attributes:true,attributeFilter:[\'style\']})" style=display:none>'+t_html
-        t_html += BLD_FOOTER
         cond = {
             "type": "conditional",
             "conditions": [{"condition": "state", "entity": "input_select.info_server_rules_tab", "state": tname}],
@@ -3198,10 +3153,8 @@ if __name__ == "__main__":
         }
     ] + sr_tab_cards
 
-    views[_find_view('asa-server-rules', 6)] = {
-        "visible": False,
-        "subview": True,
-        "title": f'服务器规则',
+    views[8] = {
+        "title": f'服务器规则 SYNC-{sr_ts}',
         "path": "asa-server-rules",
         "theme": "Material You",
         "sections": [{
@@ -3216,7 +3169,7 @@ if __name__ == "__main__":
     }
     print(f'Server rules: REBUILT with {len(sr_tab_buttons)} tabs + {len(sr_tab_cards)} cards + timestamp {sr_ts}')
 
-    # 2. INFO_WHITEROBER → views[41]
+    # 2. INFO_WHITEROBER (views[6])
     tabs = to_data.get('tabs', [])
     tab_buttons = [make_tab_button(t['name'], t.get('description','')) for t in tabs]
 
@@ -3235,7 +3188,6 @@ if __name__ == "__main__":
             t_html = render_tab_html(t)
         # Inject inline theme detection (MutationObserver on html style, threshold=50 for visionOS)
         t_html = '<img src=x onerror="var d=this.parentElement;function A(){var b=getComputedStyle(document.documentElement).getPropertyValue(\'--primary-background-color\');var m=b.match(/\\d+/g);if(m){d.setAttribute(\'data-theme\',(0.299*m[0]+0.587*m[1]+0.114*m[2])<50?\'dark\':\'light\')}}A();new MutationObserver(A).observe(document.documentElement,{attributes:true,attributeFilter:[\'style\']})" style=display:none>'+t_html
-        t_html += BLD_FOOTER
         cond = {
             "type": "conditional",
             "conditions": [{"condition": "state", "entity": "input_select.info_tribe_tab", "state": tname}],
@@ -3248,6 +3200,11 @@ if __name__ == "__main__":
     # Generate fresh timestamp
     ts = datetime.now().strftime('%H:%M:%S')
 
+    info_view = views[6]
+    info_view['title'] = f'部落运维速查 SYNC-{ts}'
+    # Remove column_span from view level (it goes at section level)
+    info_view.pop('column_span', None)
+
     # Build cards: tab bar + all generated conditional cards
     stack_cards = [
         # Tab bar
@@ -3258,27 +3215,22 @@ if __name__ == "__main__":
         }
     ] + tab_cards
 
-    views[_find_view('info_whiterober', 7)] = {
-        "visible": False,
-        "subview": True,
-        "title": f'部落运维速查',
-        "path": "info_whiterober",
-        "theme": "Material You",
-        "sections": [{
-            "type": "grid",
-            "column_span": 2,
-            "cards": [{
-                "type": "vertical-stack",
-                "grid_options": {"columns": "full"},
-                "cards": stack_cards
-            }]
+    # Section with column_span: 2 AT SECTION LEVEL (matching old page pattern)
+    info_view['sections'] = [{
+        "type": "grid",
+        "column_span": 2,
+        "cards": [{
+            "type": "vertical-stack",
+            "grid_options": {"columns": "full"},
+            "cards": stack_cards
         }]
-    }
+    }]
     print(f'info_whiterober: REBUILT with {len(tab_buttons)} tabs + {len(tab_cards)} cards + timestamp {ts}')
 
-    # 3. BASE VIEWS → views[50:61] (11 servers, one view each)
+    # 3. BASE_WHITEROBER (views[7]) - match old base_whiterober_old structure exactly
     bq_servers = bq_data.get('servers', {})
 
+    # Raw HTML card — match old view exactly (daisyui enabled, CARD_CORE_CSS)
     def make_raw_card(html_content):
         return {
             "type": "custom:mod-card",
@@ -3294,29 +3246,31 @@ if __name__ == "__main__":
             }
         }
 
-    BASE_SERVER_MAP = {
-        'Isl': {'idx': 8,  'title': '孤岛基地速查',     'path': 'base_isl'},
-        'Sco': {'idx': 9,  'title': '焦土基地速查',     'path': 'base_sco'},
-        'Cen': {'idx': 10, 'title': '核心岛基地速查',   'path': 'base_cen'},
-        'Abe': {'idx': 11, 'title': '畸变基地速查',     'path': 'base_abe'},
-        'Ast': {'idx': 12, 'title': '繁星基地速查',     'path': 'base_ast'},
-        'Ext': {'idx': 13, 'title': '灭绝基地速查',     'path': 'base_ext'},
-        'Rag': {'idx': 14, 'title': '仙境基地速查',     'path': 'base_rag'},
-        'Val': {'idx': 15, 'title': '瓦尔盖罗基地速查', 'path': 'base_val'},
-        'Los': {'idx': 16, 'title': '失落地基地速查',   'path': 'base_los'},
-        'Gen': {'idx': 17, 'title': '创世模拟基地速查', 'path': 'base_gen'},
-        'Bob': {'idx': 18, 'title': '俱乐部基地速查',   'path': 'base_bob'},
-    }
+    # Tab buttons: 英灵殿 + 孤岛号
+    bq_tab_buttons = [
+        make_tab_button('英灵殿', '设备·存储·消耗', 'input_select.info_tribe_tab'),
+        make_tab_button('孤岛号', '设备·存储·消耗', 'input_select.info_tribe_tab')
+    ]
+
+    # Isl server tabs[0] = 英灵殿, tabs[1] = 孤岛号 (empty for now)
+    isl = bq_servers.get('Isl', {})
+    isl_tabs = isl.get('tabs', [])
+    yl_data = (isl_tabs[0] or {}) if len(isl_tabs) > 0 else {}
+    gh_data = (isl_tabs[1] or {}) if len(isl_tabs) > 1 else {}
 
     def build_section_html(tab_data):
         """Build HTML from tab's sections array, including section-tab-bar."""
         sections = tab_data.get('sections', [])
         if not sections:
+            # Fallback: use raw html field directly
             return tab_data.get('html', '<p>暂无数据</p>')
+        # Build section-tab-bar
         parts = ['<div class="section-tab-bar base-title-header">']
         for i, sec in enumerate(sections):
             active = ' tab-active' if i == 0 else ''
             sid = 'section-' + str(i)
+            # Robust accordion: use closest() to find parent container,
+            # then query within it (works in both Shadow DOM and regular DOM).
             onclick_js = (
                 f"(function(el){{"
                 f"var bar=el.closest('.section-tab-bar');"
@@ -3337,70 +3291,45 @@ if __name__ == "__main__":
             parts.append(f'<div id="{sid}-body" class="accordion-body borderr-none{collapsed}">{sec.get("html","")}</div>')
         return '\n'.join(parts)
 
+    yl_html = build_section_html(yl_data) if yl_data.get('sections') else yl_data.get('html', '<p>暂无数据</p>')
+    gh_html = build_section_html(gh_data) if gh_data.get('sections') else gh_data.get('html', '<p>暂无数据</p>')
+    # Inject inline theme detection for base cards
     TJS = '<img src=x onerror="var d=this.parentElement;function A(){var b=getComputedStyle(document.documentElement).getPropertyValue(\'--primary-background-color\');var m=b.match(/\\d+/g);if(m){d.setAttribute(\'data-theme\',(0.299*m[0]+0.587*m[1]+0.114*m[2])<50?\'dark\':\'light\')}}A();new MutationObserver(A).observe(document.documentElement,{attributes:true,attributeFilter:[\'style\']})" style=display:none>'
+    yl_html = TJS + yl_html if '<img src=x' not in yl_html else yl_html
+    gh_html = TJS + gh_html if '<img src=x' not in gh_html else gh_html
+
+    bq_tab_cards = [
+        {"type": "conditional", "conditions": [{"condition": "state", "entity": "input_select.info_tribe_tab", "state": "英灵殿"}],
+         "card": make_raw_card(yl_html), "grid_options": {"columns": 24, "rows": "auto"}},
+        {"type": "conditional", "conditions": [{"condition": "state", "entity": "input_select.info_tribe_tab", "state": "孤岛号"}],
+         "card": make_raw_card(gh_html), "grid_options": {"columns": 24, "rows": "auto"}}
+    ]
 
     bq_ts = datetime.now().strftime('%H:%M:%S')
-    base_count = 0
-    for sid, cfg in BASE_SERVER_MAP.items():
-        srv = bq_servers.get(sid, {})
-        tabs = srv.get('tabs', [])
-        if not tabs:
-            # Placeholder: named view without content (avoids "未命名视图")
-            views[_find_view(cfg['path'], cfg['idx'])] = {
-                "visible": False,
-                "subview": True,
-                "title": f"{cfg['title']}",
-                "path": cfg['path'],
-                "theme": "Material You",
-                "sections": [{"type": "grid", "cards": []}]
-            }
-            base_count += 1
-            continue
-        bq_tab_buttons = [make_tab_button(t.get('name','?'), t.get('description',''), 'input_select.info_tribe_tab') for t in tabs]
-        bq_tab_cards = []
-        for t in tabs:
-            tname = t.get('name','?')
-            t_html = build_section_html(t) if t.get('sections') else t.get('html', '<p>暂无数据</p>')
-            t_html = TJS + t_html if '<img src=x' not in t_html else t_html
-            t_html += BLD_FOOTER
-            bq_tab_cards.append({
-                "type": "conditional",
-                "conditions": [{"condition": "state", "entity": "input_select.info_tribe_tab", "state": tname}],
-                "card": make_raw_card(t_html),
-                "grid_options": {"columns": 24, "rows": "auto"}
-            })
-        bq_stack = [{
-            "type": "custom:mod-card",
-            "card_mod": {"style": ":host { display: block !important; overflow-x: auto !important; white-space: nowrap !important; padding-bottom: 8px; } ha-card { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: rgba(0,0,0,0) !important; box-shadow: none !important; }"},
-            "card": {"type": "horizontal-stack", "cards": bq_tab_buttons}
-        }] + bq_tab_cards
-        views[_find_view(cfg['path'], cfg['idx'])] = {
-            "visible": False,
-            "subview": True,
-            "title": f"{cfg['title']}",
-            "path": cfg['path'],
-            "theme": "Material You",
-            "sections": [{
-                "type": "grid",
-                "column_span": 2,
-                "cards": [{
-                    "type": "vertical-stack",
-                    "grid_options": {"columns": "full"},
-                    "cards": bq_stack
-                }]
-            }]
-        }
-        base_count += 1
-        print(f'  base_{sid}: REBUILT with {len(bq_tab_buttons)} tabs + {len(bq_tab_cards)} cards')
-    print(f'Base views: REBUILT {base_count} server views + timestamp {bq_ts}')
+    bq_stack_cards = [{
+        "type": "custom:mod-card",
+        "card_mod": {"style": ":host { display: block !important; overflow-x: auto !important; white-space: nowrap !important; padding-bottom: 8px; } ha-card { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: rgba(0,0,0,0) !important; box-shadow: none !important; }"},
+        "card": {"type": "horizontal-stack", "cards": bq_tab_buttons}
+    }] + bq_tab_cards
 
-    # 4. Append old reference views at [19:21]
-    views[19] = keep_after[0] if len(keep_after) > 0 else {}
-    views[20] = keep_after[1] if len(keep_after) > 1 else {}
-    # Trim trailing empty views
-    while len(views) > 0 and views[-1] == {}:
-        views.pop()
-    print(f'Old views preserved: info_whiterober_old → [19], base_whiterober_old → [20], total {len(views)} views')
+    views[7] = {
+        "title": f'老板部落基地速查 SYNC-{bq_ts}',
+        "path": "base_whiterober",
+        "theme": "Material You",
+        "sections": [{
+            "type": "grid",
+            "column_span": 2,
+            "cards": [{
+                "type": "vertical-stack",
+                "grid_options": {"columns": "full"},
+                "cards": bq_stack_cards
+            }]
+        }]
+    }
+    print(f'base_whiterober: REBUILT with 2 tab buttons + {len(bq_tab_cards)} conditional cards + timestamp {bq_ts}')
+
+    # 4. Keep old views (9,10) untouched - they reference original lovelace-old
+    print(f'Old views preserved: views[9]={views[9].get("title")}, views[10]={views[10].get("title")}')
 
     # SAVE — auto-detect environment (server vs local dev)
     lovelace_path = '/config/lovelace' if os.path.exists('/config') else r'A:\NetSarang\Xftp 8\Temporary\lovelace'

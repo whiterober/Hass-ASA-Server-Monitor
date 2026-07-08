@@ -31,82 +31,132 @@ print('✅ 基线拉取完成')
 > ⚠️ 禁止假设本地最新。HA 上可能有其他人/进程修改过 lovelace。
 
 > 📝 **说明**：本次计划修改的是「方舟」主视图（views[3]）的原生 lovelace 卡片，不涉及 ASA `build_lovelace.py` 生成的信息卡片页面。因此走标准 lovelace 编辑流程（编辑 → 同步 → SFTP 上传 → 重启 HA），无需 ASA 后台保存流程。
+>
+> 🔗 切屏底层方案详见 `docs/自动切屏方案.md`。本地已实现登录自动切屏（TV=SteamShell 集成 ✅，显示器=计划任务 VBS），HASS.Agent 提供**远程手动切屏**能力。
 
 ---
 
 ## 二、架构总览
 
 ```
-Home Assistant (手机 Dashboard)
-    │
-    ▼
-HASS.Agent (Windows 代理)
-    │
-    ┌──────────────┴──────────────┐
-    ▼                              ▼
-切屏                              游戏输入
-    │                              │
-MultiMonitorTool              AutoHotkey v2
-    │                              │
-    ▼                              ▼
-电视/显示器主屏切换            当前焦点输入框 (ARK 筛选框)
+                    Home Assistant (手机 Dashboard)
+                              │
+                              ▼
+                      HASS.Agent (Windows 代理)
+                              │
+          ┌───────────────────┴───────────────────┐
+          ▼                                       ▼
+      远程切屏                                 游戏输入
+          │                                       │
+  DisplaySwitch.exe                        AutoHotkey v2
+  (/external /internal)                    (剪贴板 → ^v)
+          │                                       │
+          ▼                                       ▼
+  电视/显示器切换                           ARK 筛选框
 ```
+
+> 💡 本地自动切屏已在 Windows 启动时处理（计划任务 + SteamShell），HASS 按钮提供手机端**手动远程切屏**。
 
 ---
 
-## 三、第一部分：HASS 切屏
+## 三、第一部分：HASS 远程切屏
 
-### 3.1 工具安装
+### 3.1 工具确认
 
-| 工具 | 下载 | 安装路径 |
-|------|------|----------|
-| MultiMonitorTool | https://www.nirsoft.net/utils/multi_monitor_tool.html | `C:\Tools\MultiMonitorTool\` |
+`B:\DisplaySwitch\DisplaySwitch.exe` 已在游戏机上就绪（Windows 自带 `displayswitch.exe` 的副本，等同于 `Win+P`）。
 
-### 3.2 目录结构
+| 命令 | 效果 |
+|------|------|
+| `B:\DisplaySwitch\DisplaySwitch.exe /external` | 仅电视 |
+| `B:\DisplaySwitch\DisplaySwitch.exe /internal` | 仅显示器 |
 
-```
-C:\Tools\MultiMonitorTool\
-├── MultiMonitorTool.exe
-├── TV.cfg          ← 电视模式配置（电视=主屏）
-└── GAME.cfg        ← 显示器模式配置（显示器=主屏）
-```
+### 3.2 复用现有 VBS
 
-### 3.3 创建配置文件
+`B:\DisplaySwitch\` 目录已有：
 
-**步骤**：
-1. 手动调整 Windows 显示设置：电视 = 主屏、显示器 = 副屏
-2. 执行：`MultiMonitorTool.exe /SaveConfig C:\Tools\MultiMonitorTool\TV.cfg`
-3. 手动调整：显示器 = 主屏、电视 = 副屏
-4. 执行：`MultiMonitorTool.exe /SaveConfig C:\Tools\MultiMonitorTool\GAME.cfg`
+| 文件 | 命令 |
+|------|------|
+| `一键切换电视.vbs` | `DisplaySwitch.exe /external` |
+| `一键切换电脑.vbs` | `DisplaySwitch.exe /internal` |
 
-### 3.4 创建批处理脚本
+> 无需新建脚本，直接复用。
 
-**`C:\Scripts\TV.bat`**：
-```batch
-@echo off
-C:\Tools\MultiMonitorTool\MultiMonitorTool.exe /LoadConfig C:\Tools\MultiMonitorTool\TV.cfg
-```
+### 3.3 HASS.Agent 配置
 
-**`C:\Scripts\GAME.bat`**：
-```batch
-@echo off
-C:\Tools\MultiMonitorTool\MultiMonitorTool.exe /LoadConfig C:\Tools\MultiMonitorTool\GAME.cfg
-```
+> **什么是 HASS.Agent？** 一个 Windows 服务程序，通过 MQTT 连接 Home Assistant，让 HA 能远程执行 Windows 命令。安装后自动将配置的 Command 注册为 HA 实体。
+>
+> 下载：[HASS.Agent GitHub](https://github.com/LAB02-Research/HASS.Agent) | 安装在游戏 PC 上，需要配置 MQTT 连接到 HA。
 
-### 3.5 HASS.Agent 配置
+#### 3.3.1 安装 HASS.Agent
 
-在 HASS.Agent 中新增 2 个 Command：
+1. 在**游戏 PC** 上下载 [HASS.Agent 最新版](https://github.com/LAB02-Research/HASS.Agent/releases)（`.exe` 安装包）
+2. 双击安装，一路「下一步」即可
+3. 安装完成后，桌面右下角托盘会出现 HASS.Agent 图标
 
-| 名称 | 程序 | 参数 |
-|------|------|------|
-| `SwitchToTV` | `C:\Scripts\TV.bat` | （无） |
-| `SwitchToGame` | `C:\Scripts\GAME.bat` | （无） |
+#### 3.3.2 配置 MQTT 连接
 
-> HASS.Agent 会自动将这两个 Command 注册为 HA 的 `button.switchtotv` 和 `button.switchtogame` 实体。
+HASS.Agent 通过 MQTT 和 HA 通信。需要 HA 端先有 MQTT broker。
+
+<details>
+<summary>🔧 如果你的 HA 还没有 MQTT：先装 Mosquitto Broker</summary>
+
+在 HA 的「设置 → 加载项 → 加载项商店」搜索 `Mosquitto broker`，安装并启动。记下你设置的 MQTT 用户名/密码。
+</details>
+
+HASS.Agent 端配置：
+
+1. 右键托盘图标 → **Configuration**
+2. 左侧选 **MQTT Broker**
+3. 填入：
+
+| 字段 | 值 |
+|------|-----|
+| Broker IP | `192.168.197.253`（你的 HA 地址） |
+| Port | `1883` |
+| Username | 你的 MQTT 用户名 |
+| Password | 你的 MQTT 密码 |
+
+4. 点击 **Test Connection** → 显示绿色 ✅ 即成功
+5. 点击 **Save**
+
+#### 3.3.3 添加切屏 Command
+
+1. 左侧选 **Commands** → 点击 **Add**
+2. 创建第 1 个：
+
+| 字段 | 值 |
+|------|-----|
+| Name | `SwitchToTV` |
+| Command | `wscript.exe` |
+| Arguments | `//B //nologo B:\DisplaySwitch\一键切换电视.vbs` |
+
+3. 点击 **Add** 再创建第 2 个：
+
+| 字段 | 值 |
+|------|-----|
+| Name | `SwitchToGame` |
+| Command | `wscript.exe` |
+| Arguments | `//B //nologo B:\DisplaySwitch\一键切换电脑.vbs` |
+
+4. 点击 **Save**
+
+> 💡 保存后稍等几秒，HA 的「开发者工具 → 实体」里搜索 `button.switchto` 就能看到 `button.switchtotv` 和 `button.switchtogame`。
+
+#### 3.3.4 添加游戏输入 Command
+
+> 此步骤依赖第四节 TypeGameText.exe，做完第四节再回来添加。
+
+| 字段 | 值 |
+|------|-----|
+| Name | `TypeGameText` |
+| Command | `C:\Scripts\TypeGameText.exe` |
+| Arguments | `{text}` |
+
+> HA 中会注册为 `script.typegametext` 实体。
 
 ### 3.6 HA Lovelace 卡片
 
-在「方舟」视图中新增一个 Grid section，添加 entities 卡片：
+在「**玉林品上**」视图中新增 Grid section，添加屏幕切换 entities 卡片：
 
 ```json
 {
@@ -238,7 +288,9 @@ search_quetz:
 
 ### 4.7 HA Lovelace 卡片
 
-在「方舟」视图中新增 Grid section，添加：
+#### 游戏输入（玉林品上视图）
+
+在「**玉林品上**」视图中新增 Grid section：
 
 ```json
 {
@@ -257,7 +309,7 @@ search_quetz:
 }
 ```
 
-快捷按钮 Grid：
+快捷按钮 Grid（**方舟**视图）：
 
 ```json
 {
@@ -312,25 +364,28 @@ Step 9: 浏览器自验证
   └── 截图/读页确认新卡片已出现、布局无异常
 ```
 
-### 5.2 「方舟」视图新增 Section 插入位置
+### 5.2 视图分配
 
-当前「方舟」视图 sections 结构（从末尾倒推）：
+| 视图 | 新增内容 |
+|------|----------|
+| **玉林品上** | 屏幕切换卡片 + 游戏输入卡片（搜索文本 + 发送） |
+| **方舟** (views[3]) | 一键搜索快捷按钮（聚合物/金属/霸王龙/风神翼龙） |
 
 ```
-sections[]
-├── [0] 部落运维速查入口 (Grid)
-├── [1] ASA 服务器操作主卡片 (Grid)
-├── [2] 服务器规则标题 (Grid)
-├── [3] 服务器选择网格 (Grid)
-├── [4] 操作系统选择 (Grid)
-├── [5] 快速操作按钮 (Grid)
-├── [6] 补丁信息入口 (Grid)
-├── [7] 服务器状态显示 (Grid)
-├── [8] 操作日志 (Grid)
-└── [9] ← 🆕 屏幕切换 (Grid)        ← 新增
-    [10]← 🆕 游戏快捷输入 (Grid)     ← 新增
-    [11]← 🆕 一键搜索 (Grid)         ← 新增
+玉林品上视图                           方舟视图 (views[3])
+───────────                           ─────────────────
+sections[]                            sections[]
+├── ... (现有)                        ├── [0] 部落运维速查入口
+├── 🆕 屏幕切换 (entities)             ├── ... (现有)
+│   ├── 📺 电视模式                    ├── [8] 操作日志
+│   └── 🖥️ 显示器模式                  └── [9] ← 🆕 一键搜索 (Grid)
+├── 🆕 游戏快捷输入 (entities)             ├── 📦 聚合物
+│   ├── 搜索文本 (input_text)              ├── 🔩 金属
+│   └── 📤 发送到游戏                      ├── 🦖 霸王龙
+│                                         └── 🪶 风神翼龙
 ```
+
+> 💡 屏幕切换和游戏输入放玉林品上（手机常用视图），快捷按钮放方舟（游戏专属视图）。
 
 ---
 
@@ -338,7 +393,7 @@ sections[]
 
 | # | 验证项 | 方法 |
 |---|--------|------|
-| 1 | MultiMonitorTool 配置正确 | 手动运行 TV.bat / GAME.bat，确认屏幕切换 |
+| 1 | DisplaySwitch 切屏正常 | 手动运行 `B:\DisplaySwitch\DisplaySwitch.exe /external` 和 `/internal` |
 | 2 | HASS.Agent 实体注册 | HA 开发者工具 → 实体 → 搜索 `button.switchto` |
 | 3 | 屏幕切换按钮生效 | 手机点击 → 电视/显示器主屏切换 |
 | 4 | TypeGameText.exe 可用 | 命令行 `TypeGameText.exe "测试"` → 焦点应用收到粘贴 |
@@ -346,17 +401,18 @@ sections[]
 | 6 | 发送脚本生效 | 输入文字 → 点击发送 → ARK 筛选框收到文字 |
 | 7 | 快捷按钮生效 | 点击 📦 聚合物 → ARK 筛选框出现"聚合物" |
 | 8 | Lovelace 本地与远程 MD5 一致 | 本地 MD5 vs SSH md5sum 验证 |
-| 9 | 实页渲染正确 | 浏览器打开 HA lovelace 实页截图确认 |
+| 9 | 实页渲染正确 | 浏览器打开 HA 玉林品上 + 方舟实页截图确认 |
 
 ---
 
 ## 七、注意事项
 
-1. **AutoHotkey 依赖前台焦点**：发送文本时，ARK 游戏窗口必须是前台焦点（筛选框已点击激活）。
-2. **中文输入法**：ARK 筛选框需处于英文输入模式，否则 `^v` 可能粘贴到输入法候选框。
-3. **HASS.Agent 必须在 Windows 游戏机上运行**（非 HA 服务器）。当前 HASS.Agent 部署位置需确认。
-4. **快捷按钮可按需扩展**：根据实际游戏搜索习惯添加更多常用词（水泥、火花 powder、铁锭等）。
-5. **权限**：TypeGameText.exe 可能需要管理员权限才能向游戏窗口发送按键（取决于游戏的反作弊保护）。
+1. **切屏已自动处理**：登录时由计划任务/SteamShell 自动切屏，HASS 按钮为远程手动备用。
+2. **AutoHotkey 依赖前台焦点**：发送文本时，ARK 游戏窗口必须是前台焦点（筛选框已点击激活）。
+3. **中文输入法**：ARK 筛选框需处于英文输入模式，否则 `^v` 可能粘贴到输入法候选框。
+4. **HASS.Agent 必须在 Windows 游戏机上运行**（非 HA 服务器）。
+5. **快捷按钮可按需扩展**：根据实际游戏搜索习惯添加更多常用词（水泥、火花 powder、铁锭等）。
+6. **权限**：TypeGameText.exe 可能需要管理员权限才能向游戏窗口发送按键（取决于游戏的反作弊保护）。
 
 ---
 
@@ -364,14 +420,12 @@ sections[]
 
 | 文件 | 位置 | 操作 |
 |------|------|------|
-| `TV.cfg` | `C:\Tools\MultiMonitorTool\` | 🆕 新建 |
-| `GAME.cfg` | `C:\Tools\MultiMonitorTool\` | 🆕 新建 |
-| `TV.bat` | `C:\Scripts\` | 🆕 新建 |
-| `GAME.bat` | `C:\Scripts\` | 🆕 新建 |
+| `TV.bat` | — | ❌ 无需新建（复用 B:\DisplaySwitch\一键切换电视.vbs） |
+| `GAME.bat` | — | ❌ 无需新建（复用 B:\DisplaySwitch\一键切换电脑.vbs） |
 | `TypeGameText.ahk` | `C:\Scripts\` | 🆕 新建 |
 | `TypeGameText.exe` | `C:\Scripts\` | 🆕 编译生成 |
 | `configuration.yaml` | `/config/` (HA) | ✏️ 追加 input_text + scripts |
-| `lovelace` | `A:\NetSarang\Xftp 8\Temporary\` | ✏️ 方舟视图追加 3 个 Grid section |
+| `lovelace` | `A:\NetSarang\Xftp 8\Temporary\` | ✏️ 方舟视图追加 1 个 Grid + 玉林品上追加 2 个 Grid |
 | `lovelace.lovelace` | `A:\NetSarang\Xftp 8\Temporary\` | 🔄 同步自 lovelace |
 
 ---
