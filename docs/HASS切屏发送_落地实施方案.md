@@ -31,6 +31,12 @@ print('✅ 基线拉取完成')
 > ⚠️ 禁止假设本地最新。HA 上可能有其他人/进程修改过 lovelace。
 
 > 📝 **说明**：本次计划修改的是「方舟」主视图（views[3]）的原生 lovelace 卡片，不涉及 ASA `build_lovelace.py` 生成的信息卡片页面。因此走标准 lovelace 编辑流程（编辑 → 同步 → SFTP 上传 → 重启 HA），无需 ASA 后台保存流程。
+
+### 🔴 铁律 2：SFTP 上传后必须立即重建 ASA 视图
+
+**安全工作流（铁律）**：另一个会话改 lovelace → SFTP 上传 → **立即 SSH 执行 `python3 /config/build_lovelace.py`** → 完成。
+
+这一行命令会用最新 `server_rules.json` 等数据文件重建 ASA 视图，同时保留其他视图的改动。**无需再重启 HA**（`build_lovelace` 已同步 `.storage`）。
 >
 > 🔗 切屏底层方案详见 `docs/自动切屏方案.md`。本地已实现登录自动切屏（TV=SteamShell 集成 ✅，显示器=计划任务 VBS），HASS.Agent 提供**远程手动切屏**能力。
 
@@ -149,7 +155,7 @@ HASS.Agent 端配置：
 | 字段 | 值 |
 |------|-----|
 | Name | `TypeGameText` |
-| Command | `C:\Scripts\TypeGameText.exe` |
+| Command | `B:\AutoHotkey\Scripts\TypeGameText.exe` |
 | Arguments | `{text}` |
 
 > HA 中会注册为 `script.typegametext` 实体。
@@ -190,17 +196,18 @@ HASS.Agent 端配置：
 ### 4.2 目录结构
 
 ```
-C:\Scripts\
+B:\AutoHotkey\Scripts\
 ├── TypeGameText.ahk    ← AHK 源码
 └── TypeGameText.exe    ← 编译后 exe（HASS.Agent 调用）
 ```
 
 ### 4.3 AutoHotkey 脚本
 
-**`C:\Scripts\TypeGameText.ahk`**：
+**`B:\AutoHotkey\Scripts\TypeGameText.ahk`**：
 
 ```autohotkey
 #Requires AutoHotkey v2
+#Warn All, Off
 
 if A_Args.Length > 0
 {
@@ -221,7 +228,7 @@ if A_Args.Length > 0
 
 | 名称 | 程序 | 参数 |
 |------|------|------|
-| `TypeGameText` | `C:\Scripts\TypeGameText.exe` | `{text}` |
+| `TypeGameText` | `B:\AutoHotkey\Scripts\TypeGameText.exe` | `{text}` |
 
 > `{text}` 为 HASS.Agent 动态参数占位符，调用时替换为实际文本。
 
@@ -355,11 +362,16 @@ Step 7: MD5 验证（本地 vs 远程）
   └── 本地 MD5 vs SSH md5sum /homeassistant/.storage/lovelace.lovelace
   └── 两个 MD5 必须一致
 
-Step 8: 重启 HA
+Step 8: 🚨 重建 ASA 视图（铁律 2）
+  └── ssh root@host "python3 /config/build_lovelace.py"
+  └── 用最新数据文件重建 ASA 视图，保留其他视图改动
+  └── 无需重启 HA（build_lovelace 已同步 .storage）
+
+Step 9: 重启 HA（仅当卡片结构变更时）
   └── 需 askQuestions 用户确认后执行
   └── ssh root@host "ha core restart"
 
-Step 9: 浏览器自验证
+Step 10: 浏览器自验证
   └── open_browser_page 打开 HA 实页
   └── 截图/读页确认新卡片已出现、布局无异常
 ```
@@ -422,8 +434,8 @@ sections[]                            sections[]
 |------|------|------|
 | `TV.bat` | — | ❌ 无需新建（复用 B:\DisplaySwitch\一键切换电视.vbs） |
 | `GAME.bat` | — | ❌ 无需新建（复用 B:\DisplaySwitch\一键切换电脑.vbs） |
-| `TypeGameText.ahk` | `C:\Scripts\` | 🆕 新建 |
-| `TypeGameText.exe` | `C:\Scripts\` | 🆕 编译生成 |
+| `TypeGameText.ahk` | `B:\AutoHotkey\Scripts\` | 🆕 新建 |
+| `TypeGameText.exe` | `B:\AutoHotkey\Scripts\` | 🆕 编译生成 |
 | `configuration.yaml` | `/config/` (HA) | ✏️ 追加 input_text + scripts |
 | `lovelace` | `A:\NetSarang\Xftp 8\Temporary\` | ✏️ 方舟视图追加 1 个 Grid + 玉林品上追加 2 个 Grid |
 | `lovelace.lovelace` | `A:\NetSarang\Xftp 8\Temporary\` | 🔄 同步自 lovelace |
