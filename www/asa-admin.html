@@ -1241,7 +1241,7 @@ function _detectToast(success, reason) {
   setTimeout(function() { if (d.parentNode) d.parentNode.removeChild(d); }, 3000);
 }
 
-function _showSaveResult() {
+function _showSaveResult(buildOK) {
   var container = document.getElementById('toastContainer');
   var failed = _failedItems.length;
   var pending = _pendingBrightnessChecks;
@@ -1257,15 +1257,41 @@ function _showSaveResult() {
 
   if (pending > 0) {
     show('\u274C \u8FD8\u6709 ' + pending + ' \u9879\u4EAE\u5EA6\u68C0\u6D4B\u672A\u5B8C\u6210\uFF0C\u8BF7\u7A0D\u5019\u518D\u4FDD\u5B58', 'error');
-  } else if (failed === 0) {
-    show('\u2705 \u5DF2\u4FDD\u5B58', 'success');
-  } else {
+  } else if (failed > 0) {
     var lines = _failedItems.map(function(item) {
       return item.serverName + ' \u00B7 ' + (item.di != null ? '\u63CF\u8FF0\u884C #' + item.di : '\u677F\u5757\u56FE\u6807') + '\uFF08' + item.reason + '\uFF09';
     });
     show('\u26A0\uFE0F \u5DF2\u4FDD\u5B58 \u2014 ' + failed + ' \u9879\u4EAE\u5EA6\u68C0\u6D4B\u5931\u8D25<br>' + lines.join('<br>'), 'warning');
+  } else if (buildOK === true) {
+    show('\u2705 \u5DF2\u4FDD\u5B58\u5E76\u6784\u5EFA\u6210\u529F', 'success');
+  } else if (buildOK === false) {
+    show('\u26A0\uFE0F \u5DF2\u4FDD\u5B58\uFF0C\u6784\u5EFA\u5931\u8D25', 'error');
+  } else {
+    show('\u2705 \u5DF2\u4FDD\u5B58', 'success');
   }
   _failedItems = [];
+}
+
+// Poll _bl_step.txt for build result: returns true if SAVED_OK, false otherwise
+async function _waitBuildResult() {
+  var maxTries = 30;
+  var delay = 500;
+  for (var i = 0; i < maxTries; i++) {
+    await new Promise(function(r) { setTimeout(r, delay); });
+    try {
+      var resp = await fetch('/local/asa-data/_bl_step.txt?' + Date.now());
+      if (!resp.ok) continue;
+      var txt = await resp.text();
+      if (!txt.trim()) continue;
+      var lines = txt.trim().split('\n');
+      var last = lines[lines.length - 1].trim();
+      if (last.indexOf('SAVED_OK') >= 0) return true;
+      if (last.indexOf('ERR_') >= 0) return false;
+    } catch(e) {
+      // fetch failed, retry
+    }
+  }
+  return false; // timeout
 }
 
 // Sync ic-mode-* class across editor DOM elements after brightness detection
@@ -1602,9 +1628,11 @@ async function saveJSON(filename, data, skipPending) {
 
     await WS.callService('shell_command', 'build_lovelace', {});
 
-    _showSaveResult();
+    // Poll _bl_step.txt for build result
+    var buildOK = await _waitBuildResult();
+    _showSaveResult(buildOK);
 
-    if (!skipPending) incPending();
+    if (!skipPending && buildOK) incPending();
 
   } catch(e) {
 
