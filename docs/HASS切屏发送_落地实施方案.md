@@ -37,6 +37,27 @@ print('✅ 基线拉取完成')
 **安全工作流（铁律）**：另一个会话改 lovelace → SFTP 上传 → **立即 SSH 执行 `python3 /config/build_lovelace.py`** → 完成。
 
 这一行命令会用最新 `server_rules.json` 等数据文件重建 ASA 视图，同时保留其他视图的改动。**无需再重启 HA**（`build_lovelace` 已同步 `.storage`）。
+
+### 🔴 铁律 3：改 YAML / lovelace 前必须拉取最新
+
+**任何 HA 配置文件（`configuration.yaml`、`scripts.yaml`、lovelace）修改前，必须先从服务器拉取最新版本覆盖本地。** 禁止假设本地文件最新——HA 上可能存在手动编辑或其他会话的改动。
+
+```powershell
+# 拉取全部 HA 配置
+python -c "
+import paramiko
+h='192.168.197.253';p=22;u='root';pw='1219Wu1219@'
+c=paramiko.SSHClient();c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+c.connect(h,port=p,username=u,password=pw,look_for_keys=False,allow_agent=False)
+sftp=c.open_sftp()
+for f in ['configuration.yaml','scripts.yaml','lovelace','lovelace.lovelace']:
+    remote = '/config/'+f if f.endswith('.yaml') else '/homeassistant/.storage/'+f
+    local = r'A:\\NetSarang\\Xftp 8\\Temporary\\'+f
+    sftp.get(remote, local)
+    print(f'✅ {f}')
+sftp.close();c.close()
+"
+```
 >
 > 🔗 切屏底层方案详见 `docs/自动切屏方案.md`。本地已实现登录自动切屏（TV=SteamShell 集成 ✅，显示器=计划任务 VBS），HASS.Agent 提供**远程手动切屏**能力。
 

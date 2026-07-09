@@ -7741,6 +7741,9 @@ var iconList = [];
 
 var iconListLoaded = false;
 
+var iconZhMap = {};
+var iconZhMapLoaded = false;
+
 // 缩略图 URL 辅助：根据原图 URL + 显示宽度返回对应缩略图路径
 // 宽度档位: 56 (编辑器 28px@2x), 96 (浮窗 48px@2x), 192 (预览/实页)
 function thumbUrl(originalUrl, width) {
@@ -7809,6 +7812,7 @@ function openIconPicker(ctx) {
   var cfg = ICON_DISPATCH[ctx.mode];
   if (!cfg) { console.error('openIconPicker: unknown mode', ctx.mode); return; }
   closeAllPopups();
+  iconPickerCat = "__recent__";
   loadIconList(function(list){
     var cats = {}; var catOrder = [];
     list.forEach(function(item){
@@ -7854,6 +7858,8 @@ function openIconPicker(ctx) {
     html += "<button style='width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;margin-left:auto;flex-shrink:0;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);cursor:pointer' onclick='closeIconPickerOverlay(this)' title='关闭'>✕</button></div>";
     html += "<div class='combo-bar'><div class='combo-thumbs'></div><button class='combo-confirm-btn' onclick='event.stopPropagation();composeIcons(this)'><svg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round'><circle cx='8' cy='8' r='5'/><circle cx='16' cy='16' r='5'/><line x1='11' y1='11' x2='15' y2='15'/></svg> 合并</button></div>";
     html += "<div style='display:flex;gap:4px;padding:0 12px 6px;overflow-x:auto;flex-shrink:0' id='iconPickerCats'>";
+    // Recent tab
+    html += "<span class='server-tab icon-cat-tab' data-cat='__recent__' onclick='filterIconPickerCat(this)'><span>🕐 最近</span><span class='cat-count-badge'>"+getRecentIcons().length+"</span></span>";
     catOrder.forEach(function(cat){
       html += "<span class='server-tab icon-cat-tab' data-cat='"+cat+"' onclick='filterIconPickerCat(this)'><span>"+(catLabels[cat]||cat)+"</span><span class='cat-count-badge'>"+cats[cat].length+"</span></span>";
     });
@@ -7873,11 +7879,19 @@ function openIconPicker(ctx) {
     list.forEach(function(item){
       var parts2 = item.url.split("ASA/")[1]?item.url.split("ASA/")[1].split("/"):null;
       var cat2 = (parts2 && parts2.length > 1) ? parts2[0] : "\u5176\u4ed6";
-      html += "<div class='icon-picker-item' data-url='"+item.url+"' data-cat='"+cat2+"' onclick='if(comboMode){toggleComboSelect(this)}else{"+iconOnclick+"}' title='"+item.name+"'><img src='"+thumbUrl(item.url,96)+"' loading='lazy' decoding='async' class='icon-picker-img' onload='this.classList.add(\"loaded\")' onerror='this.src=this.getAttribute(\"data-src\")||\"\";this.hidden=true' data-src='"+item.url+"'><span>"+item.name+"</span></div>";
+      html += "<div class='icon-picker-item' data-url='"+item.url+"' data-name='"+item.name+"' data-cat='"+cat2+"' onclick='if(comboMode){toggleComboSelect(this)}else{addRecentIcon(this);"+iconOnclick+"}' title='"+item.name+"'><img src='"+thumbUrl(item.url,96)+"' loading='lazy' decoding='async' class='icon-picker-img' onload='this.classList.add(\"loaded\")' onerror='this.src=this.getAttribute(\"data-src\")||\"\";this.hidden=true' data-src='"+item.url+"'><span>"+item.name+"</span></div>";
+    });
+    // Recent icons grid items (hidden unless __recent__ tab active)
+    getRecentIcons().forEach(function(r){
+      html += "<div class='icon-picker-item' data-url='"+r.url+"' data-name='"+r.name+"' data-cat='__recent__' onclick='if(comboMode){toggleComboSelect(this)}else{addRecentIcon(this);"+iconOnclick+"}' title='"+r.name+"'><img src='"+thumbUrl(r.url,96)+"' loading='lazy' class='icon-picker-img' onload='this.classList.add(\"loaded\")' onerror='this.hidden=true'><span>"+r.name+"</span></div>";
     });
     html += "</div></div>";
     overlay.innerHTML = html;
+    // Default active tab: recent
+    var recentTab = overlay.querySelector('.icon-cat-tab[data-cat=\"__recent__\"]');
+    if (recentTab) recentTab.classList.add('active');
     document.body.appendChild(overlay);
+    filterIconPicker();
   });
 }
 
@@ -8349,7 +8363,7 @@ function saveComboDevice(dataUrl,overlay){
 
 
 
-var iconPickerCat = "";
+var iconPickerCat = "__recent__";
 
 
 
@@ -8791,37 +8805,63 @@ function filterIconPickerCat(el) {
 }
 
 function filterIconPicker() {
-
   var q = (document.getElementById("iconPickerSearch")?.value||"").toLowerCase();
-
   document.querySelectorAll(".icon-picker-item").forEach(function(el){
-
-    var matchSearch = !q || el.textContent.toLowerCase().includes(q);
-
-    var matchCat = !iconPickerCat || el.dataset.cat === iconPickerCat;
-
+    var name = (el.getAttribute("data-name")||"").toLowerCase();
+    var cnName = (iconZhMap[name] || "").toLowerCase();
+    var matchSearch = !q || name.includes(q) || cnName.includes(q);
+    // Search across all categories; category filter only when not searching
+    var matchCat = q ? true : (!iconPickerCat || el.dataset.cat === iconPickerCat);
     el.style.display = (matchSearch && matchCat) ? "" : "none";
-
   });
+  // Hide category bar while searching (explicit "flex" for restore)
+  var catBar = document.getElementById("iconPickerCats");
+  if (catBar) catBar.style.display = q ? "none" : "flex";
+}
 
+// === Recent icons (localStorage) ===
+var RECENT_KEY = 'asa-recent-icons', RECENT_MAX = 20;
+function addRecentIcon(el) {
+  var url = el.getAttribute('data-url') || '';
+  var nameEl = el.querySelector('span');
+  var name = nameEl ? nameEl.textContent : '';
+  var cat = el.getAttribute('data-cat') || '';
+  if (!url) return;
+  var recent = [];
+  try { recent = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch(e) {}
+  recent = recent.filter(function(r) { return r.url !== url; });
+  recent.unshift({url: url, name: name, cat: cat});
+  if (recent.length > RECENT_MAX) recent.length = RECENT_MAX;
+  localStorage.setItem(RECENT_KEY, JSON.stringify(recent));
+}
+function getRecentIcons() {
+  try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch(e) { return []; }
 }
 
 function loadIconList(cb) {
 
   if (iconListLoaded && iconList.length) { if (cb) cb(iconList); return; }
 
+  var loaded = 0, need = 2;
+  function done() { loaded++; if (loaded >= need && cb) cb(iconList); }
+
   fetch('/local/asa-data/icons2.json?t='+Date.now()).then(function(r){return r.json()}).then(function(data){
-
     iconList = data || []; iconListLoaded = true;
-
-    if (cb) cb(iconList);
-
+    done();
   }).catch(function(){
-
+    iconList = []; iconListLoaded = true;
     WS.toast('图标列表加载失败', 'error');
-
+    done();
   });
 
+  // Load Chinese name map
+  if (!iconZhMapLoaded) {
+    fetch('/local/asa-data/icon_zh_map.json?t='+Date.now()).then(function(r){return r.json()}).then(function(data){
+      iconZhMap = data || {}; iconZhMapLoaded = true;
+    }).catch(function(){
+      iconZhMap = {}; iconZhMapLoaded = true;
+    }).finally(done);
+  } else { done(); }
 }
 
 function toggleQtyPopup(el, bi, di) {
