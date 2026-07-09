@@ -2904,6 +2904,12 @@ VERSION = 'v20260611-1'
 
 # -------------------------------------------------------
 if __name__ == "__main__":
+    _pf = '/config/www/asa-data/_bl_step.txt'
+    def _log_step(msg, mode='a'):
+        with open(_pf, mode) as f:
+            from datetime import datetime
+            f.write(f"{datetime.now().strftime('%H:%M:%S')} {msg}\n")
+    _log_step("INIT", 'w')
     # -------------------------------------------------------
     with open(os.path.join(DATA_DIR, 'server_rules.json'), 'r', encoding='utf-8') as f:
         sr_data = json.load(f)
@@ -2911,14 +2917,18 @@ if __name__ == "__main__":
         to_data = json.load(f)
     with open(os.path.join(DATA_DIR, 'asa_base_quick_ref.json'), 'r', encoding='utf-8') as f:
         bq_data = json.load(f)
+    _log_step("DATA_OK")
 
     lovelace_path = '/config/lovelace' if os.path.exists('/config') else r'A:\NetSarang\Xftp 8\Temporary\lovelace'
     lovelace_ll_path = '/config/lovelace.lovelace' if os.path.exists('/config') else r'A:\NetSarang\Xftp 8\Temporary\lovelace.lovelace'
     # Read from HA's storage first to capture any manual edits (HA UI writes here)
-    storage_src = '/homeassistant/.storage/lovelace.lovelace' if os.path.exists('/config') else lovelace_path
+    storage_src = '/config/.storage/lovelace.lovelace' if os.path.exists('/config') else lovelace_path
+    _log_step('READING_' + storage_src.replace('/','_')[-30:])
     with open(storage_src, 'r', encoding='utf-8') as f:
         lovelace = json.load(f)
+    _log_step('LOVELACE_LOADED')
     views = lovelace['data']['config']['views']
+    _log_step('VIEWS_OK')
     # Build timestamp footer for all ASA pages
     build_ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     BLD_FOOTER = f'<div style="text-align:right;opacity:0.12;font-size:0.6em;margin-top:20px;user-select:none">build {build_ts}</div>'
@@ -2932,10 +2942,11 @@ if __name__ == "__main__":
             keep_after.append(v)
         # Drop everything else (stale ASA views, old padding)
     # Pad to target length
-    while len(new_views) < 21:
+    while len(new_views) < 22:
         new_views.append({})
     views = new_views
     lovelace['data']['config']['views'] = views  # CRITICAL: update lovelace dict!
+    _log_step('VIEWS_UPDATED')
 
     # Helper: find view index by path, or return default index
     def _find_view(path, default_idx):
@@ -3215,6 +3226,7 @@ if __name__ == "__main__":
         }]
     }
     print(f'Server rules: REBUILT with {len(sr_tab_buttons)} tabs + {len(sr_tab_cards)} cards + timestamp {sr_ts}')
+    _log_step('SR_OK')
 
     # 2. INFO_WHITEROBER → views[41]
     tabs = to_data.get('tabs', [])
@@ -3275,6 +3287,7 @@ if __name__ == "__main__":
         }]
     }
     print(f'info_whiterober: REBUILT with {len(tab_buttons)} tabs + {len(tab_cards)} cards + timestamp {ts}')
+    _log_step('INFO_OK')
 
     # 3. BASE VIEWS → views[50:61] (11 servers, one view each)
     bq_servers = bq_data.get('servers', {})
@@ -3393,14 +3406,51 @@ if __name__ == "__main__":
         base_count += 1
         print(f'  base_{sid}: REBUILT with {len(bq_tab_buttons)} tabs + {len(bq_tab_cards)} cards')
     print(f'Base views: REBUILT {base_count} server views + timestamp {bq_ts}')
+    _log_step('BASES_OK')
 
-    # 4. Append old reference views at [19:21]
-    views[19] = keep_after[0] if len(keep_after) > 0 else {}
-    views[20] = keep_after[1] if len(keep_after) > 1 else {}
+    # 3.5 Quick input view (ASA shortcut send buttons)
+    quick_buttons = []
+    for n in range(1, 21):
+        quick_buttons.append({
+            "type": "custom:button-card",
+            "entity": f"input_text.sb_{n}_label",
+            "name": f"[[[\n  var label = states[\"input_text.sb_{n}_label\"].state;\n  return label || \"搜索{n}\";\n]]]",
+            "icon": "mdi:send",
+            "show_state": False,
+            "show_icon": True,
+            "show_name": True,
+            "tap_action": {
+                "action": "call-service",
+                "service": "mqtt.publish",
+                "service_data": {
+                    "topic": "homeassistant/button/GAME/SendText/action",
+                    "payload": f"[[[ return states['input_text.sb_{n}_label'].state; ]]]"
+                }
+            },
+            "hold_action": {"action": "more-info"},
+            "styles": {"card": [{"height": "40px"}], "name": [{"font-size": "13px"}]}
+        })
+    views[19] = {
+        "visible": False,
+        "subview": True,
+        "title": "快捷输入",
+        "path": "asa-quick-input",
+        "icon": "mdi:keyboard",
+        "type": "sections",
+        "max_columns": 4,
+        "sections": [{
+            "title": "ASA 快捷输入",
+            "cards": quick_buttons
+        }]
+    }
+
+    # 4. Append old reference views at [20:22]
+    views[20] = keep_after[0] if len(keep_after) > 0 else {}
+    views[21] = keep_after[1] if len(keep_after) > 1 else {}
     # Trim trailing empty views
     while len(views) > 0 and views[-1] == {}:
         views.pop()
-    print(f'Old views preserved: info_whiterober_old → [19], base_whiterober_old → [20], total {len(views)} views')
+    print(f'Old views preserved: info_whiterober_old → [20], base_whiterober_old → [21], total {len(views)} views')
 
     # SAVE — auto-detect environment (server vs local dev)
     lovelace_path = '/config/lovelace' if os.path.exists('/config') else r'A:\NetSarang\Xftp 8\Temporary\lovelace'
@@ -3422,3 +3472,4 @@ if __name__ == "__main__":
             json.dump(lovelace, f, ensure_ascii=False, indent=2)
         print('(updated .storage/lovelace + .storage/lovelace.lovelace)')
     print(f'\nSaved: {len(raw)} bytes, {len(views)} views')
+    _log_step('SAVED_OK')
