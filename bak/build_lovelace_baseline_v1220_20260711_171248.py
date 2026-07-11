@@ -2359,17 +2359,12 @@ def render_tab_html(tab):
                     # Server icon prefix (show highest-priority map icon)
                     srv_icon = ''
                     _show_maps = block_maps + linear_maps
-                    if _show_maps:
+                    if _show_maps and has_map_filter:
                         _sid = _show_maps[0]
-                        # _hint/_warn always show icon; _remark never shows icon
-                        if _sid in ('_hint', '_warn'):
-                            _style = _lookup_style(_sid)
-                            _icon = _style.get('icon','mdi:map')
-                            srv_icon = '<ha-icon icon="{}" style="--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;color:oklch(var(--pc))"></ha-icon>'.format(_icon)
-                        elif _sid != '_remark' and has_map_filter:
-                            _style = _lookup_style(_sid)
-                            _icon = _style.get('icon','mdi:map')
-                            srv_icon = '<ha-icon icon="{}" style="--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;color:oklch(var(--pc))"></ha-icon>'.format(_icon)
+                        _style = _lookup_style(_sid)
+                        _icon = _style.get('icon','mdi:map')
+                        _clr = _style.get('color','')
+                        srv_icon = '<ha-icon icon="{}" style="--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;color:oklch(var(--pc))"></ha-icon>'.format(_icon)
                     elif dserver:
                         _style = _lookup_style(dserver)
                         _icon = _style.get('icon','mdi:map')
@@ -3116,7 +3111,6 @@ if __name__ == "__main__":
                 # ig-title-line + ::after separator for icon_group rows
                 css += 'ha-card .ig-title-line{border:none!important;margin:0!important;border-top:1px solid var(--primary-text-color)!important;opacity:0.15!important}'
                 css += 'ha-card .ig-row-wrapper::after{content:\'\'!important;display:block!important;width:100%!important;border-top:1px solid var(--primary-text-color)!important;opacity:0.15!important;margin-top:6px!important}'
-                css += 'ha-card .ig-row-wrapper[class*="ic-linear-"]::after{display:none!important}'
                 # ig-row-wrapper linear mode: per-map title badge + separator colors
                 for sid, sm in SERVER_MAP.items():
                     r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)

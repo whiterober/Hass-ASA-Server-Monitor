@@ -891,34 +891,13 @@ var DEL = '确认删除?';
 
 // ============================================================
 
-let pendingChanges = 0;
-(function _loadPending() {
-  var x = new XMLHttpRequest();
-  x.open('GET', '/local/asa-data/_pending.json?t=' + Date.now(), false);
-  try { x.send(); if (x.status === 200) { var d = JSON.parse(x.responseText); pendingChanges = d.count || 0; return; } } catch(e) {}
-  pendingChanges = parseInt(localStorage.getItem('asa-pending')||'0');
-})();
-function _syncPendingToServer(count) {
-  // Clear file first (empty = truncate), then write — same as saveJSON chunk protocol
-  var clr = new XMLHttpRequest();
-  clr.open('POST', '/api/services/shell_command/save_data_chunk', false);
-  clr.setRequestHeader('Content-Type', 'application/json');
-  clr.setRequestHeader('Authorization', 'Bearer ' + WS._token);
-  try { clr.send(JSON.stringify({filename:'_pending.json',b64data:''})); } catch(e) {}
-  var b64 = btoa(unescape(encodeURIComponent(JSON.stringify({count:count}))));
-  var x = new XMLHttpRequest();
-  x.open('POST', '/api/services/shell_command/save_data_chunk', false);
-  x.setRequestHeader('Content-Type', 'application/json');
-  x.setRequestHeader('Authorization', 'Bearer ' + WS._token);
-  try { x.send(JSON.stringify({filename:'_pending.json',b64data:b64})); } catch(e) {}
-}
+let pendingChanges = parseInt(localStorage.getItem('asa-pending')||'0');
 
 function incPending() {
 
   pendingChanges++;
 
   localStorage.setItem('asa-pending', pendingChanges);
-  _syncPendingToServer(pendingChanges);
 
   updatePendingUI();
 
@@ -929,7 +908,6 @@ function resetPending() {
   pendingChanges = 0;
 
   localStorage.removeItem('asa-pending');
-  _syncPendingToServer(0);
 
   updatePendingUI();
 
@@ -1169,8 +1147,10 @@ document.querySelectorAll('nav button').forEach(btn => {
 
     const panel = btn.dataset.panel;
 
-    if (panel === 'server-rules') loadEditorData('server_rules');
-    else if (panel === 'tribe-ops') { loadEditorData('tribe_ops'); }
+    if (panel === 'server-rules') loadServerRules();
+
+    else if (panel === 'tribe-ops') { loadTribeOps(); closePreview(); }
+
     else if (panel === 'base-ref') loadBaseRef();
 
   });
@@ -1678,13 +1658,6 @@ let editorData = null;
 
 let editorSelectedTab = 0;
 
-const EDITOR_CONFIGS = {
-  server_rules: { file: 'server_rules.json', label: '服务器规则', hasMapBar: false, idPrefix: 'editorTab', saveFn: 'saveEditor()' },
-  tribe_ops:    { file: 'tribe_ops.json',    label: '部落运维',   hasMapBar: false, idPrefix: 'toTab',      saveFn: 'saveEditor()' },
-  base_ref:     { file: 'asa_base_quick_ref.json', label: '部落基地', hasMapBar: true  },
-};
-let editorMode = 'server_rules';
-
 function useEditorData(data, sel) { editorData = data; editorSelectedTab = sel; migrateMdiIconsOnce(data.tabs); }
 
 function currentTab() { return (editorData.tabs||[])[editorSelectedTab] || (editorData.tabs||[])[0]; }
@@ -1692,29 +1665,62 @@ function currentTab() { return (editorData.tabs||[])[editorSelectedTab] || (edit
 function currentBlocks() { const t = currentTab(); if (!t.content_blocks) t.content_blocks = []; return t.content_blocks; }
 
 // Save block expand states, reRender, restore, re-init Sortables
-function reRender() { renderMixedEditor(); }
+function reRender() {
 
-// Unified load function for server_rules + tribe_ops
-async function loadEditorData(mode) {
-  editorMode = mode;
-  const cfg = EDITOR_CONFIGS[mode];
-  document.getElementById('main').innerHTML = '<div class="loading">加载中...</div>';
-  const data = await loadJSON(cfg.file);
-  editorData = (data && data.tabs) ? data : {tabs:[]};
-  editorSelectedTab = 0;
-  if (!editorData.tabs.length) {
-    document.getElementById('main').innerHTML = '<div class="card"><p>暂无数据</p><button class="btn-primary" onclick="addTab()" style="height:auto;line-height:1.5;font-size:0.8em">+ TAB</button></div>';
+  if (editorData === serverRulesData) {
+
+    renderMixedEditor('服务器规则');
+
   } else {
-    renderMixedEditor(cfg.label);
-    setTimeout(showPreview, 500);
+
+    renderTribeOps();
+
   }
+  scheduleAutoDetect();
+
+}
+
+async function loadServerRules() {
+
+  // Restore preview if it was visible before R2 config
+
+  if(window._prevVisible){window._prevVisible=false;var pp=document.getElementById('previewPanel');if(pp&&pp.style.display==='none'&&typeof togglePreview==='function')togglePreview();}
+
+  document.getElementById('main').innerHTML = '<div class="loading">加载中...</div>';
+
+  const data = await loadJSON('server_rules.json');
+
+  if (!data || !data.tabs) {
+
+    serverRulesData = {tabs:[]};
+
+  } else {
+
+    serverRulesData = data;
+
+  }
+
+  useEditorData(serverRulesData, srSelectedTab);
+
+  if (!serverRulesData.tabs.length) {
+
+    document.getElementById('main').innerHTML = '<div class="card"><p>暂无数据</p><button class="btn-primary" onclick="addEditorTab()" style="height:auto;line-height:1.5;font-size:0.8em">+ TAB</button></div>';
+
+  } else {
+
+    renderMixedEditor('服务器规则');
+
+    setTimeout(showPreview, 500);
+
+  }
+
 }
 
 function renderMixedEditor(title) {
 
   const tabs = editorData.tabs;
 
-  if (!tabs.length) { loadEditorData(editorMode); return; }
+  if (!tabs.length) { loadServerRules(); return; }
 
   const tab = currentTab();
 
@@ -1728,17 +1734,17 @@ function renderMixedEditor(title) {
 
   tabs.forEach((t, i) => {
 
-    html += '<div class="item-entry'+(i===editorSelectedTab?' active':'')+'" onclick="editorSelectedTab='+i+';reRender();setTimeout(showPreview,200);">'+t.name+'</div>';
+    html += '<div class="item-entry'+(i===editorSelectedTab?' active':'')+'" onclick="editorSelectedTab='+i+';renderMixedEditor(\''+title+'\');setTimeout(showPreview,200);">'+t.name+'</div>';
 
   });
 
-  html += '</div><button class="btn-primary" style="display:block;width:100%;margin-top:6px;padding:6px 0;height:auto;line-height:1.5;font-size:0.8em" onclick="addTab();reRender()">+ TAB</button></div></div>';
+  html += '</div><button class="btn-primary" style="display:block;width:100%;margin-top:6px;padding:6px 0;height:auto;line-height:1.5;font-size:0.8em" onclick="addEditorTab();renderMixedEditor(\''+title+'\')">+ TAB</button></div></div>';
 
-  // Right: mixed content editor
+  // Right: mixed content editor (shared)
 
   html += '<div style="display:flex;flex-direction:column;min-height:0"><div class="card" style="display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden">';
 
-  html += '<div style="flex-shrink:0"><div style="display:flex;align-items:center;gap:4px"><button class="mobile-tab-icon" id="mobileTabIcon" title="切换TAB"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" style="font-size:16px;line-height:1"></i></button><input id="'+EDITOR_CONFIGS[editorMode].idPrefix+'Name" value="'+esc(tab.name)+'" placeholder="名称" style="max-width:160px;font-weight:bold;font-size:1.1em;min-width:0;padding-top:1px;padding-bottom:1px"><input id="'+EDITOR_CONFIGS[editorMode].idPrefix+'Desc" value="'+esc(tab.description||'')+'" placeholder="描述" style="min-width:0;font-size:0.85em;padding-top:4px;padding-bottom:4px"><span class="count-badge">'+((tab.content_blocks||[]).length)+'</span></div></div>';
+  html += '<div style="flex-shrink:0"><div style="display:flex;align-items:center;gap:4px"><button class="mobile-tab-icon" id="mobileTabIcon" title="切换TAB"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" style="font-size:16px;line-height:1"></i></button><input id="editorTabName" value="'+esc(tab.name)+'" placeholder="名称" style="max-width:160px;font-weight:bold;font-size:1.1em;min-width:0;padding-top:1px;padding-bottom:1px"><input id="editorTabDesc" value="'+esc(tab.description||'')+'" placeholder="描述" style="min-width:0;font-size:0.85em;padding-top:4px;padding-bottom:4px"><span class="count-badge">'+((tab.content_blocks||[]).length)+'</span></div></div>';
 
   html += '<label style="flex-shrink:0"></label><div style="flex:1;min-height:0;display:flex;flex-direction:column">';
 
@@ -1746,7 +1752,7 @@ function renderMixedEditor(title) {
 
   html += '</div>';
 
-  html += '<div style="flex-shrink:0;padding-top:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:nowrap"><span style="display:flex;gap:4px"><button class="btn-success" onclick="'+EDITOR_CONFIGS[editorMode].saveFn+'" style="display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:0.85em;font-weight:bold;color:#fff"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>保存TAB</button> <button class="btn-danger" onclick="rmTab()" style="display:inline-flex;align-items:center;border:1px solid var(--danger);border-radius:6px;padding:4px 10px;font-size:0.85em;font-weight:bold;color:var(--danger);margin:0 4px">删除TAB</button></span> <button onclick="window.innerWidth<=768?(window._previewWin&&!window._previewWin.closed?window._previewWin.location=\'/local/preview_tab.html?t=\'+Date.now()+\'&theme=\'+(localStorage.getItem(\'asa-theme\')||\'dark\'):window._previewWin=window.open(\'/local/preview_tab.html?t=\'+Date.now()+\'&theme=\'+(localStorage.getItem(\'asa-theme\')||\'dark\'),\'_blank\')):togglePreview()" id="btnTogglePreview" style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.85em" title="预览">折叠预览</button></div> ';
+  html += '<div style="flex-shrink:0;padding-top:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:nowrap"><span style="display:flex;gap:4px"><button class="btn-success" onclick="saveMixedEditor()" style="display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:0.85em;font-weight:bold;color:#fff"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>保存TAB</button> <button class="btn-danger" onclick="_delSRTab()" style="display:inline-flex;align-items:center;border:1px solid var(--danger);border-radius:6px;padding:4px 10px;font-size:0.85em;font-weight:bold;color:var(--danger);margin:0 4px">删除TAB</button></span> <button onclick="window.innerWidth<=768?(window._previewWin&&!window._previewWin.closed?window._previewWin.location=\'/local/preview_tab.html?t=\'+Date.now()+\'&theme=\'+(localStorage.getItem(\'asa-theme\')||\'dark\'):window._previewWin=window.open(\'/local/preview_tab.html?t=\'+Date.now()+\'&theme=\'+(localStorage.getItem(\'asa-theme\')||\'dark\'),\'_blank\')):togglePreview()" id="btnTogglePreview" style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.85em" title="预览">折叠预览</button></div> ';
 
   html += '</div>';
 
@@ -1795,7 +1801,7 @@ function renderMixedEditor(title) {
 
     _mixedSortable = dragRegister({
 
-      _label: editorMode,
+      _label: 'server-rules',
 
       container: mcBlocks,
 
@@ -1803,7 +1809,7 @@ function renderMixedEditor(title) {
 
       getList: function(){ return editorData.tabs[editorSelectedTab].content_blocks; },
 
-      onReorder: function(){ _mixedSortable = null; reRender(); }
+      onReorder: function(){ _mixedSortable = null; renderMixedEditor("服务器规则"); }
 
     });
     setTimeout(function() { initIGSortables(); }, 200);
@@ -1978,15 +1984,69 @@ function showCustomPromptAsync(opts) {
   });
 }
 
-async function addTab() {
-  const name = await showCustomPromptAsync({title:'TAB名称'});
-  if (!name) return;
-  editorData.tabs.push({name: name, type: 'mixed_content', content_blocks: []});
-  editorSelectedTab = editorData.tabs.length - 1;
-}
-async function addEditorTab() { return addTab(); }
+async function addEditorTab() {
 
-async function saveMixedEditor() { return saveEditor(); }
+  const name = await showCustomPromptAsync({title:'TAB名称'});
+
+  if (!name) return;
+
+  editorData.tabs.push({name: name, type: 'mixed_content', content_blocks: []});
+
+  editorSelectedTab = editorData.tabs.length - 1;
+
+}
+
+async function saveMixedEditor() {
+
+  const tab = currentTab();
+
+  // Wait for pending brightness checks to complete (max 5s)
+  var _waitStart = Date.now();
+  while (_pendingBrightnessChecks > 0 && Date.now() - _waitStart < 5000) {
+    await new Promise(function(r) { setTimeout(r, 50); });
+  }
+
+  tab.name = document.getElementById('editorTabName')?.value || tab.name;
+
+  tab.description = document.getElementById('editorTabDesc')?.value || '';
+
+  // Cache original desc modes before saveMCBlocks flips them for server
+  var _savedDescModes = [];
+  (tab.content_blocks||[]).forEach(function(b) {
+    if (b.block_type === 'info_card' && b.descriptions) {
+      _savedDescModes.push(b.descriptions.map(function(d) { return (d.images && d.images[0]) ? d.images[0].image_auto_color_mode : 'off'; }));
+    } else {
+      _savedDescModes.push(null);
+    }
+  });
+
+  saveMCBlocks(tab);
+
+  if (editorData === serverRulesData) {
+
+    await saveJSON('server_rules.json', editorData);
+
+    reRender();
+
+    // Restore editorData desc modes to user selection (server got flipped values)
+    (tab.content_blocks||[]).forEach(function(b, bi) {
+      var modes = _savedDescModes[bi];
+      if (modes && b.descriptions) {
+        for (var di = 0; di < Math.min(modes.length, b.descriptions.length); di++) {
+          if (modes[di] && b.descriptions[di].type !== 'br') {
+            var d7 = b.descriptions[di];
+            if (!d7.images) d7.images = [{ image_url: '', quantity: 0, image_auto_color_mode: 'off', image_native_luminance: null }];
+            d7.images[0].image_auto_color_mode = modes[di];
+          }
+        }
+      }
+    });
+
+    setTimeout(showPreview, 500);
+
+  }
+
+}
 
 // ============================================================
 
@@ -1994,7 +2054,30 @@ async function saveMixedEditor() { return saveEditor(); }
 
 // ============================================================
 
-// loadTribeOps removed (use loadEditorData)
+async function loadTribeOps() {
+
+  document.getElementById('main').innerHTML = '<div class="loading">加载中...</div>';
+
+  const data = await loadJSON('tribe_ops.json');
+
+  editorData = data || {tabs:[]};
+
+  editorSelectedTab = 0;
+
+  if (!editorData.tabs.length) {
+
+    document.getElementById('main').innerHTML = '<div class="card"><p>暂无数据</p><button class="btn-primary" onclick="addTOTab()" style="height:auto;line-height:1.5;font-size:0.8em">+ TAB</button></div>';
+
+  } else {
+
+    renderTribeOps();
+
+    setTimeout(showPreview, 300);
+    scheduleAutoDetect();
+
+  }
+
+}
 
 // SortableJS drag wrapper
 
@@ -2169,6 +2252,241 @@ function dragRegister(opts) {
   }
 
 })();
+
+function renderTribeOps() {
+
+  const tabs = editorData.tabs;
+
+  if (!tabs.length) { loadTribeOps(); return; }
+
+  const tab = tabs[editorSelectedTab] || tabs[0];
+
+  editorSelectedTab = tabs.indexOf(tab);
+
+  let html = '<div style="display:flex;flex-direction:column;min-height:100%"><div class="grid-2" style="flex:1;min-height:0;overflow:hidden">';
+
+  // Left — tab list in its own scrollable card
+
+  html += '<div style="display:flex;flex-direction:column;min-height:0"><div class="card" style="display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden"><div class="item-list" style="flex:1;overflow-y:auto;max-height:none">';
+
+  tabs.forEach((t, i) => {
+
+    html += `<div class="item-entry${i===editorSelectedTab?' active':''}" onclick="editorSelectedTab=${i};reRender();setTimeout(showPreview,200);">${t.name}</div>`;
+
+  });
+
+  html += '</div><button class="btn-primary" style="display:block;width:100%;margin-top:6px;padding:6px 0;height:auto;line-height:1.5;font-size:0.8em" onclick="addTOTab()">+ TAB</button></div></div>';
+
+  // Right — card with fixed header/buttons, scrollable block list
+
+  html += '<div style="display:flex;flex-direction:column;min-height:0"><div class="card" style="display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden">';
+
+  // Fixed top: tab info
+
+  // old h3 heading removed — now displayed in tab name input row
+
+  tab.type = 'mixed_content';
+
+  html += `<div style="flex-shrink:0"><div style="display:flex;align-items:center;gap:4px"><button class="mobile-tab-icon" id="mobileTabIcon" title="切换TAB"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" style="font-size:16px;line-height:1"></i></button><input id="toTabName" value="${esc(tab.name)}" placeholder="名称" style="max-width:160px;font-weight:bold;font-size:1.1em;min-width:0;padding-top:1px;padding-bottom:1px"><input id="toTabDesc" value="${esc(tab.description||'')}" placeholder="描述" style="min-width:0;font-size:0.85em;padding-top:4px;padding-bottom:4px"><span class="count-badge">${(tab.content_blocks||[]).length}</span></div></div>`;
+
+  // Scrollable middle: content blocks — card with internal flex (fixed header/footer, scrollable blocks)
+
+  html += '<label style="flex-shrink:0"></label><div style="flex:1;min-height:0;display:flex;flex-direction:column">';
+
+  html += renderMixedContent(tab);
+
+  html += '</div>';
+
+  // Fixed bottom: save/delete
+
+  html += '<div style="flex-shrink:0;padding-top:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:nowrap"><span style="display:flex;gap:4px"><button class="btn-success" onclick="saveTOTab()" style="display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:0.85em;font-weight:bold;color:#fff"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>保存TAB</button> <button class="btn-danger" onclick="_delTOTab()" style="display:inline-flex;align-items:center;border:1px solid var(--danger);border-radius:6px;padding:4px 10px;font-size:0.85em;font-weight:bold;color:var(--danger);margin:0 4px">删除TAB</button></span> <button onclick="window.innerWidth<=768?(window._previewWin&&!window._previewWin.closed?window._previewWin.location=\'/local/preview_tab.html?t=\'+Date.now()+\'&theme=\'+(localStorage.getItem(\'asa-theme\')||\'dark\'):window._previewWin=window.open(\'/local/preview_tab.html?t=\'+Date.now()+\'&theme=\'+(localStorage.getItem(\'asa-theme\')||\'dark\'),\'_blank\')):togglePreview()" id="btnTogglePreview" style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.85em" title="预览">折叠预览</button></div> ';
+
+  html += '</div>';
+
+  html += '</div></div></div>';
+
+  // Destroy old Sortable before replacing DOM
+
+  try { if (_tribeSortable) { _tribeSortable.destroy(); _tribeSortable = null; } } catch(e) {}
+
+  // Save server-tabs scroll before rebuild
+  var _st = document.querySelector('.server-tabs');
+  var _sl = _st ? _st.scrollLeft : 0;
+
+  document.getElementById('main').innerHTML = html;
+
+  setTimeout(function(){ var s = document.querySelector('.server-tabs'); if (s) s.scrollLeft = _sl; }, 0);
+
+  // Inject drag handles into sub-section headers (only check header level, not deep into block body)
+
+  document.querySelectorAll('#mcBlocks .sub-section').forEach(function(sub) {
+
+    var header = sub.firstElementChild;
+
+    // Only check for drag-handle at the header level, not deep inside block body (e.g. mcICDescs)
+    if (!header || !header.querySelector('.drag-handle')) {
+
+      var handle = document.createElement('span');
+
+      handle.className = 'drag-handle';
+
+      handle.textContent = '⋮⋮';
+
+      if (header) { header.insertBefore(handle, header.firstChild); }
+
+      else { sub.insertBefore(handle, sub.firstChild); }
+
+    }
+
+  });
+
+  // SortableJS: enable drag sort for sub-sections
+
+  var mcBlocks = document.getElementById("mcBlocks");
+
+  if (mcBlocks && typeof Sortable !== "undefined") {
+
+    _tribeSortable = dragRegister({
+
+      _label: 'tribe-ops',
+
+      container: mcBlocks,
+
+      itemSelector: ".sub-section",
+
+      getList: function(){ return editorData.tabs[editorSelectedTab].content_blocks; },
+
+      onReorder: function(){ _tribeSortable = null; renderTribeOps(); }
+
+    });
+
+    setTimeout(function() { initIGSortables(); }, 200);
+
+  }
+
+  setTimeout(function(){ enhanceStorageEditor(); enhanceBlockCollapse(); initResizeHandles(); initBQControls(); upgradeICDescControls(); }, 60);
+
+  setTimeout(function(){ _initMobileTabSelect(); }, 150);
+
+  // Storage row drag (dragRegister wrapper for unified glow + cursor + click suppression; pure DOM reorder)
+
+  setTimeout(function(){
+
+    document.querySelectorAll('.sr-row-header').forEach(function(hdr) {
+
+      if (!hdr.querySelector('.drag-handle')) {
+
+        var h = document.createElement('span'); h.className = 'drag-handle'; h.textContent = '⋮⋮';
+
+        hdr.insertBefore(h, hdr.firstChild);
+
+      }
+
+    });
+
+    document.querySelectorAll('[id^=brStorageRows]').forEach(function(ctr) {
+
+      if (ctr._srSortable || !ctr.querySelector('.sr-row')) return;
+
+      ctr._srSortable = dragRegister({
+
+        container: ctr,
+
+        itemSelector: '.sr-row',
+
+        handle: '.drag-handle',
+
+        getList: function(){ return []; },
+
+        onReorder: function(){
+          var cards = ctr.querySelectorAll('.sr-cat-card');
+          cards.forEach(function(card, newDi){
+            var re = new RegExp(bi+'_(\\d+)', 'g');
+            var diRe = new RegExp('\\bdi:(\\d+)', 'g');
+            card.querySelectorAll('[id]').forEach(function(el){
+              el.id = el.id.replace(re, bi+'_'+newDi);
+              var dt = el.getAttribute('data-target');
+              if(dt) el.setAttribute('data-target', dt.replace(re, bi+'_'+newDi));
+            });
+            card.querySelectorAll('[onclick]').forEach(function(el){
+              var oc = el.getAttribute('onclick');
+              if(oc){
+                oc = oc.replace(re, bi+'_'+newDi);
+                oc = oc.replace(new RegExp(bi+',(\\d+)', 'g'), bi+','+newDi);
+                oc = oc.replace(diRe, 'di:'+newDi);
+                el.setAttribute('onclick', oc);
+                try { el.onclick = new Function('event', oc); } catch(e) {}
+              }
+            });
+          });
+        }
+
+      });
+
+    });
+
+    document.querySelectorAll('[id^=mcICDescs]').forEach(function(ctr) {
+
+      if (ctr._icSortable || !ctr.querySelector('.sr-cat-card')) return;
+
+      var m = ctr.id.match(/^mcICDescs(\d+)$/);
+
+      if (!m) return;
+
+      var bi = parseInt(m[1]);
+
+      ctr._icSortable = dragRegister({
+
+        container: ctr,
+
+        itemSelector: '.sr-cat-card',
+
+        handle: '.drag-handle',
+
+        getList: function(){
+
+          var tab = editorData.tabs[editorSelectedTab];
+
+          var block = tab.content_blocks[bi];
+
+          return block.descriptions || [];
+
+        },
+
+        onReorder: function(){
+          var cards = ctr.querySelectorAll('.sr-cat-card');
+          cards.forEach(function(card, newDi){
+            var re = new RegExp(bi+'_(\\d+)', 'g');
+            var diRe = new RegExp('\\bdi:(\\d+)', 'g');
+            card.querySelectorAll('[id]').forEach(function(el){
+              el.id = el.id.replace(re, bi+'_'+newDi);
+              var dt = el.getAttribute('data-target');
+              if(dt) el.setAttribute('data-target', dt.replace(re, bi+'_'+newDi));
+            });
+            card.querySelectorAll('[onclick]').forEach(function(el){
+              var oc = el.getAttribute('onclick');
+              if(oc){
+                oc = oc.replace(re, bi+'_'+newDi);
+                oc = oc.replace(new RegExp(bi+',(\\d+)', 'g'), bi+','+newDi);
+                oc = oc.replace(diRe, 'di:'+newDi);
+                el.setAttribute('onclick', oc);
+                try { el.onclick = new Function('event', oc); } catch(e) {}
+              }
+            });
+          });
+        }
+
+      });
+
+    });
+
+  }, 120);
+
+  setTimeout(function(){ _initMobileTabSelect(); }, 100);
+
+  setTimeout(updateAllPreviews, 50);
+
+}
 
 function renderRefTable(tab) {
 
@@ -2912,30 +3230,6 @@ function removeICDesc(el, bi) {
 
   if (card) card.remove();
 
-  // Re-index remaining DOM elements to prevent ID collisions
-  if (container) {
-    var cards = container.querySelectorAll('.sr-cat-card');
-    cards.forEach(function(c, newDi) {
-      var re = new RegExp(bi+'_(\\d+)', 'g');
-      var diRe = new RegExp('\\bdi:(\\d+)', 'g');
-      c.querySelectorAll('[id]').forEach(function(el) {
-        el.id = el.id.replace(re, bi+'_'+newDi);
-        var dt = el.getAttribute('data-target');
-        if (dt) el.setAttribute('data-target', dt.replace(re, bi+'_'+newDi));
-      });
-      c.querySelectorAll('[onclick]').forEach(function(el) {
-        var oc = el.getAttribute('onclick');
-        if (oc) {
-          oc = oc.replace(re, bi+'_'+newDi);
-          oc = oc.replace(new RegExp(bi+',(\\d+)', 'g'), bi+','+newDi);
-          oc = oc.replace(diRe, 'di:'+newDi);
-          el.setAttribute('onclick', oc);
-          try { el.onclick = new Function('event', oc); } catch(e) {}
-        }
-      });
-    });
-  }
-
   // Update ED desc count if applicable
   var c = document.getElementById('mcEDDescs'+bi);
   if (c) { var cnt = document.getElementById('mcEDDescCount'+bi); if (cnt) cnt.textContent = c.children.length; }
@@ -3304,6 +3598,7 @@ function saveMCBlocks(tab) {
       b.title = document.getElementById('mcICTitle'+bi)?.value || '';
       b.title_color = document.getElementById('mcICTitleColor'+bi)?.value || 'auto';
 
+
       b.icon_url = document.getElementById('mcICIcon'+bi)?.value || '';
 
       b.highlight = document.getElementById('mcICHL'+bi)?.value || '';
@@ -3594,7 +3889,17 @@ function addFTRow() {
 
 }
 
-// addTOTab removed (use addTab)
+async function addTOTab() {
+
+  const name = await showCustomPromptAsync({title:'Tab名称'}) || '新Tab';
+
+  editorData.tabs.push({id:'tab_'+Date.now(), name, description:'', type:'mixed_content', content_blocks:[], order:editorData.tabs.length+1});
+
+  editorSelectedTab = editorData.tabs.length - 1;
+
+  renderTribeOps();
+
+}
 
 function addTORow() {
 
@@ -4032,7 +4337,7 @@ async function showPreview() {
 
     tabName = tab.name;
 
-    source = editorMode;
+    source = (editorData === serverRulesData) ? 'server_rules' : 'tribe_ops';
 
   } else {
 
@@ -4070,29 +4375,33 @@ function closePreview() {
 
 }
 
-async function saveEditor() {
-  if (editorMode === 'base_ref') return;
+function saveTabToMemory(tab) {
 
-  const cfg = EDITOR_CONFIGS[editorMode];
-  const tab = currentTab();
+  tab.name = document.getElementById('toTabName')?.value || tab.name;
 
-  // Wait for pending brightness checks to complete (max 5s)
-  var _waitStart = Date.now();
-  while (_pendingBrightnessChecks > 0 && Date.now() - _waitStart < 5000) {
-    await new Promise(function(r) { setTimeout(r, 50); });
-  }
+  tab.description = document.getElementById('toTabDesc')?.value || '';
 
-  // Read tab name/desc from DOM using idPrefix
-  if (cfg.idPrefix) {
-    tab.name = document.getElementById(cfg.idPrefix + 'Name')?.value || tab.name;
-    tab.description = document.getElementById(cfg.idPrefix + 'Desc')?.value || '';
-  }
+  tab.type = 'mixed_content';
+
+  tab.order = parseInt(document.getElementById('toTabOrder')?.value) || tab.order;
 
   saveMCBlocks(tab);
 
-  await saveJSON(cfg.file, editorData);
+}
+
+async function saveTOTab() {
+
+  if (document.querySelector('nav button.active')?.dataset.panel !== 'tribe-ops') return;
+
+  const tab = editorData.tabs[editorSelectedTab];
+
+  saveTabToMemory(tab);
+
+  await saveJSON('tribe_ops.json', editorData);
+
   reRender();
   setTimeout(showPreview, 500);
+
 }
 
 // ============================================================
@@ -5511,9 +5820,9 @@ function toggleActionPopover(el) {
 
     pop.style.position = 'fixed';
 
-    pop.style.top = Math.min(rect.bottom + 2, window.innerHeight - 40) + 'px';
+    pop.style.top = (rect.bottom + 2) + 'px';
 
-    pop.style.left = Math.min(Math.max(0, rect.left), window.innerWidth - 150) + 'px';
+    pop.style.left = rect.left + 'px';
 
     pop.style.display = 'block';
 
@@ -6080,6 +6389,7 @@ function migrateMdiIconsOnce(tabs) {
   }
 }
 
+
 function getServerBadge(sid) {
   var s = SERVER_MAP[sid];
   var mapSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle"><path d="M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4zM8 2v16M16 6v16"/></svg>';
@@ -6442,9 +6752,9 @@ function toggleColorPopup(el) {
 
   var r = el.getBoundingClientRect();
 
-  popup.style.left = Math.min(Math.max(0, r.left), window.innerWidth - 310) + "px";
+  popup.style.left = r.left + "px";
 
-  popup.style.top = Math.min(r.bottom + 4, window.innerHeight - 40) + "px";
+  popup.style.top = (r.bottom + 4) + "px";
 
   popup.dataset.dotId = el.id;
 
@@ -6473,8 +6783,8 @@ function toggleOpacityPopup(el) {
     popup.appendChild(opt);
   });
   var r = el.getBoundingClientRect();
-  popup.style.left = Math.min(Math.max(0, r.left), window.innerWidth - 310) + 'px';
-  popup.style.top = Math.min(r.bottom + 4, window.innerHeight - 40) + 'px';
+  popup.style.left = r.left + 'px';
+  popup.style.top = (r.bottom + 4) + 'px';
   popup.dataset.dotId = el.id;
   popup.classList.add('show');
 }
@@ -7215,7 +7525,7 @@ function _initMobileTabSelect() {
   (function(){
     var activeNav = document.querySelector('nav button.active');
     var panel = activeNav ? activeNav.getAttribute('data-panel') : '';
-    var addFn = panel === 'base-ref' ? 'addBRTab()' : 'addTab()';
+    var addFn = panel === 'base-ref' ? 'addBRTab()' : 'addTOTab()';
     var btnAdd = document.createElement('button');
     btnAdd.className = 'btn-primary';
     btnAdd.style.cssText = 'display:block;width:100%;margin-top:6px;padding:6px 0;height:auto;line-height:1.5;font-size:0.8em';
@@ -7272,9 +7582,9 @@ function _initMobileTabSelect() {
 
 }
 
-function rmTab() { if (confirm('删除此Tab？')) { editorData.tabs.splice(editorSelectedTab, 1); reRender(); } }
-function _delSRTab() { rmTab(); }
-function _delTOTab() { rmTab(); }
+function _delSRTab() { if (confirm('删除此分类？')) { editorData.tabs.splice(editorSelectedTab, 1); renderMixedEditor('服务器规则'); } }
+
+function _delTOTab() { if (confirm('删除此Tab？')) { editorData.tabs.splice(editorSelectedTab, 1); reRender(); } }
 
 function addBRSection() {
 
@@ -8075,7 +8385,13 @@ function saveComboDevice(dataUrl,overlay){
   else overlay.remove();
 }
 
+
+
 var iconPickerCat = "__recent__";
+
+
+
+
 
 function selectDescImage(el, bi, di) {
   var url = el.getAttribute("data-url") || "";
@@ -8596,7 +8912,7 @@ function toggleQtyPopup(el, bi, di) {
   var panel = overlay.querySelector(".qty-popup-panel");
   panel.style.position = "fixed";
   panel.style.top = Math.min(rect.bottom + 4, window.innerHeight - 180) + "px";
-  panel.style.left = Math.min(Math.max(0, rect.left - 30), window.innerWidth - 260) + "px";
+  panel.style.left = Math.max(0, rect.left - 30) + "px";
 }
 function selectQty(bi, di, n) {
   var input = document.getElementById("mcICDescQty" + bi + "_" + di);
@@ -8614,6 +8930,12 @@ function selectQty(bi, di, n) {
 }
 
 function closeIconPickerOverlay(el) { var o = el.closest('.icon-picker-overlay'); if (o) o.remove(); return o; }
+
+
+
+
+
+
 
 function refreshIconList() {
   // Guard: prevent double-click concurrent runs
@@ -8808,7 +9130,7 @@ function testR2Connection() {
 
 WS.onConnect(() => {
 
-  loadEditorData('server_rules');
+  loadServerRules();
 
 });
 
