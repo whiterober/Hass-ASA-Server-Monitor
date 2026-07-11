@@ -295,6 +295,7 @@ def main():
             IC_CSS += 'ha-card .info-card-block img.ic-auto-color{filter:var(--ic-icon-filter,none)}'
             IC_CSS += 'ha-card .ic-desc-img{width:24px!important;height:24px!important;object-fit:contain!important;vertical-align:middle!important;margin:0 2px!important;flex-shrink:0!important}'
             IC_CSS += 'ha-card .ic-text[class*="ic-block-"]{position:relative!important;overflow:hidden!important}'
+            IC_CSS += 'ha-card .ic-block-img{position:absolute!important;right:0!important;top:0!important;height:100%!important;width:auto!important;max-width:35%!important;object-fit:cover!important;border-radius:0 6px 6px 0!important;flex-shrink:0!important}'
             IC_CSS += 'ha-card .ic-text[class*="ic-block-"]:has(.ic-block-img){padding-right:34px!important}'
             # [xxx] badge rendering — per-map colors
             # Linear mode: light tint bg + map color text
@@ -356,7 +357,6 @@ def main():
             # ig-title-line + ::after separator for icon_group rows
             css += 'ha-card .ig-title-line{border:none!important;margin:0!important;border-top:1px solid var(--primary-text-color)!important;opacity:0.15!important}'
             css += 'ha-card .ig-row-wrapper::after{content:\'\'!important;display:block!important;width:100%!important;border-top:1px solid var(--primary-text-color)!important;opacity:0.15!important;margin-top:6px!important}'
-            css += 'ha-card .ig-row-wrapper[class*="ic-linear-"]::after{display:none!important}'
             # ig-row-wrapper linear mode: per-map title badge + separator colors
             for sid, sm in SERVER_MAP.items():
                 r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)

@@ -356,7 +356,6 @@ def main():
             # ig-title-line + ::after separator for icon_group rows
             css += 'ha-card .ig-title-line{border:none!important;margin:0!important;border-top:1px solid var(--primary-text-color)!important;opacity:0.15!important}'
             css += 'ha-card .ig-row-wrapper::after{content:\'\'!important;display:block!important;width:100%!important;border-top:1px solid var(--primary-text-color)!important;opacity:0.15!important;margin-top:6px!important}'
-            css += 'ha-card .ig-row-wrapper[class*="ic-linear-"]::after{display:none!important}'
             # ig-row-wrapper linear mode: per-map title badge + separator colors
             for sid, sm in SERVER_MAP.items():
                 r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)

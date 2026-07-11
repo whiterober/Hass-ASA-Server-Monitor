@@ -1,0 +1,637 @@
+'1615614179858':
+  alias: 关闭主电脑
+  sequence:
+  - service: hassio.addon_stdin
+    data:
+      addon: core_rpc_shutdown
+      input: GAME
+  mode: single
+'1620634601365':
+  alias: 注销主机
+  sequence:
+  - event: ''
+    event_data: {}
+  mode: restart
+'1650176234822':
+  alias: 关闭剪辑电脑
+  sequence:
+  - service: hassio.addon_stdin
+    data:
+      addon: core_rpc_shutdown
+      input: TOOL
+  mode: single
+'1650176265771':
+  alias: 注销剪辑主机
+  sequence:
+  - event: ''
+    event_data: {}
+  mode: restart
+'1677578002000':
+  alias: 启动剪辑电脑
+  sequence:
+  - service: switch.turn_on
+    data: {}
+    target:
+      entity_id: switch.pcb
+  mode: single
+execute_server_action:
+  alias: 执行服务器操作
+  sequence:
+  - service: input_button.press
+    entity_id: input_button.execute_server_action
+execute_server_action_with_selection:
+  alias: 执行服务器操作（带选择）
+  sequence:
+  - service: input_select.select_option
+    data:
+      entity_id: input_select.selected_action
+      option: '{{ action }}'
+  - delay: 00:00:01
+  - service: input_button.press
+    entity_id: input_button.execute_server_action
+set_selected_server:
+  alias: 设置选中服务器
+  sequence:
+  - service: input_select.select_option
+    data:
+      entity_id: input_select.selected_server
+      option: '{{ server_id }}'
+  - service: input_text.set_value
+    data:
+      entity_id: input_text.current_operator
+      value: "{% set uid = context.user_id %} {% set ns = namespace(name=uid[:8]~'…')\
+        \ %} {% for p in states.person %}\n  {% if p.attributes.user_id == uid %}\n\
+        \    {% set ns.name = p.attributes.friendly_name %}\n  {% endif %}\n{% endfor\
+        \ %} {% set themes = state_attr('sensor.asa_server_themes', 'server_themes')\
+        \ or {} %} {% set server = themes.get(server_id, {}) %} {{ ns.name }} 已操作\
+        \ {{ server.get('name', server_id) }}"
+  fields:
+    server_id:
+      description: 服务器ID
+      example: Isl
+set_rcon_command:
+  alias: 设置RCON命令
+  sequence:
+  - service: var.set
+    data:
+      entity_id: var.rcon_message
+      value: '{{ command }}'
+  fields:
+    command:
+      description: RCON命令
+      example: broadcast 服务器即将重启
+set_dialog_server_name:
+  alias: 设置对话框服务器名称
+  sequence:
+  - service: input_select.select_option
+    data:
+      entity_id: input_select.dialog_server_name
+      option: '{{ name }}'
+  fields:
+    name:
+      description: 服务器名称
+      example: 孤岛
+kick_player:
+  alias: 踢出在线玩家（由界面触发）
+  sequence:
+  - service: input_select.select_option
+    data:
+      entity_id: input_select.selected_server
+      option: '{{ profile }}'
+  - service: var.set
+    data:
+      entity_id: var.rcon_message
+      value: '{% set p = player | string %} {% if p.isdigit() %} KickPlayer {{ p }}
+        {% else %} KickPlayer "{{ p }}" {% endif %}
+
+        '
+  - service: input_select.select_option
+    data:
+      entity_id: input_select.selected_action
+      option: rcon
+  - delay: 00:00:01
+  - service: input_button.press
+    data:
+      entity_id: input_button.execute_server_action
+  fields:
+    player:
+      description: 玩家名称或ID
+      example: someplayer 或 76561197960287930
+    profile:
+      description: 服务器ID（ProfileName）
+      example: Isl
+  mode: single
+fill_rcon_for_player:
+  alias: 填充RCON命令（仅填充，不执行）
+  sequence:
+  - service: input_select.select_option
+    data:
+      entity_id: input_select.selected_server
+      option: '{{ profile }}'
+  - service: var.set
+    data:
+      entity_id: var.rcon_message
+      value: '{% set p = player | string %} {% if p.isdigit() %} KickPlayer {{ p }}
+        {% else %} KickPlayer "{{ p }}" {% endif %}
+
+        '
+  fields:
+    player:
+      description: 玩家名称或ID
+      example: someplayer 或 76561197960287930
+    profile:
+      description: 服务器ID（ProfileName）
+      example: Isl
+  mode: single
+set_player_action_message:
+  alias: 设置玩家操作消息
+  sequence:
+  - service: var.set
+    data:
+      entity_id: var.player_action_message
+      value: '{{ message }}'
+  fields:
+    message:
+      description: 操作消息内容
+      example: 请遵守服务器规则
+execute_player_action_with_message:
+  alias: 执行玩家操作（带消息）
+  sequence:
+  - service: input_select.select_option
+    data:
+      entity_id: input_select.player_action_type
+      option: '{{ action_type }}'
+  - service: var.set
+    data:
+      entity_id: var.player_action_message
+      value: '{{ message }}'
+  - delay: 00:00:01
+  - service: input_button.press
+    entity_id: input_button.execute_player_action
+  fields:
+    action_type:
+      description: 操作类型
+      example: 发送私信
+    message:
+      description: 操作消息
+      example: 请遵守服务器规则
+set_rcon_command_safe_point:
+  alias: 传送到安全点
+  sequence:
+  - service: script.set_rcon_command
+    data:
+      command: 'SetPlayerPos 点击在线玩家昵称替换此处 {{ states(''sensor.safe_point_coords'')
+        }}
+
+        '
+      command_name: 传安全点
+test_localstorage_write:
+  alias: 测试LocalStorage写入
+  sequence:
+  - service: browser_mod.console
+    data:
+      command: window.localStorage.setItem("test_srv", "from_server")
+send_to_game:
+  alias: 发送到游戏
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+search_polymer:
+  alias: 📦 聚合物
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: 聚合物
+search_metal:
+  alias: 🔩 金属
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: 金属
+search_rex:
+  alias: 🦖 霸王龙
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: 霸王龙
+search_quetz:
+  alias: 🪶 风神翼龙
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: 风神翼龙
+
+search_dyn_1:
+  alias: '搜索1'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_2:
+  alias: '搜索2'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_3:
+  alias: '搜索3'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_4:
+  alias: '搜索4'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_5:
+  alias: '搜索5'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_6:
+  alias: '搜索6'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_7:
+  alias: '搜索7'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_8:
+  alias: '搜索8'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_9:
+  alias: '搜索9'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_10:
+  alias: '搜索10'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_11:
+  alias: '搜索11'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_12:
+  alias: '搜索12'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_13:
+  alias: '搜索13'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_14:
+  alias: '搜索14'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_15:
+  alias: '搜索15'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_16:
+  alias: '搜索16'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_17:
+  alias: '搜索17'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_18:
+  alias: '搜索18'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_19:
+  alias: '搜索19'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_20:
+  alias: '搜索20'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_21:
+  alias: '搜索21'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_22:
+  alias: '搜索22'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_23:
+  alias: '搜索23'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_24:
+  alias: '搜索24'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_25:
+  alias: '搜索25'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_26:
+  alias: '搜索26'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_27:
+  alias: '搜索27'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_28:
+  alias: '搜索28'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_29:
+  alias: '搜索29'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_30:
+  alias: '搜索30'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_31:
+  alias: '搜索31'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_32:
+  alias: '搜索32'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_33:
+  alias: '搜索33'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_34:
+  alias: '搜索34'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_35:
+  alias: '搜索35'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_36:
+  alias: '搜索36'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_37:
+  alias: '搜索37'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_38:
+  alias: '搜索38'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_39:
+  alias: '搜索39'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_40:
+  alias: '搜索40'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_41:
+  alias: '搜索41'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_42:
+  alias: '搜索42'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_43:
+  alias: '搜索43'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_44:
+  alias: '搜索44'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_45:
+  alias: '搜索45'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_46:
+  alias: '搜索46'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_47:
+  alias: '搜索47'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_48:
+  alias: '搜索48'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_49:
+  alias: '搜索49'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+search_dyn_50:
+  alias: '搜索50'
+  sequence:
+  - service: mqtt.publish
+    data:
+      topic: homeassistant/button/GAME/SendText/action
+      payload: '{{ states(''input_text.game_text'') }}'
+
+send_game_text:
+  alias: 发送到游戏
+  sequence:
+    - service: mqtt.publish
+      data:
+        topic: homeassistant/button/GAME/SendText/action
+        payload: '{{ states(''input_text.game_text'') }}'
+
