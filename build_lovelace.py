@@ -2229,8 +2229,9 @@ def render_tab_html(tab):
                 parts.append('<span{}>{}</span>'.format(title_color_style, _render_mdi_inline(ic_title, auto_cls)))
                 parts.append('</div>')
                 _details_mark = len(parts)  # insertion point for <details> if no fold
-                ic_collapse = block.get('collapse_descriptions', False)
-                # Find fold marker index (only when collapse is on)
+                # Auto-detect: block has fold → collapsible
+                ic_collapse = any(isinstance(d, dict) and d.get('type') == 'fold' for d in ic_descs)
+                # Find fold marker index
                 _fold_idx = -1
                 if ic_collapse:
                     for _fi, _fd in enumerate(ic_descs):
@@ -2240,7 +2241,7 @@ def render_tab_html(tab):
                 # Pre-count ^-prefixed descriptions for auto-numbering within this block
                 _hat_n = 0
                 for desc in ic_descs:
-                    if isinstance(desc, dict) and desc.get('type') in ('br', 'icon_group', 'fold'):
+                    if isinstance(desc, dict) and desc.get('type') in ('br', 'icon_group', 'fold', 'copy_key'):
                         continue
                     _dt = desc.get('text', '') if isinstance(desc, dict) else str(desc)
                     if _dt.startswith('^'):
@@ -2249,7 +2250,7 @@ def render_tab_html(tab):
                 for desc in ic_descs:
                     if isinstance(desc, dict) and desc.get('type') == 'fold':
                         if ic_collapse and not _details_opened:
-                            parts.append('<details name="ic-acc" style="cursor:pointer;margin:0;padding:0;width:100%"><summary class="ic-sum-top" style="display:block;font-size:0.65em;background:rgba(128,128,128,0.12);border:1px solid var(--border);border-radius:10px;padding:1px 7px;margin-bottom:2px;list-style:none;cursor:pointer;width:100%;box-sizing:border-box">···</summary><div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;width:100%">')
+                            parts.append('<details name="ic-acc" ontoggle="if(this.open)this.parentElement.querySelectorAll(&quot;details[name=ic-acc]&quot;).forEach(s=>{if(s!==this)s.open=false})" style="cursor:pointer;margin:0;padding:0;width:100%"><summary class="ic-sum-top" style="display:block;font-size:0.65em;background:rgba(128,128,128,0.12);border:1px solid var(--border);border-radius:10px;padding:1px 7px;margin-bottom:2px;list-style:none;cursor:pointer;width:100%;box-sizing:border-box">···</summary><div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;width:100%">')
                             _details_opened = True
                         continue
                     if isinstance(desc, dict) and desc.get('type') == 'br':
@@ -2269,9 +2270,9 @@ def render_tab_html(tab):
                             for bm in block_maps:
                                 parts.append('<div class="ic-text ic-block-{}" style="flex-direction:column;align-items:flex-start!important">'.format(bm))
                         elif linear_maps:
-                            parts.append('<div class="ig-row-wrapper ic-linear-{}">'.format(linear_maps[0]))
+                            parts.append('<div class="ig-row-wrapper ic-linear-{}" style="flex-basis:100%;width:100%">'.format(linear_maps[0]))
                         else:
-                            parts.append('<div class="ig-row-wrapper">')
+                            parts.append('<div class="ig-row-wrapper" style="flex-basis:100%;width:100%">')
                         # Title row
                         if ig_title:
                             title_icon_html = ''
@@ -2299,8 +2300,8 @@ def render_tab_html(tab):
                                 parts.append('<span class="ig-title-badge" style="white-space:nowrap;font-size:0.85em">{}<span class="ig-badge-text">{}</span></span>'.format(title_icon_html, _render_mdi_inline(_ig_title_text)))
                                 parts.append('<hr class="ig-title-line" style="flex:1;min-width:0" />')
                                 parts.append('</div>')
-                        # Icon row
-                        parts.append('<span class="ig-row" style="display:inline-flex;flex-wrap:wrap;gap:6px;align-items:center">')
+                        # Icon row (only render if has valid icons)
+                        _ig_html = ''
                         for icon in ig_icons:
                             iu = icon.get('image_url', '')
                             if not iu:
@@ -2319,9 +2320,18 @@ def render_tab_html(tab):
                                     ac_cls = ' ic-auto-dark' if is_rev else ' ic-auto-color'
                                 mode_cls = ' ic-mode-reverse' if is_rev else ' ic-mode-normal'
                             qty = '<span class="ic-qty">x{}</span>'.format(iq) if iq else ''
-                            parts.append('<span class="ig-item{}" style="position:relative;display:inline-flex;flex-shrink:0">{}{}</span>'.format(mode_cls, '<img src="' + esc(iu) + '" class="ig-img' + ac_cls + '" style="width:28px;height:28px;object-fit:contain;border-radius:4px" onerror="this.remove()" />', qty))
-                        parts.append('</span>')
+                            _ig_html += '<span class="ig-item{}" style="position:relative;display:inline-flex;flex-shrink:0">{}{}</span>'.format(mode_cls, '<img src="' + esc(iu) + '" class="ig-img' + ac_cls + '" style="width:28px;height:28px;object-fit:contain;border-radius:4px" onerror="this.remove()" />', qty)
+                        if _ig_html:
+                            parts.append('<span class="ig-row" style="display:inline-flex;flex-wrap:wrap;gap:6px;align-items:center">' + _ig_html + '</span>')
                         parts.append('</div>')  # close wrapper (ic-text or ig-row-wrapper)
+                        continue
+                    # ---- copy_key: clickable copy button ----
+                    if isinstance(desc, dict) and desc.get('type') == 'copy_key':
+                        ck_label = desc.get('label', '复制')
+                        ck_value = desc.get('value', '')
+                        esc_label = ck_label.replace('\\', '\\\\').replace("'", "\\'")
+                        esc_value = ck_value.replace('\\', '\\\\').replace("'", "\\'").replace('"', '&quot;').replace('\n', '\\n')
+                        parts.append('<button class="ic-copy-key" onclick="event.stopPropagation();navigator.clipboard.writeText(\'{}\').then(function(){{var t=document.createElement(\'div\');t.className=\'toast success\';t.textContent=\'已复制\';document.body.appendChild(t);setTimeout(function(){{t.style.opacity=\'0\';t.style.transition=\'opacity 0.3s\';setTimeout(function(){{t.remove();}},300);}},1500);}});" style="padding:2px 6px;border-radius:6px;border:none;background:#0288d1;color:var(--primary-background-color);cursor:pointer;font-size:0.9em;font-weight:400;line-height:1.5;white-space:nowrap" title="点击复制"><ha-icon icon="mdi:content-copy" style="--mdc-icon-size:13px;width:13px;height:13px;flex-shrink:0;margin-right:2px"></ha-icon><span>{}</span></button>'.format(esc_value, _render_mdi_inline(ck_label)))
                         continue
                     dtext = desc.get('text', '') if isinstance(desc, dict) else str(desc)
                     # Flag ^ prefix for auto-numbering (badge rendered later after block_maps known)
@@ -2361,12 +2371,17 @@ def render_tab_html(tab):
                     _show_maps = block_maps + linear_maps
                     if _show_maps:
                         _sid = _show_maps[0]
-                        # _hint/_warn always show icon; _remark never shows icon
-                        if _sid in ('_hint', '_warn'):
+                        # _hint/_warn/_remark always show icon
+                        if _sid in ('_hint', '_warn', '_remark'):
                             _style = _lookup_style(_sid)
                             _icon = _style.get('icon','mdi:map')
+                            # Check if text starts with mdi:xxx → override icon
+                            _mdi_ov = re.match(r'^mdi:([\w-]+)', dtext)
+                            if _mdi_ov:
+                                _icon = 'mdi:' + _mdi_ov.group(1)
+                                dtext = dtext[_mdi_ov.end():].strip()
                             srv_icon = '<ha-icon icon="{}" style="--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;color:oklch(var(--pc))"></ha-icon>'.format(_icon)
-                        elif _sid != '_remark' and has_map_filter:
+                        elif has_map_filter:
                             _style = _lookup_style(_sid)
                             _icon = _style.get('icon','mdi:map')
                             srv_icon = '<ha-icon icon="{}" style="--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;color:oklch(var(--pc))"></ha-icon>'.format(_icon)
@@ -2413,7 +2428,7 @@ def render_tab_html(tab):
                 if ic_collapse:
                     if not _details_opened:
                         # No fold marker: old behavior — everything in <details>
-                        parts.insert(_details_mark, '<details name="ic-acc" style="cursor:pointer;margin:0;padding:0;width:100%"><summary class="ic-sum-top" style="display:block;font-size:0.65em;background:rgba(128,128,128,0.12);border:1px solid var(--border);border-radius:10px;padding:1px 7px;margin-bottom:2px;list-style:none;cursor:pointer;width:100%;box-sizing:border-box">···</summary><div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;width:100%">')
+                        parts.insert(_details_mark, '<details name="ic-acc" ontoggle="if(this.open)this.parentElement.querySelectorAll(&quot;details[name=ic-acc]&quot;).forEach(s=>{if(s!==this)s.open=false})" style="cursor:pointer;margin:0;padding:0;width:100%"><summary class="ic-sum-top" style="display:block;font-size:0.65em;background:rgba(128,128,128,0.12);border:1px solid var(--border);border-radius:10px;padding:1px 7px;margin-bottom:2px;list-style:none;cursor:pointer;width:100%;box-sizing:border-box">···</summary><div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;width:100%">')
                     parts.append('<span class="ic-sum-end" style="font-size:0.65em;background:rgba(128,128,128,0.12);border:1px solid var(--border);border-radius:10px;padding:1px 7px;margin-top:2px;flex-basis:100%;cursor:pointer" onclick="event.stopPropagation();var d=this.closest(\'details\');var root=d.getRootNode();root.querySelectorAll(\'details[name=ic-acc]\').forEach(function(o){o.open=false});">···</span></div></details>')
                 parts.append('</div>')
                 parts.append('</div>')
@@ -3060,11 +3075,13 @@ if __name__ == "__main__":
                     IC_CSS += 'ha-card .ic-text.ic-block-{} .ic-qty{{background:rgba({},{},{},0)!important;-webkit-text-stroke:2px rgb({},{},{})!important;paint-order:stroke fill!important}}'.format(sid, r, g, b, r, g, b)
                     IC_CSS += 'ha-card .ic-text.ic-block-'+sid+'{position:relative!important;overflow:hidden!important}'
                     IC_CSS += 'ha-card .ic-text.ic-block-'+sid+' .ic-qty{position:absolute!important;right:0!important;bottom:0!important;color:var(--primary-background-color)!important;font-size:0.8em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important}'
+                    IC_CSS += 'ha-card [data-old-webkit] .ic-text.ic-block-{} .ic-qty{{font-weight:950!important;font-family:HarmonyOS Sans SC,system-ui,Impact,sans-serif!important;-webkit-text-stroke:0.5px rgb({},{},{})!important}}'.format(sid, r, g, b)
                 for fk, fv in FIXED_STYLES_MAP.items():
                     fc = fv['color']; r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
                     IC_CSS += 'ha-card .ic-text.ic-block-{} .ic-qty{{background:rgba({},{},{},0)!important;-webkit-text-stroke:2px rgb({},{},{})!important;paint-order:stroke fill!important}}'.format(fk, r, g, b, r, g, b)
                     IC_CSS += 'ha-card .ic-text.ic-block-'+fk+'{position:relative!important;overflow:hidden!important}'
                     IC_CSS += 'ha-card .ic-text.ic-block-'+fk+' .ic-qty{position:absolute!important;right:0!important;bottom:0!important;color:var(--primary-background-color)!important;font-size:0.8em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important}'
+                    IC_CSS += 'ha-card [data-old-webkit] .ic-text.ic-block-{} .ic-qty{{font-weight:950!important;font-family:HarmonyOS Sans SC,system-ui,Impact,sans-serif!important;-webkit-text-stroke:0.5px rgb({},{},{})!important}}'.format(fk, r, g, b)
                 IC_CSS += 'ha-card .ic-block-img{position:absolute!important;right:2px!important;top:50%!important;transform:translateY(-50%)!important;width:30px!important;height:30px!important;object-fit:contain!important;border-radius:0 4px 4px 0!important;flex-shrink:0!important}'
                 IC_CSS += 'ha-card .ic-text[class*="ic-block-"]:has(.ic-block-img){padding-right:34px!important}'
                 # [xxx] badge rendering — per-map colors
@@ -3123,6 +3140,12 @@ if __name__ == "__main__":
                     css += 'ha-card .ig-row-wrapper.ic-linear-'+sid+' .ig-title-badge{color:'+sm['color']+'!important;background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important}'
                     css += 'ha-card .ig-row-wrapper.ic-linear-'+sid+' .ig-title-line{border-top-color:'+sm['color']+'!important;opacity:0.4!important}'
                     css += 'ha-card .ig-row-wrapper.ic-linear-'+sid+'::after{border-top-color:'+sm['color']+'!important;opacity:0.4!important}'
+            # copy_key button + toast (reuse existing .toast framework)
+            css += 'ha-card .ic-copy-key{padding:2px 6px!important;border-radius:6px!important;border:none!important;background:#0288d1!important;color:var(--primary-background-color)!important;cursor:pointer!important;font-size:0.9em!important;font-weight:400!important;line-height:1.5!important;transition:filter 0.2s!important}'
+            css += 'ha-card .ic-copy-key:hover{filter:brightness(1.15)!important}'
+            css += '.toast{position:fixed!important;bottom:20px!important;right:20px!important;padding:12px 20px!important;border-radius:8px!important;color:#fff!important;z-index:999!important;animation:fadeIn .3s!important}'
+            css += '.toast.success{background:#4caf50!important}'
+            css += '@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}'
             if 'card_grid' in block_types:
                 css += 'ha-card .info-card{background:var(--primary-background-color);border-radius:8px;overflow:hidden;text-align:center;padding:0 0 8px 0}ha-card .info-card img{width:100%;aspect-ratio:1;object-fit:cover}ha-card .card-name{font-weight:600;margin:4px 0}ha-card .card-feature{font-size:0.85em;color:var(--secondary-text-color)}ha-card .card-grid{display:grid;gap:12px}'
         elif tab_type == 'server_grid':
@@ -3204,8 +3227,9 @@ if __name__ == "__main__":
         ttype = t.get('type','')
         t_html = render_tab_html(t)
         # Inject inline theme detection (MutationObserver on html style, threshold=50 for visionOS)
-        t_html = '<img src=x onerror="var d=this.parentElement;function A(){var b=getComputedStyle(document.documentElement).getPropertyValue(\'--primary-background-color\');var m=b.match(/\\d+/g);if(m){d.setAttribute(\'data-theme\',(0.299*m[0]+0.587*m[1]+0.114*m[2])<50?\'dark\':\'light\')}}A();new MutationObserver(A).observe(document.documentElement,{attributes:true,attributeFilter:[\'style\']})" style=display:none>'+t_html
+        t_html = '<img src=x onerror="var d=this.parentElement;function A(){var b=getComputedStyle(document.documentElement).getPropertyValue(\'--primary-background-color\');var m=b.match(/\\d+/g);if(m){d.setAttribute(\'data-theme\',(0.299*m[0]+0.587*m[1]+0.114*m[2])<50?\'dark\':\'light\')}}A();new MutationObserver(A).observe(document.documentElement,{attributes:true,attributeFilter:[\'style\']});var m=navigator.userAgent.match(/Chrome\/(\d+)/);if(m&&parseInt(m[1])<120)d.setAttribute(\'data-old-webkit\',\'\')" style=display:none>'+t_html
         t_html += BLD_FOOTER
+        t_html += '<img src=x onerror="var p=this.parentElement;setTimeout(function(){p.querySelectorAll(\'details[name=ic-acc]\').forEach(function(d){d.addEventListener(\'toggle\',function(e){if(d.open)p.querySelectorAll(\'details[name=ic-acc]\').forEach(function(s){if(s!==d)s.open=false})})})},200)" style=display:none>'
         cond = {
             "type": "conditional",
             "conditions": [{"condition": "state", "entity": "input_select.info_server_rules_tab", "state": tname}],
@@ -3261,8 +3285,9 @@ if __name__ == "__main__":
         else:
             t_html = render_tab_html(t)
         # Inject inline theme detection (MutationObserver on html style, threshold=50 for visionOS)
-        t_html = '<img src=x onerror="var d=this.parentElement;function A(){var b=getComputedStyle(document.documentElement).getPropertyValue(\'--primary-background-color\');var m=b.match(/\\d+/g);if(m){d.setAttribute(\'data-theme\',(0.299*m[0]+0.587*m[1]+0.114*m[2])<50?\'dark\':\'light\')}}A();new MutationObserver(A).observe(document.documentElement,{attributes:true,attributeFilter:[\'style\']})" style=display:none>'+t_html
+        t_html = '<img src=x onerror="var d=this.parentElement;function A(){var b=getComputedStyle(document.documentElement).getPropertyValue(\'--primary-background-color\');var m=b.match(/\\d+/g);if(m){d.setAttribute(\'data-theme\',(0.299*m[0]+0.587*m[1]+0.114*m[2])<50?\'dark\':\'light\')}}A();new MutationObserver(A).observe(document.documentElement,{attributes:true,attributeFilter:[\'style\']});var m=navigator.userAgent.match(/Chrome\/(\d+)/);if(m&&parseInt(m[1])<120)d.setAttribute(\'data-old-webkit\',\'\')" style=display:none>'+t_html
         t_html += BLD_FOOTER
+        t_html += '<img src=x onerror="var p=this.parentElement;setTimeout(function(){p.querySelectorAll(\'details[name=ic-acc]\').forEach(function(d){d.addEventListener(\'toggle\',function(e){if(d.open)p.querySelectorAll(\'details[name=ic-acc]\').forEach(function(s){if(s!==d)s.open=false})})})},200)" style=display:none>'
         cond = {
             "type": "conditional",
             "conditions": [{"condition": "state", "entity": "input_select.info_tribe_tab", "state": tname}],
@@ -3391,6 +3416,7 @@ if __name__ == "__main__":
             t_html = build_section_html(t) if t.get('sections') else t.get('html', '<p>暂无数据</p>')
             t_html = TJS + t_html if '<img src=x' not in t_html else t_html
             t_html += BLD_FOOTER
+            t_html += '<img src=x onerror="var p=this.parentElement;setTimeout(function(){p.querySelectorAll(\'details[name=ic-acc]\').forEach(function(d){d.addEventListener(\'toggle\',function(e){if(d.open)p.querySelectorAll(\'details[name=ic-acc]\').forEach(function(s){if(s!==d)s.open=false})})})},200)" style=display:none>'
             bq_tab_cards.append({
                 "type": "conditional",
                 "conditions": [{"condition": "state", "entity": "input_select.info_tribe_tab", "state": tname}],
