@@ -1677,6 +1677,8 @@ let srSelectedTab = 0;
 let editorData = null;
 
 let editorSelectedTab = 0;
+var _descClipboard = null; // {type:'desc'|'icon_group', data:{...}}
+var _blockClipboard = null; // 板块级复制剪贴板
 
 const EDITOR_CONFIGS = {
   server_rules: { file: 'server_rules.json', label: '服务器规则', hasMapBar: false, idPrefix: 'editorTab', saveFn: 'saveEditor()' },
@@ -1987,6 +1989,32 @@ async function addTab() {
 async function addEditorTab() { return addTab(); }
 
 async function saveMixedEditor() { return saveEditor(); }
+
+// ==== 行级复制/黏贴 ====
+function copyDesc(el, bi) {
+  var card = el.closest('.sr-cat-card');
+  var container = document.getElementById('mcICDescs'+bi);
+  if (!container) return;
+  var idx = Array.prototype.indexOf.call(container.children, card);
+  var block = editorData.tabs[editorSelectedTab].content_blocks[bi];
+  if (idx >= 0 && block.descriptions && block.descriptions[idx]) {
+    _descClipboard = JSON.parse(JSON.stringify(block.descriptions[idx]));
+    // Show all paste buttons without full re-render
+    document.querySelectorAll('.ic-paste-btn').forEach(function(b){ b.style.display = ''; });
+  }
+}
+function pasteDesc(bi) {
+  if (!_descClipboard) return;
+  var block = editorData.tabs[editorSelectedTab].content_blocks[bi];
+  if (!block.descriptions) block.descriptions = [];
+  block.descriptions.push(JSON.parse(JSON.stringify(_descClipboard)));
+  // Save collapse states before re-render
+  var collapseStates = {};
+  document.querySelectorAll('.block-body').forEach(function(b,i){ collapseStates[i]=!b.classList.contains('collapsed'); });
+  reRender();
+  // Restore collapse states after re-render
+  document.querySelectorAll('.block-body').forEach(function(b,i){ if(collapseStates[i]) b.classList.remove('collapsed'); else b.classList.add('collapsed'); });
+}
 
 // ============================================================
 
@@ -2718,13 +2746,15 @@ function renderMixedContent(tab) {
           h += '<span class="ig-item ig-placeholder" onclick="event.stopPropagation();openIconPicker({mode:\'icon_group\',bi:'+bi+',ii:'+_igNext+',di:'+di+'})" title="选择图片" style="width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;opacity:0.4;border:1px dashed var(--border);border-radius:3px;font-size:0.8em">+</span>';
           h += '<input type="hidden" id="mcIGImg'+bi+'_'+di+'_'+_igNext+'" value=""><input type="hidden" id="mcIGMode'+bi+'_'+di+'_'+_igNext+'" value="off"><input type="hidden" id="mcIGLum'+bi+'_'+di+'_'+_igNext+'" value="">';
           h += '</div></div></div>';
+        } else if (d.type === 'copy_key') {
+          h += '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex:1"><input id="mcCKLabel'+bi+'_'+di+'" value="'+esc(d.label||'')+'" placeholder="按钮文字" style="flex:0 0 100px;min-width:60px;margin-bottom:0;padding:4px 8px;font-size:0.85em"><input id="mcCKValue'+bi+'_'+di+'" value="'+esc(d.value||'')+'" placeholder="复制内容" style="flex:1;margin-bottom:0;padding:4px 8px;font-size:0.85em"><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
         } else {
-          h += '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:'+(d.color&&d.color!=='auto'?esc(d.color):'linear-gradient(to right, #000 50%, #fff 50%)')+';cursor:pointer" title="选择颜色" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" title="选择透明度" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:'+(d.opacity||1.0)+';background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="'+(d.opacity||1.0)+'"><span class="cat-bold-btn'+(d.bold?' active':'')+'" title="加粗" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="'+esc(d.text||'')+'" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" '+(d.bold?'checked':'')+' style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="'+esc(d.color||'auto')+'" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value="'+esc(d.server||'')+'"><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="'+esc(JSON.stringify(d.server_states||(d.server?{[d.server]:2}:{})))+'"></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return 'background:transparent;border:1px solid transparent';var sm=SERVER_MAP[ak]||FIXED_STYLES[ak];if(!sm)return 'background:transparent;border:1px solid transparent';if(ast===2)return 'background:'+sm.c+';border:none';return 'background:transparent;border:1px solid transparent';})()+'" title="选择服务器" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return getServerBadge('');var sm=SERVER_MAP[ak]||FIXED_STYLES[ak];if(!sm)return getServerBadge('');if(ast===1)return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:'+sm.c+'"></i>';return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:var(--primary-background-color)"></i>';})()+'</button><input type="hidden" id="mcICDescImg'+bi+'_'+di+'" value="'+esc(d.image_url||'')+'">'+(d.image_url?'<span style="position:relative;display:inline-flex;flex-shrink:0" class="'+(function(){var img0=(d.images&&d.images[0])?d.images[0]:{};var m=img0.image_auto_color_mode||'off';if(m==='off')return'';var l=img0.image_native_luminance;var isRev=m==='reverse';var lum=(l!=null&&l!==0.5)?l:null;var ac=lum!=null?(lum>0.5?'ic-auto-light':'ic-auto-dark'):'ic-auto-color';var badge=(m==='normal'||m==='reverse')?' ic-mode-normal':'';return ac+badge;})()+'" ><img src="'+esc(thumbUrl(d.image_url,56))+'" onclick="event.stopPropagation();openIconPicker({mode:\'desc_row\',bi:'+bi+',di:'+di+'})" title="点击换图" style="width:24px;height:24px;object-fit:contain;cursor:pointer;flex-shrink:0;border-radius:3px"></span>':'<span onclick="event.stopPropagation();openIconPicker({mode:\'desc_row\',bi:'+bi+',di:'+di+'})" title="选择图片" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px">+</span>')+'<input type="hidden" id="mcICDescQty'+bi+'_'+di+'" value="'+(d.quantity||'')+'"><button class="qty-btn" id="mcICDescQtyBtn'+bi+'_'+di+'" onclick="event.stopPropagation();toggleQtyPopup(this,'+bi+','+di+')" title="选择数量" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:'+(d.quantity?(String(d.quantity).length<=1?'0.65em':String(d.quantity).length<=2?'0.5em':String(d.quantity).length<=3?'0.4em':'0.3em'):'0.65em')+';opacity:'+(d.quantity?'1':'0.4')+';border:'+(d.quantity?'1px solid var(--accent)':'1px dashed var(--border)')+';border-radius:3px;background:'+(d.quantity?'var(--accent)':'transparent')+';color:'+(d.quantity?'var(--bg)':'var(--text)')+';padding:0">'+(d.quantity?'\u00d7'+d.quantity:'\u00d7N')+'</button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
+          h += '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:'+(d.color&&d.color!=='auto'?esc(d.color):'linear-gradient(to right, #000 50%, #fff 50%)')+';cursor:pointer" title="选择颜色" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" title="选择透明度" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:'+(d.opacity||1.0)+';background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="'+(d.opacity||1.0)+'"><span class="cat-bold-btn'+(d.bold?' active':'')+'" title="加粗" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="'+esc(d.text||'')+'" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" '+(d.bold?'checked':'')+' style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="'+esc(d.color||'auto')+'" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value="'+esc(d.server||'')+'"><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="'+esc(JSON.stringify(d.server_states||(d.server?{[d.server]:2}:{})))+'"></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return 'background:transparent;border:1px solid transparent';var sm=SERVER_MAP[ak]||FIXED_STYLES[ak];if(!sm)return 'background:transparent;border:1px solid transparent';if(ast===2)return 'background:'+sm.c+';border:none';return 'background:transparent;border:1px solid transparent';})()+'" title="选择服务器" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return getServerBadge('');var sm=SERVER_MAP[ak]||FIXED_STYLES[ak];if(!sm)return getServerBadge('');if(ast===1)return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:'+sm.c+'"></i>';return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:var(--primary-background-color)"></i>';})()+'</button><input type="hidden" id="mcICDescImg'+bi+'_'+di+'" value="'+esc(d.image_url||'')+'">'+(d.image_url?'<span style="position:relative;display:inline-flex;flex-shrink:0" class="'+(function(){var img0=(d.images&&d.images[0])?d.images[0]:{};var m=img0.image_auto_color_mode||'off';if(m==='off')return'';var l=img0.image_native_luminance;var isRev=m==='reverse';var lum=(l!=null&&l!==0.5)?l:null;var ac=lum!=null?(lum>0.5?'ic-auto-light':'ic-auto-dark'):'ic-auto-color';var badge=(m==='normal'||m==='reverse')?' ic-mode-normal':'';return ac+badge;})()+'" ><img src="'+esc(thumbUrl(d.image_url,56))+'" onclick="event.stopPropagation();openIconPicker({mode:\'desc_row\',bi:'+bi+',di:'+di+'})" title="点击换图" style="width:24px;height:24px;object-fit:contain;cursor:pointer;flex-shrink:0;border-radius:3px"></span>':'<span onclick="event.stopPropagation();openIconPicker({mode:\'desc_row\',bi:'+bi+',di:'+di+'})" title="选择图片" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px">+</span>')+'<input type="hidden" id="mcICDescQty'+bi+'_'+di+'" value="'+(d.quantity||'')+'"><button class="qty-btn" id="mcICDescQtyBtn'+bi+'_'+di+'" onclick="event.stopPropagation();toggleQtyPopup(this,'+bi+','+di+')" title="选择数量" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:'+(d.quantity?(String(d.quantity).length<=1?'0.65em':String(d.quantity).length<=2?'0.5em':String(d.quantity).length<=3?'0.4em':'0.3em'):'0.65em')+';opacity:'+(d.quantity?'1':'0.4')+';border:'+(d.quantity?'1px solid var(--accent)':'1px dashed var(--border)')+';border-radius:3px;background:'+(d.quantity?'var(--accent)':'transparent')+';color:'+(d.quantity?'var(--bg)':'var(--text)')+';padding:0">'+(d.quantity?'×'+d.quantity:'×N')+'</button><button class="btn-small" title="复制" onclick="event.stopPropagation();copyDesc(this,'+bi+');" style="color:var(--success);border-radius:4px;padding:1px 5px;font-size:0.75em;line-height:1;border:none"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
 
         }
       }
 
-      h += '</div><div style="display:flex;align-items:center;gap:4px;margin-top:4px"><button class="btn-small btn-primary" style="font-size:0.75em;padding:4px 10px;height:24px" onclick="event.stopPropagation();addICDesc('+bi+');">+ 描述</button><button class="btn-small btn-primary" style="font-size:0.75em;padding:4px 10px;height:24px" onclick="event.stopPropagation();addICBr('+bi+');">+ 换行</button><button class="btn-small btn-primary" style="font-size:0.75em;padding:4px 10px;height:24px" onclick="event.stopPropagation();addICIconGroup('+bi+');">+ 图标组</button><button class="btn-small btn-primary" style="font-size:0.75em;padding:4px 10px;height:24px" onclick="event.stopPropagation();addICFold('+bi+');">+ 折叠区</button><button type="button" class="ic-collapse-toggle'+(b.collapse_descriptions?' active':'')+'" style="font-size:0.7em;margin-left:auto;padding:4px 7px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:24px;line-height:1;border:1px solid var(--border);background:'+(b.collapse_descriptions?'var(--accent)':'transparent')+';color:'+(b.collapse_descriptions?'var(--primary-background-color)':'var(--bc)')+'" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICCollapseDescs'+bi+'\');cb.checked=!cb.checked;var a=cb.checked;this.classList.toggle(\'active\',a);this.style.background=a?\'var(--accent)\' : \'transparent\';this.style.color=a?\'var(--primary-background-color)\' : \'var(--bc)\';" title="'+(b.collapse_descriptions?'折叠描述：已开启':'折叠描述：已关闭')+'">\u2026</button><input type="checkbox" id="mcICCollapseDescs'+bi+'" '+(b.collapse_descriptions?'checked':'')+' style="display:none"></div></div>';
+      h += '</div><div style="display:flex;align-items:center;gap:4px;margin-top:4px"><button class="btn-small btn-primary" style="font-size:0.75em;padding:4px 10px;height:24px" onclick="event.stopPropagation();addICDesc('+bi+');">+ 描述</button><button class="btn-small btn-primary" style="font-size:0.75em;padding:4px 10px;height:24px" onclick="event.stopPropagation();addICBr('+bi+');">+ 换行</button><button class="btn-small btn-primary" style="font-size:0.75em;padding:4px 10px;height:24px" onclick="event.stopPropagation();addICIconGroup('+bi+');">+ 图标组/分隔</button><button class="btn-small btn-primary" style="font-size:0.75em;padding:4px 10px;height:24px" onclick="event.stopPropagation();addICFold('+bi+');">+ 折叠区</button><button class="btn-small btn-primary" style="font-size:0.75em;padding:4px 10px;height:24px" onclick="event.stopPropagation();addICCopyKey('+bi+');">+ 复制键</button><button class="btn-small btn-primary ic-paste-btn" onclick="event.stopPropagation();pasteDesc('+bi+');" style="font-size:0.75em;padding:4px 10px;height:24px;font-weight:700' + (_descClipboard?'':';display:none') + '">+ 黏贴</button></div></div>';
       h += '<label style="display:none"><input type="checkbox" id="mcICAutoColor'+bi+'" '+((function(){var img0=(b.images&&b.images[0])?b.images[0]:{};return img0.image_auto_color_mode&&img0.image_auto_color_mode!=='off';})()?'checked':'')+'> 图标跟随主题</label>';h += '<input type="hidden" id="mcICIconLum'+bi+'" value="'+esc((b.images&&b.images[0]&&b.images[0].image_native_luminance!=null)?String(b.images[0].image_native_luminance):'')+'">';
 
     }
@@ -2751,6 +2781,8 @@ function renderMixedContent(tab) {
     h += '<button class="btn-small btn-primary" style="white-space:nowrap;flex-shrink:0" onclick="addMCBlock(\''+k+'\')">+ '+v+'</button>';
 
   });
+
+  h += '<button class="btn-small btn-primary ic-block-paste-btn" onclick="event.stopPropagation();pasteBlock();" style="white-space:nowrap;flex-shrink:0;font-weight:700' + (_blockClipboard?'':';display:none') + '" title="黏贴板块">+ 黏贴</button>';
 
   h += '</div>';
 
@@ -2955,7 +2987,7 @@ function addICDesc(bi) {
 
   const di = container.children.length;
 
-  const h = '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:linear-gradient(to right, #000 50%, #fff 50%);cursor:pointer" title="选择颜色" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" title="选择透明度" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:1.0;background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="1.0"><span class="cat-bold-btn" title="加粗" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="auto" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value=""><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="{}"></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid transparent" title="选择服务器" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+getServerBadge('')+'</button><input type="hidden" id="mcICDescImg'+bi+'_'+di+'" value=""><span onclick="event.stopPropagation();openIconPicker({mode:\'desc_row\',bi:'+bi+',di:'+di+'})" title="选择图片" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px">+</span><input type="hidden" id="mcICDescQty'+bi+'_'+di+'" value=""><button class="qty-btn" id="mcICDescQtyBtn'+bi+'_'+di+'" onclick="event.stopPropagation();toggleQtyPopup(this,'+bi+','+di+')" title="选择数量" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px;background:transparent;color:var(--text);padding:0">×N</button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
+  const h = '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:linear-gradient(to right, #000 50%, #fff 50%);cursor:pointer" title="选择颜色" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" title="选择透明度" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:1.0;background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="1.0"><span class="cat-bold-btn" title="加粗" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="auto" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value=""><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="{}"></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid transparent" title="选择服务器" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+getServerBadge('')+'</button><input type="hidden" id="mcICDescImg'+bi+'_'+di+'" value=""><span onclick="event.stopPropagation();openIconPicker({mode:\'desc_row\',bi:'+bi+',di:'+di+'})" title="选择图片" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px">+</span><input type="hidden" id="mcICDescQty'+bi+'_'+di+'" value=""><button class="qty-btn" id="mcICDescQtyBtn'+bi+'_'+di+'" onclick="event.stopPropagation();toggleQtyPopup(this,'+bi+','+di+')" title="选择数量" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px;background:transparent;color:var(--text);padding:0">×N</button><button class="btn-small" title="复制" onclick="event.stopPropagation();copyDesc(this,'+bi+');" style="color:var(--success);border-radius:4px;padding:1px 5px;font-size:0.75em;line-height:1;border:none"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
 
   container.insertAdjacentHTML('beforeend', h);
 
@@ -2988,6 +3020,18 @@ function addICFold(bi) {
   d.style.cssText = 'border:1px dashed var(--accent);border-radius:3px;padding:2px 6px;margin-bottom:3px;text-align:center;font-size:0.75em;opacity:0.6;color:var(--accent)';
   d.innerHTML = '<span class="drag-handle" style="cursor:grab;float:left;opacity:0.4">\u22ee\u22ee</span>\u2500\u2500 \u6298\u53e0\u7ebf <button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button>';
   c.appendChild(d);
+}
+
+function addICCopyKey(bi) {
+  const container = document.getElementById('mcICDescs'+bi);
+  if (!container) return;
+  const tab = editorData.tabs[editorSelectedTab];
+  const block = tab.content_blocks[bi];
+  if (!block.descriptions) block.descriptions = [];
+  block.descriptions.push({type:'copy_key', label:'', value:''});
+  const di = container.children.length;
+  const h = '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex:1"><input id="mcCKLabel'+bi+'_'+di+'" value="" placeholder="按钮文字" style="flex:0 0 100px;min-width:60px;margin-bottom:0;padding:4px 8px;font-size:0.85em"><input id="mcCKValue'+bi+'_'+di+'" value="" placeholder="复制内容" style="flex:1;margin-bottom:0;padding:4px 8px;font-size:0.85em"><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
+  container.insertAdjacentHTML('beforeend', h);
 }
 
 function addICIconGroup(bi) {
@@ -3100,9 +3144,19 @@ function duplicateBlock(bi) {
   if (!tab.content_blocks) return;
   const src = tab.content_blocks[bi];
   if (!src) return;
-  const clone = JSON.parse(JSON.stringify(src));
-  tab.content_blocks.splice(bi + 1, 0, clone);
+  _blockClipboard = JSON.parse(JSON.stringify(src));
+  // Show all block paste buttons without re-render
+  document.querySelectorAll('.ic-block-paste-btn').forEach(function(b){ b.style.display = ''; });
+}
+function pasteBlock() {
+  if (!_blockClipboard) return;
+  const tab = editorData.tabs[editorSelectedTab];
+  if (!tab.content_blocks) tab.content_blocks = [];
+  tab.content_blocks.push(JSON.parse(JSON.stringify(_blockClipboard)));
+  var collapseStates = {};
+  document.querySelectorAll('.block-body').forEach(function(b,i){ collapseStates[i]=!b.classList.contains('collapsed'); });
   reRender();
+  document.querySelectorAll('.block-body').forEach(function(b,i){ if(collapseStates[i]) b.classList.remove('collapsed'); else b.classList.add('collapsed'); });
 }
 
 function addMCBlock(type) {
@@ -3117,7 +3171,7 @@ function addMCBlock(type) {
 
     map_filter: {block_type:'map_filter'},
 
-    info_card: {block_type:'info_card', title:'', icon_url:'', mdi_icon:'', highlight:'', descriptions:[{text:'',bold:false,color:''}], quote_color:'auto', collapse_descriptions:false}
+    info_card: {block_type:'info_card', title:'', icon_url:'', mdi_icon:'', highlight:'', descriptions:[{text:'',bold:false,color:''}], quote_color:'auto'}
 
   };
 
@@ -3309,7 +3363,6 @@ function saveMCBlocks(tab) {
       b.highlight = document.getElementById('mcICHL'+bi)?.value || '';
       b.server_states = JSON.parse(document.getElementById('mcBlockSrvStates'+bi)?.value || '{}');
       b.quote_color = document.getElementById('mcICQuoteColor'+bi)?.value || '#FF9800';
-      b.collapse_descriptions = document.getElementById('mcICCollapseDescs'+bi)?.checked || false;
 
       var _oldDescs = b.descriptions;  // cache before clearing
       b.descriptions = [];
@@ -3356,6 +3409,15 @@ function saveMCBlocks(tab) {
             }
             var igTitle = document.getElementById('mcIGTitle'+bi+'_'+igDi)?.value || '';
             b.descriptions.push({type:'icon_group', title: igTitle, icons: igIcons, server: document.getElementById('mcICDescServer'+bi+'_'+igDi)?.value || '', server_states: igSrvStates});
+          } else if (child.querySelector('input[id^="mcCKLabel'+bi+'_"]')) {
+            var ckLabel = child.querySelector('input[id^="mcCKLabel'+bi+'_"]');
+            var ckIdMatch = ckLabel.id.match(/^mcCKLabel\d+_(\d+)$/);
+            var ckDi = ckIdMatch ? parseInt(ckIdMatch[1]) : 0;
+            b.descriptions.push({
+              type:'copy_key',
+              label: ckLabel.value || '',
+              value: document.getElementById('mcCKValue'+bi+'_'+ckDi)?.value || ''
+            });
           } else if (!textInput) {
             if (child.hasAttribute('data-fold-line')) {
               b.descriptions.push({type:'fold'});
@@ -6080,8 +6142,16 @@ function migrateMdiIconsOnce(tabs) {
   }
 }
 
-function getServerBadge(sid) {
-  var s = SERVER_MAP[sid];
+function getServerBadge(sid, states) {
+  var s = null, ast = 0;
+  if (states) {
+    Object.keys(states).forEach(function(k){if(states[k]>0){s=SERVER_MAP[k]||FIXED_STYLES[k];ast=states[k];}});
+    if (s) {
+      if (ast===2) return '<i class="mdi mdi-'+s.n+'" style="font-size:14px;line-height:1;color:var(--primary-background-color)"></i>';
+      return '<i class="mdi mdi-'+s.n+'" style="font-size:14px;line-height:1;color:'+s.c+'"></i>';
+    }
+  }
+  s = SERVER_MAP[sid];
   var mapSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle"><path d="M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4zM8 2v16M16 6v16"/></svg>';
   return s ? '<i class="mdi mdi-'+s.n+'" style="font-size:14px;line-height:1;color:'+s.c+'"></i>' : mapSvg;
 }
@@ -8804,9 +8874,48 @@ function testR2Connection() {
 
 }
 
+function testPaintOrder() {
+  var cssOk = CSS.supports('paint-order', 'stroke fill');
+  var webkitOk = CSS.supports('-webkit-text-stroke', '2px red');
+  var ua = navigator.userAgent.match(/Android|HarmonyOS|WebView|Chrome\/\d+/g) || [];
+
+  // Remove old popup if exists
+  var old = document.getElementById('poTestOverlay');
+  if (old) { old.remove(); return; }
+
+  var overlay = document.createElement('div');
+  overlay.id = 'poTestOverlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:20px';
+  overlay.onclick = function(e){ if(e.target===overlay) overlay.remove(); };
+
+  // Test 1: paint-order ON (should show RED text with BLUE outline)
+  var d1 = document.createElement('div');
+  d1.style.cssText = 'background:#222;padding:20px 30px;border-radius:12px;text-align:center';
+  d1.innerHTML = '<div style="color:#aaa;font-size:12px;margin-bottom:8px">✅ paint-order正常工作 → 看到<span style="color:red">红色</span>文字蓝边</div><div style="font-size:48px;font-weight:bold;color:red;-webkit-text-stroke:4px blue;paint-order:stroke fill;font-family:sans-serif">ABC</div>';
+
+  // Test 2: stroke only, no paint-order (should show BLUE text)
+  var d2 = document.createElement('div');
+  d2.style.cssText = 'background:#222;padding:20px 30px;border-radius:12px;text-align:center';
+  d2.innerHTML = '<div style="color:#aaa;font-size:12px;margin-bottom:8px">❌ paint-order不生效 → 看到<span style="color:#39f">蓝色</span>文字（被描边盖住）</div><div style="font-size:48px;font-weight:bold;color:red;-webkit-text-stroke:4px blue;font-family:sans-serif">ABC</div>';
+
+  // Test 3: no stroke (reference — should be RED)
+  var d3 = document.createElement('div');
+  d3.style.cssText = 'background:#222;padding:20px 30px;border-radius:12px;text-align:center';
+  d3.innerHTML = '<div style="color:#aaa;font-size:12px;margin-bottom:8px">参考：纯色（无描边）</div><div style="font-size:48px;font-weight:bold;color:red;font-family:sans-serif">ABC</div>';
+
+  var info = document.createElement('div');
+  info.style.cssText = 'color:#aaa;font-size:13px;text-align:center;max-width:400px';
+  info.textContent = 'CSS.supports: ' + (cssOk ? '✅' : '❌') + ' paint-order, ' + (webkitOk ? '✅' : '❌') + ' text-stroke | UA: ' + ua.join(' ') + ' | 点击背景关闭';
+
+  overlay.appendChild(d1); overlay.appendChild(d2); overlay.appendChild(d3); overlay.appendChild(info);
+  document.body.appendChild(overlay);
+}
+
 // ============================================================
 
 WS.onConnect(() => {
+  // Auto-restore R2 config on connect if saved previously
+  var saved = localStorage.getItem('asa_r2_config');
 
   loadEditorData('server_rules');
 
