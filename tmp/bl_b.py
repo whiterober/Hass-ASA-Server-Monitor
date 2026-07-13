@@ -2287,16 +2287,16 @@ def render_tab_html(tab):
                             # Check for explicit mdi: prefix in title
                             _ig_mdi = re.match(r'mdi:([\w-]+)', ig_title)
                             if _ig_mdi:
-                                title_icon_html = '<ha-icon icon="mdi:{}" style="--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;vertical-align:middle"></ha-icon>'.format(_ig_mdi.group(1))
+                                title_icon_html = '<ha-icon icon="mdi:{}" style="color:inherit;--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;vertical-align:middle"></ha-icon>'.format(_ig_mdi.group(1))
                                 _ig_title_text = ig_title[_ig_mdi.end():].strip()
                             elif linear_maps:
                                 sm = _lookup_style(linear_maps[0])
                                 icon = sm.get('icon', 'mdi:map')
-                                title_icon_html = '<ha-icon icon="{}" style="--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;vertical-align:middle"></ha-icon>'.format(icon)
+                                title_icon_html = '<ha-icon icon="{}" style="color:inherit;--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;vertical-align:middle"></ha-icon>'.format(icon)
                             elif block_maps:
                                 sm = _lookup_style(block_maps[0])
                                 icon = sm.get('icon', 'mdi:map')
-                                title_icon_html = '<ha-icon icon="{}" style="--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;vertical-align:middle"></ha-icon>'.format(icon)
+                                title_icon_html = '<ha-icon icon="{}" style="color:inherit;--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;vertical-align:middle"></ha-icon>'.format(icon)
                             if block_maps:
                                 # Block mode: no hr, text inherits white color from .ic-text.ic-block-{sid}
                                 parts.append('<div class="ig-title-row" style="display:flex;align-items:center;gap:8px;margin:4px 0">')
@@ -2338,7 +2338,7 @@ def render_tab_html(tab):
                         ck_value = desc.get('value', '')
                         esc_label = ck_label.replace('\\', '\\\\').replace("'", "\\'")
                         esc_value = ck_value.replace('\\', '\\\\').replace("'", "\\'").replace('"', '&quot;').replace('\n', '\\n')
-                        parts.append('<button class="ic-copy-key" onclick="event.stopPropagation();var t=\'{}\';var s=this.querySelector(\'span\');var o=s.textContent;s.textContent=\'已复制\';if(navigator.clipboard&&navigator.clipboard.writeText){{navigator.clipboard.writeText(t).catch(function(){{var ta=document.createElement(\'textarea\');ta.value=t;ta.style.cssText=\'position:fixed;opacity:0\';document.body.appendChild(ta);ta.select();ta.setSelectionRange(0,99999);document.execCommand(\'copy\');document.body.removeChild(ta);}});}}else{{var ta=document.createElement(\'textarea\');ta.value=t;ta.style.cssText=\'position:fixed;opacity:0\';document.body.appendChild(ta);ta.select();ta.setSelectionRange(0,99999);document.execCommand(\'copy\');document.body.removeChild(ta);}}setTimeout(function(){{s.textContent=o;}},3000);" style="padding:2px 6px;border-radius:6px;border:none;background:#0288d1;color:var(--primary-background-color);cursor:pointer;font-size:0.9em;font-weight:400;line-height:1.5;white-space:nowrap" title="点击复制"><ha-icon icon="mdi:content-copy" style="--mdc-icon-size:13px;width:13px;height:13px;flex-shrink:0;margin-right:2px"></ha-icon><span>{}</span></button>'.format(esc_value, _render_mdi_inline(ck_label)))
+                        parts.append('<button class="ic-copy-key" onclick="event.stopPropagation();var t=\'{}\';var s=this.querySelector(\'span\');var o=s.textContent;s.textContent=\'已复制\';if(navigator.clipboard&&navigator.clipboard.writeText){{navigator.clipboard.writeText(t).catch(function(){{var ta=document.createElement(\'textarea\');ta.value=t;ta.style.cssText=\'position:fixed;opacity:0\';document.body.appendChild(ta);ta.select();ta.setSelectionRange(0,99999);document.execCommand(\'copy\');document.body.removeChild(ta);}});}}else{{var ta=document.createElement(\'textarea\');ta.value=t;ta.style.cssText=\'position:fixed;opacity:0\';document.body.appendChild(ta);ta.select();ta.setSelectionRange(0,99999);document.execCommand(\'copy\');document.body.removeChild(ta);}}setTimeout(function(){{s.textContent=o;}},3000);" style="padding:2px 6px;border-radius:6px;border:none;background:#0288d1;color:var(--primary-background-color);cursor:pointer;font-size:0.9em;font-weight:400;line-height:1.5;white-space:nowrap" title="点击复制"><ha-icon icon="mdi:content-copy" style="color:var(--primary-background-color);--mdc-icon-size:13px;width:13px;height:13px;flex-shrink:0;margin-right:2px"></ha-icon><span>{}</span></button>'.format(esc_value, _render_mdi_inline(ck_label)))
                         continue
                     dtext = desc.get('text', '') if isinstance(desc, dict) else str(desc)
                     # Flag ^ prefix for auto-numbering (badge rendered later after block_maps known)
@@ -2362,6 +2362,8 @@ def render_tab_html(tab):
                         ic_cls += ' ' + ' '.join('ic-linear-'+m for m in linear_maps)
                     if block_maps:
                         ic_cls += ' ' + ' '.join('ic-block-'+m for m in block_maps)
+                    if '_default' in block_maps and (not dcolor or dcolor == 'auto'):
+                        ic_cls += ' ic-auto-block'
                     dstyle = ''
                     if dbold: dstyle += 'font-weight:bold;'
                     if not block_maps:
@@ -2371,8 +2373,10 @@ def render_tab_html(tab):
                             _lm_color = _lookup_style(linear_maps[0]).get('color', '')
                             if _lm_color and _lm_color != 'auto':
                                 dstyle += 'color:{};'.format(_lm_color)
-                    if '_default' in block_maps:
-                        dstyle += 'background:{};'.format(dcolor or 'var(--primary-background-color)')
+                    if block_maps and '_default' in block_maps:
+                        if dcolor and dcolor != 'auto':
+                            dstyle += '--ic-block-bg:{};background:{}!important;color:var(--primary-background-color)!important;'.format(dcolor, dcolor)
+
                     if dopacity != 1.0: dstyle += 'opacity:{};'.format(dopacity)
                     if dstyle: dstyle = ' style="{}"'.format(dstyle)
                     # Server icon prefix (show highest-priority map icon)
@@ -2396,7 +2400,7 @@ def render_tab_html(tab):
                                 _icon = 'mdi:' + _mdi_ov.group(1)
                                 dtext = dtext[_mdi_ov.end():].strip()
                                 srv_icon = '<ha-icon icon="{}" style="--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;color:oklch(var(--pc))"></ha-icon>'.format(_icon)
-                        elif has_map_filter:
+                        else:
                             _style = _lookup_style(_sid)
                             _icon = _style.get('icon','mdi:map')
                             srv_icon = '<ha-icon icon="{}" style="--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;color:oklch(var(--pc))"></ha-icon>'.format(_icon)
@@ -3092,12 +3096,17 @@ if __name__ == "__main__":
                     IC_CSS += 'ha-card .ic-text.ic-block-'+sid+' .ic-qty{position:absolute!important;right:0!important;bottom:0!important;color:var(--primary-background-color)!important;font-size:0.8em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important}'
                     IC_CSS += 'ha-card [data-old-webkit] .ic-text.ic-block-{} .ic-qty{{font-weight:950!important;font-family:HarmonyOS Sans SC,system-ui,Impact,sans-serif!important;-webkit-text-stroke:0.5px rgb({},{},{})!important}}'.format(sid, r, g, b)
                 for fk, fv in FIXED_STYLES_MAP.items():
-                    if fv.get('color') == 'auto': continue
-                    fc = fv['color']; r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
+                    fc = fv.get('color', '#666')
+                    if not fc or fc == 'auto': fc = '#666666'
+                    r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
                     IC_CSS += 'ha-card .ic-text.ic-block-{} .ic-qty{{background:rgba({},{},{},0)!important;-webkit-text-stroke:2px rgb({},{},{})!important;paint-order:stroke fill!important}}'.format(fk, r, g, b, r, g, b)
                     IC_CSS += 'ha-card .ic-text.ic-block-'+fk+'{position:relative!important;overflow:hidden!important}'
                     IC_CSS += 'ha-card .ic-text.ic-block-'+fk+' .ic-qty{position:absolute!important;right:0!important;bottom:0!important;color:var(--primary-background-color)!important;font-size:0.8em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important}'
                     IC_CSS += 'ha-card [data-old-webkit] .ic-text.ic-block-{} .ic-qty{{font-weight:950!important;font-family:HarmonyOS Sans SC,system-ui,Impact,sans-serif!important;-webkit-text-stroke:0.5px rgb({},{},{})!important}}'.format(fk, r, g, b)
+                # _default badge-hollow: match specificity with [class*="ic-block-"] rule
+                IC_CSS += 'ha-card .ic-text.ic-auto-block .ic-qty{-webkit-text-stroke:2px var(--primary-text-color)!important}'
+                # non-auto _default qty stroke = block background color
+                IC_CSS += 'ha-card .ic-text.ic-block-_default:not(.ic-auto-block) .ic-qty{-webkit-text-stroke:2px var(--ic-block-bg)!important}'
                 IC_CSS += 'ha-card .ic-block-img{position:absolute!important;right:2px!important;top:50%!important;transform:translateY(-50%)!important;width:30px!important;height:30px!important;object-fit:contain!important;border-radius:0 4px 4px 0!important;flex-shrink:0!important}'
                 IC_CSS += 'ha-card .ic-text[class*="ic-block-"]:has(.ic-block-img){padding-right:34px!important}'
                 # [xxx] badge rendering — per-map colors
@@ -3106,14 +3115,16 @@ if __name__ == "__main__":
                     r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)
                     IC_CSS += 'ha-card .ic-text.ic-linear-'+sid+' .ic-badge{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important;color:'+sm['color']+'!important}'
                 for fk, fv in FIXED_STYLES_MAP.items():
-                    if fv.get('color') == 'auto': continue
-                    fc = fv['color']; r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
+                    fc = fv.get('color', '#666')
+                    if not fc or fc == 'auto': fc = '#666666'
+                    r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
                     IC_CSS += 'ha-card .ic-text.ic-linear-'+fk+' .ic-badge{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important;color:'+fc+'!important}'
                 # Default badge (no map): subtle primary color bg, text matches body
                 IC_CSS += 'ha-card .ic-badge{display:inline-block!important;padding:1px 6px!important;border-radius:10px!important;font-size:0.75em!important;background:color-mix(in srgb,var(--primary-color) 25%,transparent)!important;color:var(--primary-text-color)!important;line-height:1.5!important}'
                 IC_CSS += 'ha-card .ic-badge-num{border-radius:3px!important;display:inline-flex!important;justify-content:center!important;width:16px!important;white-space:nowrap!important}'
                 # Block mode: cutout matching page bg (adapts to light/dark theme)
                 IC_CSS += 'ha-card .ic-text[class*="ic-block-"] .ic-badge-hollow{background:color-mix(in srgb,var(--primary-background-color) 20%,transparent)!important;color:var(--primary-background-color)!important}'
+                IC_CSS += 'ha-card .ic-text[class*="ic-block-"][class*="ic-auto-block"] .ic-badge-hollow{color:var(--primary-text-color)!important;background:color-mix(in srgb,var(--primary-text-color) 30%,transparent)!important}'
                 # 3-state map filter: linear (icon color) + block (background) per-map — auto-generated from SERVER_MAP
                 for sid, sm in SERVER_MAP.items():
                     IC_CSS += 'ha-card .ic-linear-'+sid+' .mdi,ha-card .ic-linear-'+sid+' ha-icon{color:'+sm['color']+'!important}'
@@ -3127,16 +3138,21 @@ if __name__ == "__main__":
                     IC_CSS += 'ha-card .info-card-block.ic-block-'+sid+'{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.08)!important}'
                 # Fixed styles: hint + warning (same as preview_server.py)
                 for fk, fv in FIXED_STYLES_MAP.items():
-                    if fv.get('color') == 'auto': continue
-                    fc = fv['color']
+                    fc = fv.get('color', '#666')
+                    if not fc or fc == 'auto': fc = '#666666'
                     IC_CSS += 'ha-card .ic-linear-'+fk+' .mdi,ha-card .ic-linear-'+fk+' ha-icon{color:'+fc+'!important}'
-                    IC_CSS += 'ha-card .ic-text.ic-block-'+fk+'{background:'+fc+'!important;border-radius:6px!important;padding:2px 6px!important;color:var(--primary-background-color)!important}'
+                    if fk == '_default':
+                        IC_CSS += 'ha-card .ic-text.ic-block-_default{background:color-mix(in srgb,var(--primary-text-color) 10%,transparent)!important;border-radius:6px!important;padding:2px 6px!important;color:var(--primary-text-color)!important}'
+                    else:
+                        IC_CSS += 'ha-card .ic-text.ic-block-'+fk+'{background:'+fc+'!important;border-radius:6px!important;padding:2px 6px!important;color:var(--primary-background-color)!important}'
                     IC_CSS += 'ha-card .ic-text.ic-block-'+fk+' .mdi,ha-card .ic-text.ic-block-'+fk+' ha-icon{color:var(--primary-background-color)!important}'
-                    r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
-                    IC_CSS += 'ha-card .info-card-block.ic-block-'+fk+'{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.08)!important}'
+                    if fk != '_default':
+                        r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
+                        IC_CSS += 'ha-card .info-card-block.ic-block-'+fk+'{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.08)!important}'
                 css += IC_CSS
             if has_icon_group:
                 css += 'ha-card .ig-title-badge{display:inline-flex!important;align-items:baseline!important;font-size:0.65em!important;padding:2px 6px!important;border-radius:6px!important;background:color-mix(in srgb,var(--primary-color) 15%,transparent)!important;color:var(--primary-text-color)!important;line-height:1!important}'
+                css += 'ha-card .ig-title-row ha-icon,ha-card .ig-title-badge ha-icon{color:inherit!important}'
                 css += 'ha-card .ig-badge-text{position:relative!important;top:1px!important}'
                 css += 'ha-card .icon-group{gap:8px!important}'
                 css += 'ha-card .ig-item{position:relative!important;display:inline-flex!important;flex-shrink:0!important}'
@@ -3162,6 +3178,7 @@ if __name__ == "__main__":
             # copy_key button
             css += 'ha-card .ic-copy-key{padding:2px 6px!important;border-radius:6px!important;border:none!important;background:#0288d1!important;color:var(--primary-background-color)!important;cursor:pointer!important;font-size:0.9em!important;font-weight:400!important;line-height:1.5!important;transition:filter 0.2s!important}'
             css += 'ha-card .ic-copy-key:hover{filter:brightness(1.15)!important}'
+            css += 'ha-card .ic-copy-key ha-icon{color:var(--primary-background-color)!important}'
             if 'card_grid' in block_types:
                 css += 'ha-card .info-card{background:var(--primary-background-color);border-radius:8px;overflow:hidden;text-align:center;padding:0 0 8px 0}ha-card .info-card img{width:100%;aspect-ratio:1;object-fit:cover}ha-card .card-name{font-weight:600;margin:4px 0}ha-card .card-feature{font-size:0.85em;color:var(--secondary-text-color)}ha-card .card-grid{display:grid;gap:12px}'
         elif tab_type == 'server_grid':
