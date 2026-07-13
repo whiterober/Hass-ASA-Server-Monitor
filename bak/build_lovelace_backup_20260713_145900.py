@@ -2100,7 +2100,8 @@ def render_tab_html(tab):
                     fm=blk.get('filter_maps','')
                     if fm: active_maps.update(fm.split(','))
             active_maps.discard('')
-            active_maps.difference_update(FIXED_STYLES_MAP.keys())
+            # Exclude hint/warn/remark from filterable maps, but keep _default (it's a real map)
+            active_maps.difference_update({k for k in FIXED_STYLES_MAP if k != '_default'})
         for block in tab.get('content_blocks',[]):
             bt=block.get('block_type','')
             if bt=='text':
@@ -2218,8 +2219,8 @@ def render_tab_html(tab):
                 parts.append('<div class="ic-body" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center">')
                 parts.append('<div class="ic-title" style="flex-basis:100%">')
 
-                # Block-level map mdi icon for linear/block states (_default skips)
-                if blk_active and blk_active != '_default':
+                # Block-level map mdi icon for linear/block states
+                if blk_active:
                     _bstyle = _lookup_style(blk_active)
                     _bicon = _bstyle.get('icon','mdi:map')
                     _bcolor = _bstyle.get('color','')
@@ -2380,22 +2381,16 @@ def render_tab_html(tab):
                     _show_maps = block_maps + linear_maps
                     if _show_maps:
                         _sid = _show_maps[0]
-                        # _hint/_warn/_remark always show icon; _default only if mdi: prefix
+                        # _hint/_warn/_remark always show icon
                         if _sid in ('_hint', '_warn', '_remark'):
                             _style = _lookup_style(_sid)
                             _icon = _style.get('icon','mdi:map')
+                            # Check if text starts with mdi:xxx → override icon
                             _mdi_ov = re.match(r'^mdi:([\w-]+)', dtext)
                             if _mdi_ov:
                                 _icon = 'mdi:' + _mdi_ov.group(1)
                                 dtext = dtext[_mdi_ov.end():].strip()
                             srv_icon = '<ha-icon icon="{}" style="--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;color:oklch(var(--pc))"></ha-icon>'.format(_icon)
-                        elif _sid == '_default':
-                            # _default: no icon unless user adds mdi:xxx prefix
-                            _mdi_ov = re.match(r'^mdi:([\w-]+)', dtext)
-                            if _mdi_ov:
-                                _icon = 'mdi:' + _mdi_ov.group(1)
-                                dtext = dtext[_mdi_ov.end():].strip()
-                                srv_icon = '<ha-icon icon="{}" style="--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;color:oklch(var(--pc))"></ha-icon>'.format(_icon)
                         elif has_map_filter:
                             _style = _lookup_style(_sid)
                             _icon = _style.get('icon','mdi:map')

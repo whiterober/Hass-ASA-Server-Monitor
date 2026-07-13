@@ -242,10 +242,14 @@ def main():
             css += 'ha-card .ic-text.ic-block-{} .ic-qty{{background:rgba({},{},{},0)!important;-webkit-text-stroke:2px rgb({},{},{})!important;paint-order:stroke fill!important}}'.format(sid, r, g, b, r, g, b)
             css += 'ha-card [data-old-webkit] .ic-text.ic-block-{} .ic-qty{{font-weight:950!important;font-family:HarmonyOS Sans SC,system-ui,Impact,sans-serif!important;-webkit-text-stroke:0.5px rgb({},{},{})!important}}'.format(sid, r, g, b)
         for fk, fv in FIXED_STYLES_MAP.items():
-            if fv.get('color') == 'auto': continue
-            fc = fv['color']; r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
+            fc = fv.get('color', '#666')
+            if not fc or fc == 'auto': fc = '#666666'
+            r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
             css += 'ha-card .ic-text.ic-block-{} .ic-qty{{background:rgba({},{},{},0)!important;-webkit-text-stroke:2px rgb({},{},{})!important;paint-order:stroke fill!important}}'.format(fk, r, g, b, r, g, b)
             css += 'ha-card [data-old-webkit] .ic-text.ic-block-{} .ic-qty{{font-weight:950!important;font-family:HarmonyOS Sans SC,system-ui,Impact,sans-serif!important;-webkit-text-stroke:0.5px rgb({},{},{})!important}}'.format(fk, r, g, b)
+        # _default qty badge: theme-adaptive text color + visible background
+        css += '[data-theme="dark"] ha-card .ic-text.ic-block-_default .ic-qty{color:var(--primary-text-color)!important;background:rgba(0,0,0,0.15)!important}'
+        css += '[data-theme="light"] ha-card .ic-text.ic-block-_default .ic-qty{color:var(--primary-text-color)!important;background:rgba(255,255,255,0.15)!important}'
         # === End unconditional image CSS ===
         if block_types & {'server_grid','table','reference_table'}:
             css += TABLE_CORE_CSS
@@ -305,8 +309,9 @@ def main():
                 r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)
                 IC_CSS += 'ha-card .ic-text.ic-linear-'+sid+' .ic-badge{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important;color:'+sm['color']+'!important}'
             for fk, fv in FIXED_STYLES_MAP.items():
-                if fv.get('color') == 'auto': continue
-                fc = fv['color']; r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
+                fc = fv.get('color', '#666')
+                if not fc or fc == 'auto': fc = '#666666'
+                r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
                 IC_CSS += 'ha-card .ic-text.ic-linear-'+fk+' .ic-badge{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important;color:'+fc+'!important}'
             # Default badge (no map): subtle primary color bg, text matches body
             IC_CSS += 'ha-card .ic-badge{display:inline-block!important;padding:1px 6px!important;border-radius:10px!important;font-size:0.75em!important;background:color-mix(in srgb,var(--primary-color) 25%,transparent)!important;color:var(--primary-text-color)!important;line-height:1.5!important}'
@@ -326,13 +331,18 @@ def main():
                 IC_CSS += 'ha-card .info-card-block.ic-block-{}{{background:rgba({},{},{},0.08)!important}}'.format(sid, r, g, b)
             # Fixed styles: hint + warning (same as build_lovelace.py)
             for fk, fv in FIXED_STYLES_MAP.items():
-                if fv.get('color') == 'auto': continue
-                fc = fv['color']
+                fc = fv.get('color', '#666')
+                if not fc or fc == 'auto': fc = '#666666'
                 IC_CSS += 'ha-card .ic-linear-{} .mdi,ha-card .ic-linear-{} ha-icon{{color:{}!important}}'.format(fk, fk, fc)
-                IC_CSS += 'ha-card .ic-text.ic-block-{}{{background:{}!important;border-radius:6px!important;padding:2px 6px!important;color:var(--primary-background-color)!important}}'.format(fk, fc)
+                if fk == '_default':
+                    IC_CSS += '[data-theme="dark"] ha-card .ic-text.ic-block-_default{background:rgba(255,255,255,0.1)!important;border-radius:6px!important;padding:2px 6px!important;color:var(--primary-text-color)!important}'
+                    IC_CSS += '[data-theme="light"] ha-card .ic-text.ic-block-_default{background:rgba(0,0,0,0.1)!important;border-radius:6px!important;padding:2px 6px!important;color:var(--primary-text-color)!important}'
+                else:
+                    IC_CSS += 'ha-card .ic-text.ic-block-{}{{background:{}!important;border-radius:6px!important;padding:2px 6px!important;color:var(--primary-background-color)!important}}'.format(fk, fc)
                 IC_CSS += 'ha-card .ic-text.ic-block-{} .mdi,ha-card .ic-text.ic-block-{} ha-icon{{color:var(--primary-background-color)!important}}'.format(fk, fk)
-                r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
-                IC_CSS += 'ha-card .info-card-block.ic-block-{}{{background:rgba({},{},{},0.08)!important}}'.format(fk, r, g, b)
+                if fk != '_default':
+                    r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
+                    IC_CSS += 'ha-card .info-card-block.ic-block-{}{{background:rgba({},{},{},0.08)!important}}'.format(fk, r, g, b)
             # 3-state map filter: linear (icon color) + block (background) per-map
             for sid, sm in SERVER_MAP.items():
                 IC_CSS += 'ha-card .ic-linear-'+sid+' .mdi,ha-card .ic-linear-'+sid+' ha-icon{color:'+sm['color']+'!important}'
@@ -372,6 +382,7 @@ def main():
         # copy_key button
         css += 'ha-card .ic-copy-key{padding:2px 6px!important;border-radius:6px!important;border:none!important;background:#0288d1!important;color:var(--primary-background-color)!important;cursor:pointer!important;font-size:0.9em!important;font-weight:400!important;line-height:1.5!important;transition:filter 0.2s!important}'
         css += 'ha-card .ic-copy-key:hover{filter:brightness(1.15)!important}'
+        css += 'ha-card .ic-copy-key ha-icon{color:var(--primary-background-color)!important}'
         if 'card_grid' in block_types:
             css += 'ha-card .info-card{background:var(--primary-background-color);border-radius:8px;overflow:hidden;text-align:center;padding:0 0 8px 0}ha-card .info-card img{width:100%;aspect-ratio:1;object-fit:cover}ha-card .card-name{font-weight:600;margin:4px 0}ha-card .card-feature{font-size:0.85em;color:var(--secondary-text-color)}ha-card .card-grid{display:grid;gap:12px}'
     elif ttype == 'server_grid':
@@ -401,10 +412,14 @@ def main():
         css += 'ha-card .ic-text.ic-block-{} .ic-qty{{background:rgba({},{},{},0)!important;-webkit-text-stroke:2px rgb({},{},{})!important;paint-order:stroke fill!important}}'.format(sid, r, g, b, r, g, b)
         css += 'ha-card [data-old-webkit] .ic-text.ic-block-{} .ic-qty{{font-weight:950!important;font-family:HarmonyOS Sans SC,system-ui,Impact,sans-serif!important;-webkit-text-stroke:0.5px rgb({},{},{})!important}}'.format(sid, r, g, b)
     for fk, fv in FIXED_STYLES_MAP.items():
-        if fv.get('color') == 'auto': continue
-        fc = fv['color']; r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
+        fc = fv.get('color', '#666')
+        if not fc or fc == 'auto': fc = '#666666'
+        r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
         css += 'ha-card .ic-text.ic-block-{} .ic-qty{{background:rgba({},{},{},0)!important;-webkit-text-stroke:2px rgb({},{},{})!important;paint-order:stroke fill!important}}'.format(fk, r, g, b, r, g, b)
         css += 'ha-card [data-old-webkit] .ic-text.ic-block-{} .ic-qty{{font-weight:950!important;font-family:HarmonyOS Sans SC,system-ui,Impact,sans-serif!important;-webkit-text-stroke:0.5px rgb({},{},{})!important}}'.format(fk, r, g, b)
+    # _default qty badge: theme-adaptive text color + visible background
+    css += '[data-theme="dark"] ha-card .ic-text.ic-block-_default .ic-qty{color:var(--primary-text-color)!important;background:rgba(0,0,0,0.15)!important}'
+    css += '[data-theme="light"] ha-card .ic-text.ic-block-_default .ic-qty{color:var(--primary-text-color)!important;background:rgba(255,255,255,0.15)!important}'
 
     # HA platform font-scale defaults (injected by HA frontend, not in theme files)
     ha_font_vars = (

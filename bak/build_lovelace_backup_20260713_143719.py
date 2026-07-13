@@ -38,7 +38,6 @@ SERVER_MAP = {
     'Bob':{'label':'俱乐部','icon':'mdi:party-popper','color':'#FFC107'},
 }
 FIXED_STYLES_MAP = {
-    '_default':{'label':'默认','icon':'mdi:palette','color':'auto'},
     '_hint':{'label':'提示','icon':'mdi:information','color':'#2196F3'},
     '_warn':{'label':'警告','icon':'mdi:alert','color':'#FF9800'},
     '_remark':{'label':'备注','icon':'mdi:comment-text-outline','color':'#757575'},
@@ -2218,8 +2217,8 @@ def render_tab_html(tab):
                 parts.append('<div class="ic-body" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center">')
                 parts.append('<div class="ic-title" style="flex-basis:100%">')
 
-                # Block-level map mdi icon for linear/block states (_default skips)
-                if blk_active and blk_active != '_default':
+                # Block-level map mdi icon for linear/block states
+                if blk_active:
                     _bstyle = _lookup_style(blk_active)
                     _bicon = _bstyle.get('icon','mdi:map')
                     _bcolor = _bstyle.get('color','')
@@ -2369,10 +2368,8 @@ def render_tab_html(tab):
                             dstyle += 'color:{};'.format(dcolor)
                         elif linear_maps:
                             _lm_color = _lookup_style(linear_maps[0]).get('color', '')
-                            if _lm_color and _lm_color != 'auto':
+                            if _lm_color:
                                 dstyle += 'color:{};'.format(_lm_color)
-                    if '_default' in block_maps:
-                        dstyle += 'background:{};'.format(dcolor or 'var(--primary-background-color)')
                     if dopacity != 1.0: dstyle += 'opacity:{};'.format(dopacity)
                     if dstyle: dstyle = ' style="{}"'.format(dstyle)
                     # Server icon prefix (show highest-priority map icon)
@@ -2380,22 +2377,16 @@ def render_tab_html(tab):
                     _show_maps = block_maps + linear_maps
                     if _show_maps:
                         _sid = _show_maps[0]
-                        # _hint/_warn/_remark always show icon; _default only if mdi: prefix
+                        # _hint/_warn/_remark always show icon
                         if _sid in ('_hint', '_warn', '_remark'):
                             _style = _lookup_style(_sid)
                             _icon = _style.get('icon','mdi:map')
+                            # Check if text starts with mdi:xxx → override icon
                             _mdi_ov = re.match(r'^mdi:([\w-]+)', dtext)
                             if _mdi_ov:
                                 _icon = 'mdi:' + _mdi_ov.group(1)
                                 dtext = dtext[_mdi_ov.end():].strip()
                             srv_icon = '<ha-icon icon="{}" style="--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;color:oklch(var(--pc))"></ha-icon>'.format(_icon)
-                        elif _sid == '_default':
-                            # _default: no icon unless user adds mdi:xxx prefix
-                            _mdi_ov = re.match(r'^mdi:([\w-]+)', dtext)
-                            if _mdi_ov:
-                                _icon = 'mdi:' + _mdi_ov.group(1)
-                                dtext = dtext[_mdi_ov.end():].strip()
-                                srv_icon = '<ha-icon icon="{}" style="--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;color:oklch(var(--pc))"></ha-icon>'.format(_icon)
                         elif has_map_filter:
                             _style = _lookup_style(_sid)
                             _icon = _style.get('icon','mdi:map')
@@ -3092,7 +3083,6 @@ if __name__ == "__main__":
                     IC_CSS += 'ha-card .ic-text.ic-block-'+sid+' .ic-qty{position:absolute!important;right:0!important;bottom:0!important;color:var(--primary-background-color)!important;font-size:0.8em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important}'
                     IC_CSS += 'ha-card [data-old-webkit] .ic-text.ic-block-{} .ic-qty{{font-weight:950!important;font-family:HarmonyOS Sans SC,system-ui,Impact,sans-serif!important;-webkit-text-stroke:0.5px rgb({},{},{})!important}}'.format(sid, r, g, b)
                 for fk, fv in FIXED_STYLES_MAP.items():
-                    if fv.get('color') == 'auto': continue
                     fc = fv['color']; r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
                     IC_CSS += 'ha-card .ic-text.ic-block-{} .ic-qty{{background:rgba({},{},{},0)!important;-webkit-text-stroke:2px rgb({},{},{})!important;paint-order:stroke fill!important}}'.format(fk, r, g, b, r, g, b)
                     IC_CSS += 'ha-card .ic-text.ic-block-'+fk+'{position:relative!important;overflow:hidden!important}'
@@ -3106,7 +3096,6 @@ if __name__ == "__main__":
                     r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)
                     IC_CSS += 'ha-card .ic-text.ic-linear-'+sid+' .ic-badge{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important;color:'+sm['color']+'!important}'
                 for fk, fv in FIXED_STYLES_MAP.items():
-                    if fv.get('color') == 'auto': continue
                     fc = fv['color']; r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
                     IC_CSS += 'ha-card .ic-text.ic-linear-'+fk+' .ic-badge{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important;color:'+fc+'!important}'
                 # Default badge (no map): subtle primary color bg, text matches body
@@ -3127,7 +3116,6 @@ if __name__ == "__main__":
                     IC_CSS += 'ha-card .info-card-block.ic-block-'+sid+'{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.08)!important}'
                 # Fixed styles: hint + warning (same as preview_server.py)
                 for fk, fv in FIXED_STYLES_MAP.items():
-                    if fv.get('color') == 'auto': continue
                     fc = fv['color']
                     IC_CSS += 'ha-card .ic-linear-'+fk+' .mdi,ha-card .ic-linear-'+fk+' ha-icon{color:'+fc+'!important}'
                     IC_CSS += 'ha-card .ic-text.ic-block-'+fk+'{background:'+fc+'!important;border-radius:6px!important;padding:2px 6px!important;color:var(--primary-background-color)!important}'

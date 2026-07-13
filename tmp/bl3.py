@@ -2371,8 +2371,10 @@ def render_tab_html(tab):
                             _lm_color = _lookup_style(linear_maps[0]).get('color', '')
                             if _lm_color and _lm_color != 'auto':
                                 dstyle += 'color:{};'.format(_lm_color)
-                    if '_default' in block_maps:
-                        dstyle += 'background:{};'.format(dcolor or 'var(--primary-background-color)')
+                    if block_maps and '_default' in block_maps:
+                        if dcolor and dcolor != 'auto':
+                            dstyle += 'background:{}!important;'.format(dcolor)
+
                     if dopacity != 1.0: dstyle += 'opacity:{};'.format(dopacity)
                     if dstyle: dstyle = ' style="{}"'.format(dstyle)
                     # Server icon prefix (show highest-priority map icon)
@@ -3092,8 +3094,9 @@ if __name__ == "__main__":
                     IC_CSS += 'ha-card .ic-text.ic-block-'+sid+' .ic-qty{position:absolute!important;right:0!important;bottom:0!important;color:var(--primary-background-color)!important;font-size:0.8em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important}'
                     IC_CSS += 'ha-card [data-old-webkit] .ic-text.ic-block-{} .ic-qty{{font-weight:950!important;font-family:HarmonyOS Sans SC,system-ui,Impact,sans-serif!important;-webkit-text-stroke:0.5px rgb({},{},{})!important}}'.format(sid, r, g, b)
                 for fk, fv in FIXED_STYLES_MAP.items():
-                    if fv.get('color') == 'auto': continue
-                    fc = fv['color']; r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
+                    fc = fv.get('color', '#666')
+                    if not fc or fc == 'auto': fc = '#666666'
+                    r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
                     IC_CSS += 'ha-card .ic-text.ic-block-{} .ic-qty{{background:rgba({},{},{},0)!important;-webkit-text-stroke:2px rgb({},{},{})!important;paint-order:stroke fill!important}}'.format(fk, r, g, b, r, g, b)
                     IC_CSS += 'ha-card .ic-text.ic-block-'+fk+'{position:relative!important;overflow:hidden!important}'
                     IC_CSS += 'ha-card .ic-text.ic-block-'+fk+' .ic-qty{position:absolute!important;right:0!important;bottom:0!important;color:var(--primary-background-color)!important;font-size:0.8em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important}'
@@ -3106,8 +3109,9 @@ if __name__ == "__main__":
                     r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)
                     IC_CSS += 'ha-card .ic-text.ic-linear-'+sid+' .ic-badge{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important;color:'+sm['color']+'!important}'
                 for fk, fv in FIXED_STYLES_MAP.items():
-                    if fv.get('color') == 'auto': continue
-                    fc = fv['color']; r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
+                    fc = fv.get('color', '#666')
+                    if not fc or fc == 'auto': fc = '#666666'
+                    r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
                     IC_CSS += 'ha-card .ic-text.ic-linear-'+fk+' .ic-badge{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important;color:'+fc+'!important}'
                 # Default badge (no map): subtle primary color bg, text matches body
                 IC_CSS += 'ha-card .ic-badge{display:inline-block!important;padding:1px 6px!important;border-radius:10px!important;font-size:0.75em!important;background:color-mix(in srgb,var(--primary-color) 25%,transparent)!important;color:var(--primary-text-color)!important;line-height:1.5!important}'
@@ -3127,13 +3131,18 @@ if __name__ == "__main__":
                     IC_CSS += 'ha-card .info-card-block.ic-block-'+sid+'{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.08)!important}'
                 # Fixed styles: hint + warning (same as preview_server.py)
                 for fk, fv in FIXED_STYLES_MAP.items():
-                    if fv.get('color') == 'auto': continue
-                    fc = fv['color']
+                    fc = fv.get('color', '#666')
+                    if not fc or fc == 'auto': fc = '#666666'
                     IC_CSS += 'ha-card .ic-linear-'+fk+' .mdi,ha-card .ic-linear-'+fk+' ha-icon{color:'+fc+'!important}'
-                    IC_CSS += 'ha-card .ic-text.ic-block-'+fk+'{background:'+fc+'!important;border-radius:6px!important;padding:2px 6px!important;color:var(--primary-background-color)!important}'
+                    if fk == '_default':
+                        IC_CSS += '[data-theme="dark"] ha-card .ic-text.ic-block-_default{background:rgba(255,255,255,0.1)!important;border-radius:6px!important;padding:2px 6px!important;color:#fff!important}'
+                        IC_CSS += '[data-theme="light"] ha-card .ic-text.ic-block-_default{background:rgba(0,0,0,0.1)!important;border-radius:6px!important;padding:2px 6px!important;color:#000!important}'
+                    else:
+                        IC_CSS += 'ha-card .ic-text.ic-block-'+fk+'{background:'+fc+'!important;border-radius:6px!important;padding:2px 6px!important;color:var(--primary-background-color)!important}'
                     IC_CSS += 'ha-card .ic-text.ic-block-'+fk+' .mdi,ha-card .ic-text.ic-block-'+fk+' ha-icon{color:var(--primary-background-color)!important}'
-                    r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
-                    IC_CSS += 'ha-card .info-card-block.ic-block-'+fk+'{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.08)!important}'
+                    if fk != '_default':
+                        r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
+                        IC_CSS += 'ha-card .info-card-block.ic-block-'+fk+'{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.08)!important}'
                 css += IC_CSS
             if has_icon_group:
                 css += 'ha-card .ig-title-badge{display:inline-flex!important;align-items:baseline!important;font-size:0.65em!important;padding:2px 6px!important;border-radius:6px!important;background:color-mix(in srgb,var(--primary-color) 15%,transparent)!important;color:var(--primary-text-color)!important;line-height:1!important}'
