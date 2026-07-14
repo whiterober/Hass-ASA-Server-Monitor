@@ -1548,7 +1548,7 @@ img.ic-auto-dark { filter: none; }
 [data-theme="light"] img.ic-auto-light { filter: invert(1); }
 """
 
-# Table-level rules (any tab with tabular content — reference_table, mixed_content)
+# Table-level rules (any tab with tabular content — reference_table, mixed_content, server_grid, farming_table)
 TABLE_CORE_CSS = """ha-card table {
   border-collapse: collapse !important;
   table-layout: fixed !important;
@@ -1581,7 +1581,7 @@ ha-card .borderr {
   border-bottom-right-radius: var(--ha-card-border-radius, 12px) !important;
   height: var(--collect-table-height, 82vh) !important;
 }
-/* Generic table styling */
+/* Generic table styling — matches server_grid / farming_table visuals */
 ha-card .gen-table thead th {
   background-color: var(--secondary-background-color) !important;
   font-weight: 600;
@@ -2100,6 +2100,9 @@ def strip_and_append_empty_rows(html):
 def render_tab_html(tab):
     """Render a single tab's content to HTML."""
     ttype = tab.get('type',''); parts = []
+    if ttype == 'raw_html':
+        # raw_html tabs already have their own wrapper — use as-is
+        return tab.get('html', '')
     # All other types get flex flex-col wrapper
     parts.append('<div class="flex flex-col">')
     if ttype == 'reference_table':
@@ -2113,7 +2116,7 @@ def render_tab_html(tab):
             for val in vals: parts.append(f'<td class="border border-gray-300 p-2 text-left align-top">{esc(str(val))}</td>')
             parts.append('</tr>')
         parts.append('</tbody></table></div>')
-    if ttype == 'server_list':
+    elif ttype == 'server_list':
         for srv in tab.get('servers',[]):
             sname=srv.get('name',''); scount=srv.get('count',''); locs=srv.get('locations',[])
             parts.append(f'<div style="margin:12px 0"><h3 style="margin:0 0 8px">{esc(sname)} <small style="color:var(--secondary-text-color)">{esc(scount)}</small></h3>')
@@ -2126,6 +2129,8 @@ def render_tab_html(tab):
                 parts.append('</ul>')
             else: parts.append('<p style="color:var(--secondary-text-color);font-size:0.85em">暂无地点数据</p>')
             parts.append('</div>')
+    elif ttype == 'card_grid':
+        cols=tab.get('columns',4); cards=tab.get('cards',[])
         parts.append(f'<div class="card-grid" style="grid-template-columns:repeat({cols},1fr)">')
         for card in cards:
             parts.append('<div class="info-card">')
@@ -2158,8 +2163,17 @@ def render_tab_html(tab):
                     for k,v in blk_sst.items():
                         if v in (1,2):
                             active_maps.add(k)
-
-
+                elif bbt=='supply_card':
+                    fm=blk.get('filter_maps','')
+                    if fm: active_maps.update(fm.split(','))
+                    items=blk.get('items',[]) if blk.get('items') else ([blk.get('item')] if blk.get('item') else [])
+                    for item in items:
+                        if item:
+                            for sid in item.get('locations',{}).keys():
+                                active_maps.add(sid)
+                elif bbt=='expandable_detail':
+                    fm=blk.get('filter_maps','')
+                    if fm: active_maps.update(fm.split(','))
             active_maps.discard('')
             active_maps.difference_update(FIXED_STYLES_MAP.keys())
         for block in tab.get('content_blocks',[]):
@@ -2512,6 +2526,46 @@ def render_tab_html(tab):
                     parts.append('<span class="ic-sum-end" style="font-size:0.65em;background:rgba(128,128,128,0.12);border:1px solid var(--border);border-radius:10px;padding:1px 7px;margin-top:2px;flex-basis:100%;cursor:pointer" onclick="event.stopPropagation();var d=this.closest(\'details\');var root=d.getRootNode();root.querySelectorAll(\'details[name=ic-acc]\').forEach(function(o){o.open=false});">···</span></div></details>')
                 parts.append('</div>')
                 parts.append('</div>')
+            elif bt=='supply_card':
+                sc_cols=block.get('columns',[])
+                # Support both single item and legacy items array
+                sc_items=block.get('items',[]) if block.get('items') else [block.get('item')] if block.get('item') else []
+                for item in sc_items:
+                    if not item: continue
+                    sc_name=esc(item.get('name',''))
+                    sc_icon=(item.get('images', [{}])[0] or {}).get('image_url','')
+                    # Auto-compute filter_maps from location data
+                    sc_fmaps=block.get('filter_maps','')
+                    if not sc_fmaps and has_map_filter:
+                        fmaps=set()
+                        for sid,locs in item.get('locations',{}).items():
+                            if locs: fmaps.add(sid)
+                        sc_fmaps=','.join(sorted(fmaps))
+                    sext='' if not has_map_filter else ' filterable'
+                    sattrs='' if not has_map_filter else ' data-filter-maps="{}"'.format(sc_fmaps)
+                    parts.append('<div class="supply-card{}"{}>'.format(sext,sattrs))
+                    if sc_icon:
+                        parts.append('<img src="{}" class="sc-icon" loading="lazy" />'.format(esc(sc_icon)))
+                    parts.append('<div class="sc-body">')
+                    parts.append('<div class="sc-title">{}</div>'.format(sc_name))
+                    parts.append('<div class="sc-servers">')
+                    for col in sc_cols:
+                        sid=col.get('server','')
+                        icon=col.get('icon','mdi:server')
+                        label=col.get('label','')
+                        locs=item.get('locations',{}).get(sid,[])
+                        if locs:
+                            parts.append('<div class="sc-srv" data-map="{}">'.format(sid))
+                            parts.append('<ha-icon icon="{}"></ha-icon> '.format(icon))
+                            for loc in locs:
+                                loc_img=loc.get('image_url','')
+                                loc_name=esc(loc.get('name',''))
+                                if loc_img:
+                                    parts.append('<img src="{}" /> '.format(esc(loc_img)))
+                                if loc_name:
+                                    parts.append(loc_name)
+                            parts.append('</div>')
+                    parts.append('</div></div></div>')
             elif bt=='map_filter':
                 # Dynamic filter buttons based on actual server references in this tab
 
@@ -2538,11 +2592,925 @@ def render_tab_html(tab):
                         label=SERVER_MAP.get(srv_id,{}).get('label',srv_id)
                         parts.append('<label class="filter-label" data-map="{}"><input type="radio" name="map-filter" class="filter-radio" value="{}" onclick="{}"><ha-icon icon="{}"></ha-icon> {}</label>'.format(srv_id,srv_id,filter_js,icn,label))
                     parts.append('</div>')
+            elif bt=='server_grid':
+                # Render a server_grid block
+                cols=block.get('columns',[])
+                items=block.get('items',[])
+                fl=block.get('first_col_label','补给品')
+                hfc=block.get('hide_first_col',False)
+                tid='server-matrix' if hfc else 'supply-table'
+                tcl='gen-table server-matrix' if hfc else 'table-fixed border-collapse w-full min-w-max'
+                parts.append('<div class="borderr relative overflow-auto border border-gray-300"><table id="{}" class="{}">'.format(tid,tcl))
+                parts.append('<thead class="sticky top-0 z-20"><tr>')
+                if not hfc:
+                    parts.append('<th class="sticky left-0 z-30 border border-gray-300 p-2 text-center whitespace-nowrap">{}</th>'.format(fl))
+                for col in cols:
+                    icon=col.get('icon','mdi:server')
+                    label=esc(col.get('label',''))
+                    mid=col.get('server','')
+                    parts.append('<th class="border border-gray-300 p-2 text-center whitespace-nowrap" data-map="{}"><label class="col-head" title="切换：隐藏该列中的空行"><input type="checkbox" class="col-toggle" hidden /><ha-icon icon="{}"></ha-icon> {}</label></th>'.format(mid,icon,label))
+                parts.append('</tr></thead><tbody>')
+                for item in items:
+                    parts.append('<tr>')
+                    if not hfc:
+                        iu=item.get('icon_url','')
+                        ius=item.get('icon_urls',[iu] if iu else [])
+                        mi=item.get('mdi_icon','')
+                        parts.append('<td class="sticky left-0 z-10 border border-gray-300 p-2 text-center whitespace-nowrap">')
+                        parts.append('<label class="row-head"><input type="checkbox" class="row-toggle" hidden />')
+                        if mi: parts.append('<ha-icon icon="{}"></ha-icon>'.format(mi))
+                        for u in ius:
+                            if u: parts.append('<img src="{}" width="40" height="40" />'.format(esc(u)))
+                        parts.append('</label></td>')
+                    for col in cols:
+                        sid=col.get('server','')
+                        locs=item.get('locations',{}).get(sid,[])
+                        if locs:
+                            parts.append('<td class="border border-gray-300 p-2 text-left align-top" data-map="{}">'.format(sid))
+                            for loc in locs:
+                                loc_name=esc(loc.get('name',''))
+                                loc_img=loc.get('image_url','')
+                                loc_badge=loc.get('badge','')
+                                loc_bt=loc.get('badge_type','badge-warning')
+                                parts.append('{}<br />'.format(loc_name))
+                                if loc_img: parts.append('<div class="flex flex-wrap gap-1 items-start mb-2"><img src="{}" /></div>'.format(esc(loc_img)))
+                                if loc_badge: parts.append('<span class="badge badge-sm {} mt-1">{}</span>'.format(loc_bt,esc(loc_badge)))
+                            parts.append('</td>')
+                        else:
+                            parts.append('<td class="border border-gray-300 p-2 text-left align-top"></td>')
+                    parts.append('</tr>')
+                parts.append('</tbody></table></div>')
+            elif bt=='card_grid':
+                cols=block.get('columns',4)
+                cards=block.get('cards',[])
+                parts.append('<div class="card-grid" style="grid-template-columns:repeat({},1fr)">'.format(cols))
+                for card in cards:
+                    parts.append('<div class="info-card">')
+                    if card.get('image_url'): parts.append('<img src="{}" loading="lazy" />'.format(esc(card['image_url'])))
+                    parts.append('<div class="card-name">{}</div>'.format(esc(card.get('name',''))))
+                    if card.get('feature'): parts.append('<div class="card-feature">{}</div>'.format(esc(card['feature'])))
+                    parts.append('</div>')
+                parts.append('</div>')
+            elif bt=='expandable_detail':
+                md=block.get('map',{}) or {}
+                sd=block.get('spot',{}) or {}
+                od=block.get('output',{}) or {}
+                fd=block.get('flow',{}) or {}
+                mt=md.get('text','')
+                mh=md.get('highlight','')
+                st=sd.get('text','')
+                iu=od.get('icon_url','') if isinstance(od,dict) else ''
+                mi=SERVER_MAP.get(mh,{}).get('icon','mdi:map-marker')
+                blks=fd.get('blocks',[]) if isinstance(fd,dict) else []
+                hb=bool(blks)
+                eext='' if not has_map_filter else ' filterable'
+                eeattrs='' if not has_map_filter else ' data-filter-maps="{}"'.format(block.get('filter_maps',''))
+                parts.append('<details class="exp-block{}" data-map="{}"{}>'.format(eext,mh,' open' if not hb else '',eeattrs))
+                parts.append('<summary class="exp-summary">')
+                if iu:
+                    parts.append('<img src="{}" class="exp-icon" loading="lazy" />'.format(esc(iu)))
+                else:
+                    parts.append('<div class="exp-icon" style="display:flex;align-items:center;justify-content:center"><ha-icon icon="mdi:help-circle"></ha-icon></div>')
+                parts.append('<div class="exp-info">')
+                parts.append('<div class="exp-title"><ha-icon icon="{}"></ha-icon> {}</div>'.format(mi,esc(st)))
+                # Output descriptions (multi-description)
+                out_descs = od.get('descriptions', []) if isinstance(od, dict) else []
+                if not out_descs and isinstance(od, dict) and od.get('name'):
+                    out_descs = [{'text': od['name'], 'bold': False, 'color': ''}]
+                for ddesc in out_descs:
+                    dtext = ddesc.get('text', '') if isinstance(ddesc, dict) else str(ddesc)
+                    dbold = ddesc.get('bold', False) if isinstance(ddesc, dict) else False
+                    dopacity = ddesc.get('opacity', 1.0) if isinstance(ddesc, dict) else 1.0
+                    dstyle = 'margin:2px 0;font-size:0.9em'
+                    if dbold: dstyle += ';font-weight:bold'
+                    if dopacity != 1.0: dstyle += ';opacity:{}'.format(dopacity)
+                    parts.append('<div style="{}">{}</div>'.format(dstyle, esc(dtext)))
+                if mt: parts.append('<div class="exp-subtitle">{}</div>'.format(esc(mt)))
+                parts.append('</div>')
+                if hb: parts.append('<span class="exp-arrow">▼</span>')
+                parts.append('</summary>')
+                if hb:
+                    parts.append('<div class="exp-body">')
+                    for blk in blks:
+                        if blk.get('type')=='text':
+                            bt_t=blk.get('text','')
+                            parts.append('<p style="margin:4px 0">{}</p>'.format(esc(bt_t)))
+                        elif blk.get('type')=='ol':
+                            parts.append('<ol>')
+                            for step in blk.get('steps',[]):
+                                if isinstance(step,dict) and 'html' in step:
+                                    sh=step.get('html','')
+                                    parts.append('<li>{}</li>'.format(sh))
+                                else:
+                                    parts.append('<li>{}</li>'.format(esc(str(step))))
+                            parts.append('</ol>')
+                        elif blk.get('type')=='md_hl':
+                            parts.append('<span class="{}">{}</span>'.format(blk.get('class',''),blk.get('text','')))
+                        elif blk.get('type')=='strong':
+                            parts.append('<strong>{}</strong>'.format(blk.get('text','')))
+                    parts.append('</div>')
+                parts.append('</details>')
+    elif ttype == 'server_grid':
+        columns=tab.get('columns',[]); items=tab.get('items',[])
+        parts.append('<div class="borderr relative overflow-auto border border-gray-300"><table id="supply-table" class="table-fixed border-collapse w-full min-w-max"><thead class="sticky top-0 z-20"><tr>')
+        parts.append('<th class="sticky left-0 z-30 border border-gray-300 p-2 text-center whitespace-nowrap">补给品</th>')
+        for col in columns:
+            parts.append(f'<th class="border border-gray-300 p-2 text-center whitespace-nowrap"><label class="col-head" title="切换：隐藏该列中的空行"><input type="checkbox" class="col-toggle" hidden /><ha-icon icon="mdi:server"></ha-icon> {esc(col["label"])}</label></th>')
+        parts.append('</tr></thead><tbody>')
+        for item in items:
+            parts.append('<tr>')
+            icon_url=item.get('icon_url','')
+            parts.append(f'<td class="sticky left-0 z-10 border border-gray-300 p-2 text-center whitespace-nowrap"><label class="row-head"><input type="checkbox" class="row-toggle" hidden />')
+            if icon_url: parts.append(f'<img src="{esc(icon_url)}" width="40" height="40" />')
+            parts.append('</label></td>')
+            for col in columns:
+                server_id=col.get('server',''); locs=item.get('locations',{}).get(server_id,[])
+                parts.append('<td class="border border-gray-300 p-2 text-left align-top">')
+                for loc in locs:
+                    parts.append(f'{esc(loc.get("name",""))}<br />')
+                    if loc.get('image_url'): parts.append(f'<div class="flex flex-wrap gap-1 items-start mb-2"><img src="{esc(loc["image_url"])}" /></div>')
+                    badge=loc.get('badge',''); badge_type=loc.get('badge_type','badge-warning')
+                    if badge: parts.append(f'<span class="badge badge-sm {badge_type} mt-1">{esc(badge)}</span>')
+                parts.append('</td>')
+            parts.append('</tr>')
+        parts.append('</tbody></table></div>')
+    elif ttype == 'farming_table':
+        cols=tab.get('columns',[]); rows=tab.get('rows',[])
+        parts.append('<div class="borderr relative overflow-auto border border-gray-300"><table class="gen-table table-fixed border-collapse w-full min-w-max"><thead class="sticky top-0 z-20"><tr>')
+        for col in cols: parts.append(f'<th class="border border-gray-300 p-2 text-center whitespace-nowrap">{esc(col)}</th>')
+        parts.append('</tr></thead><tbody>')
+        for row in rows:
+            parts.append('<tr>')
+            for key,val in row.items():
+                if key.endswith('_icon') and val: parts.append(f'<td class="border border-gray-300 p-2 text-center align-top"><img src="{esc(val)}" /></td>')
+                else: parts.append(f'<td class="border border-gray-300 p-2 text-left align-top">{esc(str(val))}</td>')
+            parts.append('</tr>')
+        parts.append('</tbody></table></div>')
+    elif ttype == 'raw_html':
+        parts.append(tab.get('html',''))
     parts.append('</div>')
     return strip_and_append_empty_rows('\n'.join(parts))
 
 
+def render_server_grid(tab):
+    """Render supply/补给 table matching old page HTML exactly."""
+    columns = tab.get('columns', [])
+    items = tab.get('items', [])
+    first_col_label = tab.get('first_col_label', '补给品')
+    hide_first_col = tab.get('hide_first_col', False)
+    parts = ['<div class="flex flex-col">']
+    parts.append('  <div class="borderr relative overflow-auto border border-gray-300">')
+    table_id = 'server-matrix' if hide_first_col else 'supply-table'
+    table_class = 'gen-table server-matrix' if hide_first_col else 'table-fixed border-collapse w-full min-w-max'
+    parts.append(f'    <table id="{table_id}" class="{table_class}">')
+    parts.append('      <thead class="sticky top-0 z-20">')
+    parts.append('        <tr>')
+    if not hide_first_col:
+        parts.append(f'          <th class="sticky left-0 z-30 border border-gray-300 p-2 text-center whitespace-nowrap">{first_col_label}</th>')
+    for col in columns:
+        icon = col.get('icon', 'mdi:server')
+        label = esc(col.get('label', ''))
+        map_id = col.get('server', '')
+        parts.append(f'          <th class="border border-gray-300 p-2 text-center whitespace-nowrap" data-map="{map_id}"><label class="col-head" title="切换：隐藏该列中的空行"><input type="checkbox" class="col-toggle" hidden /><ha-icon icon="{icon}"></ha-icon> {label}</label></th>')
+    parts.append('        </tr>')
+    parts.append('      </thead>')
+    parts.append('      <tbody>')
+    for item in items:
+        parts.append('        <tr>')
+        if not hide_first_col:
+            icon_url = item.get('icon_url', '')
+            icon_urls = item.get('icon_urls', [icon_url] if icon_url else [])
+            mdi_icon = item.get('mdi_icon', '')
+            parts.append('          <td class="sticky left-0 z-10 border border-gray-300 p-2 text-center whitespace-nowrap">')
+            parts.append('            <label class="row-head" title="切换：隐藏本行为空的整列"><input type="checkbox" class="row-toggle" hidden />')
+            if mdi_icon:
+                parts.append(f'              <ha-icon icon="{mdi_icon}"></ha-icon>')
+            for u in icon_urls:
+                if u:
+                    parts.append(f'              <img src="{esc(u)}" width="40" height="40" />')
+            parts.append('            </label>')
+            parts.append('          </td>')
+        for col in columns:
+            server_id = col.get('server', '')
+            locs = item.get('locations', {}).get(server_id, [])
+            if locs:
+                parts.append(f'          <td class="border border-gray-300 p-2 text-left align-top" data-map="{server_id}">')
+                # Each location: name<br/> then image+badge div (matching old page pattern)
+                for loc in locs:
+                    name = esc(loc.get('name', ''))
+                    img_url = loc.get('image_url', '')
+                    img_urls = loc.get('image_urls', [img_url] if img_url else [])
+                    badge = loc.get('badge', '')
+                    badge_type = loc.get('badge_type', 'badge-warning')
+                    parts.append(f'            {name}<br />')
+                    if img_urls or badge:
+                        parts.append('            <div class="flex flex-wrap gap-1 items-start">')
+                        parts.append('              <div class="flex flex-col items-start">')
+                        for u in img_urls:
+                            if u:
+                                parts.append(f'                <img src="{esc(u)}" />')
+                        if badge:
+                            parts.append(f'                <span class="badge badge-sm {badge_type} mt-1">{esc(badge)}</span>')
+                        parts.append('              </div>')
+                        parts.append('            </div>')
+                parts.append('          </td>')
+            else:
+                parts.append('          <td class="border border-gray-300 p-2 text-left align-top"></td>')
+        parts.append('        </tr>')
+    parts.append('      </tbody>')
+    parts.append('    </table>')
+    parts.append('  </div>')
+    parts.append('</div>')
+    return '\n'.join(parts)
 
 
+def render_expandable_detail(tab):
+    """Render expandable detail blocks with large output icons and map theming."""
+    rows = tab.get('rows', [])
+    parts = ['<div class="flex flex-col gap-2">']
+
+    for row in rows:
+        map_data = row.get('map', {}) or {}
+        spot_data = row.get('spot', {}) or {}
+        output_data = row.get('output', {}) or {}
+        flow_data = row.get('flow', {}) or {}
+
+        map_text = map_data.get('text', '')
+        map_hl = map_data.get('highlight', '')
+        spot_text = spot_data.get('text', '')
+        icon_url = output_data.get('icon_url', '') if isinstance(output_data, dict) else ''
+        mdi = SERVER_MAP.get(map_hl,{}).get('icon','mdi:map-marker')
+        blocks = flow_data.get('blocks', []) if isinstance(flow_data, dict) else []
+
+        has_body = bool(blocks)
+        parts.append(f'<details class="exp-block" data-map="{map_hl}"{" open" if not has_body else ""}>')
+        parts.append('<summary class="exp-summary">')
+
+        # Large output icon
+        if icon_url:
+            parts.append(f'<img src="{esc(icon_url)}" class="exp-icon" loading="lazy" />')
+        else:
+            parts.append('<div class="exp-icon" style="display:flex;align-items:center;justify-content:center"><ha-icon icon="mdi:help-circle"></ha-icon></div>')
+
+        # Map + spot info
+        parts.append('<div class="exp-info">')
+        parts.append(f'<div class="exp-title"><ha-icon icon="{mdi}"></ha-icon> {esc(spot_text)}</div>')
+        if map_text:
+            parts.append(f'<div class="exp-subtitle">{esc(map_text)}</div>')
+        parts.append('</div>')
+
+        if has_body:
+            parts.append('<span class="exp-arrow">▼</span>')
+
+        parts.append('</summary>')
+
+        # Flow body
+        if has_body:
+            parts.append('<div class="exp-body">')
+            for block in blocks:
+                if block['type'] == 'text':
+                    bt = block.get('text', '')
+                    bold = block.get('bold', False)
+                    color = block.get('color', '')
+                    style = 'margin:4px 0'
+                    if bold: style += ';font-weight:bold'
+                    if color: style += ';color:{}'.format(color)
+                    parts.append(f'<p style="{style}">{esc(bt)}</p>')
+                elif block['type'] == 'ol':
+                    parts.append('<ol>')
+                    for step in block.get('steps', []):
+                        if isinstance(step, dict) and 'html' in step:
+                            sh = step.get('html', '')
+                            parts.append(f'<li>{sh}</li>')
+                        else:
+                            parts.append(f'<li>{esc(str(step))}</li>')
+                    parts.append('</ol>')
+                elif block['type'] == 'md_hl':
+                    bc = block.get('class', '')
+                    bt2 = block.get('text', '')
+                    parts.append(f'<span class="{bc}">{bt2}</span>')
+                elif block['type'] == 'strong':
+                    bt3 = block.get('text', '')
+                    parts.append(f'<strong>{bt3}</strong>')
+            parts.append('</div>')
+
+        parts.append('</details>')
+
+    parts.append('</div>')
+    return '\n'.join(parts)
 
 
+def render_farming_table(tab):
+    """Render farming/采集 table with rowspan, clamp-toggle, map-badge, and step lists."""
+    columns = tab.get('columns', [])
+    rows = tab.get('rows', [])
+    parts = ['<div class="flex flex-col">']
+    parts.append('<div class="borderr relative overflow-auto border border-gray-300">')
+    parts.append('<table class="table-fixed border-collapse w-full min-w-max">')
+    parts.append('<thead class="sticky top-0 z-20"><tr>')
+    for col in columns:
+        parts.append(f'<th class="border border-gray-300 p-2 text-center whitespace-nowrap">{esc(col)}</th>')
+    parts.append('</tr></thead><tbody>')
+
+    map_remaining = 0
+    spot_remaining = 0
+
+    for row in rows:
+        parts.append('<tr>')
+
+        # Map cell
+        map_data = row.get('map')
+        if map_data is None:
+            # Cell omitted due to rowspan
+            pass
+        elif map_data == {} or not isinstance(map_data, dict):
+            parts.append('<td class="border border-gray-300 p-2"></td>')
+        else:
+            text = map_data.get('text', '')
+            rspan = map_data.get('rowspan')
+            highlight = map_data.get('highlight')
+            classes = ['border', 'border-gray-300', 'p-2', 'text-center', 'align-top', 'col-map']
+            no_badge = highlight in ('neutral', 'col-neutral')
+            if no_badge:
+                classes.append('col-neutral')
+            attrs = f' class="{" ".join(classes)}"'
+            if rspan:
+                attrs += f' rowspan="{rspan}"'
+                map_remaining = rspan - 1
+            if highlight and not no_badge:
+                attrs += f' data-map="{highlight}"'
+            parts.append(f'<td{attrs}>')
+            if highlight and not no_badge:
+                # Map server ID to icon
+                icon=SERVER_MAP.get(highlight,{}).get('icon','mdi:server')
+                parts.append(f'<div class="map-badge"><ha-icon icon="{icon}"></ha-icon><div>{esc(text)}</div></div>')
+            else:
+                parts.append(esc(text))
+            parts.append('</td>')
+        if map_remaining > 0:
+            map_remaining -= 1
+
+        # Spot cell
+        spot_data = row.get('spot')
+        if spot_data is None:
+            pass
+        elif spot_data == {} or not isinstance(spot_data, dict):
+            parts.append('<td class="border border-gray-300 p-2"></td>')
+        else:
+            text = spot_data.get('text', '')
+            rspan = spot_data.get('rowspan')
+            highlight = spot_data.get('highlight')
+            classes = ['border', 'border-gray-300', 'p-2', 'text-left', 'align-top', 'col-spot']
+            no_badge_s = highlight in ('neutral', 'col-neutral')
+            if no_badge_s:
+                classes.append('neutral')
+            attrs = f' class="{" ".join(classes)}"'
+            if rspan:
+                attrs += f' rowspan="{rspan}"'
+                spot_remaining = rspan - 1
+            if highlight and not no_badge_s:
+                attrs += f' data-map="{highlight}"'
+            parts.append(f'<td{attrs}>{esc(text)}</td>')
+        if spot_remaining > 0:
+            spot_remaining -= 1
+
+        # Output cell
+        output_data = row.get('output', {})
+        icon_url = output_data.get('icon_url', '') if isinstance(output_data, dict) else ''
+        font_sb = ' font-semibold' if (isinstance(output_data, dict) and output_data.get('font_semibold')) else ''
+        parts.append(f'<td class="border border-gray-300 p-2 align-top col-output{font_sb}">')
+        if icon_url:
+            parts.append(f'<img src="{esc(icon_url)}" alt="" />')
+        parts.append('</td>')
+
+        # Flow cell — render content blocks in order
+        flow_data = row.get('flow', {})
+        if isinstance(flow_data, dict):
+            blocks = flow_data.get('blocks', [])
+            parts.append('<td class="border border-gray-300 p-2 text-left align-top col-flow">')
+
+            if not blocks:
+                pass
+            elif len(blocks) == 1 and blocks[0]['type'] == 'text':
+                # Single plain text — no clamp needed
+                parts.append(esc(blocks[0]['text']))
+            else:
+                # Multiple blocks or single non-text block — use clamp-wrap
+                parts.append('<label class="clamp-wrap">')
+                parts.append('<input type="checkbox" class="clamp-toggle" />')
+                parts.append('<div class="clamp-content">')
+                for block in blocks:
+                    if block['type'] == 'text':
+                        parts.append(esc(block['text']))
+                    elif block['type'] == 'ol':
+                        parts.append('<ol>')
+                        for step in block['steps']:
+                            if isinstance(step, dict) and 'html' in step:
+                                parts.append(f'<li>{step["html"]}</li>')
+                            else:
+                                parts.append(f'<li>{esc(str(step))}</li>')
+                        parts.append('</ol>')
+                    elif block['type'] == 'md_hl':
+                        parts.append(f'<span class="{block["class"]}">{block["text"]}</span>')
+                    elif block['type'] == 'strong':
+                        parts.append(f'<strong>{block["text"]}</strong>')
+                parts.append('</div>')
+                parts.append('<span class="clamp-btn" aria-hidden="true"></span>')
+                parts.append('</label>')
+            parts.append('</td>')
+        else:
+            parts.append('<td class="border border-gray-300 p-2 text-left align-top col-flow"></td>')
+
+        parts.append('</tr>')
+
+    parts.append('</tbody></table></div>')
+    parts.append('</div>')
+    return '\n'.join(parts)
+
+
+# Version stamp
+VERSION = 'v20260611-1'
+
+# -------------------------------------------------------
+if __name__ == "__main__":
+    _pf = '/config/www/asa-data/_bl_step.txt'
+    def _log_step(msg, mode='a'):
+        with open(_pf, mode) as f:
+            from datetime import datetime
+            f.write(f"{datetime.now().strftime('%H:%M:%S')} {msg}\n")
+    _log_step("INIT", 'w')
+    # -------------------------------------------------------
+    with open(os.path.join(DATA_DIR, 'server_rules.json'), 'r', encoding='utf-8') as f:
+        sr_data = json.load(f)
+    with open(os.path.join(DATA_DIR, 'tribe_ops.json'), 'r', encoding='utf-8') as f:
+        to_data = json.load(f)
+    with open(os.path.join(DATA_DIR, 'asa_base_quick_ref.json'), 'r', encoding='utf-8') as f:
+        bq_data = json.load(f)
+    _log_step("DATA_OK")
+
+    lovelace_path = '/config/lovelace' if os.path.exists('/config') else r'A:\NetSarang\Xftp 8\Temporary\lovelace'
+    lovelace_ll_path = '/config/lovelace.lovelace' if os.path.exists('/config') else r'A:\NetSarang\Xftp 8\Temporary\lovelace.lovelace'
+    # Read from HA's storage first to capture any manual edits (HA UI writes here)
+    storage_src = '/config/.storage/lovelace.lovelace' if os.path.exists('/config') else lovelace_path
+    _log_step('READING_' + storage_src.replace('/','_')[-30:])
+    with open(storage_src, 'r', encoding='utf-8') as f:
+        lovelace = json.load(f)
+    _log_step('LOVELACE_LOADED')
+    views = lovelace['data']['config']['views']
+    _log_step('VIEWS_OK')
+    # Build timestamp footer for all ASA pages
+    build_ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    BLD_FOOTER = f'<div style="text-align:right;opacity:0.12;font-size:0.6em;margin-top:20px;user-select:none">build {build_ts}</div>'
+    # -------------------------------------------------------
+    # Decoupled view management: path-based, non-ASA views preserved as-is
+    ASA_BUILD_PATHS = {
+        'asa-server-rules',
+        'info_whiterober',
+        'base_isl', 'base_sco', 'base_cen', 'base_abe',
+        'base_ast', 'base_ext', 'base_rag', 'base_val',
+        'base_los', 'base_gen', 'base_bob',
+    }
+    non_asa_views = []
+    asa_built_views = []
+    for v in views:
+        p = v.get('path', '')
+        if p in ASA_BUILD_PATHS:
+            pass  # Will be rebuilt from JSON data, not preserved
+        elif v != {}:
+            non_asa_views.append(v)
+    _log_step('VIEWS_UPDATED')
+
+    # --- Helper: content card matching OLD pattern ---
+    def make_content_card(html_content, tab_type=None, tab=None):
+        if tab_type == 'mixed_content' and tab:
+            # Compose CSS from block types present
+            block_types = {b.get('block_type','') for b in tab.get('content_blocks',[])}
+            has_map_filter = 'map_filter' in block_types
+            has_icon_group = any(
+                isinstance(d, dict) and d.get('type') == 'icon_group'
+                for b in tab.get('content_blocks', [])
+                for d in b.get('descriptions', [])
+            )
+            active_maps = set()
+            if has_map_filter:
+                for blk in tab.get('content_blocks',[]):
+                    bbt = blk.get('block_type','')
+                    if bbt == 'info_card':
+                        fm = blk.get('filter_maps','')
+                        if fm: active_maps.update(fm.split(','))
+                        for desc in blk.get('descriptions',[]):
+                            if isinstance(desc,dict) and desc.get('server'):
+                                active_maps.add(desc['server'])
+                            sst = desc.get('server_states',{}) if isinstance(desc,dict) else {}
+                            for k,v in sst.items():
+                                if v in (1,2):
+                                    active_maps.add(k)
+                        blk_sst = blk.get('server_states',{})
+                        for k,v in blk_sst.items():
+                            if v in (1,2):
+                                active_maps.add(k)
+                    elif bbt == 'supply_card':
+                        fm = blk.get('filter_maps','')
+                        if fm: active_maps.update(fm.split(','))
+                    elif bbt == 'expandable_detail':
+                        fm = blk.get('filter_maps','')
+                        if fm: active_maps.update(fm.split(','))
+                active_maps.discard('')
+            css = CARD_CORE_CSS + TABLE_CORE_CSS
+            if 'server_grid' in block_types:
+                css = SERVER_GRID_CSS  # includes SHARED_CSS
+            if 'expandable_detail' in block_types:
+                css += EXPANDABLE_DETAIL_CSS.replace(SHARED_CSS, '')
+            if 'supply_card' in block_types or 'map_filter' in block_types:
+                css += 'ha-card .supply-card{border-radius:12px!important;border-left:4px solid var(--divider-color)!important;margin-bottom:8px!important;padding:12px!important;display:flex!important;gap:12px!important;background:var(--primary-background-color)!important}'
+                css += 'ha-card .supply-card .sc-icon{width:48px!important;height:48px!important;flex-shrink:0!important;object-fit:contain!important;border-radius:8px!important}'
+                css += 'ha-card .supply-card .sc-body{flex:1!important;min-width:0!important}'
+                css += 'ha-card .supply-card .sc-body .sc-title{font-weight:600!important;font-size:1.05em!important;margin-bottom:6px!important}'
+                css += 'ha-card .supply-card .sc-body .sc-servers{display:flex!important;flex-wrap:wrap!important;gap:6px 12px!important}'
+                css += 'ha-card .supply-card .sc-body .sc-srv{display:flex!important;align-items:center!important;gap:4px!important;font-size:.85em!important}'
+                css += 'ha-card .supply-card .sc-body .sc-srv img{width:20px!important;height:20px!important;object-fit:contain!important;border-radius:2px!important}'
+                for sid, sm in SERVER_MAP.items():
+                    css += 'ha-card .supply-card .sc-srv[data-map='+sid+']{color:'+sm['color']+'!important}'
+                css += 'ha-card .filter-bar{display:flex!important;flex-wrap:wrap!important;gap:0!important;margin-bottom:12px!important}'
+                css += 'ha-card .filter-radio{position:absolute!important;opacity:0!important;width:0!important;height:0!important}'
+                css += 'ha-card .filter-label{display:inline-flex!important;align-items:center!important;gap:4px!important;padding:4px 12px!important;border-radius:16px!important;border:1px solid var(--divider-color)!important;font-size:.85em!important;cursor:pointer!important;user-select:none!important;line-height:1.4!important;white-space:nowrap!important;min-height:28px!important;margin-right:6px!important;margin-bottom:8px!important}'
+                for sid, sm in SERVER_MAP.items():
+                    css += 'ha-card .filter-label[data-map='+sid+']{background:'+sm['color']+'!important;color:var(--primary-background-color)!important;border-color:'+sm['color']+'!important}'
+                css += 'ha-card .filter-label{transition:opacity .2s!important}'
+                css += 'ha-card .filter-label ha-icon{pointer-events:none!important}'
+                css += 'ha-card:has(.filter-radio[value=\"\"]:checked) .filterable{display:flex!important}'
+                for sid in SERVER_MAP:
+                    css += 'ha-card:has(.filter-radio[value=\"'+sid+'\"]:checked) .filterable{display:none!important}'
+                    css += 'ha-card:has(.filter-radio[value=\"'+sid+'\"]:checked) .filterable[data-filter-maps*='+sid+']{display:flex!important}'
+            if 'info_card' in block_types:
+                IC_CSS = make_ic_css(SERVER_MAP, FIXED_STYLES_MAP)
+                css += IC_CSS
+            if has_icon_group:
+                css += 'ha-card .ig-title-badge{display:inline-flex!important;align-items:baseline!important;font-size:0.65em!important;padding:2px 6px!important;border-radius:6px!important;background:color-mix(in srgb,var(--primary-color) 15%,transparent)!important;color:var(--primary-text-color)!important;line-height:1!important}'
+                css += 'ha-card .ig-title-row ha-icon,ha-card .ig-title-badge ha-icon{color:inherit!important}'
+                css += 'ha-card .ig-badge-text{position:relative!important;top:1px!important}'
+                css += 'ha-card .icon-group{gap:8px!important}'
+                css += 'ha-card .ig-item{position:relative!important;display:inline-flex!important;flex-shrink:0!important}'
+                css += 'ha-card .ig-img{width:28px!important;height:28px!important;object-fit:contain!important;border-radius:4px!important}'
+                css += 'ha-card .ig-item .ic-qty{position:absolute!important;right:-2px!important;bottom:-2px!important;font-size:0.65em!important}'
+                css += 'ha-card .ig-img.ic-auto-color{color:var(--primary-background-color)!important;fill:var(--primary-text-color)!important}'
+                css += 'ha-card .ig-img.ic-auto-dark{filter:none!important}'
+                css += 'ha-card .ig-img.ic-auto-light{filter:none!important}'
+                css += '[data-theme="dark"] .ig-img.ic-auto-dark{filter:invert(1)!important}'
+                css += '[data-theme="light"] .ig-img.ic-auto-light{filter:invert(1)!important}'
+                css += 'ha-card .ig-img.ic-auto-color{filter:var(--ic-icon-filter,none)!important}'
+                # ig-title-line + ::after separator for icon_group rows
+                css += 'ha-card .ig-title-line{border:none!important;margin:0!important;border-top:1px solid var(--primary-text-color)!important;opacity:0.15!important}'
+                css += 'ha-card .ig-row-wrapper::after{content:\'\'!important;display:block!important;width:100%!important;border-top:1px solid var(--primary-text-color)!important;opacity:0.15!important;margin-top:6px!important}'
+                css += 'ha-card .ig-row-wrapper[class*="ic-linear-"]::after{display:none!important}'
+                css += 'ha-card .ig-row-wrapper.ig-empty::after{display:none!important}'
+                # ig-row-wrapper linear mode: per-map title badge + separator colors
+                for sid, sm in SERVER_MAP.items():
+                    r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)
+                    css += 'ha-card .ig-row-wrapper.ic-linear-'+sid+' .ig-title-badge{color:'+sm['color']+'!important;background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important}'
+                    css += 'ha-card .ig-row-wrapper.ic-linear-'+sid+' .ig-title-line{border-top-color:'+sm['color']+'!important;opacity:0.4!important}'
+                    css += 'ha-card .ig-row-wrapper.ic-linear-'+sid+'::after{border-top-color:'+sm['color']+'!important;opacity:0.4!important}'
+            # copy_key button
+            css += 'ha-card .ic-copy-key{padding:2px 6px!important;border-radius:6px!important;border:none!important;background:#0288d1!important;color:var(--primary-background-color)!important;cursor:pointer!important;font-size:0.9em!important;font-weight:400!important;line-height:1.5!important;transition:filter 0.2s!important}'
+            css += 'ha-card .ic-copy-key:hover{filter:brightness(1.15)!important}'
+            css += 'ha-card .ic-copy-key ha-icon{color:var(--primary-background-color)!important}'
+            if 'card_grid' in block_types:
+                css += 'ha-card .info-card{background:var(--primary-background-color);border-radius:8px;overflow:hidden;text-align:center;padding:0 0 8px 0}ha-card .info-card img{width:100%;aspect-ratio:1;object-fit:cover}ha-card .card-name{font-weight:600;margin:4px 0}ha-card .card-feature{font-size:0.85em;color:var(--secondary-text-color)}ha-card .card-grid{display:grid;gap:12px}'
+        elif tab_type == 'server_grid':
+            css = SERVER_GRID_CSS
+        elif tab_type == 'expandable_detail':
+            css = EXPANDABLE_DETAIL_CSS
+        elif tab_type == 'farming_table':
+            css = FARMING_TABLE_CSS
+        elif tab_type in ('reference_table', 'mixed_content'):
+            css = CARD_CORE_CSS + TABLE_CORE_CSS
+        else:
+            css = CARD_CORE_CSS
+
+        css += ' ha-card ha-icon{line-height:0!important}'
+        css += ' ha-card div.flex.flex-col>div:not([class]){margin-top:0!important}'
+
+        inner_card = {
+            "entity": "",
+            "content": html_content,
+            "ignore_line_breaks": True,
+            "always_update": False,
+            "parse_jinja": True,
+            "code_editor": "Ace",
+            "entities": [],
+            "bindings": [],
+            "actions": [],
+            "plugins": {"daisyui": {"enabled": True, "url": "https://cdn.jsdelivr.net/npm/daisyui@latest/dist/full.css", "theme": "dark", "overrideCardBackground": False}, "tailwindElements": {"enabled": False}},
+            "debounceChangePeriod": 500,
+            "type": "custom:tailwindcss-template-card",
+            "card_mod": {"style": css}
+        }
+
+        return {
+            "type": "custom:mod-card",
+            "card_mod": {"style": "ha-card {\n  box-shadow: none !important;\n  background: transparent !important;\n}\n"},
+            "card": inner_card
+        }
+
+    # Tab button (matching old format exactly)
+    def make_tab_button(tab_name, tab_desc, entity_id='input_select.info_tribe_tab'):
+        return {
+            "type": "custom:button-card",
+            "tap_action": {
+                "action": "call-service",
+                "service": "input_select.select_option",
+                "service_data": {"entity_id": entity_id, "option": tab_name}
+            },
+            "only_custom_fields": True,
+            "styles": {
+                "card": [
+                    {"background": f"[[[ return states['{entity_id}'].state === '{tab_name}' ? '#16a34a' : 'var(--card-background-color, #1e1e1e)'; ]]]"},
+                    {"color": f"[[[ return states['{entity_id}'].state === '{tab_name}' ? '#fff' : 'var(--primary-text-color, #ddd)'; ]]]"},
+                    {"font-weight": "bold"}, {"border-radius": "8px"},
+                    {"min-width": "70px"}, {"max-width": "200px"}, {"width": "auto"},
+                    {"box-shadow": "none"}, {"transition": "background 0.2s"},
+                    {"padding": "12px 12px"}, {"margin-right": "0px"},
+                    {"display": "flex"}, {"flex-direction": "column"},
+                    {"align-items": "stretch"}, {"text-align": "left"}, {"line-height": "18px"}
+                ],
+                "custom_fields": {
+                    "tabcontent": [
+                        {"display": "flex"}, {"flex-direction": "column"},
+                        {"align-items": "stretch"}, {"width": "100%"}, {"text-align": "left"}
+                    ]
+                }
+            },
+            "custom_fields": {
+                "tabcontent": f"[[[\n  return `\n    <div style=\"font-size:1em;font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left;\">\n      {tab_name}\n    </div>\n    <div style=\"font-size:12px;font-weight:normal;margin-top:4px;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;text-align:right;\">\n      {tab_desc}\n    </div>\n  `;\n]]]"
+            },
+            "card_mod": {"style": "#tabcontent {\n  grid-area: unset !important;\n}\n"}
+        }
+
+    # 1. SERVER RULES → views[40] — tabbed layout, same as tribe ops
+    sr_tabs = sr_data.get('tabs', [])
+    sr_tab_buttons = [make_tab_button(t['name'], t.get('description',''), 'input_select.info_server_rules_tab') for t in sr_tabs]
+    sr_tab_cards = []
+    for t in sr_tabs:
+        tname = t['name']
+        ttype = t.get('type','')
+        t_html = render_tab_html(t)
+        # Inject inline theme detection (MutationObserver on html style, threshold=50 for visionOS)
+        t_html = '<img src=x onerror="var d=this.parentElement;function A(){var b=getComputedStyle(document.documentElement).getPropertyValue(\'--primary-background-color\');var m=b.match(/\\d+/g);if(m){d.setAttribute(\'data-theme\',(0.299*m[0]+0.587*m[1]+0.114*m[2])<50?\'dark\':\'light\')}}A();new MutationObserver(A).observe(document.documentElement,{attributes:true,attributeFilter:[\'style\']});var m=navigator.userAgent.match(/Chrome\/(\d+)/);if(m&&parseInt(m[1])<120)d.setAttribute(\'data-old-webkit\',\'\')" style=display:none>'+t_html
+        t_html += BLD_FOOTER
+        t_html += '<img src=x onerror="var p=this.parentElement;setTimeout(function(){p.querySelectorAll(\'details[name=ic-acc]\').forEach(function(d){d.addEventListener(\'toggle\',function(e){if(d.open)p.querySelectorAll(\'details[name=ic-acc]\').forEach(function(s){if(s!==d)s.open=false})})})},200)" style=display:none>'
+        cond = {
+            "type": "conditional",
+            "conditions": [{"condition": "state", "entity": "input_select.info_server_rules_tab", "state": tname}],
+            "card": make_content_card(t_html, tab_type=ttype, tab=t),
+            "grid_options": {"columns": 24, "rows": "auto"}
+        }
+        sr_tab_cards.append(cond)
+        print(f'  SR Tab [{tname}] ({ttype}): {len(t_html)} chars')
+
+    sr_ts = datetime.now().strftime('%H:%M:%S')
+    sr_stack_cards = [
+        {
+            "type": "custom:mod-card",
+            "card_mod": {"style": ":host { display: block !important; overflow-x: auto !important; white-space: nowrap !important; padding-bottom: 8px; } ha-card { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: rgba(0,0,0,0) !important; box-shadow: none !important; }"},
+            "card": {"type": "horizontal-stack", "cards": sr_tab_buttons}
+        }
+    ] + sr_tab_cards
+
+    asa_built_views.append({
+        "visible": False,
+        "subview": True,
+        "title": f'服务器规则',
+        "path": "asa-server-rules",
+        "theme": "Material You",
+        "sections": [{
+            "type": "grid",
+            "column_span": 2,
+            "cards": [{
+                "type": "vertical-stack",
+                "grid_options": {"columns": "full"},
+                "cards": sr_stack_cards
+            }]
+        }]
+    })
+    print(f'Server rules: REBUILT with {len(sr_tab_buttons)} tabs + {len(sr_tab_cards)} cards + timestamp {sr_ts}')
+    _log_step('SR_OK')
+
+    # 2. INFO_WHITEROBER → views[41]
+    tabs = to_data.get('tabs', [])
+    tab_buttons = [make_tab_button(t['name'], t.get('description','')) for t in tabs]
+
+    # Generate all tab conditional cards
+    tab_cards = []
+    for t in tabs:
+        tname = t['name']
+        ttype = t['type']
+        if ttype == 'server_grid':
+            t_html = render_server_grid(t)
+        elif ttype == 'expandable_detail':
+            t_html = render_expandable_detail(t)
+        elif ttype == 'farming_table':
+            t_html = render_farming_table(t)
+        else:
+            t_html = render_tab_html(t)
+        # Inject inline theme detection (MutationObserver on html style, threshold=50 for visionOS)
+        t_html = '<img src=x onerror="var d=this.parentElement;function A(){var b=getComputedStyle(document.documentElement).getPropertyValue(\'--primary-background-color\');var m=b.match(/\\d+/g);if(m){d.setAttribute(\'data-theme\',(0.299*m[0]+0.587*m[1]+0.114*m[2])<50?\'dark\':\'light\')}}A();new MutationObserver(A).observe(document.documentElement,{attributes:true,attributeFilter:[\'style\']});var m=navigator.userAgent.match(/Chrome\/(\d+)/);if(m&&parseInt(m[1])<120)d.setAttribute(\'data-old-webkit\',\'\')" style=display:none>'+t_html
+        t_html += BLD_FOOTER
+        t_html += '<img src=x onerror="var p=this.parentElement;setTimeout(function(){p.querySelectorAll(\'details[name=ic-acc]\').forEach(function(d){d.addEventListener(\'toggle\',function(e){if(d.open)p.querySelectorAll(\'details[name=ic-acc]\').forEach(function(s){if(s!==d)s.open=false})})})},200)" style=display:none>'
+        cond = {
+            "type": "conditional",
+            "conditions": [{"condition": "state", "entity": "input_select.info_tribe_tab", "state": tname}],
+            "card": make_content_card(t_html, tab_type=ttype, tab=t),
+            "grid_options": {"columns": 24, "rows": "auto"}
+        }
+        tab_cards.append(cond)
+        print(f'  Tab [{tname}] ({ttype}): {len(t_html)} chars')
+
+    # Generate fresh timestamp
+    ts = datetime.now().strftime('%H:%M:%S')
+
+    # Build cards: tab bar + all generated conditional cards
+    stack_cards = [
+        # Tab bar
+        {
+            "type": "custom:mod-card",
+            "card_mod": {"style": ":host { display: block !important; overflow-x: auto !important; white-space: nowrap !important; padding-bottom: 8px; } ha-card { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: rgba(0,0,0,0) !important; box-shadow: none !important; }"},
+            "card": {"type": "horizontal-stack", "cards": tab_buttons}
+        }
+    ] + tab_cards
+
+    asa_built_views.append({
+        "visible": False,
+        "subview": True,
+        "title": f'部落运维速查',
+        "path": "info_whiterober",
+        "theme": "Material You",
+        "sections": [{
+            "type": "grid",
+            "column_span": 2,
+            "cards": [{
+                "type": "vertical-stack",
+                "grid_options": {"columns": "full"},
+                "cards": stack_cards
+            }]
+        }]
+    })
+    print(f'info_whiterober: REBUILT with {len(tab_buttons)} tabs + {len(tab_cards)} cards + timestamp {ts}')
+    _log_step('INFO_OK')
+
+    # 3. BASE VIEWS → views[50:61] (11 servers, one view each)
+    bq_servers = bq_data.get('servers', {})
+    # New format compatibility: {tabs:[...]} → {servers:{Isl:{tabs:[...]}}}
+    if not bq_servers and bq_data.get('tabs'):
+        bq_servers = {'Isl': {'tabs': bq_data['tabs']}}
+
+    def make_raw_card(html_content):
+        return {
+            "type": "custom:mod-card",
+            "card_mod": {"style": "ha-card {\n  box-shadow: none !important;\n}\n"},
+            "card": {
+                "entity": "", "content": html_content, "ignore_line_breaks": True,
+                "always_update": False, "parse_jinja": True, "code_editor": "Ace",
+                "entities": [], "bindings": [], "actions": [],
+                "plugins": {"daisyui": {"enabled": True, "url": "https://cdn.jsdelivr.net/npm/daisyui@latest/dist/full.css", "theme": "dark", "overrideCardBackground": False}, "tailwindElements": {"enabled": False}},
+                "debounceChangePeriod": 500,
+                "type": "custom:tailwindcss-template-card",
+                "card_mod": {"style": CARD_CORE_CSS + BASE_RAW_CSS}
+            }
+        }
+
+    BASE_SERVER_MAP = {
+        'Isl': {'idx': 8,  'title': '孤岛基地速查',     'path': 'base_isl'},
+        'Sco': {'idx': 9,  'title': '焦土基地速查',     'path': 'base_sco'},
+        'Cen': {'idx': 10, 'title': '核心岛基地速查',   'path': 'base_cen'},
+        'Abe': {'idx': 11, 'title': '畸变基地速查',     'path': 'base_abe'},
+        'Ast': {'idx': 12, 'title': '繁星基地速查',     'path': 'base_ast'},
+        'Ext': {'idx': 13, 'title': '灭绝基地速查',     'path': 'base_ext'},
+        'Rag': {'idx': 14, 'title': '仙境基地速查',     'path': 'base_rag'},
+        'Val': {'idx': 15, 'title': '瓦尔盖罗基地速查', 'path': 'base_val'},
+        'Los': {'idx': 16, 'title': '失落地基地速查',   'path': 'base_los'},
+        'Gen': {'idx': 17, 'title': '创世模拟基地速查', 'path': 'base_gen'},
+        'Bob': {'idx': 18, 'title': '俱乐部基地速查',   'path': 'base_bob'},
+    }
+
+    def build_section_html(tab_data):
+        """Build HTML from tab's sections array, including section-tab-bar."""
+        sections = tab_data.get('sections', [])
+        if not sections:
+            return tab_data.get('html', '<p>暂无数据</p>')
+        parts = ['<div class="section-tab-bar base-title-header">']
+        for i, sec in enumerate(sections):
+            active = ' tab-active' if i == 0 else ''
+            sid = 'section-' + str(i)
+            onclick_js = (
+                f"(function(el){{"
+                f"var bar=el.closest('.section-tab-bar');"
+                f"var root=bar?bar.parentNode:(el.getRootNode?el.getRootNode():document);"
+                f"var bodies=root.querySelectorAll('.accordion-body');"
+                f"for(var k=0;k<bodies.length;k++)bodies[k].classList.add('collapsed');"
+                f"var cur=root.querySelector('#{sid}-body');if(cur)cur.classList.remove('collapsed');"
+                f"var tabs=root.querySelectorAll('.section-tab');"
+                f"for(var k=0;k<tabs.length;k++)tabs[k].classList.remove('tab-active');"
+                f"el.classList.add('tab-active');"
+                f"}})(this)"
+            )
+            parts.append(f'<div class="section-tab{active}" onclick="{onclick_js}">{sec.get("name","")}</div>')
+        parts.append('</div>')
+        for i, sec in enumerate(sections):
+            sid = 'section-' + str(i)
+            collapsed = '' if i == 0 else ' collapsed'
+            parts.append(f'<div id="{sid}-body" class="accordion-body borderr-none{collapsed}">{sec.get("html","")}</div>')
+        return '\n'.join(parts)
+
+    TJS = '<img src=x onerror="var d=this.parentElement;function A(){var b=getComputedStyle(document.documentElement).getPropertyValue(\'--primary-background-color\');var m=b.match(/\\d+/g);if(m){d.setAttribute(\'data-theme\',(0.299*m[0]+0.587*m[1]+0.114*m[2])<50?\'dark\':\'light\')}}A();new MutationObserver(A).observe(document.documentElement,{attributes:true,attributeFilter:[\'style\']})" style=display:none>'
+
+    bq_ts = datetime.now().strftime('%H:%M:%S')
+    base_count = 0
+    for sid, cfg in BASE_SERVER_MAP.items():
+        srv = bq_servers.get(sid, {})
+        tabs = srv.get('tabs', [])
+        if not tabs:
+            # Placeholder: named view without content (avoids "未命名视图")
+            asa_built_views.append({
+                "visible": False,
+                "subview": True,
+                "title": f"{cfg['title']}",
+                "path": cfg['path'],
+                "theme": "Material You",
+                "sections": [{"type": "grid", "cards": []}]
+            })
+            base_count += 1
+            continue
+        bq_tab_buttons = [make_tab_button(t.get('name','?'), t.get('description',''), 'input_select.info_tribe_tab') for t in tabs]
+        bq_tab_cards = []
+        for t in tabs:
+            tname = t.get('name','?')
+            ttype = t.get('type', '')
+            if ttype == 'mixed_content':
+                t_html = render_tab_html(t)
+                css = CARD_CORE_CSS
+                css += make_ic_css(SERVER_MAP, FIXED_STYLES_MAP)
+                t_html = TJS + css + t_html
+            else:
+                t_html = build_section_html(t) if t.get('sections') else t.get('html', '<p>暂无数据</p>')
+                t_html = TJS + t_html if '<img src=x' not in t_html else t_html
+                t_html += BLD_FOOTER
+                t_html += '<img src=x onerror="var p=this.parentElement;setTimeout(function(){p.querySelectorAll(\'details[name=ic-acc]\').forEach(function(d){d.addEventListener(\'toggle\',function(e){if(d.open)p.querySelectorAll(\'details[name=ic-acc]\').forEach(function(s){if(s!==d)s.open=false})})})},200)" style=display:none>'
+            bq_tab_cards.append({
+                "type": "conditional",
+                "conditions": [{"condition": "state", "entity": "input_select.info_tribe_tab", "state": tname}],
+                "card": make_raw_card(t_html),
+                "grid_options": {"columns": 24, "rows": "auto"}
+            })
+        bq_stack = [{
+            "type": "custom:mod-card",
+            "card_mod": {"style": ":host { display: block !important; overflow-x: auto !important; white-space: nowrap !important; padding-bottom: 8px; } ha-card { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: rgba(0,0,0,0) !important; box-shadow: none !important; }"},
+            "card": {"type": "horizontal-stack", "cards": bq_tab_buttons}
+        }] + bq_tab_cards
+        asa_built_views.append({
+            "visible": False,
+            "subview": True,
+            "title": f"{cfg['title']}",
+            "path": cfg['path'],
+            "theme": "Material You",
+            "sections": [{
+                "type": "grid",
+                "column_span": 2,
+                "cards": [{
+                    "type": "vertical-stack",
+                    "grid_options": {"columns": "full"},
+                    "cards": bq_stack
+                }]
+            }]
+        })
+        base_count += 1
+        print(f'  base_{sid}: REBUILT with {len(bq_tab_buttons)} tabs + {len(bq_tab_cards)} cards')
+    print(f'Base views: REBUILT {base_count} server views + timestamp {bq_ts}')
+    _log_step('BASES_OK')
+
+    # -------------------------------------------------------
+    # Merge: non-ASA views first, then ASA rebuilt views
+    final_views = non_asa_views + asa_built_views
+    lovelace['data']['config']['views'] = final_views
+    print(f'Views: {len(non_asa_views)} non-ASA preserved + {len(asa_built_views)} ASA rebuilt = {len(final_views)} total')
+
+    # SAVE — auto-detect environment (server vs local dev)
+    lovelace_path = '/config/lovelace' if os.path.exists('/config') else r'A:\NetSarang\Xftp 8\Temporary\lovelace'
+    lovelace_ll_path = '/config/lovelace.lovelace' if os.path.exists('/config') else r'A:\NetSarang\Xftp 8\Temporary\lovelace.lovelace'
+    storage_path = '/config/.storage/lovelace' if os.path.exists('/config') else None
+    storage_ll_path = '/config/.storage/lovelace.lovelace' if os.path.exists('/config') else None
+
+    with open(lovelace_path, 'w', encoding='utf-8') as f:
+        json.dump(lovelace, f, ensure_ascii=False, indent=2)
+    with open(lovelace_path, 'r', encoding='utf-8') as f:
+        raw = f.read()
+    with open(lovelace_ll_path, 'w', encoding='utf-8') as f:
+        f.write(raw)
+    # On server, also update .storage/ files so HA picks up changes
+    if storage_path:
+        with open(storage_path, 'w', encoding='utf-8') as f:
+            json.dump(lovelace, f, ensure_ascii=False, indent=2)
+        with open(storage_ll_path, 'w', encoding='utf-8') as f:
+            json.dump(lovelace, f, ensure_ascii=False, indent=2)
+        print('(updated .storage/lovelace + .storage/lovelace.lovelace)')
+    print(f'\nSaved: {len(raw)} bytes, {len(final_views)} views')
+    _log_step('SAVED_OK')

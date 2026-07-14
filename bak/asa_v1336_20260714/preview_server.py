@@ -4,8 +4,8 @@ import sys, json, os, re
 sys.path.insert(0, '/config')
 from build_lovelace import (
     make_ic_css,
-    render_tab_html,
-    SHARED_CSS,
+    render_server_grid, render_expandable_detail, render_farming_table, render_tab_html,
+    SERVER_GRID_CSS, EXPANDABLE_DETAIL_CSS, FARMING_TABLE_CSS, SHARED_CSS,
     CARD_CORE_CSS, TABLE_CORE_CSS, BASE_RAW_CSS, strip_and_append_empty_rows,
     SERVER_MAP, FIXED_STYLES_MAP, _lookup_style
 )
@@ -168,58 +168,7 @@ def main():
                 sys.exit(1)
 
     ttype = tab.get('type', '')
-    if ttype == 'raw_html':
-        # If tab has sections, generate section HTML
-        sections = tab.get('sections', [])
-        if sections:
-            parts = []
-            # Section tab bar
-            parts.append('<div class="section-tab-bar base-title-header">')
-            for i, sec in enumerate(sections):
-                active = ' tab-active' if i == 0 else ''
-                sid = 'section-' + str(i)
-                # Robust accordion: use closest() to find parent container,
-                # then query within it (works in both Shadow DOM and regular DOM).
-                # Fallback to getRootNode() for edge cases.
-                onclick_js = (
-                    "(function(el){{"
-                    "var bar=el.closest('.section-tab-bar');"
-                    "var root=bar?bar.parentNode:(el.getRootNode?el.getRootNode():document);"
-                    "var bodies=root.querySelectorAll('.accordion-body');"
-                    "for(var k=0;k<bodies.length;k++)bodies[k].classList.add('collapsed');"
-                    "var cur=root.querySelector('#{sid}-body');if(cur)cur.classList.remove('collapsed');"
-                    "var tabs=root.querySelectorAll('.section-tab');"
-                    "for(var k=0;k<tabs.length;k++)tabs[k].classList.remove('tab-active');"
-                    "el.classList.add('tab-active');"
-                    "}})(this)"
-                ).format(sid=sid)
-                parts.append('<div class="section-tab{}" onclick="{}">{}</div>'.format(active, onclick_js, sec.get('name', '')))
-            parts.append('</div>')
-            # Section bodies
-            sec_html_list = []
-            for i, sec in enumerate(sections):
-                sid = 'section-' + str(i)
-                collapsed = '' if i == 0 else ' collapsed'
-                body_parts = []
-                for b in sec.get('content_blocks', []):
-                    bt = b.get('block_type', '')
-                    # Generate body from structured data, or fallback to body
-                    if b.get('body'):
-                        body_parts.append(b['body'])
-                    elif bt == 'base_storage' and b.get('rows'):
-                        rows_html = []
-                        for row in b['rows']:
-                            cap = str(row.get('capacity_main',''))+'<sub>'+str(row.get('capacity_sub',''))+'</sub>'
-                            icon = '<img src=\"'+row.get('device_icon_url','')+'\" alt=\"'+row.get('device_name','')+'\" />' if row.get('device_icon_url') else ''
-                            rows_html.append('<tr><td class=\"border border-gray-300 p-2 text-left align-top\"><div class=\"device-container\"><div class=\"materials-box\"><span class=\"bio-capacity-tag-bottom\">'+cap+'</span><div class=\"materials-box-inner\"><div class=\"device-icon-wrapper\">'+icon+'</div></div></div></div></td><td class=\"border border-gray-300 p-2 text-left align-top\" colspan=\"2\"></td></tr>')
-                        body_parts.append('<table id=\"base-table\" class=\"table-fixed border-collapse w-full min-w-max\"><thead><tr><th class=\"border border-gray-300 p-2\">设备</th><th class=\"border border-gray-300 p-2\" colspan=\"2\">存储</th></tr></thead><tbody>'+''.join(rows_html)+'</tbody></table>')
-                sec_html_list.append('<div id="{}-body" class="accordion-body borderr-none{}">{}</div>'.format(sid, collapsed, '\n'.join(body_parts)))
-            parts.extend(sec_html_list)
-            html = strip_and_append_empty_rows('\n'.join(parts))
-        else:
-            html = strip_and_append_empty_rows(tab.get('html', '<p>暂无数据</p>'))
-        css = CARD_CORE_CSS + BASE_RAW_CSS
-    elif ttype == 'reference_table':
+    if ttype == 'reference_table':
         html = render_tab_html(tab)
         css = CARD_CORE_CSS + TABLE_CORE_CSS
     elif ttype == 'mixed_content':

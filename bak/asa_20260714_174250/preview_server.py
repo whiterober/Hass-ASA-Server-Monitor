@@ -4,8 +4,8 @@ import sys, json, os, re
 sys.path.insert(0, '/config')
 from build_lovelace import (
     make_ic_css,
-    render_tab_html,
-    SHARED_CSS,
+    render_server_grid, render_expandable_detail, render_farming_table, render_tab_html,
+    SERVER_GRID_CSS, EXPANDABLE_DETAIL_CSS, FARMING_TABLE_CSS, SHARED_CSS,
     CARD_CORE_CSS, TABLE_CORE_CSS, BASE_RAW_CSS, strip_and_append_empty_rows,
     SERVER_MAP, FIXED_STYLES_MAP, _lookup_style
 )
@@ -139,22 +139,19 @@ def main():
     with open(os.path.join(DATA_DIR, data_file), 'r', encoding='utf-8') as f:
         data = json.load(f)
 
-    # Handle base_quick_ref format: now uses tabs array like tribe_ops/server_rules
+    # Handle base_quick_ref format (servers) vs standard format (tabs)
     if source == 'base_quick_ref':
-        tabs = data.get('tabs', [])
-        if not tabs:
-            print("ERROR: no tabs in base_quick_ref")
-            sys.exit(1)
-        tab = None
-        try:
-            idx = int(tab_name) if tab_name else 0
-            tab = tabs[idx] if idx < len(tabs) else None
-        except:
-            for t in tabs:
-                if t.get('name') == tab_name:
-                    tab = t; break
+        # tab_name format: "server_id:tab_index" e.g. "Isl:0"
+        parts = tab_name.split(':', 1)
+        server_id = parts[0] if len(parts) > 0 else 'Isl'
+        tab_idx = int(parts[1]) if len(parts) > 1 else 0
+        servers = data.get('servers', {})
+        server = servers.get(server_id, {})
+        server_tabs = server.get('tabs', [])
+        tab = server_tabs[tab_idx] if tab_idx < len(server_tabs) else None
         if not tab:
-            tab = tabs[0]
+            print(f"ERROR: server '{server_id}' tab {tab_idx} not found")
+            sys.exit(1)
     else:
         tabs = data.get('tabs', [])
         tab = None
@@ -312,6 +309,28 @@ def main():
     # Keep <ha-icon> elements as-is — polyfilled by JS in the browser
 
     css += ' ha-card ha-icon{line-height:0!important}'
+
+    # === Image sizing for info_card descriptions (unconditional, safe) ===
+    css += 'ha-card .ic-desc-img{width:24px!important;height:24px!important;object-fit:contain!important;vertical-align:middle!important;margin:0 1px!important;flex-shrink:0!important}'
+    css += 'ha-card .ic-text[class*="ic-block-"]{position:relative!important;overflow:hidden!important}'
+    css += 'ha-card .ic-block-img{position:absolute!important;right:2px!important;top:50%!important;transform:translateY(-50%)!important;width:30px!important;height:30px!important;object-fit:contain!important;border-radius:0 4px 4px 0!important;flex-shrink:0!important}'
+    css += 'ha-card .ic-text[class*="ic-block-"]:has(.ic-block-img){padding-right:34px!important}'
+    css += 'ha-card .ic-qty{font-size:0.75em!important;font-weight:600!important;margin-left:0!important;flex-shrink:0!important;line-height:1!important}'
+    css += 'ha-card .ic-text[class*="ic-block-"] .ic-qty{position:absolute!important;right:0!important;bottom:0!important;color:var(--primary-background-color)!important;font-size:0.8em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important}'
+    for sid, sm in SERVER_MAP.items():
+        r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)
+        css += 'ha-card .ic-text.ic-block-{} .ic-qty{{background:rgba({},{},{},0)!important;-webkit-text-stroke:2px rgb({},{},{})!important;paint-order:stroke fill!important}}'.format(sid, r, g, b, r, g, b)
+        css += 'ha-card [data-old-webkit] .ic-text.ic-block-{} .ic-qty{{font-weight:950!important;font-family:HarmonyOS Sans SC,system-ui,Impact,sans-serif!important;-webkit-text-stroke:0.5px rgb({},{},{})!important}}'.format(sid, r, g, b)
+    for fk, fv in FIXED_STYLES_MAP.items():
+        fc = fv.get('color', '#666')
+        if not fc or fc == 'auto': fc = '#666666'
+        r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
+        css += 'ha-card .ic-text.ic-block-{} .ic-qty{{background:rgba({},{},{},0)!important;-webkit-text-stroke:2px rgb({},{},{})!important;paint-order:stroke fill!important}}'.format(fk, r, g, b, r, g, b)
+        css += 'ha-card [data-old-webkit] .ic-text.ic-block-{} .ic-qty{{font-weight:950!important;font-family:HarmonyOS Sans SC,system-ui,Impact,sans-serif!important;-webkit-text-stroke:0.5px rgb({},{},{})!important}}'.format(fk, r, g, b)
+    # _default badge-hollow auto: only when color=auto (via ic-auto-block class)
+    css += 'ha-card .ic-text[class*="ic-block-"][class*="ic-auto-block"] .ic-badge-hollow{color:var(--primary-text-color)!important;background:color-mix(in srgb,var(--primary-text-color) 20%,transparent)!important}'
+    css += 'ha-card .ic-text.ic-auto-block .ic-qty{-webkit-text-stroke:2px var(--primary-text-color)!important}'
+    css += 'ha-card .ic-text.ic-block-_default:not(.ic-auto-block) .ic-qty{-webkit-text-stroke:2px var(--ic-block-bg)!important}'
 
     # HA platform font-scale defaults (injected by HA frontend, not in theme files)
     ha_font_vars = (
