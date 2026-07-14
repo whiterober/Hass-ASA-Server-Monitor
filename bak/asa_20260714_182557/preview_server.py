@@ -4,8 +4,8 @@ import sys, json, os, re
 sys.path.insert(0, '/config')
 from build_lovelace import (
     make_ic_css,
-    render_tab_html,
-    SHARED_CSS,
+    render_server_grid, render_expandable_detail, render_farming_table, render_tab_html,
+    SERVER_GRID_CSS, EXPANDABLE_DETAIL_CSS, FARMING_TABLE_CSS, SHARED_CSS,
     CARD_CORE_CSS, TABLE_CORE_CSS, BASE_RAW_CSS, strip_and_append_empty_rows,
     SERVER_MAP, FIXED_STYLES_MAP, _lookup_style
 )
@@ -139,22 +139,19 @@ def main():
     with open(os.path.join(DATA_DIR, data_file), 'r', encoding='utf-8') as f:
         data = json.load(f)
 
-    # Handle base_quick_ref format: now uses tabs array like tribe_ops/server_rules
+    # Handle base_quick_ref format (servers) vs standard format (tabs)
     if source == 'base_quick_ref':
-        tabs = data.get('tabs', [])
-        if not tabs:
-            print("ERROR: no tabs in base_quick_ref")
-            sys.exit(1)
-        tab = None
-        try:
-            idx = int(tab_name) if tab_name else 0
-            tab = tabs[idx] if idx < len(tabs) else None
-        except:
-            for t in tabs:
-                if t.get('name') == tab_name:
-                    tab = t; break
+        # tab_name format: "server_id:tab_index" e.g. "Isl:0"
+        parts = tab_name.split(':', 1)
+        server_id = parts[0] if len(parts) > 0 else 'Isl'
+        tab_idx = int(parts[1]) if len(parts) > 1 else 0
+        servers = data.get('servers', {})
+        server = servers.get(server_id, {})
+        server_tabs = server.get('tabs', [])
+        tab = server_tabs[tab_idx] if tab_idx < len(server_tabs) else None
         if not tab:
-            tab = tabs[0]
+            print(f"ERROR: server '{server_id}' tab {tab_idx} not found")
+            sys.exit(1)
     else:
         tabs = data.get('tabs', [])
         tab = None

@@ -387,6 +387,7 @@ button { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; f
 
 .block-body.collapsed { display: none; }
 
+.br-sec-body.collapsed { display: none; }
 
 .sr-cats-body.collapsed { display: none; }
 
@@ -640,6 +641,10 @@ label:has([id^=brCatBold]), label:has([id^=brCatSubLabelBold]) { display:none !i
 .btn-linear-delete { background:transparent;border:1px solid var(--danger);color:var(--danger);padding:0;line-height:0;border-radius:5px;font-size:0.75em;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;box-sizing:border-box;cursor:pointer; }
 
 .sr-row-header { padding-right:0; }
+
+button[onclick*="rmSrRow"] { margin-right: 4px; }
+
+button[onclick*="rmSrCat"] { background:transparent !important; color:var(--danger) !important; border:none !important; position: absolute !important; right: 4px !important; top: 3px !important; margin-left: 0 !important; }
 
 td, th { padding: 4px 6px; }
 
@@ -1069,7 +1074,8 @@ const WS = {
 
   async init() {
 
-    
+    console.log('Connecting to HA...');
+
     try {
 
       const resp = await fetch('/api/', {headers:{'Authorization':'Bearer '+this._token}});
@@ -1080,7 +1086,8 @@ const WS = {
 
         this.updateStatus(true);
 
-        
+        console.log('HA connected via token');
+
         this._onConnect?.();
 
         return;
@@ -1169,7 +1176,7 @@ document.querySelectorAll('nav button').forEach(btn => {
 
     if (panel === 'server-rules') loadEditorData('server_rules');
     else if (panel === 'tribe-ops') { loadEditorData('tribe_ops'); }
-    else if (panel === 'base-ref') loadEditorData('base_ref');
+    else if (panel === 'base-ref') loadBaseRef();
 
   });
 
@@ -1568,7 +1575,7 @@ function autoDetectLegacyIcons() {
   });
 }
 
-// Run after render
+// Run after render (called from renderTribeOps/renderServerRules)
 var _autoDetectTimer = null;
 function scheduleAutoDetect() {
   clearTimeout(_autoDetectTimer);
@@ -1681,19 +1688,7 @@ var _blockClipboard = null; // 板块级复制剪贴板
 const EDITOR_CONFIGS = {
   server_rules: { file: 'server_rules.json', label: '服务器规则', hasMapBar: false, idPrefix: 'editorTab', saveFn: 'saveEditor()' },
   tribe_ops:    { file: 'tribe_ops.json',    label: '部落运维',   hasMapBar: false, idPrefix: 'toTab',      saveFn: 'saveEditor()' },
-  base_ref:     { file: 'asa_base_quick_ref.json', label: '部落基地', hasMapBar: true, idPrefix: 'brTab', saveFn: 'saveEditor()',
-    renderHeader() {
-      if (typeof brSelectedServer === 'undefined') brSelectedServer = 'Isl';
-      var h = '<div class="card" style="flex-shrink:0"><div class="server-tabs">';
-      SERVER_LIST.forEach(function(s) {
-        h += '<span class="server-tab'+(s.id===brSelectedServer?' active':'')+'" onclick="brSelectedServer=\''+s.id+'\';reRender();setTimeout(showPreview,200);">'+s.name+'</span>';
-      });
-      return h + '</div></div>';
-    },
-    renderLeftExtras() {
-      return '<button class="btn-small" style="display:block;width:100%;margin-top:4px;padding:6px 0;border:1px solid var(--border);background:transparent;color:var(--text);opacity:0.75" onclick="copyBRFrom()">复制自...</button>';
-    }
-  },
+  base_ref:     { file: 'asa_base_quick_ref.json', label: '部落基地', hasMapBar: true, idPrefix: 'brTab', saveFn: 'saveEditor()' },
 };
 let editorMode = 'server_rules';
 
@@ -1724,7 +1719,6 @@ async function loadEditorData(mode) {
 
 function renderMixedEditor(title) {
 
-  const cfg = EDITOR_CONFIGS[editorMode];
   const tabs = editorData.tabs;
 
   if (!tabs.length) { loadEditorData(editorMode); return; }
@@ -1733,11 +1727,7 @@ function renderMixedEditor(title) {
 
   editorSelectedTab = tabs.indexOf(tab);
 
-  let html = '';
-
-  if (cfg.renderHeader) html += cfg.renderHeader();
-
-  html += '<div style="display:flex;flex-direction:column;flex:1;min-height:0"><div class="grid-2" style="flex:1;min-height:0;overflow:hidden">';
+  let html = '<div style="display:flex;flex-direction:column;min-height:100%"><div class="grid-2" style="flex:1;min-height:0;overflow:hidden">';
 
   // Left: tab list
 
@@ -1749,11 +1739,7 @@ function renderMixedEditor(title) {
 
   });
 
-  html += '</div><button class="btn-primary" style="display:block;width:100%;margin-top:6px;padding:6px 0;height:auto;line-height:1.5;font-size:0.8em" onclick="addTab();reRender()">+ TAB</button>';
-
-  if (cfg.renderLeftExtras) html += cfg.renderLeftExtras();
-
-  html += '</div></div>';
+  html += '</div><button class="btn-primary" style="display:block;width:100%;margin-top:6px;padding:6px 0;height:auto;line-height:1.5;font-size:0.8em" onclick="addTab();reRender()">+ TAB</button></div></div>';
 
   // Right: mixed content editor
 
@@ -1767,7 +1753,7 @@ function renderMixedEditor(title) {
 
   html += '</div>';
 
-  html += '<div style="flex-shrink:0;margin-top:auto;padding-top:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:nowrap"><span style="display:flex;gap:4px"><button class="btn-success" onclick="'+EDITOR_CONFIGS[editorMode].saveFn+'" style="display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:0.85em;font-weight:bold;color:#fff"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>保存TAB</button> <button class="btn-danger" onclick="rmTab()" style="display:inline-flex;align-items:center;border:1px solid var(--danger);border-radius:6px;padding:4px 10px;font-size:0.85em;font-weight:bold;color:var(--danger);margin:0 4px">删除TAB</button></span> <button onclick="window.innerWidth<=768?(window._previewWin&&!window._previewWin.closed?window._previewWin.location=\'/local/preview_tab.html?t=\'+Date.now()+\'&theme=\'+(localStorage.getItem(\'asa-theme\')||\'dark\'):window._previewWin=window.open(\'/local/preview_tab.html?t=\'+Date.now()+\'&theme=\'+(localStorage.getItem(\'asa-theme\')||\'dark\'),\'_blank\')):togglePreview()" id="btnTogglePreview" style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.85em" title="预览">折叠预览</button></div> ';
+  html += '<div style="flex-shrink:0;padding-top:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:nowrap"><span style="display:flex;gap:4px"><button class="btn-success" onclick="'+EDITOR_CONFIGS[editorMode].saveFn+'" style="display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:0.85em;font-weight:bold;color:#fff"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>保存TAB</button> <button class="btn-danger" onclick="rmTab()" style="display:inline-flex;align-items:center;border:1px solid var(--danger);border-radius:6px;padding:4px 10px;font-size:0.85em;font-weight:bold;color:var(--danger);margin:0 4px">删除TAB</button></span> <button onclick="window.innerWidth<=768?(window._previewWin&&!window._previewWin.closed?window._previewWin.location=\'/local/preview_tab.html?t=\'+Date.now()+\'&theme=\'+(localStorage.getItem(\'asa-theme\')||\'dark\'):window._previewWin=window.open(\'/local/preview_tab.html?t=\'+Date.now()+\'&theme=\'+(localStorage.getItem(\'asa-theme\')||\'dark\'),\'_blank\')):togglePreview()" id="btnTogglePreview" style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.85em" title="预览">折叠预览</button></div> ';
 
   html += '</div>';
 
@@ -1831,7 +1817,7 @@ function renderMixedEditor(title) {
 
   }
 
-  setTimeout(function(){ initResizeHandles(); initBQControls(); upgradeICDescControls(); }, 60);
+  setTimeout(function(){ enhanceStorageEditor(); enhanceBlockCollapse(); initResizeHandles(); initBQControls(); upgradeICDescControls(); }, 60);
 
   setTimeout(function(){ _initMobileTabSelect(); }, 150);
 
@@ -2041,7 +2027,7 @@ function pasteDesc(bi) {
 
 // ============================================================
 
-// (unified: use loadEditorData)
+// loadTribeOps removed (use loadEditorData)
 
 // SortableJS drag wrapper
 
@@ -2337,7 +2323,7 @@ function addSGColumn() {
 
   tab.columns.push({server: '', label: '', icon: 'mdi:server'});
 
-  reRender();
+  renderTribeOps();
 
 }
 
@@ -2349,7 +2335,7 @@ function addSGItem() {
 
   tab.items.push({name: '', icon_url: '', locations: {}});
 
-  reRender();
+  renderTribeOps();
 
 }
 
@@ -2373,7 +2359,7 @@ function addSGLocation(itemIdx, serverId) {
 
   item.locations[serverId].push({name, image_url: img, badge});
 
-  reRender();
+  renderTribeOps();
 
 }
 
@@ -2385,7 +2371,11 @@ function addSGLocation(itemIdx, serverId) {
 
 const MC_TYPE_LABELS = {
 
-  map_filter:'地图筛选', info_card:'卡片', divider:'分隔线'
+  map_filter:'地图筛选', info_card:'卡片', divider:'分隔线',
+
+  base_storage:'存储', base_device:'设备', base_other_device:'其它设备',
+
+  base_creature:'生物', base_other_creature:'其它生物', base_badge:'徽章'
 
 };
 
@@ -2456,9 +2446,25 @@ function renderMixedContent(tab) {
 
     h += '<div class="block-body'+(bt==='map_filter'?'':' collapsed')+'"'+(bt==='map_filter'?'':' style="padding-top:6px"')+'>';
 
+    if (bt === 'text') {
 
+      h += '<div class="form-group"><label>样式</label><select id="mcStyle'+bi+'">';
 
-    if (bt === 'divider') {
+      [{v:'default',l:'默认'},{v:'warning',l:'警告'},{v:'danger',l:'危险'}].forEach(o => {
+
+        h += '<option value="'+o.v+'" '+((b.style||'default')===o.v?'selected':'')+'>'+o.l+'</option>';
+
+      });
+
+      h += '</select></div>';
+
+      h += '<div class="form-group"><label>内容</label><textarea id="mcText'+bi+'" style="min-height:60px">'+esc(b.text||'')+'</textarea></div>';
+
+      h += '<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="mcCollapsed'+bi+'" '+(b.collapsed?'checked':'')+'> 折叠显示</label>';
+
+    }
+
+    else if (bt === 'divider') {
 
       h += '<div class="form-group" style="display:flex;align-items:center;gap:8px"><span class="cat-color-wrap" style="padding:0;margin:0"><span class="cat-color-dot" id="mcDivColorDot'+bi+'" data-target="mcDivColor'+bi+'" style="background:'+(b.color&&b.color!=='auto'?esc(b.color):'linear-gradient(to right, #000 50%, #fff 50%)')+';cursor:pointer" title="选择颜色" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-bold-btn'+(b.title_bold?' active':'')+'" title="加粗" onclick="event.stopPropagation();var cb=document.getElementById(\'mcDivTitleBold'+bi+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcDivTitle'+bi+'" value="'+esc(b.title||'')+'" placeholder="标题" style="box-sizing:border-box;flex:1;padding:4px 8px;font-size:0.85em;border-radius:0;border:none"><input type="checkbox" id="mcDivTitleBold'+bi+'" '+(b.title_bold?'checked':'')+' style="display:none"></span></span><input type="hidden" id="mcDivColor'+bi+'" value="'+esc(b.color||'auto')+'"></div>';
 
@@ -2478,8 +2484,99 @@ function renderMixedContent(tab) {
 
     }
 
+    else if (bt === 'table') {
 
+      h += '<div class="form-group"><label>标题</label><input id="mcTitle'+bi+'" value="'+esc(b.title||'')+'"></div>';
 
+      h += '<div class="form-group"><label>列名 (逗号分隔)</label><input id="mcCols'+bi+'" value="'+esc((b.columns||[]).join(','))+'"></div>';
+
+      h += '<div style="max-height:250px;overflow-y:auto">';
+
+      (b.rows||[]).forEach((row, ri) => {
+
+        h += '<div class="sub-section" style="margin:4px 0;padding:6px">行'+(ri+1)+': ';
+
+        Object.entries(row).forEach(([k,v]) => {
+
+          h += '<span style="margin:0 4px"><small>'+esc(k)+':</small> '+esc(String(v).substring(0,30))+'</span>';
+
+        });
+
+        h += '<button class="btn-small btn-danger" onclick="editorData.tabs[editorSelectedTab].content_blocks['+bi+'].rows.splice('+ri+',1);reRender();">✕</button></div>';
+
+      });
+
+      h += '</div>';
+
+      h += '<button class="btn-small btn-primary" onclick="addMCBlockRow('+bi+')">+ 行</button> ';
+
+    }
+
+    else if (bt === 'server_grid') {
+
+      h += '<div class="form-group"><label>首列标签</label><input id="mcSGLabel'+bi+'" value="'+esc(b.first_col_label||'补给品')+'"></div>';
+
+      h += '<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="mcSGHide'+bi+'" '+(b.hide_first_col?'checked':'')+'> 隐藏首列</label>';
+
+      h += '<div class="form-group"><label>列配置 ('+((b.columns||[]).length)+'列)</label></div>';
+
+      (b.columns||[]).forEach((c,ci) => {
+
+        h += '<div class="row"><div class="form-group"><input id="mcSGColSrv'+bi+'_'+ci+'" value="'+esc(c.server||'')+'" placeholder="服务器ID"></div>';
+
+        h += '<div class="form-group"><input id="mcSGColLbl'+bi+'_'+ci+'" value="'+esc(c.label||'')+'" placeholder="标签"></div>';
+
+        h += '<div class="form-group"><input id="mcSGColIcon'+bi+'_'+ci+'" value="'+esc(c.icon||'')+'" placeholder="图标"></div>';
+
+        h += '<button class="btn-small btn-danger" onclick="editorData.tabs[editorSelectedTab].content_blocks['+bi+'].columns.splice('+ci+',1);reRender();">✕</button></div>';
+
+      });
+
+      h += '<button class="btn-small btn-primary" onclick="addSGCBlockCol('+bi+')">+ 列</button> ';
+
+      h += '<br><div class="form-group"><label>物品列表</label></div>';
+
+      (b.items||[]).forEach((item,ii) => {
+
+        h += '<div class="sub-section" style="margin:4px 0;padding:6px">物品'+(ii+1)+': <input id="mcSGItemNm'+bi+'_'+ii+'" value="'+esc(item.name||'')+'" style="width:100px"> ';
+
+        h += '图标 <input id="mcSGItemIco'+bi+'_'+ii+'" value="'+esc(item.icon_url||'')+'" style="width:200px"> ';
+
+        h += 'MDI <input id="mcSGItemMdi'+bi+'_'+ii+'" value="'+esc(item.mdi_icon||'')+'" style="width:140px">';
+
+        h += '<button class="btn-small btn-danger" onclick="editorData.tabs[editorSelectedTab].content_blocks['+bi+'].items.splice('+ii+',1);reRender();">✕</button></div>';
+
+      });
+
+      h += '<button class="btn-small btn-primary" onclick="addSGCBlockItem('+bi+')">+ 物品</button> ';
+
+    }
+
+    else if (bt === 'card_grid') {
+
+      h += '<div class="form-group"><label>列数</label><input id="mcCGCols'+bi+'" type="number" value="'+(b.columns||4)+'" style="width:80px"></div>';
+
+      h += '<div style="max-height:250px;overflow-y:auto">';
+
+      (b.cards||[]).forEach((c,ci) => {
+
+        h += '<div class="sub-section" style="margin:4px 0;padding:6px"><strong>卡片'+(ci+1)+':</strong>';
+
+        h += '<input id="mcCGNm'+bi+'_'+ci+'" value="'+esc(c.name||'')+'" placeholder="名称" style="width:150px"> ';
+
+        h += '<input id="mcCGFt'+bi+'_'+ci+'" value="'+esc(c.feature||'')+'" placeholder="特性" style="width:200px"> ';
+
+        h += '<input id="mcCGImg'+bi+'_'+ci+'" value="'+esc(c.image_url||'')+'" placeholder="图片URL" style="width:300px">';
+
+        h += '<button class="btn-small btn-danger" onclick="editorData.tabs[editorSelectedTab].content_blocks['+bi+'].cards.splice('+ci+',1);reRender();">✕</button></div>';
+
+      });
+
+      h += '</div>';
+
+      h += '<button class="btn-small btn-primary" onclick="addCGCBlockCard('+bi+')">+ 卡片</button> ';
+
+    }
 
     else if (bt === 'expandable_detail') {
 
@@ -3083,13 +3180,63 @@ function addMCBlock(type) {
 
   };
 
-  tab.content_blocks.push(JSON.parse(JSON.stringify(defaults[type]||{block_type:type})));
+  tab.content_blocks.push(JSON.parse(JSON.stringify(defaults[type]||defaults.text)));
 
   reRender();
 
 }
 
+function addMCBlockRow(bi) {
+
+  const tab = editorData.tabs[editorSelectedTab];
+
+  const block = tab.content_blocks[bi];
+
+  if (!block.rows) block.rows = [];
+
+  const row = {};
+
+  (block.columns||['col1','col2']).forEach(c => { row[c] = ''; });
+
+  block.rows.push(row);
+
+  renderTribeOps();
+
+}
+
+function addSGCBlockCol(bi) {
+
+  const cols = editorData.tabs[editorSelectedTab].content_blocks[bi].columns;
+
+  cols.push({server:'', label:'', icon:''});
+
+  renderTribeOps();
+
+}
+
+function addSGCBlockItem(bi) {
+
+  const items = editorData.tabs[editorSelectedTab].content_blocks[bi].items;
+
+  items.push({name:'', icon_url:'', mdi_icon:'', locations:{}});
+
+  renderTribeOps();
+
+}
+
+function addCGCBlockCard(bi) {
+
+  const cards = editorData.tabs[editorSelectedTab].content_blocks[bi].cards;
+
+  cards.push({name:'', feature:'', image_url:''});
+
+  renderTribeOps();
+
+}
+
 function addSCLocation(bi, sid) {
+
+  const item = editorData.tabs[editorSelectedTab].content_blocks[bi].item;
 
   if (!item.locations) item.locations = {};
 
@@ -3097,7 +3244,7 @@ function addSCLocation(bi, sid) {
 
   item.locations[sid].push({name:'', image_url:''});
 
-  reRender();
+  renderTribeOps();
 
 }
 
@@ -3109,7 +3256,7 @@ function addEDCFlow(bi) {
 
   flow.blocks.push({type:'ol', steps:[]});
 
-  reRender();
+  renderTribeOps();
 
 }
 
@@ -3138,6 +3285,52 @@ function saveMCBlocks(tab) {
       b.color = (document.getElementById('mcDivColor'+bi)?.value) || 'auto';
 
       b.title_bold = document.getElementById('mcDivTitleBold'+bi)?.checked || false;
+
+    } else if (bt === 'table') {
+
+      b.title = document.getElementById('mcTitle'+bi)?.value || '';
+
+      b.columns = (document.getElementById('mcCols'+bi)?.value || '').split(',').map(s=>s.trim()).filter(Boolean);
+
+    } else if (bt === 'server_grid') {
+
+      b.first_col_label = document.getElementById('mcSGLabel'+bi)?.value || '';
+
+      b.hide_first_col = document.getElementById('mcSGHide'+bi)?.checked || false;
+
+      (b.columns||[]).forEach((c,ci) => {
+
+        c.server = document.getElementById('mcSGColSrv'+bi+'_'+ci)?.value || c.server;
+
+        c.label = document.getElementById('mcSGColLbl'+bi+'_'+ci)?.value || c.label;
+
+        c.icon = document.getElementById('mcSGColIcon'+bi+'_'+ci)?.value || c.icon;
+
+      });
+
+      (b.items||[]).forEach((item,ii) => {
+
+        item.name = document.getElementById('mcSGItemNm'+bi+'_'+ii)?.value || item.name;
+
+        item.icon_url = document.getElementById('mcSGItemIco'+bi+'_'+ii)?.value || item.icon_url;
+
+        item.mdi_icon = document.getElementById('mcSGItemMdi'+bi+'_'+ii)?.value || item.mdi_icon;
+
+      });
+
+    } else if (bt === 'card_grid') {
+
+      b.columns = parseInt(document.getElementById('mcCGCols'+bi)?.value) || 4;
+
+      (b.cards||[]).forEach((c,ci) => {
+
+        c.name = document.getElementById('mcCGNm'+bi+'_'+ci)?.value || c.name;
+
+        c.feature = document.getElementById('mcCGFt'+bi+'_'+ci)?.value || c.feature;
+
+        c.image_url = document.getElementById('mcCGImg'+bi+'_'+ci)?.value || c.image_url;
+
+      });
 
     } else if (bt === 'supply_card') {
 
@@ -3442,7 +3635,7 @@ function addFTColumn() {
 
   tab.columns.push(name);
 
-  reRender();
+  renderTribeOps();
 
 }
 
@@ -3464,7 +3657,7 @@ function addFTRow() {
 
   });
 
-  reRender();
+  renderTribeOps();
 
 }
 
@@ -3484,7 +3677,7 @@ function addTORow() {
 
   tab.rows.push(row);
 
-  reRender();
+  renderTribeOps();
 
 }
 
@@ -3506,7 +3699,7 @@ function addTOLocation(serverId) {
 
   srv.locations.push({name, image_url: url});
 
-  reRender();
+  renderTribeOps();
 
 }
 
@@ -3524,7 +3717,7 @@ function addTOCard() {
 
   tab.cards.push({name, image_url: url, feature});
 
-  reRender();
+  renderTribeOps();
 
 }
 
@@ -3628,6 +3821,71 @@ ha-card td.col-map[data-map="Ext"]{background-color:#00BCD4!important;color:#fff
 
 ha-card td.col-spot[data-map="Ext"]{background-color:#4DD0E1!important}`;
 
+function renderServerGridPreview(tab) {
+
+  const cols = tab.columns || [];
+
+  const items = tab.items || [];
+
+  let h = '<div class="flex flex-col"><div class="borderr relative overflow-auto border border-gray-300"><table id="supply-table" class="table-fixed border-collapse w-full min-w-max"><thead class="sticky top-0 z-20"><tr><th class="sticky left-0 z-30 border border-gray-300 p-2 text-center whitespace-nowrap">补给品</th>';
+
+  for (const col of cols) {
+
+    h += `<th class="border border-gray-300 p-2 text-center whitespace-nowrap"><label class="col-head" title="切换：隐藏该列中的空行"><input type="checkbox" class="col-toggle" hidden/><ha-icon icon="${esc(col.icon||'mdi:server')}"></ha-icon> ${esc(col.label||'')}</label></th>`;
+
+  }
+
+  h += '</tr></thead><tbody>';
+
+  for (const item of items) {
+
+    h += '<tr><td class="sticky left-0 z-10 border border-gray-300 p-2 text-center whitespace-nowrap"><label class="row-head"><input type="checkbox" class="row-toggle" hidden/>';
+
+    if (item.icon_url) h += `<img src="${esc(item.icon_url)}" width="40" height="40"/>`;
+
+    h += '</label></td>';
+
+    for (const col of cols) {
+
+      const locs = (item.locations||{})[col.server] || [];
+
+      h += '<td class="border border-gray-300 p-2 text-left align-top">';
+
+      if (locs.length) {
+
+        for (const loc of locs) {
+
+          h += esc(loc.name||'') + '<br/>';
+
+          if (loc.image_url || loc.badge) {
+
+            h += '<div class="flex flex-wrap gap-1 items-start"><div class="flex flex-col items-start">';
+
+            if (loc.image_url) h += `<img src="${esc(loc.image_url)}"/>`;
+
+            if (loc.badge) h += `<span class="badge badge-sm ${loc.badge_type||'badge-warning'} mt-1">${esc(loc.badge)}</span>`;
+
+            h += '</div></div>';
+
+          }
+
+        }
+
+      }
+
+      h += '</td>';
+
+    }
+
+    h += '</tr>';
+
+  }
+
+  h += '</tbody></table></div></div>';
+
+  return h;
+
+}
 
 function renderFarmingTablePreview(tab) {
 
@@ -3785,6 +4043,8 @@ function renderTabPreview(tab) {
 
   const t = tab.type;
 
+  if (t === 'server_grid') return renderServerGridPreview(tab);
+
   if (t === 'farming_table') return renderFarmingTablePreview(tab);
 
   // Simple table for other types
@@ -3827,7 +4087,7 @@ async function showPreview() {
 
   if (activeBtn && activeBtn.dataset.panel === 'base-ref') {
 
-    tabName = brSelectedServer + ':' + editorSelectedTab;
+    tabName = brSelectedServer + ':' + brSelectedTab;
 
     source = 'base_quick_ref';
 
@@ -3906,8 +4166,11 @@ async function saveEditor() {
 
 // ============================================================
 
+let baseData = null;
 
 let brSelectedServer = 'Isl';
+
+let brSelectedTab = 0;
 
 const SERVER_LIST = [
 
@@ -3918,6 +4181,387 @@ const SERVER_LIST = [
 
 ];
 
+async function loadBaseRef() {
+  if(window._prevVisible){window._prevVisible=false;var pp=document.getElementById('previewPanel');if(pp&&pp.style.display==='none'&&typeof togglePreview==='function')togglePreview();}
+  editorMode = 'base_ref';
+  document.getElementById('main').innerHTML = '<div class="loading">加载中...</div>';
+  const data = await loadJSON('asa_base_quick_ref.json');
+  editorData = (data && data.tabs) ? data : {tabs:[]};
+  if (!editorData.tabs.length) editorData.tabs = [];
+  editorSelectedTab = 0;
+  if (typeof brSelectedServer === 'undefined') brSelectedServer = 'Isl';
+  renderBaseRef();
+  setTimeout(showPreview, 500);
+}
+
+function renderBaseRef() {
+
+  const tabs = editorData.tabs || [];
+  const tab = tabs[editorSelectedTab] || tabs[0] || null;
+
+  let html = '<div style="display:flex;flex-direction:column;min-height:100%">';
+
+  // Server tabs (map bar - preserved)
+  html += '<div class="card" style="flex-shrink:0"><div class="server-tabs">';
+  SERVER_LIST.forEach(s => {
+    html += '<span class="server-tab'+(s.id===brSelectedServer?' active':'')+'" onclick="brSelectedServer=\''+s.id+'\';renderBaseRef();setTimeout(showPreview,200);">'+s.name+'</span>';
+  });
+  html += '</div></div>';
+
+  html += '<div class="grid-2" style="flex:1;min-height:0;overflow:hidden">';
+
+  // Left: tab list
+  html += '<div style="display:flex;flex-direction:column;min-height:0"><div class="card" style="display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden"><div class="item-list" style="flex:1;overflow-y:auto;max-height:none">';
+  tabs.forEach((t,i) => {
+    html += '<div class="item-entry'+(i===editorSelectedTab?' active':'')+'" onclick="editorSelectedTab='+i+';renderBaseRef();setTimeout(showPreview,200);">'+(t.name||'未命名')+'</div>';
+  });
+  html += '</div><button class="btn-primary" style="display:block;width:100%;margin-top:6px;padding:6px 0;height:auto;line-height:1.5;font-size:0.8em" onclick="addTab()">+ TAB</button>';
+  html += '<button class="btn-small" style="display:block;width:100%;margin-top:4px;padding:6px 0;border:1px solid var(--border);background:transparent;color:var(--text);opacity:0.75" onclick="copyBRFrom()">复制自...</button></div></div>';
+
+  // Right: shared mixed_content editor
+  if (tab) {
+    html += '<div style="display:flex;flex-direction:column;min-height:0;flex:1" id="baseEditorRight"></div>';
+  } else {
+    html += '<div style="flex:1;display:flex;align-items:center;justify-content:center;gap:12px;flex-direction:column"><button class="btn-primary" onclick="addTab()">+ TAB</button><button class="btn-small" onclick="copyBRFrom()">复制自...</button></div>';
+  }
+
+  html += '</div></div>';
+  document.getElementById('main').innerHTML = html;
+
+  // Render shared mixed content into right panel
+  if (tab) {
+    document.getElementById('baseEditorRight').innerHTML = renderMixedContent(tab);
+  }
+}
+
+async function saveBaseTab() {
+
+  const srv = baseData.servers[brSelectedServer];
+
+  const tab = srv.tabs[brSelectedTab];
+
+  if (!tab) return;
+
+  tab.name = document.getElementById('brTabName')?.value || tab.name;
+
+  tab.description = document.getElementById('brTabDesc')?.value || '';
+
+  var secs = [];
+
+    var container = document.getElementById('brSections');
+
+    if (container) {
+
+      for (var si = 0; si < 999; si++) {
+
+        var nameEl = document.getElementById('brSecName'+si);
+
+        if (!nameEl) break;
+
+        var sec = {name: nameEl.value || '', content_blocks: []};
+
+        // Read content blocks for this section
+
+        var blkDiv = document.getElementById('brSecBlocks'+si);
+
+        if (blkDiv) {
+
+          var blks = blkDiv.querySelectorAll(':scope > .sub-section');
+
+          blks.forEach(function(bd, bi){
+
+            var inpName = bd.querySelector('[id^=brBlkName]');
+
+            var inpIcon = bd.querySelector('[id^=brBlkIcon]');
+
+            var inpBody = bd.querySelector('[id^=brBlkBody]');
+
+            var bt = 'text';
+
+            var label = bd.querySelector('strong');
+
+            if (label) {
+
+              for (var k in MC_TYPE_LABELS) { if (MC_TYPE_LABELS[k] === label.textContent.trim()) { bt = k; break; } }
+
+            }
+
+            var block = {block_type: bt};
+
+            if (inpName) block.name = inpName.value || '';
+
+            if (inpIcon) block.icon_url = inpIcon.value || '';
+
+            if (inpBody) { if (bt === 'text') block.text = inpBody.value; else block.body = inpBody.value; }
+
+            // Divider-specific
+            if (bt === 'divider') {
+              block.style = bd.querySelector('[id^=mcDivStyle]')?.value || 'solid';
+              block.title = bd.querySelector('[id^=mcDivTitle]')?.value || '';
+              block.color = bd.querySelector('[id^=mcDivColor]')?.value || 'auto';
+              block.title_bold = bd.querySelector('[id^=mcDivTitleBold]')?.checked || false;
+            }
+
+            // Storage-specific: read rows
+
+            if (bt === 'base_storage') {
+
+              block.rows = [];
+
+              var srDiv = bd.querySelector('[id^=brStorageRows]');
+
+              if (srDiv) {
+
+                var srows = srDiv.querySelectorAll(':scope > .sr-row');
+
+                srows.forEach(function(sr, ri){
+
+                  var nm = sr.querySelector('[id^=brSRName]');
+
+                  var ic = sr.querySelector('[id^=brSRIcon]');
+
+                  var cm = sr.querySelector('[id^=brSRCapM]');
+
+                  var cs = sr.querySelector('[id^=brSRCapS]');
+
+                  var actionKeys = ['power','water','fire','tek'];
+
+                  var actions = [];
+
+                  actionKeys.forEach(function(ak){
+
+                    var cb = sr.querySelector('[id^=brSRAction_'+ak+'_]');
+
+                    if (cb && cb.checked) actions.push(ak);
+
+                  });
+
+                  // Read categories
+
+                  var cats = [];
+
+                  var catLabels = sr.querySelectorAll('[id^=brCatLabel]');
+
+                  catLabels.forEach(function(cl, ci){
+
+                    var catDiv = cl.closest('.sr-cat-card') || cl.parentElement;
+
+                    var items = [];
+
+                    var itemIcons = catDiv.querySelectorAll('[id^=brItemIcon]');
+
+                    var itemNames = catDiv.querySelectorAll('[id^=brItemName]');
+
+                    for (var ii=0; ii<itemIcons.length; ii++) {
+
+                      var ni = itemNames[ii];
+
+                      var cid = ni?.id?.replace('brItemName','brItemColor');
+
+                      var bid = ni?.id?.replace('brItemName','brItemBold');
+                      var itemUrl = (itemIcons[ii]?.value)||'';
+                      // Read mode/luminance from baseData — use actual index from ID (drag may have reordered DOM)
+                      var _realII = ii;
+                      if (ni && ni.id) {
+                        var _idParts = ni.id.split('_');
+                        _realII = parseInt(_idParts[4]) || ii;
+                      }
+                      var _itemData = null;
+                      try {
+                        var _bSrv = baseData.servers[brSelectedServer];
+                        var _bTab = (_bSrv.tabs||[])[brSelectedTab];
+                        var _bBlk = _bTab.sections[si].content_blocks[bi];
+                        var _bRow = _bBlk.rows[ri];
+                        var _bCat = (_bRow.categories||[])[ci];
+                        _itemData = (_bCat.items||[])[_realII];
+                      } catch(e) {}
+                      var _imgMeta = (_itemData && _itemData.images && _itemData.images[0]) ? _itemData.images[0] : {};
+                      items.push({
+                        icon_url: itemUrl,
+                        images: itemUrl ? [{image_url:itemUrl, quantity:0,
+                          image_auto_color_mode: _imgMeta.image_auto_color_mode || 'off',
+                          image_native_luminance: _imgMeta.image_native_luminance != null ? _imgMeta.image_native_luminance : null}] : [],
+
+                        name: (ni?.value)||'',
+
+                        count: '',
+
+                        color: (document.getElementById(cid)?.value)||'',
+
+                        bold: (document.getElementById(bid)?.value)==='1'
+
+                      });
+
+                    }
+
+                    var colEl = catDiv.querySelector('select[id^=brCatCol]');
+
+                    var lcEl = catDiv.querySelector('input[id^=brCatColor]');
+
+                    var lbEl = catDiv.querySelector('[id^=brCatBold]');
+
+                    
+
+                    var mkCEl = catDiv.querySelector('[id^=brCatMarkerColor]');
+
+                    var bqEl = catDiv.querySelector('[id^=brCatBQ]');
+
+                    var labelColor = (lcEl?.value)||(mkCEl?.value)||'';
+
+                    cats.push({label: (cl?.value)||'', sub_label: (catDiv.querySelector('[id^=brCatSubLabel]')?.value)||'', sub_label_color: (catDiv.querySelector('[id^=brCatSubLabelColor]')?.value)||'', label_color: labelColor, label_bold: lbEl?.checked||false, sub_label_bold: (catDiv.querySelector("[id^=brCatSubLabelBold]")?.checked)||false, marker_color: (mkCEl?.value)||'#ccc', use_blockquote: bqEl ? bqEl.checked : true, column: parseInt(colEl?.value)||0, items: items});
+
+                  });
+
+                  block.rows.push({
+
+                    device_name: (nm?.value)||'',
+
+                    images: (function(){
+                      if (!ic?.value) return [];
+                      // Read mode/luminance from baseData (set by selectBaseIcon)
+                      var _srv = baseData.servers[brSelectedServer];
+                      var _tab = (_srv.tabs||[])[brSelectedTab];
+                      var _rowData = null;
+                      try { _rowData = _tab.sections[si].content_blocks[bi].rows[ri]; } catch(e) {}
+                      var _img = (_rowData && _rowData.images && _rowData.images[0]) ? _rowData.images[0] : {};
+                      return [{image_url:ic.value, quantity:0,
+                        image_auto_color_mode: _img.image_auto_color_mode || 'off',
+                        image_native_luminance: _img.image_native_luminance != null ? _img.image_native_luminance : null}];
+                    })(),
+
+                    capacity_main: (cm?.value)||'',
+
+                    capacity_sub: (cs?.value)||'',
+
+                    actions: actions,
+
+                    action_icon_url: (sr.querySelector('[id^=brSRActionPngChk_]:checked')?.value)||'',
+
+                    categories: cats
+
+                  });
+
+                });
+
+              }
+
+              // Regenerate body HTML from rows
+
+              if (block.rows.length) block.body = buildStorageBody(block.rows);
+
+            }
+
+            // Badge-specific: read structured rows
+
+            if (bt === 'base_badge') {
+
+              block.badges = [];
+
+              var tbody = bd.querySelector('tbody');
+
+              if (tbody) {
+
+                var rows = tbody.querySelectorAll('tr');
+
+                rows.forEach(function(r){
+
+                  var n = r.querySelector('[id^=brBgName]');
+
+                  var bg = r.querySelector('[id^=brBgBadge]');
+
+                  var st = r.querySelector('[id^=brBgStyle]');
+
+                  if (n) block.badges.push({name: n.value||'', badge: (bg?.value)||'', style: (st?.value)||'default'});
+
+                });
+
+              }
+
+              // Generate body HTML from badges
+
+              if (block.badges.length) block.body = buildBadgeHTML(block.badges);
+
+            }
+
+            sec.content_blocks.push(block);
+
+          });
+
+        }
+
+        secs.push(sec);
+
+      }
+
+    }
+
+    tab.sections = secs;
+
+  // Chunked save — encode full JSON to base64, then split into safe chunks
+
+  var json = JSON.stringify(baseData, null, 2);
+
+  var CHUNK = 50000; // each chunk under 128KB ARG_MAX
+
+  try {
+
+    await WS.callService('shell_command', 'save_data_chunk', {filename: 'base_quick_ref.json', b64data: ''}).catch(function(){});
+
+    // Encode: same approach as saveJSON
+
+    var bytes = new TextEncoder().encode(json);
+
+    var b64 = '';
+
+    for (var i = 0; i < bytes.length; i += 8192) {
+
+      b64 += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+
+    }
+
+    b64 = btoa(b64);
+
+    // Write chunks of base64
+
+    for (var i = 0; i < b64.length; i += CHUNK) {
+
+      var chunk = b64.substring(i, Math.min(i + CHUNK, b64.length));
+
+      await WS.callService('shell_command', 'save_data_chunk', {
+
+        filename: 'base_quick_ref.json',
+
+        b64data: chunk
+
+      });
+
+    }
+
+    await WS.callService('shell_command', 'save_data_copy', {
+
+      src: 'base_quick_ref.json',
+
+      dst: 'asa_base_quick_ref.json'
+
+    });
+
+    _showSaveResult();
+
+    incPending();
+
+  } catch(e) {
+
+    WS.toast('保存失败: ' + e.message, 'error');
+
+  }
+
+  // Re-init SortableJS after save (async ops may disrupt drag handles)
+  document.querySelectorAll('.sr-items').forEach(function(d){ d._itemSortable = null; });
+  setTimeout(function(){ document.querySelectorAll('.sr-items').forEach(function(d){ _initItemSortable(d); }); }, 100);
+
+  setTimeout(showPreview, 500);
+
+}
 
 function buildBadgeHTML(badges) {
 
@@ -4768,7 +5412,8 @@ function migrateMdiIconsOnce(tabs) {
   }
   if (migrated > 0) {
     localStorage.setItem('_mdi_migrated_v1172', '1');
-      }
+    console.log('MDI 迁移完成：' + migrated + ' 个块');
+  }
 }
 
 function getServerBadge(sid, states) {
@@ -5238,8 +5883,606 @@ function selectMarkerColor(dot, clr) {
   }
 }
 
+function rmSrRow(el) { if (!confirm(DEL)) return; var r = el.closest('.sr-row'); if (r) r.remove(); }
 
+function rmSrCat(el) { if (!confirm(DEL)) return; var c = el.closest('.sr-cat-card'); if (c) c.remove(); }
 
+function _initItemSortable(itemsDiv) {
+  if (itemsDiv._itemSortable) { itemsDiv._itemSortable.destroy(); }
+  itemsDiv._itemSortable = dragRegister({
+    container: itemsDiv,
+    itemSelector: 'div',
+    handle: 'img',
+    glowClass: 'drag-target-glow-item',
+    getList: function(){ return []; },
+    onReorder: function(){
+      // Close any open icon picker overlays (their _ctx.ii is stale after reorder)
+      document.querySelectorAll('.icon-picker-overlay').forEach(function(o){ o.remove(); });
+      var newOrder = [];
+      itemsDiv.querySelectorAll('.sr-item').forEach(function(el){
+        var iconInp = el.querySelector('[id^=brItemIcon]');
+        if (iconInp) { var parts = iconInp.id.split('_'); newOrder.push(parseInt(parts[4]) || 0); }
+      });
+      try {
+        var catCard = itemsDiv.closest('.sr-cat-card');
+        var catLabel = catCard.querySelector('[id^=brCatLabel]');
+        if (catLabel) {
+          var idSfx = catLabel.id.replace('brCatLabel', '');
+          var parts = idSfx.split('_');
+          var si = parseInt(parts[0]), bi = parseInt(parts[1]), ri = parseInt(parts[2]), ci = parseInt(parts[3]);
+          var srv = baseData.servers[brSelectedServer];
+          var tab = (srv.tabs||[])[brSelectedTab];
+          var cat = tab.sections[si].content_blocks[bi].rows[ri].categories[ci];
+          if (cat && cat.items) {
+            cat.items = newOrder.map(function(ii){ return cat.items[ii]; }).filter(function(x){ return x; });
+          }
+          // Update DOM IDs in-place (no renderBaseRef to maintain SortableJS integrity)
+          var pfx = si + '_' + bi + '_' + ri + '_' + ci + '_';
+          itemsDiv.querySelectorAll('.sr-item').forEach(function(el, newIi){
+            var inp = el.querySelector('[id^=brItemIcon]');
+            if (inp) inp.id = 'brItemIcon' + pfx + newIi;
+            inp = el.querySelector('[id^=brItemName]');
+            if (inp) inp.id = 'brItemName' + pfx + newIi;
+            inp = el.querySelector('[id^=brItemColor]');
+            if (inp) inp.id = 'brItemColor' + pfx + newIi;
+            inp = el.querySelector('[id^=brItemBold]');
+            if (inp) inp.id = 'brItemBold' + pfx + newIi;
+            var img = el.querySelector('img[onclick*="openIconPicker"]');
+            if (img) {
+              var oc = img.getAttribute('onclick');
+              oc = oc.replace(/ii:\s*\d+/, 'ii:' + newIi);
+              img.setAttribute('onclick', oc);
+            }
+          });
+        }
+      } catch(e) { console.error('item reorder failed', e); }
+    }
+  });
+}
+
+function toggleSRBody(header) {
+
+  var body = header.nextElementSibling;
+
+  if (!body || !body.classList.contains('sr-row-body')) return;
+
+  var toggle = header.querySelector('.sr-toggle');
+
+  var isOpening = body.style.display === 'none';
+
+  // Accordion: collapse all sibling rows first
+
+  var container = header.closest('[id^=brStorageRows]');
+
+  if (container) {
+
+    container.querySelectorAll('.sr-row-body').forEach(function(b){ b.style.display = 'none'; });
+
+    container.querySelectorAll('.sr-toggle').forEach(function(t){ t.textContent = '⏵'; });
+
+  }
+
+  if (isOpening) {
+
+    body.style.display = 'block';
+
+    // Lazy-init category-level Sortable for this row
+
+    var catsDiv = body.querySelector(".sr-cats");
+
+    if (catsDiv && !catsDiv._catSortable && typeof Sortable !== "undefined") {
+
+      catsDiv.querySelectorAll(".sr-cat-card").forEach(function(card) {
+
+        if (!card.querySelector(".drag-handle-cat")) {
+
+          var h = document.createElement("span"); h.className = "drag-handle-cat"; h.textContent = "⋮⋮";
+
+          var first = card.firstElementChild; if (first) { first.insertBefore(h, first.firstChild); } else { card.insertBefore(h, card.firstChild); }
+
+        }
+
+      });
+
+      catsDiv._catSortable = dragRegister({
+
+        container: catsDiv,
+
+        itemSelector: ".sr-cat-card",
+
+        handle: ".drag-handle-cat",
+
+        getList: function(){ return []; },
+
+        onReorder: function(){}
+
+      });
+
+      // Item-level Sortable inside each category (drag via icon, no visible handle)
+      catsDiv.querySelectorAll('.sr-items').forEach(function(itemsDiv) { _initItemSortable(itemsDiv); });
+
+    }
+
+    if (toggle) { toggle.textContent = '⏷'; }
+
+  }
+
+}
+
+function enhanceStorageEditor() {
+
+  // Items now have inline color/bold in static HTML, this handles any dynamic items
+
+  document.querySelectorAll('[id^=brItemName]').forEach(function(el){
+
+    if (el.dataset.enhanced) return;
+
+    el.dataset.enhanced = "1";
+
+    var savedColor = el.getAttribute("data-color") || "";
+
+    var savedBold = el.getAttribute("data-bold") === "1";
+
+    var colorId = el.id.replace("brItemName","brItemColor");
+
+    var boldId = el.id.replace("brItemName","brItemBold");
+
+    var ec = document.getElementById(colorId);
+
+    if (ec && savedColor) { ec.value = savedColor; }
+
+    var eb = document.getElementById(boldId);
+
+    if (eb && savedBold) { eb.value = '1'; }
+
+  });
+
+}
+
+function addStorageRow(si, bi) {
+
+  var srv = baseData.servers[brSelectedServer];
+
+  var tab = (srv.tabs||[])[brSelectedTab];
+
+  if (!tab) return;
+
+  var block = tab.sections[si].content_blocks[bi];
+
+  if (!block) return;
+
+  if (!block.rows) block.rows = [];
+
+  block.rows.push({name:"", capacity_main:"", capacity_sub:"", actions:[], images:[{image_url:"",quantity:0,image_auto_color_mode:"off",image_native_luminance:null}]});
+
+  // Save expand state before re-render
+
+  var expandedSections = [];
+
+  document.querySelectorAll('.br-sec-body').forEach(function(b, i){ if (!b.classList.contains('collapsed')) expandedSections.push(i); });
+
+  var expandedRows = [];
+
+  document.querySelectorAll('.sr-row-body').forEach(function(rb,i){ if(rb.style.display==='block') expandedRows.push(i); });
+
+  var expandedBlocks = [];
+
+  document.querySelectorAll('.block-body').forEach(function(bb,i){ if(!bb.classList.contains('collapsed')) expandedBlocks.push(i); });
+
+  renderBaseRef();
+
+  setTimeout(function(){
+
+    document.querySelectorAll('.br-sec-body').forEach(function(b, i){ if (expandedSections.indexOf(i) !== -1) { b.classList.remove('collapsed'); var a = b.parentElement.querySelector('.br-sec-arrow'); if (a) a.textContent = '⏷'; window._initBlockSortable(b, i); } });
+
+    document.querySelectorAll('.sr-row-body').forEach(function(rb,i){ if(expandedRows.indexOf(i)!==-1){ rb.style.display='block'; var t=rb.parentElement.querySelector('.sr-toggle'); if(t) t.textContent='⏷'; } });
+
+    document.querySelectorAll('.block-body').forEach(function(bb,i){ if(expandedBlocks.indexOf(i)!==-1) bb.classList.remove('collapsed'); });
+
+  }, 120);
+
+}
+
+function addStorageCat(si, bi, ri) {
+
+  var srv = baseData.servers[brSelectedServer];
+
+  var tab = (srv.tabs||[])[brSelectedTab];
+
+  if (!tab) return;
+
+  var block = tab.sections[si].content_blocks[bi];
+
+  if (!block || !block.rows) return;
+
+  var row = block.rows[ri];
+
+  if (!row) return;
+
+  if (!row.categories) row.categories = [];
+
+  row.categories.push({label:"", sub_label:"", label_color:"#ccc", sub_label_color:"#ccc", label_bold:false, sub_label_bold:false, marker_color:"#ccc", use_blockquote:true, column:0, items:[]});
+
+  // Preserve expand state
+
+  var expandedSections = [];
+
+  document.querySelectorAll(".br-sec-body").forEach(function(b,i){ if(!b.classList.contains("collapsed")) expandedSections.push(i); });
+
+  var expandedRows = [];
+
+  document.querySelectorAll(".sr-row-body").forEach(function(rb,i){ if(rb.style.display==="block") expandedRows.push(i); });
+
+  var expandedBlocks = [];
+
+  document.querySelectorAll(".block-body").forEach(function(bb,i){ if(!bb.classList.contains("collapsed")) expandedBlocks.push(i); });
+
+  renderBaseRef();
+
+  setTimeout(function(){
+
+    _restoreExpandState(expandedSections, expandedRows, expandedBlocks);
+
+  }, 120);
+
+}
+
+function enhanceBlockCollapse() {
+
+  document.querySelectorAll('#brSections [id^=brSecBlocks] .sub-section').forEach(function(block){
+
+    if (block.querySelector('.block-body')) return; // already wrapped
+
+    var strong = block.querySelector('strong');
+
+    if (!strong) return;
+
+    // Title row is always the first child with class block-title-row
+
+    var titleRow = block.children[0];
+
+    if (!titleRow || !titleRow.classList.contains('block-title-row')) return;
+
+    // Wrap all siblings after titleRow into block-body
+
+    var body = document.createElement('div');
+
+    body.className = 'block-body collapsed';
+
+    while (titleRow.nextSibling) {
+
+      body.appendChild(titleRow.nextSibling);
+
+    }
+
+    block.appendChild(body);
+
+    titleRow.style.cursor = 'pointer';
+
+    titleRow.onclick = function(e){
+
+      e.stopPropagation();
+
+      if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+
+      var b = this.parentElement.querySelector('.block-body');
+
+      var isOpening = b.classList.contains('collapsed');
+
+        var section = this.closest('[id^=brSecBlocks]');
+
+        if (section) {
+
+          section.querySelectorAll('.block-body').forEach(function(sib){ sib.classList.add('collapsed'); });
+
+        }
+
+        if (isOpening) { b.classList.remove('collapsed'); }
+
+    };
+
+  });
+
+  // Add color+bold to category labels
+
+  document.querySelectorAll('[id^=brCatLabel]').forEach(function(el){
+
+    if (el.dataset.colored) return;
+
+    el.dataset.colored = '1';
+
+    var colorId = el.id.replace('brCatLabel','brCatColor');
+
+    var boldId = el.id.replace('brCatLabel','brCatBold');
+
+    // Look up saved values from baseData
+
+    var parts = el.id.split('_');
+
+    var si = parseInt(parts[0].replace('brCatLabel',''));
+
+    var bi = parseInt(parts[1]); var ri = parseInt(parts[2]); var ci = parseInt(parts[3]);
+
+    var srv = baseData.servers[brSelectedServer];
+
+    var tab = (srv.tabs||[])[brSelectedTab];
+
+    var sec = (tab.sections||[])[si];
+
+    var blk = (sec.content_blocks||[])[bi];
+
+    var row = (blk.rows||[])[ri];
+
+    var cat = (row.categories||[])[ci];
+
+    var savedColor = (cat?cat.label_color:'') || (cat?cat.color:'') || '#000000';
+
+    var savedBold = (cat?cat.label_bold:false) || (cat?cat.bold:false) || false;
+
+    if (!document.getElementById(colorId)) {
+
+      var ci2 = document.createElement('input');
+
+      ci2.type = 'color'; ci2.id = colorId; ci2.value = savedColor;
+
+      ci2.style.cssText = 'width:22px;height:20px;padding:1px;margin:0 2px';
+
+      el.parentElement.insertBefore(ci2, el.nextSibling);
+
+      // Also create sublabel color input
+
+      var subEl2 = document.getElementById(el.id.replace('brCatLabel','brCatSubLabel'));
+
+      var subColorId2 = el.id.replace('brCatLabel','brCatSubLabelColor');
+
+      if (subEl2 && !document.getElementById(subColorId2)) {
+
+        var sci2 = document.createElement('input');
+
+        sci2.type = 'hidden'; sci2.id = subColorId2; sci2.value = (cat?cat.sub_label_color:'') || '#000000';
+
+        subEl2.parentElement.appendChild(sci2);
+
+      // Also create sublabel bold toggle
+
+      if (subEl2 && !document.getElementById(el.id.replace("brCatLabel","brCatSubLabelBold"))) {
+
+        var sbl2 = document.createElement("label");
+
+        sbl2.style.cssText = "font-size:0.6em;margin:0;display:flex;align-items:center;gap:1px;white-space:nowrap";
+
+        var scb2 = document.createElement("input");
+
+        scb2.type = "checkbox"; scb2.id = el.id.replace("brCatLabel","brCatSubLabelBold");
+
+        scb2.checked = (cat?cat.sub_label_bold:false) || false;
+
+        sbl2.appendChild(scb2);
+
+        sbl2.appendChild(document.createTextNode("B"));
+
+        subEl2.parentElement.insertBefore(sbl2, subEl2);
+
+      }
+
+      }
+
+    } else { document.getElementById(colorId).value = savedColor;
+
+      var subClrEl2 = document.getElementById(el.id.replace('brCatLabel','brCatSubLabelColor'));
+
+      if (subClrEl2) subClrEl2.value = (cat?cat.sub_label_color:'') || '#ffffff'; }
+
+    if (!document.getElementById(boldId)) {
+
+      var lbl2 = document.createElement('label');
+
+      lbl2.style.cssText = 'display:flex;align-items:center;gap:2px;margin:0 4px 0 0;font-size:0.65em';
+
+      var cb2 = document.createElement('input'); cb2.type = 'checkbox'; cb2.id = boldId; cb2.checked = savedBold;
+
+      lbl2.appendChild(cb2); lbl2.appendChild(document.createTextNode('B'));
+
+      el.parentElement.insertBefore(lbl2, document.getElementById(colorId)?.nextSibling);
+
+    } else { document.getElementById(boldId).checked = savedBold; }
+
+    // Add marker checkbox + color
+
+    var bqId = el.id.replace('brCatLabel','brCatBQ');
+
+    var savedBQ = cat ? (cat.use_blockquote !== false) : true;
+
+    if (!document.getElementById(bqId)) {
+
+      var bqlbl = document.createElement('label');
+
+      bqlbl.style.cssText = 'display:flex;align-items:center;gap:1px;margin:0 2px;font-size:0.6em';
+
+      var bqcb = document.createElement('input'); bqcb.type = 'checkbox'; bqcb.id = bqId; bqcb.checked = savedBQ;
+
+      bqlbl.appendChild(bqcb); bqlbl.appendChild(document.createTextNode('引用'));
+
+      el.parentElement.appendChild(bqlbl);
+
+    } else { document.getElementById(bqId).checked = savedBQ; }
+
+  });
+
+  // Add column selectors to categories
+
+  document.querySelectorAll('[id^=brCatLabel]').forEach(function(el){
+
+    if (el.dataset.colEnhanced) return;
+
+    el.dataset.colEnhanced = '1';
+
+    var colId = el.id.replace('brCatLabel','brCatCol');
+
+    if (!document.getElementById(colId)) {
+
+      var sel = document.createElement('select');
+
+      sel.id = colId;
+
+      sel.style.cssText = 'width:40px;padding:2px 6px;font-size:0.7em;margin-left:4px';
+
+      sel.innerHTML = '<option value=\"0\">列1</option><option value=\"1\">2</option>';
+
+      // Find the column data from the row's categories
+
+      var sub = el.closest(".sub-section");
+
+      var colData = 0;
+
+      // Try to find the brCatCol hidden input or infer from position
+
+      var allCats = sub ? sub.querySelectorAll('[id^=brCatLabel]') : [];
+
+      var idx = 0;
+
+      allCats.forEach(function(c, i){ if (c === el) idx = i; });
+
+      colData = idx; // approximate: first cat col=0, second col=1
+
+      sel.value = colData;
+
+      el.parentElement.insertBefore(sel, el.nextSibling);
+
+    }
+
+  });
+
+}
+
+function addStorageItem(si, bi, ri, ci) {
+
+  var srv = baseData.servers[brSelectedServer];
+
+  var tab = (srv.tabs||[])[brSelectedTab];
+
+  if (!tab) return;
+
+  var block = tab.sections[si].content_blocks[bi];
+
+  if (!block || !block.rows) return;
+
+  var row = block.rows[ri];
+
+  if (!row || !row.categories) return;
+
+  var cat = row.categories[ci];
+
+  if (!cat) return;
+
+  if (!cat.items) cat.items = [];
+
+  cat.items.push({name:"", icon_url:"", color:"", bold:false});
+
+  var expandedSections = [];
+
+  document.querySelectorAll(".br-sec-body").forEach(function(b,i){ if(!b.classList.contains("collapsed")) expandedSections.push(i); });
+
+  var expandedRows = [];
+
+  document.querySelectorAll(".sr-row-body").forEach(function(rb,i){ if(rb.style.display==="block") expandedRows.push(i); });
+
+  var expandedBlocks = [];
+
+  document.querySelectorAll(".block-body").forEach(function(bb,i){ if(!bb.classList.contains("collapsed")) expandedBlocks.push(i); });
+
+  renderBaseRef();
+
+  setTimeout(function(){ _restoreExpandState(expandedSections, expandedRows, expandedBlocks);
+    // Re-init item SortableJS on all .sr-items after DOM rebuild
+    setTimeout(function(){
+      document.querySelectorAll('.sr-items').forEach(function(d){ _initItemSortable(d); });
+    }, 200);
+  }, 120);
+
+}
+
+function addStorageItemWithPicker(si, bi, ri, ci) {
+  var srv = baseData.servers[brSelectedServer];
+  var tab = (srv.tabs||[])[brSelectedTab];
+  if (!tab) return;
+  var block = tab.sections[si].content_blocks[bi];
+  if (!block || !block.rows) return;
+  var row = block.rows[ri];
+  if (!row || !row.categories) return;
+  var cat = row.categories[ci];
+  if (!cat) return;
+  if (!cat.items) cat.items = [];
+  cat.items.push({name:"", icon_url:"", color:"", bold:false});
+  var newIi = cat.items.length - 1;
+
+  var expandedSections = [];
+  document.querySelectorAll(".br-sec-body").forEach(function(b,i){ if(!b.classList.contains("collapsed")) expandedSections.push(i); });
+  var expandedRows = [];
+  document.querySelectorAll(".sr-row-body").forEach(function(rb,i){ if(rb.style.display==="block") expandedRows.push(i); });
+  var expandedBlocks = [];
+  document.querySelectorAll(".block-body").forEach(function(bb,i){ if(!bb.classList.contains("collapsed")) expandedBlocks.push(i); });
+
+  renderBaseRef();
+
+  setTimeout(function(){ _restoreExpandState(expandedSections, expandedRows, expandedBlocks);
+    setTimeout(function(){
+      document.querySelectorAll('.sr-items').forEach(function(d){ _initItemSortable(d); });
+      // Auto-open icon picker for the new item
+      openIconPicker({mode:'base_item', si:si, bi:bi, ri:ri, ci:ci, ii:newIi});
+    }, 200);
+  }, 120);
+}
+
+function pickNewItemIcon(si, bi, ri, ci) {
+  try {
+    var srv = baseData.servers[brSelectedServer];
+    var tab = (srv.tabs||[])[brSelectedTab];
+    var row = tab.sections[si].content_blocks[bi].rows[ri];
+    var cat = (row.categories||[])[ci];
+    var newIi = (cat && cat.items) ? cat.items.length : 0;
+    openIconPicker({mode:'base_item', si:si, bi:bi, ri:ri, ci:ci, ii:newIi});
+  } catch(e) { console.error('pickNewItemIcon failed:', e); }
+}
+
+function rmBRSection(el) {
+
+  if (!confirm(DEL)) return;
+
+  var section = el.closest('[data-si]');
+
+  if (!section) return;
+
+  var si = parseInt(section.getAttribute('data-si'));
+
+  var srv = baseData.servers[brSelectedServer];
+
+  var tab = (srv.tabs||[])[brSelectedTab];
+
+  if (tab && tab.sections) tab.sections.splice(si, 1);
+
+  renderBaseRef();
+
+}
+
+function rmBRTab() {
+
+  if (!confirm('删除此Tab？')) return;
+
+  var srv = baseData.servers[brSelectedServer];
+
+  if (!srv || !srv.tabs || !srv.tabs.length) return;
+
+  srv.tabs.splice(brSelectedTab, 1);
+
+  if (srv.tabs.length === 0) { brSelectedTab = 0; }
+  else if (brSelectedTab >= srv.tabs.length) { brSelectedTab = srv.tabs.length - 1; }
+
+  renderBaseRef();
+
+}
+
+// Shared restore after renderBaseRef: re-expand sections/rows/blocks + rebuild sortables
 
 function _restoreExpandState(expandedSections, expandedRows, expandedBlocks) {
 
@@ -5322,7 +6565,7 @@ function _initMobileTabSelect() {
   (function(){
     var activeNav = document.querySelector('nav button.active');
     var panel = activeNav ? activeNav.getAttribute('data-panel') : '';
-    var addFn = 'addTab()';
+    var addFn = panel === 'base-ref' ? 'addBRTab()' : 'addTab()';
     var btnAdd = document.createElement('button');
     btnAdd.className = 'btn-primary';
     btnAdd.style.cssText = 'display:block;width:100%;margin-top:6px;padding:6px 0;height:auto;line-height:1.5;font-size:0.8em';
@@ -5383,7 +6626,85 @@ function rmTab() { if (confirm('删除此Tab？')) { editorData.tabs.splice(edit
 function _delSRTab() { rmTab(); }
 function _delTOTab() { rmTab(); }
 
+function addBRSection() {
 
+  var srv = baseData.servers[brSelectedServer];
+
+  var tab = (srv.tabs||[])[brSelectedTab];
+
+  if (!tab) return;
+
+  tab.sections.push({name:"", description:"", content_blocks:[]});
+
+  var newSi = tab.sections.length - 1;
+
+  renderBaseRef();
+
+  // Expand the new section + init block Sortable
+
+  setTimeout(function(){
+
+    document.querySelectorAll(".br-sec-body").forEach(function(b){ b.classList.add("collapsed"); });
+
+    document.querySelectorAll(".br-sec-arrow").forEach(function(a){ a.textContent = "⏵"; });
+
+    var bodies = document.querySelectorAll(".br-sec-body");
+
+    if (bodies.length > newSi) {
+
+      var body = bodies[newSi];
+
+      body.classList.remove("collapsed");
+
+      var arrow = body.parentElement.querySelector(".br-sec-arrow");
+
+      if (arrow) arrow.textContent = "⏷";
+
+      if (typeof window._initBlockSortable === "function") window._initBlockSortable(body, newSi);
+
+    }
+
+  }, 120);
+
+}
+
+function addBRSecBlock(si, type) {
+
+  var srv = baseData.servers[brSelectedServer];
+
+  var tab = (srv.tabs||[])[brSelectedTab];
+
+  if (!tab) return;
+
+  var sec = tab.sections[si];
+
+  if (!sec) { sec = {name:"", description:"", content_blocks:[]}; tab.sections[si] = sec; }
+
+  sec.content_blocks.push({block_type: type});
+
+  renderBaseRef();
+
+  // Expand section + init block Sortable
+
+  setTimeout(function(){
+
+    var bodies = document.querySelectorAll(".br-sec-body");
+
+    if (bodies[si]) {
+
+      bodies[si].classList.remove("collapsed");
+
+      var arrow = bodies[si].parentElement.querySelector(".br-sec-arrow");
+
+      if (arrow) arrow.textContent = "⏷";
+
+      if (typeof window._initBlockSortable === "function") window._initBlockSortable(bodies[si], si);
+
+    }
+
+  }, 120);
+
+}
 
 function showCustomPromptRadio(opts, cb) {
   closeAllPopups();
@@ -5436,7 +6757,7 @@ function showCustomPromptRadio(opts, cb) {
 
 async function copyBRFrom() {
 
-  var source = await new Promise(function(resolve){
+  const source = await new Promise(function(resolve){
   showCustomPromptRadio({
     title:'来源服务器',
     options:[
@@ -5448,11 +6769,15 @@ async function copyBRFrom() {
   }, resolve);
 });
 
-  if (!source || !editorData.tabs) return;
+  if (!source || !baseData.servers[source]) return;
+
+  baseData.servers[brSelectedServer] = JSON.parse(JSON.stringify(baseData.servers[source]));
+
+  baseData.servers[brSelectedServer].name = SERVER_LIST.find(s=>s.id===brSelectedServer)?.name||brSelectedServer;
 
   WS.toast('已从 '+source+' 复制', 'success');
 
-  reRender();
+  renderBaseRef();
 
   setTimeout(showPreview, 200);
 
@@ -5542,7 +6867,9 @@ function toggleComboSelect(el){
 var ICON_DISPATCH = {
   info_card_title: { handler:'selectInfoCardIcon', args:function(ctx){return [ctx.bi];}, colorBtnId:function(ctx){return 'mcICColorModeBtn'+ctx.bi;}, clearFn:'clearIconSelection', editor:'main', iconHandler:'selectInfoCardIcon' },
   desc_row:        { handler:'selectDescImage',      args:function(ctx){return [ctx.bi, ctx.di];}, colorBtnId:function(ctx){return 'mcICDescColorModeBtn'+ctx.bi+'_'+ctx.di;}, clearFn:'clearDescImageSelection', editor:'main', iconHandler:'selectDescImage' },
-  icon_group:      { handler:'selectDescImage',      args:function(ctx){return [ctx.bi, ctx.ii];}, colorBtnId:function(ctx){return 'mcICDescColorModeBtn'+ctx.bi+'_'+ctx.ii;}, clearFn:'clearDescImageSelection', igRowDi:true, editor:'main', iconHandler:'selectDescImage' }
+  icon_group:      { handler:'selectDescImage',      args:function(ctx){return [ctx.bi, ctx.ii];}, colorBtnId:function(ctx){return 'mcICDescColorModeBtn'+ctx.bi+'_'+ctx.ii;}, clearFn:'clearDescImageSelection', igRowDi:true, editor:'main', iconHandler:'selectDescImage' },
+  base_row:        { handler:'selectBaseIcon', args:function(ctx){return [ctx.si, ctx.bi, ctx.ri];}, colorBtnId:function(ctx){return 'mcICColorModeBtn_br_'+ctx.si+'_'+ctx.bi+'_'+ctx.ri;}, clearFn:'clearBaseIconSelection', editor:'base', iconHandler:'selectBaseIcon' },
+  base_item:       { handler:'selectBaseIcon', args:function(ctx){return [ctx.si, ctx.bi, ctx.ri, ctx.ci, ctx.ii];}, colorBtnId:function(ctx){return 'mcICColorModeBtn_br_'+ctx.si+'_'+ctx.bi+'_'+ctx.ri+'_'+ctx.ci+'_'+ctx.ii;}, clearFn:'clearBaseItemIconSelection', editor:'base', iconHandler:'selectBaseIcon' }
 };
 
 
@@ -5554,1360 +6881,6 @@ WS.onConnect(() => {
 });
 
 WS.init();
-
-
-var iconPickerCtx = null;
-var iconPickerCat = "__recent__";
-
-
-function toggleQtyPopup(el, bi, di) {
-  var panel = document.getElementById('qtyPopupPanel');
-  if (panel && panel.classList.contains('show')) {
-    panel.classList.remove('show'); return;
-  }
-  closeAllPopups();
-  if (!panel) {
-    panel = document.createElement('div'); panel.id = 'qtyPopupPanel';
-    panel.className = 'qty-popup-panel asa-popup';
-    panel.style.flexWrap = 'wrap';
-    document.body.appendChild(panel);
-  }
-  var curVal = parseInt(document.getElementById('mcICDescQty' + bi + '_' + di)?.value) || 0;
-  panel.innerHTML = '';
-  var qtyValues = [0];
-  for (var i = 1; i <= 20; i++) qtyValues.push(i);
-  for (var i = 30; i <= 100; i += 10) qtyValues.push(i);
-  for (var i = 150; i <= 1000; i += 50) qtyValues.push(i);
-  for (var vi = 0; vi < qtyValues.length; vi++) {
-    var n = qtyValues[vi];
-    var label = n === 0 ? "\u2715" : "\u00d7" + n;
-    var selCls = (n === curVal) ? " qty-selected" : "";
-    var btn = document.createElement('button');
-    btn.className = 'qty-option' + selCls;
-    btn.style.width = '32px'; btn.style.height = '32px'; btn.style.flexShrink = '0';
-    var slen = String(n).length;
-    btn.style.fontSize = (slen <= 1 ? '0.65em' : slen <= 2 ? '0.5em' : slen <= 3 ? '0.4em' : '0.3em');
-    btn.textContent = label;
-    btn.onclick = function(n){
-      return function(){ selectQty(bi, di, n); panel.classList.remove('show'); };
-    }(n);
-    panel.appendChild(btn);
-  }
-  panel.classList.add('show');
-  var rect = el.getBoundingClientRect();
-  panel.style.top = Math.min(rect.bottom + 4, window.innerHeight - 40) + 'px';
-  panel.style.left = Math.min(Math.max(0, rect.left - 30), window.innerWidth - 260) + 'px';
-}
-
-
-function openIconPicker(ctx) {
-  var cfg = ICON_DISPATCH[ctx.mode];
-  if (!cfg) { console.error('openIconPicker: unknown mode', ctx.mode); return; }
-  closeAllPopups();
-  iconPickerCat = "__recent__";
-  loadIconList(function(list){
-    var cats = {}; var catOrder = [];
-    list.forEach(function(item){
-      var parts = item.url.split("ASA/")[1]?item.url.split("ASA/")[1].split("/"):null;
-      var cat = (parts && parts.length > 1) ? parts[0] : "其他";
-      if (!cats[cat]) { cats[cat] = []; catOrder.push(cat); }
-      cats[cat].push(item);
-    });
-    var catLabels = {armor:"🛡️ 护甲", biology:"🧬 生物", consumables:"🍖 消耗品", drops:"💧 掉落物", egg:"🥚 蛋", eggs:"🥚 蛋", illustrations:"🖼️ 立绘", items:"📦 物品", misc:"📁 杂项", resources:"⛏️ 资源", saddles:"🐎 鞍具", skins:"🎨 皮肤", structures:"🏗️ 建筑", tools:"🔧 工具", weapons:"⚔️ 武器", "其他":"🗂️ 其他"};
-
-    var overlay = document.createElement("div"); overlay.className = "icon-picker-overlay";
-    overlay._ctx = ctx;
-    if (cfg.igRowDi) { overlay._igRowDi = ctx.di != null ? ctx.di : (ctx.rowDi != null ? ctx.rowDi : (ctx.ii != null ? ctx.ii : 0)); }
-    overlay.onclick = function(e){ if (e.target === overlay) overlay.remove(); };
-
-    var ctxJsonEsc = esc(JSON.stringify(ctx));
-
-    var html = "<div class='icon-picker-panel' onclick='event.stopPropagation()'>";
-    html += "<div class='icon-picker-header' style='border-bottom:none;display:flex;gap:6px;align-items:center;padding:8px 12px'><input id='iconPickerSearch' placeholder='搜索图标...' style='flex:1;margin:0;padding:6px 10px;font-size:0.85em' oninput='filterIconPicker()'><button style='width:auto;height:28px;padding:0 8px;display:inline-flex;align-items:center;justify-content:center;gap:4px;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);cursor:pointer;flex-shrink:0;font-size:0.8em' onclick='event.stopPropagation();toggleComboMode(this)' title='组合图标'><svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round'><path d='M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71'/><path d='M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71'/></svg> 组合</button><button style='width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);cursor:pointer;flex-shrink:0' onclick='refreshIconList()' title='刷新'><svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M23 4v6h-6'/><path d='M1 20v-6h6'/><path d='M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15'/></svg></button>";
-
-    // Clear button (mode-specific)
-    if (cfg.clearFn === 'clearDescImageSelection') {
-      html += "<button style='width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);cursor:pointer;flex-shrink:0' onclick='clearDescImageSelection(this,"+ctx.bi+","+(cfg.igRowDi ? ctx.ii : (ctx.di||ctx.ii||0))+")' title='清空'><svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M3 6h18'/><path d='M8 6V4h8v2'/><path d='M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6'/><line x1='10' y1='11' x2='10' y2='17'/><line x1='14' y1='11' x2='14' y2='17'/></svg></button>";
-    } else if (cfg.clearFn === 'clearBaseIconSelection') {
-      html += "<button style='width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);cursor:pointer;flex-shrink:0' onclick='clearBaseIconSelection(this)' title='清空' data-si='"+ctx.si+"' data-bi='"+ctx.bi+"' data-ri='"+ctx.ri+"'><svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M3 6h18'/><path d='M8 6V4h8v2'/><path d='M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6'/><line x1='10' y1='11' x2='10' y2='17'/><line x1='14' y1='11' x2='14' y2='17'/></svg></button>";
-    } else if (cfg.clearFn === 'clearBaseItemIconSelection') {
-      html += "<button style='width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);cursor:pointer;flex-shrink:0' onclick='clearBaseItemIconSelection(this)' title='清空' data-si='"+ctx.si+"' data-bi='"+ctx.bi+"' data-ri='"+ctx.ri+"' data-ci='"+ctx.ci+"' data-ii='"+ctx.ii+"'><svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M3 6h18'/><path d='M8 6V4h8v2'/><path d='M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6'/><line x1='10' y1='11' x2='10' y2='17'/><line x1='14' y1='11' x2='14' y2='17'/></svg></button>";
-    } else {
-      html += "<button style='width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);cursor:pointer;flex-shrink:0' onclick='clearIconSelection(this)' title='清空'><svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M3 6h18'/><path d='M8 6V4h8v2'/><path d='M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6'/><line x1='10' y1='11' x2='10' y2='17'/><line x1='14' y1='11' x2='14' y2='17'/></svg></button>";
-    }
-
-    // Color mode button
-    var colorBtnId = cfg.colorBtnId(ctx);
-    // Color mode button (mode-specific, matching old proven HTML)
-    if (ctx.mode === "desc_row" || ctx.mode === "icon_group") {
-      html += "<button id=\""+colorBtnId+"\" data-mode=\"off\" style=\"width:auto;height:28px;padding:0 6px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);cursor:pointer;flex-shrink:0;font-size:0.75em;opacity:0.5\" onclick=\"event.stopPropagation();toggleIconColorModeDesc("+ctx.bi+","+(ctx.ii!=null?ctx.ii:ctx.di||0)+",this)\" title=\"\u53cd\u8272\u6a21\u5f0f\uff1a\u5173\u95ed\">\u53cd\u8272\uff1a\u5173</button>";
-    } else if (ctx.mode === "info_card_title") {
-      html += "<button id=\""+colorBtnId+"\" data-mode=\"off\" style=\"width:auto;height:28px;padding:0 6px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);cursor:pointer;flex-shrink:0;font-size:0.75em;opacity:0.5\" onclick=\"event.stopPropagation();toggleIconColorMode("+ctx.bi+",this)\" title=\"\u53cd\u8272\u6a21\u5f0f\uff1a\u5173\u95ed\">\u53cd\u8272\uff1a\u5173</button>";
-    } else {
-      html += "<button id=\""+colorBtnId+"\" data-mode=\"off\" style=\"width:auto;height:28px;padding:0 6px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);cursor:pointer;flex-shrink:0;font-size:0.75em;opacity:0.5\" onclick=\"event.stopPropagation();var m=this.getAttribute('data-mode')||'off';var n=m==='off'?'normal':'off';this.setAttribute('data-mode',n);this.textContent=n==='off'?'\u53cd\u8272\uff1a\u5173':'\u53cd\u8272\uff1a\u5f00';this.style.opacity=n==='off'?'0.5':'1';this.style.color=n==='off'?'':'var(--accent)';this.style.borderColor=n==='off'?'var(--border)':'var(--accent)'\" title=\"\u53cd\u8272\u6a21\u5f0f\uff1a\u5173\u95ed\">\u53cd\u8272\uff1a\u5173</button>";
-    }
-
-    html += "<button style='width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;margin-left:auto;flex-shrink:0;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);cursor:pointer' onclick='closeIconPickerOverlay(this)' title='关闭'>✕</button></div>";
-    html += "<div class='combo-bar'><div class='combo-thumbs'></div><button class='combo-confirm-btn' onclick='event.stopPropagation();composeIcons(this)'><svg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round'><circle cx='8' cy='8' r='5'/><circle cx='16' cy='16' r='5'/><line x1='11' y1='11' x2='15' y2='15'/></svg> 合并</button></div>";
-    html += "<div style='display:flex;gap:4px;padding:0 12px 6px;overflow-x:auto;flex-shrink:0' id='iconPickerCats'>";
-    // Recent tab
-    html += "<span class='server-tab icon-cat-tab' data-cat='__recent__' onclick='filterIconPickerCat(this)'><span>🕐 最近</span><span class='cat-count-badge'>"+getRecentIcons().length+"</span></span>";
-    catOrder.forEach(function(cat){
-      html += "<span class='server-tab icon-cat-tab' data-cat='"+cat+"' onclick='filterIconPickerCat(this)'><span>"+(catLabels[cat]||cat)+"</span><span class='cat-count-badge'>"+cats[cat].length+"</span></span>";
-    });
-    html += "</div>";
-    html += "<div class='icon-picker-grid' id='iconPickerGrid'>";
-    // Mode-specific icon onclick (matching old proven HTML)
-    var iconOnclick;
-    if (ctx.mode === "info_card_title") {
-      iconOnclick = "selectInfoCardIcon(this,"+ctx.bi+")";
-    } else if (ctx.mode === "desc_row") {
-      iconOnclick = "selectDescImage(this,"+ctx.bi+","+ctx.di+")";
-    } else if (ctx.mode === "icon_group") {
-      iconOnclick = "selectDescImage(this,"+ctx.bi+","+(ctx.ii||0)+")";
-    } else {
-      iconOnclick = "selectBaseIcon(this,"+ctxJsonEsc+")";
-    }
-    list.forEach(function(item){
-      var parts2 = item.url.split("ASA/")[1]?item.url.split("ASA/")[1].split("/"):null;
-      var cat2 = (parts2 && parts2.length > 1) ? parts2[0] : "\u5176\u4ed6";
-      html += "<div class='icon-picker-item' data-url='"+item.url+"' data-name='"+item.name+"' data-cat='"+cat2+"' onclick='if(comboMode){toggleComboSelect(this)}else{addRecentIcon(this);"+iconOnclick+"}' title='"+item.name+"'><img src='"+thumbUrl(item.url,96)+"' loading='lazy' decoding='async' class='icon-picker-img' onload='this.classList.add(\"loaded\")' onerror='this.src=this.getAttribute(\"data-src\")||\"\";this.hidden=true' data-src='"+item.url+"'><span>"+item.name+"</span></div>";
-    });
-    // Recent icons grid items (hidden unless __recent__ tab active)
-    getRecentIcons().forEach(function(r){
-      html += "<div class='icon-picker-item' data-url='"+r.url+"' data-name='"+r.name+"' data-cat='__recent__' onclick='if(comboMode){toggleComboSelect(this)}else{addRecentIcon(this);"+iconOnclick+"}' title='"+r.name+"'><img src='"+thumbUrl(r.url,96)+"' loading='lazy' class='icon-picker-img' onload='this.classList.add(\"loaded\")' onerror='this.hidden=true'><span>"+r.name+"</span></div>";
-    });
-    html += "</div></div>";
-    overlay.innerHTML = html;
-    // Default active tab: recent
-    var recentTab = overlay.querySelector('.icon-cat-tab[data-cat=\"__recent__\"]');
-    if (recentTab) recentTab.classList.add('active');
-    document.body.appendChild(overlay);
-    filterIconPicker();
-  });
-}
-
-
-function closeAllPopups() {
-  document.querySelectorAll('.asa-popup.show').forEach(function(p){ p.classList.remove('show'); });
-  var cp = document.getElementById('catColorPopup');
-  if (cp) cp.classList.remove('show');
-  var op = document.getElementById('catOpacityPopup');
-  if (op) op.classList.remove('show');
-  document.querySelectorAll('.cat-bc-popup.show').forEach(function(p){ p.classList.remove('show'); });
-  document.querySelectorAll('.icon-picker-overlay').forEach(function(o){ o.remove(); });
-  document.querySelectorAll('.mobile-tab-popup.show').forEach(function(p){ p.classList.remove('show'); });
-  document.querySelectorAll('.custom-prompt-overlay').forEach(function(o){ o.remove(); });
-}
-
-
-function loadIconList(cb) {
-
-  if (iconListLoaded && iconList.length) { if (cb) cb(iconList); return; }
-
-  var loaded = 0, need = 2;
-  function done() { loaded++; if (loaded >= need && cb) cb(iconList); }
-
-  fetch('/local/asa-data/icons2.json?t='+Date.now()).then(function(r){return r.json()}).then(function(data){
-    iconList = data || []; iconListLoaded = true;
-    done();
-  }).catch(function(){
-    iconList = []; iconListLoaded = true;
-    WS.toast('图标列表加载失败', 'error');
-    done();
-  });
-
-  // Load Chinese name map
-  if (!iconZhMapLoaded) {
-    fetch('/local/asa-data/icon_zh_map.json?t='+Date.now()).then(function(r){return r.json()}).then(function(data){
-      iconZhMap = data || {}; iconZhMapLoaded = true;
-    }).catch(function(){
-      iconZhMap = {}; iconZhMapLoaded = true;
-    }).finally(done);
-  } else { done(); }
-}
-
-
-function selectQty(bi, di, n) {
-  var input = document.getElementById("mcICDescQty" + bi + "_" + di);
-  if (input) input.value = n;
-  var btn = document.getElementById("mcICDescQtyBtn" + bi + "_" + di);
-  if (btn) {
-    btn.textContent = n ? "\u00d7" + n : "\u00d7N";
-    var len = String(n).length;
-    btn.style.fontSize = (len <= 1 ? '0.65em' : len <= 2 ? '0.5em' : len <= 3 ? '0.4em' : '0.3em');
-    btn.style.opacity = n ? "1" : "0.4";
-    btn.style.borderStyle = n ? "solid" : "dashed";
-    btn.style.background = n ? "var(--accent)" : "transparent";
-    btn.style.color = n ? "var(--bg)" : "var(--text)";
-  }
-}
-
-function selectDescImage(el, bi, di) {
-  var url = el.getAttribute("data-url") || "";
-  // icon_group mode: update editorData and re-render
-  var popup2 = el.closest('.icon-picker-overlay'); var igRowDi2 = popup2 ? popup2._igRowDi : null;
-  var igInput = igRowDi2 != null ? document.querySelector('#mcIGIcons'+bi+'_'+igRowDi2+' #mcIGImg'+bi+'_'+igRowDi2+'_'+di) : document.getElementById('mcIGImg'+bi+'_'+di);
-  if (igInput && igRowDi2 != null) {
-    igInput.value = url;
-    var tab = editorData.tabs[editorSelectedTab];
-    var block = tab.content_blocks[bi];
-    var modeBtn = document.getElementById('mcICDescColorModeBtn'+bi+'_'+di);
-    var mode = modeBtn ? modeBtn.getAttribute('data-mode') || 'off' : 'off';
-    // Row-level: update editorData descriptions
-    var igContainer2 = document.getElementById('mcIGIcons'+bi+'_'+igRowDi2);
-    if (igContainer2) {
-      var igDiMatch = igContainer2.id.match(/^mcIGIcons\d+_(\d+)$/);
-      if (igDiMatch) {
-        var rowDi = parseInt(igDiMatch[1]);
-        if (block && block.descriptions && block.descriptions[rowDi] && block.descriptions[rowDi].type === 'icon_group') {
-          var desc = block.descriptions[rowDi];
-          if (desc.icons && desc.icons[di]) {
-            desc.icons[di].image_url = url;
-            desc.icons[di].image_auto_color_mode = mode;
-          } else if (desc.icons && di >= desc.icons.length) {
-            // Extend array for auto-append slot
-            while (desc.icons.length <= di) desc.icons.push({image_url:'', quantity:0, image_auto_color_mode:'off', image_native_luminance:null});
-            desc.icons[di].image_url = url;
-            desc.icons[di].image_auto_color_mode = mode;
-          }
-          // Brightness detection for 反色 mode (must run before popup closes)
-          if (mode === 'normal' && url) {
-            _pendingBrightnessChecks++;
-            _updateSaveBtnState();
-            var _bi = bi, _di2 = di, _rowDi = rowDi, _igRowDi = igRowDi2, _igContainer2 = igContainer2;
-            detectImageBrightness(url, function(luminance, errMsg) {
-              _pendingBrightnessChecks--;
-              if (luminance >= 0 && block && block.descriptions[_rowDi] && block.descriptions[_rowDi].icons && block.descriptions[_rowDi].icons[_di2]) {
-                block.descriptions[_rowDi].icons[_di2].image_native_luminance = luminance;
-                var lumInput3 = _igContainer2 ? _igContainer2.querySelector('#mcIGLum'+_bi+'_'+_igRowDi+'_'+_di2) : null;
-                if (lumInput3) lumInput3.value = luminance.toFixed(3);
-                var modeInput3 = _igContainer2 ? _igContainer2.querySelector('#mcIGMode'+_bi+'_'+_igRowDi+'_'+_di2) : null;
-                if (modeInput3) modeInput3.value = 'normal';
-                // Re-apply visual class after luminance is known
-                var igItem3 = _igContainer2 ? _igContainer2.querySelector('.ig-item img[onclick*=\"openIconPicker({mode:\'icon_group\',bi:'+_bi+',ii:'+_di2+',"]') : null;
-                if (igItem3) {
-                  var wrapper3 = igItem3.parentElement;
-                  applyAutoColorClassWithLum(igItem3, luminance);
-                  if (wrapper3) {
-                    wrapper3.setAttribute('data-lum', luminance.toFixed(3));
-                    wrapper3.classList.add('ic-mode-normal');
-                  }
-                }
-                _detectToast(true, luminance.toFixed(3));
-              } else if (errMsg) {
-                _detectToast(false, errMsg);
-              }
-              _updateSaveBtnState();
-            });
-          }
-        }
-      }
-    }
-    var overlay = el.closest('.icon-picker-overlay');
-    if (overlay) overlay.remove();
-    // Row-level: rebuild only this icon container
-    if (igContainer2 && rowDi != null) {
-      var descRef = block.descriptions[rowDi];
-      if (descRef && descRef.icons) rebuildIGContainer(igContainer2, bi, rowDi, descRef.icons);
-    }
-    return;
-  }
-  var input = document.getElementById('mcICDescImg'+bi+'_'+di);
-  if (input) input.value = url;
-  var descRow = document.getElementById('mcICDescText'+bi+'_'+di);
-  if (descRow) {
-    var container = descRow.closest('.sr-cat-card');
-    if (container) {
-      var existingImg = container.querySelector('img[onclick*="openIconPicker("]');
-      var existingBtn = container.querySelector('button[onclick*="openIconPicker("], span[onclick*="openIconPicker("]');
-      if (url) {
-        if (existingBtn) existingBtn.style.display = 'none';
-        if (existingImg) {
-          existingImg.src = thumbUrl(url, 56);
-          existingImg.style.display = '';
-          // Ensure wrapper span exists for badge support
-          var wrapper = existingImg.parentElement;
-          if (wrapper && wrapper.tagName !== 'SPAN') {
-            var dw = document.createElement('span');
-            dw.style.cssText = 'position:relative;display:inline-flex;flex-shrink:0';
-            wrapper.insertBefore(dw, existingImg);
-            dw.appendChild(existingImg);
-            wrapper = dw;
-          }
-          // Restore wrapper display (may have been hidden by clearDescImageSelection)
-          if (wrapper && wrapper.style.display === 'none') wrapper.style.display = '';
-          // Clean up duplicate placeholder spans (from v906 clearDescImageSelection fix)
-          if (existingBtn && existingBtn.style.display === 'none') {
-            var allBtns = container.querySelectorAll('span[onclick*=\"openIconPicker(\"]');
-            for (var bi2 = allBtns.length - 1; bi2 >= 0; bi2--) {
-              var s = allBtns[bi2];
-              if (s !== existingBtn && s.style.display === 'none' && s.textContent.trim() === '+') {
-                s.remove();
-              }
-            }
-          }
-          // Always sync color mode from desc-specific button
-          var modeBtn2 = document.getElementById('mcICDescColorModeBtn'+bi+'_'+di);
-          if (modeBtn2 && wrapper) {
-            var m2 = modeBtn2.getAttribute('data-mode') || 'off';
-            // color mode synced from editorData
-          }
-        } else {
-          var descWrapper = document.createElement('span');
-          descWrapper.style.cssText = 'position:relative;display:inline-flex;flex-shrink:0';
-          var newImg = document.createElement('img');
-          newImg.src = thumbUrl(url, 56);
-          newImg.setAttribute('onclick', 'event.stopPropagation();openIconPicker({mode:\'desc_row\',bi:'+bi+',di:'+di+'})');
-          newImg.setAttribute('title', '点击换图');
-          newImg.style.cssText = 'width:22px;height:22px;object-fit:contain;cursor:pointer;flex-shrink:0;border-radius:3px';
-          descWrapper.appendChild(newImg);
-          if (existingBtn) existingBtn.before(descWrapper);
-          // Sync color mode from button
-          var modeBtn = document.getElementById('mcICDescColorModeBtn'+bi+'_'+di);
-          if (modeBtn) {
-            var mode = modeBtn.getAttribute('data-mode') || 'off';
-            if (mode === 'normal') descWrapper.classList.add('ic-mode-normal');
-            else if (mode === 'reverse') descWrapper.classList.add('ic-mode-reverse');
-          }
-        }
-      } else {
-        if (existingImg) existingImg.style.display = 'none';
-        if (existingBtn) existingBtn.style.display = '';
-      }
-      // Re-apply auto-color based on current mode
-      var descImg2 = container.querySelector('img[onclick*="openIconPicker("]');
-      if (descImg2 && descImg2.style.display !== 'none') {
-        var dw2 = descImg2.parentElement;
-        if (dw2) {
-          // Sync mode class from button immediately (for badge dot)
-          var modeBtn3 = document.getElementById('mcICDescColorModeBtn'+bi+'_'+di);
-          if (modeBtn3) {
-            var m3 = modeBtn3.getAttribute('data-mode') || 'off';
-            dw2.classList.remove('ic-mode-normal','ic-mode-reverse','ic-mode-failed');
-            if (m3 === 'normal') dw2.classList.add('ic-mode-normal');
-            else if (m3 === 'reverse') dw2.classList.add('ic-mode-reverse');
-            // Write mode to editorData immediately
-            var edTab3 = editorData.tabs[editorSelectedTab];
-            if (edTab3 && edTab3.content_blocks && edTab3.content_blocks[bi]) {
-              var edBlock3 = edTab3.content_blocks[bi];
-              if (edBlock3.descriptions && edBlock3.descriptions[di]) {
-                var d3 = edBlock3.descriptions[di];
-              if (!d3.images) d3.images = [{ image_url: '', quantity: 0, image_auto_color_mode: 'off', image_native_luminance: null }];
-              d3.images[0].image_auto_color_mode = m3;
-              }
-            }
-          }
-          var isRev2 = dw2.classList.contains('ic-mode-reverse');
-          applyAutoColorClass(descImg2, null);
-          // Only run brightness detection when mode is active
-          if (m3 !== 'off') {
-          detectImageBrightness(descImg2.src, function(lum) {
-            if (lum >= 0) {
-              applyAutoColorClassWithLum(descImg2, isRev2 ? (1-lum) : lum);
-              dw2.setAttribute('data-lum', lum.toFixed(3));
-              // Sync wrapper ic-auto-* class to match img
-              dw2.classList.remove('ic-auto-light','ic-auto-dark','ic-auto-color');
-              var imgCls = descImg2.className.match(/ic-auto-(light|dark|color)/);
-              if (imgCls) dw2.classList.add(imgCls[0]);
-              // Write back to editorData so re-render uses correct luminance
-              var edTab = editorData.tabs[editorSelectedTab];
-              if (edTab && edTab.content_blocks && edTab.content_blocks[bi]) {
-                var edBlock = edTab.content_blocks[bi];
-                if (edBlock.descriptions && edBlock.descriptions[di]) {
-                  var d4 = edBlock.descriptions[di];
-                  if (!d4.images) d4.images = [{ image_url: '', quantity: 0, image_auto_color_mode: 'off', image_native_luminance: null }];
-                  d4.images[0].image_native_luminance = lum;
-                }
-              }
-              if (m3 !== 'off') _detectToast(true, lum.toFixed(3));
-            } else {
-              descImg2.className = (descImg2.className || '').replace(/\bic-auto-(dark|light|color)\b/g, '').trim() + ' ic-auto-color';
-              if (m3 !== 'off') _detectToast(false, '网络错误或图片无法访问');
-            }
-          });
-          } // end if m3 !== 'off'
-        }
-      }
-    }
-  }
-  var overlay = el.closest('.icon-picker-overlay');
-  if (overlay) overlay.remove();
-}
-
-function clearDescImageSelection(el, bi, di) {
-  event.stopPropagation();
-  // icon_group mode: clear mcIGImg and trim trailing
-  var popup3 = el.closest('.icon-picker-overlay'); var igRowDi3 = popup3 ? popup3._igRowDi : null;
-  var igInput = igRowDi3 != null ? document.querySelector('#mcIGIcons'+bi+'_'+igRowDi3+' #mcIGImg'+bi+'_'+igRowDi3+'_'+di) : document.getElementById('mcIGImg'+bi+'_'+di);
-  if (igInput && igRowDi3 != null) {
-    igInput.value = '';
-    var tab = editorData.tabs[editorSelectedTab];
-    var block = tab.content_blocks[bi];
-    // Row-level: find which description row this icon belongs to
-    var igContainer = igInput.closest('[id^="mcIGIcons'+bi+'_"]');
-    if (igContainer) {
-      var diMatch = igContainer.id.match(/^mcIGIcons\d+_(\d+)$/);
-      if (diMatch && block && block.descriptions) {
-        var rowDi = parseInt(diMatch[1]);
-        var desc = block.descriptions[rowDi];
-        if (desc && desc.type === 'icon_group' && desc.icons && desc.icons[di]) {
-          desc.icons[di].image_url = '';
-          // Remove emptied icon (unless it's the only one left, keep one empty slot)
-          if (desc.icons.length > 1) {
-            desc.icons.splice(di, 1);
-          }
-          while (desc.icons.length > 1 && !desc.icons[desc.icons.length-1].image_url && !desc.icons[desc.icons.length-2].image_url) {
-            desc.icons.pop();
-          }
-        }
-      }
-    }
-    var overlay = el.closest('.icon-picker-overlay');
-    if (overlay) overlay.remove();
-    // Row-level: rebuild only this icon container
-    if (igContainer) {
-      var desc2 = block.descriptions[rowDi];
-      if (desc2 && desc2.icons) {
-        rebuildIGContainer(igContainer, bi, rowDi, desc2.icons);
-      }
-      return;
-    }
-    reRender();
-    return;
-  }
-  var input = document.getElementById('mcICDescImg'+bi+'_'+di);
-  if (input) input.value = '';
-  var descRow = document.getElementById('mcICDescText'+bi+'_'+di);
-  if (descRow) {
-    var container = descRow.closest('.sr-cat-card');
-    if (container) {
-      var existingImg = container.querySelector('img[onclick*="openIconPicker("]');
-      var existingBtn = container.querySelector('button[onclick*="openIconPicker("]');
-      if (existingImg) { existingImg.style.display = 'none'; var dw = existingImg.parentElement; if (dw) { dw.classList.remove('ic-mode-normal','ic-mode-failed'); dw.style.display = 'none'; } }
-      if (existingBtn) { existingBtn.style.display = ''; }
-      else if (existingImg) {
-        // Placeholder not in DOM (image existed at render time, template skipped it)
-        // Create identical placeholder matching rendering template
-        var ph = document.createElement('span');
-        ph.setAttribute('onclick', 'event.stopPropagation();openIconPicker({mode:\'desc_row\',bi:'+bi+',di:'+di+'})');
-        ph.setAttribute('title', '选择图片');
-        ph.style.cssText = 'width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px';
-        ph.textContent = '+';
-        existingImg.parentElement.after(ph);
-      }
-      // Reset color mode button
-      var modeBtn = document.getElementById('mcICDescColorModeBtn'+bi+'_'+di);
-      if (modeBtn) { modeBtn.setAttribute('data-mode','off'); modeBtn.textContent='反色：关'; modeBtn.style.opacity='0.5'; }
-      // Reset mode in editorData
-      var edTab = editorData.tabs[editorSelectedTab];
-      if (edTab && edTab.content_blocks && edTab.content_blocks[bi]) {
-        var edBlock = edTab.content_blocks[bi];
-        if (edBlock.descriptions && edBlock.descriptions[di]) {
-          var d5 = edBlock.descriptions[di];
-          if (!d5.images) d5.images = [{ image_url: '', quantity: 0, image_auto_color_mode: 'off', image_native_luminance: null }];
-          d5.images[0].image_auto_color_mode = 'off';
-          d5.images[0].image_native_luminance = null;
-        }
-      }
-    }
-  }
-  var overlay = el.closest('.icon-picker-overlay');
-  if (overlay) overlay.remove();
-}
-
-function clearIconSelection(el) {
-  event.stopPropagation();
-  var overlay = el.closest('.icon-picker-overlay');
-  if (!overlay) return;
-  var isInfoCard = overlay.querySelector('.icon-picker-item')?.getAttribute('onclick')?.includes('selectInfoCardIcon');
-  if (isInfoCard) {
-    var item = overlay.querySelector('.icon-picker-item');
-    var onclick = item?.getAttribute('onclick') || '';
-    var m = onclick.match(/selectInfoCardIcon\(this,(\d+)\)/);
-    var bi = m ? parseInt(m[1]) : undefined;
-    if (bi !== undefined) {
-      document.getElementById('mcICIcon'+bi).value = '';
-      // Reset color mode button
-      var modeBtn = document.getElementById('mcICColorModeBtn'+bi);
-      if (modeBtn) { modeBtn.setAttribute('data-mode','off'); modeBtn.textContent='反色：关'; modeBtn.style.opacity='0.5'; }
-      var cb = document.getElementById('mcICAutoColor'+bi); if (cb) cb.checked = false;
-      // Remove badge
-      var pvWrap = document.getElementById('mcICIconPreview'+bi)?.parentElement;
-      if (pvWrap) pvWrap.classList.remove('ic-mode-normal');
-      var ph = document.getElementById('mcICIconPlaceholder'+bi);
-      var pv = document.getElementById('mcICIconPreview'+bi);
-      if (pv) pv.style.display = 'none';
-      if (ph) { ph.style.display = 'flex'; }
-      else {
-        var pvParent = pv ? pv.parentNode : null;
-        if (pvParent) {
-          var newPh = document.createElement('span');
-          newPh.id = 'mcICIconPlaceholder'+bi;
-          newPh.style.cssText = 'width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px';
-          newPh.setAttribute('onclick', 'event.stopPropagation();openIconPicker({mode:\'info_card_title\',bi:'+bi+'})');
-          newPh.setAttribute('title', '选择图标');
-          newPh.textContent = '+';
-          pvParent.insertBefore(newPh, pv);
-        }
-      }
-    }
-  } else {
-    var si = overlay.dataset.si;
-    var bi = overlay.dataset.bi;
-    var ri = overlay.dataset.ri;
-    if (si !== undefined) {
-      var _inp = document.getElementById('brSRIcon'+si+'_'+bi+'_'+ri);
-      if (_inp) _inp.value = '';
-      renderBaseRef();
-    }
-  }
-  overlay.remove();
-}
-
-function toggleICMap(bi, val) {
-  var el = document.getElementById('mcICHL'+bi);
-  var cur = (el.value||'').split(',').filter(function(x){return x;});
-  var i = cur.indexOf(val);
-  if (i >= 0) cur.splice(i, 1);
-  else cur.push(val);
-  el.value = cur.join(',');
-  var tab = editorData.tabs[editorSelectedTab];
-  if (tab && tab.content_blocks[bi]) tab.content_blocks[bi].highlight = el.value;
-  // Save expansion state before re-render
-  var expanded = [];
-  document.querySelectorAll('.block-body').forEach(function(bb,idx){ if(!bb.classList.contains('collapsed')) expanded.push(idx); });
-  if (typeof reRender === 'function') reRender();
-  // Restore expansion state
-  document.querySelectorAll('.block-body').forEach(function(bb,idx){ if(expanded.indexOf(idx)!==-1) bb.classList.remove('collapsed'); });
-}
-
-function setICHighlight(bi, val) {
-  document.getElementById('mcICHL'+bi).value = val;
-}
-
-function selectInfoCardIcon(el, bi) {
-  var url = el.getAttribute("data-url") || "";
-  if (!url) return;
-  var iconInput = document.getElementById('mcICIcon'+bi);
-  if (iconInput) iconInput.value = url;
-  var preview = document.getElementById('mcICIconPreview'+bi);
-  var placeholder = document.getElementById('mcICIconPlaceholder'+bi);
-  if (url) {
-    if (preview) { preview.src = thumbUrl(url, 56); preview.style.display = ''; }
-    else {
-      var container = placeholder ? placeholder.parentNode : null;
-      if (container) {
-        var wrapper = document.createElement('span');
-        wrapper.style.cssText = 'position:relative;display:inline-flex;flex-shrink:0';
-        var newImg = document.createElement('img');
-        newImg.id = 'mcICIconPreview'+bi;
-        newImg.src = url;
-        newImg.style.cssText = 'width:28px;height:28px;object-fit:contain;cursor:pointer';
-        newImg.setAttribute('onclick', 'event.stopPropagation();openIconPicker({mode:\'info_card_title\',bi:'+bi+'})');
-        newImg.setAttribute('title', '点击换图标');
-        newImg.setAttribute('onerror', 'this.hidden=true');
-        wrapper.appendChild(newImg);
-        placeholder.before(wrapper);
-        preview = newImg;
-      }
-    }
-    // Sync color mode to wrapper (both new and existing preview)
-    var img = document.getElementById('mcICIconPreview'+bi);
-    if (img) {
-      var w = img.parentElement;
-      if (w) {
-        var modeBtn = document.getElementById('mcICColorModeBtn'+bi);
-        var mode = modeBtn ? modeBtn.getAttribute('data-mode') || 'off' : 'off';
-        // Sync mode class to wrapper immediately (for badge dot)
-        w.classList.remove('ic-mode-normal','ic-mode-reverse','ic-mode-failed');
-        if (mode === 'normal') w.classList.add('ic-mode-normal');
-        else if (mode === 'reverse') w.classList.add('ic-mode-reverse');
-        // Write mode to editorData immediately
-        var edTab4 = editorData.tabs[editorSelectedTab];
-        if (edTab4 && edTab4.content_blocks && edTab4.content_blocks[bi]) {
-          var _icTarget = edTab4.content_blocks[bi];
-          if (!_icTarget.images) _icTarget.images = [{ image_url: '', quantity: 0, image_auto_color_mode: 'off', image_native_luminance: null }];
-          _icTarget.images[0].image_auto_color_mode = mode;
-        }
-        var isRev = (mode === 'reverse');
-        applyAutoColorClass(img, null);  // clear old classes
-        w.classList.remove('ic-auto-dark','ic-auto-light','ic-auto-color');
-        // Only run brightness detection when mode is active
-        if (mode !== 'off') {
-        detectImageBrightness(img.src, function(lum) {
-          if (lum >= 0) {
-            applyAutoColorClassWithLum(img, isRev ? (1-lum) : lum);
-            // Sync wrapper ic-auto-* class to match img
-            w.classList.remove('ic-auto-light','ic-auto-dark','ic-auto-color');
-            var imgCls2 = img.className.match(/ic-auto-(light|dark|color)/);
-            if (imgCls2) w.classList.add(imgCls2[0]);
-            w.classList.add('ic-mode-normal');
-            // Write back to editorData so re-render uses correct luminance
-            var edTab2 = editorData.tabs[editorSelectedTab];
-            if (edTab2 && edTab2.content_blocks && edTab2.content_blocks[bi]) {
-              var blk2 = edTab2.content_blocks[bi];
-              if (!blk2.images) blk2.images = [{ image_url: '', quantity: 0, image_auto_color_mode: 'off', image_native_luminance: null }];
-              blk2.images[0].image_native_luminance = lum;
-            }
-            if (mode !== 'off') _detectToast(true, lum.toFixed(3));
-          } else {
-            img.className = (img.className || '').replace(/\bic-auto-(dark|light|color)\b/g, '').trim() + ' ic-auto-color';
-            if (mode !== 'off') _detectToast(false, '网络错误或图片无法访问');
-          }
-        });
-        } // end if mode !== 'off'
-        var cb = document.getElementById('mcICAutoColor'+bi);
-        if (cb) cb.checked = (mode !== 'off');
-      }
-    }
-    if (placeholder) placeholder.style.display = 'none';
-  }
-  var overlay = el.closest('.icon-picker-overlay');
-  if (overlay) overlay.remove();
-}
-function filterIconPickerCat(el) {
-
-  iconPickerCat = el.getAttribute("data-cat") || "";
-
-  document.querySelectorAll("#iconPickerCats .server-tab").forEach(function(t){ t.classList.remove("active"); });
-
-  el.classList.add("active");
-
-  filterIconPicker();
-
-}
-
-function filterIconPicker() {
-  var q = (document.getElementById("iconPickerSearch")?.value||"").toLowerCase();
-  document.querySelectorAll(".icon-picker-item").forEach(function(el){
-    var name = (el.getAttribute("data-name")||"").toLowerCase();
-    var cnName = (iconZhMap[name] || "").toLowerCase();
-    var matchSearch = !q || name.includes(q) || cnName.includes(q);
-    // Search across all categories; category filter only when not searching
-    var matchCat = q ? true : (!iconPickerCat || el.dataset.cat === iconPickerCat);
-    el.style.display = (matchSearch && matchCat) ? "" : "none";
-  });
-  // Hide category bar while searching (explicit "flex" for restore)
-  var catBar = document.getElementById("iconPickerCats");
-  if (catBar) catBar.style.display = q ? "none" : "flex";
-}
-
-// === Recent icons (localStorage) ===
-var RECENT_KEY = 'asa-recent-icons', RECENT_MAX = 20;
-function addRecentIcon(el) {
-  var url = el.getAttribute('data-url') || '';
-  var nameEl = el.querySelector('span');
-  var name = nameEl ? nameEl.textContent : '';
-  var cat = el.getAttribute('data-cat') || '';
-  if (!url) return;
-  var recent = [];
-  try { recent = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch(e) {}
-  recent = recent.filter(function(r) { return r.url !== url; });
-  recent.unshift({url: url, name: name, cat: cat});
-  if (recent.length > RECENT_MAX) recent.length = RECENT_MAX;
-  localStorage.setItem(RECENT_KEY, JSON.stringify(recent));
-}
-function getRecentIcons() {
-  try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch(e) { return []; }
-}
-
-function loadIconList(cb) {
-
-  if (iconListLoaded && iconList.length) { if (cb) cb(iconList); return; }
-
-  var loaded = 0, need = 2;
-  function done() { loaded++; if (loaded >= need && cb) cb(iconList); }
-
-  fetch('/local/asa-data/icons2.json?t='+Date.now()).then(function(r){return r.json()}).then(function(data){
-    iconList = data || []; iconListLoaded = true;
-    done();
-  }).catch(function(){
-    iconList = []; iconListLoaded = true;
-    WS.toast('图标列表加载失败', 'error');
-    done();
-  });
-
-  // Load Chinese name map
-  if (!iconZhMapLoaded) {
-    fetch('/local/asa-data/icon_zh_map.json?t='+Date.now()).then(function(r){return r.json()}).then(function(data){
-      iconZhMap = data || {}; iconZhMapLoaded = true;
-    }).catch(function(){
-      iconZhMap = {}; iconZhMapLoaded = true;
-    }).finally(done);
-  } else { done(); }
-}
-
-function toggleQtyPopup(el, bi, di) {
-  var panel = document.getElementById('qtyPopupPanel');
-  if (panel && panel.classList.contains('show')) {
-    panel.classList.remove('show'); return;
-  }
-  closeAllPopups();
-  if (!panel) {
-    panel = document.createElement('div'); panel.id = 'qtyPopupPanel';
-    panel.className = 'qty-popup-panel asa-popup';
-    panel.style.flexWrap = 'wrap';
-    document.body.appendChild(panel);
-  }
-  var curVal = parseInt(document.getElementById('mcICDescQty' + bi + '_' + di)?.value) || 0;
-  panel.innerHTML = '';
-  var qtyValues = [0];
-  for (var i = 1; i <= 20; i++) qtyValues.push(i);
-  for (var i = 30; i <= 100; i += 10) qtyValues.push(i);
-  for (var i = 150; i <= 1000; i += 50) qtyValues.push(i);
-  for (var vi = 0; vi < qtyValues.length; vi++) {
-    var n = qtyValues[vi];
-    var label = n === 0 ? "\u2715" : "\u00d7" + n;
-    var selCls = (n === curVal) ? " qty-selected" : "";
-    var btn = document.createElement('button');
-    btn.className = 'qty-option' + selCls;
-    btn.style.width = '32px'; btn.style.height = '32px'; btn.style.flexShrink = '0';
-    var slen = String(n).length;
-    btn.style.fontSize = (slen <= 1 ? '0.65em' : slen <= 2 ? '0.5em' : slen <= 3 ? '0.4em' : '0.3em');
-    btn.textContent = label;
-    btn.onclick = function(n){
-      return function(){ selectQty(bi, di, n); panel.classList.remove('show'); };
-    }(n);
-    panel.appendChild(btn);
-  }
-  panel.classList.add('show');
-  var rect = el.getBoundingClientRect();
-  panel.style.top = Math.min(rect.bottom + 4, window.innerHeight - 40) + 'px';
-  panel.style.left = Math.min(Math.max(0, rect.left - 30), window.innerWidth - 260) + 'px';
-}
-function selectQty(bi, di, n) {
-  var input = document.getElementById("mcICDescQty" + bi + "_" + di);
-  if (input) input.value = n;
-  var btn = document.getElementById("mcICDescQtyBtn" + bi + "_" + di);
-  if (btn) {
-    btn.textContent = n ? "\u00d7" + n : "\u00d7N";
-    var len = String(n).length;
-    btn.style.fontSize = (len <= 1 ? '0.65em' : len <= 2 ? '0.5em' : len <= 3 ? '0.4em' : '0.3em');
-    btn.style.opacity = n ? "1" : "0.4";
-    btn.style.borderStyle = n ? "solid" : "dashed";
-    btn.style.background = n ? "var(--accent)" : "transparent";
-    btn.style.color = n ? "var(--bg)" : "var(--text)";
-  }
-}
-
-function selectInfoCardIcon(el, bi) {
-  var url = el.getAttribute("data-url") || "";
-  if (!url) return;
-  var iconInput = document.getElementById('mcICIcon'+bi);
-  if (iconInput) iconInput.value = url;
-  var preview = document.getElementById('mcICIconPreview'+bi);
-  var placeholder = document.getElementById('mcICIconPlaceholder'+bi);
-  if (url) {
-    if (preview) { preview.src = thumbUrl(url, 56); preview.style.display = ''; }
-    else {
-      var container = placeholder ? placeholder.parentNode : null;
-      if (container) {
-        var wrapper = document.createElement('span');
-        wrapper.style.cssText = 'position:relative;display:inline-flex;flex-shrink:0';
-        var newImg = document.createElement('img');
-        newImg.id = 'mcICIconPreview'+bi;
-        newImg.src = url;
-        newImg.style.cssText = 'width:28px;height:28px;object-fit:contain;cursor:pointer';
-        newImg.setAttribute('onclick', 'event.stopPropagation();openIconPicker({mode:\'info_card_title\',bi:'+bi+'})');
-        newImg.setAttribute('title', '点击换图标');
-        newImg.setAttribute('onerror', 'this.hidden=true');
-        wrapper.appendChild(newImg);
-        placeholder.before(wrapper);
-        preview = newImg;
-      }
-    }
-    // Sync color mode to wrapper (both new and existing preview)
-    var img = document.getElementById('mcICIconPreview'+bi);
-    if (img) {
-      var w = img.parentElement;
-      if (w) {
-        var modeBtn = document.getElementById('mcICColorModeBtn'+bi);
-        var mode = modeBtn ? modeBtn.getAttribute('data-mode') || 'off' : 'off';
-        // Sync mode class to wrapper immediately (for badge dot)
-        w.classList.remove('ic-mode-normal','ic-mode-reverse','ic-mode-failed');
-        if (mode === 'normal') w.classList.add('ic-mode-normal');
-        else if (mode === 'reverse') w.classList.add('ic-mode-reverse');
-        // Write mode to editorData immediately
-        var edTab4 = editorData.tabs[editorSelectedTab];
-        if (edTab4 && edTab4.content_blocks && edTab4.content_blocks[bi]) {
-          var _icTarget = edTab4.content_blocks[bi];
-          if (!_icTarget.images) _icTarget.images = [{ image_url: '', quantity: 0, image_auto_color_mode: 'off', image_native_luminance: null }];
-          _icTarget.images[0].image_auto_color_mode = mode;
-        }
-        var isRev = (mode === 'reverse');
-        applyAutoColorClass(img, null);  // clear old classes
-        w.classList.remove('ic-auto-dark','ic-auto-light','ic-auto-color');
-        // Only run brightness detection when mode is active
-        if (mode !== 'off') {
-        detectImageBrightness(img.src, function(lum) {
-          if (lum >= 0) {
-            applyAutoColorClassWithLum(img, isRev ? (1-lum) : lum);
-            // Sync wrapper ic-auto-* class to match img
-            w.classList.remove('ic-auto-light','ic-auto-dark','ic-auto-color');
-            var imgCls2 = img.className.match(/ic-auto-(light|dark|color)/);
-            if (imgCls2) w.classList.add(imgCls2[0]);
-            w.classList.add('ic-mode-normal');
-            // Write back to editorData so re-render uses correct luminance
-            var edTab2 = editorData.tabs[editorSelectedTab];
-            if (edTab2 && edTab2.content_blocks && edTab2.content_blocks[bi]) {
-              var blk2 = edTab2.content_blocks[bi];
-              if (!blk2.images) blk2.images = [{ image_url: '', quantity: 0, image_auto_color_mode: 'off', image_native_luminance: null }];
-              blk2.images[0].image_native_luminance = lum;
-            }
-            if (mode !== 'off') _detectToast(true, lum.toFixed(3));
-          } else {
-            img.className = (img.className || '').replace(/\bic-auto-(dark|light|color)\b/g, '').trim() + ' ic-auto-color';
-            if (mode !== 'off') _detectToast(false, '网络错误或图片无法访问');
-          }
-        });
-        } // end if mode !== 'off'
-        var cb = document.getElementById('mcICAutoColor'+bi);
-        if (cb) cb.checked = (mode !== 'off');
-      }
-    }
-    if (placeholder) placeholder.style.display = 'none';
-  }
-  var overlay = el.closest('.icon-picker-overlay');
-  if (overlay) overlay.remove();
-}
-
-function selectIcon(item, ctx) {
-  // Unified forwarding: delegates to mode-specific handler
-  var url = item.getAttribute("data-url") || "";
-  if (!url) return;
-  if (ctx.mode === "info_card_title") {
-    selectInfoCardIcon(item, ctx.bi);
-  } else if (ctx.mode === "desc_row") {
-    selectDescImage(item, ctx.bi, ctx.di);
-  } else if (ctx.mode === "icon_group") {
-    selectDescImage(item, ctx.bi, ctx.ii !== undefined ? ctx.ii : ctx.di);
-  } else if (ctx.mode === "base_row" || ctx.mode === "base_item") {
-    selectBaseIcon(item, ctx);
-  }
-}
-
-function clearDescImageSelection(el, bi, di) {
-  event.stopPropagation();
-  // icon_group mode: clear mcIGImg and trim trailing
-  var popup3 = el.closest('.icon-picker-overlay'); var igRowDi3 = popup3 ? popup3._igRowDi : null;
-  var igInput = igRowDi3 != null ? document.querySelector('#mcIGIcons'+bi+'_'+igRowDi3+' #mcIGImg'+bi+'_'+igRowDi3+'_'+di) : document.getElementById('mcIGImg'+bi+'_'+di);
-  if (igInput && igRowDi3 != null) {
-    igInput.value = '';
-    var tab = editorData.tabs[editorSelectedTab];
-    var block = tab.content_blocks[bi];
-    // Row-level: find which description row this icon belongs to
-    var igContainer = igInput.closest('[id^="mcIGIcons'+bi+'_"]');
-    if (igContainer) {
-      var diMatch = igContainer.id.match(/^mcIGIcons\d+_(\d+)$/);
-      if (diMatch && block && block.descriptions) {
-        var rowDi = parseInt(diMatch[1]);
-        var desc = block.descriptions[rowDi];
-        if (desc && desc.type === 'icon_group' && desc.icons && desc.icons[di]) {
-          desc.icons[di].image_url = '';
-          // Remove emptied icon (unless it's the only one left, keep one empty slot)
-          if (desc.icons.length > 1) {
-            desc.icons.splice(di, 1);
-          }
-          while (desc.icons.length > 1 && !desc.icons[desc.icons.length-1].image_url && !desc.icons[desc.icons.length-2].image_url) {
-            desc.icons.pop();
-          }
-        }
-      }
-    }
-    var overlay = el.closest('.icon-picker-overlay');
-    if (overlay) overlay.remove();
-    // Row-level: rebuild only this icon container
-    if (igContainer) {
-      var desc2 = block.descriptions[rowDi];
-      if (desc2 && desc2.icons) {
-        rebuildIGContainer(igContainer, bi, rowDi, desc2.icons);
-      }
-      return;
-    }
-    reRender();
-    return;
-  }
-  var input = document.getElementById('mcICDescImg'+bi+'_'+di);
-  if (input) input.value = '';
-  var descRow = document.getElementById('mcICDescText'+bi+'_'+di);
-  if (descRow) {
-    var container = descRow.closest('.sr-cat-card');
-    if (container) {
-      var existingImg = container.querySelector('img[onclick*="openIconPicker("]');
-      var existingBtn = container.querySelector('button[onclick*="openIconPicker("]');
-      if (existingImg) { existingImg.style.display = 'none'; var dw = existingImg.parentElement; if (dw) { dw.classList.remove('ic-mode-normal','ic-mode-failed'); dw.style.display = 'none'; } }
-      if (existingBtn) { existingBtn.style.display = ''; }
-      else if (existingImg) {
-        // Placeholder not in DOM (image existed at render time, template skipped it)
-        // Create identical placeholder matching rendering template
-        var ph = document.createElement('span');
-        ph.setAttribute('onclick', 'event.stopPropagation();openIconPicker({mode:\'desc_row\',bi:'+bi+',di:'+di+'})');
-        ph.setAttribute('title', '选择图片');
-        ph.style.cssText = 'width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px';
-        ph.textContent = '+';
-        existingImg.parentElement.after(ph);
-      }
-      // Reset color mode button
-      var modeBtn = document.getElementById('mcICDescColorModeBtn'+bi+'_'+di);
-      if (modeBtn) { modeBtn.setAttribute('data-mode','off'); modeBtn.textContent='反色：关'; modeBtn.style.opacity='0.5'; }
-      // Reset mode in editorData
-      var edTab = editorData.tabs[editorSelectedTab];
-      if (edTab && edTab.content_blocks && edTab.content_blocks[bi]) {
-        var edBlock = edTab.content_blocks[bi];
-        if (edBlock.descriptions && edBlock.descriptions[di]) {
-          var d5 = edBlock.descriptions[di];
-          if (!d5.images) d5.images = [{ image_url: '', quantity: 0, image_auto_color_mode: 'off', image_native_luminance: null }];
-          d5.images[0].image_auto_color_mode = 'off';
-          d5.images[0].image_native_luminance = null;
-        }
-      }
-    }
-  }
-  var overlay = el.closest('.icon-picker-overlay');
-  if (overlay) overlay.remove();
-}
-
-function clearIconSelection(el) {
-  event.stopPropagation();
-  var overlay = el.closest('.icon-picker-overlay');
-  if (!overlay) return;
-  var isInfoCard = overlay.querySelector('.icon-picker-item')?.getAttribute('onclick')?.includes('selectInfoCardIcon');
-  if (isInfoCard) {
-    var item = overlay.querySelector('.icon-picker-item');
-    var onclick = item?.getAttribute('onclick') || '';
-    var m = onclick.match(/selectInfoCardIcon\(this,(\d+)\)/);
-    var bi = m ? parseInt(m[1]) : undefined;
-    if (bi !== undefined) {
-      document.getElementById('mcICIcon'+bi).value = '';
-      // Reset color mode button
-      var modeBtn = document.getElementById('mcICColorModeBtn'+bi);
-      if (modeBtn) { modeBtn.setAttribute('data-mode','off'); modeBtn.textContent='反色：关'; modeBtn.style.opacity='0.5'; }
-      var cb = document.getElementById('mcICAutoColor'+bi); if (cb) cb.checked = false;
-      // Remove badge
-      var pvWrap = document.getElementById('mcICIconPreview'+bi)?.parentElement;
-      if (pvWrap) pvWrap.classList.remove('ic-mode-normal');
-      var ph = document.getElementById('mcICIconPlaceholder'+bi);
-      var pv = document.getElementById('mcICIconPreview'+bi);
-      if (pv) pv.style.display = 'none';
-      if (ph) { ph.style.display = 'flex'; }
-      else {
-        var pvParent = pv ? pv.parentNode : null;
-        if (pvParent) {
-          var newPh = document.createElement('span');
-          newPh.id = 'mcICIconPlaceholder'+bi;
-          newPh.style.cssText = 'width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px';
-          newPh.setAttribute('onclick', 'event.stopPropagation();openIconPicker({mode:\'info_card_title\',bi:'+bi+'})');
-          newPh.setAttribute('title', '选择图标');
-          newPh.textContent = '+';
-          pvParent.insertBefore(newPh, pv);
-        }
-      }
-    }
-  } else {
-    var si = overlay.dataset.si;
-    var bi = overlay.dataset.bi;
-    var ri = overlay.dataset.ri;
-    if (si !== undefined) {
-      var _inp = document.getElementById('brSRIcon'+si+'_'+bi+'_'+ri);
-      if (_inp) _inp.value = '';
-      renderBaseRef();
-    }
-  }
-  overlay.remove();
-}
-
-function closeIconPickerOverlay(el) { var o = el.closest('.icon-picker-overlay'); if (o) o.remove(); return o; }
-
-function composeIcons(btn){
-  var overlay=btn.closest('.icon-picker-overlay');
-  var thumbs=overlay.querySelector('.combo-thumbs');
-  var urls=[];
-  if(thumbs){
-    thumbs.querySelectorAll('img').forEach(function(img){urls.push(img.getAttribute('data-url'))});
-  }
-  if(urls.length===0)urls=comboSelected.slice();
-  if(urls.length<2)return;
-  var canvas=document.createElement('canvas');canvas.width=96;canvas.height=96;
-  var ctx=canvas.getContext('2d');
-  var n=urls.length;var positions=n===2?[{x:0,y:16,w:64,h:64},{x:32,y:16,w:64,h:64}]:n===3?[{x:16,y:0,w:64,h:64},{x:0,y:32,w:64,h:64},{x:32,y:32,w:64,h:64}]:[{x:0,y:0,w:64,h:64},{x:32,y:0,w:64,h:64},{x:0,y:32,w:64,h:64},{x:32,y:32,w:64,h:64}];
-  var ts=Date.now();
-  var promises=urls.map(function(url){
-    return fetch(url+'?t='+ts,{mode:'cors'}).then(function(r){return r.blob()}).then(function(blob){
-      return new Promise(function(resolve){
-        var img=new Image();
-        img.onload=function(){resolve(img)};
-        img.onerror=function(){resolve(null)};
-        img.src=URL.createObjectURL(blob);
-      });
-    }).catch(function(){return null});
-  });
-  Promise.all(promises).then(function(images){
-    images.forEach(function(img,i){if(img){var p=positions[i];var iw=img.naturalWidth||img.width,ih=img.naturalHeight||img.height;var scale=Math.min(p.w/iw,p.h/ih);var dw=iw*scale,dh=ih*scale;var dx=p.x+(p.w-dw)/2,dy=p.y+(p.h-dh)/2;ctx.drawImage(img,dx,dy,dw,dh);URL.revokeObjectURL(img.src)}});
-    try{var dataUrl=canvas.toDataURL('image/png')}catch(e){console.error('toDataURL failed',e);return}
-    var oCtx = overlay._ctx;
-    if (oCtx) {
-      switch(oCtx.mode) {
-        case 'info_card_title': saveComboIC(dataUrl, oCtx.bi, overlay); break;
-        case 'desc_row':       saveComboDesc(dataUrl, oCtx.bi, oCtx.di, overlay); break;
-        case 'icon_group':     saveComboIG(dataUrl, oCtx.bi, oCtx.ii, overlay); break;
-        case 'base_row':
-        case 'base_item':      saveComboDevice(dataUrl, overlay); break;
-      }
-    }
-  }).catch(function(e){console.error('Compose failed:',e)});
-}
-
-function filterIconPicker() {
-  var q = (document.getElementById("iconPickerSearch")?.value||"").toLowerCase();
-  document.querySelectorAll(".icon-picker-item").forEach(function(el){
-    var name = (el.getAttribute("data-name")||"").toLowerCase();
-    var cnName = (iconZhMap[name] || "").toLowerCase();
-    var matchSearch = !q || name.includes(q) || cnName.includes(q);
-    // Search across all categories; category filter only when not searching
-    var matchCat = q ? true : (!iconPickerCat || el.dataset.cat === iconPickerCat);
-    el.style.display = (matchSearch && matchCat) ? "" : "none";
-  });
-  // Hide category bar while searching (explicit "flex" for restore)
-  var catBar = document.getElementById("iconPickerCats");
-  if (catBar) catBar.style.display = q ? "none" : "flex";
-}
-
-function filterIconPickerCat(el) {
-
-  iconPickerCat = el.getAttribute("data-cat") || "";
-
-  document.querySelectorAll("#iconPickerCats .server-tab").forEach(function(t){ t.classList.remove("active"); });
-
-  el.classList.add("active");
-
-  filterIconPicker();
-
-}
-
-function getRecentIcons() {
-  try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch(e) { return []; }
-}
-
-function addRecentIcon(el) {
-  var url = el.getAttribute('data-url') || '';
-  var nameEl = el.querySelector('span');
-  var name = nameEl ? nameEl.textContent : '';
-  var cat = el.getAttribute('data-cat') || '';
-  if (!url) return;
-  var recent = [];
-  try { recent = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch(e) {}
-  recent = recent.filter(function(r) { return r.url !== url; });
-  recent.unshift({url: url, name: name, cat: cat});
-  if (recent.length > RECENT_MAX) recent.length = RECENT_MAX;
-  localStorage.setItem(RECENT_KEY, JSON.stringify(recent));
-}
-
-function refreshIconList() {
-  // Guard: prevent double-click concurrent runs
-  if (window._iconRefreshRunning) {
-    WS.toast('\u5237\u65b0\u5df2\u5728\u8fdb\u884c\u4e2d\uff0c\u8bf7\u7a0d\u5019', 'warning');
-    return;
-  }
-  window._iconRefreshRunning = true;
-
-  var btn = document.querySelector('button[onclick="refreshIconList()"]');
-  var origHTML = btn ? btn.innerHTML : '';
-  var origWidth = btn ? btn.style.width : '';
-
-  // 按钮内嵌进度条
-  function showProgress(pct, text) {
-    if (!btn) return;
-    btn.style.position = 'relative';
-    btn.style.overflow = 'hidden';
-    btn.style.width = origWidth || '220px';
-    btn.innerHTML = '<span style="position:relative;z-index:1;font-size:0.85em">' + text + '</span>'
-      + '<span style="position:absolute;left:0;top:0;bottom:0;width:' + pct + '%;background:var(--accent);opacity:0.15;transition:width .3s;z-index:0;border-radius:6px"></span>';
-  }
-
-  showProgress(0, '刷新中...');
-
-  WS.callService("shell_command", "list_r2_icons", {}).then(function(){
-    WS.callService("shell_command", "gen_icon_thumbs", {});
-    // 轮询进度文件（带停滞检测 + 超时）
-    var pollCount = 0;
-    var lastDone = -1;
-    var stallCount = 0;
-    var STALL_MAX = 20;
-    var pollTimer = setInterval(function(){
-      pollCount++;
-      fetch('/local/asa-data/thumbs_progress.json?t=' + Date.now())
-        .then(function(r){ return r.json(); })
-        .then(function(p){
-          if (p.total > 0) {
-            var pct = Math.round(p.done * 100 / p.total);
-            var txt = pct + '% (' + p.done + '/' + p.total + ')';
-            if (p.new) txt += ' +' + p.new + '\u65B0';
-            if (p.done === lastDone) {
-              stallCount++;
-              if (stallCount >= STALL_MAX) txt += ' \u26A0\uFE0F\u505C\u6EDE';
-            } else { lastDone = p.done; stallCount = 0; }
-            showProgress(pct, txt);
-          }
-          if (p.status === 'done') {
-            clearInterval(pollTimer);
-            showProgress(100, '\u5B8C\u6210!');
-            setTimeout(function(){
-              if (btn) { btn.innerHTML = origHTML; btn.style.width = origWidth; }
-            }, 1500);
-            iconListLoaded = false; iconList = [];
-            var old = document.querySelector('script[src*="icon_thumbs.js"]');
-            if (old) old.remove();
-            var s = document.createElement('script');
-            s.src = '/local/asa-data/icon_thumbs.js?t=' + Date.now();
-            document.head.appendChild(s);
-            loadIconList(function(list){
-              window._iconRefreshRunning = false;
-              var cnt = document.getElementById("r2IconCount");
-              if (cnt) cnt.textContent = list.length;
-              WS.toast("\u5df2\u5237\u65b0 " + list.length + " \u4e2a\u56fe\u6807", "success");
-            });
-          }
-        }).catch(function(){});
-    }, 600);
-  }, function(){
-    window._iconRefreshRunning = false;
-    if (btn) { btn.innerHTML = origHTML; btn.style.width = origWidth; }
-    WS.toast("\u5237\u65b0\u5931\u8d25\uff08list_r2_icons \u8fd4\u56de\u9519\u8bef\uff09", "error");
-  });
-}
-
-function loadIconCount(){ loadIconList(function(l){ document.getElementById("r2IconCount").textContent = l.length; }); }
-
-function saveComboDesc(dataUrl,bi,di,overlay){
-  var input=document.getElementById('mcICDescImg'+bi+'_'+di);
-  if(input)input.value=dataUrl;
-  var descRow=document.getElementById('mcICDescText'+bi+'_'+di);
-  if(descRow){
-    var container=descRow.closest('.sr-cat-card');
-    if(container){
-      var img=container.querySelector('img[onclick*="openIconPicker("]');
-      if(img){
-        // Ensure img is wrapped in a SPAN for CSS pseudo-elements (小兰点)
-        var existWrapper = img.parentElement;
-        if (existWrapper && existWrapper.tagName !== 'SPAN') {
-          var wrapSpan = document.createElement('span');
-          wrapSpan.style.cssText = 'position:relative;display:inline-flex;flex-shrink:0';
-          existWrapper.insertBefore(wrapSpan, img);
-          wrapSpan.appendChild(img);
-        }
-        img.src=thumbUrl(dataUrl,56);img.style.display=''}
-      else{
-        var descWrapper = document.createElement('span');
-        descWrapper.style.cssText = 'position:relative;display:inline-flex;flex-shrink:0';
-        var newImg=document.createElement('img');
-        newImg.src=thumbUrl(dataUrl,56);
-        newImg.setAttribute('onclick','event.stopPropagation();openIconPicker({mode:\'desc_row\',bi:'+bi+',di:'+di+'})');
-        newImg.title='点击换图';newImg.style.cssText='width:22px;height:22px;object-fit:contain;cursor:pointer;flex-shrink:0;border-radius:3px';
-        descWrapper.appendChild(newImg);
-        var btn=container.querySelector('span[onclick*="openIconPicker("]');
-        if(btn){btn.style.display='none';btn.before(descWrapper)}
-      }
-    }
-  }
-  // Check color mode for combo result
-  var modeBtn = document.getElementById('mcICDescColorModeBtn'+bi+'_'+di);
-  if (modeBtn && modeBtn.getAttribute('data-mode') === 'normal') {
-    _detectComboBrightness(dataUrl, function(luminance){
-      if (luminance >= 0) {
-        var descImg = document.querySelector('#mcICDescs'+bi+' .sr-cat-card img[onclick*=\"openIconPicker({mode:\'desc_row\',bi:'+bi+',di:'+di+'})\"]');
-        if (descImg) {
-          applyAutoColorClassWithLum(descImg, luminance);
-          var dw = descImg.parentElement;
-          if (dw && dw.tagName === 'SPAN') {
-            dw.classList.add('ic-mode-normal');
-            dw.setAttribute('data-lum', luminance.toFixed(3));
-          }
-        }
-        // Persist to editorData
-        var tab = editorData.tabs[editorSelectedTab];
-        if (tab && tab.content_blocks && tab.content_blocks[bi] && tab.content_blocks[bi].descriptions && tab.content_blocks[bi].descriptions[di]) {
-          var d2 = tab.content_blocks[bi].descriptions[di];
-          if (!d2.images) d2.images = [{ image_url: '', quantity: 0, image_auto_color_mode: 'off', image_native_luminance: null }];
-          d2.images[0].image_native_luminance = luminance;
-        }
-      }
-    });
-  }
-  // Persist color mode to editorData (align with selectDescImage)
-  var tabCombo = editorData.tabs[editorSelectedTab];
-  if (tabCombo && tabCombo.content_blocks && tabCombo.content_blocks[bi] && tabCombo.content_blocks[bi].descriptions && tabCombo.content_blocks[bi].descriptions[di]) {
-    var _descTarget = tabCombo.content_blocks[bi].descriptions[di];
-    if (!_descTarget.images) _descTarget.images = [{ image_url: '', quantity: 0, image_auto_color_mode: 'off', image_native_luminance: null }];
-    _descTarget.images[0].image_auto_color_mode = (modeBtn && modeBtn.getAttribute('data-mode')) || 'off';
-  }
-  // Clean up visual classes when mode is off (remove stale ic-mode-normal from previous toggle)
-  if (!modeBtn || modeBtn.getAttribute('data-mode') !== 'normal') {
-    var descImgOff = document.querySelector('#mcICDescs'+bi+' .sr-cat-card img[onclick*=\"openIconPicker({mode:\'desc_row\',bi:'+bi+',di:'+di+'})\"]');
-    if (descImgOff) {
-      applyAutoColorClass(descImgOff, null);
-      descImgOff.style.filter = 'none';
-      var dwOff = descImgOff.parentElement;
-      if (dwOff && dwOff.tagName === 'SPAN') {
-        dwOff.classList.remove('ic-mode-normal', 'ic-mode-reverse', 'ic-auto-dark', 'ic-auto-light', 'ic-auto-color');
-        dwOff.removeAttribute('data-lum');
-      }
-    }
-  }
-  comboMode=false;comboSelected=[];overlay.remove();
-}
-
-function saveComboDevice(dataUrl,overlay){
-  // Generic save: store in a data attribute on overlay and let the existing onclick handle it
-  overlay.setAttribute('data-combo-result',dataUrl);
-  // Find first selected item and simulate its click with combo result
-  var firstItem=overlay.querySelector('.combo-selected');
-  if(firstItem)firstItem.setAttribute('data-url',dataUrl);
-  comboMode=false;comboSelected=[];
-  if(firstItem)firstItem.click();
-  else overlay.remove();
-}
-
-function saveComboIC(dataUrl,bi,overlay){
-  var input=document.getElementById('mcICIcon'+bi);
-  if(input)input.value=dataUrl;
-  var pv=document.getElementById('mcICIconPreview'+bi);
-  var ph=document.getElementById('mcICIconPlaceholder'+bi);
-  if(pv){pv.src=dataUrl;pv.style.display='';pv.style.opacity=''}
-  else if(ph){
-    var wrapSpan=document.createElement('span');
-    wrapSpan.style.cssText='position:relative;display:inline-flex;flex-shrink:0';
-    var newImg2=document.createElement('img');
-    newImg2.id='mcICIconPreview'+bi;newImg2.src=dataUrl;
-    newImg2.style.cssText='width:28px;height:28px;object-fit:contain;cursor:pointer;border-radius:3px';
-    newImg2.setAttribute('onclick','event.stopPropagation();openIconPicker({mode:\'info_card_title\',bi:'+bi+'})');
-    newImg2.setAttribute('title','点击换图');
-    newImg2.onerror=function(){this.style.opacity=0};
-    wrapSpan.appendChild(newImg2);
-    ph.parentElement.insertBefore(wrapSpan, ph);
-    ph.style.display='none';
-    pv=newImg2;
-  }
-  // Check color mode for combo result
-  var modeBtn2 = document.getElementById('mcICColorModeBtn'+bi);
-  if (modeBtn2 && modeBtn2.getAttribute('data-mode') !== 'off') {
-    _detectComboBrightness(dataUrl, function(luminance){
-      if (luminance >= 0 && pv) {
-        applyAutoColorClassWithLum(pv, luminance);
-        var wrapper2 = pv.parentElement;
-        if (wrapper2 && wrapper2.tagName === 'SPAN') {
-          wrapper2.classList.remove('ic-auto-dark','ic-auto-light','ic-auto-color');
-          var icCls3 = pv.className.match(/ic-auto-(light|dark|color)/);
-          if (icCls3) wrapper2.classList.add(icCls3[0]);
-          wrapper2.classList.add('ic-mode-normal');
-          wrapper2.setAttribute('data-lum', luminance.toFixed(3));
-        }
-        var lumInput = document.getElementById('mcICIconLum'+bi);
-        if (lumInput) lumInput.value = luminance.toFixed(3);
-        // Write to editorData so saveMCBlocks reads correct luminance
-        var tabIC = editorData.tabs[editorSelectedTab];
-        if (tabIC && tabIC.content_blocks && tabIC.content_blocks[bi]) {
-          var blkIC = tabIC.content_blocks[bi];
-          if (!blkIC.images) blkIC.images = [{ image_url: '', quantity: 0, image_auto_color_mode: 'off', image_native_luminance: null }];
-          blkIC.images[0].image_native_luminance = luminance;
-          blkIC.images[0].image_auto_color_mode = modeBtn2.getAttribute('data-mode') || 'normal';
-        }
-      }
-    });
-  }
-  comboMode=false;comboSelected=[];overlay.remove();
-}
-
-function saveComboIG(dataUrl, bi, di, overlay){
-  var tab = editorData.tabs[editorSelectedTab];
-  var block = tab.content_blocks[bi];
-  var igRowDi = overlay._igRowDi;
-  var container = igRowDi != null ? document.getElementById('mcIGIcons'+bi+'_'+igRowDi) : null;
-  // Row-level data persistence: write to editorData, then rebuild DOM via rebuildIGContainer
-  var igContainerId2 = container ? container.id : '';
-  var diMatch2 = igContainerId2.match(/^mcIGIcons\d+_(\d+)$/);
-  var rowDi4, desc;
-  if (diMatch2 && block && block.descriptions) {
-    rowDi4 = parseInt(diMatch2[1]);
-    desc = block.descriptions[rowDi4];
-    if (desc && desc.type === 'icon_group' && desc.icons) {
-      while (desc.icons.length <= di) desc.icons.push({image_url:'', quantity:0, image_auto_color_mode:'off', image_native_luminance:null});
-      desc.icons[di].image_url = dataUrl;
-    }
-  }
-  // Read color mode from button inside overlay
-  var modeBtn3 = overlay ? overlay.querySelector('#mcICDescColorModeBtn'+bi+'_'+di) : null;
-  var modeVal = modeBtn3 ? modeBtn3.getAttribute('data-mode') || 'off' : 'off';
-  if (modeVal === 'normal' || modeVal === 'reverse') {
-    var isRev3 = (modeVal === 'reverse');
-    _detectComboBrightness(dataUrl, function(luminance){
-      if (luminance >= 0) {
-        // Persist luminance and mode to editorData
-        if (desc && desc.icons && desc.icons[di]) {
-          desc.icons[di].image_native_luminance = luminance;
-          desc.icons[di].image_auto_color_mode = modeVal;
-        }
-      }
-      // Rebuild DOM from editorData (ensures sync, auto-append slot, brightness visuals)
-      if (container && desc && desc.icons) rebuildIGContainer(container, bi, igRowDi, desc.icons);
-    });
-  } else {
-    // off: persist mode directly
-    if (desc && desc.icons && desc.icons[di]) {
-      desc.icons[di].image_auto_color_mode = 'off';
-    }
-    // Rebuild DOM immediately for 'off' mode
-    if (container && desc && desc.icons) rebuildIGContainer(container, bi, igRowDi, desc.icons);
-  }
-  comboMode=false;comboSelected=[];overlay.remove();
-}
-
-function showProgress(pct, text) {
-    if (!btn) return;
-    btn.style.position = 'relative';
-    btn.style.overflow = 'hidden';
-    btn.style.width = origWidth || '220px';
-    btn.innerHTML = '<span style="position:relative;z-index:1;font-size:0.85em">' + text + '</span>'
-      + '<span style="position:absolute;left:0;top:0;bottom:0;width:' + pct + '%;background:var(--accent);opacity:0.15;transition:width .3s;z-index:0;border-radius:6px"></span>';
-  }
-
-function _detectComboBrightness(dataUrl, callback){
-  _pendingBrightnessChecks++;
-  _updateSaveBtnState();
-  // Pass raw combined image directly to detectImageBrightness (it already excludes transparent pixels)
-  detectImageBrightness(dataUrl, function(luminance, errMsg){
-    _pendingBrightnessChecks--;
-    if (luminance >= 0) {
-      _detectToast(true, luminance.toFixed(3));
-      if (callback) callback(luminance);
-    }
-    _updateSaveBtnState();
-  });
-}
-
-
-
-function setICHighlight(bi, val) {
-  document.getElementById('mcICHL'+bi).value = val;
-}
-
-function toggleICMap(bi, val) {
-  var el = document.getElementById('mcICHL'+bi);
-  var cur = (el.value||'').split(',').filter(function(x){return x;});
-  var i = cur.indexOf(val);
-  if (i >= 0) cur.splice(i, 1);
-  else cur.push(val);
-  el.value = cur.join(',');
-  var tab = editorData.tabs[editorSelectedTab];
-  if (tab && tab.content_blocks[bi]) tab.content_blocks[bi].highlight = el.value;
-  // Save expansion state before re-render
-  var expanded = [];
-  document.querySelectorAll('.block-body').forEach(function(bb,idx){ if(!bb.classList.contains('collapsed')) expanded.push(idx); });
-  if (typeof reRender === 'function') reRender();
-  // Restore expansion state
-  document.querySelectorAll('.block-body').forEach(function(bb,idx){ if(expanded.indexOf(idx)!==-1) bb.classList.remove('collapsed'); });
-}
-
 
 </script>
 

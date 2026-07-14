@@ -1069,7 +1069,8 @@ const WS = {
 
   async init() {
 
-    
+    console.log('Connecting to HA...');
+
     try {
 
       const resp = await fetch('/api/', {headers:{'Authorization':'Bearer '+this._token}});
@@ -1080,7 +1081,8 @@ const WS = {
 
         this.updateStatus(true);
 
-        
+        console.log('HA connected via token');
+
         this._onConnect?.();
 
         return;
@@ -1568,7 +1570,7 @@ function autoDetectLegacyIcons() {
   });
 }
 
-// Run after render
+// Run after render (called from renderTribeOps/renderServerRules)
 var _autoDetectTimer = null;
 function scheduleAutoDetect() {
   clearTimeout(_autoDetectTimer);
@@ -1737,7 +1739,7 @@ function renderMixedEditor(title) {
 
   if (cfg.renderHeader) html += cfg.renderHeader();
 
-  html += '<div style="display:flex;flex-direction:column;flex:1;min-height:0"><div class="grid-2" style="flex:1;min-height:0;overflow:hidden">';
+  html += '<div style="display:flex;flex-direction:column;min-height:100%"><div class="grid-2" style="flex:1;min-height:0;overflow:hidden">';
 
   // Left: tab list
 
@@ -2041,7 +2043,7 @@ function pasteDesc(bi) {
 
 // ============================================================
 
-// (unified: use loadEditorData)
+// loadTribeOps removed (use loadEditorData)
 
 // SortableJS drag wrapper
 
@@ -2337,7 +2339,7 @@ function addSGColumn() {
 
   tab.columns.push({server: '', label: '', icon: 'mdi:server'});
 
-  reRender();
+  renderTribeOps();
 
 }
 
@@ -2349,7 +2351,7 @@ function addSGItem() {
 
   tab.items.push({name: '', icon_url: '', locations: {}});
 
-  reRender();
+  renderTribeOps();
 
 }
 
@@ -2373,7 +2375,7 @@ function addSGLocation(itemIdx, serverId) {
 
   item.locations[serverId].push({name, image_url: img, badge});
 
-  reRender();
+  renderTribeOps();
 
 }
 
@@ -3097,7 +3099,7 @@ function addSCLocation(bi, sid) {
 
   item.locations[sid].push({name:'', image_url:''});
 
-  reRender();
+  renderTribeOps();
 
 }
 
@@ -3109,7 +3111,7 @@ function addEDCFlow(bi) {
 
   flow.blocks.push({type:'ol', steps:[]});
 
-  reRender();
+  renderTribeOps();
 
 }
 
@@ -3442,7 +3444,7 @@ function addFTColumn() {
 
   tab.columns.push(name);
 
-  reRender();
+  renderTribeOps();
 
 }
 
@@ -3464,7 +3466,7 @@ function addFTRow() {
 
   });
 
-  reRender();
+  renderTribeOps();
 
 }
 
@@ -3484,7 +3486,7 @@ function addTORow() {
 
   tab.rows.push(row);
 
-  reRender();
+  renderTribeOps();
 
 }
 
@@ -3506,7 +3508,7 @@ function addTOLocation(serverId) {
 
   srv.locations.push({name, image_url: url});
 
-  reRender();
+  renderTribeOps();
 
 }
 
@@ -3524,7 +3526,7 @@ function addTOCard() {
 
   tab.cards.push({name, image_url: url, feature});
 
-  reRender();
+  renderTribeOps();
 
 }
 
@@ -4768,7 +4770,8 @@ function migrateMdiIconsOnce(tabs) {
   }
   if (migrated > 0) {
     localStorage.setItem('_mdi_migrated_v1172', '1');
-      }
+    console.log('MDI 迁移完成：' + migrated + ' 个块');
+  }
 }
 
 function getServerBadge(sid, states) {
@@ -6543,7 +6546,7 @@ function composeIcons(btn){
     }).catch(function(){return null});
   });
   Promise.all(promises).then(function(images){
-    images.forEach(function(img,i){if(img){var p=positions[i];var iw=img.naturalWidth||img.width,ih=img.naturalHeight||img.height;var scale=Math.min(p.w/iw,p.h/ih);var dw=iw*scale,dh=ih*scale;var dx=p.x+(p.w-dw)/2,dy=p.y+(p.h-dh)/2;ctx.drawImage(img,dx,dy,dw,dh);URL.revokeObjectURL(img.src)}});
+    images.forEach(function(img,i){if(img){var p=positions[i];ctx.drawImage(img,p.x,p.y,p.w,p.h);URL.revokeObjectURL(img.src)}});
     try{var dataUrl=canvas.toDataURL('image/png')}catch(e){console.error('toDataURL failed',e);return}
     var oCtx = overlay._ctx;
     if (oCtx) {

@@ -4,8 +4,8 @@ import sys, json, os, re
 sys.path.insert(0, '/config')
 from build_lovelace import (
     make_ic_css,
-    render_tab_html,
-    SHARED_CSS,
+    render_server_grid, render_expandable_detail, render_farming_table, render_tab_html,
+    SERVER_GRID_CSS, EXPANDABLE_DETAIL_CSS, FARMING_TABLE_CSS, SHARED_CSS,
     CARD_CORE_CSS, TABLE_CORE_CSS, BASE_RAW_CSS, strip_and_append_empty_rows,
     SERVER_MAP, FIXED_STYLES_MAP, _lookup_style
 )
