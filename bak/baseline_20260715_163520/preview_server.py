@@ -240,7 +240,17 @@ def main():
             css = SERVER_GRID_CSS
         if 'expandable_detail' in block_types:
             css += EXPANDABLE_DETAIL_CSS.replace(SHARED_CSS, '')
-        if 'filtered_cards' in block_types or 'map_filter' in block_types:
+        if 'supply_card' in block_types or 'filtered_cards' in block_types or 'map_filter' in block_types:
+            css += 'ha-card .supply-card{border-radius:12px!important;border-left:4px solid var(--divider-color)!important;margin-bottom:8px!important;padding:12px!important;display:flex!important;gap:12px!important;background:var(--primary-background-color)!important}'
+            css += 'ha-card .supply-card .sc-icon{width:48px!important;height:48px!important;flex-shrink:0!important;object-fit:contain!important;border-radius:8px!important}'
+            css += 'ha-card .supply-card .sc-body{flex:1!important;min-width:0!important}'
+            css += 'ha-card .supply-card .sc-body .sc-title{font-weight:600!important;font-size:1.05em!important;margin-bottom:6px!important}'
+            css += 'ha-card .supply-card .sc-body .sc-servers{display:flex!important;flex-wrap:wrap!important;gap:6px 12px!important}'
+            css += 'ha-card .supply-card .sc-body .sc-srv{display:flex!important;align-items:center!important;gap:4px!important;font-size:.85em!important}'
+            css += ''
+            css += 'ha-card .supply-card .sc-body .sc-srv img{width:20px!important;height:20px!important;object-fit:contain!important;border-radius:2px!important}'
+            for sid, sm in SERVER_MAP.items():
+                css += 'ha-card .supply-card .sc-srv[data-map={}]{{color:{}!important}}'.format(sid, sm['color'])
             css += 'ha-card .filter-bar{display:flex!important;flex-wrap:wrap!important;gap:6px!important;margin-bottom:12px!important}'
             css += 'ha-card .filter-radio{position:absolute!important;opacity:0!important;pointer-events:none!important}'
             css += 'ha-card .filter-bar{display:flex!important;flex-wrap:wrap!important;gap:0!important;margin-bottom:12px!important}'
@@ -257,10 +267,37 @@ def main():
         if 'info_card' in block_types:
             IC_CSS = make_ic_css(SERVER_MAP, FIXED_STYLES_MAP)
             css += IC_CSS
+        if has_icon_group:
+            css += 'ha-card .ig-title-badge{display:inline-flex!important;align-items:baseline!important;font-size:0.65em!important;padding:2px 6px!important;border-radius:6px!important;background:color-mix(in srgb,var(--primary-color) 15%,transparent)!important;color:var(--primary-text-color)!important;line-height:1!important}'
+            css += 'ha-card .ig-badge-text{position:relative!important;top:1px!important}'
+            css += 'ha-card .icon-group{gap:8px!important}'
+            css += 'ha-card .ig-item{position:relative!important;display:inline-flex!important;flex-shrink:0!important}'
+            css += 'ha-card .ig-img{width:28px!important;height:28px!important;object-fit:contain!important;border-radius:4px!important}'
+            css += 'ha-card .ig-item .ic-qty{position:absolute!important;right:-2px!important;bottom:-2px!important;font-size:0.65em!important}'
+            css += 'ha-card .ig-img.ic-auto-color{color:var(--primary-background-color)!important;fill:var(--primary-text-color)!important}'
+            css += 'ha-card .ig-img.ic-auto-dark{filter:none!important}'
+            css += 'ha-card .ig-img.ic-auto-light{filter:none!important}'
+            css += '[data-theme="dark"] .ig-img.ic-auto-dark{filter:invert(1)!important}'
+            css += '[data-theme="light"] .ig-img.ic-auto-light{filter:invert(1)!important}'
+            css += 'ha-card .ig-img.ic-auto-color{filter:var(--ic-icon-filter,none)!important}'
+            # ig-title-line + ::after separator for icon_group rows
+            css += 'ha-card .ig-title-line{border:none!important;margin:0!important;border-top:1px solid var(--primary-text-color)!important;opacity:0.15!important}'
+            css += 'ha-card .ig-row-wrapper::after{content:\'\'!important;display:block!important;width:100%!important;border-top:1px solid var(--primary-text-color)!important;opacity:0.15!important;margin-top:6px!important}'
+            css += 'ha-card .ig-row-wrapper[class*="ic-linear-"]::after{display:none!important}'
+            css += 'ha-card .ig-row-wrapper.ig-empty::after{display:none!important}'
+            # ig-row-wrapper linear mode: per-map title badge + separator colors
+            for sid, sm in SERVER_MAP.items():
+                r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)
+                css += 'ha-card .ig-row-wrapper.ic-linear-'+sid+' .ig-title-badge{color:'+sm['color']+'!important;background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important}'
+                css += 'ha-card .ig-row-wrapper.ic-linear-'+sid+' .ig-title-line{border-top-color:'+sm['color']+'!important;opacity:0.4!important}'
+                css += 'ha-card .ig-row-wrapper.ic-linear-'+sid+'::after{border-top-color:'+sm['color']+'!important;opacity:0.4!important}'
+        css += 'ha-card .ig-title-row ha-icon,ha-card .ig-title-badge ha-icon{color:inherit!important}'
         # copy_key button
         css += 'ha-card .ic-copy-key{padding:2px 6px!important;border-radius:6px!important;border:none!important;background:#0288d1!important;color:var(--primary-background-color)!important;cursor:pointer!important;font-size:0.9em!important;font-weight:400!important;line-height:1.5!important;transition:filter 0.2s!important}'
         css += 'ha-card .ic-copy-key:hover{filter:brightness(1.15)!important}'
         css += 'ha-card .ic-copy-key ha-icon{color:var(--primary-background-color)!important}'
+        if 'card_grid' in block_types:
+            css += 'ha-card .info-card{background:var(--primary-background-color);border-radius:8px;overflow:hidden;text-align:center;padding:0 0 8px 0}ha-card .info-card img{width:100%;aspect-ratio:1;object-fit:cover}ha-card .card-name{font-weight:600;margin:4px 0}ha-card .card-feature{font-size:0.85em;color:var(--secondary-text-color)}ha-card .card-grid{display:grid;gap:12px}'
     elif ttype == 'server_grid':
         html = render_server_grid(tab); css = SERVER_GRID_CSS
     elif ttype == 'expandable_detail':

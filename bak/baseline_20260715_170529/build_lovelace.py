@@ -58,10 +58,12 @@ def make_ic_css(server_map, fixed_styles_map):
     IC_CSS += 'ha-card .info-card-block .ic-sum-end{display:none}'
     IC_CSS += 'ha-card .info-card-block details[open] .ic-sum-top{display:none!important}'
     IC_CSS += 'ha-card .info-card-block details[open] .ic-sum-end{display:block!important}'
+    IC_CSS += 'ha-card .info-card-block ha-icon.ic-auto-color{color:var(--primary-background-color)!important;fill:var(--primary-text-color)!important}'
     IC_CSS += 'ha-card .info-card-block img.ic-auto-dark{filter:none}'
     IC_CSS += 'ha-card .info-card-block img.ic-auto-light{filter:none}'
     IC_CSS += '[data-theme="dark"] .info-card-block img.ic-auto-dark{filter:invert(1)}'
     IC_CSS += '[data-theme="light"] .info-card-block img.ic-auto-light{filter:invert(1)}'
+    IC_CSS += 'ha-card .info-card-block img.ic-auto-color{filter:var(--ic-icon-filter,none)}'
     IC_CSS += 'ha-card .ic-desc-img{width:24px!important;height:24px!important;object-fit:contain!important;vertical-align:middle!important;margin:0 1px 0 1px!important;flex-shrink:0!important}'
     IC_CSS += 'ha-card .ic-qty{font-size:0.75em!important;font-weight:600!important;margin-left:0!important;flex-shrink:0!important;line-height:1!important}'
     for sid, sm in server_map.items():
@@ -128,15 +130,6 @@ def make_ic_css(server_map, fixed_styles_map):
         IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-'+sid+' .ig-title-line{border-top-color:'+sm['color']+'!important;opacity:0.4!important}'
         IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-'+sid+'::after{border-top-color:'+sm['color']+'!important;opacity:0.4!important}'
     IC_CSS += 'ha-card .ig-title-row ha-icon,ha-card .ig-title-badge ha-icon{color:inherit!important}'
-    # ig-* icon image rules (migrated from old inline CSS in preview_server.py)
-    IC_CSS += 'ha-card .icon-group{gap:8px!important}'
-    IC_CSS += 'ha-card .ig-item{position:relative!important;display:inline-flex!important;flex-shrink:0!important}'
-    IC_CSS += 'ha-card .ig-img{width:28px!important;height:28px!important;object-fit:contain!important;border-radius:4px!important}'
-    IC_CSS += 'ha-card .ig-item .ic-qty{position:absolute!important;right:-2px!important;bottom:-2px!important;font-size:0.65em!important}'
-    IC_CSS += 'ha-card .ig-img.ic-auto-dark{filter:none!important}'
-    IC_CSS += 'ha-card .ig-img.ic-auto-light{filter:none!important}'
-    IC_CSS += '[data-theme="dark"] .ig-img.ic-auto-dark{filter:invert(1)!important}'
-    IC_CSS += '[data-theme="light"] .ig-img.ic-auto-light{filter:invert(1)!important}'
     return IC_CSS
 
 
@@ -1685,6 +1678,28 @@ def render_tab_html(tab):
             for val in vals: parts.append(f'<td class="border border-gray-300 p-2 text-left align-top">{esc(str(val))}</td>')
             parts.append('</tr>')
         parts.append('</tbody></table></div>')
+    if ttype == 'server_list':
+        for srv in tab.get('servers',[]):
+            sname=srv.get('name',''); scount=srv.get('count',''); locs=srv.get('locations',[])
+            parts.append(f'<div style="margin:12px 0"><h3 style="margin:0 0 8px">{esc(sname)} <small style="color:var(--secondary-text-color)">{esc(scount)}</small></h3>')
+            if locs:
+                parts.append('<ul style="margin:0;padding-left:20px">')
+                for loc in locs:
+                    limg=(loc.get('images', [{}])[0] or {}).get('image_url','')
+                    if limg: parts.append(f'<li style="margin-bottom:4px"><img src="{esc(limg)}" style="max-width:200px;max-height:80px;display:block;margin:4px 0" loading="lazy" />{esc(loc.get("name",""))}</li>')
+                    else: parts.append(f'<li>{esc(loc.get("name",""))}</li>')
+                parts.append('</ul>')
+            else: parts.append('<p style="color:var(--secondary-text-color);font-size:0.85em">暂无地点数据</p>')
+            parts.append('</div>')
+        parts.append(f'<div class="card-grid" style="grid-template-columns:repeat({cols},1fr)">')
+        for card in cards:
+            parts.append('<div class="info-card">')
+            _cg_img = (card.get('images', [{}])[0] or {}).get('image_url','')
+            if _cg_img: parts.append(f'<img src="{esc(_cg_img)}" loading="lazy" />')
+            parts.append(f'<div class="card-name">{esc(card.get("name",""))}</div>')
+            if card.get('feature'): parts.append(f'<div class="card-feature">{esc(card["feature"])}</div>')
+            parts.append('</div>')
+        parts.append('</div>')
     elif ttype == 'mixed_content':
         # Check if this tab has a map_filter
         has_map_filter=any(b.get('block_type')=='map_filter' for b in tab.get('content_blocks',[]))
@@ -1799,7 +1814,7 @@ def render_tab_html(tab):
                         use_lum = (1 - lum) if is_rev else lum
                         auto_cls = ' ic-auto-light' if use_lum > 0.5 else ' ic-auto-dark'
                     else:
-                        auto_cls = ' ic-auto-dark'
+                        auto_cls = ' ic-auto-color'
                     mode_cls = ' ic-mode-reverse' if is_rev else ' ic-mode-normal'
                 else:
                     auto_cls = ''
@@ -1935,7 +1950,7 @@ def render_tab_html(tab):
                                     use_lum = (1 - ilum) if is_rev else ilum
                                     ac_cls = ' ic-auto-light' if use_lum > 0.5 else ' ic-auto-dark'
                                 else:
-                                    ac_cls = ' ic-auto-dark'
+                                    ac_cls = ' ic-auto-dark' if is_rev else ' ic-auto-color'
                                 mode_cls = ' ic-mode-reverse' if is_rev else ' ic-mode-normal'
                             qty = '<span class="ic-qty">x{}</span>'.format(iq) if iq else ''
                             _ig_html += '<span class="ig-item{}" style="position:relative;display:inline-flex;flex-shrink:0">{}{}</span>'.format(mode_cls, '<img src="' + esc(iu) + '" class="ig-img' + ac_cls + '" style="width:28px;height:28px;object-fit:contain;border-radius:4px" onerror="this.remove()" />', qty)
@@ -2035,7 +2050,7 @@ def render_tab_html(tab):
                                 _use_lum = (1 - _dac_lum) if _is_rev else _dac_lum
                                 _dac_cls = ' ic-auto-light' if _use_lum > 0.5 else ' ic-auto-dark'
                             else:
-                                _dac_cls = ' ic-auto-dark'
+                                _dac_cls = ' ic-auto-dark' if _is_rev else ' ic-auto-color'
                             _dac_mode_cls = ' ic-mode-reverse' if _is_rev else ' ic-mode-normal'
                         _img_tag = '<img src="{}" class="ic-desc-img{}" onerror="this.remove()" />'.format(esc(_dimg_url), _dac_cls)
                         if block_maps:
@@ -2062,6 +2077,46 @@ def render_tab_html(tab):
                     parts.append('<span class="ic-sum-end" style="font-size:0.65em;background:rgba(128,128,128,0.12);border:1px solid var(--border);border-radius:10px;padding:1px 7px;margin-top:2px;flex-basis:100%;cursor:pointer" onclick="event.stopPropagation();var d=this.closest(\'details\');var root=d.getRootNode();root.querySelectorAll(\'details[name=ic-acc]\').forEach(function(o){o.open=false});">···</span></div></details>')
                 parts.append('</div>')
                 parts.append('</div>')
+            elif bt=='supply_card':
+                sc_cols=block.get('columns',[])
+                # Support both single item and legacy items array
+                sc_items=block.get('items',[]) if block.get('items') else [block.get('item')] if block.get('item') else []
+                for item in sc_items:
+                    if not item: continue
+                    sc_name=esc(item.get('name',''))
+                    sc_icon=(item.get('images', [{}])[0] or {}).get('image_url','')
+                    # Auto-compute filter_maps from location data
+                    sc_fmaps=block.get('filter_maps','')
+                    if not sc_fmaps and has_map_filter:
+                        fmaps=set()
+                        for sid,locs in item.get('locations',{}).items():
+                            if locs: fmaps.add(sid)
+                        sc_fmaps=','.join(sorted(fmaps))
+                    sext='' if not has_map_filter else ' filterable'
+                    sattrs='' if not has_map_filter else ' data-filter-maps="{}"'.format(sc_fmaps)
+                    parts.append('<div class="supply-card{}"{}>'.format(sext,sattrs))
+                    if sc_icon:
+                        parts.append('<img src="{}" class="sc-icon" loading="lazy" />'.format(esc(sc_icon)))
+                    parts.append('<div class="sc-body">')
+                    parts.append('<div class="sc-title">{}</div>'.format(sc_name))
+                    parts.append('<div class="sc-servers">')
+                    for col in sc_cols:
+                        sid=col.get('server','')
+                        icon=col.get('icon','mdi:server')
+                        label=col.get('label','')
+                        locs=item.get('locations',{}).get(sid,[])
+                        if locs:
+                            parts.append('<div class="sc-srv" data-map="{}">'.format(sid))
+                            parts.append('<ha-icon icon="{}"></ha-icon> '.format(icon))
+                            for loc in locs:
+                                loc_img=loc.get('image_url','')
+                                loc_name=esc(loc.get('name',''))
+                                if loc_img:
+                                    parts.append('<img src="{}" /> '.format(esc(loc_img)))
+                                if loc_name:
+                                    parts.append(loc_name)
+                            parts.append('</div>')
+                    parts.append('</div></div></div>')
             elif bt=='map_filter':
                 # Dynamic filter buttons based on actual server references in this tab
 
@@ -2069,13 +2124,13 @@ def render_tab_html(tab):
                     "var s=this;var r=s.getRootNode();"
                     "if(s._w){s.checked=false;s._w=false;s.parentElement.classList.remove('active');"
                     "r.querySelectorAll('.filter-label').forEach(function(l){l.style.setProperty('opacity','','')});"
-                    "r.querySelectorAll('.filterable,.ic-text[data-server-states],.ic-br').forEach(function(e){e.style.setProperty('display','','')});"
+                    "r.querySelectorAll('.filterable,.sc-srv,.ic-text[data-server-states],.ic-br').forEach(function(e){e.style.setProperty('display','','')});"
                     "return}"
                     "r.querySelectorAll('.filter-radio').forEach(function(o){o._w=false;o.parentElement.classList.remove('active')});"
                     "r.querySelectorAll('.filter-label').forEach(function(l){l.style.setProperty('opacity','0.5','important')});"
                     "s._w=true;s.parentElement.classList.add('active');s.parentElement.style.setProperty('opacity','1','important');"
                     "r.querySelectorAll('.filterable').forEach(function(e){var fm=e.getAttribute('data-filter-maps')||'';var v=!fm||fm.indexOf(s.value)>=0;e.style.setProperty('display',v?'':'none',v?'':'important')});"
-
+                    "r.querySelectorAll('.sc-srv').forEach(function(e){var pf=e.closest('.filterable');if(pf&&(pf.classList.contains('ic-block-'+s.value)||pf.classList.contains('ic-linear-'+s.value))){e.style.setProperty('display','','');return}var v=e.getAttribute('data-map')===s.value;e.style.setProperty('display',v?'':'none',v?'':'important')});"
                     "r.querySelectorAll('.ic-text[data-server-states]').forEach(function(e){var pf=e.closest('.filterable');if(pf&&(pf.classList.contains('ic-block-'+s.value)||pf.classList.contains('ic-linear-'+s.value))){e.style.setProperty('display','','');return}var ss=JSON.parse(e.getAttribute('data-server-states')||'{}');var st=(ss[s.value]||0);if(st===0){e.style.setProperty('display','none','important')}else{e.style.setProperty('display','','');if(st===1){e.classList.add('ic-linear-'+s.value)}else{e.classList.add('ic-block-'+s.value)}}});"
                     "r.querySelectorAll('.ic-br').forEach(function(e){var nxt=e.nextElementSibling;while(nxt&&nxt.nodeType===1&&!nxt.classList.contains('ic-text')&&!nxt.classList.contains('ic-br'))nxt=nxt.nextElementSibling;var prev=e.previousElementSibling;while(prev&&prev.nodeType===1&&!prev.classList.contains('ic-text')&&!prev.classList.contains('ic-br'))prev=prev.previousElementSibling;var nxtOk=nxt&&nxt.classList.contains('ic-text')&&nxt.style.getPropertyValue('display')!=='none';var prevOk=prev&&prev.classList.contains('ic-text')&&prev.style.getPropertyValue('display')!=='none';var show=nxtOk&&prevOk;e.style.setProperty('display',show?'':'none',show?'':'important')})"
                 )
@@ -2136,6 +2191,17 @@ def render_tab_html(tab):
                             parts.append('<td class="border border-gray-300 p-2 text-left align-top"></td>')
                     parts.append('</tr>')
                 parts.append('</tbody></table></div>')
+            elif bt=='card_grid':
+                cols=block.get('columns',4)
+                cards=block.get('cards',[])
+                parts.append('<div class="card-grid" style="grid-template-columns:repeat({},1fr)">'.format(cols))
+                for card in cards:
+                    parts.append('<div class="info-card">')
+                    if card.get('image_url'): parts.append('<img src="{}" loading="lazy" />'.format(esc(card['image_url'])))
+                    parts.append('<div class="card-name">{}</div>'.format(esc(card.get('name',''))))
+                    if card.get('feature'): parts.append('<div class="card-feature">{}</div>'.format(esc(card['feature'])))
+                    parts.append('</div>')
+                parts.append('</div>')
             elif bt=='expandable_detail':
                 md=block.get('map',{}) or {}
                 sd=block.get('spot',{}) or {}
@@ -2429,6 +2495,15 @@ if __name__ == "__main__":
             css = CARD_CORE_CSS + TABLE_CORE_CSS
 
             if 'map_filter' in block_types:
+                css += 'ha-card .supply-card{border-radius:12px!important;border-left:4px solid var(--divider-color)!important;margin-bottom:8px!important;padding:12px!important;display:flex!important;gap:12px!important;background:var(--primary-background-color)!important}'
+                css += 'ha-card .supply-card .sc-icon{width:48px!important;height:48px!important;flex-shrink:0!important;object-fit:contain!important;border-radius:8px!important}'
+                css += 'ha-card .supply-card .sc-body{flex:1!important;min-width:0!important}'
+                css += 'ha-card .supply-card .sc-body .sc-title{font-weight:600!important;font-size:1.05em!important;margin-bottom:6px!important}'
+                css += 'ha-card .supply-card .sc-body .sc-servers{display:flex!important;flex-wrap:wrap!important;gap:6px 12px!important}'
+                css += 'ha-card .supply-card .sc-body .sc-srv{display:flex!important;align-items:center!important;gap:4px!important;font-size:.85em!important}'
+                css += 'ha-card .supply-card .sc-body .sc-srv img{width:20px!important;height:20px!important;object-fit:contain!important;border-radius:2px!important}'
+                for sid, sm in SERVER_MAP.items():
+                    css += 'ha-card .supply-card .sc-srv[data-map='+sid+']{color:'+sm['color']+'!important}'
                 css += 'ha-card .filter-bar{display:flex!important;flex-wrap:wrap!important;gap:0!important;margin-bottom:12px!important}'
                 css += 'ha-card .filter-radio{position:absolute!important;opacity:0!important;width:0!important;height:0!important}'
                 css += 'ha-card .filter-label{display:inline-flex!important;align-items:center!important;gap:4px!important;padding:4px 12px!important;border-radius:16px!important;border:1px solid var(--divider-color)!important;font-size:.85em!important;cursor:pointer!important;user-select:none!important;line-height:1.4!important;white-space:nowrap!important;min-height:28px!important;margin-right:6px!important;margin-bottom:8px!important}'
