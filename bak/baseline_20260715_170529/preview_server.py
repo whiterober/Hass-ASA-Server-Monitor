@@ -240,7 +240,17 @@ def main():
             css = SERVER_GRID_CSS
         if 'expandable_detail' in block_types:
             css += EXPANDABLE_DETAIL_CSS.replace(SHARED_CSS, '')
-        if 'filtered_cards' in block_types or 'map_filter' in block_types:
+        if 'supply_card' in block_types or 'filtered_cards' in block_types or 'map_filter' in block_types:
+            css += 'ha-card .supply-card{border-radius:12px!important;border-left:4px solid var(--divider-color)!important;margin-bottom:8px!important;padding:12px!important;display:flex!important;gap:12px!important;background:var(--primary-background-color)!important}'
+            css += 'ha-card .supply-card .sc-icon{width:48px!important;height:48px!important;flex-shrink:0!important;object-fit:contain!important;border-radius:8px!important}'
+            css += 'ha-card .supply-card .sc-body{flex:1!important;min-width:0!important}'
+            css += 'ha-card .supply-card .sc-body .sc-title{font-weight:600!important;font-size:1.05em!important;margin-bottom:6px!important}'
+            css += 'ha-card .supply-card .sc-body .sc-servers{display:flex!important;flex-wrap:wrap!important;gap:6px 12px!important}'
+            css += 'ha-card .supply-card .sc-body .sc-srv{display:flex!important;align-items:center!important;gap:4px!important;font-size:.85em!important}'
+            css += ''
+            css += 'ha-card .supply-card .sc-body .sc-srv img{width:20px!important;height:20px!important;object-fit:contain!important;border-radius:2px!important}'
+            for sid, sm in SERVER_MAP.items():
+                css += 'ha-card .supply-card .sc-srv[data-map={}]{{color:{}!important}}'.format(sid, sm['color'])
             css += 'ha-card .filter-bar{display:flex!important;flex-wrap:wrap!important;gap:6px!important;margin-bottom:12px!important}'
             css += 'ha-card .filter-radio{position:absolute!important;opacity:0!important;pointer-events:none!important}'
             css += 'ha-card .filter-bar{display:flex!important;flex-wrap:wrap!important;gap:0!important;margin-bottom:12px!important}'
@@ -261,6 +271,8 @@ def main():
         css += 'ha-card .ic-copy-key{padding:2px 6px!important;border-radius:6px!important;border:none!important;background:#0288d1!important;color:var(--primary-background-color)!important;cursor:pointer!important;font-size:0.9em!important;font-weight:400!important;line-height:1.5!important;transition:filter 0.2s!important}'
         css += 'ha-card .ic-copy-key:hover{filter:brightness(1.15)!important}'
         css += 'ha-card .ic-copy-key ha-icon{color:var(--primary-background-color)!important}'
+        if 'card_grid' in block_types:
+            css += 'ha-card .info-card{background:var(--primary-background-color);border-radius:8px;overflow:hidden;text-align:center;padding:0 0 8px 0}ha-card .info-card img{width:100%;aspect-ratio:1;object-fit:cover}ha-card .card-name{font-weight:600;margin:4px 0}ha-card .card-feature{font-size:0.85em;color:var(--secondary-text-color)}ha-card .card-grid{display:grid;gap:12px}'
     elif ttype == 'server_grid':
         html = render_server_grid(tab); css = SERVER_GRID_CSS
     elif ttype == 'expandable_detail':
