@@ -50,7 +50,6 @@ def make_ic_css(server_map, fixed_styles_map):
     for sid, sm in server_map.items():
         IC_CSS += 'ha-card .info-card-block[data-map='+sid+']{border-color:'+sm['color']+'!important;background:transparent!important}'
     IC_CSS += 'ha-card .info-card-block .ic-icon{width:48px!important;height:48px!important;flex-shrink:0!important;object-fit:contain!important;border-radius:8px!important;background:transparent!important}'
-    IC_CSS += 'ha-card .ic-icon-wrap .ic-qty{position:absolute!important;right:0!important;bottom:0!important;color:var(--primary-text-color)!important;font-size:0.8em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important;-webkit-text-stroke:2px var(--primary-background-color)!important;paint-order:stroke fill!important}'
     IC_CSS += 'ha-card .info-card-block .ic-body{flex:1!important;min-width:0!important}'
     IC_CSS += 'ha-card .info-card-block .ic-body .ic-title{font-weight:600!important;font-size:1.05em!important;margin-bottom:4px!important;display:flex;align-items:center;gap:4px}'
     IC_CSS += 'ha-card .info-card-block .ic-body .ic-title ha-icon{flex-shrink:0}'
@@ -70,7 +69,6 @@ def make_ic_css(server_map, fixed_styles_map):
         IC_CSS += 'ha-card .ic-text.ic-block-{} .ic-qty{{background:rgba({},{},{},0)!important;-webkit-text-stroke:2px rgb({},{},{})!important;paint-order:stroke fill!important}}'.format(sid, r, g, b, r, g, b)
         IC_CSS += 'ha-card .ic-text.ic-block-'+sid+'{position:relative!important;overflow:hidden!important}'
         IC_CSS += 'ha-card .ic-text.ic-block-'+sid+' .ic-qty{position:absolute!important;right:0!important;bottom:0!important;color:var(--primary-background-color)!important;font-size:0.8em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important}'
-        IC_CSS += 'ha-card .ic-text.ic-block-'+sid+' .ig-item .ic-qty{padding-right:0!important}'
         IC_CSS += 'ha-card [data-old-webkit] .ic-text.ic-block-{} .ic-qty{{font-weight:950!important;font-family:HarmonyOS Sans SC,system-ui,Impact,sans-serif!important;-webkit-text-stroke:0.5px rgb({},{},{})!important}}'.format(sid, r, g, b)
     for fk, fv in fixed_styles_map.items():
         fc = fv.get('color', '#666')
@@ -79,7 +77,6 @@ def make_ic_css(server_map, fixed_styles_map):
         IC_CSS += 'ha-card .ic-text.ic-block-{} .ic-qty{{background:rgba({},{},{},0)!important;-webkit-text-stroke:2px rgb({},{},{})!important;paint-order:stroke fill!important}}'.format(fk, r, g, b, r, g, b)
         IC_CSS += 'ha-card .ic-text.ic-block-'+fk+'{position:relative!important;overflow:hidden!important}'
         IC_CSS += 'ha-card .ic-text.ic-block-'+fk+' .ic-qty{position:absolute!important;right:0!important;bottom:0!important;color:var(--primary-background-color)!important;font-size:0.8em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important}'
-        IC_CSS += 'ha-card .ic-text.ic-block-'+fk+' .ig-item .ic-qty{padding-right:0!important}'
         IC_CSS += 'ha-card [data-old-webkit] .ic-text.ic-block-{} .ic-qty{{font-weight:950!important;font-family:HarmonyOS Sans SC,system-ui,Impact,sans-serif!important;-webkit-text-stroke:0.5px rgb({},{},{})!important}}'.format(fk, r, g, b)
     IC_CSS += 'ha-card .ic-text.ic-auto-block .ic-qty{-webkit-text-stroke:2px var(--primary-text-color)!important}'
     IC_CSS += 'ha-card .ic-text.ic-block-_default:not(.ic-auto-block) .ic-qty{-webkit-text-stroke:2px var(--ic-block-bg)!important}'
@@ -135,7 +132,7 @@ def make_ic_css(server_map, fixed_styles_map):
     IC_CSS += 'ha-card .icon-group{gap:8px!important}'
     IC_CSS += 'ha-card .ig-item{position:relative!important;display:inline-flex!important;flex-shrink:0!important}'
     IC_CSS += 'ha-card .ig-img{width:28px!important;height:28px!important;object-fit:contain!important;border-radius:4px!important}'
-    IC_CSS += 'ha-card .ig-item .ic-qty{position:absolute!important;right:-2px!important;bottom:-2px!important;font-size:0.65em!important;white-space:nowrap!important;word-break:normal!important;padding-right:0!important}'
+    IC_CSS += 'ha-card .ig-item .ic-qty{position:absolute!important;right:-2px!important;bottom:-2px!important;font-size:0.65em!important}'
     IC_CSS += 'ha-card .ig-img.ic-auto-dark{filter:none!important}'
     IC_CSS += 'ha-card .ig-img.ic-auto-light{filter:none!important}'
     IC_CSS += '[data-theme="dark"] .ig-img.ic-auto-dark{filter:invert(1)!important}'
@@ -1807,7 +1804,6 @@ def render_tab_html(tab):
                 else:
                     auto_cls = ''
                     mode_cls = ''
-                _block_qty = _ic_img.get('quantity', 0)
                 # Block-level server_states (for card bg + title mdi)
                 blk_states = block.get('server_states', {})
                 blk_active = None; blk_st = 0
@@ -1826,11 +1822,10 @@ def render_tab_html(tab):
                     title_color_style = ' style="color:{};"'.format(ic_title_color)
                 parts.append('<div class="info-card-block{}{}" data-map="{}"{}{}>'.format(ext,blk_cls,ic_hl,eattrs,qc_style))
                 if ic_icon:
-                    _qty_html = '<span class="ic-qty">{}</span>'.format('\u00d7'+str(_block_qty)) if _block_qty else ''
                     if mode_cls:
-                        parts.append('<span class="ic-icon-wrap{}" style="position:relative;display:inline-flex;flex-shrink:0"><img src="{}" class="ic-icon{}" loading="lazy" />{}</span>'.format(mode_cls, esc(ic_icon), auto_cls, _qty_html))
+                        parts.append('<span class="ic-icon-wrap{}" style="position:relative;display:inline-flex;flex-shrink:0"><img src="{}" class="ic-icon{}" loading="lazy" /></span>'.format(mode_cls, esc(ic_icon), auto_cls))
                     else:
-                        parts.append('<span class="ic-icon-wrap" style="position:relative;display:inline-flex;flex-shrink:0"><img src="{}" class="ic-icon{}" loading="lazy" />{}</span>'.format(esc(ic_icon), auto_cls, _qty_html))
+                        parts.append('<img src="{}" class="ic-icon{}" loading="lazy" />'.format(esc(ic_icon), auto_cls))
                 parts.append('<div class="ic-body" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center">')
                 parts.append('<div class="ic-title" style="flex-basis:100%">')
 
