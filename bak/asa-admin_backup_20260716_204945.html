@@ -653,12 +653,12 @@ td, th { padding: 4px 6px; }
 /* Qty Popup */
 .qty-popup-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:transparent;z-index:9998;pointer-events:none}
 .qty-popup-overlay.show{pointer-events:auto}
-.qty-input{width:120px;height:36px;text-align:center;font-size:1em;padding:0 28px;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);color:var(--text);box-sizing:border-box}.qty-btn-inline{position:absolute;top:0;width:28px;height:36px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;border:none;background:transparent;font-size:1em;line-height:1}.qty-btn-cancel{left:0;color:var(--danger)}.qty-btn-confirm{right:0;color:var(--success)}.qty-input-wrap{position:relative;display:inline-flex}.qty-popup-panel{gap:2px;max-width:250px;box-sizing:border-box}
+.qty-popup-panel{gap:2px;max-width:250px;box-sizing:border-box}
 .qty-option{width:32px;height:32px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);color:var(--text);cursor:pointer;font-size:0.6em;opacity:0.6;box-sizing:border-box}
 .qty-option:hover{background:var(--accent);color:var(--bg);opacity:1}.qty-selected{background:var(--accent);color:var(--bg);opacity:1;border-color:var(--accent);font-weight:600}.icon-picker-item.combo-selected{border-color:var(--accent)!important;background:rgba(79,195,247,0.2)!important;position:relative}.icon-picker-item.combo-selected::after{content:attr(data-combo-idx);position:absolute;top:2px;right:2px;width:18px;height:18px;display:flex;align-items:center;justify-content:center;background:var(--accent);color:var(--bg);border-radius:50%;font-size:0.65em;font-weight:700}.combo-bar{display:none;align-items:center;gap:8px;padding:8px 12px 8px;margin-bottom:8px;background:var(--accent);background:color-mix(in oklch,var(--accent) 15%,transparent);border-bottom:1px solid var(--accent);font-size:0.85em}.combo-count{display:none}.combo-bar.active{display:flex}.combo-bar .combo-count{font-size:0.65em;opacity:0.7}.combo-confirm-btn{display:none;padding:4px 12px;border-radius:6px;background:var(--accent);color:var(--bg);border:none;cursor:pointer;font-size:0.8em;font-weight:600}.combo-confirm-btn.visible{display:inline-flex;align-items:center;gap:4px}.combo-thumbs{display:flex;gap:4px;flex-wrap:wrap}.combo-thumb-ghost{opacity:0.4}
 
-.ic-qty{position:absolute!important;right:0!important;bottom:0!important;color:var(--text)!important;font-size:0.55rem!important;font-weight:600!important;line-height:1!important;padding:1px 0 0 5px!important;border-radius:4px 0 0 0!important;background:transparent!important;-webkit-text-stroke:2px var(--primary-background-color)!important;paint-order:stroke fill!important;margin-left:0!important;flex-shrink:0!important;pointer-events:none!important}
-.ig-item .ic-qty{position:absolute!important;right:0!important;bottom:0!important}
+.ic-qty{position:absolute!important;right:0!important;bottom:0!important;color:var(--text)!important;font-size:0.55rem!important;font-weight:600!important;line-height:1!important;padding:1px 0 0 5px!important;border-radius:4px 0 0 0!important;background:transparent!important;-webkit-text-stroke:2px var(--primary-background-color)!important;paint-order:stroke fill!important;margin-left:0!important;flex-shrink:0!important}
+.ig-item .ic-qty{position:absolute!important;right:-2px!important;bottom:-2px!important;font-size:0.65em!important}
 [data-old-webkit] .ic-qty{font-weight:950!important;font-family:HarmonyOS Sans SC,system-ui,Impact,sans-serif!important;-webkit-text-stroke:0.5px var(--text)!important}
 .ic-img-wrap{position:relative;display:inline-flex;line-height:0}
 </style>
@@ -2305,7 +2305,7 @@ function renderMixedContent(tab) {
     // Block-level map selector (info_card only) — same 3-state logic as description-level
     if (bt === 'info_card') {
       h += (function(){
-        var ss = b.server_states || (b.highlight ? (function(){var o={};o[b.highlight]=2;return o;})() : {_default:1});
+        var ss = b.server_states || (b.highlight ? (function(){var o={};o[b.highlight]=2;return o;})() : {});
         var ak = null, ast = 0;
         Object.keys(ss).forEach(function(k){ if(ss[k] > 0){ ak = k; ast = ss[k]; } });
         var bg = 'background:transparent;border:1px solid transparent';
@@ -2313,10 +2313,8 @@ function renderMixedContent(tab) {
         if (ak) {
           var sm = SERVER_MAP[ak] || FIXED_STYLES[ak];
           if (sm) {
-            var _sc = sm.c === 'auto' ? 'var(--text)' : sm.c;
-            var _sbg = sm.c === 'auto' ? '#666' : sm.c;
-            if (ast === 2) { bg = 'background:'+_sbg+';border:none'; icn = '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:var(--primary-background-color)"></i>'; }
-            else { bg = 'background:transparent;border:1px solid transparent'; icn = '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:'+_sc+'"></i>'; }
+            if (ast === 2) { bg = 'background:'+sm.c+';border:none'; icn = '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:var(--primary-background-color)"></i>'; }
+            else { bg = 'background:transparent;border:1px solid transparent'; icn = '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:'+sm.c+'"></i>'; }
           }
         }
         return '<button class="btn-small btn-server" id="mcBlockSrvBtn'+bi+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;'+bg+'" title="选择服务器" onclick="event.stopPropagation();toggleBlockServerPopup(this,'+bi+');">'+icn+'</button>';
@@ -2477,10 +2475,10 @@ function renderMixedContent(tab) {
 
     else if (bt === 'info_card') {
 
-            h += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><span class="cat-color-wrap" style="flex-shrink:0" title="引用块色条颜色"><span class="cat-color-dot" id="mcICQuoteDot'+bi+'" style="background:'+(b.quote_color&&b.quote_color!=='auto'?esc(b.quote_color):'linear-gradient(to right, #000 50%, #fff 50%)')+'" data-target="mcICQuoteColor'+bi+'" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><input type="hidden" id="mcICQuoteColor'+bi+'" value="'+esc(b.quote_color||'auto')+'">'+(b.icon_url?'<span style="position:relative;display:inline-flex;flex-shrink:0" class="'+(function(){var img0=(b.images&&b.images[0])?b.images[0]:{};var m=img0.image_auto_color_mode||'off';if(m==='off')return'';var l=img0.image_native_luminance;var isRev=m==='reverse';var lum=(l!=null&&l!==0.5)?l:null;var ac=lum!=null?(lum>0.5?'ic-auto-light':'ic-auto-dark'):'ic-auto-color';var badge=(m==='normal'||m==='reverse')?' ic-mode-normal':'';return ac+badge;})()+'" ><img src="'+esc(thumbUrl(b.icon_url,56))+'" id="mcICIconPreview'+bi+'" style="width:28px;height:28px;object-fit:contain;cursor:pointer" onclick="event.stopPropagation();openIconPicker({mode:\'info_card_title\',bi:'+bi+'})" data-qty-init="'+bi+'" title="点击换图标" onerror="this.style.opacity=0">'+'<span class="ic-qty" id="icQtyBadge'+bi+'" style="display:'+((b.images&&b.images[0]&&b.images[0].quantity)?'':'none')+'">'+((b.images&&b.images[0]&&b.images[0].quantity)?'\u00d7'+(b.images[0].quantity):'')+'</span></span>':'<span id="mcICIconPlaceholder'+bi+'" style="position:relative;display:inline-flex;flex-shrink:0;width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px" onclick="event.stopPropagation();openIconPicker({mode:\'info_card_title\',bi:'+bi+'})" data-qty-init="'+bi+'" title="选择图标">+</span>')+'<input type="hidden" id="mcICIcon'+bi+'" value="'+esc(b.icon_url||'')+'"><input type="hidden" id="mcICIconQty'+bi+'" value="'+((b.images&&b.images[0]&&b.images[0].quantity)||'')+'">'+'<span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap" title="标题颜色"><span class="cat-color-dot" id="mcICTitleCDot'+bi+'" style="background:'+(b.title_color&&b.title_color!=='auto'?esc(b.title_color):'linear-gradient(to right, #000 50%, #fff 50%)')+'" data-target="mcICTitleColor'+bi+'" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><input id="mcICTitle'+bi+'" value="'+esc(b.title||'')+'" placeholder="标题" style="box-sizing:border-box;flex:1;padding:4px 8px;font-size:0.85em;border-radius:0;border:none"></span></span><input type="hidden" id="mcICTitleColor'+bi+'" value="'+esc(b.title_color||'auto')+'"></div>';      
+            h += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><span class="cat-color-wrap" style="flex-shrink:0" title="引用块色条颜色"><span class="cat-color-dot" id="mcICQuoteDot'+bi+'" style="background:'+(b.quote_color&&b.quote_color!=='auto'?esc(b.quote_color):'linear-gradient(to right, #000 50%, #fff 50%)')+'" data-target="mcICQuoteColor'+bi+'" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><input type="hidden" id="mcICQuoteColor'+bi+'" value="'+esc(b.quote_color||'auto')+'">'+(b.icon_url?'<span style="position:relative;display:inline-flex;flex-shrink:0" class="'+(function(){var img0=(b.images&&b.images[0])?b.images[0]:{};var m=img0.image_auto_color_mode||'off';if(m==='off')return'';var l=img0.image_native_luminance;var isRev=m==='reverse';var lum=(l!=null&&l!==0.5)?l:null;var ac=lum!=null?(lum>0.5?'ic-auto-light':'ic-auto-dark'):'ic-auto-color';var badge=(m==='normal'||m==='reverse')?' ic-mode-normal':'';return ac+badge;})()+'" ><img src="'+esc(thumbUrl(b.icon_url,56))+'" id="mcICIconPreview'+bi+'" style="width:28px;height:28px;object-fit:contain;cursor:pointer" onclick="event.stopPropagation();openIconPicker({mode:\'info_card_title\',bi:'+bi+'})" title="点击换图标" onerror="this.style.opacity=0"></span>':'<span id="mcICIconPlaceholder'+bi+'" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px" onclick="event.stopPropagation();openIconPicker({mode:\'info_card_title\',bi:'+bi+'})" title="选择图标">+</span>')+'<input type="hidden" id="mcICIcon'+bi+'" value="'+esc(b.icon_url||'')+'">'+'<span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap" title="标题颜色"><span class="cat-color-dot" id="mcICTitleCDot'+bi+'" style="background:'+(b.title_color&&b.title_color!=='auto'?esc(b.title_color):'linear-gradient(to right, #000 50%, #fff 50%)')+'" data-target="mcICTitleColor'+bi+'" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><input id="mcICTitle'+bi+'" value="'+esc(b.title||'')+'" placeholder="标题" style="box-sizing:border-box;flex:1;padding:4px 8px;font-size:0.85em;border-radius:0;border:none"></span></span><input type="hidden" id="mcICTitleColor'+bi+'" value="'+esc(b.title_color||'auto')+'"></div>';      
       var selectedMaps = (document.getElementById('mcICHL'+bi)?.value || b.highlight||'').split(',').filter(function(x){ return x; });
       h += '<input type="hidden" id="mcICHL'+bi+'" value="'+esc(b.highlight||'')+'">';
-      h += '<input type="hidden" id="mcBlockSrvStates'+bi+'" value="'+esc(JSON.stringify(b.server_states||(b.highlight?{[b.highlight]:2}:{_default:1})))+'">';
+      h += '<input type="hidden" id="mcBlockSrvStates'+bi+'" value="'+esc(JSON.stringify(b.server_states||(b.highlight?{[b.highlight]:2}:{})))+'">';
       // Server assigned per description (popup) — card-level server buttons removed
       var descs = b.descriptions || [];
       if (!b.descriptions && b.body) descs = [{text: b.body, bold: false, color: ''}];
@@ -3047,8 +3045,6 @@ function saveMCBlocks(tab) {
       b.title_color = document.getElementById('mcICTitleColor'+bi)?.value || 'auto';
 
       b.icon_url = document.getElementById('mcICIcon'+bi)?.value || '';
-      var _blockQty = parseInt(document.getElementById('mcICIconQty'+bi)?.value) || 0;
-      if (b.images && b.images.length > 0) { b.images.forEach(function(img){ img.quantity = _blockQty; }); } else if (_blockQty) { b.images = [{image_url: b.icon_url || '', quantity: _blockQty, image_auto_color_mode: 'off', image_native_luminance: null}]; }
 
       b.highlight = document.getElementById('mcICHL'+bi)?.value || '';
       b.server_states = JSON.parse(document.getElementById('mcBlockSrvStates'+bi)?.value || '{}');
@@ -3179,7 +3175,7 @@ function saveMCBlocks(tab) {
       var _prevLum = (b.images && b.images[0]) ? b.images[0].image_native_luminance : null;
       b.images = [{
         image_url: _icUrl,
-        quantity: _blockQty,
+        quantity: 0,
         image_auto_color_mode: acMode,
         image_native_luminance: (_prevLum != null && _prevLum !== 0.5) ? _prevLum : null
       }];
@@ -4822,10 +4818,9 @@ function updateDescSrvBadge(bi, di, states) {
 function toggleBlockServerPopup(el, bi) {
   closeAllPopups();
   var popup = document.getElementById('blockServerPopup');
-  var wasShowing = popup && popup.classList.contains('show');
-  if (wasShowing) { popup.classList.remove('show'); return; }
-  if (popup) popup.remove();
-  popup = document.createElement('div'); popup.id = 'blockServerPopup'; popup.className = 'server-select-popup asa-popup';
+  if (popup) { popup.remove(); if (popup._triggerEl === el) return; }
+  popup = document.createElement('div'); popup.id = 'blockServerPopup'; popup.className = 'server-select-popup';
+  popup._triggerEl = el;
   var statesEl = document.getElementById('mcBlockSrvStates'+bi);
   var curStates = {};
   try { curStates = JSON.parse(statesEl?.value || '{}'); } catch(e) {}
@@ -4859,15 +4854,13 @@ function toggleBlockServerPopup(el, bi) {
     btn.className = 'btn-small';
     btn._srvId = k; btn._state = st;
     btn.title = s.label;
-    var sc = s.c === 'auto' ? 'var(--text)' : s.c;
-    var bg = s.c === 'auto' ? '#666' : s.c;
     var css = 'font-size:0.7em;padding:3px 8px;border-radius:999px;min-width:36px;height:26px;display:inline-flex;align-items:center;justify-content:center;gap:3px;cursor:pointer;white-space:nowrap;';
     if (st === 0) {
-      css += 'background:transparent;color:'+sc+';opacity:0.35;border:1px solid '+sc+';';
+      css += 'background:transparent;color:'+s.c+';opacity:0.35;border:1px solid '+s.c+';';
     } else if (st === 1) {
-      css += 'background:transparent;color:'+sc+';opacity:1;border:1px solid '+sc+';box-shadow:0 0 0 1px '+sc+';';
+      css += 'background:transparent;color:'+s.c+';opacity:1;border:1px solid '+s.c+';box-shadow:0 0 0 1px '+s.c+';';
     } else {
-      css += 'background:'+bg+';color:var(--primary-background-color);border:none;opacity:1;';
+      css += 'background:'+s.c+';color:var(--primary-background-color);border:none;opacity:1;';
     }
     btn.style.cssText = css;
     btn.innerHTML = '<i class="mdi mdi-'+s.n+'" style="font-size:13px;line-height:1;pointer-events:none"></i><span style="font-size:0.65em">'+s.label+'</span>';
@@ -4876,9 +4869,12 @@ function toggleBlockServerPopup(el, bi) {
   });
   document.body.appendChild(popup);
   var rect = el.getBoundingClientRect();
-  popup.style.flexWrap = 'wrap'; popup.style.gap = '4px'; popup.style.maxWidth = '332px';
+  popup.style.position = 'fixed'; popup.style.zIndex = '9999'; popup.style.background = 'var(--card)'; popup.style.border = '1px solid var(--border)'; popup.style.borderRadius = '8px'; popup.style.padding = '6px'; popup.style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)'; popup.style.display = 'flex'; popup.style.flexWrap = 'wrap'; popup.style.gap = '4px'; popup.style.maxWidth = '332px';
   popup.style.top = (rect.bottom + 4) + 'px'; popup.style.left = Math.min(rect.left, window.innerWidth - 352) + 'px';
-  popup.classList.add('show');
+  setTimeout(function(){
+    var h = function(e){ if (!popup.contains(e.target) && e.target !== el) { popup.remove(); document.removeEventListener('click', h); } };
+    document.addEventListener('click', h);
+  }, 50);
 }
 
 function selectBlockServer(bi, sid) {
@@ -4896,7 +4892,6 @@ function selectBlockServer(bi, sid) {
       curStates[sid] = st;
       if (!isFixed && hid) hid.value = sid;
     } else {
-      curStates._default = 1;
       if (!isFixed && hid) hid.value = '';
     }
     // Auto-set quote_color to server theme color (or reset)
@@ -4958,14 +4953,12 @@ function updateBlockSrvBadge(bi, states) {
   var s = SERVER_MAP[activeK] || FIXED_STYLES[activeK];
   if (!s) { btn.innerHTML = getServerBadge(''); return; }
   if (activeSt === 1) {
-    var lc = s.c === 'auto' ? 'var(--text)' : s.c;
-    btn.innerHTML = '<i class="mdi mdi-'+s.n+'" style="font-size:14px;line-height:1;color:'+lc+'"></i>';
+    btn.innerHTML = '<i class="mdi mdi-'+s.n+'" style="font-size:14px;line-height:1;color:'+s.c+'"></i>';
     btn.style.background = 'transparent';
     btn.style.border = '1px solid transparent';
   } else {
-    var bc = s.c === 'auto' ? '#666' : s.c;
-    btn.innerHTML = '<i class="mdi mdi-'+s.n+'" style="font-size:14px;line-height:1;color:var(--primary-background-color,#fff)"></i>';
-    btn.style.background = bc;
+    btn.innerHTML = '<i class="mdi mdi-'+s.n+'" style="font-size:14px;line-height:1;color:var(--primary-background-color)"></i>';
+    btn.style.background = s.c;
     btn.style.border = 'none';
   }
 }
@@ -5460,22 +5453,26 @@ function toggleQtyPopup(el, bi, di, opt_igRowDi) {
   var qtyBadgeId = (opt_igRowDi !== undefined) ? ('icQtyBadge' + bi + '_' + opt_igRowDi + '_' + di) : ('icQtyBadge' + bi + '_' + di);
   var curVal = parseInt(document.getElementById(qtyInputId)?.value) || 0;
   panel.innerHTML = '';
-  var wrap = document.createElement('span'); wrap.className = 'qty-input-wrap';
-  var input = document.createElement('input'); input.type = 'text'; input.className = 'qty-input';
-  input.inputMode = 'numeric'; input.pattern = '[0-9]*'; input.maxLength = 5; input.placeholder = '';
-  input.value = curVal || '';
-  var cancelBtn = document.createElement('span'); cancelBtn.className = 'qty-btn-inline qty-btn-cancel'; cancelBtn.textContent = '\u2715';
-  cancelBtn.title = '取消'; cancelBtn.onclick = function(){ panel.classList.remove('show'); };
-  var confirmBtn = document.createElement('span'); confirmBtn.className = 'qty-btn-inline qty-btn-confirm'; confirmBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>';
-  confirmBtn.title = '确认';
-  var doConfirm = function(){ var n = parseInt(input.value) || 0; if (n > 99999) n = 99999; selectQty(bi, di, n, opt_igRowDi); panel.classList.remove('show'); };
-  confirmBtn.onclick = doConfirm;
-  input.addEventListener('input', function(){ this.value = this.value.replace(/[^0-9]/g, '').slice(0, 5); if (parseInt(this.value) > 99999) this.value = '99999'; });
-  input.addEventListener('keydown', function(e){ if (e.key === 'Enter'){ e.preventDefault(); doConfirm(); } else if (e.key === 'Escape'){ panel.classList.remove('show'); } });
-  wrap.appendChild(cancelBtn); wrap.appendChild(input); wrap.appendChild(confirmBtn);
-  panel.appendChild(wrap);
+  var qtyValues = [0];
+  for (var i = 1; i <= 20; i++) qtyValues.push(i);
+  for (var i = 30; i <= 100; i += 10) qtyValues.push(i);
+  for (var i = 150; i <= 1000; i += 50) qtyValues.push(i);
+  for (var vi = 0; vi < qtyValues.length; vi++) {
+    var n = qtyValues[vi];
+    var label = n === 0 ? "\u2715" : "\u00d7" + n;
+    var selCls = (n === curVal) ? " qty-selected" : "";
+    var btn = document.createElement('button');
+    btn.className = 'qty-option' + selCls;
+    btn.style.width = '32px'; btn.style.height = '32px'; btn.style.flexShrink = '0';
+    var slen = String(n).length;
+    btn.style.fontSize = (slen <= 1 ? '0.65em' : slen <= 2 ? '0.5em' : slen <= 3 ? '0.4em' : '0.3em');
+    btn.textContent = label;
+    btn.onclick = function(n){
+      return function(){ selectQty(bi, di, n, opt_igRowDi); panel.classList.remove('show'); };
+    }(n);
+    panel.appendChild(btn);
+  }
   panel.classList.add('show');
-  setTimeout(function(){ input.focus(); input.select(); }, 50);
   var rect = el.getBoundingClientRect();
   panel.style.top = Math.min(rect.bottom + 4, window.innerHeight - 40) + 'px';
   panel.style.left = Math.min(Math.max(0, rect.left - 30), window.innerWidth - 260) + 'px';
@@ -5662,37 +5659,11 @@ function selectQty(bi, di, n, opt_igRowDi) {
   }
 }
 
-
-function toggleQtyPopupBlock(el, bi) {
-  var panel = document.getElementById('qtyPopupPanel');
-  if (panel && panel.classList.contains('show')) { panel.classList.remove('show'); return; }
-  closeAllPopups();
-  if (!panel) { panel = document.createElement('div'); panel.id = 'qtyPopupPanel'; panel.className = 'qty-popup-panel asa-popup'; panel.style.flexWrap = 'wrap'; document.body.appendChild(panel); }
-  var curVal = parseInt(document.getElementById('mcICIconQty' + bi)?.value) || 0;
-  panel.innerHTML = '';
-  var wrap = document.createElement('span'); wrap.className = 'qty-input-wrap';
-  var input = document.createElement('input'); input.type = 'text'; input.className = 'qty-input'; input.inputMode = 'numeric'; input.pattern = '[0-9]*'; input.maxLength = 5; input.value = curVal || '';
-  var cancelBtn = document.createElement('span'); cancelBtn.className = 'qty-btn-inline qty-btn-cancel'; cancelBtn.textContent = '\u2715'; cancelBtn.title = '取消'; cancelBtn.onclick = function(){ panel.classList.remove('show'); };
-  var confirmBtn = document.createElement('span'); confirmBtn.className = 'qty-btn-inline qty-btn-confirm'; confirmBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>'; confirmBtn.title = '确认';
-  var doConfirm = function(){ var n = parseInt(input.value) || 0; if (n > 99999) n = 99999; selectQtyBlock(bi, n); panel.classList.remove('show'); };
-  confirmBtn.onclick = doConfirm;
-  input.addEventListener('input', function(){ this.value = this.value.replace(/[^0-9]/g, '').slice(0, 5); if (parseInt(this.value) > 99999) this.value = '99999'; });
-  input.addEventListener('keydown', function(e){ if (e.key === 'Enter'){ e.preventDefault(); doConfirm(); } else if (e.key === 'Escape'){ panel.classList.remove('show'); } });
-  wrap.appendChild(cancelBtn); wrap.appendChild(input); wrap.appendChild(confirmBtn); panel.appendChild(wrap);
-  panel.classList.add('show'); setTimeout(function(){ input.focus(); input.select(); }, 50); var rect = el.getBoundingClientRect(); panel.style.top = Math.min(rect.bottom + 4, window.innerHeight - 40) + 'px'; panel.style.left = Math.min(Math.max(0, rect.left - 30), window.innerWidth - 260) + 'px';
-}
-
-function selectQtyBlock(bi, n) {
-  var input = document.getElementById("mcICIconQty" + bi); if (input) input.value = n;
-  var badge = document.getElementById("icQtyBadge" + bi);
-  if (badge) { badge.textContent = n ? "\u00d7" + n : ""; badge.style.display = n ? "" : "none"; }
-}
-
 function initQtyLongPress(img, bi, di, opt_igRowDi) {
   var timer, startX, startY, fired;
   function start(e) {
     fired = false; timer = setTimeout(function() {
-      fired = true; if (di === undefined) { toggleQtyPopupBlock(img, bi); } else { toggleQtyPopup(img, bi, di, opt_igRowDi); }
+      fired = true; toggleQtyPopup(img, bi, di, opt_igRowDi);
     }, 600);
     startX = (e.touches ? e.touches[0].clientX : e.clientX) || 0;
     startY = (e.touches ? e.touches[0].clientY : e.clientY) || 0;
@@ -5715,8 +5686,7 @@ function initQtyLongPress(img, bi, di, opt_igRowDi) {
 function initQtyBadges() {
   document.querySelectorAll('[data-qty-init]:not([data-qty-inited])').forEach(function(img) {
     var parts = img.getAttribute('data-qty-init').split(',');
-    if (parts.length === 1) { initQtyLongPress(img, parseInt(parts[0])); img.setAttribute('data-qty-inited','1'); }
-    else if (parts.length === 2) { initQtyLongPress(img, parseInt(parts[0]), parseInt(parts[1])); img.setAttribute('data-qty-inited','1'); }
+    if (parts.length === 2) { initQtyLongPress(img, parseInt(parts[0]), parseInt(parts[1])); img.setAttribute('data-qty-inited','1'); }
     else if (parts.length === 3) { initQtyLongPress(img, parseInt(parts[0]), parseInt(parts[2]), parseInt(parts[1])); img.setAttribute('data-qty-inited','1'); }
   });
 }
@@ -6095,8 +6065,6 @@ function selectInfoCardIcon(el, bi) {
         newImg.setAttribute('onclick', 'event.stopPropagation();openIconPicker({mode:\'info_card_title\',bi:'+bi+'})');
         newImg.setAttribute('title', '点击换图标');
         newImg.setAttribute('onerror', 'this.hidden=true');
-        newImg.setAttribute('data-qty-init', ''+bi);
-        var badgeSpan = document.createElement('span'); badgeSpan.className = 'ic-qty'; badgeSpan.id = 'icQtyBadge'+bi; badgeSpan.style.display = 'none'; wrapper.appendChild(badgeSpan);
         wrapper.appendChild(newImg);
         placeholder.before(wrapper);
         preview = newImg;
@@ -6244,22 +6212,26 @@ function toggleQtyPopup(el, bi, di, opt_igRowDi) {
   var qtyBadgeId = (opt_igRowDi !== undefined) ? ('icQtyBadge' + bi + '_' + opt_igRowDi + '_' + di) : ('icQtyBadge' + bi + '_' + di);
   var curVal = parseInt(document.getElementById(qtyInputId)?.value) || 0;
   panel.innerHTML = '';
-  var wrap = document.createElement('span'); wrap.className = 'qty-input-wrap';
-  var input = document.createElement('input'); input.type = 'text'; input.className = 'qty-input';
-  input.inputMode = 'numeric'; input.pattern = '[0-9]*'; input.maxLength = 5; input.placeholder = '';
-  input.value = curVal || '';
-  var cancelBtn = document.createElement('span'); cancelBtn.className = 'qty-btn-inline qty-btn-cancel'; cancelBtn.textContent = '\u2715';
-  cancelBtn.title = '取消'; cancelBtn.onclick = function(){ panel.classList.remove('show'); };
-  var confirmBtn = document.createElement('span'); confirmBtn.className = 'qty-btn-inline qty-btn-confirm'; confirmBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>';
-  confirmBtn.title = '确认';
-  var doConfirm = function(){ var n = parseInt(input.value) || 0; if (n > 99999) n = 99999; selectQty(bi, di, n, opt_igRowDi); panel.classList.remove('show'); };
-  confirmBtn.onclick = doConfirm;
-  input.addEventListener('input', function(){ this.value = this.value.replace(/[^0-9]/g, '').slice(0, 5); if (parseInt(this.value) > 99999) this.value = '99999'; });
-  input.addEventListener('keydown', function(e){ if (e.key === 'Enter'){ e.preventDefault(); doConfirm(); } else if (e.key === 'Escape'){ panel.classList.remove('show'); } });
-  wrap.appendChild(cancelBtn); wrap.appendChild(input); wrap.appendChild(confirmBtn);
-  panel.appendChild(wrap);
+  var qtyValues = [0];
+  for (var i = 1; i <= 20; i++) qtyValues.push(i);
+  for (var i = 30; i <= 100; i += 10) qtyValues.push(i);
+  for (var i = 150; i <= 1000; i += 50) qtyValues.push(i);
+  for (var vi = 0; vi < qtyValues.length; vi++) {
+    var n = qtyValues[vi];
+    var label = n === 0 ? "\u2715" : "\u00d7" + n;
+    var selCls = (n === curVal) ? " qty-selected" : "";
+    var btn = document.createElement('button');
+    btn.className = 'qty-option' + selCls;
+    btn.style.width = '32px'; btn.style.height = '32px'; btn.style.flexShrink = '0';
+    var slen = String(n).length;
+    btn.style.fontSize = (slen <= 1 ? '0.65em' : slen <= 2 ? '0.5em' : slen <= 3 ? '0.4em' : '0.3em');
+    btn.textContent = label;
+    btn.onclick = function(n){
+      return function(){ selectQty(bi, di, n, opt_igRowDi); panel.classList.remove('show'); };
+    }(n);
+    panel.appendChild(btn);
+  }
   panel.classList.add('show');
-  setTimeout(function(){ input.focus(); input.select(); }, 50);
   var rect = el.getBoundingClientRect();
   panel.style.top = Math.min(rect.bottom + 4, window.innerHeight - 40) + 'px';
   panel.style.left = Math.min(Math.max(0, rect.left - 30), window.innerWidth - 260) + 'px';
@@ -6307,8 +6279,6 @@ function selectInfoCardIcon(el, bi) {
         newImg.setAttribute('onclick', 'event.stopPropagation();openIconPicker({mode:\'info_card_title\',bi:'+bi+'})');
         newImg.setAttribute('title', '点击换图标');
         newImg.setAttribute('onerror', 'this.hidden=true');
-        newImg.setAttribute('data-qty-init', ''+bi);
-        var badgeSpan = document.createElement('span'); badgeSpan.className = 'ic-qty'; badgeSpan.id = 'icQtyBadge'+bi; badgeSpan.style.display = 'none'; wrapper.appendChild(badgeSpan);
         wrapper.appendChild(newImg);
         placeholder.before(wrapper);
         preview = newImg;
