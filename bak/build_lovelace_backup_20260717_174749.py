@@ -85,25 +85,23 @@ def make_ic_css(server_map, fixed_styles_map):
         IC_CSS += 'ha-card .ic-text.ic-block-'+fk+' .ig-item .ic-qty{padding-right:0!important}'
         IC_CSS += 'ha-card [data-old-webkit] .ic-text.ic-block-{} .ic-qty{{font-weight:950!important;font-family:HarmonyOS Sans SC,system-ui,Impact,sans-serif!important;-webkit-text-stroke:0.5px rgb({},{},{})!important}}'.format(fk, r, g, b)
     IC_CSS += 'ha-card .ic-text.ic-auto-block .ic-qty{-webkit-text-stroke:2px var(--primary-text-color)!important}'
-    IC_CSS += 'ha-card .ic-text.ic-block-_default.ic-auto-block .ic-qty{color:var(--primary-text-color)!important;-webkit-text-stroke:2px var(--primary-background-color)!important}'
     IC_CSS += 'ha-card .ic-text.ic-block-_default:not(.ic-auto-block) .ic-qty{-webkit-text-stroke:2px var(--ic-block-bg)!important}'
     IC_CSS += 'ha-card .ic-block-img{position:absolute!important;right:2px!important;top:50%!important;transform:translateY(-50%)!important;width:30px!important;height:30px!important;object-fit:contain!important;border-radius:0 4px 4px 0!important;flex-shrink:0!important}'
     IC_CSS += 'ha-card .ic-text[class*="ic-block-"]:has(.ic-block-img){padding-right:34px!important}'
     for sid, sm in server_map.items():
         r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)
-        IC_CSS += 'ha-card .ic-linear-'+sid+' .ic-badge{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important;color:'+sm['color']+'!important}'
+        IC_CSS += 'ha-card .ic-text.ic-linear-'+sid+' .ic-badge{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important;color:'+sm['color']+'!important}'
     for fk, fv in fixed_styles_map.items():
         fc = fv.get('color', '#666')
         if not fc or fc == 'auto': fc = '#666666'
         r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
-        IC_CSS += 'ha-card .ic-linear-'+fk+' .ic-badge{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important;color:'+(fc if fk != '_default' else 'var(--primary-text-color)')+'!important}'
+        IC_CSS += 'ha-card .ic-text.ic-linear-'+fk+' .ic-badge{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important;color:'+fc+'!important}'
     IC_CSS += 'ha-card .ic-badge{display:inline-block!important;padding:1px 6px!important;border-radius:10px!important;font-size:0.75em!important;background:color-mix(in srgb,var(--primary-color) 25%,transparent)!important;color:var(--primary-text-color)!important;line-height:1.5!important}'
     IC_CSS += 'ha-card .ic-badge-num{border-radius:3px!important;display:inline-flex!important;justify-content:center!important;width:16px!important;white-space:nowrap!important}'
     IC_CSS += 'ha-card .ic-badge{vertical-align:middle!important}'
     IC_CSS += 'ha-card .ic-badge-num{vertical-align:middle!important}'
     IC_CSS += 'ha-card .ic-text[class*="ic-block-"] .ic-badge-hollow{background:color-mix(in srgb,var(--primary-background-color) 20%,transparent)!important;color:var(--primary-background-color)!important}'
     IC_CSS += 'ha-card .ic-text[class*="ic-block-"][class*="ic-auto-block"] .ic-badge-hollow{color:var(--primary-text-color)!important;background:color-mix(in srgb,var(--primary-text-color) 15%,transparent)!important}'
-    IC_CSS += 'ha-card .ic-linear-_default .mdi,ha-card .ic-linear-_default ha-icon{color:var(--primary-text-color)!important}'
     for sid, sm in server_map.items():
         IC_CSS += 'ha-card .ic-linear-'+sid+' .mdi,ha-card .ic-linear-'+sid+' ha-icon{color:'+sm['color']+'!important}'
     for sid, sm in server_map.items():
@@ -117,17 +115,14 @@ def make_ic_css(server_map, fixed_styles_map):
         fc = fv.get('color', '#666')
         if not fc or fc == 'auto': fc = '#666666'
         if fk == '_default':
-            pass  # _default linear icon rule moved before server_map loop
+            IC_CSS += 'ha-card .ic-linear-_default .mdi,ha-card .ic-linear-_default ha-icon{color:var(--primary-text-color)!important}'
         else:
             IC_CSS += 'ha-card .ic-linear-'+fk+' .mdi,ha-card .ic-linear-'+fk+' ha-icon{color:'+fc+'!important}'
         if fk == '_default':
             IC_CSS += 'ha-card .ic-text.ic-block-_default{background:color-mix(in srgb,var(--primary-text-color) 10%,transparent)!important;border-radius:6px!important;padding:2px 6px!important;color:var(--primary-text-color)!important}'
         else:
             IC_CSS += 'ha-card .ic-text.ic-block-'+fk+'{background:'+fc+'!important;border-radius:6px!important;padding:2px 6px!important;color:var(--primary-background-color)!important}'
-        if fk == '_default':
-            IC_CSS += 'ha-card .ic-text.ic-block-_default .mdi,ha-card .ic-text.ic-block-_default ha-icon{color:var(--primary-text-color)!important}'
-        else:
-            IC_CSS += 'ha-card .ic-text.ic-block-'+fk+' .mdi,ha-card .ic-text.ic-block-'+fk+' ha-icon{color:var(--primary-background-color)!important}'
+        IC_CSS += 'ha-card .ic-text.ic-block-'+fk+' .mdi,ha-card .ic-text.ic-block-'+fk+' ha-icon{color:var(--primary-background-color)!important}'
         if fk == '_default':
             IC_CSS += 'ha-card .info-card-block.ic-block-_default{background:color-mix(in srgb,var(--primary-text-color) 5%,transparent)!important}'
         else:
@@ -146,20 +141,8 @@ def make_ic_css(server_map, fixed_styles_map):
     for sid, sm in server_map.items():
         r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)
         IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-'+sid+' .ig-title-badge{color:'+sm['color']+'!important;background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important}'
-        IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-'+sid+' .ig-title-badge .ic-badge{color:'+sm['color']+'!important;background:rgba('+str(r)+','+str(g)+','+str(b)+',0.25)!important}'
-        IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-'+sid+' .ig-title-badge .ic-badge-num{color:'+sm['color']+'!important;background:rgba('+str(r)+','+str(g)+','+str(b)+',0.25)!important}'
         IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-'+sid+' .ig-title-line{border-top-color:'+sm['color']+'!important;opacity:0.4!important}'
         IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-'+sid+'::after{border-top-color:'+sm['color']+'!important;opacity:0.4!important}'
-    for fk, fv in fixed_styles_map.items():
-        fc = fv.get('color', '#666')
-        if not fc or fc == 'auto': fc = '#666666'
-        fc_text = fc if fk != '_default' else 'var(--primary-text-color)'
-        r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
-        IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-'+fk+' .ig-title-badge{color:'+fc_text+'!important;background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important}'
-        IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-'+fk+' .ig-title-badge .ic-badge{color:'+fc_text+'!important;background:rgba('+str(r)+','+str(g)+','+str(b)+',0.25)!important}'
-        IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-'+fk+' .ig-title-badge .ic-badge-num{color:'+fc_text+'!important;background:rgba('+str(r)+','+str(g)+','+str(b)+',0.25)!important}'
-        IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-'+fk+' .ig-title-line{border-top-color:'+fc_text+'!important;opacity:0.4!important}'
-        IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-'+fk+'::after{border-top-color:'+fc_text+'!important;opacity:0.4!important}'
     IC_CSS += 'ha-card .ig-title-row ha-icon,ha-card .ig-title-badge ha-icon{color:inherit!important}'
     # ig-* icon image rules (migrated from old inline CSS in preview_server.py)
     IC_CSS += 'ha-card .icon-group{gap:8px!important}'
@@ -1944,17 +1927,9 @@ def render_tab_html(tab):
                         if ig_title:
                             title_icon_html = ''
                             _ig_title_text = ig_title
-                            # Check for explicit mdi: prefix in title (server maps take priority, fixed styles allow mdi override)
+                            # Check for explicit mdi: prefix in title
                             _ig_mdi = re.match(r'mdi:([\w-]+)', ig_title, re.ASCII)
-                            if linear_maps and linear_maps[0] in SERVER_MAP:
-                                sm = _lookup_style(linear_maps[0])
-                                icon = sm.get('icon', 'mdi:map')
-                                title_icon_html = '<ha-icon icon="{}" style="color:inherit;--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px"></ha-icon>'.format(icon)
-                            elif block_maps and block_maps[0] in SERVER_MAP:
-                                sm = _lookup_style(block_maps[0])
-                                icon = sm.get('icon', 'mdi:map')
-                                title_icon_html = '<ha-icon icon="{}" style="color:inherit;--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px"></ha-icon>'.format(icon)
-                            elif _ig_mdi:
+                            if _ig_mdi:
                                 title_icon_html = '<ha-icon icon="mdi:{}" style="color:inherit;--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px"></ha-icon>'.format(_ig_mdi.group(1))
                                 _ig_title_text = ig_title[_ig_mdi.end():].strip()
                             elif linear_maps:
