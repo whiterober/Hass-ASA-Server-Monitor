@@ -258,7 +258,7 @@ def main():
             IC_CSS = make_ic_css(SERVER_MAP, FIXED_STYLES_MAP)
             css += IC_CSS
         # copy_key button
-        css += 'ha-card .ic-copy-key{display:inline-flex!important;align-items:center!important;gap:4px!important;padding:2px 6px!important;border-radius:6px!important;border:none!important;background:#0288d1!important;color:var(--primary-background-color)!important;cursor:pointer!important;font-size:0.9em!important;font-weight:400!important;line-height:1.5!important;transition:filter 0.2s!important}'
+        css += 'ha-card .ic-copy-key{padding:2px 6px!important;border-radius:6px!important;border:none!important;background:#0288d1!important;color:var(--primary-background-color)!important;cursor:pointer!important;font-size:0.9em!important;font-weight:400!important;line-height:1.5!important;transition:filter 0.2s!important}'
         css += 'ha-card .ic-copy-key:hover{filter:brightness(1.15)!important}'
         css += 'ha-card .ic-copy-key ha-icon{color:var(--primary-background-color)!important}'
     elif ttype == 'server_grid':

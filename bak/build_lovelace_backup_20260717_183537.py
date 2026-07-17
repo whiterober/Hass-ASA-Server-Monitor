@@ -91,12 +91,12 @@ def make_ic_css(server_map, fixed_styles_map):
     IC_CSS += 'ha-card .ic-text[class*="ic-block-"]:has(.ic-block-img){padding-right:34px!important}'
     for sid, sm in server_map.items():
         r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)
-        IC_CSS += 'ha-card .ic-linear-'+sid+' .ic-badge{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important;color:'+sm['color']+'!important}'
+        IC_CSS += 'ha-card .ic-text.ic-linear-'+sid+' .ic-badge{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important;color:'+sm['color']+'!important}'
     for fk, fv in fixed_styles_map.items():
         fc = fv.get('color', '#666')
         if not fc or fc == 'auto': fc = '#666666'
         r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
-        IC_CSS += 'ha-card .ic-linear-'+fk+' .ic-badge{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important;color:'+(fc if fk != '_default' else 'var(--primary-text-color)')+'!important}'
+        IC_CSS += 'ha-card .ic-text.ic-linear-'+fk+' .ic-badge{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important;color:'+(fc if fk != '_default' else 'var(--primary-text-color)')+'!important}'
     IC_CSS += 'ha-card .ic-badge{display:inline-block!important;padding:1px 6px!important;border-radius:10px!important;font-size:0.75em!important;background:color-mix(in srgb,var(--primary-color) 25%,transparent)!important;color:var(--primary-text-color)!important;line-height:1.5!important}'
     IC_CSS += 'ha-card .ic-badge-num{border-radius:3px!important;display:inline-flex!important;justify-content:center!important;width:16px!important;white-space:nowrap!important}'
     IC_CSS += 'ha-card .ic-badge{vertical-align:middle!important}'
@@ -150,16 +150,6 @@ def make_ic_css(server_map, fixed_styles_map):
         IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-'+sid+' .ig-title-badge .ic-badge-num{color:'+sm['color']+'!important;background:rgba('+str(r)+','+str(g)+','+str(b)+',0.25)!important}'
         IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-'+sid+' .ig-title-line{border-top-color:'+sm['color']+'!important;opacity:0.4!important}'
         IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-'+sid+'::after{border-top-color:'+sm['color']+'!important;opacity:0.4!important}'
-    for fk, fv in fixed_styles_map.items():
-        fc = fv.get('color', '#666')
-        if not fc or fc == 'auto': fc = '#666666'
-        fc_text = fc if fk != '_default' else 'var(--primary-text-color)'
-        r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
-        IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-'+fk+' .ig-title-badge{color:'+fc_text+'!important;background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important}'
-        IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-'+fk+' .ig-title-badge .ic-badge{color:'+fc_text+'!important;background:rgba('+str(r)+','+str(g)+','+str(b)+',0.25)!important}'
-        IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-'+fk+' .ig-title-badge .ic-badge-num{color:'+fc_text+'!important;background:rgba('+str(r)+','+str(g)+','+str(b)+',0.25)!important}'
-        IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-'+fk+' .ig-title-line{border-top-color:'+fc_text+'!important;opacity:0.4!important}'
-        IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-'+fk+'::after{border-top-color:'+fc_text+'!important;opacity:0.4!important}'
     IC_CSS += 'ha-card .ig-title-row ha-icon,ha-card .ig-title-badge ha-icon{color:inherit!important}'
     # ig-* icon image rules (migrated from old inline CSS in preview_server.py)
     IC_CSS += 'ha-card .icon-group{gap:8px!important}'
@@ -1944,17 +1934,9 @@ def render_tab_html(tab):
                         if ig_title:
                             title_icon_html = ''
                             _ig_title_text = ig_title
-                            # Check for explicit mdi: prefix in title (server maps take priority, fixed styles allow mdi override)
+                            # Check for explicit mdi: prefix in title
                             _ig_mdi = re.match(r'mdi:([\w-]+)', ig_title, re.ASCII)
-                            if linear_maps and linear_maps[0] in SERVER_MAP:
-                                sm = _lookup_style(linear_maps[0])
-                                icon = sm.get('icon', 'mdi:map')
-                                title_icon_html = '<ha-icon icon="{}" style="color:inherit;--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px"></ha-icon>'.format(icon)
-                            elif block_maps and block_maps[0] in SERVER_MAP:
-                                sm = _lookup_style(block_maps[0])
-                                icon = sm.get('icon', 'mdi:map')
-                                title_icon_html = '<ha-icon icon="{}" style="color:inherit;--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px"></ha-icon>'.format(icon)
-                            elif _ig_mdi:
+                            if _ig_mdi:
                                 title_icon_html = '<ha-icon icon="mdi:{}" style="color:inherit;--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px"></ha-icon>'.format(_ig_mdi.group(1))
                                 _ig_title_text = ig_title[_ig_mdi.end():].strip()
                             elif linear_maps:
