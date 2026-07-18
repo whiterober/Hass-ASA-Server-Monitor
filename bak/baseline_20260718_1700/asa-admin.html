@@ -105,7 +105,7 @@ textarea { min-height: 60px; resize: vertical; font-family: monospace; font-size
 
 button { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85em; }
 
-.btn-primary { background: var(--accent); color: #000; font-weight: bold; line-height:20px;padding-top:0;padding-bottom:0;box-sizing:border-box; }
+.btn-primary { background: var(--accent); color: #000; font-weight: bold; height:24px;line-height:24px;padding-top:0;padding-bottom:0;box-sizing:border-box; }
 
 .btn-danger { background: transparent !important; color: var(--danger) !important; border: none !important; }
 
@@ -1079,6 +1079,7 @@ const WS = {
 
   async init() {
 
+    
     try {
 
       const resp = await fetch('/api/', {headers:{'Authorization':'Bearer '+this._token}});
@@ -1089,6 +1090,7 @@ const WS = {
 
         this.updateStatus(true);
 
+        
         this._onConnect?.();
 
         return;
@@ -1549,17 +1551,10 @@ let editorData = null;
 let editorSelectedTab = 0;
 var _descClipboard = null; // {type:'desc'|'icon_group', data:{...}}
 var _blockClipboard = null; // 板块级复制剪贴板
-var _tabClipboard = null; // TAB级复制剪贴板（跨菜单持久化）
 
 const EDITOR_CONFIGS = {
-  server_rules: { file: 'server_rules.json', label: '服务器规则', hasMapBar: false, idPrefix: 'editorTab', saveFn: 'saveEditor()',
-    renderLeftExtras() {
-      return '<button class="btn-small" style="display:flex;align-items:center;justify-content:center;width:100%;margin-top:4px;height:32px;border:1px solid var(--border);background:transparent;color:var(--success);opacity:0.9;box-sizing:border-box" onclick="copyTab()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline-block;vertical-align:text-bottom;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>'+(_tabClipboard?'<button class="btn-small ic-tab-paste-btn" style="display:flex;align-items:center;justify-content:center;width:100%;margin-top:4px;height:32px;border:1px solid var(--accent);background:transparent;color:var(--accent);opacity:0.9;box-sizing:border-box" onclick="pasteTab()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline-block;vertical-align:text-bottom;margin-right:3px"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg></button>':'');
-    } },
-  tribe_ops:    { file: 'tribe_ops.json',    label: '部落运维',   hasMapBar: false, idPrefix: 'toTab',      saveFn: 'saveEditor()',
-    renderLeftExtras() {
-      return '<button class="btn-small" style="display:flex;align-items:center;justify-content:center;width:100%;margin-top:4px;height:32px;border:1px solid var(--border);background:transparent;color:var(--success);opacity:0.9;box-sizing:border-box" onclick="copyTab()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline-block;vertical-align:text-bottom;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>'+(_tabClipboard?'<button class="btn-small ic-tab-paste-btn" style="display:flex;align-items:center;justify-content:center;width:100%;margin-top:4px;height:32px;border:1px solid var(--accent);background:transparent;color:var(--accent);opacity:0.9;box-sizing:border-box" onclick="pasteTab()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline-block;vertical-align:text-bottom;margin-right:3px"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg></button>':'');
-    } },
+  server_rules: { file: 'server_rules.json', label: '服务器规则', hasMapBar: false, idPrefix: 'editorTab', saveFn: 'saveEditor()' },
+  tribe_ops:    { file: 'tribe_ops.json',    label: '部落运维',   hasMapBar: false, idPrefix: 'toTab',      saveFn: 'saveEditor()' },
   base_ref:     { file: 'asa_base_quick_ref.json', label: '部落基地', hasMapBar: true, idPrefix: 'brTab', saveFn: 'saveEditor()',
     renderHeader() {
       if (typeof brSelectedServer === 'undefined') brSelectedServer = 'Isl';
@@ -1570,7 +1565,7 @@ const EDITOR_CONFIGS = {
       return h + '</div></div>';
     },
     renderLeftExtras() {
-      return '<button class="btn-small" style="display:flex;align-items:center;justify-content:center;width:100%;margin-top:4px;height:32px;border:1px solid var(--border);background:transparent;color:var(--success);opacity:0.9;box-sizing:border-box" onclick="copyTab()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline-block;vertical-align:text-bottom;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>'+(_tabClipboard?'<button class="btn-small ic-tab-paste-btn" style="display:flex;align-items:center;justify-content:center;width:100%;margin-top:4px;height:32px;border:1px solid var(--accent);background:transparent;color:var(--accent);opacity:0.9;box-sizing:border-box" onclick="pasteTab()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline-block;vertical-align:text-bottom;margin-right:3px"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg></button>':'');
+      return '<button class="btn-small" style="display:block;width:100%;margin-top:4px;padding:6px 0;border:1px solid var(--border);background:transparent;color:var(--text);opacity:0.75" onclick="copyBRFrom()">复制自...</button>';
     }
   },
 };
@@ -1594,7 +1589,7 @@ async function loadEditorData(mode) {
   editorData = (data && data.tabs) ? data : {tabs:[]};
   editorSelectedTab = 0;
   if (!editorData.tabs.length) {
-    document.getElementById('main').innerHTML = '<div class="card"><p>暂无数据</p><button class="btn-primary" onclick="addTab()" style="height:auto;line-height:1.5;font-size:0.8em">+</button></div>';
+    document.getElementById('main').innerHTML = '<div class="card"><p>暂无数据</p><button class="btn-primary" onclick="addTab()" style="height:auto;line-height:1.5;font-size:0.8em">+ TAB</button></div>';
   } else {
     renderMixedEditor(cfg.label);
     setTimeout(showPreview, 500);
@@ -1628,7 +1623,7 @@ function renderMixedEditor(title) {
 
   });
 
-  html += '</div><button class="btn-primary" style="display:flex;align-items:center;justify-content:center;width:100%;margin-top:4px;height:32px;font-size:0.8em;border:1px solid transparent;box-sizing:border-box" onclick="addTab();reRender()">+</button>';
+  html += '</div><button class="btn-primary" style="display:block;width:100%;margin-top:6px;padding:6px 0;height:auto;line-height:1.5;font-size:0.8em" onclick="addTab();reRender()">+ TAB</button>';
 
   if (cfg.renderLeftExtras) html += cfg.renderLeftExtras();
 
@@ -1886,33 +1881,6 @@ async function addTab() {
   editorSelectedTab = editorData.tabs.length - 1;
 }
 async function addEditorTab() { return addTab(); }
-
-// ==== TAB级复制/黏贴（跨菜单） ====
-function copyTab() {
-  var tab = editorData.tabs[editorSelectedTab];
-  if (!tab) return;
-  _tabClipboard = JSON.parse(JSON.stringify(tab));
-  reRender();
-  WS.toast('已: ' + (_tabClipboard.name || '(未命名)'), 'success');
-}
-function pasteTab() {
-  if (!_tabClipboard) return;
-  var clone = JSON.parse(JSON.stringify(_tabClipboard));
-  // Ensure unique name for preview (preview_server.py searches by name)
-  var baseName = clone.name || '(未命名)';
-  var suffix = ' (副本)';
-  var existingNames = editorData.tabs.map(function(t){ return t.name; });
-  if (existingNames.indexOf(baseName + suffix) >= 0) {
-    var n = 2;
-    while (existingNames.indexOf(baseName + suffix + n) >= 0) n++;
-    suffix = suffix + n;
-  }
-  clone.name = baseName + suffix;
-  editorData.tabs.push(clone);
-  editorSelectedTab = editorData.tabs.length - 1;
-  reRender();
-  setTimeout(function(){ showPreview(); }, 300);
-}
 
 async function saveMixedEditor() { return saveEditor(); }
 
@@ -2987,7 +2955,7 @@ function addMCBlock(type) {
 
     map_filter: {block_type:'map_filter'},
 
-    info_card: {block_type:'info_card', title:'', icon_url:'', mdi_icon:'', highlight:'', descriptions:[{text:'',bold:false,color:'auto',opacity:1.0,server:'',server_states:{_default:1},image_url:'',quantity:0,image_auto_color_mode:'off',image_native_luminance:null}], quote_color:'auto'}
+    info_card: {block_type:'info_card', title:'', icon_url:'', mdi_icon:'', highlight:'', descriptions:[{text:'',bold:false,color:''}], quote_color:'auto'}
 
   };
 
@@ -3752,7 +3720,7 @@ async function showPreview() {
 
   if (activeBtn && activeBtn.dataset.panel === 'base-ref') {
 
-    tabName = String(editorSelectedTab);
+    tabName = brSelectedServer + ':' + editorSelectedTab;
 
     source = 'base_quick_ref';
 
@@ -3803,19 +3771,6 @@ function closePreview() {
 }
 
 async function saveEditor() {
-  // Check for duplicate tab names (read from DOM input, not stale editorData)
-  var nameInput = document.getElementById(EDITOR_CONFIGS[editorMode].idPrefix + 'Name');
-  var curName = nameInput ? nameInput.value.trim() : '';
-  if (curName) {
-    var dupIdx = -1;
-    editorData.tabs.forEach(function(t, i) {
-      if (i !== editorSelectedTab && t.name === curName) dupIdx = i;
-    });
-    if (dupIdx >= 0) {
-      WS.toast('TAB名称重复: "' + curName + '"（与第' + (dupIdx+1) + '个TAB同名），请修改名称后再保存', 'error');
-      return;
-    }
-  }
   const cfg = EDITOR_CONFIGS[editorMode];
   const tab = currentTab();
 
@@ -4060,6 +4015,8 @@ function buildStorageBody(rows) {
             h += ' <small style="font-size:0.8em;opacity:0.7">'+_slTag+'</small>';
           }
           h += '</div>';
+
+          
 
           texts.forEach(function(item){
 
@@ -4801,7 +4758,7 @@ function selectDescServer(bi, di, sid) {
     var st = (prevSt + 1) % 3;
     if (isDefault && st === 0) st = 1;  // _default loops 0→1→2→1, never empty
     if (st > 0) {
-      curStates[sid] = st; 
+      curStates[sid] = st;
       if (!isFixed && hid) hid.value = sid;
     } else {
       // Non-_default cleared: revert to _default linear
@@ -4834,9 +4791,6 @@ function selectDescServer(bi, di, sid) {
     if (dot) { dot.style.background = 'linear-gradient(to right, #000 50%, #fff 50%)'; dot.classList.add('auto-theme'); }
   }
   if (statesEl) statesEl.value = JSON.stringify(curStates);
-  var _tab = editorData.tabs[editorSelectedTab];
-  var _block = _tab && _tab.content_blocks ? _tab.content_blocks[bi] : null;
-  if (_block && _block.descriptions && _block.descriptions[di]) _block.descriptions[di].server_states = curStates;
   // Update badge: show map icon with state-appropriate styling
   updateDescSrvBadge(bi, di, curStates);
 }
@@ -4994,9 +4948,6 @@ function selectBlockServer(bi, sid) {
     if (hid) hid.value = '';
   }
   if (statesEl) statesEl.value = JSON.stringify(curStates);
-  var _tab = editorData.tabs[editorSelectedTab];
-  var _block = _tab && _tab.content_blocks ? _tab.content_blocks[bi] : null;
-  if (_block) _block.server_states = curStates;
   updateBlockSrvBadge(bi, curStates);
 }
 
@@ -5033,7 +4984,17 @@ function updateBlockSrvBadge(bi, states) {
   }
 }
 
-
+function closeAllPopups() {
+  document.querySelectorAll('.asa-popup.show').forEach(function(p){ p.classList.remove('show'); });
+  var cp = document.getElementById('catColorPopup');
+  if (cp) cp.classList.remove('show');
+  var op = document.getElementById('catOpacityPopup');
+  if (op) op.classList.remove('show');
+  document.querySelectorAll('.cat-bc-popup.show').forEach(function(p){ p.classList.remove('show'); });
+  document.querySelectorAll('.icon-picker-overlay').forEach(function(o){ o.remove(); });
+  document.querySelectorAll('.mobile-tab-popup.show').forEach(function(p){ p.classList.remove('show'); });
+  document.querySelectorAll('.custom-prompt-overlay').forEach(function(o){ o.remove(); });
+}
 
 function toggleColorPopup(el) {
 
@@ -5256,7 +5217,7 @@ function _initMobileTabSelect() {
     var btnAdd = document.createElement('button');
     btnAdd.className = 'btn-primary';
     btnAdd.style.cssText = 'display:block;width:100%;margin-top:6px;padding:6px 0;height:auto;line-height:1.5;font-size:0.8em';
-    btnAdd.textContent = '+';
+    btnAdd.textContent = '+ TAB';
     btnAdd.onclick = function(){ popup.classList.remove('show'); setTimeout(function(){ eval(addFn); }, 100); };
     inner.appendChild(btnAdd);
     if (panel === 'base-ref') {
@@ -5362,7 +5323,29 @@ function showCustomPromptRadio(opts, cb) {
   document.body.appendChild(overlay);
 }
 
-function copyBRFrom() { copyTab(); }
+async function copyBRFrom() {
+
+  var source = await new Promise(function(resolve){
+  showCustomPromptRadio({
+    title:'来源服务器',
+    options:[
+      {value:'Isl',label:'孤岛'},{value:'Sco',label:'焦土'},{value:'Cen',label:'核心岛'},
+      {value:'Abe',label:'畸变'},{value:'Ext',label:'灭绝'},{value:'Ast',label:'星辰'},
+      {value:'Rag',label:'仙境'},{value:'Val',label:'瓦尔盖罗'},{value:'Bob',label:'俱乐部'},
+      {value:'Los',label:'失落地'}
+    ]
+  }, resolve);
+});
+
+  if (!source || !editorData.tabs) return;
+
+  WS.toast('已从 '+source+' 复制', 'success');
+
+  reRender();
+
+  setTimeout(showPreview, 200);
+
+}
 
 // ============================================================
 
@@ -5475,7 +5458,42 @@ WS.init();
 var iconPickerCtx = null;
 var iconPickerCat = "__recent__";
 
-
+function toggleQtyPopup(el, bi, di, opt_igRowDi) {
+  var panel = document.getElementById('qtyPopupPanel');
+  if (panel && panel.classList.contains('show')) {
+    panel.classList.remove('show'); return;
+  }
+  closeAllPopups();
+  if (!panel) {
+    panel = document.createElement('div'); panel.id = 'qtyPopupPanel';
+    panel.className = 'qty-popup-panel asa-popup';
+    panel.style.flexWrap = 'wrap';
+    document.body.appendChild(panel);
+  }
+  var qtyInputId = (opt_igRowDi !== undefined) ? ('mcIGQty' + bi + '_' + opt_igRowDi + '_' + di) : ('mcICDescQty' + bi + '_' + di);
+  var qtyBadgeId = (opt_igRowDi !== undefined) ? ('icQtyBadge' + bi + '_' + opt_igRowDi + '_' + di) : ('icQtyBadge' + bi + '_' + di);
+  var curVal = parseInt(document.getElementById(qtyInputId)?.value) || 0;
+  panel.innerHTML = '';
+  var wrap = document.createElement('span'); wrap.className = 'qty-input-wrap';
+  var input = document.createElement('input'); input.type = 'text'; input.className = 'qty-input';
+  input.inputMode = 'numeric'; input.pattern = '[0-9]*'; input.maxLength = 5; input.placeholder = '';
+  input.value = curVal || '';
+  var cancelBtn = document.createElement('span'); cancelBtn.className = 'qty-btn-inline qty-btn-cancel'; cancelBtn.textContent = '\u2715';
+  cancelBtn.title = '取消'; cancelBtn.onclick = function(){ panel.classList.remove('show'); };
+  var confirmBtn = document.createElement('span'); confirmBtn.className = 'qty-btn-inline qty-btn-confirm'; confirmBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>';
+  confirmBtn.title = '确认';
+  var doConfirm = function(){ var n = parseInt(input.value) || 0; if (n > 99999) n = 99999; selectQty(bi, di, n, opt_igRowDi); panel.classList.remove('show'); };
+  confirmBtn.onclick = doConfirm;
+  input.addEventListener('input', function(){ this.value = this.value.replace(/[^0-9]/g, '').slice(0, 5); if (parseInt(this.value) > 99999) this.value = '99999'; });
+  input.addEventListener('keydown', function(e){ if (e.key === 'Enter'){ e.preventDefault(); doConfirm(); } else if (e.key === 'Escape'){ panel.classList.remove('show'); } });
+  wrap.appendChild(cancelBtn); wrap.appendChild(input); wrap.appendChild(confirmBtn);
+  panel.appendChild(wrap);
+  panel.classList.add('show');
+  setTimeout(function(){ input.focus(); input.select(); }, 50);
+  var rect = el.getBoundingClientRect();
+  panel.style.top = Math.min(rect.bottom + 4, window.innerHeight - 40) + 'px';
+  panel.style.left = Math.min(Math.max(0, rect.left - 30), window.innerWidth - 260) + 'px';
+}
 
 function openIconPicker(ctx) {
   var cfg = ICON_DISPATCH[ctx.mode];
@@ -5610,8 +5628,53 @@ function closeAllPopups() {
   document.querySelectorAll('.custom-prompt-overlay').forEach(function(o){ o.remove(); });
 }
 
+function loadIconList(cb) {
 
+  if (iconListLoaded && iconList.length) { if (cb) cb(iconList); return; }
 
+  var loaded = 0, need = 2;
+  function done() { loaded++; if (loaded >= need && cb) cb(iconList); }
+
+  fetch('/local/asa-data/icons2.json?t='+Date.now()).then(function(r){return r.json()}).then(function(data){
+    iconList = data || []; iconListLoaded = true;
+    done();
+  }).catch(function(){
+    iconList = []; iconListLoaded = true;
+    WS.toast('图标列表加载失败', 'error');
+    done();
+  });
+
+  // Load Chinese name map
+  if (!iconZhMapLoaded) {
+    fetch('/local/asa-data/icon_zh_map.json?t='+Date.now()).then(function(r){return r.json()}).then(function(data){
+      iconZhMap = data || {}; iconZhMapLoaded = true;
+    }).catch(function(){
+      iconZhMap = {}; iconZhMapLoaded = true;
+    }).finally(done);
+  } else { done(); }
+}
+
+function selectQty(bi, di, n, opt_igRowDi) {
+  var qtyInputId2 = (opt_igRowDi !== undefined) ? ("mcIGQty" + bi + "_" + opt_igRowDi + "_" + di) : ("mcICDescQty" + bi + "_" + di);
+  var input = document.getElementById(qtyInputId2);
+  if (input) input.value = n;
+  var btn = document.getElementById("mcICDescQtyBtn" + bi + "_" + di);
+  if (btn) {
+    btn.textContent = n ? "\u00d7" + n : "\u00d7N";
+    var len = String(n).length;
+    btn.style.fontSize = (len <= 1 ? '0.65em' : len <= 2 ? '0.5em' : len <= 3 ? '0.4em' : '0.3em');
+    btn.style.opacity = n ? "1" : "0.4";
+    btn.style.borderStyle = n ? "solid" : "dashed";
+    btn.style.background = n ? "var(--accent)" : "transparent";
+    btn.style.color = n ? "var(--bg)" : "var(--text)";
+  }
+  var badgeId2 = (opt_igRowDi !== undefined) ? ("icQtyBadge" + bi + "_" + opt_igRowDi + "_" + di) : ("icQtyBadge" + bi + "_" + di);
+  var badge = document.getElementById(badgeId2);
+  if (badge) {
+    badge.textContent = n ? "\u00d7" + n : "";
+    badge.style.display = n ? "" : "none";
+  }
+}
 
 
 function toggleQtyPopupBlock(el, bi) {
@@ -5671,6 +5734,7 @@ function initQtyBadges() {
     else if (parts.length === 3) { initQtyLongPress(img, parseInt(parts[0]), parseInt(parts[2]), parseInt(parts[1])); img.setAttribute('data-qty-inited','1'); }
   });
 }
+
 
 function selectDescImage(el, bi, di) { _pickerSelectedNew = true;
   var url = el.getAttribute("data-url") || "";
@@ -5873,7 +5937,265 @@ function selectDescImage(el, bi, di) { _pickerSelectedNew = true;
   }
 }
 
+function clearDescImageSelection(el, bi, di) {
+  event.stopPropagation();
+  // icon_group mode: clear mcIGImg and trim trailing
+  var popup3 = el.closest('.icon-picker-overlay'); var igRowDi3 = popup3 ? popup3._igRowDi : null;
+  var igInput = igRowDi3 != null ? document.querySelector('#mcIGIcons'+bi+'_'+igRowDi3+' #mcIGImg'+bi+'_'+igRowDi3+'_'+di) : document.getElementById('mcIGImg'+bi+'_'+di);
+  if (igInput && igRowDi3 != null) {
+    igInput.value = '';
+    var tab = editorData.tabs[editorSelectedTab];
+    var block = tab.content_blocks[bi];
+    // Row-level: find which description row this icon belongs to
+    var igContainer = igInput.closest('[id^="mcIGIcons'+bi+'_"]');
+    if (igContainer) {
+      var diMatch = igContainer.id.match(/^mcIGIcons\d+_(\d+)$/);
+      if (diMatch && block && block.descriptions) {
+        var rowDi = parseInt(diMatch[1]);
+        var desc = block.descriptions[rowDi];
+        if (desc && desc.type === 'icon_group' && desc.icons && desc.icons[di]) {
+          desc.icons[di].image_url = '';
+          // Remove emptied icon (unless it's the only one left, keep one empty slot)
+          if (desc.icons.length > 1) {
+            desc.icons.splice(di, 1);
+          }
+          while (desc.icons.length > 1 && !desc.icons[desc.icons.length-1].image_url && !desc.icons[desc.icons.length-2].image_url) {
+            desc.icons.pop();
+          }
+        }
+      }
+    }
+    var overlay = el.closest('.icon-picker-overlay');
+    if (overlay) overlay.remove();
+    // Row-level: rebuild only this icon container
+    if (igContainer) {
+      var desc2 = block.descriptions[rowDi];
+      if (desc2 && desc2.icons) {
+        rebuildIGContainer(igContainer, bi, rowDi, desc2.icons);
+      }
+      return;
+    }
+    reRender();
+    return;
+  }
+  var input = document.getElementById('mcICDescImg'+bi+'_'+di);
+  if (input) input.value = '';
+  var descRow = document.getElementById('mcICDescText'+bi+'_'+di);
+  if (descRow) {
+    var container = descRow.closest('.sr-cat-card');
+    if (container) {
+      var existingImg = container.querySelector('img[onclick*="openIconPicker("]');
+      var existingBtn = container.querySelector('button[onclick*="openIconPicker("]');
+      if (existingImg) { existingImg.style.display = 'none'; var dw = existingImg.parentElement; if (dw) { dw.classList.remove('ic-mode-normal','ic-mode-failed'); dw.style.display = 'none'; } }
+      if (existingBtn) { existingBtn.style.display = ''; }
+      else if (existingImg) {
+        // Placeholder not in DOM (image existed at render time, template skipped it)
+        // Create identical placeholder matching rendering template
+        var ph = document.createElement('span');
+        ph.setAttribute('onclick', 'event.stopPropagation();openIconPicker({mode:\'desc_row\',bi:'+bi+',di:'+di+'})');
+        ph.setAttribute('title', '选择图片');
+        ph.style.cssText = 'width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px';
+        ph.textContent = '+';
+        existingImg.parentElement.after(ph);
+      }
+      // Reset color mode button
+      var modeBtn = document.getElementById('mcICDescColorModeBtn'+bi+'_'+di);
+      if (modeBtn) { modeBtn.setAttribute('data-mode','off'); modeBtn.textContent='反色：关'; modeBtn.style.opacity='0.5'; }
+      // Reset mode in editorData
+      var edTab = editorData.tabs[editorSelectedTab];
+      if (edTab && edTab.content_blocks && edTab.content_blocks[bi]) {
+        var edBlock = edTab.content_blocks[bi];
+        if (edBlock.descriptions && edBlock.descriptions[di]) {
+          var d5 = edBlock.descriptions[di];
+          if (!d5.images) d5.images = [{ image_url: '', quantity: 0, image_auto_color_mode: 'off', image_native_luminance: null }];
+          d5.images[0].image_auto_color_mode = 'off';
+          d5.images[0].image_native_luminance = null;
+        }
+      }
+    }
+  }
+  var overlay = el.closest('.icon-picker-overlay');
+  if (overlay) overlay.remove();
+}
 
+function clearIconSelection(el) {
+  event.stopPropagation();
+  var overlay = el.closest('.icon-picker-overlay');
+  if (!overlay) return;
+  var isInfoCard = overlay.querySelector('.icon-picker-item')?.getAttribute('onclick')?.includes('selectInfoCardIcon');
+  if (isInfoCard) {
+    var item = overlay.querySelector('.icon-picker-item');
+    var onclick = item?.getAttribute('onclick') || '';
+    var m = onclick.match(/selectInfoCardIcon\(this,(\d+)\)/);
+    var bi = m ? parseInt(m[1]) : undefined;
+    if (bi !== undefined) {
+      document.getElementById('mcICIcon'+bi).value = '';
+      // Reset color mode button
+      var modeBtn = document.getElementById('mcICColorModeBtn'+bi);
+      if (modeBtn) { modeBtn.setAttribute('data-mode','off'); modeBtn.textContent='反色：关'; modeBtn.style.opacity='0.5'; }
+      var cb = document.getElementById('mcICAutoColor'+bi); if (cb) cb.checked = false;
+      // Remove badge
+      var pvWrap = document.getElementById('mcICIconPreview'+bi)?.parentElement;
+      if (pvWrap) pvWrap.classList.remove('ic-mode-normal');
+      var ph = document.getElementById('mcICIconPlaceholder'+bi);
+      var pv = document.getElementById('mcICIconPreview'+bi);
+      if (pv) pv.style.display = 'none';
+      if (ph) { ph.style.display = 'flex'; }
+      else {
+        var pvParent = pv ? pv.parentNode : null;
+        if (pvParent) {
+          var newPh = document.createElement('span');
+          newPh.id = 'mcICIconPlaceholder'+bi;
+          newPh.style.cssText = 'width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px';
+          newPh.setAttribute('onclick', 'event.stopPropagation();openIconPicker({mode:\'info_card_title\',bi:'+bi+'})');
+          newPh.setAttribute('title', '选择图标');
+          newPh.textContent = '+';
+          pvParent.insertBefore(newPh, pv);
+        }
+      }
+    }
+  } else {
+    var si = overlay.dataset.si;
+    var bi = overlay.dataset.bi;
+    var ri = overlay.dataset.ri;
+    if (si !== undefined) {
+      var _inp = document.getElementById('brSRIcon'+si+'_'+bi+'_'+ri);
+      if (_inp) _inp.value = '';
+      renderBaseRef();
+    }
+  }
+  overlay.remove();
+}
+
+function toggleICMap(bi, val) {
+  var el = document.getElementById('mcICHL'+bi);
+  var cur = (el.value||'').split(',').filter(function(x){return x;});
+  var i = cur.indexOf(val);
+  if (i >= 0) cur.splice(i, 1);
+  else cur.push(val);
+  el.value = cur.join(',');
+  var tab = editorData.tabs[editorSelectedTab];
+  if (tab && tab.content_blocks[bi]) tab.content_blocks[bi].highlight = el.value;
+  // Save expansion state before re-render
+  var expanded = [];
+  document.querySelectorAll('.block-body').forEach(function(bb,idx){ if(!bb.classList.contains('collapsed')) expanded.push(idx); });
+  if (typeof reRender === 'function') reRender();
+  // Restore expansion state
+  document.querySelectorAll('.block-body').forEach(function(bb,idx){ if(expanded.indexOf(idx)!==-1) bb.classList.remove('collapsed'); });
+}
+
+function setICHighlight(bi, val) {
+  document.getElementById('mcICHL'+bi).value = val;
+}
+
+function selectInfoCardIcon(el, bi) {
+  var url = el.getAttribute("data-url") || "";
+  if (!url) return;
+  var iconInput = document.getElementById('mcICIcon'+bi);
+  if (iconInput) iconInput.value = url;
+  var preview = document.getElementById('mcICIconPreview'+bi);
+  var placeholder = document.getElementById('mcICIconPlaceholder'+bi);
+  if (url) {
+    if (preview) { preview.src = thumbUrl(url, 56); preview.style.display = ''; }
+    else {
+      var container = placeholder ? placeholder.parentNode : null;
+      if (container) {
+        var wrapper = document.createElement('span');
+        wrapper.style.cssText = 'position:relative;display:inline-flex;flex-shrink:0';
+        var newImg = document.createElement('img');
+        newImg.id = 'mcICIconPreview'+bi;
+        newImg.src = url;
+        newImg.style.cssText = 'width:28px;height:28px;object-fit:contain;cursor:pointer';
+        newImg.setAttribute('onclick', 'event.stopPropagation();openIconPicker({mode:\'info_card_title\',bi:'+bi+'})');
+        newImg.setAttribute('title', '点击换图标');
+        newImg.setAttribute('onerror', 'this.hidden=true');
+        newImg.setAttribute('data-qty-init', ''+bi);
+        var badgeSpan = document.createElement('span'); badgeSpan.className = 'ic-qty'; badgeSpan.id = 'icQtyBadge'+bi; badgeSpan.style.display = 'none'; wrapper.appendChild(badgeSpan);
+        wrapper.appendChild(newImg);
+        placeholder.before(wrapper);
+        preview = newImg;
+      }
+    }
+    // Sync color mode to wrapper (both new and existing preview)
+    var img = document.getElementById('mcICIconPreview'+bi);
+    if (img) {
+      var w = img.parentElement;
+      if (w) {
+        var modeBtn = document.getElementById('mcICColorModeBtn'+bi);
+        var mode = modeBtn ? modeBtn.getAttribute('data-mode') || 'off' : 'off';
+        // Sync mode class to wrapper immediately (for badge dot)
+        w.classList.remove('ic-mode-normal','ic-mode-reverse','ic-mode-failed');
+        if (mode === 'normal') w.classList.add('ic-mode-normal');
+        else if (mode === 'reverse') w.classList.add('ic-mode-reverse');
+        // Write mode to editorData immediately
+        var edTab4 = editorData.tabs[editorSelectedTab];
+        if (edTab4 && edTab4.content_blocks && edTab4.content_blocks[bi]) {
+          var _icTarget = edTab4.content_blocks[bi];
+          if (!_icTarget.images) _icTarget.images = [{ image_url: '', quantity: 0, image_auto_color_mode: 'off', image_native_luminance: null }];
+          _icTarget.images[0].image_auto_color_mode = mode;
+        }
+        var isRev = (mode === 'reverse');
+        applyAutoColorClass(img, null);  // clear old classes
+        w.classList.remove('ic-auto-dark','ic-auto-light','ic-auto-color');
+        // Only run brightness detection when mode is active
+        if (mode !== 'off') {
+        detectImageBrightness(img.src, function(lum) {
+          if (lum >= 0) {
+            applyAutoColorClassWithLum(img, isRev ? (1-lum) : lum);
+            // Sync wrapper ic-auto-* class to match img
+            w.classList.remove('ic-auto-light','ic-auto-dark','ic-auto-color');
+            var imgCls2 = img.className.match(/ic-auto-(light|dark|color)/);
+            if (imgCls2) w.classList.add(imgCls2[0]);
+            w.classList.add('ic-mode-normal');
+            // Write back to editorData so re-render uses correct luminance
+            var edTab2 = editorData.tabs[editorSelectedTab];
+            if (edTab2 && edTab2.content_blocks && edTab2.content_blocks[bi]) {
+              var blk2 = edTab2.content_blocks[bi];
+              if (!blk2.images) blk2.images = [{ image_url: '', quantity: 0, image_auto_color_mode: 'off', image_native_luminance: null }];
+              blk2.images[0].image_native_luminance = lum;
+            }
+            if (mode !== 'off') _detectToast(true, lum.toFixed(3));
+          } else {
+            img.className = (img.className || '').replace(/\bic-auto-(dark|light|color)\b/g, '').trim() + ' ic-auto-color';
+            if (mode !== 'off') _detectToast(false, '网络错误或图片无法访问');
+          }
+        });
+        } // end if mode !== 'off'
+        var cb = document.getElementById('mcICAutoColor'+bi);
+        if (cb) cb.checked = (mode !== 'off');
+      }
+    }
+    if (placeholder) placeholder.style.display = 'none';
+  }
+  var overlay = el.closest('.icon-picker-overlay');
+  if (overlay) overlay.remove();
+}
+function filterIconPickerCat(el) {
+
+  iconPickerCat = el.getAttribute("data-cat") || "";
+
+  document.querySelectorAll("#iconPickerCats .server-tab").forEach(function(t){ t.classList.remove("active"); });
+
+  el.classList.add("active");
+
+  filterIconPicker();
+
+}
+
+function filterIconPicker() {
+  var q = (document.getElementById("iconPickerSearch")?.value||"").toLowerCase();
+  document.querySelectorAll(".icon-picker-item").forEach(function(el){
+    var name = (el.getAttribute("data-name")||"").toLowerCase();
+    var cnName = (iconZhMap[name] || "").toLowerCase();
+    var matchSearch = !q || name.includes(q) || cnName.includes(q);
+    // Search across all categories; category filter only when not searching
+    var matchCat = q ? true : (!iconPickerCat || el.dataset.cat === iconPickerCat);
+    el.style.display = (matchSearch && matchCat) ? "" : "none";
+  });
+  // Hide category bar while searching (explicit "flex" for restore)
+  var catBar = document.getElementById("iconPickerCats");
+  if (catBar) catBar.style.display = q ? "none" : "flex";
+}
 
 // === Recent icons (localStorage) ===
 var RECENT_KEY = 'asa-recent-icons', RECENT_MAX = 20;
@@ -5983,8 +6305,6 @@ function selectInfoCardIcon(el, bi) {
   if (!url) return;
   var iconInput = document.getElementById('mcICIcon'+bi);
   if (iconInput) iconInput.value = url;
-  var _tab = editorData.tabs[editorSelectedTab];
-  if (_tab && _tab.content_blocks && _tab.content_blocks[bi]) _tab.content_blocks[bi].icon_url = url;
   var preview = document.getElementById('mcICIconPreview'+bi);
   var placeholder = document.getElementById('mcICIconPlaceholder'+bi);
   if (url) {
@@ -6006,8 +6326,6 @@ function selectInfoCardIcon(el, bi) {
         wrapper.appendChild(newImg);
         placeholder.before(wrapper);
         preview = newImg;
-        initQtyLongPress(newImg, bi);
-        newImg.setAttribute('data-qty-inited', '1');
       }
     }
     // Sync color mode to wrapper (both new and existing preview)
@@ -6025,7 +6343,7 @@ function selectInfoCardIcon(el, bi) {
         var edTab4 = editorData.tabs[editorSelectedTab];
         if (edTab4 && edTab4.content_blocks && edTab4.content_blocks[bi]) {
           var _icTarget = edTab4.content_blocks[bi];
-          if (!_icTarget.images) _icTarget.images = [{ image_url: url, quantity: 0, image_auto_color_mode: 'off', image_native_luminance: null }];
+          if (!_icTarget.images) _icTarget.images = [{ image_url: '', quantity: 0, image_auto_color_mode: 'off', image_native_luminance: null }];
           _icTarget.images[0].image_auto_color_mode = mode;
         }
         var isRev = (mode === 'reverse');
@@ -6045,7 +6363,7 @@ function selectInfoCardIcon(el, bi) {
             var edTab2 = editorData.tabs[editorSelectedTab];
             if (edTab2 && edTab2.content_blocks && edTab2.content_blocks[bi]) {
               var blk2 = edTab2.content_blocks[bi];
-              if (!blk2.images) blk2.images = [{ image_url: url, quantity: 0, image_auto_color_mode: 'off', image_native_luminance: null }];
+              if (!blk2.images) blk2.images = [{ image_url: '', quantity: 0, image_auto_color_mode: 'off', image_native_luminance: null }];
               blk2.images[0].image_native_luminance = lum;
             }
             if (mode !== 'off') _detectToast(true, lum.toFixed(3));
@@ -6344,7 +6662,14 @@ function refreshIconList() {
   var origWidth = btn ? btn.style.width : '';
 
   // 按钮内嵌进度条
-  
+  function showProgress(pct, text) {
+    if (!btn) return;
+    btn.style.position = 'relative';
+    btn.style.overflow = 'hidden';
+    btn.style.width = origWidth || '220px';
+    btn.innerHTML = '<span style="position:relative;z-index:1;font-size:0.85em">' + text + '</span>'
+      + '<span style="position:absolute;left:0;top:0;bottom:0;width:' + pct + '%;background:var(--accent);opacity:0.15;transition:width .3s;z-index:0;border-radius:6px"></span>';
+  }
 
   showProgress(0, '刷新中...');
 

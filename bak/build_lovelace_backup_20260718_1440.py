@@ -72,37 +72,32 @@ def make_ic_css(server_map, fixed_styles_map):
         r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)
         IC_CSS += 'ha-card .ic-text.ic-block-{} .ic-qty{{background:rgba({},{},{},0)!important;-webkit-text-stroke:2px rgb({},{},{})!important;paint-order:stroke fill!important}}'.format(sid, r, g, b, r, g, b)
         IC_CSS += 'ha-card .ic-text.ic-block-'+sid+'{position:relative!important;overflow:hidden!important}'
-        IC_CSS += 'ha-card .ic-text.ic-block-{0} .ic-qty{{position:absolute!important;right:0!important;bottom:0!important;color:var(--primary-background-color)!important;font-size:0.8em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important;-webkit-text-stroke:2px rgb({1},{2},{3})!important;paint-order:stroke fill!important}}'.format(sid, r, g, b)
-        IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-{0} .ig-item .ic-qty{{position:absolute!important;right:0!important;bottom:0!important;color:var(--primary-text-color)!important;font-size:0.8em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important;-webkit-text-stroke:2px var(--primary-background-color)!important;paint-order:stroke fill!important}}'.format(sid)
-        IC_CSS += 'ha-card .ic-text.ic-block-'+sid+' .ig-item .ic-qty,ha-card .ig-row-wrapper.ic-linear-'+sid+' .ig-item .ic-qty{padding-right:0!important}'
+        IC_CSS += 'ha-card .ic-text.ic-block-'+sid+' .ic-qty{position:absolute!important;right:0!important;bottom:0!important;color:var(--primary-background-color)!important;font-size:0.8em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important}'
+        IC_CSS += 'ha-card .ic-text.ic-block-'+sid+' .ig-item .ic-qty{padding-right:0!important}'
         IC_CSS += 'ha-card [data-old-webkit] .ic-text.ic-block-{} .ic-qty{{font-weight:950!important;font-family:HarmonyOS Sans SC,system-ui,Impact,sans-serif!important;-webkit-text-stroke:0.5px rgb({},{},{})!important}}'.format(sid, r, g, b)
-        IC_CSS += 'ha-card [data-old-webkit] .ig-row-wrapper.ic-linear-{} .ig-item .ic-qty{{font-weight:950!important;font-family:HarmonyOS Sans SC,system-ui,Impact,sans-serif!important;-webkit-text-stroke:0.5px var(--primary-background-color)!important}}'.format(sid)
     for fk, fv in fixed_styles_map.items():
         fc = fv.get('color', '#666')
         if not fc or fc == 'auto': fc = '#666666'
         r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
         IC_CSS += 'ha-card .ic-text.ic-block-{} .ic-qty{{background:rgba({},{},{},0)!important;-webkit-text-stroke:2px rgb({},{},{})!important;paint-order:stroke fill!important}}'.format(fk, r, g, b, r, g, b)
         IC_CSS += 'ha-card .ic-text.ic-block-'+fk+'{position:relative!important;overflow:hidden!important}'
-        _qty_color = 'var(--primary-text-color)' if fk == '_default' else 'var(--primary-background-color)'
-        _stroke_col = 'var(--primary-background-color)' if fk == '_default' else 'rgb({},{},{})'.format(r, g, b)
-        _qty_color_rule = 'color:'+_qty_color+'!important;' if fk == '_default' else ''
-        IC_CSS += 'ha-card .ic-text.ic-block-{0} .ic-qty{{position:absolute!important;right:0!important;bottom:0!important;'.format(fk)+_qty_color_rule+'font-size:0.8em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important;-webkit-text-stroke:2px '+_stroke_col+'!important;paint-order:stroke fill!important}'
-        IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-{0} .ig-item .ic-qty{{position:absolute!important;right:0!important;bottom:0!important;color:var(--primary-text-color)!important;font-size:0.8em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important;-webkit-text-stroke:2px var(--primary-background-color)!important;paint-order:stroke fill!important}}'.format(fk)
-        IC_CSS += 'ha-card .ic-text.ic-block-'+fk+' .ig-item .ic-qty,ha-card .ig-row-wrapper.ic-linear-'+fk+' .ig-item .ic-qty{padding-right:0!important}'
-        IC_CSS += 'ha-card [data-old-webkit] .ic-text.ic-block-{0} .ic-qty{{font-weight:950!important;font-family:HarmonyOS Sans SC,system-ui,Impact,sans-serif!important;-webkit-text-stroke:0.5px '.format(fk)+_stroke_col+'!important}}'
-        IC_CSS += 'ha-card [data-old-webkit] .ig-row-wrapper.ic-linear-{0} .ig-item .ic-qty{{font-weight:950!important;font-family:HarmonyOS Sans SC,system-ui,Impact,sans-serif!important;-webkit-text-stroke:0.5px var(--primary-background-color)!important}}'.format(fk)
-    IC_CSS += 'ha-card .ic-text.ic-block-_default .ic-qty{color:var(--primary-text-color)!important;-webkit-text-stroke:2px var(--primary-background-color)!important}'
-    IC_CSS += 'ha-card [data-old-webkit] .ic-text.ic-block-_default .ic-qty{font-weight:950!important;font-family:HarmonyOS Sans SC,system-ui,Impact,sans-serif!important;-webkit-text-stroke:0.5px var(--primary-background-color)!important}'
+        IC_CSS += 'ha-card .ic-text.ic-block-'+fk+' .ic-qty{position:absolute!important;right:0!important;bottom:0!important;color:var(--primary-background-color)!important;font-size:0.8em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important}'
+        IC_CSS += 'ha-card .ic-text.ic-block-'+fk+' .ig-item .ic-qty{padding-right:0!important}'
+        IC_CSS += 'ha-card [data-old-webkit] .ic-text.ic-block-{} .ic-qty{{font-weight:950!important;font-family:HarmonyOS Sans SC,system-ui,Impact,sans-serif!important;-webkit-text-stroke:0.5px rgb({},{},{})!important}}'.format(fk, r, g, b)
+    IC_CSS += 'ha-card .ic-text.ic-auto-block .ic-qty{-webkit-text-stroke:2px var(--primary-text-color)!important}'
+    IC_CSS += 'ha-card .ic-text.ic-block-_default.ic-auto-block .ic-qty{color:var(--primary-text-color)!important;-webkit-text-stroke:2px var(--primary-background-color)!important}'
+    IC_CSS += 'ha-card [data-old-webkit] .ic-text.ic-block-_default.ic-auto-block .ic-qty{color:var(--primary-text-color)!important;-webkit-text-stroke:0.5px var(--primary-background-color)!important}'
+    IC_CSS += 'ha-card .ic-text.ic-block-_default:not(.ic-auto-block) .ic-qty{-webkit-text-stroke:2px var(--ic-block-bg)!important}'
     IC_CSS += 'ha-card .ic-block-img{position:absolute!important;right:2px!important;top:50%!important;transform:translateY(-50%)!important;width:30px!important;height:30px!important;object-fit:contain!important;border-radius:0 4px 4px 0!important;flex-shrink:0!important}'
     IC_CSS += 'ha-card .ic-text[class*="ic-block-"]:has(.ic-block-img){padding-right:34px!important}'
     for sid, sm in server_map.items():
         r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)
-        IC_CSS += 'ha-card .ic-linear-'+sid+' .ic-badge,.ic-block-'+sid+' .ic-badge{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important;color:'+sm['color']+'!important}'
+        IC_CSS += 'ha-card .ic-linear-'+sid+' .ic-badge{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important;color:'+sm['color']+'!important}'
     for fk, fv in fixed_styles_map.items():
         fc = fv.get('color', '#666')
         if not fc or fc == 'auto': fc = '#666666'
         r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
-        IC_CSS += 'ha-card .ic-linear-'+fk+' .ic-badge,.ic-block-'+fk+' .ic-badge{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important;color:'+(fc if fk != '_default' else 'var(--primary-text-color)')+'!important}'
+        IC_CSS += 'ha-card .ic-linear-'+fk+' .ic-badge{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important;color:'+(fc if fk != '_default' else 'var(--primary-text-color)')+'!important}'
     IC_CSS += 'ha-card .ic-badge{display:inline-block!important;padding:1px 6px!important;border-radius:10px!important;font-size:0.75em!important;background:color-mix(in srgb,var(--primary-color) 25%,transparent)!important;color:var(--primary-text-color)!important;line-height:1.5!important}'
     IC_CSS += 'ha-card .ic-badge-num{border-radius:3px!important;display:inline-flex!important;justify-content:center!important;width:16px!important;white-space:nowrap!important}'
     IC_CSS += 'ha-card .ic-badge{vertical-align:middle!important}'
@@ -111,8 +106,6 @@ def make_ic_css(server_map, fixed_styles_map):
     IC_CSS += 'ha-card .ic-text[class*="ic-block-"][class*="ic-auto-block"] .ic-badge-hollow{color:var(--primary-text-color)!important;background:color-mix(in srgb,var(--primary-text-color) 15%,transparent)!important}'
     IC_CSS += 'ha-card .ig-row-wrapper[class*="ic-block-"] .ic-badge-hollow{background:color-mix(in srgb,var(--primary-background-color) 20%,transparent)!important;color:var(--primary-background-color)!important}'
     IC_CSS += 'ha-card .ig-row-wrapper[class*="ic-block-"][class*="ic-auto-block"] .ic-badge-hollow{color:var(--primary-text-color)!important;background:color-mix(in srgb,var(--primary-text-color) 15%,transparent)!important}'
-    IC_CSS += 'ha-card .ic-text.ic-block-_default .ic-badge-hollow{color:var(--primary-text-color)!important;background:color-mix(in srgb,var(--primary-text-color) 15%,transparent)!important}'
-    IC_CSS += 'ha-card .ig-row-wrapper.ic-block-_default .ic-badge-hollow{color:var(--primary-text-color)!important;background:color-mix(in srgb,var(--primary-text-color) 15%,transparent)!important}'
     IC_CSS += 'ha-card .ic-linear-_default .mdi,ha-card .ic-linear-_default ha-icon{color:var(--primary-text-color)!important}'
     for sid, sm in server_map.items():
         IC_CSS += 'ha-card .ic-linear-'+sid+' .mdi,ha-card .ic-linear-'+sid+' ha-icon{color:'+sm['color']+'!important}'
@@ -147,7 +140,7 @@ def make_ic_css(server_map, fixed_styles_map):
     IC_CSS += 'ha-card .ig-title-badge{display:inline-flex!important;align-items:center!important;gap:2px!important;padding:2px 6px!important;border-radius:6px!important;background:color-mix(in srgb,var(--primary-color) 15%,transparent)!important;color:var(--primary-text-color)!important;line-height:1.5!important}'
     IC_CSS += 'ha-card .ig-row-wrapper{font-size:0.9em!important}'
     IC_CSS += 'ha-card .ig-title-row ha-icon{flex-shrink:0!important;align-self:center!important}'
-    IC_CSS += 'ha-card .ig-title-row > span{display:inline-flex!important;align-items:center!important;gap:2px!important}'
+    IC_CSS += 'ha-card .ig-title-row > span{display:inline-flex!important;align-items:center!important}'
     IC_CSS += 'ha-card .ig-title-badge ha-icon{flex-shrink:0!important}'
     IC_CSS += 'ha-card .ig-title-line{border:none!important;margin:0!important;border-top:1px solid var(--primary-text-color)!important;opacity:0.15!important}'
     IC_CSS += 'ha-card .ig-row-wrapper::after{content:\'\'!important;display:block!important;width:100%!important;border-top:1px solid var(--primary-text-color)!important;opacity:0.15!important;margin-top:6px!important}'
@@ -1859,6 +1852,12 @@ def render_tab_html(tab):
                         blk_cls = ' ic-linear-{}'.format(blk_active)
                     elif blk_st == 2:
                         blk_cls = ' ic-block-{}'.format(blk_active)
+                # _default block mode: flip auto-color class (bg=var(--primary-text-color) theme-adaptive)
+                if blk_active == '_default' and blk_st == 2:
+                    if auto_cls == ' ic-auto-dark':
+                        auto_cls = ' ic-auto-light'
+                    elif auto_cls == ' ic-auto-light':
+                        auto_cls = ' ic-auto-dark'
                 # Title color from block data
                 ic_title_color = block.get('title_color', 'auto')
                 title_color_style = ''
@@ -2012,6 +2011,12 @@ def render_tab_html(tab):
                                     ac_cls = ' ic-auto-light' if use_lum > 0.5 else ' ic-auto-dark'
                                 else:
                                     ac_cls = ' ic-auto-dark'
+                                # _default block mode: flip auto-color class
+                                if block_maps and '_default' in block_maps:
+                                    if ac_cls == ' ic-auto-dark':
+                                        ac_cls = ' ic-auto-light'
+                                    elif ac_cls == ' ic-auto-light':
+                                        ac_cls = ' ic-auto-dark'
                                 mode_cls = ' ic-mode-reverse' if is_rev else ' ic-mode-normal'
                             qty = '<span class="ic-qty">×{}</span>'.format(iq) if iq else ''
                             _ig_html += '<span class="ig-item{}" style="position:relative;display:inline-flex;flex-shrink:0">{}{}</span>'.format(mode_cls, '<img src="' + esc(iu) + '" class="ig-img' + ac_cls + '" style="width:28px;height:28px;object-fit:contain;border-radius:4px" onerror="this.remove()" />', qty)
@@ -2112,6 +2117,12 @@ def render_tab_html(tab):
                                 _dac_cls = ' ic-auto-light' if _use_lum > 0.5 else ' ic-auto-dark'
                             else:
                                 _dac_cls = ' ic-auto-dark'
+                            # _default block mode: flip auto-color class
+                            if block_maps and '_default' in block_maps:
+                                if _dac_cls == ' ic-auto-dark':
+                                    _dac_cls = ' ic-auto-light'
+                                elif _dac_cls == ' ic-auto-light':
+                                    _dac_cls = ' ic-auto-dark'
                             _dac_mode_cls = ' ic-mode-reverse' if _is_rev else ' ic-mode-normal'
                         _img_tag = '<img src="{}" class="ic-desc-img{}" onerror="this.remove()" />'.format(esc(_dimg_url), _dac_cls)
                         if block_maps:
