@@ -70,7 +70,6 @@ def make_ic_css(server_map, fixed_styles_map):
     IC_CSS += 'ha-card .ic-body.ic-open .ic-acc-arrow{opacity:.6;background:transparent}'
     IC_CSS += 'ha-card .ic-body:not(.ic-open) .ic-arr-ex{display:none}'
     IC_CSS += 'ha-card .ic-body.ic-open .ic-arr-co{display:none}'
-    IC_CSS += 'ha-card .asa-selected{outline:1px solid var(--accent)!important;outline-offset:-2px!important;outline-style:solid!important}'
     IC_CSS += 'ha-card .info-card-block img.ic-auto-dark{filter:none}'
     IC_CSS += 'ha-card .info-card-block img.ic-auto-light{filter:none}'
     IC_CSS += '[data-theme="dark"] .info-card-block img.ic-auto-dark{filter:invert(1)}'
@@ -1908,11 +1907,10 @@ def render_tab_html(tab):
                     _title_text = _render_badges(_render_mdi_inline(_title_text), False)
                 parts.append('<span{}>{}{}</span>'.format(title_color_style, _title_icon, _title_text))
                 parts.append('</div>')
+                parts.append('<span class="ic-acc-arrow" onclick="event.stopPropagation();var d=this.parentElement.querySelector(\'details.ic-acc\');if(d){d.open=!d.open}"><ha-icon icon="mdi:chevron-right" class="ic-arr-co"></ha-icon><ha-icon icon="mdi:chevron-down" class="ic-arr-ex"></ha-icon></span>')
+                _details_mark = len(parts)  # insertion point for <details> if no fold
                 # Auto-detect: block has fold → collapsible
                 ic_collapse = any(isinstance(d, dict) and d.get('type') == 'fold' for d in ic_descs)
-                if ic_collapse:
-                    parts.append('<span class="ic-acc-arrow" onclick="event.stopPropagation();var d=this.parentElement.querySelector(\'details.ic-acc\');if(d){d.open=!d.open}"><ha-icon icon="mdi:chevron-right" class="ic-arr-co"></ha-icon><ha-icon icon="mdi:chevron-down" class="ic-arr-ex"></ha-icon></span>')
-                _details_mark = len(parts)  # insertion point for <details> if no fold
                 # Find fold marker index
                 _fold_idx = -1
                 if ic_collapse:
@@ -1932,7 +1930,7 @@ def render_tab_html(tab):
                 for desc in ic_descs:
                     if isinstance(desc, dict) and desc.get('type') == 'fold':
                         if ic_collapse and not _details_opened:
-                            parts.append('<details class="ic-acc" name="ic-acc" ontoggle="var p=this.parentElement;if(this.open){p.querySelectorAll(&quot;details[name=ic-acc]&quot;).forEach(function(s){if(s!==this)s.open=false},this);p.classList.add(&quot;ic-open&quot;)}else{p.classList.remove(&quot;ic-open&quot;)}" style="margin:0;padding:0;width:100%"><summary class="ic-summary"></summary><div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;width:100%">')
+                            parts.append('<details class="ic-acc" name="ic-acc" ontoggle="var p=this.parentElement;if(this.open){p.querySelectorAll(&quot;details[name=ic-acc]&quot;).forEach(function(s){if(s!==this)s.open=false},this);p.classList.add(&quot;ic-open&quot;)}else{p.classList.remove(&quot;ic-open&quot;)}" style="cursor:pointer;margin:0;padding:0;width:100%"><summary class="ic-summary"></summary><div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;width:100%">')
                             _details_opened = True
                         continue
                     if isinstance(desc, dict) and desc.get('type') == 'br':
@@ -2141,12 +2139,11 @@ def render_tab_html(tab):
                         dtext_rendered = '<span class="' + hat_cls + '">' + str(_hat_idx) + '</span> ' + _render_badges(_render_mdi_inline(dtext[1:].lstrip()), bool(block_maps))
                     else:
                         dtext_rendered = _render_badges(_render_mdi_inline(dtext), bool(block_maps))
-                    onclick_block='event.stopPropagation();var b=this.closest(&#39;.info-card-block&#39;);if(b){var all=b.querySelectorAll(&#39;.ic-text[class*=ic-block-]&#39;);var was=!!this.style.outline;all.forEach(function(e){e.style.outline=&#39;&#39;});if(was){try{localStorage.removeItem(&#39;asa-sel&#39;)}catch(e){}}else{var idx=Array.from(all).indexOf(this);this.style.setProperty(&#39;outline-width&#39;,&#39;2px&#39;,&#39;important&#39;);this.style.setProperty(&#39;outline-style&#39;,&#39;solid&#39;,&#39;important&#39;);this.style.setProperty(&#39;outline-color&#39;,&#39;#0288d1&#39;,&#39;important&#39;);this.style.setProperty(&#39;outline-offset&#39;,&#39;-2px&#39;,&#39;important&#39;);try{localStorage.setItem(&#39;asa-sel&#39;,idx)}catch(e){}}}'
-                    parts.append('<div class="{}"'.format(ic_cls) + ' onclick="'+onclick_block+'"' + dstyle+dserver_attr+'>'+srv_icon+dtext_rendered+_dimg+'</div>')
+                    parts.append('<div class="{}"{{}}{{}}>{{}}{{}}{{}}</div>'.format(ic_cls).format(dstyle, dserver_attr, srv_icon, dtext_rendered, _dimg))
                 if ic_collapse:
                     if not _details_opened:
                         # No fold marker: old behavior — everything in <details>
-                        parts.insert(_details_mark, '<details class="ic-acc" name="ic-acc" ontoggle="var p=this.parentElement;if(this.open){p.querySelectorAll(&quot;details[name=ic-acc]&quot;).forEach(function(s){if(s!==this)s.open=false},this);p.classList.add(&quot;ic-open&quot;)}else{p.classList.remove(&quot;ic-open&quot;)}" style="margin:0;padding:0;width:100%"><summary class="ic-summary"></summary><div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;width:100%">')
+                        parts.insert(_details_mark, '<details class="ic-acc" name="ic-acc" ontoggle="var p=this.parentElement;if(this.open){p.querySelectorAll(&quot;details[name=ic-acc]&quot;).forEach(function(s){if(s!==this)s.open=false},this);p.classList.add(&quot;ic-open&quot;)}else{p.classList.remove(&quot;ic-open&quot;)}" style="cursor:pointer;margin:0;padding:0;width:100%"><summary class="ic-summary"></summary><div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;width:100%">')
                     parts.append('</div></details>')
                 parts.append('</div>')
                 parts.append('</div>')
@@ -2296,7 +2293,6 @@ def render_tab_html(tab):
             parts.append('</tr>')
         parts.append('</tbody></table></div>')
     parts.append('</div>')
-    parts.append('<img src=x onerror="var rt=(this.getRootNode?this.getRootNode():document);var s=localStorage.getItem(&quot;asa-sel&quot;);if(s!=null){var i=parseInt(s),els=rt.querySelectorAll(&quot;.ic-text[class*=ic-block-]&quot;);if(els[i]){var el=els[i];el.style.setProperty(&quot;outline-width&quot;,&quot;2px&quot;,&quot;important&quot;);el.style.setProperty(&quot;outline-style&quot;,&quot;solid&quot;,&quot;important&quot;);el.style.setProperty(&quot;outline-color&quot;,&quot;#0288d1&quot;,&quot;important&quot;);el.style.setProperty(&quot;outline-offset&quot;,&quot;-2px&quot;,&quot;important&quot;)}}" style="display:none">')
     return strip_and_append_empty_rows('\n'.join(parts))
 
 

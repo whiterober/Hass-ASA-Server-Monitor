@@ -316,7 +316,6 @@ button { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; f
 }
 
 .drag-handle:hover, .drag-handle-block:hover { opacity: 0.7; }
-@media (hover: none) { .drag-handle, .drag-handle-block { touch-action: none; padding: 6px 8px; margin: -6px 0 -6px -8px; } }
 
 .drag-handle-block {
 
@@ -681,7 +680,7 @@ d>
 
   <h1>ASA 后台管理</h1>
 
-  <span id="connStatus" class="status off"></span>
+  <span id="connStatus" class="status off">未连接</span>
 
   <span style="margin-left:auto;display:flex;align-items:center;gap:8px"><button id="applyBtn" onclick="applyAllChanges()" style="display:none;padding:6px 14px;border-radius:8px;border:1px solid var(--danger);background:var(--danger);color:#fff;cursor:pointer;font-size:0.85em">待应用: <b id="pendingCount">0</b></button>
 
@@ -752,7 +751,7 @@ function togglePreview() {
 
     var tpBtn = document.getElementById('btnTogglePreview');
 
-    if (tpBtn) { tpBtn.title = '折叠预览'; tpBtn.innerHTML = '<i class="mdi mdi-eye-off" style="font-size:1.1em"></i>'; }
+    if (tpBtn) tpBtn.textContent = '折叠预览';
 
     // Restore saved split
 
@@ -780,7 +779,7 @@ function togglePreview() {
 
     var tpBtn2 = document.getElementById('btnTogglePreview');
 
-    if (tpBtn2) { tpBtn2.title = '展开预览'; tpBtn2.innerHTML = '<i class="mdi mdi-eye" style="font-size:1.1em"></i>'; }
+    if (tpBtn2) tpBtn2.textContent = '展开预览';
 
     document.documentElement.style.setProperty('--split-editor', '100%');
 
@@ -974,11 +973,7 @@ function updatePendingUI() {
 
 function applyAllChanges() {
 
-  showCustomConfirm('确定应用所有修改？应用后将重启 Home Assistant 并刷新页面。', [
-    {text: '确定应用', cls: 'primary', action: 'ok'},
-    {text: '取消', cls: '', action: 'cancel'}
-  ], function(action) {
-    if (action !== 'ok') return;
+  if (!confirm('确定应用所有修改？应用后将重启 Home Assistant 并刷新页面。')) return;
 
   resetPending();
 
@@ -997,8 +992,6 @@ function applyAllChanges() {
   try { xhr2.send('{}'); } catch(e) {}
 
   setTimeout(function() { window.location.href = window.location.href; }, 30000);
-
-  });
 
 }
 
@@ -1142,7 +1135,7 @@ const WS = {
 
     const el = document.getElementById('connStatus');
 
-    el.textContent = ok ? '已连接' : '';
+    el.textContent = ok ? '已连接' : '未连接';
 
     el.className = 'status ' + (ok ? 'on' : 'off');
 
@@ -1176,58 +1169,18 @@ document.querySelectorAll('nav button').forEach(btn => {
 
   btn.addEventListener('click', () => {
 
-    const panel = btn.dataset.panel;
-    const targetMode = panel === 'server-rules' ? 'server_rules' :
-                       panel === 'tribe-ops' ? 'tribe_ops' : 'base_ref';
-
-    if (_editorDirty && targetMode !== editorMode) {
-      showCustomConfirm('有未保存的更改，是否保存后再切换？', [
-        {text: '保存并切换', cls: 'primary', action: 'save', _autoClose: false},
-        {text: '不保存直接切换', cls: 'danger', action: 'discard'},
-        {text: '取消', cls: '', action: 'cancel'}
-      ], function(action) {
-        document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        if (action === 'save') {
-          var overlay = document.querySelector('.custom-confirm-overlay');
-          if (overlay) {
-            var btns = overlay.querySelectorAll('button');
-            btns.forEach(function(b){ b.disabled = true; b.style.opacity = '0.5'; });
-            btns[0].style.opacity = '1';
-            btns[0].style.display = 'flex'; btns[0].style.alignItems = 'center';
-            btns[0].innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;animation:spin 0.8s linear infinite"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>保存中...';
-          }
-          saveEditor().then(function() {
-            if (overlay) overlay.remove();
-            loadEditorData(targetMode);
-          }).catch(function(e) {
-            if (overlay) overlay.remove();
-          });
-        } else if (action === 'discard') {
-          _editorDirty = false;
-          loadEditorData(targetMode);
-        }
-      });
-      return;
-    }
-
     document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+
     btn.classList.add('active');
 
-    if (targetMode !== editorMode) loadEditorData(targetMode);
+    const panel = btn.dataset.panel;
+
+    if (panel === 'server-rules') loadEditorData('server_rules');
+    else if (panel === 'tribe-ops') { loadEditorData('tribe_ops'); }
+    else if (panel === 'base-ref') loadEditorData('base_ref');
 
   });
 
-});
-
-// ============================================================
-
-// 页面离开前提示保存
-window.addEventListener('beforeunload', function(e) {
-  if (_editorDirty) {
-    e.preventDefault();
-    e.returnValue = '有未保存的更改，确定离开？';
-  }
 });
 
 // ============================================================
@@ -1597,7 +1550,6 @@ let editorSelectedTab = 0;
 var _descClipboard = null; // {type:'desc'|'icon_group', data:{...}}
 var _blockClipboard = null; // 板块级复制剪贴板
 var _tabClipboard = null; // TAB级复制剪贴板（跨菜单持久化）
-var _editorDirty = false;
 
 const EDITOR_CONFIGS = {
   server_rules: { file: 'server_rules.json', label: '服务器规则', hasMapBar: false, idPrefix: 'editorTab', saveFn: 'saveEditor()',
@@ -1632,11 +1584,6 @@ function currentBlocks() { const t = currentTab(); if (!t.content_blocks) t.cont
 
 // Save block expand states, reRender, restore, re-init Sortables
 function reRender() { renderMixedEditor(); }
-function safeReRender() {
-  var tab = editorData.tabs[editorSelectedTab];
-  if (tab) saveMCBlocks(tab);
-  reRender();
-}
 
 // Unified load function for server_rules + tribe_ops
 async function loadEditorData(mode) {
@@ -1681,7 +1628,7 @@ function renderMixedEditor(title) {
 
   });
 
-  html += '</div><button class="btn-primary" style="display:flex;align-items:center;justify-content:center;width:100%;margin-top:4px;height:32px;font-size:0.8em;border:1px solid transparent;box-sizing:border-box" onclick="addTab()">+</button>';
+  html += '</div><button class="btn-primary" style="display:flex;align-items:center;justify-content:center;width:100%;margin-top:4px;height:32px;font-size:0.8em;border:1px solid transparent;box-sizing:border-box" onclick="addTab();reRender()">+</button>';
 
   if (cfg.renderLeftExtras) html += cfg.renderLeftExtras();
 
@@ -1699,7 +1646,7 @@ function renderMixedEditor(title) {
 
   html += '</div>';
 
-  html += '<div style="flex-shrink:0;margin-top:auto;padding-top:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:nowrap"><span style="display:flex;gap:4px"><button class="btn-success save-tab-btn" onclick="saveWithFeedback(this)" style="display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:6px;padding:4px 14px;font-size:0.85em;font-weight:bold;color:#fff;min-width:100px" title="保存TAB"><i class="mdi mdi-content-save" style="font-size:1.1em"></i></button> <button class="btn-danger" onclick="rmTab()" style="display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--danger);border-radius:6px;padding:4px 10px;font-size:0.85em;font-weight:bold;color:var(--danger);margin:0 4px;min-width:36px" title="删除TAB"><i class="mdi mdi-delete" style="font-size:1.1em"></i></button></span> <button onclick="window.innerWidth<=768?(window._previewWin&&!window._previewWin.closed?window._previewWin.location=\'/local/preview_tab.html?t=\'+Date.now()+\'&theme=\'+(localStorage.getItem(\'asa-theme\')||\'dark\'):window._previewWin=window.open(\'/local/preview_tab.html?t=\'+Date.now()+\'&theme=\'+(localStorage.getItem(\'asa-theme\')||\'dark\'),\'_blank\')):togglePreview()" id="btnTogglePreview" style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.85em;min-width:36px;display:inline-flex;align-items:center;justify-content:center" title="预览"><i class="mdi mdi-eye" style="font-size:1.1em"></i></button></div> ';
+  html += '<div style="flex-shrink:0;margin-top:auto;padding-top:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:nowrap"><span style="display:flex;gap:4px"><button class="btn-success" onclick="'+EDITOR_CONFIGS[editorMode].saveFn+'" style="display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:0.85em;font-weight:bold;color:#fff"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>保存TAB</button> <button class="btn-danger" onclick="rmTab()" style="display:inline-flex;align-items:center;border:1px solid var(--danger);border-radius:6px;padding:4px 10px;font-size:0.85em;font-weight:bold;color:var(--danger);margin:0 4px">删除TAB</button></span> <button onclick="window.innerWidth<=768?(window._previewWin&&!window._previewWin.closed?window._previewWin.location=\'/local/preview_tab.html?t=\'+Date.now()+\'&theme=\'+(localStorage.getItem(\'asa-theme\')||\'dark\'):window._previewWin=window.open(\'/local/preview_tab.html?t=\'+Date.now()+\'&theme=\'+(localStorage.getItem(\'asa-theme\')||\'dark\'),\'_blank\')):togglePreview()" id="btnTogglePreview" style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.85em" title="预览">折叠预览</button></div> ';
 
   html += '</div>';
 
@@ -1714,15 +1661,6 @@ function renderMixedEditor(title) {
   var _sl = _st ? _st.scrollLeft : 0;
 
   document.getElementById('main').innerHTML = html;
-
-  // Sync preview button icon with current state
-  var _pp = document.getElementById('previewPanel');
-  var _tpb = document.getElementById('btnTogglePreview');
-  if (_tpb && _pp && _pp.style.display !== 'none') {
-    _tpb.innerHTML = '<i class="mdi mdi-eye-off" style="font-size:1.1em"></i>';
-    _tpb.title = '折叠预览';
-  }
-
   setTimeout(initQtyBadges, 0);
 
   setTimeout(function(){ var s = document.querySelector('.server-tabs'); if (s) s.scrollLeft = _sl; }, 0);
@@ -1941,52 +1879,11 @@ function showCustomPromptAsync(opts) {
   });
 }
 
-// 通用删除确认浮窗（替代不可靠的 confirm()）
-function confirmDelete(msg, onOk) {
-  showCustomConfirm(msg || DEL, [
-    {text: '确定删除', cls: 'danger', action: 'ok'},
-    {text: '取消', cls: '', action: 'cancel'}
-  ], function(action) { if (action === 'ok' && onOk) onOk(); });
-}
-
-function showCustomConfirm(msg, buttons, cb) {
-  closeAllPopups();
-  var old = document.querySelector('.custom-confirm-overlay');
-  if (old) old.remove();
-  var overlay = document.createElement('div');
-  overlay.className = 'custom-confirm-overlay';
-  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.45);z-index:99999;display:flex;align-items:center;justify-content:center';
-  var box = document.createElement('div');
-  box.style.cssText = 'background:var(--card);border:1px solid var(--border);border-radius:8px;padding:20px;min-width:280px;max-width:90vw;box-shadow:0 4px 24px rgba(0,0,0,0.18)';
-  var msgEl = document.createElement('div');
-  msgEl.textContent = msg;
-  msgEl.style.cssText = 'margin-bottom:16px;font-size:0.9em;color:var(--text);line-height:1.5;white-space:pre-line';
-  box.appendChild(msgEl);
-  var btns = document.createElement('div');
-  btns.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap';
-  buttons.forEach(function(b){
-    var btn = document.createElement('button');
-    btn.textContent = b.text;
-    var bg = b.cls === 'primary' ? 'var(--accent)' : b.cls === 'danger' ? '#e53935' : 'transparent';
-    var color = b.cls ? '#fff' : 'var(--text)';
-    var border = b.cls ? 'none' : '1px solid var(--border)';
-    btn.style.cssText = 'padding:7px 16px;border:'+border+';border-radius:5px;background:'+bg+';color:'+color+';cursor:pointer;font-size:0.85em;font-weight:600';
-    btn.onclick = function(e){ e.stopPropagation(); if (b._autoClose !== false) overlay.remove(); cb(b.action); };
-    btns.appendChild(btn);
-  });
-  box.appendChild(btns);
-  overlay.appendChild(box);
-  overlay.onclick = function(e){ if (e.target === overlay) { overlay.remove(); cb(null); } };
-  document.body.appendChild(overlay);
-}
-
 async function addTab() {
   const name = await showCustomPromptAsync({title:'TAB名称'});
   if (!name) return;
   editorData.tabs.push({name: name, type: 'mixed_content', content_blocks: []});
   editorSelectedTab = editorData.tabs.length - 1;
-  _editorDirty = true;
-  reRender();
 }
 async function addEditorTab() { return addTab(); }
 
@@ -1996,7 +1893,7 @@ function copyTab() {
   if (!tab) return;
   _tabClipboard = JSON.parse(JSON.stringify(tab));
   reRender();
-  WS.toast('已复制: ' + (_tabClipboard.name || '(未命名)'), 'success');
+  WS.toast('已: ' + (_tabClipboard.name || '(未命名)'), 'success');
 }
 function pasteTab() {
   if (!_tabClipboard) return;
@@ -2013,7 +1910,6 @@ function pasteTab() {
   clone.name = baseName + suffix;
   editorData.tabs.push(clone);
   editorSelectedTab = editorData.tabs.length - 1;
-  _editorDirty = true;
   reRender();
   setTimeout(function(){ showPreview(); }, 300);
 }
@@ -2038,7 +1934,6 @@ function pasteDesc(bi) {
   var block = editorData.tabs[editorSelectedTab].content_blocks[bi];
   if (!block.descriptions) block.descriptions = [];
   block.descriptions.push(JSON.parse(JSON.stringify(_descClipboard)));
-  _editorDirty = true;
   // Save collapse states before re-render
   var collapseStates = {};
   document.querySelectorAll('.block-body').forEach(function(b,i){ collapseStates[i]=!b.classList.contains('collapsed'); });
@@ -2082,7 +1977,7 @@ function dragRegister(opts) {
     scrollSensitivity: 60,
 
     scrollSpeed: 8,
-    touchStartThreshold: 3,
+
     onStart: function(evt) {
 
       window._dragActive = true;
@@ -2442,17 +2337,18 @@ function renderMixedContent(tab) {
     // Block-level map selector (info_card only) — same 3-state logic as description-level
     if (bt === 'info_card') {
       h += (function(){
-        var _hasSS = b.server_states && Object.keys(b.server_states).length > 0;
-        var ss = _hasSS ? b.server_states : (b.highlight ? (function(){var o={};o[b.highlight]=2;return o;})() : {_default:1});
+        var ss = b.server_states || (b.highlight ? (function(){var o={};o[b.highlight]=2;return o;})() : {_default:1});
         var ak = null, ast = 0;
         Object.keys(ss).forEach(function(k){ if(ss[k] > 0){ ak = k; ast = ss[k]; } });
-        var icn = getServerBadge('', ss);
         var bg = 'background:transparent;border:1px solid transparent';
-        if (ak && ast === 2) {
+        var icn = getServerBadge('');
+        if (ak) {
           var sm = SERVER_MAP[ak] || FIXED_STYLES[ak];
           if (sm) {
+            var _sc = sm.c === 'auto' ? 'var(--text)' : sm.c;
             var _sbg = sm.c === 'auto' ? '#666' : sm.c;
-            bg = 'background:'+_sbg+';border:none';
+            if (ast === 2) { bg = 'background:'+_sbg+';border:none'; icn = '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:var(--primary-background-color)"></i>'; }
+            else { bg = 'background:transparent;border:1px solid transparent'; icn = '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:'+_sc+'"></i>'; }
           }
         }
         return '<button class="btn-small btn-server" id="mcBlockSrvBtn'+bi+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;'+bg+'" title="选择服务器" onclick="event.stopPropagation();toggleBlockServerPopup(this,'+bi+');">'+icn+'</button>';
@@ -2461,7 +2357,7 @@ function renderMixedContent(tab) {
 
     h += '<button class="btn-small" style="color:var(--success);border-radius:4px;padding:1px 5px;font-size:0.75em;line-height:1;border:none" onclick="event.stopPropagation();duplicateBlock('+bi+')" title="复制"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>';
 
-    h += '<button class="btn-small btn-danger" onclick="delBlock('+bi+')">✕</button>';
+    h += '<button class="btn-small btn-danger" onclick="if(confirm(DEL)){editorData.tabs[editorSelectedTab].content_blocks.splice('+bi+',1);reRender();}">✕</button>';
 
     h += '</div>';  // close right buttons
 
@@ -2842,7 +2738,7 @@ function duplicateMCBlock(from) {
 
 function removeICDesc(el, bi) {
 
-  confirmDelete(DEL, function() {
+  if (!confirm(DEL)) return;
 
   var card = el.closest('.sr-cat-card');
 
@@ -2855,7 +2751,6 @@ function removeICDesc(el, bi) {
       var idx = Array.prototype.indexOf.call(container.children, card);
       if (idx >= 0 && idx < block.descriptions.length) {
         block.descriptions.splice(idx, 1);
-        _editorDirty = true;
       }
     }
   }
@@ -2890,8 +2785,6 @@ function removeICDesc(el, bi) {
   var c = document.getElementById('mcEDDescs'+bi);
   if (c) { var cnt = document.getElementById('mcEDDescCount'+bi); if (cnt) cnt.textContent = c.children.length; }
 
-  });
-
 }
 
 function addICDesc(bi) {
@@ -2904,7 +2797,6 @@ function addICDesc(bi) {
   const block = tab.content_blocks[bi];
   if (!block.descriptions) block.descriptions = [];
   block.descriptions.push({text:'', bold:false, color:'auto', opacity:1.0, server:'', server_states:{_default:1}, image_url:'', quantity:0, image_auto_color_mode:'off', image_native_luminance:null});
-  _editorDirty = true;
 
   const di = container.children.length;
 
@@ -2920,7 +2812,6 @@ function addICBr(bi) {
   const block = tab.content_blocks[bi];
   if (!block.descriptions) block.descriptions = [];
   block.descriptions.push({type:'br'});
-  _editorDirty = true;
   const c = document.getElementById('mcICDescs'+bi);
   if (!c) return;
   const d = document.createElement('div');
@@ -2935,7 +2826,6 @@ function addICFold(bi) {
   const block = tab.content_blocks[bi];
   if (!block.descriptions) block.descriptions = [];
   block.descriptions.push({type:'fold'});
-  _editorDirty = true;
   const c = document.getElementById('mcICDescs'+bi);
   if (!c) return;
   const d = document.createElement('div');
@@ -2953,7 +2843,6 @@ function addICCopyKey(bi) {
   const block = tab.content_blocks[bi];
   if (!block.descriptions) block.descriptions = [];
   block.descriptions.push({type:'copy_key', label:'', value:''});
-  _editorDirty = true;
   const di = container.children.length;
   const h = '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex:1"><input id="mcCKLabel'+bi+'_'+di+'" value="" placeholder="按钮文字" style="flex:0 0 100px;min-width:60px;margin-bottom:0;padding:4px 8px;font-size:0.7em"><input id="mcCKValue'+bi+'_'+di+'" value="" placeholder="复制内容" style="flex:1;margin-bottom:0;padding:4px 8px;font-size:0.7em"><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
   container.insertAdjacentHTML('beforeend', h);
@@ -2964,7 +2853,6 @@ function addICIconGroup(bi) {
   const block = tab.content_blocks[bi];
   if (!block.descriptions) block.descriptions = [];
   block.descriptions.push({type:'icon_group', icons:[{image_url:'', quantity:0, image_auto_color_mode:'off', image_native_luminance:null}], server_states:{_default:1}});
-  _editorDirty = true;
   const c = document.getElementById('mcICDescs'+bi);
   if (!c) return;
   const di = c.children.length;
@@ -3067,15 +2955,6 @@ function addEDDesc(bi) {
 
 }
 
-// 板块删除辅助函数（inline onclick 替代 confirm）
-function delBlock(bi) {
-  confirmDelete(null, function() {
-    editorData.tabs[editorSelectedTab].content_blocks.splice(bi, 1);
-    _editorDirty = true;
-    reRender();
-  });
-}
-
 function duplicateBlock(bi) {
   const tab = editorData.tabs[editorSelectedTab];
   if (!tab.content_blocks) return;
@@ -3090,7 +2969,6 @@ function pasteBlock() {
   const tab = editorData.tabs[editorSelectedTab];
   if (!tab.content_blocks) tab.content_blocks = [];
   tab.content_blocks.push(JSON.parse(JSON.stringify(_blockClipboard)));
-  _editorDirty = true;
   var collapseStates = {};
   document.querySelectorAll('.block-body').forEach(function(b,i){ collapseStates[i]=!b.classList.contains('collapsed'); });
   reRender();
@@ -3115,8 +2993,7 @@ function addMCBlock(type) {
 
   tab.content_blocks.push(JSON.parse(JSON.stringify(defaults[type]||{block_type:type})));
 
-  _editorDirty = true;
-  safeReRender();
+  reRender();
 
 }
 
@@ -3199,15 +3076,15 @@ function saveMCBlocks(tab) {
     } else if (bt === 'info_card') {
 
       b.title = document.getElementById('mcICTitle'+bi)?.value || '';
-      b.title_color = document.getElementById('mcICTitleColor'+bi)?.value || b.title_color;
+      b.title_color = document.getElementById('mcICTitleColor'+bi)?.value || 'auto';
 
-      b.icon_url = document.getElementById('mcICIcon'+bi)?.value || b.icon_url;
+      b.icon_url = document.getElementById('mcICIcon'+bi)?.value || '';
       var _blockQty = parseInt(document.getElementById('mcICIconQty'+bi)?.value) || 0;
       if (b.images && b.images.length > 0) { b.images.forEach(function(img){ img.quantity = _blockQty; }); } else if (_blockQty) { b.images = [{image_url: b.icon_url || '', quantity: _blockQty, image_auto_color_mode: 'off', image_native_luminance: null}]; }
 
       b.highlight = document.getElementById('mcICHL'+bi)?.value || '';
       b.server_states = JSON.parse(document.getElementById('mcBlockSrvStates'+bi)?.value || '{}');
-      b.quote_color = document.getElementById('mcICQuoteColor'+bi)?.value || b.quote_color;
+      b.quote_color = document.getElementById('mcICQuoteColor'+bi)?.value || '#FF9800';
 
       var _oldDescs = b.descriptions;  // cache before clearing
       b.descriptions = [];
@@ -3925,35 +3802,6 @@ function closePreview() {
 
 }
 
-function saveWithFeedback(btn) {
-  if (btn.disabled) return;
-  var origHTML = btn.innerHTML;
-  var origMinW = btn.style.minWidth;
-  btn.disabled = true;
-  btn.style.opacity = '0.5';
-  btn.style.minWidth = 'auto';
-  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;animation:spin 0.8s linear infinite"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>保存中...';
-  saveEditor().then(function() {
-    btn.disabled = false;
-    btn.style.opacity = '1';
-    btn.style.minWidth = origMinW;
-    btn.innerHTML = origHTML;
-  }).catch(function(e) {
-    btn.disabled = false;
-    btn.style.opacity = '1';
-    btn.style.minWidth = origMinW;
-    btn.innerHTML = origHTML;
-    WS.toast('保存失败: ' + (e.message || '未知错误'), 'error');
-  });
-}
-
-// Add spin animation for save button
-(function(){
-  var style = document.createElement('style');
-  style.textContent = '@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}';
-  document.head.appendChild(style);
-})();
-
 async function saveEditor() {
   // Check for duplicate tab names (read from DOM input, not stale editorData)
   var nameInput = document.getElementById(EDITOR_CONFIGS[editorMode].idPrefix + 'Name');
@@ -3986,7 +3834,6 @@ async function saveEditor() {
   saveMCBlocks(tab);
 
   await saveJSON(cfg.file, editorData);
-  _editorDirty = false;
   reRender();
   setTimeout(showPreview, 500);
 }
@@ -4062,7 +3909,7 @@ function addBadgeItem(si, bi) {
 
     + '<td><select id=\"brBgStyle'+si+'_'+bi+'_'+bgi+'\" style=\"padding:4px;margin:0;font-size:0.85em\"><option value=\"default\">默认</option><option value=\"idle\">虚线</option></select></td>'
 
-    + '<td><button class=\"btn-small btn-danger\" onclick=\"var t=this;confirmDelete(null,function(){t.closest(\"tr\").remove()})\" style=\"padding:2px 6px\">✕</button></td>';
+    + '<td><button class=\"btn-small btn-danger\" onclick=\"if(confirm(DEL))this.parentElement.parentElement.remove()\" style=\"padding:2px 6px\">✕</button></td>';
 
   // Update count label
 
@@ -4576,7 +4423,7 @@ function mergeLabelInputs(card) {
 
     document.addEventListener('click', function(e){
 
-      if (e.target.closest('.asa-popup, .icon-picker-overlay, .mobile-tab-popup, .custom-prompt-overlay, .custom-confirm-overlay, [data-qty-inited]')) return;
+      if (e.target.closest('.asa-popup, .icon-picker-overlay, .mobile-tab-popup, .custom-prompt-overlay, [data-qty-inited]')) return;
 
       if (e.target.closest('.cat-color-dot, .cat-opacity-dot, .btn-server, .qty-btn')) return;
 
@@ -5412,19 +5259,13 @@ function _initMobileTabSelect() {
     btnAdd.textContent = '+';
     btnAdd.onclick = function(){ popup.classList.remove('show'); setTimeout(function(){ eval(addFn); }, 100); };
     inner.appendChild(btnAdd);
-    var btnCopy = document.createElement('button');
-    btnCopy.className = 'btn-small';
-    btnCopy.style.cssText = 'display:flex;align-items:center;justify-content:center;width:100%;margin-top:4px;padding:6px 0;border:1px solid var(--border);background:transparent;color:var(--success);opacity:0.9';
-    btnCopy.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
-    btnCopy.onclick = function(){ popup.classList.remove('show'); setTimeout(function(){ copyTab(); }, 100); };
-    inner.appendChild(btnCopy);
-    if (typeof _tabClipboard !== 'undefined' && _tabClipboard) {
-      var btnPaste = document.createElement('button');
-      btnPaste.className = 'btn-small';
-      btnPaste.style.cssText = 'display:flex;align-items:center;justify-content:center;width:100%;margin-top:4px;padding:6px 0;border:1px solid var(--accent);background:transparent;color:var(--accent);opacity:0.9';
-      btnPaste.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>';
-      btnPaste.onclick = function(){ popup.classList.remove('show'); setTimeout(function(){ pasteTab(); }, 100); };
-      inner.appendChild(btnPaste);
+    if (panel === 'base-ref') {
+      var btnCopy = document.createElement('button');
+      btnCopy.className = 'btn-small';
+      btnCopy.style.cssText = 'display:block;width:100%;margin-top:4px;padding:6px 0;border:1px solid var(--border);background:transparent;color:var(--text);opacity:0.75';
+      btnCopy.textContent = '复制自...';
+      btnCopy.onclick = function(){ popup.classList.remove('show'); setTimeout(function(){ copyBRFrom(); }, 100); };
+      inner.appendChild(btnCopy);
     }
   })();
 
@@ -5442,7 +5283,7 @@ function _initMobileTabSelect() {
 
     var tpBtn = document.getElementById('btnTogglePreview');
 
-    if (tpBtn) { tpBtn.title = '跳转预览'; tpBtn.innerHTML = '<i class="mdi mdi-eye" style="font-size:1.1em"></i>'; }
+    if (tpBtn) tpBtn.textContent = '跳转预览';
 
     if (typeof togglePreview === 'function') {
 
@@ -5468,13 +5309,7 @@ function _initMobileTabSelect() {
 
 }
 
-function rmTab() {
-  confirmDelete('删除此Tab？', function() {
-    editorData.tabs.splice(editorSelectedTab, 1);
-    _editorDirty = true;
-    safeReRender();
-  });
-}
+function rmTab() { if (confirm('删除此Tab？')) { editorData.tabs.splice(editorSelectedTab, 1); reRender(); } }
 function _delSRTab() { rmTab(); }
 function _delTOTab() { rmTab(); }
 
@@ -5773,7 +5608,6 @@ function closeAllPopups() {
   document.querySelectorAll('.icon-picker-overlay').forEach(function(o){ o.remove(); });
   document.querySelectorAll('.mobile-tab-popup.show').forEach(function(p){ p.classList.remove('show'); });
   document.querySelectorAll('.custom-prompt-overlay').forEach(function(o){ o.remove(); });
-  document.querySelectorAll('.custom-confirm-overlay').forEach(function(o){ o.remove(); });
 }
 
 
