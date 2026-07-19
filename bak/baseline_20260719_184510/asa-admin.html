@@ -316,7 +316,7 @@ button { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; f
 }
 
 .drag-handle:hover, .drag-handle-block:hover { opacity: 0.7; }
-@media (hover: none) { .drag-handle, .drag-handle-block { touch-action: none; padding: 6px 8px; margin: -6px 0 -6px -8px; } }
+@media (pointer: coarse) { .drag-handle, .drag-handle-block { touch-action: none; } }
 
 .drag-handle-block {
 
@@ -681,7 +681,7 @@ d>
 
   <h1>ASA 后台管理</h1>
 
-  <span id="connStatus" class="status off"></span>
+  <span id="connStatus" class="status off">未连接</span>
 
   <span style="margin-left:auto;display:flex;align-items:center;gap:8px"><button id="applyBtn" onclick="applyAllChanges()" style="display:none;padding:6px 14px;border-radius:8px;border:1px solid var(--danger);background:var(--danger);color:#fff;cursor:pointer;font-size:0.85em">待应用: <b id="pendingCount">0</b></button>
 
@@ -1142,7 +1142,7 @@ const WS = {
 
     const el = document.getElementById('connStatus');
 
-    el.textContent = ok ? '已连接' : '';
+    el.textContent = ok ? '已连接' : '未连接';
 
     el.className = 'status ' + (ok ? 'on' : 'off');
 
@@ -1681,7 +1681,7 @@ function renderMixedEditor(title) {
 
   });
 
-  html += '</div><button class="btn-primary" style="display:flex;align-items:center;justify-content:center;width:100%;margin-top:4px;height:32px;font-size:0.8em;border:1px solid transparent;box-sizing:border-box" onclick="addTab()">+</button>';
+  html += '</div><button class="btn-primary" style="display:flex;align-items:center;justify-content:center;width:100%;margin-top:4px;height:32px;font-size:0.8em;border:1px solid transparent;box-sizing:border-box" onclick="addTab();reRender()">+</button>';
 
   if (cfg.renderLeftExtras) html += cfg.renderLeftExtras();
 
@@ -1986,7 +1986,6 @@ async function addTab() {
   editorData.tabs.push({name: name, type: 'mixed_content', content_blocks: []});
   editorSelectedTab = editorData.tabs.length - 1;
   _editorDirty = true;
-  reRender();
 }
 async function addEditorTab() { return addTab(); }
 
@@ -1996,7 +1995,7 @@ function copyTab() {
   if (!tab) return;
   _tabClipboard = JSON.parse(JSON.stringify(tab));
   reRender();
-  WS.toast('已复制: ' + (_tabClipboard.name || '(未命名)'), 'success');
+  WS.toast('已: ' + (_tabClipboard.name || '(未命名)'), 'success');
 }
 function pasteTab() {
   if (!_tabClipboard) return;
@@ -2013,7 +2012,6 @@ function pasteTab() {
   clone.name = baseName + suffix;
   editorData.tabs.push(clone);
   editorSelectedTab = editorData.tabs.length - 1;
-  _editorDirty = true;
   reRender();
   setTimeout(function(){ showPreview(); }, 300);
 }
@@ -5412,19 +5410,13 @@ function _initMobileTabSelect() {
     btnAdd.textContent = '+';
     btnAdd.onclick = function(){ popup.classList.remove('show'); setTimeout(function(){ eval(addFn); }, 100); };
     inner.appendChild(btnAdd);
-    var btnCopy = document.createElement('button');
-    btnCopy.className = 'btn-small';
-    btnCopy.style.cssText = 'display:flex;align-items:center;justify-content:center;width:100%;margin-top:4px;padding:6px 0;border:1px solid var(--border);background:transparent;color:var(--success);opacity:0.9';
-    btnCopy.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
-    btnCopy.onclick = function(){ popup.classList.remove('show'); setTimeout(function(){ copyTab(); }, 100); };
-    inner.appendChild(btnCopy);
-    if (typeof _tabClipboard !== 'undefined' && _tabClipboard) {
-      var btnPaste = document.createElement('button');
-      btnPaste.className = 'btn-small';
-      btnPaste.style.cssText = 'display:flex;align-items:center;justify-content:center;width:100%;margin-top:4px;padding:6px 0;border:1px solid var(--accent);background:transparent;color:var(--accent);opacity:0.9';
-      btnPaste.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>';
-      btnPaste.onclick = function(){ popup.classList.remove('show'); setTimeout(function(){ pasteTab(); }, 100); };
-      inner.appendChild(btnPaste);
+    if (panel === 'base-ref') {
+      var btnCopy = document.createElement('button');
+      btnCopy.className = 'btn-small';
+      btnCopy.style.cssText = 'display:block;width:100%;margin-top:4px;padding:6px 0;border:1px solid var(--border);background:transparent;color:var(--text);opacity:0.75';
+      btnCopy.textContent = '复制自...';
+      btnCopy.onclick = function(){ popup.classList.remove('show'); setTimeout(function(){ copyBRFrom(); }, 100); };
+      inner.appendChild(btnCopy);
     }
   })();
 

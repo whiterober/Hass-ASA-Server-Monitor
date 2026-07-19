@@ -374,21 +374,6 @@ document.addEventListener('click',function(e){
   if(acc) window.toggleAcc(acc.querySelector('.ic-acc-arrow'));
 });
 
-// Restore selected block outline from localStorage
-(function(){
-  var s=localStorage.getItem('asa-sel');
-  if(s!=null){
-    var i=parseInt(s),els=document.querySelectorAll('.ic-text[class*=ic-block-]');
-    if(els[i]){
-      var el=els[i];
-      el.style.setProperty('outline-width','2px','important');
-      el.style.setProperty('outline-style','solid','important');
-      el.style.setProperty('outline-color','#0288d1','important');
-      el.style.setProperty('outline-offset','-2px','important');
-    }
-  }
-})();
-
 </script>
 </body></html>""" % (ha_font_vars, theme_vars, css, html)
 
