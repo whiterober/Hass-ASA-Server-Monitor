@@ -2174,7 +2174,7 @@ def render_tab_html(tab):
                     for srv_id in sorted(active_maps):
                         icn=SERVER_MAP.get(srv_id,{}).get('icon','mdi:server')
                         label=SERVER_MAP.get(srv_id,{}).get('label',srv_id)
-                        parts.append('<label class="filter-label" data-map="{}" title="{}"><input type="radio" name="map-filter" class="filter-radio" value="{}" onclick="{}"><ha-icon icon="{}"></ha-icon></label>'.format(srv_id,label,srv_id,filter_js,icn))
+                        parts.append('<label class="filter-label" data-map="{}"><input type="radio" name="map-filter" class="filter-radio" value="{}" onclick="{}"><ha-icon icon="{}"></ha-icon> {}</label>'.format(srv_id,srv_id,filter_js,icn,label))
                     parts.append('</div>')
             elif bt=='server_grid':
                 # Render a server_grid block
@@ -2520,7 +2520,7 @@ if __name__ == "__main__":
             if 'map_filter' in block_types:
                 css += 'ha-card .filter-bar{display:flex!important;flex-wrap:wrap!important;gap:0!important;margin-bottom:12px!important}'
                 css += 'ha-card .filter-radio{position:absolute!important;opacity:0!important;width:0!important;height:0!important}'
-                css += 'ha-card .filter-label{display:inline-flex!important;align-items:center!important;justify-content:center!important;padding:4px 8px!important;border-radius:16px!important;border:1px solid var(--divider-color)!important;font-size:.85em!important;cursor:pointer!important;user-select:none!important;line-height:1.4!important;white-space:nowrap!important;min-height:28px!important;min-width:30px!important;margin-right:6px!important;margin-bottom:8px!important}'
+                css += 'ha-card .filter-label{display:inline-flex!important;align-items:center!important;gap:4px!important;padding:4px 12px!important;border-radius:16px!important;border:1px solid var(--divider-color)!important;font-size:.85em!important;cursor:pointer!important;user-select:none!important;line-height:1.4!important;white-space:nowrap!important;min-height:28px!important;margin-right:6px!important;margin-bottom:8px!important}'
                 for sid, sm in SERVER_MAP.items():
                     css += 'ha-card .filter-label[data-map='+sid+']{background:'+sm['color']+'!important;color:var(--primary-background-color)!important;border-color:'+sm['color']+'!important}'
                 css += 'ha-card .filter-label{transition:opacity .2s!important}'
