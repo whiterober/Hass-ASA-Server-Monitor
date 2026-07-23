@@ -2007,7 +2007,7 @@ def render_tab_html(tab):
                                 _ti_cls = ''
                                 _ti_mode_cls = ''
                                 if tiae != 'off':
-                                    _is_rev = bool(block_maps) and not (block_maps == ['_default'])
+                                    _is_rev = bool(block_maps)
                                     if tilum is not None and tilum != 0.5:
                                         _use_lum = (1 - tilum) if _is_rev else tilum
                                         _ti_cls = ' ic-auto-light' if _use_lum > 0.5 else ' ic-auto-dark'

@@ -105,7 +105,6 @@ def make_ic_css(server_map, fixed_styles_map):
     IC_CSS += 'ha-card .ic-block-img{position:absolute!important;right:2px!important;top:50%!important;transform:translateY(-50%)!important;width:30px!important;height:30px!important;object-fit:contain!important;border-radius:0 4px 4px 0!important;flex-shrink:0!important}'
     IC_CSS += 'ha-card .ic-text[class*="ic-block-"]:has(.ic-block-img){padding-right:34px!important}'
     IC_CSS += 'ha-card .ig-title-badge:has(.ic-block-img){padding-right:34px!important}'
-    IC_CSS += 'ha-card .ig-title-row:has(.ic-block-img) > span{display:inline-block!important;padding-right:34px!important}'
     for sid, sm in server_map.items():
         r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)
         IC_CSS += 'ha-card .ic-linear-'+sid+' .ic-badge,.ic-block-'+sid+' .ic-badge{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important;color:'+sm['color']+'!important}'
@@ -1979,15 +1978,13 @@ def render_tab_html(tab):
                                 title_icon_html = '<ha-icon icon="mdi:{}" style="color:inherit;--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px"></ha-icon>'.format(_ig_mdi.group(1))
                                 _ig_title_text = ig_title[_ig_mdi.end():].strip()
                             elif linear_maps:
-                                if linear_maps[0] != '_default':
-                                    sm = _lookup_style(linear_maps[0])
-                                    icon = sm.get('icon', 'mdi:map')
-                                    title_icon_html = '<ha-icon icon="{}" style="color:inherit;--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px"></ha-icon>'.format(icon)
+                                sm = _lookup_style(linear_maps[0])
+                                icon = sm.get('icon', 'mdi:map')
+                                title_icon_html = '<ha-icon icon="{}" style="color:inherit;--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px"></ha-icon>'.format(icon)
                             elif block_maps:
-                                if block_maps[0] != '_default':
-                                    sm = _lookup_style(block_maps[0])
-                                    icon = sm.get('icon', 'mdi:map')
-                                    title_icon_html = '<ha-icon icon="{}" style="color:inherit;--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px"></ha-icon>'.format(icon)
+                                sm = _lookup_style(block_maps[0])
+                                icon = sm.get('icon', 'mdi:map')
+                                title_icon_html = '<ha-icon icon="{}" style="color:inherit;--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px"></ha-icon>'.format(icon)
                             # ^ aut numbering + [] badges (same as description lines)
                             _ig_is_hat = _ig_title_text.startswith('^')
                             if _ig_is_hat:
@@ -2007,7 +2004,7 @@ def render_tab_html(tab):
                                 _ti_cls = ''
                                 _ti_mode_cls = ''
                                 if tiae != 'off':
-                                    _is_rev = bool(block_maps) and not (block_maps == ['_default'])
+                                    _is_rev = bool(block_maps)
                                     if tilum is not None and tilum != 0.5:
                                         _use_lum = (1 - tilum) if _is_rev else tilum
                                         _ti_cls = ' ic-auto-light' if _use_lum > 0.5 else ' ic-auto-dark'

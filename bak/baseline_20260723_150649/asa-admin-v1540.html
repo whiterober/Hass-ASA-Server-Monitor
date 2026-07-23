@@ -1342,14 +1342,6 @@ var _failedItems = [];
 function detectImageBrightness(imgUrl, callback, retries) {
   if (retries === undefined) retries = 2;
   if (!imgUrl) { callback(-1); return; }
-  // data-uri: use new Image() directly (fetch with CORS fails on data: URIs)
-  if (imgUrl.indexOf('data:') === 0) {
-    var _img = new Image();
-    _img.onload = function() { _analyzeImage(_img, callback); };
-    _img.onerror = function() { callback(-1); };
-    _img.src = imgUrl;
-    return;
-  }
   // Use fetch with CORS for cross-origin images (bypass img tag caching issues)
   fetch(imgUrl, {mode: 'cors', cache: 'no-store'}).then(function(resp) {
     if (!resp.ok) { callback(-1); return; }
@@ -1358,7 +1350,27 @@ function detectImageBrightness(imgUrl, callback, retries) {
     if (!blob) return;
     var url = URL.createObjectURL(blob);
     var img = new Image();
-    img.onload = function() { _analyzeImage(img, callback); URL.revokeObjectURL(url); };
+    img.onload = function() {
+      try {
+        var canvas = document.createElement('canvas');
+        canvas.width = canvas.height = 20;
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, 20, 20);
+        var data = ctx.getImageData(0, 0, 20, 20).data;
+        var lum = 0, n = 0;
+        for (var i = 0; i < data.length; i += 4) {
+          if (data[i+3] < 128) continue;
+          var r = data[i]/255, g = data[i+1]/255, b = data[i+2]/255;
+          lum += 0.2126*r + 0.7152*g + 0.0722*b;
+          n++;
+        }
+        URL.revokeObjectURL(url);
+        callback(n ? lum/n : -1);
+      } catch(e) {
+        URL.revokeObjectURL(url);
+        callback(-1);
+      }
+    };
     img.onerror = function() { URL.revokeObjectURL(url); callback(-1); };
     img.src = url;
   }).catch(function(e) {
@@ -1368,24 +1380,6 @@ function detectImageBrightness(imgUrl, callback, retries) {
     }
     callback(-1, e.message || '网络错误');
   });
-}
-
-function _analyzeImage(img, callback) {
-  try {
-    var canvas = document.createElement('canvas');
-    canvas.width = canvas.height = 20;
-    var ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0, 0, 20, 20);
-    var data = ctx.getImageData(0, 0, 20, 20).data;
-    var lum = 0, n = 0;
-    for (var i = 0; i < data.length; i += 4) {
-      if (data[i+3] < 128) continue;
-      var r = data[i]/255, g = data[i+1]/255, b = data[i+2]/255;
-      lum += 0.2126*r + 0.7152*g + 0.0722*b;
-      n++;
-    }
-    callback(n ? lum/n : -1);
-  } catch(e) { callback(-1); }
 }
 
 // Save button state management (2-state: detecting / ready)
@@ -3386,7 +3380,7 @@ function saveMCBlocks(tab) {
             var igTitleIconUrl = document.getElementById('mcIGTitleIconUrl'+bi+'_'+igDi)?.value || '';
             var igTitleIconQty = parseInt(document.getElementById('mcIGTitleIconQty'+bi+'_'+igDi)?.value) || 0;
             var igTitleIconMode = document.getElementById('mcIGTitleIconMode'+bi+'_'+igDi)?.value || 'off';
-            var igTitleIconLum = (function(){ var li=document.getElementById('mcIGTitleIconLum'+bi+'_'+igDi); var lv=li?li.value:''; return (lv&&lv!=='0.500')?parseFloat(lv):null; })();
+            var igTitleIconLum = (function(){ var w=document.getElementById('mcIGTitleIconWrap'+bi+'_'+igDi); var dl=w?w.getAttribute('data-lum'):null; return (dl&&dl!=='0.500')?parseFloat(dl):null; })();
             b.descriptions.push({type:'icon_group', title: igTitle, title_icon_url: igTitleIconUrl, title_icon_quantity: igTitleIconQty, title_icon_auto_color_mode: igTitleIconMode, title_icon_native_luminance: igTitleIconLum, icons: igIcons, server: document.getElementById('mcICDescServer'+bi+'_'+igDi)?.value || '', server_states: igSrvStates});
           } else if (child.querySelector('input[id^="mcCKLabel'+bi+'_"]')) {
             var ckLabel = child.querySelector('input[id^="mcCKLabel'+bi+'_"]');
