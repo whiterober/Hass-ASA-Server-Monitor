@@ -104,8 +104,6 @@ def make_ic_css(server_map, fixed_styles_map):
     IC_CSS += 'ha-card [data-old-webkit] .ic-text.ic-block-_default .ic-qty{font-weight:950!important;font-family:HarmonyOS Sans SC,system-ui,Impact,sans-serif!important;-webkit-text-stroke:0.5px var(--primary-background-color)!important}'
     IC_CSS += 'ha-card .ic-block-img{position:absolute!important;right:2px!important;top:50%!important;transform:translateY(-50%)!important;width:30px!important;height:30px!important;object-fit:contain!important;border-radius:0 4px 4px 0!important;flex-shrink:0!important}'
     IC_CSS += 'ha-card .ic-text[class*="ic-block-"]:has(.ic-block-img){padding-right:34px!important}'
-    IC_CSS += 'ha-card .ig-title-badge:has(.ic-block-img){padding-right:34px!important}'
-    IC_CSS += 'ha-card .ig-title-row:has(.ic-block-img) > span{display:inline-block!important;padding-right:34px!important}'
     for sid, sm in server_map.items():
         r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)
         IC_CSS += 'ha-card .ic-linear-'+sid+' .ic-badge,.ic-block-'+sid+' .ic-badge{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important;color:'+sm['color']+'!important}'
@@ -1979,15 +1977,13 @@ def render_tab_html(tab):
                                 title_icon_html = '<ha-icon icon="mdi:{}" style="color:inherit;--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px"></ha-icon>'.format(_ig_mdi.group(1))
                                 _ig_title_text = ig_title[_ig_mdi.end():].strip()
                             elif linear_maps:
-                                if linear_maps[0] != '_default':
-                                    sm = _lookup_style(linear_maps[0])
-                                    icon = sm.get('icon', 'mdi:map')
-                                    title_icon_html = '<ha-icon icon="{}" style="color:inherit;--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px"></ha-icon>'.format(icon)
+                                sm = _lookup_style(linear_maps[0])
+                                icon = sm.get('icon', 'mdi:map')
+                                title_icon_html = '<ha-icon icon="{}" style="color:inherit;--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px"></ha-icon>'.format(icon)
                             elif block_maps:
-                                if block_maps[0] != '_default':
-                                    sm = _lookup_style(block_maps[0])
-                                    icon = sm.get('icon', 'mdi:map')
-                                    title_icon_html = '<ha-icon icon="{}" style="color:inherit;--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px"></ha-icon>'.format(icon)
+                                sm = _lookup_style(block_maps[0])
+                                icon = sm.get('icon', 'mdi:map')
+                                title_icon_html = '<ha-icon icon="{}" style="color:inherit;--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px"></ha-icon>'.format(icon)
                             # ^ aut numbering + [] badges (same as description lines)
                             _ig_is_hat = _ig_title_text.startswith('^')
                             if _ig_is_hat:
@@ -1997,40 +1993,14 @@ def render_tab_html(tab):
                                 _ig_title_text = '<span class="' + hat_cls + '">' + str(_hat_idx) + '</span> ' + _render_badges(_render_mdi_inline(_ig_title_text), bool(block_maps))
                             else:
                                 _ig_title_text = _render_badges(_render_mdi_inline(_ig_title_text), bool(block_maps))
-                            # Title icon image (block mode = reverse anti-color, linear mode = normal anti-color)
-                            _title_img_html = ''
-                            if desc.get('title_icon_url', ''):
-                                tiu = desc['title_icon_url']
-                                tiq = desc.get('title_icon_quantity', 0)
-                                tiae = desc.get('title_icon_auto_color_mode', 'off')
-                                tilum = desc.get('title_icon_native_luminance')
-                                _ti_cls = ''
-                                _ti_mode_cls = ''
-                                if tiae != 'off':
-                                    _is_rev = bool(block_maps) and not (block_maps == ['_default'])
-                                    if tilum is not None and tilum != 0.5:
-                                        _use_lum = (1 - tilum) if _is_rev else tilum
-                                        _ti_cls = ' ic-auto-light' if _use_lum > 0.5 else ' ic-auto-dark'
-                                    else:
-                                        _ti_cls = ' ic-auto-dark'
-                                    _ti_mode_cls = ' ic-mode-reverse' if _is_rev else ' ic-mode-normal'
-                                _ti_qty = '<span class="ic-qty">\u00d7{}</span>'.format(tiq) if tiq else ''
-                                _ti_img_cls = 'ic-block-img'
-                                _title_img_html = '<img src="{}" class="{}{}{}" onerror="this.remove()" />{}'.format(
-                                    esc(tiu), _ti_img_cls, _ti_cls, _ti_mode_cls, _ti_qty)
                             if block_maps:
                                 # Block mode: no hr, text inherits white color from .ic-text.ic-block-{sid}
-                                parts.append('<div class="ig-title-row" style="display:flex;align-items:center;gap:8px;margin:0 0 4px 0;position:relative">')
-                                parts.append('<span style="white-space:nowrap">{}{}{}</span>'.format(title_icon_html, _ig_title_text, _title_img_html))
-                                parts.append('</div>')
-                            elif linear_maps and _title_img_html:
-                                parts.append('<div class="ig-title-row" style="display:flex;align-items:center;gap:8px;margin:4px 0">')
-                                parts.append('<span class="ig-title-badge" style="white-space:nowrap;position:relative;padding-right:34px">{}{}{}</span>'.format(title_icon_html, _ig_title_text, _title_img_html))
-                                parts.append('<hr class="ig-title-line" style="flex:1;min-width:0" />')
+                                parts.append('<div class="ig-title-row" style="display:flex;align-items:center;gap:8px;margin:0 0 4px 0">')
+                                parts.append('<span style="white-space:nowrap">{}{}</span>'.format(title_icon_html, _ig_title_text))
                                 parts.append('</div>')
                             else:
                                 parts.append('<div class="ig-title-row" style="display:flex;align-items:center;gap:8px;margin:4px 0">')
-                                parts.append('<span class="ig-title-badge" style="white-space:nowrap;position:relative;padding-right:34px">{}{}{}</span>'.format(title_icon_html, _ig_title_text, _title_img_html))
+                                parts.append('<span class="ig-title-badge" style="white-space:nowrap">{}{}</span>'.format(title_icon_html, _ig_title_text))
                                 parts.append('<hr class="ig-title-line" style="flex:1;min-width:0" />')
                                 parts.append('</div>')
                         # Icon row (only render if has valid icons)
