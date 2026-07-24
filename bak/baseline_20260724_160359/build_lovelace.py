@@ -1967,7 +1967,6 @@ def render_tab_html(tab):
                             _ig_title_text = ig_title
                             # Check for explicit mdi: prefix in title (server maps take priority, fixed styles allow mdi override)
                             _ig_mdi = re.match(r'mdi:([\w-]+)', ig_title, re.ASCII)
-                            _ig_user_mdi = False
                             if linear_maps and linear_maps[0] in SERVER_MAP:
                                 sm = _lookup_style(linear_maps[0])
                                 icon = sm.get('icon', 'mdi:map')
@@ -1977,7 +1976,6 @@ def render_tab_html(tab):
                                 icon = sm.get('icon', 'mdi:map')
                                 title_icon_html = '<ha-icon icon="{}" style="color:inherit;--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px"></ha-icon>'.format(icon)
                             elif _ig_mdi:
-                                _ig_user_mdi = True
                                 title_icon_html = '<ha-icon icon="mdi:{}" style="color:inherit;--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px"></ha-icon>'.format(_ig_mdi.group(1))
                                 _ig_title_text = ig_title[_ig_mdi.end():].strip()
                             elif linear_maps:
@@ -1999,8 +1997,6 @@ def render_tab_html(tab):
                                 _ig_title_text = '<span class="' + hat_cls + '">' + str(_hat_idx) + '</span> ' + _render_badges(_render_mdi_inline(_ig_title_text), bool(block_maps))
                             else:
                                 _ig_title_text = _render_badges(_render_mdi_inline(_ig_title_text), bool(block_maps))
-                            if _ig_is_hat and not _ig_user_mdi:
-                                title_icon_html = ''
                             # Title icon image (block mode = reverse anti-color, linear mode = normal anti-color)
                             _title_img_html = ''
                             if desc.get('title_icon_url', ''):
@@ -2111,40 +2107,33 @@ def render_tab_html(tab):
                     if dstyle: dstyle = ' style="{}"'.format(dstyle)
                     # Server icon prefix (show highest-priority map icon)
                     srv_icon = ''
-                    if _is_hat:
-                        # ^ numbering active: suppress auto server/hint icons, keep only user's mdi:xxx
-                        _mdi_ov = re.match(r'^mdi:([\w-]+)', dtext[1:].lstrip(), re.ASCII)
-                        if _mdi_ov:
-                            srv_icon = '<ha-icon icon="mdi:{}" style="--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;color:var(--primary-text-color)"></ha-icon>'.format(_mdi_ov.group(1))
-                            dtext = dtext[:1] + dtext[1:].replace(_mdi_ov.group(0), '', 1)
-                    else:
-                        _show_maps = block_maps + linear_maps
-                        if _show_maps:
-                            _sid = _show_maps[0]
-                            # _hint/_warn/_remark always show icon; _default only if mdi: prefix
-                            if _sid in ('_hint', '_warn', '_remark'):
-                                _style = _lookup_style(_sid)
-                                _icon = _style.get('icon','mdi:map')
-                                _mdi_ov = re.match(r'^mdi:([\w-]+)', dtext, re.ASCII)
-                                if _mdi_ov:
-                                    _icon = 'mdi:' + _mdi_ov.group(1)
-                                    dtext = dtext[_mdi_ov.end():].strip()
-                                srv_icon = '<ha-icon icon="{}" style="--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;color:{}"></ha-icon>'.format(_icon, _style.get('color','var(--primary-text-color)'))
-                            elif _sid == '_default':
-                                # _default: no icon unless user adds mdi:xxx prefix
-                                _mdi_ov = re.match(r'^mdi:([\w-]+)', dtext, re.ASCII)
-                                if _mdi_ov:
-                                    _icon = 'mdi:' + _mdi_ov.group(1)
-                                    dtext = dtext[_mdi_ov.end():].strip()
-                                    srv_icon = '<ha-icon icon="{}" style="--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;color:var(--primary-text-color)"></ha-icon>'.format(_icon)
-                            else:
-                                _style = _lookup_style(_sid)
-                                _icon = _style.get('icon','mdi:map')
-                                srv_icon = '<ha-icon icon="{}" style="--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;color:{}"></ha-icon>'.format(_icon, _style.get('color','var(--primary-text-color)'))
-                        elif dserver:
-                            _style = _lookup_style(dserver)
+                    _show_maps = block_maps + linear_maps
+                    if _show_maps:
+                        _sid = _show_maps[0]
+                        # _hint/_warn/_remark always show icon; _default only if mdi: prefix
+                        if _sid in ('_hint', '_warn', '_remark'):
+                            _style = _lookup_style(_sid)
+                            _icon = _style.get('icon','mdi:map')
+                            _mdi_ov = re.match(r'^mdi:([\w-]+)', dtext, re.ASCII)
+                            if _mdi_ov:
+                                _icon = 'mdi:' + _mdi_ov.group(1)
+                                dtext = dtext[_mdi_ov.end():].strip()
+                            srv_icon = '<ha-icon icon="{}" style="--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;color:{}"></ha-icon>'.format(_icon, _style.get('color','var(--primary-text-color)'))
+                        elif _sid == '_default':
+                            # _default: no icon unless user adds mdi:xxx prefix
+                            _mdi_ov = re.match(r'^mdi:([\w-]+)', dtext, re.ASCII)
+                            if _mdi_ov:
+                                _icon = 'mdi:' + _mdi_ov.group(1)
+                                dtext = dtext[_mdi_ov.end():].strip()
+                                srv_icon = '<ha-icon icon="{}" style="--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;color:var(--primary-text-color)"></ha-icon>'.format(_icon)
+                        else:
+                            _style = _lookup_style(_sid)
                             _icon = _style.get('icon','mdi:map')
                             srv_icon = '<ha-icon icon="{}" style="--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;color:{}"></ha-icon>'.format(_icon, _style.get('color','var(--primary-text-color)'))
+                    elif dserver:
+                        _style = _lookup_style(dserver)
+                        _icon = _style.get('icon','mdi:map')
+                        srv_icon = '<ha-icon icon="{}" style="--mdc-icon-size:14px;width:14px;height:14px;margin-right:2px;color:{}"></ha-icon>'.format(_icon, _style.get('color','var(--primary-text-color)'))
                     dserver_attr=' data-server="{}" data-server-states=\'{}\''.format(dserver, states_json)
                     _dimg = ''
                     _dimg_url = (desc.get('images', [{}])[0] or {}).get('image_url','')
