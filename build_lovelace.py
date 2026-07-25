@@ -189,6 +189,7 @@ def make_ic_css(server_map, fixed_styles_map):
     IC_CSS += 'ha-card .ig-img.ic-auto-light{filter:none!important}'
     IC_CSS += '[data-theme="dark"] .ig-img.ic-auto-dark{filter:invert(1)!important}'
     IC_CSS += '[data-theme="light"] .ig-img.ic-auto-light{filter:invert(1)!important}'
+    IC_CSS += 'ha-card .ic-text[class*="ic-block-"]{cursor:pointer!important}'
     return IC_CSS
 
 
