@@ -116,7 +116,7 @@ def make_ic_css(server_map, fixed_styles_map):
         if not fc or fc == 'auto': fc = '#666666'
         r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
         IC_CSS += 'ha-card .ic-linear-'+fk+' .ic-badge,.ic-block-'+fk+' .ic-badge{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important;color:'+(fc if fk != '_default' else 'var(--primary-text-color)')+'!important}'
-    IC_CSS += 'ha-card .ic-badge{display:inline-flex!important;align-items:center!important;gap:1px!important;padding:1px 6px!important;border-radius:10px!important;font-size:0.75em!important;background:color-mix(in srgb,var(--primary-color) 25%,transparent)!important;color:var(--primary-text-color)!important;line-height:1.5!important}'
+    IC_CSS += 'ha-card .ic-badge{display:inline-block!important;padding:1px 6px!important;border-radius:10px!important;font-size:0.75em!important;background:color-mix(in srgb,var(--primary-color) 25%,transparent)!important;color:var(--primary-text-color)!important;line-height:1.5!important}'
     IC_CSS += 'ha-card .ic-badge-num{border-radius:3px!important;display:inline-flex!important;justify-content:center!important;width:16px!important;white-space:nowrap!important}'
     IC_CSS += 'ha-card .ic-badge{vertical-align:middle!important}'
     IC_CSS += 'ha-card .ic-badge ha-icon{--mdc-icon-size:1em!important}'
