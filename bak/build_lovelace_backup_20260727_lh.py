@@ -106,7 +106,6 @@ def make_ic_css(server_map, fixed_styles_map):
     IC_CSS += 'ha-card .ic-text[class*="ic-block-"]:has(.ic-block-img){padding-right:34px!important}'
     IC_CSS += 'ha-card .ig-title-badge:has(.ic-block-img){padding-right:34px!important}'
     IC_CSS += 'ha-card .ig-title-row:has(.ic-block-img) > span{display:inline-block!important;padding-right:34px!important}'
-    IC_CSS += 'ha-card .ig-title-row:has(.ic-block-img) > span{display:inline-flex!important}'
     IC_CSS += 'ha-card .ic-text[class*="ic-block-"]:has(.ig-title-row):has(.ic-block-img){padding-right:6px!important}'
     for sid, sm in server_map.items():
         r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)
@@ -116,7 +115,7 @@ def make_ic_css(server_map, fixed_styles_map):
         if not fc or fc == 'auto': fc = '#666666'
         r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
         IC_CSS += 'ha-card .ic-linear-'+fk+' .ic-badge,.ic-block-'+fk+' .ic-badge{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important;color:'+(fc if fk != '_default' else 'var(--primary-text-color)')+'!important}'
-    IC_CSS += 'ha-card .ic-badge{display:inline-flex!important;align-items:center!important;gap:1px!important;padding:1px 6px!important;border-radius:10px!important;font-size:0.75em!important;background:color-mix(in srgb,var(--primary-color) 25%,transparent)!important;color:var(--primary-text-color)!important;line-height:1.5!important}'
+    IC_CSS += 'ha-card .ic-badge{display:inline-block!important;padding:1px 6px!important;border-radius:10px!important;font-size:0.75em!important;background:color-mix(in srgb,var(--primary-color) 25%,transparent)!important;color:var(--primary-text-color)!important;line-height:1.5!important}'
     IC_CSS += 'ha-card .ic-badge-num{border-radius:3px!important;display:inline-flex!important;justify-content:center!important;width:16px!important;white-space:nowrap!important}'
     IC_CSS += 'ha-card .ic-badge{vertical-align:middle!important}'
     IC_CSS += 'ha-card .ic-badge ha-icon{--mdc-icon-size:1em!important}'
@@ -177,11 +176,9 @@ def make_ic_css(server_map, fixed_styles_map):
         if not fc or fc == 'auto': fc = '#666666'
         fc_text = fc if fk != '_default' else 'var(--primary-text-color)'
         r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
-        _bg_15 = 'rgba('+str(r)+','+str(g)+','+str(b)+',0.15)' if fk != '_default' else 'color-mix(in srgb,var(--primary-text-color) 10%,transparent)'
-        _bg_25 = 'rgba('+str(r)+','+str(g)+','+str(b)+',0.25)' if fk != '_default' else 'color-mix(in srgb,var(--primary-text-color) 15%,transparent)'
-        IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-'+fk+' .ig-title-badge{color:'+fc_text+'!important;background:'+_bg_15+'!important}'
-        IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-'+fk+' .ig-title-badge .ic-badge{color:'+fc_text+'!important;background:'+_bg_25+'!important}'
-        IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-'+fk+' .ig-title-badge .ic-badge-num{color:'+fc_text+'!important;background:'+_bg_25+'!important}'
+        IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-'+fk+' .ig-title-badge{color:'+fc_text+'!important;background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important}'
+        IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-'+fk+' .ig-title-badge .ic-badge{color:'+fc_text+'!important;background:rgba('+str(r)+','+str(g)+','+str(b)+',0.25)!important}'
+        IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-'+fk+' .ig-title-badge .ic-badge-num{color:'+fc_text+'!important;background:rgba('+str(r)+','+str(g)+','+str(b)+',0.25)!important}'
         IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-'+fk+' .ig-title-line{border-top-color:'+fc_text+'!important;opacity:0.4!important}'
         IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-'+fk+'::after{border-top-color:'+fc_text+'!important;opacity:0.4!important}'
     IC_CSS += 'ha-card .ig-title-row ha-icon,ha-card .ig-title-badge ha-icon{color:inherit!important}'
