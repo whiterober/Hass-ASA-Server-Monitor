@@ -107,9 +107,10 @@ def make_ic_css(server_map, fixed_styles_map):
     IC_CSS += 'ha-card .ic-text[class*="ic-block-"]:not(:has(.ig-title-row)):has(.ic-block-img-before){padding-left:34px!important}'
     IC_CSS += 'ha-card .ig-title-row:has(.ic-block-img-before){margin-left:-6px!important}'
     IC_CSS += 'ha-card .ig-title-row:has(.ic-block-img-before) > span{padding-left:34px!important}'
-    IC_CSS += 'ha-card .ic-img-qty{display:inline-flex!important;align-items:center!important;padding:1px 4px!important;border-radius:4px!important;font-size:0.75em!important;font-weight:600!important;background:color-mix(in srgb,var(--primary-color) 20%,transparent)!important;color:var(--primary-text-color)!important;flex-shrink:0!important;line-height:1!important}'
+    IC_CSS += 'ha-card .ic-img-qty{display:inline-flex!important;align-items:center!important;padding:1px 4px!important;border-radius:4px!important;font-size:0.75em!important;background:color-mix(in srgb,var(--primary-color) 20%,transparent)!important;color:var(--primary-text-color)!important;flex-shrink:0!important;line-height:1!important}'
+    IC_CSS += 'ha-card .ic-text[class*="ic-block-"] .ic-img-qty{position:absolute!important;right:2px!important;top:50%!important;transform:translateY(-50%)!important}'
     IC_CSS += 'ha-card .ic-text[class*="ic-block-"]:has(.ic-block-img, .ic-img-qty){padding-right:34px!important}'
-    IC_CSS += 'ha-card .ig-title-badge:has(.ic-block-img){padding-right:34px!important}'
+    IC_CSS += 'ha-card .ig-title-badge:has(.ic-block-img, .ic-img-qty){padding-right:34px!important}'
     IC_CSS += 'ha-card .ig-title-row:has(.ic-block-img, .ic-img-qty) > span{display:inline-block!important;padding-right:34px!important}'
     IC_CSS += 'ha-card .ig-title-row:has(.ic-block-img) > span{display:inline-flex!important}'
     IC_CSS += 'ha-card .ic-text[class*="ic-block-"]:has(.ig-title-row):has(.ic-block-img, .ic-img-qty){padding-right:6px!important}'
@@ -2038,9 +2039,6 @@ def render_tab_html(tab):
                                     esc(tiu), _ti_img_cls, _ti_cls, _ti_mode_cls, _ti_qty)
                             else:
                                 _ti_img_pos = 'after'
-                                tiq = desc.get('title_icon_quantity', 0)
-                                if tiq:
-                                    _title_img_html = '<span class="ic-img-qty">\u00d7{}</span>'.format(tiq)
                             if _ti_img_pos == 'before':
                                 _title_span = '<span style="white-space:nowrap">{}{}{}</span>'.format(_title_img_html, title_icon_html, _ig_title_text)
                                 _title_span_badge = '<span class="ig-title-badge" style="white-space:nowrap;position:relative">{}{}{}</span>'.format(_title_img_html, title_icon_html, _ig_title_text)

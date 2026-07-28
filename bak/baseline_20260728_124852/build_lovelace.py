@@ -103,16 +103,11 @@ def make_ic_css(server_map, fixed_styles_map):
     IC_CSS += 'ha-card .ic-text.ic-block-_default .ic-qty{color:var(--primary-text-color)!important;-webkit-text-stroke:2px var(--primary-background-color)!important}'
     IC_CSS += 'ha-card [data-old-webkit] .ic-text.ic-block-_default .ic-qty{font-weight:950!important;font-family:HarmonyOS Sans SC,system-ui,Impact,sans-serif!important;-webkit-text-stroke:0.5px var(--primary-background-color)!important}'
     IC_CSS += 'ha-card .ic-block-img{position:absolute!important;right:2px!important;top:50%!important;transform:translateY(-50%)!important;width:30px!important;height:30px!important;object-fit:contain!important;border-radius:0 4px 4px 0!important;flex-shrink:0!important}'
-    IC_CSS += 'ha-card .ic-block-img-before{position:absolute!important;left:2px!important;top:50%!important;transform:translateY(-50%)!important;width:30px!important;height:30px!important;object-fit:contain!important;border-radius:4px 0 0 4px!important;flex-shrink:0!important}'
-    IC_CSS += 'ha-card .ic-text[class*="ic-block-"]:not(:has(.ig-title-row)):has(.ic-block-img-before){padding-left:34px!important}'
-    IC_CSS += 'ha-card .ig-title-row:has(.ic-block-img-before){margin-left:-6px!important}'
-    IC_CSS += 'ha-card .ig-title-row:has(.ic-block-img-before) > span{padding-left:34px!important}'
-    IC_CSS += 'ha-card .ic-img-qty{display:inline-flex!important;align-items:center!important;padding:1px 4px!important;border-radius:4px!important;font-size:0.75em!important;font-weight:600!important;background:color-mix(in srgb,var(--primary-color) 20%,transparent)!important;color:var(--primary-text-color)!important;flex-shrink:0!important;line-height:1!important}'
-    IC_CSS += 'ha-card .ic-text[class*="ic-block-"]:has(.ic-block-img, .ic-img-qty){padding-right:34px!important}'
+    IC_CSS += 'ha-card .ic-text[class*="ic-block-"]:has(.ic-block-img){padding-right:34px!important}'
     IC_CSS += 'ha-card .ig-title-badge:has(.ic-block-img){padding-right:34px!important}'
-    IC_CSS += 'ha-card .ig-title-row:has(.ic-block-img, .ic-img-qty) > span{display:inline-block!important;padding-right:34px!important}'
+    IC_CSS += 'ha-card .ig-title-row:has(.ic-block-img) > span{display:inline-block!important;padding-right:34px!important}'
     IC_CSS += 'ha-card .ig-title-row:has(.ic-block-img) > span{display:inline-flex!important}'
-    IC_CSS += 'ha-card .ic-text[class*="ic-block-"]:has(.ig-title-row):has(.ic-block-img, .ic-img-qty){padding-right:6px!important}'
+    IC_CSS += 'ha-card .ic-text[class*="ic-block-"]:has(.ig-title-row):has(.ic-block-img){padding-right:6px!important}'
     for sid, sm in server_map.items():
         r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)
         IC_CSS += 'ha-card .ic-linear-'+sid+' .ic-badge,.ic-block-'+sid+' .ic-badge{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important;color:'+sm['color']+'!important}'
@@ -2032,34 +2027,22 @@ def render_tab_html(tab):
                                         _ti_cls = ' ic-auto-dark'
                                     _ti_mode_cls = ' ic-mode-reverse' if _is_rev else ' ic-mode-normal'
                                 _ti_qty = '<span class="ic-qty">\u00d7{}</span>'.format(tiq) if tiq else ''
-                                _ti_img_pos = desc.get('title_icon_image_position', 'after')
-                                _ti_img_cls = 'ic-block-img-before' if _ti_img_pos == 'before' else 'ic-block-img'
+                                _ti_img_cls = 'ic-block-img'
                                 _title_img_html = '<img src="{}" class="{}{}{}" onerror="this.remove()" />{}'.format(
                                     esc(tiu), _ti_img_cls, _ti_cls, _ti_mode_cls, _ti_qty)
-                            else:
-                                _ti_img_pos = 'after'
-                                tiq = desc.get('title_icon_quantity', 0)
-                                if tiq:
-                                    _title_img_html = '<span class="ic-img-qty">\u00d7{}</span>'.format(tiq)
-                            if _ti_img_pos == 'before':
-                                _title_span = '<span style="white-space:nowrap">{}{}{}</span>'.format(_title_img_html, title_icon_html, _ig_title_text)
-                                _title_span_badge = '<span class="ig-title-badge" style="white-space:nowrap;position:relative">{}{}{}</span>'.format(_title_img_html, title_icon_html, _ig_title_text)
-                            else:
-                                _title_span = '<span style="white-space:nowrap">{}{}{}</span>'.format(title_icon_html, _ig_title_text, _title_img_html)
-                                _title_span_badge = '<span class="ig-title-badge" style="white-space:nowrap;position:relative;padding-right:34px">{}{}{}</span>'.format(title_icon_html, _ig_title_text, _title_img_html)
                             if block_maps:
                                 # Block mode: no hr, text inherits white color from .ic-text.ic-block-{sid}
                                 parts.append('<div class="ig-title-row" style="display:flex;align-items:center;gap:8px;margin:0 0 4px 0;position:relative">')
-                                parts.append(_title_span)
+                                parts.append('<span style="white-space:nowrap">{}{}{}</span>'.format(title_icon_html, _ig_title_text, _title_img_html))
                                 parts.append('</div>')
                             elif linear_maps and _title_img_html:
                                 parts.append('<div class="ig-title-row" style="display:flex;align-items:center;gap:8px;margin:4px 0">')
-                                parts.append(_title_span_badge)
+                                parts.append('<span class="ig-title-badge" style="white-space:nowrap;position:relative;padding-right:34px">{}{}{}</span>'.format(title_icon_html, _ig_title_text, _title_img_html))
                                 parts.append('<hr class="ig-title-line" style="flex:1;min-width:0" />')
                                 parts.append('</div>')
                             else:
                                 parts.append('<div class="ig-title-row" style="display:flex;align-items:center;gap:8px;margin:4px 0">')
-                                parts.append(_title_span_badge)
+                                parts.append('<span class="ig-title-badge" style="white-space:nowrap;position:relative;padding-right:34px">{}{}{}</span>'.format(title_icon_html, _ig_title_text, _title_img_html))
                                 parts.append('<hr class="ig-title-line" style="flex:1;min-width:0" />')
                                 parts.append('</div>')
                         # Icon row (only render if has valid icons)
@@ -2104,7 +2087,6 @@ def render_tab_html(tab):
                     dcolor = desc.get('color', '') if isinstance(desc, dict) else ''
                     dopacity = desc.get('opacity', 1.0) if isinstance(desc, dict) else 1.0
                     dserver = desc.get('server', '') if isinstance(desc, dict) else ''
-                    _img_pos = (desc.get('images', [{}])[0] or {}).get('image_position', 'after')
                     # 3-state: server_states per-map (0=off, 1=linear, 2=block)
                     srv_states = desc.get('server_states', {}) if isinstance(desc, dict) else {}
                     if not srv_states and dserver:
@@ -2190,20 +2172,14 @@ def render_tab_html(tab):
                                 _dac_cls = ' ic-auto-dark'
                             _dac_mode_cls = ' ic-mode-reverse' if _is_rev else ' ic-mode-normal'
                         _img_tag = '<img src="{}" class="ic-desc-img{}" onerror="this.remove()" />'.format(esc(_dimg_url), _dac_cls)
-                        if block_maps and _img_pos != 'before':
+                        if block_maps:
                             _img_tag = '<img src="{}" class="ic-block-img{}" onerror="this.remove()" />'.format(esc(_dimg_url), _dac_cls)
-                        elif block_maps and _img_pos == 'before':
-                            _img_tag = '<img src="{}" class="ic-block-img-before{}" onerror="this.remove()" />'.format(esc(_dimg_url), _dac_cls)
                         if _dac_mode_cls:
-                            if block_maps and _img_pos != 'before':
+                            if block_maps:
                                 _img_tag = '<img src="{}" class="ic-block-img{}{}" onerror="this.remove()" />'.format(esc(_dimg_url), _dac_cls, _dac_mode_cls)
-                            elif block_maps and _img_pos == 'before':
-                                _img_tag = '<img src="{}" class="ic-block-img-before{}{}" onerror="this.remove()" />'.format(esc(_dimg_url), _dac_cls, _dac_mode_cls)
                             else:
                                 _img_tag = '<span class="ic-desc-wrap{}" style="position:relative;display:inline-flex;flex-shrink:0">{}</span>'.format(_dac_mode_cls, _img_tag)
                         _dimg = _img_tag + _qty_tag
-                    elif _qty:
-                        _dimg = '<span class="ic-img-qty">\u00d7{}</span>'.format(_qty)
                     else:
                         _dimg = _qty_tag
                     # Compute rendered text (after block_maps is known for _render_badges)
@@ -2213,10 +2189,7 @@ def render_tab_html(tab):
                     else:
                         dtext_rendered = _render_badges(_render_mdi_inline(dtext), bool(block_maps))
                     onclick_block='event.stopPropagation();if(!this.className.includes(&#39;ic-block-&#39;))return;var b=this.closest(&#39;.info-card-block&#39;);if(b){var all=b.querySelectorAll(&#39;.ic-text[class*=ic-block-]&#39;);var was=!!this.style.outline;all.forEach(function(e){e.style.outline=&#39;&#39;});if(was){try{localStorage.removeItem(&#39;asa-sel&#39;)}catch(e){}}else{var idx=Array.from(all).indexOf(this);this.style.setProperty(&#39;outline-width&#39;,&#39;2px&#39;,&#39;important&#39;);this.style.setProperty(&#39;outline-style&#39;,&#39;solid&#39;,&#39;important&#39;);this.style.setProperty(&#39;outline-color&#39;,&#39;#0288d1&#39;,&#39;important&#39;);this.style.setProperty(&#39;outline-offset&#39;,&#39;-2px&#39;,&#39;important&#39;);try{localStorage.setItem(&#39;asa-sel&#39;,idx)}catch(e){}}}'
-                    if _img_pos == 'before':
-                        parts.append('<div class="{}"'.format(ic_cls) + ' onclick="'+onclick_block+'"' + dstyle+dserver_attr+'>'+srv_icon+_dimg+dtext_rendered+'</div>')
-                    else:
-                        parts.append('<div class="{}"'.format(ic_cls) + ' onclick="'+onclick_block+'"' + dstyle+dserver_attr+'>'+srv_icon+dtext_rendered+_dimg+'</div>')
+                    parts.append('<div class="{}"'.format(ic_cls) + ' onclick="'+onclick_block+'"' + dstyle+dserver_attr+'>'+srv_icon+dtext_rendered+_dimg+'</div>')
                 if ic_collapse:
                     if not _details_opened:
                         # No fold marker: old behavior — everything in <details>

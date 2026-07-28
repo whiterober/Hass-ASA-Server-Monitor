@@ -1438,8 +1438,6 @@ td, th { padding: 4px 6px; }
 
 .img-pos-toggle{width:auto;align-self:stretch;margin-top:4px;padding:4px 0;border:none;border-radius:4px;background:transparent;cursor:pointer;font-size:0.9em;text-align:center;color:var(--text);box-sizing:border-box;opacity:0.6}.img-pos-toggle:hover{opacity:1;background:color-mix(in srgb,var(--primary-color) 15%,transparent)}
 
-.img-only-qty{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;flex-shrink:0;padding:1px 6px;border-radius:4px;font-size:0.75em;font-weight:700;background:color-mix(in srgb,var(--primary-color) 25%,transparent);color:var(--primary-color);cursor:grab}
-
 
 
 .qty-option{width:32px;height:32px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);color:var(--text);cursor:pointer;font-size:0.6em;opacity:0.6;box-sizing:border-box}
@@ -4666,7 +4664,7 @@ function currentBlocks() { const t = currentTab(); if (!t.content_blocks) t.cont
 
 
 
-function reRender() { renderMixedEditor(); fixDefaultImgPos(); applyAllImgPositions(); initImgOnlyQty(); }
+function reRender() { renderMixedEditor(); fixDefaultImgPos(); applyAllImgPositions(); }
 
 
 
@@ -4761,7 +4759,6 @@ async function loadEditorData(mode) {
     renderMixedEditor(cfg.label);
     fixDefaultImgPos();
     applyAllImgPositions();
-    initImgOnlyQty();
 
 
 
@@ -4776,7 +4773,6 @@ async function loadEditorData(mode) {
     renderMixedEditor(cfg.label);
     fixDefaultImgPos();
     applyAllImgPositions();
-    initImgOnlyQty();
 
 
 
@@ -16506,49 +16502,6 @@ function applyAllImgPositions() {
   });
 }
 
-// Replace empty images with pure-quantity badges + attach long-press to placeholders
-function initImgOnlyQty() {
-  document.querySelectorAll('img[data-qty-init]').forEach(function(img) {
-    if (img.src && !img.src.endsWith('/') && img.src.indexOf('undefined') < 0) return;
-    var biDi = img.getAttribute('data-qty-init').split(',');
-    if (biDi.length < 2) return;
-    var bi = parseInt(biDi[0]), di = parseInt(biDi[1]);
-    if (isNaN(bi) || isNaN(di)) return;
-    var block = _currentTab()?.content_blocks?.[bi];
-    if (!block || !block.descriptions || !block.descriptions[di]) return;
-    var desc = block.descriptions[di];
-    var qty = (desc.images && desc.images[0] && desc.images[0].quantity) || desc.quantity || 0;
-    if (qty <= 0) return;
-    var holder = img.closest('span[style*="display:inline-flex"]');
-    if (!holder || holder.querySelector('.img-only-qty')) return;
-    img.style.display = 'none';
-    var qtyBadge = holder.querySelector('.ic-qty');
-    if (qtyBadge) qtyBadge.style.display = 'none';
-    var badge = document.createElement('span');
-    badge.className = 'img-only-qty img-preview-wrap';
-    badge.id = 'mcImg' + bi + '_' + di;
-    badge.setAttribute('data-qty-init', bi+','+di);
-    badge.textContent = '\u00d7' + qty;
-    holder.appendChild(badge);
-    badge.setAttribute('data-qty-inited', '1');
-    initQtyLongPress(badge, bi, di);
-  });
-  // Fallback: ensure all placeholder spans have data-qty-init + long-press
-  document.querySelectorAll('span[onclick*="openIconPicker"]').forEach(function(ph) {
-    if (ph.hasAttribute('data-qty-inited')) return;
-    var onclick = ph.getAttribute('onclick') || '';
-    var mBi = onclick.match(/bi:(\d+)/);
-    if (!mBi) return;
-    var bi = parseInt(mBi[1]);
-    var mDi = onclick.match(/di:(\d+)/);
-    var di = mDi ? parseInt(mDi[1]) : undefined;
-    if (isNaN(bi)) return;
-    ph.setAttribute('data-qty-init', bi+','+(di||0));
-    ph.setAttribute('data-qty-inited', '1');
-    initQtyLongPress(ph, bi, di);
-  });
-}
-
 function toggleImgPos(bi, di, opt_isBlock) {
   var tab = _currentTab();
   if (!tab || !tab.content_blocks || !tab.content_blocks[bi]) return;
@@ -16794,34 +16747,6 @@ function initQtyBadges() {
     else if (parts.length === 3) { initQtyLongPress(img, parseInt(parts[0]), parseInt(parts[2]), parseInt(parts[1])); img.setAttribute('data-qty-inited','1'); }
 
 
-
-  });
-
-
-
-  // Fallback: ensure all dynamically created placeholder spans have long-press
-
-  document.querySelectorAll('span[onclick*="openIconPicker"]:not([data-qty-inited])').forEach(function(ph) {
-
-    var onclick = ph.getAttribute('onclick') || '';
-
-    var mBi = onclick.match(/bi:(\d+)/);
-
-    if (!mBi) return;
-
-    var bi = parseInt(mBi[1]);
-
-    var mDi = onclick.match(/di:(\d+)/);
-
-    var di = mDi ? parseInt(mDi[1]) : undefined;
-
-    if (isNaN(bi)) return;
-
-    ph.setAttribute('data-qty-init', bi+','+(di||0));
-
-    ph.setAttribute('data-qty-inited', '1');
-
-    initQtyLongPress(ph, bi, di);
 
   });
 
@@ -18951,16 +18876,7 @@ function clearIconSelection(el) {
 
   } else {
 
-    // Handle icon_group_title via overlay._ctx
-    var oCtx = overlay._ctx;
-    if (oCtx && oCtx.mode === 'icon_group_title') {
-      document.getElementById('mcIGTitleIconUrl'+oCtx.bi+'_'+oCtx.di).value = '';
-      var wrap = document.getElementById('mcIGTitleIconWrap'+oCtx.bi+'_'+oCtx.di);
-      var img = document.getElementById('mcIGTitleIcon'+oCtx.bi+'_'+oCtx.di);
-      var ph = document.getElementById('mcIGTitleIconPlaceholder'+oCtx.bi+'_'+oCtx.di);
-      if (img) img.style.display = 'none';
-      if (ph) ph.style.display = 'inline-flex';
-    } else {
+
 
     var si = overlay.dataset.si;
 
@@ -18992,7 +18908,7 @@ function clearIconSelection(el) {
 
     }
 
-    }  // close inner else
+
 
   }
 
