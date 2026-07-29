@@ -1,0 +1,11 @@
+import re
+c=open("/config/lovelace").read()
+m1 = re.findall(r'ic-text:not\(\[class\*=.ic-block-.\]\) \.ic-qty\{[^}]+}', c)
+print(f"scoped badge: {len(m1)}")
+if m1: print("  First:", m1[0][:150])
+m2 = re.findall(r'ig-title-badge:has\(\.ic-block-img[^)]*\) \.ic-qty\{position:absolute', c)
+print(f"ig-title base after: {len(m2)}")
+m3 = re.findall(r'ig-title-badge:has\(\.ic-block-img[^)]*\) \.ic-qty\{padding:1px 5px', c)
+print(f"ig-title per-color after: {len(m3)}")
+m4 = re.findall(r'ic-text\[class\*=.ic-block-.\]:has\(\.ic-block-img-before\) \.ic-qty', c)
+print(f"OLD merged before rule: {len(m4)}")

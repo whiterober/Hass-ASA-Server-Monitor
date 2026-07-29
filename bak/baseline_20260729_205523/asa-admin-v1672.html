@@ -4666,7 +4666,7 @@ function currentBlocks() { const t = currentTab(); if (!t.content_blocks) t.cont
 
 
 
-function reRender() { renderMixedEditor(); fixDefaultImgPos(); applyAllImgPositions(); }
+function reRender() { renderMixedEditor(); fixDefaultImgPos(); applyAllImgPositions(); initImgOnlyQty(); }
 
 
 
@@ -4761,6 +4761,7 @@ async function loadEditorData(mode) {
     renderMixedEditor(cfg.label);
     fixDefaultImgPos();
     applyAllImgPositions();
+    initImgOnlyQty();
 
 
 
@@ -4775,6 +4776,7 @@ async function loadEditorData(mode) {
     renderMixedEditor(cfg.label);
     fixDefaultImgPos();
     applyAllImgPositions();
+    initImgOnlyQty();
 
 
 
@@ -7182,7 +7184,7 @@ function renderMixedContent(tab) {
 
 
 
-            h += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><span class="cat-color-wrap" style="flex-shrink:0" title="引用块色条颜色"><span class="cat-color-dot" id="mcICQuoteDot'+bi+'" style="background:'+(b.quote_color&&b.quote_color!=='auto'?esc(b.quote_color):'linear-gradient(to right, #000 50%, #fff 50%)')+'" data-target="mcICQuoteColor'+bi+'" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><input type="hidden" id="mcICQuoteColor'+bi+'" value="'+esc(b.quote_color||'auto')+'">'+(b.icon_url?'<span style="position:relative;display:inline-flex;flex-shrink:0" class="'+(function(){var img0=(b.images&&b.images[0])?b.images[0]:{};var m=img0.image_auto_color_mode||'off';if(m==='off')return'';var l=img0.image_native_luminance;var isRev=m==='reverse';var lum=(l!=null&&l!==0.5)?l:null;var ac=lum!=null?(lum>0.5?'ic-auto-light':'ic-auto-dark'):'ic-auto-color';var badge=(m==='normal'||m==='reverse')?' ic-mode-normal':'';return ac+badge;})()+'" ><img src="'+esc(thumbUrl(b.icon_url,56))+'" id="mcICIconPreview'+bi+'" style="width:28px;height:28px;object-fit:contain;cursor:pointer" onclick="event.stopPropagation();openIconPicker({mode:\'info_card_title\',bi:'+bi+'})" data-qty-init="'+bi+'" title="点击换图标" onerror="this.style.opacity=0">'+'<span id="mcICIconPlaceholder'+bi+'" style="position:relative;display:inline-flex;flex-shrink:0;width:28px;height:28px;align-items:center;justify-content:center;cursor:pointer;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px;display:none" onclick="event.stopPropagation();openIconPicker({mode:\'info_card_title\',bi:'+bi+'})" data-qty-init="'+bi+'" title="选择图标">+</span>'+'<span class="ic-qty" id="icQtyBadge'+bi+'" style="display:'+((b.images&&b.images[0]&&b.images[0].quantity)?'':'none')+'">'+((b.images&&b.images[0]&&b.images[0].quantity)?'\u00d7'+(b.images[0].quantity):'')+'</span></span>':'<span style="position:relative;display:inline-flex;flex-shrink:0"><img id="mcICIconPreview'+bi+'" style="width:28px;height:28px;object-fit:contain;cursor:pointer;display:none" onclick="event.stopPropagation();openIconPicker({mode:\'info_card_title\',bi:'+bi+'})" data-qty-init="'+bi+'" title="点击选图 | 长按选数量" onerror="this.style.opacity=0"><span id="mcICIconPlaceholder'+bi+'" style="position:relative;display:inline-flex;flex-shrink:0;width:28px;height:28px;align-items:center;justify-content:center;cursor:pointer;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px" onclick="event.stopPropagation();openIconPicker({mode:\'info_card_title\',bi:'+bi+'})" data-qty-init="'+bi+'" title="选择图标">+</span><span class="ic-qty" id="icQtyBadge'+bi+'" style="display:'+((b.images&&b.images[0]&&b.images[0].quantity)?'':'none')+'">'+((b.images&&b.images[0]&&b.images[0].quantity)?'\u00d7'+(b.images[0].quantity):'')+'</span></span>')+'<input type="hidden" id="mcICIcon'+bi+'" value="'+esc(b.icon_url||'')+'"><input type="hidden" id="mcICIconQty'+bi+'" value="'+((b.images&&b.images[0]&&b.images[0].quantity)||'')+'">'+'<span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap" title="标题颜色"><span class="cat-color-dot" id="mcICTitleCDot'+bi+'" style="background:'+(b.title_color&&b.title_color!=='auto'?esc(b.title_color):'linear-gradient(to right, #000 50%, #fff 50%)')+'" data-target="mcICTitleColor'+bi+'" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><input id="mcICTitle'+bi+'" value="'+esc(b.title||'')+'" placeholder="标题" style="box-sizing:border-box;flex:1;padding:4px 8px;font-size:0.85em;border-radius:0;border:none"></span></span><input type="hidden" id="mcICTitleColor'+bi+'" value="'+esc(b.title_color||'auto')+'"></div>';
+            h += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><span class="cat-color-wrap" style="flex-shrink:0" title="引用块色条颜色"><span class="cat-color-dot" id="mcICQuoteDot'+bi+'" style="background:'+(b.quote_color&&b.quote_color!=='auto'?esc(b.quote_color):'linear-gradient(to right, #000 50%, #fff 50%)')+'" data-target="mcICQuoteColor'+bi+'" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><input type="hidden" id="mcICQuoteColor'+bi+'" value="'+esc(b.quote_color||'auto')+'">'+(b.icon_url?'<span style="position:relative;display:inline-flex;flex-shrink:0" class="'+(function(){var img0=(b.images&&b.images[0])?b.images[0]:{};var m=img0.image_auto_color_mode||'off';if(m==='off')return'';var l=img0.image_native_luminance;var isRev=m==='reverse';var lum=(l!=null&&l!==0.5)?l:null;var ac=lum!=null?(lum>0.5?'ic-auto-light':'ic-auto-dark'):'ic-auto-color';var badge=(m==='normal'||m==='reverse')?' ic-mode-normal':'';return ac+badge;})()+'" ><img src="'+esc(thumbUrl(b.icon_url,56))+'" id="mcICIconPreview'+bi+'" style="width:28px;height:28px;object-fit:contain;cursor:pointer" onclick="event.stopPropagation();openIconPicker({mode:\'info_card_title\',bi:'+bi+'})" data-qty-init="'+bi+'" title="点击换图标" onerror="this.style.opacity=0">'+'<span class="ic-qty" id="icQtyBadge'+bi+'" style="display:'+((b.images&&b.images[0]&&b.images[0].quantity)?'':'none')+'">'+((b.images&&b.images[0]&&b.images[0].quantity)?'\u00d7'+(b.images[0].quantity):'')+'</span></span>':'<span id="mcICIconPlaceholder'+bi+'" style="position:relative;display:inline-flex;flex-shrink:0;width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px" onclick="event.stopPropagation();openIconPicker({mode:\'info_card_title\',bi:'+bi+'})" data-qty-init="'+bi+'" title="选择图标">+<span class="ic-qty" id="icQtyBadge'+bi+'" style="display:'+((b.images&&b.images[0]&&b.images[0].quantity)?'':'none')+'">'+((b.images&&b.images[0]&&b.images[0].quantity)?'\u00d7'+(b.images[0].quantity):'')+'</span></span>')+'<input type="hidden" id="mcICIcon'+bi+'" value="'+esc(b.icon_url||'')+'"><input type="hidden" id="mcICIconQty'+bi+'" value="'+((b.images&&b.images[0]&&b.images[0].quantity)||'')+'">'+'<span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap" title="标题颜色"><span class="cat-color-dot" id="mcICTitleCDot'+bi+'" style="background:'+(b.title_color&&b.title_color!=='auto'?esc(b.title_color):'linear-gradient(to right, #000 50%, #fff 50%)')+'" data-target="mcICTitleColor'+bi+'" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><input id="mcICTitle'+bi+'" value="'+esc(b.title||'')+'" placeholder="标题" style="box-sizing:border-box;flex:1;padding:4px 8px;font-size:0.85em;border-radius:0;border:none"></span></span><input type="hidden" id="mcICTitleColor'+bi+'" value="'+esc(b.title_color||'auto')+'"></div>';
 
 
 
@@ -7306,15 +7308,23 @@ function renderMixedContent(tab) {
 
 
 
-          h += '<img src="'+esc(thumbUrl(igTitleIconUrl||'',56))+'" id="mcIGTitleIcon'+bi+'_'+di+'" data-qty-init="'+bi+','+di+'" onclick="event.stopPropagation();openIconPicker({mode:\'icon_group_title\',bi:'+bi+',di:'+di+'})" title="点击选图 | 长按选数量" style="width:24px;height:24px;object-fit:contain;cursor:pointer;border-radius:3px'+(igTitleIconUrl?'':';display:none')+'">';
+          if (igTitleIconUrl) {
 
 
 
-          h += '<span id="mcIGTitleIconPlaceholder'+bi+'_'+di+'" onclick="event.stopPropagation();openIconPicker({mode:\'icon_group_title\',bi:'+bi+',di:'+di+'})" title="选择图标" style="width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;opacity:0.4;border:1px dashed var(--border);border-radius:3px;font-size:0.65em'+(igTitleIconUrl?';display:none':'')+'">+</span>';
+            h += '<img src="'+esc(thumbUrl(igTitleIconUrl,56))+'" id="mcIGTitleIcon'+bi+'_'+di+'" data-qty-init="'+bi+','+di+'" onclick="event.stopPropagation();openIconPicker({mode:\'icon_group_title\',bi:'+bi+',di:'+di+'})" title="点击换图" style="width:24px;height:24px;object-fit:contain;cursor:pointer;border-radius:3px">';
 
 
 
-          h += '<span class="ic-qty" id="icQtyBadgeIGTitle'+bi+'_'+di+'" style="display:'+(igTitleIconQty?'':'none')+'">'+(igTitleIconQty?'\u00d7'+igTitleIconQty:'')+'</span>';
+            h += '<span class="ic-qty" id="icQtyBadgeIGTitle'+bi+'_'+di+'" style="display:'+(igTitleIconQty?'':'none')+'">\u00d7'+igTitleIconQty+'</span>';
+
+
+
+          }
+
+
+
+          h += '<span id="mcIGTitleIconPlaceholder'+bi+'_'+di+'" onclick="event.stopPropagation();openIconPicker({mode:\'icon_group_title\',bi:'+bi+',di:'+di+'})" title="选择图标" style="width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;opacity:0.4;border:1px dashed var(--border);border-radius:3px;font-size:0.8em'+(igTitleIconUrl?';display:none':'')+'">+</span>';
 
 
 
@@ -7474,7 +7484,7 @@ function renderMixedContent(tab) {
 
 
 
-          h += '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:'+(d.color&&d.color!=='auto'?esc(d.color):'linear-gradient(to right, #000 50%, #fff 50%)')+';cursor:pointer" title="选择颜色" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" title="选择透明度" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:'+(d.opacity||1.0)+';background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="'+(d.opacity||1.0)+'"><span class="cat-bold-btn'+(d.bold?' active':'')+'" title="加粗" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="'+esc(d.text||'')+'" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" '+(d.bold?'checked':'')+' style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="'+esc(d.color||'auto')+'" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value="'+esc(d.server||'')+'"><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="'+esc(JSON.stringify(d.server_states||(d.server?{[d.server]:2}:{})))+'"></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return 'background:transparent;border:1px solid transparent';var sm=SERVER_MAP[ak]||FIXED_STYLES[ak];if(!sm)return 'background:transparent;border:1px solid transparent';if(ast===2)return 'background:'+(sm.c==='auto'?'#666':sm.c)+';border:none';return 'background:transparent;border:1px solid transparent';})()+'" title="选择服务器" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return getServerBadge('');var sm=SERVER_MAP[ak]||FIXED_STYLES[ak];if(!sm)return getServerBadge('');if(ast===1)return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:'+(sm.c==='auto'?'var(--text)':sm.c)+'"></i>';return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:'+(sm.c==='auto'?'var(--primary-background-color)':'var(--primary-background-color)')+'"></i>';})()+'</button><input type="hidden" id="mcICDescImg'+bi+'_'+di+'" value="'+esc(d.image_url||'')+'">'+(d.image_url?'<span style="position:relative;display:inline-flex;flex-shrink:0" class="'+(function(){var img0=(d.images&&d.images[0])?d.images[0]:{};var m=img0.image_auto_color_mode||'off';if(m==='off')return'';var l=img0.image_native_luminance;var isRev=m==='reverse';var lum=(l!=null&&l!==0.5)?l:null;var ac=lum!=null?(lum>0.5?'ic-auto-light':'ic-auto-dark'):'ic-auto-color';var badge=(m==='normal'||m==='reverse')?' ic-mode-normal':'';return ac+badge;})()+'" ><img src="'+esc(thumbUrl(d.image_url,56))+'" data-qty-init="'+bi+','+di+'" onclick="event.stopPropagation();openIconPicker({mode:\'desc_row\',bi:'+bi+',di:'+di+'})" title="点击换图" style="width:24px;height:24px;object-fit:contain;cursor:pointer;flex-shrink:0;border-radius:3px">'+'<span data-qty-init="'+bi+','+di+'" onclick="event.stopPropagation();openIconPicker({mode:\'desc_row\',bi:'+bi+',di:'+di+'})" title="选择图片" style="position:relative;display:inline-flex;flex-shrink:0;width:24px;height:24px;align-items:center;justify-content:center;cursor:pointer;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px;display:none">+</span>'+'<span class="ic-qty" id="icQtyBadge'+bi+'_'+di+'" style="display:'+(d.quantity?'':'none')+'">'+(d.quantity?'\u00d7'+d.quantity:'')+'</span></span>':'<span style="position:relative;display:inline-flex;flex-shrink:0"><img data-qty-init="'+bi+','+di+'" onclick="event.stopPropagation();openIconPicker({mode:\'desc_row\',bi:'+bi+',di:'+di+'})" title="点击选图 | 长按选数量" style="width:24px;height:24px;object-fit:contain;cursor:pointer;flex-shrink:0;border-radius:3px;display:none"><span data-qty-init="'+bi+','+di+'" onclick="event.stopPropagation();openIconPicker({mode:\'desc_row\',bi:'+bi+',di:'+di+'})" title="选择图片" style="position:relative;display:flex;flex-shrink:0;width:24px;height:24px;align-items:center;justify-content:center;cursor:pointer;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px">+</span><span class="ic-qty" id="icQtyBadge'+bi+'_'+di+'" style="display:'+(d.quantity?'':'none')+'">'+(d.quantity?'\u00d7'+d.quantity:'')+'</span></span>')+'<input type="hidden" id="mcICDescQty'+bi+'_'+di+'" value="'+(d.quantity||'')+'"><button class="btn-small" title="复制" onclick="event.stopPropagation();copyDesc(this,'+bi+');" style="color:var(--success);border-radius:4px;padding:1px 5px;font-size:0.75em;line-height:1;border:none"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
+          h += '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:'+(d.color&&d.color!=='auto'?esc(d.color):'linear-gradient(to right, #000 50%, #fff 50%)')+';cursor:pointer" title="选择颜色" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" title="选择透明度" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:'+(d.opacity||1.0)+';background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="'+(d.opacity||1.0)+'"><span class="cat-bold-btn'+(d.bold?' active':'')+'" title="加粗" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="'+esc(d.text||'')+'" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" '+(d.bold?'checked':'')+' style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="'+esc(d.color||'auto')+'" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value="'+esc(d.server||'')+'"><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="'+esc(JSON.stringify(d.server_states||(d.server?{[d.server]:2}:{})))+'"></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return 'background:transparent;border:1px solid transparent';var sm=SERVER_MAP[ak]||FIXED_STYLES[ak];if(!sm)return 'background:transparent;border:1px solid transparent';if(ast===2)return 'background:'+(sm.c==='auto'?'#666':sm.c)+';border:none';return 'background:transparent;border:1px solid transparent';})()+'" title="选择服务器" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return getServerBadge('');var sm=SERVER_MAP[ak]||FIXED_STYLES[ak];if(!sm)return getServerBadge('');if(ast===1)return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:'+(sm.c==='auto'?'var(--text)':sm.c)+'"></i>';return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:'+(sm.c==='auto'?'var(--primary-background-color)':'var(--primary-background-color)')+'"></i>';})()+'</button><input type="hidden" id="mcICDescImg'+bi+'_'+di+'" value="'+esc(d.image_url||'')+'">'+(d.image_url?'<span style="position:relative;display:inline-flex;flex-shrink:0" class="'+(function(){var img0=(d.images&&d.images[0])?d.images[0]:{};var m=img0.image_auto_color_mode||'off';if(m==='off')return'';var l=img0.image_native_luminance;var isRev=m==='reverse';var lum=(l!=null&&l!==0.5)?l:null;var ac=lum!=null?(lum>0.5?'ic-auto-light':'ic-auto-dark'):'ic-auto-color';var badge=(m==='normal'||m==='reverse')?' ic-mode-normal':'';return ac+badge;})()+'" ><img src="'+esc(thumbUrl(d.image_url,56))+'" data-qty-init="'+bi+','+di+'" onclick="event.stopPropagation();openIconPicker({mode:\'desc_row\',bi:'+bi+',di:'+di+'})" title="点击换图" style="width:24px;height:24px;object-fit:contain;cursor:pointer;flex-shrink:0;border-radius:3px">'+'<span class="ic-qty" id="icQtyBadge'+bi+'_'+di+'" style="display:'+(d.quantity?'':'none')+'">'+(d.quantity?'\u00d7'+d.quantity:'')+'</span></span>':'<span data-qty-init="'+bi+','+di+'" onclick="event.stopPropagation();openIconPicker({mode:\'desc_row\',bi:'+bi+',di:'+di+'})" title="选择图片" style="position:relative;display:inline-flex;flex-shrink:0;width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px">+<span class="ic-qty" id="icQtyBadge'+bi+'_'+di+'" style="display:'+(d.quantity?'':'none')+'">'+(d.quantity?'\u00d7'+d.quantity:'')+'</span></span>')+'<input type="hidden" id="mcICDescQty'+bi+'_'+di+'" value="'+(d.quantity||'')+'"><button class="btn-small" title="复制" onclick="event.stopPropagation();copyDesc(this,'+bi+');" style="color:var(--success);border-radius:4px;padding:1px 5px;font-size:0.75em;line-height:1;border:none"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
 
 
 
@@ -8274,7 +8284,7 @@ function addICDescOld(bi) {
 
 
 
-  const h = '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:linear-gradient(to right, #000 50%, #fff 50%);cursor:pointer" title="选择颜色" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" title="选择透明度" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:1.0;background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="1.0"><span class="cat-bold-btn" title="加粗" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="auto" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value=""><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="{&quot;_default&quot;:1}"></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid transparent" title="选择服务器" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+getServerBadge('',{_default:1})+'</button><input type="hidden" id="mcICDescImg'+bi+'_'+di+'" value=""><span data-qty-init="'+bi+','+di+'" onclick="event.stopPropagation();openIconPicker({mode:\'desc_row\',bi:'+bi+',di:'+di+'})" title="选择图片" style="position:relative;display:inline-flex;flex-shrink:0;width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px">+<span class="ic-qty" id="icQtyBadge'+bi+'_'+di+'" style="display:'+(d.quantity?'':'none')+'">'+(d.quantity?'\u00d7'+d.quantity:'')+'</span></span><input type="hidden" id="mcICDescQty'+bi+'_'+di+'" value=""><button class="btn-small" title="复制" onclick="event.stopPropagation();copyDesc(this,'+bi+');" style="color:var(--success);border-radius:4px;padding:1px 5px;font-size:0.75em;line-height:1;border:none"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
+  const h = '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:linear-gradient(to right, #000 50%, #fff 50%);cursor:pointer" title="选择颜色" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" title="选择透明度" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:1.0;background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="1.0"><span class="cat-bold-btn" title="加粗" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="auto" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value=""><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="{&quot;_default&quot;:1}"></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid transparent" title="选择服务器" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+getServerBadge('',{_default:1})+'</button><input type="hidden" id="mcICDescImg'+bi+'_'+di+'" value=""><span data-qty-init="'+bi+','+di+'" onclick="event.stopPropagation();openIconPicker({mode:\'desc_row\',bi:'+bi+',di:'+di+'})" title="选择图片" style="position:relative;display:inline-flex;flex-shrink:0;width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px">+<span class="ic-qty" id="icQtyBadge'+bi+'_'+di+'" style="display:none"></span></span><input type="hidden" id="mcICDescQty'+bi+'_'+di+'" value=""><button class="btn-small" title="复制" onclick="event.stopPropagation();copyDesc(this,'+bi+');" style="color:var(--success);border-radius:4px;padding:1px 5px;font-size:0.75em;line-height:1;border:none"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
 
 
 
@@ -8566,7 +8576,7 @@ function addICIconGroupOld(bi) {
 
 
 
-  d.innerHTML = '<span class="drag-handle" style="cursor:grab;opacity:0.4;font-size:0.9em;flex-shrink:0">\u22ee\u22ee</span><div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><input id="mcIGTitle'+bi+'_'+di+'" value="" placeholder="图标组标题"></span></span><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value=""><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="{&quot;_default&quot;:1}"><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid transparent" title="选择服务器" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+getServerBadge('',{_default:1})+'</button><span id="mcIGTitleIconWrap'+bi+'_'+di+'" style="position:relative;display:inline-flex;flex-shrink:0"><span id="mcIGTitleIconPlaceholder'+bi+'_'+di+'" onclick="event.stopPropagation();openIconPicker({mode:\'icon_group_title\',bi:'+bi+',di:'+di+'})" title="选择图标" style="width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;opacity:0.4;border:1px dashed var(--border);border-radius:3px;font-size:0.65em">+</span></span><input type="hidden" id="mcIGTitleIconUrl'+bi+'_'+di+'" value=""><input type="hidden" id="mcIGTitleIconQty'+bi+'_'+di+'" value="0"><input type="hidden" id="mcIGTitleIconMode'+bi+'_'+di+'" value="off"><input type="hidden" id="mcIGTitleIconLum'+bi+'_'+di+'" value=""><button class="btn-small" title="复制" onclick="event.stopPropagation();copyDesc(this,'+bi+');" style="color:var(--success);border-radius:4px;padding:1px 5px;font-size:0.75em;line-height:1;border:none"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button><button class="btn-small btn-danger" style="" onclick="removeICDesc(this,'+bi+')">✕</button></div><div id="mcIGIcons'+bi+'_'+di+'" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;min-width:0"><span class="ig-item ig-placeholder" onclick="event.stopPropagation();openIconPicker({mode:\'icon_group\',bi:'+bi+',ii:0,di:'+di+'})" title="选择图片" style="width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;opacity:0.4;border:1px dashed var(--border);border-radius:3px;font-size:0.8em">+</span><input type="hidden" id="mcIGImg'+bi+'_'+di+'_0" value=""><input type="hidden" id="mcIGMode'+bi+'_'+di+'_0" value="off"><input type="hidden" id="mcIGLum'+bi+'_'+di+'_0" value=""></div></div>';
+  d.innerHTML = '<span class="drag-handle" style="cursor:grab;opacity:0.4;font-size:0.9em;flex-shrink:0">\u22ee\u22ee</span><div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><input id="mcIGTitle'+bi+'_'+di+'" value="" placeholder="图标组标题"></span></span><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value=""><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="{&quot;_default&quot;:1}"><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid transparent" title="选择服务器" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+getServerBadge('',{_default:1})+'</button><span id="mcIGTitleIconWrap'+bi+'_'+di+'" style="position:relative;display:inline-flex;flex-shrink:0"><span id="mcIGTitleIconPlaceholder'+bi+'_'+di+'" onclick="event.stopPropagation();openIconPicker({mode:\'icon_group_title\',bi:'+bi+',di:'+di+'})" title="选择图标" style="width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;opacity:0.4;border:1px dashed var(--border);border-radius:3px;font-size:0.8em">+<span class="ic-qty" id="icQtyBadgeIGTitle'+bi+'_'+di+'" style="display:none"></span></span></span><input type="hidden" id="mcIGTitleIconUrl'+bi+'_'+di+'" value=""><input type="hidden" id="mcIGTitleIconQty'+bi+'_'+di+'" value="0"><input type="hidden" id="mcIGTitleIconMode'+bi+'_'+di+'" value="off"><input type="hidden" id="mcIGTitleIconLum'+bi+'_'+di+'" value=""><button class="btn-small" title="复制" onclick="event.stopPropagation();copyDesc(this,'+bi+');" style="color:var(--success);border-radius:4px;padding:1px 5px;font-size:0.75em;line-height:1;border:none"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button><button class="btn-small btn-danger" style="" onclick="removeICDesc(this,'+bi+')">✕</button></div><div id="mcIGIcons'+bi+'_'+di+'" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;min-width:0"><span class="ig-item ig-placeholder" onclick="event.stopPropagation();openIconPicker({mode:\'icon_group\',bi:'+bi+',ii:0,di:'+di+'})" title="选择图片" style="width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;opacity:0.4;border:1px dashed var(--border);border-radius:3px;font-size:0.8em">+</span><input type="hidden" id="mcIGImg'+bi+'_'+di+'_0" value=""><input type="hidden" id="mcIGMode'+bi+'_'+di+'_0" value="off"><input type="hidden" id="mcIGLum'+bi+'_'+di+'_0" value=""></div></div>';
 
 
 
@@ -16496,7 +16506,48 @@ function applyAllImgPositions() {
   });
 }
 
-// [REMOVED] initImgOnlyQty - template now handles qty display natively
+// Replace empty images with pure-quantity badges + attach long-press to placeholders
+function initImgOnlyQty() {
+  document.querySelectorAll('img[data-qty-init]').forEach(function(img) {
+    if (img.src && !img.src.endsWith('/') && img.src.indexOf('undefined') < 0) return;
+    var biDi = img.getAttribute('data-qty-init').split(',');
+    if (biDi.length < 2) return;
+    var bi = parseInt(biDi[0]), di = parseInt(biDi[1]);
+    if (isNaN(bi) || isNaN(di)) return;
+    var block = _currentTab()?.content_blocks?.[bi];
+    if (!block || !block.descriptions || !block.descriptions[di]) return;
+    var desc = block.descriptions[di];
+    var qty = (desc.images && desc.images[0] && desc.images[0].quantity) || desc.quantity || 0;
+    if (qty <= 0) return;
+    var holder = img.closest('span[style*="display:inline-flex"]');
+    if (!holder || holder.querySelector('.img-only-qty')) return;
+    img.style.display = 'none';
+    var qtyBadge = holder.querySelector('.ic-qty');
+    if (qtyBadge) qtyBadge.style.display = 'none';
+    var badge = document.createElement('span');
+    badge.className = 'img-only-qty img-preview-wrap';
+    badge.id = 'mcImg' + bi + '_' + di;
+    badge.setAttribute('data-qty-init', bi+','+di);
+    badge.textContent = '\u00d7' + qty;
+    holder.appendChild(badge);
+    badge.setAttribute('data-qty-inited', '1');
+    initQtyLongPress(badge, bi, di);
+  });
+  // Fallback: ensure all placeholder spans have data-qty-init + long-press
+  document.querySelectorAll('span[onclick*="openIconPicker"]').forEach(function(ph) {
+    if (ph.hasAttribute('data-qty-inited')) return;
+    var onclick = ph.getAttribute('onclick') || '';
+    var mBi = onclick.match(/bi:(\d+)/);
+    if (!mBi) return;
+    var bi = parseInt(mBi[1]);
+    var mDi = onclick.match(/di:(\d+)/);
+    var di = mDi ? parseInt(mDi[1]) : undefined;
+    if (isNaN(bi)) return;
+    ph.setAttribute('data-qty-init', bi+','+(di||0));
+    ph.setAttribute('data-qty-inited', '1');
+    initQtyLongPress(ph, bi, di);
+  });
+}
 
 function toggleImgPos(bi, di, opt_isBlock) {
   var tab = _currentTab();
@@ -17132,7 +17183,7 @@ function selectDescImage(el, bi, di) { _pickerSelectedNew = true;
 
 
 
-          if (wrapper && wrapper.style.display === 'none') wrapper.style.display = 'inline-flex';
+          if (wrapper && wrapper.style.display === 'none') wrapper.style.display = '';
 
 
 
@@ -17252,11 +17303,83 @@ function selectDescImage(el, bi, di) { _pickerSelectedNew = true;
 
 
 
-          // Template provides wrapper/img/ph - just toggle
-          var _drImg = document.getElementById('mcICDescImg'+bi+'_'+di)?.previousElementSibling?.querySelector('img[onclick*=\"desc_row\"]');
-          if (_drImg) { _drImg.src = thumbUrl(url, 56); _drImg.style.display = ''; }
-          var _drPh = _drImg?.parentElement?.querySelector('span[data-qty-init=\"'+bi+','+di+'\"]');
-          if (_drPh) _drPh.style.display = 'none';
+          var descWrapper = document.createElement('span');
+
+
+
+          descWrapper.style.cssText = 'position:relative;display:inline-flex;flex-shrink:0';
+
+
+
+          var newImg = document.createElement('img');
+
+
+
+          newImg.src = thumbUrl(url, 56);
+
+
+
+          newImg.setAttribute('onclick', 'event.stopPropagation();openIconPicker({mode:\'desc_row\',bi:'+bi+',di:'+di+'})');
+
+
+
+          newImg.setAttribute('title', '点击换图');
+
+
+
+          newImg.setAttribute('data-qty-init', bi+','+di);
+
+
+
+          newImg.style.cssText = 'width:22px;height:22px;object-fit:contain;cursor:pointer;flex-shrink:0;border-radius:3px';
+
+
+
+          descWrapper.appendChild(newImg);
+
+
+
+          // Move old badge from + button container into new wrapper
+
+
+
+          var oldBadge = document.getElementById('icQtyBadge'+bi+'_'+di);
+
+
+
+          if (oldBadge) descWrapper.appendChild(oldBadge);
+
+
+
+          // Ensure qty hidden input exists for long-press quantity
+
+
+
+          var qtyInput = document.getElementById('mcICDescQty'+bi+'_'+di);
+
+
+
+          if (!qtyInput) {
+
+
+
+            qtyInput = document.createElement('input');
+
+
+
+            qtyInput.type = 'hidden'; qtyInput.id = 'mcICDescQty'+bi+'_'+di; qtyInput.value = '0';
+
+
+
+            container.appendChild(qtyInput);
+
+
+
+          }
+
+
+
+          if (existingBtn) existingBtn.before(descWrapper);
 
 
 
@@ -17976,7 +18099,89 @@ function selectInfoCardIcon(el, bi) {
 
 
 
-    // Sync color mode to wrapper
+    else {
+
+
+
+      var container = placeholder ? placeholder.parentNode : null;
+
+
+
+      if (container) {
+
+
+
+        var wrapper = document.createElement('span');
+
+
+
+        wrapper.style.cssText = 'position:relative;display:inline-flex;flex-shrink:0';
+
+
+
+        var newImg = document.createElement('img');
+
+
+
+        newImg.id = 'mcICIconPreview'+bi;
+
+
+
+        newImg.src = url;
+
+
+
+        newImg.style.cssText = 'width:28px;height:28px;object-fit:contain;cursor:pointer';
+
+
+
+        newImg.setAttribute('onclick', 'event.stopPropagation();openIconPicker({mode:\'info_card_title\',bi:'+bi+'})');
+
+
+
+        newImg.setAttribute('title', '点击换图标');
+
+
+
+        newImg.setAttribute('onerror', 'this.hidden=true');
+
+
+
+        newImg.setAttribute('data-qty-init', ''+bi);
+
+
+
+        wrapper.appendChild(newImg);
+
+
+
+        // Move existing badge from placeholder back into wrapper
+        var _oldBadge = document.getElementById('icQtyBadge'+bi);
+        if (_oldBadge) wrapper.appendChild(_oldBadge);
+
+
+
+        placeholder.before(wrapper);
+
+
+
+        preview = newImg;
+
+
+
+        initQtyLongPress(newImg, bi);
+
+
+
+        newImg.setAttribute('data-qty-inited', '1');
+
+
+
+      }
+
+
+
+    }
 
 
 
@@ -18476,9 +18681,61 @@ function clearDescImageSelection(el, bi, di) {
 
 
 
-      if (existingImg) { existingImg.style.display = 'none'; }
-      var _descPh = container.querySelector('span[data-qty-init="'+bi+','+di+'"]');
-      if (_descPh) _descPh.style.display = 'flex';
+      if (existingImg) { existingImg.style.display = 'none'; var dw = existingImg.parentElement; if (dw) { dw.classList.remove('ic-mode-normal','ic-mode-failed'); dw.style.display = 'none'; } }
+
+
+
+      if (existingBtn) { existingBtn.style.display = ''; }
+
+
+
+      else if (existingImg) {
+
+
+
+        // Placeholder not in DOM (image existed at render time, template skipped it)
+
+
+
+        // Create identical placeholder matching rendering template
+
+
+
+        var ph = document.createElement('span');
+
+
+
+        ph.setAttribute('onclick', 'event.stopPropagation();openIconPicker({mode:\'desc_row\',bi:'+bi+',di:'+di+'})');
+
+
+
+        ph.setAttribute('title', '选择图片');
+
+
+
+        ph.setAttribute('data-qty-init', bi+','+di);
+        ph.setAttribute('data-qty-inited', '1');
+
+
+
+        ph.style.cssText = 'position:relative;width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px';
+
+
+
+        ph.textContent = '+';
+
+
+
+        existingImg.parentElement.after(ph);
+
+        // Move qty badge from hidden image wrapper into placeholder
+        relocateBadgeToPlaceholder('icQtyBadge'+bi+'_'+di, ph);
+
+        initQtyLongPress(ph, bi, di);
+
+
+
+      }
 
 
 
@@ -18554,6 +18811,19 @@ function clearDescImageSelection(el, bi, di) {
 
 
 
+}
+
+
+
+function relocateBadgeToPlaceholder(badgeId, targetEl) {
+  var badge = document.getElementById(badgeId);
+  if (!badge || !targetEl) return;
+  var parent = badge.parentElement;
+  if (parent && (parent.style.display === 'none' || getComputedStyle(parent).display === 'none')) {
+    targetEl.textContent = '';
+    targetEl.appendChild(document.createTextNode('+'));
+    targetEl.appendChild(badge);
+  }
 }
 
 
@@ -18670,10 +18940,64 @@ function clearIconSelection(el) {
 
 
 
-      // Badge stays in wrapper - hidden by selectQtyBlock on qty=0
-      var _blBadgeClean = document.getElementById('icQtyBadge'+bi);
-      if (_blBadgeClean) { _blBadgeClean.style.display = 'none'; _blBadgeClean.textContent = ''; }
+      else {
 
+
+
+        var pvParent = pv ? pv.parentNode : null;
+
+
+
+        if (pvParent) {
+
+
+
+          var newPh = document.createElement('span');
+
+
+
+          newPh.id = 'mcICIconPlaceholder'+bi;
+
+
+
+          newPh.style.cssText = 'position:relative;width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px';
+
+
+
+          newPh.setAttribute('onclick', 'event.stopPropagation();openIconPicker({mode:\'info_card_title\',bi:'+bi+'})');
+
+
+
+          newPh.setAttribute('title', '选择图标');
+
+
+
+          newPh.setAttribute('data-qty-init', bi);
+
+          newPh.setAttribute('data-qty-inited', '1');
+
+
+
+          newPh.textContent = '+';
+
+
+
+          pvParent.insertBefore(newPh, pv);
+
+
+
+          // Move qty badge from hidden wrapper to placeholder
+          relocateBadgeToPlaceholder('icQtyBadge'+bi, newPh);
+
+          initQtyLongPress(newPh, bi);
+
+
+
+        }
+
+
+
+      }
 
 
 
@@ -18696,7 +19020,10 @@ function clearIconSelection(el) {
       var img = document.getElementById('mcIGTitleIcon'+oCtx.bi+'_'+oCtx.di);
       var ph = document.getElementById('mcIGTitleIconPlaceholder'+oCtx.bi+'_'+oCtx.di);
       if (img) img.style.display = 'none';
-      if (ph) ph.style.display = 'inline-flex';
+      if (ph) { ph.style.display = 'inline-flex'; ph.style.position = 'relative'; }
+      // Force-move one badge into placeholder (so selectQty finds it)
+      var _firstBadge = document.querySelector('#icQtyBadgeIGTitle'+oCtx.bi+'_'+oCtx.di);
+      if (_firstBadge && ph) { ph.textContent = ''; ph.appendChild(document.createTextNode('+')); ph.appendChild(_firstBadge); }
     } else {
 
     var si = overlay.dataset.si;
@@ -19555,11 +19882,31 @@ function saveComboDesc(dataUrl,bi,di,overlay){
 
 
 
-        // Template provides wrapper/img - just toggle
-        var _pfImg = container.querySelector('img[onclick*=\"desc_row\"][onclick*=\"'+bi+','+di+'\"]');
-        if (_pfImg) { _pfImg.src = thumbUrl(dataUrl, 56); _pfImg.style.display = ''; }
-        var _pfPh = container.querySelector('span[data-qty-init=\"'+bi+','+di+'\"]');
-        if (_pfPh) _pfPh.style.display = 'none';
+        var descWrapper = document.createElement('span');
+
+
+
+        descWrapper.style.cssText = 'position:relative;display:inline-flex;flex-shrink:0';
+
+
+
+        var newImg=document.createElement('img');
+
+
+
+        newImg.src=thumbUrl(dataUrl,56);
+
+
+
+        newImg.setAttribute('onclick','event.stopPropagation();openIconPicker({mode:\'desc_row\',bi:'+bi+',di:'+di+'})');
+
+
+
+        newImg.title='点击换图';newImg.style.cssText='width:22px;height:22px;object-fit:contain;cursor:pointer;flex-shrink:0;border-radius:3px';
+
+
+
+        descWrapper.appendChild(newImg);
 
 
 
@@ -20857,6 +21204,10 @@ function selectIGTitleIcon(el, bi, di) { _pickerSelectedNew = true; _editorDirty
 
     if (ph) ph.style.display = 'none';
 
+    // Move existing badge from placeholder back into wrapper
+    var _igOldBadge = document.getElementById('icQtyBadgeIGTitle'+bi+'_'+di);
+    if (_igOldBadge && wrap) wrap.appendChild(_igOldBadge);
+
 
 
   }
@@ -21091,7 +21442,20 @@ function clearIGTitleIconSelection(el) {
 
 
 
-  var qty = document.getElementById('icQtyBadgeIGTitle'+bi+'_'+di);
+  if (img) img.style.display = 'none';
+
+
+
+  if (ph) ph.style.display = '';
+
+
+
+  var _qtyBadge = document.getElementById('icQtyBadgeIGTitle'+bi+'_'+di);
+  if (_qtyBadge) { _qtyBadge.style.display = 'none'; _qtyBadge.textContent = ''; }
+
+
+
+  document.getElementById('mcIGTitleIconUrl'+bi+'_'+di).value = '';
 
 
 

@@ -1,0 +1,5 @@
+c=open("/config/lovelace").read()
+print("ic-qty{display:inline-flex:", c.count("ic-qty{display:inline-flex"))
+print("ig-title-badge:has(.ic-block-img) .ic-qty{padding:", c.count(".ig-title-badge:has(.ic-block-img) .ic-qty{padding"))
+print("ig-title-badge:has(.ic-block-img) .ic-qty{position:", c.count(".ig-title-badge:has(.ic-block-img) .ic-qty{position"))
+print("ig-item .ic-qty{position:absolute;right:-2px:", c.count("ig-item .ic-qty{position:absolute;right:-2px"))
