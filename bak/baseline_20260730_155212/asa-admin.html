@@ -7312,7 +7312,7 @@ function renderMixedContent(tab) {
 
 
 
-          h += '<span class="ic-qty" id="icQtyBadgeIGTitle'+bi+'_'+di+'" style="display:'+(igTitleIconQty?'':'none')+'">'+(igTitleIconQty?'\u00d7'+igTitleIconQty:'')+'</span>';
+          h += '<span class="ic-qty" id="icQtyBadgeIGTitle'+bi+'_'+di+'" style="display:none"></span>';
 
 
 
@@ -18124,13 +18124,6 @@ function selectInfoCardIcon(el, bi) {
 
     if (preview) { preview.src = thumbUrl(url, 56); preview.style.display = ''; }
 
-    // When placeholder was showing qty, restore badge visibility
-    var _blkQty = parseInt(document.getElementById('mcICIconQty'+bi)?.value) || 0;
-    if (_blkQty > 0) {
-      var _blkBadge = document.getElementById('icQtyBadge'+bi);
-      if (_blkBadge) { _blkBadge.textContent = '\u00d7'+_blkQty; _blkBadge.style.display = ''; }
-    }
-
 
 
     // Sync color mode to wrapper
@@ -18844,6 +18837,9 @@ function clearIconSelection(el) {
     var oCtx = overlay._ctx;
     if (oCtx && oCtx.mode === 'icon_group_title') {
       document.getElementById('mcIGTitleIconUrl'+oCtx.bi+'_'+oCtx.di).value = '';
+      // Also clear quantity (like desc_row)
+      var _igQty2 = document.getElementById('mcIGTitleIconQty'+oCtx.bi+'_'+oCtx.di);
+      if (_igQty2) _igQty2.value = '0';
       var _igBadge2 = document.getElementById('icQtyBadgeIGTitle'+oCtx.bi+'_'+oCtx.di);
       if (_igBadge2) { _igBadge2.style.display = 'none'; _igBadge2.textContent = ''; }
       var wrap = document.getElementById('mcIGTitleIconWrap'+oCtx.bi+'_'+oCtx.di);
@@ -21011,13 +21007,6 @@ function selectIGTitleIcon(el, bi, di) { _pickerSelectedNew = true; _editorDirty
 
     if (ph) ph.style.display = 'none';
 
-    // When placeholder was showing qty, restore badge visibility
-    var _igtQty = parseInt(document.getElementById('mcIGTitleIconQty'+bi+'_'+di)?.value) || 0;
-    if (_igtQty > 0) {
-      var _igtBadge = document.getElementById('icQtyBadgeIGTitle'+bi+'_'+di);
-      if (_igtBadge) { _igtBadge.textContent = '\u00d7'+_igtQty; _igtBadge.style.display = ''; }
-    }
-
 
 
   }
@@ -21228,6 +21217,10 @@ function clearIGTitleIconSelection(el) {
 
 
 
+    block.descriptions[di].title_icon_quantity = 0;
+
+
+
     block.descriptions[di].title_icon_auto_color_mode = 'off';
 
 
@@ -21249,6 +21242,10 @@ function clearIGTitleIconSelection(el) {
 
 
   var qty = document.getElementById('icQtyBadgeIGTitle'+bi+'_'+di);
+
+
+
+  document.getElementById('mcIGTitleIconQty'+bi+'_'+di).value = '0';
 
 
 

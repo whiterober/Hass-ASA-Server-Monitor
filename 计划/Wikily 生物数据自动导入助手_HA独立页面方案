@@ -1,0 +1,226 @@
+# Wikily 生物数据自动导入助手 — HA 独立页面方案
+
+## 基础信息
+- 创建时间：2026-07-30
+- 任务类型：开发
+- 方案：HA 托管独立 HTML 页面 + Wikily REST API 直传
+- 替代：原 Tampermonkey 方案（仅限安装了脚本的浏览器，不跨设备）
+- 目标：所有设备（手机/平板/电脑）打开 HA 仪表板均可使用
+
+---
+
+## 项目概述
+
+**目标**：在 Home Assistant 上托管一个独立的 HTML 导入页面，用户选择 ARK 游戏导出的 `.ini` 生物数据文件后，自动解析并调用 Wikily 后端 API 直接创建生物记录，无需 Tampermonkey。
+
+**适用场景**：
+- 玩家在游戏中通过"导出恐龙"功能生成 `.ini` 文件
+- 用户在 HA 仪表板中打开导入页面，选择文件即可一键导入
+- 所有设备通用（手机浏览器 / 平板 / PC）
+
+**技术栈**：
+- 纯 HTML + CSS + JavaScript（单文件，托管在 HA `/config/www/`）
+- FileReader API（读取本地 .ini 文件）
+- Wikily REST API（`POST /api/ark/user-creatures/create/`）
+- Cookie 认证（利用浏览器中已有的 Wikily 登录态）
+
+---
+
+## 涉及文件
+
+| # | 文件 | 改动 |
+|---|------|------|
+| 1 | `www/dino-import.html` | **新建**：独立导入页面 |
+| 2 | `lovelace`（方舟视图 + 实页同步） | 新增 iframe/导航卡片指向导入页 |
+| 3 | `build_lovelace.py` | 如需嵌入 ASA 管理页面 |
+
+---
+
+## 步骤 1：创建独立导入页面 `www/dino-import.html`
+
+### 1.1 页面结构
+
+```
+┌──────────────────────────────────────────────┐
+│  🦖 Wikily 生物数据导入                        │
+│  ─────────────────────────────────────────── │
+│                                              │
+│  📂 [选择 .ini 文件]  或拖拽到此处              │
+│                                              │
+│  ┌─ 解析结果预览 ──────────────────────────┐  │
+│  │ 物种: Rex          名称: MyRex          │  │
+│  │ 等级: 150          性别: ♀              │  │
+│  │ 生命: 10/0/2  (野生/驯服/变异)          │  │
+│  │ 耐力: 5/0/0                             │  │
+│  │ ...                                     │  │
+│  └──────────────────────────────────────────┘  │
+│                                              │
+│  [🚀 导入到 Wikily]  [🔄 重新选择]             │
+│  ✅ 导入成功！                                  │
+└──────────────────────────────────────────────┘
+```
+
+### 1.2 .ini 解析逻辑
+
+ARK 导出格式：
+```ini
+[Dino]
+DinoClass=Blueprint'/Game/PrimalEarth/Dinos/Rex/Rex_Character_BP.Rex_Character_BP'
+DinoNameTag=MyRex
+BaseLevel=150
+Stats[0]=1100.0     ; 生命值
+Stats[1]=360.0      ; 耐力
+Stats[2]=150.0      ; 氧气
+Stats[3]=6000.0     ; 食物
+Stats[4]=450.0      ; 重量
+Stats[5]=100.0      ; 近战伤害
+Stats[6]=100.0      ; 移动速度
+TamedEffectiveness=0.9978
+```
+
+解析映射：
+| .ini 字段 | Wikily API 字段 | 说明 |
+|-----------|----------------|------|
+| DinoClass | `species_blueprint` | 提取类名如 `Rex_Character_BP_C` |
+| DinoNameTag | `name` | 生物名称 |
+| BaseLevel | — | 用于预览，不直接传给 API |
+| Stats[0] | `wild_levels.health` | 生命 |
+| Stats[1] | `wild_levels.stamina` | 耐力 |
+| Stats[2] | `wild_levels.oxygen` | 氧气 |
+| Stats[3] | `wild_levels.food` | 食物 |
+| Stats[4] | `wild_levels.weight` | 重量 |
+| Stats[5] | `wild_levels.melee_damage_multiplier` | 近战 |
+| Stats[6] | `wild_levels.speed_multiplier` | 速度 |
+| TamedEffectiveness | `tame_effectiveness` | 驯服有效性 |
+
+> ⚠️ 注意：`.ini` 中的 Stats 是**属性原始值**（如 1100.0 生命），而 Wikily API 需要的是**点数**（levels）。需要根据物种的基数做换算（`点数 = (原始值 - 基数) / 增量`）。如果无法确定基数，先用 0 填充 `wild_levels`，让用户手动调整。
+
+### 1.3 Wikily API 调用
+
+```javascript
+async function submitToWikily(data) {
+    const response = await fetch(
+        'https://wikily.gg/api/ark/user-creatures/create/',
+        {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',  // 携带 Wikily session cookie
+            body: JSON.stringify({
+                species_blueprint: data.blueprint,   // "Rex_Character_BP_C"
+                name: data.name || null,
+                sex: data.sex || "?",
+                wild_levels: data.wildLevels,
+                dom_levels: data.domLevels || {},
+                mutations: data.mutations || {},
+                tags: data.tags || [],
+                notes: data.notes || null,
+                mutations_maternal: data.matMutations || 0,
+                mutations_paternal: data.patMutations || 0,
+                traits: [],
+                colors: []
+            })
+        }
+    );
+    
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${response.status}`);
+    }
+    
+    return await response.json();
+}
+```
+
+### 1.4 登录态检测
+
+页面加载时检测用户是否已登录 Wikily：
+```javascript
+async function checkLogin() {
+    const res = await fetch('https://wikily.gg/api/ark/user-creatures/list/', {
+        credentials: 'include'
+    });
+    return res.ok;  // 401/403 = 未登录
+}
+```
+
+未登录时显示引导按钮"🔑 先登录 Wikily"，点击跳转 `https://wikily.gg/zh-cn/ark-survival-ascended/?openLoginModal=true`。
+
+---
+
+## 步骤 2：在 Lovelace 方舟视图中添加入口
+
+### 2.1 方式 A：iframe 卡片（推荐）
+
+在方舟视图或服务器操作子页面添加：
+```yaml
+type: iframe
+url: /local/dino-import.html
+aspect_ratio: 60%
+```
+
+### 2.2 方式 B：导航按钮
+
+```yaml
+type: custom:button-card
+name: Wikily 导入
+icon: mdi:file-import-outline
+tap_action:
+  action: navigate
+  navigation_path: /lovelace/dino-import
+```
+
+---
+
+## 步骤 3：部署与验证
+
+| 步骤 | 操作 | 说明 |
+|------|------|------|
+| 1 | SFTP 上传 `dino-import.html` 到 `/config/www/` | |
+| 2 | 修改 lovelace 添加入口卡片 | 本地 lovelace → 同步 lovelace.lovelace |
+| 3 | ASA 后台「💾 保存Tab」 | 同步实页 |
+| 4 | 重启 HA | |
+| 5 | 浏览器验证 | 手机 + PC 分别测试 |
+
+---
+
+## .ini 文件格式参考
+
+ARK ASA 导出文件示例：
+```ini
+[Dino]
+DinoClass=Blueprint'/Game/PrimalEarth/Dinos/Rex/Rex_Character_BP.Rex_Character_BP'
+DinoNameTag=MyRex
+BaseLevel=150
+Stats[0]=1100.0
+Stats[1]=360.0
+Stats[2]=150.0
+Stats[3]=6000.0
+Stats[4]=450.0
+Stats[5]=100.0
+Stats[6]=100.0
+TamedEffectiveness=0.9978
+```
+
+---
+
+## Wikily API 清单（已反向工程）
+
+| 操作 | 方法 | 端点 | 认证 |
+|------|:---:|------|:---:|
+| 列出生物 | GET | `/api/ark/user-creatures/list/` | Cookie |
+| **创建生物** | **POST** | `/api/ark/user-creatures/create/` | Cookie |
+| 更新生物 | PATCH | `/api/ark/user-creatures/update/` | Cookie |
+| 删除生物 | DELETE | `/api/ark/user-creatures/delete/` | Cookie |
+| 查物种 | GET | `/api/ark/dino-by-bp/` | Cookie |
+
+请求头：`Content-Type: application/json`  
+跨域：需 `credentials: 'include'` 携带 session cookie
+
+---
+
+## 扩展方向（后续）
+
+- [ ] 批量导入：一次选多个 .ini 文件
+- [ ] 属性值→点数自动换算（需内置物种基数表）
+- [ ] 导入历史记录
+- [ ] 支持 Stats Extractor 模式（截图 OCR → API）

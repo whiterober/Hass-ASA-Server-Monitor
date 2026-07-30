@@ -2061,10 +2061,7 @@ def render_tab_html(tab):
                                 _ti_img_pos = desc.get('title_icon_image_position', 'after')
                                 tiq = desc.get('title_icon_quantity', 0)
                                 if tiq:
-                                    if block_maps:
-                                        _title_img_html = '<span class="ic-qty ic-badge ic-badge-hollow" style="position:static">\u00d7{}</span>'.format(tiq)
-                                    else:
-                                        _title_img_html = '<span class="ic-qty" style="position:static">\u00d7{}</span>'.format(tiq)
+                                    _title_img_html = '<span class="ic-qty" style="position:static">\u00d7{}</span>'.format(tiq)
                             if _ti_img_pos == 'before':
                                 _title_span = '<span style="white-space:nowrap">{}{}{}</span>'.format(_title_img_html, title_icon_html, _ig_title_text)
                                 _title_span_badge = '<span class="ig-title-badge" style="white-space:nowrap;position:relative">{}{}{}</span>'.format(_title_img_html, title_icon_html, _ig_title_text)
@@ -2227,10 +2224,7 @@ def render_tab_html(tab):
                                 _img_tag = '<span class="ic-desc-wrap{}" style="position:relative;display:inline-flex;flex-shrink:0">{}</span>'.format(_dac_mode_cls, _img_tag)
                         _dimg = _img_tag + _qty_tag
                     elif _qty:
-                        if block_maps:
-                            _dimg = '<span class="ic-qty ic-badge ic-badge-hollow" style="position:static">\u00d7{}</span>'.format(_qty)
-                        else:
-                            _dimg = '<span class="ic-qty" style="position:static">\u00d7{}</span>'.format(_qty)
+                        _dimg = '<span class="ic-qty" style="position:static">\u00d7{}</span>'.format(_qty)
                     else:
                         _dimg = _qty_tag
                     # Compute rendered text (after block_maps is known for _render_badges)

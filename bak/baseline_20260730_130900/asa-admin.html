@@ -4664,7 +4664,7 @@ function currentBlocks() { const t = currentTab(); if (!t.content_blocks) t.cont
 
 
 
-function reRender() { renderMixedEditor(); fixDefaultImgPos(); applyAllImgPositions(); syncDescQtyPlaceholders(); setTimeout(syncDescQtyPlaceholders, 500); }
+function reRender() { renderMixedEditor(); fixDefaultImgPos(); applyAllImgPositions(); }
 
 
 
@@ -5000,7 +5000,7 @@ function renderMixedEditor(title) {
 
 
 
-  setTimeout(function(){ initQtyBadges(); syncDescQtyPlaceholders(); }, 0);
+  setTimeout(initQtyBadges, 0);
 
 
 
@@ -7308,7 +7308,7 @@ function renderMixedContent(tab) {
 
 
 
-          h += '<span id="mcIGTitleIconPlaceholder'+bi+'_'+di+'" onclick="event.stopPropagation();openIconPicker({mode:\'icon_group_title\',bi:'+bi+',di:'+di+'})" title="选择图标" style="width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:0.65em'+(igTitleIconUrl?';display:none':'')+';opacity:'+(igTitleIconQty&&!igTitleIconUrl?'1':'0.4')+';border:1px dashed var(--border);border-radius:3px">'+(igTitleIconQty&&!igTitleIconUrl?'\u00d7'+igTitleIconQty:'+')+'</span>';
+          h += '<span id="mcIGTitleIconPlaceholder'+bi+'_'+di+'" onclick="event.stopPropagation();openIconPicker({mode:\'icon_group_title\',bi:'+bi+',di:'+di+'})" title="选择图标" style="width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;opacity:0.4;border:1px dashed var(--border);border-radius:3px;font-size:0.65em'+(igTitleIconUrl?';display:none':'')+'">+</span>';
 
 
 
@@ -7472,7 +7472,7 @@ function renderMixedContent(tab) {
 
 
 
-          h += '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:'+(d.color&&d.color!=='auto'?esc(d.color):'linear-gradient(to right, #000 50%, #fff 50%)')+';cursor:pointer" title="选择颜色" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" title="选择透明度" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:'+(d.opacity||1.0)+';background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="'+(d.opacity||1.0)+'"><span class="cat-bold-btn'+(d.bold?' active':'')+'" title="加粗" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="'+esc(d.text||'')+'" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" '+(d.bold?'checked':'')+' style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="'+esc(d.color||'auto')+'" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value="'+esc(d.server||'')+'"><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="'+esc(JSON.stringify(d.server_states||(d.server?{[d.server]:2}:{})))+'"></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return 'background:transparent;border:1px solid transparent';var sm=SERVER_MAP[ak]||FIXED_STYLES[ak];if(!sm)return 'background:transparent;border:1px solid transparent';if(ast===2)return 'background:'+(sm.c==='auto'?'#666':sm.c)+';border:none';return 'background:transparent;border:1px solid transparent';})()+'" title="选择服务器" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return getServerBadge('');var sm=SERVER_MAP[ak]||FIXED_STYLES[ak];if(!sm)return getServerBadge('');if(ast===1)return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:'+(sm.c==='auto'?'var(--text)':sm.c)+'"></i>';return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:'+(sm.c==='auto'?'var(--primary-background-color)':'var(--primary-background-color)')+'"></i>';})()+'</button><input type="hidden" id="mcICDescImg'+bi+'_'+di+'" value="'+esc(d.image_url||'')+'">'+(d.image_url?'<span style="position:relative;display:inline-flex;flex-shrink:0" class="'+(function(){var img0=(d.images&&d.images[0])?d.images[0]:{};var m=img0.image_auto_color_mode||'off';if(m==='off')return'';var l=img0.image_native_luminance;var isRev=m==='reverse';var lum=(l!=null&&l!==0.5)?l:null;var ac=lum!=null?(lum>0.5?'ic-auto-light':'ic-auto-dark'):'ic-auto-color';var badge=(m==='normal'||m==='reverse')?' ic-mode-normal':'';return ac+badge;})()+'" ><img src="'+esc(thumbUrl(d.image_url,56))+'" data-qty-init="'+bi+','+di+'" onclick="event.stopPropagation();openIconPicker({mode:\'desc_row\',bi:'+bi+',di:'+di+'})" title="点击换图" style="width:24px;height:24px;object-fit:contain;cursor:pointer;flex-shrink:0;border-radius:3px">'+'<span data-qty-init="'+bi+','+di+'" onclick="event.stopPropagation();openIconPicker({mode:\'desc_row\',bi:'+bi+',di:'+di+'})" title="选择图片" style="position:relative;display:inline-flex;flex-shrink:0;width:24px;height:24px;align-items:center;justify-content:center;cursor:pointer;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px;display:none">+</span>'+'<span class="ic-qty" id="icQtyBadge'+bi+'_'+di+'" style="display:'+(d.quantity?'':'none')+'">'+(d.quantity?'\u00d7'+d.quantity:'')+'</span></span>':'<span style="position:relative;display:inline-flex;flex-shrink:0"><img data-qty-init="'+bi+','+di+'" onclick="event.stopPropagation();openIconPicker({mode:\'desc_row\',bi:'+bi+',di:'+di+'})" title="点击选图 | 长按选数量" style="width:24px;height:24px;object-fit:contain;cursor:pointer;flex-shrink:0;border-radius:3px;display:none"><span data-qty-init="'+bi+','+di+'" onclick="event.stopPropagation();openIconPicker({mode:\'desc_row\',bi:'+bi+',di:'+di+'})" title="选择图片" style="position:relative;display:flex;flex-shrink:0;width:24px;height:24px;align-items:center;justify-content:center;cursor:pointer;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px">'+(d.quantity?'\u00d7'+d.quantity:'+')+'</span><span class="ic-qty" id="icQtyBadge'+bi+'_'+di+'" style="display:none"></span></span>')+'<input type="hidden" id="mcICDescQty'+bi+'_'+di+'" value="'+(d.quantity||'')+'"><button class="btn-small" title="复制" onclick="event.stopPropagation();copyDesc(this,'+bi+');" style="color:var(--success);border-radius:4px;padding:1px 5px;font-size:0.75em;line-height:1;border:none"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
+          h += '<div class="sr-cat-card" style="border:1px solid var(--border);border-radius:3px;padding:4px 6px;margin-bottom:3px"><span class="drag-handle" style="cursor:grab;margin-right:2px;opacity:0.4;font-size:0.9em">⋮⋮</span><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1"><span class="cat-merged" style="flex:1;min-width:0"><span class="cat-input-wrap"><span class="cat-color-wrap"><span class="cat-color-dot" id="mcICDescCDot'+bi+'_'+di+'" data-target="mcICDescColor'+bi+'_'+di+'" style="background:'+(d.color&&d.color!=='auto'?esc(d.color):'linear-gradient(to right, #000 50%, #fff 50%)')+';cursor:pointer" title="选择颜色" onclick="event.stopPropagation();toggleColorPopup(this)"></span></span><span class="cat-opacity-dot" id="mcICDescODot'+bi+'_'+di+'" title="选择透明度" data-target="mcICDescOpacity'+bi+'_'+di+'" style="opacity:'+(d.opacity||1.0)+';background:#000000" onclick="event.stopPropagation();toggleOpacityPopup(this)"></span><input type="hidden" id="mcICDescOpacity'+bi+'_'+di+'" value="'+(d.opacity||1.0)+'"><span class="cat-bold-btn'+(d.bold?' active':'')+'" title="加粗" onclick="event.stopPropagation();var cb=document.getElementById(\'mcICDescBold'+bi+'_'+di+'\');cb.checked=!cb.checked;this.classList.toggle(\'active\',cb.checked)">B</span><input id="mcICDescText'+bi+'_'+di+'" value="'+esc(d.text||'')+'" placeholder="描述文字"><input type="checkbox" id="mcICDescBold'+bi+'_'+di+'" '+(d.bold?'checked':'')+' style="display:none"><input type="hidden" id="mcICDescColor'+bi+'_'+di+'" value="'+esc(d.color||'auto')+'" style="display:none"><input type="hidden" id="mcICDescServer'+bi+'_'+di+'" value="'+esc(d.server||'')+'"><input type="hidden" id="mcICDescSrvStates'+bi+'_'+di+'" value="'+esc(JSON.stringify(d.server_states||(d.server?{[d.server]:2}:{})))+'"></span></span><button class="btn-small btn-server" id="mcICDescSrvBtn'+bi+'_'+di+'" style="font-size:0.7em;padding:0;border-radius:4px;flex-shrink:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return 'background:transparent;border:1px solid transparent';var sm=SERVER_MAP[ak]||FIXED_STYLES[ak];if(!sm)return 'background:transparent;border:1px solid transparent';if(ast===2)return 'background:'+(sm.c==='auto'?'#666':sm.c)+';border:none';return 'background:transparent;border:1px solid transparent';})()+'" title="选择服务器" onclick="event.stopPropagation();toggleDescServerPopup(this,'+bi+','+di+');">'+(function(){var ss=d.server_states||(d.server?{[d.server]:2}:{});var ak=null,ast=0;Object.keys(ss).forEach(function(k){if(ss[k]>0){ak=k;ast=ss[k];}});if(!ak)return getServerBadge('');var sm=SERVER_MAP[ak]||FIXED_STYLES[ak];if(!sm)return getServerBadge('');if(ast===1)return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:'+(sm.c==='auto'?'var(--text)':sm.c)+'"></i>';return '<i class="mdi mdi-'+sm.n+'" style="font-size:14px;line-height:1;color:'+(sm.c==='auto'?'var(--primary-background-color)':'var(--primary-background-color)')+'"></i>';})()+'</button><input type="hidden" id="mcICDescImg'+bi+'_'+di+'" value="'+esc(d.image_url||'')+'">'+(d.image_url?'<span style="position:relative;display:inline-flex;flex-shrink:0" class="'+(function(){var img0=(d.images&&d.images[0])?d.images[0]:{};var m=img0.image_auto_color_mode||'off';if(m==='off')return'';var l=img0.image_native_luminance;var isRev=m==='reverse';var lum=(l!=null&&l!==0.5)?l:null;var ac=lum!=null?(lum>0.5?'ic-auto-light':'ic-auto-dark'):'ic-auto-color';var badge=(m==='normal'||m==='reverse')?' ic-mode-normal':'';return ac+badge;})()+'" ><img src="'+esc(thumbUrl(d.image_url,56))+'" data-qty-init="'+bi+','+di+'" onclick="event.stopPropagation();openIconPicker({mode:\'desc_row\',bi:'+bi+',di:'+di+'})" title="点击换图" style="width:24px;height:24px;object-fit:contain;cursor:pointer;flex-shrink:0;border-radius:3px">'+'<span data-qty-init="'+bi+','+di+'" onclick="event.stopPropagation();openIconPicker({mode:\'desc_row\',bi:'+bi+',di:'+di+'})" title="选择图片" style="position:relative;display:inline-flex;flex-shrink:0;width:24px;height:24px;align-items:center;justify-content:center;cursor:pointer;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px;display:none">+</span>'+'<span class="ic-qty" id="icQtyBadge'+bi+'_'+di+'" style="display:'+(d.quantity?'':'none')+'">'+(d.quantity?'\u00d7'+d.quantity:'')+'</span></span>':'<span style="position:relative;display:inline-flex;flex-shrink:0"><img data-qty-init="'+bi+','+di+'" onclick="event.stopPropagation();openIconPicker({mode:\'desc_row\',bi:'+bi+',di:'+di+'})" title="点击选图 | 长按选数量" style="width:24px;height:24px;object-fit:contain;cursor:pointer;flex-shrink:0;border-radius:3px;display:none"><span data-qty-init="'+bi+','+di+'" onclick="event.stopPropagation();openIconPicker({mode:\'desc_row\',bi:'+bi+',di:'+di+'})" title="选择图片" style="position:relative;display:flex;flex-shrink:0;width:24px;height:24px;align-items:center;justify-content:center;cursor:pointer;font-size:0.65em;opacity:0.4;border:1px dashed var(--border);border-radius:3px">+</span><span class="ic-qty" id="icQtyBadge'+bi+'_'+di+'" style="display:'+(d.quantity?'':'none')+'">'+(d.quantity?'\u00d7'+d.quantity:'')+'</span></span>')+'<input type="hidden" id="mcICDescQty'+bi+'_'+di+'" value="'+(d.quantity||'')+'"><button class="btn-small" title="复制" onclick="event.stopPropagation();copyDesc(this,'+bi+');" style="color:var(--success);border-radius:4px;padding:1px 5px;font-size:0.75em;line-height:1;border:none"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button><button class="btn-small btn-danger" onclick="removeICDesc(this,'+bi+')">✕</button></div></div>';
 
 
 
@@ -16425,86 +16425,6 @@ function closeAllPopups() {
 
 }
 
-// Sync placeholder styles: qty>0 shows ×N, qty=0 restores + with template defaults
-function syncDescQtyPlaceholders() {
-  // --- Desc rows ---
-  document.querySelectorAll('span[data-qty-init]').forEach(function(ph) {
-    var biDi = ph.getAttribute('data-qty-init').split(',');
-    if (biDi.length < 2) return;
-    var bi = parseInt(biDi[0]), di = parseInt(biDi[1]);
-    if (isNaN(bi) || isNaN(di)) return;
-    var imgInput = document.getElementById('mcICDescImg'+bi+'_'+di);
-    if (!imgInput || imgInput.value) return;
-    var qtyInput = document.getElementById('mcICDescQty'+bi+'_'+di);
-    var qty = parseInt(qtyInput?.value) || 0;
-    var badge = document.getElementById('icQtyBadge'+bi+'_'+di);
-    if (qty > 0) {
-      var _slen = String(qty).length;
-      ph.textContent = '\u00d7'+qty;
-      ph.style.width = '24px';
-      ph.style.padding = '1px 2px';
-      ph.style.fontSize = (_slen <= 1 ? '0.65em' : _slen <= 2 ? '0.5em' : _slen <= 3 ? '0.4em' : '0.3em');
-      ph.style.fontWeight = '700';
-      ph.style.opacity = '1';
-      if (badge) badge.style.display = 'none';
-    } else {
-      ph.textContent = '+';
-      ph.style.fontSize = '0.65em'; ph.style.fontWeight = 'normal';
-      ph.style.opacity = '0.4'; ph.style.padding = '0';
-    }
-  });
-  // --- Block-level (info_card_title) ---
-  document.querySelectorAll('[id^="mcICIconPlaceholder"]').forEach(function(ph) {
-    var m = ph.id.match(/^mcICIconPlaceholder(\d+)$/);
-    if (!m) return;
-    var bi = parseInt(m[1]);
-    var imgInput = document.getElementById('mcICIcon'+bi);
-    if (!imgInput || imgInput.value) return;
-    var qtyInput = document.getElementById('mcICIconQty'+bi);
-    var qty = parseInt(qtyInput?.value) || 0;
-    var badge = document.getElementById('icQtyBadge'+bi);
-    if (qty > 0) {
-      var _slen = String(qty).length;
-      ph.textContent = '\u00d7'+qty;
-      ph.style.width = '28px';
-      ph.style.padding = '1px 2px';
-      ph.style.fontSize = (_slen <= 1 ? '0.65em' : _slen <= 2 ? '0.5em' : _slen <= 3 ? '0.4em' : '0.3em');
-      ph.style.fontWeight = '700';
-      ph.style.opacity = '1';
-      if (badge) badge.style.display = 'none';
-    } else {
-      ph.textContent = '+';
-      ph.style.fontSize = '0.65em'; ph.style.fontWeight = 'normal';
-      ph.style.opacity = '0.4'; ph.style.padding = '0';
-    }
-  });
-  // --- IG title ---
-  document.querySelectorAll('[id^="mcIGTitleIconPlaceholder"]').forEach(function(ph) {
-    var m = ph.id.match(/^mcIGTitleIconPlaceholder(\d+)_(\d+)$/);
-    if (!m) return;
-    var bi = parseInt(m[1]), di = parseInt(m[2]);
-    var imgInput = document.getElementById('mcIGTitleIconUrl'+bi+'_'+di);
-    if (!imgInput || imgInput.value) return;
-    var qtyInput = document.getElementById('mcIGTitleIconQty'+bi+'_'+di);
-    var qty = parseInt(qtyInput?.value) || 0;
-    var badge = document.getElementById('icQtyBadgeIGTitle'+bi+'_'+di);
-    if (qty > 0) {
-      var _slen = String(qty).length;
-      ph.textContent = '\u00d7'+qty;
-      ph.style.width = '24px';
-      ph.style.padding = '1px 2px';
-      ph.style.fontSize = (_slen <= 1 ? '0.65em' : _slen <= 2 ? '0.5em' : _slen <= 3 ? '0.4em' : '0.3em');
-      ph.style.fontWeight = '700';
-      ph.style.opacity = '1';
-      if (badge) badge.style.display = 'none';
-    } else {
-      ph.textContent = '+';
-      ph.style.fontSize = '0.65em'; ph.style.fontWeight = 'normal';
-      ph.style.opacity = '0.4'; ph.style.padding = '0';
-    }
-  });
-}
-
 // Fix default image position: move img holder between cat-merged and server button
 function fixDefaultImgPos() {
   // Description rows
@@ -16699,26 +16619,6 @@ function selectQtyBlock(bi, n) {
 
 
   if (badge) { badge.textContent = n ? "\u00d7" + n : ""; badge.style.display = n ? "" : "none"; }
-
-
-
-  // 无图 block：文字缩放适配虚线框
-  var _blImg = document.getElementById('mcICIcon'+bi);
-  if (_blImg && !_blImg.value) {
-    var _blPh = document.getElementById('mcICIconPlaceholder'+bi);
-    if (_blPh) {
-      _blPh.textContent = n ? '\u00d7'+n : '+';
-      if (n > 0) {
-        var _s = String(n).length;
-        _blPh.style.fontSize = (_s <= 1 ? '0.65em' : _s <= 2 ? '0.5em' : _s <= 3 ? '0.4em' : '0.3em');
-        _blPh.style.fontWeight = '700'; _blPh.style.opacity = '1'; _blPh.style.padding = '1px 2px';
-        if (badge) badge.style.display = 'none';
-      } else {
-        _blPh.style.fontSize = '0.65em'; _blPh.style.fontWeight = 'normal';
-        _blPh.style.opacity = '0.4'; _blPh.style.padding = '0';
-      }
-    }
-  }
 
 
 
@@ -17175,13 +17075,6 @@ function selectDescImage(el, bi, di) { _pickerSelectedNew = true;
 
 
         if (existingBtn) existingBtn.style.display = 'none';
-
-        // When placeholder was showing qty, restore badge visibility
-        var _selQty = parseInt(document.getElementById('mcICDescQty'+bi+'_'+di)?.value) || 0;
-        if (_selQty > 0) {
-          var _selBadge = document.getElementById('icQtyBadge'+bi+'_'+di);
-          if (_selBadge) { _selBadge.textContent = '\u00d7'+_selQty; _selBadge.style.display = ''; }
-        }
 
 
 
@@ -18033,51 +17926,6 @@ function selectQty(bi, di, n, opt_igRowDi) {
 
 
 
-  // 无图 desc row：文字缩放适配虚线框
-  if (!opt_igRowDi && document.getElementById('mcICDescQty'+bi+'_'+di) && !document.getElementById('mcIGTitleIconQty'+bi+'_'+di)) {
-    var _descImgVal = document.getElementById('mcICDescImg'+bi+'_'+di);
-    if (_descImgVal && !_descImgVal.value) {
-      var _ph = document.querySelector('span[data-qty-init="'+bi+','+di+'"]');
-      if (_ph) {
-        _ph.textContent = n ? '\u00d7'+n : '+';
-        if (n > 0) {
-          var _s = String(n).length;
-          _ph.style.fontSize = (_s <= 1 ? '0.65em' : _s <= 2 ? '0.5em' : _s <= 3 ? '0.4em' : '0.3em');
-          _ph.style.fontWeight = '700'; _ph.style.opacity = '1'; _ph.style.padding = '1px 2px';
-          if (badge) badge.style.display = 'none';
-        } else {
-          _ph.style.fontSize = '0.65em'; _ph.style.fontWeight = 'normal';
-          _ph.style.opacity = '0.4'; _ph.style.padding = '0';
-        }
-      }
-    }
-  }
-
-
-
-  // 无图 IG title：文字缩放适配虚线框
-  var _igQtyInput = document.getElementById('mcIGTitleIconQty'+bi+'_'+di);
-  if (_igQtyInput && !opt_igRowDi) {
-    var _igImg = document.getElementById('mcIGTitleIconUrl'+bi+'_'+di);
-    if (_igImg && !_igImg.value) {
-      var _igPh = document.getElementById('mcIGTitleIconPlaceholder'+bi+'_'+di);
-      if (_igPh) {
-        _igPh.textContent = n ? '\u00d7'+n : '+';
-        if (n > 0) {
-          var _s2 = String(n).length;
-          _igPh.style.fontSize = (_s2 <= 1 ? '0.65em' : _s2 <= 2 ? '0.5em' : _s2 <= 3 ? '0.4em' : '0.3em');
-          _igPh.style.fontWeight = '700'; _igPh.style.opacity = '1'; _igPh.style.padding = '1px 2px';
-          if (badge) badge.style.display = 'none';
-        } else {
-          _igPh.style.fontSize = '0.65em'; _igPh.style.fontWeight = 'normal';
-          _igPh.style.opacity = '0.4'; _igPh.style.padding = '0';
-        }
-      }
-    }
-  }
-
-
-
 }
 
 
@@ -18123,13 +17971,6 @@ function selectInfoCardIcon(el, bi) {
 
 
     if (preview) { preview.src = thumbUrl(url, 56); preview.style.display = ''; }
-
-    // When placeholder was showing qty, restore badge visibility
-    var _blkQty = parseInt(document.getElementById('mcICIconQty'+bi)?.value) || 0;
-    if (_blkQty > 0) {
-      var _blkBadge = document.getElementById('icQtyBadge'+bi);
-      if (_blkBadge) { _blkBadge.textContent = '\u00d7'+_blkQty; _blkBadge.style.display = ''; }
-    }
 
 
 
@@ -18635,7 +18476,7 @@ function clearDescImageSelection(el, bi, di) {
 
       if (existingImg) { existingImg.style.display = 'none'; }
       var _descPh = container.querySelector('span[data-qty-init="'+bi+','+di+'"]');
-      if (_descPh) { _descPh.style.display = 'flex'; _descPh.textContent = '+'; _descPh.style.width = '24px'; _descPh.style.padding = ''; _descPh.style.fontWeight = ''; _descPh.style.opacity = '0.4'; }
+      if (_descPh) _descPh.style.display = 'flex';
 
 
 
@@ -18823,7 +18664,7 @@ function clearIconSelection(el) {
 
 
 
-      if (ph) { ph.style.display = 'flex'; ph.textContent = '+'; }
+      if (ph) { ph.style.display = 'flex'; }
 
 
 
@@ -18844,13 +18685,16 @@ function clearIconSelection(el) {
     var oCtx = overlay._ctx;
     if (oCtx && oCtx.mode === 'icon_group_title') {
       document.getElementById('mcIGTitleIconUrl'+oCtx.bi+'_'+oCtx.di).value = '';
+      // Also clear quantity (like desc_row)
+      var _igQty2 = document.getElementById('mcIGTitleIconQty'+oCtx.bi+'_'+oCtx.di);
+      if (_igQty2) _igQty2.value = '0';
       var _igBadge2 = document.getElementById('icQtyBadgeIGTitle'+oCtx.bi+'_'+oCtx.di);
       if (_igBadge2) { _igBadge2.style.display = 'none'; _igBadge2.textContent = ''; }
       var wrap = document.getElementById('mcIGTitleIconWrap'+oCtx.bi+'_'+oCtx.di);
       var img = document.getElementById('mcIGTitleIcon'+oCtx.bi+'_'+oCtx.di);
       var ph = document.getElementById('mcIGTitleIconPlaceholder'+oCtx.bi+'_'+oCtx.di);
       if (img) img.style.display = 'none';
-      if (ph) { ph.style.display = 'inline-flex'; ph.textContent = '+'; }
+      if (ph) ph.style.display = 'inline-flex';
     } else {
 
     var si = overlay.dataset.si;
@@ -21011,13 +20855,6 @@ function selectIGTitleIcon(el, bi, di) { _pickerSelectedNew = true; _editorDirty
 
     if (ph) ph.style.display = 'none';
 
-    // When placeholder was showing qty, restore badge visibility
-    var _igtQty = parseInt(document.getElementById('mcIGTitleIconQty'+bi+'_'+di)?.value) || 0;
-    if (_igtQty > 0) {
-      var _igtBadge = document.getElementById('icQtyBadgeIGTitle'+bi+'_'+di);
-      if (_igtBadge) { _igtBadge.textContent = '\u00d7'+_igtQty; _igtBadge.style.display = ''; }
-    }
-
 
 
   }
@@ -21228,6 +21065,10 @@ function clearIGTitleIconSelection(el) {
 
 
 
+    block.descriptions[di].title_icon_quantity = 0;
+
+
+
     block.descriptions[di].title_icon_auto_color_mode = 'off';
 
 
@@ -21249,6 +21090,10 @@ function clearIGTitleIconSelection(el) {
 
 
   var qty = document.getElementById('icQtyBadgeIGTitle'+bi+'_'+di);
+
+
+
+  document.getElementById('mcIGTitleIconQty'+bi+'_'+di).value = '0';
 
 
 
