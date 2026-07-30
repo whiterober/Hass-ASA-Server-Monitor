@@ -77,16 +77,15 @@ def make_ic_css(server_map, fixed_styles_map):
     IC_CSS += '[data-theme="light"] .info-card-block img.ic-auto-light{filter:invert(1)}'
     IC_CSS += 'ha-card .ic-desc-img{width:24px!important;height:24px!important;object-fit:contain!important;vertical-align:middle!important;margin:0 1px 0 1px!important;flex-shrink:0!important}'
     IC_CSS += 'ha-card .ic-qty{font-size:0.75em!important;font-weight:600!important;margin-left:0!important;flex-shrink:0!important;line-height:1!important}'
-    IC_CSS += 'ha-card .ic-text:not(:has(.ic-block-img)):not(:has(.ic-desc-img)) .ic-qty{display:inline-flex!important;align-items:center!important;gap:1px!important;padding:1px 6px!important;border-radius:10px!important;font-size:0.75em!important;font-weight:600!important;flex-shrink:0!important;line-height:1.5!important}'
-    IC_CSS += 'ha-card .ig-title-badge .ic-qty{display:inline-flex!important;align-items:center!important;gap:1px!important;padding:1px 6px!important;border-radius:10px!important;font-size:0.75em!important;font-weight:600!important;flex-shrink:0!important;line-height:1.5!important}'
+    IC_CSS += 'ha-card .ic-text:not([class*="ic-block-"]) .ic-qty{display:inline-flex!important;align-items:center!important;gap:1px!important;padding:1px 6px!important;border-radius:10px!important;font-size:0.75em!important;font-weight:600!important;flex-shrink:0!important;line-height:1.5!important}'
     for sid, sm in server_map.items():
         r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)
-        IC_CSS += 'ha-card .ic-text.ic-block-{}:has(.ic-block-img,.ic-desc-img) .ic-qty{{background:rgba({},{},{},0)!important;-webkit-text-stroke:2px rgb({},{},{})!important;paint-order:stroke fill!important}}'.format(sid, r, g, b, r, g, b)
+        IC_CSS += 'ha-card .ic-text.ic-block-{} .ic-qty{{background:rgba({},{},{},0)!important;-webkit-text-stroke:2px rgb({},{},{})!important;paint-order:stroke fill!important}}'.format(sid, r, g, b, r, g, b)
         IC_CSS += 'ha-card .ic-text.ic-block-'+sid+'{position:relative!important;overflow:hidden!important}'
-        IC_CSS += 'ha-card .ic-text.ic-block-{0}:has(.ic-block-img,.ic-desc-img) .ic-qty{{position:absolute!important;right:0!important;bottom:0!important;color:var(--primary-background-color)!important;font-size:0.8em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important;-webkit-text-stroke:2px rgb({1},{2},{3})!important;paint-order:stroke fill!important}}'.format(sid, r, g, b)
+        IC_CSS += 'ha-card .ic-text.ic-block-{0} .ic-qty{{position:absolute!important;right:0!important;bottom:0!important;color:var(--primary-background-color)!important;font-size:0.8em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important;-webkit-text-stroke:2px rgb({1},{2},{3})!important;paint-order:stroke fill!important}}'.format(sid, r, g, b)
         IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-{0} .ig-item .ic-qty{{position:absolute!important;right:0!important;bottom:0!important;color:var(--primary-text-color)!important;font-size:0.8em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important;-webkit-text-stroke:2px var(--primary-background-color)!important;paint-order:stroke fill!important}}'.format(sid)
-        IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-{0} .ig-title-badge:has(.ic-block-img) .ic-qty,ha-card .ig-row-wrapper.ic-linear-{0} .ig-title-row:has(.ic-block-img) .ic-qty{{background:transparent!important;padding:1px 5px!important;border-radius:4px 0 0 0!important;color:rgb({1},{2},{3})!important;-webkit-text-stroke:2px var(--primary-background-color)!important;paint-order:stroke fill!important}}'.format(sid, r, g, b)
-        IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-{0} .ig-title-badge:has(.ic-block-img-before) .ic-qty,ha-card .ig-row-wrapper.ic-linear-{0} .ig-title-row:has(.ic-block-img-before) .ic-qty{{background:transparent!important;padding:1px 5px!important;border-radius:0 4px 0 0!important;color:rgb({1},{2},{3})!important;-webkit-text-stroke:2px var(--primary-background-color)!important;paint-order:stroke fill!important}}'.format(sid, r, g, b)
+        IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-{0} .ig-title-badge:has(.ic-block-img) .ic-qty,ha-card .ig-row-wrapper.ic-linear-{0} .ig-title-row:has(.ic-block-img) .ic-qty{{padding:1px 5px!important;border-radius:4px 0 0 0!important;color:rgb({1},{2},{3})!important;-webkit-text-stroke:2px var(--primary-background-color)!important;paint-order:stroke fill!important}}'.format(sid, r, g, b)
+        IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-{0} .ig-title-badge:has(.ic-block-img-before) .ic-qty,ha-card .ig-row-wrapper.ic-linear-{0} .ig-title-row:has(.ic-block-img-before) .ic-qty{{padding:1px 5px!important;border-radius:0 4px 0 0!important;color:rgb({1},{2},{3})!important;-webkit-text-stroke:2px var(--primary-background-color)!important;paint-order:stroke fill!important}}'.format(sid, r, g, b)
         IC_CSS += 'ha-card .ic-text.ic-block-'+sid+' .ig-item .ic-qty,ha-card .ig-row-wrapper.ic-linear-'+sid+' .ig-item .ic-qty{padding-right:0!important}'
         IC_CSS += 'ha-card [data-old-webkit] .ic-text.ic-block-{} .ic-qty{{font-weight:950!important;font-family:HarmonyOS Sans SC,system-ui,Impact,sans-serif!important;-webkit-text-stroke:0.5px rgb({},{},{})!important}}'.format(sid, r, g, b)
         IC_CSS += 'ha-card [data-old-webkit] .ig-row-wrapper.ic-linear-{} .ig-item .ic-qty{{font-weight:950!important;font-family:HarmonyOS Sans SC,system-ui,Impact,sans-serif!important;-webkit-text-stroke:0.5px var(--primary-background-color)!important}}'.format(sid)
@@ -94,16 +93,16 @@ def make_ic_css(server_map, fixed_styles_map):
         fc = fv.get('color', '#666')
         if not fc or fc == 'auto': fc = '#666666'
         r = int(fc[1:3], 16); g = int(fc[3:5], 16); b = int(fc[5:7], 16)
-        IC_CSS += 'ha-card .ic-text.ic-block-{}:has(.ic-block-img,.ic-desc-img) .ic-qty{{background:rgba({},{},{},0)!important;-webkit-text-stroke:2px rgb({},{},{})!important;paint-order:stroke fill!important}}'.format(fk, r, g, b, r, g, b)
+        IC_CSS += 'ha-card .ic-text.ic-block-{} .ic-qty{{background:rgba({},{},{},0)!important;-webkit-text-stroke:2px rgb({},{},{})!important;paint-order:stroke fill!important}}'.format(fk, r, g, b, r, g, b)
         IC_CSS += 'ha-card .ic-text.ic-block-'+fk+'{position:relative!important;overflow:hidden!important}'
         _qty_color = 'var(--primary-text-color)' if fk == '_default' else 'var(--primary-background-color)'
         _stroke_col = 'var(--primary-background-color)' if fk == '_default' else 'rgb({},{},{})'.format(r, g, b)
         _qty_color_rule = 'color:'+_qty_color+'!important;' if fk == '_default' else ''
-        IC_CSS += 'ha-card .ic-text.ic-block-{0}:has(.ic-block-img,.ic-desc-img) .ic-qty{{position:absolute!important;right:0!important;bottom:0!important;'.format(fk)+_qty_color_rule+'font-size:0.8em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important;-webkit-text-stroke:2px '+_stroke_col+'!important;paint-order:stroke fill!important}'
+        IC_CSS += 'ha-card .ic-text.ic-block-{0} .ic-qty{{position:absolute!important;right:0!important;bottom:0!important;'.format(fk)+_qty_color_rule+'font-size:0.8em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important;-webkit-text-stroke:2px '+_stroke_col+'!important;paint-order:stroke fill!important}'
         IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-{0} .ig-item .ic-qty{{position:absolute!important;right:0!important;bottom:0!important;color:var(--primary-text-color)!important;font-size:0.8em!important;padding:1px 5px!important;border-radius:4px 0 0 0!important;-webkit-text-stroke:2px var(--primary-background-color)!important;paint-order:stroke fill!important}}'.format(fk)
         _ig_stroke = 'var(--primary-text-color)' if fk == '_default' else 'var(--primary-background-color)'
-        IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-{0} .ig-title-badge:has(.ic-block-img) .ic-qty,ha-card .ig-row-wrapper.ic-linear-{0} .ig-title-row:has(.ic-block-img) .ic-qty{{background:transparent!important;padding:1px 5px!important;border-radius:4px 0 0 0!important;color:{1}!important;-webkit-text-stroke:2px {2}!important;paint-order:stroke fill!important}}'.format(fk, _stroke_col, _ig_stroke)
-        IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-{0} .ig-title-badge:has(.ic-block-img-before) .ic-qty,ha-card .ig-row-wrapper.ic-linear-{0} .ig-title-row:has(.ic-block-img-before) .ic-qty{{background:transparent!important;padding:1px 5px!important;border-radius:0 4px 0 0!important;color:{1}!important;-webkit-text-stroke:2px {2}!important;paint-order:stroke fill!important}}'.format(fk, _stroke_col, _ig_stroke)
+        IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-{0} .ig-title-badge:has(.ic-block-img) .ic-qty,ha-card .ig-row-wrapper.ic-linear-{0} .ig-title-row:has(.ic-block-img) .ic-qty{{padding:1px 5px!important;border-radius:4px 0 0 0!important;color:{1}!important;-webkit-text-stroke:2px {2}!important;paint-order:stroke fill!important}}'.format(fk, _stroke_col, _ig_stroke)
+        IC_CSS += 'ha-card .ig-row-wrapper.ic-linear-{0} .ig-title-badge:has(.ic-block-img-before) .ic-qty,ha-card .ig-row-wrapper.ic-linear-{0} .ig-title-row:has(.ic-block-img-before) .ic-qty{{padding:1px 5px!important;border-radius:0 4px 0 0!important;color:{1}!important;-webkit-text-stroke:2px {2}!important;paint-order:stroke fill!important}}'.format(fk, _stroke_col, _ig_stroke)
         IC_CSS += 'ha-card .ic-text.ic-block-'+fk+' .ig-item .ic-qty,ha-card .ig-row-wrapper.ic-linear-'+fk+' .ig-item .ic-qty{padding-right:0!important}'
         IC_CSS += 'ha-card [data-old-webkit] .ic-text.ic-block-{0} .ic-qty{{font-weight:950!important;font-family:HarmonyOS Sans SC,system-ui,Impact,sans-serif!important;-webkit-text-stroke:0.5px '.format(fk)+_stroke_col+'!important}}'
         IC_CSS += 'ha-card [data-old-webkit] .ig-row-wrapper.ic-linear-{0} .ig-item .ic-qty{{font-weight:950!important;font-family:HarmonyOS Sans SC,system-ui,Impact,sans-serif!important;-webkit-text-stroke:0.5px var(--primary-background-color)!important}}'.format(fk)
@@ -126,8 +125,7 @@ def make_ic_css(server_map, fixed_styles_map):
     for sid, sm in server_map.items():
         r = int(sm['color'][1:3], 16); g = int(sm['color'][3:5], 16); b = int(sm['color'][5:7], 16)
         IC_CSS += 'ha-card .ic-linear-'+sid+' .ic-badge,.ic-block-'+sid+' .ic-badge{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important;color:'+sm['color']+'!important}'
-        IC_CSS += 'ha-card .ic-linear-'+sid+' .ig-title-badge .ic-qty,.ic-block-'+sid+' .ig-title-badge .ic-qty{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important;color:'+sm['color']+'!important}'
-        IC_CSS += 'ha-card .ic-linear-'+sid+' .ic-title .ic-qty,.ic-block-'+sid+' .ic-title .ic-qty{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important;color:'+sm['color']+'!important}'
+        IC_CSS += 'ha-card .ic-linear-'+sid+' .ic-qty{background:transparent!important;color:'+sm['color']+'!important}'
         IC_CSS += 'ha-card .ic-text.ic-linear-'+sid+':not([class*="ic-block-"]) .ic-qty{background:rgba('+str(r)+','+str(g)+','+str(b)+',0.15)!important;color:'+sm['color']+'!important}'
     for fk, fv in fixed_styles_map.items():
         fc = fv.get('color', '#666')
@@ -1894,9 +1892,6 @@ def render_tab_html(tab):
                         blk_cls = ' ic-linear-{}'.format(blk_active)
                     elif blk_st == 2:
                         blk_cls = ' ic-block-{}'.format(blk_active)
-                # When no server active, clear highlight to prevent stale data-map
-                if not blk_active or blk_active == '_default':
-                    ic_hl = ''
                 # Title color from block data
                 ic_title_color = block.get('title_color', 'auto')
                 title_color_style = ''
@@ -1937,9 +1932,6 @@ def render_tab_html(tab):
                 else:
                     _title_text = _render_badges(_render_mdi_inline(_title_text), False)
                 parts.append('<span{}>{}</span>'.format(title_color_style, _title_text))
-                # Block-level pure quantity (no image, has qty → after title)
-                if _block_qty and not _ic_img.get('image_url', ''):
-                    parts.append('<span class="ic-qty ic-badge" style="position:static">\u00d7{}</span>'.format(_block_qty))
                 parts.append('</div>')
                 # Auto-detect: block has fold → collapsible
                 ic_collapse = any(isinstance(d, dict) and d.get('type') == 'fold' for d in ic_descs)
@@ -2058,13 +2050,10 @@ def render_tab_html(tab):
                                 _title_img_html = '<img src="{}" class="{}{}{}" onerror="this.remove()" />{}'.format(
                                     esc(tiu), _ti_img_cls, _ti_cls, _ti_mode_cls, _ti_qty)
                             else:
-                                _ti_img_pos = desc.get('title_icon_image_position', 'after')
+                                _ti_img_pos = 'after'
                                 tiq = desc.get('title_icon_quantity', 0)
                                 if tiq:
-                                    if block_maps:
-                                        _title_img_html = '<span class="ic-qty ic-badge ic-badge-hollow" style="position:static">\u00d7{}</span>'.format(tiq)
-                                    else:
-                                        _title_img_html = '<span class="ic-qty" style="position:static">\u00d7{}</span>'.format(tiq)
+                                    _title_img_html = '<span class="ic-img-qty">\u00d7{}</span>'.format(tiq)
                             if _ti_img_pos == 'before':
                                 _title_span = '<span style="white-space:nowrap">{}{}{}</span>'.format(_title_img_html, title_icon_html, _ig_title_text)
                                 _title_span_badge = '<span class="ig-title-badge" style="white-space:nowrap;position:relative">{}{}{}</span>'.format(_title_img_html, title_icon_html, _ig_title_text)
@@ -2227,10 +2216,7 @@ def render_tab_html(tab):
                                 _img_tag = '<span class="ic-desc-wrap{}" style="position:relative;display:inline-flex;flex-shrink:0">{}</span>'.format(_dac_mode_cls, _img_tag)
                         _dimg = _img_tag + _qty_tag
                     elif _qty:
-                        if block_maps:
-                            _dimg = '<span class="ic-qty ic-badge ic-badge-hollow" style="position:static">\u00d7{}</span>'.format(_qty)
-                        else:
-                            _dimg = '<span class="ic-qty" style="position:static">\u00d7{}</span>'.format(_qty)
+                        _dimg = '<span class="ic-img-qty">\u00d7{}</span>'.format(_qty)
                     else:
                         _dimg = _qty_tag
                     # Compute rendered text (after block_maps is known for _render_badges)
