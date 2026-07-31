@@ -1,228 +1,279 @@
 # Wikily 生物数据自动导入助手
-## Tampermonkey 脚本 + Wikily API 直传
+## NAS 桥接页 + Tampermonkey API 导入（无 HA）
 
 ---
 
 ## 基础信息
 - 创建时间：2026-07-30
 - 任务类型：开发
-- 方案：Tampermonkey 用户脚本注入 Wikily 页面 → 解析 .ini → 直接调 Wikily API
-- 关键改进：**不再操作 DOM 填表单**，改为调 API 直接创建生物（同源请求，无 CORS 问题）
-- 局限：每台设备需安装 Tampermonkey 扩展 + 此脚本（一次性）
+- 方案：NAS 上托管桥接页（与 WebDAV 同源）→ 列文件/读 .ini → 跳转 Wikily → Tampermonkey API 导入
+- 优势：零 CORS、零 nginx 配置、零 HA 依赖
+- 跨设备：✅ 所有设备通用（手机/平板/PC）
 
 ---
 
-## 项目概述
-
-用户在 Wikily 的"添加生物"弹窗中看到一个 **[📂 导入 .ini]** 按钮（Tampermonkey 注入），选择 ARK 游戏导出的 `.ini` 文件后，脚本解析并直接调用 Wikily 后端 API 创建生物，全程不碰 DOM 表单。
+## 最终架构
 
 ```
-用户打开 Wikily Add Creature 弹窗
-       ↓
-Tampermonkey 注入 [📂 导入 .ini] 按钮
-       ↓
-用户选择 .ini 文件
-       ↓
-FileReader 读取 → 解析 .ini
-       ↓
-构建 API 请求体
-       ↓
-fetch('/api/ark/user-creatures/create/', ...)  ← 同源，无 CORS
-       ↓
-✅ 创建成功 → 刷新列表
+手机浏览器（局域网）
+  │
+  ▼
+NAS 桥接页 (http://192.168.197.252:100/media/.../dino-import.html)
+  │  ← 与 WebDAV 同源，无 CORS！
+  ├─ PROPFIND → 列出同目录 .ini 文件
+  ├─ 用户点选文件
+  ├─ GET → 读取 .ini 内容
+  ├─ 解析 .ini → 预览数据
+  │
+  ▼
+打开 Wikily（数据 base64 编码在 URL hash 中）
+  │
+  ▼
+Tampermonkey 脚本 (@match wikily.gg)
+  ├─ 检测 #import=xxx hash
+  ├─ 解码 → 构建 API 请求体
+  └─ fetch('/api/ark/user-creatures/create/', ...)  ← 同源，无 CORS
+      │
+      ✅ 创建成功
 ```
-
----
-
-## 步骤 1：创建 Tampermonkey 脚本
-
-### 1.1 脚本元信息
-
-```javascript
-// ==UserScript==
-// @name         Wikily ARK Dino Importer
-// @namespace    https://hass.whiterober.com/
-// @version      1.0
-// @description  从 ARK .ini 文件导入生物数据到 Wikily
-// @author       WhiteRobert
-// @match        https://wikily.gg/zh-cn/ark-survival-ascended/profile/*
-// @grant        none
-// ==/UserScript==
-```
-
-> 不设 `@noframes`—确保 HA iframe 内也能运行。
-
-### 1.2 注入按钮逻辑
-
-用 `MutationObserver` 监听 Add Creature 弹窗出现，在弹窗的物种选择区域上方注入导入按钮：
-
-```javascript
-function injectImportButton(dialog) {
-    // 避免重复注入
-    if (dialog.querySelector('#tm-import-btn')) return;
-    
-    const container = document.createElement('div');
-    container.innerHTML = `
-        <label for="tm-file-input" style="
-            cursor:pointer; display:inline-flex; align-items:center; gap:6px;
-            background:#7c3aed; color:white; padding:6px 14px; border-radius:6px;
-            font-size:13px; margin-bottom:8px;
-        ">
-            📂 导入 .ini 文件
-        </label>
-        <input type="file" id="tm-file-input" accept=".ini" style="display:none">
-        <span id="tm-status" style="margin-left:8px;font-size:12px;"></span>
-    `;
-    
-    // 插到物种选择框前面
-    const speciesSection = dialog.querySelector(/* 物种区域选择器 */);
-    speciesSection?.parentNode?.insertBefore(container, speciesSection);
-    
-    document.getElementById('tm-file-input').addEventListener('change', handleFile);
-}
-```
-
-### 1.3 .ini 解析
-
-ARK ASA 导出格式：
-```ini
-[Dino]
-DinoClass=Blueprint'/Game/PrimalEarth/Dinos/Rex/Rex_Character_BP.Rex_Character_BP'
-DinoNameTag=MyRex
-BaseLevel=150
-Stats[0]=1100.0     ; 生命值
-Stats[1]=360.0      ; 耐力
-Stats[2]=150.0      ; 氧气
-Stats[3]=6000.0     ; 食物
-Stats[4]=450.0      ; 重量
-Stats[5]=100.0      ; 近战伤害
-Stats[6]=100.0      ; 移动速度
-RandomMutationsFemale=0
-RandomMutationsMale=0
-TamedEffectiveness=0.9978
-```
-
-解析映射：
-
-| .ini 字段 | API 字段 | 说明 |
-|-----------|----------|------|
-| DinoClass | `species_blueprint` | 路径末段加 `_C` 后缀 |
-| DinoNameTag | `name` | 可选 |
-| Sex (需外推) | `sex` | `"F"` / `"M"` / `"?"` |
-| Stats[0]~[6] | `wild_levels.{stat}` | 属性原始值→需换算点数 |
-| RandomMutationsFemale | `mutations_maternal` | |
-| RandomMutationsMale | `mutations_paternal` | |
-| TamedEffectiveness | `tame_effectiveness` | |
-
-Stat 索引 → API 字段名：
-```
-0 → health
-1 → stamina
-2 → oxygen
-3 → food
-4 → weight
-5 → melee_damage_multiplier
-6 → speed_multiplier
-```
-
-> ⚠️ `.ini` 的 Stats 是**属性值**（如 1100.0），API 要的是**点数**（levels）。方案：先传原始值到 `raw_stat_values` 备用字段，`wild_levels` 填 `{}`。后续可加物种基数表自动换算。
-
-### 1.4 API 调用
-
-```javascript
-async function submitToWikily(data) {
-    const res = await fetch('/api/ark/user-creatures/create/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            species_blueprint: data.blueprint,
-            name: data.name || null,
-            sex: data.sex || '?',
-            wild_levels: data.wildLevels || {},
-            dom_levels: {},
-            mutations: {},
-            tags: [],
-            notes: data.notes || null,
-            mutations_maternal: data.matMutations || 0,
-            mutations_paternal: data.patMutations || 0,
-            tame_effectiveness: data.tameEff || null,
-            traits: [],
-            colors: []
-        })
-    });
-    
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || `HTTP ${res.status}`);
-    }
-    return res.json();
-}
-```
-
-### 1.5 完整流程
-
-```javascript
-async function handleFile(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    
-    const status = document.getElementById('tm-status');
-    status.textContent = '⏳ 解析中...';
-    
-    try {
-        const text = await file.text();
-        const data = parseIni(text);
-        
-        status.textContent = `📋 ${data.name || data.blueprint} Lv.${data.level || '?'} — 提交中...`;
-        
-        await submitToWikily(data);
-        
-        status.textContent = '✅ 导入成功！';
-        // 可选：自动关闭弹窗或刷新生物列表
-    } catch (err) {
-        status.textContent = `❌ ${err.message}`;
-    }
-}
-```
-
----
-
-## 步骤 2：安装与测试
-
-| 步骤 | 操作 |
-|------|------|
-| 1 | 浏览器安装 Tampermonkey 扩展 |
-| 2 | 新建脚本 → 粘贴完整代码 → Ctrl+S |
-| 3 | 打开 Wikily profile → Add Creature |
-| 4 | 确认 [📂 导入 .ini] 按钮出现 |
-| 5 | 选一个 .ini 文件测试导入 |
-
----
-
-## Wikily API 清单（已反向工程）
-
-| 操作 | 方法 | 端点 | 认证 |
-|------|:---:|------|:---:|
-| 列出生物 | GET | `/api/ark/user-creatures/list/` | Cookie |
-| **创建生物** | **POST** | `/api/ark/user-creatures/create/` | Cookie |
-| 删除生物 | DELETE | `/api/ark/user-creatures/delete/` | Cookie |
-
-> 脚本运行在 `wikily.gg` 域内，所有请求均为同源，无 CORS 问题。
 
 ---
 
 ## 涉及文件
 
-| # | 文件 | 改动 |
-|---|------|------|
-| 1 | Tampermonkey 脚本（浏览器内） | **新建** |
-| 2 | 本计划文件 | 更新为最终方案 |
+| # | 文件 | 改动 | 说明 |
+|---|------|------|------|
+| 1 | NAS: `DinoExports/imported/dino-import.html` | **新建** | 桥接页 |
+| 2 | Tampermonkey 脚本 | **新建** | 接收 URL hash → API 导入 |
 
 ---
 
-## 扩展方向（后续）
+## 步骤 1：创建桥接页 `dino-import.html`
 
-- [ ] 属性值→点数自动换算（内置 ARK 物种基数表）
-- [ ] 批量导入（多选 .ini 文件）
-- [ ] 导入历史记录（localStorage）
-- [ ] 支持 Stats Extractor 模式（配合 Wikily OCR）
+放在 NAS 上，与 .ini 文件同目录：  
+`http://192.168.197.252:100/media/私人共享/ASA/DinoExports/imported/dino-import.html`
+
+### 1.1 页面功能
+
+```
+┌──────────────────────────────────────────────┐
+│  🦖 Wikily 生物导入                           │
+│  ─────────────────────────────────────────── │
+│  数据源: NAS → DinoExports/imported/          │
+│  [🔄 刷新列表]                                │
+│                                              │
+│  ┌─ 可用文件 ──────────────────────────────┐  │
+│  │ ● DinoExport_25219277464184860.ini  1KB │  │
+│  │ ● DinoExport_138748270124052219.ini  1KB │  │
+│  │ ● DinoExport_116738199212870838.ini  1KB │  │
+│  └──────────────────────────────────────────┘  │
+│                                              │
+│  ┌─ 解析结果 ──────────────────────────────┐  │
+│  │ 物种: Rex_Character_BP                  │  │
+│  │ 名称: MyRex   等级: 150                  │  │
+│  │ 生命:1100  耐力:360  氧气:150  ...       │  │
+│  └──────────────────────────────────────────┘  │
+│                                              │
+│  [🚀 导入到 Wikily]                           │
+└──────────────────────────────────────────────┘
+```
+
+### 1.2 核心逻辑
+
+```javascript
+// 同源 PROPFIND 列文件（无 CORS 问题）
+async function listFiles() {
+    const res = await fetch('.', {
+        method: 'PROPFIND',
+        headers: { 'Depth': '1' }
+    });
+    const xml = await res.text();
+    return parseXmlForIniFiles(xml);  // 提取 .ini 文件名
+}
+
+// 同源 GET 读文件
+async function readFile(filename) {
+    const res = await fetch(filename);
+    return await res.text();
+}
+
+// 解析 .ini
+function parseIni(text) {
+    const result = { stats: [] };
+    for (const line of text.split('\n')) {
+        const m = line.match(/^(\w+(?:\[\d+\])?)\s*=\s*(.*)$/);
+        if (!m) continue;
+        const [, key, val] = m;
+        if (key === 'DinoClass') {
+            const parts = val.split('.');
+            result.blueprint = parts[parts.length - 1].replace(/'/g, '');
+        } else if (key === 'DinoNameTag') {
+            result.name = val;
+        } else if (key === 'BaseLevel') {
+            result.level = parseInt(val);
+        } else if (key.startsWith('Stats[')) {
+            result.stats[parseInt(key.match(/\d+/)[0])] = parseFloat(val);
+        } else if (key === 'TamedEffectiveness') {
+            result.tameEff = parseFloat(val);
+        } else if (key === 'RandomMutationsFemale') {
+            result.matMutations = parseInt(val);
+        } else if (key === 'RandomMutationsMale') {
+            result.patMutations = parseInt(val);
+        }
+    }
+    return result;
+}
+
+// 跳转 Wikily
+function openWikily(data) {
+    const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+    window.open(
+        'https://wikily.gg/zh-cn/ark-survival-ascended/profile/你的用户名/#import=' + encoded,
+        '_blank'
+    );
+}
+```
+
+### 1.3 完整 HTML（单文件）
+
+> 见附录 A：完整源码
+
+---
+
+## 步骤 2：创建 Tampermonkey 接收脚本
+
+```javascript
+// ==UserScript==
+// @name         Wikily Dino Importer Receiver
+// @namespace    https://hass.whiterober.com/
+// @version      1.0
+// @match        https://wikily.gg/zh-cn/ark-survival-ascended/profile/*
+// @grant        none
+// ==/UserScript==
+
+(function() {
+    const hash = location.hash;
+    if (!hash.startsWith('#import=')) return;
+
+    const encoded = hash.substring(8);
+    let data;
+    try {
+        data = JSON.parse(decodeURIComponent(escape(atob(encoded))));
+    } catch(e) {
+        console.error('Wikily Importer: decode failed', e);
+        return;
+    }
+    history.replaceState(null, '', location.pathname + location.search);
+
+    // 页面右下角注入按钮
+    const btn = document.createElement('button');
+    btn.textContent = `🚀 导入 ${data.name || data.blueprint || '生物'}`;
+    Object.assign(btn.style, {
+        position: 'fixed', bottom: '20px', right: '20px', zIndex: '9999',
+        background: '#7c3aed', color: 'white', padding: '12px 20px',
+        borderRadius: '8px', border: 'none', cursor: 'pointer',
+        fontSize: '14px', boxShadow: '0 4px 12px rgba(124,58,237,0.4)'
+    });
+    btn.onclick = async () => {
+        btn.textContent = '⏳ 导入中...';
+        btn.disabled = true;
+        try {
+            await submitToWikily(data);
+            alert('✅ 导入成功！');
+            location.reload();
+        } catch(e) {
+            alert('❌ ' + e.message);
+            btn.textContent = '🚀 重试';
+            btn.disabled = false;
+        }
+    };
+    document.body.appendChild(btn);
+
+    async function submitToWikily(d) {
+        const statNames = ['health','stamina','oxygen','food','weight',
+            'melee_damage_multiplier','speed_multiplier'];
+        const wild = {};
+        d.stats?.forEach((v,i) => { if (i < 7 && v > 0) wild[statNames[i]] = v; });
+
+        const res = await fetch('/api/ark/user-creatures/create/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                species_blueprint: d.blueprint,
+                name: d.name || null,
+                sex: d.sex || '?',
+                wild_levels: wild,
+                dom_levels: {},
+                mutations: {},
+                tags: [],
+                notes: 'Imported via NAS Bridge',
+                mutations_maternal: d.matMutations || 0,
+                mutations_paternal: d.patMutations || 0,
+                tame_effectiveness: d.tameEff || null,
+                traits: [],
+                colors: []
+            })
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || 'HTTP ' + res.status);
+        }
+    }
+})();
+```
+
+> ⚠️ 替换 `你的用户名` 为实际 Wikily 用户名。
+
+---
+
+## 步骤 3：部署
+
+| # | 操作 |
+|---|------|
+| 1 | 将 `dino-import.html` 放到 NAS 目录 `DinoExports/imported/` |
+| 2 | 安装 Tampermonkey → 新建脚本 → 粘贴步骤 2 代码 |
+| 3 | 手机浏览器打开 `http://192.168.197.252:100/media/私人共享/ASA/DinoExports/imported/dino-import.html` |
+| 4 | 选文件 → 点导入 → Wikily 页面自动弹出 → 点按钮确认 |
+
+---
+
+## .ini 解析映射
+
+| .ini 字段 | API 字段 | 说明 |
+|-----------|----------|------|
+| DinoClass | `species_blueprint` | 路径末段 |
+| DinoNameTag | `name` | 可选 |
+| Stats[0]~[6] | `wild_levels.{stat}` | 属性值 |
+| RandomMutationsFemale | `mutations_maternal` | |
+| RandomMutationsMale | `mutations_paternal` | |
+| TamedEffectiveness | `tame_effectiveness` | |
+
+Stat 索引：0=health, 1=stamina, 2=oxygen, 3=food, 4=weight, 5=melee_damage_multiplier, 6=speed_multiplier
+
+---
+
+## NAS WebDAV 连通验证
+
+- 地址：`http://192.168.197.252:100/media/私人共享/ASA/DinoExports/imported/`
+- PROPFIND → 207 ✅
+- 目录有 3 个 .ini 文件
+
+---
+
+## Wikily API
+
+| 操作 | 方法 | 端点 |
+|------|:---:|------|
+| **创建生物** | **POST** | `/api/ark/user-creatures/create/` |
+
+> Tampermonkey 运行在 `wikily.gg` 域内，同源无 CORS。
+
+---
+
+## 扩展方向
+
+- [ ] 属性值→点数自动换算
+- [ ] 支持手机端 PWA 离线访问
+- [ ] NAS 上新 .ini 自动出现在列表
+
+
