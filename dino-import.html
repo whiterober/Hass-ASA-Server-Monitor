@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wikily 生物导入</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f0f13;color:#e0e0e0;min-height:100vh;padding:16px}
+.header{text-align:center;margin-bottom:16px}
+.header h1{font-size:20px;color:#7c3aed;margin-bottom:4px}
+.header p{font-size:12px;color:#666}
+.card{background:#1a1a24;border-radius:12px;padding:16px;margin-bottom:12px;border:1px solid #2a2a3a}
+.card h2{font-size:14px;color:#999;margin-bottom:10px}
+.file-list{max-height:250px;overflow-y:auto}
+.file-item{display:flex;flex-wrap:wrap;align-items:center;cursor:pointer;border-radius:8px;padding:8px 10px;margin:3px 0;background:#22223a;transition:all .15s}
+.file-item:hover{background:#2d2d50}
+.file-item.selected{background:#7c3aed;color:white}
+.file-item.selected .file-info,.file-item.selected .fi-species,.file-item.selected .fi-name,.file-item.selected .fi-level,.file-item.selected .fi-date,.file-item.selected .fi-size{color:#ddd}
+.file-item .icon{font-size:16px;margin-right:8px;flex-shrink:0}
+.file-name{flex:1;font-size:12px;word-break:break-all;min-width:0}
+.file-info{font-size:10px;color:#777;margin-top:2px}
+.fi-species{color:#a78bfa;font-weight:600}
+.fi-name{color:#ccc}
+.fi-level{color:#ccc}
+.preview{font-size:13px}
+.preview .row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #222}
+.preview .row:last-child{border:none}
+.preview.collapsed{display:none}
+.preview .label{color:#888}
+.preview .value{color:#e0e0e0;font-weight:500}
+.input-row{margin:6px 0}
+.input-row input{width:100%;padding:10px;border-radius:8px;border:1px solid #333;background:#111;color:#e0e0e0;font-size:13px}
+.btn{display:block;width:100%;padding:14px;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;text-align:center;transition:all .15s}
+.btn-primary{background:#7c3aed;color:white;margin-top:12px}
+.btn-primary:hover{background:#6d28d9}
+.btn-primary:disabled{background:#444;cursor:not-allowed}
+.status{padding:10px;border-radius:8px;font-size:13px;text-align:center;margin-top:10px}
+.status.info{background:#1a1a3a;color:#7c3aed}
+.status.success{background:#1a3a1a;color:#4ade80}
+.status.error{background:#3a1a1a;color:#f87171}
+.hint{font-size:11px;color:#666;margin-top:4px}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🦖 Wikily 生物导入</h1>
+  <p>NAS → DinoExports/imported/</p>
+</div>
+
+<!-- 登录卡片 -->
+<div class="card" id="loginCard">
+  <h2>🔐 NAS 认证</h2>
+  <div class="input-row">
+    <input type="text" id="nasUser" placeholder="用户名" autocomplete="username">
+  </div>
+  <div class="input-row">
+    <input type="password" id="nasPass" placeholder="密码" autocomplete="current-password">
+  </div>
+  <button class="btn btn-primary" onclick="doLogin()">连接 NAS</button>
+  <div id="loginStatus"></div>
+</div>
+
+<!-- 主界面 -->
+<div id="mainUI" style="display:none">
+  <div class="card">
+    <h2>📂 可用文件 <button onclick="refreshFiles()" style="float:right;background:none;border:1px solid #333;color:#999;padding:2px 10px;border-radius:6px;cursor:pointer;font-size:12px">🔄 刷新</button></h2>
+    <div class="file-list" id="fileList"><div style="text-align:center;padding:20px;color:#555">加载中...</div></div>
+  </div>
+  <div class="card" id="previewCard" style="display:none">
+    <h2 style="cursor:pointer" onclick="document.getElementById('preview').classList.toggle('collapsed')">📋 解析结果 ▾</h2>
+    <div class="preview" id="preview"></div>
+  </div>
+  <div id="statusArea"></div>
+  <div class="card" id="teCard" style="display:none">
+    <h2>⚙️ 驯服有效性 (TE)</h2>
+    <div style="display:flex;gap:8px;align-items:center">
+      <input type="number" id="teMin" placeholder="最小%" min="0" max="100" step="0.1" value="95" style="flex:1">
+      <span style="color:#666">~</span>
+      <input type="number" id="teMax" placeholder="最大%" min="0" max="100" step="0.1" value="100" style="flex:1">
+    </div>
+    <div class="hint">已驯服生物需要 TE 才能拆分野生/已驯化等级。默认 100% 表示完美驯服。</div>
+  </div>
+  <button class="btn btn-primary" id="importBtn" disabled onclick="doImport()">🚀 导入到 Wikily</button>
+  <div class="card" style="margin-top:12px">
+    <h2>⚙️ Wikily 用户名</h2>
+    <div class="input-row"><input type="text" id="wikiUser" placeholder="输入你的 Wikily 用户名" onchange="saveUser()"></div>
+    <div class="hint">用于跳转到你的 profile 页面</div>
+  </div>
+</div>
+
+<script>
+var AUTH = null, selectedFile = null, parsedData = null;
+
+document.getElementById('wikiUser').value = localStorage.getItem('wikily_user') || '';
+
+function saveUser() { localStorage.setItem('wikily_user', document.getElementById('wikiUser').value.trim()); }
+
+function doLogin() {
+  var u = document.getElementById('nasUser').value.trim();
+  var p = document.getElementById('nasPass').value.trim();
+  if (!u || !p) return showLogin('请输入用户名和密码', 'error');
+  AUTH = 'Basic ' + btoa(u + ':' + p);
+  showLogin('⏳ 验证中...', 'info');
+  fetch('dino-import.html', { headers: { 'Authorization': AUTH } })
+    .then(function(r) {
+      if (r.ok) {
+        sessionStorage.setItem('nas_auth', AUTH);
+        document.getElementById('loginCard').style.display = 'none';
+        document.getElementById('mainUI').style.display = 'block';
+        refreshFiles();
+      } else { AUTH = null; showLogin('❌ 认证失败 (HTTP ' + r.status + ')', 'error'); }
+    })
+    .catch(function(e) { AUTH = null; showLogin('❌ 连接失败：' + e.message, 'error'); });
+}
+
+function showLogin(m, t) { document.getElementById('loginStatus').innerHTML = '<div class="status ' + t + '">' + m + '</div>'; }
+
+// 恢复 session
+(function() {
+  var s = sessionStorage.getItem('nas_auth');
+  if (s) { AUTH = s; document.getElementById('loginCard').style.display = 'none'; document.getElementById('mainUI').style.display = 'block'; refreshFiles(); }
+})();
+
+function ah() { return AUTH ? { 'Authorization': AUTH } : {}; }
+
+async function refreshFiles() {
+  var list = document.getElementById('fileList');
+  list.innerHTML = '<div style="text-align:center;padding:20px;color:#555">加载中...</div>';
+  try {
+    var body = '<?xml version="1.0"?><D:propfind xmlns:D="DAV:"><D:prop><D:getcontentlength/><D:getlastmodified/><D:resourcetype/></D:prop></D:propfind>';
+    var res = await fetch('.', { method: 'PROPFIND', headers: Object.assign({}, ah(), { 'Depth': '1' }), body: body });
+    if (res.status === 401) { sessionStorage.removeItem('nas_auth'); AUTH = null; document.getElementById('mainUI').style.display = 'none'; document.getElementById('loginCard').style.display = 'block'; showLogin('⚠️ 认证过期，请重新登录', 'error'); return; }
+    if (res.status !== 207) throw new Error('WebDAV ' + res.status);
+    var xml = await res.text();
+    var doc = new DOMParser().parseFromString(xml, 'text/xml');
+    var resp = doc.getElementsByTagNameNS('DAV:', 'response');
+    var files = [];
+    for (var i = 0; i < resp.length; i++) {
+      var r = resp[i];
+      var href = (r.getElementsByTagNameNS('DAV:', 'href')[0] || {}).textContent || '';
+      var size = (r.getElementsByTagNameNS('DAV:', 'getcontentlength')[0] || {}).textContent;
+      var date = (r.getElementsByTagNameNS('DAV:', 'getlastmodified')[0] || {}).textContent;
+      var rt = r.getElementsByTagNameNS('DAV:', 'resourcetype')[0];
+      var isCol = rt && rt.getElementsByTagNameNS('DAV:', 'collection').length > 0;
+      var name = decodeURIComponent(href.split('/').filter(Boolean).pop() || '');
+      if (!name || isCol || !name.toLowerCase().endsWith('.ini')) continue;
+      files.push({ name: name, size: parseInt(size) || 0, date: date || '' });
+    }
+    if (files.length === 0) { list.innerHTML = '<div style="text-align:center;padding:20px;color:#555">😕 没有 .ini 文件</div>'; return; }
+    files.sort(function(a, b) { return b.name.localeCompare(a.name); });
+    
+    // 渲染列表
+    list.innerHTML = files.map(function(f) {
+      var shortDate = f.date ? f.date.replace(/ GMT.*/, '').replace(/^\w+, /, '') : '';
+      return '<div class="file-item" id="fi-' + encodeURIComponent(f.name) + '" onclick="selectFile(\'' + escapeHtml(f.name) + '\',' + f.size + ')" style="flex-wrap:wrap">'
+        + '<span class="icon">📄</span>'
+        + '<span class="file-name">' + escapeHtml(f.name) + '</span>'
+        + '<span class="file-info" style="width:100%;font-size:10px;color:#666;margin-left:28px">'
+        + '<span class="fi-species">...</span> | '
+        + '<span class="fi-name">...</span> | '
+        + '<span class="fi-level"></span> | '
+        + '<span class="fi-date">' + shortDate + '</span> | '
+        + '<span class="fi-size">' + formatSize(f.size) + '</span>'
+        + '</span></div>';
+    }).join('');
+    
+    // 异步加载每个文件的头部信息
+    files.forEach(function(f) { loadFileMeta(f.name); });
+    
+  } catch (e) { list.innerHTML = '<div style="text-align:center;padding:20px;color:#f87171">❌ ' + escapeHtml(e.message) + '<br><small>请确认已连接 NAS 局域网</small></div>'; }
+}
+
+// 异步加载文件头部元数据
+async function loadFileMeta(filename) {
+  try {
+    var res = await fetch(filename, { headers: ah() });
+    if (!res.ok) return;
+    var text = await res.text();
+    var lines = text.split(/\r?\n/);
+    var species = '', dinoName = '', level = '', section = '';
+    for (var i = 0; i < lines.length && i < 30; i++) {
+      var l = lines[i].trim();
+      var sec = l.match(/^\[(.+)\]$/);
+      if (sec) { section = sec[1]; continue; }
+      var m = l.match(/^([^=]+?)\s*=\s*(.*)$/);
+      if (!m) continue;
+      var k = m[1].trim(), v = m[2].trim();
+      if (section === 'Dino Data') {
+        if (k === 'DinoClass') { species = v.split('/').pop().split('.')[0].split('_')[0]; }
+        else if (k === 'DinoNameTag' && v) dinoName = v;
+        else if (k === 'TamedName' && v) dinoName = v;
+        else if (k === 'CharacterLevel') level = v;
+        if (species && dinoName && level) break;
+      }
+    }
+    var el = document.getElementById('fi-' + encodeURIComponent(filename));
+    if (el) {
+      var sp = el.querySelector('.fi-species');
+      var nm = el.querySelector('.fi-name');
+      var lv = el.querySelector('.fi-level');
+      if (sp) sp.textContent = species || '?';
+      if (nm) nm.textContent = dinoName || '-';
+      if (lv) lv.textContent = level ? 'Lv.' + level : '';
+    }
+  } catch(e) { /* skip */ }
+}
+
+async function selectFile(name) {
+  var items = document.querySelectorAll('.file-item');
+  for (var i = 0; i < items.length; i++) items[i].classList.remove('selected');
+  document.getElementById('fi-' + encodeURIComponent(name))?.classList.add('selected');
+  selectedFile = name;
+  showStatus('info', '⏳ 读取中...');
+  try {
+    var res = await fetch(name, { headers: ah() });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    parsedData = parseIni(await res.text(), name);
+    showPreview(parsedData);
+    document.getElementById('previewCard').style.display = 'block';
+    document.getElementById('preview').classList.add('collapsed');
+    document.getElementById('importBtn').disabled = false;
+    showStatus('success', '✅ ' + (parsedData.blueprint || '解析完成'));
+  } catch (e) { showStatus('error', '❌ ' + e.message); parsedData = null; document.getElementById('importBtn').disabled = true; }
+}
+
+// ARK 颜色表: [id, Linear_R, Linear_G, Linear_B] (ID 1-100 + 染料 128-254)
+var ARK_COLORS = [
+[1,1,0,0],[2,0,0,1],[3,0,1,0],[4,1,1,0],[5,0,1,1],[6,1,0,1],
+[7,0.532,1,0.5],[8,0.581,0.6,0.594],[9,0.19,0.137,0.099],[10,1,0.462,0.15],
+[11,1,0.952,0.26],[12,1,0.181,0.15],[13,0.2,0.2,0.2],[14,0.04,0.04,0.04],[15,0.1,0.039,0.019],
+[16,0.012,0.065,0],[17,0.225,0.011,0.006],[18,1,1,1],[19,1,0.4,0.4],[20,0.1,0.02,0.02],
+[21,1,0.475,0.3],[22,0.25,0.084,0.025],[23,0.6,0.6,0.36],[24,0.3,0.3,0.15],[25,0.75,1,0.75],
+[26,0.195,0.3,0.195],[27,0.013,0.05,0.013],[28,0.7,0.75,1],[29,0.037,0.052,0.125],[30,0.78,0.7,1],
+[31,0.049,0.03,0.1],[32,1,0.75,0.5],[33,0.3,0.24,0.18],[34,0.1,0.075,0.05],[35,0.1,0.1,0.1],
+[36,1.75,1.75,1.75],[37,0.48,0.31,0.231],[38,0.825,0.705,0.668],[39,0.635,0.393,0.302],[40,0.555,0.459,0.352],
+[41,0.25,0.185,0.134],[42,0.36,0.133,0.067],[43,0.605,0.193,0.091],[44,0.51,0.077,0],[45,0.193,0.235,0.15],
+[46,0.286,0.34,0.192],[47,0.385,0.375,0.263],[48,0.177,0.296,0.34],[49,0.191,0.175,0.31],[50,0.442,0.369,0.535],
+[51,0.122,0.224,0.395],[52,0.063,0.107,0.18],[53,0.116,0.38,0.825],[54,0.057,0.139,0.665],[55,0.85,0.85,0.85],
+[56,0.08,0.08,0.08],[57,0.006,0.056,0.058],[58,0,0.165,0.117],[59,0,0.565,0.413],[60,0.048,0.1,0.07],
+[61,0.045,0.076,0.048],[62,0.041,0.037,0.036],[63,0.098,0.089,0.086],[64,0.332,0.292,0.283],[65,0.082,0.105,0.093],
+[66,0.258,0.361,0.309],[67,0.807,0.44,1],[68,1,0.003,0.328],[69,0.175,0,0.06],[70,0.479,0,0.051],
+[71,0.212,0.03,0.009],[72,0.402,0.026,0],[73,0.863,0.027,0],[74,1,0.098,0.031],[75,1,0.216,0],
+[76,1,0.392,0.04],[77,0.429,0.165,0],[78,0.301,0.301,0.017],[79,0.005,0.005,0.005],[80,0.006,0.009,0.033],
+[81,0.004,0.02,0.038],[82,0.026,0.014,0.027],[83,0.397,1,0.054],[84,0.036,0.815,0.238],[85,0,0.25,0.048],
+[86,0.002,0.089,0.023],[87,0,0.105,0.056],[88,0.105,0.314,0.014],[89,0.112,0.017,0.114],[90,0.238,0.032,0.246],
+[91,0.515,0.188,0.521],[92,0.002,0.048,0.067],[93,0.002,0.089,0.125],[94,0.004,0.235,0.337],[95,0.227,0.392,1],
+[96,0.418,0.823,1],[97,0.078,0.08,0.006],[98,0.184,0.159,0.047],[99,0.533,0.515,0.112],[100,0.905,1,0.533],
+[128,0.033,0,0],[129,0.133,0,0],[130,0.451,0,0],[131,1,0,0],[132,1,0.171,0.171],
+[133,1,0.521,0.521],[134,0.694,0.266,0.266],[135,0.381,0.086,0.086],[136,0.033,0.01,0],[137,0.133,0.033,0],
+[138,0.451,0.1,0],[139,1,0.212,0],[140,1,0.485,0.171],[141,1,0.738,0.521],[142,0.694,0.451,0.266],
+[143,0.381,0.202,0.086],[144,0.033,0.033,0],[145,0.133,0.133,0],[146,0.445,0.451,0],[147,1,1,0],
+[148,1,1,0.171],[149,1,1,0.521],[150,0.694,0.694,0.266],[151,0.381,0.381,0.086],[152,0.01,0.033,0],
+[153,0.033,0.133,0],[154,0.1,0.451,0],[155,0.216,1,0],[156,0.485,1,0.171],[157,0.738,1,0.521],
+[158,0.451,0.694,0.266],[159,0.202,0.381,0.086],[160,0,0.033,0],[161,0,0.133,0],[162,0,0.451,0],
+[163,0,1,0],[164,0.171,1,0.171],[165,0.521,1,0.521],[166,0.266,0.694,0.266],[167,0.086,0.381,0.086],
+[168,0,0.033,0.01],[169,0,0.133,0.033],[170,0,0.451,0.1],[171,0,1,0.216],[172,0.171,1,0.485],
+[173,0.521,1,0.738],[174,0.266,0.694,0.451],[175,0.086,0.381,0.202],[176,0,0.033,0.033],[177,0,0.133,0.133],
+[178,0,0.451,0.451],[179,0,1,1],[180,0.171,1,1],[181,0.521,1,1],[182,0.266,0.694,0.694],
+[183,0.086,0.381,0.381],[184,0,0.01,0.033],[185,0,0.033,0.133],[186,0,0.1,0.451],[187,0,0.212,1],
+[188,0.171,0.485,1],[189,0.521,0.738,1],[190,0.262,0.445,0.694],[191,0.086,0.202,0.381],[192,0,0,0.033],
+[193,0,0,0.133],[194,0,0,0.451],[195,0,0,1],[196,0.171,0.171,1],[197,0.521,0.521,1],
+[198,0.262,0.262,0.694],[199,0.086,0.086,0.381],[200,0.01,0,0.033],[201,0.033,0,0.133],[202,0.1,0,0.451],
+[203,0.216,0,1],[204,0.485,0.171,1],[205,0.738,0.521,1],[206,0.451,0.266,0.694],[207,0.202,0.086,0.381],
+[208,0.033,0,0.033],[209,0.133,0,0.133],[210,0.445,0,0.451],[211,1,0,1],[212,1,0.171,1],
+[213,1,0.521,1],[214,0.694,0.266,0.694],[215,0.381,0.086,0.381],[216,0.033,0,0.01],[217,0.133,0,0.033],
+[218,0.451,0,0.1],[219,1,0,0.212],[220,1,0.171,0.485],[221,1,0.521,0.738],[222,0.694,0.266,0.451],
+[223,0.381,0.086,0.202],[224,0.01,0.01,0.01],[225,0.033,0.033,0.033],[226,0.074,0.074,0.074],[227,0.133,0.133,0.133],
+[228,0.216,0.216,0.216],[229,0.319,0.319,0.319],[230,0.451,0.451,0.451],[231,0.604,0.604,0.604],[232,0.791,0.791,0.791],
+[233,1,1,1],[234,0.051,0.035,0.016],[235,0.1,0.063,0.018],[236,0.216,0.127,0.026],[237,0.319,0.223,0.047],
+[238,0.451,0.332,0.1],[239,0.604,0.445,0.133],[240,0.791,0.584,0.171],[241,1,0.863,0.521],[242,0.913,0.913,0.716],
+[243,0.319,0.056,0.019],[244,1,0.371,0.018],[245,1,0.527,0],[246,0.871,0.871,0.032],[247,0.451,0.815,0.006],
+[248,0.016,0.171,0.03],[249,0.023,0.565,0.468],[250,0,0.165,0.25],[251,0.086,0.098,0.168],[252,0.275,0.076,0.376],
+[253,0.791,0.546,0.723],[254,1,0.521,0.624]
+];
+
+function findColorId(r, g, b) {
+  var best = 0, bestD = Infinity;
+  for (var i = 0; i < ARK_COLORS.length; i++) {
+    var c = ARK_COLORS[i];
+    var dr = r - c[1], dg = g - c[2], db = b - c[3];
+    var d = dr*dr + dg*dg + db*db;
+    if (d < bestD) { bestD = d; best = c[0]; }
+  }
+  return best;
+}
+
+function parseIni(t, fn) {
+  var r = { stats: [], _filename: fn, colors: [], ancestors: [] };
+  var section = '';
+  var statMap = {
+    '生命值':'health', '耐力':'stamina', '氧气':'oxygen', '氧氣':'oxygen',
+    '食物':'food', '负重':'weight', '重量':'weight',
+    '近战伤害':'melee_damage_multiplier', '移动速度':'speed_multiplier',
+    '眩暈':'torpidity', '眩晕':'torpidity',
+    '水':'water', '溫度':'temperature', '温度':'temperature',
+    '抗性':'fortitude', '制作技能':'crafting'
+  };
+  
+  t.split(/\r?\n/).forEach(function(l) {
+    l = l.trim();
+    if (!l || l[0] === ';') return;
+    
+    var sec = l.match(/^\[(.+)\]$/);
+    if (sec) { section = sec[1]; return; }
+    
+    var m = l.match(/^([^=]+?)\s*=\s*(.*)$/);
+    if (!m) return;
+    var k = m[1].trim(), v = m[2].trim();
+    
+    // [Dino Data]
+    if (section === 'Dino Data') {
+      if (k === 'DinoID1') r.dinoId1 = v;
+      else if (k === 'DinoID2') r.dinoId2 = v;
+      else if (k === 'DinoClass') { var parts = v.split('/').pop().split('.'); r.blueprint = parts.length > 1 ? parts[1] : parts[0]; }
+      else if (k === 'DinoNameTag') r.nameTag = v;
+      else if (k === 'CharacterLevel') r.level = parseInt(v) || 0;
+      else if (k === 'bIsFemale') r.sex = (v === 'True') ? 'female' : 'male';
+      else if (k === 'bNeutered') r.isNeutered = (v === 'True');
+      else if (k === 'TamerString') r.tamer = v || null;
+      else if (k === 'TamedName' && v) r.name = v;
+      else if (k === 'ImprinterName' && v) r.imprinter = v;
+      else if (k === 'RandomMutationsMale') r.patMutations = parseInt(v) || 0;
+      else if (k === 'RandomMutationsFemale') r.matMutations = parseInt(v) || 0;
+      else if (k === 'DinoImprintingQuality') r.imprint = parseFloat(v);
+      else if (k === 'BabyAge') r.babyAge = parseFloat(v);
+    }
+    
+    // [Max Character Status Values]
+    if (section === 'Max Character Status Values') {
+      var mapped = statMap[k];
+      if (mapped) {
+        r.statsByName = r.statsByName || {};
+        var val = parseFloat(v) || 0;
+        // melee 在 .ini 是倍率(2.0=200%)，Wikily 算法需要百分比(200)
+        if (mapped === 'melee_damage_multiplier') val = val * 100;
+        r.statsByName[mapped] = val;
+      }
+    }
+    
+    // [Colorization]
+    if (section === 'Colorization') {
+      var cm = k.match(/^ColorSet\[(\d+)\]$/);
+      if (cm) {
+        var cv = v.match(/R=([\d.]+).*?G=([\d.]+).*?B=([\d.]+).*?A=([\d.]+)/);
+        if (cv) r.colors[parseInt(cm[1])] = { r:parseFloat(cv[1]), g:parseFloat(cv[2]), b:parseFloat(cv[3]), a:parseFloat(cv[4]) };
+      }
+    }
+    
+    // [Dino Ancestry]
+    if (section === 'Dino Ancestry') {
+      if (k === 'DinoAncestorsCount') r.ancestorCount = parseInt(v) || 0;
+      else if (k === 'DinoAncestorsMale') r.ancestorMale = parseInt(v) || 0;
+    }
+    
+    // [DinoAncestors] / [DinoAncestorsMale]
+    if (section === 'DinoAncestors' || section === 'DinoAncestorsMale') {
+      if (v) r.ancestors.push({ type: section, data: v });
+    }
+  });
+  
+  // 回填 stats 数组（兼容旧版预览）
+  if (r.statsByName) {
+    var sv = ['health','stamina','oxygen','food','weight','melee','speed'];
+    for (var i = 0; i < sv.length; i++) r.stats[i] = r.statsByName[sv[i]] || 0;
+  }
+  
+  return r;
+}
+
+function showPreview(d) {
+  var statLabels = {
+    'health':'生命','stamina':'耐力','oxygen':'氧气','food':'食物','weight':'负重',
+    'melee_damage_multiplier':'近战伤害','speed_multiplier':'移动速度','torpidity':'眩晕','water':'水',
+    'temperature':'温度','fortitude':'抗性','crafting':'制作技能'
+  };
+  var h = '';
+  
+  // 基本
+  var rows = [];
+  rows.push(['文件', d._filename]);
+  rows.push(['物种', d.blueprint||'?']);
+  rows.push(['名称', d.name||d.nameTag||'-']);
+  rows.push(['等级', d.level||'?']);
+  rows.push(['性别', d.sex==='female'?'♀':'♂' + (d.isNeutered?' (已绝育)':'')]);
+  if (d.imprinter) rows.push(['留痕人', d.imprinter]);
+  if (typeof d.imprint === 'number') rows.push(['留痕度', (d.imprint*100).toFixed(1) + '%']);
+  if (typeof d.babyAge === 'number') rows.push(['幼崽成长', (d.babyAge*100).toFixed(1) + '%']);
+  if (d.tamer) rows.push(['驯服人', d.tamer]);
+  rows.push(['突变(母/父)', d.matMutations + ' / ' + d.patMutations]);
+  rows.push(['Dino ID', d.dinoId1 + '/' + d.dinoId2]);
+  
+  // 属性值
+  if (d.statsByName) {
+    rows.push(['── 属性值 ──', '']);
+    var order = ['health','stamina','torpidity','oxygen','food','water','temperature','weight','melee_damage_multiplier','speed_multiplier','fortitude','crafting'];
+    for (var i = 0; i < order.length; i++) {
+      var v = d.statsByName[order[i]];
+      if (typeof v === 'number') rows.push([statLabels[order[i]]||order[i], v.toFixed(1)]);
+    }
+  }
+  
+  // 颜色（预览显示 RGBA + 匹配的颜色 ID）
+  if (d.colors && d.colors.length > 0) {
+    rows.push(['── 颜色区域 ──', '']);
+    for (var i = 0; i < d.colors.length; i++) {
+      if (d.colors[i]) {
+        var c = d.colors[i];
+        var cid = findColorId(c.r, c.g, c.b);
+        rows.push(['Region ' + i, 'R:'+(c.r*255).toFixed(0)+' G:'+(c.g*255).toFixed(0)+' B:'+(c.b*255).toFixed(0)+' → ID:'+cid]);
+      }
+    }
+  }
+  
+  // 祖先
+  if (d.ancestorCount > 0) {
+    rows.push(['── 祖先 ──', '数量:' + d.ancestorCount + ' 雄性:' + (d.ancestorMale||0)]);
+    for (var i = 0; i < d.ancestors.length; i++) {
+      rows.push(['', d.ancestors[i].data]);
+    }
+  }
+  
+  for (var i = 0; i < rows.length; i++) {
+    h += '<div class="row"><span class="label">' + escapeHtml(String(rows[i][0])) + '</span><span class="value">' + escapeHtml(String(rows[i][1])) + '</span></div>';
+  }
+  // 显示/隐藏 TE 卡片 + 设置默认值
+  var isTamed = !!d.tamer;
+  document.getElementById('teCard').style.display = isTamed ? '' : 'none';
+  
+  // 预览中显示类型
+  var ctype = d.imprinter ? 'bred' : (d.tamer ? 'tamed' : 'tamed');
+  if (d.imprinter) rows.push(['类型', 'Bred (繁殖)']);
+  else if (d.tamer) rows.push(['类型', '已驯服 (需要 TE)']);
+  if (typeof d.imprint === 'number') rows.push(['留痕度', (d.imprint*100).toFixed(1) + '%']);
+  
+  document.getElementById('preview').innerHTML = h;
+}
+
+function doImport() {
+  if (!parsedData) return;
+  var u = document.getElementById('wikiUser').value.trim();
+  if (!u) { showStatus('error', '⚠️ 请输入 Wikily 用户名'); return; }
+  saveUser();
+  // 转换 RGBA → ARK 颜色 ID
+  var colorIds = [];
+  if (parsedData.colors && parsedData.colors.length > 0) {
+    for (var i = 0; i < parsedData.colors.length; i++) {
+      var c = parsedData.colors[i];
+      if (c) colorIds[i] = findColorId(c.r, c.g, c.b);
+    }
+  }
+  // 判断类型 + TE + 留痕
+  var ctype = parsedData.imprinter ? 'bred' : (parsedData.tamer ? 'tamed' : 'tamed');
+  var te = null;
+  if (ctype === 'tamed') {
+    var teMin = parseFloat(document.getElementById('teMin').value) || 80;
+    var teMax = parseFloat(document.getElementById('teMax').value) || 100;
+    te = { min: Math.min(teMin, teMax), max: Math.max(teMin, teMax) };
+  }
+  var imp = (typeof parsedData.imprint === 'number') ? parsedData.imprint * 100 : null;
+  var p = { blueprint: parsedData.blueprint, name: parsedData.name||null, level: parsedData.level, sex: parsedData.sex||'female', type: ctype, statsByName: parsedData.statsByName||{}, matMutations: parsedData.matMutations||0, patMutations: parsedData.patMutations||0, colors: colorIds, tamingEffectiveness: te, imprintingQuality: imp, _filename: parsedData._filename };
+  var enc = btoa(unescape(encodeURIComponent(JSON.stringify(p))));
+  showStatus('info', '🚀 正在打开 Wikily...');
+  setTimeout(function(){ showStatus('', ''); }, 3000);
+  window.open('https://wikily.gg/zh-cn/ark-survival-ascended/profile/' + encodeURIComponent(u) + '/#import=' + enc, '_blank');
+}
+
+function showStatus(t, m) { document.getElementById('statusArea').innerHTML = '<div class="status ' + t + '">' + m + '</div>'; }
+function formatSize(b) { return b < 1024 ? b + ' B' : (b/1024).toFixed(1) + ' KB'; }
+function escapeHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+</script>
+</body>
+</html>
