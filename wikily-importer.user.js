@@ -52,7 +52,7 @@
             sex: d.sex || 'female',
             wild_levels: wildLevels,
             dom_levels: domLevels,
-            tags: [], notes: null,
+            tags: d.tags || [], notes: d.notes || null,
             mutations_maternal: d.matMutations || 0,
             mutations_paternal: d.patMutations || 0,
             mutations: d.mutations || null,
