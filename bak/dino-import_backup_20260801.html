@@ -6,49 +6,14 @@
 <title>Wikily 生物导入</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f0f13;color:#e0e0e0;height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden;padding:16px 16px 0}
-.header{text-align:center;margin-bottom:16px;flex-shrink:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f0f13;color:#e0e0e0;min-height:100vh;padding:16px}
+.header{text-align:center;margin-bottom:16px}
 .header h1{font-size:20px;color:#7c3aed;margin-bottom:4px}
 .header p{font-size:12px;color:#666}
 .card{background:#1a1a24;border-radius:12px;padding:16px;margin-bottom:12px;border:1px solid #2a2a3a}
 .card h2{font-size:14px;color:#999;margin-bottom:10px}
-#mainUI{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;gap:12px}
-#leftCol,#rightCol{display:flex;flex-direction:column;min-height:0}
-#leftCol{flex:1}
-#fileCard{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;margin-bottom:0}
-#rightCol{flex-shrink:0}
-@media (min-width:768px){
-  #mainUI{flex-direction:row}
-  #leftCol{flex:1;min-width:0;padding-bottom:16px}
-  #rightCol{flex:1;overflow-y:auto;min-width:0}
-  #rightCol .card:last-of-type{margin-bottom:0}
-  #rightPlaceholder{display:flex}
-}
-@media (max-width:767px){
-  body{padding-bottom:4px}
-}
-.file-list{flex:1;overflow-y:auto;min-height:0;scrollbar-width:thin;scrollbar-color:#333 transparent}
-.file-list::-webkit-scrollbar{width:5px}
-.file-list::-webkit-scrollbar-track{background:transparent}
-.file-list::-webkit-scrollbar-thumb{background:#333;border-radius:3px}
-.file-list::-webkit-scrollbar-thumb:hover{background:#555}
-html{scrollbar-width:thin;scrollbar-color:#333 transparent}
-html::-webkit-scrollbar{width:5px}
-html::-webkit-scrollbar-track{background:transparent}
-html::-webkit-scrollbar-thumb{background:#333;border-radius:3px}
-html::-webkit-scrollbar-thumb:hover{background:#555}
-@media (pointer:coarse){html::-webkit-scrollbar,.file-list::-webkit-scrollbar{width:0}}
-.parse-btn{display:none;width:22px;height:22px;border-radius:6px;flex-shrink:0;cursor:pointer;align-items:center;justify-content:center;margin-left:auto}
-.parse-btn.ok{display:inline-flex;background:#1a3a1a;border:1px solid #2a5a2a}
-.parse-btn.err{display:inline-flex;background:#3a1a1a;border:1px solid #5a2a2a}
-.file-item.selected .parse-btn.ok,.file-item.selected .parse-btn.err{background:transparent;border-color:#fff4}
-#previewPopup .row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #222}
-#previewPopup .row:last-child{border:none}
-#previewPopup .label{color:#888}
-#previewPopup .value{color:#e0e0e0;font-weight:500}
-.file-group[open] > summary{border:1px solid #7c3aed}
+.file-list{max-height:350px;overflow-y:auto}
 .file-item{display:flex;flex-direction:column;cursor:pointer;border-radius:8px;padding:8px 10px;margin:3px 0;background:#22223a;transition:all .15s}
-.file-item .fi-top{display:flex;align-items:center;font-size:13px}
 .file-item:hover{background:#2d2d50}
 .file-item.selected{background:#7c3aed;color:white}
 .file-item.selected .fi-species,.file-item.selected .fi-name,.file-item.selected .fi-level,.file-item.selected .fi-size,.file-item.selected .file-name{color:#fff!important}
@@ -62,11 +27,15 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 .fi-level{color:#ccc}
 .fi-date{color:#666;margin-left:auto}
 .fi-size{color:#888;margin-left:4px}
+.preview{font-size:13px}
+.preview .row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #222}
+.preview .row:last-child{border:none}
+.preview .label{color:#888}
+.preview .value{color:#e0e0e0;font-weight:500}
 .input-row{margin:6px 0}
 .input-row input{width:100%;padding:10px;border-radius:8px;border:1px solid #333;background:#111;color:#e0e0e0;font-size:13px}
 .btn{display:block;width:100%;padding:14px;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;text-align:center;transition:all .15s}
-.btn-primary{background:#7c3aed;color:white;margin:12px 0 16px;flex-shrink:0}
-@media (min-width:768px){.btn-primary{margin-top:auto}}
+.btn-primary{background:#7c3aed;color:white;margin-top:12px}
 .btn-primary:hover{background:#6d28d9}
 .btn-primary:disabled{background:#444;cursor:not-allowed}
 .status{padding:10px;border-radius:8px;font-size:13px;text-align:center;margin-top:10px}
@@ -74,85 +43,64 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 .status.success{background:#1a3a1a;color:#4ade80}
 .status.error{background:#3a1a1a;color:#f87171}
 .hint{font-size:11px;color:#666;margin-top:4px}
+.preview.collapsed{display:none}
 .cand-row{display:flex;align-items:center;padding:6px 8px;margin:2px 0;border-radius:6px;cursor:pointer;background:#1a1a2e;font-size:11px;gap:4px}
 .cand-row:hover{background:#2a2a4e}
 .cand-row.selected{background:#7c3aed;color:white}
 .cand-row .cand-num{width:20px;text-align:center;color:#666;font-weight:600}
 .cand-row.selected .cand-num{color:#ccc}
-.cand-row .cand-stat{text-align:center;min-width:20px}
+.cand-row .cand-stat{text-align:center;min-width:36px}
 .cand-row .cand-stat .cw{color:#a78bfa;font-weight:600}
-.cand-row .cand-stat .cm{font-weight:600;text-shadow:0 0 6px #f59e0b,0 0 12px #f59e0b40}
 .cand-row.selected .cand-stat .cw{color:#fff}
-.cand-row.selected .cand-stat .cm{text-shadow:0 0 6px #fbbf24,0 0 12px #fbbf2440}
 .cand-row .cand-stat .cd{color:#666;font-size:10px}
 .cand-row.selected .cand-stat .cd{color:#ccc}
-.cand-row .cand-score{color:#555;font-size:10px;text-align:right;min-width:20px}
+.cand-row .cand-score{color:#555;font-size:10px;margin-left:auto}
 .cand-row.selected .cand-score{color:#ccc}
 .cand-row.selected .cand-info{color:#ccc!important}
-.mut-chip{display:inline-flex;align-items:center;gap:3px;padding:5px 10px;border-radius:6px;background:#1a1a2e;border:1px solid #2a2a3a;cursor:pointer;font-size:11px;color:#888;transition:all .15s;user-select:none}
-.mut-chip:hover{background:#2a2a4e;color:#ccc}
-.mut-chip.has-val{color:#a78bfa;border-color:#7c3aed33;background:#1a1a2e}
-.mut-chip.editing{flex:1 0 100%;gap:8px;padding:8px 12px;background:#111;border:1px solid #7c3aed;color:#e0e0e0;cursor:default}
-.mut-chip.editing input{flex:1;background:none;border:none;color:#e0e0e0;font-size:14px;outline:none;text-align:right;min-width:0}
-.mut-chip.editing input::-webkit-outer-spin-button,.mut-chip.editing input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 </style>
 </head>
 <body>
 
 <div class="header">
   <h1>🦖 Wikily 生物导入</h1>
-  <p style="color:#444;font-size:11px;display:flex;align-items:center;justify-content:center;gap:4px;cursor:pointer" onclick="startWikiEdit()" id="wikiUserRow">
-    <span id="wikiUserDisp" style="display:inline-flex;align-items:center;gap:4px">点击设置 Wikily 用户名 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></span>
-  </p>
+  <p>NAS → DinoExports/（ASB 公式本地计算）</p>
 </div>
-<input type="hidden" id="wikiUser"></textarea>
 
 
 <!-- 全原生认证：浏览器自动管理 HTTP Basic Auth -->
 <div id="mainUI">
-  <div id="leftCol">
-    <div class="card" id="fileCard">
-      <h2>📂 可用文件 <button onclick="refreshFiles()" style="float:right;background:none;border:none;color:#999;padding:2px 4px;border-radius:6px;cursor:pointer;font-size:12px;line-height:1"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg></button></h2>
-      <div class="file-list" id="fileList"><div style="text-align:center;padding:20px;color:#555">加载中...</div></div>
-    </div>
+  <div class="card">
+    <h2>📂 可用文件 <button onclick="refreshFiles()" style="float:right;background:none;border:1px solid #333;color:#999;padding:2px 10px;border-radius:6px;cursor:pointer;font-size:12px">🔄 刷新</button></h2>
+    <div class="file-list" id="fileList"><div style="text-align:center;padding:20px;color:#555">加载中...</div></div>
   </div>
-  <div id="rightCol">
-    <div id="rightPlaceholder" style="flex:1;display:none;align-items:center;justify-content:center;opacity:0.06">
-      <svg width="96" height="96" viewBox="0 0 24 24" fill="currentColor" style="color:#fff"><path d="M13 2V3H12V9H11V10H9V11H8V12H7V13H5V12H4V11H3V9H2V15H3V16H4V17H5V18H6V22H8V21H7V20H8V19H9V18H10V19H11V22H13V21H12V17H13V16H14V15H15V12H16V13H17V11H15V9H20V8H17V7H22V3H21V2M14 3H15V4H14Z"/></svg>
+  <div class="card" id="previewCard" style="display:none;padding-bottom:16px;cursor:pointer" onclick="var p=document.getElementById('preview');p.classList.toggle('collapsed');var a=document.getElementById('pa');a.textContent=p.classList.contains('collapsed')?'⏷':'⏶';var c=document.getElementById('previewCard');c.style.paddingBottom=p.classList.contains('collapsed')?'16px':'16px'">
+    <h2 style="margin-bottom:0;display:flex;justify-content:space-between;align-items:center;pointer-events:none"><span>📋 解析结果 <span id="parseStatus" style="margin-left:8px;vertical-align:middle"></span> <span id="solverTag" style="font-size:11px;color:#7c3aed"></span></span><span id="pa" style="color:#999;font-size:11px">⏷</span></h2>
+    <div class="preview collapsed" id="preview"></div>
+  </div>
+  <div id="statusArea"></div>
+  <div class="card" id="candCard" style="display:none">
+    <h2>🎯 候选分配方案 <span id="candCount" style="font-size:11px;color:#999"></span></h2>
+    <div id="candList"></div>
+  </div>
+  <div class="card" id="teCard" style="display:none">
+    <h2>⚙️ 驯服有效性 (TE)</h2>
+    <div style="display:flex;gap:8px;align-items:center">
+      <input type="number" id="teMin" placeholder="最小%" min="0" max="100" step="0.1" value="95" style="flex:1">
+      <span style="color:#666">~</span>
+      <input type="number" id="teMax" placeholder="最大%" min="0" max="100" step="0.1" value="100" style="flex:1">
     </div>
-    <div id="statusArea"></div>
-    <div class="card" id="teCard" style="display:none">
-      <h2>⚙️ 驯服有效性 (TE)</h2>
-      <div id="teInputs" style="display:flex;gap:8px;align-items:center">
-        <div style="flex:1;display:flex;align-items:center;gap:6px;background:#111;border:1px solid #333;border-radius:8px;padding:8px 12px">
-          <span style="color:#666;font-size:12px">TE</span>
-          <input type="number" id="teMin" placeholder="最小" min="0" max="100" step="0.1" value="95" style="flex:1;background:none;border:none;color:#e0e0e0;font-size:14px;outline:none;-moz-appearance:textfield;text-align:center">
-          <span style="color:#555">%</span>
-        </div>
-        <span style="color:#666">~</span>
-        <div style="flex:1;display:flex;align-items:center;gap:6px;background:#111;border:1px solid #333;border-radius:8px;padding:8px 12px">
-          <span style="color:#666;font-size:12px">TE</span>
-          <input type="number" id="teMax" placeholder="最大" min="0" max="100" step="0.1" value="100" style="flex:1;background:none;border:none;color:#e0e0e0;font-size:14px;outline:none;-moz-appearance:textfield;text-align:center">
-          <span style="color:#555">%</span>
-        </div>
-      </div>
-      <div class="hint">已驯服生物用 TE 上限反推（属性由最终 TE 决定）。</div>
-    </div>
-    <div class="card" id="mutCard" style="display:none">
-      <h2 id="mutTitle">🧬 变异 (Mutations)</h2>
-      <div id="mutGrid" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center"></div>
-      <div class="hint">点击属性输入变异点数，游戏中 TEK 望远镜可查看</div>
-    </div>
-    <div class="card" id="candCard" style="display:none">
-      <h2>🎯 候选分配方案 <span id="candCount" style="font-size:11px;color:#999"></span>
-        <span style="float:right;font-size:11px;border:1px solid #333;border-radius:4px;overflow:hidden">
-          <span id="btTamed" onclick="setBioType('tamed')" style="cursor:pointer;padding:1px 6px;display:inline-block">训</span>
-          <span id="btBred" onclick="setBioType('bred')" style="cursor:pointer;padding:1px 6px;display:inline-block">繁</span>
-        </span>
-      </h2>
-      <div id="candList"></div>
-    </div>
-    <button class="btn btn-primary" id="importBtn" disabled onclick="doImport()" style="display:none">🚀 导入到 Wikily</button>
+    <div class="hint">已驯服生物用 TE 上限反推（属性由最终 TE 决定）。</div>
+  </div>
+  <div class="card" id="mutCard" style="display:none">
+    <h2>🧬 变异 (Mutations)</h2>
+    <div id="mutGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:6px"></div>
+    <div class="hint">手动输入每属性变异点数（TEK 望远镜确认）</div>
+  </div>
+  <button class="btn btn-primary" id="importBtn" disabled onclick="doImport()">🚀 导入到 Wikily</button>
+  <div class="card" style="margin-top:12px">
+    <h2>⚙️ Wikily 用户名</h2>
+    <div class="input-row"><input type="text" id="wikiUser" placeholder="输入你的 Wikily 用户名" onchange="saveUser()"></div>
+    <div class="hint">用于跳转到你的 profile 页面</div>
   </div>
 </div>
 
@@ -414,8 +362,6 @@ function solveLevels(species, statsByName, TE_min, TE_max, origin, charLevel, im
   var topCandidates = candidates.slice(0,10);
   var result = topCandidates[0] || {wildLevels:{},domLevels:{},sumW:0,diff:0};
   result.candidates = topCandidates;
-  result._totalFromTorp = totalW;  // torpidity 反推的总等级（含驯服奖励）
-  result._totalDom = totalDom;
   console.log('DP: top='+topCandidates.length+' bestScore='+(topCandidates[0]?topCandidates[0].score:'?'));
   return result;
 }
@@ -456,55 +402,8 @@ function authFetch(url, opts) {
   });
 }
 
-// Wikily 用户名：大标题下低可视，点击编辑
-var _wikiEditing = false;
-function initWikiUser() {
-  var v = localStorage.getItem('wikily_user') || '';
-  var disp = document.getElementById('wikiUserDisp');
-  var inp = document.getElementById('wikiUser');
-  inp.value = v;
-  updateWikiDisp();
-}
-initWikiUser();
-
-function updateWikiDisp() {
-  var v = localStorage.getItem('wikily_user') || '';
-  var disp = document.getElementById('wikiUserDisp');
-  disp.innerHTML = '<span style="display:inline-flex;align-items:center;gap:4px">' + (v || '点击设置 Wikily 用户名') + ' <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></span>';
-  disp.style.color = v ? '#555' : '#444';
-}
-
-function startWikiEdit() {
-  if (_wikiEditing) return;
-  _wikiEditing = true;
-  var disp = document.getElementById('wikiUserDisp');
-  var v = localStorage.getItem('wikily_user') || '';
-  disp.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px">'
-    + '<input type="text" id="wikiEditInp" value="' + escapeHtml(v) + '" style="width:140px;padding:2px 6px;border-radius:4px;border:1px solid #7c3aed;background:#111;color:#e0e0e0;font-size:11px;outline:none;text-align:center">'
-    + '<svg onclick="event.stopPropagation();cancelWikiEdit()" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="3" style="cursor:pointer;flex-shrink:0"><path d="M18 6L6 18M6 6l12 12"/></svg>'
-    + '<svg onclick="event.stopPropagation();saveWikiUser()" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="3" style="cursor:pointer;flex-shrink:0"><path d="M5 13l4 4L19 7"/></svg>'
-    + '</span>';
-  disp.style.color = '#e0e0e0';
-  var inpEl = document.getElementById('wikiEditInp');
-  if (inpEl) { inpEl.focus(); inpEl.select(); }
-  inpEl.onkeydown = function(e) { if (e.key === 'Enter') saveWikiUser(); if (e.key === 'Escape') cancelWikiEdit(); };
-}
-
-function saveWikiUser() {
-  var inpEl = document.getElementById('wikiEditInp');
-  if (inpEl) {
-    var v = inpEl.value.trim();
-    document.getElementById('wikiUser').value = v;
-    localStorage.setItem('wikily_user', v);
-  }
-  _wikiEditing = false;
-  updateWikiDisp();
-}
-
-function cancelWikiEdit() {
-  _wikiEditing = false;
-  updateWikiDisp();
-}
+document.getElementById('wikiUser').value = localStorage.getItem('wikily_user') || '';
+function saveUser() { localStorage.setItem('wikily_user', document.getElementById('wikiUser').value.trim()); }
 
 // 预加载 ASB JSON
 loadASB().catch(function(e){ console.log('ASB load fail:', e); });
@@ -563,14 +462,14 @@ async function refreshFiles() {
       var timeLabel = fmt(first._ts) + ' ~ ' + fmt(last._ts);
       var isLatest = gi === 0;
       var delBtn = isLatest ? '' : ' <button onclick="event.stopPropagation();deleteGroup(' + gi + ')" style="float:right;background:none;border:none;color:#ef4444;padding:2px 4px;border-radius:4px;font-size:10px;cursor:pointer;line-height:1" title="删除本组全部文件"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14"/></svg></button>';
-      html += '<details class="file-group" id="fg-' + gi + '"' + (isLatest ? ' open' : '') + ' ontoggle="if(this.open)closeOtherGroups(' + gi + ')"' + '>'
+      html += '<details class="file-group" id="fg-' + gi + '"' + (isLatest ? ' open' : '') + '>'
         + '<summary style="cursor:pointer;padding:6px 10px;background:#1e1e32;border-radius:8px;margin:6px 0;font-size:12px;color:#999;list-style:disc">'
         + timeLabel + ' | ' + g.files.length + ' 个文件' + delBtn + '</summary>';
       for (var fi = 0; fi < g.files.length; fi++) {
         var f = g.files[fi];
         var shortDate = f.date ? f.date.replace(/ GMT.*/, '').replace(/^\w+, /, '') : '';
-        html += '<div class="file-item" id="fi-' + encodeURIComponent(f.name) + '" onclick="selectFile(\'' + escapeHtml(f.name) + '\',' + f.size + ')">'
-          + '<div class="fi-top">'
+        html += '<div class="file-item" id="fi-' + encodeURIComponent(f.name) + '" onclick="selectFile(\'' + escapeHtml(f.name) + '\',' + f.size + ')" style="flex-wrap:wrap">'
+          + '<div style="font-size:13px">'
           + '<span class="fi-species" style="font-weight:600">...</span>  '
           + '<span class="fi-name" style="color:#aaa">...</span>  '
           + '<span class="fi-level" style="color:#7c3aed;font-weight:600"></span> '
@@ -608,7 +507,7 @@ async function deleteGroup(gi) {
   if (selectedFile && g.files.some(function(f){return f.name===selectedFile;})) {
     selectedFile = null; parsedData = null;
     document.getElementById('previewCard').style.display = 'none';
-    showBtn(false);showRightPlaceholder(true);
+    document.getElementById('importBtn').disabled = true;
   }
   showStatus('info', '🗑 已删除 ' + ok + ' 个文件' + (fail > 0 ? '，' + fail + ' 个失败' : ''));
   setTimeout(function(){ showStatus('', ''); }, 3000);
@@ -734,102 +633,32 @@ function findColorId(r, g, b) {
 }
 
 async function selectFile(name) {
-  // 点击已选中项 → 取消选中
-  if (selectedFile === name) {
-    var items = document.querySelectorAll('.file-item');
-    for (var i = 0; i < items.length; i++) items[i].classList.remove('selected');
-    setParseBtn(selectedFile, null); // 隐藏按钮
-    selectedFile = null; parsedData = null;
-    document.getElementById('teCard').style.display = 'none';
-    document.getElementById('mutCard').style.display = 'none';
-    document.getElementById('candCard').style.display = 'none';
-    showBtn(false);showRightPlaceholder(true);
-    document.getElementById('statusArea').style.display = 'none';
-    _mutValues = {health:0, stamina:0, oxygen:0, food:0, weight:0, melee_damage_multiplier:0};
-    _editingKey = null;
-    closePreviewOverlay();
-    return;
-  }
   var items = document.querySelectorAll('.file-item');
   for (var i = 0; i < items.length; i++) items[i].classList.remove('selected');
-  // 隐藏上一个文件的按钮
-  if (selectedFile) setParseBtn(selectedFile, null);
   var el = document.getElementById('fi-' + encodeURIComponent(name));
   if (el) el.classList.add('selected');
   selectedFile = name;
-  
-  // 显示加载态按钮
-  setParseBtn(name, 'loading');
+  document.getElementById('parseStatus').innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#facc15" stroke-width="3"><circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="8"/></svg>';
   showStatus('info', '');
   try {
     var res = await authFetch(DINO_DATA + name, {});
     if (!res.ok) throw new Error('HTTP ' + res.status);
     parsedData = parseIni(await res.text(), name);
-    showBtn(true);showRightPlaceholder(false);
+    showPreview(parsedData);
+    document.getElementById('previewCard').style.display = 'block';
+    document.getElementById('preview').classList.add('collapsed');
+    document.getElementById('importBtn').disabled = false;
     var matched = parsedData.blueprint ? true : false;
-    setParseBtn(name, matched ? 'ok' : 'err');
-    // 自动判断训/繁
-    var isBred = (typeof parsedData.imprint === 'number' && parsedData.imprint > 0) || (parsedData.ancestorCount > 0);
-    setBioType(isBred ? 'bred' : 'tamed');
-    _mutValues = {health:0, stamina:0, oxygen:0, food:0, weight:0, melee_damage_multiplier:0};
-    _editingKey = null;
-    renderMutGrid();
-    // 更新变异标题
-    var totalMut = (parsedData.matMutations||0) + (parsedData.patMutations||0);
-    var mutTitle = document.getElementById('mutTitle');
-    if (mutTitle) {
-      mutTitle.innerHTML = '🧬 变异 (Mutations)';
-      if (totalMut > 0) mutTitle.innerHTML += ' <span style="font-size:11px;color:#888">母' + (parsedData.matMutations||0) + '/父' + (parsedData.patMutations||0) + '=Σ' + totalMut + '</span>';
-    }
-    // 重置 TE 输入框
-    document.getElementById('teMin').value = isBred ? '100' : '95';
-    document.getElementById('teMax').value = '100';
+    document.getElementById('parseStatus').innerHTML = matched
+      ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg>'
+      : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="3"><path d="M18 6L6 18M6 6l12 12"/></svg>';
     showStatus('info', '');
     document.getElementById('statusArea').style.display = 'none';
     showCandidates(parsedData);
   } catch (e) {
-    setParseBtn(name, 'err');
     document.getElementById('statusArea').style.display = '';
-    showStatus('error', '❌ ' + e.message); parsedData = null; showBtn(false);showRightPlaceholder(true); }
-}
-
-function setParseBtn(filename, state) {
-  var el = document.getElementById('fi-' + encodeURIComponent(filename));
-  if (!el) return;
-  var top = el.querySelector('.fi-top');
-  if (!top) return;
-  var btn = top.querySelector('.parse-btn');
-  if (!btn) {
-    btn = document.createElement('span');
-    btn.className = 'parse-btn';
-    btn.onclick = function(e) { e.stopPropagation(); if (parsedData) openPreviewOverlay(); };
-    top.appendChild(btn);
-  }
-  if (!state) { btn.style.display = 'none'; return; }
-  btn.style.display = 'inline-flex';
-  btn.className = 'parse-btn';
-  if (state === 'ok') {
-    btn.className += ' ok';
-    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="3"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>';
-    btn.title = '点击查看解析结果';
-  } else if (state === 'err') {
-    btn.className += ' err';
-    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="3"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
-    btn.title = '解析失败';
-  } else {
-    btn.className += ' ok';
-    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#facc15" stroke-width="2"><circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="8"/></svg>';
-    btn.title = '解析中...';
-  }
-}
-
-function openPreviewOverlay() {
-  if (!parsedData) return;
-  document.getElementById('previewOverlay').style.display = '';
-  renderPreviewContent(parsedData);
-}
-function closePreviewOverlay() {
-  document.getElementById('previewOverlay').style.display = 'none';
+    document.getElementById('parseStatus').innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="3"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+    showStatus('error', '❌ ' + e.message); parsedData = null; document.getElementById('importBtn').disabled = true; }
 }
 
 function parseIni(t, fn) {
@@ -924,46 +753,25 @@ function showCandidates(d) {
   if (!lvls || !lvls.candidates) { document.getElementById('candCard').style.display = 'none'; return; }
   
   var cands = lvls.candidates;
-  var totalFromTorp = lvls._totalFromTorp || 0;
-  var isBred = _bioType === 'bred';
-  // 按 TE 拆分：野 = total/(1+TE/2), 奖 = total-野, 加 = charLevel-1-total
-  var teSplit = (teMax/100) / 2;
-  var wildBase = Math.round(totalFromTorp / (1 + teSplit));
-  var bonusBase = totalFromTorp - wildBase;
-  var xpBase = Math.max(0, (d.level||1) - 1 - totalFromTorp);
   var keys = ['health','stamina','oxygen','food','weight','melee_damage_multiplier'];
   var abbr = ['生','耐','氧','食','重','伤'];
   var h = '<div class="cand-row" style="background:#111;color:#666;font-size:10px;cursor:default">';
   h += '<span class="cand-num">#</span>';
   for (var ki = 0; ki < keys.length; ki++) h += '<span class="cand-stat">' + abbr[ki] + '</span>';
-  if (isBred) {
-    h += '<span style="display:inline-flex;gap:4px;margin-left:auto"><span class="cand-score">Σ承</span><span class="cand-score">Σ加</span></span><span style="width:13px;margin-left:2px"></span></div>';
-  } else {
-    h += '<span style="display:inline-flex;gap:4px;margin-left:auto"><span class="cand-score">Σ野</span><span class="cand-score">Σ奖</span><span class="cand-score">Σ加</span></span><span style="width:13px;margin-left:2px"></span></div>';
-  }
+  h += '<span class="cand-score">Σ野</span></div>';
   for (var ci = 0; ci < cands.length; ci++) {
     var c = cands[ci];
+    var totalDom = (d.level||1) - 1 - c.sumW;
     h += '<div class="cand-row" onclick="selectCandidate(' + ci + ')" id="candRow' + ci + '">';
     h += '<span class="cand-num">#' + (ci+1) + '</span>';
     for (var kj = 0; kj < keys.length; kj++) {
       var k = keys[kj];
-      var mutCls = (_mutValues[k] > 0) ? 'cm' : 'cw';
-      h += '<span class="cand-stat"><span class="' + mutCls + '">' + (c.wildLevels[k]||0) + '</span>';
+      h += '<span class="cand-stat"><span class="cw">' + (c.wildLevels[k]||0) + '</span>';
       if (c.domLevels[k]) h += '<span class="cd">+' + c.domLevels[k] + '</span>';
       h += '</span>';
     }
-    if (isBred) {
-      h += '<span style="display:inline-flex;gap:4px;margin-left:auto">'
-        + '<span class="cand-score">Σ' + (totalFromTorp+1) + '</span>'
-        + '<span class="cand-score">Σ' + xpBase + '</span></span>'
-        + '<span class="cand-info" onclick="event.stopPropagation();toggleLevelInfo(event,' + (d.level||0) + ',1,' + totalFromTorp + ',0,' + xpBase + ',true)" style="cursor:pointer;color:#666;line-height:0;margin-left:2px" title="等级构成"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 118 2.83M22 12A10 10 0 0012 2v10z"/></svg></span></div>';
-    } else {
-      h += '<span style="display:inline-flex;gap:4px;margin-left:auto">'
-        + '<span class="cand-score">Σ' + (wildBase+1) + '</span>'
-        + '<span class="cand-score">Σ' + bonusBase + '</span>'
-        + '<span class="cand-score">Σ' + xpBase + '</span></span>'
-        + '<span class="cand-info" onclick="event.stopPropagation();toggleLevelInfo(event,' + (d.level||0) + ',1,' + wildBase + ',' + bonusBase + ',' + xpBase + ',false)" style="cursor:pointer;color:#666;line-height:0;margin-left:2px" title="等级构成"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 118 2.83M22 12A10 10 0 0012 2v10z"/></svg></span></div>';
-    }
+    h += '<span class="cand-score" style="display:inline-flex;align-items:center;gap:2px"><span>Σ' + c.sumW + '</span>'
+      + '<span class="cand-info" onclick="event.stopPropagation();toggleLevelInfo(event,' + (d.level||0) + ',1,' + c.sumW + ',' + totalDom + ')" style="cursor:pointer;color:#666;line-height:0" title="等级构成"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 118 2.83M22 12A10 10 0 0012 2v10z"/></svg></span></span></div>';
   }
   document.getElementById('candList').innerHTML = h;
   document.getElementById('candCount').textContent = '(' + cands.length + '个)';
@@ -981,71 +789,7 @@ function selectCandidate(idx) {
   if (parsedData && parsedData._candidates) selectedCandidate = parsedData._candidates[idx];
 }
 
-
-function resetMutations() {
-  _mutValues = {health:0, stamina:0, oxygen:0, food:0, weight:0, melee_damage_multiplier:0};
-  renderMutGrid();
-}
-
-var _mutValues = {health:0, stamina:0, oxygen:0, food:0, weight:0, melee_damage_multiplier:0};
-var _mutLabels = {health:'血',stamina:'耐',oxygen:'氧',food:'食',weight:'重',melee_damage_multiplier:'攻'};
-var _editingKey = null;
-
-function renderMutGrid() {
-  var grid = document.getElementById('mutGrid');
-  if (!grid) return;
-  var keys = ['health','stamina','oxygen','food','weight','melee_damage_multiplier'];
-  var h = '';
-  if (_editingKey) {
-    // 编辑态：只显示正在编辑的那个输入框
-    var v = _mutValues[_editingKey] || 0;
-    h += '<span class="mut-chip editing">'
-      + '<span style="font-size:11px;color:#888;flex-shrink:0">' + _mutLabels[_editingKey] + '</span>'
-      + '<input type="number" id="mutEditInp" value="' + v + '" min="0" max="255" onkeydown="if(event.key===\'Enter\')confirmMutEdit(\'' + _editingKey + '\')">'
-      + '<svg onclick="confirmMutEdit(\'' + _editingKey + '\')" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="3" style="cursor:pointer;flex-shrink:0"><path d="M5 13l4 4L19 7"/></svg>'
-      + '<svg onclick="cancelMutEdit()" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="3" style="cursor:pointer;flex-shrink:0"><path d="M18 6L6 18M6 6l12 12"/></svg>'
-      + '</span>';
-  } else {
-    // 普通态：显示所有标签
-    for (var ki = 0; ki < keys.length; ki++) {
-      var k = keys[ki];
-      var v = _mutValues[k] || 0;
-      var cls = v > 0 ? 'mut-chip has-val' : 'mut-chip';
-      h += '<span class="' + cls + '" onclick="startMutEdit(\'' + k + '\')" title="' + (v>0?'当前 '+v+' 点':'点击输入') + '">'
-        + _mutLabels[k]
-        + (v > 0 ? ' <b style="font-size:12px">' + v + '</b>' : '')
-        + '</span>';
-    }
-  }
-  grid.innerHTML = h;
-  if (_editingKey) {
-    var inp = document.getElementById('mutEditInp');
-    if (inp) { inp.focus(); inp.select(); }
-  }
-}
-
-function startMutEdit(key) {
-  _editingKey = key;
-  renderMutGrid();
-}
-
-function confirmMutEdit(key) {
-  var inp = document.getElementById('mutEditInp');
-  if (inp) {
-    var v = parseInt(inp.value) || 0;
-    _mutValues[key] = Math.max(0, Math.min(255, v));
-  }
-  _editingKey = null;
-  renderMutGrid();
-  if (parsedData) showCandidates(parsedData);
-}
-
-function cancelMutEdit() {
-  _editingKey = null;
-  renderMutGrid();
-}
-
-function renderPreviewContent(d) {
+function showPreview(d) {
   var statLabels = {
     'health':'生命','stamina':'耐力','oxygen':'氧气','food':'食物','weight':'负重',
     'melee_damage_multiplier':'近战伤害','speed_multiplier':'移动速度','torpidity':'眩晕','water':'水',
@@ -1097,7 +841,10 @@ function renderPreviewContent(d) {
   }
   
   var isBred = (typeof d.imprint === 'number' && d.imprint > 0) || (d.ancestorCount > 0);
-  setBioType(isBred ? 'bred' : 'tamed');
+  var isTamed = !!d.tamer && !isBred;
+  document.getElementById('teCard').style.display = isTamed ? '' : 'none';
+  // 繁育生物 TE 固定 100%
+  if (isBred) { document.getElementById('teMin').value = '100'; document.getElementById('teMax').value = '100'; }
   
   var tag = document.getElementById('solverTag');
   if (ASB_DB && d.dinoClassFull) {
@@ -1105,30 +852,26 @@ function renderPreviewContent(d) {
       var sp = findSpecies(bp);
       tag.textContent = (sp && sp.name) ? ' [' + sp.name + ']' : ' [未匹配]';
   } else { tag.textContent = ''; }
+  document.getElementById('preview').innerHTML = h;
   
-  var matched = d.blueprint ? true : false;
-  document.getElementById('parseStatus').innerHTML = matched
-    ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="3" style="vertical-align:middle"><path d="M5 13l4 4L19 7"/></svg>'
-    : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="3" style="vertical-align:middle"><path d="M18 6L6 18M6 6l12 12"/></svg>';
-  document.getElementById('previewPopupContent').innerHTML = h;
-  
-  // 刷新变异显示
-  renderMutGrid();
-  
-  var totalMut = (parsedData.matMutations||0) + (parsedData.patMutations||0);
-  var mutTitle = document.getElementById('mutTitle');
-  if (mutTitle) {
-    mutTitle.innerHTML = '🧬 变异 (Mutations)';
-    if (totalMut > 0) mutTitle.innerHTML += ' <span style="font-size:11px;color:#888">母' + (parsedData.matMutations||0) + '/父' + (parsedData.patMutations||0) + '=Σ' + totalMut + '</span>';
+  // 变异输入框
+  var mutGrid = document.getElementById('mutGrid');
+  var mutLabels = {health:'生命',stamina:'耐力',oxygen:'氧气',food:'食物',weight:'负重',melee_damage_multiplier:'近战'};
+  mutGrid.innerHTML = '';
+  for (var mk in mutLabels) {
+    mutGrid.innerHTML += '<div style="display:flex;align-items:center;gap:6px">'
+      + '<span style="font-size:12px;color:#999;width:32px">' + mutLabels[mk] + '</span>'
+      + '<input type="number" id="mut_' + mk + '" value="0" min="0" max="255" style="width:60px;padding:6px;border-radius:6px;border:1px solid #333;background:#111;color:#e0e0e0;font-size:12px">'
+      + '</div>';
   }
-  document.getElementById('mutCard').style.display = (typeof d.imprint === 'number' && d.imprint > 0) || (d.ancestorCount > 0) ? '' : 'none';
+  document.getElementById('mutCard').style.display = '';
 }
 
 function doImport() {
   if (!parsedData) return;
   var u = document.getElementById('wikiUser').value.trim();
   if (!u) { showStatus('error', '⚠️ 请输入 Wikily 用户名'); return; }
-  saveWikiUser();
+  saveUser();
   
   // 颜色 RGBA → ID
   var colorIds = [];
@@ -1170,49 +913,13 @@ function doImport() {
     var mutKeys = ['health','stamina','oxygen','food','weight','melee_damage_multiplier'];
     p.mutations = {};
     for (var mi = 0; mi < mutKeys.length; mi++) {
-      var mv = _mutValues[mutKeys[mi]] || 0;
+      var mv = parseInt(document.getElementById('mut_' + mutKeys[mi]).value) || 0;
       if (mv > 0) {
         p.mutations[mutKeys[mi]] = mv;
         p.wildLevels[mutKeys[mi]] = Math.max(0, (p.wildLevels[mutKeys[mi]] || 0) - mv);
       }
     }
   } else { p._solver = 'no_solution'; }
-  
-  // 构建 note：DinoID + 等级构成 + 变异史 + 直系父母 + 导入时间
-  var noteParts = [];
-  if (parsedData.dinoId1 || parsedData.dinoId2) noteParts.push('ID: ' + (parsedData.dinoId1||'?') + '/' + (parsedData.dinoId2||'?'));
-  if (selectedCandidate && selectedCandidate.wildLevels) {
-    var keys = ['health','stamina','oxygen','food','weight','melee_damage_multiplier'];
-    var sumW = 0, sumD = 0;
-    for (var ki = 0; ki < keys.length; ki++) { sumW += (selectedCandidate.wildLevels[keys[ki]]||0); sumD += (selectedCandidate.domLevels[keys[ki]]||0); }
-    var xp = Math.max(0, (parsedData.level||0) - 1 - sumW - sumD);
-    noteParts.push('Lv.' + parsedData.level + ' (1 + ' + (ctype==='bred'?'承':'野') + sumW + (ctype==='bred'?'':' + 奖' + sumD) + ' + 加' + xp + ')');
-  }
-  // 变异史
-  var totalMut = (parsedData.matMutations||0) + (parsedData.patMutations||0);
-  if (totalMut > 0) noteParts.push('变异: 母' + (parsedData.matMutations||0) + '/父' + (parsedData.patMutations||0) + '=Σ' + totalMut);
-  // 直系一代父母
-  if (parsedData.ancestors && parsedData.ancestors.length > 0) {
-    var lastFemale = null, lastMale = null;
-    for (var ai = parsedData.ancestors.length - 1; ai >= 0; ai--) {
-      var a = parsedData.ancestors[ai];
-      if (!lastFemale && a.type === 'DinoAncestors') lastFemale = a;
-      if (!lastMale && a.type === 'DinoAncestorsMale') lastMale = a;
-      if (lastFemale && lastMale) break;
-    }
-    if (lastFemale || lastMale) {
-      var extractName = function(data, prefix) {
-        var re = new RegExp(prefix + 'Name=([^;]*)');
-        var m = data.match(re);
-        return (m && m[1]) ? m[1] : '(无名)';
-      };
-      if (lastFemale) noteParts.push('母: ' + extractName(lastFemale.data, 'Female'));
-      if (lastMale) noteParts.push('父: ' + extractName(lastMale.data, 'Male'));
-    }
-  }
-  var now = new Date();
-  noteParts.push('导入: ' + now.getFullYear() + '/' + (now.getMonth()+1) + '/' + now.getDate() + ' ' + ('0'+now.getHours()).slice(-2) + ':' + ('0'+now.getMinutes()).slice(-2));
-  if (noteParts.length > 0) p.notes = noteParts.join('\n');
   
   var enc = btoa(unescape(encodeURIComponent(JSON.stringify(p))));
   showStatus('info', '🚀 正在打开 Wikily...');
@@ -1223,45 +930,9 @@ function doImport() {
 function showStatus(t, m) { document.getElementById('statusArea').innerHTML = '<div class="status ' + t + '">' + m + '</div>'; }
 function formatSize(b) { return b < 1024 ? b + ' B' : (b/1024).toFixed(1) + ' KB'; }
 function escapeHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-function showBtn(s) { var b=document.getElementById('importBtn'); b.disabled=!s; b.style.display=s?'':'none'; }
-function showRightPlaceholder(s) { var p=document.getElementById('rightPlaceholder'); if(!p)return; p.style.display=s?'flex':'none'; if(s&&window.innerWidth<768)p.style.display='none'; if(window.innerWidth<768)document.body.style.paddingBottom=s?'4px':'0'; }
-
-// 手风琴互斥
-function closeOtherGroups(openGi) {
-  var details = document.querySelectorAll('.file-group');
-  for (var i = 0; i < details.length; i++) {
-    var d = details[i];
-    var gi = parseInt(d.id.replace('fg-',''));
-    if (gi !== openGi) d.open = false;
-  }
-}
-
-// 生物类型切换（训/繁）
-var _bioType = 'tamed';
-function setBioType(t) {
-  _bioType = t;
-  var ta = document.getElementById('btTamed'), br = document.getElementById('btBred');
-  ta.style.background = t==='tamed'?'#7c3aed':'transparent';
-  ta.style.color = t==='tamed'?'#fff':'#666';
-  br.style.background = t==='bred'?'#7c3aed':'transparent';
-  br.style.color = t==='bred'?'#fff':'#666';
-  updateBioUI();
-  if (parsedData) showCandidates(parsedData);
-}
-function updateBioUI() {
-  var isBred = _bioType === 'bred';
-  document.getElementById('teCard').style.display = isBred ? 'none' : '';
-  document.getElementById('mutCard').style.display = isBred ? '' : 'none';
-  if (isBred) {
-    document.getElementById('teMin').value = '100'; document.getElementById('teMax').value = '100';
-  } else {
-    if (document.getElementById('teMin').value === '100') { document.getElementById('teMin').value = '95'; document.getElementById('teMax').value = '100'; }
-  }
-}
-function onBioTypeChange() {}  // 保留兼容，实际由 setBioType 调用
 
 // 等级构成浮窗
-function toggleLevelInfo(e, total, base, wild, bonus, xp, isBred) {
+function toggleLevelInfo(e, total, base, wild, dom) {
   var old = document.getElementById('levelInfo');
   if (old) { old.remove(); return; }
   var pop = document.createElement('div');
@@ -1271,19 +942,12 @@ function toggleLevelInfo(e, total, base, wild, bonus, xp, isBred) {
   pop.style.left = x + 'px';
   pop.style.top = (e.clientY - 10) + 'px';
   var pctW = total > 1 ? ((wild/(total-1))*100).toFixed(0) : 0;
-  var pctB = total > 1 ? ((bonus/(total-1))*100).toFixed(0) : 0;
-  var pctX = total > 1 ? ((xp/(total-1))*100).toFixed(0) : 0;
-  var html = '<div style="font-weight:600;color:#fff;margin-bottom:4px">等级构成 Lv.' + total + '</div>'
-    + '<div>底  Lv.<b>' + base + '</b></div>';
-  if (isBred) {
-    html += '<div style="color:#a78bfa">承  Lv.<b>' + wild + '</b> (' + pctW + '%)</div>';
-  } else {
-    html += '<div style="color:#a78bfa">野  Lv.<b>' + wild + '</b> (' + pctW + '%)</div>'
-      + '<div style="color:#60a5fa">奖  Lv.<b>' + bonus + '</b> (' + pctB + '%)</div>';
-  }
-  html += '<div style="color:#facc15">加  Lv.<b>' + xp + '</b> (' + pctX + '%)</div>'
-    + '<div style="border-top:1px solid #333;margin-top:4px;padding-top:4px;color:#666;font-size:10px">' + (isBred ? '承=可继承 | 加=XP加点' : '野=可继承 | 奖=驯服奖励 | 加=XP加点') + '</div>';
-  pop.innerHTML = html;
+  var pctD = total > 1 ? ((dom/(total-1))*100).toFixed(0) : 0;
+  pop.innerHTML = '<div style="font-weight:600;color:#fff;margin-bottom:4px">等级构成 Lv.' + total + '</div>'
+    + '<div>底  Lv.<b>' + base + '</b></div>'
+    + '<div style="color:#a78bfa">野  Lv.<b>' + wild + '</b> (' + pctW + '%)</div>'
+    + '<div style="color:#60a5fa">驯  Lv.<b>' + dom + '</b> (' + pctD + '%)</div>'
+    + '<div style="border-top:1px solid #333;margin-top:4px;padding-top:4px;color:#666;font-size:10px">总 ' + (total-1) + ' = 野' + wild + ' + 驯' + dom + '<br>野=可继承 | 驯=不可继承</div>';
   document.body.appendChild(pop);
   setTimeout(function(){
     var fn = function(ev){ if(ev.target!==pop&&!pop.contains(ev.target)){pop.remove();document.removeEventListener('click',fn);} };
@@ -1291,15 +955,5 @@ function toggleLevelInfo(e, total, base, wild, bonus, xp, isBred) {
   }, 50);
 }
 </script>
-<!-- 解析结果浮窗 -->
-<div id="previewOverlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7)" onclick="if(event.target===this)closePreviewOverlay()">
-  <div id="previewPopup" style="position:absolute;inset:16px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:12px;display:flex;flex-direction:column;overflow:hidden">
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 16px 0">
-      <h2 style="font-size:14px;color:#999;margin:0">📋 解析结果 <span id="parseStatus"></span> <span id="solverTag" style="font-size:11px;color:#7c3aed"></span></h2>
-      <svg onclick="closePreviewOverlay()" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" style="cursor:pointer;flex-shrink:0"><path d="M18 6L6 18M6 6l12 12"/></svg>
-    </div>
-    <div id="previewPopupContent" style="flex:1;overflow-y:auto;padding:12px 16px 16px;font-size:13px"></div>
-  </div>
-</div>
 </body>
 </html>
