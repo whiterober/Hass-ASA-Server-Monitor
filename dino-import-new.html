@@ -57,11 +57,12 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 .file-item .icon{font-size:16px;margin-right:8px;flex-shrink:0}
 .file-name{flex:1;font-size:12px;word-break:break-all;min-width:0}
 .file-info{font-size:10px;color:#777;margin-top:2px}
-.fi-species{color:#a78bfa;font-weight:600}
-.fi-name{color:#ccc}
-.fi-level{color:#ccc}
+.fi-species{color:#a78bfa;font-weight:600;margin-right:6px}
+.fi-name{color:#ccc;margin-right:6px}
+.fi-level{color:#ccc;margin-right:6px}
 .fi-date{color:#666;margin-left:auto}
 .fi-size{color:#888;margin-left:4px}
+.fi-sep{color:#333;font-size:inherit}
 .input-row{margin:6px 0}
 .input-row input{width:100%;padding:10px;border-radius:8px;border:1px solid #333;background:#111;color:#e0e0e0;font-size:13px}
 .btn{display:block;width:100%;padding:14px;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;text-align:center;transition:all .15s}
@@ -573,7 +574,7 @@ async function refreshFiles() {
           + '<div class="fi-top">'
           + '<span class="fi-species" style="font-weight:600">...</span>  '
           + '<span class="fi-name" style="color:#aaa">...</span>  '
-          + '<span class="fi-level" style="color:#7c3aed;font-weight:600"></span> '
+          + '<span class="fi-level" style="color:#7c3aed;font-weight:600"></span>  '
           + '<span class="fi-sex" style="font-size:13px"></span>'
           + '<span class="fi-stage" style="font-size:10px;padding:1px 5px;border-radius:3px;vertical-align:middle;margin-left:4px"></span>'
           + '</div>'
@@ -769,7 +770,7 @@ async function selectFile(name) {
     var matched = parsedData.blueprint ? true : false;
     setParseBtn(name, matched ? 'ok' : 'err');
     // 自动判断训/繁
-    var isBred = (typeof parsedData.imprint === 'number' && parsedData.imprint > 0) || (parsedData.ancestorCount > 0);
+    var isBred = isBredDino(parsedData);
     setBioType(isBred ? 'bred' : 'tamed');
     _mutValues = {health:0, stamina:0, oxygen:0, food:0, weight:0, melee_damage_multiplier:0};
     _editingKey = null;
@@ -1096,7 +1097,7 @@ function renderPreviewContent(d) {
     h += '<div class="row"><span class="label">' + escapeHtml(String(rows[i][0])) + '</span><span class="value">' + escapeHtml(String(rows[i][1])) + '</span></div>';
   }
   
-  var isBred = (typeof d.imprint === 'number' && d.imprint > 0) || (d.ancestorCount > 0);
+  var isBred = isBredDino(d);
   setBioType(isBred ? 'bred' : 'tamed');
   
   var tag = document.getElementById('solverTag');
@@ -1121,7 +1122,7 @@ function renderPreviewContent(d) {
     mutTitle.innerHTML = '🧬 变异 (Mutations)';
     if (totalMut > 0) mutTitle.innerHTML += ' <span style="font-size:11px;color:#888">母' + (parsedData.matMutations||0) + '/父' + (parsedData.patMutations||0) + '=Σ' + totalMut + '</span>';
   }
-  document.getElementById('mutCard').style.display = (typeof d.imprint === 'number' && d.imprint > 0) || (d.ancestorCount > 0) ? '' : 'none';
+  document.getElementById('mutCard').style.display = isMutVisible(d) ? '' : 'none';
 }
 
 function doImport() {
@@ -1223,6 +1224,21 @@ function doImport() {
 function showStatus(t, m) { document.getElementById('statusArea').innerHTML = '<div class="status ' + t + '">' + m + '</div>'; }
 function formatSize(b) { return b < 1024 ? b + ' B' : (b/1024).toFixed(1) + ' KB'; }
 function escapeHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+// 判断是否繁育：留痕度>0 / 有祖先 / ImprinterName非空 / BabyAge是幼崽
+function isBredDino(d) {
+  if (!d) return false;
+  if (typeof d.imprint === 'number' && d.imprint > 0) return true;
+  if (d.ancestorCount > 0) return true;
+  if (d.imprinter) return true;             // 留痕人非空 = 已留痕 = 繁育
+  if (typeof d.babyAge === 'number' && d.babyAge > 0 && d.babyAge < 1) return true; // 幼崽只能来自繁育
+  return false;
+}
+// 变异模块可见：繁育 且 突变计数器>0（C=0 时无突变，隐藏）
+function isMutVisible(d) {
+  if (!isBredDino(d)) return false;
+  return ((d.matMutations||0) + (d.patMutations||0)) > 0;
+}
+
 function showBtn(s) { var b=document.getElementById('importBtn'); b.disabled=!s; b.style.display=s?'':'none'; }
 function showRightPlaceholder(s) { var p=document.getElementById('rightPlaceholder'); if(!p)return; p.style.display=s?'flex':'none'; if(s&&window.innerWidth<768)p.style.display='none'; if(window.innerWidth<768)document.body.style.paddingBottom=s?'4px':'0'; }
 
@@ -1251,7 +1267,7 @@ function setBioType(t) {
 function updateBioUI() {
   var isBred = _bioType === 'bred';
   document.getElementById('teCard').style.display = isBred ? 'none' : '';
-  document.getElementById('mutCard').style.display = isBred ? '' : 'none';
+  document.getElementById('mutCard').style.display = (isBred && parsedData && isMutVisible(parsedData)) ? '' : 'none';
   if (isBred) {
     document.getElementById('teMin').value = '100'; document.getElementById('teMax').value = '100';
   } else {
