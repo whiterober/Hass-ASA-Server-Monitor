@@ -1,0 +1,19 @@
+# ASA 最新生物 - 刷新代理 部署（QNAP Container Station 或 docker compose）
+# ⚠️ RCON_PASSWORD 为敏感信息：建议在 NAS 上通过 compose 环境或 secret 注入，勿提交到仓库
+services:
+  refresh-proxy:
+    build: .
+    container_name: asa-refresh-proxy
+    restart: unless-stopped
+    environment:
+      - PORT=8080
+      - RCON_HOST=work.whiterober.cn
+      - RCON_PASSWORD=1219wu1219
+      - DINO_DATA=/data
+      - POLL_TIMEOUT=30
+    volumes:
+      # NAS 本地 DinoData 目录 → 容器 /data（路径以实际 NAS 挂载点为准）
+      - /share/私人共享/ASA/DinoData:/data
+    ports:
+      # 仅容器内部使用；对外由 QNAP 反向代理转发 /api → 本端口
+      - "127.0.0.1:8080:8080"
