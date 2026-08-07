@@ -1,6 +1,6 @@
 # 最新生物 TAB — 独立实施计划
 
-> 版本：v1.5 · 日期：2026-08-07
+> 版本：v1.4 · 日期：2026-08-07
 > 目标文件：`dino-import-new.html`（**页面部署 HA**：`/config/www/dino-import.html`，`hass.whiterober.com/local/`）
 > 关联：方案 `前端独立化改造方案_ASA生物数据浏览器.md` v1.5 · 接口 `RCON接口与JSON数据结构说明.md` v0.3.0
 > 状态：计划（待确认后实施）
@@ -8,7 +8,6 @@
 > 更新 v1.2：~~后端代理部署确定为 NAS Docker~~（v1.3 已替换）
 > 更新 v1.3：**改用 AppDaemon 直接调用 RCON**（复用 HA 现有 `send_rcon_command_sync`）+ 页面内嵌 hass + NAS CORS 放行 hass 域
 > 更新 v1.4：**展示方式 = HA Lovelace 顶栏子页面**（panel 视图 + 同域 iframe 卡片指向 `/local/dino-import.html`，与方舟/服务器规则并列、可互跳，无跳出感）
-> 更新 v1.5：**固化 iframe 决策记录**（§5.6）——同域 iframe 无害、跨域 iframe 有害；采用页面搬 HA 同域方案
 
 ---
 
@@ -198,23 +197,6 @@ Access-Control-Allow-Credentials: true
 ```
 
 > ⚠️ token 安全：AppDaemon API key 若需前端携带，**禁止写死在前端 HTML**；优先走 HA 登录态同源认证（页面部署 hass 即为此目的）。
-
-### 5.6 决策记录：同域 iframe vs 跨域 iframe（v1.5 固化）
-
-> 2026-08-07 用户质疑「之前不是说 iframe 不好么」，以下为最终决策依据，**长期有效，避免反复纠结**。
-
-**结论：iframe 本身无害，跨域才有害。**
-
-| 方案 | iframe 性质 | 结果 |
-|------|------------|------|
-| 页面**留 NAS**（wiim 域），HA 里 iframe 嵌它 | **跨域 iframe** | ❌ 不推荐：① NAS Basic 认证弹窗 ② 刷新端点跨域（wiim→hass）③ 高度/移动端难控 |
-| 页面**搬 HA**（`/config/www/`，hass 域），HA 里 iframe 嵌 `/local/` | **同域 iframe** | ✅ 采用：① 无认证弹窗（同域无 Basic）② 刷新端点同源直调 AppDaemon ③ HA 原生管理高度 |
-
-**判断准则（未来新增页面同样适用）**：
-1. 先决定**页面放哪**（同域 vs 跨域），再谈 iframe——iframe 只是展示容器
-2. 若页面与 HA 同域（`/config/www/` → `/local/`），`panel_iframe` / Lovelace iframe 卡片均无上述问题，可放心用
-3. 若页面必须留在外部域，需先解决 CORS、认证、高度，通常比"搬到 HA"更麻烦
-4. 本项目结论：**页面统一部署 HA `/config/www/`**（同域基础），展示用 Lovelace 顶栏子页面（§5.5）
 
 ---
 

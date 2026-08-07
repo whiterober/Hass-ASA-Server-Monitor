@@ -111,8 +111,7 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 <!-- Tab 导航 -->
 <div class="tabbar">
   <div class="tab active" id="tabBtn-import" onclick="switchTab('import')">📥 生物导入</div>
-  <div class="tab" id="tabBtn-latest" onclick="switchTab('latest')">🧬 生物速查</div>
-  <div class="tab" id="tabBtn-settings" onclick="switchTab('settings')">⚙️ 设置</div>
+  <div class="tab" id="tabBtn-latest" onclick="switchTab('latest')">🧬 最新生物</div>
 </div>
 <style>
 .tabbar{display:flex;gap:8px;margin-bottom:12px;flex-shrink:0}
@@ -172,29 +171,20 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 <!-- Tab② 最新生物 -->
 <div id="latestUI" style="display:none;flex:1;flex-direction:column;min-height:0;gap:12px;overflow:hidden">
   <div class="card">
-    <h2>🧬 生物速查</h2>
+    <h2>🧬 最新生物</h2>
     <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">
       <span style="font-size:12px;color:#999">👤 玩家</span>
       <span id="lbPlayer" style="font-size:13px;color:#a78bfa;font-weight:600"></span>
       <span style="font-size:11px;color:#555">（URL ?player= 传参）</span>
     </div>
-    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
-      <span style="font-size:12px;color:#999">🐾 物种</span>
-      <select id="lbClassFilter" onchange="lbView()" style="background:#1a1a24;border:1px solid #333;border-radius:6px;color:#ccc;font-size:12px;padding:4px 8px;max-width:280px;flex:1;min-width:120px"></select>
-    </div>
-  </div>
-  <div id="lbStatus" style="display:none;padding:8px 12px;border-radius:8px;font-size:12px;background:#1a1a3a;color:#7c3aed"></div>
-  <div id="lbList" style="flex:1;overflow-y:auto;min-height:0;scrollbar-width:thin;scrollbar-color:#333 transparent"></div>
-</div>
-
-<div id="settingsUI" style="display:none;flex:1;flex-direction:column;min-height:0;gap:12px;overflow:hidden">
-  <div class="card">
-    <h2>⚙️ 设置</h2>
     <div style="margin-bottom:8px">
-      <div style="font-size:12px;color:#999;margin-bottom:6px">🗺 刷新服务器多选</div>
+      <div style="font-size:12px;color:#999;margin-bottom:6px">🗺 地图多选</div>
       <div id="lbServers" style="display:flex;flex-wrap:wrap;gap:6px"></div>
     </div>
-    <button class="btn btn-primary" id="lbRefreshBtn" onclick="lbRefresh()">🔄 刷新服务器数据</button>
+    <div style="display:flex;align-items:center;gap:8px">
+      <button class="btn btn-primary" id="lbRefreshBtn" onclick="lbRefresh()">🔄 刷新并查看</button>
+      <button id="lbViewBtn" onclick="lbView()" title="只查看不刷新（调试用，不触发服务器）" style="font-size:11px;padding:3px 10px;border-radius:6px;border:1px solid #333;background:transparent;color:#666;cursor:pointer;opacity:.6;transition:opacity .2s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.6">👁 查看</button>
+    </div>
   </div>
   <div id="lbProgress" style="display:none">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
@@ -203,6 +193,8 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
     </div>
     <div id="lbProgLegend" style="display:flex;gap:12px;font-size:10px;color:#666;margin-top:2px"></div>
   </div>
+  <div id="lbStatus" style="display:none;padding:8px 12px;border-radius:8px;font-size:12px;background:#1a1a3a;color:#7c3aed"></div>
+  <div id="lbList" style="flex:1;overflow-y:auto;min-height:0;scrollbar-width:thin;scrollbar-color:#333 transparent"></div>
 </div>
 
 <script>
@@ -1383,23 +1375,21 @@ LB._inited = false;
 var DINO_JSON = 'https://whiterober:%401219Wu1219%40@wiim.whiterober.com/dino-data/';  // 最新生物(JSON) 走 NPM /dino-data/
 
 function switchTab(name){
-  var imp=document.getElementById('mainUI'), lat=document.getElementById('latestUI'), set=document.getElementById('settingsUI');
-  if(!imp||!lat||!set) return;
-  var on=(name==='latest'), onSet=(name==='settings');
-  imp.style.display = (name==='import')?'flex':'none';
+  var imp=document.getElementById('mainUI'), lat=document.getElementById('latestUI');
+  if(!imp||!lat) return;
+  var on = (name==='latest');
+  imp.style.display = on?'none':'flex';
   lat.style.display = on?'flex':'none';
-  set.style.display = onSet?'flex':'none';
-  var bi=document.getElementById('tabBtn-import'), bl=document.getElementById('tabBtn-latest'), bs=document.getElementById('tabBtn-settings');
-  if(bi) bi.className='tab'+(name==='import'?' active':'');
-  if(bl) bl.className='tab'+(on?' active':'');
-  if(bs) bs.className='tab'+(onSet?' active':'');
+  var bi=document.getElementById('tabBtn-import'), bl=document.getElementById('tabBtn-latest');
+  if(bi) bi.className = 'tab'+(on?'':' active');
+  if(bl) bl.className = 'tab'+(on?' active':'');
   if(on) lbInit();
 }
 function lbInit(){
   if(!LB._inited){ LB._inited=true; lbRenderServers(); }
   var p=document.getElementById('lbPlayer');
   if(p) p.textContent = lbPlayer() || '（未指定，显示全部）';
-  lbView();
+  if(!LB._inited2){ LB._inited2=true; lbView(); }
 }
 function lbPlayer(){ return new URLSearchParams(location.search).get('player')||''; }
 function lbRenderServers(){
@@ -1542,31 +1532,18 @@ function lbView(){
   var list=document.getElementById('lbList'), status=document.getElementById('lbStatus');
   if(!list) return;
   var player=lbPlayer();
-  var classSel=document.getElementById('lbClassFilter');
-  var classFilter=classSel?classSel.value:'';
-  var sel=LB.SERVERS.map(function(s){return s.abbr;});
+  var sel=lbSelectedServers();
+  if(!sel.length){ list.innerHTML='<div style="text-align:center;padding:30px;color:#555">请至少选择一个地图</div>'; return; }
   list.innerHTML='<div style="text-align:center;padding:30px;color:#555">⏳ 加载数据中...</div>';
   if(status){ status.style.display='block'; status.textContent='⏳ 加载 '+sel.length+' 台数据...'; }
   lbLoad(sel).then(function(data){
-    // 填充物种下拉（保留当前选择）
-    var classMap={};
-    data.recs.forEach(function(r){ if(r.dinoClass) classMap[r.dinoClass]=1; });
-    if(classSel){
-      var cur=classSel.value, html='<option value="">全部物种</option>';
-      Object.keys(classMap).sort().forEach(function(k){
-        html+='<option value="'+k+'">'+(zhName(k)||k)+'</option>';
-      });
-      classSel.innerHTML=html;
-      if(cur && classMap[cur]) classSel.value=cur;
-    }
     var playerSet = player ? lbPlayerTribes(data.tribesByServer, player) : null;
-    var byServer={};
+    var all=[];
     data.recs.forEach(function(r){
       if(playerSet){ var key=r.server+':'+r.ownerTribeId; if(!playerSet[key]) return; }
-      if(classFilter && r.dinoClass!==classFilter) return;
-      (byServer[r.server]=byServer[r.server]||[]).push(r);
+      all.push(r);
     });
-    // 排序：有世界秒按世界秒降序；无世界秒排最后，内部按墙钟降序
+    // 排序：有世界秒按世界秒降序（最新在前）；无世界秒（收纳/驯养时间未知）排最后，内部按墙钟降序
     function cmp(a,b){
       var ta=a.sortWorldSec||0, tb=b.sortWorldSec||0;
       if(ta && tb) return tb-ta;
@@ -1574,18 +1551,18 @@ function lbView(){
       if(!ta && tb) return 1;
       return (b.absMs||0)-(a.absMs||0);
     }
-    var h='', total=0;
-    LB.SERVERS.forEach(function(s){
-      var arr=byServer[s.abbr]||[];
-      if(!arr.length) return;
-      total+=arr.length;
-      arr.sort(cmp);
-      h+=lbRenderGroup(arr, s.name+'（'+s.abbr+'）');
-    });
+    var carried=[], rest=[];
+    all.forEach(function(r){ (r.containerType==='player'?carried:rest).push(r); });
+    rest.sort(cmp); carried.sort(cmp);
+    var groups=[ rest.slice(0,30), rest.slice(30), carried ];
+    var h='';
+    h+=lbRenderGroup(groups[0],'🆕 最新 30 个生物');
+    h+=lbRenderGroup(groups[1],'📜 更多');
+    h+=lbRenderGroup(groups[2],'🎒 玩家携带');
     if(!h) h='<div style="text-align:center;padding:30px;color:#555">😕 没有匹配的生物'+(player?'（玩家 '+player+'）':'')+'</div>';
     list.innerHTML=h;
     if(status){
-      status.textContent='✅ 共 '+total+' 条'+(classFilter?'（'+classFilter+'）':'')+(player?'（玩家 '+player+'）':'');
+      status.textContent='✅ 共 '+all.length+' 条 → 最新 '+groups[0].length+' / 更多 '+groups[1].length+' / 玩家携带 '+groups[2].length+(player?'（玩家 '+player+'）':'');
     }
   }).catch(function(e){
     list.innerHTML='<div style="text-align:center;padding:30px;color:#f87171">❌ 加载失败：'+e+'</div>';
