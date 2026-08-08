@@ -100,10 +100,18 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 </head>
 <body>
 
+<div class="header">
+  <h1>🦖 Wikily 生物导入</h1>
+  <p style="color:#444;font-size:11px;display:flex;align-items:center;justify-content:center;gap:4px;cursor:pointer" onclick="startWikiEdit()" id="wikiUserRow">
+    <span id="wikiUserDisp" style="display:inline-flex;align-items:center;gap:4px">点击设置 Wikily 用户名 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></span>
+  </p>
+</div>
+<input type="hidden" id="wikiUser"></textarea>
+
 <!-- Tab 导航 -->
 <div class="tabbar">
-  <div class="tab" id="tabBtn-import" onclick="switchTab('import')">📥 生物导入</div>
-  <div class="tab active" id="tabBtn-latest" onclick="switchTab('latest')">🧬 生物速查</div>
+  <div class="tab active" id="tabBtn-import" onclick="switchTab('import')">📥 生物导入</div>
+  <div class="tab" id="tabBtn-latest" onclick="switchTab('latest')">🧬 生物速查</div>
   <div class="tab" id="tabBtn-settings" onclick="switchTab('settings')">⚙️ 设置</div>
 </div>
 <style>
@@ -111,18 +119,10 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 .tab{flex:1;text-align:center;padding:10px 0;border-radius:10px;background:#1a1a24;border:1px solid #2a2a3a;color:#999;cursor:pointer;font-size:14px;font-weight:600;transition:all .15s;user-select:none}
 .tab:hover{background:#22223a;color:#ccc}
 .tab.active{background:#7c3aed;color:#fff;border-color:#7c3aed}
-.lb-tab{font-size:12px;padding:5px 12px;border-radius:8px;border:1px solid #333;background:#1a1a24;color:#999;cursor:pointer;user-select:none;transition:all .15s}
-.lb-tab:hover{background:#22223a;color:#ccc}
-.lb-tab-on{background:#7c3aed22;border-color:#7c3aed;color:#a78bfa;font-weight:600}
-.acc{border:1px solid #2a2a3a;border-radius:8px;margin-bottom:6px;background:#15151f;overflow:hidden}
-.acc summary{padding:8px 12px;cursor:pointer;font-size:13px;color:#ccc;user-select:none;display:flex;justify-content:space-between;align-items:center;transition:all .15s}
-.acc summary:hover{background:#1d1d29;color:#fff}
-.acc[open] summary{border-bottom:1px solid #2a2a3a;color:#fff}
-.acc-cnt{color:#666;font-size:11px}
 </style>
 
 <!-- 全原生认证：浏览器自动管理 HTTP Basic Auth -->
-<div id="mainUI" style="display:none">
+<div id="mainUI">
   <div id="leftCol">
     <div class="card" id="fileCard">
       <h2>📂 可用文件 <button onclick="refreshFiles()" style="float:right;background:none;border:none;color:#999;padding:2px 4px;border-radius:6px;cursor:pointer;font-size:12px;line-height:1"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg></button></h2>
@@ -165,23 +165,26 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
       </h2>
       <div id="candList"></div>
     </div>
+    <button class="btn btn-primary" id="importBtn" disabled onclick="doImport()" style="display:none">🚀 导入到 Wikily</button>
   </div>
 </div>
 
 <!-- Tab② 最新生物 -->
-<div id="latestUI" style="display:flex;flex:1;flex-direction:column;min-height:0;gap:12px;overflow:hidden">
+<div id="latestUI" style="display:none;flex:1;flex-direction:column;min-height:0;gap:12px;overflow:hidden">
   <div class="card">
     <h2>🧬 生物速查</h2>
     <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">
       <span style="font-size:12px;color:#999">👤 玩家</span>
       <span id="lbPlayer" style="font-size:13px;color:#a78bfa;font-weight:600"></span>
+      <span style="font-size:11px;color:#555">（URL ?player= 传参）</span>
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
       <span style="font-size:12px;color:#999">🐾 物种</span>
       <select id="lbClassFilter" onchange="lbView()" style="background:#1a1a24;border:1px solid #333;border-radius:6px;color:#ccc;font-size:12px;padding:4px 8px;max-width:280px;flex:1;min-width:120px"></select>
+      <span style="font-size:12px;color:#999">📦 容器</span>
+      <select id="lbContainerFilter" onchange="lbView()" style="background:#1a1a24;border:1px solid #333;border-radius:6px;color:#ccc;font-size:12px;padding:4px 8px;max-width:280px;flex:1;min-width:120px"></select>
       <button id="lbRefreshBtn2" onclick="lbRefreshView()" title="强制重新加载数据" style="font-size:12px;padding:5px 14px;border-radius:6px;border:1px solid #7c3aed;background:transparent;color:#a78bfa;cursor:pointer">🔄 刷新</button>
     </div>
-    <div id="lbTabs"></div>
   </div>
   <div id="lbStatus" style="display:none;padding:8px 12px;border-radius:8px;font-size:12px;background:#1a1a3a;color:#7c3aed"></div>
   <div id="lbList" style="flex:1;overflow-y:auto;min-height:0;scrollbar-width:thin;scrollbar-color:#333 transparent"></div>
@@ -209,8 +212,8 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 var selectedFile = null, parsedData = null;
 var ASB_DB = null;
 var ZH_MAP = {};
-// ====== 加载汉化映射（直接调用 ASA 后台管理项目维护的 /local/asa-data/icon_zh_map.json，不在根目录自维护一份） ======
-var ZH_READY = authFetch('/local/asa-data/icon_zh_map.json', {}).then(function(r){return r.json();}).then(function(d){ ZH_MAP = d; }).catch(function(e){ console.log('ZH fail:', e); });
+// ====== 加载汉化映射（用 authFetch 绕过 VS Code 凭据限制） ======
+var ZH_READY = authFetch('icon_zh_map.json', {}).then(function(r){return r.json();}).then(function(d){ ZH_MAP = d; }).catch(function(e){ console.log('ZH fail:', e); });
 // ====== 加载 ASB 物种数据库（合并 values.json + ASA-values.json） ======
 function loadASB() {
   return Promise.all([
@@ -546,6 +549,56 @@ function authFetch(url, opts) {
   });
 }
 
+// Wikily 用户名：大标题下低可视，点击编辑
+var _wikiEditing = false;
+function initWikiUser() {
+  var v = localStorage.getItem('wikily_user') || '';
+  var disp = document.getElementById('wikiUserDisp');
+  var inp = document.getElementById('wikiUser');
+  inp.value = v;
+  updateWikiDisp();
+}
+initWikiUser();
+
+function updateWikiDisp() {
+  var v = localStorage.getItem('wikily_user') || '';
+  var disp = document.getElementById('wikiUserDisp');
+  disp.innerHTML = '<span style="display:inline-flex;align-items:center;gap:4px">' + (v || '点击设置 Wikily 用户名') + ' <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></span>';
+  disp.style.color = v ? '#555' : '#444';
+}
+
+function startWikiEdit() {
+  if (_wikiEditing) return;
+  _wikiEditing = true;
+  var disp = document.getElementById('wikiUserDisp');
+  var v = localStorage.getItem('wikily_user') || '';
+  disp.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px">'
+    + '<input type="text" id="wikiEditInp" value="' + escapeHtml(v) + '" style="width:140px;padding:2px 6px;border-radius:4px;border:1px solid #7c3aed;background:#111;color:#e0e0e0;font-size:11px;outline:none;text-align:center">'
+    + '<svg onclick="event.stopPropagation();cancelWikiEdit()" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="3" style="cursor:pointer;flex-shrink:0"><path d="M18 6L6 18M6 6l12 12"/></svg>'
+    + '<svg onclick="event.stopPropagation();saveWikiUser()" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="3" style="cursor:pointer;flex-shrink:0"><path d="M5 13l4 4L19 7"/></svg>'
+    + '</span>';
+  disp.style.color = '#e0e0e0';
+  var inpEl = document.getElementById('wikiEditInp');
+  if (inpEl) { inpEl.focus(); inpEl.select(); }
+  inpEl.onkeydown = function(e) { if (e.key === 'Enter') saveWikiUser(); if (e.key === 'Escape') cancelWikiEdit(); };
+}
+
+function saveWikiUser() {
+  var inpEl = document.getElementById('wikiEditInp');
+  if (inpEl) {
+    var v = inpEl.value.trim();
+    document.getElementById('wikiUser').value = v;
+    localStorage.setItem('wikily_user', v);
+  }
+  _wikiEditing = false;
+  updateWikiDisp();
+}
+
+function cancelWikiEdit() {
+  _wikiEditing = false;
+  updateWikiDisp();
+}
+
 // 预加载 ASB JSON
 loadASB().catch(function(e){ console.log('ASB load fail:', e); });
 // 页面加载后直接刷新文件列表
@@ -648,7 +701,7 @@ async function deleteGroup(gi) {
   if (selectedFile && g.files.some(function(f){return f.name===selectedFile;})) {
     selectedFile = null; parsedData = null;
     document.getElementById('previewCard').style.display = 'none';
-    showRightPlaceholder(true);
+    showBtn(false);showRightPlaceholder(true);
   }
   showStatus('info', '🗑 已删除 ' + ok + ' 个文件' + (fail > 0 ? '，' + fail + ' 个失败' : ''));
   setTimeout(function(){ showStatus('', ''); }, 3000);
@@ -783,7 +836,7 @@ async function selectFile(name) {
     document.getElementById('teCard').style.display = 'none';
     document.getElementById('mutCard').style.display = 'none';
     document.getElementById('candCard').style.display = 'none';
-    showRightPlaceholder(true);
+    showBtn(false);showRightPlaceholder(true);
     document.getElementById('statusArea').style.display = 'none';
     _mutValues = {health:0, stamina:0, oxygen:0, food:0, weight:0, melee_damage_multiplier:0};
     _editingKey = null;
@@ -805,7 +858,7 @@ async function selectFile(name) {
     var res = await authFetch(DINO_DATA + name, {});
     if (!res.ok) throw new Error('HTTP ' + res.status);
     parsedData = parseIni(await res.text(), name);
-    showRightPlaceholder(false);
+    showBtn(true);showRightPlaceholder(false);
     var matched = parsedData.blueprint ? true : false;
     setParseBtn(name, matched ? 'ok' : 'err');
     // 自动判断训/繁
@@ -830,7 +883,7 @@ async function selectFile(name) {
   } catch (e) {
     setParseBtn(name, 'err');
     document.getElementById('statusArea').style.display = '';
-    showStatus('error', '❌ ' + e.message); parsedData = null; showRightPlaceholder(true); }
+    showStatus('error', '❌ ' + e.message); parsedData = null; showBtn(false);showRightPlaceholder(true); }
 }
 
 function setParseBtn(filename, state) {
@@ -1164,6 +1217,102 @@ function renderPreviewContent(d) {
   document.getElementById('mutCard').style.display = isMutVisible(d) ? '' : 'none';
 }
 
+function doImport() {
+  if (!parsedData) return;
+  var u = document.getElementById('wikiUser').value.trim();
+  if (!u) { showStatus('error', '⚠️ 请输入 Wikily 用户名'); return; }
+  saveWikiUser();
+  
+  // 颜色 RGBA → ID
+  var colorIds = [];
+  if (parsedData.colors && parsedData.colors.length > 0) {
+    for (var i = 0; i < parsedData.colors.length; i++) {
+      var c = parsedData.colors[i];
+      if (c) colorIds[i] = findColorId(c.r, c.g, c.b);
+    }
+  }
+  
+  var ctype = parsedData.imprinter ? 'bred' : (parsedData.tamer ? 'tamed' : 'tamed');
+  var te = null;
+  if (ctype === 'tamed') {
+    var teMin = parseFloat(document.getElementById('teMin').value) || 80;
+    var teMax = parseFloat(document.getElementById('teMax').value) || 100;
+    te = { min: Math.min(teMin, teMax), max: Math.max(teMin, teMax) };
+  }
+  var imp = (typeof parsedData.imprint === 'number') ? parsedData.imprint * 100 : null;
+  
+  var p = {
+    blueprint: parsedData.blueprint, name: parsedData.name||null,
+    level: parsedData.level, sex: parsedData.sex||'female', type: ctype,
+    statsByName: parsedData.statsByName||{},
+    matMutations: parsedData.matMutations||0, patMutations: parsedData.patMutations||0,
+    colors: colorIds, tamingEffectiveness: te, imprintingQuality: imp,
+    _filename: parsedData._filename, dinoClassFull: parsedData.dinoClassFull || null,
+    tags: (function(){
+      var zh = zhName(parsedData.blueprint);
+      if (!zh && parsedData.dinoClassFull) { var sp = findSpecies(parsedData.dinoClassFull); if (sp && sp.name) zh = zhName(sp.name); }
+      return zh ? [zh] : [];
+    })()
+  };
+  
+  // 使用用户选择的候选方案
+  if (selectedCandidate && selectedCandidate.wildLevels) {
+    p.wildLevels = selectedCandidate.wildLevels;
+    p.domLevels = selectedCandidate.domLevels;
+    p._solver = 'asb';
+    var mutKeys = ['health','stamina','oxygen','food','weight','melee_damage_multiplier'];
+    p.mutations = {};
+    for (var mi = 0; mi < mutKeys.length; mi++) {
+      var mv = _mutValues[mutKeys[mi]] || 0;
+      if (mv > 0) {
+        p.mutations[mutKeys[mi]] = mv;
+        p.wildLevels[mutKeys[mi]] = Math.max(0, (p.wildLevels[mutKeys[mi]] || 0) - mv);
+      }
+    }
+  } else { p._solver = 'no_solution'; }
+  
+  // 构建 note：DinoID + 等级构成 + 变异史 + 直系父母 + 导入时间
+  var noteParts = [];
+  if (parsedData.dinoId1 || parsedData.dinoId2) noteParts.push('ID: ' + (parsedData.dinoId1||'?') + '/' + (parsedData.dinoId2||'?'));
+  if (selectedCandidate && selectedCandidate.wildLevels) {
+    var keys = ['health','stamina','oxygen','food','weight','melee_damage_multiplier'];
+    var sumW = 0, sumD = 0;
+    for (var ki = 0; ki < keys.length; ki++) { sumW += (selectedCandidate.wildLevels[keys[ki]]||0); sumD += (selectedCandidate.domLevels[keys[ki]]||0); }
+    var xp = Math.max(0, (parsedData.level||0) - 1 - sumW - sumD);
+    noteParts.push('Lv.' + parsedData.level + ' (1 + ' + (ctype==='bred'?'承':'野') + sumW + (ctype==='bred'?'':' + 奖' + sumD) + ' + 加' + xp + ')');
+  }
+  // 变异史
+  var totalMut = (parsedData.matMutations||0) + (parsedData.patMutations||0);
+  if (totalMut > 0) noteParts.push('变异: 母' + (parsedData.matMutations||0) + '/父' + (parsedData.patMutations||0) + '=Σ' + totalMut);
+  // 直系一代父母
+  if (parsedData.ancestors && parsedData.ancestors.length > 0) {
+    var lastFemale = null, lastMale = null;
+    for (var ai = parsedData.ancestors.length - 1; ai >= 0; ai--) {
+      var a = parsedData.ancestors[ai];
+      if (!lastFemale && a.type === 'DinoAncestors') lastFemale = a;
+      if (!lastMale && a.type === 'DinoAncestorsMale') lastMale = a;
+      if (lastFemale && lastMale) break;
+    }
+    if (lastFemale || lastMale) {
+      var extractName = function(data, prefix) {
+        var re = new RegExp(prefix + 'Name=([^;]*)');
+        var m = data.match(re);
+        return (m && m[1]) ? m[1] : '(无名)';
+      };
+      if (lastFemale) noteParts.push('母: ' + extractName(lastFemale.data, 'Female'));
+      if (lastMale) noteParts.push('父: ' + extractName(lastMale.data, 'Male'));
+    }
+  }
+  var now = new Date();
+  noteParts.push('导入: ' + now.getFullYear() + '/' + (now.getMonth()+1) + '/' + now.getDate() + ' ' + ('0'+now.getHours()).slice(-2) + ':' + ('0'+now.getMinutes()).slice(-2));
+  if (noteParts.length > 0) p.notes = noteParts.join('\n');
+  
+  var enc = btoa(unescape(encodeURIComponent(JSON.stringify(p))));
+  showStatus('info', '🚀 正在打开 Wikily...');
+  setTimeout(function(){ showStatus('', ''); }, 3000);
+  window.open('https://wikily.gg/zh-cn/ark-survival-ascended/profile/' + encodeURIComponent(u) + '/#import=' + enc, '_blank');
+}
+
 function showStatus(t, m) { document.getElementById('statusArea').innerHTML = '<div class="status ' + t + '">' + m + '</div>'; }
 function formatSize(b) { return b < 1024 ? b + ' B' : (b/1024).toFixed(1) + ' KB'; }
 function escapeHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
@@ -1182,6 +1331,7 @@ function isMutVisible(d) {
   return ((d.matMutations||0) + (d.patMutations||0)) > 0;
 }
 
+function showBtn(s) { var b=document.getElementById('importBtn'); b.disabled=!s; b.style.display=s?'':'none'; }
 function showRightPlaceholder(s) { var p=document.getElementById('rightPlaceholder'); if(!p)return; p.style.display=s?'flex':'none'; if(s&&window.innerWidth<768)p.style.display='none'; if(window.innerWidth<768)document.body.style.paddingBottom=s?'4px':'0'; }
 
 // 手风琴互斥
@@ -1251,8 +1401,12 @@ function toggleLevelInfo(e, total, base, wild, bonus, xp, isBred) {
 
 /* ================= 最新生物 TAB ================= */
 var LB = {};
-// 服务器列表完全由 apps.yaml 主题数据（sensor.asa_server_themes）决定：lbLoadThemes() 启动时填充，不再硬编码；API 失败则为空
-LB.SERVERS = [];
+LB.SERVERS = [
+  {abbr:'Isl',name:'孤岛'},{abbr:'Sco',name:'焦土'},{abbr:'Cen',name:'中心岛'},
+  {abbr:'Abe',name:'艾伯'},{abbr:'Ext',name:'灭绝'},{abbr:'Ast',name:'仙境'},
+  {abbr:'Rag',name:'拉格纳'},{abbr:'Val',name:'瓦尔盖罗'},{abbr:'Los',name:'迷失'},
+  {abbr:'Gen',name:'创世纪2'}
+];
 LB.DAY30 = 30*24*3600;                    // 30 游戏天（世界秒）
 LB.ASA_LAUNCH_MS = Date.UTC(2023,9,25);   // ASE 脏数据阈值
 LB.SVC_REFRESH = '/api/services/script/refresh_tamed'; // HA script 发事件 → AppDaemon listen_event（v1.6 事件链路）
@@ -1279,13 +1433,10 @@ function switchTab(name){
   if(on) lbInit();
 }
 function lbInit(){
-  LB._themesPromise = LB._themesPromise || lbLoadThemes();
-  LB._themesPromise.then(function(){
-    if(!LB._inited){ LB._inited=true; lbRenderServers(); }
-    var p=document.getElementById('lbPlayer');
-    if(p) p.textContent = lbPlayer() || '（未指定，显示全部）';
-    lbView();
-  });
+  if(!LB._inited){ LB._inited=true; lbRenderServers(); }
+  var p=document.getElementById('lbPlayer');
+  if(p) p.textContent = lbPlayer() || '（未指定，显示全部）';
+  lbView();
 }
 function lbPlayer(){ return new URLSearchParams(location.search).get('player')||''; }
 function lbRenderServers(){
@@ -1306,8 +1457,7 @@ function lbSelectedServers(){
 async function lbLoad(servers){
   var recs=[], recMap={}, tribesByServer={}, worldNowByServer={};
   function lbAddRec(rec){
-    // 空球无 dinoId，用 podId 作唯一 key；有生物用 dinoId1_dinoId2 跨服去重
-    var key = rec.isEmpty ? ('empty_'+(rec.podId||rec.containerId||'empty')) : ((rec.dinoId1||'') + '_' + (rec.dinoId2||''));
+    var key = (rec.dinoId1||'') + '_' + (rec.dinoId2||'');
     var old = recMap[key];
     if(!old || (rec.sortWorldSec||0) > (old.sortWorldSec||0)) recMap[key] = rec;
   }
@@ -1320,23 +1470,14 @@ async function lbLoad(servers){
       tribesByServer[abbr] = cryo.tribes||{};
       worldNowByServer[abbr] = cryo.worldSecondsNow||0;
       (cryo.cryopod||[]).forEach(function(p){
-        var isEmpty = !p.dinoId1;
-        // 空球容器类型推断（containerClass → containerType），便于归入对应容器
-        var ct = p.containerType || '';
-        if(isEmpty){
-          var cc = p.containerClass || '';
-          if(cc.indexOf('CryoFridge')>=0) ct = 'fridge';
-          else if(cc.indexOf('PrimalInventory1')>=0) ct = 'player';
-          else if(cc.indexOf('TekReplicator')>=0) ct = 'replicator';
-          else ct = ct || 'other';
-        }
-        recs.push({ src:'cryo', server:abbr, isEmpty:isEmpty, podId:p.podInstanceId, dinoId1:p.dinoId1||'', dinoId2:p.dinoId2||'', dinoClass:p.dinoClass||'',
+        if(!p.dinoId1) return; // 空球
+        recs.push({ src:'cryo', server:abbr, dinoId1:p.dinoId1, dinoId2:p.dinoId2, dinoClass:p.dinoClass||'',
           name:p.name||'', level:p.level||0, gender:p.gender||'', babyAge:p.babyAge, isBaby:p.isBaby,
           tribeId:p.tribeId, statValues:p.statValues||[], statPoints:p.statPoints||[], statMutations:p.statMutations||[],
           imprintingQuality:p.imprintingQuality, randomMutationsMale:p.randomMutationsMale, randomMutationsFemale:p.randomMutationsFemale, ancestors:p.ancestors||[],
           colors:p.colors||'', saddle:p.saddle||'', cryoVersion:p.cryoVersion,
           sortWorldSec:p.packedAtWorldSec||0, srcWorld:'packed', absMs:p.downloadedAtMs||0,
-          containerId:p.containerId, containerType:ct, containerName:p.containerName||'', containerClass:p.containerClass||'', containerTribe:p.containerTribe,
+          containerId:p.containerId, containerType:p.containerType||'', containerName:p.containerName||'', containerClass:p.containerClass||'', containerTribe:p.containerTribe,
           ownerTribeId:p.containerTribe||0 });
         lbAddRec(recs[recs.length-1]);
       });
@@ -1601,14 +1742,20 @@ function lbDinoHTML(r){
     +'</div>'
     +'<div style="font-size:11px;color:#999;margin-top:6px;display:flex;flex-wrap:wrap;gap:4px 14px">'
     +'<span>🏛 '+r.server+' <b style="color:#ccc">'+r.ownerTribeId+'</b>'+(r.tribeName?'（'+r.tribeName+'）':'')+'</span>'
-    +'<span> '+timeTxt+'</span>'
-    +(r.saddle?'<span>🦺 '+lbSaddleLabel(r.saddle)+'</span>':'')
+    +'<span>📦 '+r.containerName+'</span>'
+    +'<span>🕐 '+timeTxt+'</span>'
+    +(r.saddle?'<span>🦺 '+r.saddle+'</span>':'')
     +(anc?'<span>'+anc+'</span>':'')
     +(mutSum?'<span style="color:#f59e0b">⚡突变 ♂'+mutM+'/♀'+mutF+'</span>':'')
     +'</div>'
     +(stats?'<div style="font-size:11px;margin-top:6px;flex-wrap:wrap">'+stats+'</div>':'')
     +v6warn
     +'</div>';
+}
+function lbRenderGroup(arr, title){
+  if(!arr.length) return '';
+  var body = arr.map(lbDinoHTML).join('');
+  return '<details open style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;color:#ccc;padding:6px 0">'+title+' <span style="color:#666;font-size:11px">('+arr.length+')</span></summary>'+body+'</details>';
 }
 
 // IndexedDB 速查缓存持久化（刷新页面后秒开，避免重新加载 10 台 JSON）
@@ -1655,65 +1802,16 @@ function lbCacheClear(){
     });
   }).catch(function(){});
 }
-// 容器 key：display/stand 未命名可合并（无 ID）；其他容器未命名不允许合并（按 containerId 区分）
+// 容器筛选：key = server|containerType|containerName；显示名：冷冻器(未命名)/放出/宠物台
 function lbContainerKey(r){
-  var hasName = r.containerName && r.containerName!=='?' && r.containerName!=='';
-  if(r.containerType==='display' || r.containerType==='stand'){
-    return (r.server||'?')+'|'+(r.containerType||'?')+'|'+(hasName ? r.containerName : '');
-  }
-  return (r.server||'?')+'|'+(r.containerType||'?')+'|'+(hasName ? r.containerName : ('#'+(r.containerId||'')));
+  return (r.server||'?')+'|'+(r.containerType||'?')+'|'+(r.containerName||'');
 }
-// containerType → 中文 JSON key（中文名从 icon_zh_map.json 查，不写死中文；JSON 无映射回退英文）
-var LB_CONTAINER_ZH_KEY = {
-  fridge: 'cryofridge',
-  display: 'display_case',
-  stand: 'hud_petdisplaystand_wall_thatch_icon',
-  storage: 'hud_storagebox_icon',
-  hospital: 'hud_medicalstand_icon',
-  replicator: 'tek_replicator'
-};
-function lbContainerTypeZh(t){
-  if(!t) return '';
-  var k = LB_CONTAINER_ZH_KEY[t];
-  if(!k) return '';
-  return zhName(k) || '';
-}
-// 鞍显示名：中文优先（JSON 查鞍名，如 似鸡龙鞍）；无映射则 ASB 物种英文名 + Saddle；再无则提取物种名 + Saddle（不显示类名）
-function lbSaddleLabel(sc){
-  if(!sc) return '';
-  var s = String(sc).replace(/^PrimalItemArmor_/,'').replace(/_C$/,'');
-  // 提取物种部分：支持 _Saddle_ 前缀（Saddle_FireLion）与后缀连写（CarchaSaddle）两种类名
-  var idx = s.search(/Saddle/i);
-  var spPart = '';
-  if(idx>=0){
-    var before = s.slice(0, idx).replace(/_+$/,'');
-    var after = s.slice(idx+6).replace(/^_+/,'');
-    spPart = (before ? before : after).replace(/_+/g,' ');
-  } else {
-    spPart = s;
-  }
-  if(!spPart) return sc;
-  var spLow = spPart.toLowerCase().replace(/ /g,'_');
-  var cands = [spLow+'_saddle','saddle_'+spLow,spLow+'saddle',spLow+' saddle',spLow.replace(/_/g,' ')+' saddle'];
-  for(var i=0;i<cands.length;i++){
-    var zh2 = zhName(cands[i]);
-    if(zh2) return zh2;
-  }
-  var sp2 = findSpeciesByClass(spPart.replace(/ /g,'_')+'_Character_BP_C');
-  if(sp2 && sp2.name) return sp2.name + ' Saddle';
-  return spPart + ' Saddle';
-}
-// 容器显示名：有名字显示名字；未命名 display/stand 合并用 JSON 中文；其他未命名容器加 containerId 后 6 位区分
 function lbContainerLabel(r){
-  var icon = ({released:'🐾', stand:'🧺', display:'🖼', storage:'📦', hospital:'🏥', fridge:'🧊', replicator:'⚙️'})[r.containerType] || '🧊';
-  var hasName = r.containerName && r.containerName!=='?' && r.containerName!=='';
-  if(hasName) return icon+' '+r.containerName;
-  var tzh = lbContainerTypeZh(r.containerType);
-  var name = tzh || r.containerType; // JSON 无中文 → 回退英文类型名（不脑补）
-  if(r.containerType!=='display' && r.containerType!=='stand' && r.containerType!=='released'){
-    var id = r.containerId || '';
-    name += ' #' + (id.length>6 ? id.slice(-6) : id);
-  }
+  var icon, name;
+  if(r.containerType==='released'){ icon='🐾'; name='放出'; }
+  else if(r.containerType==='stand'){ icon='🧺'; name='宠物台'; }
+  else if(r.containerType==='display'){ icon='🖼'; name=(r.containerName && r.containerName!=='?' && r.containerName!=='') ? r.containerName : '展示柜'; }
+  else { icon='🧊'; name=(r.containerName && r.containerName!=='?' && r.containerName!=='') ? r.containerName : '冷冻器'; }
   return icon+' '+name;
 }
 function lbView(){
@@ -1722,16 +1820,18 @@ function lbView(){
   var player=lbPlayer();
   var classSel=document.getElementById('lbClassFilter');
   var classFilter=classSel?classSel.value:'';
+  var contSel=document.getElementById('lbContainerFilter');
+  var containerFilter=contSel?contSel.value:'';
   // 1. 内存缓存命中：直接渲染（会话内快速）
   if(LB._cache && LB._cache.data){
-    lbRenderView(LB._cache.data, player, classFilter, classSel);
+    lbRenderView(LB._cache.data, player, classFilter, classSel, containerFilter);
     return;
   }
   // 2. IndexedDB 缓存（刷新页面后秒开）
   lbCacheGet().then(function(cache){
     if(cache && cache.data && cache.data.recs && cache.data.recs.length){
       LB._cache = { data: cache.data, ts: cache.ts || Date.now() };
-      lbRenderView(cache.data, player, classFilter, classSel);
+      lbRenderView(cache.data, player, classFilter, classSel, containerFilter);
       return;
     }
     // 3. 无缓存 → 重新加载
@@ -1741,14 +1841,14 @@ function lbView(){
     lbLoad(sel).then(function(data){
       LB._cache={ data:data, ts:Date.now() };
       lbCacheSet(data); // 写入 IndexedDB
-      lbRenderView(data, player, classFilter, classSel);
+      lbRenderView(data, player, classFilter, classSel, containerFilter);
     }).catch(function(e){
       list.innerHTML='<div style="text-align:center;padding:30px;color:#f87171">❌ 加载失败：'+e+'</div>';
       if(status){ status.textContent='❌ 加载失败'; }
     });
   });
 }
-function lbRenderView(data, player, classFilter, classSel){
+function lbRenderView(data, player, classFilter, classSel, containerFilter){
   var list=document.getElementById('lbList'), status=document.getElementById('lbStatus');
   LB.curClass = classFilter || ''; // 物种名仅在「全部物种」模式显示（LB.curClass 为空）
   var playerSet = player ? lbPlayerTribes(data.tribesByServer, player) : null;
@@ -1769,9 +1869,31 @@ function lbRenderView(data, player, classFilter, classSel){
     classSel.innerHTML=html;
     if(cur && classMap[cur]) classSel.value=cur;
   }
+  // 填充容器下拉（保留当前选择，optgroup 按服务器分组，只列存在的容器）
+  var contSel=document.getElementById('lbContainerFilter');
+  var curC=contSel?contSel.value:'';
+  var contBySrv={}, contSample={};
+  visible.forEach(function(r){
+    if(r.containerType==='player') return; // 玩家携带独立组，不进容器下拉
+    var k=lbContainerKey(r);
+    (contBySrv[r.server]=contBySrv[r.server]||{})[k]=1;
+    if(!contSample[k]) contSample[k]=r;
+  });
+  if(contSel){
+    var htmlC='<option value="">全部容器</option>';
+    LB.SERVERS.forEach(function(s){
+      var set=contBySrv[s.abbr];
+      if(!set) return;
+      var opts=Object.keys(set).sort().map(function(k){ return '<option value="'+k+'">'+lbContainerLabel(contSample[k])+'</option>'; }).join('');
+      htmlC+='<optgroup label="'+s.name+'（'+s.abbr+'）">'+opts+'</optgroup>';
+    });
+    contSel.innerHTML=htmlC;
+    if(curC && Object.keys(contSample).indexOf(curC)>=0) contSel.value=curC;
+  }
   var byServer={}, playerCarried=[];
   visible.forEach(function(r){
     if(classFilter && r.dinoClass!==classFilter) return;
+    if(containerFilter && r.containerType!=='player' && lbContainerKey(r)!==containerFilter) return; // 容器筛选（玩家携带组不受影响）
     if(r.containerType==='player'){ playerCarried.push(r); return; } // 玩家背包（PrimalInventory1）独立成玩家组
     (byServer[r.server]=byServer[r.server]||[]).push(r);
   });
@@ -1783,71 +1905,25 @@ function lbRenderView(data, player, classFilter, classSel){
     if(!ta && tb) return 1;
     return (b.absMs||0)-(a.absMs||0);
   }
-  // 标签 TAB（一级=服务器/玩家携带）：默认玩家携带，点击切换；数量=有生物数（空球只在容器标题标）
-  if(!LB.tab) LB.tab='player';
-  var pcCnt=playerCarried.filter(function(r){return !r.isEmpty;}).length;
-  var tabH='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">';
-  tabH+='<button class="lb-tab'+(LB.tab==='player'?' lb-tab-on':'')+'" onclick="lbSetTab(\'player\')">🎒 玩家携带'+(pcCnt?' ('+pcCnt+')':'')+'</button>';
+  var h='', total=0;
+  // 玩家背包独立组（放最前）
+  if(playerCarried.length){
+    playerCarried.sort(cmp);
+    h+=lbRenderGroup(playerCarried, '🎒 玩家携带');
+    total+=playerCarried.length;
+  }
   LB.SERVERS.forEach(function(s){
     var arr=byServer[s.abbr]||[];
     if(!arr.length) return;
-    var cnt=arr.filter(function(r){return !r.isEmpty;}).length;
-    tabH+='<button class="lb-tab'+(LB.tab===s.abbr?' lb-tab-on':'')+'" onclick="lbSetTab(\''+s.abbr+'\')">'+((s.icon||'')+' '+s.name).trim()+' ('+cnt+')</button>';
+    total+=arr.length;
+    arr.sort(cmp);
+    h+=lbRenderGroup(arr, s.name+'（'+s.abbr+'）');
   });
-  tabH+='</div>';
-  var tabEl=document.getElementById('lbTabs');
-  if(tabEl) tabEl.innerHTML=tabH;
-
-  var h='', total=0, tabLabel='';
-  if(LB.tab==='player'){
-    if(playerCarried.length){
-      playerCarried.sort(cmp);
-      var peArr=playerCarried.filter(function(r){return !r.isEmpty;});
-      var peCnt=playerCarried.length - peArr.length;
-      h=peArr.map(lbDinoHTML).join('');
-      if(peCnt>0) h+='<div style="background:#15151f;border:1px dashed #333;border-radius:8px;padding:8px 12px;margin:8px;font-size:12px;color:#888">🈳 空球 ×'+peCnt+'</div>';
-      total=peArr.length;
-    }
-    tabLabel='🎒 玩家携带';
-  } else {
-    var arr2=byServer[LB.tab]||[];
-    arr2.sort(cmp);
-    // 按容器分组成手风琴（同时只能展开一个，默认全部收起）
-    var contGroups={};
-    arr2.forEach(function(r){
-      var k=lbContainerKey(r);
-      (contGroups[k]=contGroups[k]||[]).push(r);
-    });
-    Object.keys(contGroups).sort().forEach(function(k){
-      var list=contGroups[k];
-      var neArr=list.filter(function(r){return !r.isEmpty;});
-      var ecnt=list.length - neArr.length;
-      var body=neArr.map(lbDinoHTML).join('');
-      if(ecnt>0) body+='<div style="background:#15151f;border:1px dashed #333;border-radius:8px;padding:8px 12px;margin:8px;font-size:12px;color:#888">🈳 空球 ×'+ecnt+'</div>';
-      // 标题第一个数字 = 有生物数（除去空球），空球数用 |N 单独标注
-      h+='<details class="acc" onclick="lbAccOnly(this)"><summary>'+lbContainerLabel(list[0])+' <span class="acc-cnt">('+neArr.length+(ecnt>0?'|'+ecnt:'')+')</span></summary>'+body+'</details>';
-    });
-    total=arr2.filter(function(r){return !r.isEmpty;}).length;
-    var ts=LB.SERVERS.find(function(x){return x.abbr===LB.tab;});
-    tabLabel=(ts ? ((ts.icon||'')+' '+ts.name).trim() : LB.tab);
-  }
   if(!h) h='<div style="text-align:center;padding:30px;color:#555">😕 没有匹配的生物'+(player?'（玩家 '+player+'）':'')+'</div>';
   list.innerHTML=h;
-  if(status) status.style.display='none'; // 渲染完成：隐藏状态栏（不再显示 ✅共N条 统计；加载中/失败提示由 lbView 负责）
-}
-// 手风琴互斥：展开当前容器时收起同组其他容器（同时只能展开一个）
-function lbAccOnly(el){
-  if(!el || !el.parentNode) return;
-  var kids=el.parentNode.children;
-  for(var i=0;i<kids.length;i++){
-    var k=kids[i];
-    if(k!==el && k.tagName==='DETAILS') k.removeAttribute('open');
+  if(status){
+    status.textContent='✅ 共 '+total+' 条'+(classFilter?'（'+classFilter+'）':'')+(containerFilter&&contSample[containerFilter]?'（📦 '+lbContainerLabel(contSample[containerFilter])+'）':'')+(player?'（玩家 '+player+'）':'');
   }
-}
-// 切换一级标签（玩家携带/服务器），默认玩家携带
-function lbSetTab(tab){
-  LB.tab = tab || 'player';
-  lbView();
 }
 // 速查页刷新按钮：清缓存强制重新加载
 function lbRefreshView(){
@@ -2000,31 +2076,6 @@ async function lbRefresh(){
   await lbView();
   setTimeout(function(){ prog.style.display='none'; }, 4000);
 }
-// 从 HA API 读取服务器主题（名称/图标直接用 apps.yaml server_themes → sensor.asa_server_themes 属性），失败回退硬编码
-function lbLoadThemes(){
-  return new Promise(function(resolve){
-    lbHaTokenRefresh().then(function(token){
-      if(!token){ resolve(false); return; }
-      fetch('/api/states/sensor.asa_server_themes', { headers: { 'Authorization': 'Bearer ' + token } })
-      .then(function(r){ if(!r.ok) throw 0; return r.json(); })
-      .then(function(s){
-        var th = (s && s.attributes && s.attributes.server_themes) ? s.attributes.server_themes : null;
-        if(!th) throw 0;
-        var arr = [];
-        Object.keys(th).forEach(function(k){
-          var v = th[k] || {};
-          arr.push({ abbr: k, name: v.name || k, icon: v.emoji || '' });
-        });
-        if(arr.length){ LB.SERVERS = arr; resolve(true); }
-        else resolve(false);
-      }).catch(function(){ resolve(false); });
-    }, function(){ resolve(false); });
-  });
-}
-// 启动：预取服务器主题（apps.yaml → sensor.asa_server_themes），lbInit 会等待它；不再有硬编码兜底
-LB._themesPromise = lbLoadThemes();
-// 默认页为生物速查：直接初始化（lbInit 内部等待 themes）
-lbInit();
 </script>
 <!-- 解析结果浮窗 -->
 <div id="previewOverlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7)" onclick="if(event.target===this)closePreviewOverlay()">

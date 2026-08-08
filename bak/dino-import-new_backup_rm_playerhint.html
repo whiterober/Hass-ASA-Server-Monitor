@@ -100,10 +100,18 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 </head>
 <body>
 
+<div class="header">
+  <h1>🦖 Wikily 生物导入</h1>
+  <p style="color:#444;font-size:11px;display:flex;align-items:center;justify-content:center;gap:4px;cursor:pointer" onclick="startWikiEdit()" id="wikiUserRow">
+    <span id="wikiUserDisp" style="display:inline-flex;align-items:center;gap:4px">点击设置 Wikily 用户名 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></span>
+  </p>
+</div>
+<input type="hidden" id="wikiUser"></textarea>
+
 <!-- Tab 导航 -->
 <div class="tabbar">
-  <div class="tab" id="tabBtn-import" onclick="switchTab('import')">📥 生物导入</div>
-  <div class="tab active" id="tabBtn-latest" onclick="switchTab('latest')">🧬 生物速查</div>
+  <div class="tab active" id="tabBtn-import" onclick="switchTab('import')">📥 生物导入</div>
+  <div class="tab" id="tabBtn-latest" onclick="switchTab('latest')">🧬 生物速查</div>
   <div class="tab" id="tabBtn-settings" onclick="switchTab('settings')">⚙️ 设置</div>
 </div>
 <style>
@@ -122,7 +130,7 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 </style>
 
 <!-- 全原生认证：浏览器自动管理 HTTP Basic Auth -->
-<div id="mainUI" style="display:none">
+<div id="mainUI">
   <div id="leftCol">
     <div class="card" id="fileCard">
       <h2>📂 可用文件 <button onclick="refreshFiles()" style="float:right;background:none;border:none;color:#999;padding:2px 4px;border-radius:6px;cursor:pointer;font-size:12px;line-height:1"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg></button></h2>
@@ -165,16 +173,18 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
       </h2>
       <div id="candList"></div>
     </div>
+    <button class="btn btn-primary" id="importBtn" disabled onclick="doImport()" style="display:none">🚀 导入到 Wikily</button>
   </div>
 </div>
 
 <!-- Tab② 最新生物 -->
-<div id="latestUI" style="display:flex;flex:1;flex-direction:column;min-height:0;gap:12px;overflow:hidden">
+<div id="latestUI" style="display:none;flex:1;flex-direction:column;min-height:0;gap:12px;overflow:hidden">
   <div class="card">
     <h2>🧬 生物速查</h2>
     <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">
       <span style="font-size:12px;color:#999">👤 玩家</span>
       <span id="lbPlayer" style="font-size:13px;color:#a78bfa;font-weight:600"></span>
+      <span style="font-size:11px;color:#555">（URL ?player= 传参）</span>
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
       <span style="font-size:12px;color:#999">🐾 物种</span>
@@ -546,6 +556,56 @@ function authFetch(url, opts) {
   });
 }
 
+// Wikily 用户名：大标题下低可视，点击编辑
+var _wikiEditing = false;
+function initWikiUser() {
+  var v = localStorage.getItem('wikily_user') || '';
+  var disp = document.getElementById('wikiUserDisp');
+  var inp = document.getElementById('wikiUser');
+  inp.value = v;
+  updateWikiDisp();
+}
+initWikiUser();
+
+function updateWikiDisp() {
+  var v = localStorage.getItem('wikily_user') || '';
+  var disp = document.getElementById('wikiUserDisp');
+  disp.innerHTML = '<span style="display:inline-flex;align-items:center;gap:4px">' + (v || '点击设置 Wikily 用户名') + ' <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></span>';
+  disp.style.color = v ? '#555' : '#444';
+}
+
+function startWikiEdit() {
+  if (_wikiEditing) return;
+  _wikiEditing = true;
+  var disp = document.getElementById('wikiUserDisp');
+  var v = localStorage.getItem('wikily_user') || '';
+  disp.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px">'
+    + '<input type="text" id="wikiEditInp" value="' + escapeHtml(v) + '" style="width:140px;padding:2px 6px;border-radius:4px;border:1px solid #7c3aed;background:#111;color:#e0e0e0;font-size:11px;outline:none;text-align:center">'
+    + '<svg onclick="event.stopPropagation();cancelWikiEdit()" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="3" style="cursor:pointer;flex-shrink:0"><path d="M18 6L6 18M6 6l12 12"/></svg>'
+    + '<svg onclick="event.stopPropagation();saveWikiUser()" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="3" style="cursor:pointer;flex-shrink:0"><path d="M5 13l4 4L19 7"/></svg>'
+    + '</span>';
+  disp.style.color = '#e0e0e0';
+  var inpEl = document.getElementById('wikiEditInp');
+  if (inpEl) { inpEl.focus(); inpEl.select(); }
+  inpEl.onkeydown = function(e) { if (e.key === 'Enter') saveWikiUser(); if (e.key === 'Escape') cancelWikiEdit(); };
+}
+
+function saveWikiUser() {
+  var inpEl = document.getElementById('wikiEditInp');
+  if (inpEl) {
+    var v = inpEl.value.trim();
+    document.getElementById('wikiUser').value = v;
+    localStorage.setItem('wikily_user', v);
+  }
+  _wikiEditing = false;
+  updateWikiDisp();
+}
+
+function cancelWikiEdit() {
+  _wikiEditing = false;
+  updateWikiDisp();
+}
+
 // 预加载 ASB JSON
 loadASB().catch(function(e){ console.log('ASB load fail:', e); });
 // 页面加载后直接刷新文件列表
@@ -648,7 +708,7 @@ async function deleteGroup(gi) {
   if (selectedFile && g.files.some(function(f){return f.name===selectedFile;})) {
     selectedFile = null; parsedData = null;
     document.getElementById('previewCard').style.display = 'none';
-    showRightPlaceholder(true);
+    showBtn(false);showRightPlaceholder(true);
   }
   showStatus('info', '🗑 已删除 ' + ok + ' 个文件' + (fail > 0 ? '，' + fail + ' 个失败' : ''));
   setTimeout(function(){ showStatus('', ''); }, 3000);
@@ -783,7 +843,7 @@ async function selectFile(name) {
     document.getElementById('teCard').style.display = 'none';
     document.getElementById('mutCard').style.display = 'none';
     document.getElementById('candCard').style.display = 'none';
-    showRightPlaceholder(true);
+    showBtn(false);showRightPlaceholder(true);
     document.getElementById('statusArea').style.display = 'none';
     _mutValues = {health:0, stamina:0, oxygen:0, food:0, weight:0, melee_damage_multiplier:0};
     _editingKey = null;
@@ -805,7 +865,7 @@ async function selectFile(name) {
     var res = await authFetch(DINO_DATA + name, {});
     if (!res.ok) throw new Error('HTTP ' + res.status);
     parsedData = parseIni(await res.text(), name);
-    showRightPlaceholder(false);
+    showBtn(true);showRightPlaceholder(false);
     var matched = parsedData.blueprint ? true : false;
     setParseBtn(name, matched ? 'ok' : 'err');
     // 自动判断训/繁
@@ -830,7 +890,7 @@ async function selectFile(name) {
   } catch (e) {
     setParseBtn(name, 'err');
     document.getElementById('statusArea').style.display = '';
-    showStatus('error', '❌ ' + e.message); parsedData = null; showRightPlaceholder(true); }
+    showStatus('error', '❌ ' + e.message); parsedData = null; showBtn(false);showRightPlaceholder(true); }
 }
 
 function setParseBtn(filename, state) {
@@ -1164,6 +1224,102 @@ function renderPreviewContent(d) {
   document.getElementById('mutCard').style.display = isMutVisible(d) ? '' : 'none';
 }
 
+function doImport() {
+  if (!parsedData) return;
+  var u = document.getElementById('wikiUser').value.trim();
+  if (!u) { showStatus('error', '⚠️ 请输入 Wikily 用户名'); return; }
+  saveWikiUser();
+  
+  // 颜色 RGBA → ID
+  var colorIds = [];
+  if (parsedData.colors && parsedData.colors.length > 0) {
+    for (var i = 0; i < parsedData.colors.length; i++) {
+      var c = parsedData.colors[i];
+      if (c) colorIds[i] = findColorId(c.r, c.g, c.b);
+    }
+  }
+  
+  var ctype = parsedData.imprinter ? 'bred' : (parsedData.tamer ? 'tamed' : 'tamed');
+  var te = null;
+  if (ctype === 'tamed') {
+    var teMin = parseFloat(document.getElementById('teMin').value) || 80;
+    var teMax = parseFloat(document.getElementById('teMax').value) || 100;
+    te = { min: Math.min(teMin, teMax), max: Math.max(teMin, teMax) };
+  }
+  var imp = (typeof parsedData.imprint === 'number') ? parsedData.imprint * 100 : null;
+  
+  var p = {
+    blueprint: parsedData.blueprint, name: parsedData.name||null,
+    level: parsedData.level, sex: parsedData.sex||'female', type: ctype,
+    statsByName: parsedData.statsByName||{},
+    matMutations: parsedData.matMutations||0, patMutations: parsedData.patMutations||0,
+    colors: colorIds, tamingEffectiveness: te, imprintingQuality: imp,
+    _filename: parsedData._filename, dinoClassFull: parsedData.dinoClassFull || null,
+    tags: (function(){
+      var zh = zhName(parsedData.blueprint);
+      if (!zh && parsedData.dinoClassFull) { var sp = findSpecies(parsedData.dinoClassFull); if (sp && sp.name) zh = zhName(sp.name); }
+      return zh ? [zh] : [];
+    })()
+  };
+  
+  // 使用用户选择的候选方案
+  if (selectedCandidate && selectedCandidate.wildLevels) {
+    p.wildLevels = selectedCandidate.wildLevels;
+    p.domLevels = selectedCandidate.domLevels;
+    p._solver = 'asb';
+    var mutKeys = ['health','stamina','oxygen','food','weight','melee_damage_multiplier'];
+    p.mutations = {};
+    for (var mi = 0; mi < mutKeys.length; mi++) {
+      var mv = _mutValues[mutKeys[mi]] || 0;
+      if (mv > 0) {
+        p.mutations[mutKeys[mi]] = mv;
+        p.wildLevels[mutKeys[mi]] = Math.max(0, (p.wildLevels[mutKeys[mi]] || 0) - mv);
+      }
+    }
+  } else { p._solver = 'no_solution'; }
+  
+  // 构建 note：DinoID + 等级构成 + 变异史 + 直系父母 + 导入时间
+  var noteParts = [];
+  if (parsedData.dinoId1 || parsedData.dinoId2) noteParts.push('ID: ' + (parsedData.dinoId1||'?') + '/' + (parsedData.dinoId2||'?'));
+  if (selectedCandidate && selectedCandidate.wildLevels) {
+    var keys = ['health','stamina','oxygen','food','weight','melee_damage_multiplier'];
+    var sumW = 0, sumD = 0;
+    for (var ki = 0; ki < keys.length; ki++) { sumW += (selectedCandidate.wildLevels[keys[ki]]||0); sumD += (selectedCandidate.domLevels[keys[ki]]||0); }
+    var xp = Math.max(0, (parsedData.level||0) - 1 - sumW - sumD);
+    noteParts.push('Lv.' + parsedData.level + ' (1 + ' + (ctype==='bred'?'承':'野') + sumW + (ctype==='bred'?'':' + 奖' + sumD) + ' + 加' + xp + ')');
+  }
+  // 变异史
+  var totalMut = (parsedData.matMutations||0) + (parsedData.patMutations||0);
+  if (totalMut > 0) noteParts.push('变异: 母' + (parsedData.matMutations||0) + '/父' + (parsedData.patMutations||0) + '=Σ' + totalMut);
+  // 直系一代父母
+  if (parsedData.ancestors && parsedData.ancestors.length > 0) {
+    var lastFemale = null, lastMale = null;
+    for (var ai = parsedData.ancestors.length - 1; ai >= 0; ai--) {
+      var a = parsedData.ancestors[ai];
+      if (!lastFemale && a.type === 'DinoAncestors') lastFemale = a;
+      if (!lastMale && a.type === 'DinoAncestorsMale') lastMale = a;
+      if (lastFemale && lastMale) break;
+    }
+    if (lastFemale || lastMale) {
+      var extractName = function(data, prefix) {
+        var re = new RegExp(prefix + 'Name=([^;]*)');
+        var m = data.match(re);
+        return (m && m[1]) ? m[1] : '(无名)';
+      };
+      if (lastFemale) noteParts.push('母: ' + extractName(lastFemale.data, 'Female'));
+      if (lastMale) noteParts.push('父: ' + extractName(lastMale.data, 'Male'));
+    }
+  }
+  var now = new Date();
+  noteParts.push('导入: ' + now.getFullYear() + '/' + (now.getMonth()+1) + '/' + now.getDate() + ' ' + ('0'+now.getHours()).slice(-2) + ':' + ('0'+now.getMinutes()).slice(-2));
+  if (noteParts.length > 0) p.notes = noteParts.join('\n');
+  
+  var enc = btoa(unescape(encodeURIComponent(JSON.stringify(p))));
+  showStatus('info', '🚀 正在打开 Wikily...');
+  setTimeout(function(){ showStatus('', ''); }, 3000);
+  window.open('https://wikily.gg/zh-cn/ark-survival-ascended/profile/' + encodeURIComponent(u) + '/#import=' + enc, '_blank');
+}
+
 function showStatus(t, m) { document.getElementById('statusArea').innerHTML = '<div class="status ' + t + '">' + m + '</div>'; }
 function formatSize(b) { return b < 1024 ? b + ' B' : (b/1024).toFixed(1) + ' KB'; }
 function escapeHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
@@ -1182,6 +1338,7 @@ function isMutVisible(d) {
   return ((d.matMutations||0) + (d.patMutations||0)) > 0;
 }
 
+function showBtn(s) { var b=document.getElementById('importBtn'); b.disabled=!s; b.style.display=s?'':'none'; }
 function showRightPlaceholder(s) { var p=document.getElementById('rightPlaceholder'); if(!p)return; p.style.display=s?'flex':'none'; if(s&&window.innerWidth<768)p.style.display='none'; if(window.innerWidth<768)document.body.style.paddingBottom=s?'4px':'0'; }
 
 // 手风琴互斥
@@ -1601,8 +1758,9 @@ function lbDinoHTML(r){
     +'</div>'
     +'<div style="font-size:11px;color:#999;margin-top:6px;display:flex;flex-wrap:wrap;gap:4px 14px">'
     +'<span>🏛 '+r.server+' <b style="color:#ccc">'+r.ownerTribeId+'</b>'+(r.tribeName?'（'+r.tribeName+'）':'')+'</span>'
-    +'<span> '+timeTxt+'</span>'
-    +(r.saddle?'<span>🦺 '+lbSaddleLabel(r.saddle)+'</span>':'')
+    +'<span>📦 '+r.containerName+'</span>'
+    +'<span>🕐 '+timeTxt+'</span>'
+    +(r.saddle?'<span>🦺 '+r.saddle+'</span>':'')
     +(anc?'<span>'+anc+'</span>':'')
     +(mutSum?'<span style="color:#f59e0b">⚡突变 ♂'+mutM+'/♀'+mutF+'</span>':'')
     +'</div>'
@@ -1677,31 +1835,6 @@ function lbContainerTypeZh(t){
   var k = LB_CONTAINER_ZH_KEY[t];
   if(!k) return '';
   return zhName(k) || '';
-}
-// 鞍显示名：中文优先（JSON 查鞍名，如 似鸡龙鞍）；无映射则 ASB 物种英文名 + Saddle；再无则提取物种名 + Saddle（不显示类名）
-function lbSaddleLabel(sc){
-  if(!sc) return '';
-  var s = String(sc).replace(/^PrimalItemArmor_/,'').replace(/_C$/,'');
-  // 提取物种部分：支持 _Saddle_ 前缀（Saddle_FireLion）与后缀连写（CarchaSaddle）两种类名
-  var idx = s.search(/Saddle/i);
-  var spPart = '';
-  if(idx>=0){
-    var before = s.slice(0, idx).replace(/_+$/,'');
-    var after = s.slice(idx+6).replace(/^_+/,'');
-    spPart = (before ? before : after).replace(/_+/g,' ');
-  } else {
-    spPart = s;
-  }
-  if(!spPart) return sc;
-  var spLow = spPart.toLowerCase().replace(/ /g,'_');
-  var cands = [spLow+'_saddle','saddle_'+spLow,spLow+'saddle',spLow+' saddle',spLow.replace(/_/g,' ')+' saddle'];
-  for(var i=0;i<cands.length;i++){
-    var zh2 = zhName(cands[i]);
-    if(zh2) return zh2;
-  }
-  var sp2 = findSpeciesByClass(spPart.replace(/ /g,'_')+'_Character_BP_C');
-  if(sp2 && sp2.name) return sp2.name + ' Saddle';
-  return spPart + ' Saddle';
 }
 // 容器显示名：有名字显示名字；未命名 display/stand 合并用 JSON 中文；其他未命名容器加 containerId 后 6 位区分
 function lbContainerLabel(r){
@@ -2021,10 +2154,8 @@ function lbLoadThemes(){
     }, function(){ resolve(false); });
   });
 }
-// 启动：预取服务器主题（apps.yaml → sensor.asa_server_themes），lbInit 会等待它；不再有硬编码兜底
+// 启动：预取服务器主题（apps.yaml → sensor.asa_server_themes），lbInit 会等待它；不再有硬编码兑底
 LB._themesPromise = lbLoadThemes();
-// 默认页为生物速查：直接初始化（lbInit 内部等待 themes）
-lbInit();
 </script>
 <!-- 解析结果浮窗 -->
 <div id="previewOverlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7)" onclick="if(event.target===this)closePreviewOverlay()">
