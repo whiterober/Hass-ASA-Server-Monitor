@@ -2610,30 +2610,14 @@ var LB_BREED_LABEL = {health:'血',stamina:'耐',oxygen:'氧',food:'食',weight:
 var LB_BREED_IDX = {health:0, stamina:1, oxygen:3, food:4, weight:7, melee_damage_multiplier:8}; // statValues 索引（STAT_ZH 顺序）
 LB.breedSel = LB.breedSel || [];
 LB.breedResult = LB.breedResult || false;
-// 繁育栏属性选择按物种分别持久化（lbBreedTargetsMap：{'lbBreed:'+dinoClass: [keys]}）；旧全局 lbBreedTargets 迁移兼容
-function lbBreedStoreKey(){ return 'lbBreed:' + (LB.curClass||''); }
-function lbBreedLoadStore(){
-  try{ return JSON.parse(localStorage.getItem('lbBreedTargetsMap')||'{}'); }catch(e){ return {}; }
-}
-function lbBreedSaveStore(m){ try{ localStorage.setItem('lbBreedTargetsMap', JSON.stringify(m)); }catch(e){} }
-(function(){
-  var _bm = lbBreedLoadStore();
-  if(!Object.keys(_bm).length){
-    try{ var _old = JSON.parse(localStorage.getItem('lbBreedTargets')||'[]'); if(Array.isArray(_old) && _old.length){ _bm['lbBreed:'] = _old; lbBreedSaveStore(_bm); } }catch(e){}
-  }
-  LB.breedSel = (Array.isArray(_bm[lbBreedStoreKey()]) ? _bm[lbBreedStoreKey()].slice() : []);
-})();
+try{ var _bs = JSON.parse(localStorage.getItem('lbBreedTargets')||'[]'); if(Array.isArray(_bs)) LB.breedSel = _bs; }catch(e){}
 function lbRenderBreedBar(){
   var bar = document.getElementById('lbBreedBar');
   if(!bar) return;
   var show = !!LB.curClass; // 选中具体物种才显示
   bar.style.display = show ? 'block' : 'none';
-  // 物种变化时：保存旧物种选择 → 加载当前物种的持久化选择；重置结果（旧物种结果不残留）
+  // 物种变化时重置结果（旧物种结果不残留）
   if(LB._breedLastClass !== LB.curClass){
-    var _bm = lbBreedLoadStore();
-    if(LB._breedLastClass !== undefined) _bm['lbBreed:'+LB._breedLastClass] = LB.breedSel.slice();
-    LB.breedSel = (LB.curClass && Array.isArray(_bm[lbBreedStoreKey()])) ? _bm[lbBreedStoreKey()].slice() : [];
-    lbBreedSaveStore(_bm);
     LB._breedLastClass = LB.curClass;
     if(LB.breedResult){ LB.breedResult = false; lbRenderBreedResult(); }
   }
@@ -2655,10 +2639,7 @@ function lbBreedPick(k){
   var i = LB.breedSel.indexOf(k);
   if(i>=0) LB.breedSel.splice(i,1);
   else LB.breedSel.push(k);
-  // 按当前物种持久化
-  var _bm = lbBreedLoadStore();
-  _bm[lbBreedStoreKey()] = LB.breedSel.slice();
-  lbBreedSaveStore(_bm);
+  try{ localStorage.setItem('lbBreedTargets', JSON.stringify(LB.breedSel)); }catch(e){}
   lbRenderBreedBar();
 }
 function lbBreedToggle(){
@@ -2846,8 +2827,7 @@ function lbRenderBreedResult(){
   }
   var h = '';
   if(myAllChamp.length){
-    var pn = lbPlayer() || '';
-    h += '<div style="font-size:12px;color:#a78bfa;font-weight:600;margin-bottom:4px">'+(pn||'我的')+'</div>'
+    h += '<div style="font-size:12px;color:#a78bfa;font-weight:600;margin-bottom:4px">我的</div>'
       + myAllChamp.map(function(it){ return card(it, myTag(it.r), it.attrs); }).join('');
   }
   if(extAll.length){

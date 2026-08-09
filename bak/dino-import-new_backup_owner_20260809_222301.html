@@ -1554,7 +1554,7 @@ async function lbLoad(servers){
           colors:p.colors||'', saddle:p.saddle||'', cryoVersion:p.cryoVersion,
           sortWorldSec:p.packedAtWorldSec||0, srcWorld:'packed', absMs:p.downloadedAtMs||0,
           containerId:p.containerId, containerType:ct, containerName:p.containerName||'', containerClass:p.containerClass||'', containerTribe:p.containerTribe,
-          ownerTribeId:p.containerTribe||0, playerName:p.playerName||'' });
+          ownerTribeId:p.containerTribe||0 });
         lbAddRec(recs[recs.length-1]);
       });
     }
@@ -2610,30 +2610,14 @@ var LB_BREED_LABEL = {health:'血',stamina:'耐',oxygen:'氧',food:'食',weight:
 var LB_BREED_IDX = {health:0, stamina:1, oxygen:3, food:4, weight:7, melee_damage_multiplier:8}; // statValues 索引（STAT_ZH 顺序）
 LB.breedSel = LB.breedSel || [];
 LB.breedResult = LB.breedResult || false;
-// 繁育栏属性选择按物种分别持久化（lbBreedTargetsMap：{'lbBreed:'+dinoClass: [keys]}）；旧全局 lbBreedTargets 迁移兼容
-function lbBreedStoreKey(){ return 'lbBreed:' + (LB.curClass||''); }
-function lbBreedLoadStore(){
-  try{ return JSON.parse(localStorage.getItem('lbBreedTargetsMap')||'{}'); }catch(e){ return {}; }
-}
-function lbBreedSaveStore(m){ try{ localStorage.setItem('lbBreedTargetsMap', JSON.stringify(m)); }catch(e){} }
-(function(){
-  var _bm = lbBreedLoadStore();
-  if(!Object.keys(_bm).length){
-    try{ var _old = JSON.parse(localStorage.getItem('lbBreedTargets')||'[]'); if(Array.isArray(_old) && _old.length){ _bm['lbBreed:'] = _old; lbBreedSaveStore(_bm); } }catch(e){}
-  }
-  LB.breedSel = (Array.isArray(_bm[lbBreedStoreKey()]) ? _bm[lbBreedStoreKey()].slice() : []);
-})();
+try{ var _bs = JSON.parse(localStorage.getItem('lbBreedTargets')||'[]'); if(Array.isArray(_bs)) LB.breedSel = _bs; }catch(e){}
 function lbRenderBreedBar(){
   var bar = document.getElementById('lbBreedBar');
   if(!bar) return;
   var show = !!LB.curClass; // 选中具体物种才显示
   bar.style.display = show ? 'block' : 'none';
-  // 物种变化时：保存旧物种选择 → 加载当前物种的持久化选择；重置结果（旧物种结果不残留）
+  // 物种变化时重置结果（旧物种结果不残留）
   if(LB._breedLastClass !== LB.curClass){
-    var _bm = lbBreedLoadStore();
-    if(LB._breedLastClass !== undefined) _bm['lbBreed:'+LB._breedLastClass] = LB.breedSel.slice();
-    LB.breedSel = (LB.curClass && Array.isArray(_bm[lbBreedStoreKey()])) ? _bm[lbBreedStoreKey()].slice() : [];
-    lbBreedSaveStore(_bm);
     LB._breedLastClass = LB.curClass;
     if(LB.breedResult){ LB.breedResult = false; lbRenderBreedResult(); }
   }
@@ -2655,10 +2639,7 @@ function lbBreedPick(k){
   var i = LB.breedSel.indexOf(k);
   if(i>=0) LB.breedSel.splice(i,1);
   else LB.breedSel.push(k);
-  // 按当前物种持久化
-  var _bm = lbBreedLoadStore();
-  _bm[lbBreedStoreKey()] = LB.breedSel.slice();
-  lbBreedSaveStore(_bm);
+  try{ localStorage.setItem('lbBreedTargets', JSON.stringify(LB.breedSel)); }catch(e){}
   lbRenderBreedBar();
 }
 function lbBreedToggle(){
@@ -2706,12 +2687,9 @@ function lbOwnerName(r){
     return null;
   }
   var ts = tb[r.containerTribe] || null;
-  if(r.containerType==='player'){ // 在某玩家身上：优先精确玩家名 playerName（插件新字段）；fallback ownerName → members[0]，不显示部落名
-    if(r.playerName) return r.playerName;
-    if(ts){
-      if(ts.ownerName) return ts.ownerName;
-      if(ts.members && ts.members.length) return ts.members[0];
-    }
+  if(r.containerType==='player'){ // 在某玩家身上：优先显示持有玩家名
+    var nm = tribeLabel(ts);
+    if(nm) return nm;
     return '玩家#'+(r.containerTribe||'?');
   }
   var nm = tribeLabel(ts);
@@ -2721,9 +2699,6 @@ function lbOwnerName(r){
   if(tid && tid!=='0'){
     var nm2 = tribeLabel(tb[tid]);
     if(nm2) return nm2;
-    // 无归属占位（tribeId=2000000000 特殊值，放生后部落已删除）→ 待认养
-    if(r.containerType==='released' && r.tribeId===2000000000) return '待认养';
-    if(r.containerType==='released') return '放出';
     return '部落#'+tid;
   }
   if(r.containerType==='released') return '放出';
@@ -2827,27 +2802,12 @@ function lbRenderBreedResult(){
   }
   function myTag(r){ return lbContainerLabel(r); } // 我的不标「我的」，只标容器
   function extTag(r){
-    if(r.containerType==='player'){ // 玩家身上携带：背包图标（mask 染橙）+ 玩家名（不显示地图）
-      var burl = (LB_ICON_BY_NAME && LB_ICON_BY_NAME['RW_Store_chibi']) || '';
-      var bag = burl
-        ? '<span style="display:inline-block;width:12px;height:12px;background:#f59e0b;-webkit-mask-image:url(\''+burl+'\');mask-image:url(\''+burl+'\');-webkit-mask-size:contain;mask-size:contain;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;vertical-align:-1px;flex-shrink:0"></span>'
-        : lbMdiSvg('mdi-bag-personal', 12);
-      return '<span style="color:#f59e0b">'+bag+' '+lbOwnerName(r)+'</span>';
-    }
     var mdi = LB_SERVER_MDI[r.server] || 'mdi-map';
-    var name = lbOwnerName(r);
-    // 部落名后标识部落长（ownerName）：如「基纽特战队 · 歌星星」；无部落/放生/部落#xxx 不加
-    var data = LB._cache && LB._cache.data;
-    var tb = (data && data.tribesByServer && data.tribesByServer[r.server]) || {};
-    var t = tb[r.containerTribe] || tb[r.tribeId] || null;
-    var owner = (t && t.ownerName) ? t.ownerName : '';
-    if(owner && owner !== name){ name += ' · ' + owner; }
-    return '<span style="color:#f59e0b">'+lbMdiSvg(mdi, 12)+' '+name+'</span>';
+    return '<span style="color:#f59e0b">'+lbMdiSvg(mdi, 12)+' '+lbOwnerName(r)+'</span>';
   }
   var h = '';
   if(myAllChamp.length){
-    var pn = lbPlayer() || '';
-    h += '<div style="font-size:12px;color:#a78bfa;font-weight:600;margin-bottom:4px">'+(pn||'我的')+'</div>'
+    h += '<div style="font-size:12px;color:#a78bfa;font-weight:600;margin-bottom:4px">我的</div>'
       + myAllChamp.map(function(it){ return card(it, myTag(it.r), it.attrs); }).join('');
   }
   if(extAll.length){

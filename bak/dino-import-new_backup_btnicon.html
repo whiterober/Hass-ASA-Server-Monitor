@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Wikily 生物导入</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f0f13;color:#e0e0e0;height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden;padding:16px 16px 0}
@@ -103,62 +102,28 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 
 <!-- Tab 导航 -->
 <div class="tabbar">
-  <div class="tab" id="tabBtn-import" onclick="switchTab('import')"><i class="mdi mdi-file-import"></i> 生物导入</div>
-  <div class="tab active" id="tabBtn-latest" onclick="switchTab('latest')"><i class="mdi mdi-dna"></i> 生物速查</div>
-  <div class="tab" id="tabBtn-settings" onclick="switchTab('settings')"><i class="mdi mdi-cog"></i> 设置</div>
+  <div class="tab" id="tabBtn-import" onclick="switchTab('import')">📥 生物导入</div>
+  <div class="tab active" id="tabBtn-latest" onclick="switchTab('latest')">🧬 生物速查</div>
+  <div class="tab" id="tabBtn-settings" onclick="switchTab('settings')">⚙️ 设置</div>
 </div>
 <style>
 .tabbar{display:flex;gap:8px;margin-bottom:12px;flex-shrink:0}
 .tab{flex:1;text-align:center;padding:10px 0;border-radius:10px;background:#1a1a24;border:1px solid #2a2a3a;color:#999;cursor:pointer;font-size:14px;font-weight:600;transition:all .15s;user-select:none}
 .tab:hover{background:#22223a;color:#ccc}
 .tab.active{background:#7c3aed;color:#fff;border-color:#7c3aed}
-.tab .mdi{font-size:16px;vertical-align:-2px;margin-right:4px}
 .lb-tab{font-size:12px;padding:5px 12px;border-radius:8px;border:1px solid #333;background:#1a1a24;color:#999;cursor:pointer;user-select:none;transition:all .15s}
 .lb-tab:hover{background:#22223a;color:#ccc}
 .lb-tab-on{background:#7c3aed22;border-color:#7c3aed;color:#a78bfa;font-weight:600}
-/* 服务器 TAB（ASA 后台 server-tab 同款：纯图标 + active 紫高亮 + 数量角标；与选物种按钮统一高度 28px） */
-.server-tab{padding:4px 8px;border-radius:6px;border:1px solid #333;cursor:pointer;font-size:14px;background:#1a1a24;color:#ccc;display:inline-flex;align-items:center;justify-content:center;transition:all .15s;user-select:none;position:relative;height:28px}
-.server-tab:hover{background:#22223a;color:#fff}
-.server-tab.active{background:#7c3aed;color:#fff;border-color:#7c3aed}
-.server-tab .mdi{font-size:15px;line-height:1}
-.server-tab-cnt{position:absolute;top:-5px;right:-5px;background:#7c3aed;color:#fff;font-size:9px;border-radius:8px;padding:0 3px;line-height:13px;min-width:13px;text-align:center;font-style:normal;pointer-events:none}
-.server-tab.active .server-tab-cnt{background:#fff;color:#7c3aed}
 /* 物种选择按钮（更像按钮：hover 紫色高亮 + 下拉箭头） */
-.lb-class-btn{display:inline-flex;align-items:center;gap:6px;background:#1a1a24;border:1px solid #333;border-radius:8px;color:#ccc;font-size:12px;padding:5px 24px 5px 12px;max-width:280px;min-width:120px;cursor:pointer;text-align:left;overflow:visible;transition:all .15s;user-select:none;position:relative;margin-right:12px;height:28px;flex-shrink:0}
+.lb-class-btn{display:inline-flex;align-items:center;gap:6px;background:#1a1a24;border:1px solid #333;border-radius:8px;color:#ccc;font-size:12px;padding:5px 12px;max-width:280px;min-width:120px;cursor:pointer;text-align:left;overflow:hidden;transition:all .15s;user-select:none}
 .lb-class-btn:hover{background:#22223a;border-color:#7c3aed;color:#fff}
 .lb-class-btn:active{transform:scale(.97)}
-.lb-class-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:#a78bfa}
-.lb-class-ic{position:absolute;right:-6px;top:50%;transform:translateY(-50%);width:36px;height:36px;object-fit:contain;flex-shrink:0}
-/* 生物卡片右侧高透物种图标（绝对定位，右缘超出被 overflow:hidden 裁切；filter 用 style 属性注入避免与定位样式冲突） */
-.lb-card-ic{position:absolute;right:8px;top:10px;width:64px;height:64px;object-fit:contain;opacity:.14;pointer-events:none;z-index:0}
-/* 生物卡片：PC 手型 + hover 紫色描边（可选中）；移动端禁选字 */
-.lb-card{cursor:pointer}
-.lb-card:hover{border-color:#7c3aed!important}
-/* ID 小按钮：卡片右上角绝对定位，圆角描边低可视化，点击 toggle 显示 ID 浮窗（双端统一） */
-.lb-id-btn{position:absolute;top:14px;right:8px;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:2px;border:1px solid #444;background:rgba(255,255,255,.05);color:#777;opacity:.6;cursor:pointer;z-index:2;flex-shrink:0;line-height:1;padding:0}
-.lb-id-btn:hover{opacity:1;color:#a78bfa;border-color:#7c3aed}
-.lb-id-btn.lb-active{opacity:1;color:#a78bfa;border-color:#7c3aed;background:rgba(124,58,237,.15)}
-.lb-id-btn .mdi{font-size:12px}
-/* 繁育结果卡片：容器图标固定尺寸（防崩，不依赖 .acc summary img） */
-.lb-breed-card .lb-sum-ic{width:16px;height:16px;vertical-align:-3px;margin-right:3px;border-radius:3px;object-fit:contain}
-.acc{border-radius:8px;margin-bottom:6px;background:transparent;overflow:hidden}
+.lb-class-label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acc{border:1px solid #2a2a3a;border-radius:8px;margin-bottom:6px;background:#15151f;overflow:hidden}
 .acc summary{padding:8px 12px;cursor:pointer;font-size:13px;color:#ccc;user-select:none;display:flex;justify-content:space-between;align-items:center;transition:all .15s}
 .acc summary:hover{background:#1d1d29;color:#fff}
-.acc[open] summary{color:#fff;margin-bottom:6px;border-radius:8px;background:#7c3aed}
+.acc[open] summary{border-bottom:1px solid #2a2a3a;color:#fff}
 .acc-cnt{color:#666;font-size:11px}
-.acc[open] summary .acc-cnt{color:#fff}
-.acc summary .mdi{font-size:14px;vertical-align:-2px}
-.acc summary img{width:22px;height:22px;vertical-align:-5px;margin-right:4px;border-radius:4px}
-/* 属性行横滑：隐藏滚动条（去移动端箭头残留），触摸仍可滑动 */
-.lb-stats-row{scrollbar-width:none;-ms-overflow-style:none}
-.lb-stats-row::-webkit-scrollbar{display:none}
-.lb-empty-ic{width:16px;height:16px;vertical-align:-3px;margin-right:4px;border-radius:3px}
-/* 移动端：筛选栏物种按钮独占一行，tabs 强制换到第二行并自动换行（行距 12px，不影响筛选栏整体下边距） */
-@media (max-width:768px){
-  .lb-filter-bar{ row-gap:12px !important; }
-  .lb-filter-bar #lbTabs{ flex-basis:100% !important; }
-  .lb-card{-webkit-user-select:none;user-select:none}
-}
 /* 物种选择浮窗（ASA 后台选图同款 dark 样式） */
 .lb-picker-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center}
 .lb-picker-panel{background:#1a1a24;border:1px solid #333;border-radius:8px;width:90%;max-width:640px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden}
@@ -219,8 +184,8 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
     <div class="card" id="candCard" style="display:none">
       <h2>🎯 候选分配方案 <span id="candCount" style="font-size:11px;color:#999"></span>
         <span style="float:right;font-size:11px;border:1px solid #333;border-radius:4px;overflow:hidden">
-          <span id="btTamed" onclick="setBioType('tamed')" style="cursor:pointer;padding:1px 6px;display:inline-block" title="训（驯服）"><i class="mdi mdi-human" style="font-size:11px;line-height:1"></i></span>
-          <span id="btBred" onclick="setBioType('bred')" style="cursor:pointer;padding:1px 6px;display:inline-block" title="繁（繁育）"><i class="mdi mdi-dna" style="font-size:11px;line-height:1"></i></span>
+          <span id="btTamed" onclick="setBioType('tamed')" style="cursor:pointer;padding:1px 6px;display:inline-block">训</span>
+          <span id="btBred" onclick="setBioType('bred')" style="cursor:pointer;padding:1px 6px;display:inline-block">繁</span>
         </span>
       </h2>
       <div id="candList"></div>
@@ -230,11 +195,11 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 
 <!-- Tab② 最新生物 -->
 <div id="latestUI" style="display:flex;flex:1;flex-direction:column;min-height:0;gap:12px;overflow:hidden">
-  <div class="card" style="position:relative;margin-bottom:0">
+  <div class="card" style="position:relative">
     <button id="lbRefreshBtn2" onclick="lbRefreshView()" title="强制重新加载数据" style="position:absolute;top:10px;right:10px;background:none;border:none;color:#999;padding:2px 4px;border-radius:6px;cursor:pointer;font-size:12px;line-height:1;opacity:.65"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg></button>
-    <div class="lb-filter-bar" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-right:90px;margin-bottom:6px">
       <button id="lbClassBtn" class="lb-class-btn" onclick="lbOpenSpeciesPicker()" title="选择物种"><span class="lb-class-label">全部物种</span></button>
-      <div id="lbTabs" style="display:flex;flex-wrap:wrap;gap:6px;flex:1 0 auto;min-width:0"></div>
+      <div id="lbTabs" style="display:contents"></div>
     </div>
   </div>
   <div id="lbStatus" style="display:none;padding:8px 12px;border-radius:8px;font-size:12px;background:#1a1a3a;color:#7c3aed"></div>
@@ -243,8 +208,12 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 
 <div id="settingsUI" style="display:none;flex:1;flex-direction:column;min-height:0;gap:12px;overflow:hidden">
   <div class="card">
-    <div id="lbServers" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
-    <button class="btn btn-primary" id="lbRefreshBtn" onclick="lbRefresh()" style="margin-bottom:0">刷新选中服务器数据</button>
+    <h2>⚙️ 设置</h2>
+    <div style="margin-bottom:8px">
+      <div style="font-size:12px;color:#999;margin-bottom:6px">🗺 刷新服务器多选</div>
+      <div id="lbServers" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+    </div>
+    <button class="btn btn-primary" id="lbRefreshBtn" onclick="lbRefresh()">🔄 刷新服务器数据</button>
   </div>
   <div id="lbProgress" style="display:none">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
@@ -428,20 +397,6 @@ function lbLoadPrefixZh(){
     LB_PREFIX_ZH = d || {};
     return LB_PREFIX_ZH;
   }).catch(function(){ LB_PREFIX_ZH = {}; return LB_PREFIX_ZH; });
-}
-// ===== 颜色库 dino_colors.json（颜色 ID → HEX，生物卡片顶部色带用；ark.wiki.gg 公开表） =====
-var LB_COLORS = null;
-function lbLoadColors(){
-  if(LB_COLORS) return Promise.resolve(LB_COLORS);
-  return authFetch('/local/asa-data/dino_colors.json?t='+Date.now(), {}).then(function(r){return r.json();}).then(function(d){
-    LB_COLORS = d || {};
-    return LB_COLORS;
-  }).catch(function(){ LB_COLORS = {}; return LB_COLORS; });
-}
-// colors ID → HEX（ID 0 未设置/未知 → 灰色）
-function lbColorHex(id){
-  var c = LB_COLORS && LB_COLORS[id];
-  return (c && c.hex) ? c.hex : '#3a3a4a';
 }
 // 拆前缀：返回 {prefixes:[小写前缀], base:基础英文名}（支持 R-/X- 与多重前缀；空值前缀如 brute 也剥离）
 function lbStripPrefix(eng){
@@ -793,7 +748,7 @@ async function refreshFiles() {
       var delBtn = isLatest ? '' : ' <button onclick="event.stopPropagation();deleteGroup(' + gi + ')" style="float:right;background:none;border:none;color:#ef4444;padding:2px 4px;border-radius:4px;font-size:10px;cursor:pointer;line-height:1" title="删除本组全部文件"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14"/></svg></button>';
       html += '<details class="file-group" id="fg-' + gi + '"' + (isLatest ? ' open' : '') + ' ontoggle="if(this.open)closeOtherGroups(' + gi + ')"' + '>'
         + '<summary style="cursor:pointer;padding:6px 10px;background:#1e1e32;border-radius:8px;margin:6px 0;font-size:12px;color:#999;list-style:disc">'
-        + timeLabel + ' <span style="opacity:.5">|</span> ' + g.files.length + ' 个文件' + delBtn + '</summary>';
+        + timeLabel + ' | ' + g.files.length + ' 个文件' + delBtn + '</summary>';
       for (var fi = 0; fi < g.files.length; fi++) {
         var f = g.files[fi];
         var shortDate = f.date ? f.date.replace(/ GMT.*/, '').replace(/^\w+, /, '') : '';
@@ -1160,7 +1115,7 @@ function showCandidates(d) {
   var bonusBase = totalFromTorp - wildBase;
   var xpBase = Math.max(0, (d.level||1) - 1 - totalFromTorp);
   var keys = ['health','stamina','oxygen','food','weight','melee_damage_multiplier'];
-  var abbr = ['血','耐','氧','食','重','攻'];
+  var abbr = ['生','耐','氧','食','重','伤'];
   var h = '<div class="cand-row" style="background:#111;color:#666;font-size:10px;cursor:default">';
   h += '<span class="cand-num">#</span>';
   for (var ki = 0; ki < keys.length; ki++) h += '<span class="cand-stat">' + abbr[ki] + '</span>';
@@ -1364,15 +1319,6 @@ function isBredDino(d) {
   if (typeof d.babyAge === 'number' && d.babyAge > 0 && d.babyAge < 1) return true; // 幼崽只能来自繁育
   return false;
 }
-// 速查版训/繁判断（适配速查字段：imprintingQuality/ancestors/imprinter/babyAge）；实锤=繁，排除法判训=非实锤（标绿）
-function lbIsBred(r){
-  if(!r) return false;
-  if(typeof r.imprintingQuality==='number' && r.imprintingQuality>0) return true;
-  if(r.ancestors && r.ancestors.length>0) return true;
-  if(r.imprinter) return true;
-  if(typeof r.babyAge==='number' && r.babyAge>0 && r.babyAge<1) return true;
-  return false;
-}
 // 变异模块可见：繁育 且 突变计数器>0（C=0 时无突变，隐藏）
 function isMutVisible(d) {
   if (!isBredDino(d)) return false;
@@ -1469,8 +1415,6 @@ LB.SVC_REFRESH = '/api/services/script/refresh_tamed'; // HA script 发事件 �
 LB.POLL_MS = 1000;        // 触发后轮询 tamed savedAt 间隔
 LB.POLL_TIMEOUT = 30000;  // 轮询确认超时（ms）
 LB.servName = function(abbr){ var s=LB.SERVERS.find(function(x){return x.abbr===abbr;}); return s?s.name:abbr; };
-// 服务器 TAB 图标（ASA 后台附件同款 MDI）
-var LB_SERVER_MDI = { Isl:'mdi-island', Sco:'mdi-volcano', Cen:'mdi-orbit', Abe:'mdi-radioactive', Ast:'mdi-star-four-points', Ext:'mdi-meteor', Rag:'mdi-lighthouse-on', Val:'mdi-forest', Los:'mdi-castle', Gen:'mdi-dna', Bob:'mdi-party-popper' };
 LB._inited = false;
 LB._cache = null;   // 生物速查数据缓存（{data, ts}）
 
@@ -1502,20 +1446,13 @@ function lbRenderServers(){
   var el=document.getElementById('lbServers'); if(!el) return;
   var html='';
   LB.SERVERS.forEach(function(s){
-    if(s.abbr==='Bob') return; // 设置页去掉俱乐部
-    var mdi=LB_SERVER_MDI[s.abbr]||'';
-    html+='<span class="server-tab active" data-abbr="'+s.abbr+'" onclick="lbToggleServer(this)" title="'+s.name+'">'+(mdi?'<i class="mdi '+mdi+'"></i>':(s.icon||''))+'</span>';
+    html+='<label style="display:inline-flex;align-items:center;gap:4px;padding:6px 10px;border-radius:8px;background:#22223a;border:1px solid #2a2a3a;cursor:pointer;font-size:12px"><input type="checkbox" data-abbr="'+s.abbr+'" checked style="accent-color:#7c3aed"> '+s.name+'</label>';
   });
   el.innerHTML=html;
 }
-// 设置页服务器多选：点击切换选中（可多选，active=选中，样式同速查服务器 TAB）
-function lbToggleServer(el){
-  if(!el) return;
-  el.classList.toggle('active');
-}
 function lbSelectedServers(){
   var arr=[];
-  document.querySelectorAll('#lbServers .server-tab.active').forEach(function(el){ arr.push(el.getAttribute('data-abbr')); });
+  document.querySelectorAll('#lbServers input[type=checkbox]').forEach(function(cb){ if(cb.checked) arr.push(cb.getAttribute('data-abbr')); });
   return arr;
 }
 
@@ -1554,7 +1491,7 @@ async function lbLoad(servers){
           colors:p.colors||'', saddle:p.saddle||'', cryoVersion:p.cryoVersion,
           sortWorldSec:p.packedAtWorldSec||0, srcWorld:'packed', absMs:p.downloadedAtMs||0,
           containerId:p.containerId, containerType:ct, containerName:p.containerName||'', containerClass:p.containerClass||'', containerTribe:p.containerTribe,
-          ownerTribeId:p.containerTribe||0, playerName:p.playerName||'' });
+          ownerTribeId:p.containerTribe||0 });
         lbAddRec(recs[recs.length-1]);
       });
     }
@@ -1608,8 +1545,8 @@ function lbTimeGroup(rec, worldNowByServer){
   return 2;  // 收纳/驯养时间未知
 }
 
-var STAT_ZH = ['血','耐','晕','氧','食','水','温','重','攻','速','抗','制'];
-function fmtStat(v){ return String(Math.round(Number(v))); }
+var STAT_ZH = ['生命','耐力','眩晕','氧气','食物','水分','温度','负重','近战','速度','耐性','制作'];
+function fmtStat(v){ return String(Number(v)); }
 // 无属性值时复用生物导入算法（calcStatValue）计算最终属性值
 function lbCalcStat(r, i){
   try{
@@ -1735,12 +1672,21 @@ function lbTamedDom(r){
   return r._dom;
 }
 function lbDinoHTML(r){
-  // 物种名：仅「全部物种」模式显示（LB.curClass 为空）；直接复用浮窗 lbSpName（完整逻辑：特殊名/前缀/深度查询，与浮窗一致），无中文显示英文
+  // 物种名：仅「全部物种」模式显示（LB.curClass 为空）；中文优先（类名→英文名两级查），无中文显示英文名（不显示类名）
   var zh = '';
   if(!LB.curClass){
-    var nm = lbSpName(r.dinoClass);
-    zh = nm.zh || nm.eng || '';
+    var sp = findSpeciesByClass(r.dinoClass);
+    var eng = (sp && sp.name) ? sp.name : '';
+    var zhc = zhName(r.dinoClass) || (eng ? zhName(eng) : null);
+    if(zhc) zh = zhc;
+    else {
+      zh = eng || '';
+      if(!zh){ var spc = LB_SPECIAL_NAMES[r.dinoClass]; if(spc) zh = spc.replace(/\s*\(.*\)$/,''); }
+    }
   }
+  var srcLabel = r.src==='cryo' ? (r.containerType==='stand'?'宠物台':'球内') : '放出';
+  var tlabel = {packed: (r.containerType==='stand'?'上架':'收球'), downloaded:'下载', tamed:'驯服'}[r.srcWorld] || '';
+  var timeTxt = r.sortWorldSec>0 ? (tlabel+' #'+(r.sortWorldSec|0)) : (r.absMs>=LB.ASA_LAUNCH_MS ? new Date(r.absMs).toLocaleString() : '未知');
   var stats='';
   var sol = null; // 懒加载逆推结果（null=未算，false=无可逆推）
   var domR = null; // tamed/v7/stand 手动加点反推（懒加载）
@@ -1762,7 +1708,7 @@ function lbDinoHTML(r){
     var disp;
     var domVal = 0;
     if(guessed){ // v6 推测：遗传/加点都是猜测（绿色）；变异橙
-      disp = '(<span style="color:#22c55e">'+gw+'</span><span style="opacity:.5">|</span><span style="color:#f59e0b">0</span><span style="opacity:.5">|</span><span style="color:#22c55e">'+p+'</span>)';
+      disp = '(<span style="color:#22c55e">'+gw+'</span>|<span style="color:#f59e0b">0</span>|<span style="color:#22c55e">'+p+'</span>)';
     } else if(r.cryoVersion===6 && sol === false) disp = ''; // v6 推测失败：不显示
     else {
       // tamed/v7/stand 真实数据：反推手动加点
@@ -1773,181 +1719,49 @@ function lbDinoHTML(r){
       if(domVal > 0){
         // fallback（无真实留痕字段）猜测加点绿色；真实留痕正常显示
         disp = (typeof r.imprintingQuality==='number')
-          ? ('('+p+'<span style="opacity:.5">|</span><span style="color:#f59e0b">'+m+'</span><span style="opacity:.5">|</span>'+domVal+')')
-          : ('('+p+'<span style="opacity:.5">|</span><span style="color:#f59e0b">'+m+'</span><span style="opacity:.5">|</span><span style="color:#22c55e">'+domVal+'</span>)');
+          ? ('('+p+'|<span style="color:#f59e0b">'+m+'</span>|'+domVal+')')
+          : ('('+p+'|<span style="color:#f59e0b">'+m+'</span>|<span style="color:#22c55e">'+domVal+'</span>)');
       } else {
-        disp = '('+p+'<span style="opacity:.5">|</span><span style="color:#f59e0b">'+m+'</span><span style="opacity:.5">|</span>0)';
+        disp = '('+p+'|<span style="color:#f59e0b">'+m+'</span>|0)';
       }
     }
     var vDisp = fmtStat(v);
     if(i===8) vDisp = Math.round(v*100) + '%'; // 近战：multiplier→百分比（含基础100%，如 6.55→655%）
-    stats+='<span style="margin-right:10px;color:#999;display:inline-block;vertical-align:top">'+STAT_ZH[i]+' <b style="color:#e0e0e0">'+vDisp+'</b>'
-      +(disp?'<br><span style="color:#a78bfa" title="'+(guessed?'推测值(遗传|变异|加点)':'')+'">'+disp+'</span>':'')
+    stats+='<span style="margin-right:10px;color:#999">'+STAT_ZH[i]+' <b style="color:#e0e0e0">'+vDisp+'</b>'
+      +(disp?'<span style="color:#a78bfa" title="'+(guessed?'推测值(遗传|变异|加点)':'')+'">'+disp+'</span>':'')
       +'</span>';
   });
   var v6warn = (r.cryoVersion===6 && sol === false) ? '<div style="margin-top:6px;color:#f87171;font-size:11px">⚠️ 加点/变异数据缺失（v6旧球，无法逆推）</div>' : '';
   var mutM = (r.randomMutationsMale||0), mutF = (r.randomMutationsFemale||0);
   var mutSum = mutM + mutF;
-  // 变异代数（社区惯例）：所有有变异的属性都分析显示；代数 = 该属性变异次数（点数÷2，每次变异+2点）
+  // 变异代数（社区惯例）：主属性 = 变异最多的属性；代数 = 该属性变异次数（点数÷2，每次变异+2点）
   var mutAbbr = ['血','耐','晕','氧','食','水','温','重','攻','速','抗','制'];
-  var mutArr = Array.isArray(r.statMutations)?r.statMutations:[];
-  var anc = '';
+  var genIdx = -1, genN = 0, mutArr = Array.isArray(r.statMutations)?r.statMutations:[];
   for(var gi=0; gi<mutArr.length; gi++){
     var gv = Number(mutArr[gi])||0;
-    if(gv > 0){ anc += '🧬'+Math.round(gv/2)+'代 '+(mutAbbr[gi]||'?')+' '; }
+    if(gv > genN){ genN = gv; genIdx = gi; }
   }
-  // 训/繁徽章（复用导入页 isBredDino 逻辑；样式同鞍：16×16 圆角2px 彩底白字；繁紫#7c3aed mdi-dna；训不显示标识；放第一行鞍右边）
-  var tbTag = lbIsBred(r)
-    ? '<span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:2px;background:#7c3aed;color:#fff;flex-shrink:0"><i class="mdi mdi-dna" style="font-size:12px;line-height:1"></i></span>'
-    : '';
-  // 成长百分比（100%/成年不显示；婴儿绿/幼崽黄/青年橙，与导入页阶段着色一致）
-  var growth='';
-  if(typeof r.babyAge==='number' && r.babyAge>0 && r.babyAge<1){
-    var gPct=Math.round(r.babyAge*100);
-    var gCls = r.babyAge<0.1 ? '#4ade80' : (r.babyAge<0.5 ? '#facc15' : '#fb923c');
-    growth='<span style="color:'+gCls+'">🐣 '+gPct+'%</span>';
-  }
-  // 第二行：成长/突变/变异代数（收球/驯服时间与鞍已移除；无内容不渲染整行）
-  var row2 = growth
-    +(mutSum?'<span style="color:#f59e0b">☢️♂'+mutM+'/♀'+mutF+'</span>':'')
-    +(anc?'<span>'+anc+'</span>':'');
-  // 顶部色带：6 区域颜色（R0-R5，从左到右），ID 0 未设置→灰色；紧贴卡片顶/左/右无间隙
-  var strip = '';
-  if(r.colors){
-    var ids = String(r.colors).split(',');
-    if(ids.length){
-      strip = '<div style="display:flex;height:6px;margin:-10px -12px 8px;border-radius:10px 10px 0 0;overflow:hidden">';
-      for(var ci=0; ci<ids.length; ci++){
-        strip += '<i style="flex:1;background:'+lbColorHex(ids[ci].trim())+'"></i>';
-      }
-      strip += '</div>';
-    }
-  }
-  // 卡片右侧高透物种图标（绝对定位，右缘超出被 overflow:hidden 裁切一部分；定位用 CSS 类，filter 用 style 注入）
-  var cardIcon='';
-  var icUrl=lbIconForDinoClass(r.dinoClass);
-  if(icUrl) cardIcon='<img class="lb-card-ic" src="'+icUrl+'"'+lbIconFilterStyle(icUrl,'biology')+' onerror="this.remove()">';
-  // ID 小按钮（卡片右上角，点击 toggle 显示/隐藏 ID 浮窗，双端统一）
-  var idBtn='<span class="lb-id-btn" onclick="lbToggleId(event,this,\'#'+r.dinoId1+'_'+r.dinoId2+'\')" title="查看ID"><i class="mdi mdi-identifier"></i></span>';
-  return '<div class="lb-card" style="position:relative;overflow:hidden;background:#1a1a24;border:1px solid #2a2a3a;border-radius:10px;padding:10px 12px;margin-bottom:8px">'
-    +cardIcon
-    +idBtn
-    +strip
-    +'<div style="position:relative;z-index:1;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
-    +(zh?'<span style="color:#a78bfa;font-size:12px">'+zh+'</span>':'')
-    +'<span style="font-size:15px;color:'+(r.gender==='FEMALE'?'#f472b6':'#60a5fa')+'">'+(r.gender==='FEMALE'?'♀':'♂')+'</span>'
+  genN = Math.round(genN/2);
+  var anc = (genN>0 && genIdx>=0) ? '🧬'+genN+'代 '+(mutAbbr[genIdx]||'?') : '';
+  return '<div style="background:#1a1a24;border:1px solid #2a2a3a;border-radius:10px;padding:10px 12px;margin-bottom:8px">'
+    +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+    +'<span style="font-size:15px">'+(r.gender==='FEMALE'?'♀':'♂')+'</span>'
     +(r.name ? '<b style="color:#fff;font-size:14px">'+r.name+'</b>' : '')
-    +'<span style="background:#22223a;border:1px solid #333;border-radius:2px;padding:1px 8px;font-size:11px;color:#ccc">Lv.'+r.level+'</span>'
-    +(r.saddle?'<span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:2px;background:'+(/platform/i.test(r.saddle)?'#fb923c':(/tek/i.test(r.saddle)?'#7c3aed':'#38bdf8'))+';color:#fff">'+lbSaddleImg(r.saddle)+'</span>':'')
-    +tbTag
+    +(zh?'<span style="color:#a78bfa;font-size:12px">'+zh+'</span>':'')
+    +'<span style="background:#22223a;border:1px solid #333;border-radius:6px;padding:1px 8px;font-size:11px;color:#ccc">Lv.'+r.level+'</span>'
+    +'<span style="background:#1a1a3a;border:1px solid #7c3aed33;border-radius:6px;padding:1px 8px;font-size:11px;color:#a78bfa">'+srcLabel+'</span>'
+    +'<span style="margin-left:auto;font-size:11px;color:#666">#'+r.dinoId1+'_'+r.dinoId2+'</span>'
     +'</div>'
-    +(row2?'<div style="position:relative;z-index:1;font-size:11px;color:#999;margin-top:6px;display:flex;flex-wrap:wrap;gap:4px 14px">'+row2+'</div>':'')
-    +(stats?'<div class="lb-stats-row" style="position:relative;z-index:1;font-size:11px;margin-top:6px;white-space:nowrap;overflow-x:auto">'+stats+'</div>':'')
+    +'<div style="font-size:11px;color:#999;margin-top:6px;display:flex;flex-wrap:wrap;gap:4px 14px">'
+    +'<span> '+timeTxt+'</span>'
+    +(r.saddle?'<span>'+lbSaddleIcon(r.saddle)+'</span>':'')
+    +(anc?'<span>'+anc+'</span>':'')
+    +(mutSum?'<span style="color:#f59e0b">⚡突变 ♂'+mutM+'/♀'+mutF+'</span>':'')
+    +'</div>'
+    +(stats?'<div style="font-size:11px;margin-top:6px;flex-wrap:wrap">'+stats+'</div>':'')
     +v6warn
     +'</div>';
 }
-
-// Dino ID 自定义浮窗（桌面 hover 第一行 / 移动端长按，显示 dinoId1_dinoId2）
-var LB_ID_TIP = null, LB_ID_TIP_TIMER = null;
-function lbIdTipEl(){
-  if(!LB_ID_TIP){
-    LB_ID_TIP = document.createElement('div');
-    LB_ID_TIP.style.cssText = 'position:fixed;z-index:99999;display:none;background:#1a1a2a;border:1px solid #7c3aed;border-radius:6px;padding:4px 10px;font-size:11px;color:#ccc;pointer-events:none;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.4)';
-    document.body.appendChild(LB_ID_TIP);
-  }
-  return LB_ID_TIP;
-}
-function lbShowId(ev, id){
-  var tip = lbIdTipEl();
-  tip.textContent = id;
-  tip.style.display = 'block';
-  var x = ev.clientX + 12, y = ev.clientY + 14;
-  var r = tip.getBoundingClientRect();
-  if(x + r.width > innerWidth) x = ev.clientX - r.width - 12;
-  if(y + r.height > innerHeight) y = ev.clientY - r.height - 12;
-  tip.style.left = x + 'px';
-  tip.style.top = y + 'px';
-}
-function lbHideId(){
-  clearTimeout(LB_ID_TIP_TIMER);
-  if(LB_ID_TIP) LB_ID_TIP.style.display = 'none';
-}
-// 卡片右上角 ID 小按钮：点击 toggle 显示/隐藏 ID 浮窗（双端统一）；显示时自动复制 ID + 提示已复制；按钮高亮与浮窗显隐同步
-function lbToggleId(ev, btn, id){
-  ev.stopPropagation();
-  if(LB_ID_TIP && LB_ID_TIP.style.display==='block'){
-    if(LB._idBtn === btn){ // 同一按钮：隐藏
-      lbHideId();
-      lbIdBtnActive(null);
-      return;
-    }
-    // 不同按钮：切换显示新按钮的浮窗（走下方显示逻辑）
-  }
-  lbIdBtnActive(btn);
-  lbShowId(ev, id);
-  var tip = lbIdTipEl();
-  tip.innerHTML = id + ' <span style="color:#22c55e">已复制</span>';
-  lbCopyId(id);
-  lbBindDocHide();
-}
-// 按钮高亮管理：只保留当前按钮 lb-active（浮窗显示时高亮，隐藏时恢复）
-function lbIdBtnActive(btn){
-  if(LB._idBtn && LB._idBtn!==btn) LB._idBtn.classList.remove('lb-active');
-  LB._idBtn = btn || null;
-  if(btn) btn.classList.add('lb-active');
-}
-// 浮窗显示后：点击其他任何位置自动隐藏（只绑定一次；ID 按钮已 stopPropagation 不会误触发）
-function lbBindDocHide(){
-  if(LB._docHideBound) return;
-  LB._docHideBound = true;
-  document.addEventListener('click', function(e){
-    var t = e.target;
-    if(t && t.closest && t.closest('.lb-id-btn')) return; // 按钮自己 toggle
-    lbHideId();
-    lbIdBtnActive(null);
-  });
-}
-// 复制 ID 到剪贴板（clipboard API 优先，老式 execCommand 兜底）
-function lbCopyId(id){
-  try{
-    if(navigator.clipboard && navigator.clipboard.writeText){
-      navigator.clipboard.writeText(id).catch(function(){});
-    } else {
-      var ta = document.createElement('textarea');
-      ta.value = id;
-      ta.style.position = 'fixed'; ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.select();
-      try{ document.execCommand('copy'); }catch(e){}
-      document.body.removeChild(ta);
-    }
-  }catch(e){}
-}
-function lbTouchIdStart(ev, id){
-  clearTimeout(LB_ID_TIP_TIMER);
-  var t = ev.touches && ev.touches[0];
-  LB_ID_TIP_TIMER = setTimeout(function(){
-    lbShowId({clientX: t ? t.clientX : 0, clientY: t ? t.clientY : 0}, id);
-  }, 500);
-}
-// 移动端：长按整张卡片显示 ID 浮窗，再点一下消失（toggle；桌面 hover 走 mouseenter/mouseleave）
-function lbCardTouchStart(ev, id){
-  if(LB_ID_TIP && LB_ID_TIP.style.display==='block'){ // 浮窗已显示：点击即隐藏
-    lbHideId();
-    clearTimeout(LB_ID_TIP_TIMER);
-    LB._tipCard = null;
-    return;
-  }
-  clearTimeout(LB_ID_TIP_TIMER);
-  var t = ev.touches && ev.touches[0];
-  LB._tipCard = { x:(t?t.clientX:0), y:(t?t.clientY:0) };
-  LB_ID_TIP_TIMER = setTimeout(function(){
-    if(!LB._tipCard) return;
-    lbShowId({clientX:LB._tipCard.x, clientY:LB._tipCard.y}, id);
-  }, 500);
-}
-function lbCardTouchEnd(){ clearTimeout(LB_ID_TIP_TIMER); LB._tipCard = null; }
-function lbCardTouchMove(){ clearTimeout(LB_ID_TIP_TIMER); LB._tipCard = null; }
 
 // IndexedDB 速查缓存持久化（刷新页面后秒开，避免重新加载 10 台 JSON）
 var LB_IDB_NAME = 'dinoImportDB', LB_IDB_STORE = 'lbCache';
@@ -2007,7 +1821,7 @@ var LB_CONTAINER_ZH_KEY = {
   display: 'display_case',
   stand: 'hud_petdisplaystand_wall_thatch_icon',
   storage: 'hud_storagebox_icon',
-  hospital: 'hud_cryohospital_icon',
+  hospital: 'hud_medicalstand_icon',
   replicator: 'tek_replicator'
 };
 function lbContainerTypeZh(t){
@@ -2027,72 +1841,18 @@ function lbSaddleIcon(sc){
   else if(/tek/i.test(sc)) p = MDI_HEXAGON;
   return '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px"><path d="'+p+'"/></svg>';
 }
-// 鞍图标（PNG 优先，取自 asa-data 图标库；未收录回退 MDI SVG）：普通 RW_equip_saddle、平台 RW_Garage_roof_show、Tek TEK_Icon
-function lbSaddleImg(sc){
-  if(!sc) return '';
-  var key = 'RW_equip_saddle';
-  if(/platform/i.test(sc)) key = 'RW_Garage_roof_show';
-  else if(/tek/i.test(sc)) key = 'TEK_Icon';
-  var url = (LB_ICON_BY_NAME && LB_ICON_BY_NAME[key]) || '';
-  if(!url) return lbSaddleIcon(sc);
-  var f = lbIconFilterStyle(url);
-  return '<img src="'+url+'" style="width:12px;height:12px;object-fit:contain;display:block"'+(f?f:'')+'>';
-}
 // 容器显示名：有名字显示名字；未命名 display/stand 合并用 JSON 中文；其他未命名容器加 containerId 后 6 位区分
-// containerType → MDI 图标（无 png 时回退）
-var LB_CONTAINER_MDI = { released:'mdi-paw', stand:'mdi-basket-outline', display:'mdi-image-frame', storage:'mdi-package-variant-closed', hospital:'mdi-medical-bag', fridge:'mdi-fridge-outline', replicator:'mdi-cog', player:'mdi-bag-personal' };
-// 繁育卡片 MDI 图标（内联 SVG，不依赖字体字形）：容器 + 服务器地图
-var LB_MDI_SVG = {
-  'mdi-paw': 'M8.35,3C9.53,2.83 10.78,4.12 11.14,5.9C11.5,7.67 10.85,9.25 9.67,9.43C8.5,9.61 7.24,8.32 6.87,6.54C6.5,4.77 7.17,3.19 8.35,3M15.5,3C16.69,3.19 17.35,4.77 17,6.54C16.62,8.32 15.37,9.61 14.19,9.43C13,9.25 12.35,7.67 12.72,5.9C13.08,4.12 14.33,2.83 15.5,3M3,7.6C4.14,7.11 5.69,8 6.5,9.55C7.26,11.13 7,12.79 5.87,13.28C4.74,13.77 3.2,12.89 2.41,11.32C1.62,9.75 1.9,8.08 3,7.6M21,7.6C22.1,8.08 22.38,9.75 21.59,11.32C20.8,12.89 19.26,13.77 18.13,13.28C17,12.79 16.74,11.13 17.5,9.55C18.31,8 19.86,7.11 21,7.6M19.33,18.38C19.37,19.32 18.65,20.36 17.79,20.75C16,21.57 13.88,19.87 11.89,19.87C9.9,19.87 7.76,21.64 6,20.75C5,20.26 4.31,18.96 4.44,17.88C4.62,16.39 6.41,15.59 7.47,14.5C8.88,13.09 9.88,10.44 11.89,10.44C13.89,10.44 14.95,13.05 16.3,14.5C17.41,15.72 19.26,16.75 19.33,18.38Z',
-  'mdi-basket-outline': 'M22 9H17.21L12.83 2.44C12.64 2.16 12.32 2 12 2S11.36 2.16 11.17 2.45L6.79 9H2C1.45 9 1 9.45 1 10C1 10.09 1 10.18 1.04 10.27L3.58 19.54C3.81 20.38 4.58 21 5.5 21H18.5C19.42 21 20.19 20.38 20.43 19.54L22.97 10.27L23 10C23 9.45 22.55 9 22 9M12 4.8L14.8 9H9.2L12 4.8M18.5 19L5.5 19L3.31 11H20.7L18.5 19M12 13C10.9 13 10 13.9 10 15S10.9 17 12 17 14 16.1 14 15 13.1 13 12 13Z',
-  'mdi-image-frame': 'M10,14.29L6.5,19H17.46L14.75,15.46L12.78,17.8L10,14.29M5,21V7H18.96V21H5M12,2.4L14.61,5.03H9.37L12,2.4M5,5.03C4.5,5.03 4,5.22 3.61,5.61C3.2,6 3,6.46 3,7V21C3,21.5 3.2,22 3.61,22.39C4,22.8 4.5,23 5,23H18.96C19.5,23 19.96,22.8 20.37,22.39C20.77,22 21,21.5 21,21V7C21,6.46 20.77,6 20.37,5.61C19.96,5.22 19.5,5.03 18.96,5.03H16L12,1L7.96,5.03H5Z',
-  'mdi-package-variant-closed': 'M21,16.5C21,16.88 20.79,17.21 20.47,17.38L12.57,21.82C12.41,21.94 12.21,22 12,22C11.79,22 11.59,21.94 11.43,21.82L3.53,17.38C3.21,17.21 3,16.88 3,16.5V7.5C3,7.12 3.21,6.79 3.53,6.62L11.43,2.18C11.59,2.06 11.79,2 12,2C12.21,2 12.41,2.06 12.57,2.18L20.47,6.62C20.79,6.79 21,7.12 21,7.5V16.5M12,4.15L10.11,5.22L16,8.61L17.96,7.5L12,4.15M6.04,7.5L12,10.85L13.96,9.75L8.08,6.35L6.04,7.5M5,15.91L11,19.29V12.58L5,9.21V15.91M19,15.91V9.21L13,12.58V19.29L19,15.91Z',
-  'mdi-medical-bag': 'M10,3L8,5V7H5C3.85,7 3.12,8 3,9L2,19C1.88,20 2.54,21 4,21H20C21.46,21 22.12,20 22,19L21,9C20.88,8 20.06,7 19,7H16V5L14,3H10M10,5H14V7H10V5M11,10H13V13H16V15H13V18H11V15H8V13H11V10Z',
-  'mdi-fridge-outline': 'M9,21V22H7V21A2,2 0 0,1 5,19V4A2,2 0 0,1 7,2H17A2,2 0 0,1 19,4V19A2,2 0 0,1 17,21V22H15V21H9M7,4V9H17V4H7M7,19H17V11H7V19M8,12H10V15H8V12M8,6H10V8H8V6Z',
-  'mdi-cog': 'M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.67 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z',
-  'mdi-bag-personal': 'M16,5V4A2,2 0 0,0 14,2H10A2,2 0 0,0 8,4V5A4,4 0 0,0 4,9V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V9A4,4 0 0,0 16,5M10,4H14V5H10V4M12,9L14,11L12,13L10,11L12,9M18,16H9V18H8V16H6V15H18V16Z',
-  'mdi-island': 'M20 20C18.61 20 17.22 19.53 16 18.67C13.56 20.38 10.44 20.38 8 18.67C6.78 19.53 5.39 20 4 20H2V22H4C5.37 22 6.74 21.65 8 21C10.5 22.3 13.5 22.3 16 21C17.26 21.65 18.62 22 20 22H22V20H20M20.78 19H20C18.82 19 17.64 18.6 16.58 17.85L16 17.45L15.42 17.85C14.39 18.57 13.21 18.95 12 18.95C10.77 18.95 9.59 18.57 8.56 17.85L8 17.45L7.43 17.85C6.36 18.6 5.18 19 4 19H3.22C3.75 17.54 5.58 15 12 15C14 15 15 15.24 15 15.24C15.68 13.87 16.83 10.77 16 6.82L17.06 7.53C17.39 8.96 18 11.75 16.8 15.65C19.43 16.5 20.42 18 20.78 19M22 7.59C21.21 6.5 20 5.71 18.58 5.53C18.7 5.67 18.81 5.83 18.92 6C20.12 7.91 19.87 10.32 18.47 11.95C19.06 10.5 19 8.79 18.08 7.36C18 7.28 17.96 7.2 17.9 7.11C17.5 6.53 16.96 6.06 16.38 5.72C14.35 6.37 12.88 8.27 12.88 10.5C12.88 11.03 12.96 11.53 13.1 12C12.5 11.17 12.16 10.17 12.16 9.07C12.16 7.41 12.96 5.95 14.2 5.03C13.16 4.95 12.09 5.18 11.14 5.78C10.7 6.05 10.32 6.38 10 6.76C10.39 5.82 11.05 5 12 4.4C13.04 3.74 14.25 3.5 15.39 3.69C15.1 3.29 14.75 2.92 14.33 2.6C13.92 2.29 13.47 2.05 13 1.88C14 1.91 15.04 2.24 15.91 2.89C16.35 3.22 16.7 3.62 17 4.05C17.06 4.05 17.12 4.04 17.19 4.04C19.45 4.04 21.37 5.53 22 7.59Z',
-  'mdi-volcano': 'M18 8H11L9 13H6L2 22H22L18 8M13 1H15V5H13V1M16.12 5.47L18.95 2.64L20.36 4.05L17.54 6.88L16.12 5.47M7.64 4.05L9.05 2.64L11.88 5.46L10.47 6.88L7.64 4.05Z',
-  'mdi-radioactive': 'M14 11C14 12.1 13.1 13 12 13S10 12.1 10 11 10.9 9 12 9 14 9.9 14 11M16 11H22C22 7.3 20 4.1 17 2.3L14 7.5C15.2 8.2 16 9.5 16 11M12 15C11.3 15 10.6 14.8 10 14.4C8.8 16.5 7.4 18.8 7 19.6C8.5 20.5 10.2 20.9 12 20.9S15.5 20.4 17 19.6L14 14.4C13.4 14.8 12.7 15 12 15M10 7.6C8.8 5.5 7.4 3.1 7 2.3C4 4 2 7.3 2 11H8C8 9.5 8.8 8.2 10 7.6Z',
-  'mdi-meteor': 'M2.8,3L19.67,18.82C19.67,18.82 20,19.27 19.58,19.71C19.17,20.15 18.63,19.77 18.63,19.77L2.8,3M7.81,4.59L20.91,16.64C20.91,16.64 21.23,17.08 20.82,17.5C20.4,17.97 19.86,17.59 19.86,17.59L7.81,4.59M4.29,8L17.39,20.03C17.39,20.03 17.71,20.47 17.3,20.91C16.88,21.36 16.34,21 16.34,21L4.29,8M12.05,5.96L21.2,14.37C21.2,14.37 21.42,14.68 21.13,15C20.85,15.3 20.47,15.03 20.47,15.03L12.05,5.96M5.45,11.91L14.6,20.33C14.6,20.33 14.82,20.64 14.54,20.95C14.25,21.26 13.87,21 13.87,21L5.45,11.91M16.38,7.92L20.55,11.74C20.55,11.74 20.66,11.88 20.5,12.03C20.38,12.17 20.19,12.05 20.19,12.05L16.38,7.92M7.56,16.1L11.74,19.91C11.74,19.91 11.85,20.06 11.7,20.2C11.56,20.35 11.37,20.22 11.37,20.22L7.56,16.1Z',
-  'mdi-star-four-points': 'M12,1L9,9L1,12L9,15L12,23L15,15L23,12L15,9L12,1Z',
-  'mdi-lighthouse-on': 'M1,10V2L10,5V7L1,10M8,10V8H13V4H8V3L12,1L16,3V4H15V8H16V10H14.74L8.44,13.64L9,10H8M7,23L7.04,22.76L16.15,17.5L16.67,20.88L13,23H7M8.05,16.17L15.31,12L15.83,15.37L7.43,20.22L8.05,16.17Z',
-  'mdi-forest': 'M16 12L9 2L2 12H3.86L0 18H7V22H11V18H18L14.14 12H16M20.14 12H22L15 2L12.61 5.41L17.92 13H15.97L19.19 18H24L20.14 12M13 19H17V22H13V19Z',
-  'mdi-party-popper': 'M14.53 1.45L13.45 2.53L15.05 4.13C15.27 4.38 15.38 4.67 15.38 5S15.27 5.64 15.05 5.86L11.5 9.47L12.5 10.55L16.13 6.94C16.66 6.35 16.92 5.7 16.92 5C16.92 4.3 16.66 3.64 16.13 3.05L14.53 1.45M10.55 3.47L9.47 4.55L10.08 5.11C10.3 5.33 10.41 5.63 10.41 6S10.3 6.67 10.08 6.89L9.47 7.45L10.55 8.53L11.11 7.92C11.64 7.33 11.91 6.69 11.91 6C11.91 5.28 11.64 4.63 11.11 4.03L10.55 3.47M21 5.06C20.31 5.06 19.67 5.33 19.08 5.86L13.45 11.5L14.53 12.5L20.11 6.94C20.36 6.69 20.66 6.56 21 6.56S21.64 6.69 21.89 6.94L22.5 7.55L23.53 6.47L22.97 5.86C22.38 5.33 21.72 5.06 21 5.06M7 8L2 22L16 17L7 8M19 11.06C18.3 11.06 17.66 11.33 17.06 11.86L15.47 13.45L16.55 14.53L18.14 12.94C18.39 12.69 18.67 12.56 19 12.56C19.33 12.56 19.63 12.69 19.88 12.94L21.5 14.53L22.55 13.5L20.95 11.86C20.36 11.33 19.7 11.06 19 11.06Z',
-  'mdi-castle': 'M2,13H4V15H6V13H8V15H10V13H12V15H14V10L17,7V1H19L23,3L19,5V7L22,10V22H11V19A2,2 0 0,0 9,17A2,2 0 0,0 7,19V22H2V13M18,10C17.45,10 17,10.54 17,11.2V13H19V11.2C19,10.54 18.55,10 18,10Z',
-  'mdi-map': 'M15,19L9,16.89V5L15,7.11M20.5,3C20.44,3 20.39,3 20.34,3L15,5.1L9,3L3.36,4.9C3.15,4.97 3,5.15 3,5.38V20.5A0.5,0.5 0 0,0 3.5,21C3.55,21 3.61,21 3.66,20.97L9,18.9L15,21L20.64,19.1C20.85,19 21,18.85 21,18.62V3.5A0.5,0.5 0 0,0 20.5,3Z',
-  'mdi-dna': 'M4,2H6V4C6,5.44 6.68,6.61 7.88,7.78C8.74,8.61 9.89,9.41 11.09,10.2L9.26,11.39C8.27,10.72 7.31,10 6.5,9.21C5.07,7.82 4,6.1 4,4V2M18,2H20V4C20,6.1 18.93,7.82 17.5,9.21C16.09,10.59 14.29,11.73 12.54,12.84C10.79,13.96 9.09,15.05 7.88,16.22C6.68,17.39 6,18.56 6,20V22H4V20C4,17.9 5.07,16.18 6.5,14.79C7.91,13.41 9.71,12.27 11.46,11.16C13.21,10.04 14.91,8.95 16.12,7.78C17.32,6.61 18,5.44 18,4V2M14.74,12.61C15.73,13.28 16.69,14 17.5,14.79C18.93,16.18 20,17.9 20,20V22H18V20C18,18.56 17.32,17.39 16.12,16.22C15.26,15.39 14.11,14.59 12.91,13.8L14.74,12.61M7,3H17V4L16.94,4.5H7.06L7,4V3M7.68,6H16.32C16.08,6.34 15.8,6.69 15.42,7.06L14.91,7.5H9.07L8.58,7.06C8.2,6.69 7.92,6.34 7.68,6M9.09,16.5H14.93L15.42,16.94C15.8,17.31 16.08,17.66 16.32,18H7.68C7.92,17.66 8.2,17.31 8.58,16.94L9.09,16.5M7.06,19.5H16.94L17,20V21H7V20L7.06,19.5Z',  'mdi-orbit': 'M8.11,1.75C9.3,1.25 10.62,1 12,1C18.08,1 23,5.92 23,12C23,18.08 18.08,23 12,23C5.92,23 1,18.08 1,12C1,10.62 1.25,9.3 1.72,8.08C2.24,8.61 2.83,8.96 3.45,9.18C3.16,10.07 3,11 3,12A9,9 0 0,0 12,21A9,9 0 0,0 21,12A9,9 0 0,0 12,3C11,3 10.07,3.16 9.18,3.45C8.96,2.83 8.61,2.24 8.11,1.75M4.93,2.93C6.03,2.93 6.93,3.82 6.93,4.93A2,2 0 0,1 4.93,6.93C3.82,6.93 2.93,6.03 2.93,4.93C2.93,3.82 3.82,2.93 4.93,2.93M12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7Z'
-};
-function lbMdiSvg(name, size){
-  var d = LB_MDI_SVG[name] || '';
-  if(!d) return '';
-  return '<svg viewBox="0 0 24 24" width="'+size+'" height="'+size+'" style="vertical-align:-1px;fill:currentColor;flex-shrink:0"><path d="'+d+'"/></svg>';
-}
-// containerType → icons2.json 图标名（summary 用 png，released 的 RW_Tracking_dino 需强制反色）
-var LB_CONTAINER_ICON_KEY = { fridge:'Cryofridge', display:'Display_Case', hospital:'HUD_CryoHospital_Icon', stand:'HUD_PetDisplayStand_Wall_Thatch_Icon', replicator:'Tek_Replicator', storage:'SmallStorage_Icon', released:'RW_Tracking_dino', player:'RW_Store_chibi' };
-// containerType → 容器排序优先级（放出→展示柜→宠物展示台→低温护理站→低温冰箱→其它）
-var LB_CONTAINER_ORDER = { released:0, display:1, stand:2, hospital:3, fridge:4 };
 function lbContainerLabel(r){
-  var icon = '';
-  var icKey = LB_CONTAINER_ICON_KEY[r.containerType];
-  var url = (LB_ICON_BY_NAME && icKey) ? LB_ICON_BY_NAME[icKey] : '';
-  if(url){
-    var f = lbIconFilterStyle(url);
-    icon = '<img src="'+url+'" class="lb-sum-ic"'+f+'>';
-  } else {
-    var mdi = LB_CONTAINER_MDI[r.containerType] || LB_CONTAINER_MDI.fridge;
-    if(mdi) icon = lbMdiSvg(mdi, 14);
-  }
+  var icon = ({released:'🐾', stand:'🧺', display:'🖼', storage:'📦', hospital:'🏥', fridge:'🧊', replicator:'⚙️'})[r.containerType] || '🧊';
   var hasName = r.containerName && r.containerName!=='?' && r.containerName!=='';
-  if(hasName) return '<span class="acc-title">'+icon+' '+r.containerName+'</span>';
-  // player（玩家背包）固定标「背包」（ZH_MAP 无对应 key，用户指定文案）
-  var tzh = r.containerType==='player' ? '背包' : lbContainerTypeZh(r.containerType);
+  if(hasName) return icon+' '+r.containerName;
+  var tzh = lbContainerTypeZh(r.containerType);
   var name = tzh || r.containerType; // JSON 无中文 → 回退英文类型名（不脑补）
-  if(r.containerType!=='display' && r.containerType!=='stand' && r.containerType!=='released' && r.containerType!=='player'){
+  if(r.containerType!=='display' && r.containerType!=='stand' && r.containerType!=='released'){
     var id = r.containerId || '';
     name += ' #' + (id.length>6 ? id.slice(-6) : id);
   }
-  return '<span class="acc-title">'+icon+' '+name+'</span>';
+  return icon+' '+name;
 }
 function lbView(){
   var list=document.getElementById('lbList'), status=document.getElementById('lbStatus');
@@ -2114,6 +1874,7 @@ function lbView(){
     // 3. 无缓存 → 重新加载
     var sel=LB.SERVERS.map(function(s){return s.abbr;});
     list.innerHTML='<div style="text-align:center;padding:30px;color:#555">⏳ 加载数据中...</div>';
+    if(status){ status.style.display='block'; status.textContent='⏳ 加载 '+sel.length+' 台数据...'; }
     lbLoad(sel).then(function(data){
       LB._cache={ data:data, ts:Date.now() };
       lbCacheSet(data); // 写入 IndexedDB
@@ -2127,21 +1888,14 @@ function lbView(){
 function lbRenderView(data, player, classFilter){
   var list=document.getElementById('lbList'), status=document.getElementById('lbStatus');
   LB.curClass = classFilter || ''; // 物种名仅在「全部物种」模式显示（LB.curClass 为空）
-  lbRenderBreedBar(); // 繁育栏：选中具体物种才显示
   // 物种按钮文字（中文优先：类名→英文名两级查，回退英文）
   var clsBtn=document.getElementById('lbClassBtn');
   if(clsBtn){
-    // 按钮图标：仅选中具体物种时显示；全部物种不显示图标
-    var icHtml='';
-    if(LB.curClass){
-      var icon=lbIconForDinoClass(LB.curClass);
-      if(icon) icHtml='<img class="lb-class-ic" src="'+icon+'"'+lbIconFilterStyle(icon,'biology')+'>';
-    }
     if(LB.curClass){
       var nm2=lbSpName(LB.curClass);
-      clsBtn.innerHTML = icHtml + '<span class="lb-class-label">'+(nm2.zh || nm2.eng)+'</span>';
+      clsBtn.innerHTML = '<span class="lb-class-label">'+(nm2.zh || nm2.eng)+'</span>';
     } else {
-      clsBtn.innerHTML = icHtml + '<span class="lb-class-label">全部物种</span>';
+      clsBtn.innerHTML = '<span class="lb-class-label">全部物种</span>';
     }
   }
   var playerSet = player ? lbPlayerTribes(data.tribesByServer, player) : null;
@@ -2165,20 +1919,7 @@ function lbRenderView(data, player, classFilter){
     if(!ta && tb) return 1;
     return (b.absMs||0)-(a.absMs||0);
   }
-  // 卡片按种名拼音排序（忽略前缀，与物种浮窗统一：lbSortKey 主词中文 → 完整中文）
-  var lbCollSp = new Intl.Collator('zh-Hans-CN');
-  function cmpSp(a,b){
-    var r=lbCollSp.compare(lbSortKey(a.dinoClass),lbSortKey(b.dinoClass));
-    if(r) return r;
-    return lbCollSp.compare(lbSpName(a.dinoClass).zh||'',lbSpName(b.dinoClass).zh||'');
-  }
-// 空球行 HTML：低温仓图标 + 文字（宽度与卡片一致：margin 仅上下 8px）
-function lbEmptyRowHtml(n){
-  var ic = (LB_ICON_BY_NAME && LB_ICON_BY_NAME['Cryopod']) ? '<img src="'+LB_ICON_BY_NAME['Cryopod']+'" class="lb-empty-ic">' : '';
-  return '<div style="display:flex;align-items:center;background:#15151f;border:1px dashed #333;border-radius:8px;padding:8px 12px;margin:8px 0;font-size:12px;color:#888">'+ic+' ×'+n+'</div>';
-}
-
-// 标签 TAB（一级=服务器/玩家携带）：默认玩家携带，点击切换；数量=有生物数（空球只在容器标题标）
+  // 标签 TAB（一级=服务器/玩家携带）：默认玩家携带，点击切换；数量=有生物数（空球只在容器标题标）
   // 当前 tab 无内容时自动切到第一个有内容的组（避免空白页）
   var hasContent = function(t){ return t==='player' ? playerCarried.length>0 : ((byServer[t]||[]).length>0); };
   if(!LB.tab) LB.tab='player';
@@ -2191,13 +1932,12 @@ function lbEmptyRowHtml(n){
   }
   var pcCnt=playerCarried.filter(function(r){return !r.isEmpty;}).length;
   var tabH='';
-  if(playerCarried.length) tabH+='<span class="server-tab'+(LB.tab==='player'?' active':'')+'" onclick="lbSetTab(\'player\')" title="玩家携带 ('+pcCnt+')"><i class="mdi mdi-human"></i>'+(pcCnt?'<em class="server-tab-cnt">'+pcCnt+'</em>':'')+'</span>';
+  if(playerCarried.length) tabH+='<button class="lb-tab'+(LB.tab==='player'?' lb-tab-on':'')+'" onclick="lbSetTab(\'player\')">🎒 玩家携带'+(pcCnt?' ('+pcCnt+')':'')+'</button>';
   LB.SERVERS.forEach(function(s){
     var arr=byServer[s.abbr]||[];
     if(!arr.length) return;
     var cnt=arr.filter(function(r){return !r.isEmpty;}).length;
-    var mdi=LB_SERVER_MDI[s.abbr]||'';
-    tabH+='<span class="server-tab'+(LB.tab===s.abbr?' active':'')+'" onclick="lbSetTab(\''+s.abbr+'\')" title="'+s.name+' ('+cnt+')">'+(mdi?'<i class="mdi '+mdi+'"></i>':(s.icon||''))+(cnt?'<em class="server-tab-cnt">'+cnt+'</em>':'')+'</span>';
+    tabH+='<button class="lb-tab'+(LB.tab===s.abbr?' lb-tab-on':'')+'" onclick="lbSetTab(\''+s.abbr+'\')">'+((s.icon||'')+' '+s.name).trim()+' ('+cnt+')</button>';
   });
   var tabEl=document.getElementById('lbTabs');
   if(tabEl) tabEl.innerHTML=tabH;
@@ -2205,40 +1945,31 @@ function lbEmptyRowHtml(n){
   var h='', total=0, tabLabel='';
   if(LB.tab==='player'){
     if(playerCarried.length){
-      playerCarried.sort(cmpSp);
+      playerCarried.sort(cmp);
       var peArr=playerCarried.filter(function(r){return !r.isEmpty;});
       var peCnt=playerCarried.length - peArr.length;
       h=peArr.map(lbDinoHTML).join('');
-      if(peCnt>0) h+=lbEmptyRowHtml(peCnt);
+      if(peCnt>0) h+='<div style="background:#15151f;border:1px dashed #333;border-radius:8px;padding:8px 12px;margin:8px;font-size:12px;color:#888">🈳 空球 ×'+peCnt+'</div>';
       total=peArr.length;
     }
     tabLabel='🎒 玩家携带';
   } else {
     var arr2=byServer[LB.tab]||[];
-    arr2.sort(cmpSp);
+    arr2.sort(cmp);
     // 按容器分组成手风琴（同时只能展开一个，默认全部收起）
     var contGroups={};
     arr2.forEach(function(r){
       var k=lbContainerKey(r);
       (contGroups[k]=contGroups[k]||[]).push(r);
     });
-    Object.keys(contGroups).sort(function(a,b){
-      var ta = LB_CONTAINER_ORDER[contGroups[a][0].containerType];
-      var tb = LB_CONTAINER_ORDER[contGroups[b][0].containerType];
-      if(ta===undefined) ta=5;
-      if(tb===undefined) tb=5;
-      if(ta!==tb) return ta-tb;
-      return a.localeCompare(b);
-    }).forEach(function(k){
+    Object.keys(contGroups).sort().forEach(function(k){
       var list=contGroups[k];
       var neArr=list.filter(function(r){return !r.isEmpty;});
       var ecnt=list.length - neArr.length;
-      // v6 无法逆推属性点数量（红 |N 标注）
-      var v6cnt=neArr.filter(function(r){ return !lbBreedable(r); }).length;
       var body=neArr.map(lbDinoHTML).join('');
-      if(ecnt>0) body+=lbEmptyRowHtml(ecnt);
-      // 标题第一个数字 = 有生物数（除去空球），空球数用 |N 单独标注，v6 无法逆推用红色 |N 标注
-      h+='<details class="acc" onclick="lbAccOnly(this)"><summary>'+lbContainerLabel(list[0])+' <span class="acc-cnt">'+neArr.length+(ecnt>0?'<span style="opacity:.5">|</span>'+ecnt:'')+(v6cnt>0?'<span style="opacity:.5">|</span><span style="color:#ef4444">'+v6cnt+'</span>':'')+'</span></summary>'+body+'</details>';
+      if(ecnt>0) body+='<div style="background:#15151f;border:1px dashed #333;border-radius:8px;padding:8px 12px;margin:8px;font-size:12px;color:#888">🈳 空球 ×'+ecnt+'</div>';
+      // 标题第一个数字 = 有生物数（除去空球），空球数用 |N 单独标注
+      h+='<details class="acc" onclick="lbAccOnly(this)"><summary>'+lbContainerLabel(list[0])+' <span class="acc-cnt">('+neArr.length+(ecnt>0?'|'+ecnt:'')+')</span></summary>'+body+'</details>';
     });
     total=arr2.filter(function(r){return !r.isEmpty;}).length;
     var ts=LB.SERVERS.find(function(x){return x.abbr===LB.tab;});
@@ -2297,8 +2028,8 @@ function lbLoadIconList(){
   if(LB_ICON_BY_NAME) return Promise.resolve(LB_ICON_BY_NAME);
   return authFetch('/local/asa-data/icons2.json?t='+Date.now(), {}).then(function(r){return r.json();}).then(function(d){
     var by={}, cats={};
-    // 额外收录的非 biology/units 精选图标（如「全部物种」的 HubTameIcon，GUI 分类；以及手风琴 summary 容器图标 facility/skins/GUI）
-    var extra={'HubTameIcon':1, 'Cryofridge':1, 'Display_Case':1, 'HUD_CryoHospital_Icon':1, 'HUD_PetDisplayStand_Wall_Thatch_Icon':1, 'Tek_Replicator':1, 'SmallStorage_Icon':1, 'RW_Tracking_dino':1, 'Cryopod':1, 'RW_Store_chibi':1, 'RW_equip_saddle':1, 'TEK_Icon':1, 'RW_Garage_roof_show':1};
+    // 额外收录的非 biology/units 精选图标（如「全部物种」的 HubTameIcon，GUI 分类）
+    var extra={'HubTameIcon':1};
     (d||[]).forEach(function(it){
       if(!it || !it.url || !it.name) return;
       var m=it.url.match(/\/ASA\/([^/]+)\//);
@@ -2600,286 +2331,10 @@ function lbLoadThemes(){
     }, function(){ resolve(false); });
   });
 }
-// 启动：预取服务器主题 + 图标/反色/前缀（确保按钮图标与反色首帧正确）；lbInitServers 已用兜底初始化（解耦：无 HA 环境也有数据）
-LB._themesPromise = Promise.all([lbLoadThemes(), lbLoadIconList(), lbLoadAntiColors(), lbLoadPrefixZh(), lbLoadColors()]).then(function(r){ return r[0]; });
+// 启动：预取服务器主题（apps.yaml → sensor.asa_server_themes）；lbInitServers 已用兜底初始化（解耦：无 HA 环境也有数据）
+LB._themesPromise = lbLoadThemes();
 // 默认页为生物速查：直接初始化（lbInit 内部等待 themes）
 lbInit();
-// ===== 繁育栏（选中具体物种时显示；6 属性顺序选种，localStorage 持久化）=====
-var LB_BREED_KEYS = ['health','stamina','oxygen','food','weight','melee_damage_multiplier'];
-var LB_BREED_LABEL = {health:'血',stamina:'耐',oxygen:'氧',food:'食',weight:'重',melee_damage_multiplier:'攻'};
-var LB_BREED_IDX = {health:0, stamina:1, oxygen:3, food:4, weight:7, melee_damage_multiplier:8}; // statValues 索引（STAT_ZH 顺序）
-LB.breedSel = LB.breedSel || [];
-LB.breedResult = LB.breedResult || false;
-// 繁育栏属性选择按物种分别持久化（lbBreedTargetsMap：{'lbBreed:'+dinoClass: [keys]}）；旧全局 lbBreedTargets 迁移兼容
-function lbBreedStoreKey(){ return 'lbBreed:' + (LB.curClass||''); }
-function lbBreedLoadStore(){
-  try{ return JSON.parse(localStorage.getItem('lbBreedTargetsMap')||'{}'); }catch(e){ return {}; }
-}
-function lbBreedSaveStore(m){ try{ localStorage.setItem('lbBreedTargetsMap', JSON.stringify(m)); }catch(e){} }
-(function(){
-  var _bm = lbBreedLoadStore();
-  if(!Object.keys(_bm).length){
-    try{ var _old = JSON.parse(localStorage.getItem('lbBreedTargets')||'[]'); if(Array.isArray(_old) && _old.length){ _bm['lbBreed:'] = _old; lbBreedSaveStore(_bm); } }catch(e){}
-  }
-  LB.breedSel = (Array.isArray(_bm[lbBreedStoreKey()]) ? _bm[lbBreedStoreKey()].slice() : []);
-})();
-function lbRenderBreedBar(){
-  var bar = document.getElementById('lbBreedBar');
-  if(!bar) return;
-  var show = !!LB.curClass; // 选中具体物种才显示
-  bar.style.display = show ? 'block' : 'none';
-  // 物种变化时：保存旧物种选择 → 加载当前物种的持久化选择；重置结果（旧物种结果不残留）
-  if(LB._breedLastClass !== LB.curClass){
-    var _bm = lbBreedLoadStore();
-    if(LB._breedLastClass !== undefined) _bm['lbBreed:'+LB._breedLastClass] = LB.breedSel.slice();
-    LB.breedSel = (LB.curClass && Array.isArray(_bm[lbBreedStoreKey()])) ? _bm[lbBreedStoreKey()].slice() : [];
-    lbBreedSaveStore(_bm);
-    LB._breedLastClass = LB.curClass;
-    if(LB.breedResult){ LB.breedResult = false; lbRenderBreedResult(); }
-  }
-  if(!show){ LB.breedResult = false; lbRenderBreedResult(); }
-  var attrs = document.getElementById('lbBreedAttrs');
-  if(attrs){
-    var h = '';
-    LB_BREED_KEYS.forEach(function(k){
-      var idx = LB.breedSel.indexOf(k);
-      var cls = idx>=0 ? 'mut-chip has-val' : 'mut-chip';
-      h += '<span class="'+cls+'" onclick="lbBreedPick(\''+k+'\')" style="font-size:11px;padding:4px 8px">'+LB_BREED_LABEL[k]+(idx>=0?' <b>'+(idx+1)+'</b>':'')+'</span>';
-    });
-    attrs.innerHTML = h;
-  }
-  var btn = document.getElementById('lbBreedBtn');
-  if(btn) btn.textContent = LB.breedResult ? '取消' : '选种';
-}
-function lbBreedPick(k){
-  var i = LB.breedSel.indexOf(k);
-  if(i>=0) LB.breedSel.splice(i,1);
-  else LB.breedSel.push(k);
-  // 按当前物种持久化
-  var _bm = lbBreedLoadStore();
-  _bm[lbBreedStoreKey()] = LB.breedSel.slice();
-  lbBreedSaveStore(_bm);
-  lbRenderBreedBar();
-}
-function lbBreedToggle(){
-  LB.breedResult = !LB.breedResult;
-  lbRenderBreedBar();
-  lbRenderBreedResult();
-}
-// 遗传属性点（完全复用现有 p 逻辑：statPoints 直接用；v6 缺失用 lbSolveStats 逆推，不做额外脑补）
-function lbBreedPoint(r, i){
-  var p = (r.statPoints && r.statPoints[i]) || 0;
-  if(!p && r.cryoVersion===6){
-    var sol = lbSolveStats(r);
-    // v6 逆推：真实 statPoints 语义=遗传等级（阿紫验证），用 wildLevels 保持一致
-    if(sol && sol.wildLevels) p = sol.wildLevels[i] || 0;
-  }
-  // 属性点包含变异（statMutations），显示与比较都用 遗传+变异
-  var m = (r.statMutations && r.statMutations[i]) || 0;
-  return (Number(p)||0) + (Number(m)||0);
-}
-// 该生物是否有属性点信息（可参与筛选）
-function lbBreedable(r){
-  var sum = function(a){ return a.reduce(function(x,y){ return x+(Number(y)||0); },0); };
-  if(r.statPoints && sum(r.statPoints) > 0) return true;
-  if(r.cryoVersion===6){
-    var sol = lbSolveStats(r);
-    return !!(sol && sol.statPoints && sum(sol.statPoints) > 0);
-  }
-  return false;
-}
-// 归属判断（与列表玩家过滤一致，统一按 ownerTribeId）：cryo=容器部落、tamed放出=生物原部落
-function lbIsMyRec(r, playerSet){
-  if(!playerSet) return false;
-  var tid = String(r.ownerTribeId||0);
-  return !!playerSet[r.server+':'+tid];
-}
-// 外部生物归属名：玩家身上带的显示持有玩家名，其他显示部落名；containerTribe 无信息时 fallback 原部落 tribeId
-function lbOwnerName(r){
-  var data = LB._cache && LB._cache.data;
-  var tb = (data && data.tribesByServer && data.tribesByServer[r.server]) || {};
-  function tribeLabel(ts){
-    if(!ts) return null;
-    if(ts.name) return ts.name;
-    if(ts.ownerName) return ts.ownerName;
-    if(ts.members && ts.members.length) return ts.members[0];
-    return null;
-  }
-  var ts = tb[r.containerTribe] || null;
-  if(r.containerType==='player'){ // 在某玩家身上：优先精确玩家名 playerName（插件新字段）；fallback ownerName → members[0]，不显示部落名
-    if(r.playerName) return r.playerName;
-    if(ts){
-      if(ts.ownerName) return ts.ownerName;
-      if(ts.members && ts.members.length) return ts.members[0];
-    }
-    return '玩家#'+(r.containerTribe||'?');
-  }
-  var nm = tribeLabel(ts);
-  if(nm) return nm;
-  // containerTribe 无信息（如野放 containerTribe=0）：fallback 原部落 tribeId
-  var tid = String(r.tribeId||0);
-  if(tid && tid!=='0'){
-    var nm2 = tribeLabel(tb[tid]);
-    if(nm2) return nm2;
-    // 无归属占位（tribeId=2000000000 特殊值，放生后部落已删除）→ 待认养
-    if(r.containerType==='released' && r.tribeId===2000000000) return '待认养';
-    if(r.containerType==='released') return '放出';
-    return '部落#'+tid;
-  }
-  if(r.containerType==='released') return '放出';
-  return '未知';
-}
-function lbRenderBreedResult(){
-  var c = document.getElementById('lbBreedResult');
-  if(!c) return;
-  if(!LB.breedResult || !LB.curClass){ c.style.display='none'; c.innerHTML=''; return; }
-  var data = LB._cache && LB._cache.data;
-  var recs = (data && data.recs) || [];
-  var cls = LB.curClass;
-  var player = lbPlayer();
-  var playerSet = player ? lbPlayerTribes(data.tribesByServer, player) : null;
-  var myM=[], myF=[], extM=[], extF=[], v6fail=0, total=0;
-  recs.forEach(function(r){
-    if(r.dinoClass!==cls || r.isEmpty) return;
-    total++;
-    if(!lbBreedable(r)){ v6fail++; return; } // v6 无法逆推不计入
-    var isMy = lbIsMyRec(r, playerSet);
-    if(r.gender==='MALE'){ if(isMy) myM.push(r); else extM.push(r); }
-    else if(r.gender==='FEMALE'){ if(isMy) myF.push(r); else extF.push(r); }
-  });
-  var myAll = myM.concat(myF);
-  // 外部更高：每个选中属性取外部高于我的该属性最高值的最多 3 张（并列进榜都算，同一生物多属性进榜合并）
-  function extChamps(arr){
-    var out = [];
-    LB.breedSel.forEach(function(k){
-      var bi = LB_BREED_IDX[k];
-      var myMax = null;
-      myAll.forEach(function(r){ var v = lbBreedPoint(r, bi); if(myMax===null || v>myMax) myMax=v; });
-      if(myMax===null) return;
-      arr.map(function(r){ return {r:r, v:lbBreedPoint(r, bi)}; })
-        .filter(function(x){ return x.v > myMax; })
-        .sort(function(a,b){ return b.v-a.v; })
-        .slice(0,3)
-        .forEach(function(x){
-          var ex = null;
-          for(var i=0;i<out.length;i++){ if(out[i].r===x.r){ ex=out[i]; break; } }
-          if(ex){ ex.attrs.push({k:k, v:x.v}); }
-          else{ out.push({r:x.r, attrs:[{k:k, v:x.v}]}); }
-        });
-    });
-    return out;
-  }
-  var extAll = extChamps(extM.concat(extF));
-  LB._breedCands = []; // 候选 rec 索引映射（点击卡片弹浮窗用）
-  // 我的分组：每个选中属性取该属性最高的生物；并列最高全部显示（同一生物多属性冠军合并显示）
-  function myChamps(arr){
-    var out = [];
-    LB.breedSel.forEach(function(k){
-      var bi = LB_BREED_IDX[k];
-      var maxV = null;
-      arr.forEach(function(r){
-        var v = lbBreedPoint(r, bi);
-        if(maxV===null || v>maxV) maxV = v;
-      });
-      if(maxV===null) return;
-      arr.forEach(function(r){
-        if(lbBreedPoint(r, bi) !== maxV) return;
-        var ex = null;
-        for(var i=0;i<out.length;i++){ if(out[i].r===r){ ex=out[i]; break; } }
-        if(ex){ ex.attrs.push({k:k, v:maxV}); }
-        else{ out.push({r:r, attrs:[{k:k, v:maxV}]}); }
-      });
-    });
-    return out;
-  }
-  // 我的分组：公母混在一起，每个选中属性取该属性最高的生物（同一生物多属性冠军合并显示，有公有公、有母有母）
-  var myAllChamp = myChamps(myAll);
-  function card(it, tag, attrs){
-    var r = it.r;
-    var idx = LB._breedCands.length;
-    LB._breedCands.push(r);
-    var attrHtml;
-    if(attrs){
-      // 冠军属性：显示该生物代表属性的值（血最高显示血、攻最高显示攻）
-      attrHtml = attrs.map(function(x){
-        return '<span style="margin-right:6px;color:#a78bfa">'+LB_BREED_LABEL[x.k]+' <b style="color:#e0e0e0">'+x.v+'</b></span>';
-      }).join('');
-    } else {
-      // 外部：只显示该卡数值最高的那个属性（并列全显示）
-      var attrList = LB.breedSel.map(function(k){
-        return {k:k, v:lbBreedPoint(r, LB_BREED_IDX[k])};
-      }).sort(function(a,b){ return b.v-a.v; });
-      var maxV = attrList.length ? attrList[0].v : null;
-      attrHtml = attrList.filter(function(x){ return x.v===maxV; }).map(function(x){
-        return '<span style="margin-right:6px;color:#a78bfa">'+LB_BREED_LABEL[x.k]+' <b style="color:#e0e0e0">'+x.v+'</b></span>';
-      }).join('');
-    }
-    // 不显示种名（已是单物种筛选）
-    return '<div class="lb-breed-card" onclick="lbBreedShowCard('+idx+')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:6px 10px;margin-bottom:6px;font-size:12px">'
-      +'<div style="min-width:0">'
-      +'<span style="color:'+(r.gender==='FEMALE'?'#f472b6':'#60a5fa')+'">'+(r.gender==='FEMALE'?'♀':'♂')+'</span> '
-      +(r.name?'<b style="color:#fff">'+r.name+'</b> ':' ')
-      +'<span style="background:#22223a;border-radius:2px;padding:0 6px;color:#ccc">Lv.'+r.level+'</span>'
-      +'<br>'+attrHtml
-      +'</div>'
-      +'<div style="flex-shrink:0;font-size:11px;color:#999;text-align:right">'+tag+'</div>'
-      +'</div>';
-  }
-  function myTag(r){ return lbContainerLabel(r); } // 我的不标「我的」，只标容器
-  function extTag(r){
-    if(r.containerType==='player'){ // 玩家身上携带：背包图标（mask 染橙）+ 玩家名（不显示地图）
-      var burl = (LB_ICON_BY_NAME && LB_ICON_BY_NAME['RW_Store_chibi']) || '';
-      var bag = burl
-        ? '<span style="display:inline-block;width:12px;height:12px;background:#f59e0b;-webkit-mask-image:url(\''+burl+'\');mask-image:url(\''+burl+'\');-webkit-mask-size:contain;mask-size:contain;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;vertical-align:-1px;flex-shrink:0"></span>'
-        : lbMdiSvg('mdi-bag-personal', 12);
-      return '<span style="color:#f59e0b">'+bag+' '+lbOwnerName(r)+'</span>';
-    }
-    var mdi = LB_SERVER_MDI[r.server] || 'mdi-map';
-    var name = lbOwnerName(r);
-    // 部落名后标识部落长（ownerName）：如「基纽特战队 · 歌星星」；无部落/放生/部落#xxx 不加
-    var data = LB._cache && LB._cache.data;
-    var tb = (data && data.tribesByServer && data.tribesByServer[r.server]) || {};
-    var t = tb[r.containerTribe] || tb[r.tribeId] || null;
-    var owner = (t && t.ownerName) ? t.ownerName : '';
-    if(owner && owner !== name){ name += ' · ' + owner; }
-    return '<span style="color:#f59e0b">'+lbMdiSvg(mdi, 12)+' '+name+'</span>';
-  }
-  var h = '';
-  if(myAllChamp.length){
-    var pn = lbPlayer() || '';
-    h += '<div style="font-size:12px;color:#a78bfa;font-weight:600;margin-bottom:4px">'+(pn||'我的')+'</div>'
-      + myAllChamp.map(function(it){ return card(it, myTag(it.r), it.attrs); }).join('');
-  }
-  if(extAll.length){
-    h += '<div style="font-size:12px;color:#999;font-weight:600;margin:6px 0 4px">外部更高</div>'
-      + extAll.map(function(it){ return card(it, extTag(it.r), it.attrs); }).join('');
-  }
-  if(v6fail>0){
-    h += '<div style="margin-top:8px;padding:6px 10px;border-radius:6px;background:#2a1a1a;color:#f87171;font-size:11px">⚠️ '+v6fail+'/'+total+' 无法逆推 v6</div>';
-  }
-  if(!myAllChamp.length && !extAll.length){
-    h = '<div style="text-align:center;padding:20px;color:#555">没有匹配的生物</div>';
-  }
-  c.innerHTML = h;
-  c.style.display = 'block';
-}
-// 点击繁育候选卡片：弹浮窗显示完整生物卡片（与速查卡片一致，只含卡片本体）
-function lbBreedShowCard(idx){
-  var r = (LB._breedCands && LB._breedCands[idx]) || null;
-  if(!r) return;
-  var ov = document.getElementById('lbBreedOverlay');
-  var body = document.getElementById('lbBreedOverlayBody');
-  if(!ov || !body) return;
-  body.innerHTML = lbDinoHTML(r);
-  ov.style.display = 'block';
-}
-// 浮窗：点卡片以外的任何区域自动关闭
-function lbBreedOverlayClick(e){
-  if(!e.target || !e.target.closest || !e.target.closest('.lb-card')){
-    document.getElementById('lbBreedOverlay').style.display = 'none';
-  }
-}
-lbRenderBreedBar();
 </script>
 <!-- 解析结果浮窗 -->
 <div id="previewOverlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7)" onclick="if(event.target===this)closePreviewOverlay()">
@@ -2890,21 +2345,6 @@ lbRenderBreedBar();
     </div>
     <div id="previewPopupContent" style="flex:1;overflow-y:auto;padding:12px 16px 16px;font-size:13px"></div>
   </div>
-</div>
-<!-- 繁育栏：选中具体物种时显示（底部固定单行；6 属性顺序选种） -->
-<div id="lbBreedBar" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#16161f;border-top:1px solid #2a2a3a;padding:6px 10px;z-index:998">
-  <div style="display:flex;align-items:center;gap:8px">
-    <span style="color:#7c3aed;font-size:13px;flex-shrink:0" title="繁育目标">🧬</span>
-    <div id="lbBreedAttrs" style="display:flex;gap:4px;flex-shrink:0"></div>
-    <span style="flex:1"></span>
-    <button id="lbBreedBtn" onclick="lbBreedToggle()" style="flex-shrink:0;background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:4px 14px;font-size:12px;cursor:pointer">选种</button>
-  </div>
-</div>
-<!-- 繁育结果浮层（繁育栏上方） -->
-<div id="lbBreedResult" style="display:none;position:fixed;bottom:40px;left:0;right:0;max-height:60vh;overflow-y:auto;background:#16161f;border-top:1px solid #2a2a3a;z-index:997;padding:8px 12px"></div>
-<!-- 繁育候选详情浮窗（点击繁育卡片弹出，只显示完整生物卡片本体；点卡片外自动关闭） -->
-<div id="lbBreedOverlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);overflow-y:auto;padding:80px 20px 20px" onclick="lbBreedOverlayClick(event)">
-  <div id="lbBreedOverlayBody" style="max-width:520px;margin:0 auto"></div>
 </div>
 </body>
 </html>

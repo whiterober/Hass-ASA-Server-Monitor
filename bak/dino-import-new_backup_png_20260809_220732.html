@@ -1554,7 +1554,7 @@ async function lbLoad(servers){
           colors:p.colors||'', saddle:p.saddle||'', cryoVersion:p.cryoVersion,
           sortWorldSec:p.packedAtWorldSec||0, srcWorld:'packed', absMs:p.downloadedAtMs||0,
           containerId:p.containerId, containerType:ct, containerName:p.containerName||'', containerClass:p.containerClass||'', containerTribe:p.containerTribe,
-          ownerTribeId:p.containerTribe||0, playerName:p.playerName||'' });
+          ownerTribeId:p.containerTribe||0 });
         lbAddRec(recs[recs.length-1]);
       });
     }
@@ -1788,14 +1788,15 @@ function lbDinoHTML(r){
   var v6warn = (r.cryoVersion===6 && sol === false) ? '<div style="margin-top:6px;color:#f87171;font-size:11px">⚠️ 加点/变异数据缺失（v6旧球，无法逆推）</div>' : '';
   var mutM = (r.randomMutationsMale||0), mutF = (r.randomMutationsFemale||0);
   var mutSum = mutM + mutF;
-  // 变异代数（社区惯例）：所有有变异的属性都分析显示；代数 = 该属性变异次数（点数÷2，每次变异+2点）
+  // 变异代数（社区惯例）：主属性 = 变异最多的属性；代数 = 该属性变异次数（点数÷2，每次变异+2点）
   var mutAbbr = ['血','耐','晕','氧','食','水','温','重','攻','速','抗','制'];
-  var mutArr = Array.isArray(r.statMutations)?r.statMutations:[];
-  var anc = '';
+  var genIdx = -1, genN = 0, mutArr = Array.isArray(r.statMutations)?r.statMutations:[];
   for(var gi=0; gi<mutArr.length; gi++){
     var gv = Number(mutArr[gi])||0;
-    if(gv > 0){ anc += '🧬'+Math.round(gv/2)+'代 '+(mutAbbr[gi]||'?')+' '; }
+    if(gv > genN){ genN = gv; genIdx = gi; }
   }
+  genN = Math.round(genN/2);
+  var anc = (genN>0 && genIdx>=0) ? '🧬'+genN+'代 '+(mutAbbr[genIdx]||'?') : '';
   // 训/繁徽章（复用导入页 isBredDino 逻辑；样式同鞍：16×16 圆角2px 彩底白字；繁紫#7c3aed mdi-dna；训不显示标识；放第一行鞍右边）
   var tbTag = lbIsBred(r)
     ? '<span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:2px;background:#7c3aed;color:#fff;flex-shrink:0"><i class="mdi mdi-dna" style="font-size:12px;line-height:1"></i></span>'
@@ -1838,7 +1839,7 @@ function lbDinoHTML(r){
     +'<span style="font-size:15px;color:'+(r.gender==='FEMALE'?'#f472b6':'#60a5fa')+'">'+(r.gender==='FEMALE'?'♀':'♂')+'</span>'
     +(r.name ? '<b style="color:#fff;font-size:14px">'+r.name+'</b>' : '')
     +'<span style="background:#22223a;border:1px solid #333;border-radius:2px;padding:1px 8px;font-size:11px;color:#ccc">Lv.'+r.level+'</span>'
-    +(r.saddle?'<span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:2px;background:'+(/platform/i.test(r.saddle)?'#fb923c':(/tek/i.test(r.saddle)?'#7c3aed':'#38bdf8'))+';color:#fff">'+lbSaddleImg(r.saddle)+'</span>':'')
+    +(r.saddle?'<span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:2px;background:'+(/platform/i.test(r.saddle)?'#fb923c':(/tek/i.test(r.saddle)?'#7c3aed':'#38bdf8'))+';color:#fff">'+lbSaddleIcon(r.saddle)+'</span>':'')
     +tbTag
     +'</div>'
     +(row2?'<div style="position:relative;z-index:1;font-size:11px;color:#999;margin-top:6px;display:flex;flex-wrap:wrap;gap:4px 14px">'+row2+'</div>':'')
@@ -2027,17 +2028,6 @@ function lbSaddleIcon(sc){
   else if(/tek/i.test(sc)) p = MDI_HEXAGON;
   return '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px"><path d="'+p+'"/></svg>';
 }
-// 鞍图标（PNG 优先，取自 asa-data 图标库；未收录回退 MDI SVG）：普通 RW_equip_saddle、平台 RW_Garage_roof_show、Tek TEK_Icon
-function lbSaddleImg(sc){
-  if(!sc) return '';
-  var key = 'RW_equip_saddle';
-  if(/platform/i.test(sc)) key = 'RW_Garage_roof_show';
-  else if(/tek/i.test(sc)) key = 'TEK_Icon';
-  var url = (LB_ICON_BY_NAME && LB_ICON_BY_NAME[key]) || '';
-  if(!url) return lbSaddleIcon(sc);
-  var f = lbIconFilterStyle(url);
-  return '<img src="'+url+'" style="width:12px;height:12px;object-fit:contain;display:block"'+(f?f:'')+'>';
-}
 // 容器显示名：有名字显示名字；未命名 display/stand 合并用 JSON 中文；其他未命名容器加 containerId 后 6 位区分
 // containerType → MDI 图标（无 png 时回退）
 var LB_CONTAINER_MDI = { released:'mdi-paw', stand:'mdi-basket-outline', display:'mdi-image-frame', storage:'mdi-package-variant-closed', hospital:'mdi-medical-bag', fridge:'mdi-fridge-outline', replicator:'mdi-cog', player:'mdi-bag-personal' };
@@ -2053,6 +2043,7 @@ var LB_MDI_SVG = {
   'mdi-bag-personal': 'M16,5V4A2,2 0 0,0 14,2H10A2,2 0 0,0 8,4V5A4,4 0 0,0 4,9V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V9A4,4 0 0,0 16,5M10,4H14V5H10V4M12,9L14,11L12,13L10,11L12,9M18,16H9V18H8V16H6V15H18V16Z',
   'mdi-island': 'M20 20C18.61 20 17.22 19.53 16 18.67C13.56 20.38 10.44 20.38 8 18.67C6.78 19.53 5.39 20 4 20H2V22H4C5.37 22 6.74 21.65 8 21C10.5 22.3 13.5 22.3 16 21C17.26 21.65 18.62 22 20 22H22V20H20M20.78 19H20C18.82 19 17.64 18.6 16.58 17.85L16 17.45L15.42 17.85C14.39 18.57 13.21 18.95 12 18.95C10.77 18.95 9.59 18.57 8.56 17.85L8 17.45L7.43 17.85C6.36 18.6 5.18 19 4 19H3.22C3.75 17.54 5.58 15 12 15C14 15 15 15.24 15 15.24C15.68 13.87 16.83 10.77 16 6.82L17.06 7.53C17.39 8.96 18 11.75 16.8 15.65C19.43 16.5 20.42 18 20.78 19M22 7.59C21.21 6.5 20 5.71 18.58 5.53C18.7 5.67 18.81 5.83 18.92 6C20.12 7.91 19.87 10.32 18.47 11.95C19.06 10.5 19 8.79 18.08 7.36C18 7.28 17.96 7.2 17.9 7.11C17.5 6.53 16.96 6.06 16.38 5.72C14.35 6.37 12.88 8.27 12.88 10.5C12.88 11.03 12.96 11.53 13.1 12C12.5 11.17 12.16 10.17 12.16 9.07C12.16 7.41 12.96 5.95 14.2 5.03C13.16 4.95 12.09 5.18 11.14 5.78C10.7 6.05 10.32 6.38 10 6.76C10.39 5.82 11.05 5 12 4.4C13.04 3.74 14.25 3.5 15.39 3.69C15.1 3.29 14.75 2.92 14.33 2.6C13.92 2.29 13.47 2.05 13 1.88C14 1.91 15.04 2.24 15.91 2.89C16.35 3.22 16.7 3.62 17 4.05C17.06 4.05 17.12 4.04 17.19 4.04C19.45 4.04 21.37 5.53 22 7.59Z',
   'mdi-volcano': 'M18 8H11L9 13H6L2 22H22L18 8M13 1H15V5H13V1M16.12 5.47L18.95 2.64L20.36 4.05L17.54 6.88L16.12 5.47M7.64 4.05L9.05 2.64L11.88 5.46L10.47 6.88L7.64 4.05Z',
+  'mdi-diamond-stone': 'M16,9H19L14,16M10,9H14L12,17M5,9H8L10,16M15,4H17L19,7H16M11,4H13L14,7H10M7,4H9L8,7H5M6,2L2,8L12,22L22,8L18,2H6Z',
   'mdi-radioactive': 'M14 11C14 12.1 13.1 13 12 13S10 12.1 10 11 10.9 9 12 9 14 9.9 14 11M16 11H22C22 7.3 20 4.1 17 2.3L14 7.5C15.2 8.2 16 9.5 16 11M12 15C11.3 15 10.6 14.8 10 14.4C8.8 16.5 7.4 18.8 7 19.6C8.5 20.5 10.2 20.9 12 20.9S15.5 20.4 17 19.6L14 14.4C13.4 14.8 12.7 15 12 15M10 7.6C8.8 5.5 7.4 3.1 7 2.3C4 4 2 7.3 2 11H8C8 9.5 8.8 8.2 10 7.6Z',
   'mdi-meteor': 'M2.8,3L19.67,18.82C19.67,18.82 20,19.27 19.58,19.71C19.17,20.15 18.63,19.77 18.63,19.77L2.8,3M7.81,4.59L20.91,16.64C20.91,16.64 21.23,17.08 20.82,17.5C20.4,17.97 19.86,17.59 19.86,17.59L7.81,4.59M4.29,8L17.39,20.03C17.39,20.03 17.71,20.47 17.3,20.91C16.88,21.36 16.34,21 16.34,21L4.29,8M12.05,5.96L21.2,14.37C21.2,14.37 21.42,14.68 21.13,15C20.85,15.3 20.47,15.03 20.47,15.03L12.05,5.96M5.45,11.91L14.6,20.33C14.6,20.33 14.82,20.64 14.54,20.95C14.25,21.26 13.87,21 13.87,21L5.45,11.91M16.38,7.92L20.55,11.74C20.55,11.74 20.66,11.88 20.5,12.03C20.38,12.17 20.19,12.05 20.19,12.05L16.38,7.92M7.56,16.1L11.74,19.91C11.74,19.91 11.85,20.06 11.7,20.2C11.56,20.35 11.37,20.22 11.37,20.22L7.56,16.1Z',
   'mdi-star-four-points': 'M12,1L9,9L1,12L9,15L12,23L15,15L23,12L15,9L12,1Z',
@@ -2060,8 +2051,7 @@ var LB_MDI_SVG = {
   'mdi-forest': 'M16 12L9 2L2 12H3.86L0 18H7V22H11V18H18L14.14 12H16M20.14 12H22L15 2L12.61 5.41L17.92 13H15.97L19.19 18H24L20.14 12M13 19H17V22H13V19Z',
   'mdi-party-popper': 'M14.53 1.45L13.45 2.53L15.05 4.13C15.27 4.38 15.38 4.67 15.38 5S15.27 5.64 15.05 5.86L11.5 9.47L12.5 10.55L16.13 6.94C16.66 6.35 16.92 5.7 16.92 5C16.92 4.3 16.66 3.64 16.13 3.05L14.53 1.45M10.55 3.47L9.47 4.55L10.08 5.11C10.3 5.33 10.41 5.63 10.41 6S10.3 6.67 10.08 6.89L9.47 7.45L10.55 8.53L11.11 7.92C11.64 7.33 11.91 6.69 11.91 6C11.91 5.28 11.64 4.63 11.11 4.03L10.55 3.47M21 5.06C20.31 5.06 19.67 5.33 19.08 5.86L13.45 11.5L14.53 12.5L20.11 6.94C20.36 6.69 20.66 6.56 21 6.56S21.64 6.69 21.89 6.94L22.5 7.55L23.53 6.47L22.97 5.86C22.38 5.33 21.72 5.06 21 5.06M7 8L2 22L16 17L7 8M19 11.06C18.3 11.06 17.66 11.33 17.06 11.86L15.47 13.45L16.55 14.53L18.14 12.94C18.39 12.69 18.67 12.56 19 12.56C19.33 12.56 19.63 12.69 19.88 12.94L21.5 14.53L22.55 13.5L20.95 11.86C20.36 11.33 19.7 11.06 19 11.06Z',
   'mdi-castle': 'M2,13H4V15H6V13H8V15H10V13H12V15H14V10L17,7V1H19L23,3L19,5V7L22,10V22H11V19A2,2 0 0,0 9,17A2,2 0 0,0 7,19V22H2V13M18,10C17.45,10 17,10.54 17,11.2V13H19V11.2C19,10.54 18.55,10 18,10Z',
-  'mdi-map': 'M15,19L9,16.89V5L15,7.11M20.5,3C20.44,3 20.39,3 20.34,3L15,5.1L9,3L3.36,4.9C3.15,4.97 3,5.15 3,5.38V20.5A0.5,0.5 0 0,0 3.5,21C3.55,21 3.61,21 3.66,20.97L9,18.9L15,21L20.64,19.1C20.85,19 21,18.85 21,18.62V3.5A0.5,0.5 0 0,0 20.5,3Z',
-  'mdi-dna': 'M4,2H6V4C6,5.44 6.68,6.61 7.88,7.78C8.74,8.61 9.89,9.41 11.09,10.2L9.26,11.39C8.27,10.72 7.31,10 6.5,9.21C5.07,7.82 4,6.1 4,4V2M18,2H20V4C20,6.1 18.93,7.82 17.5,9.21C16.09,10.59 14.29,11.73 12.54,12.84C10.79,13.96 9.09,15.05 7.88,16.22C6.68,17.39 6,18.56 6,20V22H4V20C4,17.9 5.07,16.18 6.5,14.79C7.91,13.41 9.71,12.27 11.46,11.16C13.21,10.04 14.91,8.95 16.12,7.78C17.32,6.61 18,5.44 18,4V2M14.74,12.61C15.73,13.28 16.69,14 17.5,14.79C18.93,16.18 20,17.9 20,20V22H18V20C18,18.56 17.32,17.39 16.12,16.22C15.26,15.39 14.11,14.59 12.91,13.8L14.74,12.61M7,3H17V4L16.94,4.5H7.06L7,4V3M7.68,6H16.32C16.08,6.34 15.8,6.69 15.42,7.06L14.91,7.5H9.07L8.58,7.06C8.2,6.69 7.92,6.34 7.68,6M9.09,16.5H14.93L15.42,16.94C15.8,17.31 16.08,17.66 16.32,18H7.68C7.92,17.66 8.2,17.31 8.58,16.94L9.09,16.5M7.06,19.5H16.94L17,20V21H7V20L7.06,19.5Z',  'mdi-orbit': 'M8.11,1.75C9.3,1.25 10.62,1 12,1C18.08,1 23,5.92 23,12C23,18.08 18.08,23 12,23C5.92,23 1,18.08 1,12C1,10.62 1.25,9.3 1.72,8.08C2.24,8.61 2.83,8.96 3.45,9.18C3.16,10.07 3,11 3,12A9,9 0 0,0 12,21A9,9 0 0,0 21,12A9,9 0 0,0 12,3C11,3 10.07,3.16 9.18,3.45C8.96,2.83 8.61,2.24 8.11,1.75M4.93,2.93C6.03,2.93 6.93,3.82 6.93,4.93A2,2 0 0,1 4.93,6.93C3.82,6.93 2.93,6.03 2.93,4.93C2.93,3.82 3.82,2.93 4.93,2.93M12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7Z'
+  'mdi-dna': 'M4,2H6V4C6,5.44 6.68,6.61 7.88,7.78C8.74,8.61 9.89,9.41 11.09,10.2L9.26,11.39C8.27,10.72 7.31,10 6.5,9.21C5.07,7.82 4,6.1 4,4V2M18,2H20V4C20,6.1 18.93,7.82 17.5,9.21C16.09,10.59 14.29,11.73 12.54,12.84C10.79,13.96 9.09,15.05 7.88,16.22C6.68,17.39 6,18.56 6,20V22H4V20C4,17.9 5.07,16.18 6.5,14.79C7.91,13.41 9.71,12.27 11.46,11.16C13.21,10.04 14.91,8.95 16.12,7.78C17.32,6.61 18,5.44 18,4V2M14.74,12.61C15.73,13.28 16.69,14 17.5,14.79C18.93,16.18 20,17.9 20,20V22H18V20C18,18.56 17.32,17.39 16.12,16.22C15.26,15.39 14.11,14.59 12.91,13.8L14.74,12.61M7,3H17V4L16.94,4.5H7.06L7,4V3M7.68,6H16.32C16.08,6.34 15.8,6.69 15.42,7.06L14.91,7.5H9.07L8.58,7.06C8.2,6.69 7.92,6.34 7.68,6M9.09,16.5H14.93L15.42,16.94C15.8,17.31 16.08,17.66 16.32,18H7.68C7.92,17.66 8.2,17.31 8.58,16.94L9.09,16.5M7.06,19.5H16.94L17,20V21H7V20L7.06,19.5Z'
 };
 function lbMdiSvg(name, size){
   var d = LB_MDI_SVG[name] || '';
@@ -2069,7 +2059,7 @@ function lbMdiSvg(name, size){
   return '<svg viewBox="0 0 24 24" width="'+size+'" height="'+size+'" style="vertical-align:-1px;fill:currentColor;flex-shrink:0"><path d="'+d+'"/></svg>';
 }
 // containerType → icons2.json 图标名（summary 用 png，released 的 RW_Tracking_dino 需强制反色）
-var LB_CONTAINER_ICON_KEY = { fridge:'Cryofridge', display:'Display_Case', hospital:'HUD_CryoHospital_Icon', stand:'HUD_PetDisplayStand_Wall_Thatch_Icon', replicator:'Tek_Replicator', storage:'SmallStorage_Icon', released:'RW_Tracking_dino', player:'RW_Store_chibi' };
+var LB_CONTAINER_ICON_KEY = { fridge:'Cryofridge', display:'Display_Case', hospital:'HUD_CryoHospital_Icon', stand:'HUD_PetDisplayStand_Wall_Thatch_Icon', replicator:'Tek_Replicator', storage:'SmallStorage_Icon', released:'RW_Tracking_dino' };
 // containerType → 容器排序优先级（放出→展示柜→宠物展示台→低温护理站→低温冰箱→其它）
 var LB_CONTAINER_ORDER = { released:0, display:1, stand:2, hospital:3, fridge:4 };
 function lbContainerLabel(r){
@@ -2298,7 +2288,7 @@ function lbLoadIconList(){
   return authFetch('/local/asa-data/icons2.json?t='+Date.now(), {}).then(function(r){return r.json();}).then(function(d){
     var by={}, cats={};
     // 额外收录的非 biology/units 精选图标（如「全部物种」的 HubTameIcon，GUI 分类；以及手风琴 summary 容器图标 facility/skins/GUI）
-    var extra={'HubTameIcon':1, 'Cryofridge':1, 'Display_Case':1, 'HUD_CryoHospital_Icon':1, 'HUD_PetDisplayStand_Wall_Thatch_Icon':1, 'Tek_Replicator':1, 'SmallStorage_Icon':1, 'RW_Tracking_dino':1, 'Cryopod':1, 'RW_Store_chibi':1, 'RW_equip_saddle':1, 'TEK_Icon':1, 'RW_Garage_roof_show':1};
+    var extra={'HubTameIcon':1, 'Cryofridge':1, 'Display_Case':1, 'HUD_CryoHospital_Icon':1, 'HUD_PetDisplayStand_Wall_Thatch_Icon':1, 'Tek_Replicator':1, 'SmallStorage_Icon':1, 'RW_Tracking_dino':1, 'Cryopod':1};
     (d||[]).forEach(function(it){
       if(!it || !it.url || !it.name) return;
       var m=it.url.match(/\/ASA\/([^/]+)\//);
@@ -2610,30 +2600,14 @@ var LB_BREED_LABEL = {health:'血',stamina:'耐',oxygen:'氧',food:'食',weight:
 var LB_BREED_IDX = {health:0, stamina:1, oxygen:3, food:4, weight:7, melee_damage_multiplier:8}; // statValues 索引（STAT_ZH 顺序）
 LB.breedSel = LB.breedSel || [];
 LB.breedResult = LB.breedResult || false;
-// 繁育栏属性选择按物种分别持久化（lbBreedTargetsMap：{'lbBreed:'+dinoClass: [keys]}）；旧全局 lbBreedTargets 迁移兼容
-function lbBreedStoreKey(){ return 'lbBreed:' + (LB.curClass||''); }
-function lbBreedLoadStore(){
-  try{ return JSON.parse(localStorage.getItem('lbBreedTargetsMap')||'{}'); }catch(e){ return {}; }
-}
-function lbBreedSaveStore(m){ try{ localStorage.setItem('lbBreedTargetsMap', JSON.stringify(m)); }catch(e){} }
-(function(){
-  var _bm = lbBreedLoadStore();
-  if(!Object.keys(_bm).length){
-    try{ var _old = JSON.parse(localStorage.getItem('lbBreedTargets')||'[]'); if(Array.isArray(_old) && _old.length){ _bm['lbBreed:'] = _old; lbBreedSaveStore(_bm); } }catch(e){}
-  }
-  LB.breedSel = (Array.isArray(_bm[lbBreedStoreKey()]) ? _bm[lbBreedStoreKey()].slice() : []);
-})();
+try{ var _bs = JSON.parse(localStorage.getItem('lbBreedTargets')||'[]'); if(Array.isArray(_bs)) LB.breedSel = _bs; }catch(e){}
 function lbRenderBreedBar(){
   var bar = document.getElementById('lbBreedBar');
   if(!bar) return;
   var show = !!LB.curClass; // 选中具体物种才显示
   bar.style.display = show ? 'block' : 'none';
-  // 物种变化时：保存旧物种选择 → 加载当前物种的持久化选择；重置结果（旧物种结果不残留）
+  // 物种变化时重置结果（旧物种结果不残留）
   if(LB._breedLastClass !== LB.curClass){
-    var _bm = lbBreedLoadStore();
-    if(LB._breedLastClass !== undefined) _bm['lbBreed:'+LB._breedLastClass] = LB.breedSel.slice();
-    LB.breedSel = (LB.curClass && Array.isArray(_bm[lbBreedStoreKey()])) ? _bm[lbBreedStoreKey()].slice() : [];
-    lbBreedSaveStore(_bm);
     LB._breedLastClass = LB.curClass;
     if(LB.breedResult){ LB.breedResult = false; lbRenderBreedResult(); }
   }
@@ -2655,10 +2629,7 @@ function lbBreedPick(k){
   var i = LB.breedSel.indexOf(k);
   if(i>=0) LB.breedSel.splice(i,1);
   else LB.breedSel.push(k);
-  // 按当前物种持久化
-  var _bm = lbBreedLoadStore();
-  _bm[lbBreedStoreKey()] = LB.breedSel.slice();
-  lbBreedSaveStore(_bm);
+  try{ localStorage.setItem('lbBreedTargets', JSON.stringify(LB.breedSel)); }catch(e){}
   lbRenderBreedBar();
 }
 function lbBreedToggle(){
@@ -2671,8 +2642,7 @@ function lbBreedPoint(r, i){
   var p = (r.statPoints && r.statPoints[i]) || 0;
   if(!p && r.cryoVersion===6){
     var sol = lbSolveStats(r);
-    // v6 逆推：真实 statPoints 语义=遗传等级（阿紫验证），用 wildLevels 保持一致
-    if(sol && sol.wildLevels) p = sol.wildLevels[i] || 0;
+    if(sol && sol.statPoints) p = sol.statPoints[i] || 0;
   }
   // 属性点包含变异（statMutations），显示与比较都用 遗传+变异
   var m = (r.statMutations && r.statMutations[i]) || 0;
@@ -2706,12 +2676,9 @@ function lbOwnerName(r){
     return null;
   }
   var ts = tb[r.containerTribe] || null;
-  if(r.containerType==='player'){ // 在某玩家身上：优先精确玩家名 playerName（插件新字段）；fallback ownerName → members[0]，不显示部落名
-    if(r.playerName) return r.playerName;
-    if(ts){
-      if(ts.ownerName) return ts.ownerName;
-      if(ts.members && ts.members.length) return ts.members[0];
-    }
+  if(r.containerType==='player'){ // 在某玩家身上：优先显示持有玩家名
+    var nm = tribeLabel(ts);
+    if(nm) return nm;
     return '玩家#'+(r.containerTribe||'?');
   }
   var nm = tribeLabel(ts);
@@ -2721,9 +2688,6 @@ function lbOwnerName(r){
   if(tid && tid!=='0'){
     var nm2 = tribeLabel(tb[tid]);
     if(nm2) return nm2;
-    // 无归属占位（tribeId=2000000000 特殊值，放生后部落已删除）→ 待认养
-    if(r.containerType==='released' && r.tribeId===2000000000) return '待认养';
-    if(r.containerType==='released') return '放出';
     return '部落#'+tid;
   }
   if(r.containerType==='released') return '放出';
@@ -2827,27 +2791,12 @@ function lbRenderBreedResult(){
   }
   function myTag(r){ return lbContainerLabel(r); } // 我的不标「我的」，只标容器
   function extTag(r){
-    if(r.containerType==='player'){ // 玩家身上携带：背包图标（mask 染橙）+ 玩家名（不显示地图）
-      var burl = (LB_ICON_BY_NAME && LB_ICON_BY_NAME['RW_Store_chibi']) || '';
-      var bag = burl
-        ? '<span style="display:inline-block;width:12px;height:12px;background:#f59e0b;-webkit-mask-image:url(\''+burl+'\');mask-image:url(\''+burl+'\');-webkit-mask-size:contain;mask-size:contain;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;vertical-align:-1px;flex-shrink:0"></span>'
-        : lbMdiSvg('mdi-bag-personal', 12);
-      return '<span style="color:#f59e0b">'+bag+' '+lbOwnerName(r)+'</span>';
-    }
     var mdi = LB_SERVER_MDI[r.server] || 'mdi-map';
-    var name = lbOwnerName(r);
-    // 部落名后标识部落长（ownerName）：如「基纽特战队 · 歌星星」；无部落/放生/部落#xxx 不加
-    var data = LB._cache && LB._cache.data;
-    var tb = (data && data.tribesByServer && data.tribesByServer[r.server]) || {};
-    var t = tb[r.containerTribe] || tb[r.tribeId] || null;
-    var owner = (t && t.ownerName) ? t.ownerName : '';
-    if(owner && owner !== name){ name += ' · ' + owner; }
-    return '<span style="color:#f59e0b">'+lbMdiSvg(mdi, 12)+' '+name+'</span>';
+    return '<span style="color:#f59e0b">'+lbMdiSvg(mdi, 12)+' '+lbOwnerName(r)+'</span>';
   }
   var h = '';
   if(myAllChamp.length){
-    var pn = lbPlayer() || '';
-    h += '<div style="font-size:12px;color:#a78bfa;font-weight:600;margin-bottom:4px">'+(pn||'我的')+'</div>'
+    h += '<div style="font-size:12px;color:#a78bfa;font-weight:600;margin-bottom:4px">我的</div>'
       + myAllChamp.map(function(it){ return card(it, myTag(it.r), it.attrs); }).join('');
   }
   if(extAll.length){
