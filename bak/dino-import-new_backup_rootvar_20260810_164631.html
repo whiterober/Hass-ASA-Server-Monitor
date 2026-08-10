@@ -6,13 +6,6 @@
 <title>Wikily 生物导入</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
 <style>
-:root{
-  --bg:#0f0f13;
-  --card:#1a1a24;
-  --text:#e0e0e0;
-  --accent:#7c3aed;
-  --border:#2a2a3a;
-}
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f0f13;color:#e0e0e0;height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden;padding:16px 16px 0}
 .header{text-align:center;margin-bottom:16px;flex-shrink:0}
@@ -108,6 +101,12 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 </head>
 <body>
 
+<!-- Tab 导航 -->
+<div class="tabbar">
+  <div class="tab" id="tabBtn-import" onclick="switchTab('import')"><i class="mdi mdi-file-import"></i> 生物导入</div>
+  <div class="tab active" id="tabBtn-latest" onclick="switchTab('latest')"><i class="mdi mdi-dna"></i> 生物速查</div>
+  <div class="tab" id="tabBtn-settings" onclick="switchTab('settings')"><i class="mdi mdi-cog"></i> 设置</div>
+</div>
 <!-- 登录引导条（无 token 无法自动识别账号时显示） -->
 <div id="lbLoginBar" style="display:none;margin-bottom:10px;padding:8px 12px;border-radius:8px;background:#1a1a24;border:1px solid #7c3aed55;color:#ccc;font-size:12px;align-items:center;flex-wrap:wrap"></div>
 <style>
@@ -222,8 +221,8 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
     <div class="card" id="candCard" style="display:none">
       <h2>🎯 候选分配方案 <span id="candCount" style="font-size:11px;color:#999"></span>
         <span style="float:right;font-size:11px;border:1px solid #333;border-radius:4px;overflow:hidden">
-          <span id="btTamed" onclick="setBioType('tamed')" style="cursor:pointer;padding:1px 6px;display:inline-block" title="训（驯服）"><img id="btTamedIc" src="" style="width:11px;height:11px;object-fit:contain;vertical-align:-1px"></span>
-          <span id="btBred" onclick="setBioType('bred')" style="cursor:pointer;padding:1px 6px;display:inline-block" title="繁（繁育）"><img id="btBredIc" src="" style="width:11px;height:11px;object-fit:contain;vertical-align:-1px"></span>
+          <span id="btTamed" onclick="setBioType('tamed')" style="cursor:pointer;padding:1px 6px;display:inline-block" title="训（驯服）"><i class="mdi mdi-human" style="font-size:11px;line-height:1"></i></span>
+          <span id="btBred" onclick="setBioType('bred')" style="cursor:pointer;padding:1px 6px;display:inline-block" title="繁（繁育）"><i class="mdi mdi-dna" style="font-size:11px;line-height:1"></i></span>
         </span>
       </h2>
       <div id="candList"></div>
@@ -235,7 +234,6 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 <div id="latestUI" style="display:flex;flex:1;flex-direction:column;min-height:0;gap:12px;overflow:hidden">
   <div class="card" style="position:relative;margin-bottom:0">
     <button id="lbRefreshBtn2" onclick="lbConfirmRefresh()" title="刷新低温仓数据" style="position:absolute;top:10px;right:10px;background:none;border:none;color:#999;padding:2px 4px;border-radius:6px;cursor:pointer;font-size:12px;line-height:1;opacity:.65"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg></button>
-    <span id="lbDataTime" title="" style="position:absolute;top:9px;right:36px;font-size:11px;line-height:14px;color:#777;opacity:.5;pointer-events:none;white-space:nowrap"></span>
     <div class="lb-filter-bar" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
       <button id="lbClassBtn" class="lb-class-btn" onclick="lbOpenSpeciesPicker()" title="选择物种"><span class="lb-class-label">全部物种</span></button>
       <div id="lbTabs" style="display:flex;flex-wrap:wrap;gap:6px;flex:1 0 auto;min-width:0"></div>
@@ -247,10 +245,22 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 
 <div id="settingsUI" style="display:none;flex:1;flex-direction:column;min-height:0;gap:12px;overflow:hidden">
   <div class="card">
-    <div style="text-align:center;color:#666;font-size:13px;padding:24px 0;line-height:1.8">
-      ⚙️ 刷新功能已移至<b style="color:#a78bfa">生物速查页右上角刷新按钮</b><br>
-      <span style="font-size:12px;color:#555">支持刷新低温仓数据（全部服务器）与刷新 tamed 放出生物（多选服务器）</span>
+    <div id="lbServers" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
+    <button class="btn btn-primary" id="lbRefreshBtn" onclick="lbRefresh()" style="margin-bottom:0">刷新选中服务器数据</button>
+  </div>
+  <div id="lbProgress" style="display:none">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+      <div id="lbProgBar" style="flex:1;height:8px;border-radius:4px;background:#22223a;overflow:hidden;display:flex;gap:2px;padding:0 1px"></div>
+      <span id="lbProgText" style="font-size:12px;color:#999;white-space:nowrap"></span>
     </div>
+    <div id="lbProgLegend" style="display:flex;gap:12px;font-size:10px;color:#666;margin-top:2px"></div>
+  </div>
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <span style="font-weight:600;color:#a78bfa;font-size:13px">🔍 调试信息</span>
+      <button class="btn" onclick="lbShowDebug()" style="font-size:12px;padding:4px 10px">检测</button>
+    </div>
+    <div id="lbDebugOut" style="font-size:11px;color:#bbb;white-space:pre-wrap;word-break:break-all;max-height:260px;overflow:auto;display:none;line-height:1.6"></div>
   </div>
 </div>
 
@@ -1390,14 +1400,6 @@ function closeOtherGroups(openGi) {
 
 // 生物类型切换（训/繁）
 var _bioType = 'tamed';
-// 图标加载完成后填充训/繁切换按钮 PNG（HTML 静态 img 无法内联 JS 表达式）
-function lbFillBioIcons(){
-  if(!LB_ICON_BY_NAME) return;
-  var ti=document.getElementById('btTamedIc'), bi=document.getElementById('btBredIc');
-  var tu=LB_ICON_BY_NAME['HubTameIcon']||'', bu=LB_ICON_BY_NAME['RW_wants_to_cuddle']||'';
-  if(ti && tu) ti.src=tu;
-  if(bi && bu) bi.src=bu;
-}
 function setBioType(t) {
   _bioType = t;
   var ta = document.getElementById('btTamed'), br = document.getElementById('btBred');
@@ -1487,7 +1489,6 @@ var DINO_JSON = 'https://whiterober:%401219Wu1219%40@wiim.whiterober.com/dino-da
 function switchTab(name){
   var imp=document.getElementById('mainUI'), lat=document.getElementById('latestUI'), set=document.getElementById('settingsUI');
   if(!imp||!lat||!set) return;
-  LB._curPage = name;
   var on=(name==='latest'), onSet=(name==='settings');
   imp.style.display = (name==='import')?'flex':'none';
   lat.style.display = on?'flex':'none';
@@ -1496,7 +1497,6 @@ function switchTab(name){
   if(bi) bi.className='tab'+(name==='import'?' active':'');
   if(bl) bl.className='tab'+(on?' active':'');
   if(bs) bs.className='tab'+(onSet?' active':'');
-  if(typeof lbRenderBreedBar==='function') lbRenderBreedBar(); // 切换页面时同步繁育栏显示状态（仅速查页显示）
   if(on) lbInit();
 }
 function lbInit(){
@@ -1525,7 +1525,6 @@ function lbInitPlayer(){
           LB._needLogin = true;
           resolve(); return;
         }
-        LB._tok = token; // 缓存 token 供 lbLoadThemes 等复用（避免重复 lbHaTokenRefresh 再次卡 6s）
         var proto = (location.protocol === 'https:') ? 'wss://' : 'ws://';
         var ws;
         try{ ws = new WebSocket(proto + location.host + '/api/websocket'); }
@@ -1557,19 +1556,11 @@ function lbShowLoginPrompt(){
   var bar = document.getElementById('lbLoginBar');
   if(!bar || !LB._needLogin) return;
   bar.style.display = 'block';
-  bar.innerHTML = '<span>未检测到登录，以游客身份浏览</span>'
-    + '<button onclick="lbGoLogin()" style="margin-left:10px;padding:4px 12px;border-radius:6px;border:none;background:#7c3aed;color:#fff;cursor:pointer;font-size:12px">去登录</button>';
+  bar.innerHTML = '<span>未检测到 HA 登录（以游客身份浏览，玩家携带/繁育数据已隐藏）</span>'
+    + '<button onclick="lbGoLogin()" style="margin-left:10px;padding:4px 12px;border-radius:6px;border:none;background:#7c3aed;color:#fff;cursor:pointer;font-size:12px">去登录自动识别</button>';
 }
-// 登录：统一走 lbHaTokenRefresh（内部已含 App externalAuth bridge + 浏览器 localStorage + 过期换新）
-// 拿到 token → 刷新页面自动识别账号；拿不到 → App 内轻提示（跳转被禁）/ 浏览器跳转登录页写 token
-async function lbGoLogin(){
-  try{
-    var token = await lbHaTokenRefresh();
-    if(token){ location.reload(); return; }
-  }catch(e){}
-  var isApp = (window.externalApp && typeof window.externalApp.getExternalAuth === 'function')
-    || (window.externalAppV2 && typeof window.externalAppV2.postMessage === 'function');
-  if(isApp){ lbToast('请先在 HA App 中登录账号'); return; }
+// 跳转 HA 首页登录（storeToken=true 触发 HA 写 localStorage.hassTokens）；新标签打开，登录后回本页刷新
+function lbGoLogin(){
   try{
     window.open('/?storeToken=true', '_blank');
   }catch(e){
@@ -1580,10 +1571,9 @@ function lbRenderServers(){
   var el=document.getElementById('lbServers'); if(!el) return;
   var html='';
   LB.SERVERS.forEach(function(s){
-    if(s.abbr==='Bob') return; // 去掉俱乐部
+    if(s.abbr==='Bob') return; // 设置页去掉俱乐部
     var mdi=LB_SERVER_MDI[s.abbr]||'';
-    // 刷新浮窗内默认全不选（用户自行勾选，tamed 尽量单服抓取）
-    html+='<span class="server-tab" data-abbr="'+s.abbr+'" onclick="lbToggleServer(this)" title="'+s.name+'">'+(mdi?'<i class="mdi '+mdi+'"></i>':(s.icon||''))+'</span>';
+    html+='<span class="server-tab active" data-abbr="'+s.abbr+'" onclick="lbToggleServer(this)" title="'+s.name+'">'+(mdi?'<i class="mdi '+mdi+'"></i>':(s.icon||''))+'</span>';
   });
   el.innerHTML=html;
 }
@@ -1644,120 +1634,62 @@ async function lbShowDebug(){
   out.textContent=L.join('\n');
 }
 
-// 获取文件 Last-Modified（HEAD 轻量请求，毫秒级；失败返回 null，文件不存在(404)返回 '__404__'）
-// 用 XHR 直接实现（fetch HEAD 并发易 ERR_ABORTED）；Basic Auth 从 URL 内嵌凭据取
-var LB_LM_404 = '__404__';
-function lbHeadLm(url){
-  return new Promise(function(resolve){
-    var m = url.match(/^([a-z]+:\/\/)([^@\/]+)@/i);
-    var cleanUrl = url;
-    var auth = null;
-    if(m){
-      var b64;
-      try{ b64 = btoa(decodeURIComponent(m[2])); }catch(e2){ b64 = btoa(m[2]); }
-      auth = 'Basic ' + b64;
-      cleanUrl = m[1] + url.slice(m[0].length);
-    }
-    var xhr = new XMLHttpRequest();
-    xhr.open('HEAD', cleanUrl, true);
-    if(auth) xhr.setRequestHeader('Authorization', auth);
-    xhr.timeout = 8000;
-    xhr.onload = function(){
-      var lm = null;
-      try{ lm = xhr.getResponseHeader('Last-Modified') || null; }catch(e){}
-      if(xhr.status === 404) lm = LB_LM_404; // 文件不存在（如非 Isl 的 tamed.json）
-      resolve(lm);
-    };
-    xhr.onerror = function(){ resolve(null); };
-    xhr.ontimeout = function(){ resolve(null); };
-    try{ xhr.send(null); }catch(e){ resolve(null); }
-  });
-}
-
 // 加载 + 归一化（cryo∪tamed，跨服去重：同一 dinoId 只保留一条，优先 sortWorldSec 大的）
-// 两阶段：①全部并发 HEAD 收集 Last-Modified + 变化清单（HEAD 不与下载抢连接）②分批只下载变化的文件，未变化的复用旧 recs
-async function lbLoad(servers, oldData){
+async function lbLoad(servers){
   var recs=[], recMap={}, tribesByServer={}, worldNowByServer={};
-  var oldRecs = (oldData && Array.isArray(oldData.recs)) ? oldData.recs : null;
-  var oldLm = (oldData && oldData._lm) ? oldData._lm : {};
-  var lm = {}; // 本次各文件 Last-Modified 记录（存缓存）
   function lbAddRec(rec){
+    // 空球无 dinoId，用 podId 作唯一 key；有生物用 dinoId1_dinoId2 跨服去重
     var key = rec.isEmpty ? ('empty_'+(rec.podId||rec.containerId||'empty')) : ((rec.dinoId1||'') + '_' + (rec.dinoId2||''));
     var old = recMap[key];
     if(!old || (rec.sortWorldSec||0) > (old.sortWorldSec||0)) recMap[key] = rec;
   }
-  function addCryoRec(abbr, p){
-    var isEmpty = !p.dinoId1; var ct = p.containerType || '';
-    if(isEmpty){ var cc = p.containerClass || '';
-      if(cc.indexOf('CryoFridge')>=0) ct='fridge'; else if(cc.indexOf('PrimalInventory1')>=0) ct='player'; else if(cc.indexOf('TekReplicator')>=0) ct='replicator'; else ct=ct||'other'; }
-    recs.push({ src:'cryo', server:abbr, isEmpty:isEmpty, podId:p.podInstanceId, dinoId1:p.dinoId1||'', dinoId2:p.dinoId2||'', dinoClass:p.dinoClass||'',
-      name:p.name||'', level:p.level||0, gender:p.gender||'', babyAge:p.babyAge, isBaby:p.isBaby, tribeId:p.tribeId,
-      statValues:p.statValues||[], statPoints:p.statPoints||[], statMutations:p.statMutations||[], imprintingQuality:p.imprintingQuality,
-      randomMutationsMale:p.randomMutationsMale, randomMutationsFemale:p.randomMutationsFemale, ancestors:p.ancestors||[], colors:p.colors||'',
-      saddle:p.saddle||'', cryoVersion:p.cryoVersion, sortWorldSec:p.packedAtWorldSec||0, srcWorld:'packed', absMs:p.downloadedAtMs||0,
-      containerId:p.containerId, containerType:ct, containerName:p.containerName||'', containerClass:p.containerClass||'', containerTribe:p.containerTribe,
-      ownerTribeId:p.containerTribe||0, playerName:p.playerName||'' });
-    lbAddRec(recs[recs.length-1]);
-  }
-  function addTamedRec(abbr, d){
-    var ws = d.downloadedAtWorldSec || d.tamedAtWorldSec || 0;
-    recs.push({ src:'tamed', server:abbr, dinoId1:d.dinoId1, dinoId2:d.dinoId2, dinoClass:d.dinoClass||'',
-      name:d.name||'', level:d.level||0, gender:d.gender||'', babyAge:d.babyAge, isBaby:d.isBaby, tribeId:d.tribeId,
-      statValues:d.statValues||[], statPoints:d.statPoints||[], statMutations:d.statMutations||[], imprintingQuality:d.imprintingQuality,
-      randomMutationsMale:d.randomMutationsMale, randomMutationsFemale:d.randomMutationsFemale, ancestors:d.ancestors||[], colors:d.colors||'',
-      saddle:d.saddle||'', cryoVersion:0, sortWorldSec:ws, srcWorld:(d.downloadedAtWorldSec?'downloaded':(d.tamedAtWorldSec?'tamed':'')), absMs:0,
-      containerId:'', containerType:'released', containerName:'放出', containerClass:'', containerTribe:0, ownerTribeId:d.tribeId||0 });
-    lbAddRec(recs[recs.length-1]);
-  }
-  // 阶段①：全部服务器并发 HEAD（不跟下载竞争连接）
-  var headTasks = servers.map(function(abbr){
-    var s = LB.SERVERS.find(function(x){return x.abbr===abbr;});
-    if(!s) return Promise.resolve();
-    var cryoUrl = DINO_JSON+abbr+'_cryo.json?cb='+Date.now();
-    var tamedUrl = DINO_JSON+abbr+'_tamed.json?cb='+Date.now();
-    var oCryo = oldLm[abbr] && oldLm[abbr].cryo;
-    var oTamed = oldLm[abbr] && oldLm[abbr].tamed;
-    return Promise.all([ lbHeadLm(cryoUrl), lbHeadLm(tamedUrl) ]).then(function(lms){
-      var cryoLm = lms[0], tamedLm = lms[1];
-      lm[abbr] = { cryo: cryoLm || null, tamed: tamedLm || null };
-      var cryoSkip = !!(cryoLm && oCryo && cryoLm === oCryo);
-      var tamedSkip = !!(tamedLm && oTamed && tamedLm === oTamed);
-      // 未变化的文件：立即复用旧 recs + 旧 tribes/worldNow
-      var reused = oldRecs ? oldRecs.filter(function(r){ return r.server === abbr; }) : [];
-      if(cryoSkip){ reused.filter(function(r){ return r.src === 'cryo'; }).forEach(lbAddRec);
-        if(oldData && oldData.tribesByServer && oldData.tribesByServer[abbr]) tribesByServer[abbr] = oldData.tribesByServer[abbr];
-        if(oldData && oldData.worldNowByServer && oldData.worldNowByServer[abbr] !== undefined) worldNowByServer[abbr] = oldData.worldNowByServer[abbr];
-      }
-      if(tamedSkip){ reused.filter(function(r){ return r.src === 'tamed'; }).forEach(lbAddRec); }
-      return { abbr:abbr, needCryo:!cryoSkip, needTamed:!tamedSkip };
-    });
-  });
-  var headResults = await Promise.all(headTasks);
-  // 阶段②：只下载变化的文件（分批 3 台，每台内 cryo+tamed 并行）
-  var needList = headResults.filter(function(r){ return r && (r.needCryo || r.needTamed); });
-  var BATCH = 3;
-  for(var bi=0; bi<needList.length; bi+=BATCH){
-    var batch = needList.slice(bi, bi+BATCH).map(function(item){
-      var abbr = item.abbr;
-      var cryoUrl = DINO_JSON+abbr+'_cryo.json?cb='+Date.now();
-      var tamedUrl = DINO_JSON+abbr+'_tamed.json?cb='+Date.now();
-      var tasks = [];
-      // 404（文件不存在）的文件跳过下载
-      if(item.needCryo && lm[abbr].cryo !== LB_LM_404) tasks.push(authFetch(cryoUrl,{}).then(function(r){return r.json();}).then(function(cryo){
-        if(cryo){ tribesByServer[abbr] = cryo.tribes||{}; worldNowByServer[abbr] = cryo.worldSecondsNow||0;
-          (cryo.cryopod||[]).forEach(function(p){ addCryoRec(abbr, p); }); }
-      }).catch(function(){}));
-      if(item.needTamed && lm[abbr].tamed !== LB_LM_404) tasks.push(authFetch(tamedUrl,{}).then(function(r){return r.json();}).then(function(tamed){
-        if(tamed){ (tamed.dinos||[]).forEach(function(d){ addTamedRec(abbr, d); }); }
-      }).catch(function(){}));
-      return Promise.all(tasks);
-    });
-    await Promise.all(batch);
+  for(var i=0;i<servers.length;i++){
+    var abbr=servers[i], s=LB.SERVERS.find(function(x){return x.abbr===abbr;}); if(!s) continue;
+    var cryo=null, tamed=null;
+    try{ cryo = await authFetch(DINO_JSON+abbr+'_cryo.json?cb='+Date.now(),{}).then(function(r){return r.json();}); }catch(e){ cryo=null; }
+    try{ tamed = await authFetch(DINO_JSON+abbr+'_tamed.json?cb='+Date.now(),{}).then(function(r){return r.json();}); }catch(e){ tamed=null; }
+    if(cryo){
+      tribesByServer[abbr] = cryo.tribes||{};
+      worldNowByServer[abbr] = cryo.worldSecondsNow||0;
+      (cryo.cryopod||[]).forEach(function(p){
+        var isEmpty = !p.dinoId1;
+        // 空球容器类型推断（containerClass → containerType），便于归入对应容器
+        var ct = p.containerType || '';
+        if(isEmpty){
+          var cc = p.containerClass || '';
+          if(cc.indexOf('CryoFridge')>=0) ct = 'fridge';
+          else if(cc.indexOf('PrimalInventory1')>=0) ct = 'player';
+          else if(cc.indexOf('TekReplicator')>=0) ct = 'replicator';
+          else ct = ct || 'other';
+        }
+        recs.push({ src:'cryo', server:abbr, isEmpty:isEmpty, podId:p.podInstanceId, dinoId1:p.dinoId1||'', dinoId2:p.dinoId2||'', dinoClass:p.dinoClass||'',
+          name:p.name||'', level:p.level||0, gender:p.gender||'', babyAge:p.babyAge, isBaby:p.isBaby,
+          tribeId:p.tribeId, statValues:p.statValues||[], statPoints:p.statPoints||[], statMutations:p.statMutations||[],
+          imprintingQuality:p.imprintingQuality, randomMutationsMale:p.randomMutationsMale, randomMutationsFemale:p.randomMutationsFemale, ancestors:p.ancestors||[],
+          colors:p.colors||'', saddle:p.saddle||'', cryoVersion:p.cryoVersion,
+          sortWorldSec:p.packedAtWorldSec||0, srcWorld:'packed', absMs:p.downloadedAtMs||0,
+          containerId:p.containerId, containerType:ct, containerName:p.containerName||'', containerClass:p.containerClass||'', containerTribe:p.containerTribe,
+          ownerTribeId:p.containerTribe||0, playerName:p.playerName||'' });
+        lbAddRec(recs[recs.length-1]);
+      });
+    }
+    if(tamed){
+      (tamed.dinos||[]).forEach(function(d){
+        var ws = d.downloadedAtWorldSec || d.tamedAtWorldSec || 0;
+        recs.push({ src:'tamed', server:abbr, dinoId1:d.dinoId1, dinoId2:d.dinoId2, dinoClass:d.dinoClass||'',
+          name:d.name||'', level:d.level||0, gender:d.gender||'', babyAge:d.babyAge, isBaby:d.isBaby,
+          tribeId:d.tribeId, statValues:d.statValues||[], statPoints:d.statPoints||[], statMutations:d.statMutations||[],
+          imprintingQuality:d.imprintingQuality, randomMutationsMale:d.randomMutationsMale, randomMutationsFemale:d.randomMutationsFemale, ancestors:d.ancestors||[],
+          colors:d.colors||'', saddle:d.saddle||'', cryoVersion:0,
+          sortWorldSec:ws, srcWorld:(d.downloadedAtWorldSec?'downloaded':(d.tamedAtWorldSec?'tamed':'')), absMs:0,
+          containerId:'', containerType:'released', containerName:'放出', containerClass:'', containerTribe:0,
+          ownerTribeId:d.tribeId||0 });
+        lbAddRec(recs[recs.length-1]);
+      });
+    }
   }
   recs = Object.values(recMap);
-  var out = {recs:recs, tribesByServer:tribesByServer, worldNowByServer:worldNowByServer};
-  out._lm = lm;
-  return out;
+  return {recs:recs, tribesByServer:tribesByServer, worldNowByServer:worldNowByServer};
 }
 
 // 玩家所属部落集合（members 匹配，跨服）
@@ -1934,8 +1866,6 @@ function lbDinoHTML(r){
   var stats='';
   var sol = null; // 懒加载逆推结果（null=未算，false=无可逆推）
   var domR = null; // tamed/v7/stand 手动加点反推（懒加载）
-  // 非正常生物（Units 载具/特殊生物：ASB 查不到或无属性点）：属性值行仍显示，仅隐藏属性点括号（disp）且跳过逆推计算
-  var lbNormalCreature = lbIsNormalCreature(r);
   [0,1,3,4,7,8].forEach(function(i){
     var v = (r.statValues && r.statValues[i] !== undefined) ? r.statValues[i] : lbCalcStat(r, i);
     if(v===undefined || v===null) return;
@@ -1943,35 +1873,32 @@ function lbDinoHTML(r){
     var m = (r.statMutations && r.statMutations[i]) || 0;
     var guessed = false;
     var gw = 0;
-    var disp = '';
-    var domVal = 0;
-    // 仅正常生物计算属性点括号（非正常生物跳过逆推，省性能且不显示属性点）
-    if(lbNormalCreature){
-      if(r.cryoVersion===6 && !p && !m && sol !== false){
-        if(sol === null) sol = lbSolveStats(r) || false;
-        if(sol){
-          p = (sol.statPoints && sol.statPoints[i]) || 0;
-          gw = (sol.wildLevels && sol.wildLevels[i]) || 0;
-          guessed = true;
-        }
+    if(r.cryoVersion===6 && !p && !m && sol !== false){
+      if(sol === null) sol = lbSolveStats(r) || false;
+      if(sol){
+        p = (sol.statPoints && sol.statPoints[i]) || 0;
+        gw = (sol.wildLevels && sol.wildLevels[i]) || 0;
+        guessed = true;
       }
-      if(guessed){ // v6 推测：遗传/加点都是猜测（绿色）；变异橙
-        disp = '(<span style="color:#22c55e">'+gw+'</span><span style="opacity:.5">|</span><span style="color:#f59e0b">0</span><span style="opacity:.5">|</span><span style="color:#22c55e">'+p+'</span>)';
-      } else if(r.cryoVersion===6 && sol === false) disp = ''; // v6 推测失败：不显示
-      else {
-        // tamed/v7/stand 真实数据：反推手动加点
-        if(r.cryoVersion!==6 && p>0){
-          if(domR === null) domR = lbTamedDom(r) || false;
-          if(domR && domR.dom && domR.dom[i] > 0) domVal = domR.dom[i];
-        }
-        if(domVal > 0){
-          // fallback（无真实留痕字段）猜测加点绿色；真实留痕正常显示
-          disp = (typeof r.imprintingQuality==='number')
-            ? ('('+p+'<span style="opacity:.5">|</span><span style="color:#f59e0b">'+m+'</span><span style="opacity:.5">|</span>'+domVal+')')
-            : ('('+p+'<span style="opacity:.5">|</span><span style="color:#f59e0b">'+m+'</span><span style="opacity:.5">|</span><span style="color:#22c55e">'+domVal+'</span>)');
-        } else {
-          disp = '('+p+'<span style="opacity:.5">|</span><span style="color:#f59e0b">'+m+'</span><span style="opacity:.5">|</span>0)';
-        }
+    }
+    var disp;
+    var domVal = 0;
+    if(guessed){ // v6 推测：遗传/加点都是猜测（绿色）；变异橙
+      disp = '(<span style="color:#22c55e">'+gw+'</span><span style="opacity:.5">|</span><span style="color:#f59e0b">0</span><span style="opacity:.5">|</span><span style="color:#22c55e">'+p+'</span>)';
+    } else if(r.cryoVersion===6 && sol === false) disp = ''; // v6 推测失败：不显示
+    else {
+      // tamed/v7/stand 真实数据：反推手动加点
+      if(r.cryoVersion!==6 && p>0){
+        if(domR === null) domR = lbTamedDom(r) || false;
+        if(domR && domR.dom && domR.dom[i] > 0) domVal = domR.dom[i];
+      }
+      if(domVal > 0){
+        // fallback（无真实留痕字段）猜测加点绿色；真实留痕正常显示
+        disp = (typeof r.imprintingQuality==='number')
+          ? ('('+p+'<span style="opacity:.5">|</span><span style="color:#f59e0b">'+m+'</span><span style="opacity:.5">|</span>'+domVal+')')
+          : ('('+p+'<span style="opacity:.5">|</span><span style="color:#f59e0b">'+m+'</span><span style="opacity:.5">|</span><span style="color:#22c55e">'+domVal+'</span>)');
+      } else {
+        disp = '('+p+'<span style="opacity:.5">|</span><span style="color:#f59e0b">'+m+'</span><span style="opacity:.5">|</span>0)';
       }
     }
     var vDisp = fmtStat(v);
@@ -1980,26 +1907,20 @@ function lbDinoHTML(r){
       +(disp?'<br><span style="color:#a78bfa" title="'+(guessed?'推测值(遗传|变异|加点)':'')+'">'+disp+'</span>':'')
       +'</span>';
   });
-  var v6warn = (!lbNormalCreature) ? '' : ((r.cryoVersion===6 && sol === false) ? '<div style="margin-top:6px;color:#f87171;font-size:11px">⚠️ 逆推失败的v6旧球，建议重新装球</div>' : '');
+  var v6warn = (r.cryoVersion===6 && sol === false) ? '<div style="margin-top:6px;color:#f87171;font-size:11px">⚠️ 加点/变异数据缺失（v6旧球，无法逆推）</div>' : '';
   var mutM = (r.randomMutationsMale||0), mutF = (r.randomMutationsFemale||0);
   var mutSum = mutM + mutF;
   // 变异代数（社区惯例）：所有有变异的属性都分析显示；代数 = 该属性变异次数（点数÷2，每次变异+2点）
-  // 格式「🧬血1代」（属性名在前、代数在后）
   var mutAbbr = ['血','耐','晕','氧','食','水','温','重','攻','速','抗','制'];
   var mutArr = Array.isArray(r.statMutations)?r.statMutations:[];
   var anc = '';
   for(var gi=0; gi<mutArr.length; gi++){
     var gv = Number(mutArr[gi])||0;
-    if(gv > 0){ anc += '🧬'+(mutAbbr[gi]||'?')+Math.round(gv/2)+'代 '; }
+    if(gv > 0){ anc += '🧬'+Math.round(gv/2)+'代 '+(mutAbbr[gi]||'?')+' '; }
   }
-  // 训/繁徽章（复用导入页 isBredDino 逻辑；样式同鞍：16×16 圆角2px；繁=透明底+紫色按留痕百分比从下往上填充+紫色细内描边；训不显示标识；放第一行鞍右边）
+  // 训/繁徽章（复用导入页 isBredDino 逻辑；样式同鞍：16×16 圆角2px 彩底白字；繁紫#7c3aed mdi-dna；训不显示标识；放第一行鞍右边）
   var tbTag = lbIsBred(r)
-    ? (function(){
-        var imp = (typeof r.imprintingQuality === 'number') ? Math.max(0, Math.min(1, r.imprintingQuality)) : 0; // 留痕 0~1；无数据(如 cryo/v6 球)=0
-        var pct = Math.round(imp * 100);
-        var bg = 'linear-gradient(to top, #7c3aed ' + pct + '%, transparent ' + pct + '%)';
-        return '<span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:2px;background:' + bg + ';border:1px solid #7c3aed;color:#fff;flex-shrink:0;box-sizing:border-box"><img src="'+(LB_ICON_BY_NAME&&LB_ICON_BY_NAME['RW_wants_to_cuddle']||'')+'" style="width:14px;height:14px;object-fit:contain;display:block"'+(LB_ICON_BY_NAME&&LB_ICON_BY_NAME['RW_wants_to_cuddle']?lbIconFilterStyle(LB_ICON_BY_NAME['RW_wants_to_cuddle'],'GUI'):'')+'></span>';
-      })()
+    ? '<span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:2px;background:#7c3aed;color:#fff;flex-shrink:0"><i class="mdi mdi-dna" style="font-size:12px;line-height:1"></i></span>'
     : '';
   // 成长百分比（100%/成年不显示；婴儿绿/幼崽黄/青年橙，与导入页阶段着色一致）
   var growth='';
@@ -2030,11 +1951,7 @@ function lbDinoHTML(r){
   if(icUrl) cardIcon='<img class="lb-card-ic" src="'+icUrl+'"'+lbIconFilterStyle(icUrl,'biology')+' onerror="this.remove()">';
   // ID 小按钮（卡片右上角，点击 toggle 显示/隐藏 ID 浮窗，双端统一）
   var idBtn='<span class="lb-id-btn" onclick="lbToggleId(event,this,\'#'+r.dinoId1+'_'+r.dinoId2+'\')" title="查看ID"><i class="mdi mdi-identifier"></i></span>';
-  // 长按选物种（双端）：移动端 touchstart / 桌面端 mousedown，500ms 触发；ID 按钮等交互元素不触发
-  var clsEsc = String(r.dinoClass||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-  return '<div class="lb-card" style="position:relative;overflow:hidden;background:#1a1a24;border:1px solid #2a2a3a;border-radius:10px;padding:10px 12px;margin-bottom:8px"'
-    +' onmousedown="lbCardPressStart(event,\''+clsEsc+'\')" onmouseup="lbCardPressEnd()" onmouseleave="lbCardPressEnd()"'
-    +' ontouchstart="lbCardPressStart(event,\''+clsEsc+'\')" ontouchend="lbCardPressEnd()" ontouchmove="lbCardPressEnd()">'
+  return '<div class="lb-card" style="position:relative;overflow:hidden;background:#1a1a24;border:1px solid #2a2a3a;border-radius:10px;padding:10px 12px;margin-bottom:8px">'
     +cardIcon
     +idBtn
     +strip
@@ -2042,8 +1959,8 @@ function lbDinoHTML(r){
     +(zh?'<span style="color:#a78bfa;font-size:12px">'+zh+'</span>':'')
     +'<span style="font-size:15px;color:'+(r.gender==='FEMALE'?'#f472b6':'#60a5fa')+'">'+(r.gender==='FEMALE'?'♀':'♂')+'</span>'
     +(r.name ? '<b style="color:#fff;font-size:14px">'+r.name+'</b>' : '')
-    +'<span style="display:inline-flex;align-items:center;height:18px;background:#22223a;border:1px solid #333;border-radius:2px;padding:0 8px;font-size:11px;color:#ccc;line-height:1">Lv.'+r.level+'</span>'
-    +(r.saddle?'<span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:2px;background:'+(/platform/i.test(r.saddle)?'#fb923c':(/tek/i.test(r.saddle)?'#7c3aed':'#38bdf8'))+';color:#fff">'+lbSaddleImg(r.saddle)+'</span>':'')
+    +'<span style="background:#22223a;border:1px solid #333;border-radius:2px;padding:1px 8px;font-size:11px;color:#ccc">Lv.'+r.level+'</span>'
+    +(r.saddle?'<span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:2px;background:'+(/platform/i.test(r.saddle)?'#fb923c':(/tek/i.test(r.saddle)?'#7c3aed':'#38bdf8'))+';color:#fff">'+lbSaddleImg(r.saddle)+'</span>':'')
     +tbTag
     +'</div>'
     +(row2?'<div style="position:relative;z-index:1;font-size:11px;color:#999;margin-top:6px;display:flex;flex-wrap:wrap;gap:4px 14px">'+row2+'</div>':'')
@@ -2128,46 +2045,31 @@ function lbCopyId(id){
     }
   }catch(e){}
 }
-// ===== 长按卡片选物种（双端：移动端 touchstart / 桌面端 mousedown，500ms 触发）=====
-// 替换原「长按显示 ID 浮窗」：长按现在自动选该卡片物种（筛选显示该物种全部生物）；ID 仍可点右上角按钮查看
-var LB_PRESS_TIMER=null, LB_PRESS_CLS=null;
-function lbCardPressStart(ev, cls){
-  // 点击 ID 按钮等交互元素不触发长按选物种
-  if(ev.target && ev.target.closest && ev.target.closest('.lb-id-btn')) return;
-  clearTimeout(LB_PRESS_TIMER);
-  LB_PRESS_CLS = cls;
-  LB_PRESS_TIMER = setTimeout(function(){
-    LB_PRESS_TIMER=null;
-    lbSelectClassByPress(LB_PRESS_CLS);
+function lbTouchIdStart(ev, id){
+  clearTimeout(LB_ID_TIP_TIMER);
+  var t = ev.touches && ev.touches[0];
+  LB_ID_TIP_TIMER = setTimeout(function(){
+    lbShowId({clientX: t ? t.clientX : 0, clientY: t ? t.clientY : 0}, id);
   }, 500);
 }
-function lbCardPressEnd(){
-  clearTimeout(LB_PRESS_TIMER);
-  LB_PRESS_TIMER=null;
-}
-// 长按触发：选中该物种并重新渲染筛选（等同物种浮窗选中）
-function lbSelectClassByPress(cls){
-  if(!cls) return;
-  LB.curClass = cls;
-  lbView();
-  // 轻提示「已选中 XX」+ 按钮高亮反馈由 lbRenderView 自动更新
-  var nm = lbSpName(cls);
-  var label = (nm && (nm.zh||nm.eng)) || cls;
-  lbToast('已选中：' + label);
-}
-// 轻提示浮层（左下角，自动消失）
-var LB_TOAST=null, LB_TOAST_TM=null;
-function lbToast(msg){
-  if(!LB_TOAST){
-    LB_TOAST=document.createElement('div');
-    LB_TOAST.style.cssText='position:fixed;left:12px;bottom:12px;z-index:99998;background:#7c3aed;color:#fff;padding:6px 14px;border-radius:8px;font-size:13px;box-shadow:0 2px 12px rgba(0,0,0,.4);display:none;pointer-events:none';
-    document.body.appendChild(LB_TOAST);
+// 移动端：长按整张卡片显示 ID 浮窗，再点一下消失（toggle；桌面 hover 走 mouseenter/mouseleave）
+function lbCardTouchStart(ev, id){
+  if(LB_ID_TIP && LB_ID_TIP.style.display==='block'){ // 浮窗已显示：点击即隐藏
+    lbHideId();
+    clearTimeout(LB_ID_TIP_TIMER);
+    LB._tipCard = null;
+    return;
   }
-  LB_TOAST.textContent = msg;
-  LB_TOAST.style.display='block';
-  clearTimeout(LB_TOAST_TM);
-  LB_TOAST_TM=setTimeout(function(){ LB_TOAST.style.display='none'; }, 1600);
+  clearTimeout(LB_ID_TIP_TIMER);
+  var t = ev.touches && ev.touches[0];
+  LB._tipCard = { x:(t?t.clientX:0), y:(t?t.clientY:0) };
+  LB_ID_TIP_TIMER = setTimeout(function(){
+    if(!LB._tipCard) return;
+    lbShowId({clientX:LB._tipCard.x, clientY:LB._tipCard.y}, id);
+  }, 500);
 }
+function lbCardTouchEnd(){ clearTimeout(LB_ID_TIP_TIMER); LB._tipCard = null; }
+function lbCardTouchMove(){ clearTimeout(LB_ID_TIP_TIMER); LB._tipCard = null; }
 
 // IndexedDB 速查缓存持久化（刷新页面后秒开，避免重新加载 10 台 JSON）
 var LB_IDB_NAME = 'dinoImportDB', LB_IDB_STORE = 'lbCache';
@@ -2245,7 +2147,7 @@ function lbSaddleIcon(sc){
   var p = MDI_SEAT;
   if(/platform/i.test(sc)) p = MDI_DASHBOARD;
   else if(/tek/i.test(sc)) p = MDI_HEXAGON;
-  return '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px"><path d="'+p+'"/></svg>';
+  return '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px"><path d="'+p+'"/></svg>';
 }
 // 鞍图标（PNG 优先，取自 asa-data 图标库；未收录回退 MDI SVG）：普通 RW_equip_saddle、平台 RW_Garage_roof_show、Tek TEK_Icon
 function lbSaddleImg(sc){
@@ -2256,7 +2158,7 @@ function lbSaddleImg(sc){
   var url = (LB_ICON_BY_NAME && LB_ICON_BY_NAME[key]) || '';
   if(!url) return lbSaddleIcon(sc);
   var f = lbIconFilterStyle(url);
-  return '<img src="'+url+'" style="width:14px;height:14px;object-fit:contain;display:block"'+(f?f:'')+'>';
+  return '<img src="'+url+'" style="width:12px;height:12px;object-fit:contain;display:block"'+(f?f:'')+'>';
 }
 // 容器显示名：有名字显示名字；未命名 display/stand 合并用 JSON 中文；其他未命名容器加 containerId 后 6 位区分
 // containerType → MDI 图标（无 png 时回退）
@@ -2290,7 +2192,7 @@ function lbMdiSvg(name, size){
   return '<svg viewBox="0 0 24 24" width="'+size+'" height="'+size+'" style="vertical-align:-1px;fill:currentColor;flex-shrink:0"><path d="'+d+'"/></svg>';
 }
 // containerType → icons2.json 图标名（summary 用 png，released 的 RW_Tracking_dino 需强制反色）
-var LB_CONTAINER_ICON_KEY = { fridge:'Cryofridge', display:'Display_Case', hospital:'HUD_CryoHospital_Icon', stand:'HUD_PetDisplayStand_Wall_Thatch_Icon', replicator:'Tek_Replicator', storage:'SmallStorage_Icon', released:'RW_Tracking_dino', player:'HubInventoryIcon' };
+var LB_CONTAINER_ICON_KEY = { fridge:'Cryofridge', display:'Display_Case', hospital:'HUD_CryoHospital_Icon', stand:'HUD_PetDisplayStand_Wall_Thatch_Icon', replicator:'Tek_Replicator', storage:'SmallStorage_Icon', released:'RW_Tracking_dino', player:'RW_Store_chibi' };
 // containerType → 容器排序优先级（放出→展示柜→宠物展示台→低温护理站→低温冰箱→其它）
 var LB_CONTAINER_ORDER = { released:0, display:1, stand:2, hospital:3, fridge:4 };
 function lbContainerLabel(r){
@@ -2388,15 +2290,10 @@ function lbRenderView(data, player, classFilter){
   }
   // 卡片按种名拼音排序（忽略前缀，与物种浮窗统一：lbSortKey 主词中文 → 完整中文）
   var lbCollSp = new Intl.Collator('zh-Hans-CN');
-  // 排序键缓存：lbSortKey/lbSpName 内部做多重查询（findSpeciesByClass/lbZhDeep/lbStripPrefix），
-  // 6776 条排序每次比较重查 4 次 = 8 秒+；按 dinoClass 去重后只需算几十次，其余 O(1) 命中
-  var _spKeyCache={};
-  function _spKey(c){ if(_spKeyCache[c]) return _spKeyCache[c]; return _spKeyCache[c]={sk:lbSortKey(c), zh:(lbSpName(c).zh||'')}; }
   function cmpSp(a,b){
-    var ka=_spKey(a.dinoClass), kb=_spKey(b.dinoClass);
-    var r=lbCollSp.compare(ka.sk,kb.sk);
+    var r=lbCollSp.compare(lbSortKey(a.dinoClass),lbSortKey(b.dinoClass));
     if(r) return r;
-    return lbCollSp.compare(ka.zh,kb.zh);
+    return lbCollSp.compare(lbSpName(a.dinoClass).zh||'',lbSpName(b.dinoClass).zh||'');
   }
 // 空球行 HTML：低温仓图标 + 文字（宽度与卡片一致：margin 仅上下 8px）
 function lbEmptyRowHtml(n){
@@ -2417,7 +2314,7 @@ function lbEmptyRowHtml(n){
   }
   var pcCnt=playerCarried.filter(function(r){return !r.isEmpty;}).length;
   var tabH='';
-  if(playerCarried.length) tabH+='<span class="server-tab'+(LB.tab==='player'?' active':'')+'" onclick="lbSetTab(\'player\')" title="玩家携带 ('+pcCnt+')"><img src="'+(LB_ICON_BY_NAME&&LB_ICON_BY_NAME['HubInventoryIcon']||'')+'" style="width:16px;height:16px;object-fit:contain;vertical-align:-3px"'+(LB_ICON_BY_NAME&&LB_ICON_BY_NAME['HubInventoryIcon']?lbIconFilterStyle(LB_ICON_BY_NAME['HubInventoryIcon'],'GUI'):'')+'>'+(pcCnt?'<em class="server-tab-cnt">'+pcCnt+'</em>':'')+'</span>';
+  if(playerCarried.length) tabH+='<span class="server-tab'+(LB.tab==='player'?' active':'')+'" onclick="lbSetTab(\'player\')" title="玩家携带 ('+pcCnt+')"><i class="mdi mdi-human"></i>'+(pcCnt?'<em class="server-tab-cnt">'+pcCnt+'</em>':'')+'</span>';
   LB.SERVERS.forEach(function(s){
     var arr=byServer[s.abbr]||[];
     if(!arr.length) return;
@@ -2428,24 +2325,15 @@ function lbEmptyRowHtml(n){
   var tabEl=document.getElementById('lbTabs');
   if(tabEl) tabEl.innerHTML=tabH;
 
-  // ===== 分块渲染（避免一次性生成+插入 7k+ 卡片卡死 UI；每次渲染先给「⏳ 渲染中」反馈）=====
-  var plan=[], total=0, tabLabel='';
-  function lbPushPlan(sumHtml, recs, emptyCnt){
-    if(sumHtml) plan.push({t:'sum', html:sumHtml});
-    var CH=150; // 每批 150 条：生成+插入约 0.18s，分批让出主线程
-    for(var i=0;i<recs.length;i+=CH){
-      plan.push({t:'cards', recs:recs.slice(i,i+CH)}); // 存引用，生成放到异步循环分批做（避免同步阻塞）
-    }
-    if(emptyCnt>0) plan.push({t:'empty', html:lbEmptyRowHtml(emptyCnt)});
-    if(sumHtml) plan.push({t:'close', html:'</details>'});
-    total+=recs.length;
-  }
+  var h='', total=0, tabLabel='';
   if(LB.tab==='player'){
     if(playerCarried.length){
       playerCarried.sort(cmpSp);
       var peArr=playerCarried.filter(function(r){return !r.isEmpty;});
       var peCnt=playerCarried.length - peArr.length;
-      lbPushPlan('', peArr, peCnt);
+      h=peArr.map(lbDinoHTML).join('');
+      if(peCnt>0) h+=lbEmptyRowHtml(peCnt);
+      total=peArr.length;
     }
     tabLabel='🎒 玩家携带';
   } else {
@@ -2465,50 +2353,23 @@ function lbEmptyRowHtml(n){
       if(ta!==tb) return ta-tb;
       return a.localeCompare(b);
     }).forEach(function(k){
-      var grp=contGroups[k];
-      var neArr=grp.filter(function(r){return !r.isEmpty;});
-      var ecnt=grp.length - neArr.length;
-      // v6/v7 无法逆推属性点数量（红 |N 标注）：仅统计「正常可驯服生物」的新球（cryoVersion>=6 且逆推失败）；
-      // Units 载具类（ASB 查不到）与特殊生物（绿洲龙/SIR-5rM8 等无属性点）不标红；ASB 误标 noGender 但可繁育（风行蜥等）正常标红
-      var v6cnt=neArr.filter(function(r){ return r.cryoVersion>=6 && lbIsNormalCreature(r) && !lbBreedable(r); }).length;
+      var list=contGroups[k];
+      var neArr=list.filter(function(r){return !r.isEmpty;});
+      var ecnt=list.length - neArr.length;
+      // v6 无法逆推属性点数量（红 |N 标注）
+      var v6cnt=neArr.filter(function(r){ return !lbBreedable(r); }).length;
+      var body=neArr.map(lbDinoHTML).join('');
+      if(ecnt>0) body+=lbEmptyRowHtml(ecnt);
       // 标题第一个数字 = 有生物数（除去空球），空球数用 |N 单独标注，v6 无法逆推用红色 |N 标注
-      var sumHtml='<details class="acc" onclick="lbAccOnly(this)"><summary>'+lbContainerLabel(grp[0])+' <span class="acc-cnt">'+neArr.length+(ecnt>0?'<span style="opacity:.5">|</span>'+ecnt:'')+(v6cnt>0?'<span style="opacity:.5">|</span><span style="color:#ef4444">'+v6cnt+'</span>':'')+'</span></summary>';
-      lbPushPlan(sumHtml, neArr, ecnt);
+      h+='<details class="acc" onclick="lbAccOnly(this)"><summary>'+lbContainerLabel(list[0])+' <span class="acc-cnt">'+neArr.length+(ecnt>0?'<span style="opacity:.5">|</span>'+ecnt:'')+(v6cnt>0?'<span style="opacity:.5">|</span><span style="color:#ef4444">'+v6cnt+'</span>':'')+'</span></summary>'+body+'</details>';
     });
+    total=arr2.filter(function(r){return !r.isEmpty;}).length;
     var ts=LB.SERVERS.find(function(x){return x.abbr===LB.tab;});
     tabLabel=(ts ? ((ts.icon||'')+' '+ts.name).trim() : LB.tab);
   }
-  if(!plan.length){
-    list.innerHTML='<div style="text-align:center;padding:30px;color:#555">😕 没有匹配的生物'+(player?'（玩家 '+player+'）':'')+'</div>';
-    if(status) status.style.display='none';
-    lbUpdateDataTime(); // 无匹配也更新已放出数据时间显示
-    return;
-  }
-  // 每次渲染先显示「⏳ 渲染中... 已渲染 X/Y 条」反馈（解决有缓存时直接渲染无提示问题）
-  list.innerHTML='<div id="lbRenderTip" style="text-align:center;padding:30px;color:#555">⏳ 渲染中... <span id="lbRenderProg" style="color:#888"></span></div>';
-  if(!LB._renderSeq) LB._renderSeq=0;
-  var mySeq=++LB._renderSeq;
-  var i=0, done=0, buf=[];
-  // 分块生成+插入（每批 150 条生成后让出主线程+更新进度，UI 不冻结）；
-  // 全部生成完一次性 insertAdjacentHTML 插入（只布局一次，避免每批插入触发多次重排）
-  (function lbRenderNext(){
-    if(mySeq!==LB._renderSeq) return; // 已被更新的渲染取代（切服务器/切tab/刷新）
-    if(i>=plan.length){
-      list.insertAdjacentHTML('beforeend', buf.join(''));
-      buf=null;
-      var tip=document.getElementById('lbRenderTip');
-      if(tip) tip.parentNode.removeChild(tip); // 移除整个渲染中提示（含进度 span）
-      if(status) status.style.display='none'; // 渲染完成：隐藏状态栏
-      lbUpdateDataTime(); // 更新已放出数据时间显示（刷新按钮左侧）
-      return;
-    }
-    var it=plan[i++];
-    if(it.t==='cards'){ done+=it.recs.length; buf.push(it.recs.map(lbDinoHTML).join('')); }
-    else if(it.html) buf.push(it.html);
-    var prog=document.getElementById('lbRenderProg');
-    if(prog) prog.textContent='已渲染 '+done+'/'+total+' 条';
-    setTimeout(lbRenderNext, 0); // 让出主线程，浏览器可绘制
-  })();
+  if(!h) h='<div style="text-align:center;padding:30px;color:#555">😕 没有匹配的生物'+(player?'（玩家 '+player+'）':'')+'</div>';
+  list.innerHTML=h;
+  if(status) status.style.display='none'; // 渲染完成：隐藏状态栏（不再显示 ✅共N条 统计；加载中/失败提示由 lbView 负责）
 }
 // 手风琴互斥：展开当前容器时收起同组其他容器（同时只能展开一个）
 function lbAccOnly(el){
@@ -2525,154 +2386,44 @@ function lbSetTab(tab){
   lbView();
 }
 // 速查页刷新按钮：二次确认（ASA 后台同款浮窗样式）→ 确认后清缓存强制重新加载
-// 多功能刷新浮窗：刷新球（低温仓数据，全部服务器）+ 刷新tamed（多选服务器 RCON）
-function lbOpenRefreshModal(){
+function lbConfirmRefresh(){
   var old = document.querySelector('.lb-confirm-overlay');
   if (old) old.remove();
   var overlay = document.createElement('div');
   overlay.className = 'lb-confirm-overlay';
-  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.45);z-index:99999;display:flex;align-items:center;justify-content:center;overflow-y:auto';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.45);z-index:99999;display:flex;align-items:center;justify-content:center';
   var box = document.createElement('div');
-  box.style.cssText = 'background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;min-width:320px;max-width:90vw;box-shadow:0 4px 24px rgba(0,0,0,0.18);max-height:90vh;overflow-y:auto';
-  // 标题（无图标，纯文字）
+  box.style.cssText = 'background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;min-width:280px;max-width:90vw;box-shadow:0 4px 24px rgba(0,0,0,0.18)';
   var title = document.createElement('div');
-  title.style.cssText = 'margin-bottom:12px;font-size:0.95em;color:var(--text);font-weight:bold;display:flex;align-items:center;justify-content:space-between';
-  title.innerHTML = '<span>刷新数据</span><span style="cursor:pointer;color:#888;font-size:14px" onclick="lbCloseRefreshModal()">✕</span>';
+  title.textContent = '确认刷新低温仓数据？';
+  title.style.cssText = 'margin-bottom:10px;font-size:0.9em;color:var(--text);font-weight:bold';
   box.appendChild(title);
-  // 分区标题图标：低温仓 Cryopod.png / 饲料槽 Feeding_Trough.png（加载后替换 emoji，未加载回退 emoji）
-  var cryoIc = (LB_ICON_BY_NAME && LB_ICON_BY_NAME['Cryopod']) ? '<img src="'+LB_ICON_BY_NAME['Cryopod']+'" style="width:18px;height:18px;object-fit:contain;vertical-align:-3px;display:inline-block;margin-right:4px">' : '🧊 ';
-  var troughIc = (LB_ICON_BY_NAME && LB_ICON_BY_NAME['Feeding_Trough']) ? '<img src="'+LB_ICON_BY_NAME['Feeding_Trough']+'" style="width:18px;height:18px;object-fit:contain;vertical-align:-3px;display:inline-block;margin-right:4px">' : '🦖 ';
-  // 按钮内图标：放「刷新」文字后（margin-left 留距），18px
-  var cryoBtnIc = (LB_ICON_BY_NAME && LB_ICON_BY_NAME['Cryopod']) ? '<img src="'+LB_ICON_BY_NAME['Cryopod']+'" style="width:18px;height:18px;object-fit:contain;vertical-align:-3px;display:inline-block;margin-left:4px">' : '';
-  var troughBtnIc = (LB_ICON_BY_NAME && LB_ICON_BY_NAME['Feeding_Trough']) ? '<img src="'+LB_ICON_BY_NAME['Feeding_Trough']+'" style="width:18px;height:18px;object-fit:contain;vertical-align:-3px;display:inline-block;margin-left:4px">' : '';
-  // 分区1：刷新球（低温仓数据）
-  var sec1 = document.createElement('div');
-  sec1.style.cssText = 'margin-bottom:14px';
-  sec1.innerHTML = '<div style="font-size:0.85em;color:#a78bfa;font-weight:600;margin-bottom:6px">'+cryoIc+' 刷新低温仓数据</div>'
-    + '<div style="font-size:0.8em;color:#999;line-height:1.6;margin-bottom:8px">数据量较大（全服约 1.3 万条生物），预计加载 <b style="color:#facc15">10-60 秒</b>。<br>数据由服务器插件自动保存同步，<b style="color:#facc15">非实时</b>，刷新后可能与游戏内存在延迟。</div>'
-    + '<button class="lb-modal-btn" onclick="lbRefreshView();var o=this.closest(\'.lb-confirm-overlay\');if(o)o.remove();" style="padding:8px 14px;border:none;border-radius:6px;background:var(--accent);color:#fff;cursor:pointer;font-size:0.85em;font-weight:bold;display:inline-flex;align-items:center">刷新（全部）'+cryoBtnIc+'</button>';
-  box.appendChild(sec1);
-  // 分区2：刷新tamed（多选服务器）
-  var sec2 = document.createElement('div');
-  sec2.style.cssText = 'margin-bottom:12px;padding-top:12px;border-top:1px solid var(--border)';
-  sec2.innerHTML = '<div style="font-size:0.85em;color:#a78bfa;font-weight:600;margin-bottom:6px">'+troughIc+' 刷新已放出生物</div>'
-    + '<div style="font-size:0.8em;color:#999;line-height:1.6;margin-bottom:8px">只抓取服务器中的<b style="color:#facc15">实时已放出生物</b>信息，<b style="color:#ef4444">不要频繁操作</b>，尽量单服抓取。<br>该刷新附带刷新全服低温仓数据。</div>'
-    + '<div id="lbServers" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>'
-    + '<button class="lb-modal-btn" onclick="lbRefreshTamed(this)" style="padding:8px 14px;border:none;border-radius:6px;background:var(--accent);color:#fff;cursor:pointer;font-size:0.85em;font-weight:bold;display:inline-flex;align-items:center">刷新（选中）'+troughBtnIc+'</button>';
-  box.appendChild(sec2);
-  // 进度区（tamed 刷新用）
-  var prog = document.createElement('div');
-  prog.style.cssText = 'display:none;margin-top:10px';
-  prog.innerHTML = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><div id="lbProgBar" style="flex:1;height:8px;border-radius:4px;background:#22223a;overflow:hidden;display:flex;gap:2px;padding:0 1px"></div><span id="lbProgText" style="font-size:12px;color:#999;white-space:nowrap"></span></div>'
-    + '<div id="lbProgLegend" style="display:flex;gap:12px;font-size:10px;color:#666;margin-top:2px"></div>';
-  box.appendChild(prog);
+  var msg = document.createElement('div');
+  msg.style.cssText = 'margin-bottom:14px;font-size:0.85em;color:#999;line-height:1.6';
+  msg.innerHTML = '⚠️ 数据量较大（全服约 1.3 万条生物），预计加载 <b style="color:#facc15">10-60 秒</b>。<br>数据由服务器插件自动保存同步，<b style="color:#facc15">非实时</b>，刷新后可能与游戏内存在延迟。';
+  box.appendChild(msg);
+  var btns = document.createElement('div');
+  btns.style.cssText = 'display:flex;gap:6px;justify-content:flex-end';
+  var cancel = document.createElement('button');
+  cancel.textContent = '取消';
+  cancel.style.cssText = 'padding:6px 14px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text);cursor:pointer;font-size:0.85em';
+  cancel.onclick = function(){ overlay.remove(); };
+  btns.appendChild(cancel);
+  var ok = document.createElement('button');
+  ok.textContent = '确认刷新';
+  ok.style.cssText = 'padding:6px 14px;border:none;border-radius:4px;background:var(--accent);color:#fff;cursor:pointer;font-size:0.85em;font-weight:bold';
+  ok.onclick = function(){ overlay.remove(); lbRefreshView(); };
+  btns.appendChild(ok);
+  box.appendChild(btns);
   overlay.appendChild(box);
-  overlay.onclick = function(e){ if (e.target === overlay) { lbCloseRefreshModal(); } };
+  overlay.onclick = function(e){ if (e.target === overlay) { overlay.remove(); } };
   document.body.appendChild(overlay);
-  // 渲染服务器多选（默认全不选）
-  lbRenderServers();
 }
-// 关闭刷新浮窗：刷新中拦截关闭（✕ 和点遮罩统一走这里）+ 轻提示；完成后恢复可关闭
-function lbCloseRefreshModal(){
-  if(LB._tamedRefreshing){ lbToast('正在刷新中，请稍候…'); return; }
-  var o=document.querySelector('.lb-confirm-overlay');
-  if(o) o.remove();
-}
-// tamed 刷新执行（从浮窗按钮调用）：多选服务器串行触发 RCON + 进度条
-async function lbRefreshTamed(btn){
-  var sel=lbSelectedServers();
-  if(!sel.length){ alert('请至少选择一个服务器（tamed 刷新需要指定范围）'); return; }
-  LB._tamedRefreshing = true; // 刷新进行中：锁定浮窗禁止关闭
-  try{
-    // 定位浮窗内进度区（lbProgBar 的父容器的父容器 = 进度外层 div）
-    var all=btn.closest('.lb-confirm-overlay').querySelectorAll('div');
-    var progEl=null;
-    for(var i=0;i<all.length;i++){ if(all[i].id==='lbProgBar'){ progEl=all[i].parentElement.parentElement; break; } }
-    if(progEl) progEl.style.display='block';
-    var bar=document.getElementById('lbProgBar'), txt=document.getElementById('lbProgText'), legend=document.getElementById('lbProgLegend');
-    var noToken = !(await lbHaTokenRefresh());
-    btn.disabled=true;
-    // 分段进度条：每台一格（进行中紫 / 成功绿 / 失败红 / 跳过橙）
-    bar.innerHTML = sel.map(function(){ return '<div style="flex:1;border-radius:2px;background:#333;transition:background .3s"></div>'; }).join('');
-    var segs = bar.children;
-    if(legend) legend.innerHTML = '<span><span style="color:#7c3aed">■</span> 进行中</span><span><span style="color:#22c55e">■</span> 成功</span><span><span style="color:#ef4444">■</span> 失败</span><span><span style="color:#f59e0b">■</span> 跳过/冷却</span>';
-    var ok=0, fail=0;
-    for(var i=0;i<sel.length;i++){
-      var abbr=sel[i];
-      segs[i].style.background = '#7c3aed'; // 进行中
-      txt.textContent='正在刷新 '+LB.servName(abbr)+'（'+(i+1)+'/'+sel.length+'）'+(noToken?' [webhook]':'');
-      var oldMarker = await lbGetSavedAt(abbr);
-      var r;
-      try{ r = await lbTrigger(abbr); }catch(e){ r={ok:false,error:String(e)}; }
-      var done = false, skipped = false;
-      if(r && r.ok){
-        if(r.cooldown){ skipped = true; }
-        else { done = await lbWaitTamed(abbr, oldMarker); }
-      }
-      if(done){ ok++; segs[i].style.background='#22c55e'; }
-      else if(skipped){ fail++; segs[i].style.background='#f59e0b'; }
-      else { fail++; segs[i].style.background='#ef4444'; }
-      txt.textContent=(done?'✅ ':(skipped?'⏭ ':'❌ '))+LB.servName(abbr)+'（'+(i+1)+'/'+sel.length+'）';
-    }
-    txt.textContent='✅ 已刷新 '+ok+' 台，失败/跳过 '+fail+' 台'+(noToken?'（webhook 模式）':'');
-    btn.disabled=false;
-    lbReloadIncremental(); // 增量重载（并行 + 未变化文件复用）
-    setTimeout(function(){ if(progEl) progEl.style.display='none'; }, 4000);
-  }finally{
-    LB._tamedRefreshing = false; // 无论成功/异常，刷新结束都恢复可关闭浮窗
-  }
-}
-// 兼容旧按钮调用（保留 lbRefreshView 用于「刷新球」）
-function lbConfirmRefresh(){ lbOpenRefreshModal(); }
-// 更新「已放出数据时间」显示（刷新按钮左侧，低可视化）：取各服务器 tamed 文件 Last-Modified 的最大值
-// _lm 格式：{ abbr:{cryo:'...', tamed:'...'}, ... }；不存在的文件为 LB_LM_404('__404__') 跳过
-// 显示格式：今天 HH:MM / 之前 MM-DD HH:MM；无数据隐藏
-function lbUpdateDataTime(){
-  var el=document.getElementById('lbDataTime');
-  if(!el) return;
-  var data = LB._cache && LB._cache.data;
-  var lm = (data && data._lm) ? data._lm : null;
-  var maxTs = 0;
-  if(lm){
-    Object.keys(lm).forEach(function(abbr){
-      var t = lm[abbr] && lm[abbr].tamed;
-      if(!t || t === LB_LM_404) return;
-      var ts = Date.parse(t);
-      if(ts && ts > maxTs) maxTs = ts;
-    });
-  }
-  if(!maxTs){ el.textContent=''; el.title=''; return; }
-  var d = new Date(maxTs);
-  var now = new Date();
-  var pad = function(n){ return (n<10?'0':'')+n; };
-  var hm = pad(d.getHours())+':'+pad(d.getMinutes());
-  var sameDay = d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth() && d.getDate()===now.getDate();
-  var txt = sameDay ? hm : pad(d.getMonth()+1)+'-'+pad(d.getDate())+' '+hm;
-  el.textContent = txt;
-  el.title = '已放出数据时间：' + d.toLocaleString();
-}
-// 增量重载：读 IndexedDB 旧缓存 → lbLoad 并行+Last-Modified 判断（未变化文件复用旧数据）→ 更新缓存渲染
-function lbReloadIncremental(){
-  var list=document.getElementById('lbList');
-  if(list) list.innerHTML='<div style="text-align:center;padding:30px;color:#555">⏳ 加载数据中...</div>';
-  var sel=LB.SERVERS.map(function(s){return s.abbr;});
-  // 旧数据源：内存缓存优先，否则 IndexedDB
-  var oldPromise = LB._cache && LB._cache.data
-    ? Promise.resolve(LB._cache.data)
-    : lbCacheGet().then(function(c){ return (c && c.data) ? c.data : null; });
-  oldPromise.then(function(oldData){
-    lbLoad(sel, oldData).then(function(data){
-      LB._cache={ data:data, ts:Date.now() };
-      lbCacheSet(data);
-      lbRenderView(data, lbPlayer(), LB.curClass||'');
-    }).catch(function(e){
-      if(list) list.innerHTML='<div style="text-align:center;padding:30px;color:#f87171">❌ 加载失败：'+e+'</div>';
-    });
-  });
-}
-// 速查页刷新球：增量重载（并行 + 未变化文件复用，不再清缓存全量下载）
+// 速查页刷新执行：清缓存强制重新加载
 function lbRefreshView(){
-  lbReloadIncremental();
+  LB._cache=null;
+  lbCacheClear(); // 清 IndexedDB 缓存
+  lbView();
 }
 
 // ===== 物种选择浮窗（ASA 后台选图同款：icons2.json biology+units 图标 + 中文回退英文 + 反色逻辑） =====
@@ -2704,7 +2455,7 @@ function lbLoadIconList(){
   return authFetch('/local/asa-data/icons2.json?t='+Date.now(), {}).then(function(r){return r.json();}).then(function(d){
     var by={}, cats={};
     // 额外收录的非 biology/units 精选图标（如「全部物种」的 HubTameIcon，GUI 分类；以及手风琴 summary 容器图标 facility/skins/GUI）
-    var extra={'HubTameIcon':1, 'Cryofridge':1, 'Display_Case':1, 'HUD_CryoHospital_Icon':1, 'HUD_PetDisplayStand_Wall_Thatch_Icon':1, 'Tek_Replicator':1, 'SmallStorage_Icon':1, 'RW_Tracking_dino':1, 'Cryopod':1, 'RW_Store_chibi':1, 'RW_equip_saddle':1, 'TEK_Icon':1, 'RW_Garage_roof_show':1, 'HubInventoryIcon':1, 'RW_wants_to_cuddle':1, 'Feeding_Trough':1};
+    var extra={'HubTameIcon':1, 'Cryofridge':1, 'Display_Case':1, 'HUD_CryoHospital_Icon':1, 'HUD_PetDisplayStand_Wall_Thatch_Icon':1, 'Tek_Replicator':1, 'SmallStorage_Icon':1, 'RW_Tracking_dino':1, 'Cryopod':1, 'RW_Store_chibi':1, 'RW_equip_saddle':1, 'TEK_Icon':1, 'RW_Garage_roof_show':1};
     (d||[]).forEach(function(it){
       if(!it || !it.url || !it.name) return;
       var m=it.url.match(/\/ASA\/([^/]+)\//);
@@ -2853,9 +2604,6 @@ function lbHaToken(){
 // V2: window.externalAppV2.postMessage({type:'getExternalAuth', payload:{callback,force}}) → 同上回调
 function lbAppToken(){
   return new Promise(function(resolve){
-    // 关键：iframe 内（self!==top）bridge 消息必然被 V2 origin 校验丢弃（!isMainFrame），
-    // 直接返回 null 跳过，避免白等 6s 超时（App 内 Lovelace iframe 场景 12s 无提示空窗的根因）
-    try{ if(window.self !== window.top) return resolve(null); }catch(e){}
     try{
       var hasV1 = window.externalApp && typeof window.externalApp.getExternalAuth === 'function';
       var hasV2 = window.externalAppV2 && typeof window.externalAppV2.postMessage === 'function';
@@ -2883,42 +2631,11 @@ function lbAppToken(){
     }catch(e){ resolve(null); }
   });
 }
-// 同源 iframe 读取父框架 token：页面若嵌入 Lovelace iframe（与顶层同源），
-// 顶层 HA 前端在 App 内能通过 externalAuth 拿到 token（存在 window.hassConnection → {auth, conn}），
-// 同源 iframe 可直接访问 window.parent.hassConnection 读取 auth.accessToken
-// 作用域：仅本页被 iframe 嵌入时尝试；直接顶层打开时 window.parent===window 自动跳过
-function lbParentToken(){
-  return new Promise(function(resolve){
-    try{
-      var p = window.parent;
-      if(!p || p === window || !p.hassConnection || typeof p.hassConnection.then !== 'function'){
-        return resolve(null);
-      }
-      var done = false;
-      var tm = setTimeout(function(){ if(!done){ done = true; resolve(null); } }, 5000);
-      p.hassConnection.then(function(conn){
-        if(done) return;
-        done = true; clearTimeout(tm);
-        var auth = conn && conn.auth;
-        var t = (auth && auth.accessToken) || (auth && auth.data && auth.data.access_token) || null;
-        resolve(t || null);
-      }).catch(function(){
-        if(done) return;
-        done = true; clearTimeout(tm);
-        resolve(null);
-      });
-    }catch(e){ resolve(null); }
-  });
-}
-// 获取有效 HA token：手机 App 走 externalAuth bridge；iframe 嵌入读父框架 token；浏览器读 localStorage（access_token 过期则用 refresh_token 换新并写回）
+// 获取有效 HA token：手机 App 走 externalAuth bridge；浏览器读 localStorage（access_token 过期则用 refresh_token 换新并写回）
 async function lbHaTokenRefresh(){
   try{
     var appTok = await lbAppToken();
     if(appTok) return appTok;
-  }catch(e){}
-  try{
-    var parentTok = await lbParentToken();
-    if(parentTok) return parentTok;
   }catch(e){}
   try{
     var raw = localStorage.getItem('hassTokens');
@@ -3070,14 +2787,48 @@ async function lbTrigger(abbr){
     return {ok:false, server:abbr, error:String(e)};
   }
 }
+// 刷新：串行排队触发多服 tamed（HA service）+ 前端自轮询 savedAt 确认 + 分段进度条
+async function lbRefresh(){
+  var sel=lbSelectedServers();
+  if(!sel.length){ alert('请至少选择一个地图'); return; }
+  var btn=document.getElementById('lbRefreshBtn'), prog=document.getElementById('lbProgress');
+  var bar=document.getElementById('lbProgBar'), txt=document.getElementById('lbProgText');
+  var legend=document.getElementById('lbProgLegend');
+  var noToken = !(await lbHaTokenRefresh());
+  btn.disabled=true; prog.style.display='block';
+  // 分段进度条：每台一格（进行中紫 / 成功绿 / 失败红 / 跳过橙）
+  bar.innerHTML = sel.map(function(){ return '<div style="flex:1;border-radius:2px;background:#333;transition:background .3s"></div>'; }).join('');
+  var segs = bar.children;
+  if(legend) legend.innerHTML = '<span><span style="color:#7c3aed">■</span> 进行中</span><span><span style="color:#22c55e">■</span> 成功</span><span><span style="color:#ef4444">■</span> 失败</span><span><span style="color:#f59e0b">■</span> 跳过/冷却</span>';
+  var ok=0, fail=0;
+  for(var i=0;i<sel.length;i++){
+    var abbr=sel[i];
+    segs[i].style.background = '#7c3aed'; // 进行中
+    txt.textContent='正在刷新 '+LB.servName(abbr)+'（'+(i+1)+'/'+sel.length+'）'+(noToken?' [webhook]':'');
+    var oldMarker = await lbGetSavedAt(abbr);
+    var r;
+    try{ r = await lbTrigger(abbr); }catch(e){ r={ok:false,error:String(e)}; }
+    var done = false, skipped = false;
+    if(r && r.ok){
+      if(r.cooldown){ skipped = true; }
+      else { done = await lbWaitTamed(abbr, oldMarker); }
+    }
+    if(done){ ok++; segs[i].style.background='#22c55e'; }
+    else if(skipped){ fail++; segs[i].style.background='#f59e0b'; }
+    else { fail++; segs[i].style.background='#ef4444'; }
+    txt.textContent=(done?'✅ ':(skipped?'⏭ ':'❌ '))+LB.servName(abbr)+'（'+(i+1)+'/'+sel.length+'）';
+  }
+  txt.textContent='✅ 已刷新 '+ok+' 台，失败/跳过 '+fail+' 台'+(noToken?'（webhook 模式）':'');
+  btn.disabled=false;
+  LB._cache=null;   // 清速查缓存，刷新后强制重新加载
+  lbCacheClear();   // 清 IndexedDB 缓存
+  await lbView();
+  setTimeout(function(){ prog.style.display='none'; }, 4000);
+}
 // 从 HA API 读取服务器主题（名称/图标直接用 apps.yaml server_themes → sensor.asa_server_themes 属性），失败回退硬编码
 function lbLoadThemes(){
   return new Promise(function(resolve){
-    // 复用 lbInitPlayer 已缓存的 token（避免重复 lbHaTokenRefresh 再次卡 6s 空窗）；无缓存才重新获取
-    var tokenPromise = LB._tok
-      ? Promise.resolve(LB._tok)
-      : lbHaTokenRefresh();
-    tokenPromise.then(function(token){
+    lbHaTokenRefresh().then(function(token){
       if(!token){ resolve(false); return; }
       fetch('/api/states/sensor.asa_server_themes', { headers: { 'Authorization': 'Bearer ' + token } })
       .then(function(r){ if(!r.ok) throw 0; return r.json(); })
@@ -3102,25 +2853,22 @@ function lbLoadThemes(){
 }
 // 启动：预取服务器主题 + 图标/反色/前缀（确保按钮图标与反色首帧正确）；lbInitServers 已用兜底初始化（解耦：无 HA 环境也有数据）
 LB._themesPromise = Promise.all([lbLoadThemes(), lbLoadIconList(), lbLoadAntiColors(), lbLoadPrefixZh(), lbLoadColors()]).then(function(r){ return r[0]; });
-// 启动：立即显示初始化提示（不等任何 await，消除「页面空白无提示」空窗）；
-// 数据加载（lbInit）与玩家识别（lbInitPlayer）并行——玩家识别完成后如有变化再刷新视图
+// 启动：先获取登录账号显示名（作为 player），再执行权限判断与初始化
 (async function(){
-  // ① 立即给反馈：页面一加载就有「⏳ 正在初始化...」（首屏不再空白卡顿）
-  var list0 = document.getElementById('lbList');
-  if(list0 && !list0.textContent.trim()){
-    list0.innerHTML = '<div style="text-align:center;padding:30px;color:#555">⏳ 正在初始化...</div>';
-  }
-  // ② 并行：立即启动数据初始化（内部等待 themes；玩家识别不阻塞数据加载）
-  lbInit();
-  LB._themesPromise.then(function(){ lbFillBioIcons(); });
-  // ③ 玩家识别（后台并行；完成后若有玩家名则刷新视图到玩家视角）
-  lbInitPlayer().then(function(){
-    lbShowLoginPrompt();
-    if(!LB._needLogin && LB.autoPlayer){
-      // 已识别玩家：重新渲染（此前可能按游客/无玩家渲染过）
-      lbView();
+  await lbInitPlayer();
+  lbShowLoginPrompt();
+  // 权限：仅 player=板板 时显示「生物导入」标签（其它玩家/无 player 隐藏）
+  var p = lbPlayer();
+  var bi = document.getElementById('tabBtn-import');
+  if(bi){
+    if(p === '板板'){
+      bi.style.display = '';
+    } else {
+      bi.style.display = 'none';
     }
-  });
+  }
+  // 默认页为生物速查：直接初始化（lbInit 内部等待 themes）
+  lbInit();
 })();
 // ===== 繁育栏（选中具体物种时显示；6 属性顺序选种，localStorage 持久化）=====
 var LB_BREED_KEYS = ['health','stamina','oxygen','food','weight','melee_damage_multiplier'];
@@ -3144,8 +2892,7 @@ function lbBreedSaveStore(m){ try{ localStorage.setItem('lbBreedTargetsMap', JSO
 function lbRenderBreedBar(){
   var bar = document.getElementById('lbBreedBar');
   if(!bar) return;
-  // 仅在「生物速查」页且选中具体物种时显示（繁育栏只在速查里用）
-  var show = (LB._curPage !== 'import' && LB._curPage !== 'settings') && !!LB.curClass;
+  var show = !!LB.curClass; // 选中具体物种才显示
   bar.style.display = show ? 'block' : 'none';
   // 物种变化时：保存旧物种选择 → 加载当前物种的持久化选择；重置结果（旧物种结果不残留）
   if(LB._breedLastClass !== LB.curClass){
@@ -3169,8 +2916,6 @@ function lbRenderBreedBar(){
   }
   var btn = document.getElementById('lbBreedBtn');
   if(btn) btn.textContent = LB.breedResult ? '取消' : '选种';
-  // attrs 变化（选/取消属性）会改变 bar 高度，结果浮层重新对齐
-  lbBreedAlignResult();
 }
 function lbBreedPick(k){
   var i = LB.breedSel.indexOf(k);
@@ -3208,22 +2953,6 @@ function lbBreedable(r){
     return !!(sol && sol.statPoints && sum(sol.statPoints) > 0);
   }
   return false;
-}
-// 是否「正常可驯服生物」（接收 rec）：ASB 数据库能查到该 dinoClass，且（非 noGender 或 有真实属性点/可逆推）
-// 用于「无法逆推」红标判定——Units 载具类（ASB 查不到）不标红；
-// ASB noGender 但可繁育（风行蜥/狮鹫/凤凰等 ASB 误标 noGender 的正常生物）仍算正常；
-// 绿洲龙/SIR-5rM8 等真正无属性点的特殊生物（noGender 且不可繁育）不标红
-// 岩石巨人（RockGolem）：ASB 标 noGender 且 statPoints 全 0，但实为正常可驯服生物，强制视为正常
-var LB_NORMAL_WHITELIST = { 'RockGolem_Character_BP_C':1 };
-function lbIsNormalCreature(r){
-  var dinoClass = r && r.dinoClass;
-  if(!dinoClass) return false;
-  if(LB_NORMAL_WHITELIST[dinoClass]) return true;
-  var sp = findSpeciesByClass(dinoClass);
-  if(!sp) return false;
-  if(!sp.noGender) return true;
-  // noGender 标记但可能是正常生物（ASB 误标）：有真实属性点/可逆推则视为正常
-  return lbBreedable(r);
 }
 // 归属判断（与列表玩家过滤一致）：玩家携带按 playerName 精确匹配；cryo/tamed放出按 ownerTribeId 部落匹配
 function lbIsMyRec(r, playerSet, player){
@@ -3267,16 +2996,6 @@ function lbOwnerName(r){
   if(r.containerType==='released') return '放出';
   return '未知';
 }
-// 成长阶段标注（与文件导入页 fi-stage 同口径）：babyAge <0.1 婴儿 / <0.5 幼崽 / <1.0 青年 / >=1.0 成年（不标）
-// 返回 {text, color} 或 null（成年/未知）
-function lbGrowthStage(r){
-  var a = r.babyAge;
-  if(typeof a !== 'number' || !(a >= 0)) return null;
-  if(a < 0.1) return {text:'婴儿', color:'#4ade80'};
-  if(a < 0.5) return {text:'幼崽', color:'#facc15'};
-  if(a < 1.0) return {text:'青年', color:'#fb923c'};
-  return null; // 成年不标
-}
 function lbRenderBreedResult(){
   var c = document.getElementById('lbBreedResult');
   if(!c) return;
@@ -3286,16 +3005,12 @@ function lbRenderBreedResult(){
   var cls = LB.curClass;
   var player = lbPlayer();
   var playerSet = player ? lbPlayerTribes(data.tribesByServer, player) : null;
-  var myM=[], myF=[], extM=[], extF=[], v6fail=0, v6failMy=0, total=0;
-  // 性别统计计数（含 v6 无法逆推球：性别字段可获取，v6 球应计入性别判断避免误报缺公/母）
-  var mySexM=0, mySexF=0;
+  var myM=[], myF=[], extM=[], extF=[], v6fail=0, total=0;
   recs.forEach(function(r){
     if(r.dinoClass!==cls || r.isEmpty) return;
     total++;
+    if(!lbBreedable(r)){ v6fail++; return; } // v6 无法逆推不计入
     var isMy = lbIsMyRec(r, playerSet, player);
-    if(r.gender==='MALE'){ if(isMy) mySexM++; }
-    else if(r.gender==='FEMALE'){ if(isMy) mySexF++; }
-    if(!lbBreedable(r)){ v6fail++; if(isMy) v6failMy++; return; } // v6 无法逆推：只计 v6fail，不参与属性冠军比较
     if(r.gender==='MALE'){ if(isMy) myM.push(r); else extM.push(r); }
     else if(r.gender==='FEMALE'){ if(isMy) myF.push(r); else extF.push(r); }
   });
@@ -3366,43 +3081,25 @@ function lbRenderBreedResult(){
         return '<span style="margin-right:6px;color:#a78bfa">'+LB_BREED_LABEL[x.k]+' <b style="color:#e0e0e0">'+x.v+'</b></span>';
       }).join('');
     }
-    // 成长阶段标注（婴儿/幼崽/青年；成年不标）
-    var stage = lbGrowthStage(r);
-    var stageHtml = stage
-      ? ' <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:'+stage.color+'22;color:'+stage.color+';border:1px solid '+stage.color+'44;vertical-align:1px">'+stage.text+'</span>'
-      : '';
     // 不显示种名（已是单物种筛选）
     return '<div class="lb-breed-card" onclick="lbBreedShowCard('+idx+')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:6px 10px;margin-bottom:6px;font-size:12px">'
       +'<div style="min-width:0">'
       +'<span style="color:'+(r.gender==='FEMALE'?'#f472b6':'#60a5fa')+'">'+(r.gender==='FEMALE'?'♀':'♂')+'</span> '
       +(r.name?'<b style="color:#fff">'+r.name+'</b> ':' ')
       +'<span style="background:#22223a;border-radius:2px;padding:0 6px;color:#ccc">Lv.'+r.level+'</span>'
-      +stageHtml
       +'<br>'+attrHtml
       +'</div>'
       +'<div style="flex-shrink:0;font-size:11px;color:#999;text-align:right">'+tag+'</div>'
       +'</div>';
   }
-  // 我的分组：容器前显示所在地图图标（与外部组一致），再显示容器标签；背包里（player）无需地图图标
-  // 配色：我的醒目橙色（#f59e0b），容器文字也橙色
-  function myTag(r){
-    var mdi = LB_SERVER_MDI[r.server] || 'mdi-map';
-    if(r.containerType==='player'){ // 背包：不显示地图图标，原图直接显示（不着色，与容器图标 img.lb-sum-ic 一致）
-      var burl = (LB_ICON_BY_NAME && LB_ICON_BY_NAME['HubInventoryIcon']) || '';
-      var bag = burl
-        ? '<img src="'+burl+'" class="lb-sum-ic">'
-        : lbMdiSvg('mdi-bag-personal', 14);
-      return '<span style="color:#f59e0b">'+bag+' 背包</span>';
-    }
-    return '<span style="color:#f59e0b">'+lbMdiSvg(mdi, 12)+' '+lbContainerLabel(r)+'</span>';
-  }
+  function myTag(r){ return lbContainerLabel(r); } // 我的不标「我的」，只标容器
   function extTag(r){
-    if(r.containerType==='player'){ // 玩家身上携带：背包图标（mask 染灰）+ 玩家名（不显示地图）
-      var burl = (LB_ICON_BY_NAME && LB_ICON_BY_NAME['HubInventoryIcon']) || '';
+    if(r.containerType==='player'){ // 玩家身上携带：背包图标（mask 染橙）+ 玩家名（不显示地图）
+      var burl = (LB_ICON_BY_NAME && LB_ICON_BY_NAME['RW_Store_chibi']) || '';
       var bag = burl
-        ? '<span style="display:inline-block;width:12px;height:12px;background:#999;-webkit-mask-image:url(\''+burl+'\');mask-image:url(\''+burl+'\');-webkit-mask-size:contain;mask-size:contain;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;vertical-align:-1px;flex-shrink:0"></span>'
+        ? '<span style="display:inline-block;width:12px;height:12px;background:#f59e0b;-webkit-mask-image:url(\''+burl+'\');mask-image:url(\''+burl+'\');-webkit-mask-size:contain;mask-size:contain;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;vertical-align:-1px;flex-shrink:0"></span>'
         : lbMdiSvg('mdi-bag-personal', 12);
-      return '<span style="color:#999">'+bag+' '+lbOwnerName(r)+'</span>';
+      return '<span style="color:#f59e0b">'+bag+' '+lbOwnerName(r)+'</span>';
     }
     var mdi = LB_SERVER_MDI[r.server] || 'mdi-map';
     var name = lbOwnerName(r);
@@ -3412,8 +3109,7 @@ function lbRenderBreedResult(){
     var t = tb[r.containerTribe] || tb[r.tribeId] || null;
     var owner = (t && t.ownerName) ? t.ownerName : '';
     if(owner && owner !== name){ name += ' <span style="opacity:.55">'+lbMdiSvg('mdi-crown', 11)+' '+owner+'</span>'; }
-    // 配色：外部低可视灰色（#999）
-    return '<span style="color:#999">'+lbMdiSvg(mdi, 12)+' '+name+'</span>';
+    return '<span style="color:#f59e0b">'+lbMdiSvg(mdi, 12)+' '+name+'</span>';
   }
   var h = '';
   if(myAllChamp.length){
@@ -3425,33 +3121,15 @@ function lbRenderBreedResult(){
     h += '<div style="font-size:12px;color:#999;font-weight:600;margin:6px 0 4px">外部更高</div>'
       + extAll.map(function(it){ return card(it, extTag(it.r), it.attrs); }).join('');
   }
-  // 繁育提示合并到一栏（v6 无法逆推 + 性别缺失，用 · 分隔）
-  // 性别符号着色加粗：♂ 蓝 #60a5fa / ♀ 粉 #f472b6（括号冗余已去除）
-  var tips = [];
-  if(v6fail>0){ var vt = v6fail+'个v6球无法逆推'; if(v6failMy>0) vt += '（我的'+v6failMy+'）'; tips.push(vt); }
-  if(mySexM===0 && mySexF===0) tips.push('我的库存中没有该物种');
-  else if(mySexM===0) tips.push('我的库存缺少 <b style="color:#60a5fa">♂</b>');
-  else if(mySexF===0) tips.push('我的库存缺少 <b style="color:#f472b6">♀</b>');
-  if(tips.length){
-    h += '<div style="margin-top:8px;padding:6px 10px;border-radius:6px;background:#2a1a1a;color:#f87171;font-size:11px">'+tips.join(' · ')+'</div>';
+  if(v6fail>0){
+    h += '<div style="margin-top:8px;padding:6px 10px;border-radius:6px;background:#2a1a1a;color:#f87171;font-size:11px">⚠️ '+v6fail+'/'+total+' 无法逆推 v6</div>';
   }
-  if(!myAllChamp.length && !extAll.length && !tips.length){
+  if(!myAllChamp.length && !extAll.length){
     h = '<div style="text-align:center;padding:20px;color:#555">没有匹配的生物</div>';
   }
   c.innerHTML = h;
   c.style.display = 'block';
-  lbBreedAlignResult();
 }
-// 繁育结果浮层紧贴繁育栏上方：动态把 result 的 bottom 设为 bar 的实际高度（移动端 attrs 换行后 bar 更高，不能写死 40px）
-function lbBreedAlignResult(){
-  var bar = document.getElementById('lbBreedBar');
-  var c = document.getElementById('lbBreedResult');
-  if(!bar || !c) return;
-  var h = bar.offsetHeight || 40;
-  c.style.bottom = h + 'px';
-}
-// 窗口尺寸变化（含移动端地址栏收起/旋转）时重新对齐结果浮层
-window.addEventListener('resize', function(){ lbBreedAlignResult(); });
 // 点击繁育候选卡片：弹浮窗显示完整生物卡片（与速查卡片一致，只含卡片本体）
 function lbBreedShowCard(idx){
   var r = (LB._breedCands && LB._breedCands[idx]) || null;

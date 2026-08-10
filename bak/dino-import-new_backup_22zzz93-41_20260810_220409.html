@@ -1984,13 +1984,12 @@ function lbDinoHTML(r){
   var mutM = (r.randomMutationsMale||0), mutF = (r.randomMutationsFemale||0);
   var mutSum = mutM + mutF;
   // 变异代数（社区惯例）：所有有变异的属性都分析显示；代数 = 该属性变异次数（点数÷2，每次变异+2点）
-  // 格式「🧬血1代」（属性名在前、代数在后）
   var mutAbbr = ['血','耐','晕','氧','食','水','温','重','攻','速','抗','制'];
   var mutArr = Array.isArray(r.statMutations)?r.statMutations:[];
   var anc = '';
   for(var gi=0; gi<mutArr.length; gi++){
     var gv = Number(mutArr[gi])||0;
-    if(gv > 0){ anc += '🧬'+(mutAbbr[gi]||'?')+Math.round(gv/2)+'代 '; }
+    if(gv > 0){ anc += '🧬'+Math.round(gv/2)+'代 '+(mutAbbr[gi]||'?')+' '; }
   }
   // 训/繁徽章（复用导入页 isBredDino 逻辑；样式同鞍：16×16 圆角2px；繁=透明底+紫色按留痕百分比从下往上填充+紫色细内描边；训不显示标识；放第一行鞍右边）
   var tbTag = lbIsBred(r)
@@ -2042,7 +2041,7 @@ function lbDinoHTML(r){
     +(zh?'<span style="color:#a78bfa;font-size:12px">'+zh+'</span>':'')
     +'<span style="font-size:15px;color:'+(r.gender==='FEMALE'?'#f472b6':'#60a5fa')+'">'+(r.gender==='FEMALE'?'♀':'♂')+'</span>'
     +(r.name ? '<b style="color:#fff;font-size:14px">'+r.name+'</b>' : '')
-    +'<span style="display:inline-flex;align-items:center;height:18px;background:#22223a;border:1px solid #333;border-radius:2px;padding:0 8px;font-size:11px;color:#ccc;line-height:1">Lv.'+r.level+'</span>'
+    +'<span style="background:#22223a;border:1px solid #333;border-radius:2px;padding:1px 8px;font-size:11px;color:#ccc">Lv.'+r.level+'</span>'
     +(r.saddle?'<span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:2px;background:'+(/platform/i.test(r.saddle)?'#fb923c':(/tek/i.test(r.saddle)?'#7c3aed':'#38bdf8'))+';color:#fff">'+lbSaddleImg(r.saddle)+'</span>':'')
     +tbTag
     +'</div>'
@@ -3169,8 +3168,6 @@ function lbRenderBreedBar(){
   }
   var btn = document.getElementById('lbBreedBtn');
   if(btn) btn.textContent = LB.breedResult ? '取消' : '选种';
-  // attrs 变化（选/取消属性）会改变 bar 高度，结果浮层重新对齐
-  lbBreedAlignResult();
 }
 function lbBreedPick(k){
   var i = LB.breedSel.indexOf(k);
@@ -3213,12 +3210,9 @@ function lbBreedable(r){
 // 用于「无法逆推」红标判定——Units 载具类（ASB 查不到）不标红；
 // ASB noGender 但可繁育（风行蜥/狮鹫/凤凰等 ASB 误标 noGender 的正常生物）仍算正常；
 // 绿洲龙/SIR-5rM8 等真正无属性点的特殊生物（noGender 且不可繁育）不标红
-// 岩石巨人（RockGolem）：ASB 标 noGender 且 statPoints 全 0，但实为正常可驯服生物，强制视为正常
-var LB_NORMAL_WHITELIST = { 'RockGolem_Character_BP_C':1 };
 function lbIsNormalCreature(r){
   var dinoClass = r && r.dinoClass;
   if(!dinoClass) return false;
-  if(LB_NORMAL_WHITELIST[dinoClass]) return true;
   var sp = findSpeciesByClass(dinoClass);
   if(!sp) return false;
   if(!sp.noGender) return true;
@@ -3286,16 +3280,12 @@ function lbRenderBreedResult(){
   var cls = LB.curClass;
   var player = lbPlayer();
   var playerSet = player ? lbPlayerTribes(data.tribesByServer, player) : null;
-  var myM=[], myF=[], extM=[], extF=[], v6fail=0, v6failMy=0, total=0;
-  // 性别统计计数（含 v6 无法逆推球：性别字段可获取，v6 球应计入性别判断避免误报缺公/母）
-  var mySexM=0, mySexF=0;
+  var myM=[], myF=[], extM=[], extF=[], v6fail=0, total=0;
   recs.forEach(function(r){
     if(r.dinoClass!==cls || r.isEmpty) return;
     total++;
+    if(!lbBreedable(r)){ v6fail++; return; } // v6 无法逆推不计入
     var isMy = lbIsMyRec(r, playerSet, player);
-    if(r.gender==='MALE'){ if(isMy) mySexM++; }
-    else if(r.gender==='FEMALE'){ if(isMy) mySexF++; }
-    if(!lbBreedable(r)){ v6fail++; if(isMy) v6failMy++; return; } // v6 无法逆推：只计 v6fail，不参与属性冠军比较
     if(r.gender==='MALE'){ if(isMy) myM.push(r); else extM.push(r); }
     else if(r.gender==='FEMALE'){ if(isMy) myF.push(r); else extF.push(r); }
   });
@@ -3428,30 +3418,19 @@ function lbRenderBreedResult(){
   // 繁育提示合并到一栏（v6 无法逆推 + 性别缺失，用 · 分隔）
   // 性别符号着色加粗：♂ 蓝 #60a5fa / ♀ 粉 #f472b6（括号冗余已去除）
   var tips = [];
-  if(v6fail>0){ var vt = v6fail+'个v6球无法逆推'; if(v6failMy>0) vt += '（我的'+v6failMy+'）'; tips.push(vt); }
-  if(mySexM===0 && mySexF===0) tips.push('我的库存中没有该物种');
-  else if(mySexM===0) tips.push('我的库存缺少 <b style="color:#60a5fa">♂</b>');
-  else if(mySexF===0) tips.push('我的库存缺少 <b style="color:#f472b6">♀</b>');
+  if(v6fail>0) tips.push(v6fail+'个v6球无法逆推');
+  if(myM.length===0 && myF.length===0) tips.push('我的库存中没有该物种');
+  else if(myM.length===0) tips.push('我的库存缺少 <b style="color:#60a5fa">♂</b>');
+  else if(myF.length===0) tips.push('我的库存缺少 <b style="color:#f472b6">♀</b>');
   if(tips.length){
     h += '<div style="margin-top:8px;padding:6px 10px;border-radius:6px;background:#2a1a1a;color:#f87171;font-size:11px">'+tips.join(' · ')+'</div>';
   }
-  if(!myAllChamp.length && !extAll.length && !tips.length){
+  if(!myAllChamp.length && !extAll.length){
     h = '<div style="text-align:center;padding:20px;color:#555">没有匹配的生物</div>';
   }
   c.innerHTML = h;
   c.style.display = 'block';
-  lbBreedAlignResult();
 }
-// 繁育结果浮层紧贴繁育栏上方：动态把 result 的 bottom 设为 bar 的实际高度（移动端 attrs 换行后 bar 更高，不能写死 40px）
-function lbBreedAlignResult(){
-  var bar = document.getElementById('lbBreedBar');
-  var c = document.getElementById('lbBreedResult');
-  if(!bar || !c) return;
-  var h = bar.offsetHeight || 40;
-  c.style.bottom = h + 'px';
-}
-// 窗口尺寸变化（含移动端地址栏收起/旋转）时重新对齐结果浮层
-window.addEventListener('resize', function(){ lbBreedAlignResult(); });
 // 点击繁育候选卡片：弹浮窗显示完整生物卡片（与速查卡片一致，只含卡片本体）
 function lbBreedShowCard(idx){
   var r = (LB._breedCands && LB._breedCands[idx]) || null;
