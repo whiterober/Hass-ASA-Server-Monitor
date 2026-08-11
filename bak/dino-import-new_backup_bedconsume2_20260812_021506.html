@@ -1479,7 +1479,7 @@ function toggleLevelInfo(e, total, base, wild, bonus, xp, isBred) {
 /* ================= 最新生物 TAB ================= */
 var LB = {};
 // 页面版本号：每次部署递增（调试信息里显示，方便确认手机加载的是否新版）
-var LB_VERSION = 'v20260812-14'; // 2026-08-12 床消费：大簇优先占用范围床；无专属床纯released≤2离散吸收
+var LB_VERSION = 'v20260812-13'; // 2026-08-12 床消费唯一化：一张床只能归属一个聚落；无专属床纯released≤2离散吸收
 // 服务器列表：HA API（apps.yaml sensor.asa_server_themes）优先；无 HA 环境（解耦）时用内置兜底（localStorage 上次同步缓存 → 代码常量）
 var LB_FALLBACK_SERVERS = [
   {abbr:'Isl',name:'孤岛',icon:'🏝️'},{abbr:'Sco',name:'焦土',icon:'🔥'},{abbr:'Cen',name:'核心岛',icon:'💎'},
@@ -2091,18 +2091,14 @@ function lbBuildSettlements(data){
           clu.forEach(function(c){ scatteredCtn.push(c); });
         }
       });
-      // 床消费（2026-08-12 修正）：大簇优先（容器数降序），子簇占用"距其中心 ≤LB_SETTLE_EPS 的全部未占用床"；
-      // 一张床只能归属一个聚落（被大簇吸走后小簇不可复用），避免同一床支撑多个聚落成立/命名
-      cands.sort(function(a,b){ return b.sub.length - a.sub.length; });
-      var used = {};
-      cands.forEach(function(ca){
-        var cnt = 0;
-        beds.forEach(function(b, bi){
-          if(used[bi]) return;
+      // 床唯一归属：每张床归属"距其子簇中心最近"的候选子簇（≤LB_SETTLE_EPS）；占用后其他子簇不可复用
+      beds.forEach(function(b){
+        var best=null, bd=Infinity;
+        cands.forEach(function(ca){
           var dd = Math.sqrt(Math.pow(ca.cx-Number(b.x),2)+Math.pow(ca.cy-Number(b.y),2));
-          if(dd <= LB_SETTLE_EPS){ used[bi]=1; cnt++; }
+          if(dd<bd){ bd=dd; best=ca; }
         });
-        ca.owned = cnt;
+        if(best && bd <= LB_SETTLE_EPS) best.owned++;
       });
       cands.forEach(function(ca){
         if(ca.owned > 0){

@@ -1479,7 +1479,7 @@ function toggleLevelInfo(e, total, base, wild, bonus, xp, isBred) {
 /* ================= 最新生物 TAB ================= */
 var LB = {};
 // 页面版本号：每次部署递增（调试信息里显示，方便确认手机加载的是否新版）
-var LB_VERSION = 'v20260812-14'; // 2026-08-12 床消费：大簇优先占用范围床；无专属床纯released≤2离散吸收
+var LB_VERSION = 'v20260812-2'; // 2026-08-12 地图标注 y 方向修正（北在下，全图统一）
 // 服务器列表：HA API（apps.yaml sensor.asa_server_themes）优先；无 HA 环境（解耦）时用内置兜底（localStorage 上次同步缓存 → 代码常量）
 var LB_FALLBACK_SERVERS = [
   {abbr:'Isl',name:'孤岛',icon:'🏝️'},{abbr:'Sco',name:'焦土',icon:'🔥'},{abbr:'Cen',name:'核心岛',icon:'💎'},
@@ -1507,7 +1507,7 @@ var LB_SERVER_MDI = { Isl:'mdi-island', Sco:'mdi-volcano', Cen:'mdi-orbit', Abe:
 // 坐标换算：lat = y/multLat + shiftLat（y=UE Y），lon = x/multLon + shiftLon；px = lat/lon/100*256，图像素 (0,0)=左上
 // 参数：8 老图 = ARK wiki 官方换算表（实测验证适用 ASA）；Ast = 官方 264 sq km 反推 mult 16250；Los = 实测反推 mult 3200（待校准）；Bob 无地图
 var LB_MAP_INFO = {
-  Isl:{img:'isl_s', shift:50, mult:8000, lonMin:7.33, lonMax:92.79, latMin:7.17, latMax:92.50},
+  Isl:{img:'isl_s', shift:50, mult:8000},
   Sco:{img:'sco_s', shift:50, mult:8000},
   Cen:{img:'cen_s', shiftLat:30.34, shiftLon:55.10, multLat:9584, multLon:9600},
   Abe:{img:'abe_s', shift:50, mult:8000},
@@ -1524,22 +1524,19 @@ var LB_MAP_BASE = 'https://img.whiterober.ccwu.cc/ASA/misc/'; // 浏览器 <img>
 function lbMapForServer(abbr, z){
   var m = LB_MAP_INFO[abbr];
   if(!m) return null;
-  // Gen 按 z 选图（2026-08-12 修正方向）：z 大(≥oceanZ)=海洋 → 用 gen_ocean_s；z 小=陆地 → 用 gen_s
-  if(m.oceanImg && z !== undefined && z !== null && Number(z) >= m.oceanZ){
-    return {img:m.oceanImg, shiftLat:m.shift, shiftLon:m.shift, multLat:m.mult, multLon:m.mult, lonMin:m.lonMin, lonMax:m.lonMax, latMin:m.latMin, latMax:m.latMax};
+  if(m.oceanImg && z !== undefined && z !== null && Number(z) < m.oceanZ){
+    return {img:m.oceanImg, shiftLat:m.shift, shiftLon:m.shift, multLat:m.mult, multLon:m.mult};
   }
-  return {img:m.img, shiftLat:(m.shiftLat!==undefined?m.shiftLat:m.shift), shiftLon:(m.shiftLon!==undefined?m.shiftLon:m.shift), multLat:(m.multLat!==undefined?m.multLat:m.mult), multLon:(m.multLon!==undefined?m.multLon:m.mult), lonMin:m.lonMin, lonMax:m.lonMax, latMin:m.latMin, latMax:m.latMax};
+  return {img:m.img, shiftLat:(m.shiftLat!==undefined?m.shiftLat:m.shift), shiftLon:(m.shiftLon!==undefined?m.shiftLon:m.shift), multLat:(m.multLat!==undefined?m.multLat:m.mult), multLon:(m.multLon!==undefined?m.multLon:m.mult)};
 }
-// UE 坐标 → 地图像素百分比（clamp 0-100；按图片实际坐标范围归一化，无配置默认 0~100 全图）
-// 2026-08-12：y 方向北在下；图片范围（lon/lat 边界）由 LB_MAP_INFO 配置（点击地标实测）
+// UE 坐标 → 256 地图像素百分比（clamp 0-256；返回百分比便于图片任意缩放红点不错位）
+// 2026-08-12：坐标系 y 方向修正——地图图片北在下（南在上），lat 大(北) → 图下方
 function lbWorldToPx(x, y, map){
   var lon = Number(x)/map.multLon + map.shiftLon;
   var lat = Number(y)/map.multLat + map.shiftLat;
-  var lo0 = (map.lonMin!==undefined?map.lonMin:0), lo1 = (map.lonMax!==undefined?map.lonMax:100);
-  var la0 = (map.latMin!==undefined?map.latMin:0), la1 = (map.latMax!==undefined?map.latMax:100);
-  var px = Math.max(0, Math.min(100, (lon-lo0)/(lo1-lo0)*100));
-  var py = Math.max(0, Math.min(100, (lat-la0)/(la1-la0)*100));
-  return {x:px, y:py};
+  var px = Math.max(0, Math.min(256, lon/100*256));
+  var py = Math.max(0, Math.min(256, lat/100*256));
+  return {x:px/256*100, y:py/256*100};
 }
 LB._inited = false;
 LB._cache = null;   // 生物速查数据缓存（{data, ts}）
@@ -1900,7 +1897,6 @@ function lbHeadLm(url){
 // 两阶段：①全部并发 HEAD 收集 Last-Modified + 变化清单（HEAD 不与下载抢连接）②分批只下载变化的文件，未变化的复用旧 recs
 async function lbLoad(servers, oldData){
   var recs=[], recMap={}, tribesByServer={}, worldNowByServer={};
-  var structures = []; // v6：床/棺材/睡眠舱结构（聚落建筑命名）
   var playersByEos = {}; // eosId → {eosId, name, roles:{pid:characterName}}（跨服合并）
   var oldRecs = (oldData && Array.isArray(oldData.recs)) ? oldData.recs : null;
   var oldLm = (oldData && oldData._lm) ? oldData._lm : {};
@@ -1969,7 +1965,6 @@ async function lbLoad(servers, oldData){
         if(oldData && oldData.tribesByServer && oldData.tribesByServer[abbr]) tribesByServer[abbr] = oldData.tribesByServer[abbr];
         if(oldData && oldData.worldNowByServer && oldData.worldNowByServer[abbr] !== undefined) worldNowByServer[abbr] = oldData.worldNowByServer[abbr];
         if(oldData && Array.isArray(oldData.players)) oldData.players.forEach(lbMergePlayer);
-        if(oldData && Array.isArray(oldData.structures)) oldData.structures.forEach(function(s){ structures.push(s); });
       }
       if(tamedSkip){ reused.filter(function(r){ return r.src === 'tamed'; }).forEach(lbAddRec); }
       return { abbr:abbr, needCryo:!cryoSkip, needTamed:!tamedSkip };
@@ -1989,8 +1984,7 @@ async function lbLoad(servers, oldData){
       if(item.needCryo && lm[abbr].cryo !== LB_LM_404) tasks.push(authFetch(cryoUrl,{}).then(function(r){return r.json();}).then(function(cryo){
         if(cryo){ tribesByServer[abbr] = cryo.tribes||{}; worldNowByServer[abbr] = cryo.worldSecondsNow||0;
           (cryo.players||[]).forEach(lbMergePlayer);
-          (cryo.cryopod||[]).forEach(function(p){ addCryoRec(abbr, p); });
-          (cryo.structures||[]).forEach(function(s){ structures.push(s); }); }
+          (cryo.cryopod||[]).forEach(function(p){ addCryoRec(abbr, p); }); }
       }).catch(function(){}));
       if(item.needTamed && lm[abbr].tamed !== LB_LM_404) tasks.push(authFetch(tamedUrl,{}).then(function(r){return r.json();}).then(function(tamed){
         if(tamed){ (tamed.dinos||[]).forEach(function(d){ addTamedRec(abbr, d); }); }
@@ -2002,8 +1996,7 @@ async function lbLoad(servers, oldData){
   recs = Object.values(recMap);
   var out = {recs:recs, tribesByServer:tribesByServer, worldNowByServer:worldNowByServer};
   out.players = Object.keys(playersByEos).map(function(eos){ return playersByEos[eos]; });
-  out.structures = structures; // v6：床/棺材/睡眠舱结构（聚落建筑命名）
-  out._schemaVer = 6; // v6：+structures 建筑数据（床/棺材/睡眠舱，聚落命名用）
+  out._schemaVer = 5; // v5：坐标(containerX/Y/Z)+印痕者(imprinterName/EosId) 透传（聚落算法输入）
   out._lm = lm;
   return out;
 }
@@ -2012,25 +2005,7 @@ async function lbLoad(servers, oldData){
 // 严格按《前端对接_JSON规范与聚落算法.md》§6-§8：
 //  容器聚合 → 排除背包/无坐标 → 按部落 → DBSCAN(eps=6000) → 冠名(印痕者反查pid→本部落过滤→前3名)
 // 输出：{ byServer: {abbr: {settlements:[], scatteredCnt}}, byDinoKey: {dinoKey: {setId, dist, server, tribeId}}, buildAt }
-var LB_SETTLE_EPS = 8000; // 聚类距离阈值（2026-08-12 6000→8000，聚类更宽松）
-var LB_SPLIT_EPS = 6000;  // 大簇切割阈值（独立保持 6000：radius>6000 的桥接簇仍切割，防 released 桥接分离基地）
-// 聚落成立判定（2026-08-12）：簇内有床/棺材/睡眠舱建筑（同部落，距簇内任一容器 ≤eps）→ 成聚落；不再校验容器数量
-function lbClusterHasBed(data, clu){
-  var sts = (data && Array.isArray(data.structures)) ? data.structures : [];
-  if(!sts.length || !clu || !clu.length) return false;
-  var tid = clu[0].tribeId;
-  var beds = sts.filter(function(s){
-    return Number(s.tribeId)===Number(tid) && /SimpleBed|ModernBed|TekBed|CompanionBed|Coffin|SleepingPod/i.test(s.class||'');
-  });
-  if(!beds.length) return false;
-  for(var i=0;i<clu.length;i++){
-    for(var j=0;j<beds.length;j++){
-      var d = Math.sqrt(Math.pow(Number(clu[i].x)-Number(beds[j].x),2)+Math.pow(Number(clu[i].y)-Number(beds[j].y),2));
-      if(d <= LB_SETTLE_EPS) return true;
-    }
-  }
-  return false;
-}
+var LB_SETTLE_EPS = 6000;
 function lbBuildSettlements(data){
   var byServer = {}, byDinoKey = {}, byContainer = {};
   if(!data || !Array.isArray(data.recs)) return {byServer:byServer, byDinoKey:byDinoKey, byContainer:byContainer, buildAt:Date.now()};
@@ -2068,55 +2043,25 @@ function lbBuildSettlements(data){
     var scatteredCtn = [];
     Object.keys(byTribe).forEach(function(tid){
       var grp = byTribe[tid];
+      // 聚类单元（容器）≥3 才成聚落；1~2 个容器归离散（避免孤零容器/两两相近误成聚落）
       var clusters = lbDbscan(grp, LB_SETTLE_EPS, 1);
-      // 本部落床池（床消费唯一化 2026-08-12：一张床只能归属一个聚落）
-      var beds = (Array.isArray(data.structures) ? data.structures : []).filter(function(s){
-        return Number(s.tribeId) === Number(tid) && /SimpleBed|ModernBed|TekBed|CompanionBed|Coffin|SleepingPod/i.test(s.class||'');
-      });
-      // 候选子簇（原 lbClusterHasBed 为真的簇拆分而来）
-      var cands = [];
       clusters.forEach(function(clu, ci){
-        // 聚落成立：簇内有床/棺材/睡眠舱建筑（不再校验容器数量）；无建筑 → 离散
-        if(lbClusterHasBed(data, clu)){
-          // radius>切割阈值的大簇：单链接最大间隙拆分（桥接的分离基地各自成聚落）；切割阈值独立（LB_SPLIT_EPS），不随聚类 eps 放大
-          var subs = lbSplitOversize(clu, LB_SPLIT_EPS);
+        if(clu.length >= 3){
+          // radius>eps 的大簇：单链接最大间隙拆分（桥接的分离基地各自成聚落）
+          var subs = lbSplitOversize(clu, LB_SETTLE_EPS);
           subs.forEach(function(sub, si){
-            var cx=0, cy=0;
-            sub.forEach(function(c){ cx+=Number(c.x); cy+=Number(c.y); });
-            cands.push({ sub:sub, cx:cx/sub.length, cy:cy/sub.length, owned:0, ci:ci, si:si });
+            if(sub.length >= 3){
+              settlements.push(lbFinalizeSettlement(data, abbr, tid, abbr+'_'+tid+'_'+(ci+1)+'_'+(si+1), sub));
+            } else {
+              // 拆分出的 1~2 点子簇 → 离散
+              sub.forEach(function(c){ c._scattered = true; });
+              sub.forEach(function(c){ scatteredCtn.push(c); });
+            }
           });
         } else {
-          // 无床/棺材/睡眠舱的簇 → 离散
+          // 1~2 个容器 → 离散
           clu.forEach(function(c){ c._scattered = true; });
           clu.forEach(function(c){ scatteredCtn.push(c); });
-        }
-      });
-      // 床消费（2026-08-12 修正）：大簇优先（容器数降序），子簇占用"距其中心 ≤LB_SETTLE_EPS 的全部未占用床"；
-      // 一张床只能归属一个聚落（被大簇吸走后小簇不可复用），避免同一床支撑多个聚落成立/命名
-      cands.sort(function(a,b){ return b.sub.length - a.sub.length; });
-      var used = {};
-      cands.forEach(function(ca){
-        var cnt = 0;
-        beds.forEach(function(b, bi){
-          if(used[bi]) return;
-          var dd = Math.sqrt(Math.pow(ca.cx-Number(b.x),2)+Math.pow(ca.cy-Number(b.y),2));
-          if(dd <= LB_SETTLE_EPS){ used[bi]=1; cnt++; }
-        });
-        ca.owned = cnt;
-      });
-      cands.forEach(function(ca){
-        if(ca.owned > 0){
-          // 有专属床 → 聚落
-          settlements.push(lbFinalizeSettlement(data, abbr, tid, abbr+'_'+tid+'_'+(ca.ci+1)+'_'+(ca.si+1), ca.sub));
-        } else {
-          // 无专属床：含真实建筑容器 或 纯 released >2 → 保留聚落；纯 released ≤2 → 离散（走吸收）
-          var hasReal = ca.sub.some(function(c){ return c.type !== 'released'; });
-          if(hasReal || ca.sub.length > 2){
-            settlements.push(lbFinalizeSettlement(data, abbr, tid, abbr+'_'+tid+'_'+(ca.ci+1)+'_'+(ca.si+1), ca.sub));
-          } else {
-            ca.sub.forEach(function(c){ c._scattered = true; });
-            ca.sub.forEach(function(c){ scatteredCtn.push(c); });
-          }
         }
       });
     });
@@ -2124,33 +2069,6 @@ function lbBuildSettlements(data){
     var covered = {};
     settlements.forEach(function(s){ (s.containers||[]).forEach(function(c){ covered[c.id]=1; }); });
     posCtn.forEach(function(c){ if(!c._scattered && !covered[c.id]){ c._scattered=true; scatteredCtn.push(c); } });
-    // 4.5 离散吸收（2026-08-12）：同部落离散容器若离最近聚落中心 ≤ 吸收阈值 → 归入该聚落（防近主聚落的离散被误切/误分）
-    var ABSORB_EPS = 20000; // 吸收阈值（2026-08-12 放宽到 20000：聚类 8000 边缘的离散也吸收）
-    var keepScattered = [];
-    scatteredCtn.forEach(function(c){
-      var bestS=null, bd=Infinity;
-      settlements.forEach(function(s){
-        if(Number(s.tribeId)!==Number(c.tribeId)) return;
-        var d = Math.sqrt(Math.pow(Number(c.x)-s.center.x,2)+Math.pow(Number(c.y)-s.center.y,2));
-        if(d<bd){ bd=d; bestS=s; }
-      });
-      if(bestS && bd <= ABSORB_EPS){
-        bestS.containers.push(c);
-        c._absorbed = true;
-        bestS._absorbed = true;
-      } else {
-        keepScattered.push(c);
-      }
-    });
-    scatteredCtn = keepScattered;
-    // 吸收后重算受影响聚落 center（标注更准）
-    settlements.forEach(function(s){
-      if(!s._absorbed || !s.containers || !s.containers.length) return;
-      var nx=0, ny=0;
-      s.containers.forEach(function(cc){ nx+=Number(cc.x); ny+=Number(cc.y); });
-      s.center.x = nx/s.containers.length;
-      s.center.y = ny/s.containers.length;
-    });
     // 5. 建立 dinoKey 映射
     settlements.forEach(function(s){
       (s.containers||[]).forEach(function(c){
@@ -2275,27 +2193,6 @@ function lbDbscan(pts, eps, minPts){
   }
   return clusters;
 }
-// 取数组中距中心最近的建筑（返回其 name）
-function lbNearestStructure(arr, cx, cy){
-  var best=null, bd=Infinity;
-  arr.forEach(function(s){
-    var d = Math.sqrt(Math.pow(Number(s.x)-cx,2)+Math.pow(Number(s.y)-cy,2));
-    if(d < bd){ bd=d; best=s; }
-  });
-  return best ? best.name : null;
-}
-// 聚落建筑命名优先级（2026-08-12）：①墓碑/木牌/金属牌(Gravestone/WoodSign_Large/MetalSign_Large)自定义名(同组取距center最近) → ②床/棺材/睡眠舱 name 以大写 M 结尾(取最近) → ③床/棺材/睡眠舱最近带名字；无则 null
-function lbSettlementBuildingName(data, abbr, tid, cx, cy){
-  var sts = (data && Array.isArray(data.structures)) ? data.structures : [];
-  if(!sts.length) return null;
-  var cands = sts.filter(function(s){ return Number(s.tribeId) === Number(tid) && s.name; });
-  if(!cands.length) return null;
-  var sign = cands.filter(function(s){ return /Gravestone|WoodSign_Large|MetalSign_Large/i.test(s.class||''); });
-  if(sign.length) return lbNearestStructure(sign, cx, cy);
-  var mEnd = cands.filter(function(s){ return /M$/.test(s.name.trim()); });
-  if(mEnd.length) return lbNearestStructure(mEnd, cx, cy);
-  return lbNearestStructure(cands, cx, cy);
-}
 // 聚落收尾：计算 center/radius/容器数/球数 + 冠名（§8）
 function lbFinalizeSettlement(data, abbr, tid, sid, containers){
   var cx=0, cy=0, cz=0, pods=0;
@@ -2333,9 +2230,7 @@ function lbFinalizeSettlement(data, abbr, tid, sid, containers){
     return true;
   });
   // 无成员回退 S 编号
-  // 聚落命名（2026-08-12）：优先聚落内建筑名（床/棺材/睡眠舱，M 结尾→最近带名字）；无则回退冠名/S编号
-  var bName = lbSettlementBuildingName(data, abbr, Number(tid), cx, cy);
-  var name = bName || (members.length ? members.map(function(m){ return m.name; }).join('、') : ('S'+String(sid).split('_').pop()));
+  var name = members.length ? members.map(function(m){ return m.name; }).join('、') : ('S'+String(sid).split('_').pop());
   return { id:sid, tribeId:Number(tid), tribeName:(tribe&&tribe.name)||'', center:{x:cx,y:cy,z:cz}, radius:maxR,
     containers:containers, pods:pods, owners:members, name:name };
 }
@@ -2910,7 +2805,7 @@ function lbCacheGet(){
           var d = v.data;
           // 派生数据不持久化：剔除 _settlements，每次加载用当前算法重建
           if(d._settlements) delete d._settlements;
-          var okVer = d._schemaVer === 6;
+          var okVer = d._schemaVer === 5;
           var okPlayers = Array.isArray(d.players);
           var okPid = true;
           if(okPlayers && Array.isArray(d.recs)){
@@ -3097,7 +2992,7 @@ function lbView(){
   var player=lbPlayer();
   var classFilter=LB.curClass||'';
   // 1. 内存缓存命中：直接渲染（会话内快速）；版本不符（旧结构）则丢弃走重拉
-  if(LB._cache && LB._cache.data && LB._cache.data._schemaVer === 6){
+  if(LB._cache && LB._cache.data && LB._cache.data._schemaVer === 5){
     lbResolveIdentity(); // 身份解析（幂等：已解析则直接返回；autoPlayer 未就绪则跳过等下次）
     var p1 = lbPlayer();
     lbRenderView(LB._cache.data, p1, classFilter);
@@ -3293,10 +3188,11 @@ function lbSettleBtnHtml(grp, key){
   var r0 = grp[0];
   var s = lbSettlementOf(r0);
   var tent = lbMdiSvg('mdi-tent', 12);
-  var name, cls, mapHtml='';
+  var name, coord, cls, mapHtml='';
   if(s && !s.scattered){
     var st = lbFindSettlementObj(s);
     name = (st && st.name) ? st.name : (s.setId.split('_').pop() || s.setId);
+    coord = (st && st.center) ? '('+Math.round(st.center.x)+','+Math.round(st.center.y)+')' : '';
     cls = '';
     // 内嵌 256 完整地图 + 红点标记聚落中心（Gen 按 z 选海洋图；无地图服务器跳过）
     if(st && st.center){
@@ -3308,7 +3204,7 @@ function lbSettleBtnHtml(grp, key){
       }
     }
   } else if(s && s.scattered){
-    name = '离散'; cls = ' scattered';
+    name = '离散'; coord = ''; cls = ' scattered';
     // 地图上标出所有离散点（离散容器坐标，橙色小点）
     var pts = [];
     grp.forEach(function(r){
@@ -3329,7 +3225,7 @@ function lbSettleBtnHtml(grp, key){
       }
     }
   } else {
-    name = '无聚落'; cls = ' nosettle';
+    name = '无聚落'; coord = ''; cls = ' nosettle';
   }
   var cnt = grp.filter(function(r){return !r.isEmpty;}).length;
   var ecnt = grp.length - cnt;
@@ -3337,6 +3233,7 @@ function lbSettleBtnHtml(grp, key){
     + mapHtml
     + '<span class="settle-info">'+tent
     + '<span class="settle-name">'+name+'</span>'
+    + (coord ? '<span class="settle-coord">'+coord+'</span>' : '')
     + '<span class="settle-cnt">'+cnt+(ecnt>0?'|'+ecnt:'')+'</span></span></div>';
 }
 // 点击聚落大按钮：进入聚落详情子页面（隐藏聚落列表，显示该聚落容器手风琴 + 返回按钮）

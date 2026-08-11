@@ -1479,7 +1479,7 @@ function toggleLevelInfo(e, total, base, wild, bonus, xp, isBred) {
 /* ================= 最新生物 TAB ================= */
 var LB = {};
 // 页面版本号：每次部署递增（调试信息里显示，方便确认手机加载的是否新版）
-var LB_VERSION = 'v20260812-14'; // 2026-08-12 床消费：大簇优先占用范围床；无专属床纯released≤2离散吸收
+var LB_VERSION = 'v20260812-10'; // 2026-08-12 离散吸收阈值放宽到 20000
 // 服务器列表：HA API（apps.yaml sensor.asa_server_themes）优先；无 HA 环境（解耦）时用内置兜底（localStorage 上次同步缓存 → 代码常量）
 var LB_FALLBACK_SERVERS = [
   {abbr:'Isl',name:'孤岛',icon:'🏝️'},{abbr:'Sco',name:'焦土',icon:'🔥'},{abbr:'Cen',name:'核心岛',icon:'💎'},
@@ -1524,8 +1524,7 @@ var LB_MAP_BASE = 'https://img.whiterober.ccwu.cc/ASA/misc/'; // 浏览器 <img>
 function lbMapForServer(abbr, z){
   var m = LB_MAP_INFO[abbr];
   if(!m) return null;
-  // Gen 按 z 选图（2026-08-12 修正方向）：z 大(≥oceanZ)=海洋 → 用 gen_ocean_s；z 小=陆地 → 用 gen_s
-  if(m.oceanImg && z !== undefined && z !== null && Number(z) >= m.oceanZ){
+  if(m.oceanImg && z !== undefined && z !== null && Number(z) < m.oceanZ){
     return {img:m.oceanImg, shiftLat:m.shift, shiftLon:m.shift, multLat:m.mult, multLon:m.mult, lonMin:m.lonMin, lonMax:m.lonMax, latMin:m.latMin, latMax:m.latMax};
   }
   return {img:m.img, shiftLat:(m.shiftLat!==undefined?m.shiftLat:m.shift), shiftLon:(m.shiftLon!==undefined?m.shiftLon:m.shift), multLat:(m.multLat!==undefined?m.multLat:m.mult), multLon:(m.multLon!==undefined?m.multLon:m.mult), lonMin:m.lonMin, lonMax:m.lonMax, latMin:m.latMin, latMax:m.latMax};
@@ -2014,23 +2013,6 @@ async function lbLoad(servers, oldData){
 // 输出：{ byServer: {abbr: {settlements:[], scatteredCnt}}, byDinoKey: {dinoKey: {setId, dist, server, tribeId}}, buildAt }
 var LB_SETTLE_EPS = 8000; // 聚类距离阈值（2026-08-12 6000→8000，聚类更宽松）
 var LB_SPLIT_EPS = 6000;  // 大簇切割阈值（独立保持 6000：radius>6000 的桥接簇仍切割，防 released 桥接分离基地）
-// 聚落成立判定（2026-08-12）：簇内有床/棺材/睡眠舱建筑（同部落，距簇内任一容器 ≤eps）→ 成聚落；不再校验容器数量
-function lbClusterHasBed(data, clu){
-  var sts = (data && Array.isArray(data.structures)) ? data.structures : [];
-  if(!sts.length || !clu || !clu.length) return false;
-  var tid = clu[0].tribeId;
-  var beds = sts.filter(function(s){
-    return Number(s.tribeId)===Number(tid) && /SimpleBed|ModernBed|TekBed|CompanionBed|Coffin|SleepingPod/i.test(s.class||'');
-  });
-  if(!beds.length) return false;
-  for(var i=0;i<clu.length;i++){
-    for(var j=0;j<beds.length;j++){
-      var d = Math.sqrt(Math.pow(Number(clu[i].x)-Number(beds[j].x),2)+Math.pow(Number(clu[i].y)-Number(beds[j].y),2));
-      if(d <= LB_SETTLE_EPS) return true;
-    }
-  }
-  return false;
-}
 function lbBuildSettlements(data){
   var byServer = {}, byDinoKey = {}, byContainer = {};
   if(!data || !Array.isArray(data.recs)) return {byServer:byServer, byDinoKey:byDinoKey, byContainer:byContainer, buildAt:Date.now()};
@@ -2068,55 +2050,25 @@ function lbBuildSettlements(data){
     var scatteredCtn = [];
     Object.keys(byTribe).forEach(function(tid){
       var grp = byTribe[tid];
+      // 聚类单元（容器）≥3 才成聚落；1~2 个容器归离散（避免孤零容器/两两相近误成聚落）
       var clusters = lbDbscan(grp, LB_SETTLE_EPS, 1);
-      // 本部落床池（床消费唯一化 2026-08-12：一张床只能归属一个聚落）
-      var beds = (Array.isArray(data.structures) ? data.structures : []).filter(function(s){
-        return Number(s.tribeId) === Number(tid) && /SimpleBed|ModernBed|TekBed|CompanionBed|Coffin|SleepingPod/i.test(s.class||'');
-      });
-      // 候选子簇（原 lbClusterHasBed 为真的簇拆分而来）
-      var cands = [];
       clusters.forEach(function(clu, ci){
-        // 聚落成立：簇内有床/棺材/睡眠舱建筑（不再校验容器数量）；无建筑 → 离散
-        if(lbClusterHasBed(data, clu)){
+        if(clu.length >= 3){
           // radius>切割阈值的大簇：单链接最大间隙拆分（桥接的分离基地各自成聚落）；切割阈值独立（LB_SPLIT_EPS），不随聚类 eps 放大
           var subs = lbSplitOversize(clu, LB_SPLIT_EPS);
           subs.forEach(function(sub, si){
-            var cx=0, cy=0;
-            sub.forEach(function(c){ cx+=Number(c.x); cy+=Number(c.y); });
-            cands.push({ sub:sub, cx:cx/sub.length, cy:cy/sub.length, owned:0, ci:ci, si:si });
+            if(sub.length >= 3){
+              settlements.push(lbFinalizeSettlement(data, abbr, tid, abbr+'_'+tid+'_'+(ci+1)+'_'+(si+1), sub));
+            } else {
+              // 拆分出的 1~2 点子簇 → 离散
+              sub.forEach(function(c){ c._scattered = true; });
+              sub.forEach(function(c){ scatteredCtn.push(c); });
+            }
           });
         } else {
-          // 无床/棺材/睡眠舱的簇 → 离散
+          // 1~2 个容器 → 离散
           clu.forEach(function(c){ c._scattered = true; });
           clu.forEach(function(c){ scatteredCtn.push(c); });
-        }
-      });
-      // 床消费（2026-08-12 修正）：大簇优先（容器数降序），子簇占用"距其中心 ≤LB_SETTLE_EPS 的全部未占用床"；
-      // 一张床只能归属一个聚落（被大簇吸走后小簇不可复用），避免同一床支撑多个聚落成立/命名
-      cands.sort(function(a,b){ return b.sub.length - a.sub.length; });
-      var used = {};
-      cands.forEach(function(ca){
-        var cnt = 0;
-        beds.forEach(function(b, bi){
-          if(used[bi]) return;
-          var dd = Math.sqrt(Math.pow(ca.cx-Number(b.x),2)+Math.pow(ca.cy-Number(b.y),2));
-          if(dd <= LB_SETTLE_EPS){ used[bi]=1; cnt++; }
-        });
-        ca.owned = cnt;
-      });
-      cands.forEach(function(ca){
-        if(ca.owned > 0){
-          // 有专属床 → 聚落
-          settlements.push(lbFinalizeSettlement(data, abbr, tid, abbr+'_'+tid+'_'+(ca.ci+1)+'_'+(ca.si+1), ca.sub));
-        } else {
-          // 无专属床：含真实建筑容器 或 纯 released >2 → 保留聚落；纯 released ≤2 → 离散（走吸收）
-          var hasReal = ca.sub.some(function(c){ return c.type !== 'released'; });
-          if(hasReal || ca.sub.length > 2){
-            settlements.push(lbFinalizeSettlement(data, abbr, tid, abbr+'_'+tid+'_'+(ca.ci+1)+'_'+(ca.si+1), ca.sub));
-          } else {
-            ca.sub.forEach(function(c){ c._scattered = true; });
-            ca.sub.forEach(function(c){ scatteredCtn.push(c); });
-          }
         }
       });
     });
