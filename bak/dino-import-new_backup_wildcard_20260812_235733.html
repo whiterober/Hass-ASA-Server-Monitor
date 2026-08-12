@@ -627,9 +627,8 @@ function solveLevels(species, statsByName, TE_min, TE_max, origin, charLevel, im
   // 留痕加成属性（按 ASB 默认）
   var impStats = {health:true, food:true, weight:true, melee_damage_multiplier:true};
   
-  // totalW 候选：眩晕反推优先；低温仓眩晕含加成矛盾（totalW>level）时枚举（2026-08-13）
-  var baseTotalW = 0, baseTotalDom = 0;
-  var totalWCands = [];
+  // totalW：驯服/繁殖用眩晕反推（眩晕 IncPerTamedLevel=0，只含野生等级）
+  var totalW = 0, totalDom = 0;
   if (dom && fsr[2]) {
     // 反向去除驯服加成：torpidity = (B×(1+totalW×Iw) + Add) × domMult × imprintM
     var torpVal = statsByName.torpidity;
@@ -639,177 +638,134 @@ function solveLevels(species, statsByName, TE_min, TE_max, origin, charLevel, im
     if ((imprint||0) > 0 && IMPRINT_MULT_DEFAULT[2] !== 0)
       torpImprintM = 1 + IMPRINT_MULT_DEFAULT[2] * (imprint||0);
     var preBonus = (torpVal / torpDomMult - torpAdd) / torpImprintM;
-    baseTotalW = Math.round((preBonus / torpB - 1) / torpIw);
-    baseTotalDom = Math.max(0, (charLevel||0) - 1 - baseTotalW);
-    totalWCands.push({tw: baseTotalW, td: baseTotalDom});
-    if (baseTotalW > (charLevel||0) - 1) {
-      // 眩晕含加成（数据矛盾）：枚举 totalW（步长 2 覆盖全范围，上限 60 次）
-      var lvTop = Math.max(0, (charLevel||1) - 1);
-      var tries = 0;
-      for (var fw = lvTop; fw >= 0 && tries < 60; fw -= 2, tries++) {
-        totalWCands.push({tw: fw, td: Math.max(0, (charLevel||1) - 1 - fw)});
+    totalW = Math.round((preBonus / torpB - 1) / torpIw);
+    if (charLevel && charLevel > 0) totalDom = Math.max(0, charLevel - 1 - totalW);
+  } else if (charLevel && charLevel > 1) {
+    totalW = charLevel - 1;
+  }
+  console.log('solveLevels: totalW=' + totalW + ' totalDom=' + totalDom + ' charLevel=' + charLevel + ' dom=' + dom);
+  
+  var dpKeys = ['health','stamina','oxygen','weight','melee_damage_multiplier'];
+  var allOptions = [];
+  var maxW = Math.max(40, Math.round(totalW / 4));
+  
+  for (var ki = 0; ki < dpKeys.length; ki++) {
+    var k = dpKeys[ki];
+    var idx = STAT_IDX[k];
+    var displayed = statsByName[k];
+    if (displayed == null || !fsr[idx]) {
+      allOptions.push([{w:0,d:0,diff:0}]);
+      continue;
+    }
+    // 近战：.ini 存 bonus%，需要 +100 变总百分比
+    var isMelee = (k === 'melee_damage_multiplier');
+    var multiplier = isMelee ? (displayed + 100) / 100 : displayed;
+    var tol = isMelee ? Math.max((imprint||0)>0?0.03:0.005, multiplier*0.0005) : Math.max(1.0, displayed*0.0006);
+    
+    var opts = [];
+    // 检查 TE 区间内是否有匹配：v(TE) 单调，取两端
+    function teRangeMatch(w, d) {
+      var vHi = calcStatValue(species, idx, w, 0, d, dom && d>=0, TE_max, imprint||0);
+      if (!dom || TE_min >= TE_max) return Math.abs((isMelee?vHi:vHi) - multiplier) < tol;
+      var vLo = calcStatValue(species, idx, w, 0, d, true, TE_min, imprint||0);
+      var vMin = Math.min(vHi, vLo), vMax = Math.max(vHi, vLo);
+      return multiplier >= vMin - tol && multiplier <= vMax + tol;
+    }
+    for (var w = 0; w <= maxW; w++) {
+      if (teRangeMatch(w, 0)) {
+        var v = calcStatValue(species, idx, w, 0, 0, dom, TE_max, imprint||0);
+        var diff = Math.abs((isMelee?v:v) - multiplier);
+        opts.push({w:w, d:0, diff:diff});
       }
     }
-  } else if (charLevel && charLevel > 1) {
-    baseTotalW = charLevel - 1;
-    totalWCands.push({tw: baseTotalW, td: 0});
+    if (dom) {
+      for (var w = 0; w <= maxW; w++) {
+        for (var d = 1; d <= 255; d++) {
+          if (teRangeMatch(w, d)) {
+            var v = calcStatValue(species, idx, w, 0, d, true, TE_max, imprint||0);
+            var diff = Math.abs((isMelee?v:v) - multiplier);
+            if (w===0 && d>0 && totalW>50) diff += 2.0;
+            opts.push({w:w, d:d, diff:diff});
+          }
+        }
+      }
+    }
+    if (opts.length === 0) opts.push({w:0, d:0, diff:0});
+    opts.sort(function(a,b){ return b.w-a.w || a.diff-b.diff; });
+    allOptions.push(opts);
+    console.log('  stat '+k+': multiplier='+multiplier.toFixed(4)+' options='+opts.length+' top='+JSON.stringify(opts[0]));
   }
   
-  // DP 求解（参数化 tw/td，支持多次尝试）
-  function runDP(tw, td){
-    var dpKeys = ['health','stamina','oxygen','weight','melee_damage_multiplier'];
-    var allOptions = [];
-    // 2026-08-13 放宽：tw/4 上限卡死高属性龙（Carcha 攻需 wild55>52）；改 tw 后 73%→93%，17.6ms/球可接受
-    var maxW = Math.max(40, tw);
-    
-    for (var ki = 0; ki < dpKeys.length; ki++) {
-      var k = dpKeys[ki];
-      var idx = STAT_IDX[k];
-      var displayed = statsByName[k];
-      if (displayed == null || !fsr[idx]) {
-        allOptions.push([{w:0,d:0,diff:0}]);
-        continue;
-      }
-      // 近战：.ini 存 bonus%，需要 +100 变总百分比
-      var isMelee = (k === 'melee_damage_multiplier');
-      var multiplier = isMelee ? (displayed + 100) / 100 : displayed;
-      var tol = isMelee ? Math.max((imprint||0)>0?0.03:0.005, multiplier*0.0005) : Math.max(1.0, displayed*0.0006);
-      
-      var opts = [];
-      // 检查 TE 区间内是否有匹配：v(TE) 单调，取两端
-      function teRangeMatch(w, d) {
-        var vHi = calcStatValue(species, idx, w, 0, d, dom && d>=0, TE_max, imprint||0);
-        if (!dom || TE_min >= TE_max) return Math.abs((isMelee?vHi:vHi) - multiplier) < tol;
-        var vLo = calcStatValue(species, idx, w, 0, d, true, TE_min, imprint||0);
-        var vMin = Math.min(vHi, vLo), vMax = Math.max(vHi, vLo);
-        return multiplier >= vMin - tol && multiplier <= vMax + tol;
-      }
-      for (var w = 0; w <= maxW; w++) {
-        if (teRangeMatch(w, 0)) {
-          var v = calcStatValue(species, idx, w, 0, 0, dom, TE_max, imprint||0);
-          var diff = Math.abs((isMelee?v:v) - multiplier);
-          opts.push({w:w, d:0, diff:diff});
-        }
-      }
-      if (dom) {
-        // 2026-08-13 性能优化：dom 循环 d 1..255 暴力遍历 → 数学反推 + 局部扫描 ±3
-        var ss = species._stats[idx];
-        var domMult2 = (ss.MultAffinity>=0) ? (1+ss.MultAffinity*TE_max) : 1;
-        var imprintM2 = 1;
-        if ((imprint||0) > 0 && species._imprintMult && species._imprintMult[idx] !== 0)
-          imprintM2 = 1 + species._imprintMult[idx]*(imprint||0);
-        var tamedHP2 = (idx===0) ? (species._tamedHP||1) : 1;
-        for (var w = 0; w <= maxW; w++) {
-          if (!(ss.IncPerTamedLevel > 0)) continue;
-          var basePart = (ss.BaseValue*(1+w*ss.IncPerWildLevel)*tamedHP2*imprintM2 + (ss.AddWhenTamed||0)) * domMult2;
-          if (!(basePart > 0)) continue;
-          var dFloat = ss.IncreaseStatAsPercentage
-            ? (multiplier/basePart - 1)/ss.IncPerTamedLevel
-            : (multiplier - basePart)/ss.IncPerTamedLevel;
-          if (!(dFloat >= -0.5 && dFloat <= 256)) continue;
-          var d0 = Math.max(0, Math.round(dFloat));
-          for (var dd = Math.max(0,d0-3); dd <= d0+3; dd++) {
-            if (dd === 0) continue;
-            if (teRangeMatch(w, dd)) {
-              var v = calcStatValue(species, idx, w, 0, dd, true, TE_max, imprint||0);
-              var diff = Math.abs((isMelee?v:v) - multiplier);
-              if (w===0 && dd>0 && tw>50) diff += 2.0;
-              opts.push({w:w, d:dd, diff:diff});
-            }
-          }
-        }
-      }
-      if (opts.length === 0) opts.push({w:0, d:0, diff:9999}); // 无匹配兜底（diff 大，避免假解）
-      opts.sort(function(a,b){ return b.w-a.w || a.diff-b.diff; });
-      allOptions.push(opts);
-    }
-    
-    // DP 约束
-    var MAX_S = tw;
-    var dp = {};
-    dp[0] = {wl:{},dl:{},diff:0};
-    for (var si = 0; si < allOptions.length; si++) {
-      var k = dpKeys[si];
-      var opts = allOptions[si];
-      var ndp = {};
-      for (var sStr in dp) {
-        var s = parseInt(sStr);
-        var prev = dp[sStr];
-        for (var oi = 0; oi < opts.length; oi++) {
-          var opt = opts[oi];
-          var ns = s + opt.w;
-          if (ns > MAX_S) continue;
-          var nd = prev.diff + opt.diff;
-          var nk = String(ns);
-          if (!(nk in ndp) || nd < ndp[nk].diff) {
-            var nwl={};for(var kk in prev.wl)nwl[kk]=prev.wl[kk];
-            var ndl={};for(var kk in prev.dl)ndl[kk]=prev.dl[kk];
-            nwl[k]=opt.w; ndl[k]=opt.d;
-            ndp[nk]={wl:nwl,dl:ndl,diff:nd};
-          }
-        }
-      }
-      dp = ndp;
-    }
-    
-    // 收集候选
-    var avgW = tw / 6;
-    var candidates = [];
+  // DP 约束
+  var MAX_S = totalW;
+  var dp = {};
+  dp[0] = {wl:{},dl:{},diff:0};
+  for (var si = 0; si < allOptions.length; si++) {
+    var k = dpKeys[si];
+    var opts = allOptions[si];
+    var ndp = {};
     for (var sStr in dp) {
       var s = parseInt(sStr);
-      var cur = dp[sStr];
-      var cand = {wildLevels:{},domLevels:{},sumW:s,diff:cur.diff};
-      for (var ki = 0; ki < dpKeys.length; ki++) {
-        var k = dpKeys[ki];
-        cand.wildLevels[k]=cur.wl[k]||0;
-        cand.domLevels[k]=cur.dl[k]||0;
+      var prev = dp[sStr];
+      for (var oi = 0; oi < opts.length; oi++) {
+        var opt = opts[oi];
+        var ns = s + opt.w;
+        if (ns > MAX_S) continue;
+        var nd = prev.diff + opt.diff;
+        var nk = String(ns);
+        if (!(nk in ndp) || nd < ndp[nk].diff) {
+          var nwl={};for(var kk in prev.wl)nwl[kk]=prev.wl[kk];
+          var ndl={};for(var kk in prev.dl)ndl[kk]=prev.dl[kk];
+          nwl[k]=opt.w; ndl[k]=opt.d;
+          ndp[nk]={wl:nwl,dl:ndl,diff:nd};
+        }
       }
-      cand.wildLevels.food = Math.max(0, tw - s);
-      cand.domLevels.food = 0;
-      var knownDom = 0;
-      for (var ki = 0; ki < dpKeys.length; ki++) knownDom += (cur.dl[dpKeys[ki]]||0);
-      if (td > knownDom) cand.domLevels.food = td - knownDom;
-      cand.wildLevels.torpidity=0; cand.domLevels.torpidity=0;
-      cand.wildLevels.speed_multiplier=0; cand.domLevels.speed_multiplier=0;
-      var balance=0, domStats=0, totalDomCand=0;
-      var ak = dpKeys.concat(['food']);
-      for (var kj=0;kj<ak.length;kj++){
-        balance += Math.abs((cand.wildLevels[ak[kj]]||0)-avgW);
-        if ((cand.domLevels[ak[kj]]||0)>0) domStats++;
-        totalDomCand += (cand.domLevels[ak[kj]]||0);
-      }
-      // 食物值校验：不匹配则丢弃候选
-      if (statsByName.food != null && fsr[4]) {
-        var fv = calcStatValue(species, 4, cand.wildLevels.food, 0, cand.domLevels.food, dom, TE_max, imprint||0);
-        var ftol = Math.max(1.0, statsByName.food * 0.0006);
-        if (Math.abs(fv - statsByName.food) > ftol) continue;
-      }
-      cand.score = balance*0.3 + totalDomCand*4 + domStats*16 + cand.diff;
-      candidates.push(cand);
     }
-    candidates.sort(function(a,b){return a.score-b.score;});
-    return candidates.slice(0,10);
+    dp = ndp;
   }
   
-  // 主流程：遍历 totalW 候选，取最优有解
-  var topCandidates = [];
-  var best = null, bestTw = 0, bestTd = 0;
-  for (var ci = 0; ci < totalWCands.length; ci++) {
-    var cands = runDP(totalWCands[ci].tw, totalWCands[ci].td);
-    if (cands && cands.length && cands[0].diff < 1000) { // diff<1000 才视为真解（拒绝无匹配假解）
-      if (!best || cands[0].score < best.score) {
-        best = cands[0];
-        bestTw = totalWCands[ci].tw;
-        bestTd = totalWCands[ci].td;
-        topCandidates = cands;
-      }
+  // 收集候选
+  var avgW = totalW / 6;
+  var candidates = [];
+  for (var sStr in dp) {
+    var s = parseInt(sStr);
+    var cur = dp[sStr];
+    var cand = {wildLevels:{},domLevels:{},sumW:s,diff:cur.diff};
+    for (var ki = 0; ki < dpKeys.length; ki++) {
+      var k = dpKeys[ki];
+      cand.wildLevels[k]=cur.wl[k]||0;
+      cand.domLevels[k]=cur.dl[k]||0;
     }
+    cand.wildLevels.food = Math.max(0, totalW - s);
+    cand.domLevels.food = 0;
+    var knownDom = 0;
+    for (var ki = 0; ki < dpKeys.length; ki++) knownDom += (cur.dl[dpKeys[ki]]||0);
+    if (totalDom > knownDom) cand.domLevels.food = totalDom - knownDom;
+    cand.wildLevels.torpidity=0; cand.domLevels.torpidity=0;
+    cand.wildLevels.speed_multiplier=0; cand.domLevels.speed_multiplier=0;
+    var balance=0, domStats=0, totalDomCand=0;
+    var ak = dpKeys.concat(['food']);
+    for (var kj=0;kj<ak.length;kj++){
+      balance += Math.abs((cand.wildLevels[ak[kj]]||0)-avgW);
+      if ((cand.domLevels[ak[kj]]||0)>0) domStats++;
+      totalDomCand += (cand.domLevels[ak[kj]]||0);
+    }
+    // 食物值校验：不匹配则丢弃候选
+    if (statsByName.food != null && fsr[4]) {
+      var fv = calcStatValue(species, 4, cand.wildLevels.food, 0, cand.domLevels.food, dom, TE_max, imprint||0);
+      var ftol = Math.max(1.0, statsByName.food * 0.0006);
+      if (Math.abs(fv - statsByName.food) > ftol) continue;
+    }
+    cand.score = balance*0.3 + totalDomCand*4 + domStats*16 + cand.diff;
+    candidates.push(cand);
   }
-  var result = best || {wildLevels:{},domLevels:{},sumW:0,diff:0};
+  candidates.sort(function(a,b){return a.score-b.score;});
+  var topCandidates = candidates.slice(0,10);
+  var result = topCandidates[0] || {wildLevels:{},domLevels:{},sumW:0,diff:0};
   result.candidates = topCandidates;
-  result._totalFromTorp = baseTotalW;  // torpidity 反推的总等级（含驯服奖励）
-  result._totalDom = baseTotalDom;
-  result._fallback = (baseTotalW > (charLevel||0) - 1); // 是否走了眩晕矛盾枚举
+  result._totalFromTorp = totalW;  // torpidity 反推的总等级（含驯服奖励）
+  result._totalDom = totalDom;
+  console.log('DP: top='+topCandidates.length+' bestScore='+(topCandidates[0]?topCandidates[0].score:'?'));
   return result;
 }
 
@@ -1578,7 +1534,7 @@ function toggleLevelInfo(e, total, base, wild, bonus, xp, isBred) {
 /* ================= 最新生物 TAB ================= */
 var LB = {};
 // 页面版本号：每次部署递增（调试信息里显示，方便确认手机加载的是否新版）
-var LB_VERSION = 'v20260813-94'; // 2026-08-13 runDP dom 循环数学反推优化（Carcha 5.9s→~1s）
+var LB_VERSION = 'v20260812-86'; // 2026-08-12 搜野生超时跳过服务器优化
 // 服务器列表：HA API（apps.yaml sensor.asa_server_themes）优先；无 HA 环境（解耦）时用内置兜底（localStorage 上次同步缓存 → 代码常量）
 var LB_FALLBACK_SERVERS = [
   {abbr:'Isl',name:'孤岛',icon:'🏝️'},{abbr:'Sco',name:'焦土',icon:'🔥'},{abbr:'Cen',name:'核心岛',icon:'💎'},
@@ -2650,13 +2606,10 @@ function lbSolveStats(r){
   var isBred = (r.ancestors && r.ancestors.length > 0);
   var origin = isBred ? 'bred' : 'tamed';
   var tes = isBred ? [1.0, 0.98, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7] : [1.0];
-  // 2026-08-13：低温仓 imprintingQuality 可能为 1（100%留痕），属性（含眩晕）含留痕加成；
-  // 先尝试真实留痕值，否则留痕生物眩晕反推 totalW 虚高导致假矛盾（v91 枚举兜底绕远路）
-  var impQ = (typeof r.imprintingQuality === 'number' && r.imprintingQuality > 0) ? r.imprintingQuality : null;
-  var imprints = (impQ !== null) ? (isBred ? [impQ, 1, 0] : [impQ, 0]) : (isBred ? [1, 0] : [0]);
+  var imprints = isBred ? [1, 0] : [0];
   var statsByName = { health: sv[0], stamina: sv[1], torpidity: sv[2], oxygen: sv[3], food: sv[4],
-    water: sv[5], temperature: sv[6], weight: sv[7], melee_damage_multiplier: sv[8]*100, speed_multiplier: sv[9], fortitude: sv[10], crafting: sv[11] };
-  // 注（2026-08-13 后端新规则）：statValues[8] 统一为加成值（不含基础100%，如 0.56=加成56%）；solveLevels 近战需「加点百分比」= sv[8]*100（56）
+    water: sv[5], temperature: sv[6], weight: sv[7], melee_damage_multiplier: (sv[8]>=1 ? sv[8]*100-100 : sv[8]*100), speed_multiplier: sv[9], fortitude: sv[10], crafting: sv[11] };
+  // 注（2026-08-12 复盘）：solveLevels 近战需「加点百分比」（如 56=加点56%，内部+100变总）；statValues[8] v>=1 为总倍率(×100-100 转加点)，v<1 为加点倍率(×100 即加点百分比)
   for(var ii=0; ii<imprints.length; ii++){
     for(var ti=0; ti<tes.length; ti++){
       var lvls;
@@ -2732,7 +2685,6 @@ function lbTamedDom(r){
   [0,1,3,4,7,8].forEach(function(i){
     var wild = Number(sp[i])||0, mut = Number(sm[i])||0, target = sv[i];
     if(!(target>0)) return;
-    if(i===8) target = target + 1; // 攻击 statValues[8] 为加成值，+1 转总倍率与 calcStatValue 一致（2026-08-13 后端新规则；否则球内攻击 dom 反推失败）
     var best = null;
     for(var ti=0; ti<tes.length && best===null; ti++){
       for(var ii=0; ii<imprints.length && best===null; ii++){
@@ -2799,14 +2751,16 @@ function lbDinoHTML(r, opts){
     }
     var vDisp = fmtStat(v);
     if(i===8){
-      // 近战攻击→百分比（2026-08-13 后端新规则）：statValues[8] 统一为「加成值」（不含基础100%，如 3.739=加成373.9%），前端 +100% 显示（3.739→473.9%）；v=0 且有点数为数据缺陷用公式
+      // 近战攻击→百分比。数据语义（2026-08-12 复盘）：statValues[8] v>=1 为总倍率（含基础100%），v<1 为加点倍率（漏基础100%，需+1），v=0 且有点数为数据缺陷（不按 cryoVersion 区分，ver6/ver7 旧球一致）
       var vPct;
       if(v===0 && p>0){
         // 数据缺陷（有攻击加点但值0，如 Megalania/ZombieDodo）：用公式算真实总倍率
         var cv = lbCalcStat(r, 8);
         vPct = (cv && cv>0) ? Math.round(cv*100) : 100;
+      } else if(v>0 && v<1){
+        vPct = Math.round((v+1)*100); // 加点倍率 + 基础100%
       } else {
-        vPct = Math.round((v+1)*100); // 统一 +100%：基础100% + 加成值
+        vPct = Math.round(v*100);     // 总倍率（已含基础）
       }
       vDisp = vPct + '%';
     }
@@ -5022,22 +4976,11 @@ function lbRenderBreedResult(){
     h += '<div style="font-size:12px;color:#999;font-weight:600;margin:6px 0 4px">外部更高</div>'
       + extAll.map(function(it){ return card(it, extTag(it.r), it.attrs, true); }).join('');
   }
-  // 野生最高组（搜野生结果）：青色标题，每属性取野生点数最高 2 条（跨服合并），非「高于我的」；卡片带等级/属性值/服务器/基因词条；点击弹生物卡片（包装 rec 加入候选）
+  // 野生更高组（搜野生结果）：青色标题，卡片带等级/属性值/服务器/基因词条
   if(wildChamps.length){
-    h += '<div style="font-size:12px;color:#22d3ee;font-weight:600;margin:6px 0 4px">野生最高</div>'
+    h += '<div style="font-size:12px;color:#22d3ee;font-weight:600;margin:6px 0 4px">野生更高</div>'
       + wildChamps.map(function(it){
         var w = it.w;
-        // 包装成 rec 加入候选（点击 lbBreedShowCard → lbDinoHTML 渲染生物卡片）
-        var idx = LB._breedCands.length;
-        LB._breedCands.push({
-          dinoClass: w.dinoClass, server: it.server, level: w.level,
-          gender: w.gender || '', name: '', saddle: '',
-          statValues: w.statValues || [], statPoints: w.statPoints || [], statMutations: w.statMutations || [],
-          colors: w.colors, babyAge: w.babyAge, isBaby: w.isBaby,
-          randomMutationsMale: w.randomMutationsMale || 0, randomMutationsFemale: w.randomMutationsFemale || 0,
-          imprintingQuality: 0, cryoVersion: 7, containerType: 'wild', isEmpty: false,
-          dinoId1: w.dinoId1 || w.id1 || 0, dinoId2: w.dinoId2 || w.id2 || 0
-        });
         var attrHtml = it.attrs.map(function(a){
           var v = Math.round(a.v);
           return '<span style="margin-right:6px;color:#a78bfa">'+(LB_BREED_LABEL[a.k]||a.k)+' <b style="color:#e0e0e0">'+v+'</b></span>';
@@ -5046,7 +4989,7 @@ function lbRenderBreedResult(){
           ? ' <span style="color:#a78bfa">🧬'+w.geneTraits.map(function(g){ return g.trait+(g.stacks>1?'×'+g.stacks:''); }).join('/')+'</span>'
           : '';
         var srv = LB.servName(it.server) || it.server;
-        return '<div class="lb-breed-card" onclick="lbBreedShowCard('+idx+')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:6px 10px;margin-bottom:6px;font-size:12px">'
+        return '<div class="lb-breed-card" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:6px 10px;margin-bottom:6px;font-size:12px">'
           +'<div style="min-width:0"><span style="color:#fbbf24">🐺</span> <b style="color:#fff">野生</b> <span style="background:#22223a;border-radius:2px;padding:0 6px;color:#ccc">Lv.'+w.level+'</span>'
           +'<br>'+attrHtml+'</div>'
           +'<div style="flex-shrink:0;font-size:11px;color:#999;text-align:right">📡 '+srv+gt+'</div>'

@@ -692,29 +692,13 @@ function solveLevels(species, statsByName, TE_min, TE_max, origin, charLevel, im
         }
       }
       if (dom) {
-        // 2026-08-13 性能优化：dom 循环 d 1..255 暴力遍历 → 数学反推 + 局部扫描 ±3
-        var ss = species._stats[idx];
-        var domMult2 = (ss.MultAffinity>=0) ? (1+ss.MultAffinity*TE_max) : 1;
-        var imprintM2 = 1;
-        if ((imprint||0) > 0 && species._imprintMult && species._imprintMult[idx] !== 0)
-          imprintM2 = 1 + species._imprintMult[idx]*(imprint||0);
-        var tamedHP2 = (idx===0) ? (species._tamedHP||1) : 1;
         for (var w = 0; w <= maxW; w++) {
-          if (!(ss.IncPerTamedLevel > 0)) continue;
-          var basePart = (ss.BaseValue*(1+w*ss.IncPerWildLevel)*tamedHP2*imprintM2 + (ss.AddWhenTamed||0)) * domMult2;
-          if (!(basePart > 0)) continue;
-          var dFloat = ss.IncreaseStatAsPercentage
-            ? (multiplier/basePart - 1)/ss.IncPerTamedLevel
-            : (multiplier - basePart)/ss.IncPerTamedLevel;
-          if (!(dFloat >= -0.5 && dFloat <= 256)) continue;
-          var d0 = Math.max(0, Math.round(dFloat));
-          for (var dd = Math.max(0,d0-3); dd <= d0+3; dd++) {
-            if (dd === 0) continue;
-            if (teRangeMatch(w, dd)) {
-              var v = calcStatValue(species, idx, w, 0, dd, true, TE_max, imprint||0);
+          for (var d = 1; d <= 255; d++) {
+            if (teRangeMatch(w, d)) {
+              var v = calcStatValue(species, idx, w, 0, d, true, TE_max, imprint||0);
               var diff = Math.abs((isMelee?v:v) - multiplier);
-              if (w===0 && dd>0 && tw>50) diff += 2.0;
-              opts.push({w:w, d:dd, diff:diff});
+              if (w===0 && d>0 && tw>50) diff += 2.0;
+              opts.push({w:w, d:d, diff:diff});
             }
           }
         }
@@ -1578,7 +1562,7 @@ function toggleLevelInfo(e, total, base, wild, bonus, xp, isBred) {
 /* ================= 最新生物 TAB ================= */
 var LB = {};
 // 页面版本号：每次部署递增（调试信息里显示，方便确认手机加载的是否新版）
-var LB_VERSION = 'v20260813-94'; // 2026-08-13 runDP dom 循环数学反推优化（Carcha 5.9s→~1s）
+var LB_VERSION = 'v20260813-93'; // 2026-08-13 放宽 maxW 野生等级上限（73%→93%）
 // 服务器列表：HA API（apps.yaml sensor.asa_server_themes）优先；无 HA 环境（解耦）时用内置兜底（localStorage 上次同步缓存 → 代码常量）
 var LB_FALLBACK_SERVERS = [
   {abbr:'Isl',name:'孤岛',icon:'🏝️'},{abbr:'Sco',name:'焦土',icon:'🔥'},{abbr:'Cen',name:'核心岛',icon:'💎'},

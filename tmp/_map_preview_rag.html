@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head><meta charset="utf-8"><title>仙境地图锚点预览</title>
+<style>
+body{background:#111;color:#ccc;font-family:sans-serif;padding:16px}
+h2{font-size:15px;color:#fff}
+.mapbox{position:relative;width:640px;height:640px;border:1px solid #444;background:#000;cursor:crosshair}
+.mapbox img{position:absolute;left:0;top:0;width:640px;height:640px}
+.dot{position:absolute;width:13px;height:13px;border-radius:50%;transform:translate(-50%,-50%);border:2px solid #fff;box-shadow:0 0 8px #000}
+.lab{position:absolute;transform:translate(-50%,16px);font-size:11px;color:#fff;text-shadow:0 0 4px #000;white-space:nowrap}
+.tip{font-size:13px;color:#ffd;line-height:1.7;max-width:640px}
+.cursor-mark{position:absolute;width:18px;height:18px;border-radius:50%;transform:translate(-50%,-50%);border:2px solid #0ff;background:rgba(0,255,255,.25);pointer-events:none}
+.cursor-lab{position:absolute;transform:translate(-50%,-26px);font-size:12px;color:#0ff;text-shadow:0 0 4px #000;white-space:nowrap;pointer-events:none}
+</style></head>
+<body>
+<h2>仙境 rag_s.jpg 洞穴入口锚点（待校准）</h2>
+<div class="mapbox" id="mapbox">
+  <img src="file:///b:/项目/Hass%20ASA%20Server%20Monitor/tmp/_rag_s.jpg">
+  <div class="dot" style="left:27.6%;top:19.5%;background:#60a5fa"></div>
+  <div class="lab" style="left:27.6%;top:19.5%">Cave2(27.6,19.5)</div>
+  <div class="dot" style="left:42.4%;top:20.5%;background:#22d3ee"></div>
+  <div class="lab" style="left:42.4%;top:20.5%">Megalo(42.4,20.5)</div>
+  <div class="dot" style="left:36.9%;top:34.5%;background:#4ade80"></div>
+  <div class="lab" style="left:36.9%;top:34.5%">Penguins(36.9,34.5)</div>
+  <div class="dot" style="left:2.5%;top:47.1%;background:#f87171"></div>
+  <div class="lab" style="left:2.5%;top:47.1%">Devourer(2.5,47.1)</div>
+  <div class="dot" style="left:78.4%;top:48.1%;background:#facc15"></div>
+  <div class="lab" style="left:78.4%;top:48.1%">Cave5(78.4,48.1)</div>
+  <div class="dot" style="left:40.7%;top:63.9%;background:#fb923c"></div>
+  <div class="lab" style="left:40.7%;top:63.9%">Wyvern(40.7,63.9)</div>
+  <div class="cursor-mark" id="cm" style="display:none"></div>
+  <div class="cursor-lab" id="cl" style="display:none"></div>
+</div>
+<p class="tip" id="out">🟦 请核对 6 个洞穴标注：准 → 告诉我"都是准的"；偏 → 点击实际位置（每点一次记录百分比）。<br>
+坐标：Cave2(19.5,27.6)、Megalo(20.5,42.4)、Penguins(34.5,36.9)、Devourer(47.1,2.5)、Cave5(48.1,78.4)、Wyvern(63.9,40.7)。</p>
+<script>
+var box=document.getElementById('mapbox');
+var cm=document.getElementById('cm');var cl=document.getElementById('cl');var out=document.getElementById('out');
+var log=[];
+box.addEventListener('click',function(e){
+  var r=box.getBoundingClientRect();
+  var x=(e.clientX-r.left)/r.width*100, y=(e.clientY-r.top)/r.height*100;
+  cm.style.display='block';cm.style.left=x+'%';cm.style.top=y+'%';
+  cl.style.display='block';cl.style.left=x+'%';cl.style.top=y+'%';
+  cl.textContent='点击: '+x.toFixed(1)+'%, '+y.toFixed(1)+'%';
+  log.push(x.toFixed(1)+'% , '+y.toFixed(1)+'%');
+  out.innerHTML='已点击 '+log.length+' 次：<br>'+log.map(function(s,i){return (i+1)+'. '+s;}).join('<br>')+'<br>请把上面数字发给我。';
+});
+</script>
+</body></html>
