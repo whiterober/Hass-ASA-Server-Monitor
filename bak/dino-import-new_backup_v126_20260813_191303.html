@@ -1582,7 +1582,7 @@ function toggleLevelInfo(e, total, base, wild, bonus, xp, isBred) {
 /* ================= 最新生物 TAB ================= */
 var LB = {};
 // 页面版本号：每次部署递增（调试信息里显示，方便确认手机加载的是否新版）
-var LB_VERSION = 'v20260813-132'; // 2026-08-13 toast层级修复
+var LB_VERSION = 'v20260813-126'; // 2026-08-13 野生卡片属性简化+加粗
 // 服务器列表：HA API（apps.yaml sensor.asa_server_themes）优先；无 HA 环境（解耦）时用内置兜底（localStorage 上次同步缓存 → 代码常量）
 var LB_FALLBACK_SERVERS = [
   {abbr:'Isl',name:'孤岛',icon:'🏝️'},{abbr:'Sco',name:'焦土',icon:'🔥'},{abbr:'Cen',name:'核心岛',icon:'💎'},
@@ -2797,8 +2797,8 @@ function lbDinoHTML(r, opts){
     var domVal = 0;
     // 仅正常生物计算属性点括号（非正常生物跳过逆推，省性能且不显示属性点）
     if(lbNormalCreature){
-      if(isWild){ // v127：野生不显示属性点括号（最高属性点仍加粗标识）
-        disp = '';
+      if(isWild){ // v126：野生只显示属性点（无变异/加点）
+        disp = p>0 ? '('+p+')' : '';
       } else {
         if(r.cryoVersion===6 && !p && !m && sol !== false){
           if(sol === null) sol = lbSolveStats(r) || false;
@@ -2841,10 +2841,8 @@ function lbDinoHTML(r, opts){
       }
       vDisp = vPct + '%';
     }
-    var wildBold = isWild && p>0 && p===maxP; // v131：野生最高属性点橙色+加粗（普通点紫色）
-    // 野生：属性点保留但去括号（值 + 空格 + 点数，同行）；普通点紫色 #a78bfa，最高点橙色 #f59e0b + 加粗
-    var wildP = isWild && p>0 ? ' <span style="color:'+(wildBold?'#f59e0b':'#a78bfa')+';font-weight:'+(wildBold?'bold':'normal')+'">'+p+'</span>' : '';
-    stats+='<span style="margin-right:10px;color:#999;display:inline-block;vertical-align:top">'+STAT_ZH[i]+' <b style="color:#e0e0e0">'+vDisp+'</b>'+wildP
+    var wildBold = isWild && p>0 && p===maxP; // v126：野生属性点最高的属性加粗
+    stats+='<span style="margin-right:10px;color:#999;display:inline-block;vertical-align:top'+(wildBold?';font-weight:bold':'')+'">'+STAT_ZH[i]+' <b style="color:'+(wildBold?'#fff':'#e0e0e0')+'">'+vDisp+'</b>'
       +(disp?'<br><span style="color:#a78bfa" title="'+(guessed?'推测值(遗传|变异|加点)':'')+'">'+disp+'</span>':'')
       +'</span>';
   });
@@ -3060,7 +3058,7 @@ var LB_TOAST=null, LB_TOAST_TM=null;
 function lbToast(msg){
   if(!LB_TOAST){
     LB_TOAST=document.createElement('div');
-    LB_TOAST.style.cssText='position:fixed;left:12px;bottom:12px;z-index:100000;background:#7c3aed;color:#fff;padding:6px 14px;border-radius:8px;font-size:13px;box-shadow:0 2px 12px rgba(0,0,0,.4);display:none;pointer-events:none';
+    LB_TOAST.style.cssText='position:fixed;left:12px;bottom:12px;z-index:99998;background:#7c3aed;color:#fff;padding:6px 14px;border-radius:8px;font-size:13px;box-shadow:0 2px 12px rgba(0,0,0,.4);display:none;pointer-events:none';
     document.body.appendChild(LB_TOAST);
   }
   LB_TOAST.textContent = msg;

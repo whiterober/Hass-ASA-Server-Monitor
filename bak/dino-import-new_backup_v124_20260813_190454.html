@@ -1582,7 +1582,7 @@ function toggleLevelInfo(e, total, base, wild, bonus, xp, isBred) {
 /* ================= 最新生物 TAB ================= */
 var LB = {};
 // 页面版本号：每次部署递增（调试信息里显示，方便确认手机加载的是否新版）
-var LB_VERSION = 'v20260813-132'; // 2026-08-13 toast层级修复
+var LB_VERSION = 'v20260813-124'; // 2026-08-13 野生卡片服务器mdi图标
 // 服务器列表：HA API（apps.yaml sensor.asa_server_themes）优先；无 HA 环境（解耦）时用内置兜底（localStorage 上次同步缓存 → 代码常量）
 var LB_FALLBACK_SERVERS = [
   {abbr:'Isl',name:'孤岛',icon:'🏝️'},{abbr:'Sco',name:'焦土',icon:'🔥'},{abbr:'Cen',name:'核心岛',icon:'💎'},
@@ -2780,12 +2780,6 @@ function lbDinoHTML(r, opts){
   var domR = null; // tamed/v7/stand 手动加点反推（懒加载）
   // 非正常生物（Units 载具/特殊生物：ASB 查不到或无属性点）：属性值行仍显示，仅隐藏属性点括号（disp）且跳过逆推计算
   var lbNormalCreature = lbIsNormalCreature(r);
-  // v126：野生卡片简化——不显示变异/加点，属性点最高的属性加粗
-  var isWild = (r.containerType==='wild');
-  var maxP = 0;
-  if(isWild && r.statPoints){
-    for(var pi=0; pi<r.statPoints.length; pi++){ var pv = Number(r.statPoints[pi])||0; if(pv>maxP) maxP = pv; }
-  }
   [0,1,3,4,7,8].forEach(function(i){
     var v = (r.statValues && r.statValues[i] !== undefined) ? r.statValues[i] : lbCalcStat(r, i);
     if(v===undefined || v===null) return;
@@ -2797,34 +2791,30 @@ function lbDinoHTML(r, opts){
     var domVal = 0;
     // 仅正常生物计算属性点括号（非正常生物跳过逆推，省性能且不显示属性点）
     if(lbNormalCreature){
-      if(isWild){ // v127：野生不显示属性点括号（最高属性点仍加粗标识）
-        disp = '';
-      } else {
-        if(r.cryoVersion===6 && !p && !m && sol !== false){
-          if(sol === null) sol = lbSolveStats(r) || false;
-          if(sol){
-            p = (sol.statPoints && sol.statPoints[i]) || 0;
-            gw = (sol.wildLevels && sol.wildLevels[i]) || 0;
-            guessed = true;
-          }
+      if(r.cryoVersion===6 && !p && !m && sol !== false){
+        if(sol === null) sol = lbSolveStats(r) || false;
+        if(sol){
+          p = (sol.statPoints && sol.statPoints[i]) || 0;
+          gw = (sol.wildLevels && sol.wildLevels[i]) || 0;
+          guessed = true;
         }
-        if(guessed){ // v6 推测：遗传/加点都是猜测（绿色）；变异橙
-          disp = '(<span style="color:#22c55e">'+gw+'</span><span style="opacity:.5">|</span><span style="color:#f59e0b">0</span><span style="opacity:.5">|</span><span style="color:#22c55e">'+p+'</span>)';
-        } else if(r.cryoVersion===6 && sol === false) disp = ''; // v6 推测失败：不显示
-        else {
-          // tamed/v7/stand 真实数据：反推手动加点
-          if(r.cryoVersion!==6 && p>0){
-            if(domR === null) domR = lbTamedDom(r) || false;
-            if(domR && domR.dom && domR.dom[i] > 0) domVal = domR.dom[i];
-          }
-          if(domVal > 0){
-            // fallback（无真实留痕字段）猜测加点绿色；真实留痕正常显示
-            disp = (typeof r.imprintingQuality==='number')
-              ? ('('+p+'<span style="opacity:.5">|</span><span style="color:#f59e0b">'+m+'</span><span style="opacity:.5">|</span>'+domVal+')')
-              : ('('+p+'<span style="opacity:.5">|</span><span style="color:#f59e0b">'+m+'</span><span style="opacity:.5">|</span><span style="color:#22c55e">'+domVal+'</span>)');
-          } else {
-            disp = '('+p+'<span style="opacity:.5">|</span><span style="color:#f59e0b">'+m+'</span><span style="opacity:.5">|</span>0)';
-          }
+      }
+      if(guessed){ // v6 推测：遗传/加点都是猜测（绿色）；变异橙
+        disp = '(<span style="color:#22c55e">'+gw+'</span><span style="opacity:.5">|</span><span style="color:#f59e0b">0</span><span style="opacity:.5">|</span><span style="color:#22c55e">'+p+'</span>)';
+      } else if(r.cryoVersion===6 && sol === false) disp = ''; // v6 推测失败：不显示
+      else {
+        // tamed/v7/stand 真实数据：反推手动加点
+        if(r.cryoVersion!==6 && p>0){
+          if(domR === null) domR = lbTamedDom(r) || false;
+          if(domR && domR.dom && domR.dom[i] > 0) domVal = domR.dom[i];
+        }
+        if(domVal > 0){
+          // fallback（无真实留痕字段）猜测加点绿色；真实留痕正常显示
+          disp = (typeof r.imprintingQuality==='number')
+            ? ('('+p+'<span style="opacity:.5">|</span><span style="color:#f59e0b">'+m+'</span><span style="opacity:.5">|</span>'+domVal+')')
+            : ('('+p+'<span style="opacity:.5">|</span><span style="color:#f59e0b">'+m+'</span><span style="opacity:.5">|</span><span style="color:#22c55e">'+domVal+'</span>)');
+        } else {
+          disp = '('+p+'<span style="opacity:.5">|</span><span style="color:#f59e0b">'+m+'</span><span style="opacity:.5">|</span>0)';
         }
       }
     }
@@ -2841,10 +2831,7 @@ function lbDinoHTML(r, opts){
       }
       vDisp = vPct + '%';
     }
-    var wildBold = isWild && p>0 && p===maxP; // v131：野生最高属性点橙色+加粗（普通点紫色）
-    // 野生：属性点保留但去括号（值 + 空格 + 点数，同行）；普通点紫色 #a78bfa，最高点橙色 #f59e0b + 加粗
-    var wildP = isWild && p>0 ? ' <span style="color:'+(wildBold?'#f59e0b':'#a78bfa')+';font-weight:'+(wildBold?'bold':'normal')+'">'+p+'</span>' : '';
-    stats+='<span style="margin-right:10px;color:#999;display:inline-block;vertical-align:top">'+STAT_ZH[i]+' <b style="color:#e0e0e0">'+vDisp+'</b>'+wildP
+    stats+='<span style="margin-right:10px;color:#999;display:inline-block;vertical-align:top">'+STAT_ZH[i]+' <b style="color:#e0e0e0">'+vDisp+'</b>'
       +(disp?'<br><span style="color:#a78bfa" title="'+(guessed?'推测值(遗传|变异|加点)':'')+'">'+disp+'</span>':'')
       +'</span>';
   });
@@ -3060,7 +3047,7 @@ var LB_TOAST=null, LB_TOAST_TM=null;
 function lbToast(msg){
   if(!LB_TOAST){
     LB_TOAST=document.createElement('div');
-    LB_TOAST.style.cssText='position:fixed;left:12px;bottom:12px;z-index:100000;background:#7c3aed;color:#fff;padding:6px 14px;border-radius:8px;font-size:13px;box-shadow:0 2px 12px rgba(0,0,0,.4);display:none;pointer-events:none';
+    LB_TOAST.style.cssText='position:fixed;left:12px;bottom:12px;z-index:99998;background:#7c3aed;color:#fff;padding:6px 14px;border-radius:8px;font-size:13px;box-shadow:0 2px 12px rgba(0,0,0,.4);display:none;pointer-events:none';
     document.body.appendChild(LB_TOAST);
   }
   LB_TOAST.textContent = msg;
@@ -5112,9 +5099,9 @@ function lbRenderBreedResult(){
           : '';
         var srv = LB.servName(it.server) || it.server;
         return '<div class="lb-breed-card" onclick="lbOpenWildMap('+idx+')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:6px 10px;margin-bottom:6px;font-size:12px">'
-          +'<div style="min-width:0"><span style="color:'+(w.gender==='FEMALE'?'#f472b6':'#60a5fa')+'">'+(w.gender==='FEMALE'?'♀':'♂')+'</span> <b style="color:#fff">野生</b> <span style="background:#22223a;border-radius:2px;padding:0 6px;color:#ccc">Lv.'+w.level+'</span>'
+          +'<div style="min-width:0"><span style="color:#fbbf24">🐺</span> <b style="color:#fff">野生</b> <span style="background:#22223a;border-radius:2px;padding:0 6px;color:#ccc">Lv.'+w.level+'</span>'
           +'<br>'+attrHtml+'</div>'
-          +'<div style="flex-shrink:0;font-size:11px;color:#999;text-align:right">'+lbMdiSvg(LB_SERVER_MDI[it.server]||'mdi-map', 12)+' '+srv+(it.savedAt?' 🕐 '+lbFmtTs(it.savedAt):'')+(gt?'<br>'+gt:'')+'</div>'
+          +'<div style="flex-shrink:0;font-size:11px;color:#999;text-align:right">'+lbMdiSvg(LB_SERVER_MDI[it.server]||'mdi-map', 12)+' '+srv+gt+(it.savedAt?'<br>🕐 '+lbFmtTs(it.savedAt):'')+'</div>'
           +'</div>';
       }).join('');
   }

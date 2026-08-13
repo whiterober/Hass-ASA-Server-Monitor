@@ -1582,7 +1582,7 @@ function toggleLevelInfo(e, total, base, wild, bonus, xp, isBred) {
 /* ================= 最新生物 TAB ================= */
 var LB = {};
 // 页面版本号：每次部署递增（调试信息里显示，方便确认手机加载的是否新版）
-var LB_VERSION = 'v20260813-132'; // 2026-08-13 toast层级修复
+var LB_VERSION = 'v20260813-114'; // 2026-08-13 遮罩统一 0.9
 // 服务器列表：HA API（apps.yaml sensor.asa_server_themes）优先；无 HA 环境（解耦）时用内置兜底（localStorage 上次同步缓存 → 代码常量）
 var LB_FALLBACK_SERVERS = [
   {abbr:'Isl',name:'孤岛',icon:'🏝️'},{abbr:'Sco',name:'焦土',icon:'🔥'},{abbr:'Cen',name:'核心岛',icon:'💎'},
@@ -1919,23 +1919,6 @@ function lbRenderServers(){
 function lbToggleServer(el){
   if(!el) return;
   el.classList.toggle('active');
-}
-// 搜野生浮窗服务器多选渲染（v120）：排除 Bob，默认不选（与刷新数据的服务器网格同款样式）
-function lbRenderServersWild(){
-  var el=document.getElementById('lbServersWild'); if(!el) return;
-  var html='';
-  LB.SERVERS.forEach(function(s){
-    if(s.abbr==='Bob') return; // 去掉俱乐部
-    var mdi=LB_SERVER_MDI[s.abbr]||'';
-    html+='<span class="server-tab" data-abbr="'+s.abbr+'" onclick="lbToggleServer(this)" title="'+s.name+'">'+(mdi?'<i class="mdi '+mdi+'"></i>':(s.icon||''))+'</span>';
-  });
-  el.innerHTML=html;
-}
-// 读取搜野生选中服务器
-function lbSelectedServersWild(){
-  var arr=[];
-  document.querySelectorAll('#lbServersWild .server-tab.active').forEach(function(el){ arr.push(el.getAttribute('data-abbr')); });
-  return arr;
 }
 function lbSelectedServers(){
   var arr=[];
@@ -2780,12 +2763,6 @@ function lbDinoHTML(r, opts){
   var domR = null; // tamed/v7/stand 手动加点反推（懒加载）
   // 非正常生物（Units 载具/特殊生物：ASB 查不到或无属性点）：属性值行仍显示，仅隐藏属性点括号（disp）且跳过逆推计算
   var lbNormalCreature = lbIsNormalCreature(r);
-  // v126：野生卡片简化——不显示变异/加点，属性点最高的属性加粗
-  var isWild = (r.containerType==='wild');
-  var maxP = 0;
-  if(isWild && r.statPoints){
-    for(var pi=0; pi<r.statPoints.length; pi++){ var pv = Number(r.statPoints[pi])||0; if(pv>maxP) maxP = pv; }
-  }
   [0,1,3,4,7,8].forEach(function(i){
     var v = (r.statValues && r.statValues[i] !== undefined) ? r.statValues[i] : lbCalcStat(r, i);
     if(v===undefined || v===null) return;
@@ -2797,34 +2774,30 @@ function lbDinoHTML(r, opts){
     var domVal = 0;
     // 仅正常生物计算属性点括号（非正常生物跳过逆推，省性能且不显示属性点）
     if(lbNormalCreature){
-      if(isWild){ // v127：野生不显示属性点括号（最高属性点仍加粗标识）
-        disp = '';
-      } else {
-        if(r.cryoVersion===6 && !p && !m && sol !== false){
-          if(sol === null) sol = lbSolveStats(r) || false;
-          if(sol){
-            p = (sol.statPoints && sol.statPoints[i]) || 0;
-            gw = (sol.wildLevels && sol.wildLevels[i]) || 0;
-            guessed = true;
-          }
+      if(r.cryoVersion===6 && !p && !m && sol !== false){
+        if(sol === null) sol = lbSolveStats(r) || false;
+        if(sol){
+          p = (sol.statPoints && sol.statPoints[i]) || 0;
+          gw = (sol.wildLevels && sol.wildLevels[i]) || 0;
+          guessed = true;
         }
-        if(guessed){ // v6 推测：遗传/加点都是猜测（绿色）；变异橙
-          disp = '(<span style="color:#22c55e">'+gw+'</span><span style="opacity:.5">|</span><span style="color:#f59e0b">0</span><span style="opacity:.5">|</span><span style="color:#22c55e">'+p+'</span>)';
-        } else if(r.cryoVersion===6 && sol === false) disp = ''; // v6 推测失败：不显示
-        else {
-          // tamed/v7/stand 真实数据：反推手动加点
-          if(r.cryoVersion!==6 && p>0){
-            if(domR === null) domR = lbTamedDom(r) || false;
-            if(domR && domR.dom && domR.dom[i] > 0) domVal = domR.dom[i];
-          }
-          if(domVal > 0){
-            // fallback（无真实留痕字段）猜测加点绿色；真实留痕正常显示
-            disp = (typeof r.imprintingQuality==='number')
-              ? ('('+p+'<span style="opacity:.5">|</span><span style="color:#f59e0b">'+m+'</span><span style="opacity:.5">|</span>'+domVal+')')
-              : ('('+p+'<span style="opacity:.5">|</span><span style="color:#f59e0b">'+m+'</span><span style="opacity:.5">|</span><span style="color:#22c55e">'+domVal+'</span>)');
-          } else {
-            disp = '('+p+'<span style="opacity:.5">|</span><span style="color:#f59e0b">'+m+'</span><span style="opacity:.5">|</span>0)';
-          }
+      }
+      if(guessed){ // v6 推测：遗传/加点都是猜测（绿色）；变异橙
+        disp = '(<span style="color:#22c55e">'+gw+'</span><span style="opacity:.5">|</span><span style="color:#f59e0b">0</span><span style="opacity:.5">|</span><span style="color:#22c55e">'+p+'</span>)';
+      } else if(r.cryoVersion===6 && sol === false) disp = ''; // v6 推测失败：不显示
+      else {
+        // tamed/v7/stand 真实数据：反推手动加点
+        if(r.cryoVersion!==6 && p>0){
+          if(domR === null) domR = lbTamedDom(r) || false;
+          if(domR && domR.dom && domR.dom[i] > 0) domVal = domR.dom[i];
+        }
+        if(domVal > 0){
+          // fallback（无真实留痕字段）猜测加点绿色；真实留痕正常显示
+          disp = (typeof r.imprintingQuality==='number')
+            ? ('('+p+'<span style="opacity:.5">|</span><span style="color:#f59e0b">'+m+'</span><span style="opacity:.5">|</span>'+domVal+')')
+            : ('('+p+'<span style="opacity:.5">|</span><span style="color:#f59e0b">'+m+'</span><span style="opacity:.5">|</span><span style="color:#22c55e">'+domVal+'</span>)');
+        } else {
+          disp = '('+p+'<span style="opacity:.5">|</span><span style="color:#f59e0b">'+m+'</span><span style="opacity:.5">|</span>0)';
         }
       }
     }
@@ -2841,10 +2814,7 @@ function lbDinoHTML(r, opts){
       }
       vDisp = vPct + '%';
     }
-    var wildBold = isWild && p>0 && p===maxP; // v131：野生最高属性点橙色+加粗（普通点紫色）
-    // 野生：属性点保留但去括号（值 + 空格 + 点数，同行）；普通点紫色 #a78bfa，最高点橙色 #f59e0b + 加粗
-    var wildP = isWild && p>0 ? ' <span style="color:'+(wildBold?'#f59e0b':'#a78bfa')+';font-weight:'+(wildBold?'bold':'normal')+'">'+p+'</span>' : '';
-    stats+='<span style="margin-right:10px;color:#999;display:inline-block;vertical-align:top">'+STAT_ZH[i]+' <b style="color:#e0e0e0">'+vDisp+'</b>'+wildP
+    stats+='<span style="margin-right:10px;color:#999;display:inline-block;vertical-align:top">'+STAT_ZH[i]+' <b style="color:#e0e0e0">'+vDisp+'</b>'
       +(disp?'<br><span style="color:#a78bfa" title="'+(guessed?'推测值(遗传|变异|加点)':'')+'">'+disp+'</span>':'')
       +'</span>';
   });
@@ -3060,7 +3030,7 @@ var LB_TOAST=null, LB_TOAST_TM=null;
 function lbToast(msg){
   if(!LB_TOAST){
     LB_TOAST=document.createElement('div');
-    LB_TOAST.style.cssText='position:fixed;left:12px;bottom:12px;z-index:100000;background:#7c3aed;color:#fff;padding:6px 14px;border-radius:8px;font-size:13px;box-shadow:0 2px 12px rgba(0,0,0,.4);display:none;pointer-events:none';
+    LB_TOAST.style.cssText='position:fixed;left:12px;bottom:12px;z-index:99998;background:#7c3aed;color:#fff;padding:6px 14px;border-radius:8px;font-size:13px;box-shadow:0 2px 12px rgba(0,0,0,.4);display:none;pointer-events:none';
     document.body.appendChild(LB_TOAST);
   }
   LB_TOAST.textContent = msg;
@@ -4594,12 +4564,10 @@ function lbOpenWildConfirm(){
   box.style.cssText = 'background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;min-width:320px;max-width:90vw;box-shadow:0 4px 24px rgba(0,0,0,0.18);max-height:90vh;overflow-y:auto';
   var title = document.createElement('div');
   title.style.cssText = 'margin-bottom:12px;font-size:0.95em;color:var(--text);font-weight:bold;display:flex;align-items:center;justify-content:space-between';
-  title.innerHTML = '<span>🐺 刷新野生</span><span style="cursor:pointer;color:#888;font-size:14px" onclick="lbCloseWildConfirm()">✕</span>';
+  title.innerHTML = '<span>🐺 搜野生</span><span style="cursor:pointer;color:#888;font-size:14px" onclick="lbCloseWildConfirm()">✕</span>';
   box.appendChild(title);
   var body = document.createElement('div');
-  body.innerHTML = '<div style="font-size:0.85em;color:#ccc;line-height:1.7;margin-bottom:14px">将实时获取野生「<b style="color:#facc15">'+(lbSpName(LB.curClass).zh||lbSpName(LB.curClass).eng)+'</b>」的全图野生生物信息</div>'
-    + '<div style="font-size:0.75em;color:#999;margin-bottom:6px">选择要搜索的服务器：</div>'
-    + '<div id="lbServersWild" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>'
+  body.innerHTML = '<div style="font-size:0.85em;color:#ccc;line-height:1.7;margin-bottom:14px">将实时获取「<b style="color:#facc15">'+(lbSpName(LB.curClass).zh||lbSpName(LB.curClass).eng)+'</b>」的全图野生龙信息</div>'
     + '<div style="display:flex;gap:8px;justify-content:flex-end">'
     + '<button class="lb-modal-btn" onclick="lbWildSearch(this)" style="padding:8px 14px;border:none;border-radius:6px;background:var(--accent);color:#fff;cursor:pointer;font-size:0.85em;font-weight:bold">确认搜索</button>'
     + '</div>';
@@ -4613,8 +4581,6 @@ function lbOpenWildConfirm(){
   overlay.appendChild(box);
   overlay.onclick = function(e){ if (e.target === overlay) { lbCloseWildConfirm(); } };
   document.body.appendChild(overlay);
-  // 渲染服务器多选（默认全选，排除 Bob；v119）
-  lbRenderServersWild();
 }
 // 关闭搜野生浮窗：搜索中拦截关闭 + 轻提示；完成后恢复可关闭
 function lbCloseWildConfirm(){
@@ -4626,8 +4592,7 @@ function lbCloseWildConfirm(){
 async function lbWildSearch(btn){
   var species = LB._wildConfirmSpecies || '';
   if(!species){ return; }
-  var sel = lbSelectedServersWild();
-  if(!sel.length){ lbToast('请至少选择一个服务器'); return; } // v119：多选服务器，未选提示
+  var sel = LB.SERVERS.map(function(s){ return s.abbr; });
   LB._wildSearching = true;
   try{
     // 定位浮窗内进度区（lbWildProgBar 的父容器的父容器 = 进度外层 div）
@@ -4964,24 +4929,23 @@ function lbRenderBreedResult(){
   if(wc){
     var wildAll = [];
     Object.keys(wc).forEach(function(abbr){
-      if(abbr==='Bob') return; // 不显示俱乐部（搜野生结果，防旧缓存残留）
       var ent = wc[abbr];
       if(!ent || !Array.isArray(ent.dinos)) return;
-      ent.dinos.forEach(function(w){ if(w.dinoClass === cls) wildAll.push({w:w, server:abbr, savedAt: ent.savedAt}); });
+      ent.dinos.forEach(function(w){ if(w.dinoClass === cls) wildAll.push({w:w, server:abbr}); });
     });
     if(wildAll.length){
       LB.breedSel.forEach(function(k){
         var bi = LB_BREED_IDX[k];
         var cands = wildAll.map(function(x){
           var v = (x.w.statPoints && x.w.statPoints[bi] !== undefined) ? (Number(x.w.statPoints[bi]) || 0) : 0;
-          return {w:x.w, server:x.server, savedAt:x.savedAt, v:v};
+          return {w:x.w, server:x.server, v:v};
         }).sort(function(a,b){ return b.v-a.v; }).slice(0,2);
         cands.forEach(function(x){
           var ex = null;
           for(var i=0;i<wildChamps.length;i++){ if(wildChamps[i].w.id && wildChamps[i].w.id===x.w.id){ ex=wildChamps[i]; break; } }
           var item = {k:k, v:x.v};
           if(ex){ ex.attrs.push(item); }
-          else{ wildChamps.push({w:x.w, server:x.server, savedAt:x.savedAt, attrs:[item]}); }
+          else{ wildChamps.push({w:x.w, server:x.server, attrs:[item]}); }
         });
       });
     }
@@ -5090,7 +5054,7 @@ function lbRenderBreedResult(){
     h += '<div style="font-size:12px;color:#22d3ee;font-weight:600;margin:6px 0 4px">野生最高</div>'
       + wildChamps.map(function(it){
         var w = it.w;
-        // 包装成 rec 加入候选（点击 lbOpenWildMap → 地图点位 + lbDinoHTML 生物卡片；x/y/z 为野生坐标）
+        // 包装成 rec 加入候选（点击 lbBreedShowCard → lbDinoHTML 渲染生物卡片）
         var idx = LB._breedCands.length;
         LB._breedCands.push({
           dinoClass: w.dinoClass, server: it.server, level: w.level,
@@ -5099,9 +5063,7 @@ function lbRenderBreedResult(){
           colors: w.colors, babyAge: w.babyAge, isBaby: w.isBaby,
           randomMutationsMale: w.randomMutationsMale || 0, randomMutationsFemale: w.randomMutationsFemale || 0,
           imprintingQuality: 0, cryoVersion: 7, containerType: 'wild', isEmpty: false,
-          dinoId1: w.dinoId1 || w.id1 || 0, dinoId2: w.dinoId2 || w.id2 || 0,
-          x: w.x, y: w.y, z: w.z,
-          geneTraits: w.geneTraits || [] // v119：补基因词条（地图浮窗 lbDinoHTML 渲染用）
+          dinoId1: w.dinoId1 || w.id1 || 0, dinoId2: w.dinoId2 || w.id2 || 0
         });
         var attrHtml = it.attrs.map(function(a){
           var v = Math.round(a.v);
@@ -5111,10 +5073,10 @@ function lbRenderBreedResult(){
           ? ' <span style="color:#a78bfa">🧬'+w.geneTraits.map(function(g){ return (function(){var tn=String(g.trait||'').replace(/\[\d+\]$/,'');var z=(LB_GENE_ZH&&LB_GENE_ZH[tn])||tn;return z+(g.stacks>1?' Lv.'+g.stacks:'');})(); }).join('/')+'</span>'
           : '';
         var srv = LB.servName(it.server) || it.server;
-        return '<div class="lb-breed-card" onclick="lbOpenWildMap('+idx+')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:6px 10px;margin-bottom:6px;font-size:12px">'
-          +'<div style="min-width:0"><span style="color:'+(w.gender==='FEMALE'?'#f472b6':'#60a5fa')+'">'+(w.gender==='FEMALE'?'♀':'♂')+'</span> <b style="color:#fff">野生</b> <span style="background:#22223a;border-radius:2px;padding:0 6px;color:#ccc">Lv.'+w.level+'</span>'
+        return '<div class="lb-breed-card" onclick="lbBreedShowCard('+idx+')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:6px 10px;margin-bottom:6px;font-size:12px">'
+          +'<div style="min-width:0"><span style="color:#fbbf24">🐺</span> <b style="color:#fff">野生</b> <span style="background:#22223a;border-radius:2px;padding:0 6px;color:#ccc">Lv.'+w.level+'</span>'
           +'<br>'+attrHtml+'</div>'
-          +'<div style="flex-shrink:0;font-size:11px;color:#999;text-align:right">'+lbMdiSvg(LB_SERVER_MDI[it.server]||'mdi-map', 12)+' '+srv+(it.savedAt?' 🕐 '+lbFmtTs(it.savedAt):'')+(gt?'<br>'+gt:'')+'</div>'
+          +'<div style="flex-shrink:0;font-size:11px;color:#999;text-align:right">📡 '+srv+gt+'</div>'
           +'</div>';
       }).join('');
   }
@@ -5135,58 +5097,6 @@ function lbRenderBreedResult(){
   c.style.display = 'block';
   lbBreedMask(true);
   lbBreedAlignResult();
-  // v122：筛选自动读取服务器上的全图野生文件——只要服务器上有该生物全图数据就进筛选库，无需先点「确认搜索」；确认搜索仅强制刷新
-  if(LB.curClass && LB.breedResult && !LB._wildFetching){
-    var miss = lbMissingWildServers(LB.curClass);
-    if(miss.length){
-      LB._wildFetching = true;
-      var cls2 = LB.curClass;
-      lbFetchWildFiles(cls2, miss).then(function(updated){
-        LB._wildFetching = false;
-        if(updated && LB.curClass===cls2 && LB.breedResult) lbRenderBreedResult(); // 有全图数据后重渲染
-      });
-    }
-  }
-}
-// ===== v122 野生全图数据自动读取 =====
-// 检查该物种哪些服务器缺野生缓存（筛选时自动补拉服务器上的 _wild 全图文件，仅读不触发 RCON）
-function lbMissingWildServers(cls){
-  var missing = [];
-  LB.SERVERS.forEach(function(s){
-    if(s.abbr==='Bob') return;
-    var ent = (LB._wildCache && LB._wildCache[cls] && LB._wildCache[cls][s.abbr]);
-    if(!ent || !Array.isArray(ent.dinos)) missing.push(s.abbr);
-  });
-  return missing;
-}
-// 拉取缺失服务器的 _wild 全图文件（存在且有数据才进库）
-async function lbFetchWildFiles(cls, servers){
-  var wild = LB._wildCache = LB._wildCache || {};
-  if(!wild[cls]) wild[cls] = {};
-  var species = cls.replace(/_C$/,'');
-  var updated = false;
-  for(var i=0;i<servers.length;i++){
-    var abbr = servers[i];
-    try{
-      var j = await authFetch(DINO_JSON + abbr + '_wild_' + encodeURIComponent(species) + '.json?cb=' + Date.now(), {}).then(function(r){ return r.json(); });
-      if(j && j.savedAt && Array.isArray(j.dinos) && j.dinos.length){
-        wild[cls][abbr] = { savedAt: j.savedAt, dinos: j.dinos };
-        updated = true;
-      }
-    }catch(e){}
-  }
-  return updated;
-}
-// v123：野生 json 时间戳格式化（毫秒 → HH:MM；非当天 → MM-DD HH:MM；无 → -）
-function lbFmtTs(ts){
-  if(!ts) return '-';
-  var d = new Date(Number(ts));
-  if(isNaN(d.getTime())) return '-';
-  var now = new Date();
-  var pad = function(n){ return (n<10?'0':'')+n; };
-  var hm = pad(d.getHours())+':'+pad(d.getMinutes());
-  var sameDay = d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth() && d.getDate()===now.getDate();
-  return sameDay ? hm : pad(d.getMonth()+1)+'-'+pad(d.getDate())+' '+hm;
 }
 // 繁育结果浮层紧贴繁育栏上方：动态把 result 的 bottom 设为 bar 的实际高度（移动端 attrs 换行后 bar 更高，不能写死 40px）
 function lbBreedAlignResult(){
@@ -5252,8 +5162,8 @@ function lbSearchLive(){
   var el = document.getElementById('lbIdSearch');
   if(!el) return;
   var q = el.value.trim().replace(/^#/,'').trim();
-  // 宽度自适应：随内容增长（11px 字体数字实际约 6.5px/字符 + 14px 余量含左右 padding，限 60~220px）
-  var w = Math.max(60, Math.min(220, q.length*6.5+14));
+  // 宽度自适应：随内容增长（数字约 7.5px/字符 + 左右 padding 24px），限 60~220px
+  var w = Math.max(60, Math.min(220, q.length*7.5+24));
   if(el.style.width !== w+'px') el.style.width = w+'px';
   var ov = document.getElementById('lbBreedOverlay');
   if(!ov) return;
@@ -5289,35 +5199,6 @@ function lbBreedShowCard(idx){
   var body = document.getElementById('lbBreedOverlayBody');
   if(!ov || !body) return;
   body.innerHTML = lbDinoHTML(r);
-  ov.style.display = 'block';
-}
-// 野生生物地图浮窗（v118）：点野生结果 → 卡片上方加地图点位（同离散生物样式：地图+黄点+LL坐标），下方保持原生物卡片不变
-function lbOpenWildMap(idx){
-  var r = (LB._breedCands && LB._breedCands[idx]) || null;
-  if(!r) return;
-  var ov = document.getElementById('lbBreedOverlay');
-  var body = document.getElementById('lbBreedOverlayBody');
-  if(!ov || !body) return;
-  var X = Number(r.x), Y = Number(r.y), Z = Number(r.z);
-  var h = '';
-  var map = lbMapForServer(r.server, isFinite(Z) ? Z : undefined);
-  if(map && isFinite(X) && isFinite(Y) && (X!==0 || Y!==0)){
-    var p = lbWorldToPx(X, Y, map);
-    // LL 坐标（纬度 经度，加粗居中，2 位小数）
-    var lat = (Y/map.multLat + map.shiftLat).toFixed(2);
-    var lon = (X/map.multLon + map.shiftLon).toFixed(2);
-    var imgName = map.img.replace(/_s$/,''); // 高清大图（不带 _s 缩略）
-    h += '<div style="font-weight:bold;font-size:14px;color:#fff;text-align:center;margin-bottom:8px">'+lat+' '+lon+'</div>'
-      + '<div style="position:relative;border-radius:10px;overflow:hidden;line-height:0;border:1px solid #2a2a3a">'
-      + '<img src="'+LB_MAP_BASE+imgName+'.jpg" style="width:100%;height:auto;display:block">'
-      + '<div style="position:absolute;left:'+p.x.toFixed(2)+'%;top:'+p.y.toFixed(2)+'%;width:14px;height:14px;border-radius:50%;background:#fbbf24;border:2px solid #fff;transform:translate(-50%,-50%);box-shadow:0 0 8px rgba(0,0,0,.8)"></div>'
-      + '</div>';
-  } else {
-    h += '<div style="color:#666;font-size:12px;text-align:center;padding:20px">无坐标</div>';
-  }
-  // 下方保持原生物卡片不变
-  h += '<div style="margin-top:8px">'+lbDinoHTML(r)+'</div>';
-  body.innerHTML = h;
   ov.style.display = 'block';
 }
 // 离散聚落生物卡片单击：地图浮窗（仅地图+黄点标位；交互同繁育候选浮窗 #lbBreedOverlay，点遮罩关闭）
@@ -5386,7 +5267,7 @@ lbBreedBindOutsideCancel();
     <span style="color:#7c3aed;font-size:13px;flex-shrink:0" title="繁育目标">🧬</span>
     <div id="lbBreedAttrs" style="display:flex;gap:4px;flex-shrink:0"></div>
     <span style="flex:1"></span>
-    <button id="lbBreedWildBtn" onclick="lbOpenWildConfirm()" style="display:none;flex-shrink:0;background:#0e7490;color:#fff;border:none;border-radius:6px;padding:4px 14px;font-size:12px;cursor:pointer">刷新野生</button>
+    <button id="lbBreedWildBtn" onclick="lbOpenWildConfirm()" style="display:none;flex-shrink:0;background:#0e7490;color:#fff;border:none;border-radius:6px;padding:4px 14px;font-size:12px;cursor:pointer">搜野生</button>
     <button id="lbBreedBtn" onclick="lbBreedToggle()" style="flex-shrink:0;background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:4px 14px;font-size:12px;cursor:pointer">选种</button>
   </div>
 </div>
