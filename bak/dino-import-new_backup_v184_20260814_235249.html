@@ -1606,7 +1606,7 @@ function toggleLevelInfo(e, total, base, wild, bonus, xp, isBred) {
 /* ================= 最新生物 TAB ================= */
 var LB = {};
 // 页面版本号：每次部署递增（调试信息里显示，方便确认手机加载的是否新版）
-var LB_VERSION = 'v20260814-185'; // 2026-08-14 繁育筛选适度统一：LB.filter 统一空间+lbFilterMap 统一持久化
+var LB_VERSION = 'v20260814-184'; // 2026-08-14 修复：纯基因聚落仅选物种且有我的基因时显示（去他人聚落）
 // 服务器列表：HA API（apps.yaml sensor.asa_server_themes）优先；无 HA 环境（解耦）时用内置兜底（localStorage 上次同步缓存 → 代码常量）
 var LB_FALLBACK_SERVERS = [
   {abbr:'Isl',name:'孤岛',icon:'🏝️'},{abbr:'Sco',name:'焦土',icon:'🔥'},{abbr:'Cen',name:'核心岛',icon:'💎'},
@@ -5000,29 +5000,37 @@ var LB_BREED_KEYS = ['health','stamina','oxygen','food','weight','melee_damage_m
 var LB_BREED_LABEL = {health:'血',stamina:'耐',oxygen:'氧',food:'食',weight:'重',melee_damage_multiplier:'攻'};
 var LB_BREED_IDX = {health:0, stamina:1, oxygen:3, food:4, weight:7, melee_damage_multiplier:8}; // statValues 索引（STAT_ZH 顺序）
 LB.breedSel = LB.breedSel || [];
-LB.breedGene = LB.breedGene || [];
-// v185 适度统一：筛选状态集中到 LB.filter（attrs=属性选种/genes=基因筛选，引用同一数组兼容 breedSel/breedGene）
-// 统一持久化：lbFilterMap = {cls: {attrs:[], genes:[]}}；迁移旧 store（breedTargetsMap/lbBreedTargets、breedGeneMap/lbBreedGene）
-function lbFilterKey(){ return 'lbFilter:' + (LB.curClass||''); }
-function lbFilterLoadAll(){ try{ return JSON.parse(localStorage.getItem('lbFilterMap')||'{}'); }catch(e){ return {}; } }
-function lbFilterSaveAll(m){ try{ localStorage.setItem('lbFilterMap', JSON.stringify(m)); }catch(e){} }
-LB.filter = LB.filter || { attrs: LB.breedSel, genes: LB.breedGene };
-(function(){
-  var fm = lbFilterLoadAll();
-  if(!Object.keys(fm).length){
-    // 迁移旧 store（首次统一存储前）
-    try{ var _ba = JSON.parse(localStorage.getItem('lbBreedTargets')||'[]'); if(Array.isArray(_ba)&&_ba.length){ fm['lbFilter:'] = {attrs:_ba.slice(), genes:[]}; } }catch(e){}
-    try{ var _bg = JSON.parse(localStorage.getItem('lbBreedGene')||'[]'); if(Array.isArray(_bg)&&_bg.length){ if(!fm['lbFilter:']) fm['lbFilter:'] = {attrs:[],genes:[]}; fm['lbFilter:'].genes = _bg.slice(); } }catch(e){}
-    try{ var _bm = JSON.parse(localStorage.getItem('lbBreedTargetsMap')||'{}'); Object.keys(_bm).forEach(function(k){ var c=k.replace(/^lbBreed:/,''); fm['lbFilter:'+c] = {attrs:Array.isArray(_bm[k])?_bm[k].slice():[], genes:[]}; }); }catch(e){}
-    try{ var _gm = JSON.parse(localStorage.getItem('lbBreedGeneMap')||'{}'); Object.keys(_gm).forEach(function(k){ var c=k.replace(/^lbBreedGene:/,''); if(!fm['lbFilter:'+c]) fm['lbFilter:'+c] = {attrs:[],genes:[]}; fm['lbFilter:'+c].genes = Array.isArray(_gm[k])?_gm[k].slice():[]; }); }catch(e){}
-    lbFilterSaveAll(fm);
+// v134：基因筛选状态（小写 trait 列表）
+// v143：按物种分别持久化（lbBreedGeneMap：{'lbBreedGene:'+dinoClass: [traits]}）；旧全局 lbBreedGene 迁移到当前物种
+function lbGeneStoreKey(){ return 'lbBreedGene:' + (LB.curClass||''); }
+function lbGeneLoadStore(){ try{ return JSON.parse(localStorage.getItem('lbBreedGeneMap')||'{}'); }catch(e){ return {}; } }
+function lbGeneSaveStore(m){ try{ localStorage.setItem('lbBreedGeneMap', JSON.stringify(m)); }catch(e){} }
+LB.breedGene = LB.breedGene || (function(){
+  var _gm = lbGeneLoadStore();
+  if(Object.keys(_gm).length){
+    return Array.isArray(_gm[lbGeneStoreKey()]) ? _gm[lbGeneStoreKey()].slice() : [];
   }
-  var cur = fm[lbFilterKey()] || {attrs:[], genes:[]};
-  LB.breedSel = Array.isArray(cur.attrs) ? cur.attrs.slice() : [];
-  LB.breedGene = Array.isArray(cur.genes) ? cur.genes.slice() : [];
-  LB.filter = { attrs: LB.breedSel, genes: LB.breedGene }; // v185：统一空间（引用同一数组）
+  // 旧全局迁移（首次按物种存储前）
+  try{
+    var _old = JSON.parse(localStorage.getItem('lbBreedGene')||'[]');
+    if(Array.isArray(_old)){ _gm[lbGeneStoreKey()] = _old.slice(); lbGeneSaveStore(_gm); return _old.slice(); }
+  }catch(e){}
+  return [];
 })();
 LB.breedResult = LB.breedResult || false;
+// 繁育栏属性选择按物种分别持久化（lbBreedTargetsMap：{'lbBreed:'+dinoClass: [keys]}）；旧全局 lbBreedTargets 迁移兼容
+function lbBreedStoreKey(){ return 'lbBreed:' + (LB.curClass||''); }
+function lbBreedLoadStore(){
+  try{ return JSON.parse(localStorage.getItem('lbBreedTargetsMap')||'{}'); }catch(e){ return {}; }
+}
+function lbBreedSaveStore(m){ try{ localStorage.setItem('lbBreedTargetsMap', JSON.stringify(m)); }catch(e){} }
+(function(){
+  var _bm = lbBreedLoadStore();
+  if(!Object.keys(_bm).length){
+    try{ var _old = JSON.parse(localStorage.getItem('lbBreedTargets')||'[]'); if(Array.isArray(_old) && _old.length){ _bm['lbBreed:'] = _old; lbBreedSaveStore(_bm); } }catch(e){}
+  }
+  LB.breedSel = (Array.isArray(_bm[lbBreedStoreKey()]) ? _bm[lbBreedStoreKey()].slice() : []);
+})();
 function lbRenderBreedBar(){
   var bar = document.getElementById('lbBreedBar');
   if(!bar) return;
@@ -5031,18 +5039,18 @@ function lbRenderBreedBar(){
   bar.style.display = show ? 'block' : 'none';
   // 物种变化时：保存旧物种选择 → 加载当前物种的持久化选择；重置结果（旧物种结果不残留）
   if(LB._breedLastClass !== LB.curClass){
-    // v185：统一持久化——保存旧物种筛选 → 加载新物种筛选
-    var fm = lbFilterLoadAll();
-    if(LB._breedLastClass !== undefined) fm['lbFilter:'+LB._breedLastClass] = { attrs: LB.breedSel.slice(), genes: LB.breedGene.slice() };
-    var cur = fm[lbFilterKey()] || {attrs:[], genes:[]};
-    LB.breedSel = Array.isArray(cur.attrs) ? cur.attrs.slice() : [];
-    LB.breedGene = Array.isArray(cur.genes) ? cur.genes.slice() : [];
+    var _bm = lbBreedLoadStore();
+    if(LB._breedLastClass !== undefined) _bm['lbBreed:'+LB._breedLastClass] = LB.breedSel.slice();
+    LB.breedSel = (LB.curClass && Array.isArray(_bm[lbBreedStoreKey()])) ? _bm[lbBreedStoreKey()].slice() : [];
+    lbBreedSaveStore(_bm);
+    // v143：基因按物种切换（保存旧物种 → 加载新物种）
     // v152：加载后过滤当前物种不可见基因（防旧物种残留导致按钮数虚高）
+    var _gm2 = lbGeneLoadStore();
+    if(LB._breedLastClass !== undefined) _gm2['lbBreedGene:'+LB._breedLastClass] = LB.breedGene.slice();
+    LB.breedGene = Array.isArray(_gm2[lbGeneStoreKey()]) ? _gm2[lbGeneStoreKey()].slice() : [];
     var _vs = lbGeneVisibleSet();
     LB.breedGene = LB.breedGene.filter(function(k){ return _vs[k]; });
-    fm[lbFilterKey()] = { attrs: LB.breedSel.slice(), genes: LB.breedGene.slice() };
-    lbFilterSaveAll(fm);
-    LB.filter = { attrs: LB.breedSel, genes: LB.breedGene }; // v185：统一空间同步
+    lbGeneSaveStore(_gm2);
     LB._breedLastClass = LB.curClass;
     if(LB.breedResult){ LB.breedResult = false; lbRenderBreedResult(); }
   }
@@ -5104,8 +5112,7 @@ function lbOpenGenePicker(ev){
   var _bg0 = (LB.breedGene||[]).filter(function(k){ return _vs0[k]; });
   if(_bg0.length !== (LB.breedGene||[]).length){
     LB.breedGene = _bg0;
-    LB.filter.genes = LB.breedGene; // v185：统一空间同步
-    var fm0 = lbFilterLoadAll(); fm0[lbFilterKey()] = { attrs: LB.breedSel.slice(), genes: LB.breedGene.slice() }; lbFilterSaveAll(fm0);
+    var _m0 = lbGeneLoadStore(); _m0[lbGeneStoreKey()] = _bg0.slice(); lbGeneSaveStore(_m0);
   }
   var sel=(LB.breedGene||[]).slice();
   var title=document.createElement('div'); title.style.cssText='margin-bottom:10px;font-size:14px;color:#fff;font-weight:bold;display:flex;justify-content:space-between;align-items:center';
@@ -5182,11 +5189,10 @@ function lbOpenGenePicker(ev){
 }
 function lbBreedSaveGene(sel){
   LB.breedGene = sel.slice();
-  LB.filter.genes = LB.breedGene; // v185：统一空间同步
-  // v185：按物种统一持久化
-  var fm = lbFilterLoadAll();
-  fm[lbFilterKey()] = { attrs: LB.breedSel.slice(), genes: LB.breedGene.slice() };
-  lbFilterSaveAll(fm);
+  // v143：按物种持久化
+  var _gm = lbGeneLoadStore();
+  _gm[lbGeneStoreKey()] = sel.slice();
+  lbGeneSaveStore(_gm);
 }
 function lbBreedGeneDone(){
   var o=document.querySelector('.lb-picker-overlay'); if(o) o.remove();
@@ -5197,11 +5203,10 @@ function lbBreedPick(ev, k){
   var i = LB.breedSel.indexOf(k);
   if(i>=0) LB.breedSel.splice(i,1);
   else LB.breedSel.push(k);
-  LB.filter.attrs = LB.breedSel; // v185：统一空间同步
-  // v185：按当前物种统一持久化
-  var fm = lbFilterLoadAll();
-  fm[lbFilterKey()] = { attrs: LB.breedSel.slice(), genes: LB.breedGene.slice() };
-  lbFilterSaveAll(fm);
+  // 按当前物种持久化
+  var _bm = lbBreedLoadStore();
+  _bm[lbBreedStoreKey()] = LB.breedSel.slice();
+  lbBreedSaveStore(_bm);
   lbRenderBreedBar();
   // 繁育结果已开启时，切换属性自动重算（无需再点选种）
   if(LB.breedResult) lbRenderBreedResult();
