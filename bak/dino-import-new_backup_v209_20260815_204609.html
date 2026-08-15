@@ -1614,7 +1614,7 @@ function toggleLevelInfo(e, total, base, wild, bonus, xp, isBred) {
 /* ================= 最新生物 TAB ================= */
 var LB = {};
 // 页面版本号：每次部署递增（调试信息里显示，方便确认手机加载的是否新版）
-var LB_VERSION = 'v20260815-210'; // 2026-08-15 身份未识别一律占位（含游客/匹配失败，不显示全量）
+var LB_VERSION = 'v20260815-209'; // 2026-08-15 基因物种名翻译修复（Kangaroo/CaveCrab 汉化 JSON 词条 + dinoClass 优先）
 // 服务器列表：HA API（apps.yaml sensor.asa_server_themes）优先；无 HA 环境（解耦）时用内置兜底（localStorage 上次同步缓存 → 代码常量）
 var LB_FALLBACK_SERVERS = [
   {abbr:'Isl',name:'孤岛',icon:'🏝️'},{abbr:'Sco',name:'焦土',icon:'🔥'},{abbr:'Cen',name:'核心岛',icon:'💎'},
@@ -3662,13 +3662,10 @@ function lbServerHasGene(abbr, cls){
 }
 function lbRenderView(data, player, classFilter){
   var list=document.getElementById('lbList'), status=document.getElementById('lbStatus');
-  // v210：身份未识别一律占位（隐私）——游客/识别中/匹配失败（curPid null）都不渲染全量数据；识别成功后重调渲染玩家视角
-  if(LB.curPid === null){
-    var _idMsg;
-    if(LB._needLogin) _idMsg = '🔒 身份未识别（未登录），请登录后查看玩家数据';
-    else if(LB._identityResolved) _idMsg = '⚠️ 身份识别失败（账号未关联游戏角色），请联系管理员';
-    else _idMsg = '⏳ 正在识别玩家身份...';
-    if(list) list.innerHTML = '<div style="text-align:center;padding:30px;color:#555">'+_idMsg+'</div>';
+  // v200：身份未就绪不渲染全量（隐私+性能）——数据已加载，身份未解析则占位；lbInitPlayer 完成后重调 lbRenderView
+  // 游客（_needLogin）与身份匹配失败（_identityResolved=true）不走占位
+  if(!LB._needLogin && LB.curPid === null && !LB._identityResolved){
+    if(list) list.innerHTML = '<div style="text-align:center;padding:30px;color:#555">⏳ 正在识别玩家身份...</div>';
     if(status) status.style.display='none';
     return;
   }

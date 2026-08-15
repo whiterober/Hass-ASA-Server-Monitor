@@ -324,7 +324,7 @@ var selectedFile = null, parsedData = null;
 var ASB_DB = null;
 var ZH_MAP = {};
 // ====== 加载汉化映射（直接调用 ASA 后台管理项目维护的 /local/asa-data/icon_zh_map.json，不在根目录自维护一份） ======
-var ZH_READY = authFetch('/local/asa-data/icon_zh_map.json?t='+Date.now(), {}).then(function(r){return r.json();}).then(function(d){ ZH_MAP = d; }).catch(function(e){ console.log('ZH fail:', e); });
+var ZH_READY = authFetch('/local/asa-data/icon_zh_map.json', {}).then(function(r){return r.json();}).then(function(d){ ZH_MAP = d; }).catch(function(e){ console.log('ZH fail:', e); });
 // ====== 基因词条中文映射（gene_traits_zh.json：词条名→中文，59 条，2026-08-13） ======
 var LB_GENE_ZH = {};
 var GENE_ZH_READY = authFetch('/local/asa-data/gene_traits_zh.json?t='+Date.now(), {}).then(function(r){return r.json();}).then(function(d){ LB_GENE_ZH = d||{}; }).catch(function(e){ console.log('GENE ZH fail:', e); });
@@ -334,19 +334,11 @@ function geneCn(trait){
   return LB_GENE_ZH[trait] || LB_GENE_ZH[trait.toLowerCase()] || trait;
 }
 // v134：基因来源物种翻译（后端 species 英文 → zhName 中文；未命中返回英文）
-// v209：基因物种中文——dinoClass（蓝图类名）优先 → species 英文名 lbSpName（选物种方法）→ lbZhDeep 深度翻译（汉化 JSON 词条）
-function geneSpeciesCn(species, dinoClass){
-  if(dinoClass){
-    var nm0 = lbSpName(dinoClass);
-    if(nm0 && nm0.zh) return nm0.zh;
-  }
-  if(species){
-    var nm = lbSpName(species);
-    if(nm && nm.zh) return nm.zh;
-    var deep = lbZhWithPrefix(species) || lbZhDeep(species);
-    if(deep) return deep;
-  }
-  return species || '';
+function geneSpeciesCn(species){
+  if(!species) return '';
+  // v170：复用选物种浮窗的翻译方法 lbSpName（含次级种名/特殊名/前缀处理），不再另写一套（zhName 查不到就回退英文）
+  var nm = lbSpName(species);
+  return (nm && nm.zh) || species;
 }
 // ====== 加载 ASB 物种数据库（合并 values.json + ASA-values.json） ======
 function loadASB() {
@@ -1614,7 +1606,7 @@ function toggleLevelInfo(e, total, base, wild, bonus, xp, isBred) {
 /* ================= 最新生物 TAB ================= */
 var LB = {};
 // 页面版本号：每次部署递增（调试信息里显示，方便确认手机加载的是否新版）
-var LB_VERSION = 'v20260815-210'; // 2026-08-15 身份未识别一律占位（含游客/匹配失败，不显示全量）
+var LB_VERSION = 'v20260815-189'; // 2026-08-15 容器体系统一：装球+other 一张表（中文 JSON 不脑补）
 // 服务器列表：HA API（apps.yaml sensor.asa_server_themes）优先；无 HA 环境（解耦）时用内置兜底（localStorage 上次同步缓存 → 代码常量）
 var LB_FALLBACK_SERVERS = [
   {abbr:'Isl',name:'孤岛',icon:'🏝️'},{abbr:'Sco',name:'焦土',icon:'🔥'},{abbr:'Cen',name:'核心岛',icon:'💎'},
@@ -2051,40 +2043,9 @@ function lbHeadLm(url){
   });
 }
 
-// v208：数据下载——优先静态 .json.gz（预压缩，nginx 从 WebDAV 拉小文件），404 回退 .json
-// 自动解压：gzip magic 检测 → DecompressionStream('gzip')；nginx 动态 gzip 由浏览器自动解压
-function lbFetchDataJson(base, gzUrl){
-  return authFetch(gzUrl, {}).then(function(res){
-    if(res.ok){
-      return res.arrayBuffer().then(function(buf){
-        var u8 = new Uint8Array(buf);
-        if(u8.length>2 && u8[0]===0x1f && u8[1]===0x8b){ // gzip magic
-          if(typeof DecompressionStream !== 'undefined'){
-            var stream = new Response(buf).body.pipeThrough(new DecompressionStream('gzip'));
-            return new Response(stream).text().then(function(t){ return JSON.parse(t); });
-          }
-          // 极老浏览器无 DecompressionStream → 回退请求 .json（nginx 动态 gzip）
-          return authFetch(base, {}).then(function(r2){ return r2.ok ? r2.json() : null; });
-        }
-        return JSON.parse(new TextDecoder().decode(buf));
-      });
-    }
-    if(res.status === 404){
-      // 回退 .json
-      return authFetch(base, {}).then(function(r2){
-        if(!r2.ok) return null;
-        var enc = (r2.headers.get('content-encoding')||'').toLowerCase();
-        if(enc.indexOf('gzip')>=0) return r2.json(); // nginx 动态 gzip，浏览器自动解压
-        return r2.arrayBuffer().then(function(b2){ return JSON.parse(new TextDecoder().decode(b2)); });
-      });
-    }
-    return null;
-  }).catch(function(){ return null; });
-}
-
 // 加载 + 归一化（cryo∪tamed，跨服去重：同一 dinoId 只保留一条，优先 sortWorldSec 大的）
 // 两阶段：①全部并发 HEAD 收集 Last-Modified + 变化清单（HEAD 不与下载抢连接）②分批只下载变化的文件，未变化的复用旧 recs
-async function lbLoad(servers, oldData, onProgress){ // v207：onProgress({phase:'head'|'dl', done, total, msg}) 下载进度回调
+async function lbLoad(servers, oldData){
   var recs=[], recMap={}, tribesByServer={}, worldNowByServer={};
   var structures = []; // v6：床/棺材/睡眠舱结构（聚落建筑命名）
   var geneDevices = {}; // v134：基因台/基因枪（{server:{infusers:[],scanners:[]}}）
@@ -2112,9 +2073,7 @@ async function lbLoad(servers, oldData, onProgress){ // v207：onProgress({phase
   function addCryoRec(abbr, p){
     var isEmpty = !p.dinoId1; var ct = p.containerType || '';
     if(isEmpty){ var cc = p.containerClass || '';
-      // v190：空球容器识别统一走 lbContainerTypeOf（containerClass 正则派生）；PrimalInventory1=玩家背包保留特判
-      if(cc.indexOf('PrimalInventory1')>=0) ct='player';
-      else ct = lbContainerTypeOf({ containerType:ct, containerClass:cc }); }
+      if(cc.indexOf('CryoFridge')>=0) ct='fridge'; else if(cc.indexOf('PrimalInventory1')>=0) ct='player'; else if(cc.indexOf('TekReplicator')>=0) ct='replicator'; else ct=ct||'other'; }
     recs.push({ src:'cryo', server:abbr, isEmpty:isEmpty, podId:p.podInstanceId, dinoId1:p.dinoId1||'', dinoId2:p.dinoId2||'', dinoClass:p.dinoClass||'',
       name:p.name||'', level:p.level||0, gender:p.gender||'', babyAge:p.babyAge, isBaby:p.isBaby, tribeId:p.tribeId,
       statValues:p.statValues||[], statPoints:p.statPoints||[], statMutations:p.statMutations||[], imprintingQuality:p.imprintingQuality,
@@ -2140,7 +2099,6 @@ async function lbLoad(servers, oldData, onProgress){ // v207：onProgress({phase
     lbAddRec(recs[recs.length-1]);
   }
   // 阶段①：全部服务器并发 HEAD（不跟下载竞争连接）
-  if(onProgress) onProgress({ phase:'head', msg:'检查数据更新...' }); // v207
   var headTasks = servers.map(function(abbr){
     var s = LB.SERVERS.find(function(x){return x.abbr===abbr;});
     if(!s) return Promise.resolve();
@@ -2170,59 +2128,27 @@ async function lbLoad(servers, oldData, onProgress){ // v207：onProgress({phase
   // 阶段②：只下载变化的文件（分批 3 台，每台内 cryo+tamed 并行）
   var needList = headResults.filter(function(r){ return r && (r.needCryo || r.needTamed); });
   var BATCH = 3;
-  // v207：下载进度统计（总文件数 = 需下载的 cryo+tamed）
-  var _dlTotal = 0, _dlDone = 0;
-  needList.forEach(function(r){ if(r.needCryo) _dlTotal++; if(r.needTamed) _dlTotal++; });
-  function _dlProg(){
-    if(onProgress) onProgress({ phase:'dl', done:_dlDone, total:_dlTotal, msg:'下载 '+_dlDone+'/'+_dlTotal+' ...' });
-  }
   for(var bi=0; bi<needList.length; bi+=BATCH){
     var batch = needList.slice(bi, bi+BATCH).map(function(item){
       var abbr = item.abbr;
-      // v208：.json.gz 优先（预压缩，nginx 拉小文件），404 自动回退 .json
-      var cryoBase = DINO_JSON+abbr+'_cryo.json';
-      var tamedBase = DINO_JSON+abbr+'_tamed.json';
+      var cryoUrl = DINO_JSON+abbr+'_cryo.json?cb='+Date.now();
+      var tamedUrl = DINO_JSON+abbr+'_tamed.json?cb='+Date.now();
       var tasks = [];
       // 404（文件不存在）的文件跳过下载
-      if(item.needCryo && lm[abbr].cryo !== LB_LM_404) tasks.push(lbFetchDataJson(cryoBase, cryoBase+'.gz?cb='+Date.now()).then(function(cryo){
-        _dlDone++; _dlProg(); // v207：文件下载完成
+      if(item.needCryo && lm[abbr].cryo !== LB_LM_404) tasks.push(authFetch(cryoUrl,{}).then(function(r){return r.json();}).then(function(cryo){
         if(cryo){ tribesByServer[abbr] = cryo.tribes||{}; worldNowByServer[abbr] = cryo.worldSecondsNow||0;
           (cryo.players||[]).forEach(lbMergePlayer);
           (cryo.cryopod||[]).forEach(function(p){ addCryoRec(abbr, p); });
           (cryo.structures||[]).forEach(function(s){ structures.push(s); });
-          // v197：facilities（后端新输出所有结构设施，含空容器）→ 提取容器类空设施补充为 rec（空容器显示，与基因设施孤儿对齐）
-          var _cidSet = {};
-          (recs||[]).forEach(function(r){ if(r.server===abbr && r.containerId) _cidSet[r.containerId]=1; });
-          var _arrF = LB_CONTAINER_DISP._cls || [];
-          (cryo.facilities||[]).forEach(function(f){
-            if(!f || !f.key || _cidSet[f.key]) return; // 已有 rec（有球/空球）跳过
-            var _cc = f.class || '';
-            var _sub = '';
-            for(var i=0;i<_arrF.length;i++){ if(_arrF[i].re.test(_cc)){ _sub=_arrF[i].type; break; } }
-            if(!_sub || _sub==='released' || _sub==='player') return; // 非容器类跳过（捕兽夹/炮塔/水箱等）
-            if(!(Number(f.x)||Number(f.y))) return; // 无坐标跳过（聚落需坐标）
-            lbAddRec({ src:'facility', server:abbr, isEmpty:true, podId:'', dinoId1:'', dinoId2:'', dinoClass:'',
-              name:'', level:0, gender:'', babyAge:0, isBaby:false, tribeId:Number(f.tribeId||0),
-              statValues:[], statPoints:[], statMutations:[], imprintingQuality:0,
-              randomMutationsMale:0, randomMutationsFemale:0, ancestors:[], colors:'',
-              saddle:'', cryoVersion:0, sortWorldSec:0, srcWorld:'', absMs:0, geneTraits:[],
-              containerId:f.key, containerType:_sub, containerName:f.name||'', containerClass:_cc, containerTribe:Number(f.tribeId||0), ownerTribeId:Number(f.tribeId||0),
-              playerName:'', containerOwnerPid:null, containerOwnerEosId:null,
-              containerX:Number(f.x)||0, containerY:Number(f.y)||0, containerZ:Number(f.z)||0,
-              imprinterName:'', imprinterEosId:'' });
-          });
           // v134：基因台/基因枪（geneDevices）按 type 分组
           (cryo.geneDevices||[]).forEach(function(d){
-            // v192：过滤蓝图物品（后端 isBlueprint=1=蓝图，如蓝图基因枪）；真实物品 isBlueprint=0/undefined 保留
-            if(d.isBlueprint===1) return;
             var t=d.type||'';
             if(!geneDevices[abbr]) geneDevices[abbr]={infusers:[],scanners:[]};
             if(t==='geneInfuser') geneDevices[abbr].infusers.push(d);
             else if(t==='geneScanner') geneDevices[abbr].scanners.push(d);
           }); }
       }).catch(function(){}));
-      if(item.needTamed && lm[abbr].tamed !== LB_LM_404) tasks.push(lbFetchDataJson(tamedBase, tamedBase+'.gz?cb='+Date.now()).then(function(tamed){
-        _dlDone++; _dlProg(); // v207：文件下载完成
+      if(item.needTamed && lm[abbr].tamed !== LB_LM_404) tasks.push(authFetch(tamedUrl,{}).then(function(r){return r.json();}).then(function(tamed){
         if(tamed){ (tamed.dinos||[]).forEach(function(d){ addTamedRec(abbr, d); }); }
       }).catch(function(){}));
       return Promise.all(tasks);
@@ -2234,7 +2160,7 @@ async function lbLoad(servers, oldData, onProgress){ // v207：onProgress({phase
   out.players = Object.keys(playersByEos).map(function(eos){ return playersByEos[eos]; });
   out.structures = structures; // v6：床/棺材/睡眠舱结构（聚落建筑命名）
   out.geneDevices = geneDevices; // v134：基因台/基因枪
-  out._schemaVer = 10; // v10：facilities 空容器接入（后端输出所有结构设施含空），旧缓存(9)判失效强制重拉
+  out._schemaVer = 8; // v8：基因枪容器坐标 containerX/Y（v141 归属聚落用；后端文件 mtime 不变 → bump 版本强制重拉）
   out._lm = lm;
   return out;
 }
@@ -2263,14 +2189,8 @@ function lbClusterHasBed(data, clu){
   return false;
 }
 function lbBuildSettlements(data){
-  var byServer = {}, byDinoKey = {}, byContainer = {}, byGeneDevice = {}, byBed = {};
-  if(!data || !Array.isArray(data.recs)) return {byServer:byServer, byDinoKey:byDinoKey, byContainer:byContainer, byGeneDevice:byGeneDevice, byBed:byBed, buildAt:Date.now()};
-  // v194：structures 按部落预分组（床纳入中心性能：全服床 52万条，避免逐聚落全量过滤）
-  var structsByTribe = {};
-  (Array.isArray(data.structures) ? data.structures : []).forEach(function(s){
-    var st = String(s.tribeId||0);
-    (structsByTribe[st]=structsByTribe[st]||[]).push(s);
-  });
+  var byServer = {}, byDinoKey = {}, byContainer = {};
+  if(!data || !Array.isArray(data.recs)) return {byServer:byServer, byDinoKey:byDinoKey, byContainer:byContainer, buildAt:Date.now()};
   var servers = {};
   data.recs.forEach(function(r){ if(r.server) servers[r.server]=1; });
   Object.keys(servers).forEach(function(abbr){
@@ -2278,19 +2198,19 @@ function lbBuildSettlements(data){
     // 1. 容器聚合：containerId → {x,y,type,tribeId,球数,印痕者集合,dinoKeys}
     var ctn = {};
     recs.forEach(function(r){
-      if(lbContainerTypeOf(r)==='player') return; // 排除玩家背包（不算聚落）；空球也参与容器坐标聚合（byContainer 归属用）
+      if(r.containerType==='player') return; // 排除玩家背包（不算聚落）；空球也参与容器坐标聚合（byContainer 归属用）
       var cid, tid;
-      if(lbContainerTypeOf(r)==='released'){
+      if(r.containerType==='released'){
         // 放出：无真实容器（野外放养），按生物个体坐标聚类；部落用生物自身 tribeId（避免共享 noid_released 容器错冠名）
         cid = 'rel_'+(r.dinoId1||'')+'_'+(r.dinoId2||'');
         tid = r.tribeId||r.containerTribe||0;
       } else {
-        cid = r.containerId || ('noid_'+(lbContainerTypeOf(r)||''));
+        cid = r.containerId || ('noid_'+(r.containerType||''));
         tid = r.containerTribe||r.tribeId||0;
       }
-      var c = ctn[cid] = ctn[cid] || { id:cid, type:lbContainerTypeOf(r), x:r.containerX||0, y:r.containerY||0, z:r.containerZ||0,
+      var c = ctn[cid] = ctn[cid] || { id:cid, type:r.containerType, x:r.containerX||0, y:r.containerY||0, z:r.containerZ||0,
         tribeId:tid, count:0, imps:{}, keys:[] };
-      if(r.src !== 'facility') c.count++; // v202：facility 空容器 rec 不算球数（容器是空的，无球；cryo 空球仍计）
+      c.count++;
       if(!r.isEmpty && r.imprinterName) c.imps[r.imprinterName] = (c.imps[r.imprinterName]||0)+1; // 空球不计印痕者（不影响冠名）
       if(!r.isEmpty) c.keys.push(String(r.dinoId1||'')+'_'+String(r.dinoId2||'')); // 空球无 dinoId，仅建 byContainer
     });
@@ -2388,120 +2308,6 @@ function lbBuildSettlements(data){
       s.center.x = nx/s.containers.length;
       s.center.y = ny/s.containers.length;
     });
-    // v194/v196 床纳入聚落中心：床=主宅标志；容器稀少/放养龙远离主宅时中心偏移修复（海潮厅 case）
-    // v196/v199 一致化：床建唯一 key（class+tribeId+x+y+z）；v199 修复：床归属最近聚落（原大聚落优先会抢走其他聚落床，如龙舍被 My DOG 抢走）
-    var BED_CENTER_EPS = LB_SETTLE_EPS * 1.5;
-    var bedKey = function(b){ return (b.class||'')+'|'+(b.tribeId||0)+'|'+Math.round(Number(b.x))+'|'+Math.round(Number(b.y))+'|'+Math.round(Number(b.z)||0); };
-    // 按部落分组聚落
-    var tribeSettles = {};
-    settlements.forEach(function(s){ var t=String(s.tribeId||0); (tribeSettles[t]=tribeSettles[t]||[]).push(s); });
-    // 每张床归属同部落最近聚落（≤BED_CENTER_EPS）；bedOwner: bedKey -> {setId, bed}
-    var bedOwner = {};
-    Object.keys(structsByTribe).forEach(function(t){
-      var tSettles = tribeSettles[t] || [];
-      if(!tSettles.length) return;
-      (structsByTribe[t]||[]).forEach(function(b){
-        if(!/SimpleBed|ModernBed|TekBed|CompanionBed|Coffin|SleepingPod/i.test(b.class||'')) return;
-        var best=null, bd=Infinity;
-        for(var i=0;i<tSettles.length;i++){
-          var s0=tSettles[i];
-          var dd = Math.sqrt(Math.pow(Number(b.x)-s0.center.x,2)+Math.pow(Number(b.y)-s0.center.y,2));
-          if(dd<bd){ bd=dd; best=s0; }
-        }
-        if(best && bd<=BED_CENTER_EPS) bedOwner[bedKey(b)] = { setId:best.id, bed:b };
-      });
-    });
-    // 聚落纳入归属床 + 重算中心（含床）
-    var sBedById = {};
-    Object.keys(bedOwner).forEach(function(bk){
-      var o = bedOwner[bk];
-      (sBedById[o.setId]=sBedById[o.setId]||[]).push(o.bed);
-    });
-    settlements.forEach(function(s){
-      var nearBeds = sBedById[s.id] || [];
-      if(nearBeds.length){
-        nearBeds.forEach(function(b){ b._bk = bedKey(b); }); // 记录床 key（byBed 映射用）
-        var nx = Number(s.center.x)*s.containers.length, ny = Number(s.center.y)*s.containers.length, nz = Number(s.center.z||0)*s.containers.length;
-        var tot = s.containers.length;
-        nearBeds.forEach(function(b){ nx+=Number(b.x); ny+=Number(b.y); nz+=(b.z!==undefined&&b.z!==null)?Number(b.z):0; });
-        tot += nearBeds.length;
-        s.center.x = nx/tot; s.center.y = ny/tot; s.center.z = nz/tot;
-        s.beds = nearBeds; // 聚落床列表（详情显示 + byBed 映射）
-      }
-    });
-    // v198/v200 命名设施统一最近归属：墓碑/牌子/M床/其他带名 每设施只归属同部落最近聚落（对齐床 v199 规则；替代 v198 大聚落优先）
-    var _signRe = /Gravestone|WoodSign_Large|MetalSign_Large/i;
-    var nameOwner = {}; // structKey -> setId（所有带名结构最近归属）
-    Object.keys(structsByTribe).forEach(function(t){
-      var tSettles = tribeSettles[t] || [];
-      if(!tSettles.length) return;
-      (structsByTribe[t]||[]).forEach(function(st){
-        if(!st.name) return;
-        var best=null, bd=Infinity;
-        for(var i=0;i<tSettles.length;i++){
-          var s0=tSettles[i];
-          var dd = Math.sqrt(Math.pow(Number(st.x)-s0.center.x,2)+Math.pow(Number(st.y)-s0.center.y,2));
-          if(dd<bd){ bd=dd; best=s0; }
-        }
-        if(best) nameOwner[(st.class||'')+'|'+Math.round(Number(st.x))+'|'+Math.round(Number(st.y))] = best.id;
-      });
-    });
-    // v200 命名：只取归属本聚落的最近命名设施（墓碑优先→M床→任意）；无则冠名/S编号
-    var sNameOf = function(s){
-      var sts2 = structsByTribe[String(s.tribeId)] || [];
-      function owned(t){
-        var best=null, bd=Infinity;
-        t.forEach(function(st){
-          var k = (st.class||'')+'|'+Math.round(Number(st.x))+'|'+Math.round(Number(st.y));
-          if(nameOwner[k]!==s.id) return;
-          var dd = Math.sqrt(Math.pow(Number(st.x)-s.center.x,2)+Math.pow(Number(st.y)-s.center.y,2));
-          if(dd<bd){ bd=dd; best=st; }
-        });
-        return best;
-      }
-      var b1 = owned(sts2.filter(function(st){ return _signRe.test(st.class||''); }));
-      if(b1) return b1.name;
-      var b2 = owned(sts2.filter(function(st){ return /M$/.test(String(st.name||'').trim()) && !_signRe.test(st.class||''); }));
-      if(b2) return b2.name;
-      var b3 = owned(sts2.filter(function(st){ return !_signRe.test(st.class||''); }));
-      if(b3) return b3.name;
-      return null;
-    };
-    settlements.forEach(function(s){
-      var nbName = sNameOf(s);
-      if(nbName){ s.name = nbName; }
-      else { s.name = (s.owners && s.owners.length) ? s.owners.map(function(m){ return m.name; }).join('、') : ('S'+String(s.id).split('_').pop()); }
-    });
-    // v194 基因设备归属映射：基因台/枪按坐标归属聚落（同部落 ≤ ABSORB_EPS）——消除运行时独立匹配（海潮厅根因）
-    var gdEnt = (data.geneDevices && data.geneDevices[abbr]) || null;
-    var geneDevs = [];
-    if(gdEnt){
-      (gdEnt.infusers||[]).forEach(function(d){ if(d && d.key) geneDevs.push(d); });
-      (gdEnt.scanners||[]).forEach(function(d){ if(d && d.key && lbContainerTypeOf(d)!=='player') geneDevs.push(d); });
-    }
-    geneDevs.forEach(function(d){
-      var gx = (d.containerX!==undefined && Number(d.containerX)!==0) ? Number(d.containerX) : Number(d.x);
-      var gy = (d.containerY!==undefined && Number(d.containerY)!==0) ? Number(d.containerY) : Number(d.y);
-      var gt = Number(d.containerTribe||d.tribeId||0);
-      var best=null, bd=Infinity;
-      settlements.forEach(function(s){
-        if(Number(s.tribeId)!==gt) return;
-        var dist=Math.sqrt(Math.pow(gx-s.center.x,2)+Math.pow(gy-s.center.y,2));
-        if(dist<bd){ bd=dist; best=s; }
-      });
-      if(best && bd<=ABSORB_EPS){
-        byGeneDevice[abbr+'_'+d.key] = { setId:best.id, scattered:false, server:abbr, tribeId:Number(best.tribeId) };
-        (best.geneKeys=best.geneKeys||[]).push(d.key);
-      } else {
-        byGeneDevice[abbr+'_'+d.key] = { setId:'scattered', scattered:true, server:abbr, tribeId:gt };
-      }
-    });
-    // v194/v196 床归属映射（详情显示 + 未来扩展；v196 用统一床 key，与基因设备/容器同构）
-    settlements.forEach(function(s){
-      (s.beds||[]).forEach(function(b){
-        byBed[abbr+'_'+(b._bk||bedKey(b))] = { setId:s.id, scattered:false, server:abbr, tribeId:Number(s.tribeId) };
-      });
-    });
     // 5. 建立 dinoKey 映射
     settlements.forEach(function(s){
       (s.containers||[]).forEach(function(c){
@@ -2527,7 +2333,7 @@ function lbBuildSettlements(data){
     });
     byServer[abbr] = { settlements:settlements, scattered:scatteredCtn.length };
   });
-  return { byServer:byServer, byDinoKey:byDinoKey, byContainer:byContainer, byGeneDevice:byGeneDevice, byBed:byBed, buildAt:Date.now() };
+  return { byServer:byServer, byDinoKey:byDinoKey, byContainer:byContainer, buildAt:Date.now() };
 }
 function tidOf(s){ return s && s.tribeId; }
 // 簇半径：到簇中心（均值）的最大距离
@@ -2603,42 +2409,20 @@ function lbSplitOversize(pts, eps){
   return split(pts);
 }
 // DBSCAN（eps 距离阈值，minPts=1 即单点也成簇；按 x/y 平面距离；标准密度可达递归扩展）
-// v201 性能修复（切换地图卡 8.6s 根因）：空间网格索引（cell=eps）——邻域查询只查 3×3 格
-// 数学保证不漏点：两点距离 ≤eps 必在同一或相邻 cell（3×3 覆盖对角线 2.83eps）；复杂度 O(n²) → O(n)
-// queue 用头指针替代 shift()（避免数组头部移除 O(n)）；语义与原实现完全一致
 function lbDbscan(pts, eps, minPts){
   var clusters = [], visited = {};
-  var n = pts.length;
-  var cellSize = eps > 0 ? eps : 1;
-  var cell = {};
-  for(var i=0;i<n;i++){
-    var k = Math.floor(Number(pts[i].x)/cellSize)+','+Math.floor(Number(pts[i].y)/cellSize);
-    (cell[k]=cell[k]||[]).push(i);
-  }
-  var eps2 = eps*eps;
+  function dist(a,b){ return Math.sqrt(Math.pow(Number(a.x)-Number(b.x),2)+Math.pow(Number(a.y)-Number(b.y),2)); }
   function regionIdx(i){
     var out=[];
-    var gx = Math.floor(Number(pts[i].x)/cellSize), gy = Math.floor(Number(pts[i].y)/cellSize);
-    for(var dx=-1;dx<=1;dx++){
-      for(var dy=-1;dy<=1;dy++){
-        var c = cell[(gx+dx)+','+(gy+dy)];
-        if(!c) continue;
-        for(var m=0;m<c.length;m++){
-          var j=c[m];
-          if(j===i) continue;
-          var dx2=Number(pts[i].x)-Number(pts[j].x), dy2=Number(pts[i].y)-Number(pts[j].y);
-          if(dx2*dx2+dy2*dy2 <= eps2) out.push(j);
-        }
-      }
-    }
+    for(var j=0;j<pts.length;j++){ if(j!==i && dist(pts[i],pts[j])<=eps) out.push(j); }
     return out;
   }
-  for(var i=0;i<n;i++){
+  for(var i=0;i<pts.length;i++){
     if(visited[i]) continue;
     visited[i]=1;
-    var clu=[i], queue=regionIdx(i), head=0;
-    while(head<queue.length){
-      var q=queue[head++];
+    var clu=[i], queue=regionIdx(i);
+    while(queue.length){
+      var q=queue.shift();
       if(visited[q]) continue;
       visited[q]=1;
       clu.push(q);
@@ -2757,7 +2541,7 @@ function lbPlayerTribes(tribesByServer, curPid){
 // 统一玩家过滤：玩家携带（身上背的）按 containerOwnerPid 匹配当前角色 pid；容器/放出按聚落归属（§8 冠名）→ 部落回退
 function lbIsPlayerRec(r, playerSet, curPid){
   if(!playerSet || !curPid) return true;
-  if(lbContainerTypeOf(r)==='player'){
+  if(r.containerType==='player'){
     // rec 缺 containerOwnerPid → 报错（不做名字回退）
     if(r.containerOwnerPid === undefined || r.containerOwnerPid === null){
       console.error('[PID] rec 缺 containerOwnerPid:', r.dinoClass, r.playerName);
@@ -3347,11 +3131,11 @@ function lbCacheGet(){
           var d = v.data;
           // 派生数据不持久化：剔除 _settlements，每次加载用当前算法重建
           if(d._settlements) delete d._settlements;
-          var okVer = d._schemaVer === 10; // v10：facilities 空容器接入，旧缓存(9)判失效强制重拉
+          var okVer = d._schemaVer === 8; // v141：基因枪容器坐标 containerX/Y，旧缓存(7)判失效强制重拉
           var okPlayers = Array.isArray(d.players);
           var okPid = true;
           if(okPlayers && Array.isArray(d.recs)){
-            var pc = d.recs.filter(function(r){ return lbContainerTypeOf(r)==='player' && !r.isEmpty; })[0];
+            var pc = d.recs.filter(function(r){ return r.containerType==='player' && !r.isEmpty; })[0];
             if(pc && pc.containerOwnerPid === undefined && pc.containerOwnerPid === null) okPid = false;
           }
           if(!okVer || !okPlayers || !okPid){ resolve(null); return; }
@@ -3387,11 +3171,10 @@ function lbCacheClear(){
 // 容器 key：display/stand 未命名可合并（无 ID）；其他容器未命名不允许合并（按 containerId 区分）
 function lbContainerKey(r){
   var hasName = r.containerName && r.containerName!=='?' && r.containerName!=='';
-  var t = lbContainerTypeOf(r); // v190：合并键用统一派生类型
-  if(t==='display' || t==='stand'){
-    return (r.server||'?')+'|'+t+'|'+(hasName ? r.containerName : '');
+  if(r.containerType==='display' || r.containerType==='stand'){
+    return (r.server||'?')+'|'+(r.containerType||'?')+'|'+(hasName ? r.containerName : '');
   }
-  return (r.server||'?')+'|'+t+'|'+(hasName ? r.containerName : ('#'+(r.containerId||'')));
+  return (r.server||'?')+'|'+(r.containerType||'?')+'|'+(hasName ? r.containerName : ('#'+(r.containerId||'')));
 }
 // v189：容器查词/图标统一到 LB_CONTAINER_DISP（装球容器 + other 一张表，中文 JSON 动态）
 // 鞍图标（MDI）：普通鞍 mdi-seat；平台鞍（类名含 Platform）mdi-view-dashboard（⊞）；Tek鞍（类名含 Tek）mdi-hexagon-multiple（⬢）
@@ -3485,41 +3268,26 @@ var LB_CONTAINER_DISP = {
   released: { key:'', iconKey:'RW_Tracking_dino', mdi:'mdi-paw' },
   player: { key:'', iconKey:'HubInventoryIcon', mdi:'mdi-bag-personal' },
   _cls: [
-    { re:/Cryofridge/i, type:'fridge', key:'cryofridge', iconKey:'Cryofridge', mdi:'mdi-fridge-outline' },
-    { re:/Display_Case|DisplayCase/i, type:'display', key:'display_case', iconKey:'Display_Case', mdi:'mdi-cog' },
-    { re:/Feeding_Trough|FeedingTrough/i, type:'other', key:'feeding_trough', iconKey:'Feeding_Trough', mdi:'mdi-cog' },
-    { re:/GeneStorage/i, type:'other', key:'gene_storage', iconKey:'Gene_Storage', mdi:'mdi-dna' },
-    { re:/EggIncubator/i, type:'other', key:'egg_incubator', iconKey:'Egg_Incubator', mdi:'mdi-cog' },
-    { re:/EmbryoIncubator/i, type:'other', key:'embryo_incubator', iconKey:'Embryo_Incubator', mdi:'mdi-cog' },
-    { re:/PreservingBin/i, type:'other', key:'industrial_preserving_bin', iconKey:'Industrial_Preserving_Bin', mdi:'mdi-fridge-outline' },
-    { re:/Linked_Storage/i, type:'other', key:'linked_storage_box', iconKey:'Linked_Storage_Box', mdi:'mdi-package-variant-closed' },
-    { re:/LibraryStorage|Library_Storage/i, type:'other', key:'library_storage', iconKey:'Library_Storage', mdi:'mdi-package-variant-closed' },
-    { re:/WoodFridge/i, type:'other', key:'woodfridge_icon', iconKey:'WoodFridge_Icon', mdi:'mdi-fridge-outline' },
-    { re:/Large_Storage_Box/i, type:'other', key:'large_storage_box', iconKey:'Large_Storage_Box', mdi:'mdi-package-variant-closed' },
-    { re:/LargeStorage/i, type:'storage', key:'hud_storagebox_icon', iconKey:'LargeStorage_Icon', mdi:'mdi-package-variant-closed' },
-    { re:/DedicatedStorage/i, type:'other', key:'icon_dedicatedstorage', iconKey:'Icon_DedicatedStorage', mdi:'mdi-package-variant-closed' },
-    { re:/StorageBox_Huge/i, type:'other', key:'vault', iconKey:'Vault', mdi:'mdi-cog' },
-    { re:/StorageBox_Large/i, type:'other', key:'large_storage_box', iconKey:'Large_Storage_Box', mdi:'mdi-package-variant-closed' },
-    { re:/StorageBox_Small/i, type:'storage', key:'hud_storagebox_icon', iconKey:'SmallStorage_Icon', mdi:'mdi-package-variant-closed' },
-    { re:/TekReplicator/i, type:'replicator', key:'tek_replicator', iconKey:'Tek_Replicator', mdi:'mdi-cog' },
-    { re:/TekTransmitter/i, type:'other', key:'tek_transmitter', iconKey:'TEKPortal_Icon', mdi:'mdi-cog' },
-    { re:/CompanionBed/i, type:'other', key:'hud_companionbed_icon', iconKey:'HUD_CompanionBed_Icon', mdi:'mdi-cog' },
-    { re:/TekSleepingPod/i, type:'other', key:'tek_sleeping_pod', iconKey:'Tek_Sleeping_Pod', mdi:'mdi-cog' }
+    { re:/Cryofridge/i, key:'cryofridge', iconKey:'Cryofridge', mdi:'mdi-fridge-outline' },
+    { re:/Display_Case|DisplayCase/i, key:'display_case', iconKey:'Display_Case', mdi:'mdi-cog' },
+    { re:/Feeding_Trough|FeedingTrough/i, key:'feeding_trough', iconKey:'Feeding_Trough', mdi:'mdi-cog' },
+    { re:/GeneStorage/i, key:'gene_storage', iconKey:'Gene_Storage', mdi:'mdi-dna' },
+    { re:/EggIncubator/i, key:'egg_incubator', iconKey:'Egg_Incubator', mdi:'mdi-cog' },
+    { re:/EmbryoIncubator/i, key:'embryo_incubator', iconKey:'Embryo_Incubator', mdi:'mdi-cog' },
+    { re:/PreservingBin/i, key:'industrial_preserving_bin', iconKey:'Industrial_Preserving_Bin', mdi:'mdi-fridge-outline' },
+    { re:/Linked_Storage/i, key:'linked_storage_box', iconKey:'Linked_Storage_Box', mdi:'mdi-package-variant-closed' },
+    { re:/LibraryStorage|Library_Storage/i, key:'library_storage', iconKey:'Library_Storage', mdi:'mdi-package-variant-closed' },
+    { re:/WoodFridge/i, key:'woodfridge_icon', iconKey:'WoodFridge_Icon', mdi:'mdi-fridge-outline' },
+    { re:/Large_Storage_Box/i, key:'large_storage_box', iconKey:'Large_Storage_Box', mdi:'mdi-package-variant-closed' },
+    { re:/LargeStorage/i, key:'hud_storagebox_icon', iconKey:'LargeStorage_Icon', mdi:'mdi-package-variant-closed' },
+    { re:/DedicatedStorage/i, key:'icon_dedicatedstorage', iconKey:'Icon_DedicatedStorage', mdi:'mdi-package-variant-closed' },
+    { re:/StorageBox/i, key:'hud_storagebox_icon', iconKey:'SmallStorage_Icon', mdi:'mdi-package-variant-closed' },
+    { re:/TekReplicator/i, key:'tek_replicator', iconKey:'Tek_Replicator', mdi:'mdi-cog' },
+    { re:/TekTransmitter/i, key:'tek_transmitter', iconKey:'TEKPortal_Icon', mdi:'mdi-cog' },
+    { re:/CompanionBed/i, key:'hud_companionbed_icon', iconKey:'HUD_CompanionBed_Icon', mdi:'mdi-cog' },
+    { re:/TekSleepingPod/i, key:'tek_sleeping_pod', iconKey:'Tek_Sleeping_Pod', mdi:'mdi-cog' }
   ]
 };
-// v190 容器识别统一派生：位置态（released/player）原样；容器由 containerClass 正则派生子类型
-// （无匹配回退原 containerType，兜底 other）——排序/合并/显示/加载分类统一走此函数
-function lbContainerTypeOf(r){
-  if(!r) return '';
-  var t = r.containerType;
-  if(t==='released' || t==='player') return t;
-  var cc = r.containerClass || '';
-  if(cc){
-    var arr = LB_CONTAINER_DISP._cls || [];
-    for(var i=0;i<arr.length;i++){ if(arr[i].re.test(cc)) return arr[i].type || 'other'; }
-  }
-  return t || 'other';
-}
 // camelCase 拆分：TekTransmitter → Tek Transmitter（容器类名英文提取用）
 function lbCamelSplit(s){
   return (s||'').replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').trim();
@@ -3543,9 +3311,8 @@ function lbContainerDisp(type, cls){
 function lbContainerLabel(r){
   var icon = '';
   var dtcCls = '';
-  // v190 统一：容器子类型由 lbContainerTypeOf 派生（位置态 released/player + containerClass 正则）
-  var sub = lbContainerTypeOf(r);
-  var disp = lbContainerDisp(sub, (sub==='other') ? r.containerClass : null);
+  // v189 统一：装球容器（containerType）+ other（containerClass）一套表查词/图标（中文 JSON 动态）
+  var disp = lbContainerDisp(r.containerType, (r.containerType==='other') ? r.containerClass : null);
   // 恐龙背包容器（DinoTamedInventoryComponent_xxx）：复用选物种方法（lbIconForDinoClass 图标 + lbSpName 中文名）
   if(r.containerClass && r.containerClass.indexOf('DinoTamedInventoryComponent')===0 && LB_ICON_BY_NAME){
     dtcCls = lbDtcDinoClass(r);
@@ -3577,9 +3344,9 @@ function lbContainerLabel(r){
     if(dzh) return '<span class="acc-title">'+icon+' '+dzh+'</span>';
   }
   // player（玩家背包）固定标「背包」；other/装球用 disp.zh（JSON 动态，无词条英文提取名）
-  var tzh = sub==='player' ? '背包' : (disp ? disp.zh : '');
-  var name = tzh || sub; // JSON 无中文 → 回退子类型名（不脑补）
-  if(sub!=='display' && sub!=='stand' && sub!=='released' && sub!=='player'){
+  var tzh = r.containerType==='player' ? '背包' : (disp ? disp.zh : '');
+  var name = tzh || r.containerType; // JSON 无中文 → 回退英文类型名（不脑补）
+  if(r.containerType!=='display' && r.containerType!=='stand' && r.containerType!=='released' && r.containerType!=='player'){
     var id = r.containerId || '';
     name += ' #' + (id.length>6 ? id.slice(-6) : id);
   }
@@ -3609,11 +3376,8 @@ function lbView(){
     }
     // 3. 无缓存 → 重新加载
     var sel=LB.SERVERS.map(function(s){return s.abbr;});
-    list.innerHTML='<div style="text-align:center;padding:30px;color:#555">⏳ 检查数据更新...</div>';
-    lbLoad(sel, null, function(p){ // v207：显示真实下载进度
-      if(p.phase==='head'){ list.innerHTML='<div style="text-align:center;padding:30px;color:#555">⏳ 检查数据更新...</div>'; return; }
-      list.innerHTML='<div style="text-align:center;padding:30px;color:#555">⏳ 下载数据 '+p.done+'/'+p.total+' ...</div>';
-    }).then(function(data){
+    list.innerHTML='<div style="text-align:center;padding:30px;color:#555">⏳ 加载数据中...</div>';
+    lbLoad(sel).then(function(data){
       LB._cache={ data:data, ts:Date.now() };
       lbCacheSet(data); // 写入 IndexedDB
       lbResolveIdentity(); // 身份解析（数据就绪后）
@@ -3662,16 +3426,6 @@ function lbServerHasGene(abbr, cls){
 }
 function lbRenderView(data, player, classFilter){
   var list=document.getElementById('lbList'), status=document.getElementById('lbStatus');
-  // v210：身份未识别一律占位（隐私）——游客/识别中/匹配失败（curPid null）都不渲染全量数据；识别成功后重调渲染玩家视角
-  if(LB.curPid === null){
-    var _idMsg;
-    if(LB._needLogin) _idMsg = '🔒 身份未识别（未登录），请登录后查看玩家数据';
-    else if(LB._identityResolved) _idMsg = '⚠️ 身份识别失败（账号未关联游戏角色），请联系管理员';
-    else _idMsg = '⏳ 正在识别玩家身份...';
-    if(list) list.innerHTML = '<div style="text-align:center;padding:30px;color:#555">'+_idMsg+'</div>';
-    if(status) status.style.display='none';
-    return;
-  }
   lbEnsureSettlements(data); // 构建聚落（幂等：data._settlements 缓存）
   LB._geneDevices = (data && data.geneDevices) || LB._geneDevices || {}; // v134：基因台/基因枪
   LB.curClass = classFilter || ''; // 物种名仅在「全部物种」模式显示（LB.curClass 为空）
@@ -3702,7 +3456,7 @@ function lbRenderView(data, player, classFilter){
   });
   var byServer={}, playerCarried=[], byServerAll={};
   visible.forEach(function(r){
-    if(lbContainerTypeOf(r)==='player'){
+    if(r.containerType==='player'){
       // v177：玩家 tab 内容仍按物种过滤；player 不参与聚落结构
       if(!classFilter || r.dinoClass===classFilter) playerCarried.push(r);
       return;
@@ -3740,7 +3494,7 @@ function lbRenderView(data, player, classFilter){
     var _cp = lbCurPid();
     Object.keys(LB._geneDevices).forEach(function(_abbr){
       (LB._geneDevices[_abbr].scanners||[]).forEach(function(_d){
-        if(lbContainerTypeOf(_d)==='player' && String(_d.containerOwnerPid)===String(_cp)) _myScannerCount++;
+        if(_d.containerType==='player' && String(_d.containerOwnerPid)===String(_cp)) _myScannerCount++;
       });
     });
   }
@@ -3795,7 +3549,7 @@ function lbRenderView(data, player, classFilter){
     var myScanners = [];
     Object.keys(LB._geneDevices||{}).forEach(function(abbr){
       (LB._geneDevices[abbr].scanners||[]).forEach(function(d){
-        if(lbContainerTypeOf(d)==='player' && String(d.containerOwnerPid)===String(curPid2)) myScanners.push(d);
+        if(d.containerType==='player' && String(d.containerOwnerPid)===String(curPid2)) myScanners.push(d);
       });
     });
     // v149：选中物种时只显示含该物种基因的背包基因枪（不含的隐藏）
@@ -3803,8 +3557,8 @@ function lbRenderView(data, player, classFilter){
     if(myScanners.length){
       var scnHtml = myScanners.map(function(d){
         var sl=(d.slots||[]).filter(geneSlotShow); // v142：按当前物种过滤
-        var genes = sl.length ? sl.map(function(s){ return lbGeneTagHtml(s.trait,s.level,s.species,undefined,s.dinoClass); }).join('') : '<span style="color:#666">无基因</span>';
-        return '<div style="font-size:12px;padding:8px 10px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;margin-bottom:6px">'+lbGeneDevIcon('基因枪')+'<b style="color:#c4b5fd">'+lbGeneDevZh('基因枪')+'</b><div style="margin-top:4px">'+genes+'</div></div>';
+        var genes = sl.length ? sl.map(function(s){ return lbGeneTagHtml(s.trait,s.level,s.species); }).join('') : '<span style="color:#666">无基因</span>';
+        return '<div style="font-size:12px;padding:8px 10px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;margin-bottom:6px">'+lbGeneDevIcon('基因枪')+'<b style="color:#c4b5fd">'+lbGeneDevZh('基因枪')+'</b>'+(d.playerName?' · '+d.playerName:'')+'<div style="margin-top:4px">'+genes+'</div></div>';
       }).join('');
       plan.push({t:'raw', html:scnHtml});
     }
@@ -3887,8 +3641,8 @@ function lbClusterSettles(settleGroups, cls){
     // v183 匹配基因成员（统一过滤 my+lbMemberMatch），替代 lbSettleGeneMatch
     var fgenes = garr.filter(function(m){ return my(m) && (cls ? lbMemberMatch(m, cls) : true); });
     var hasGene = fgenes.length>0;
-    // v194：纯基因聚落（无生物）——有我的基因设备（含床支撑的基因实验室/主宅）即显示；全部物种也显示（替代 v184 仅选物种规则）
-    if(!fgrp.length && !hasGene) return;
+    // v184 修复：纯基因聚落（无生物）仅选物种且有我的基因时显示；全部物种不显示（保持 v182，避免他人聚落）
+    if(!fgrp.length && !(cls && hasGene)) return;
     // v183：聚落归属——优先生物 rec，纯基因聚落用基因成员 settle
     var base = fgrp[0] || grp[0];
     var s = base ? lbSettlementOf(base) : (garr[0] ? garr[0].settle : null);
@@ -3903,8 +3657,8 @@ function lbClusterSettles(settleGroups, cls){
         }
       }
     }
-    var mRel = fgrp.filter(function(r){return !r.isEmpty && lbContainerTypeOf(r)==='released';}).length;
-    var mPod = fgrp.filter(function(r){return !r.isEmpty && lbContainerTypeOf(r)!=='released';}).length;
+    var mRel = fgrp.filter(function(r){return !r.isEmpty && r.containerType==='released';}).length;
+    var mPod = fgrp.filter(function(r){return !r.isEmpty && r.containerType!=='released';}).length;
     var cnt = mRel + mPod;
     // v183：grp 用全量（名称/地图/离散点），genes 携带基因成员；计数用匹配子集（mRel/mPod）
     items.push({key:key, grp:grp, genes:garr, fgenes:fgenes, settle:s, center:center, map:map, cnt:cnt, mRel:mRel, mPod:mPod, hasGene:hasGene});
@@ -4112,8 +3866,8 @@ function lbGeneLevelColor(lv){
   if(n >= 2) return '#3b82f6';
   return '#22c55e';
 }
-function lbGeneTagHtml(trait, level, species, showSpecies, dinoClass){
-  var sp = (showSpecies===false) ? '' : geneSpeciesCn(species, dinoClass);
+function lbGeneTagHtml(trait, level, species, showSpecies){
+  var sp = (showSpecies===false) ? '' : geneSpeciesCn(species);
   return '<span style="display:inline-block;padding:0 6px;margin-right:4px;margin-bottom:2px;border-radius:9px;'+lbGeneLevelCss(level)+';font-size:10px;line-height:16px;white-space:nowrap">'+(Number(level)>=2?'<b style="color:'+lbGeneLevelColor(level)+';font-weight:800;margin-right:3px">'+level+'</b>':'')+geneCn(trait)+(sp?' · '+sp:'')+'</span>'; // v168：0/1层无数字
 }
 // v171：基因槽位排序——物种(中文拼音) > 稀有度(层数降序) > 后主体词拼音
@@ -4239,7 +3993,7 @@ function lbCollectSettleMembers(server){
   var curPid = lbCurPid();
   var playerSet = curPid ? lbPlayerTribes((data&&data.tribesByServer)||{}, curPid) : null;
   (data.recs||[]).forEach(function(r){
-    if(r.server!==server || lbContainerTypeOf(r)==='player') return;
+    if(r.server!==server || r.containerType==='player') return;
     // v183 修复：玩家模式按 lbIsPlayerRec 过滤（与 v182 byServerAll 一致，界面不变）
     if(playerSet && !lbIsPlayerRec(r, playerSet, curPid)) return;
     members.bios.push({ kind:'bio', item:r, server:server, settle:lbSettlementOf(r), tribeId:Number(r.tribeId||r.containerTribe||0) });
@@ -4250,7 +4004,7 @@ function lbCollectSettleMembers(server){
       members.genes.push({ kind:'gene_infuser', item:d, server:server, settle:lbGeneSettlement(server,d), tribeId:Number(d.tribeId||d.containerTribe||0) });
     });
     (gd.scanners||[]).forEach(function(d){
-      if(lbContainerTypeOf(d)==='player') return; // 背包基因枪单独玩家 tab
+      if(d.containerType==='player') return; // 背包基因枪单独玩家 tab
       members.genes.push({ kind:'gene_scanner', item:d, server:server, settle:lbGeneSettlement(server,d), tribeId:Number(d.containerTribe||d.tribeId||0) });
     });
   }
@@ -4272,11 +4026,6 @@ function lbMemberMatch(m, cls){
 function lbGeneSettlement(abbr, d){
   var data = LB._cache && LB._cache.data;
   if(!data || !data._settlements || !d) return null;
-  // v194：优先查聚落形成时建立的 byGeneDevice 映射（消除运行时独立坐标匹配的偏差）
-  if(d.key && data._settlements.byGeneDevice){
-    var gv = data._settlements.byGeneDevice[abbr+'_'+d.key];
-    if(gv) return gv;
-  }
   if(d.containerId){
     var ck = abbr+'_'+d.containerId;
     var v = data._settlements.byContainer && data._settlements.byContainer[ck];
@@ -4300,7 +4049,7 @@ function lbGeneSettlement(abbr, d){
 }
 // v140：基因设备归属判定（对齐生物 lbIsMyBySettlement：聚落冠名→部落回退；背包按 containerOwnerPid）
 function lbGeneIsMy(abbr, tp, d, playerSet, curPid){
-  if(tp==='基因枪' && lbContainerTypeOf(d)==='player'){
+  if(tp==='基因枪' && d.containerType==='player'){
     return String(d.containerOwnerPid)===String(curPid);
   }
   if(!playerSet || !curPid) return false;
@@ -4321,13 +4070,13 @@ function lbGeneIsMy(abbr, tp, d, playerSet, curPid){
 function lbGeneOwnerTag(abbr, x, isMy){
   var d=x.d;
   var color = isMy ? '#f59e0b' : '#999';
-  if(lbContainerTypeOf(d)==='player'){
+  if(d.containerType==='player'){
     var burl=(LB_ICON_BY_NAME&&LB_ICON_BY_NAME['HubInventoryIcon'])||'';
     var bag = burl
       ? '<img src="'+burl+'" style="width:12px;height:12px;object-fit:contain;vertical-align:-2px;display:inline-block;margin-right:2px"'+lbIconFilterStyle(burl,'GUI')+'>'
       : lbMdiSvg('mdi-bag-personal',12);
     if(isMy) return '<span style="color:#f59e0b">'+bag+' 背包</span>';
-    return '<span style="color:#999">'+bag+' 背包</span>'; // v204：不显示玩家名（仅区分我的/外部颜色）
+    return '<span style="color:#999">'+bag+' '+(d.playerName||'玩家')+'</span>';
   }
   var mdi = lbMdiSvg(LB_SERVER_MDI[abbr]||'mdi-map',12);
   // 部落名解析（与生物 lbOwnerName 同源：containerTribe → tribeId 回退）
@@ -4387,8 +4136,8 @@ function lbBuildSettleContainerHtml(grp, settleKey){
   });
   var h='';
   var grpKeys = Object.keys(contGroups).sort(function(a,b){
-    var ta = LB_CONTAINER_ORDER[lbContainerTypeOf(contGroups[a][0])];
-    var tb = LB_CONTAINER_ORDER[lbContainerTypeOf(contGroups[b][0])];
+    var ta = LB_CONTAINER_ORDER[contGroups[a][0].containerType];
+    var tb = LB_CONTAINER_ORDER[contGroups[b][0].containerType];
     if(ta===undefined) ta=5;
     if(tb===undefined) tb=5;
     if(ta!==tb) return ta-tb;
@@ -4402,7 +4151,7 @@ function lbBuildSettleContainerHtml(grp, settleKey){
     var d=m.item;
     if(!d.containerId || knownCids[d.containerId]) return;
     // v175：过滤背包（player）容器——背包已单独玩家 TAB，与主列表分组一致
-    if(lbContainerTypeOf(d)==='player') return;
+    if(d.containerType==='player') return;
     (orphanGroups[d.containerId]=orphanGroups[d.containerId]||[]).push(d);
   });
   var orphanKeys = Object.keys(orphanGroups);
@@ -4413,7 +4162,7 @@ function lbBuildSettleContainerHtml(grp, settleKey){
     if(!LB.curClass){ renderCnt++; return; }
     var nn=cg2.some(function(r){ return !r.isEmpty && r.dinoClass===LB.curClass; });
     var cid2=cg2[0].containerId;
-    var sc2 = scanners.some(function(m){ return m.item.containerId===cid2 && (m.item.slots||[]).some(geneSlotShow); }); // v203：只认有基因的枪（空枪不影响展开判断）
+    var sc2 = scanners.some(function(m){ return m.item.containerId===cid2; }); // v183：scanners 已按物种过滤
     if(nn || sc2) renderCnt++;
   });
   var autoOpen = (renderCnt + infusers.length + orphanKeys.length) === 1 ? ' open' : '';
@@ -4422,32 +4171,30 @@ function lbBuildSettleContainerHtml(grp, settleKey){
     // v177：容器分组内容按物种过滤（按钮结构不变），纯空球/无匹配的容器分组隐藏
     var allNonEmpty=cg.filter(function(r){return !r.isEmpty;});
     var neArr = LB.curClass ? allNonEmpty.filter(function(r){ return r.dinoClass===LB.curClass; }) : allNonEmpty;
-    // v202：空球数仅统计 cryo 空球（facility 空容器 rec 表示"容器是空的"，不算 1 个空球）
-    var ecnt = cg.filter(function(r){ return r.isEmpty && r.src !== 'facility'; }).length;
-    var isEmptyFacility = !allNonEmpty.length && !ecnt && cg.some(function(r){ return r.src==='facility'; }); // 纯空容器（无球）
+    var ecnt=cg.length - allNonEmpty.length; // 空球数（全部保留，不分物种）
     // v134/v183：容器内基因枪（scanners 已统一归属+物种过滤，containerId 匹配）
     var cid = cg[0].containerId;
-    // v203：容器内只保留有基因的基因枪（空基因枪不显示不计数）
-    var cScanners = scanners.filter(function(m){ return m.item.containerId===cid && (m.item.slots||[]).some(geneSlotShow); }).map(function(m){ return m.item; });
+    var cScanners = scanners.filter(function(m){ return m.item.containerId===cid; }).map(function(m){ return m.item; });
     // v177：选物种时容器分组只保留有匹配生物或匹配基因枪的（纯空球/无匹配=空按钮隐藏）
     if(LB.curClass && !neArr.length && !cScanners.length) return;
     // v6 无属性点数量（红 |N 标注）：后端 statPoints 已真实（2026-08-13 v98），仅统计 statPoints 全 0 且逆推也失败的球（真数据缺失）
     var v6cnt=neArr.filter(function(r){ return r.cryoVersion===6 && lbIsNormalCreature(r) && (!r.statPoints || r.statPoints.reduce(function(a,b){return a+(Number(b)||0);},0)===0) && !lbSolveStats(r); }).length;
     // 布局：容器名(flex:1 省略) + 数量（聚落名已由聚落大按钮展示，容器内不重复标注）
     // 分组计数：0 值不显示数字和图标；v6 红字紧跟有生物数字后；放出分组不加圆点图标
-    var isRel = lbContainerTypeOf(cg[0]) === 'released';
+    var isRel = cg[0].containerType === 'released';
     var fullIc = isRel ? '' : lbMdiSvg('mdi-circle', 10);
     var emptyIc = isRel ? '' : lbMdiSvg('mdi-circle-outline', 10);
     var fullH = neArr.length>0 ? fullIc+neArr.length : '';
     var emptyH = ecnt>0 ? emptyIc+ecnt : '';
     var v6H = v6cnt>0 ? ((fullH?'<span style="opacity:.5">|</span>':'')+'<span style="color:#ef4444">'+v6cnt+'</span>') : '';
-    // v205：容器内基因枪显示统一为背包卡片样式（与玩家 tab 一致，不维护两套）
     var scnHtml = cScanners.map(function(d){
       var sl=(d.slots||[]).filter(geneSlotShow); // v142：按当前物种过滤
       sl = lbSortGeneSlots(sl); // v171：物种>稀有度>后主体词拼音 排序
-      return '<div style="font-size:12px;padding:8px 10px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;margin-bottom:6px">'+lbGeneDevIcon('基因枪')+'<b style="color:#c4b5fd">'+lbGeneDevZh('基因枪')+'</b><div style="margin-top:4px">'+sl.map(function(s){ return lbGeneTagHtml(s.trait,s.level,s.species,undefined,s.dinoClass); }).join('')+'</div></div>';
+      return '<div style="font-size:11px;padding:6px 8px;border-bottom:1px solid #23233a">'+lbGeneDevIcon('基因枪')+'<b style="color:#c4b5fd">'+lbGeneDevZh('基因枪')+'</b>'
+        +(sl.length?('<div style="margin-top:3px">'+sl.map(function(s){ return lbGeneTagHtml(s.trait,s.level,s.species); }).join('')+'</div>'):' <span style="color:#666">无基因</span>')
+        +'</div>';
     }).join('');
-    var scnMark = cScanners.length ? '<span style="color:#a78bfa">✦'+cScanners.length+'</span>' : ''; // v206：星号在前
+    var scnMark = cScanners.length ? '<span style="color:#a78bfa">'+lbGeneDevIcon('基因枪',12)+'×'+cScanners.length+'</span>' : '';
     var sepH = (fullH||v6H||scnMark) && emptyH ? ' ' : '';
     var sumHtml='<details class="acc"'+autoOpen+' onclick="lbAccOnly(this)"><summary>'
       +'<span class="acc-sum-name">'+lbContainerLabel(cg[0])+'</span>'
@@ -4460,7 +4207,6 @@ function lbBuildSettleContainerHtml(grp, settleKey){
       return lbDinoHTML(r, {mapIdx: idx});
     }).join('');
     if(ecnt>0) h+=lbEmptyRowHtml(ecnt);
-    else if(isEmptyFacility) h+='<div style="display:flex;align-items:center;background:#15151f;border:1px dashed #333;border-radius:8px;padding:8px 12px;margin:8px 0;font-size:12px;color:#888">🧊 空容器（无低温仓球）</div>';
     h+='</details>';
   });
   // v177/v183：infusers 已在上面提前计算（统一归属）
@@ -4469,9 +4215,9 @@ function lbBuildSettleContainerHtml(grp, settleKey){
       var d=m.item;
       var sl=(d.slots||[]).filter(geneSlotShow); // v142：按当前物种过滤
       sl = lbSortGeneSlots(sl); // v171：物种>稀有度>后主体词拼音 排序
-      var genes = sl.length ? sl.map(function(s){ return lbGeneTagHtml(s.trait,s.level,s.species,undefined,s.dinoClass); }).join('') : '';
+      var genes = sl.length ? sl.map(function(s){ return lbGeneTagHtml(s.trait,s.level,s.species); }).join('') : '';
       // v138：实际图标 + 无需坐标；v142：互斥手风琴；v181：纯基因聚落唯一分组自动展开
-      return '<details class="acc"'+autoOpen+' onclick="lbAccOnly(this)"><summary><span class="acc-sum-name">'+lbGeneDevIcon('基因台')+lbGeneDevZh('基因台')+'</span><span class="acc-cnt">'+(sl.length?'✦'+sl.length:'')+'</span></summary>'
+      return '<details class="acc"'+autoOpen+' onclick="lbAccOnly(this)"><summary><span class="acc-sum-name">'+lbGeneDevIcon('基因台')+lbGeneDevZh('基因台')+'</span><span class="acc-cnt">'+(sl.length?sl.length:'')+'</span></summary>'
         + (genes ? '<div style="padding:6px 8px">'+genes+'</div>' : '<div style="color:#666;font-size:11px;padding:4px 8px">无基因</div>')
         + '</details>';
     }).join('');
@@ -4484,42 +4230,19 @@ function lbBuildSettleContainerHtml(grp, settleKey){
       ds.forEach(function(d){ (d.slots||[]).forEach(function(s){ if(geneSlotShow(s)) sl.push(s); }); }); // v142：按当前物种过滤
       sl = lbSortGeneSlots(sl); // v171：物种>稀有度>后主体词拼音 排序
       // v174：孤儿容器标题复用 lbContainerLabel（容器类型图标+自定义名称，类似低温冰箱），不写死设施/储物箱
-      var genes = sl.length ? sl.map(function(s){ return lbGeneTagHtml(s.trait,s.level,s.species,undefined,s.dinoClass); }).join('') : '';
-      // v203：空基因枪（无基因）不显示不计数——容器保留显示（不隐藏），展开按空容器提示（与 v202 空冰箱一致）
+      var genes = sl.length ? sl.map(function(s){ return lbGeneTagHtml(s.trait,s.level,s.species); }).join('') : '';
+      // 计数对照空球：有基因=实心 🧬+基因数；空基因=半透明 🧬+枪数（对照 ◯N）
       var cnt = sl.length
-        ? '<span style="color:#a78bfa">✦'+sl.length+'</span>' // v206：星号在前
-        : '';
-      // v205：孤儿容器有基因的枪显示为背包卡片样式（每枪一卡，与玩家 tab 一致）
+        ? '<span style="color:#a78bfa">'+lbGeneDevIcon('基因枪',11)+'</span>'+sl.length
+        : '<span style="opacity:.5">'+lbGeneDevIcon('基因枪',11)+'</span>'+ds.length;
+      // 空基因展开：虚线空行（对照空球 lbEmptyRowHtml 样式）
       var body = genes
-        ? ds.map(function(d2){
-            var sl2=(d2.slots||[]).filter(geneSlotShow);
-            sl2 = lbSortGeneSlots(sl2);
-            return sl2.length
-              ? '<div style="font-size:12px;padding:8px 10px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;margin-bottom:6px">'+lbGeneDevIcon('基因枪')+'<b style="color:#c4b5fd">'+lbGeneDevZh('基因枪')+'</b><div style="margin-top:4px">'+sl2.map(function(s){ return lbGeneTagHtml(s.trait,s.level,s.species,undefined,s.dinoClass); }).join('')+'</div></div>'
-              : '';
-          }).join('')
-        : '<div style="display:flex;align-items:center;background:#15151f;border:1px dashed #333;border-radius:8px;padding:8px 12px;margin:8px 0;font-size:12px;color:#888">🧊 空容器（无低温仓球）</div>';
+        ? '<div style="padding:6px 8px">'+genes+'</div>'
+        : '<div style="display:flex;align-items:center;background:#15151f;border:1px dashed #333;border-radius:8px;padding:8px 12px;margin:8px 0;font-size:12px;color:#888">🧬 ×'+ds.length+'</div>';
       // v142：互斥手风琴；v181：纯基因聚落唯一分组自动展开
       return '<details class="acc"'+autoOpen+' onclick="lbAccOnly(this)"><summary><span class="acc-sum-name">'+lbContainerLabel(ds[0])+'</span><span class="acc-cnt">'+cnt+'</span></summary>'
         + body + '</details>';
     }).join('');
-  }
-  // v194：聚落床分组（床=主宅标志，带自定义名；容器稀少/放养龙远时中心已纳入床）
-  if(!scattered && settleKey){
-    var _sp = String(settleKey).split('|');
-    var _srv = _sp[0], _sid = _sp[1];
-    if(_srv && _sid && _sid!=='scattered'){
-      var _sv = (LB._cache && LB._cache.data && LB._cache.data._settlements && LB._cache.data._settlements.byServer && LB._cache.data._settlements.byServer[_srv]) || null;
-      var _sObj = null;
-      if(_sv && Array.isArray(_sv.settlements)) _sv.settlements.some(function(x){ if(x.id===_sid){ _sObj=x; return true; } return false; });
-      var _beds = (_sObj && _sObj.beds) || [];
-      if(_beds.length){
-        h += _beds.map(function(_b){
-          var _bn = _b.name || '床';
-          return '<details class="acc" onclick="lbAccOnly(this)"><summary><span class="acc-sum-name"><span class="acc-title">🛏 '+_bn+'</span></span><span class="acc-cnt"></span></summary></details>';
-        }).join('');
-      }
-    }
   }
   return h;
 }
@@ -4680,12 +4403,7 @@ function lbReloadIncremental(){
     ? Promise.resolve(LB._cache.data)
     : lbCacheGet().then(function(c){ return (c && c.data) ? c.data : null; });
   oldPromise.then(function(oldData){
-    lbLoad(sel, oldData, function(p){ // v207：刷新也显示下载进度
-      if(list){
-        if(p.phase==='head') list.innerHTML='<div style="text-align:center;padding:30px;color:#555">⏳ 检查数据更新...</div>';
-        else list.innerHTML='<div style="text-align:center;padding:30px;color:#555">⏳ 下载数据 '+p.done+'/'+p.total+' ...</div>';
-      }
-    }).then(function(data){
+    lbLoad(sel, oldData).then(function(data){
       LB._cache={ data:data, ts:Date.now() };
       lbCacheSet(data);
       lbRenderView(data, lbPlayer(), LB.curClass||'');
@@ -4729,7 +4447,7 @@ function lbLoadIconList(){
     var by={}, cats={};
     // 额外收录的非 biology/units 精选图标（如「全部物种」的 HubTameIcon，GUI 分类；以及手风琴 summary 容器图标 facility/skins/GUI）
     var extra={'HubTameIcon':1, 'Cryofridge':1, 'Display_Case':1, 'HUD_CryoHospital_Icon':1, 'HUD_PetDisplayStand_Wall_Thatch_Icon':1, 'Tek_Replicator':1, 'SmallStorage_Icon':1, 'RW_Tracking_dino':1, 'Cryopod':1, 'RW_Store_chibi':1, 'RW_equip_saddle':1, 'TEK_Icon':1, 'RW_Garage_roof_show':1, 'HubInventoryIcon':1, 'RW_wants_to_cuddle':1, 'Feeding_Trough':1,
-      'Tek Transmitter':1, 'TEKPortal_Icon':1, 'WoodFridge_Icon':1, 'Industrial_Preserving_Bin':1, 'Icon_DedicatedStorage':1, 'LargeStorage_Icon':1, 'Linked_Storage_Box':1, 'Library_Storage':1, 'Large_Storage_Box':1, 'Egg_Incubator':1, 'Embryo_Incubator':1, 'Gene_Storage':1, 'Pet_Display':1, 'Tek_Sleeping_Pod':1, 'HUD_CompanionBed_Icon':1, 'RW_cryopod':1, 'Gene_Scanner':1, 'Vault':1};
+      'Tek Transmitter':1, 'TEKPortal_Icon':1, 'WoodFridge_Icon':1, 'Industrial_Preserving_Bin':1, 'Icon_DedicatedStorage':1, 'LargeStorage_Icon':1, 'Linked_Storage_Box':1, 'Library_Storage':1, 'Large_Storage_Box':1, 'Egg_Incubator':1, 'Embryo_Incubator':1, 'Gene_Storage':1, 'Pet_Display':1, 'Tek_Sleeping_Pod':1, 'HUD_CompanionBed_Icon':1, 'RW_cryopod':1, 'Gene_Scanner':1};
     (d||[]).forEach(function(it){
       if(!it || !it.url || !it.name) return;
       var m=it.url.match(/\/ASA\/([^/]+)\//);
@@ -5748,7 +5466,7 @@ function lbIsNormalCreature(r){
 // 归属判断（改造后全用 pid）：玩家携带按 containerOwnerPid 匹配；cryo/tamed放出按 ownerTribeId 部落匹配
 function lbIsMyRec(r, playerSet, curPid){
   if(!playerSet) return false;
-  if(lbContainerTypeOf(r)==='player'){
+  if(r.containerType==='player'){
     // rec 缺 containerOwnerPid → 报错（不做名字回退）
     if(r.containerOwnerPid === undefined || r.containerOwnerPid === null){
       console.error('[PID] rec 缺 containerOwnerPid:', r.dinoClass, r.playerName);
@@ -5772,7 +5490,7 @@ function lbOwnerName(r){
     return null;
   }
   var ts = tb[r.containerTribe] || null;
-  if(lbContainerTypeOf(r)==='player'){ // 在某玩家身上：按 containerOwnerPid 反查 characterName（仅渲染）；查不到 → 报错
+  if(r.containerType==='player'){ // 在某玩家身上：按 containerOwnerPid 反查 characterName（仅渲染）；查不到 → 报错
     if(r.containerOwnerPid !== undefined && r.containerOwnerPid !== null){
       var cn = lbCharName(r.containerOwnerPid);
       if(cn) return cn;
@@ -5793,11 +5511,11 @@ function lbOwnerName(r){
     var nm2 = tribeLabel(tb[tid]);
     if(nm2) return nm2;
     // 无归属占位（tribeId=2000000000 特殊值，放生后部落已删除）→ 待认养
-    if(lbContainerTypeOf(r)==='released' && r.tribeId===2000000000) return '待认养';
-    if(lbContainerTypeOf(r)==='released') return '放出';
+    if(r.containerType==='released' && r.tribeId===2000000000) return '待认养';
+    if(r.containerType==='released') return '放出';
     return '部落#'+tid;
   }
-  if(lbContainerTypeOf(r)==='released') return '放出';
+  if(r.containerType==='released') return '放出';
   return '未知';
 }
 // 成长阶段标注（与文件导入页 fi-stage 同口径）：babyAge <0.1 婴儿 / <0.5 幼崽 / <1.0 青年 / >=1.0 成年（不标）
@@ -6274,7 +5992,7 @@ window.addEventListener('resize', function(){ lbBreedAlignResult(); });
 // 我的归属标签（橙色）：地图 + 容器标签 + 聚落（v113 从繁育列表提升为顶层共用）
 function lbOwnerTagMy(r){
   var mdi = LB_SERVER_MDI[r.server] || 'mdi-map';
-  if(lbContainerTypeOf(r)==='player'){ // 背包：不显示地图图标，原图直接显示（不着色，与容器图标 img.lb-sum-ic 一致）
+  if(r.containerType==='player'){ // 背包：不显示地图图标，原图直接显示（不着色，与容器图标 img.lb-sum-ic 一致）
     var burl = (LB_ICON_BY_NAME && LB_ICON_BY_NAME['HubInventoryIcon']) || '';
     var bag = burl
       ? '<img src="'+burl+'" class="lb-sum-ic">'
@@ -6285,7 +6003,7 @@ function lbOwnerTagMy(r){
 }
 // 外部归属标签（灰色）：地图 + 部落/玩家名 + 聚落⛺冠名第一人 / 皇冠👑部落长（v113 提升为顶层共用）
 function lbOwnerTagExt(r){
-  if(lbContainerTypeOf(r)==='player'){ // 玩家身上携带：背包图标（mask 染灰）+ 玩家名（不显示地图）
+  if(r.containerType==='player'){ // 玩家身上携带：背包图标（mask 染灰）+ 玩家名（不显示地图）
     var burl = (LB_ICON_BY_NAME && LB_ICON_BY_NAME['HubInventoryIcon']) || '';
     var bag = burl
       ? '<span style="display:inline-block;width:12px;height:12px;background:#999;-webkit-mask-image:url(\''+burl+'\');mask-image:url(\''+burl+'\');-webkit-mask-size:contain;mask-size:contain;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;vertical-align:-1px;flex-shrink:0"></span>'
