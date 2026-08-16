@@ -1614,7 +1614,7 @@ function toggleLevelInfo(e, total, base, wild, bonus, xp, isBred) {
 /* ================= 最新生物 TAB ================= */
 var LB = {};
 // 页面版本号：每次部署递增（调试信息里显示，方便确认手机加载的是否新版）
-var LB_VERSION = 'v20260815-229'; // 2026-08-16 聚落按钮基因标记 🧬 → ✦
+var LB_VERSION = 'v20260815-219'; // 2026-08-16 基因浮窗点击冒泡误关结果浮层修复
 // 服务器列表：HA API（apps.yaml sensor.asa_server_themes）优先；无 HA 环境（解耦）时用内置兜底（localStorage 上次同步缓存 → 代码常量）
 var LB_FALLBACK_SERVERS = [
   {abbr:'Isl',name:'孤岛',icon:'🏝️'},{abbr:'Sco',name:'焦土',icon:'🔥'},{abbr:'Cen',name:'核心岛',icon:'💎'},
@@ -1955,20 +1955,13 @@ function lbToggleServer(el){
   el.classList.toggle('active');
 }
 // 搜野生浮窗服务器多选渲染（v120）：排除 Bob，默认不选（与刷新数据的服务器网格同款样式）
-// v228：服务器按钮角标显示该服当前物种野生数量（复用 server-tab-cnt 样式；数据源 LB._wildCache[LB.curClass][abbr]）
 function lbRenderServersWild(){
   var el=document.getElementById('lbServersWild'); if(!el) return;
-  var cls = LB.curClass || '';
-  var wc = (cls && LB._wildCache) ? LB._wildCache[cls] : null;
   var html='';
   LB.SERVERS.forEach(function(s){
     if(s.abbr==='Bob') return; // 去掉俱乐部
     var mdi=LB_SERVER_MDI[s.abbr]||'';
-    var cnt = (wc && wc[s.abbr] && wc[s.abbr].dinos) ? wc[s.abbr].dinos.length : 0;
-    html+='<span class="server-tab" data-abbr="'+s.abbr+'" onclick="lbToggleServer(this)" title="'+s.name+(cnt?'（野生 '+cnt+'）':'')+'">'
-      +(mdi?'<i class="mdi '+mdi+'"></i>':(s.icon||''))
-      +(cnt?'<em class="server-tab-cnt">'+cnt+'</em>':'')
-      +'</span>';
+    html+='<span class="server-tab" data-abbr="'+s.abbr+'" onclick="lbToggleServer(this)" title="'+s.name+'">'+(mdi?'<i class="mdi '+mdi+'"></i>':(s.icon||''))+'</span>';
   });
   el.innerHTML=html;
 }
@@ -3808,8 +3801,7 @@ function lbRenderView(data, player, classFilter){
     var _cp = lbCurPid();
     Object.keys(LB._geneDevices).forEach(function(_abbr){
       (LB._geneDevices[_abbr].scanners||[]).forEach(function(_d){
-        // v221：对齐 v149 内容过滤——选中物种时只统计含该物种基因的背包基因枪（未选时 geneSlotShow 恒 true 不变）；球已按物种过滤，两者皆无时玩家携带 tab 隐藏
-        if(lbContainerTypeOf(_d)==='player' && String(_d.containerOwnerPid)===String(_cp) && (_d.slots||[]).some(geneSlotShow)) _myScannerCount++;
+        if(lbContainerTypeOf(_d)==='player' && String(_d.containerOwnerPid)===String(_cp)) _myScannerCount++;
       });
     });
   }
@@ -4051,8 +4043,8 @@ function lbSettleClusterHtml(clu){
     // 0 值一侧不显示（数字+图标）
     var c2h = c2>0 ? sic.rel+c2 : '';
     var e2h = e2>0 ? sic.pod+e2 : '';
-    // v181+v229：无匹配生物但该聚落有匹配基因——显示 ✦ 标记（统一星星，与 tab 基因角标一致）
-    var g2h = (it.hasGene && !c2 && !e2) ? '<span style="color:#a78bfa">✦</span>' : '';
+    // v181：无匹配生物但该聚落有匹配基因——显示 🧬 标记
+    var g2h = (it.hasGene && !c2 && !e2) ? '<span style="color:#a78bfa">🧬</span>' : '';
     h += '<div class="settle-btn side-btn" data-k="'+it.key+'" onclick="lbOpenSettle(this)">'
       + '<span class="settle-info">'+lbMdiSvg('mdi-tent', 12)
       + '<span class="settle-name">'+lbSettleName(it.settle)+'</span>' // v183：统一归属名称
@@ -4129,8 +4121,8 @@ function lbSettleBtnHtml(it){
   // 0 值一侧不显示（数字+图标）
   var cntH = cnt>0 ? sic.rel+cnt : '';
   var ecntH = ecnt>0 ? sic.pod+ecnt : '';
-  // v181+v229：无匹配生物但该聚落有匹配基因——显示 ✦ 标记（点击进详情看基因设备；统一星星）
-  var geneH = (it.hasGene && !cntH && !ecntH) ? '<span style="color:#a78bfa">✦</span>' : '';
+  // v181：无匹配生物但该聚落有匹配基因——显示 🧬 标记（点击进详情看基因设备）
+  var geneH = (it.hasGene && !cntH && !ecntH) ? '<span style="color:#a78bfa">🧬</span>' : '';
   return '<div class="settle-btn'+cls+'" data-k="'+it.key+'" onclick="lbOpenSettle(this)">'
     + mapHtml
     + '<span class="settle-info">'+tent
@@ -4977,7 +4969,7 @@ function lbOpenSpeciesPicker(){
     var seenNm={};
     keys.forEach(function(k){
       if(classMap[k]) return;
-      if(!lbIsTameableCls(k) && !lbHasAttrRecs(k)) return; // v223：可驯服 或 有属性点数据（Enforcer 等不可驯服但有属性点可选）
+      if(!lbIsTameableCls(k)) return; // 只可驯服
       var sp2=findSpeciesByClass(k);
       var nm2=((sp2&&sp2.name)||'').toLowerCase();
       if(seenNm[nm2]) return; // 按英文名去重
@@ -4993,18 +4985,6 @@ function lbOpenSpeciesPicker(){
     overlay.innerHTML=html;
     document.body.appendChild(overlay);
   });
-}
-// v223：该物种在数据 recs 中是否存在有属性点的记录（不可驯服但有属性点的物种如 Enforcer 也可选）
-function lbHasAttrRecs(dinoClass){
-  if(!dinoClass) return false;
-  var _d = LB._cache && LB._cache.data;
-  if(_d && Array.isArray(_d.recs)){
-    for(var i=0;i<_d.recs.length;i++){
-      var _r=_d.recs[i];
-      if(_r && _r.dinoClass===dinoClass && lbBreedable(_r)) return true;
-    }
-  }
-  return false;
 }
 // 判断 dinoClass 是否可驯服（ASB taming.violent||nonViolent）；VR 变体（虚拟现实，实际不可驯服）排除
 function lbIsTameableCls(dinoClass){
@@ -5043,7 +5023,6 @@ function lbPickerBuildNoHave(){
 }
 // 折叠区懒加载：首次展开时填充（不点开不加载）
 // 2026-08-13 v108：未驯服展开时隐藏主网格/最近选择（占满浮窗不浪费空间），收起时恢复
-// v225：搜索模式（LB._pickerSearchMode）下不隐藏主网格——避免未驯服结果遮挡驯服结果（toggle 事件异步派发，lbPickerFilter 同步恢复无效）
 function lbPickerLazyNoHave(el){
   if(!el) return;
   var grid=el.querySelector('#lbPickerNoHaveGrid');
@@ -5054,42 +5033,26 @@ function lbPickerLazyNoHave(el){
     if(r) r.style.display='';
     return;
   }
-  if(LB._pickerSearchMode){
-    if(r) r.style.display='none'; // 搜索时最近区隐藏
-    if(g) g.style.display='';     // 主网格保持显示
-  } else {
-    if(g) g.style.display='none';
-    if(r) r.style.display='none';
-  }
+  if(g) g.style.display='none';
+  if(r) r.style.display='none';
   if(grid && !grid.innerHTML) grid.innerHTML = lbPickerBuildNoHave();
 }
 function lbPickerFilter(){
   var q=(document.getElementById('lbPickerSearch').value||'').trim().toLowerCase();
-  LB._pickerSearchMode = !!q; // v225：搜索模式标志（ontoggle 据此不隐藏主网格）
-  var recent=document.getElementById('lbPickerRecent');
-  var grid=document.getElementById('lbPickerGrid');
-  var noHave=document.getElementById('lbNoHave');
-  if(q){
-    // v224：搜索模式——隐藏最近区（结果只来自搜索匹配）；主网格保持显示，避免 noHave.open 触发 ontoggle 隐藏被折叠区遮挡
-    if(recent) recent.style.display='none';
-    if(noHave){
-      var ng=noHave.querySelector('#lbPickerNoHaveGrid');
-      if(!ng.innerHTML) ng.innerHTML = lbPickerBuildNoHave();
-      noHave.open=true; // open 触发 ontoggle 会隐藏主网格/最近，下方显式恢复主网格
-    }
-    if(grid) grid.style.display='';
-  } else {
-    if(recent) recent.style.display='';
-    if(grid) grid.style.display='';
-    if(noHave) noHave.open=false;
-  }
-  // 主网格过滤（含「全部物种」+ 有库存物种）
   document.querySelectorAll('#lbPickerGrid .lb-picker-item').forEach(function(it){
     if(!q){ it.style.display=''; return; }
     it.style.display=((it.textContent||'').toLowerCase().indexOf(q)>=0)?'':'none';
   });
-  // 折叠区过滤（无库存未驯服/有属性点物种）
+  // 搜索时折叠区也参与过滤并展开（懒填充）；无关键词恢复收起
+  var noHave=document.getElementById('lbNoHave');
   if(noHave){
+    if(q){
+      var ng=noHave.querySelector('#lbPickerNoHaveGrid');
+      if(!ng.innerHTML) ng.innerHTML = lbPickerBuildNoHave();
+      noHave.open=true;
+    } else {
+      noHave.open=false;
+    }
     noHave.querySelectorAll('.lb-picker-item').forEach(function(it){
       if(!q){ it.style.display=''; return; }
       it.style.display=((it.textContent||'').toLowerCase().indexOf(q)>=0)?'':'none';
@@ -5434,7 +5397,7 @@ function lbRenderBreedBar(){
   var bar = document.getElementById('lbBreedBar');
   if(!bar) return;
   // 仅在「生物速查」页且选中具体物种时显示（繁育栏只在速查里用）；非正常生物（载具/特殊无属性生物）不显示繁育栏
-  var show = (LB._curPage !== 'import' && LB._curPage !== 'settings') && !!LB.curClass && lbIsNormalCreatureClass(LB.curClass); // v222：按类名判断（noGender 物种查实际数据），修复执行者/狮鹫/凤凰误判
+  var show = (LB._curPage !== 'import' && LB._curPage !== 'settings') && !!LB.curClass && lbIsNormalCreature({dinoClass: LB.curClass});
   bar.style.display = show ? 'block' : 'none';
   // 物种变化时：保存旧物种选择 → 加载当前物种的持久化选择；重置结果（旧物种结果不残留）
   if(LB._breedLastClass !== LB.curClass){
@@ -5573,7 +5536,7 @@ function lbOpenGenePicker(ev){
       sp.className=on?'mut-chip has-val':'mut-chip';
       sp.innerHTML=g.zh+cntHtml; // v146：浮窗基因无需 🧬 图标
       sp.style.cssText='font-size:11px;padding:4px 8px;cursor:pointer';
-      sp.onclick=function(ev){ if(ev&&ev.stopPropagation) ev.stopPropagation(); var i=sel.indexOf(kl); if(i>=0) sel.splice(i,1); else sel.push(kl); lbBreedSaveGene(sel); render(); lbRenderBreedBar(); }; // v220：对齐属性 chip 防冒泡（render 重建后 target 脱离 DOM，document 监听误触发 lbBreedToggle 关结果）
+      sp.onclick=function(){ var i=sel.indexOf(kl); if(i>=0) sel.splice(i,1); else sel.push(kl); lbBreedSaveGene(sel); render(); lbRenderBreedBar(); };
       list.appendChild(sp);
     });
     if(!shown) list.innerHTML='<div style="color:#888;font-size:12px;padding:10px">该物种暂无基因数据</div>';
@@ -5621,24 +5584,6 @@ function lbBreedToggle(){
 // ===== 搜野生（对齐 lbRefreshTamed 实现模式：HA script / webhook 双通道 + 分段进度条 + 状态轮询）=====
 // 注：野生龙 statPoints 后端直接可读（无需逆推），攻击 statPoints[8] 也有效；statValues[8] 虽常为 0/1 但 statPoints 正常
 // 确认浮窗：提示实时获取该物种野生信息（无冷却文案；实际有 60s 冷却功能，冷却中点击忽略）
-// v226：野生等级上限（普通 150 / 泰克种 180）——超过视为洞穴/特殊刷新（不可驯服）
-var LB_WILD_MAX_LEVEL = 150;
-var LB_WILD_MAX_LEVEL_TEK = 180;
-function lbWildMaxLevel(dinoClass){
-  var sp = findSpeciesByClass(dinoClass);
-  var nm = (sp && sp.name) || dinoClass || '';
-  return /^Tek\s/i.test(nm) ? LB_WILD_MAX_LEVEL_TEK : LB_WILD_MAX_LEVEL;
-}
-// v226+v227：野生个体保留判断——Zombie 系列优先保留（玩家都有，视为正常生物；Revenant/Corrupted 除外）；不可驯服变种过滤；等级超上限（洞穴种）过滤
-function lbWildKeep(d){
-  if(!d || !d.dinoClass) return true;
-  var nm = (findSpeciesByClass(d.dinoClass)||{}).name || d.dinoClass || '';
-  // v227：Zombie 系列（ZombieDodo/Zombie Wyvern 等）玩家都有，不因不可驯服/等级过滤；Revenant/Corrupted 排除仍按不可驯服过滤
-  if((/Zombie/i.test(d.dinoClass) || /^Zombie\s|^Zom/i.test(nm)) && !/Corrupt|Revenant/i.test(nm + d.dinoClass)) return true;
-  if(!lbIsTameableCls(d.dinoClass)) return false;
-  if((Number(d.level)||0) > lbWildMaxLevel(d.dinoClass)) return false;
-  return true;
-}
 function lbOpenWildConfirm(){
   if(!LB.curClass) return;
   if(LB._wildSearching){ lbToast('搜索进行中，请稍候…'); return; }
@@ -5700,9 +5645,6 @@ async function lbWildSearch(btn){
     var bar=document.getElementById('lbWildProgBar'), txt=document.getElementById('lbWildProgText'), legend=document.getElementById('lbWildProgLegend');
     var noToken = !(await lbHaTokenRefresh());
     btn.disabled = true;
-    // v228：按钮置灰视觉（内联样式，CSS :disabled 无法覆盖）
-    btn.style.opacity = '0.5';
-    btn.style.cursor = 'not-allowed';
     // 分段进度条：每台一格（进行中紫 / 成功绿 / 失败红 / 跳过橙，照抄刷新）
     bar.innerHTML = sel.map(function(){ return '<div style="flex:1;border-radius:2px;background:#333;transition:background .3s"></div>'; }).join('');
     var segs = bar.children;
@@ -5728,18 +5670,7 @@ async function lbWildSearch(btn){
       // 拉取该服野生数据入缓存（成功才替换）
       try{
         var j = await authFetch(DINO_JSON + abbr + '_wild_' + encodeURIComponent(species) + '.json?cb=' + Date.now(), {}).then(function(r){ return r.json(); });
-        if(j && j.savedAt && Array.isArray(j.dinos)){
-          var _kept = j.dinos.filter(lbWildKeep); // v226：过滤不可驯服变种/超上限洞穴种
-          wild[LB.curClass][abbr] = { savedAt: j.savedAt, dinos: _kept };
-          // v228：实时更新浮窗内该服按钮数量角标
-          var _btn = document.querySelector('#lbServersWild .server-tab[data-abbr="'+abbr+'"]');
-          if(_btn){
-            _btn.setAttribute('title', LB.servName(abbr)+'（野生 '+_kept.length+'）');
-            var _em = _btn.querySelector('.server-tab-cnt');
-            if(_em){ _em.textContent = _kept.length; }
-            else if(_kept.length){ _btn.insertAdjacentHTML('beforeend','<em class="server-tab-cnt">'+_kept.length+'</em>'); }
-          }
-        }
+        if(j && j.savedAt && Array.isArray(j.dinos)){ wild[LB.curClass][abbr] = { savedAt: j.savedAt, dinos: j.dinos }; }
       }catch(e){}
     }
     txt.textContent = '完成：成功 '+ok+' / 失败 '+fail;
@@ -5899,22 +5830,6 @@ function lbIsNormalCreature(r){
   if(!sp.noGender) return true;
   // noGender 标记但可能是正常生物（ASB 误标）：有真实属性点/可逆推则视为正常
   return lbBreedable(r);
-}
-// v222：按类名判断是否正常可繁育生物（繁育栏用）——纯 dinoClass 无属性点，noGender 物种从实际数据找该物种 rec（有真实属性点/可逆推即正常），避免执行者/狮鹫/凤凰等被误判为非常规
-function lbIsNormalCreatureClass(dinoClass){
-  if(!dinoClass) return false;
-  if(LB_NORMAL_WHITELIST[dinoClass]) return true;
-  var sp = findSpeciesByClass(dinoClass);
-  if(!sp) return false;
-  if(!sp.noGender) return true;
-  var _d = LB._cache && LB._cache.data;
-  if(_d && Array.isArray(_d.recs)){
-    for(var i=0;i<_d.recs.length;i++){
-      var _r = _d.recs[i];
-      if(_r && _r.dinoClass===dinoClass && lbBreedable(_r)) return true;
-    }
-  }
-  return false;
 }
 // 归属判断（改造后全用 pid）：玩家携带按 containerOwnerPid 匹配；cryo/tamed放出按 ownerTribeId 部落匹配
 function lbIsMyRec(r, playerSet, curPid){
