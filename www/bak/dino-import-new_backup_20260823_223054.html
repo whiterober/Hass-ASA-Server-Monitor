@@ -5781,9 +5781,8 @@ LB.breedResult = LB.breedResult || false;
 function lbRenderBreedBar(){
   var bar = document.getElementById('lbBreedBar');
   if(!bar) return;
-  // 仅在「生物速查」页且选中具体物种时显示（繁育栏只在速查里用）
-  // v262：去除「正常可繁育生物」限制（用户 2026-08-23）——所有选中物种（含不可驯服/不可繁殖的死亡蠕虫/精英死亡蠕虫等）都显示繁育栏
-  var show = (LB._curPage !== 'import' && LB._curPage !== 'settings') && !!LB.curClass;
+  // 仅在「生物速查」页且选中具体物种时显示（繁育栏只在速查里用）；非正常生物（载具/特殊无属性生物）不显示繁育栏
+  var show = (LB._curPage !== 'import' && LB._curPage !== 'settings') && !!LB.curClass && lbIsNormalCreatureClass(LB.curClass); // v222：按类名判断（noGender 物种查实际数据），修复执行者/狮鹫/凤凰误判
   bar.style.display = show ? 'block' : 'none';
   // 物种变化时：保存旧物种选择 → 加载当前物种的持久化选择；重置结果（旧物种结果不残留）
   if(LB._breedLastClass !== LB.curClass){
@@ -5979,13 +5978,11 @@ function lbWildMaxLevel(dinoClass){
   return /^Tek\s/i.test(nm) ? LB_WILD_MAX_LEVEL_TEK : LB_WILD_MAX_LEVEL;
 }
 // v226+v227：野生个体保留判断——Zombie 系列优先保留（玩家都有，视为正常生物；Revenant/Corrupted 除外）；不可驯服变种过滤；等级超上限（洞穴种）过滤
-// v261：Alpha（精英）变体放行——野生精英（精英利兹鱼/精英迅猛龙/精英霸王龙等）不可驯服，但用户要搜野生结果（v226 曾误过滤，2026-08-23 修复）
 function lbWildKeep(d){
   if(!d || !d.dinoClass) return true;
   var nm = (findSpeciesByClass(d.dinoClass)||{}).name || d.dinoClass || '';
   // v227：Zombie 系列（ZombieDodo/Zombie Wyvern 等）玩家都有，不因不可驯服/等级过滤；Revenant/Corrupted 排除仍按不可驯服过滤
   if((/Zombie/i.test(d.dinoClass) || /^Zombie\s|^Zom/i.test(nm)) && !/Corrupt|Revenant/i.test(nm + d.dinoClass)) return true;
-  if(/^Alpha\s/i.test(nm)) return true; // v261：精英变体放行
   if(!lbIsTameableCls(d.dinoClass)) return false;
   if((Number(d.level)||0) > lbWildMaxLevel(d.dinoClass)) return false;
   return true;

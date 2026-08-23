@@ -5781,9 +5781,8 @@ LB.breedResult = LB.breedResult || false;
 function lbRenderBreedBar(){
   var bar = document.getElementById('lbBreedBar');
   if(!bar) return;
-  // 仅在「生物速查」页且选中具体物种时显示（繁育栏只在速查里用）
-  // v262：去除「正常可繁育生物」限制（用户 2026-08-23）——所有选中物种（含不可驯服/不可繁殖的死亡蠕虫/精英死亡蠕虫等）都显示繁育栏
-  var show = (LB._curPage !== 'import' && LB._curPage !== 'settings') && !!LB.curClass;
+  // 仅在「生物速查」页且选中具体物种时显示（繁育栏只在速查里用）；非正常生物（载具/特殊无属性生物）不显示繁育栏
+  var show = (LB._curPage !== 'import' && LB._curPage !== 'settings') && !!LB.curClass && lbIsNormalCreatureClass(LB.curClass); // v222：按类名判断（noGender 物种查实际数据），修复执行者/狮鹫/凤凰误判
   bar.style.display = show ? 'block' : 'none';
   // 物种变化时：保存旧物种选择 → 加载当前物种的持久化选择；重置结果（旧物种结果不残留）
   if(LB._breedLastClass !== LB.curClass){
