@@ -457,16 +457,6 @@ var LB_SPECIAL_NAMES = {
   'Volcano_Trike_Character_BP_Retrieve_Alpha_C': '精英 X-三角龙 (Alpha X-Triceratops)',
   // v239：个别中文补齐（前缀表未覆盖）
   'AstralRockDrake_Character_BP_C': '星界岩龙 (Astral Rock Drake)',
-  'AstralScorpionKing_Character_BP_C': '星界蝎子王 (Astral Scorpion King)', // v289：星界蝎子王加前缀（用户 2026-08-24）
-  'Volcanic_Dragon_Character_BP_C': '火山龙 (X-Dragon)', // v292：X-Dragon 改名火山龙（用户 2026-08-24）
-  'Wyvern_Character_BP_Fire_Lightning_C': '繁星闪电飞龙 (Lightning Wyvern)', // v294：繁星前缀（用户 2026-08-24）
-  'Ragnarok_Wyvern_Override_C': '仙境火飞龙 (Fire Wyvern)', // v294：仙境前缀（用户 2026-08-24）
-  // v295：掉翻译补全（用户 2026-08-24）：北极熊/极地普雷兽/巨噬细胞/油壶虫/水壶虫
-  'Direbear_Character_Polar_C': '北极熊 (Polar Bear)',
-  'Purlovia_Character_BP_Polar_C': '极地普雷兽 (Polar Purlovia)',
-  'Macrophage_Swarm_Character_C': '巨噬细胞 (Macrophage)',
-  'Jugbug_Oil_Character_BP_C': '油壶虫 (Oil Jug Bug)',
-  'Jugbug_Water_Character_BP_C': '水壶虫 (Water Jug Bug)',
   'KingKaiju_Character_BP_C': '君王泰坦 (Gamma King Titan)',
   'Angler_Character_BP_ShipSkills_GhostFish_C': '幽灵鮟鱇鱼 (Ghost Anglerfish)',
   // v240：死神王后/国王翻译（区分后缀）
@@ -495,9 +485,6 @@ var LB_SPECIAL_NAMES = {
   // v266：圣羊/杀人火鸡 中文补全（用户 2026-08-24，zh 为空时生效）
   'Kirayli_Character_BP_C': '圣羊 (Kirayli)',
   'Turkey_Character_BP_C': '火鸡 (Murder Turkey)',
-  'RhynioDrone_Character_BP_C': '莱尼颚虫·Drone (Rhyniognatha Drone)', // v296：莱尼颚虫 Drone 加前缀（用户 2026-08-24）
-  'RemoteCamera_Character_BP_C': '摄像头 (Remote Camera)', // v266：远程摄像头侦察机→摄像头（用户 2026-08-24）
-  'Wyvern_Character_BP_Ash_C': '灰烬飞龙 (Fire Wyvern)', // v266：灰烬飞龙（用户 2026-08-24）
   // v266：腐化系/闪电系 前缀翻译补全（用户 2026-08-24，归不可训变体）
   'CorruptTumor_Character_BP_C': '腐化肿瘤 (Corrupt Tumor)',
   'Bot_Character_BP_C': '腐化化身 (Corrupted Avatar)',
@@ -586,10 +573,7 @@ var LB_ICON_SPECIAL = {
   'Astral Mosasaur': 'Mosasaurus',           // 星界沧龙→沧龙头图
   // v266：头像修复（用户 2026-08-24）
   'DodoRex': 'Dodorex',                      // 渡渡霸王龙（含火鸡试炼版）→渡渡霸王龙图（修复包含匹配 Turkey 抢先）
-  'Polar Bear': 'Dire_Bear',                 // 北极熊→恐熊图（库无本体图，与北极恐熊一致）
-  // v296：头像修复（用户 2026-08-24）
-  'Lightning Infused Rex': 'TRexHead',       // 闪电霸王龙→霸王龙头图（前缀拆分后 Infused Rex 匹配不到）
-  'Corruptling': 'Arthropluera'              // 腐化节胸虫（Corruptling）→节胸虫图（库无 Corruptling 名）
+  'Polar Bear': 'Dire_Bear'                  // 北极熊→恐熊图（库无本体图，与北极恐熊一致）
 };
 function lbSpLabel(dinoClass) {
   if (!dinoClass) return dinoClass;
@@ -629,16 +613,15 @@ function lbSpName(dinoClass){
     var baseNm=lbZhDeep(eng.replace(/\s*\(.*\)$/,''))||'';
     if(baseNm) return { zh: baseNm+' ('+LB_SUB_SPECIES[brMatch[1]]+')', eng: eng };
   }
-  // v266：手动翻译优先（LB_SPECIAL_NAMES 覆盖 zhName，用户指定始终生效）——如 RemoteCamera→摄像头
-  if(LB_SPECIAL_NAMES[dinoClass]){
-    var _sn=LB_SPECIAL_NAMES[dinoClass];
-    var _sm=_sn.match(/^(.+?)\s*\((.+)\)$/);
-    if(_sm) return {zh:_sm[1], eng:_sm[2]};
-    return {zh:_sn, eng:''};
-  }
   var zh=zhName(dinoClass)||zhName(eng)||'';
   var finalEng=eng;
   if(!zh){
+    if(LB_SPECIAL_NAMES[dinoClass]){
+      var t=LB_SPECIAL_NAMES[dinoClass];
+      var m=t.match(/^(.+?)\s*\((.+)\)$/);
+      if(m) return {zh:m[1], eng:m[2]};
+      return {zh:t, eng:''};
+    }
     var st=lbStripPrefix(eng);
     if(st.prefixes.length && st.prefixes.every(function(p){ return !LB_PREFIX_ZH[p]; })){
       // 剥离词（如 brute 空值）：中文/英文都用主词（不显示前缀）
@@ -5150,8 +5133,6 @@ function lbOpenSpeciesPicker(){
     keys.forEach(function(k){
       if(lbExcludeCls(k)) return; // v253：统一过滤（强制隐藏 BOSS + 洞穴变体，与特殊区同一套）
       if(classMap[k]) return;
-      // v267：强制归特殊生物折叠区（用户 2026-08-24）——LB_EXTRA_FORCE 直接收容，不经过 lbIsSpecialCls 判定
-      if(LB_EXTRA_FORCE.indexOf(k)>=0){ extraCnt++; extraKeys.push(k); return; }
       if(lbIsSpecialCls(k)) return; // v230：特殊生物进变体折叠区
       if(seenCls[k]) return; // v240：按类名去重
       seenCls[k]=1;
@@ -5218,7 +5199,7 @@ var LB_BOSS_PATTERN = /Boss|Kaiju|Rockwell|Node|Summoner|FinalFight|EndBoss|VRMa
 // v236：不可驯服虫鱼/水母归「精英/特殊生物」折叠区（用户确认 2026-08-23）：水蛭/七鳃鳗/女王蜂/腔棘鱼/食人鱼/剑齿鲑鱼 + 水母
 var LB_UNTAMEABLE_SPECIAL = [
   'Leech_Character_STA_C','Leech_Character_Diseased_C',          // 水蛭
-  'Bee_Queen_Character_BP_Gauntlet_C','Bee_Queen_Character_BP_STA_C', // 巨型女王蜂（v266：Bee_Queen_C 移未驯服，见 LB_TAMEABLE_FORCE）
+  'Bee_Queen_Character_BP_C','Bee_Queen_Character_BP_Gauntlet_C','Bee_Queen_Character_BP_STA_C', // 巨型女王蜂
   'Cnidaria_Character_BP_C','Cnidaria_Character_BP_Aberrant_C','Cnidaria_Character_BP_Retrieve_C' // 水母
   // v266：七鳃鳗/腔棘鱼/食人鱼/剑齿鲑鱼 移出→未驯服（用户 2026-08-24，见 LB_TAMEABLE_FORCE）
 ];
@@ -5232,15 +5213,13 @@ var LB_TAMEABLE_FORCE = [
   'RhynioDrone_Character_BP_C',                           // 莱尼颚虫 Drone
   'Xenomorph_Character_BP_Female_Gen2_C',                 // R-死神王后（可驯服）
   // v238：可驯服生物强制归「未驯服」（用户确认）：死神王后/侦察机/执行者/嘟嘟飞龙/秃鹫/蝎子（实验体已按 v239 全部隐藏；R-死神国王按 v240 移特殊）
-  // v291：死神女王 Xenomorph_Character_BP_Female_C 移出→不可训变体（用户 2026-08-24，见 LB_HIDDEN_SPECIAL）；畸变DLC死神国王 Male_Tamed_C 加入
-  // v292：可驯服死神国王 Male_Tamed_C 移出→特殊生物（用户 2026-08-24，见 LB_EXTRA_FORCE）
+  'Xenomorph_Character_BP_Female_C',                      // 死神王后（Reaper Queen）
   'Scout_Character_BP_C',                                 // 侦察机
   // v256：Enforcer_Character_BP_Race_C 移出（_Race 竞速版全隐藏，用户 2026-08-23）
   'DodoWyvern_Character_BP_C',                            // 嘟嘟飞龙
   'Vulture_Character_BP_OasisaurTaming_C',                // 秃鹫
   // v264：AstralScorpionKing 移出（星界蝎子归特殊折叠区）
   'Xenomorph_Character_BP_Male_Tamed_Gen2_C',             // v259：创世2可驯服R-死神国王（nonViolent，归未驯服）
-  'Xenomorph_Character_BP_Male_Gen2_C',                   // v293：野外创世2R-死神国王（用户 2026-08-24 移未驯服）
   // v266：鱼归未驯服（用户 2026-08-24）：七鳃鳗/腔棘鱼(普通海洋畸变)/所有剑齿鲑鱼/所有食人鱼
   'Lamprey_Character_C',                                   // 七鳃鳗
   'Coel_Character_BP_C','Coel_Character_BP_Ocean_C','Coel_Character_BP_Aberrant_C', // 腔棘鱼（普通/海洋/畸变）
@@ -5251,18 +5230,7 @@ var LB_TAMEABLE_FORCE = [
   'Cherufe_Character_BP_C',                               // 溶喉龙（Magmasaur）
   'Wyvern_Character_BP_Fire_C','Wyvern_Character_BP_Poison_C','Wyvern_Character_BP_Lightning_C', // 焦土飞龙（火/毒/电）
   'RockDrake_Character_BP_C',                             // 岩龙本体
-  'Exosuit_RTS_Character_BP_C',                           // v266：外骨骼机甲 RTS 版（用户 2026-08-24 移未驯服）
-  'Wyvern_Character_BP_Ash_C',                            // v266：灰烬飞龙（用户 2026-08-24 移未驯服）
-  // v266：可拥有生物移未驯服（用户 2026-08-24）：冰原/沙漠泰坦、芬里尔、泰坦龙、巨翼魔蝠、巨型女王蜂
-  'IceKaiju_Character_BP_C','DesertKaiju_Character_BP_C','Fenrir_Character_BP_C','Titanosaur_Character_BP_C','BossBat_Character_BP_C','Bee_Queen_Character_BP_C',
-  // v267：血仆/渡渡霸王龙/机甲系/泰克悬浮艇/双桅帆船/森林泰坦/蝎子 移未驯服（用户 2026-08-24）
-  'Thrall_Character_BP_WithFlamethrower_C','Thrall_Character_BP_WithSniperRifle_C','Thrall_Character_BP_WithCrossbow_C','Thrall_Character_BP_Soldier_C','Thrall_Character_BP_SoldierWithPistol_C','Thrall_Character_BP_WithBola_C','Thrall_Character_BP_WithShotgun_C','Thrall_Character_BP_Cultist_C','Thrall_Character_BP_Tamer_C','Thrall_Character_BP_Fighter_C', // 血仆×10
-  'DodoRex_Character_BP_C','DodoRex_Character_BP_TurkeyTrials_C','DodoRex_Character_BP_FearEvolved_C', // 渡渡霸王龙×3
-  'Mek_Character_BP_C','MegaMek_Character_BP_C','Exosuit_Character_BP_C', // 机甲/力神机甲/外骨骼机甲
-  'TekHoverSkiff_Character_BP_C','BrigShipBP_C', // 泰克悬浮艇/双桅帆船
-  'ForestKaiju_Character_BP_C' // 森林泰坦（v289：星界蝎子王移出→归不可训变体，见 LB_SPECIAL_NAMES + /^Astral/ 规则）
-  // v290：寒冰巨像/黏土巨像 移未驯服（用户 2026-08-24：可驯服）
-  ,'IceGolem_Character_BP_C','ChalkGolem_Character_BP_C'
+  'Exosuit_RTS_Character_BP_C'                            // v266：外骨骼机甲 RTS 版（用户 2026-08-24 移未驯服）
 ];
 // v237：被隐藏生物归「精英/特殊生物」折叠区（用户确认 2026-08-23：除上述可驯服外全部显示为特殊，含防御者/侦察机等野生机械）
 var LB_HIDDEN_SPECIAL = [
@@ -5275,20 +5243,21 @@ var LB_HIDDEN_SPECIAL = [
   'Dodo_Character_BP_Birthday_C','Dodo_Character_BP_Bunny_C','BunnyOviraptor_Character_BP_C', // 派对/兔耳渡渡鸟/兔耳窃蛋龙
   // v266：普通飞龙/岩龙/溶喉龙移未驯服（用户 2026-08-24，见 LB_TAMEABLE_FORCE）；保留隐藏/星界变体
   'RockDrake_Character_BP_Gauntlet_C','RockDrake_Character_BP_Summoned_C','RockDrake_Character_BP_STA_C','AstralRockDrake_Character_BP_C' // 岩龙变体（Gauntlet/Summoned/STA 隐藏、星界归特殊）
-  // v239：未驯服→特殊（用户确认）：猎杀者/粘土巨像/腔棘鱼/三叶虫/食人鱼/水蛭/寒冰巨像/机甲/君王泰坦（v266：芬里尔/巨翼魔蝠/泰坦龙移未驯服）
-  ,'Neophyte_Character_BP_C','Neophyte_Char_BP_Gargoyle_C',// 猎杀者
-  // v290：粘土巨像/寒冰巨像 移未驯服（用户 2026-08-24：可驯服，见 LB_TAMEABLE_FORCE）；三叶虫普通版走 LB_EXTRA_FORCE
-  'Trilobite_Character_STA_C','Trilobite_Character_Aberrant_C', // 三叶虫（STA 隐藏；畸变版在 LB_EXTRA_FORCE）
+  // v239：未驯服→特殊（用户确认）：芬里尔/巨翼魔蝠/猎杀者/粘土巨像/腔棘鱼/三叶虫/食人鱼/水蛭/泰坦龙/寒冰巨像/机甲/君王泰坦
+  ,'Fenrir_Character_BP_C',                                // 芬里尔
+  'BossBat_Character_BP_C',                               // 巨翼魔蝠
+  'Neophyte_Character_BP_C','Neophyte_Char_BP_Gargoyle_C',// 猎杀者
+  'ChalkGolem_Character_BP_C',                            // 粘土巨像
+  'Trilobite_Character_STA_C','Trilobite_Character_Aberrant_C', // 三叶虫
   'Leech_Character_C',                                    // 水蛭（普通）
-  'IceGolem_Char_BP_Gargoyle_C',// 冰元素（v290：寒冰巨像 IceGolem_Character_BP_C 移未驯服）
+  'Titanosaur_Character_BP_C',                            // 泰坦龙
+  'IceGolem_Character_BP_C','IceGolem_Char_BP_Gargoyle_C',// 寒冰巨像
   'Mek_Character_BP_C',                                   // 机甲
   'KingKaiju_Character_BP_C'                              // 君王泰坦（v240 起隐藏，见 LB_HIDDEN_FORCE）
   // v239：死神变种归特殊（除王后/XR可驯服、闪电不显示、腐化移除外）：地底/地表/元素死神王等
   // v251：移除 VRXenomorph_Character_BP_Male_Minion_C（ASB 显示名=Corrupted Dinotar，腐化生物不列特殊，与 VRRex 等 6 变体一致隐藏）
   // v259：移除 Tamed_Gen2（可驯服版移到未驯服区）；Gen2_Summoned（召唤版）走 LB_HIDDEN_DUP 隐藏
   ,'Xenomorph_Character_BP_Male_Chupa_C','Xenomorph_Character_BP_Male_Lunar_C','Xenomorph_Character_BP_Male_Minion_C','Xenomorph_Character_BP_Male_Surface_C','Xenomorph_Character_BP_Male_Gen2_C' // 含 R-死神国王（v240 从可驯服移入）
-  // v291：死神女王归不可训变体（用户 2026-08-24，从 LB_TAMEABLE_FORCE 移出）
-  ,'Xenomorph_Character_BP_Female_C' // 死神王后（Reaper Queen）
   // v240：Attack Drone / Malfunctioned Attack Drone 归特殊（用户确认）
   ,'EndDrone_Character_BP_C','EndDrone_Character_BP_Malfunctioned_C'
   // v240：幽灵生物归特殊（用户确认）：幽灵灯泡犬 + 幽灵精灵龙×4
@@ -5298,56 +5267,13 @@ var LB_HIDDEN_SPECIAL = [
   // v258：攻击无人机月球版归特殊（用户确认）
   ,'EndDrone_Lunar_Character_BP_C'
   // v264：可驯服泰坦 BOSS 归特殊（用户 2026-08-24）：冰原/沙漠/森林泰坦（玩家可拥有）
-  // v266：冰原/沙漠泰坦移未驯服（用户 2026-08-24，见 LB_TAMEABLE_FORCE）；森林泰坦保留
-  ,'ForestKaiju_Character_BP_C'
+  ,'IceKaiju_Character_BP_C','DesertKaiju_Character_BP_C','ForestKaiju_Character_BP_C'
   // v266：防御单元/无名怪地表/追寻者地表/油壶虫/水壶虫/无名怪精英/北极熊/极地地懒/巨噬细胞 归特殊（用户 2026-08-24）
   ,'Defender_Character_BP_C','ChupaCabra_Character_BP_Surface_C','Pteroteuthis_Char_BP_Surface_C','Jugbug_Oil_Character_BP_C','Jugbug_Water_Character_BP_C','ALPHA_ChupaCabra_Character_BP_C','Direbear_Character_Polar_C','Purlovia_Character_BP_Polar_C','Macrophage_Swarm_Character_C'
   // v266：圣羊/杀人火鸡 归特殊（用户 2026-08-24，调查繁星彩蛋+节日生物缺显示）
   ,'Kirayli_Character_BP_C','Turkey_Character_BP_C'
   // v266：闪电飞龙（繁星 Lightning Infused 系列）归不可训变体（用户 2026-08-24——同物种已驯服过滤误伤，显式放行）
   ,'Wyvern_Character_BP_Fire_Lightning_C'
-];
-// v267：强制归「特殊生物」折叠区（用户 2026-08-24）：畸变/兔耳/派对/病态系列 7 个
-var LB_EXTRA_FORCE = [
-  'Coel_Character_BP_VDay_Aberrant_C',        // 情人节畸变腔棘鱼
-  'Trilobite_Character_Aberrant_C',           // 畸变三叶虫
-  'Cnidaria_Character_BP_Aberrant_C',         // 畸变水母
-  'Dodo_Character_BP_Bunny_C',                // 兔耳渡渡鸟
-  'BunnyOviraptor_Character_BP_C',            // 兔耳窃蛋龙
-  'Dodo_Character_BP_Birthday_C',             // 生日派对渡渡鸟
-  'Leech_Character_Diseased_C',               // 病态水蛭
-  'Trilobite_Character_C',                    // v290：普通三叶虫（用户 2026-08-24 移特殊）
-  'Volcanic_Dragon_Character_BP_C',           // v291：X-Dragon（用户 2026-08-24 移特殊）
-  'Cnidaria_Character_BP_C',                  // v291：水母（用户 2026-08-24 移特殊）
-  // v292：22 个移特殊生物（用户 2026-08-24）：水蛭/攻击无人机/腐化肿瘤/广翅鲎/火鸡/菊石/巨型蜜蜂/猎杀者/普通利兹鱼/情人节腔棘鱼/圣诞嘎查/圣羊/可驯服死神国王/死亡蠕虫/泰坦蚁×2/无名怪/鹦鹉鱼群/追寻者/Macrophage/Jug Bug×2
-  'Leech_Character_C',                        // 水蛭（普通）
-  'EndDrone_Character_BP_C',                  // 攻击无人机
-  'CorruptTumor_Character_BP_C',              // 孵化肿瘤（腐化肿瘤）
-  'Euryp_Character_C',                        // 广翅鲎
-  'Turkey_Character_BP_C',                    // 火鸡
-  'Ammonite_Character_C',                     // 菊石
-  'Bee_Character_BP_C',                       // 巨型蜜蜂
-  'Neophyte_Character_BP_C',                  // 猎杀者
-  'Leedsichthys_Character_BP_C',              // 普通利兹鱼
-  'Coel_Character_BP_VDay_C',                 // 情人节腔棘鱼
-  'Gacha_Claus_Character_BP_C',               // 圣诞嘎查
-  'Kirayli_Character_BP_C',                   // 圣羊
-  'Xenomorph_Character_BP_Male_Tamed_C',      // 可驯服的死神国王
-  'Deathworm_Character_BP_C',                 // 普通死亡蠕虫
-  'Ant_Character_BP_C','FlyingAnt_Character_BP_C', // 泰坦蚁×2
-  'ChupaCabra_Character_BP_C',                // 普通无名怪
-  'MicrobeSwarmChar_BP_C',                    // 鹦鹉鱼群
-  'Pteroteuthis_Char_BP_C',                   // 追寻者
-  'Macrophage_Swarm_Character_C',             // Macrophage
-  'Jugbug_Oil_Character_BP_C','Jugbug_Water_Character_BP_C', // Oil/Water Jug Bug
-  // v293：虫群/电光萤/防御单元×2/月球攻击无人机/情人节海洋腔棘鱼/普通死神王后 移特殊（用户 2026-08-24）
-  'InsectSwarmChar_BP_C',                     // 虫群
-  'Lightbug_Character_BaseBP_C',              // 电光萤
-  'Defender_Character_BP_C','EndTank_Character_BP_C', // 防御单元×2（灭绝/最终战）
-  'EndDrone_Lunar_Character_BP_C',            // 月球攻击无人机
-  'Coel_Character_BP_VDay_Ocean_C',           // 情人节海洋腔棘鱼
-  'Xenomorph_Character_BP_Female_C',          // 普通死神王后
-  'RhynioDrone_Character_BP_C'                // v294：莱尼颚虫 Drone（用户 2026-08-24 移特殊）
 ];
 // v239：强制隐藏（BOSS 不显示，用户确认）：冰原/沙漠/森林泰坦、贝拉；v240 加君王泰坦、恐熊LL
 // v264：IceKaiju/DesertKaiju/ForestKaiju 移出（玩家可拥有的泰坦 BOSS 归特殊，见 LB_HIDDEN_SPECIAL）；FirstFlock/Beyla/KingKaiju/Direbear_LL 保持隐藏
@@ -5356,10 +5282,6 @@ var LB_HIDDEN_FORCE = ['DesertKaiju_FirstFlockChar_BP_C','Beyla_Character_BP_C',
   ,'CaveMinotaur_Character_BP_New_C','Iceworm_Character_Minion_BP_smaller_C','Bat_Character_BP_Gamma_C','BoaFrill_Character_BP_Gamma_C','Steinbjorn_Character_BP_C'
   // v266：特殊生物区任务怪隐藏（用户 2026-08-24）：Eclipsar暗影/光明驯服阿根廷鹫/无齿翼龙、贝拉小怪、Steinbjörn恐熊、冰鱼任务腔棘鱼、无名怪小怪、繁星蝎子王
   ,'Argent_Character_BP_UmbraTaming_C','LighBacon_Character_BP_LuminaTaming_C','BeylaMinion_Character_BP_C','Direbear_Character_BP_SteinbjornMinion_C','Coel_Character_BP_IceFishMission_C','Ptero_Minion_Character_BP_UmbraTaming_C','ChupaCabra_Character_BP_Minion_C','ScorpionKing_Character_BP_C'
-  // v292：狂暴4种龙隐藏（用户 2026-08-24）：狂暴腐化/闪电霸王龙、狂暴腐化/闪电三角龙
-  ,'MegaRex_Character_BP_Corrupt_C','MegaTrike_Character_BP_Corrupt_C','MegaRex_Character_BP_Lightning_C','MegaTrike_Character_BP_Lightning_C'
-  // v294：任务怪隐藏（用户 2026-08-24）：恐狼LL/竞速鱼龙/篮球灯泡犬/破网食人鱼/冰鱼任务食人鱼+剑齿鲑鱼/腐化节胸虫
-  ,'Direwolf_LL_Character_BP_C','RaceDolphin_Character_BP_C','LanternPug_Character_BP_Basketball_C','Piranha_Character_BP_BreakNet_C','Piranha_Character_BP_IceFishMission_C','Salmon_Character_BP_IceFishMission_C','Arthro_Character_BP_Corrupt_C'
 ];
 // v258：重名表隐藏清单（用户 2026-08-23）——精确类名，最后判断覆盖显式集合放行（除 _C 本体与 _Lunar/_VDay/_Rare/_Gen2 翻译保留、_STA 不动、_Ocean 暂留外，重名表内变体全隐藏）
 var LB_HIDDEN_DUP = [
@@ -5391,8 +5313,6 @@ function lbExcludeCls(dinoClass){
   if(LB_TAMEABLE_FORCE.indexOf(dinoClass)>=0) return false;
   if(LB_UNTAMEABLE_SPECIAL.indexOf(dinoClass)>=0) return false;
   if(LB_HIDDEN_SPECIAL.indexOf(dinoClass)>=0) return false;
-  // v292：显式归特殊生物区放行（用户 2026-08-24）——腐化肿瘤/任务后缀等不误伤
-  if(LB_EXTRA_FORCE.indexOf(dinoClass)>=0) return false;
   var _spX=findSpeciesByClass(dinoClass);
   var _bpX=(_spX&&_spX.blueprintPath)||'';
   if(/\/Cave\//i.test(_bpX) || /_Cave/i.test(_bpX)) return true; // 洞穴变体过滤
@@ -5405,9 +5325,6 @@ function lbExcludeCls(dinoClass){
 }
 function lbIsSpecialCls(dinoClass){
   if(!dinoClass) return false;
-  // v267：强制归未驯服/特殊生物区的集合优先放行（用户 2026-08-24）——防被下方关键词/显式集合误判进不可训变体
-  if(LB_TAMEABLE_FORCE.indexOf(dinoClass)>=0) return false;
-  if(LB_EXTRA_FORCE.indexOf(dinoClass)>=0) return false;
   // v266：任务路径生物隐藏（用户 2026-08-24）——Missions/MissionVariants 路径（迷宫/生命维持/首领战/狩猎/护送/最终战等）全部不列特殊
   var _spT=findSpeciesByClass(dinoClass);
   var _bpT=(_spT&&_spT.blueprintPath)||'';
