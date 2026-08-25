@@ -1769,7 +1769,7 @@ function toggleLevelInfo(e, total, base, wild, bonus, xp, isBred) {
 /* ================= 最新生物 TAB ================= */
 var LB = {};
 // 页面版本号：每次部署递增（调试信息里显示，方便确认手机加载的是否新版）
-var LB_VERSION = 'v20260825-310'; // 2026-08-25 v310：设备判断改 UA（修复 PC 触屏误判为长按）
+var LB_VERSION = 'v20260825-306'; // 2026-08-25 v306：野生卡片追踪按钮高度对齐顶部开始追踪
 // 服务器列表：HA API（apps.yaml sensor.asa_server_themes）优先；无 HA 环境（解耦）时用内置兜底（localStorage 上次同步缓存 → 代码常量）
 var LB_FALLBACK_SERVERS = [
   {abbr:'Isl',name:'孤岛',icon:'🏝️'},{abbr:'Sco',name:'焦土',icon:'🔥'},{abbr:'Cen',name:'核心岛',icon:'💎'},
@@ -6109,8 +6109,6 @@ function lbRenderBreedBar(){
     var _hasWild = false;
     if(_wc){ for(var _k in _wc){ if(_wc[_k] && Array.isArray(_wc[_k].dinos) && _wc[_k].dinos.length){ _hasWild = true; break; } } }
     tbtn.style.display = (LB.breedResult && _hasWild) ? 'inline-block' : 'none';
-    // v307：提示按设备区分（PC 右键 / 移动端长按）
-    tbtn.title = '点击=开始/停止追踪；'+lbTrackSwitchHint();
     // 追踪中状态恢复（切物种/关闭结果时自动停止追踪并恢复按钮）
     if(!LB.breedResult && LB._trackState && LB._trackState.tracking){
       lbTrackStop(true);
@@ -6505,22 +6503,6 @@ async function lbWaitWildStatusFile(abbr, oldTs){
   return {cooldown:false, ok:false, error:'timeout'};
 }
 // ===== TrackDino 实时追踪野生龙（2026-08-25，v302）=====
-// v310：设备类型判断——用 userAgent 判断移动端（PC 触屏笔记本 maxTouchPoints>0 但仍是 PC，用鼠标右键切换）
-function lbIsTouchDevice(){
-  try{
-    var ua = navigator.userAgent || '';
-    return /Android|iPhone|iPad|iPod|Windows Phone|Mobile|MicroMessenger/i.test(ua);
-  }catch(e){ return false; }
-}
-// 切换方式提示文案（PC=右键 / 移动=长按）
-function lbTrackSwitchHint(){
-  return lbIsTouchDevice() ? '长按=切换下一只野生龙' : '右键=切换下一只野生龙';
-}
-// 追踪成功提示（v309）：两个入口（顶部按钮 lbTrackClick / 野生卡片 lbTrackWildFrom）都调用
-// 每次开始追踪都带切换提示（PC 右键 / 移动端长按），移动端 PC 端都有
-function lbTrackFirstHint(server, level){
-  return '已追踪 '+LB.servName(server)+' Lv.'+level+' 野生龙（'+ (lbIsTouchDevice() ? '长按' : '右键') +'按钮可切换下一只）';
-}
 // 点击追踪按钮：查玩家位置（逐服 player_pos）→ 该服找最近野生龙 → track_dino 开始追踪
 async function lbTrackClick(){
   if(lbTrackClickGuard()) return; // v304：移动端长按后的 touchend 残留，跳过点击
@@ -6546,8 +6528,10 @@ async function lbTrackClick(){
     var ok = await lbTrackDino(pos.server, dino);
     if(!ok){ lbToast('追踪失败，请检查服务器/玩家'); return; }
     LB._trackState = { tracking:true, server: pos.server, dinoId: String(dino.id1)+'_'+String(dino.id2), dino: dino, player: LB.playerEos, pos: pos };
-    // v308：首次提示（长按/右键切换）——移动端野生卡片入口也会走 lbTrackFirstHint
-    lbToast(lbTrackFirstHint(pos.server, dino.level));
+    // v304：首次追踪提示长按切换（localStorage 标记，只提示一次）
+    var _first = false;
+    try{ if(!localStorage.getItem('lbTrackHintShown')){ localStorage.setItem('lbTrackHintShown','1'); _first = true; } }catch(e){}
+    lbToast(_first ? ('已追踪 '+LB.servName(pos.server)+' Lv.'+dino.level+' 野生龙（长按按钮可切换下一只）') : ('已追踪 '+LB.servName(pos.server)+' Lv.'+dino.level+' 野生龙'));
     lbStartTrackPoll();
     lbRenderBreedBar();
     if(LB.breedResult) lbRenderBreedResult(); // v304：同步刷新野生卡片追踪按钮状态
@@ -6719,8 +6703,7 @@ async function lbTrackWildFrom(server, idx, ev){
     if(!ok){ lbToast('追踪失败，请检查服务器/玩家'); return; }
     var pos = cur && cur.pos ? cur.pos : null;
     LB._trackState = { tracking:true, server: server, dinoId: targetId, dino: dino, player: LB.playerEos, pos: pos };
-    // v308：首次提示（长按/右键切换）——与顶部按钮入口统一
-    lbToast(lbTrackFirstHint(server, dino.level));
+    lbToast('已追踪 '+LB.servName(server)+' Lv.'+dino.level+' 野生龙');
     lbStartTrackPoll();
     lbRenderBreedBar();
     if(LB.breedResult) lbRenderBreedResult(); // v304：同步刷新野生卡片追踪按钮状态
@@ -7671,7 +7654,7 @@ lbBreedBindOutsideCancel();
     <span style="flex:1"></span>
     <!-- v166：操作按钮组（移动端另起一行居中） -->
     <div id="lbBreedActions" style="display:flex;align-items:center;gap:8px;flex-shrink:0">
-      <button id="lbBreedTrackBtn" onclick="lbTrackClick()" oncontextmenu="event.preventDefault();lbTrackNext();return false;" ontouchstart="lbTrackTouchStart(event)" ontouchend="lbTrackTouchEnd(event)" ontouchmove="lbTrackTouchMove(event)" ontouchcancel="lbTrackTouchEnd(event)" style="display:none;flex-shrink:0;background:#22c55e;color:#fff;border:none;border-radius:6px;padding:4px 14px;font-size:12px;cursor:pointer;touch-action:manipulation;-webkit-user-select:none;user-select:none" title="点击=开始/停止追踪"></button>
+      <button id="lbBreedTrackBtn" onclick="lbTrackClick()" oncontextmenu="event.preventDefault();lbTrackNext();return false;" ontouchstart="lbTrackTouchStart(event)" ontouchend="lbTrackTouchEnd(event)" ontouchmove="lbTrackTouchMove(event)" ontouchcancel="lbTrackTouchEnd(event)" style="display:none;flex-shrink:0;background:#22c55e;color:#fff;border:none;border-radius:6px;padding:4px 14px;font-size:12px;cursor:pointer;touch-action:manipulation;-webkit-user-select:none;user-select:none" title="点击=开始/停止追踪；长按=切换下一只野生龙"></button>
       <button id="lbBreedWildBtn" onclick="lbOpenWildConfirm()" style="display:none;flex-shrink:0;background:#0e7490;color:#fff;border:none;border-radius:6px;padding:4px 14px;font-size:12px;cursor:pointer">刷新野生</button>
       <button id="lbBreedBtn" onclick="lbBreedToggle()" style="flex-shrink:0;background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:4px 14px;font-size:12px;cursor:pointer">选种</button>
     </div>

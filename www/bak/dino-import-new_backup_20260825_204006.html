@@ -1769,7 +1769,7 @@ function toggleLevelInfo(e, total, base, wild, bonus, xp, isBred) {
 /* ================= 最新生物 TAB ================= */
 var LB = {};
 // 页面版本号：每次部署递增（调试信息里显示，方便确认手机加载的是否新版）
-var LB_VERSION = 'v20260825-310'; // 2026-08-25 v310：设备判断改 UA（修复 PC 触屏误判为长按）
+var LB_VERSION = 'v20260825-308'; // 2026-08-25 v308：首次追踪提示统一（顶部按钮+野生卡片两入口）
 // 服务器列表：HA API（apps.yaml sensor.asa_server_themes）优先；无 HA 环境（解耦）时用内置兜底（localStorage 上次同步缓存 → 代码常量）
 var LB_FALLBACK_SERVERS = [
   {abbr:'Isl',name:'孤岛',icon:'🏝️'},{abbr:'Sco',name:'焦土',icon:'🔥'},{abbr:'Cen',name:'核心岛',icon:'💎'},
@@ -6505,21 +6505,23 @@ async function lbWaitWildStatusFile(abbr, oldTs){
   return {cooldown:false, ok:false, error:'timeout'};
 }
 // ===== TrackDino 实时追踪野生龙（2026-08-25，v302）=====
-// v310：设备类型判断——用 userAgent 判断移动端（PC 触屏笔记本 maxTouchPoints>0 但仍是 PC，用鼠标右键切换）
+// v307：设备类型判断——PC（无触摸）右键切换，移动端（有触摸）长按切换
 function lbIsTouchDevice(){
-  try{
-    var ua = navigator.userAgent || '';
-    return /Android|iPhone|iPad|iPod|Windows Phone|Mobile|MicroMessenger/i.test(ua);
-  }catch(e){ return false; }
+  try{ return !!('ontouchstart' in window) || (navigator.maxTouchPoints > 0); }catch(e){ return false; }
 }
 // 切换方式提示文案（PC=右键 / 移动=长按）
 function lbTrackSwitchHint(){
   return lbIsTouchDevice() ? '长按=切换下一只野生龙' : '右键=切换下一只野生龙';
 }
-// 追踪成功提示（v309）：两个入口（顶部按钮 lbTrackClick / 野生卡片 lbTrackWildFrom）都调用
-// 每次开始追踪都带切换提示（PC 右键 / 移动端长按），移动端 PC 端都有
+// 首次追踪提示（v308 抽取公共函数）：两个入口（顶部按钮 lbTrackClick / 野生卡片 lbTrackWildFrom）都调用
+// localStorage 标记只提示一次；按设备区分（PC 右键 / 移动端长按）
 function lbTrackFirstHint(server, level){
-  return '已追踪 '+LB.servName(server)+' Lv.'+level+' 野生龙（'+ (lbIsTouchDevice() ? '长按' : '右键') +'按钮可切换下一只）';
+  var _first = false;
+  try{ if(!localStorage.getItem('lbTrackHintShown')){ localStorage.setItem('lbTrackHintShown','1'); _first = true; } }catch(e){}
+  if(_first){
+    return '已追踪 '+LB.servName(server)+' Lv.'+level+' 野生龙（'+ (lbIsTouchDevice() ? '长按' : '右键') +'按钮可切换下一只）';
+  }
+  return '已追踪 '+LB.servName(server)+' Lv.'+level+' 野生龙';
 }
 // 点击追踪按钮：查玩家位置（逐服 player_pos）→ 该服找最近野生龙 → track_dino 开始追踪
 async function lbTrackClick(){
