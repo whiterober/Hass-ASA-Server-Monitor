@@ -3,12 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<!-- PWA 声明（2026-08-29）：移动端可安装为应用 -->
-<meta name="theme-color" content="#7c3aed">
-<link rel="manifest" href="/manifest.webmanifest">
-<link rel="apple-touch-icon" href="/icons/icon-192.png">
-<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
-<title>粑粑服搞事系统</title>
+<title>Wikily 生物导入</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
 <style>
 :root{
@@ -56,9 +51,6 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 #rightCol::-webkit-scrollbar-track,#lbList::-webkit-scrollbar-track,.file-list::-webkit-scrollbar-track,.lb-picker-grid::-webkit-scrollbar-track,.lb-confirm-overlay::-webkit-scrollbar-track,.lb-modal-box::-webkit-scrollbar-track,#previewPopupContent::-webkit-scrollbar-track,#lbBreedResult::-webkit-scrollbar-track,#lbBreedOverlay::-webkit-scrollbar-track{background:transparent}
 #rightCol::-webkit-scrollbar-thumb,#lbList::-webkit-scrollbar-thumb,.file-list::-webkit-scrollbar-thumb,.lb-picker-grid::-webkit-scrollbar-thumb,.lb-confirm-overlay::-webkit-scrollbar-thumb,.lb-modal-box::-webkit-scrollbar-thumb,#previewPopupContent::-webkit-scrollbar-thumb,#lbBreedResult::-webkit-scrollbar-thumb,#lbBreedOverlay::-webkit-scrollbar-thumb{background:#333;border-radius:3px}
 #rightCol::-webkit-scrollbar-thumb:hover,#lbList::-webkit-scrollbar-thumb:hover,.file-list::-webkit-scrollbar-thumb:hover,.lb-picker-grid::-webkit-scrollbar-thumb:hover,.lb-confirm-overlay::-webkit-scrollbar-thumb:hover,.lb-modal-box::-webkit-scrollbar-thumb:hover,#previewPopupContent::-webkit-scrollbar-thumb:hover,#lbBreedResult::-webkit-scrollbar-thumb:hover,#lbBreedOverlay::-webkit-scrollbar-thumb:hover{background:#555}
-/* #lbList 隐藏原生滚动条（v363 方案B：滚动条不占内容宽度；overlay 已废弃回退 auto，故用隐藏方案） */
-#lbList{scrollbar-width:none;-ms-overflow-style:none}
-#lbList::-webkit-scrollbar{display:none}
 @media (pointer:coarse){html::-webkit-scrollbar,.file-list::-webkit-scrollbar{width:0}}
 .parse-btn{display:none;width:22px;height:22px;border-radius:6px;flex-shrink:0;cursor:pointer;align-items:center;justify-content:center;margin-left:auto}
 .parse-btn.ok{display:inline-flex;background:#1a3a1a;border:1px solid #2a5a2a}
@@ -322,7 +314,7 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
     </div>
   </div>
   <div id="lbStatus" style="display:none;padding:8px 12px;border-radius:8px;font-size:12px;background:#1a1a3a;color:#7c3aed"></div>
-  <div id="lbList" style="flex:1;overflow-y:auto;min-height:0;scrollbar-width:none;scrollbar-color:transparent transparent;padding-bottom:12px"></div>
+  <div id="lbList" style="flex:1;overflow-y:auto;min-height:0;scrollbar-width:thin;scrollbar-color:#333 transparent"></div>
 </div>
 
 <div id="settingsUI" style="display:none;flex:1;flex-direction:column;min-height:0;gap:12px;overflow:hidden">
@@ -332,7 +324,6 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
       <span style="font-size:12px;color:#555">支持刷新低温仓数据（全部服务器）与刷新 tamed 放出生物（多选服务器）</span>
     </div>
   </div>
-  <!-- v359：清空缓存按钮已移至「自助配置」弹窗（settingsUI 无入口，原卡片移除） -->
 </div>
 
 <script>
@@ -346,13 +337,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260829-368';
-// ====== PWA：Service Worker 注册（2026-08-29，配合 manifest 使移动端 Edge/Chrome 可安装为应用） ======
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){
-    navigator.serviceWorker.register('/sw.js').catch(function(){});
-  });
-}
+var LB_VERSION = 'v20260828-351';
 var selectedFile = null, parsedData = null;
 var ASB_DB = null;
 var ZH_MAP = {};
@@ -1885,8 +1870,7 @@ var LB_MAP_INFO = {
   Ast:{img:'ast_s', shiftLat:49.40, shiftLon:49.63, multLat:16432, multLon:15879}, // 2026-08-12 Wikily 洞穴校准
   Bob:null
 };
-var LB_MAP_BASE = (LB_ARCH === 'new') ? 'https://dino.whiterober.ccwu.cc/maps/' : 'https://img.whiterober.ccwu.cc/ASA/misc/'; // 新架构：地图 WebP 随 CF Pages 打包（maps/）；旧架构：img 域 JPG
-var LB_MAP_EXT = (LB_ARCH === 'new') ? '.webp' : '.jpg'; // 地图扩展名（新架构 WebP 已压 30% 省流）
+var LB_MAP_BASE = 'https://img.whiterober.ccwu.cc/ASA/misc/'; // 浏览器 <img> 自带 UA 可直接加载（无需认证）
 // ===== 资源包预取缓存（2026-08-27 v311）：地图+图标 Cache Storage 提前下载；初始化/换客户端首次打开自动预取 =====
 var LB_ASSET_CACHE = 'dino-assets-v1'; // 缓存版本号：资源集变化时 +1 使旧缓存作废重预取
 function lbAssetCache(){
@@ -1914,8 +1898,8 @@ function lbPrefetchAssets(){
     Object.keys(LB_MAP_INFO).forEach(function(k){
       var m = LB_MAP_INFO[k];
       if(!m) return;
-      if(m.img) urls[LB_MAP_BASE + m.img + LB_MAP_EXT] = 1;
-      if(m.oceanImg) urls[LB_MAP_BASE + m.oceanImg + LB_MAP_EXT] = 1;
+      if(m.img) urls[LB_MAP_BASE + m.img + '.jpg'] = 1;
+      if(m.oceanImg) urls[LB_MAP_BASE + m.oceanImg + '.jpg'] = 1;
     });
   }
   var iconP = (typeof lbLoadIconList==='function') ? lbLoadIconList() : Promise.resolve(LB_ICON_BY_NAME||null);
@@ -2087,7 +2071,7 @@ function lbOpenRolePicker(){
   var overlay=document.createElement('div'); overlay.className='lb-picker-overlay';
   overlay.onclick=function(e){ if(e.target===overlay) overlay.remove(); };
   var html='<div class="lb-picker-panel" onclick="event.stopPropagation()" style="max-width:400px">';
-  html+='<div class="lb-picker-header"><span style="flex:1;font-weight:bold;color:#a78bfa">选择生存者</span><span style="font-size:10px;color:#3a3a4a;opacity:.6;margin-right:4px;user-select:none;line-height:1" title="前端版本">'+LB_VERSION+'</span><button class="lb-picker-close" style="opacity:.4;font-size:14px" onclick="lbOpenConfigModal()" title="自助配置"><i class="mdi mdi-cog"></i></button><button class="lb-picker-close" style="opacity:.4;font-size:14px" onclick="lbLogout()" title="注销登录"><i class="mdi mdi-logout"></i></button><button class="lb-picker-close" onclick="this.closest(\'.lb-picker-overlay\').remove()" title="关闭">✕</button></div>';
+  html+='<div class="lb-picker-header"><span style="flex:1;font-weight:bold;color:#a78bfa">选择生存者</span><button class="lb-picker-close" style="opacity:.4;font-size:14px" onclick="lbOpenConfigModal()" title="自助配置"><i class="mdi mdi-cog"></i></button><button class="lb-picker-close" style="opacity:.4;font-size:14px" onclick="lbLogout()" title="注销登录"><i class="mdi mdi-logout"></i></button><button class="lb-picker-close" onclick="this.closest(\'.lb-picker-overlay\').remove()" title="关闭">✕</button></div>';
   html+='<div class="lb-picker-grid" id="lbRoleGrid">';
   var huIcon=(LB_ICON_BY_NAME && LB_ICON_BY_NAME['Human_icon']) || '';
   LB.playerRoles.forEach(function(r, i){
@@ -2209,12 +2193,7 @@ function lbResolveIdentity(){
     if(!LB._identityRetried){
       LB._identityRetried = true;
       lbForceReload().then(function(ok){
-        if(!ok){
-          // 2026-08-28 修复：强制刷新被新下载取代（数据仍在下载中）→ 不立即弹错，
-          // 等 3s 后重新解析（此时新下载大概率已完成并更新 LB._cache；若仍无该玩家名则数据完整后才弹错）
-          setTimeout(function(){ lbResolveIdentity(); }, 3000);
-          return;
-        }
+        if(!ok) lbIdentityError(name);
         else {
           // 重新解析（lbForceReload 已更新缓存）
           var d2 = LB._cache && LB._cache.data;
@@ -2240,11 +2219,7 @@ function lbResolveIdentity(){
   if(LB.playerRoles.length === 0 && !LB._identityRetried){
     LB._identityRetried = true;
     lbForceReload().then(function(ok){
-      if(!ok){
-        // 2026-08-28 修复：同「匹配失败」——强制刷新被新下载取代时不立即弹错，等数据下载完再判断
-        setTimeout(function(){ lbResolveIdentity(); }, 3000);
-        return;
-      }
+      if(!ok){ lbIdentityError(name); return; }
       var d2 = LB._cache && LB._cache.data;
       if(d2 && Array.isArray(d2.players)){
         var f2 = null;
@@ -2432,15 +2407,10 @@ function lbOpenConfigModal(){
     + '<div id="lbCfgPwdMsg" style="font-size:12px;min-height:14px;margin-top:6px"></div>'
     + '<div style="font-size:13px;font-weight:bold;color:#ddd;margin:18px 0 8px">🎮 绑定 SteamID（玩家身份）</div>'
     + '<input id="lbCfgPlayer" placeholder="填你的 Steam 账号名（如 whiter.rober）" style="'+inp+'" oninput="lbCfgCheckPlayer()">'
-    + '<div id="lbCfgPlayerHint" style="font-size:12px;min-height:0;margin:0 0 6px"></div>'
+    + '<div id="lbCfgPlayerHint" style="font-size:12px;min-height:14px;margin:2px 0 6px"></div>'
     + '<button onclick="lbBindPlayer()" style="'+btn+'">绑定</button>'
     + '<div id="lbCfgBindMsg" style="font-size:12px;min-height:14px;margin-top:6px"></div>'
-    + '<div style="margin-top:18px;padding-top:14px;border-top:1px solid #2a2a3a">'
-    + '<div style="font-size:13px;font-weight:bold;color:#ddd;margin-bottom:4px">🗑️ 清空本地生物数据</div>'
-    + '<div style="font-size:11px;color:#666;margin-bottom:10px">清除本地生物缓存（保留登录/筛选），下次加载自动重新下载</div>'
-    + '<button id="lbClearCacheBtn" onclick="lbClearLocalData()" style="padding:7px 14px;border-radius:6px;border:none;background:#ef4444;color:#fff;cursor:pointer;font-size:13px;font-weight:bold">清空缓存</button>'
-    + '</div>'
-    + '<div style="margin-top:14px;text-align:right"><button onclick="this.closest(\'.lb-picker-overlay\').remove()" style="padding:7px 16px;border-radius:6px;border:1px solid #333;background:transparent;color:#888;cursor:pointer;font-size:13px">关闭</button></div>'
+    + '<div style="margin-top:18px;text-align:right"><button onclick="this.closest(\'.lb-picker-overlay\').remove()" style="padding:7px 16px;border-radius:6px;border:1px solid #333;background:transparent;color:#888;cursor:pointer;font-size:13px">关闭</button></div>'
     + '</div>';
   overlay.innerHTML = html;
   document.body.appendChild(overlay);
@@ -2538,33 +2508,22 @@ function lbRenderServers(){
 }
 // 设置页服务器多选：点击切换选中（可多选，active=选中，样式同速查服务器 TAB）
 // v323：切换时同步保存 LB._wildSel（内联区重建后恢复选中）
-// v352：按物种记忆——每个物种独立保存服务器选择（LB._wildSelByClass[cls]），localStorage 持久化
 function lbToggleServer(el){
   if(!el) return;
   el.classList.toggle('active');
   var sel=[];
   document.querySelectorAll('#lbServersWild .server-tab.active').forEach(function(e){ sel.push(e.getAttribute('data-abbr')); });
-  var cls = LB.curClass || '';
-  if(!LB._wildSelByClass) LB._wildSelByClass = {};
-  LB._wildSelByClass[cls] = sel;
-  LB._wildSel = sel; // 兼容旧引用
-  try{ localStorage.setItem('lbWildSelByClass', JSON.stringify(LB._wildSelByClass)); }catch(e){}
+  LB._wildSel = sel;
 }
 // 搜野生服务器多选渲染（v120）：排除 Bob，默认不选（与刷新数据的服务器网格同款样式）
 // v228：服务器按钮角标显示该服当前物种野生数量（复用 server-tab-cnt 样式；数据源 LB._wildCache[LB.curClass][abbr]）
 // v323：按 LB._wildSel 恢复选中（内联区重建后保持）
-// v352：按物种记忆——读取当前物种自己的服务器选择；首次从 localStorage 恢复
 function lbRenderServersWild(){
   var el=document.getElementById('lbServersWild'); if(!el) return;
   var cls = LB.curClass || '';
   var wc = (cls && LB._wildCache) ? LB._wildCache[cls] : null;
-  if(!LB._wildSelByClass){
-    LB._wildSelByClass = {};
-    try{ var s = JSON.parse(localStorage.getItem('lbWildSelByClass')||'{}'); if(s && typeof s==='object' && !Array.isArray(s)) LB._wildSelByClass = s; }catch(e){}
-  }
-  var sel = LB._wildSelByClass[cls] || [];
   var selMap = {};
-  sel.forEach(function(a){ selMap[a]=1; });
+  (LB._wildSel||[]).forEach(function(a){ selMap[a]=1; });
   var html='';
   LB.SERVERS.forEach(function(s){
     if(s.abbr==='Bob') return; // 去掉俱乐部
@@ -2581,7 +2540,6 @@ function lbRenderServersWild(){
 // v325：紧凑布局——服务器多选与确认按钮同一行（多选 flex:1 撑开、按钮贴右），去掉说明行；执行期按钮隐藏由 lbWildSearch 控制
 // v327：去掉标题行，按钮直接叫「🐺 刷新野生」
 function lbWildInlineHtml(){
-  // v354：左右边距对齐已统一到 #lbBreedResult（padding 左右 10px 与繁育栏一致），本区无需再负 margin
   return '<div id="lbWildInline" style="margin-top:8px;padding-top:8px;border-top:1px dashed #22d3ee44">'
     +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
     +'<div id="lbServersWild" style="display:flex;flex-wrap:wrap;gap:6px;flex:1;min-width:0"></div>'
@@ -2739,21 +2697,11 @@ async function lbLoad(servers, oldData, onProgress){ // v207：onProgress({phase
     if(!old || (rec.sortWorldSec||0) > (old.sortWorldSec||0)) recMap[key] = rec;
   }
   // 合并单条 player 到 playersByEos（按 eosId 分组，roles 按 pid 字典，name/characterName 取非空优先）
-  // v357：兼容两种输入格式——后端 cryo.players 条目 {pid,eosId,name,characterName,roles}（顶层 pid）；
-  // 前端缓存 out.players 条目 {eosId,name,roles:{pid:ch}}（无顶层 pid，roles 聚合）。
-  // 此前只认顶层 pid → cryoSkip 复用 oldData.players（聚合格式）时角色全部跳过 → 只刷单服后其他服角色丢失（如板板）
   function lbMergePlayer(p){
     if(!p || !p.eosId) return;
     var eos = p.eosId;
     var ent = playersByEos[eos] = playersByEos[eos] || { eosId: eos, name:'', roles:{} };
     if(!ent.name && p.name) ent.name = p.name;
-    // 兼容前端聚合格式：p.roles 为 {pid:ch} 字典（无顶层 pid 时用这里合并）
-    if(p.roles && typeof p.roles === 'object'){
-      Object.keys(p.roles).forEach(function(pid){
-        var ch = p.roles[pid];
-        if(ch && !ent.roles[pid]) ent.roles[pid] = ch;
-      });
-    }
     if(p.pid !== undefined && p.pid !== null){
       var ch = p.characterName || ent.roles[p.pid] || '';
       if(!ch && p.name) ch = p.name;
@@ -4088,20 +4036,6 @@ function lbCacheClear(){
     });
   }).catch(function(){});
 }
-// v359：设置页「清空本地生物数据」——仅清 IndexedDB 缓存（保留登录/筛选偏好），完成后重载页面重新拉取
-function lbClearLocalData(){
-  var btn = document.getElementById('lbClearCacheBtn');
-  if(btn){ btn.disabled = true; btn.textContent = '清理中…'; }
-  lbCacheClear().then(function(){
-    // 同时清内存缓存，确保下次渲染重拉
-    try{ LB._cache = null; }catch(e){}
-    lbToast('✅ 本地生物数据已清空，正在重新加载…');
-    setTimeout(function(){ try{ location.reload(); }catch(e){} }, 600);
-  }).catch(function(){
-    if(btn){ btn.disabled = false; btn.textContent = '清空缓存'; }
-    lbToast('清理失败，请重试');
-  });
-}
 // 容器 key：display/stand 未命名可合并（无 ID）；其他容器未命名不允许合并（按 containerId 区分）
 function lbContainerKey(r){
   var hasName = r.containerName && r.containerName!=='?' && r.containerName!=='';
@@ -4730,7 +4664,7 @@ function lbSettleClusterHtml(clu){
       pts.forEach(function(p){ R = Math.max(R, Math.hypot(p.x-cx, p.y-cy)); });
       R += 1.8; // 边距
       var dia = R*2;
-      h += '<div class="settle-map"><img src="'+LB_MAP_BASE+main.map.img+LB_MAP_EXT+'" data-lbasset="'+LB_MAP_BASE+main.map.img+LB_MAP_EXT+'" alt="" loading="lazy" onerror="this.parentNode.style.display=&quot;none&quot;"><div class="settle-dot cluster-zone" style="left:'+((cx-R).toFixed(2))+'%;top:'+((cy-R).toFixed(2))+'%;width:'+dia.toFixed(2)+'%;height:'+dia.toFixed(2)+'%"></div></div>';
+      h += '<div class="settle-map"><img src="'+LB_MAP_BASE+main.map.img+'.jpg" data-lbasset="'+LB_MAP_BASE+main.map.img+'.jpg" alt="" loading="lazy" onerror="this.parentNode.style.display=&quot;none&quot;"><div class="settle-dot cluster-zone" style="left:'+((cx-R).toFixed(2))+'%;top:'+((cy-R).toFixed(2))+'%;width:'+dia.toFixed(2)+'%;height:'+dia.toFixed(2)+'%"></div></div>';
     }
   }
   h += '</div>';
@@ -4781,7 +4715,7 @@ function lbSettleBtnHtml(it){
       var map = lbMapForServer(s.server, st.center.z);
       if(map){
         var p = lbWorldToPx(st.center.x, st.center.y, map);
-        mapHtml = '<div class="settle-map"><img src="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" data-lbasset="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" alt="" loading="lazy" onerror="this.parentNode.style.display=&quot;none&quot;"><div class="settle-dot" style="left:'+p.x.toFixed(2)+'%;top:'+p.y.toFixed(2)+'%"></div></div>';
+        mapHtml = '<div class="settle-map"><img src="'+LB_MAP_BASE+map.img+'.jpg" data-lbasset="'+LB_MAP_BASE+map.img+'.jpg" alt="" loading="lazy" onerror="this.parentNode.style.display=&quot;none&quot;"><div class="settle-dot" style="left:'+p.x.toFixed(2)+'%;top:'+p.y.toFixed(2)+'%"></div></div>';
         cls = ' with-map';
       }
     }
@@ -4808,7 +4742,7 @@ function lbSettleBtnHtml(it){
           var q = lbWorldToPx(p.x, p.y, map);
           return '<div class="settle-dot scat" style="left:'+q.x.toFixed(2)+'%;top:'+q.y.toFixed(2)+'%"></div>';
         }).join('');
-        mapHtml = '<div class="settle-map"><img src="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" data-lbasset="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" alt="" loading="lazy" onerror="this.parentNode.style.display=&quot;none&quot;">'+dots+'</div>';
+        mapHtml = '<div class="settle-map"><img src="'+LB_MAP_BASE+map.img+'.jpg" data-lbasset="'+LB_MAP_BASE+map.img+'.jpg" alt="" loading="lazy" onerror="this.parentNode.style.display=&quot;none&quot;">'+dots+'</div>';
         cls = ' with-map';
       }
     }
@@ -5398,39 +5332,25 @@ async function lbRefreshTamed(btn){
     var segs = bar.children;
     if(legend) legend.innerHTML = '<span><span style="color:#7c3aed">■</span> 进行中</span><span><span style="color:#22c55e">■</span> 成功</span><span><span style="color:#ef4444">■</span> 失败</span><span><span style="color:#f59e0b">■</span> 跳过/冷却</span>';
     var ok=0, fail=0;
-    // 2026-08-28 优化：恢复并行刷新——后端已改为每台写独立状态文件 refresh_status_{abbr}.json，
-    // 彻底解决单文件 refresh_status.json 并发覆盖根因（之前并行全失败）。并行触发所有服务器
-    // （后端线程池 6 并发 RCON），各自等待独立状态文件 + tamed savedAt，总耗时 ≈ 单台而非 4×。
-    // 2026-08-28 修复：savedAt 基线必须在「触发前」读取——RCON 触发快（实测 3.2s 内 tamed 已更新），
-    // 若触发后才读基线，基线已是新值 → lbWaitTamed 永远等不到变化 → 30s 超时全失败（实测 4 台全红）。
-    // ① 先并行读取各台 savedAt 基线（触发前）
-    var markers = {};
-    await Promise.all(sel.map(function(abbr){
-      return lbGetSavedAt(abbr).then(function(m){ markers[abbr] = m; })
-        .catch(function(){ markers[abbr] = ''; });
-    }));
-    // ② 并行触发所有服务器（各自拿独立状态文件基线 ts + 触发 + 等 status）
-    var results = await Promise.all(sel.map(function(abbr, i){
+    // 2026-08-28 回退：改回逐台串行——refresh_status.json 是单文件，多台并行会互相覆盖 ts，
+    // 前端无法区分每台状态导致全部失败（用户实测 4 台全红）。串行每台完整走「触发→status→文件生成」链。
+    // 提速保留：轮询间隔已缩短（status 300ms / tamed POLL_MS 400ms），RCON 已修复快返回，单台约 2-3s。
+    for(var i=0;i<sel.length;i++){
+      var abbr=sel[i];
       segs[i].style.background = '#7c3aed'; // 进行中
-      txt.textContent = '正在刷新 '+LB.servName(abbr)+'（'+(i+1)+'/'+sel.length+'）'+(noToken?' [webhook]':'');
-      return lbTrigger(abbr).then(function(r){ return {abbr:abbr, idx:i, r:r}; })
-        .catch(function(e){ return {abbr:abbr, idx:i, r:{ok:false, error:String(e)}}; });
-    }));
-    // ③ 并行等待各自 tamed savedAt 确认（用触发前基线，互不干扰）
-    var waits = await Promise.all(results.map(function(item){
-      var abbr = item.abbr, r = item.r || {};
-      if(r.cooldown){ return {abbr:abbr, idx:item.idx, skipped:true, done:false}; }
-      if(!r.ok){ return {abbr:abbr, idx:item.idx, skipped:false, done:false}; }
-      var oldMarker = markers[abbr] || '';
-      return lbWaitTamed(abbr, oldMarker).then(function(done){ return {abbr:abbr, idx:item.idx, skipped:false, done:done}; });
-    }));
-    // ④ 汇总更新进度条
-    for(var i=0;i<waits.length;i++){
-      var w = waits[i];
-      if(w.done){ ok++; segs[w.idx].style.background='#22c55e'; }
-      else if(w.skipped){ fail++; segs[w.idx].style.background='#f59e0b'; }
-      else { fail++; segs[w.idx].style.background='#ef4444'; }
-      txt.textContent=(w.done?'✅ ':(w.skipped?'⏭ ':'❌ '))+LB.servName(w.abbr)+'（'+(w.idx+1)+'/'+sel.length+'）';
+      txt.textContent='正在刷新 '+LB.servName(abbr)+'（'+(i+1)+'/'+sel.length+'）'+(noToken?' [webhook]':'');
+      var oldMarker = await lbGetSavedAt(abbr);
+      var r;
+      try{ r = await lbTrigger(abbr); }catch(e){ r={ok:false,error:String(e)}; }
+      var done = false, skipped = false;
+      if(r && r.ok){
+        if(r.cooldown){ skipped = true; }
+        else { done = await lbWaitTamed(abbr, oldMarker); }
+      }
+      if(done){ ok++; segs[i].style.background='#22c55e'; }
+      else if(skipped){ fail++; segs[i].style.background='#f59e0b'; }
+      else { fail++; segs[i].style.background='#ef4444'; }
+      txt.textContent=(done?'✅ ':(skipped?'⏭ ':'❌ '))+LB.servName(abbr)+'（'+(i+1)+'/'+sel.length+'）';
     }
     txt.textContent='✅ 已刷新 '+ok+' 台，失败/跳过 '+fail+' 台'+(noToken?'（webhook 模式）':'');
     btn.disabled=false;
@@ -5859,8 +5779,6 @@ var LB_TAMEABLE_FORCE = [
   'ForestKaiju_Character_BP_C' // 森林泰坦（v289：星界蝎子王移出→归不可训变体，见 LB_SPECIAL_NAMES + /^Astral/ 规则）
   // v290：寒冰巨像/黏土巨像 移未驯服（用户 2026-08-24：可驯服）
   ,'IceGolem_Character_BP_C','ChalkGolem_Character_BP_C'
-  // v359：奥西顿强制可驯服（ASB 数据 taming 缺 violent/nonViolent 标记导致误判不可驯服，游戏实际可驯服；用户确认 2026-08-29）
-  ,'SnowMonster_Character_BP_C'
 ];
 // v237：被隐藏生物归「精英/特殊生物」折叠区（用户确认 2026-08-23：除上述可驯服外全部显示为特殊，含防御者/侦察机等野生机械）
 var LB_HIDDEN_SPECIAL = [
@@ -6045,8 +5963,6 @@ function lbIsSpecialCls(dinoClass){
   if(/LanternPug/i.test(dinoClass + ' ' + nm)) return false;
   // v238：嘟嘟飞龙不列为特殊（用户确认可驯服，同灯泡犬/精灵龙）
   if(/DodoWyvern/i.test(dinoClass + ' ' + nm)) return false;
-  // v358：独角兽不列为特殊（Equus_Character_BP_Unicorn_C 为普通可驯服生物 taming.nonViolent，被 Unicorn 关键词误匹配）
-  if(/Unicorn/i.test(dinoClass + ' ' + nm)) return false;
   // v239：血仆（Thrall）归特殊折叠区（失落之地奴仆生物，玩家无库存且不可驯服）
   if(/Thrall/i.test(dinoClass + ' ' + bp)) return true;
   // v234：影鬃不列为特殊（Shadowmane，bp 含 Hunt_Alpha 被 Alpha 关键词误匹配）
@@ -6471,18 +6387,12 @@ function lbParseStatusFile(text){
   }catch(e){ return null; }
 }
 // 免认证轮询 AppDaemon 写入的静态状态文件（手机 App 无 token 也能读）：精确判断 ok/cooldown/error
-// 2026-08-28 优化：新架构读每台独立状态文件 refresh_status_{abbr}.json（后端同时写单文件+独立文件，
-// 独立文件保证多台并行时互不覆盖——单文件并发覆盖是之前并行全失败的根因）
 async function lbWaitStatusFile(abbr, oldTs){
   var deadline = Date.now() + 15000;
-  // 新架构：独立文件路径；旧架构：单文件（兼容）
-  var sfPath = (LB_ARCH === 'new')
-    ? (LB_STATUS + '/refresh_status_' + abbr + '.json?cb=' + Date.now())
-    : (LB_STATUS + '/refresh_status.json?cb=' + Date.now());
   while(Date.now() < deadline){
     await new Promise(function(r){ setTimeout(r, 300); }); // 2026-08-28 提速：800ms→300ms，后端 RCON 已修复快返回，减少前端等待
     try{
-      var sf = await fetch(sfPath, { cache: 'no-store' });
+      var sf = await fetch(LB_STATUS + '/refresh_status.json?cb=' + Date.now(), { cache: 'no-store' });
       if(sf.ok){
         var obj = lbParseStatusFile(await sf.text());
         if(!obj) continue;
@@ -6500,11 +6410,7 @@ async function lbWaitStatusFile(abbr, oldTs){
 // 读取静态状态文件当前值（触发前基线 ts 用）
 async function lbGetStatusFile(abbr){
   try{
-    // 新架构：独立文件路径；旧架构：单文件（兼容）
-    var sfPath = (LB_ARCH === 'new')
-      ? (LB_STATUS + '/refresh_status_' + abbr + '.json?cb=' + Date.now())
-      : (LB_STATUS + '/refresh_status.json?cb=' + Date.now());
-    var sf = await fetch(sfPath, { cache: 'no-store' });
+    var sf = await fetch(LB_STATUS + '/refresh_status.json?cb=' + Date.now(), { cache: 'no-store' });
     if(sf.ok){
       var obj = lbParseStatusFile(await sf.text());
       var attrs = (obj && obj.attributes) || {};
@@ -6990,38 +6896,22 @@ async function lbWildSearch(btn){
     var wild = LB._wildCache = LB._wildCache || {};
     if(!wild[LB.curClass]) wild[LB.curClass] = {};
     var ok=0, fail=0;
-    // 2026-08-28 优化：并行搜索（对齐 tamed 并行方案）——后端已写独立状态文件 wild_status_{abbr}.json，
-    // 彻底解决单文件并发覆盖；savedAt 基线必须在触发前读取（RCON 快，触发后才读=新值→永远等不到变化→超时全失败）。
-    // ① 触发前并行读取各台 wild 文件 savedAt 基线
-    var markers = {};
-    await Promise.all(sel.map(function(abbr){
-      return lbGetWildSavedAt(abbr, species).then(function(m){ markers[abbr] = m; })
-        .catch(function(){ markers[abbr] = ''; });
-    }));
-    // ② 并行触发所有服务器（各自拿独立状态文件基线 ts + 触发 + 等 status）
-    var results = await Promise.all(sel.map(function(abbr, i){
+    for(var i=0;i<sel.length;i++){
+      var abbr = sel[i];
       segs[i].style.background = '#7c3aed'; // 进行中
       txt.textContent = '正在搜索 '+LB.servName(abbr)+'（'+(i+1)+'/'+sel.length+'）'+(noToken?' [webhook]':'');
-      return lbWildTrigger(abbr, species).then(function(r){ return {abbr:abbr, idx:i, r:r}; })
-        .catch(function(e){ return {abbr:abbr, idx:i, r:{ok:false, error:String(e)}}; });
-    }));
-    // ③ 并行等待各自 wild 文件 savedAt 确认（用触发前基线，互不干扰）
-    var waits = await Promise.all(results.map(function(item){
-      var abbr = item.abbr, r = item.r || {};
-      if(r.cooldown){ return {abbr:abbr, idx:item.idx, skipped:true, done:false}; }
-      if(!r.ok){ return {abbr:abbr, idx:item.idx, skipped:false, done:false}; }
-      var oldMarker = markers[abbr] || '';
-      return lbWaitWild(abbr, species, oldMarker).then(function(done){ return {abbr:abbr, idx:item.idx, skipped:false, done:done, oldMarker:oldMarker}; });
-    }));
-    // ④ 汇总进度条 + 拉取各自 wild 数据入缓存
-    for(var i=0;i<waits.length;i++){
-      var w = waits[i];
-      var abbr = w.abbr, oldMarker = w.oldMarker || '';
-      if(w.done){ ok++; segs[w.idx].style.background='#22c55e'; }
-      else if(w.skipped){ fail++; segs[w.idx].style.background='#f59e0b'; }
-      else { fail++; segs[w.idx].style.background='#ef4444'; }
-      txt.textContent=(w.done?'✅ ':(w.skipped?'⏭ ':'❌ '))+LB.servName(abbr)+'（'+(w.idx+1)+'/'+sel.length+'）';
-      // 拉取该服野生数据入缓存（savedAt 比旧新才替换，防搜索未完成/写文件延迟读到旧文件）
+      var oldMarker = await lbGetWildSavedAt(abbr, species);
+      var r;
+      try{ r = await lbWildTrigger(abbr, species); }catch(e){ r={ok:false,error:String(e)}; }
+      var done = false, skipped = false;
+      if(r && r.ok){
+        if(r.cooldown){ skipped = true; }
+        else { done = await lbWaitWild(abbr, species, oldMarker); }
+      }
+      if(done){ ok++; segs[i].style.background='#22c55e'; }
+      else if(skipped){ fail++; segs[i].style.background='#f59e0b'; }
+      else { fail++; segs[i].style.background='#ef4444'; }
+      // 拉取该服野生数据入缓存（2026-08-28：savedAt 比旧新才替换，防搜索未完成/写文件延迟读到旧文件）
       try{
         var j = await authFetch(DINO_JSON + abbr + '_wild_' + encodeURIComponent(species) + '.json?cb=' + Date.now(), {}).then(function(r){ return r.json(); });
         if(j && j.savedAt && Array.isArray(j.dinos)){
@@ -7115,7 +7005,7 @@ async function lbWildTrigger(abbr, species){
     if(!res.ok) return {ok:false, server:abbr, error:'HTTP '+res.status};
     var deadline = Date.now() + 15000;
     while(Date.now() < deadline){
-      await new Promise(function(r){ setTimeout(r, 300); }); // 2026-08-28 提速：800ms→300ms（对齐 tamed）
+      await new Promise(function(r){ setTimeout(r, 800); });
       var st;
       try{
         st = await fetch(LB_API + '/api/states/sensor.search_wild_status', { headers: { 'Authorization': 'Bearer ' + token } });
@@ -7150,14 +7040,10 @@ async function lbWaitWild(abbr, species, oldMarker){
   }
   return false;
 }
-// 免认证模式：读野生状态文件基线（/local/asa-data/wild_status.json；新架构读独立文件 wild_status_{abbr}.json）
-// 2026-08-28 优化：独立文件（对齐 refresh_status_{abbr}）——并行搜索时单文件会被并发覆盖，各自轮询自己文件才安全
+// 免认证模式：读野生状态文件基线（/local/asa-data/wild_status.json）
 async function lbGetWildStatusFile(abbr){
   try{
-    var sfPath = (LB_ARCH === 'new')
-      ? (LB_STATUS + '/wild_status_' + abbr + '.json?cb=' + Date.now())
-      : (LB_STATUS + '/wild_status.json?cb=' + Date.now());
-    var sf = await fetch(sfPath, { cache: 'no-store' });
+    var sf = await fetch(LB_STATUS + '/wild_status.json?cb=' + Date.now(), { cache: 'no-store' });
     if(sf.ok){
       var obj = lbParseStatusFile(await sf.text());
       var attrs = (obj && obj.attributes) || {};
@@ -7166,17 +7052,13 @@ async function lbGetWildStatusFile(abbr){
   }catch(e){}
   return null;
 }
-// 免认证模式：轮询野生状态文件（对齐 lbWaitStatusFile；独立文件 + 300ms 提速）
+// 免认证模式：轮询野生状态文件（对齐 lbWaitStatusFile）
 async function lbWaitWildStatusFile(abbr, oldTs){
   var deadline = Date.now() + 15000;
-  // 新架构：独立文件路径；旧架构：单文件（兼容）
-  var sfPath = (LB_ARCH === 'new')
-    ? (LB_STATUS + '/wild_status_' + abbr + '.json?cb=' + Date.now())
-    : (LB_STATUS + '/wild_status.json?cb=' + Date.now());
   while(Date.now() < deadline){
-    await new Promise(function(r){ setTimeout(r, 300); }); // 2026-08-28 提速：800ms→300ms（对齐 tamed）
+    await new Promise(function(r){ setTimeout(r, 800); });
     try{
-      var sf = await fetch(sfPath, { cache: 'no-store' });
+      var sf = await fetch(LB_STATUS + '/wild_status.json?cb=' + Date.now(), { cache: 'no-store' });
       if(sf.ok){
         var obj = lbParseStatusFile(await sf.text());
         if(!obj) continue;
@@ -7204,9 +7086,9 @@ function lbTrackSwitchHint(){
   return '点击=切换下一只野生龙'; // v20260827：移除长按停止
 }
 // 追踪成功提示（v309）：两个入口（顶部按钮 lbTrackClick / 野生卡片 lbTrackWildFrom）都调用
-// v359：用户要求不再提示（直接不提示了），保留函数占位避免调用处报错
+// 每次开始追踪都带切换提示（PC 右键 / 移动端长按），移动端 PC 端都有
 function lbTrackFirstHint(server, level){
-  return ''; // v359：不再提示
+  return '已追踪 '+LB.servName(server)+' Lv.'+level+' 野生龙（点击=切换下一只）'; // v20260827：移除长按停止
 }
 // 点击追踪按钮：查玩家位置（逐服 player_pos）→ 该服找最近野生龙 → track_dino 开始追踪
 async function lbTrackClick(){
@@ -7272,7 +7154,8 @@ async function lbTrackClick(){
     // v316：追踪开始静默刷新一次该服该物种野生数据（RCON WildDinos），保证切换候选/缓存新鲜
     var _sp = (dino.dinoClass || LB.curClass || '').replace(/_C$/,'');
     if(_sp && !LB._wildRefreshing){ LB._wildRefreshing = true; lbWildTrigger(pos.server, _sp).catch(function(){}).then(function(){ LB._wildRefreshing = false; }); }
-    // v359：不再弹追踪成功提示（用户要求）
+    // v308：首次提示（长按/右键切换）——移动端野生卡片入口也会走 lbTrackFirstHint
+    lbToast(lbTrackFirstHint(pos.server, dino.level));
     lbStartTrackPoll();
     lbRenderBreedBar();
     if(LB.breedResult) lbRenderBreedResult(); // v304：同步刷新野生卡片追踪按钮状态
@@ -7343,26 +7226,14 @@ async function lbQueryDinoStatus(server, dinoId, timeoutMs){
 }
 // 逐服查玩家位置：用 script.player_pos（EOSID），返回 {server,x,y,z} 或 null
 // v339：单服玩家位置查询（供 lbFindPlayerPos 复用：先查上次服 → 并行查其余）
-// 2026-08-28 优化：新架构读每台独立状态文件 player_pos_status_{abbr}.json（后端同时写单文件+独立文件），
-// 并行查多服时互不覆盖（单 sensor/单文件并发覆盖曾导致误判"找不到玩家"）
 async function lbQueryPlayerPos(abbr, token){
-  // 2026-08-28 修复：新架构直连免认证 /api/player_pos（token='new' 占位）+ 免认证独立状态文件轮询；旧架构保留 HA token 链路
+  // 2026-08-28 修复：新架构直连免认证 /api/player_pos（token='new' 占位）+ 免认证 sensor 轮询；旧架构保留 HA token 链路
   var isNew = (LB_ARCH === 'new');
   try{
     var baseTs = null;
     try{
-      if(isNew){
-        // 新架构：读独立状态文件基线（后端写 player_pos_status_{abbr}.json）
-        var sf = await fetch(LB_STATUS + '/player_pos_status_' + abbr + '.json?cb=' + Date.now(), { cache: 'no-store' });
-        if(sf.ok){
-          var _o = lbParseStatusFile(await sf.text());
-          var _a = (_o && _o.attributes) || {};
-          if(_a.server === abbr) baseTs = _a.ts || null;
-        }
-      } else {
-        var b = await fetch(LB_API + '/api/states/sensor.player_pos_status', { headers: { 'Authorization': 'Bearer ' + token } });
-        if(b.ok){ var bj = await b.json(); var ba = bj.attributes || {}; if(ba.server === abbr) baseTs = ba.ts; }
-      }
+      var b = await fetch(LB_API + '/api/states/sensor.player_pos_status', { headers: isNew ? {} : { 'Authorization': 'Bearer ' + token } });
+      if(b.ok){ var bj = await b.json(); var ba = bj.attributes || {}; if(ba.server === abbr) baseTs = ba.ts; }
     }catch(e){}
     var ac = new AbortController();
     var _t = setTimeout(function(){ try{ ac.abort(); }catch(e){} }, 15000);
@@ -7379,16 +7250,13 @@ async function lbQueryPlayerPos(abbr, token){
     // 2026-08-28：后端 RCON 已修复（快速返回 player not found / found），缩短轮询间隔与超时——
     // 玩家下线时串行查 10 服不再拖到 30s（原 700ms×3s/服 → 150ms×1.2s/服），快速判定"不在线"停止追踪
     var deadline = Date.now() + 1200; // v322+fix：1.2s 快速跳过（服务器未启动/玩家不在该服）
-    var sfPath = isNew
-      ? (LB_STATUS + '/player_pos_status_' + abbr + '.json?cb=' + Date.now())
-      : (LB_API + '/api/states/sensor.player_pos_status');
     while(Date.now() < deadline){
       await new Promise(function(r){ setTimeout(r, 150); });
       try{
-        var st = await fetch(sfPath, isNew ? { cache: 'no-store' } : { headers: { 'Authorization': 'Bearer ' + token } });
+        var st = await fetch(LB_API + '/api/states/sensor.player_pos_status', { headers: isNew ? {} : { 'Authorization': 'Bearer ' + token } });
         if(st.ok){
-          var obj = isNew ? lbParseStatusFile(await st.text()) : await st.json();
-          var attrs = (obj && obj.attributes) || {};
+          var obj = await st.json();
+          var attrs = obj.attributes || {};
           if(attrs.server === abbr && attrs.ts !== baseTs){
             if(attrs.found && attrs.x !== undefined && attrs.y !== undefined){
               return { server: abbr, x: Number(attrs.x), y: Number(attrs.y), z: Number(attrs.z !== undefined ? attrs.z : 0) };
@@ -7416,8 +7284,6 @@ async function lbFindPlayerPosInner(){
   var total = 0;
   for(var i=0;i<LB.SERVERS.length;i++){ if(LB.SERVERS[i].abbr!=='Bob') total++; }
   // v342：去掉并行 RCON（单 sensor.player_pos_status 并发覆盖导致误判"找不到玩家"），改回串行逐服，上次服优先 + 服名提示
-  // 2026-08-28 优化：后端已写每台独立状态文件 player_pos_status_{abbr}.json（对齐 refresh/wild 独立文件方案），
-  // 单文件并发覆盖根因已消除 → 恢复并行查 10 服（Promise.all 同时触发，各自轮询独立文件），总耗时 ≈ 单服而非 10×。
   // v315：按角色(pid)独立缓存上次服务器（lbLastPlayerSrv_<pid>），不同角色各自记住；无 pid 缓存回退旧全局 key 迁移
   var _lkey = 'lbLastPlayerSrv_' + ((LB.curPid!==null && LB.curPid!==undefined) ? LB.curPid : 'guest');
   var lastSrv = null;
@@ -7429,13 +7295,11 @@ async function lbFindPlayerPosInner(){
     if(_a === lastSrv){ order.unshift(_a); } else { order.push(_a); }
   }
   lbToast('正在查找玩家位置…'); // v322：开始提示
-  // 并行查所有服（独立状态文件互不干扰），先返回的 found 即玩家所在服
-  var results = await Promise.all(order.map(function(abbr){
-    return lbQueryPlayerPos(abbr, token);
-  }));
-  for(var i=0;i<results.length;i++){
-    var pos = results[i];
-    if(pos){ try{ localStorage.setItem(_lkey, pos.server); }catch(e){} return pos; }
+  for(var i=0;i<order.length;i++){
+    var abbr = order[i];
+    lbToast('正在查找玩家位置（'+LB.servName(abbr)+' '+(i+1)+'/'+total+'）…'); // v339：带服名
+    var pos = await lbQueryPlayerPos(abbr, token);
+    if(pos){ try{ localStorage.setItem(_lkey, abbr); }catch(e){} return pos; }
   }
   return null;
 }
@@ -7497,7 +7361,7 @@ async function lbTrackDino(server, dino, requireFound, timeoutMs){ // v335：tim
     if(!res.ok) return false;
     var deadline = Date.now() + (timeoutMs || 12000); // v335：超时可配，轮询 3s 快速判定
     while(Date.now() < deadline){
-      await new Promise(function(r){ setTimeout(r, 300); }); // 2026-08-28 提速：700ms→300ms（对齐 tamed/wild，追踪确认更快，死亡检测 3s 内多查几次）
+      await new Promise(function(r){ setTimeout(r, 700); });
       try{
         var st = await fetch(LB_API + '/api/states/sensor.track_dino_status', { headers: isNew ? {} : { 'Authorization': 'Bearer ' + token } });
         if(st.ok){
@@ -7596,7 +7460,8 @@ async function lbTrackWildFrom(server, idx, ev){
     // v316：追踪开始静默刷新一次该服该物种野生数据（RCON WildDinos），保证切换候选/缓存新鲜
     var _sp = (dino.dinoClass || LB.curClass || '').replace(/_C$/,'');
     if(_sp && !LB._wildRefreshing){ LB._wildRefreshing = true; lbWildTrigger(server, _sp).catch(function(){}).then(function(){ LB._wildRefreshing = false; }); }
-    // v359：不再弹追踪成功提示（用户要求）
+    // v308：首次提示（长按/右键切换）——与顶部按钮入口统一
+    lbToast(lbTrackFirstHint(server, dino.level));
     lbStartTrackPoll();
     lbRenderBreedBar();
     if(LB.breedResult) lbRenderBreedResult(); // v304：同步刷新野生卡片追踪按钮状态
@@ -7653,17 +7518,14 @@ function lbStartTrackPoll(){
 async function lbHandleTrackLost(st, reason){
   var cls2 = LB.curClass || (st.dino && st.dino.dinoClass);
   if(cls2) LB.curClass = cls2; // v315：确保 lbNearestWild 用对物种（野生卡片追踪时 curClass 可能为空）
-  // 2026-08-29 修复：card 分支也先确认玩家在线——玩家下线时 TrackDino found=0 连续 2 次会被误判"目标已死亡"，
-  // 实际是玩家不在线（RCON TrackDino 找不到玩家也返回 found=0）。先查玩家位置，不在线报"玩家可能已下线"而非"已死亡"。
-  var pos = await lbFindPlayerPos();
-  if(!pos){ lbToast('未找到玩家位置（玩家可能已下线），已停止追踪'); lbTrackStop(true); return; }
-  // v345：单追踪（卡片指定）目标丢失 → 直接停止，不自动切换（用户指定追踪这一只，死了就停）
+  // v345：单追踪（卡片指定）目标丢失 → 直接停止，不自动切换、不查玩家位置（用户指定追踪这一只，死了就停）
   if(st.from === 'card'){
     lbToast('该目标'+reason+'，停止追踪');
     lbTrackStop(true);
     return;
   }
-  // v338：nearest 分支切换前已重新确认玩家在线（上面统一查了），此时玩家在线，正常自动切换
+  // v338：切换前重新确认玩家在线（玩家下线时 TrackDino found=0 会被误判为死亡，此时不应误报"该物种全部生物死亡"）
+  var pos = await lbFindPlayerPos();
   if(!pos){ lbToast('未找到玩家位置（玩家可能已下线），已停止追踪'); lbTrackStop(true); return; }
   // v318：从缓存剔除已死亡目标，避免来回切（A↔B 反复）
   var wc3 = LB._wildCache && LB._wildCache[cls2];
@@ -7691,11 +7553,9 @@ async function lbCheckTargetTamed(st){
   return r.found && r.tribeId > 0; // 存在且有部落归属 = 已被驯服
 }
 // 长按（右键）「取消追踪」：按距离排序顺序切换到下一只野生龙（不来回切，v303 修复：原来取「最近非当前」导致 A↔B 来回切）
-// 2026-08-28 修复：快速连点时 busy 不再丢弃点击——记录 _trackNextPending，本次切换结束后自动补切一次（
-// 原逻辑 busy 直接 return 丢弃，RCON 切换 ~1.3s 期间第 2 次点击被吞，表现为「点 2 次同一只，点 3 次才切换」）
 async function lbTrackNext(){
   if(!LB._trackState || !LB._trackState.tracking){ lbToast('未在追踪中'); return; }
-  if(LB._trackBusy){ LB._trackNextPending = true; return; } // busy 期间点击入队，结束后自动补切
+  if(LB._trackBusy){ lbToast('追踪处理中，请稍候…'); return; }
   var st = LB._trackState;
   if(!st.server || !st.dinoId) return;
   LB._trackBusy = true;
@@ -7740,11 +7600,6 @@ async function lbTrackNext(){
     lbToast('切换异常：'+e);
   }finally{
     LB._trackBusy = false;
-    // 2026-08-28：busy 期间有点击入队 → 结束后自动补切一次（每点击一次只补切一次）
-    if(LB._trackNextPending){
-      LB._trackNextPending = false;
-      setTimeout(function(){ lbTrackNext(); }, 50);
-    }
   }
 }
 // ===== 追踪按钮移动端长按切换（v304）：touchstart 计时 600ms → 触发 lbTrackNext；手指滑动/提前抬起=取消长按 = 正常点击 = 开始/停止追踪 =====
@@ -8416,10 +8271,9 @@ function lbBreedAlignResult(){
   var h = bar.offsetHeight || 40;
   c.style.bottom = h + 'px';
   // v169：主列表底部留白——繁育栏固定底部遮挡滚动内容时，给 #lbList 加 padding-bottom（隐藏时清空）
-  // v362：繁育栏隐藏时也保留最小 12px 留白（否则最后一行贴底无边距，用户反馈）
   var list = document.getElementById('lbList');
   if(list){
-    list.style.paddingBottom = (bar.style.display === 'none') ? '12px' : (h + 12) + 'px';
+    list.style.paddingBottom = (bar.style.display === 'none') ? '' : (h + 12) + 'px';
   }
 }
 // 窗口尺寸变化（含移动端地址栏收起/旋转）时重新对齐结果浮层
@@ -8532,11 +8386,10 @@ function lbOpenWildMap(idx){
     // LL 坐标（纬度 经度，加粗居中，2 位小数）
     var lat = (Y/map.multLat + map.shiftLat).toFixed(2);
     var lon = (X/map.multLon + map.shiftLon).toFixed(2);
-    // 地图图：坐标浮窗用高清大图（不带 _s，R2 原始高清如 isl.jpg）；新架构 maps/*.webp（同时打包高清+缩略），旧架构 img 域 JPG
     var imgName = map.img.replace(/_s$/,''); // 高清大图（不带 _s 缩略）
     h += '<div style="font-weight:bold;font-size:14px;color:#fff;text-align:center;margin-bottom:8px">'+lat+' '+lon+'</div>'
       + '<div style="position:relative;border-radius:10px;overflow:hidden;line-height:0;border:1px solid #2a2a3a">'
-      + '<img src="'+LB_MAP_BASE+imgName+LB_MAP_EXT+'" style="width:100%;height:auto;display:block">'
+      + '<img src="'+LB_MAP_BASE+imgName+'.jpg" style="width:100%;height:auto;display:block">'
       + '<div style="position:absolute;left:'+p.x.toFixed(2)+'%;top:'+p.y.toFixed(2)+'%;width:14px;height:14px;border-radius:50%;background:#fbbf24;border:2px solid #fff;transform:translate(-50%,-50%);box-shadow:0 0 8px rgba(0,0,0,.8)"></div>'
       + '</div>';
   } else {
@@ -8565,7 +8418,7 @@ function lbOpenBioMap(idx){
     var imgName = map.img.replace(/_s$/,''); // 高清大图（不带 _s 缩略）
     h += '<div style="font-weight:bold;font-size:14px;color:#fff;text-align:center;margin-bottom:8px">'+lat+' '+lon+'</div>'
       + '<div style="position:relative;border-radius:10px;overflow:hidden;line-height:0;border:1px solid #2a2a3a">'
-      + '<img src="'+LB_MAP_BASE+imgName+LB_MAP_EXT+'" style="width:100%;height:auto;display:block">'
+      + '<img src="'+LB_MAP_BASE+imgName+'.jpg" style="width:100%;height:auto;display:block">'
       + '<div style="position:absolute;left:'+p.x.toFixed(2)+'%;top:'+p.y.toFixed(2)+'%;width:14px;height:14px;border-radius:50%;background:#fbbf24;border:2px solid #fff;transform:translate(-50%,-50%);box-shadow:0 0 8px rgba(0,0,0,.8)"></div>'
       + '</div>';
   } else {
@@ -8649,13 +8502,13 @@ lbTrackFloatWatch(); // v343：启动悬浮按钮位置动态重算监听（筛�
   </div>
 </div>
 <!-- v331：追踪悬浮按钮（繁育栏上方右上角；追踪期间常驻，无繁育栏也在底部对应位置；来源=追踪最近→切换+停止，卡片追踪→仅停止） -->
-<div id="lbTrackFloat" style="display:none;position:fixed;right:10px;bottom:12px;z-index:996;align-items:center;gap:8px">
+<div id="lbTrackFloat" style="display:none;position:fixed;right:12px;bottom:12px;z-index:996;align-items:center;gap:8px">
   <span id="lbFloatSrv" style="color:#e0e0e0;font-size:12px;background:#1a1a24;border:none;border-radius:6px;height:26px;display:inline-flex;align-items:center;padding:0 10px"></span> <!-- v344：固定高度 26px 与按钮对齐 -->
   <button id="lbFloatSwitch" onclick="lbTrackNext()" style="display:none;background:#f59e0b;color:#fff;border:none;border-radius:6px;padding:5px 14px;font-size:12px;cursor:pointer">切换</button>
   <button id="lbFloatStop" onclick="lbTrackStop(false)" style="background:#ef4444;color:#fff;border:none;border-radius:6px;padding:5px 14px;font-size:12px;cursor:pointer">停止追踪</button>
 </div>
 <!-- 繁育结果浮层（繁育栏上方） -->
-<div id="lbBreedResult" style="display:none;position:fixed;bottom:40px;left:0;right:0;max-height:60vh;overflow-y:auto;background:#16161f;border-top:1px solid #2a2a3a;z-index:997;padding:8px 10px"></div><!-- v354：左右 padding 12px→10px 与繁育栏对齐 -->
+<div id="lbBreedResult" style="display:none;position:fixed;bottom:40px;left:0;right:0;max-height:60vh;overflow-y:auto;background:#16161f;border-top:1px solid #2a2a3a;z-index:997;padding:8px 12px"></div>
 <!-- 繁育候选详情浮窗（点击繁育卡片弹出，只显示完整生物卡片本体；点卡片外自动关闭） -->
 <div id="lbBreedOverlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.9);overflow-y:auto;padding:80px 20px 20px" onclick="lbBreedOverlayClick(event)">
   <div id="lbBreedOverlayBody" style="max-width:520px;margin:0 auto"></div>
