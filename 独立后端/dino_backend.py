@@ -630,7 +630,10 @@ def _rcon_str(port, command):
     if not raw:
         return False, None
     text = raw.decode('utf-8', errors='ignore')
-    idx = text.rfind('{')
+    # 2026-08-29 修复：ArkGetDino 返回多层嵌套 JSON（外层 found/tribeId + statValues/currentStatValues/statMutations 数组内 {}），
+    # 原 rfind('{') 取【最后一个 {】会截到最内层 → json.loads 失败 → get_dino 的 found/tribeId 恒 null → 前端被驯服检测永远 false → 追踪标记不消失。
+    # 改 find('{') 取【第一个 {】（完整 JSON 对象起点）；单层 JSON（TrackDino/PlayerPos）rfind==find 无回归。
+    idx = text.find('{')
     if idx >= 0:
         # 2026-08-28 修复：剥掉 RCON 包末尾 \x00\x00 控制字符，避免 json.loads 失败
         return True, text[idx:].rstrip('\x00\r\n\t ')
