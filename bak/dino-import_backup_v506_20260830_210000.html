@@ -353,7 +353,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260830-507';
+var LB_VERSION = 'v20260830-506';
 // ====== PWA：Service Worker 注册（2026-08-29，配合 manifest 使移动端 Edge/Chrome 可安装为应用） ======
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function(){
@@ -3892,20 +3892,6 @@ function lbCalcStat(r, i){
     return Math.round(v * d) / d;
   }catch(e){ return null; }
 }
-// v507：蛋属性 MAX 值——蛋的 statPoints 是「野生遗传点数」（非驯服加点），
-// 必须作为 lvWild（野生等级）计算且无驯服加成（dom=false）：重 25→525、攻 41→339%（用户 2026-08-30 游戏内确认）
-function lbEggCalcStat(r, i){
-  try{
-    var sp = findSpeciesByClass(r.dinoClass);
-    if(!sp) return null;
-    var lvWild = (r.statPoints && r.statPoints[i]) || 0;
-    var lvMut = (r.statMutations && r.statMutations[i]) || 0;
-    var v = calcStatValue(sp, i, lvWild, lvMut, 0, false, 0, 0);
-    if (!(v > 0)) return null;
-    var d = statPrecision(i)===3 ? 1000 : 100;
-    return Math.round(v * d) / d;
-  }catch(e){ return null; }
-}
 // v6 旧球 statPoints 缺失 → 枚举逆推（复用 solveLevels，繁殖优先；返回 {statPoints, wildLevels, guessed:true} 或 null）
 var LB_SOLVE_CACHE = {};
 var LB_SOLVE_STORE_KEY = 'lbSolveCache_v1';
@@ -4059,9 +4045,9 @@ function lbDinoHTML(r, opts){
   }
   [0,1,3,4,7,8].forEach(function(i){
     var p = (r.statPoints && r.statPoints[i]) || 0;
-    // v507：蛋无最终属性值（无 statValues），用 statPoints 经 lbEggCalcStat 算属性 MAX 值（statPoints=野生遗传点→lvWild，无驯服加成）；
+    // v506：蛋无最终属性值（无 statValues），用 statPoints 经 lbCalcStat 算属性 MAX 值（与精灵球显示一致）；
     // ASB 查不到（如变体龙）返回 null 则该属性列跳过
-    var v = isEgg ? lbEggCalcStat(r, i) : ((r.statValues && r.statValues[i] !== undefined) ? r.statValues[i] : lbCalcStat(r, i));
+    var v = isEgg ? lbCalcStat(r, i) : ((r.statValues && r.statValues[i] !== undefined) ? r.statValues[i] : lbCalcStat(r, i));
     if(v===undefined || v===null) return;
     var m = (r.statMutations && r.statMutations[i]) || 0;
     var guessed = false;

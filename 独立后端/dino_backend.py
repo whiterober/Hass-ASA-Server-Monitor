@@ -32,6 +32,7 @@ dino_backend.py — ASA 生物数据独立后端（dino-import.html 脱离 HA �
 """
 import json
 import os
+import re
 import socket
 import struct
 import threading
@@ -118,6 +119,9 @@ CMD_TRACK = 'TransferIdentityFix.TrackDino'
 CMD_STOP_TRACK = 'TransferIdentityFix.StopTrackDino'
 CMD_PLAYER_POS = 'TransferIdentityFix.PlayerPos'
 CMD_GET_DINO = 'TransferIdentityFix.ArkGetDino'
+CMD_MOVE_DEATH_BAG = 'TransferIdentityFix.MoveDeathBag'
+CMD_MOVE_ALL_PENDINGS = 'TransferIdentityFix.MoveAllPendings'
+CMD_RENAME_DINO = 'TransferIdentityFix.RenameDino'
 
 # 内存状态缓存（供 /api/states/sensor.* 兼容轮询）：key = sensor 名，value = {state, attributes}
 STATUS_MEM = {}
@@ -433,7 +437,7 @@ def extract_json(data):
 # ================= 业务 =================
 # RCON 异步执行线程池（search_wild/refresh_tamed 后台执行，POST 立即返回触发成功——对齐旧架构 AppDaemon 异步行为，前端轮询状态文件等结果）
 # 2026-08-28 提速：max_workers 2→6——用户一次刷新多台服务器时全部并发提交，避免任务排队（2 个慢任务占池导致后续任务等 20s）
-_RCON_EXECUTOR = __import__('concurrent.futures', fromlist=['ThreadPoolExecutor']).ThreadPoolExecutor(max_workers=6)
+_RCON_EXECUTOR = __import__('concurrent.futures', fromlist=['ThreadPoolExecutor']).ThreadPoolExecutor(max_workers=8)
 
 def refresh_tamed(server):
     """触发一台服务器 tamed 刷新（RCON ArkTamedDinos）+ 轮询确认更新。"""
@@ -480,12 +484,13 @@ def refresh_tamed(server):
 
 
 def search_wild(server, species):
-    """搜野生：RCON WildDinos <species> → 写 wild_status.json。"""
+    """搜野生：RCON WildDinos <species> → 写 wild_status.json。
+    v5（2026-08-30）：超时放宽到 60s——Los 服丧尸数量庞大，WildDinos 处理可能超 15s（线程池异步，长阻塞不卡请求）"""
     port = SERVERS.get(server)
     if not port:
         return {'ok': False, 'server': server, 'error': 'unknown server'}
     try:
-        success, result = _rcon_str(port, CMD_WILD + ' ' + species)
+        success, result = _rcon_str(port, CMD_WILD + ' ' + species, timeout=60)
     except Exception as e:
         return {'ok': False, 'server': server, 'species': species, 'error': str(e)}
     ok = False
@@ -559,6 +564,59 @@ def stop_track_dino(server, player):
     return r
 
 
+# v3（2026-08-30）：服务器管理——仅管理员 whiterober 可用（前端隐藏 + 后端双重校验）
+def move_death_bag(server, target):
+    """把部落/玩家的死亡包+尸体转移到最近墓碑（含 charId=0 包）：RCON MoveDeathBag <target>。target=部落ID/玩家名/EOSID"""
+    port = SERVERS.get(server)
+    if not port:
+        return {'ok': False, 'server': server, 'error': 'unknown server'}
+    try:
+        success, result = _rcon_str(port, '%s %s' % (CMD_MOVE_DEATH_BAG, target))
+    except Exception as e:
+        return {'ok': False, 'server': server, 'target': target, 'error': str(e)}
+    r = {'ok': bool(success), 'server': server, 'target': target,
+         'result': str(result)[:300], 'ts': str(datetime.now())}
+    return r
+
+
+def move_all_pendings(server, team):
+    """把指定部落所有未被消费的 pending 球（cryopod）刷新到该部落墓碑：RCON MoveAllPendings <team>。team=部落ID 必填。"""
+    port = SERVERS.get(server)
+    if not port:
+        return {'ok': False, 'server': server, 'error': 'unknown server'}
+    try:
+        success, result = _rcon_str(port, '%s %s' % (CMD_MOVE_ALL_PENDINGS, team))
+    except Exception as e:
+        return {'ok': False, 'server': server, 'team': team, 'error': str(e)}
+    r = {'ok': bool(success), 'server': server, 'team': team,
+         'result': str(result)[:300], 'ts': str(datetime.now())}
+    return r
+
+
+def rename_dino(server, dino_id1, dino_id2, new_name):
+    """生物改名：RCON TransferIdentityFix.RenameDino <id1> <id2> <新名>（tif.operator 权限，中文名 UTF-8 直传）。
+    返回结构化 JSON：ok / dino_id / old_name / new_name / desc / readback / error / verified / dup / detail"""
+    port = SERVERS.get(server)
+    if not port:
+        return {'ok': False, 'server': server, 'error': 'unknown server'}
+    try:
+        success, result = _rcon_str(port, '%s %s %s %s' % (CMD_RENAME_DINO, dino_id1, dino_id2, new_name))
+    except Exception as e:
+        return {'ok': False, 'server': server, 'dino_id': '%s_%s' % (dino_id1, dino_id2), 'error': str(e)}
+    detail = {}
+    if success and result:
+        try:
+            j = json.loads(result)
+            if isinstance(j, dict):
+                detail = j
+        except Exception:
+            pass
+    r = {'ok': bool(success), 'server': server, 'dino_id': '%s_%s' % (dino_id1, dino_id2),
+         'dino_id1': dino_id1, 'dino_id2': dino_id2, 'name': new_name,
+         'detail': detail, 'result': str(result)[:800], 'ts': str(datetime.now())}
+    return r
+
+
 def get_dino(server, dino1, dino2):
     """单龙实时查询：RCON ArkGetDino。返回 {found, tribeId}；tribeId>0 = 已驯服。"""
     port = SERVERS.get(server)
@@ -625,18 +683,32 @@ def player_pos(server, player):
     return r
 
 
-def _rcon_str(port, command):
-    raw = rcon_command(RCON_HOST, port, RCON_PASSWORD, command)
+def _rcon_str(port, command, timeout=None):
+    """执行 RCON 命令并提取 JSON。timeout 覆盖默认 RCON_TIMEOUT（搜野生大物种用 60s）。
+    v6（2026-08-30）：先剥离 NUL/控制字符——大响应时 RCON 保活包（Keep Alive）字节混入，
+    find('{') 会命中保活包中的错误位置导致 json.loads 失败 → 后端误判失败（数据实际已写入）。"""
+    if timeout is None:
+        timeout = RCON_TIMEOUT
+    raw = rcon_command(RCON_HOST, port, RCON_PASSWORD, command, timeout=timeout)
     if not raw:
         return False, None
     text = raw.decode('utf-8', errors='ignore')
-    # 2026-08-29 修复：ArkGetDino 返回多层嵌套 JSON（外层 found/tribeId + statValues/currentStatValues/statMutations 数组内 {}），
-    # 原 rfind('{') 取【最后一个 {】会截到最内层 → json.loads 失败 → get_dino 的 found/tribeId 恒 null → 前端被驯服检测永远 false → 追踪标记不消失。
-    # 改 find('{') 取【第一个 {】（完整 JSON 对象起点）；单层 JSON（TrackDino/PlayerPos）rfind==find 无回归。
-    idx = text.find('{')
-    if idx >= 0:
-        # 2026-08-28 修复：剥掉 RCON 包末尾 \x00\x00 控制字符，避免 json.loads 失败
-        return True, text[idx:].rstrip('\x00\r\n\t ')
+    # v7：剥离控制字符后，遍历所有 { 位置尝试 json.loads，取第一个有效 JSON——
+    # 保活包（Keep Alive）非控制字节可能含 {，v6 的 find('{') 命中后变成 {{... 仍解析失败
+    clean = re.sub(r'[\x00-\x1f]', '', text)
+    idx = 0
+    while True:
+        idx = clean.find('{', idx)
+        if idx < 0:
+            break
+        chunk = clean[idx:].rstrip('\x00\r\n\t ')
+        try:
+            obj = json.loads(chunk)
+            if isinstance(obj, dict):
+                return True, chunk
+        except Exception:
+            pass
+        idx += 1
     return True, text
 
 
@@ -946,6 +1018,43 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(400, {'ok': False, 'error': 'missing args'})
                 return
             self._send(200, player_pos(server, player))
+        # v3：服务器管理（管理员 whiterober）：转移死亡包到最近墓碑 / 重建冷冻球
+        elif path.endswith('move_death_bag'):
+            username = g('username')
+            if username != 'whiterober':
+                self._send(401, {'ok': False, 'error': 'admin required'})
+                return
+            server = g('server')
+            target = g('target')
+            if not (server and target):
+                self._send(400, {'ok': False, 'error': 'missing args'})
+                return
+            self._send(200, move_death_bag(server, target))
+        elif path.endswith('move_all_pendings'):
+            username = g('username')
+            if username != 'whiterober':
+                self._send(401, {'ok': False, 'error': 'admin required'})
+                return
+            server = g('server')
+            team = g('team')
+            if not (server and team):
+                self._send(400, {'ok': False, 'error': 'missing args'})
+                return
+            self._send(200, move_all_pendings(server, team))
+        # 生物改名（登录用户，前端仅自己的生物卡显示）：/api/rename_dino
+        elif path.endswith('rename_dino'):
+            username = g('username')
+            if not username:
+                self._send(401, {'ok': False, 'error': 'login required'})
+                return
+            server = g('server')
+            dino_id1 = g('dino_id1')
+            dino_id2 = g('dino_id2')
+            name = g('name')
+            if not (server and dino_id1 and dino_id2 and name):
+                self._send(400, {'ok': False, 'error': 'missing args'})
+                return
+            self._send(200, rename_dino(server, dino_id1, dino_id2, name))
         else:
             self._send(404, {'ok': False, 'error': 'not found'})
 
@@ -958,5 +1067,50 @@ def main():
     srv.serve_forever()
 
 
-if __name__ == '__main__':
+# ================= 自动重启守护（watchdog） =================
+# v2（2026-08-30）：worker 子进程异常退出后自动拉起，避免 cloudflared 报
+# "dial tcp 127.0.0.1:8080 ... actively refused"（2026-08-28~29 多时段后端 down，dino-data/track 全失败）。
+# 运行方式不变：python dino_backend.py（默认启动 watchdog）；仅跑服务体：python dino_backend.py --worker
+# 特性：worker 崩溃 3s 自动重启；60s 内连续崩 5 次改 30s 退避；watchdog 永不退出（Ctrl+C 不退出，仅重启 worker，用户 2026-08-30）。
+def _worker():
     main()
+
+def _watchdog():
+    import subprocess, sys
+    print('[watchdog] dino_backend watchdog started (never exits, worker auto-restart)')
+    crashes = 0
+    last = time.time()
+    while True:
+        try:
+            p = subprocess.Popen([sys.executable, os.path.abspath(__file__), '--worker'])
+        except Exception as e:
+            print('[watchdog] spawn worker failed: {}'.format(e))
+            time.sleep(5)
+            continue
+        try:
+            rc = p.wait()
+        except KeyboardInterrupt:
+            # 用户 2026-08-30：一直重试不退出——Ctrl+C 仅记录并重启 worker，watchdog 保持运行
+            print('[watchdog] Ctrl+C received, keeping watchdog alive (worker restart)')
+            try:
+                p.kill()
+            except Exception:
+                pass
+            time.sleep(1)
+            continue
+        now = time.time()
+        if now - last > 60:
+            crashes = 0
+        last = now
+        crashes += 1
+        delay = 30 if crashes >= 5 else 3
+        print('[watchdog] worker exited rc={} (crashes={}), restart in {}s'.format(rc, crashes, delay))
+        time.sleep(delay)
+
+
+if __name__ == '__main__':
+    import sys
+    if '--worker' in sys.argv:
+        _worker()
+    else:
+        _watchdog()

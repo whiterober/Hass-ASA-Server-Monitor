@@ -353,7 +353,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260830-507';
+var LB_VERSION = 'v20260830-502';
 // ====== PWA：Service Worker 注册（2026-08-29，配合 manifest 使移动端 Edge/Chrome 可安装为应用） ======
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function(){
@@ -3892,20 +3892,6 @@ function lbCalcStat(r, i){
     return Math.round(v * d) / d;
   }catch(e){ return null; }
 }
-// v507：蛋属性 MAX 值——蛋的 statPoints 是「野生遗传点数」（非驯服加点），
-// 必须作为 lvWild（野生等级）计算且无驯服加成（dom=false）：重 25→525、攻 41→339%（用户 2026-08-30 游戏内确认）
-function lbEggCalcStat(r, i){
-  try{
-    var sp = findSpeciesByClass(r.dinoClass);
-    if(!sp) return null;
-    var lvWild = (r.statPoints && r.statPoints[i]) || 0;
-    var lvMut = (r.statMutations && r.statMutations[i]) || 0;
-    var v = calcStatValue(sp, i, lvWild, lvMut, 0, false, 0, 0);
-    if (!(v > 0)) return null;
-    var d = statPrecision(i)===3 ? 1000 : 100;
-    return Math.round(v * d) / d;
-  }catch(e){ return null; }
-}
 // v6 旧球 statPoints 缺失 → 枚举逆推（复用 solveLevels，繁殖优先；返回 {statPoints, wildLevels, guessed:true} 或 null）
 var LB_SOLVE_CACHE = {};
 var LB_SOLVE_STORE_KEY = 'lbSolveCache_v1';
@@ -4059,9 +4045,8 @@ function lbDinoHTML(r, opts){
   }
   [0,1,3,4,7,8].forEach(function(i){
     var p = (r.statPoints && r.statPoints[i]) || 0;
-    // v507：蛋无最终属性值（无 statValues），用 statPoints 经 lbEggCalcStat 算属性 MAX 值（statPoints=野生遗传点→lvWild，无驯服加成）；
-    // ASB 查不到（如变体龙）返回 null 则该属性列跳过
-    var v = isEgg ? lbEggCalcStat(r, i) : ((r.statValues && r.statValues[i] !== undefined) ? r.statValues[i] : lbCalcStat(r, i));
+    // v500：蛋无最终属性值，属性列直接显示遗传点（statPoints）
+    var v = isEgg ? p : ((r.statValues && r.statValues[i] !== undefined) ? r.statValues[i] : lbCalcStat(r, i));
     if(v===undefined || v===null) return;
     var m = (r.statMutations && r.statMutations[i]) || 0;
     var guessed = false;
@@ -4133,19 +4118,15 @@ function lbDinoHTML(r, opts){
     }
     if(i===8){
       // 近战攻击→百分比（2026-08-13 后端新规则）：statValues[8] 统一为「加成值」（不含基础100%，如 3.739=加成373.9%），前端 +100% 显示（3.739→473.9%）；v=0 且有点数为数据缺陷用公式
-      // v506：蛋攻击用 lbCalcStat 算 MAX 总倍率（lbCalcStat 返回含基础 100% 的倍率，如 3.739=373.9%），直接 v*100 显示
-      if(isEgg){
-        vPct = (v && v>0) ? Math.round(v*100) : 100;
-        vDisp = vPct + '%';
-      } else if(v===0 && p>0){
+      var vPct;
+      if(v===0 && p>0){
         // 数据缺陷（有攻击加点但值0，如 Megalania/ZombieDodo）：用公式算真实总倍率
         var cv = lbCalcStat(r, 8);
         vPct = (cv && cv>0) ? Math.round(cv*100) : 100;
-        vDisp = vPct + '%';
       } else {
         vPct = Math.round((v+1)*100); // 统一 +100%：基础100% + 加成值
-        vDisp = vPct + '%';
       }
+      vDisp = vPct + '%';
     }
     var wildBold = isWild && p>0 && p===maxP; // v131：野生最高属性点橙色+加粗（普通点紫色）
     // 野生：属性点保留但去括号（值 + 空格 + 点数，同行）；普通点紫色 #a78bfa，最高点橙色 #f59e0b + 加粗
@@ -4245,6 +4226,7 @@ function lbDinoHTML(r, opts){
     +'</div>'
     +(row2?'<div style="position:relative;z-index:1;font-size:11px;color:#999;margin-top:6px;display:flex;flex-wrap:wrap;gap:4px 14px">'+row2+'</div>':'')
     +geneHtml
+    +(isEgg && r.parentDesc ? '<div style="position:relative;z-index:1;font-size:11px;color:#a78bfa;margin-top:4px">'+escapeHtml(String(r.parentDesc).replace(/\n/g,' · '))+'</div>' : '') // v500：蛋显示双亲摘要
     +(stats?'<div class="lb-stats-row" style="position:relative;z-index:1;font-size:11px;margin-top:6px;white-space:nowrap;overflow-x:auto">'+stats+'</div>':'')
     +v6warn
     +'</div>';
@@ -4255,10 +4237,7 @@ function lbEggIcon(r){
   if(!LB_ICON_BY_NAME) return '';
   var sp = findSpeciesByClass(r.dinoClass);
   var nm = (sp && sp.name) ? sp.name : r.dinoClass;
-  // v503：剥离所有 _Fertilized 片段（如 Wyvern_Fertilized_Ice → Wyvern_Ice）扩大候选
-  var base = String(nm).replace(/_Fertilized/g,'');
   var cands = [nm + '_Egg', nm.replace(/ /g,'_') + '_Egg'];
-  if(base!==nm){ cands.push(base + '_Egg', base.replace(/ /g,'_') + '_Egg'); }
   for(var i=0;i<cands.length;i++){
     if(LB_ICON_BY_NAME[cands[i]]) return LB_ICON_BY_NAME[cands[i]];
   }
@@ -6236,9 +6215,7 @@ function lbLoadIconList(){
       if(!it || !it.url || !it.name) return;
       var m=it.url.match(/\/ASA\/([^/]+)\//);
       var cat=m?m[1]:'';
-      // v503：收录 eggs 分类的蛋图标（<物种>_Egg，lbEggIcon 查询用）；种子/茧等不收录避免索引膨胀
-      var isEggIcon = (cat==='eggs' && /_Egg$/.test(it.name));
-      if(cat!=='biology' && cat!=='units' && !isEggIcon && !extra[it.name]) return;
+      if(cat!=='biology' && cat!=='units' && !extra[it.name]) return;
       var u = tm[it.url] || it.url;   // WebP 缩略图替换（省流）
       by[it.name]=u;
       cats[it.url]=cat;
@@ -9341,8 +9318,6 @@ function lbSearchLive(){
   var el = document.getElementById('lbIdSearch');
   if(!el) return;
   var q = el.value.trim().replace(/^#/,'').trim();
-  // v505：蛋 dinoId2 为空 → ID 形如 #xxx_（尾随下划线），剥离后再匹配（id1===q 即可命中）
-  q = q.replace(/_+$/,'');
   // 宽度自适应：随内容增长（11px 字体数字实际约 6.5px/字符 + 14px 余量含左右 padding，限 60~220px）
   var w = Math.max(60, Math.min(220, q.length*6.5+14));
   if(el.style.width !== w+'px') el.style.width = w+'px';
