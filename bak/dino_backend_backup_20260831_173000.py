@@ -441,12 +441,6 @@ def extract_json(data):
 # 2026-08-28 提速：max_workers 2→6——用户一次刷新多台服务器时全部并发提交，避免任务排队（2 个慢任务占池导致后续任务等 20s）
 _RCON_EXECUTOR = __import__('concurrent.futures', fromlist=['ThreadPoolExecutor']).ThreadPoolExecutor(max_workers=8)
 
-# 2026-08-31：玩家位置共享缓存——多客户端共用同一份点位数据（联盟成员分布每 1s 全量轮询，
-# N 客户端 × M 玩家并发 POST 会重复执行 RCON；TTL 内命中直接复用，RCON 命令量从 客户端数×玩家数/s 降为 玩家数/TTL）
-_POS_CACHE = {}       # (server, player) -> [expire_ts, result_dict]
-_POS_TTL = 1.5        # 秒
-_POS_CACHE_MAX = 500  # 超上限清空重建，防 key 泄漏
-
 def refresh_tamed(server):
     """触发一台服务器 tamed 刷新（RCON ArkTamedDinos）+ 轮询确认更新。"""
     port = SERVERS.get(server)
@@ -710,21 +704,10 @@ def get_dino(server, dino1, dino2):
 
 
 def player_pos(server, player):
-    """玩家位置：RCON PlayerPos（带 1.5s 共享缓存，多客户端复用同一份点位数据）。"""
+    """玩家位置：RCON PlayerPos。"""
     port = SERVERS.get(server)
     if not port:
         return {'ok': False, 'server': server, 'error': 'unknown server'}
-    key = (server, player)
-    now = time.time()
-    hit = _POS_CACHE.get(key)
-    if hit and hit[0] > now:
-        # 缓存命中：复用 RCON 结果，仅刷新 ts（前端靠 attrs.ts !== baseTs 识别新结果，ts 不变会被误判"该服未找到"）
-        r = dict(hit[1])
-        r['ts'] = str(datetime.now())
-        write_status_file('player_pos_status.json', 'ok' if r['ok'] else 'error', r)
-        write_status_file('player_pos_status_%s.json' % server, 'ok' if r['ok'] else 'error', r)
-        mem_status('sensor.player_pos_status', 'ok' if r['ok'] else 'error', r)
-        return r
     try:
         success, result = _rcon_str(port, '%s %s' % (CMD_PLAYER_POS, player))
     except Exception as e:
@@ -754,10 +737,6 @@ def player_pos(server, player):
     write_status_file('player_pos_status.json', 'ok' if ok else 'error', r)
     write_status_file('player_pos_status_%s.json' % server, 'ok' if ok else 'error', r)
     mem_status('sensor.player_pos_status', 'ok' if ok else 'error', r)
-    # 存入共享缓存（TTL 1.5s）；超上限清空重建
-    if len(_POS_CACHE) >= _POS_CACHE_MAX:
-        _POS_CACHE.clear()
-    _POS_CACHE[key] = [time.time() + _POS_TTL, r]
     return r
 
 

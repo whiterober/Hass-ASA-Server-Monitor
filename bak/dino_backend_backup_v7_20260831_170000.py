@@ -122,8 +122,6 @@ CMD_GET_DINO = 'TransferIdentityFix.ArkGetDino'
 CMD_MOVE_DEATH_BAG = 'TransferIdentityFix.MoveDeathBag'
 CMD_MOVE_ALL_PENDINGS = 'TransferIdentityFix.MoveAllPendings'
 CMD_RENAME_DINO = 'TransferIdentityFix.RenameDino'
-CMD_EGG_PROBE = 'TransferIdentityFix.EggProbe'
-CMD_LIST_PLAYERS = 'ListPlayers'  # v532：原生 RCON 在线玩家列表（联盟位置只查在线成员）
 
 # 内存状态缓存（供 /api/states/sensor.* 兼容轮询）：key = sensor 名，value = {state, attributes}
 STATUS_MEM = {}
@@ -441,20 +439,13 @@ def extract_json(data):
 # 2026-08-28 提速：max_workers 2→6——用户一次刷新多台服务器时全部并发提交，避免任务排队（2 个慢任务占池导致后续任务等 20s）
 _RCON_EXECUTOR = __import__('concurrent.futures', fromlist=['ThreadPoolExecutor']).ThreadPoolExecutor(max_workers=8)
 
-# 2026-08-31：玩家位置共享缓存——多客户端共用同一份点位数据（联盟成员分布每 1s 全量轮询，
-# N 客户端 × M 玩家并发 POST 会重复执行 RCON；TTL 内命中直接复用，RCON 命令量从 客户端数×玩家数/s 降为 玩家数/TTL）
-_POS_CACHE = {}       # (server, player) -> [expire_ts, result_dict]
-_POS_TTL = 1.5        # 秒
-_POS_CACHE_MAX = 500  # 超上限清空重建，防 key 泄漏
-
 def refresh_tamed(server):
     """触发一台服务器 tamed 刷新（RCON ArkTamedDinos）+ 轮询确认更新。"""
     port = SERVERS.get(server)
     if not port:
         return {'ok': False, 'error': 'unknown server: ' + server}
     try:
-        # v542：ArkTamedDinos 导出量大（Ext 服 150+ 只），默认 15s RCON 超时会中断导出 → tamed.json 只生成部分数据 → 前端聚落消失。放宽到 60s（对齐 search_wild）
-        raw = rcon_command(RCON_HOST, port, RCON_PASSWORD, CMD_TAMED, timeout=60)
+        raw = rcon_command(RCON_HOST, port, RCON_PASSWORD, CMD_TAMED)
     except Exception as e:
         return {'ok': False, 'server': server, 'error': 'rcon: ' + str(e)}
     resp = extract_json(raw) or {}
@@ -462,7 +453,7 @@ def refresh_tamed(server):
     if ok and resp.get('cooldown'):
         time.sleep(20.0)
         try:
-            raw2 = rcon_command(RCON_HOST, port, RCON_PASSWORD, CMD_TAMED, timeout=60)
+            raw2 = rcon_command(RCON_HOST, port, RCON_PASSWORD, CMD_TAMED)
             resp2 = extract_json(raw2) or {}
             if resp2.get('ok') and not resp2.get('cooldown'):
                 ok = True
@@ -489,60 +480,6 @@ def refresh_tamed(server):
     write_status_file('refresh_status.json', 'ok', result)  # 兼容旧前端
     write_status_file('refresh_status_%s.json' % server, 'ok', result)  # 独立文件（并行安全）
     mem_status('sensor.refresh_tamed_status', 'ok', result)
-    return result
-
-
-def refresh_eggs(server):
-    """触发一台服务器全图蛋信息实时刷新（RCON TransferIdentityFix.EggProbe）+ 写状态。
-    蛋数据文件由 exe 侧生成 {server}_eggs.json.gz，前端重拉确认。"""
-    port = SERVERS.get(server)
-    if not port:
-        return {'ok': False, 'error': 'unknown server: ' + server}
-    try:
-        raw = rcon_command(RCON_HOST, port, RCON_PASSWORD, CMD_EGG_PROBE)
-    except Exception as e:
-        return {'ok': False, 'server': server, 'error': 'rcon: ' + str(e)}
-    resp = extract_json(raw) or {}
-    ok = bool(resp.get('ok'))
-    if not ok:
-        r = {'ok': False, 'server': server, 'error': resp.get('error') or 'trigger failed', 'ts': str(datetime.now())}
-        write_status_file('egg_probe_status.json', 'error', r)
-        write_status_file('egg_probe_status_%s.json' % server, 'error', r)
-        return r
-    result = {'ok': True, 'server': server, 'triggered': True, 'ts': str(datetime.now())}
-    write_status_file('egg_probe_status.json', 'ok', result)  # 兼容
-    write_status_file('egg_probe_status_%s.json' % server, 'ok', result)  # 独立文件（并行安全）
-    mem_status('sensor.egg_probe_status', 'ok', result)
-    return result
-
-
-def list_players(server):
-    """在线玩家列表：原生 RCON ListPlayers → 解析 eosId → 写 {server}_online.json。
-    前端据此过滤联盟离线成员，只查在线成员位置（每个在线成员仅 1 次 PlayerPos）。"""
-    port = SERVERS.get(server)
-    if not port:
-        return {'ok': False, 'error': 'unknown server: ' + server}
-    try:
-        raw = rcon_command(RCON_HOST, port, RCON_PASSWORD, CMD_LIST_PLAYERS)
-    except Exception as e:
-        return {'ok': False, 'server': server, 'error': 'rcon: ' + str(e)}
-    import re
-    players = []
-    for line in str(raw or '').splitlines():
-        line = line.strip()
-        if not line or 'No Players' in line:
-            continue
-        # 实测格式（2026-08-31）：'0. JaronV5, 00026f605e2e4146af882fd3c5d9624e'（无 SteamID: 前缀，直接名字, eoshex）
-        # 兼容旧格式：'1. Name, SteamID: eoshex, PlayerUID: 123'
-        m = re.search(r'([0-9a-fA-F]{32})', line)
-        if not m:
-            continue
-        eos = m.group(1).lower()
-        nm = re.sub(r'^\d+\.\s*', '', line)
-        name = nm.split(',')[0].strip()
-        players.append({'eosId': eos, 'name': name})
-    result = {'ok': True, 'server': server, 'players': players, 'count': len(players), 'ts': str(datetime.now())}
-    write_status_file('%s_online.json' % server, 'ok', result)
     return result
 
 
@@ -710,21 +647,10 @@ def get_dino(server, dino1, dino2):
 
 
 def player_pos(server, player):
-    """玩家位置：RCON PlayerPos（带 1.5s 共享缓存，多客户端复用同一份点位数据）。"""
+    """玩家位置：RCON PlayerPos。"""
     port = SERVERS.get(server)
     if not port:
         return {'ok': False, 'server': server, 'error': 'unknown server'}
-    key = (server, player)
-    now = time.time()
-    hit = _POS_CACHE.get(key)
-    if hit and hit[0] > now:
-        # 缓存命中：复用 RCON 结果，仅刷新 ts（前端靠 attrs.ts !== baseTs 识别新结果，ts 不变会被误判"该服未找到"）
-        r = dict(hit[1])
-        r['ts'] = str(datetime.now())
-        write_status_file('player_pos_status.json', 'ok' if r['ok'] else 'error', r)
-        write_status_file('player_pos_status_%s.json' % server, 'ok' if r['ok'] else 'error', r)
-        mem_status('sensor.player_pos_status', 'ok' if r['ok'] else 'error', r)
-        return r
     try:
         success, result = _rcon_str(port, '%s %s' % (CMD_PLAYER_POS, player))
     except Exception as e:
@@ -754,10 +680,6 @@ def player_pos(server, player):
     write_status_file('player_pos_status.json', 'ok' if ok else 'error', r)
     write_status_file('player_pos_status_%s.json' % server, 'ok' if ok else 'error', r)
     mem_status('sensor.player_pos_status', 'ok' if ok else 'error', r)
-    # 存入共享缓存（TTL 1.5s）；超上限清空重建
-    if len(_POS_CACHE) >= _POS_CACHE_MAX:
-        _POS_CACHE.clear()
-    _POS_CACHE[key] = [time.time() + _POS_TTL, r]
     return r
 
 
@@ -1054,22 +976,6 @@ class Handler(BaseHTTPRequestHandler):
             # 2026-08-28 异步化：后台线程执行 RCON（旧架构 AppDaemon 异步 1s 返回；此处立即返回触发成功，前端轮询 refresh_status.json/savedAt 等结果）
             _RCON_EXECUTOR.submit(refresh_tamed, server)
             self._send(200, {'ok': True, 'server': server, 'triggered': True, 'async': True, 'ts': str(datetime.now())})
-        # v525：全图蛋信息实时刷新（TransferIdentityFix.EggProbe）——选中服务器刷新时同步触发
-        elif path.endswith('refresh_eggs'):
-            server = g('server')
-            if not server:
-                self._send(400, {'ok': False, 'error': 'missing server'})
-                return
-            _RCON_EXECUTOR.submit(refresh_eggs, server)
-            self._send(200, {'ok': True, 'server': server, 'triggered': True, 'async': True, 'ts': str(datetime.now())})
-        # v532：在线玩家列表（原生 RCON ListPlayers）——联盟位置只查在线成员，减少无效 PlayerPos 查询
-        elif path.endswith('list_players'):
-            server = g('server')
-            if not server:
-                self._send(400, {'ok': False, 'error': 'missing server'})
-                return
-            _RCON_EXECUTOR.submit(list_players, server)
-            self._send(200, {'ok': True, 'server': server, 'triggered': True, 'async': True, 'ts': str(datetime.now())})
         elif path.endswith('search_wild_dinos') or path.endswith('search_wild'):
             server = g('server')
             species = g('species')
@@ -1111,11 +1017,7 @@ class Handler(BaseHTTPRequestHandler):
             if not (server and player):
                 self._send(400, {'ok': False, 'error': 'missing args'})
                 return
-            # 2026-08-31 异步化：后台线程执行 RCON（原同步阻塞单线程 HTTP server，前端并行查 10 服被串行排队，
-            # 联盟多成员位置查询极慢：M 成员×10 服全串行）。异步后前端并行 POST 立即返回，线程池并行 RCON，
-            # 前端轮询 player_pos_status_{server}.json 拿结果（ts 变化检测，逻辑不变）。
-            _RCON_EXECUTOR.submit(player_pos, server, player)
-            self._send(200, {'ok': True, 'server': server, 'player': player, 'triggered': True, 'async': True, 'ts': str(datetime.now())})
+            self._send(200, player_pos(server, player))
         # v3：服务器管理（管理员 whiterober）：转移死亡包到最近墓碑 / 重建冷冻球
         elif path.endswith('move_death_bag'):
             username = g('username')
