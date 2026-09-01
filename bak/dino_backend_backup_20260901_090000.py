@@ -525,21 +525,10 @@ def list_players(server):
     try:
         raw = rcon_command(RCON_HOST, port, RCON_PASSWORD, CMD_LIST_PLAYERS)
     except Exception as e:
-        # v10（2026-09-01）：RCON 失败也写 ok=false 的 online.json——前端据此判断服务器离线（否则旧文件残留误判在线）
-        r = {'ok': False, 'server': server, 'error': 'rcon: ' + str(e)}
-        write_status_file('%s_online.json' % server, 'error', r)
-        return r
+        return {'ok': False, 'server': server, 'error': 'rcon: ' + str(e)}
     import re
-    # v9（2026-09-01）：str(raw) 是 bytes repr（\n 为字面字符非真实换行）→ splitlines 只 1 行 → 只解析出第 1 个玩家
-    # （在线名单带 b':\x00 垃圾前缀 + 多人只显示 1 人的同一根因）。改 decode 后 \n 为真实换行，全部玩家可解析。
-    text = (raw or b'').decode('utf-8', errors='ignore')
-    if not text.strip():
-        # v11（2026-09-01）：连接成功但 ListPlayers 无任何响应（服务器未就绪/假死，超时返回空）→ 视为离线
-        r = {'ok': False, 'server': server, 'error': 'no response'}
-        write_status_file('%s_online.json' % server, 'error', r)
-        return r
     players = []
-    for line in text.splitlines():
+    for line in str(raw or '').splitlines():
         line = line.strip()
         if not line or 'No Players' in line:
             continue

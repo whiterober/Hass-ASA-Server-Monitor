@@ -366,7 +366,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260831-598';
+var LB_VERSION = 'v20260831-596';
 // ====== PWA：Service Worker 注册（2026-08-29，配合 manifest 使移动端 Edge/Chrome 可安装为应用） ======
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function(){
@@ -421,7 +421,6 @@ function loadASB() {
       var bpNoC = s.blueprintPath.replace(/_C$/,'');
       if (bpNoC !== s.blueprintPath) ASB_DB._byBp[bpNoC] = s;
     }
-    LB_FSBC_CACHE = {}; // v598：ASB 加载完成后清空 findSpeciesByClass 缓存（加载前可能缓存了 null）
     console.log('ASB loaded: ' + db.species.length + ' species');
     return ASB_DB;
   });
@@ -431,33 +430,23 @@ function findSpecies(bp) {
   return ASB_DB._byBp[bp] || ASB_DB._byBp[bp.replace(/_C$/, '')] || null;
 }
 // 速查页按短类名匹配物种（blueprintPath 是完整路径，dinoClass 是短名）
-// v598：加缓存——lbSpeciesMatch 对 6776 recs 每条调用 findSpeciesByClass 两次，无缓存时每次遍历数千 key×4 循环 → 切换属性按钮巨卡
-var LB_FSBC_CACHE = {};
 function findSpeciesByClass(dinoClass){
   if(!ASB_DB || !ASB_DB._byBp || !dinoClass) return null;
-  if(LB_FSBC_CACHE[dinoClass] !== undefined) return LB_FSBC_CACHE[dinoClass];
   var c = dinoClass.replace(/_C$/, '');
   var direct = ASB_DB._byBp[dinoClass] || ASB_DB._byBp[c];
-  var out = direct || null;
-  if(!out){
-    // 第一优先：精确蓝图节点（路径段 `/名.` 后跟点号，排除 _Gauntlet/_Aberrant/_Corrupt 等变体路径）
-    // 修复：Bigfoot_Character_BP_C 实为 Gigantopithecus（巨猿），之前被 .Bigfoot_Character_BP 前缀误配到 Gauntlet→Yeti
-    for (var key0 in ASB_DB._byBp) {
-      if (key0.indexOf('/' + c + '.') >= 0){ out = ASB_DB._byBp[key0]; break; }
-    }
-    if(!out){
-      for (var key in ASB_DB._byBp) {
-        if (key.indexOf('.' + c) >= 0){ out = ASB_DB._byBp[key]; break; }
-      }
-    }
-    if(!out){
-      for (var key2 in ASB_DB._byBp) {
-        if (key2.indexOf('/' + c) >= 0 || key2.indexOf(c) >= 0){ out = ASB_DB._byBp[key2]; break; }
-      }
-    }
+  if (direct) return direct;
+  // 第一优先：精确蓝图节点（路径段 `/名.` 后跟点号，排除 _Gauntlet/_Aberrant/_Corrupt 等变体路径）
+  // 修复：Bigfoot_Character_BP_C 实为 Gigantopithecus（巨猿），之前被 .Bigfoot_Character_BP 前缀误配到 Gauntlet→Yeti
+  for (var key0 in ASB_DB._byBp) {
+    if (key0.indexOf('/' + c + '.') >= 0) return ASB_DB._byBp[key0];
   }
-  LB_FSBC_CACHE[dinoClass] = out;
-  return out;
+  for (var key in ASB_DB._byBp) {
+    if (key.indexOf('.' + c) >= 0) return ASB_DB._byBp[key];
+  }
+  for (var key2 in ASB_DB._byBp) {
+    if (key2.indexOf('/' + c) >= 0 || key2.indexOf(c) >= 0) return ASB_DB._byBp[key2];
+  }
+  return null;
 }
 
 // v575：物种筛选统一匹配——恐龙 dinoClass=蓝图类名（如 Rex_Character_BP_C），蛋/胚胎 dinoClass=物种英文短名（如 Rex）
@@ -6744,8 +6733,7 @@ function lbLoadIconList(){
       var m=it.url.match(/\/ASA\/([^/]+)\//);
       var cat=m?m[1]:'';
       // v503：收录 eggs 分类的蛋图标（<物种>_Egg，lbEggIcon 查询用）；种子/茧等不收录避免索引膨胀
-      // v597：额外收录 Item_*Egg_Icon 格式（血蛛卵 Item_BogSpiderEgg_Icon 等 item 命名蛋图标）
-      var isEggIcon = (cat==='eggs' && (/_Egg$/.test(it.name) || /Egg_Icon$/.test(it.name)));
+      var isEggIcon = (cat==='eggs' && /_Egg$/.test(it.name));
       if(cat!=='biology' && cat!=='units' && !isEggIcon && !extra[it.name]) return;
       var u = tm[it.url] || it.url;   // WebP 缩略图替换（省流）
       by[it.name]=u;
@@ -9318,8 +9306,7 @@ function lbRenderBreedResult(){
   // 性别统计计数（含 v6 无法逆推球：性别字段可获取，v6 球应计入性别判断避免误报缺公/母）
   var mySexM=0, mySexF=0;
   recs.forEach(function(r){
-    // v597：改用 lbSpeciesMatch（蛋/胚胎 dinoClass=物种短名如 Argent，选中=蓝图类名 Argent_Character_BP_C，直接比较会排除蛋）
-    if(!lbSpeciesMatch(r, cls) || r.isEmpty) return;
+    if(r.dinoClass!==cls || r.isEmpty) return;
     // v159：分组不再按基因剔除——属性冠军从全部生物评选（并集），有选中基因的生物在渲染阶段单独过滤
     total++;
     var isMy = lbIsMyRec(r, playerSet, curPid);
@@ -9486,12 +9473,6 @@ function lbRenderBreedResult(){
     var stageHtml = stage
       ? ' <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:'+stage.color+'22;color:'+stage.color+';border:1px solid '+stage.color+'44;vertical-align:1px">'+stage.text+'</span>'
       : '';
-    // v597：蛋/胚胎分类徽章（同婴儿/幼崽样式；蛋/胚胎有性别，性别图标保留在左侧，徽章只标注分类）
-    var eggKind = (r.source==='embryo') ? {text:'胚胎', color:'#a78bfa'}
-      : ((r._isEgg || r.source==='egg') ? {text:'蛋', color:'#f59e0b'} : null);
-    var eggKindHtml = eggKind
-      ? ' <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:'+eggKind.color+'22;color:'+eggKind.color+';border:1px solid '+eggKind.color+'44;vertical-align:1px">'+eggKind.text+'</span>'
-      : '';
     // v153：基因筛选模式——卡片显示生物含有的选中基因标签（替代属性行）；trait 去 [n] 后缀
     var geneTags='';
     if(bgene && r.geneTraits && r.geneTraits.length){
@@ -9512,7 +9493,6 @@ function lbRenderBreedResult(){
       +(r.name?'<b style="color:#fff">'+r.name+'</b> ':' ')
       +'<span style="background:#22223a;border-radius:2px;padding:0 6px;color:#ccc">Lv.'+r.level+'</span>'
       +stageHtml
-      +eggKindHtml
       // v154：属性+基因都显示（把基因当属性，逻辑统一；无则留空）
       +(attrHtml?'<br>'+attrHtml:'')
       +geneTags

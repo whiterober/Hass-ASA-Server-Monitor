@@ -366,7 +366,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260831-567';
+var LB_VERSION = 'v20260831-598';
 // ====== PWA：Service Worker 注册（2026-08-29，配合 manifest 使移动端 Edge/Chrome 可安装为应用） ======
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function(){
@@ -421,6 +421,7 @@ function loadASB() {
       var bpNoC = s.blueprintPath.replace(/_C$/,'');
       if (bpNoC !== s.blueprintPath) ASB_DB._byBp[bpNoC] = s;
     }
+    LB_FSBC_CACHE = {}; // v598：ASB 加载完成后清空 findSpeciesByClass 缓存（加载前可能缓存了 null）
     console.log('ASB loaded: ' + db.species.length + ' species');
     return ASB_DB;
   });
@@ -430,23 +431,47 @@ function findSpecies(bp) {
   return ASB_DB._byBp[bp] || ASB_DB._byBp[bp.replace(/_C$/, '')] || null;
 }
 // 速查页按短类名匹配物种（blueprintPath 是完整路径，dinoClass 是短名）
+// v598：加缓存——lbSpeciesMatch 对 6776 recs 每条调用 findSpeciesByClass 两次，无缓存时每次遍历数千 key×4 循环 → 切换属性按钮巨卡
+var LB_FSBC_CACHE = {};
 function findSpeciesByClass(dinoClass){
   if(!ASB_DB || !ASB_DB._byBp || !dinoClass) return null;
+  if(LB_FSBC_CACHE[dinoClass] !== undefined) return LB_FSBC_CACHE[dinoClass];
   var c = dinoClass.replace(/_C$/, '');
   var direct = ASB_DB._byBp[dinoClass] || ASB_DB._byBp[c];
-  if (direct) return direct;
-  // 第一优先：精确蓝图节点（路径段 `/名.` 后跟点号，排除 _Gauntlet/_Aberrant/_Corrupt 等变体路径）
-  // 修复：Bigfoot_Character_BP_C 实为 Gigantopithecus（巨猿），之前被 .Bigfoot_Character_BP 前缀误配到 Gauntlet→Yeti
-  for (var key0 in ASB_DB._byBp) {
-    if (key0.indexOf('/' + c + '.') >= 0) return ASB_DB._byBp[key0];
+  var out = direct || null;
+  if(!out){
+    // 第一优先：精确蓝图节点（路径段 `/名.` 后跟点号，排除 _Gauntlet/_Aberrant/_Corrupt 等变体路径）
+    // 修复：Bigfoot_Character_BP_C 实为 Gigantopithecus（巨猿），之前被 .Bigfoot_Character_BP 前缀误配到 Gauntlet→Yeti
+    for (var key0 in ASB_DB._byBp) {
+      if (key0.indexOf('/' + c + '.') >= 0){ out = ASB_DB._byBp[key0]; break; }
+    }
+    if(!out){
+      for (var key in ASB_DB._byBp) {
+        if (key.indexOf('.' + c) >= 0){ out = ASB_DB._byBp[key]; break; }
+      }
+    }
+    if(!out){
+      for (var key2 in ASB_DB._byBp) {
+        if (key2.indexOf('/' + c) >= 0 || key2.indexOf(c) >= 0){ out = ASB_DB._byBp[key2]; break; }
+      }
+    }
   }
-  for (var key in ASB_DB._byBp) {
-    if (key.indexOf('.' + c) >= 0) return ASB_DB._byBp[key];
+  LB_FSBC_CACHE[dinoClass] = out;
+  return out;
+}
+
+// v575：物种筛选统一匹配——恐龙 dinoClass=蓝图类名（如 Rex_Character_BP_C），蛋/胚胎 dinoClass=物种英文短名（如 Rex）
+// v576：ASB name 是完整名（如 Carcharodontosaurus）而蛋 dinoClass 是短名（Carcha）——改用 findSpeciesByClass 归一为同一 ASB 物种对象比较
+function lbSpeciesMatch(r, cls){
+  if(!cls) return true;
+  if(r.dinoClass === cls) return true;
+  var a = findSpeciesByClass(r.dinoClass);
+  if(!a && (r.source==='egg'||r.source==='embryo') && /_(XSmall|Small|Medium|Large)$/.test(r.dinoClass||'')){
+    // v593：蛋品质变体（风行蜥 Maelizard_Small 等）→ 去品质后缀再查（兜底）
+    a = findSpeciesByClass(String(r.dinoClass).replace(/_(XSmall|Small|Medium|Large)$/,''));
   }
-  for (var key2 in ASB_DB._byBp) {
-    if (key2.indexOf('/' + c) >= 0 || key2.indexOf(c) >= 0) return ASB_DB._byBp[key2];
-  }
-  return null;
+  var b = findSpeciesByClass(cls);
+  return !!(a && b && a === b);
 }
 
 // 查中文名：蓝图代码 → 中文名（提取括号前部分），无映射返回 null
@@ -4213,19 +4238,42 @@ function lbDinoHTML(r, opts){
       +'</span>';
   });
   var v6warn = (!lbNormalCreature) ? '' : ((r.cryoVersion===6 && sol === false) ? '<div style="margin-top:6px;color:#f87171;font-size:11px">⚠️ v6球数据缺失（属性点不可用）</div>' : '');
-  // v526 基础 + v552：孵化只留进度条+百分比（去"未孵化/孵化中/已孵出"文字标签；去腐坏显示）
+  // v526 基础 + v552 + v574：孵化区=进度条（durability，无百分比数字）+孵化剩余时间；腐化按新语义 1-剩余/总时长
   var eggProgHtml = '';
   if(isEgg){
     var _eggBits = '';
     var _du = (typeof r.durability === 'number' && isFinite(r.durability)) ? r.durability : -1;
+    // 孵化倒计时（hatchTimeRemaining；0=已孵出可孵，-1=未孵化/不可用）
+    var _htr = (typeof r.hatchTimeRemaining==='number' && isFinite(r.hatchTimeRemaining)) ? r.hatchTimeRemaining : -1;
+    // 孵化进度条（durability 0=已孵出 100=未孵 → 孵化%=100-durability）；v583：🥚 图标右侧显示倒计时/可孵（叠条上，替代原🔥孵化字样）
     if(_du >= 0){
       var _hp = Math.max(0, Math.min(100, Math.round(100 - _du))); // 0=未孵化(0%)，100=已孵出(100%)
-      var _hCol = _hp>=100 ? '#22c55e' : (_hp>0 ? '#38bdf8' : '#64748b');
-      // v555：进度条保持原尺寸（52x8），🔥 孵化文字绝对定位叠在条上居中（不撑开）
-      var _hbar = '<span style="position:relative;display:inline-block;width:52px;height:8px;border-radius:4px;background:#22223a;overflow:visible;vertical-align:-1px;margin:0 4px"><span style="display:block;height:100%;width:'+_hp+'%;background:'+_hCol+';border-radius:4px"></span><span style="position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;font-size:9px;line-height:1;color:#fff;text-shadow:0 0 2px #000;white-space:nowrap">🔥 孵化</span></span>';
-      _eggBits += '<span>'+_hbar+'<b style="color:'+_hCol+'">'+_hp+'%</b></span>';
+      var _hCol = (_htr===0) ? '#22c55e' : (_hp>0 ? '#38bdf8' : '#64748b');
+      var _hLbl = (_htr < 0) ? '未孵化' : ((_htr < 1) ? '可孵' : lbFmtDurationMin(_htr)); // v590：0≤htr<1 秒 = 可孵（修复 0~1 小数显示 0m）
+      var _hbar = '<span style="position:relative;display:inline-block;width:52px;height:8px;border-radius:4px;background:#22223a;overflow:visible;vertical-align:-1px;margin:0 4px"><span style="display:block;height:100%;width:'+_hp+'%;background:'+_hCol+';border-radius:4px"></span><span style="position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;font-size:9px;line-height:1;white-space:nowrap;color:#fff;text-shadow:0 0 2px #000,0 0 2px #000">🥚 '+_hLbl+'</span></span>';
+      _eggBits += '<span>'+_hbar+'</span>';
     }
-    // v553：去掉「🧪 腐化」显示——corruptionPercent=1-savedDurability 实为孵化进度（与 durability 冗余），非腐化；腐坏剩余缺世界秒基准无法精确，不显示
+    // v583：无倒计时且无耐久 → 未孵化/不可用
+    if(_htr < 0 && _du < 0){
+      _eggBits += '<span style="color:#64748b">未孵化/不可用</span>';
+    }
+    // v574：腐化百分比 = 1 - spoilTimeRemaining/spoilingTime（新语义权威；数据缺则用 corruptionPercent；-1 隐藏）
+    var _str = (typeof r.spoilTimeRemaining==='number' && isFinite(r.spoilTimeRemaining)) ? r.spoilTimeRemaining : -1;
+    var _st = (typeof r.eggSpoilTime==='number' && isFinite(r.eggSpoilTime)) ? r.eggSpoilTime : 0;
+    var _cp = -1;
+    if(_str >= 0 && _st > 0){
+      _cp = Math.max(0, Math.min(1, 1 - _str/_st));
+    } else if(typeof r.corruptionPercent==='number' && isFinite(r.corruptionPercent) && r.corruptionPercent>=0){
+      _cp = Math.min(1, r.corruptionPercent);
+    }
+    // v585：腐化与孵化完全同款——条内叠「💀 倒计时」（无前缀/百分比/独立 Spoils in）
+    if(_cp >= 0 || _str >= 0){
+      var _cpp = Math.max(0, Math.min(100, Math.round((_cp>=0?_cp:0)*100)));
+      var _cLbl = (_str >= 0) ? lbFmtDurationMin(_str) : '';
+      var _cbar = '<span style="position:relative;display:inline-block;width:52px;height:8px;border-radius:4px;background:#22223a;overflow:visible;vertical-align:-1px;margin:0 4px"><span style="display:block;height:100%;width:'+_cpp+'%;background:#f87171;border-radius:4px"></span><span style="position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;font-size:9px;line-height:1;white-space:nowrap;color:#fff;text-shadow:0 0 2px #000,0 0 2px #000">💀 '+_cLbl+'</span></span>';
+      _eggBits += '<span>'+_cbar+'</span>';
+    }
+    // 温度不适标记（保留）
     if(r.tooCold || r.tooHot){
       _eggBits += '<span style="color:#f59e0b">'+(r.tooCold ? '❄️ 太冷' : '🔥 太热')+'</span>';
     }
@@ -4410,6 +4458,9 @@ async function lbLoadEggs(servers, force){
         : Promise.resolve(JSON.parse(lbJsonFix(new TextDecoder().decode(u8))));
       return parse.then(function(j){
         var list = (j && Array.isArray(j.eggs)) ? j.eggs : [];
+        // v586：记录文件级 worldSecondsNow（248M 基准，与 nextSpoilingTime/creationTime 同基准）——真实腐化剩余 = nextSpoilingTime − worldSecondsNow
+        if(!LB._eggWorldByServer) LB._eggWorldByServer = {};
+        LB._eggWorldByServer[abbr] = (j && typeof j.worldSecondsNow==='number' && isFinite(j.worldSecondsNow)) ? j.worldSecondsNow : null;
         return {server:abbr, eggs: list.map(function(e){ return lbEggToRec(e, abbr); })};
       });
     }).catch(function(){ return {server:abbr, eggs:[]}; });
@@ -4424,24 +4475,37 @@ async function lbLoadEggs(servers, force){
   });
 }
 // v501：把已缓存的蛋/胚胎并入 data.recs（按 key 去重），无感重渲染
+// v587：合并时更新已有蛋 rec 的实时字段（后端/eggprobe 刷新后腐化/孵化值变化不再被固化旧值）
 function lbEggMergeToView(){
   var data = LB._cache && LB._cache.data;
   if(!data || !data.recs || !LB._eggCache) return;
-  var exist = {};
-  data.recs.forEach(function(r){ if(r.source==='egg'||r.source==='embryo') exist[r.dinoId1]=1; });
-  var added = 0;
+  var byId = {};
+  data.recs.forEach(function(r){ if(r.source==='egg'||r.source==='embryo') byId[r.dinoId1]=r; });
+  var added = 0, updated = 0;
   Object.keys(LB._eggCache).forEach(function(abbr){
     (LB._eggCache[abbr]||[]).forEach(function(e){
-      if(e.dinoId1 && !exist[e.dinoId1]){ data.recs.push(e); exist[e.dinoId1]=1; added++; }
+      if(!e.dinoId1) return;
+      var old = byId[e.dinoId1];
+      if(old){
+        var changed = false;
+        ['dinoClass','species','hatchTimeRemaining','corruptionPercent','spoilTimeRemaining','nextSpoilingTime','durability','tooCold','tooHot','minTemp','maxTemp'].forEach(function(k){ // v594：含 dinoClass（品质蛋归一同步）
+          if(e[k]!==undefined && old[k]!==e[k]){ old[k]=e[k]; changed=true; }
+        });
+        if(changed) updated++;
+      } else {
+        data.recs.push(e); byId[e.dinoId1]=e; added++;
+      }
     });
   });
-  if(!added) return;
+  if(!added && !updated) return;
   // v550 蛋变化不重建 + v551：仅当聚落构建未含蛋容器（蛋后到，如手动刷新页面）才重建一次（data 级）；
   // 刷新场景 lbReloadIncremental/静默刷新已合并蛋缓存（_eggInSettles=true）→ 不重建不卡
   if(!data._eggInSettles && !data._eggBuiltOnce){
     data._eggBuiltOnce = true;
     if(data._settlements) delete data._settlements;
     if(typeof lbRenderKeepView==='function') lbRenderKeepView();
+  } else if(updated && typeof lbRenderKeepView==='function'){
+    lbRenderKeepView(); // v587：蛋字段更新后重渲染（不重建聚落）
   }
 }
 // v500：egg 记录 → rec 兼容结构（lbDinoHTML 可直接渲染；无自身等级/最终值，用 parentLevel 为等级、属性点直读）
@@ -4455,6 +4519,20 @@ function lbEggToRec(e, abbr){
     var es = lbEmbryoSpecies(e.parentDesc);
     if(es) dinoClass = es;
   }
+  // v593：蛋品质变体（如 Maelizard_Small/Medium/Large/XSmall——风行蜥不同品质的蛋）→ 归一到基础物种类名（可查/可翻译中文）
+  if(!findSpeciesByClass(dinoClass) && /_(XSmall|Small|Medium|Large)$/.test(dinoClass)){
+    var _base = dinoClass.replace(/_(XSmall|Small|Medium|Large)$/,'');
+    var _bs = findSpeciesByClass(_base);
+    if(_bs && _bs.blueprintPath){
+      dinoClass = String(_bs.blueprintPath).split('/').pop().replace(/^(.+)\.(.+)$/,'$1'); // Maelizard_Small → Maelizard_Character_BP
+    }
+  }
+  // v596：蛋等级 = 1 + 继承属性点之和（ARK 机制：蛋等级=孵化后恐龙等级=1+Σ野生遗传点数，含变异点）
+  // 注意：eggprobe 的 parentLevel 是父母显示等级（含驯服加成/经验升级，不遗传），不是蛋等级！
+  var _lvl = 1;
+  if(Array.isArray(e.statPoints)){
+    for(var _pi=0;_pi<e.statPoints.length;_pi++){ _lvl += Number(e.statPoints[_pi])||0; }
+  }
   var sex = (e.genderOverride==='MALE'||e.genderOverride==='FEMALE') ? e.genderOverride : 'MALE';
   // v502：部落归属参考精灵球 addCryoRec——蛋自身 tribeId 恒 0（后端只给 containerTribe），
   // 用所在容器 containerTribe 归属 + containerId 聚合（lbBuildSettlements: tid=containerTribe||tribeId）
@@ -4462,12 +4540,12 @@ function lbEggToRec(e, abbr){
   return {
     src: e.source, source: e.source, _isEgg:true, server:abbr,
     dinoClass: dinoClass, species: spRaw,
-    level: Number(e.parentLevel)||0,
+    level: _lvl,
     gender: sex, name: '', saddle: '',
     statValues: [], statPoints: (e.statPoints||[]), statMutations: (e.statMutations||[]),
     colors: e.colors, babyAge: -1, isBaby: false,
     dinoId1: e.key||'', dinoId2: '',
-    parentDesc: e.parentDesc||'', parentLevel: Number(e.parentLevel)||0, fertilized: e.fertilized,
+    parentDesc: e.parentDesc||'', parentLevel: _lvl, fertilized: e.fertilized,
     geneTraits: [],
     containerId: e.containerId||'', containerType: e.containerType||'egg', containerName: e.containerName||'',
     containerClass: e.containerClass||'', containerTribe: ctribe, ownerTribeId: ctribe,
@@ -4480,8 +4558,36 @@ function lbEggToRec(e, abbr){
     // v540：EggProbe 新字段（hatchTimeRemaining 权威剩余孵化秒，-1=不可用/未孵；corruptionPercent=1-savedDurability 0~1）
     savedDurability: (typeof e.savedDurability==='number') ? e.savedDurability : 0,
     hatchTimeRemaining: (e.hatchTimeRemaining!==null && typeof e.hatchTimeRemaining==='number' && isFinite(e.hatchTimeRemaining)) ? e.hatchTimeRemaining : -1,
-    corruptionPercent: (typeof e.corruptionPercent==='number') ? e.corruptionPercent : 0
+    corruptionPercent: (typeof e.corruptionPercent==='number' && isFinite(e.corruptionPercent)) ? e.corruptionPercent : -1,
+    // v573：腐化剩余秒 + 温度区间（-1/null 兜底，inf 已由 lbJsonFix 归一化）
+    // v586：真实腐化剩余 = nextSpoilingTime − worldSecondsNow（248M 基准，exe 文件顶层输出 worldSecondsNow 后生效）
+    nextSpoilingTime: (typeof e.nextSpoilingTime==='number' && isFinite(e.nextSpoilingTime)) ? e.nextSpoilingTime : null,
+    spoilTimeRemaining: (function(){
+      var _s = (typeof e.spoilTimeRemaining==='number' && isFinite(e.spoilTimeRemaining)) ? e.spoilTimeRemaining : -1;
+      var _w = (LB._eggWorldByServer && LB._eggWorldByServer[abbr]);
+      if(typeof e.nextSpoilingTime==='number' && isFinite(e.nextSpoilingTime) && typeof _w==='number' && isFinite(_w)){
+        return Math.max(0, e.nextSpoilingTime - _w);
+      }
+      return _s;
+    })(),
+    minTemp: (typeof e.minTemp==='number' && isFinite(e.minTemp)) ? e.minTemp : null,
+    maxTemp: (typeof e.maxTemp==='number' && isFinite(e.maxTemp)) ? e.maxTemp : null
   };
+}
+// v573：秒 → HH:MM:SS（孵化剩余/腐化倒计时）
+function lbFmtDuration(sec){
+  sec = Math.max(0, Math.floor(Number(sec)||0));
+  function p2(n){ return (n<10?'0':'')+n; }
+  return p2(Math.floor(sec/3600))+':'+p2(Math.floor((sec%3600)/60))+':'+p2(sec%60);
+}
+// v582：倒计时精确到分钟（d/h/m 简写；孵化/腐化剩余用）
+function lbFmtDurationMin(sec){
+  sec = Math.max(0, Math.floor(Number(sec)||0));
+  var d = Math.floor(sec/86400), h = Math.floor((sec%86400)/3600), m = Math.floor((sec%3600)/60);
+  if(d>0) return d+'d '+h+'h';
+  if(h>0) return h+'h '+m+'m';
+  if(m>0) return m+'m';
+  return '0m';
 }
 // v540：容错 JSON——exe 侧蛋输出 inf/-inf/NaN（非法 JSON），替换为 null 保证 JSON.parse 不炸（蛋数据全量加载依赖）
 function lbJsonFix(s){
@@ -5362,11 +5468,13 @@ function lbRenderView(data, player, classFilter){
   visible.forEach(function(r){
     if(lbContainerTypeOf(r)==='player'){
       // v177：玩家 tab 内容仍按物种过滤；player 不参与聚落结构
-      if(!classFilter || r.dinoClass===classFilter) playerCarried.push(r);
+      // v577：lbSpeciesMatch 同时匹配蛋/胚胎
+      if(!classFilter || lbSpeciesMatch(r, classFilter)) playerCarried.push(r);
       return;
     }
     (byServerAll[r.server]=byServerAll[r.server]||[]).push(r); // v177：聚落按钮结构用全部生物（按钮结构不变）
-    if(classFilter && r.dinoClass!==classFilter) return;
+    // v577：lbSpeciesMatch 同时匹配该物种的蛋/胚胎（角标/主列表含蛋）
+    if(classFilter && !lbSpeciesMatch(r, classFilter)) return;
     (byServer[r.server]=byServer[r.server]||[]).push(r);
   });
   // 排序：有世界秒按世界秒降序；无世界秒排最后，内部按墙钟降序
@@ -5544,7 +5652,8 @@ function lbClusterSettles(settleGroups, cls){
     var grp = settleGroups[key]; // 生物数组（纯基因聚落为空数组）
     var garr = (LB._geneGroups && LB._geneGroups[key]) || []; // v183：基因成员（统一归属）
     // v177：匹配子集（聚落按钮结构不变，内容按物种过滤）
-    var fgrp = cls ? grp.filter(function(r){ return r.dinoClass===cls; }) : grp;
+    // v575：lbSpeciesMatch 同时匹配该物种的蛋/胚胎（蛋 dinoClass=物种英文名）
+    var fgrp = cls ? grp.filter(function(r){ return lbSpeciesMatch(r, cls); }) : grp;
     // v183 匹配基因成员（统一过滤 my+lbMemberMatch），替代 lbSettleGeneMatch
     var fgenes = garr.filter(function(m){ return my(m) && (cls ? lbMemberMatch(m, cls) : true); });
     var hasGene = fgenes.length>0;
@@ -6205,7 +6314,7 @@ function lbBuildSettleContainerHtml(grp, settleKey){
   grpKeys.forEach(function(k){
     var cg2=contGroups[k];
     if(!LB.curClass){ renderCnt++; return; }
-    var nn=cg2.some(function(r){ return !r.isEmpty && r.dinoClass===LB.curClass; });
+    var nn=cg2.some(function(r){ return !r.isEmpty && lbSpeciesMatch(r, LB.curClass); }); // v575：含蛋/胚胎
     var cid2=cg2[0].containerId;
     var sc2 = scanners.some(function(m){ return m.item.containerId===cid2 && (m.item.slots||[]).some(geneSlotShow); }); // v203：只认有基因的枪（空枪不影响展开判断）
     if(nn || sc2) renderCnt++;
@@ -6215,7 +6324,8 @@ function lbBuildSettleContainerHtml(grp, settleKey){
     var cg=contGroups[k];
     // v177：容器分组内容按物种过滤（按钮结构不变），纯空球/无匹配的容器分组隐藏
     var allNonEmpty=cg.filter(function(r){return !r.isEmpty;});
-    var neArr = LB.curClass ? allNonEmpty.filter(function(r){ return r.dinoClass===LB.curClass; }) : allNonEmpty;
+    // v575：lbSpeciesMatch 同时匹配该物种的蛋/胚胎
+    var neArr = LB.curClass ? allNonEmpty.filter(function(r){ return lbSpeciesMatch(r, LB.curClass); }) : allNonEmpty;
     // v202：空球数仅统计 cryo 空球（facility 空容器 rec 表示"容器是空的"，不算 1 个空球）
     var ecnt = cg.filter(function(r){ return r.isEmpty && r.src !== 'facility'; }).length;
     var isEmptyFacility = !allNonEmpty.length && !ecnt && cg.some(function(r){ return r.src==='facility'; }); // 纯空容器（无球）
@@ -6352,24 +6462,24 @@ function lbOpenRefreshModal(){
   dtRow.style.cssText = 'font-size:0.75em;color:#888;margin-bottom:8px';
   dtRow.innerHTML = '📅 最近拉数据时间：<span id="lbDataTimeInModal">'+(LB._dataTimeText||'-')+'</span>';
   box.appendChild(dtRow);
-  // 分区标题图标：低温仓 Cryopod.png / 饲料槽 Feeding_Trough.png（加载后替换 emoji，未加载回退 emoji）
+  // 分区标题图标：低温仓 Cryopod.png / 饲料槽 RaptorHead Icon（v588：饲料槽图标改为迅猛龙头；加载后替换 emoji，未加载回退 emoji）
   // 按钮内图标：放「刷新」文字后（margin-left 留距），18px
   var cryoBtnIc = (LB_ICON_BY_NAME && LB_ICON_BY_NAME['Cryopod']) ? '<img src="'+LB_ICON_BY_NAME['Cryopod']+'" style="width:18px;height:18px;object-fit:contain;vertical-align:-3px;display:inline-block;margin-left:4px">' : '';
-  var troughBtnIc = (LB_ICON_BY_NAME && LB_ICON_BY_NAME['Feeding_Trough']) ? '<img src="'+LB_ICON_BY_NAME['Feeding_Trough']+'" style="width:18px;height:18px;object-fit:contain;vertical-align:-3px;display:inline-block;margin-left:4px">' : '';
-  // v525：刷新按钮加蛋图标（icon2 eggs 分类，候选取第一个可用）
+  var troughBtnIc = (LB_ICON_BY_NAME && LB_ICON_BY_NAME['RaptorHead Icon']) ? '<img src="'+LB_ICON_BY_NAME['RaptorHead Icon']+'" style="width:18px;height:18px;object-fit:contain;vertical-align:-3px;display:inline-block;margin-left:4px">' : '';
+  // v525：刷新按钮加蛋图标（icon2 eggs 分类，候选取第一个可用）；v588：优先 Crystal_Wyvern_Egg
   var eggIcUrl = '';
   if(LB_ICON_BY_NAME){
-    var _eggCands = ['Brontosaurus_Egg','Raptor_Egg','Dodo_Egg','Wyvern_Egg','Archaeopteryx_Egg'];
+    var _eggCands = ['Crystal_Wyvern_Egg','Brontosaurus_Egg','Raptor_Egg','Dodo_Egg','Wyvern_Egg','Archaeopteryx_Egg'];
     for(var _ei=0;_ei<_eggCands.length;_ei++){ if(LB_ICON_BY_NAME[_eggCands[_ei]]){ eggIcUrl = LB_ICON_BY_NAME[_eggCands[_ei]]; break; } }
   }
   var eggBtnIc = eggIcUrl ? '<img src="'+eggIcUrl+'" style="width:18px;height:18px;object-fit:contain;vertical-align:-3px;display:inline-block;margin-left:4px">' : '';
   // 合并分区：提示 + 服务器多选 + 单个刷新按钮
   var sec = document.createElement('div');
   sec.style.cssText = 'margin-bottom:12px';
-  sec.innerHTML = '<div style="font-size:0.8em;color:#999;line-height:1.6;margin-bottom:8px">▸ 球内数据：全服约 <b style="color:#facc15">数万条</b>，预计加载 <b style="color:#facc15">10-60 秒</b>，和服务器自动保存同步（非实时）。<br>▸ 已放出生物：<b style="color:#facc15">实时抓取</b>，<b style="color:#ef4444">不要频繁操作</b>，尽量单服抓取。<br>▸ 蛋信息：<b style="color:#facc15">选中服务器刷新时同步实时刷新</b>（EggProbe 刷全图蛋，无需单独操作）。</div>'
+  sec.innerHTML = '<div style="font-size:0.8em;color:#999;line-height:1.6;margin-bottom:8px">▸ 球内数据：全服约 <b style="color:#facc15">数万条</b>，预计加载 <b style="color:#facc15">10-60 秒</b>，和服务器自动保存同步（非实时）。<br>▸ 已放出生物：<b style="color:#facc15">实时抓取</b>，<b style="color:#ef4444">不要频繁操作</b>，尽量单服抓取。<br>▸ 蛋信息：<b style="color:#facc15">选中服务器刷新时同步实时刷新</b>。</div>'
     + '<div id="lbServers" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px"></div>'
     + '<div style="font-size:0.75em;color:#666;margin-bottom:8px">💡 未选择服务器时，点击刷新将仅刷新低温仓数据。</div>'
-    + '<button class="lb-modal-btn" onclick="lbRefreshMerged(this)" style="padding:8px 14px;border:none;border-radius:6px;background:var(--accent);color:#fff;cursor:pointer;font-size:0.85em;font-weight:bold;display:inline-flex;align-items:center">刷新'+cryoBtnIc+troughBtnIc+eggBtnIc+'</button>';
+    + '<button class="lb-modal-btn" onclick="lbRefreshMerged(this)" style="padding:8px 14px;border:none;border-radius:6px;background:var(--accent);color:#fff;cursor:pointer;font-size:0.85em;font-weight:bold;display:inline-flex;align-items:center">刷新'+troughBtnIc+cryoBtnIc+eggBtnIc+'</button>'; // v592：RaptorHead 摆低温仓前
   box.appendChild(sec);
   // 进度区（tamed 刷新用）
   var prog = document.createElement('div');
@@ -6628,13 +6738,14 @@ function lbLoadIconList(){
     var by={}, cats={};
     // 额外收录的非 biology/units 精选图标（如「全部物种」的 HubTameIcon，GUI 分类；以及手风琴 summary 容器图标 facility/skins/GUI）
     var extra={'HubTameIcon':1, 'Cryofridge':1, 'Display_Case':1, 'HUD_CryoHospital_Icon':1, 'HUD_PetDisplayStand_Wall_Thatch_Icon':1, 'Tek_Replicator':1, 'SmallStorage_Icon':1, 'RW_Tracking_dino':1, 'Cryopod':1, 'RW_Store_chibi':1, 'RW_equip_saddle':1, 'TEK_Icon':1, 'RW_Garage_roof_show':1, 'HubInventoryIcon':1, 'RW_wants_to_cuddle':1, 'Feeding_Trough':1,
-      'Tek Transmitter':1, 'TEKPortal_Icon':1, 'WoodFridge_Icon':1, 'Industrial_Preserving_Bin':1, 'Icon_DedicatedStorage':1, 'LargeStorage_Icon':1, 'Linked_Storage_Box':1, 'Library_Storage':1, 'Large_Storage_Box':1, 'Egg_Incubator':1, 'Embryo_Incubator':1, 'Gene_Storage':1, 'Pet_Display':1, 'Tek_Sleeping_Pod':1, 'HUD_CompanionBed_Icon':1, 'RW_cryopod':1, 'Gene_Scanner':1, 'Vault':1};
+      'Tek Transmitter':1, 'TEKPortal_Icon':1, 'WoodFridge_Icon':1, 'Industrial_Preserving_Bin':1, 'Icon_DedicatedStorage':1, 'LargeStorage_Icon':1, 'Linked_Storage_Box':1, 'Library_Storage':1, 'Large_Storage_Box':1, 'Egg_Incubator':1, 'Embryo_Incubator':1, 'Gene_Storage':1, 'Pet_Display':1, 'Tek_Sleeping_Pod':1, 'HUD_CompanionBed_Icon':1, 'RW_cryopod':1, 'Gene_Scanner':1, 'Vault':1, 'RaptorHead Icon':1}; // v591：刷新浮窗饲料槽图标（misc 分类）
     (d||[]).forEach(function(it){
       if(!it || !it.url || !it.name) return;
       var m=it.url.match(/\/ASA\/([^/]+)\//);
       var cat=m?m[1]:'';
       // v503：收录 eggs 分类的蛋图标（<物种>_Egg，lbEggIcon 查询用）；种子/茧等不收录避免索引膨胀
-      var isEggIcon = (cat==='eggs' && /_Egg$/.test(it.name));
+      // v597：额外收录 Item_*Egg_Icon 格式（血蛛卵 Item_BogSpiderEgg_Icon 等 item 命名蛋图标）
+      var isEggIcon = (cat==='eggs' && (/_Egg$/.test(it.name) || /Egg_Icon$/.test(it.name)));
       if(cat!=='biology' && cat!=='units' && !isEggIcon && !extra[it.name]) return;
       var u = tm[it.url] || it.url;   // WebP 缩略图替换（省流）
       by[it.name]=u;
@@ -9207,7 +9318,8 @@ function lbRenderBreedResult(){
   // 性别统计计数（含 v6 无法逆推球：性别字段可获取，v6 球应计入性别判断避免误报缺公/母）
   var mySexM=0, mySexF=0;
   recs.forEach(function(r){
-    if(r.dinoClass!==cls || r.isEmpty) return;
+    // v597：改用 lbSpeciesMatch（蛋/胚胎 dinoClass=物种短名如 Argent，选中=蓝图类名 Argent_Character_BP_C，直接比较会排除蛋）
+    if(!lbSpeciesMatch(r, cls) || r.isEmpty) return;
     // v159：分组不再按基因剔除——属性冠军从全部生物评选（并集），有选中基因的生物在渲染阶段单独过滤
     total++;
     var isMy = lbIsMyRec(r, playerSet, curPid);
@@ -9374,6 +9486,12 @@ function lbRenderBreedResult(){
     var stageHtml = stage
       ? ' <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:'+stage.color+'22;color:'+stage.color+';border:1px solid '+stage.color+'44;vertical-align:1px">'+stage.text+'</span>'
       : '';
+    // v597：蛋/胚胎分类徽章（同婴儿/幼崽样式；蛋/胚胎有性别，性别图标保留在左侧，徽章只标注分类）
+    var eggKind = (r.source==='embryo') ? {text:'胚胎', color:'#a78bfa'}
+      : ((r._isEgg || r.source==='egg') ? {text:'蛋', color:'#f59e0b'} : null);
+    var eggKindHtml = eggKind
+      ? ' <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:'+eggKind.color+'22;color:'+eggKind.color+';border:1px solid '+eggKind.color+'44;vertical-align:1px">'+eggKind.text+'</span>'
+      : '';
     // v153：基因筛选模式——卡片显示生物含有的选中基因标签（替代属性行）；trait 去 [n] 后缀
     var geneTags='';
     if(bgene && r.geneTraits && r.geneTraits.length){
@@ -9394,6 +9512,7 @@ function lbRenderBreedResult(){
       +(r.name?'<b style="color:#fff">'+r.name+'</b> ':' ')
       +'<span style="background:#22223a;border-radius:2px;padding:0 6px;color:#ccc">Lv.'+r.level+'</span>'
       +stageHtml
+      +eggKindHtml
       // v154：属性+基因都显示（把基因当属性，逻辑统一；无则留空）
       +(attrHtml?'<br>'+attrHtml:'')
       +geneTags
@@ -10066,7 +10185,8 @@ async function lbAlliancePosQuery(members, online, token, onProgress){
 }
 
 // 渲染联盟成员位置（每服地图 + 成员点/名字标签 + 离线/无法定位列表）
-function lbAlliancePosRender(alli, results){
+// v568：加 focusAbbr 进入自动滚动到点击服页；当前角色特殊标注
+function lbAlliancePosRender(alli, results, focusAbbr){
   var ov = document.getElementById('lbBreedOverlay');
   var body = document.getElementById('lbBreedOverlayBody');
   if(!ov || !body) return;
@@ -10090,9 +10210,13 @@ function lbAlliancePosRender(alli, results){
     pageMeta.push({abbr:abbr, n:arr.length, pids:arr.map(function(x){return String(x.r.pid);}), alliName:(arr[0]&&arr[0].r.alliName)||''}); // v565 pids 轮询只刷当前页；v566 alliName 每页联盟名
     var dots = arr.map(function(x){
       var p = lbWorldToPx(Number(x.r.pos.x), Number(x.r.pos.y), map);
+      var isMe = (LB.curPid!==null && LB.curPid!==undefined && String(x.r.pid)===String(LB.curPid)); // v568：当前角色特殊标注（大号白点紫边 + 名字标 (我)）
+      var dc = isMe ? '#ffffff' : x.c;
+      var db = isMe ? '2px solid #7c3aed' : '2px solid #fff';
+      var ds = isMe ? '0 0 10px rgba(124,58,237,.9)' : '0 0 6px rgba(0,0,0,.9)';
       return '<div id="lbAlliDot_'+x.r.pid+'" title="'+escapeHtml(x.r.name||x.r.pid)+'" style="position:absolute;left:'+p.x.toFixed(2)+'%;top:'+p.y.toFixed(2)+'%;transform:translate(-50%,-50%);z-index:2;text-align:center;line-height:1">'
-        + '<div style="width:14px;height:14px;border-radius:50%;background:'+x.c+';border:2px solid #fff;box-shadow:0 0 6px rgba(0,0,0,.9);margin:0 auto"></div>'
-        + '<div style="font-size:10px;color:#fff;background:rgba(0,0,0,.65);border-radius:3px;padding:3px 6px;margin-top:2px;white-space:nowrap">'+escapeHtml(x.r.name||x.r.pid)+'</div>'
+        + '<div style="width:'+(isMe?18:14)+'px;height:'+(isMe?18:14)+'px;border-radius:50%;background:'+dc+';border:'+db+';box-shadow:'+ds+';margin:0 auto"></div>'
+        + '<div class="lb-alli-ntag" style="font-size:10px;color:'+(isMe?'#a78bfa':'#fff')+';background:rgba(0,0,0,.65);border-radius:3px;padding:3px 6px;margin-top:2px;white-space:nowrap">'+escapeHtml(x.r.name||x.r.pid)+(isMe?' (我)':'')+'</div>'
         + '</div>';
     }).join('');
     var imgName = map.img.replace(/_s$/,'');
@@ -10103,7 +10227,8 @@ function lbAlliancePosRender(alli, results){
       + dots + '</div></div>';
   }).filter(Boolean);
   var head = '<div onclick="event.stopPropagation()" style="font-weight:bold;font-size:14px;color:#fff;text-align:center;margin-bottom:8px"><span id="lbAlliHeadTxt">📌 '+(alli.name||'联盟')+'</span>'
-    + '<span onclick="event.stopPropagation();lbAllianceClose()" title="关闭" style="position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:30;cursor:pointer;color:#aaa;font-size:22px;line-height:1">✕</span>'
+    + '<span onclick="event.stopPropagation();lbAllianceRefresh()" title="重新拉取本服在线玩家" style="position:fixed;bottom:16px;left:calc(50% - 40px);transform:translateX(-100%);z-index:30;cursor:pointer;color:#aaa;font-size:22px;line-height:1;display:inline-flex;align-items:center;height:22px"><svg viewBox="3.5 3.5 17 17" style="width:22px;height:22px;display:block;fill:currentColor"><path d="M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z"/></svg></span>'
+    + '<span onclick="event.stopPropagation();lbAllianceClose()" title="关闭" style="position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:30;cursor:pointer;color:#aaa;font-size:22px;line-height:1;display:inline-flex;align-items:center;justify-content:center;height:22px;width:22px"><svg viewBox="5 5 14 14" style="width:22px;height:22px;display:block;fill:currentColor"><path d="M19,6.41L17.59,5 12,10.59 6.41,5 5,6.41 10.59,12 5,17.59 6.41,19 12,13.41 17.59,19 19,17.59 13.41,12z"/></svg></span>'
     + '</div>';
   var list = '';
   if(noEos.length) list += '<div style="font-size:12px;color:#f87171;margin-top:8px;text-align:center">无法定位（缺身份码）：'+noEos.map(function(r){return escapeHtml(r.name||r.pid);}).join('、')+'</div>';
@@ -10128,12 +10253,23 @@ function lbAlliancePosRender(alli, results){
     if(idx >= pageMeta.length) idx = pageMeta.length - 1;
     var m = pageMeta[idx];
     _ht.textContent = '📌 '+(m.alliName || alli.name || '联盟')+' · '+LB.servName(m.abbr)+'（'+m.n+' 人）'; // v566：联盟名也随页切换（每页成员实际联盟）
+    // v568：首图隐藏 ‹、末图隐藏 ›（中间页正常显示）
+    var _bp = _hs.parentElement ? _hs.parentElement.querySelector('button[title="上一张"]') : null;
+    var _bn = _hs.parentElement ? _hs.parentElement.querySelector('button[title="下一张"]') : null;
+    if(_bp) _bp.style.opacity = (idx<=0) ? '0' : '.5';
+    if(_bn) _bn.style.opacity = (idx>=pageMeta.length-1) ? '0' : '.5';
   }
   if(LB._alliHeadUpd && _hs) _hs.removeEventListener('scroll', LB._alliHeadUpd);
   LB._alliHeadUpd = lbAlliHeadUpd;
   if(_hs) _hs.addEventListener('scroll', lbAlliHeadUpd);
   lbAlliHeadUpd();
   LB._alliLastPageMeta = pageMeta; // v565：供 lbAllianceServerMap 创建 track 时挂载（轮询只刷当前页）
+  // v568：进入自动滚动到点击服所在页（不重排页序；滚动触发 scroll → head/翻页按钮联动更新）
+  if(focusAbbr && pageMeta.length>1){
+    var _fi = -1;
+    for(var i=0;i<pageMeta.length;i++){ if(pageMeta[i].abbr===focusAbbr){ _fi=i; break; } }
+    if(_fi>0 && _hs) _hs.scrollLeft = _fi * _hs.clientWidth;
+  }
 }
 
 // 入口：拉联盟 → 浮窗列联盟按钮 → 选择后查询渲染
@@ -10168,6 +10304,7 @@ async function lbOpenAlliancePos(){
       }
     });
     var founderName = '', onlineBtns = '';
+    var srvOn = !!(online[abbr] && online[abbr].ok === true); // v570：服务器状态（后端 RCON 失败写 ok=false）
     if(alli){
       // 盟主 = admins[0] 部落的所有者角色名
       var aObj = null;
@@ -10178,17 +10315,20 @@ async function lbOpenAlliancePos(){
         var ft = tbs[String(admins[0])];
         if(ft && ft.ownerName) founderName = ft.ownerName;
       }
-      // 该联盟「本服在线」成员（eosToSrv[eos]===abbr；v537：一个角色只在所在服出现）
-      var mems = lbCollectAllianceMembers(alli.id);
-      var btns = [];
-      mems.forEach(function(m){
-        var eos = m.eosId || lbPidToEos(m.pid);
-        if(eos && eosToSrv[eos] === abbr) btns.push(m);
-      });
-      // v556：在线成员名单（写清谁在线）+ 地图按钮（点→该服全部在线成员标同一张图）
-      var _names = btns.map(function(m){ return escapeHtml(m.name||m.pid); }).join('、');
-      onlineBtns = (_names ? '<div style="margin-top:4px;font-size:11px;color:#4ade80">🟢 在线：'+_names+'</div>' : '')
-        + (btns.length ? '<button onclick="event.stopPropagation();lbAllianceServerMap(\''+abbr+'\',\''+String(alli.id)+'\',\''+(alli.name||('联盟#'+alli.id)).replace(/'/g,"\\'")+'\')" style="margin-top:4px;padding:4px 12px;border:none;border-radius:6px;background:#7c3aed;color:#fff;font-size:11px;cursor:pointer">🗺 成员分布</button>' : '');
+      // v570：离线服不显示成员（联盟/盟主信息保留）
+      if(srvOn){
+        // 该联盟「本服在线」成员（eosToSrv[eos]===abbr；v537：一个角色只在所在服出现）
+        var mems = lbCollectAllianceMembers(alli.id);
+        var btns = [];
+        mems.forEach(function(m){
+          var eos = m.eosId || lbPidToEos(m.pid);
+          if(eos && eosToSrv[eos] === abbr) btns.push(m);
+        });
+        // v556：在线成员名单（写清谁在线）+ 地图按钮（点→该服全部在线成员标同一张图）
+        var _names = btns.map(function(m){ return escapeHtml(m.name||m.pid); }).join('、');
+        onlineBtns = (_names ? '<div style="margin-top:4px;font-size:11px;color:#4ade80">🟢 在线：'+_names+'</div>' : '')
+          + (btns.length ? '<button onclick="event.stopPropagation();lbAllianceServerMap(\''+abbr+'\',\''+String(alli.id)+'\',\''+(alli.name||('联盟#'+alli.id)).replace(/'/g,"\\'")+'\')" style="margin-top:4px;padding:4px 12px;border:none;border-radius:6px;background:#7c3aed;color:#fff;font-size:11px;cursor:pointer">🗺 成员分布</button>' : '');
+      }
     } else {
       onlineBtns = '';
     }
@@ -10198,14 +10338,16 @@ async function lbOpenAlliancePos(){
     var mdi = LB_SERVER_MDI[abbr] || '';
     return '<div style="padding:8px 0' + (onlineBtns ? ';border-bottom:1px solid #24243a' : '') + '">'
       + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px;color:#fff;font-weight:bold">'+(mdi?'<i class="mdi '+mdi+'" style="font-size:14px"></i>':'')+' '+escapeHtml(sname)
-      + (alli ? '<span style="font-size:11px;color:#a78bfa;font-weight:normal">联盟：'+escapeHtml(alli.name||('#'+alli.id))+'</span>' : '')
-      + (founderName ? '<span style="font-size:11px;color:#888;font-weight:normal">盟主：'+escapeHtml(founderName)+'</span>' : '')
+      + '<span style="font-size:11px;font-weight:normal;color:'+(srvOn?'#4ade80':'#f87171')+'">'+(srvOn?'🟢 在线':'⭕ 离线')+'</span>' // v570：服务器状态
+      + (alli ? '<span style="font-size:11px;color:#a78bfa;font-weight:normal">'+escapeHtml(alli.name||('#'+alli.id))+'</span>' : '')
+      + (founderName ? '<span style="font-size:11px;color:#888;font-weight:normal">'+escapeHtml(founderName)+'</span>' : '')
       + '</div>'
       + '<div style="margin-top:4px">'+onlineBtns+'</div>'
       + '</div>';
   }).join('');
-  body.innerHTML = '<div onclick="event.stopPropagation()" style="font-weight:bold;font-size:14px;color:#fff;text-align:center;margin-bottom:8px">📌 联盟成员位置'
-    + '<span onclick="event.stopPropagation();lbAllianceClose()" title="关闭" style="position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:30;cursor:pointer;color:#aaa;font-size:22px;line-height:1">✕</span>'
+  body.innerHTML = '<div onclick="event.stopPropagation()" style="font-weight:bold;font-size:14px;color:#fff;text-align:center;margin-bottom:8px">📌 地图信息'
+    + '<span onclick="event.stopPropagation();lbMapInfoRefresh()" title="刷新地图状态" style="position:fixed;bottom:16px;left:calc(50% - 40px);transform:translateX(-100%);z-index:30;cursor:pointer;color:#aaa;font-size:22px;line-height:1;display:inline-flex;align-items:center;height:22px"><svg viewBox="3.5 3.5 17 17" style="width:22px;height:22px;display:block;fill:currentColor"><path d="M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z"/></svg></span>'
+    + '<span onclick="event.stopPropagation();lbAllianceClose()" title="关闭" style="position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:30;cursor:pointer;color:#aaa;font-size:22px;line-height:1;display:inline-flex;align-items:center;justify-content:center;height:22px;width:22px"><svg viewBox="5 5 14 14" style="width:22px;height:22px;display:block;fill:currentColor"><path d="M19,6.41L17.59,5 12,10.59 6.41,5 5,6.41 10.59,12 5,17.59 6.41,19 12,13.41 17.59,19 19,17.59 13.41,12z"/></svg></span>'
     + '</div>'
     + '<div onclick="event.stopPropagation()" style="padding:0 12px 20px;max-height:70vh;overflow-y:auto">'+rows+'</div>';
   ov.style.display = 'block';
@@ -10263,7 +10405,8 @@ async function lbAllianceServerMap(abbr, alliId, alliName){
   var progEl = document.getElementById('lbAlliProg');
   var results = await lbAlliancePosQuery(members, online, token, function(pg){});
   if(LB._alliCancel){ if(progEl) progEl.innerHTML='已取消'; return; }
-  lbAlliancePosRender({id:alliId, name:alliName}, results);
+  LB._alliLastSrv = { abbr:abbr, alliId:alliId, alliName:alliName }; // v568：供 🔄 重新拉在线按钮
+  lbAlliancePosRender({id:alliId, name:alliName}, results, abbr); // v568：focusAbbr 进入自动滚到点击服页
   // v558：成员分布 1s 实时更新（每成员所在服查 1 次 PlayerPos，busy 防并发）
   lbAllianceMapTrackStop(); // v559：修正调用名（原 LB._alliMapTrackStop 未定义抛错 → 轮询未启动）
   var eosById = {};
@@ -10296,9 +10439,23 @@ function lbAllianceMapTick(){
     if(!eos) return;
     if(curPids && !curPids[String(r.pid)]) return; // v565：只刷当前页成员
     tasks.push(lbQueryPlayerPos(r.pos.server, t.token, eos).then(function(pos){
-      if(!pos) return;
       var dot = document.getElementById('lbAlliDot_'+r.pid);
-      if(!dot) return;
+      if(!pos){
+        // v568：下线/传图 → 标记置灰 + 名字标签标 ⏻（恢复后自动还原）
+        if(dot){
+          dot.style.opacity = '0.3';
+          dot.style.filter = 'grayscale(1)';
+          var _nt = dot.querySelector('.lb-alli-ntag');
+          if(_nt && _nt.getAttribute('data-off')!=='1'){ _nt.setAttribute('data-off','1'); _nt.textContent = _nt.textContent.replace(/\s*⏻\s*$/,'') + ' ⏻'; }
+        }
+        return;
+      }
+      if(dot){
+        dot.style.opacity = '';
+        dot.style.filter = '';
+        var _nt2 = dot.querySelector('.lb-alli-ntag');
+        if(_nt2){ _nt2.removeAttribute('data-off'); _nt2.textContent = _nt2.textContent.replace(/\s*⏻\s*$/,''); }
+      }
       var map = lbMapForServer(pos.server, pos.z);
       if(!map) return;
       var p = lbWorldToPx(Number(pos.x), Number(pos.y), map);
@@ -10313,6 +10470,19 @@ function lbAllianceMapTrackStop(){
     if(LB._alliMapTrack.timer) clearInterval(LB._alliMapTrack.timer);
     LB._alliMapTrack = null;
   }
+}
+// v568：🔄 重新拉取本服在线玩家（ListPlayers 刷新 + 重新收集查询）
+async function lbAllianceRefresh(){
+  var s = LB._alliLastSrv;
+  if(!s) return;
+  lbToast('重新拉取 '+LB.servName(s.abbr)+' 在线…');
+  await lbLoadOnline(true);
+  lbAllianceServerMap(s.abbr, s.alliId, s.alliName);
+}
+// v572：📌 地图信息 列表刷新按钮——重拉在线数据并重渲染列表（含服务器状态）
+async function lbMapInfoRefresh(){
+  lbToast('刷新地图状态…');
+  lbOpenAlliancePos();
 }
 async function lbAllianceGo(alliId, alliName){
   LB._alliCancel = false;
