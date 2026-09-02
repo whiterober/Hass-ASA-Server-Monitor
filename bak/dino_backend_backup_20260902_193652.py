@@ -124,7 +124,6 @@ CMD_MOVE_ALL_PENDINGS = 'TransferIdentityFix.MoveAllPendings'
 CMD_RENAME_DINO = 'TransferIdentityFix.RenameDino'
 CMD_EGG_PROBE = 'TransferIdentityFix.EggProbe'
 CMD_LIST_PLAYERS = 'ListPlayers'  # v532：原生 RCON 在线玩家列表（联盟位置只查在线成员）
-CMD_SAVE_WORLD = 'SaveWorld'  # v17：原生 RCON 保存世界（强制存档，cryo.json.gz 落地后前端拉最新球数据）
 
 # 内存状态缓存（供 /api/states/sensor.* 兼容轮询）：key = sensor 名，value = {state, attributes}
 STATUS_MEM = {}
@@ -380,26 +379,21 @@ def rcon_command(host, port, password, command, timeout=RCON_TIMEOUT):
 
 
 def _recv_stream(s, timeout):
-    """对齐旧架构 receive_packets：阻塞 recv(4096) 循环收原始字节流。
-    v13（2026-09-02）：修复 Source RCON 分包截断——服务器按 RCON 包(≤4096)逐包发送，
-    多玩家长响应（ListPlayers/ArkTamedDinos/WildDinos 等）拆多个包，recv(4096) 一次往往只
-    收到服务器当前已发的第一个包（<4096）。此前 len(part)<buf 立即 break → 后续分包全丢，
-    玩家列表被截断（多人只显示前 1 人，与地图 PlayerPos 逐人查询不一致的根因）。
-    改法：收到首个数据后降短超时(0.5s)继续收，短超时无新数据才判定响应结束（收全分包）。"""
+    """对齐旧架构 receive_packets：阻塞 recv(4096) 循环直到收到不足 buffer_size 的块
+    （服务器暂时无更多数据）或 socket 超时。返回原始字节流（可能包含多个 RCON 包/保活包）。"""
     s.settimeout(timeout)
     data = b""
     buf = 4096
-    first = True
     while True:
         try:
-            s.settimeout(timeout if first else 0.5)
             part = s.recv(buf)
         except socket.timeout:
             break
         if not part:
             break
         data += part
-        first = False
+        if len(part) < buf:
+            break
     return data
 
 
@@ -496,35 +490,6 @@ def refresh_tamed(server):
     write_status_file('refresh_status_%s.json' % server, 'ok', result)  # 独立文件（并行安全）
     mem_status('sensor.refresh_tamed_status', 'ok', result)
     return result
-
-
-def save_world(server):
-    """强制一台服务器保存世界（RCON SaveWorld）。
-    v17（2026-09-02）：供前端「刷新数据」选中服务器时先存档——原生命令返回 'World Saved' 文本（非 JSON），
-    非空即视为保存成功；前端再轮询 {server}_cryo.json.gz Last-Modified 确认落盘后拉取。"""
-    port = SERVERS.get(server)
-    now = str(datetime.now())
-    if not port:
-        r = {'ok': False, 'server': server, 'error': 'unknown server: ' + server, 'ts': now}
-        write_status_file('save_world_status.json', 'error', r)
-        write_status_file('save_world_status_%s.json' % server, 'error', r)
-        mem_status('sensor.save_world_status', 'error', r)
-        return r
-    try:
-        raw = rcon_command(RCON_HOST, port, RCON_PASSWORD, CMD_SAVE_WORLD, timeout=30)
-    except Exception as e:
-        r = {'ok': False, 'server': server, 'error': 'rcon: ' + str(e), 'ts': now}
-        write_status_file('save_world_status.json', 'error', r)
-        write_status_file('save_world_status_%s.json' % server, 'error', r)
-        mem_status('sensor.save_world_status', 'error', r)
-        return r
-    text = (raw or b'').decode('utf-8', errors='ignore').strip(' \x00\r\n\t')
-    ok = bool(raw)
-    r = {'ok': ok, 'server': server, 'saved': ok, 'reply': text[:80], 'ts': now}
-    write_status_file('save_world_status.json', 'ok' if ok else 'error', r)
-    write_status_file('save_world_status_%s.json' % server, 'ok' if ok else 'error', r)
-    mem_status('sensor.save_world_status', 'ok' if ok else 'error', r)
-    return r
 
 
 def refresh_eggs(server):
@@ -727,9 +692,7 @@ def rename_dino(server, dino_id1, dino_id2, new_name):
 
 
 def get_dino(server, dino1, dino2):
-    """单龙实时查询：RCON ArkGetDino。返回 {found, tribeId, babyAge, ...}。
-    v14（2026-09-02）：扩展返回完整实时字段（babyAge/isBaby/level/name/坐标等）——
-    前端「关注未成年」浮窗周期轮询此接口刷新成长进度（ArkGetDino 实时返回 babyAge 推进值）。"""
+    """单龙实时查询：RCON ArkGetDino。返回 {found, tribeId}；tribeId>0 = 已驯服。"""
     port = SERVERS.get(server)
     if not port:
         return {'ok': False, 'server': server, 'error': 'unknown server'}
@@ -741,27 +704,18 @@ def get_dino(server, dino1, dino2):
     found = None
     tribe_id = None
     err = None
-    extra = {}
     if success and result:
         try:
             j = json.loads(result)
-            ok = bool(j.get('found'))  # v15（2026-09-02）：ArkGetDino 响应无 ok 字段（JSON 以 {"found":.. 开头），以 found 为准——v14 误用 j.get('ok') 致 ok 恒 false、extra 永不透传
+            ok = bool(j.get('ok'))
             found = j.get('found')
             tribe_id = j.get('tribeId') if 'tribeId' in j else j.get('tribe_id')
             err = j.get('error')
-            if ok and found:
-                # v16（2026-09-02）：+ 实时属性字段（statValues/currentStatValues/statPoints/statMutations/saddle/colors）——前端关注浮窗每 5s 需刷新当前属性值，v15 仅透传成长字段导致只刷成长度
-                for k in ['babyAge', 'isBaby', 'level', 'name', 'dinoClass', 'gender',
-                          'x', 'y', 'z', 'stasised', 'dinoId1', 'dinoId2', 'randomMutationsMale',
-                          'saddle', 'colors', 'statValues', 'currentStatValues', 'statPoints', 'statMutations']:
-                    if k in j:
-                        extra[k] = j[k]
         except Exception:
             ok = True
     r = {'ok': ok, 'server': server, 'dino': '%s_%s' % (dino1, dino2),
          'found': found, 'tribeId': tribe_id, 'error': err,
          'result': str(result)[:200], 'ts': str(datetime.now())}
-    r.update(extra)
     mem_status('sensor.get_dino_status', 'ok' if ok else 'error', r)
     return r
 
@@ -1110,14 +1064,6 @@ class Handler(BaseHTTPRequestHandler):
                 return
             # 2026-08-28 异步化：后台线程执行 RCON（旧架构 AppDaemon 异步 1s 返回；此处立即返回触发成功，前端轮询 refresh_status.json/savedAt 等结果）
             _RCON_EXECUTOR.submit(refresh_tamed, server)
-            self._send(200, {'ok': True, 'server': server, 'triggered': True, 'async': True, 'ts': str(datetime.now())})
-        # v17：强制保存世界（原生 RCON SaveWorld）——刷新数据选中服务器时先存档，cryo 落地后再拉数据
-        elif path.endswith('save_world'):
-            server = g('server')
-            if not server:
-                self._send(400, {'ok': False, 'error': 'missing server'})
-                return
-            _RCON_EXECUTOR.submit(save_world, server)
             self._send(200, {'ok': True, 'server': server, 'triggered': True, 'async': True, 'ts': str(datetime.now())})
         # v525：全图蛋信息实时刷新（TransferIdentityFix.EggProbe）——选中服务器刷新时同步触发
         elif path.endswith('refresh_eggs'):

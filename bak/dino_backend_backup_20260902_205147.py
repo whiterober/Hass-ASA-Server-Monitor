@@ -124,7 +124,6 @@ CMD_MOVE_ALL_PENDINGS = 'TransferIdentityFix.MoveAllPendings'
 CMD_RENAME_DINO = 'TransferIdentityFix.RenameDino'
 CMD_EGG_PROBE = 'TransferIdentityFix.EggProbe'
 CMD_LIST_PLAYERS = 'ListPlayers'  # v532：原生 RCON 在线玩家列表（联盟位置只查在线成员）
-CMD_SAVE_WORLD = 'SaveWorld'  # v17：原生 RCON 保存世界（强制存档，cryo.json.gz 落地后前端拉最新球数据）
 
 # 内存状态缓存（供 /api/states/sensor.* 兼容轮询）：key = sensor 名，value = {state, attributes}
 STATUS_MEM = {}
@@ -498,35 +497,6 @@ def refresh_tamed(server):
     return result
 
 
-def save_world(server):
-    """强制一台服务器保存世界（RCON SaveWorld）。
-    v17（2026-09-02）：供前端「刷新数据」选中服务器时先存档——原生命令返回 'World Saved' 文本（非 JSON），
-    非空即视为保存成功；前端再轮询 {server}_cryo.json.gz Last-Modified 确认落盘后拉取。"""
-    port = SERVERS.get(server)
-    now = str(datetime.now())
-    if not port:
-        r = {'ok': False, 'server': server, 'error': 'unknown server: ' + server, 'ts': now}
-        write_status_file('save_world_status.json', 'error', r)
-        write_status_file('save_world_status_%s.json' % server, 'error', r)
-        mem_status('sensor.save_world_status', 'error', r)
-        return r
-    try:
-        raw = rcon_command(RCON_HOST, port, RCON_PASSWORD, CMD_SAVE_WORLD, timeout=30)
-    except Exception as e:
-        r = {'ok': False, 'server': server, 'error': 'rcon: ' + str(e), 'ts': now}
-        write_status_file('save_world_status.json', 'error', r)
-        write_status_file('save_world_status_%s.json' % server, 'error', r)
-        mem_status('sensor.save_world_status', 'error', r)
-        return r
-    text = (raw or b'').decode('utf-8', errors='ignore').strip(' \x00\r\n\t')
-    ok = bool(raw)
-    r = {'ok': ok, 'server': server, 'saved': ok, 'reply': text[:80], 'ts': now}
-    write_status_file('save_world_status.json', 'ok' if ok else 'error', r)
-    write_status_file('save_world_status_%s.json' % server, 'ok' if ok else 'error', r)
-    mem_status('sensor.save_world_status', 'ok' if ok else 'error', r)
-    return r
-
-
 def refresh_eggs(server):
     """触发一台服务器全图蛋信息实时刷新（RCON TransferIdentityFix.EggProbe）+ 写状态。
     蛋数据文件由 exe 侧生成 {server}_eggs.json.gz，前端重拉确认。"""
@@ -745,15 +715,14 @@ def get_dino(server, dino1, dino2):
     if success and result:
         try:
             j = json.loads(result)
-            ok = bool(j.get('found'))  # v15（2026-09-02）：ArkGetDino 响应无 ok 字段（JSON 以 {"found":.. 开头），以 found 为准——v14 误用 j.get('ok') 致 ok 恒 false、extra 永不透传
+            ok = bool(j.get('ok'))
             found = j.get('found')
             tribe_id = j.get('tribeId') if 'tribeId' in j else j.get('tribe_id')
             err = j.get('error')
             if ok and found:
-                # v16（2026-09-02）：+ 实时属性字段（statValues/currentStatValues/statPoints/statMutations/saddle/colors）——前端关注浮窗每 5s 需刷新当前属性值，v15 仅透传成长字段导致只刷成长度
+                # v14：透传实时成长/身份字段（供关注未成年浮窗刷新）
                 for k in ['babyAge', 'isBaby', 'level', 'name', 'dinoClass', 'gender',
-                          'x', 'y', 'z', 'stasised', 'dinoId1', 'dinoId2', 'randomMutationsMale',
-                          'saddle', 'colors', 'statValues', 'currentStatValues', 'statPoints', 'statMutations']:
+                          'x', 'y', 'z', 'stasised', 'dinoId1', 'dinoId2', 'randomMutationsMale']:
                     if k in j:
                         extra[k] = j[k]
         except Exception:
@@ -1110,14 +1079,6 @@ class Handler(BaseHTTPRequestHandler):
                 return
             # 2026-08-28 异步化：后台线程执行 RCON（旧架构 AppDaemon 异步 1s 返回；此处立即返回触发成功，前端轮询 refresh_status.json/savedAt 等结果）
             _RCON_EXECUTOR.submit(refresh_tamed, server)
-            self._send(200, {'ok': True, 'server': server, 'triggered': True, 'async': True, 'ts': str(datetime.now())})
-        # v17：强制保存世界（原生 RCON SaveWorld）——刷新数据选中服务器时先存档，cryo 落地后再拉数据
-        elif path.endswith('save_world'):
-            server = g('server')
-            if not server:
-                self._send(400, {'ok': False, 'error': 'missing server'})
-                return
-            _RCON_EXECUTOR.submit(save_world, server)
             self._send(200, {'ok': True, 'server': server, 'triggered': True, 'async': True, 'ts': str(datetime.now())})
         # v525：全图蛋信息实时刷新（TransferIdentityFix.EggProbe）——选中服务器刷新时同步触发
         elif path.endswith('refresh_eggs'):
