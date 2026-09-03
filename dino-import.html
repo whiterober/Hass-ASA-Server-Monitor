@@ -373,7 +373,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260903-703';
+var LB_VERSION = 'v20260903-707';
 // ====== PWA：Service Worker 注册（2026-08-29，配合 manifest 使移动端 Edge/Chrome 可安装为应用） ======
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function(){
@@ -11339,25 +11339,42 @@ function lbRouteBucket(r){
   if(r.source==='embryo' || r.containerType==='embryo') return 'embryo';
   return (lbContainerTypeOf(r)==='released') ? 'released' : 'cryo';
 }
-function lbRoutePoint(r,k){
+function lbRoutePoint(r,k){        // v705：属性点 = 基础(statPoints) + 变异(statMutations)，对齐繁育栏 lbBreedPoint
   var sp = r.statPoints || [];
+  var sm = r.statMutations || [];
   var i = LB_BREED_IDX[k];
-  if(i==null || !sp[i]) return 0;
-  var v = Number(sp[i]);
+  if(i==null) return 0;
+  var v = (Number(sp[i])||0) + (Number(sm[i])||0);
   return isFinite(v) ? v : 0;
 }
-function lbRouteBirth(r){          // v6.26：出生等级 = Σ12 statPoints + 1
+function lbRoutePtDisp(r, k){     // v706：显示 基础|变异（对齐卡片前两位）；v707：变异点不加粗（span 同字重，仅橙色区分）
+  var sp = r.statPoints || [], sm = r.statMutations || [];
+  var i = LB_BREED_IDX[k];
+  if(i==null) return '0';
+  var b = Number(sp[i])||0, m = Number(sm[i])||0;
+  return b + '<span style="opacity:.45">|</span><span style="color:#f59e0b">'+m+'</span>';
+}
+function lbRouteBirth(r){          // v705：出生等级 = Σ12(基础+变异) + 1（幼体真实等级 1+Σ(base+mut)）
   var sp = r.statPoints || [];
+  var sm = r.statMutations || [];
   var s = 0;
-  for(var i=0;i<sp.length;i++){ var v=Number(sp[i]); if(isFinite(v)) s+=v; }
+  for(var i=0;i<12;i++){ var v=(Number(sp[i])||0)+(Number(sm[i])||0); if(isFinite(v)) s+=v; }
   return s + 1;
 }
 function lbRouteCountM(r){ var v=Number(r.randomMutationsMale); return isFinite(v)?v:0; }
 function lbRouteCountF(r){ var v=Number(r.randomMutationsFemale); return isFinite(v)?v:0; }
-function lbRouteJunkPts(r){        // 氧3+食4+速9 垃圾点
+function lbRouteJunkPts(r, attrs){ // v705：垃圾点 = 所有「未选中属性」(基础+变异) 之和（不再写死氧3食4速9）
   var sp = r.statPoints || [];
-  function g(i){ var v=Number(sp[i]); return isFinite(v)?v:0; }
-  return g(3)+g(4)+g(9);
+  var sm = r.statMutations || [];
+  var ex = {};
+  (attrs||[]).forEach(function(k){ var i = LB_BREED_IDX[k]; if(i!=null) ex[i]=1; });
+  var s = 0;
+  for(var i=0;i<12;i++){
+    if(ex[i]) continue;
+    var v = (Number(sp[i])||0) + (Number(sm[i])||0);
+    if(isFinite(v)) s+=v;
+  }
+  return s;
 }
 function lbRouteAdult(r){ if(lbRouteIsEgg(r)) return false; var a=r.babyAge; return !(typeof a==='number' && a>=0 && a<1); }
 function lbRouteName(r){
@@ -11372,7 +11389,7 @@ function lbRouteName(r){
     }
     return nm;
   }
-  if(lbRouteIsEgg(r)) return '蛋·未命名';
+  if(lbRouteIsEgg(r)) return 'Lv.'+(Number(r.level)||0); // v707：蛋不标"未命名"，直接显等级（蛋徽章由调用处 lbRouteAgeBadge 加）
   var n = lbSpName(r.dinoClass); return (n && (n.zh||n.eng)) || '未命名';
 }
 /* 等级档位徽章（v6.26）：≤339 安全不显 / 340-350 余量吃紧 / 351-450 超手点极限 / >450 强制飞升 */
@@ -11463,7 +11480,7 @@ function lbRoutePill(txt,color){
 function lbRouteMemberChip(r, k){
   var i = LB._routeRecs.indexOf(r);
   var sexCol = (r.gender==='FEMALE') ? '#f472b6' : '#60a5fa';
-  var ptTxt = k ? (LB_BREED_LABEL[k]+lbRoutePoint(r,k)) : ('Σ'+(lbRouteBirth(r)-1));
+  var ptTxt = k ? (LB_BREED_LABEL[k]+lbRoutePtDisp(r,k)) : ('Σ'+(lbRouteBirth(r)-1));
   var h = '<div onclick="lbRouteViewRec('+i+')" title="'+lbAttr(lbRouteName(r))+'" style="background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:4px 8px;display:inline-flex;align-items:center;gap:4px;font-size:12px;margin:0 4px 4px 0;cursor:pointer" onmouseover="this.style.borderColor=\'#7c3aed88\';this.style.background=\'#232335\'" onmouseout="this.style.borderColor=\'#2a2a3a\';this.style.background=\'#1a1a24\'">'
     + lbSexSvg(r.gender, 14, sexCol)
     + '<span style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:bottom">'+lbAttr(lbRouteName(r))+'</span>'
@@ -11484,17 +11501,21 @@ function lbRouteMemberChip(r, k){
 function lbRoutePlanDino(r, k, size, extra){
   var i = LB._routeRecs.indexOf(r);
   var sexCol = (r.gender==='FEMALE') ? '#f472b6' : '#60a5fa';
-  var info = k ? ('('+LB_BREED_LABEL[k]+lbRoutePoint(r,k)+(extra?' · '+extra:'')+')') : (extra?('('+extra+')'):'');
+  var info = k ? ('('+LB_BREED_LABEL[k]+lbRoutePtDisp(r,k)+(extra?' · '+extra:'')+')') : (extra?('('+extra+')'):'');
+  var egb = lbRouteIsEgg(r) ? lbRouteStdBadge(lbRouteAgeBadge(r).txt, lbRouteAgeBadge(r).color) : ''; // v707：蛋/胚胎加蛋徽章
   return '<span style="display:inline-flex;align-items:center;gap:4px">'
     + lbSexSvg(r.gender, size||13, sexCol)
     + '<span onclick="lbRouteViewRec('+i+')" title="'+lbAttr(lbRouteName(r))+'" style="cursor:pointer;color:#c4b5fd;border-bottom:1px dashed #7c3aed88;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:bottom">'+lbAttr(lbRouteName(r))+'</span>'
+    + egb
     + '<span style="color:#888;font-size:10px">'+info+'</span></span>';
 }
 function lbRouteNameLink(r, extra){
   var i = LB._routeRecs.indexOf(r);
   var col = (r.gender==='FEMALE') ? '#f472b6' : '#60a5fa';
+  var egb = lbRouteIsEgg(r) ? lbRouteStdBadge(lbRouteAgeBadge(r).txt, lbRouteAgeBadge(r).color) : ''; // v707：蛋/胚胎加蛋徽章
   return '<span style="display:inline-flex;align-items:center;gap:4px">'+lbSexSvg(r.gender,11,col)
     + '<span onclick="lbRouteViewRec('+i+')" title="'+lbAttr(lbRouteName(r))+'" style="cursor:pointer;color:#c4b5fd;border-bottom:1px dashed #7c3aed88">'+lbAttr(lbRouteName(r))+'</span>'
+    + egb
     + (extra?' <span style="color:#888;font-size:10px">'+extra+'</span>':'')
     + '</span>';
 }
@@ -11514,8 +11535,8 @@ function lbRouteEggJuvZero(recs, k){
     return !lbRouteAdult(r) && lbRouteCountM(r)+lbRouteCountF(r)===0 && lbRoutePoint(r,k)>0;
   }).sort(function(a,b){ return lbRoutePoint(b,k)-lbRoutePoint(a,k); });
 }
-function lbRouteWashCand(recs){ // 洗剂：垃圾全0 且任选属性>0 的成年种（刚抓到优先：按出生等级低）
-  return recs.filter(function(r){ return lbRouteAdult(r) && lbRouteJunkPts(r)===0; }).sort(function(a,b){ return lbRouteBirth(a)-lbRouteBirth(b); });
+function lbRouteWashCand(recs, attrs){ // v705：洗剂 = 未选中属性垃圾全0 的成年种（按出生等级低优先）
+  return recs.filter(function(r){ return lbRouteAdult(r) && lbRouteJunkPts(r, attrs)===0; }).sort(function(a,b){ return lbRouteBirth(a)-lbRouteBirth(b); });
 }
 /* 生成一组（tag/color/title/body/note/order） */
 function lbRouteGroup(tag, title, body, note, headExtra){
@@ -11563,7 +11584,7 @@ function lbRoutePlanHtml(recs, attrs){
         var src = lbRouteBucket(r)==='released' ? '' : (lbRouteBucket(r)==='cryo' ? '球内' : (lbRouteBucket(r)==='egg'?'蛋':'胚胎'));
         return lbRoutePlanDino(r, k, 13, '候选'+(src?'·'+src:''));
       }).join('<span style="color:#666">×</span>');
-      groups.push({order:0, tag:secTag, title:'补'+LB_BREED_LABEL[k]+' '+sexTxt+'（有替代）', body:body,
+      groups.push({order:0, ai:attrs.indexOf(k), tag:secTag, title:'补'+LB_BREED_LABEL[k]+' '+sexTxt+'（有替代）', body:body,
         note:'另有达标 '+sexTxt+'（'+goalPts+' 点级）藏在 球内/蛋/冰箱 等 → 取回后用替代补齐，再压缩/叠变异'});
     } else {
       // v689：缺侧时先给「繁育自产」方案（达标侧最优 × 该侧可用最高 → 子代筛达线该性别），而不是只报缺
@@ -11572,16 +11593,16 @@ function lbRoutePlanHtml(recs, attrs){
       if(ps && src && lbRoutePoint(src,k) < goalPts){
         var psBk = lbRouteBucket(ps)==='released' ? '' : (lbRouteBucket(ps)==='cryo' ? '球内' : (lbRouteBucket(ps)==='egg'?'蛋':'胚胎'));
         var srcBk = lbRouteBucket(src)==='released' ? '' : (lbRouteBucket(src)==='cryo' ? '球内' : (lbRouteBucket(src)==='egg'?'蛋':'胚胎'));
-        groups.push({order:0, tag:secTag, title:'补'+LB_BREED_LABEL[k]+' '+sexTxt,
+        groups.push({order:0, ai:attrs.indexOf(k), tag:secTag, title:'补'+LB_BREED_LABEL[k]+' '+sexTxt,
           body: lbRoutePlanDino(ps, k, 14, '达线'+(psBk?'·'+psBk:''))
             + '<span style="color:#666">×</span>'
             + lbRoutePlanDino(src, k, 13, '本源'+(srcBk?'·'+srcBk:'')),
           note:'用达线 '+((need==='MALE')?'♀':'♂')+' '+goalPts+' 点 配 该'+sexTxt+'（'+lbRoutePoint(src,k)+' 点）→ 子代该属性 55% 继承 '+goalPts+' → 孵蛋筛出 '+sexTxt+' 达线作最优；多孵提升命中，连续多轮不出再考虑外部市场 / 交换'});
       } else if(best && lbRoutePoint(best,k) < 30){ // v684：阈值 10→30（无自产条件才外部缺口）
-        groups.push({order:0, tag:secTag, title:'补'+LB_BREED_LABEL[k]+' '+sexTxt+'（外部缺口）', body:'',
+        groups.push({order:0, ai:attrs.indexOf(k), tag:secTag, title:'补'+LB_BREED_LABEL[k]+' '+sexTxt+'（外部缺口）', body:'',
           note:'当前该属性'+sexTxt+'最高仅 '+lbRoutePoint(best,k)+' 点且无自产条件 → 建议来源：外部市场 / 部落交换 / 等刷新蛋（不硬凑低质配对）'});
       } else {
-        groups.push({order:0, tag:secTag, title:'补'+LB_BREED_LABEL[k]+' '+sexTxt, body:'',
+        groups.push({order:0, ai:attrs.indexOf(k), tag:secTag, title:'补'+LB_BREED_LABEL[k]+' '+sexTxt, body:'',
           note:'该'+sexTxt+'目前无可用个体 → 抓 / 孵蛋 / 交换一只，补齐后再压缩叠变异'});
       }
     }
@@ -11590,21 +11611,21 @@ function lbRoutePlanHtml(recs, attrs){
   var needCompress = [];
   attrs.forEach(function(k){
     var rep = lineRep[k] && (lineRep[k].m || lineRep[k].f);
-    if(rep && lbRouteJunkPts(rep)>0) needCompress.push({k:k, rep:rep});
+    if(rep && lbRouteJunkPts(rep, attrs)>0) needCompress.push({k:k, rep:rep});
   });
-  var washCands = lbRouteWashCand(recs);
+  var washCands = lbRouteWashCand(recs, attrs);
   if(needCompress.length && washCands.length){
     needCompress.slice(0,2).forEach(function(o){
       var rep = o.rep;
       var wash = washCands[0];
-      groups.push({order:1, tag:'并行', title:'压垃圾（洗剂）',
-        body: lbRoutePlanDino(rep, null, 13, LB_BREED_LABEL[o.k]+lbRoutePoint(rep,o.k)+'·氧'+lbRouteJunkPts(rep)+'级垃圾')
+      groups.push({order:1, ai:attrs.indexOf(o.k), tag:'并行', title:'压垃圾（洗剂）',
+        body: lbRoutePlanDino(rep, null, 13, LB_BREED_LABEL[o.k]+lbRoutePtDisp(rep,o.k)+'·垃圾'+lbRouteJunkPts(rep,attrs)+'级(未选)')
           + '<span style="color:#666">×</span>' + lbRoutePlanDino(wash, null, 13, '垃圾0'),
-        note:'预期子代垃圾 ~50% 清零 → 后续筛 主属性达标且垃圾全 0 的新种续线（归还手动升级空间）'});
+        note:'预期子代未选中属性垃圾 ~50% 清零 → 后续筛 选中属性达标且垃圾全 0 的新种续线（归还等级空间）'});
     });
   } else if(needCompress.length){
     var rp = needCompress[0].rep;
-    compressSuffix = '（带垃圾 '+lbRouteJunkPts(rp)+' 点，无洗剂 → 先抓垃圾0再压）';
+    compressSuffix = '（带垃圾 '+lbRouteJunkPts(rp, attrs)+' 点，无洗剂 → 先抓垃圾0再压）';
   }
   // ---- 3. 叠变异组（0变异母优先；已占用母排除——每叠组选出后标记，后续叠组不重用；可选组不参与）
   // v660：无空闲 0 变异母时统一隐藏（同负变异组策略），不再渲染「缺 0 变异母/等蛋」说明卡
@@ -11638,13 +11659,13 @@ function lbRoutePlanHtml(recs, attrs){
       var note = '预期 '+LB_BREED_LABEL[k]+' '+mxK+'~'+(mxK+2)+' · '+used.length+' 只 达线 0 变异母承接可续叠';
       // v694(B)：母群未饱和时叠变异让位——叠组标注建议先扩群
       if(momShort) note += ' · ⚠ 达线 0/0 母仅 '+used.length+'/'+lbRouteMomGet()+' → 建议先扩母群（下方）再叠更高效';
-      groups.push({order:2, tag:tag, title:'叠'+LB_BREED_LABEL[k]+'变异', body:parts.join(''), note:note});
+      groups.push({order:2, ai:attrs.indexOf(k), tag:tag, title:'叠'+LB_BREED_LABEL[k]+'变异', body:parts.join(''), note:note});
       // v692：扩母群繁殖源用「未占用」可续母（母系不重用）；v694(C)：低计数优先；未饱和时扩群卡前置(order1)
       if(momShort){
         var freeF = pickFree();
         if(freeF.length){
           var srcF = freeF[0];
-          groups.push({order:1, tag:tag, title:'自产母群 · '+LB_BREED_LABEL[k],
+          groups.push({order:1, ai:attrs.indexOf(k), tag:tag, title:'自产母群 · '+LB_BREED_LABEL[k],
             body: lbRoutePlanDino(rep.m, k, 13, '当前最优') + '<span style="color:#666">×</span>' + lbRoutePlanDino(srcF, k, 13, lbRouteCountM(srcF)+'/'+lbRouteCountF(srcF)),
             note:'母群 '+used.length+'/'+lbRouteMomGet()+' 未满 → 用低计数母（'+lbRouteCountM(srcF)+'/'+lbRouteCountF(srcF)+'）繁殖，子代筛 达线+0/0 ♀ 补足后再开叠（大队续叠）'});
         }
@@ -11654,30 +11675,35 @@ function lbRoutePlanHtml(recs, attrs){
       var freeF2 = pickFree();
       if(freeF2.length){
         var srcF2 = freeF2[0];
-        groups.push({order:1, tag:tag, title:'自产母群 · '+LB_BREED_LABEL[k],
+        groups.push({order:1, ai:attrs.indexOf(k), tag:tag, title:'自产母群 · '+LB_BREED_LABEL[k],
           body: lbRoutePlanDino(rep.m, k, 13, '当前最优') + '<span style="color:#666">×</span>' + lbRoutePlanDino(srcF2, k, 13, lbRouteCountM(srcF2)+'/'+lbRouteCountF(srcF2)),
           note:'现无「'+LB_BREED_LABEL[k]+'达线('+mxK+') + 0/0」母 → 用低计数母（'+lbRouteCountM(srcF2)+'/'+lbRouteCountF(srcF2)+'）繁殖，子代筛 '+LB_BREED_LABEL[k]+mxK+' 且 0/0 的 ♀，出 ≥1 只后即可开叠（大队续叠）'});
       }
     }
   });
   // ---- 4. 负变异溢出线（并行紫）：挑闲置 0/0 种子 1公1母（不与线代表/优质母重种）
-  var usedArr = [];
-  attrs.forEach(function(k){ if(lineRep[k]&&lineRep[k].m) usedArr.push(lineRep[k].m); if(lineRep[k]&&lineRep[k].f) usedArr.push(lineRep[k].f); });
-  var zeroRecs = recs.filter(function(r){ return lbRouteCountM(r)+lbRouteCountF(r)===0; });
-  function idleOf(r){ for(var ai=0;ai<attrs.length;ai++){ if(lbRoutePoint(r,attrs[ai])>0) return false; } return true; }
-  var seedPool = zeroRecs.filter(function(r){ return idleOf(r) && usedMothers.indexOf(r)<0; });
-  if(!seedPool.length) seedPool = zeroRecs.filter(function(r){ return usedMothers.indexOf(r)<0; });
-  // 无可用种子（全被叠组占用）→ 不生成负线组，避免重复占用母
-  var seedM = null, seedF = null;
-  seedPool.forEach(function(r){
-    if(usedArr.indexOf(r)>=0) return;
-    if(r.gender==='MALE' && !seedM) seedM = r;
-    else if(r.gender==='FEMALE' && !seedF) seedF = r;
-  });
-  if(seedM && seedF){
-    groups.push({order:4, tag:'并行', title:'负计数溢出',
-      body: lbRoutePlanDino(seedM, null, 13, '0/0 · 种子') + '<span style="color:#666">×</span>' + lbRoutePlanDino(seedF, null, 13, '0/0 · 种子'),
-      note:'0/0 种子先孵出 1 次变异（计数 1/0 起点，约每 4–5 蛋 1 次）→ 同源子代互配计数翻倍 1+1=2→4→8… <b style="color:#fbbf24">翻倍 ~31 次 ≈31 代</b> 达 2³¹ → <b style="color:#f87171">int32 溢出成负计数</b>（总计约 32–36 次配种）→ 导入主繁殖线恢复 &lt;20 完整变异判定'});
+  // v705：负线目的 = 产出「负计数公种」（负变异♂ 作主繁殖线父系）；库存已有负计数公 → 目的达成 → 整组不显示
+  var hasNegM = false;
+  recs.forEach(function(r){ if(r.gender==='MALE' && lbRouteCountM(r)<0) hasNegM = true; });
+  if(!hasNegM){
+    var usedArr = [];
+    attrs.forEach(function(k){ if(lineRep[k]&&lineRep[k].m) usedArr.push(lineRep[k].m); if(lineRep[k]&&lineRep[k].f) usedArr.push(lineRep[k].f); });
+    var zeroRecs = recs.filter(function(r){ return lbRouteCountM(r)+lbRouteCountF(r)===0; });
+    function idleOf(r){ for(var ai=0;ai<attrs.length;ai++){ if(lbRoutePoint(r,attrs[ai])>0) return false; } return true; }
+    var seedPool = zeroRecs.filter(function(r){ return idleOf(r) && usedMothers.indexOf(r)<0; });
+    if(!seedPool.length) seedPool = zeroRecs.filter(function(r){ return usedMothers.indexOf(r)<0; });
+    // 无可用种子（全被叠组占用）→ 不生成负线组，避免重复占用母
+    var seedM = null, seedF = null;
+    seedPool.forEach(function(r){
+      if(usedArr.indexOf(r)>=0) return;
+      if(r.gender==='MALE' && !seedM) seedM = r;
+      else if(r.gender==='FEMALE' && !seedF) seedF = r;
+    });
+    if(seedM && seedF){
+      groups.push({order:4, ai:attrs.length, tag:'并行', title:'负计数溢出',
+        body: lbRoutePlanDino(seedM, null, 13, '0/0 · 种子') + '<span style="color:#666">×</span>' + lbRoutePlanDino(seedF, null, 13, '0/0 · 种子'),
+        note:'<b style="color:#fbbf24">目标：产出负计数公种 → 导入主繁殖线父系</b> · 0/0 种子先孵出 1 次变异（计数 1/0 起点，约每 4–5 蛋 1 次）→ 同源子代互配计数翻倍 1+1=2→4→8… <b style="color:#fbbf24">翻倍 ~31 次 ≈31 代</b> 达 2³¹ → <b style="color:#f87171">int32 溢出成负计数</b>（总计约 32–36 次配种）→ 溢出得负公后恢复 &lt;20 完整变异判定'});
+    }
   }
   // ---- 5. 多线合并（可选金）——常驻（v691：全局最优配对，非固定某线代表）
   if(attrs.length>=2){
@@ -11736,9 +11762,9 @@ function lbRoutePlanHtml(recs, attrs){
         var line = '<div style="margin-top:'+(gi?6:0)+'px;padding:'+(gi?'8px 0 0':'0')+';'+(gi?'border-top:1px dashed #2a2a3a':'')+'">'
           + '<div style="font-size:11px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
           + (pairs.length>1 ? '<span style="color:#fbbf24;border:1px solid #fbbf2488;background:#fbbf2418;border-radius:6px;padding:0 5px;font-weight:bold;font-size:10px">并行 '+(gi+1)+'</span>' : '') // v699：仅多组时显示序号徽章
-          + lbRoutePlanDino(male,null,13,attrs.map(function(k){return LB_BREED_LABEL[k]+lbRoutePoint(male,k);}).join('·'))
+          + lbRoutePlanDino(male,null,13,attrs.map(function(k){return LB_BREED_LABEL[k]+lbRoutePtDisp(male,k);}).join('·'))
           + '<span style="color:#666">×</span>'
-          + lbRoutePlanDino(female,null,13,attrs.map(function(k){return LB_BREED_LABEL[k]+lbRoutePoint(female,k);}).join('·'))
+          + lbRoutePlanDino(female,null,13,attrs.map(function(k){return LB_BREED_LABEL[k]+lbRoutePtDisp(female,k);}).join('·'))
           + '</div>'
           + '<div style="font-size:10px;color:#888;margin-top:2px;line-height:1.7">理论 '+th.join(' · ');
         if(miss.length){
@@ -11747,13 +11773,13 @@ function lbRoutePlanHtml(recs, attrs){
         line += '</div></div>';
         return line;
       }).join('');
-      groups.push({order:5, tag:'可选', title:'多线合并',
+      groups.push({order:5, ai:attrs.length, tag:'可选', title:'多线合并',
         body: rowsHtml,
         note:(pairs.length>1 ? '每组 <b>互不共用龙</b>，可同时推进 · ' : '') + '计数叠加后 &lt;20 ✓'}); // v701：单组不显并行说明；去掉 55%/45% 说法
     }
   }
   // ---- 6. 颜色繁育（可选金 · 常驻）
-  groups.push({order:6, tag:'可选', title:'颜色繁育', body:'', note:'', colorHtml:true});
+  groups.push({order:6, ai:attrs.length, tag:'可选', title:'颜色繁育', body:'', note:'', colorHtml:true});
   // ---- 组装
   var h = '';
   // 等级账本提示条（压缩无洗剂信息并入括号后缀 = 单行）
@@ -11762,7 +11788,7 @@ function lbRoutePlanHtml(recs, attrs){
   if(topRep){
     var tb = lbRouteBirth(topRep);
     var mar = LB_ROUTE_LMAX - tb;
-    var junk = lbRouteJunkPts(topRep);
+    var junk = lbRouteJunkPts(topRep, attrs);
     var stTxt = (tb > LB_ROUTE_LMAX) ? '⛔ 出生已超服务器上限' : ((tb>350)?'⚠ 超手点极限' : ((tb>=340)?'⚠ 余量吃紧':'✓ 未触顶'));
     var stCol = (tb > 350) ? '#f87171' : ((tb>=340)?'#f59e0b':'#4ade80');
     var tail = compressSuffix || (junk>0 ? '（压掉垃圾可再腾 ~'+junk+' 级叠变异）' : '');
@@ -11772,7 +11798,7 @@ function lbRoutePlanHtml(recs, attrs){
       + tail
       + '</div>';
   }
-  groups.sort(function(a,b){ return a.order-b.order; });
+  groups.sort(function(a,b){ return (a.ai-b.ai) || (a.order-b.order); }); // v705：先按属性序号聚拢，组内按现有 order
   groups.forEach(function(g){
     if(g.colorHtml){ h += lbRouteColorHtml(recs); }
     else { h += lbRouteGroup(g.tag, g.title, g.body, g.note); }
@@ -11910,7 +11936,7 @@ function lbRouteLineBlock(recs, k, idx, color){
     + triHtml
     + '<span style="font-size:13px;color:'+color+';font-weight:bold">'+LB_BREED_LABEL[k]+'线</span>'
     + '</span>' + status + '</div>'
-    + '<div style="font-size:10px;color:#777;margin-top:2px;'+(open?'':'display:none;')+'">成员 '+mem.length+(mRep||fRep ? ' · ♂最优 '+((mRep)?lbRouteName(mRep)+' '+LB_BREED_LABEL[k]+lbRoutePoint(mRep,k):'—')+' ｜ ♀最优 '+((fRep)?lbRouteName(fRep)+' '+LB_BREED_LABEL[k]+lbRoutePoint(fRep,k):'—') : '')+'</div>'
+    + '<div style="font-size:10px;color:#777;margin-top:2px;'+(open?'':'display:none;')+'">成员 '+mem.length+(mRep||fRep ? ' · ♂最优 '+((mRep)?lbRouteName(mRep)+' '+LB_BREED_LABEL[k]+lbRoutePtDisp(mRep,k):'—')+' ｜ ♀最优 '+((fRep)?lbRouteName(fRep)+' '+LB_BREED_LABEL[k]+lbRoutePtDisp(fRep,k):'—') : '')+'</div>'
     + '<div style="margin-top:5px;flex-wrap:wrap;gap:4px;'+(open?'':'display:none;')+'">'+memberHtml+'</div>'
     + '</div>';
 }
@@ -11963,7 +11989,7 @@ function lbRouteRender(preserve){
     h += '先在繁育栏点选属性（攻/血/重…）以自动拆「X 线」并出配种计划。</div>';
     h += '<div style="margin-top:8px;font-size:11px;color:#22c55e;font-weight:bold;margin-bottom:4px">我的种龙简览</div>';
     var sorted = recs.slice().sort(function(a,b){
-      function ts(r){ var sp=r.statPoints||[]; var s=0; for(var i=0;i<sp.length;i++){var v=Number(sp[i]);if(isFinite(v))s+=v;} return s; }
+      function ts(r){ var sp=r.statPoints||[], sm=r.statMutations||[]; var s=0; for(var i=0;i<sp.length;i++){var v=(Number(sp[i])||0)+(Number(sm[i])||0);if(isFinite(v))s+=v;} return s; }
       return ts(b)-ts(a);
     });
     var chips = sorted.slice(0,12).map(function(r){
@@ -12031,8 +12057,8 @@ function lbRouteHelp(){
     ['<span style="color:#f59e0b;border:1px solid #f59e0b55;background:#f59e0b22;border-radius:8px;padding:0 4px;font-size:10px">近上限</span>','单侧变异计数 ≥20，换 0 变异母大队续叠'],
     ['<span style="color:#ef4444;border:1px solid #ef444455;background:#ef444422;border-radius:8px;padding:0 4px;font-size:10px">基本报废</span>','双侧计数 ≥20，变异判定被压制'],
     ['<span style="color:#fbbf24;border:1px solid #fbbf2455;background:#fbbf2422;border-radius:8px;padding:0 4px;font-size:10px">负变异 ∞</span>','祖先计数 int32 溢出成负数 → 恢复 &lt;20 完整变异判定'],
-    ['<span style="color:#fb923c;border:1px solid #fb923c55;background:#fb923c22;border-radius:8px;padding:0 4px;font-size:10px">需压缩</span>','带氧/食/速垃圾点，压缩可归还手动升级/变异空间'],
-    ['<span style="color:#4ade80;border:1px solid #4ade8055;background:#4ade8022;border-radius:8px;padding:0 4px;font-size:10px">已压缩</span>','垃圾全 0，等级空间已归还']
+    ['<span style="color:#fb923c;border:1px solid #fb923c55;background:#fb923c22;border-radius:8px;padding:0 4px;font-size:10px">需压缩</span>','带未选中属性垃圾点（氧/食/速等），压缩归还等级/变异空间'],
+    ['<span style="color:#4ade80;border:1px solid #4ade8055;background:#4ade8022;border-radius:8px;padding:0 4px;font-size:10px">已压缩</span>','未选属性垃圾全 0，等级空间已归还']
   ];
   var inner = rows.map(function(rw){
     return '<span style="display:inline-flex;align-items:center">'+rw[0]+'</span><span style="color:#bbb">'+rw[1]+'</span>';
