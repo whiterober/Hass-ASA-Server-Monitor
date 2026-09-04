@@ -233,20 +233,15 @@ html.ios .lb-sex{transform:translateY(-0.08em)}
 .settle-btn .settle-map img{width:100%;height:auto;display:block}
 .settle-btn .settle-map .settle-dot{position:absolute;width:9px;height:9px;border-radius:50%;background:#f87171;border:1.5px solid #fff;transform:translate(-50%,-50%);box-shadow:0 0 5px rgba(0,0,0,.7);pointer-events:none}
 .settle-btn .settle-map .settle-dot.scat{width:6px;height:6px;background:#fbbf24;border:1px solid #fff}
-/* v748b：普通聚落地图 1/4（qcrop）：地图区撑满卡宽（自适应），img scale(2) + origin=点象限角只显示该 1/4（源图高清不糊），红点按象限内相对位置 */
-.settle-btn.qcrop{min-width:0}
-.settle-btn.qcrop .settle-map{overflow:hidden;position:relative;line-height:0}
 .settle-btn .settle-info{display:inline-flex;align-items:center;gap:6px;min-width:0}
 .settle-body{display:none;margin:2px 4px 10px}
 /* 聚落子页面：点击聚落按钮进入详情（隐藏列表），返回按钮恢复 */
 .settle-detail{margin:2px 2px 10px}
 .settle-back{background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;color:#a78bfa;padding:8px 14px;margin-bottom:8px;cursor:pointer;font-size:13px;user-select:none;transition:all .15s;display:inline-flex;align-items:center;gap:4px}
 .settle-back:hover{background:#2a2340;border-color:#a78bfa}
-/* 移动端响应式：一行 2 个独立聚落 或 1 个聚合框（置于聚落 CSS 之后确保覆盖；qcrop 地图随卡宽自适应裁块） */
+/* 移动端响应式：一行 2 个独立聚落 或 1 个聚合框（置于聚落 CSS 之后确保覆盖） */
 @media (max-width:640px){
   .settle-wrap > .settle-btn{flex:1 1 calc(50% - 3px);min-width:0;max-width:none}
-  .settle-wrap > .settle-btn .settle-name{font-size:12px}
-  .settle-wrap > .settle-btn .settle-coord{font-size:10px}
   .settle-cluster{flex:1 1 100%;max-width:100%}
 }
 .acc summary .mdi{font-size:14px;vertical-align:-2px}
@@ -378,7 +373,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260904-753';
+var LB_VERSION = 'v20260904-743';
 // ====== PWA：Service Worker 注册（2026-08-29，配合 manifest 使移动端 Edge/Chrome 可安装为应用） ======
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function(){
@@ -5415,20 +5410,6 @@ function lbContainerLabel(r){
   }
   return '<span class="acc-title">'+icon+' '+name+'</span>';
 }
-// v751b：视口跨 640 断点时自动重渲染（PC 半块 ↔ 移动 1/4 撑满切换，无需刷新）
-(function(){
-  var lastMobile = (window.innerWidth || document.documentElement.clientWidth) <= 640;
-  var rt = null;
-  window.addEventListener('resize', function(){
-    var mob = (window.innerWidth || document.documentElement.clientWidth) <= 640;
-    if(mob === lastMobile) return;
-    lastMobile = mob;
-    if(rt) clearTimeout(rt);
-    rt = setTimeout(function(){
-      try{ if(typeof lbView==='function') lbView(); }catch(e){}
-    }, 250);
-  });
-})();
 function lbView(){
   var list=document.getElementById('lbList'), status=document.getElementById('lbStatus');
   if(!list) return;
@@ -5926,21 +5907,8 @@ function lbSettleBtnHtml(it){
       var map = lbMapForServer(s.server, st.center.z);
       if(map){
         var p = lbWorldToPx(st.center.x, st.center.y, map);
-        // v753：普通聚落地图 1/4 视野 = 点所在区域（中央带 |Δx|,|Δy|≤25 → 中央 25~75%；否则田字四角块）；移动(≤640) scale2 撑满卡自适应，PC 半块直裁（聚落集合/离散两端整图）
-        var isC = Math.abs(p.x - 50) <= 25 && Math.abs(p.y - 50) <= 25;
-        var vx = isC ? 25 : (p.x >= 50 ? 50 : 0); // 视野左缘对应原图百分比（0/25/50）
-        var vy = isC ? 25 : (p.y >= 50 ? 50 : 0);
-        var dx = ((p.x - vx) * 2).toFixed(2);
-        var dy = ((p.y - vy) * 2).toFixed(2);
-        if((window.innerWidth || document.documentElement.clientWidth) <= 640){
-          var ox = vx === 25 ? '50%' : (vx ? '100%' : '0%');
-          var oy = vy === 25 ? '50%' : (vy ? '100%' : '0%');
-          mapHtml = '<div class="settle-map"><img src="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" data-lbasset="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" alt="" loading="lazy" style="transform:scale(2);transform-origin:'+ox+' '+oy+'" onerror="this.parentNode.style.display=&quot;none&quot;"><div class="settle-dot" style="left:'+dx+'%;top:'+dy+'%"></div></div>';
-          cls = ' with-map qcrop';
-        } else {
-          mapHtml = '<div class="settle-map"><img src="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" data-lbasset="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" alt="" loading="lazy" onload="lbSettleCrop(this,'+vx+','+vy+')" onerror="this.parentNode.style.display=&quot;none&quot;"><div class="settle-dot" style="left:'+dx+'%;top:'+dy+'%"></div></div>';
-          cls = ' with-map qcrop';
-        }
+        mapHtml = '<div class="settle-map"><img src="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" data-lbasset="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" alt="" loading="lazy" onerror="this.parentNode.style.display=&quot;none&quot;"><div class="settle-dot" style="left:'+p.x.toFixed(2)+'%;top:'+p.y.toFixed(2)+'%"></div></div>';
+        cls = ' with-map';
       }
     }
   } else if(s && s.scattered){
@@ -5986,22 +5954,6 @@ function lbSettleBtnHtml(it){
     + '<span class="settle-info">'+tent
     + '<span class="settle-name">'+name+'</span>'
     + '<span class="settle-cnt">'+cntH+(cntH&&ecntH?' ':'')+ecntH+(ecntH&&geneH?' ':'')+geneH+'</span></span></div>';
-}
-// v753：直裁小块（不放大）——地图显示 = 整图基准的一半边长（面积 1/4），img 整图原宽平移显示视野 [vx,vx+50]%×[vy,vy+50]%（vx/vy=0/25/50：四角/中央），点(已换算 dx/dy%)保持区域内相对位置
-function lbSettleCrop(img, vx, vy){
-  var wrap = img ? img.parentNode : null;
-  if(!wrap || !img || !img.naturalWidth) return;
-  var R = img.naturalHeight / img.naturalWidth; // 源图高宽比
-  if(!isFinite(R) || R <= 0) R = 1;
-  // 此刻 img 仍 flow（未转 absolute）→ wrap 宽 = 整图撑起的卡基准宽
-  var w = wrap.clientWidth;
-  if(!w || w <= 4) w = 160;
-  wrap.style.width = (w / 2) + 'px';
-  wrap.style.height = ((w / 2) * R) + 'px';
-  img.style.position = 'absolute';
-  img.style.width = w + 'px';
-  img.style.left = (-((vx||0) / 100) * w) + 'px';
-  img.style.top = (-((vy||0) / 100) * w * R) + 'px';
 }
 // 点击聚落大按钮：进入聚落详情子页面（隐藏聚落列表，显示该聚落容器手风琴 + 返回按钮）
 function lbOpenSettle(btn){

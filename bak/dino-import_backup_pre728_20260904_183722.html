@@ -233,20 +233,15 @@ html.ios .lb-sex{transform:translateY(-0.08em)}
 .settle-btn .settle-map img{width:100%;height:auto;display:block}
 .settle-btn .settle-map .settle-dot{position:absolute;width:9px;height:9px;border-radius:50%;background:#f87171;border:1.5px solid #fff;transform:translate(-50%,-50%);box-shadow:0 0 5px rgba(0,0,0,.7);pointer-events:none}
 .settle-btn .settle-map .settle-dot.scat{width:6px;height:6px;background:#fbbf24;border:1px solid #fff}
-/* v748b：普通聚落地图 1/4（qcrop）：地图区撑满卡宽（自适应），img scale(2) + origin=点象限角只显示该 1/4（源图高清不糊），红点按象限内相对位置 */
-.settle-btn.qcrop{min-width:0}
-.settle-btn.qcrop .settle-map{overflow:hidden;position:relative;line-height:0}
 .settle-btn .settle-info{display:inline-flex;align-items:center;gap:6px;min-width:0}
 .settle-body{display:none;margin:2px 4px 10px}
 /* 聚落子页面：点击聚落按钮进入详情（隐藏列表），返回按钮恢复 */
 .settle-detail{margin:2px 2px 10px}
 .settle-back{background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;color:#a78bfa;padding:8px 14px;margin-bottom:8px;cursor:pointer;font-size:13px;user-select:none;transition:all .15s;display:inline-flex;align-items:center;gap:4px}
 .settle-back:hover{background:#2a2340;border-color:#a78bfa}
-/* 移动端响应式：一行 2 个独立聚落 或 1 个聚合框（置于聚落 CSS 之后确保覆盖；qcrop 地图随卡宽自适应裁块） */
+/* 移动端响应式：一行 2 个独立聚落 或 1 个聚合框（置于聚落 CSS 之后确保覆盖） */
 @media (max-width:640px){
   .settle-wrap > .settle-btn{flex:1 1 calc(50% - 3px);min-width:0;max-width:none}
-  .settle-wrap > .settle-btn .settle-name{font-size:12px}
-  .settle-wrap > .settle-btn .settle-coord{font-size:10px}
   .settle-cluster{flex:1 1 100%;max-width:100%}
 }
 .acc summary .mdi{font-size:14px;vertical-align:-2px}
@@ -264,7 +259,7 @@ html.ios .lb-sex{transform:translateY(-0.08em)}
   .lb-card{-webkit-user-select:none;user-select:none}
 }
 /* 物种选择浮窗（ASA 后台选图同款 dark 样式） */
-.lb-picker-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.9);z-index:1000001;display:flex;align-items:center;justify-content:center}
+.lb-picker-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.9);z-index:9999;display:flex;align-items:center;justify-content:center}
 .lb-picker-panel{background:#1a1a24;border:1px solid #333;border-radius:8px;width:90%;max-width:640px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden}
 .lb-picker-header{display:flex;gap:8px;padding:10px 12px;align-items:center;flex-shrink:0;border-bottom:1px solid #2a2a3a}
 .lb-picker-header input{flex:1;margin:0;background:#15151f;border:1px solid #333;border-radius:6px;color:#ccc;font-size:12px;padding:0 10px;height:28px}
@@ -378,7 +373,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260904-753';
+var LB_VERSION = 'v20260904-727';
 // ====== PWA：Service Worker 注册（2026-08-29，配合 manifest 使移动端 Edge/Chrome 可安装为应用） ======
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function(){
@@ -4982,7 +4977,7 @@ var LB_ID_TIP = null, LB_ID_TIP_TIMER = null;
 function lbIdTipEl(){
   if(!LB_ID_TIP){
     LB_ID_TIP = document.createElement('div');
-    LB_ID_TIP.style.cssText = 'position:fixed;z-index:1000000;display:none;background:#1a1a2a;border:1px solid #7c3aed;border-radius:6px;padding:4px 10px;font-size:11px;color:#ccc;pointer-events:none;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.4)';
+    LB_ID_TIP.style.cssText = 'position:fixed;z-index:99999;display:none;background:#1a1a2a;border:1px solid #7c3aed;border-radius:6px;padding:4px 10px;font-size:11px;color:#ccc;pointer-events:none;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.4)';
     document.body.appendChild(LB_ID_TIP);
   }
   return LB_ID_TIP;
@@ -5101,7 +5096,7 @@ var LB_TOAST=null, LB_TOAST_TM=null;
 function lbToast(msg){
   if(!LB_TOAST){
     LB_TOAST=document.createElement('div');
-    LB_TOAST.style.cssText='position:fixed;right:12px;top:56px;z-index:1000000;background:#7c3aed;color:#fff;padding:6px 14px;border-radius:8px;font-size:13px;box-shadow:0 2px 12px rgba(0,0,0,.4);display:none;pointer-events:none';
+    LB_TOAST.style.cssText='position:fixed;right:12px;top:56px;z-index:100000;background:#7c3aed;color:#fff;padding:6px 14px;border-radius:8px;font-size:13px;box-shadow:0 2px 12px rgba(0,0,0,.4);display:none;pointer-events:none';
     document.body.appendChild(LB_TOAST);
   }
   LB_TOAST.textContent = msg;
@@ -5415,20 +5410,6 @@ function lbContainerLabel(r){
   }
   return '<span class="acc-title">'+icon+' '+name+'</span>';
 }
-// v751b：视口跨 640 断点时自动重渲染（PC 半块 ↔ 移动 1/4 撑满切换，无需刷新）
-(function(){
-  var lastMobile = (window.innerWidth || document.documentElement.clientWidth) <= 640;
-  var rt = null;
-  window.addEventListener('resize', function(){
-    var mob = (window.innerWidth || document.documentElement.clientWidth) <= 640;
-    if(mob === lastMobile) return;
-    lastMobile = mob;
-    if(rt) clearTimeout(rt);
-    rt = setTimeout(function(){
-      try{ if(typeof lbView==='function') lbView(); }catch(e){}
-    }, 250);
-  });
-})();
 function lbView(){
   var list=document.getElementById('lbList'), status=document.getElementById('lbStatus');
   if(!list) return;
@@ -5926,21 +5907,8 @@ function lbSettleBtnHtml(it){
       var map = lbMapForServer(s.server, st.center.z);
       if(map){
         var p = lbWorldToPx(st.center.x, st.center.y, map);
-        // v753：普通聚落地图 1/4 视野 = 点所在区域（中央带 |Δx|,|Δy|≤25 → 中央 25~75%；否则田字四角块）；移动(≤640) scale2 撑满卡自适应，PC 半块直裁（聚落集合/离散两端整图）
-        var isC = Math.abs(p.x - 50) <= 25 && Math.abs(p.y - 50) <= 25;
-        var vx = isC ? 25 : (p.x >= 50 ? 50 : 0); // 视野左缘对应原图百分比（0/25/50）
-        var vy = isC ? 25 : (p.y >= 50 ? 50 : 0);
-        var dx = ((p.x - vx) * 2).toFixed(2);
-        var dy = ((p.y - vy) * 2).toFixed(2);
-        if((window.innerWidth || document.documentElement.clientWidth) <= 640){
-          var ox = vx === 25 ? '50%' : (vx ? '100%' : '0%');
-          var oy = vy === 25 ? '50%' : (vy ? '100%' : '0%');
-          mapHtml = '<div class="settle-map"><img src="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" data-lbasset="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" alt="" loading="lazy" style="transform:scale(2);transform-origin:'+ox+' '+oy+'" onerror="this.parentNode.style.display=&quot;none&quot;"><div class="settle-dot" style="left:'+dx+'%;top:'+dy+'%"></div></div>';
-          cls = ' with-map qcrop';
-        } else {
-          mapHtml = '<div class="settle-map"><img src="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" data-lbasset="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" alt="" loading="lazy" onload="lbSettleCrop(this,'+vx+','+vy+')" onerror="this.parentNode.style.display=&quot;none&quot;"><div class="settle-dot" style="left:'+dx+'%;top:'+dy+'%"></div></div>';
-          cls = ' with-map qcrop';
-        }
+        mapHtml = '<div class="settle-map"><img src="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" data-lbasset="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" alt="" loading="lazy" onerror="this.parentNode.style.display=&quot;none&quot;"><div class="settle-dot" style="left:'+p.x.toFixed(2)+'%;top:'+p.y.toFixed(2)+'%"></div></div>';
+        cls = ' with-map';
       }
     }
   } else if(s && s.scattered){
@@ -5986,22 +5954,6 @@ function lbSettleBtnHtml(it){
     + '<span class="settle-info">'+tent
     + '<span class="settle-name">'+name+'</span>'
     + '<span class="settle-cnt">'+cntH+(cntH&&ecntH?' ':'')+ecntH+(ecntH&&geneH?' ':'')+geneH+'</span></span></div>';
-}
-// v753：直裁小块（不放大）——地图显示 = 整图基准的一半边长（面积 1/4），img 整图原宽平移显示视野 [vx,vx+50]%×[vy,vy+50]%（vx/vy=0/25/50：四角/中央），点(已换算 dx/dy%)保持区域内相对位置
-function lbSettleCrop(img, vx, vy){
-  var wrap = img ? img.parentNode : null;
-  if(!wrap || !img || !img.naturalWidth) return;
-  var R = img.naturalHeight / img.naturalWidth; // 源图高宽比
-  if(!isFinite(R) || R <= 0) R = 1;
-  // 此刻 img 仍 flow（未转 absolute）→ wrap 宽 = 整图撑起的卡基准宽
-  var w = wrap.clientWidth;
-  if(!w || w <= 4) w = 160;
-  wrap.style.width = (w / 2) + 'px';
-  wrap.style.height = ((w / 2) * R) + 'px';
-  img.style.position = 'absolute';
-  img.style.width = w + 'px';
-  img.style.left = (-((vx||0) / 100) * w) + 'px';
-  img.style.top = (-((vy||0) / 100) * w * R) + 'px';
 }
 // 点击聚落大按钮：进入聚落详情子页面（隐藏聚落列表，显示该聚落容器手风琴 + 返回按钮）
 function lbOpenSettle(btn){
@@ -6184,7 +6136,6 @@ function lbWatchOpen(){
     + '<div style="display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid #2a2a3a"><b style="color:#a78bfa;font-size:15px;display:inline-flex;align-items:center;gap:5px">'+lbMdiSvg('mdi-eye',15)+' 关注未成年</b>'
     + '<span style="font-size:11px;color:#888">点眼睛=关注/取消</span>'
     + '<span style="flex:1"></span><button onclick="lbWatchClose()" style="background:none;border:none;color:#999;font-size:18px;cursor:pointer">✕</button></div>'
-    + '<div id="lbWatchFoodBar" style="display:none;padding:6px 12px;border-bottom:1px solid #2a2a3a;font-size:11px"></div>'
     + '<div id="lbWatchList" style="flex:1;min-height:0;overflow-y:auto;padding:8px 12px"></div>'
     + '<div style="padding:8px 12px;border-top:1px solid #2a2a3a;font-size:11px;color:#555" id="lbWatchHint">暂无关注 · 在未成年生物卡右上角点关注角标加入</div>'
     + '</div>';
@@ -6193,134 +6144,13 @@ function lbWatchOpen(){
   LB._watchList = lbWatchLoad();
   lbWatchRender();
   lbWatchCnt();
-  lbWatchFoodScan(); // 2026-09-04：打开刷一次食物源（串行扫描，不轮询）
   lbWatchStartTimer();
   lbWatchTick(); // v634：打开立即先执行一轮刷新（ArkGetDino 实时），再进入 5s 定时轮询（_watchBusy 防重入）
 }
 function lbWatchClose(){
   LB._watchOpen = false;
-  LB._foodQ = []; // 2026-09-04：关窗停剩余食物源扫描
   lbWatchStopTimer();
   var ov = document.querySelector('.lb-watch-overlay'); if(ov) ov.remove();
-}
-// ===== 2026-09-04 食物源监控：已关注未成年所在聚落的 饲料槽/泰克槽 + 放出风行蜥背包 + 未成年自身背包 可喂物品 =====
-// 设计（用户 2026-09-04）：不做实时轮询——打开浮窗刷一次 + 低可视刷新图标；RCON InvProbe 一次一个串行（防撞车）
-var LB_FOOD_WL = [ // 可喂白名单 class 子串（标准清单：肉/熟/优质/果/蔬/蛋；腐肉=Spoiled 走排除）
-  ['RawMeat', '生肉'], ['CookedMeat', '熟肉'], ['PrimeMeat', '优质肉'], ['Mutton', '羊肉'],
-  ['LambChop', '羊排'], ['FishMeat', '鱼肉'], ['Berry', '果子'], ['Mejoberry', '紫果子'],
-  ['Amarberry', '黄果子'], ['Azulberry', '蓝果子'], ['Tintoberry', '红果子'],
-  ['Rockarrot', '胡萝卜'], ['Savoroot', '土豆'], ['Longrass', '柠檬草'], ['Citronal', '柠檬'],
-  ['Vegetable', '蔬菜'], ['_Egg_', '蛋'], ['Egg', '蛋']];
-function lbFoodWl(cls){ // 是否可喂：非腐肉 + 命中白名单
-  var c = String(cls || '');
-  if(!c || /Spoiled/i.test(c)) return false;
-  for(var i=0;i<LB_FOOD_WL.length;i++){ if(c.indexOf(LB_FOOD_WL[i][0])>=0) return true; }
-  return false;
-}
-function lbFoodName(cls){ // 2026-09-04 v747：肉只分 生肉/熟肉；其余果/蔬/蛋按映射
-  var c = String(cls || '');
-  if(!c) return '?';
-  if(/Cooked/.test(c)) return '熟肉'; // 一切烹熟肉类（熟肉/优质熟肉/熟羊排/熟鱼等）
-  if(/Meat|Mutton|Lamb|Prime|Fish/.test(c)) return '生肉'; // 一切生肉/优质生肉/羊肉/鱼肉
-  for(var i=0;i<LB_FOOD_WL.length;i++){ if(c.indexOf(LB_FOOD_WL[i][0])>=0) return LB_FOOD_WL[i][1]; }
-  return (c.match(/[A-Za-z]+Berry|[A-Za-z]+Egg|Rex|Argent|Maelizard/i)||['?'])[0];
-}
-function lbWatchRecByKey(sv, d1){ // 按 server+dinoId 反查缓存 rec（取 tribeId/class/坐标）
-  var d = LB._cache && LB._cache.data;
-  if(!d || !Array.isArray(d.recs) || !sv || !d1) return null;
-  for(var i=0;i<d.recs.length;i++){ var r=d.recs[i]; if(r && r.server===sv && (String(r.dinoId1)===String(d1)||String(r.dinoId2)===String(d1))) return r; }
-  return null;
-}
-function lbWatchFoodScan(){ // 打开/点刷新：按关注未成年聚合到聚落(tribeId)，建串行任务队列
-  LB._foodQ = []; LB._watchFood = {}; LB._foodBusy = false;
-  var list = LB._watchList || [];
-  var bar = document.getElementById('lbWatchFoodBar');
-  if(bar) bar.style.display = list.length ? '' : 'none';
-  if(!list.length){ if(bar) bar.innerHTML=''; return; }
-  var grp = {};
-  list.forEach(function(x){
-    var rec = lbWatchRecByKey(x.sv, x.d1);
-    var t = rec ? Number(rec.containerTribe || rec.tribeId || 0) : 0;
-    var key = x.sv + '|' + t;
-    if(!grp[key]) grp[key] = { srv:x.sv, tid:t, cls:{}, rec:null };
-    if(!grp[key].rec) grp[key].rec = rec; // v748：存首个 rec 供聚落名/图标
-    if(rec && rec.dinoClass) grp[key].cls[String(rec.dinoClass).replace(/_C$/, '')] = 1;
-  });
-  var any = false;
-  Object.keys(grp).forEach(function(key){
-    var g = grp[key];
-    LB._foodQ.push({ srv:g.srv, flt:'Trough', tid:g.tid, src:'槽', rec:g.rec });
-    LB._foodQ.push({ srv:g.srv, flt:'Maelizard', tid:g.tid, src:'蜥', rec:g.rec });
-    Object.keys(g.cls).forEach(function(c){ LB._foodQ.push({ srv:g.srv, flt:c, tid:g.tid, src:'包', rec:g.rec }); });
-    any = true;
-  });
-  if(!any){ if(bar) bar.innerHTML = '<span style="color:#777">🍖 无可定位聚落的已关注未成年</span>'; return; }
-  lbWatchFoodRender('扫描中…');
-  lbWatchFoodRunQ();
-}
-function lbWatchFoodRunQ(){ // 串行：一次只发一个 /api/inv_probe（防 RCON 撞车）
-  if(LB._foodBusy) return;
-  LB._foodBusy = true;
-  (function next(){
-    if(!LB._watchOpen){ LB._foodBusy = false; return; }
-    var q = LB._foodQ.shift();
-    if(!q){ LB._foodBusy = false; lbWatchFoodRender(''); return; }
-    var g = LB._watchFood[q.srv+'|'+q.tid];
-    if(!g){ g = { key:q.srv+'|'+q.tid, srv:q.srv, tid:q.tid, srcs:[], rec:q.rec }; LB._watchFood[g.key] = g; } // v749：带 rec 供聚落名/图标
-    fetch(LB_API + '/api/inv_probe', { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ server:q.srv, filter:q.flt, tribe_id:q.tid, max:5 }) })
-    .then(function(r){ return r.json(); }).then(function(j){
-      try{
-        if(j && j.ok && Array.isArray(j.list)){
-          var used = false;
-          j.list.forEach(function(ct){
-            if(!ct || !Array.isArray(ct.items)) return;
-            var it = ct.items.filter(function(it2){ return lbFoodWl(it2 && it2.class); });
-            if(it.length){
-              g.srcs.push({ src:q.src, cls:ct.class || '', id:ct.id || '', n:it.length, items:it });
-              used = true;
-            }
-          });
-          if(!used && g.srcs.length===0) g.err = '无可喂物';
-        } else if(g.srcs.length===0){ g.err = (j && j.error) || '查询失败'; }
-      }catch(e){ if(g.srcs.length===0) g.err='解析失败'; }
-      if(LB._foodQ.length) lbWatchFoodRender('扫描中 '+(LB._foodQ.length)+'…');
-      next();
-    }).catch(function(){ if(g.srcs.length===0) g.err='网络失败'; next(); });
-  })();
-}
-function lbWatchFoodRender(status){
-  var bar = document.getElementById('lbWatchFoodBar');
-  if(!bar) return;
-  var keys = Object.keys(LB._watchFood || {});
-  var h = '<div style="display:flex;align-items:center;gap:6px"><b style="color:#f59e0b;font-size:11px">🍖 食物源</b>'
-    + '<span style="color:#888;font-size:10px">可喂物</span><span style="flex:1"></span>' // v747：去掉「（打开时扫一次）」
-    + '<button onclick="lbWatchFoodScan()" title="重新扫描食物源" style="background:none;border:none;color:#888;font-size:12px;cursor:pointer;line-height:1;padding:2px">⭮</button>'
-    + (status ? '<span style="color:#aaa;font-size:10px">'+status+'</span>' : '') + '</div>';
-  if(!keys.length){ h += '<div style="color:#777;font-size:10px;margin-top:2px">'+ (status||'（已关注未成年将显示其聚落可喂食物）') +'</div>'; }
-  keys.forEach(function(k){
-    var g = LB._watchFood[k];
-    var st = LB.servName ? LB.servName(g.srv) : g.srv;
-    // v748：行首 = 服务器 mdi 图标 + ⛺聚落图标/名（复用 lbSettlementLabel）；无聚落回退服务器名
-    var head = '';
-    var _srvIco = (typeof LB_SERVER_MDI !== 'undefined' && LB_SERVER_MDI && LB_SERVER_MDI[g.srv]) ? LB_SERVER_MDI[g.srv] : '';
-    if(_srvIco) head += '<i class="mdi ' + _srvIco + '" style="font-size:11px;vertical-align:-1px"></i> ';
-    var _sl = '';
-    try{ if(g.rec && typeof lbSettlementLabel === 'function') _sl = lbSettlementLabel(g.rec, false); }catch(e){}
-    head += _sl || st;
-    if(g.err && !g.srcs.length){ h += '<div style="margin-top:2px;color:#999;font-size:10px">'+head+'：'+g.err+'</div>'; return; }
-    var agg = {}; // 物名 -> qty；源集合
-    var srcSet = {};
-    g.srcs.forEach(function(s){
-      srcSet[s.src] = (srcSet[s.src]||0)+1;
-      s.items.forEach(function(it){ if(!lbFoodWl(it.class)) return; var nm = lbFoodName(it.class); agg[nm] = (agg[nm]||0) + (Number(it.qty)||1); });
-    });
-    var parts = Object.keys(agg).map(function(nm){ return '<span style="color:#4ade80">'+nm+'</span>×'+agg[nm]; });
-    var srcTxt = Object.keys(srcSet).map(function(s){ return (s==='槽'?'槽':s==='蜥'?'风行蜥':'背包')+'×'+srcSet[s]; }).join('·');
-    h += '<div style="margin-top:3px;font-size:10px;color:#ccc">'+head+'：'+(parts.length?parts.join(' · '):'<span style="color:#888">无可喂物</span>')
-      + '<span style="color:#666">（'+(srcTxt||'—')+'）</span></div>';
-  });
-  bar.innerHTML = h;
 }
 // v623：浮窗 = 自动列出所有我的未成年（默认全部不关注），每张卡右上角点眼睛=关注/取消；已关注卡随 ArkGetDino 实时覆盖成长/属性
 function lbWatchCandidates(){
@@ -11824,59 +11654,7 @@ function lbRoutePlanHtml(recs, attrs){
     recs.forEach(function(r){ var sp=r.statPoints||[]; var b=(iB==null)?0:(Number(sp[iB])||0); if(b>bmx) bmx=b; });
     mxBaseAll[k] = bmx;
   });
-  // v750：breeding 基因词条（Inherit*Mutable/Robust/Frail）并入路线预测
-  // 官方(ark.wiki.gg 2026-09-04)：Mutable=子代该属性变异事件概率 +1.0/1.5/2.0%(层1/2/3, additive)
-  //            Robust/Frail=继承父母较高值概率 ±1.5/2.25/3.0%(层1/2/3, additive)
-  var LB_ROUTE_GENE_ATTR = {health:'health', stamina:'stamina', oxygen:'oxygen', food:'food', weight:'weight', melee:'melee_damage_multiplier'};
-  var LB_ROUTE_GENE_MUT = [0.010, 0.015, 0.020];
-  var LB_ROUTE_GENE_INH = [0.015, 0.0225, 0.030];
-  function lbRouteGeneMod(r){ // geneTraits → {mut:{k:加成}, inh:{k:净加成}}（仅 6 育种属性；stacks=层 1/2/3）
-    var out = {mut:{}, inh:{}};
-    if(!r || !r.geneTraits || !r.geneTraits.length) return out;
-    for(var i=0;i<r.geneTraits.length;i++){
-      var g = r.geneTraits[i];
-      var tn = String((g && g.trait) || '').replace(/\[\d+\]$/,'');
-      var mm = tn.match(/^inherit([a-z]+)(mutable|robust|frail)$/i);
-      if(!mm) continue;
-      var k = LB_ROUTE_GENE_ATTR[mm[1].toLowerCase()];
-      if(!k) continue;
-      var st = Math.max(1, Math.min(3, Number((g && g.stacks)||1)));
-      var typ = mm[2].toLowerCase();
-      var b = (typ==='mutable') ? LB_ROUTE_GENE_MUT[st-1] : (((typ==='robust')?1:-1) * LB_ROUTE_GENE_INH[st-1]);
-      var pool = (typ==='mutable') ? out.mut : out.inh;
-      pool[k] = (pool[k]||0) + b;
-    }
-    return out;
-  }
-  function lbRouteInhP(m, f, k){ // v750：Robust/Frail → 该属性继承父母较高值概率（父母净加成叠加，clip 1%~99.9%)
-    var gm = lbRouteGeneMod(m).inh[k] || 0;
-    if(f) gm += (lbRouteGeneMod(f).inh[k] || 0);
-    var p = 0.55 + gm;
-    if(p < 0.01) p = 0.01;
-    if(p > 0.999) p = 0.999;
-    return p;
-  }
-  function lbRouteInhBadge(m, f, k){ // v753：该属性 Robust/Frail 词条徽章（父母两侧，卡片样式 lbGeneLevelCss/lbGeneLevelColor）
-    var arr = [];
-    function add(r){
-      if(!r || !r.geneTraits) return;
-      for(var i=0;i<r.geneTraits.length;i++){
-        var g = r.geneTraits[i];
-        var tn = String((g&&g.trait)||'').replace(/\[\d+\]$/,'');
-        var mm = tn.match(/^inherit([a-z]+)(robust|frail)$/i);
-        if(!mm) continue;
-        var kk = LB_ROUTE_GENE_ATTR[mm[1].toLowerCase()];
-        if(kk!==k) continue;
-        var st = Math.max(1, Math.min(3, Number((g&&g.stacks)||1)));
-        var zh = (LB_GENE_ZH && (LB_GENE_ZH[tn] || LB_GENE_ZH[tn.toLowerCase()])) || LB_BREED_LABEL[k];
-        arr.push('<span style="display:inline-block;padding:0 6px;margin-right:2px;border-radius:9px;'+lbGeneLevelCss(st)+';font-size:10px;line-height:16px;white-space:nowrap" title="'+lbAttr(tn)+'">'+(st>=2?'<b style="color:'+lbGeneLevelColor(st)+';font-weight:800;margin-right:3px">'+st+'</b>':'')+zh+'</span>');
-      }
-    }
-    add(m); if(f && f!==m) add(f);
-    return arr.join(' ');
-  }
-  // v734：变异期望动态段（独立行；社区 7.6% 口径：父/母系双侧 roll、父系锁只剩母系；落点全池 n/11；「每有效变异≈N子代」绿粗同目标重点）
-  // v750：父本 Mutable 词条 → 该属性变异落点命中率绝对 +b（官方 1.0/1.5/2.0% 每层）→ 全池归一（挤占其他落点；无词条退化为 n/11）
+  // v734：变异期望动态段（独立行；社区 7.6% 口径：父/母系双侧 roll、父系锁只剩母系；落点全池 n/11；「每变异≈N子代」绿粗同目标重点）
   function mutSeg(m){
     if(!m) return '';
     var n = attrs.length;
@@ -11884,60 +11662,27 @@ function lbRoutePlanHtml(recs, attrs){
     var pEgg = LB_ROUTE_MUT_ANY, tag = '';
     if(t < 0){ tag = '负∞ '; }
     else if(t >= 20){ pEgg = LB_ROUTE_MUT_SIDE; tag = '父系锁(总'+t+')→仅母系 '; }
-    // v750：预算模型 —— 每属性基础命中 1/11，Mutable[attr] 命中预算 +b（官方 pp）；命中率=目标预算/总预算(1+Σb)
-    var gm = lbRouteGeneMod(m).mut, hasAny = false, gTxt = '';
-    var keys6 = ['health','stamina','oxygen','food','weight','melee_damage_multiplier'];
-    var wT = n / LB_ROUTE_MUT_ATTRS, wP = 1;
-    for(var gi=0; gi<keys6.length; gi++){
-      var b6 = gm[keys6[gi]] || 0;
-      if(b6){ hasAny = true; wP += b6; } // 全 6 育种属性词条都吃预算（含非目标 → 挤占目标）
-    }
-    for(var gj=0; gj<n; gj++){ var ka = attrs[gj], ba = gm[ka] || 0; wT += ba; }
-    // v752：标注 = 与生物卡片一致的基因徽章（lbGeneLevelCss/lbGeneLevelColor 圆角+层数数字+中文名），后跟 +x% 加成小字
-    if(m.geneTraits){
-      for(var gk=0; gk<m.geneTraits.length; gk++){
-        var gg2 = m.geneTraits[gk];
-        var tn2 = String((gg2 && gg2.trait) || '').replace(/\[\d+\]$/,'');
-        var mm2 = tn2.match(/^inherit([a-z]+)mutable$/i);
-        if(!mm2) continue;
-        var k2 = LB_ROUTE_GENE_ATTR[mm2[1].toLowerCase()];
-        if(!k2) continue;
-        var st2 = Math.max(1, Math.min(3, Number((gg2 && gg2.stacks)||1)));
-        var zh2 = (LB_GENE_ZH && (LB_GENE_ZH[tn2] || LB_GENE_ZH[tn2.toLowerCase()])) || LB_BREED_LABEL[k2];
-        gTxt += (gTxt?' ':'') + '<span style="display:inline-block;padding:0 6px;margin-right:2px;border-radius:9px;' + lbGeneLevelCss(st2) + ';font-size:10px;line-height:16px;white-space:nowrap" title="' + lbAttr(tn2) + '">' + (st2>=2 ? ('<b style="color:'+lbGeneLevelColor(st2)+';font-weight:800;margin-right:3px">'+st2+'</b>') : '') + zh2 + '</span><span style="color:#a78bfa;font-size:9px;margin-right:6px">+' + (Math.round((LB_ROUTE_GENE_MUT[st2-1]||0)*1000)/10) + '%</span>';
-      }
-    }
-    var hit = hasAny ? (wT / wP) : (n / LB_ROUTE_MUT_ATTRS);
     var pct = Math.round(pEgg * 1000) / 10;
-    var sumPct = (pEgg * hit * 100).toFixed(1); // v738：出现有用变异(目标命中)的汇总概率 %（v750：Mutable 预算后）
-    var eggs = Math.max(1, Math.round(1 / (pEgg * hit)));
-    return '<div style="flex-basis:100%;max-width:100%;font-size:10px;color:#888;margin-top:-4px;line-height:1.7">变异 ' + tag + pct + '%/子代 × 落点' + n + '/' + LB_ROUTE_MUT_ATTRS + (hasAny ? (' <span style="color:#a78bfa">'+gTxt+'</span>') : '') + '<b style="color:#4ade80">≈' + sumPct + '%</b> → <b style="color:#4ade80">每有效变异≈' + eggs + '子代</b></div>'; // v737：-4px 抵消 body gap6 → 与上行(目标)净距 2px，同 note 一致；v738：落点后=汇总有用变异概率；v739：每变异→每有效变异；v750：Mutable 命中预算绝对加→归一挤占
+    var hitPct = Math.round(n / LB_ROUTE_MUT_ATTRS * 1000) / 10; // v736：落点具体概率（n/11）
+    var eggs = Math.max(1, Math.round(1 / (pEgg * n / LB_ROUTE_MUT_ATTRS)));
+    return '<div style="flex-basis:100%;max-width:100%;font-size:10px;color:#888;margin-top:-4px;line-height:1.7">变异 ' + tag + pct + '%/子代 × 落点' + n + '/' + LB_ROUTE_MUT_ATTRS + '<b style="color:#4ade80">≈' + hitPct + '%</b> → <b style="color:#4ade80">每变异≈' + eggs + '子代</b></div>'; // v737：-4px 抵消 body gap6 → 与上行(目标)净距 2px，同 note 一致
   }
   function thRow(m, f, extraTxt){
-    var th = [], miss = [], needKs = []; // v729：全达概率只算「父母不同值」达顶属性；同值=100% 必达不计 55%；v750：needKs 收集（Robust/Frail 逐属性修正）
+    var th = [], miss = [], needN = 0; // v729：全达概率只算「父母不同值」达顶属性；同值=100% 必达不计 55%
     attrs.forEach(function(k){
       var mv = lbRoutePoint(m,k), fv = lbRoutePoint(f,k);
       var v = Math.max(mv, fv);
       if(v<=0) return; // v712d：跳过无意义 0 值属性（不影响该组目标）
-      if(mxAll[k]>0 && v>=mxAll[k]){ th.push('<b style="color:#4ade80">'+LB_BREED_LABEL[k]+v+'</b>'); if(mv!==fv) needKs.push(k); }
+      if(mxAll[k]>0 && v>=mxAll[k]){ th.push('<b style="color:#4ade80">'+LB_BREED_LABEL[k]+v+'</b>'); if(mv!==fv) needN++; }
       else { th.push('<span style="color:#999">'+LB_BREED_LABEL[k]+v+'</span>'); if(mxAll[k]>0) miss.push(k); }
     });
-    var cnt = needKs.length;
+    var cnt = needN;
     var pTxt;
     if(cnt===0){ pTxt = th.length ? '（必达）' : '（55%）'; }
+    else if(cnt===1){ pTxt = '（55%）'; }
     else {
-      var P = 1, modKs = [];
-      needKs.forEach(function(k){ // v750：Robust/Frail 词条 → 该属性继承父母较高值概率修正（官方 ±1.5/2.25/3.0% 每层）
-        var pk = lbRouteInhP(m, f, k);
-        P *= pk;
-        if(Math.abs(pk - 0.55) > 1e-9) modKs.push([k, pk]);
-      });
-      if(!modKs.length){
-        if(cnt===1) pTxt = '（55%）';
-        else pTxt = '（55%×'+cnt+'：单只≈'+(P*100).toFixed(1)+'% · 平均≈'+Math.round(1/P)+'只出1只全达）'; // v729：1/单只全达概率
-      } else {
-        pTxt = '（'+modKs.map(function(o){ return lbRouteInhBadge(m, f, o[0])+'<span style="color:#a78bfa;font-size:9px;margin-right:4px">→'+(o[1]*100).toFixed(1)+'%</span>'; }).join('')+' → 单只≈'+(P*100).toFixed(1)+'% · 平均≈'+Math.round(1/P)+'只出1只全达）'; // v753：Robust/Frail 徽章样式+修正后概率
-      }
+      var p1 = Math.pow(0.55, cnt);
+      pTxt = '（55%×'+cnt+'：单只≈'+(p1*100).toFixed(1)+'% · 平均≈'+Math.round(1/p1)+'只出1只全达）'; // v729：1/单只全达概率
     }
     var hh = '<div style="flex-basis:100%;max-width:100%;font-size:10px;color:#888;margin-top:2px;line-height:1.7">目标 '+th.join(' · ')+pTxt; // v712e：flex 容器内强制占满整行
     if(miss.length) hh += ' · <span style="color:#f59e0b">缺口：'+miss.map(function(k){ return LB_BREED_LABEL[k]+'差'+(mxAll[k]-Math.max(lbRoutePoint(m,k),lbRoutePoint(f,k))); }).join('、')+'</span>';
@@ -11997,6 +11742,23 @@ function lbRoutePlanHtml(recs, attrs){
   var poolN = lbRouteMomGet();
   if(omni && (lbRouteCountM(omni)+lbRouteCountF(omni))>=20) poolN = Math.min(30, poolN*2); // v727：总到20 → 池目标×2
   var avail0 = zeroFems.length;
+  // 公用扩母卡（单条、不分属性）：0/0 母公用池不足时
+  if(avail0 < poolN){
+    var seedM2 = null;
+    zeroMales.forEach(function(r){ if(!seedM2 && usedMothers.indexOf(r)<0) seedM2 = r; });
+    var breedF2 = zeroFems.slice(0, 3);
+    if(seedM2 && breedF2.length){
+      usedMothers.push(seedM2);
+      var mB2 = [lbRoutePlanDino(seedM2, null, 13, '0/0 种公')]
+        .concat(breedF2.map(function(fm){ return '<span style="color:#666">×</span>' + lbRoutePlanDino(fm, null, 13, '0/0'); })).join('');
+      mB2 += '<div style="flex-basis:100%;max-width:100%;font-size:10px;color:#888;margin-top:2px;line-height:1.7">目标 子代变异次数 0/0（0/0×0/0 不产生变异）→ 入公用母池</div>';
+      groups.push({order:-1, ai:0, tag:'主配', title:'扩母群 · 0/0母 '+avail0+'/'+poolN, body:mB2,
+        note:'0/0 母公用池 '+avail0+'/'+poolN+' 未满（'+attrs.length+' 条属性线共用、不分属性）→ 0/0 种公 × 0/0♀ 扩产（'+breedF2.length+' 源）→ 筛 0/0 ♀ 补足后再单公推进；母本不限属性'});
+    } else {
+      groups.push({order:-1, ai:0, tag:'主配', title:'扩母群 · 0/0母 '+avail0+'/'+poolN, body:'',
+        note:'0/0 母公用池 '+avail0+'/'+poolN+' 不足：0/0 只能由 0/0×0/0 产出 → '+(seedM2?'缺 0/0♀ 母源，先抓/孵 1 只 0/0♀':'当前无 0/0 种公 → 只能外部 抓/孵/交换 0/0♀')});
+    }
+  }
   // 全能公叠组（父须所选属性全达最高；母群公用、达线数优先排序）
   if(omni){
     var zf = zeroFems.filter(function(r){ return usedMothers.indexOf(r)<0; }).sort(function(a,b){
@@ -12004,10 +11766,7 @@ function lbRoutePlanHtml(recs, attrs){
       var d = dc(b)-dc(a); if(d!==0) return d;
       return lbRouteBirth(a)-lbRouteBirth(b);
     });
-    // v744：扩母群需求（avail0<poolN）且 0/0 母有限（avail0≥2）→ 叠变异让渡：只留 1 只启动，其余 0/0 母给扩母群补池（母不是没有而是全被占时）
-    var usedN = (avail0 < poolN && avail0 >= 2) ? 1 : poolN;
-    var yldTxt = (usedN < poolN) ? ('；0/0 母有限 → 母群暂缩至 '+usedN+' 只启动，其余 0/0 母让给扩母群补池（扩出的母会回流公用池）') : '';
-    var usedZ = zf.slice(0, usedN);
+    var usedZ = zf.slice(0, poolN);
     usedZ.forEach(function(r){ usedMothers.push(r); });
     if(usedZ.length){
       var tK = attrs.map(function(k){ return LB_BREED_LABEL[k]; }).join('');
@@ -12016,7 +11775,7 @@ function lbRoutePlanHtml(recs, attrs){
       usedZ.forEach(function(fm){ parts3.push('<span style="color:#666">×</span>' + lbRoutePlanDino(fm, null, 13, '0/0')); });
       var t3 = parts3.join('') + thRow(omni, usedZ[0] || omni, '一窝蛋按变异落点归各属性线') + mutSeg(omni); // v734：变异段独立成行（叠变异卡保留）
       groups.push({order:1, ai:0, tag:'主配', title:'叠变异（全能公）', body:t3, // v721i：去属性名 N，统一「叠变异（全能公）」
-        note:''+lbRouteName(omni)+' 所选属性均全场最高 → × 公用 0/0 母群（'+usedZ.length+' 只）→ 每窝子代 55% 拿各属性高值；变异随机落点 → 孵出看变异落在 '+tK+' 哪个属性即推进哪个（落点分散，非目标落点淘汰）；父系栏随总变异累积（仔=父本总/母本总）'+yldTxt});
+        note:''+lbRouteName(omni)+' 所选属性均全场最高 → × 公用 0/0 母群（'+usedZ.length+' 只）→ 每窝子代 55% 拿各属性高值；变异随机落点 → 孵出看变异落在 '+tK+' 哪个属性即推进哪个（落点分散，非目标落点淘汰）；父系栏随总变异累积（仔=父本总/母本总）'});
     }
   } // v721f：无全能公（omni）时叠变异无法执行 → 整组隐藏（不再 push 空提示卡）
   // ---- 3.5 换代（v721c2 母覆盖贪心 + 理论行）：造父期与全能期同逻辑 —— 目标♂ 基础未达 0/0 可及上限 → 高基母换代；深负公完全并入
@@ -12044,8 +11803,7 @@ function lbRoutePlanHtml(recs, attrs){
         var iK = LB_BREED_IDX[k];
         var mBase = (targetM.statPoints && iK!=null) ? (Number(targetM.statPoints[iK])||0) : 0;
         var hi = null;
-        zeroFems.forEach(function(r){ // v741：跳过已入池母（主配/并行共用 usedMothers）
-          if(usedMothers.indexOf(r)>=0) return;
+        zeroFems.forEach(function(r){
           var rb = (r.statPoints && iK!=null) ? (Number(r.statPoints[iK])||0) : 0;
           if(rb > mBase && (!hi || rb > (Number((hi.statPoints&&iK!=null)?(hi.statPoints[iK]):0)||0))) hi = r;
         });
@@ -12071,8 +11829,7 @@ function lbRoutePlanHtml(recs, attrs){
         var iK = LB_BREED_IDX[k];
         var mBase = (targetM.statPoints && iK!=null) ? (Number(targetM.statPoints[iK])||0) : 0;
         var hi = null;
-        zeroFems.forEach(function(r){ // v741：跳过已入池母
-          if(usedMothers.indexOf(r)>=0) return;
+        zeroFems.forEach(function(r){
           var rb = (r.statPoints && iK!=null) ? (Number(r.statPoints[iK])||0) : 0;
           if(rb > mBase && (!hi || rb > (Number((hi.statPoints&&iK!=null)?(hi.statPoints[iK]):0)||0))) hi = r;
         });
@@ -12083,7 +11840,6 @@ function lbRoutePlanHtml(recs, attrs){
           g.ks.push(k);
         }
       });
-      fGrps.forEach(function(g){ if(usedMothers.indexOf(g.f)<0) usedMothers.push(g.f); }); // v741：换公代高基母入统一池
       function fSub(g){ // 母子标签：其覆盖属性+基础
         return g.ks.map(function(kk){ var jj=LB_BREED_IDX[kk]; var fb=(g.f.statPoints&&jj!=null)?(Number(g.f.statPoints[jj])||0):0; return LB_BREED_LABEL[kk]+fb; }).join('·')+'·0/0 高基';
       }
@@ -12106,9 +11862,8 @@ function lbRoutePlanHtml(recs, attrs){
           return isTop ? ('<b style="color:#4ade80">'+LB_BREED_LABEL[kk]+fb+'</b>')
             : ('<span style="color:#e6e6ef">'+LB_BREED_LABEL[kk]+fb+'<span style="color:#22d3ee">↑</span></span>');
         });
-        var nc = g.ks.length, PM = 1, modM = [];
-        g.ks.forEach(function(kk){ var pk=lbRouteInhP(targetM, g.f, kk); PM*=pk; if(Math.abs(pk-0.55)>1e-9) modM.push([kk,pk]); }); // v750：Robust/Frail 词条修正（targetM×该母）
-        var pTxt = (nc===0) ? '（55%）' : (modM.length ? ('（'+modM.map(function(o){ return lbRouteInhBadge(targetM, g.f, o[0])+'<span style="color:#a78bfa;font-size:9px;margin-right:4px">→'+(o[1]*100).toFixed(1)+'%</span>'; }).join('')+' → 单只≈'+(PM*100).toFixed(1)+'% · 平均≈'+Math.round(1/PM)+'只出1只全达）') : ((nc<=1) ? '（55%）' : (function(){ var p1=Math.pow(0.55,nc); return '（55%×'+nc+'：单只≈'+(p1*100).toFixed(1)+'% · 平均≈'+Math.round(1/p1)+'只出1只全达）'; }())));
+        var nc = g.ks.length;
+        var pTxt = (nc<=1) ? '（55%）' : (function(){ var p1=Math.pow(0.55,nc); return '（55%×'+nc+'：单只≈'+(p1*100).toFixed(1)+'% · 平均≈'+Math.round(1/p1)+'只出1只全达）'; }());
         return per.join('·')+' '+pTxt;
       });
       var mN = fGrps.length;
@@ -12127,25 +11882,6 @@ function lbRoutePlanHtml(recs, attrs){
         note:''+lbRouteName(targetM)+' 属性基础未达 0/0 可及上限 → 高基母换公代：'+stepTxt+'，全部提到位即全能公'
           +(hasNegM?'；深负公换公代后仍深负、续享无限叠':'')
           +(gaps.length?('；另有 '+gaps.length+' 个缺 ♂ 属性需并入/补齐'):'')});
-    }
-  }
-  // 公用扩母卡（单条、不分属性；v741：叠变异/换公代优先占母后取剩余，统一 usedMothers 池排重）
-  if(avail0 < poolN){
-    var seedM2 = null;
-    zeroMales.forEach(function(r){ if(!seedM2 && usedMothers.indexOf(r)<0) seedM2 = r; });
-    var freeF = zeroFems.filter(function(r){ return usedMothers.indexOf(r)<0; });
-    var breedF2 = freeF.slice(0, 3);
-    if(seedM2 && breedF2.length){
-      usedMothers.push(seedM2);
-      breedF2.forEach(function(fm){ usedMothers.push(fm); });
-      var mB2 = [lbRoutePlanDino(seedM2, null, 13, '0/0 种公')]
-        .concat(breedF2.map(function(fm){ return '<span style="color:#666">×</span>' + lbRoutePlanDino(fm, null, 13, '0/0'); })).join('');
-      mB2 += '<div style="flex-basis:100%;max-width:100%;font-size:10px;color:#888;margin-top:2px;line-height:1.7">目标 子代变异次数 0/0（0/0×0/0 不产生变异）→ 入公用母池</div>';
-      groups.push({order:2, ai:0, tag:'主配', title:'扩母群 · 0/0母 '+freeF.length+'/'+poolN, body:mB2, // v740：主配内排最后；v741：主配叠组优先后取剩余
-        note:'0/0 母公用池 '+avail0+'/'+poolN+' 未满（'+attrs.length+' 条属性线共用、不分属性）→ 主配叠组优先占用后剩余 '+freeF.length+' 只 0/0♀ 扩产（'+breedF2.length+' 源）→ 筛 0/0 ♀ 补足后再单公推进；母本不限属性'});
-    } else {
-      groups.push({order:2, ai:0, tag:'主配', title:'扩母群 · 0/0母 '+freeF.length+'/'+poolN, body:'', // v741
-        note:'0/0 母公用池 '+avail0+'/'+poolN+' 不足：0/0 只能由 0/0×0/0 产出 → '+(seedM2?'0/0♀ 已全部投入主配叠组/换公代，先抓/孵补池':'当前无 0/0 种公 → 只能外部 抓/孵/交换 0/0♀')});
     }
   }
   // ---- 4. 负变异溢出线（并行紫 · v712 多种子线并行 ≤3）：挑闲置 0/0 种子对（不与线代表/叠母重种）
@@ -12222,16 +11958,14 @@ function lbRoutePlanHtml(recs, attrs){
     if(pairs.length){
       var rowsHtml = pairs.map(function(g,gi){
         var male=g.m, female=g.f;
-        var th=[], miss=[], needKs=[]; // v729：全达概率只算「父母不同值」的达顶属性；父母同值=100% 必达，不计 55%；v750：needKs 收集（Robust/Frail 逐属性修正）
+        var th=[], miss=[], needN=0; // v729：全达概率只算「父母不同值」的达顶属性；父母同值=100% 必达，不计 55%
         attrs.forEach(function(k){
           var mv=lbRoutePoint(male,k), fv=lbRoutePoint(female,k);
           var v=Math.max(mv,fv);
-          if(mxA[k]>0 && v>=mxA[k]){ th.push('<b style="color:#4ade80">'+LB_BREED_LABEL[k]+v+'</b>'); if(mv!==fv) needKs.push(k); } // 达顶标绿；同值不赌
+          if(mxA[k]>0 && v>=mxA[k]){ th.push('<b style="color:#4ade80">'+LB_BREED_LABEL[k]+v+'</b>'); if(mv!==fv) needN++; } // 达顶标绿；同值不赌
           else { th.push('<span style="color:#999">'+LB_BREED_LABEL[k]+v+'</span>'); if(mxA[k]>0) miss.push(k); }
         });
-        var _cntM = needKs.length, _PM = 1, _modM = [];
-        needKs.forEach(function(k){ var _pk=lbRouteInhP(male,female,k); _PM*=_pk; if(Math.abs(_pk-0.55)>1e-9) _modM.push([k,_pk]); }); // v750：Robust/Frail 词条修正
-        var _ptxtM = (_cntM===0) ? (th.length ? '（必达）' : '（55%）') : (_modM.length ? ('（'+_modM.map(function(o){ return lbRouteInhBadge(male, female, o[0])+'<span style="color:#a78bfa;font-size:9px;margin-right:4px">→'+(o[1]*100).toFixed(1)+'%</span>'; }).join('')+' → 单只≈'+(_PM*100).toFixed(1)+'% · 平均≈'+Math.round(1/_PM)+'只出1只全达）') : ((_cntM===1) ? '（55%）' : (function(){ var p1=Math.pow(0.55,_cntM); return '（55%×'+_cntM+'：单只≈'+(p1*100).toFixed(1)+'% · 平均≈'+Math.round(1/p1)+'只出1只全达）'; }()))); // v729：仅赌不同值达顶属性；同值必达
+        var _ptxtM = (needN===0) ? (th.length ? '（必达）' : '（55%）') : ((needN===1) ? '（55%）' : (function(){ var p1=Math.pow(0.55,needN); return '（55%×'+needN+'：单只≈'+(p1*100).toFixed(1)+'% · 平均≈'+Math.round(1/p1)+'只出1只全达）'; }())); // v729：仅赌不同值达顶属性；同值必达
         var line = '<div style="flex-basis:100%;max-width:100%;margin-top:'+(gi?3:0)+'px">' // v717：内部并行无分隔线（多线合并）
           + '<div style="font-size:11px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
           + (pairs.length>1 ? paraBadge(gi) : '') // v719：统一徽章函数 paraBadge（与负线内部并行完全一致）
@@ -12246,16 +11980,9 @@ function lbRoutePlanHtml(recs, attrs){
         line += '</div></div>';
         return line;
       }).join('');
-      // v745：去掉常驻「变异次数合计<20✓」；仅当配对含已锁亲本（总≥20）时警示
-      var lockTxt = '';
-      pairs.forEach(function(g){
-        if(lockTxt) return;
-        var _mm = (lbRouteCountM(g.m)+lbRouteCountF(g.m))>=20, _ff = (lbRouteCountM(g.f)+lbRouteCountF(g.f))>=20;
-        if(_mm || _ff) lockTxt = '⚠ 存在已锁亲本（总≥20：不再贡献新变异）';
-      });
       groups.push({order:5, ai:attrs.length, tag:'可选', title:'属性集中',
         body: rowsHtml,
-        note:(pairs.length>1 ? '每组 <b>互不共用龙</b>，可同时推进 · ' : '') + lockTxt});
+        note:(pairs.length>1 ? '每组 <b>互不共用龙</b>，可同时推进 · ' : '') + '变异次数合计 &lt;20 ✓'}); // v701：单组不显并行说明；去掉 55%/45% 说法
     }
   }
   // ---- 6. 颜色繁育（可选金 · 常驻）

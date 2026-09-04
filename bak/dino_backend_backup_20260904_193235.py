@@ -123,7 +123,6 @@ CMD_MOVE_DEATH_BAG = 'TransferIdentityFix.MoveDeathBag'
 CMD_MOVE_ALL_PENDINGS = 'TransferIdentityFix.MoveAllPendings'
 CMD_RENAME_DINO = 'TransferIdentityFix.RenameDino'
 CMD_EGG_PROBE = 'TransferIdentityFix.EggProbe'
-CMD_INV_PROBE = 'TransferIdentityFix.InvProbe'  # 2026-09-04：库存扫描（饲料槽/风行蜥/未成年背包物品）
 CMD_LIST_PLAYERS = 'ListPlayers'  # v532：原生 RCON 在线玩家列表（联盟位置只查在线成员）
 CMD_SAVE_WORLD = 'SaveWorld'  # v17：原生 RCON 保存世界（强制存档，cryo.json.gz 落地后前端拉最新球数据）
 
@@ -727,31 +726,6 @@ def rename_dino(server, dino_id1, dino_id2, new_name):
     return r
 
 
-def inv_probe(server, filter_s, tribe_id, max_n):
-    """库存扫描：RCON TransferIdentityFix.InvProbe <filter> <tribeId> <maxContainers>（tif.operator）。
-    2026-09-04 新增：前端「关注未成年→食物源」读取 饲料槽/泰克槽(Trough)/风行蜥(Maelizard)/未成年背包 物品。
-    注意：RCON 响应约 8KB 上限 → 单次 maxContainers 建议 ≤5；解析失败视为结果过大截断。"""
-    port = SERVERS.get(server)
-    if not port:
-        return {'ok': False, 'server': server, 'error': 'unknown server'}
-    try:
-        flt = (filter_s or '_C').strip()
-        success, result = _rcon_str(port, '%s %s %s %s' % (CMD_INV_PROBE, flt, tribe_id or 0, int(max_n) if str(max_n).isdigit() else 5))
-    except Exception as e:
-        return {'ok': False, 'server': server, 'error': str(e)}
-    if not success or not result:
-        return {'ok': False, 'server': server, 'error': 'rcon empty'}
-    try:
-        j = json.loads(result)
-    except Exception:
-        return {'ok': False, 'server': server, 'error': 'result too large (truncated)'}
-    if not isinstance(j, dict) or not j.get('ok'):
-        return {'ok': False, 'server': server, 'error': ((j or {}).get('error')) or 'inv probe failed', 'raw': str(result)[:200]}
-    return {'ok': True, 'server': server, 'filter': j.get('filter'), 'tribeId': j.get('tribeId'),
-            'containers': j.get('containers'), 'items': j.get('items'), 'list': j.get('list') or [],
-            'ts': str(datetime.now())}
-
-
 def get_dino(server, dino1, dino2):
     """单龙实时查询：RCON ArkGetDino。返回 {found, tribeId, babyAge, ...}。
     v14（2026-09-02）：扩展返回完整实时字段（babyAge/isBaby/level/name/坐标等）——
@@ -1196,12 +1170,6 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(400, {'ok': False, 'error': 'missing args'})
                 return
             self._send(200, get_dino(server, d1, d2))
-        elif path.endswith('inv_probe'):  # 2026-09-04：库存扫描（关注未成年→食物源）
-            server = g('server')
-            if not server:
-                self._send(400, {'ok': False, 'error': 'missing server'})
-                return
-            self._send(200, inv_probe(server, g('filter'), g('tribe_id', '0'), g('max', '5')))
         elif path.endswith('player_pos'):
             server = g('server')
             player = g('player')

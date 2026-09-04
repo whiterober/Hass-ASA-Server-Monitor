@@ -233,20 +233,15 @@ html.ios .lb-sex{transform:translateY(-0.08em)}
 .settle-btn .settle-map img{width:100%;height:auto;display:block}
 .settle-btn .settle-map .settle-dot{position:absolute;width:9px;height:9px;border-radius:50%;background:#f87171;border:1.5px solid #fff;transform:translate(-50%,-50%);box-shadow:0 0 5px rgba(0,0,0,.7);pointer-events:none}
 .settle-btn .settle-map .settle-dot.scat{width:6px;height:6px;background:#fbbf24;border:1px solid #fff}
-/* v748b：普通聚落地图 1/4（qcrop）：地图区撑满卡宽（自适应），img scale(2) + origin=点象限角只显示该 1/4（源图高清不糊），红点按象限内相对位置 */
-.settle-btn.qcrop{min-width:0}
-.settle-btn.qcrop .settle-map{overflow:hidden;position:relative;line-height:0}
 .settle-btn .settle-info{display:inline-flex;align-items:center;gap:6px;min-width:0}
 .settle-body{display:none;margin:2px 4px 10px}
 /* 聚落子页面：点击聚落按钮进入详情（隐藏列表），返回按钮恢复 */
 .settle-detail{margin:2px 2px 10px}
 .settle-back{background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;color:#a78bfa;padding:8px 14px;margin-bottom:8px;cursor:pointer;font-size:13px;user-select:none;transition:all .15s;display:inline-flex;align-items:center;gap:4px}
 .settle-back:hover{background:#2a2340;border-color:#a78bfa}
-/* 移动端响应式：一行 2 个独立聚落 或 1 个聚合框（置于聚落 CSS 之后确保覆盖；qcrop 地图随卡宽自适应裁块） */
+/* 移动端响应式：一行 2 个独立聚落 或 1 个聚合框（置于聚落 CSS 之后确保覆盖） */
 @media (max-width:640px){
   .settle-wrap > .settle-btn{flex:1 1 calc(50% - 3px);min-width:0;max-width:none}
-  .settle-wrap > .settle-btn .settle-name{font-size:12px}
-  .settle-wrap > .settle-btn .settle-coord{font-size:10px}
   .settle-cluster{flex:1 1 100%;max-width:100%}
 }
 .acc summary .mdi{font-size:14px;vertical-align:-2px}
@@ -378,7 +373,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260904-753';
+var LB_VERSION = 'v20260904-740';
 // ====== PWA：Service Worker 注册（2026-08-29，配合 manifest 使移动端 Edge/Chrome 可安装为应用） ======
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function(){
@@ -5415,20 +5410,6 @@ function lbContainerLabel(r){
   }
   return '<span class="acc-title">'+icon+' '+name+'</span>';
 }
-// v751b：视口跨 640 断点时自动重渲染（PC 半块 ↔ 移动 1/4 撑满切换，无需刷新）
-(function(){
-  var lastMobile = (window.innerWidth || document.documentElement.clientWidth) <= 640;
-  var rt = null;
-  window.addEventListener('resize', function(){
-    var mob = (window.innerWidth || document.documentElement.clientWidth) <= 640;
-    if(mob === lastMobile) return;
-    lastMobile = mob;
-    if(rt) clearTimeout(rt);
-    rt = setTimeout(function(){
-      try{ if(typeof lbView==='function') lbView(); }catch(e){}
-    }, 250);
-  });
-})();
 function lbView(){
   var list=document.getElementById('lbList'), status=document.getElementById('lbStatus');
   if(!list) return;
@@ -5926,21 +5907,8 @@ function lbSettleBtnHtml(it){
       var map = lbMapForServer(s.server, st.center.z);
       if(map){
         var p = lbWorldToPx(st.center.x, st.center.y, map);
-        // v753：普通聚落地图 1/4 视野 = 点所在区域（中央带 |Δx|,|Δy|≤25 → 中央 25~75%；否则田字四角块）；移动(≤640) scale2 撑满卡自适应，PC 半块直裁（聚落集合/离散两端整图）
-        var isC = Math.abs(p.x - 50) <= 25 && Math.abs(p.y - 50) <= 25;
-        var vx = isC ? 25 : (p.x >= 50 ? 50 : 0); // 视野左缘对应原图百分比（0/25/50）
-        var vy = isC ? 25 : (p.y >= 50 ? 50 : 0);
-        var dx = ((p.x - vx) * 2).toFixed(2);
-        var dy = ((p.y - vy) * 2).toFixed(2);
-        if((window.innerWidth || document.documentElement.clientWidth) <= 640){
-          var ox = vx === 25 ? '50%' : (vx ? '100%' : '0%');
-          var oy = vy === 25 ? '50%' : (vy ? '100%' : '0%');
-          mapHtml = '<div class="settle-map"><img src="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" data-lbasset="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" alt="" loading="lazy" style="transform:scale(2);transform-origin:'+ox+' '+oy+'" onerror="this.parentNode.style.display=&quot;none&quot;"><div class="settle-dot" style="left:'+dx+'%;top:'+dy+'%"></div></div>';
-          cls = ' with-map qcrop';
-        } else {
-          mapHtml = '<div class="settle-map"><img src="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" data-lbasset="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" alt="" loading="lazy" onload="lbSettleCrop(this,'+vx+','+vy+')" onerror="this.parentNode.style.display=&quot;none&quot;"><div class="settle-dot" style="left:'+dx+'%;top:'+dy+'%"></div></div>';
-          cls = ' with-map qcrop';
-        }
+        mapHtml = '<div class="settle-map"><img src="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" data-lbasset="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" alt="" loading="lazy" onerror="this.parentNode.style.display=&quot;none&quot;"><div class="settle-dot" style="left:'+p.x.toFixed(2)+'%;top:'+p.y.toFixed(2)+'%"></div></div>';
+        cls = ' with-map';
       }
     }
   } else if(s && s.scattered){
@@ -5986,22 +5954,6 @@ function lbSettleBtnHtml(it){
     + '<span class="settle-info">'+tent
     + '<span class="settle-name">'+name+'</span>'
     + '<span class="settle-cnt">'+cntH+(cntH&&ecntH?' ':'')+ecntH+(ecntH&&geneH?' ':'')+geneH+'</span></span></div>';
-}
-// v753：直裁小块（不放大）——地图显示 = 整图基准的一半边长（面积 1/4），img 整图原宽平移显示视野 [vx,vx+50]%×[vy,vy+50]%（vx/vy=0/25/50：四角/中央），点(已换算 dx/dy%)保持区域内相对位置
-function lbSettleCrop(img, vx, vy){
-  var wrap = img ? img.parentNode : null;
-  if(!wrap || !img || !img.naturalWidth) return;
-  var R = img.naturalHeight / img.naturalWidth; // 源图高宽比
-  if(!isFinite(R) || R <= 0) R = 1;
-  // 此刻 img 仍 flow（未转 absolute）→ wrap 宽 = 整图撑起的卡基准宽
-  var w = wrap.clientWidth;
-  if(!w || w <= 4) w = 160;
-  wrap.style.width = (w / 2) + 'px';
-  wrap.style.height = ((w / 2) * R) + 'px';
-  img.style.position = 'absolute';
-  img.style.width = w + 'px';
-  img.style.left = (-((vx||0) / 100) * w) + 'px';
-  img.style.top = (-((vy||0) / 100) * w * R) + 'px';
 }
 // 点击聚落大按钮：进入聚落详情子页面（隐藏聚落列表，显示该聚落容器手风琴 + 返回按钮）
 function lbOpenSettle(btn){
@@ -11848,7 +11800,7 @@ function lbRoutePlanHtml(recs, attrs){
     }
     return out;
   }
-  function lbRouteInhP(m, f, k){ // v750：Robust/Frail → 该属性继承父母较高值概率（父母净加成叠加，clip 1%~99.9%)
+  function lbRouteInhP(m, f, k){ // v750：Robust/Frail → 该属性继承父母较高值概率（父母净加成叠加，clip 1%~99.9%）
     var gm = lbRouteGeneMod(m).inh[k] || 0;
     if(f) gm += (lbRouteGeneMod(f).inh[k] || 0);
     var p = 0.55 + gm;
@@ -11856,27 +11808,8 @@ function lbRoutePlanHtml(recs, attrs){
     if(p > 0.999) p = 0.999;
     return p;
   }
-  function lbRouteInhBadge(m, f, k){ // v753：该属性 Robust/Frail 词条徽章（父母两侧，卡片样式 lbGeneLevelCss/lbGeneLevelColor）
-    var arr = [];
-    function add(r){
-      if(!r || !r.geneTraits) return;
-      for(var i=0;i<r.geneTraits.length;i++){
-        var g = r.geneTraits[i];
-        var tn = String((g&&g.trait)||'').replace(/\[\d+\]$/,'');
-        var mm = tn.match(/^inherit([a-z]+)(robust|frail)$/i);
-        if(!mm) continue;
-        var kk = LB_ROUTE_GENE_ATTR[mm[1].toLowerCase()];
-        if(kk!==k) continue;
-        var st = Math.max(1, Math.min(3, Number((g&&g.stacks)||1)));
-        var zh = (LB_GENE_ZH && (LB_GENE_ZH[tn] || LB_GENE_ZH[tn.toLowerCase()])) || LB_BREED_LABEL[k];
-        arr.push('<span style="display:inline-block;padding:0 6px;margin-right:2px;border-radius:9px;'+lbGeneLevelCss(st)+';font-size:10px;line-height:16px;white-space:nowrap" title="'+lbAttr(tn)+'">'+(st>=2?'<b style="color:'+lbGeneLevelColor(st)+';font-weight:800;margin-right:3px">'+st+'</b>':'')+zh+'</span>');
-      }
-    }
-    add(m); if(f && f!==m) add(f);
-    return arr.join(' ');
-  }
   // v734：变异期望动态段（独立行；社区 7.6% 口径：父/母系双侧 roll、父系锁只剩母系；落点全池 n/11；「每有效变异≈N子代」绿粗同目标重点）
-  // v750：父本 Mutable 词条 → 该属性变异落点命中率绝对 +b（官方 1.0/1.5/2.0% 每层）→ 全池归一（挤占其他落点；无词条退化为 n/11）
+  // v750：父本 Mutable 词条 → 落点属性加权（官方每层 +1.0/1.5/2.0%，挤占其他属性落点；无词条退化为 n/11）
   function mutSeg(m){
     if(!m) return '';
     var n = attrs.length;
@@ -11884,34 +11817,19 @@ function lbRoutePlanHtml(recs, attrs){
     var pEgg = LB_ROUTE_MUT_ANY, tag = '';
     if(t < 0){ tag = '负∞ '; }
     else if(t >= 20){ pEgg = LB_ROUTE_MUT_SIDE; tag = '父系锁(总'+t+')→仅母系 '; }
-    // v750：预算模型 —— 每属性基础命中 1/11，Mutable[attr] 命中预算 +b（官方 pp）；命中率=目标预算/总预算(1+Σb)
-    var gm = lbRouteGeneMod(m).mut, hasAny = false, gTxt = '';
+    var gm = lbRouteGeneMod(m).mut, hasG = false, gTxt = '', wT = 0, wP = LB_ROUTE_MUT_ATTRS;
     var keys6 = ['health','stamina','oxygen','food','weight','melee_damage_multiplier'];
-    var wT = n / LB_ROUTE_MUT_ATTRS, wP = 1;
-    for(var gi=0; gi<keys6.length; gi++){
-      var b6 = gm[keys6[gi]] || 0;
-      if(b6){ hasAny = true; wP += b6; } // 全 6 育种属性词条都吃预算（含非目标 → 挤占目标）
+    for(var gi=0; gi<keys6.length; gi++){ var b6 = gm[keys6[gi]]||0; wP += b6; } // 池=6育种(带加成)+5其他=11
+    for(var gj=0; gj<n; gj++){
+      var ka = attrs[gj], ba = gm[ka]||0;
+      wT += 1 + ba;
+      if(ba){ hasG = true; gTxt += (gTxt?' · ':'') + '🧬突变-'+LB_BREED_LABEL[ka]+'+'+(Math.round(ba*1000)/10)+'%'; }
     }
-    for(var gj=0; gj<n; gj++){ var ka = attrs[gj], ba = gm[ka] || 0; wT += ba; }
-    // v752：标注 = 与生物卡片一致的基因徽章（lbGeneLevelCss/lbGeneLevelColor 圆角+层数数字+中文名），后跟 +x% 加成小字
-    if(m.geneTraits){
-      for(var gk=0; gk<m.geneTraits.length; gk++){
-        var gg2 = m.geneTraits[gk];
-        var tn2 = String((gg2 && gg2.trait) || '').replace(/\[\d+\]$/,'');
-        var mm2 = tn2.match(/^inherit([a-z]+)mutable$/i);
-        if(!mm2) continue;
-        var k2 = LB_ROUTE_GENE_ATTR[mm2[1].toLowerCase()];
-        if(!k2) continue;
-        var st2 = Math.max(1, Math.min(3, Number((gg2 && gg2.stacks)||1)));
-        var zh2 = (LB_GENE_ZH && (LB_GENE_ZH[tn2] || LB_GENE_ZH[tn2.toLowerCase()])) || LB_BREED_LABEL[k2];
-        gTxt += (gTxt?' ':'') + '<span style="display:inline-block;padding:0 6px;margin-right:2px;border-radius:9px;' + lbGeneLevelCss(st2) + ';font-size:10px;line-height:16px;white-space:nowrap" title="' + lbAttr(tn2) + '">' + (st2>=2 ? ('<b style="color:'+lbGeneLevelColor(st2)+';font-weight:800;margin-right:3px">'+st2+'</b>') : '') + zh2 + '</span><span style="color:#a78bfa;font-size:9px;margin-right:6px">+' + (Math.round((LB_ROUTE_GENE_MUT[st2-1]||0)*1000)/10) + '%</span>';
-      }
-    }
-    var hit = hasAny ? (wT / wP) : (n / LB_ROUTE_MUT_ATTRS);
+    var hit = hasG ? (wT / wP) : (n / LB_ROUTE_MUT_ATTRS);
     var pct = Math.round(pEgg * 1000) / 10;
-    var sumPct = (pEgg * hit * 100).toFixed(1); // v738：出现有用变异(目标命中)的汇总概率 %（v750：Mutable 预算后）
+    var sumPct = (pEgg * hit * 100).toFixed(1); // v738：出现有用变异(目标命中)的汇总概率 %（v750：Mutable 加权后）
     var eggs = Math.max(1, Math.round(1 / (pEgg * hit)));
-    return '<div style="flex-basis:100%;max-width:100%;font-size:10px;color:#888;margin-top:-4px;line-height:1.7">变异 ' + tag + pct + '%/子代 × 落点' + n + '/' + LB_ROUTE_MUT_ATTRS + (hasAny ? (' <span style="color:#a78bfa">'+gTxt+'</span>') : '') + '<b style="color:#4ade80">≈' + sumPct + '%</b> → <b style="color:#4ade80">每有效变异≈' + eggs + '子代</b></div>'; // v737：-4px 抵消 body gap6 → 与上行(目标)净距 2px，同 note 一致；v738：落点后=汇总有用变异概率；v739：每变异→每有效变异；v750：Mutable 命中预算绝对加→归一挤占
+    return '<div style="flex-basis:100%;max-width:100%;font-size:10px;color:#888;margin-top:-4px;line-height:1.7">变异 ' + tag + pct + '%/子代 × 落点' + (hasG ? ('<span style="color:#a78bfa">'+wT.toFixed(2)+'/'+wP.toFixed(2)+'</span>') : (n + '/' + LB_ROUTE_MUT_ATTRS)) + (hasG ? (' <span style="color:#a78bfa">'+gTxt+'</span>') : '') + '<b style="color:#4ade80">≈' + sumPct + '%</b> → <b style="color:#4ade80">每有效变异≈' + eggs + '子代</b></div>'; // v737：-4px 抵消 body gap6 → 与上行(目标)净距 2px，同 note 一致；v738：落点后=汇总有用变异概率；v739：每变异→每有效变异；v750：词条加权落点+标注
   }
   function thRow(m, f, extraTxt){
     var th = [], miss = [], needKs = []; // v729：全达概率只算「父母不同值」达顶属性；同值=100% 必达不计 55%；v750：needKs 收集（Robust/Frail 逐属性修正）
@@ -11936,7 +11854,7 @@ function lbRoutePlanHtml(recs, attrs){
         if(cnt===1) pTxt = '（55%）';
         else pTxt = '（55%×'+cnt+'：单只≈'+(P*100).toFixed(1)+'% · 平均≈'+Math.round(1/P)+'只出1只全达）'; // v729：1/单只全达概率
       } else {
-        pTxt = '（'+modKs.map(function(o){ return lbRouteInhBadge(m, f, o[0])+'<span style="color:#a78bfa;font-size:9px;margin-right:4px">→'+(o[1]*100).toFixed(1)+'%</span>'; }).join('')+' → 单只≈'+(P*100).toFixed(1)+'% · 平均≈'+Math.round(1/P)+'只出1只全达）'; // v753：Robust/Frail 徽章样式+修正后概率
+        pTxt = '（🧬'+modKs.map(function(o){ return LB_BREED_LABEL[o[0]]+(o[1]*100).toFixed(1)+'%'; }).join('·')+' → 单只≈'+(P*100).toFixed(1)+'% · 平均≈'+Math.round(1/P)+'只出1只全达）'; // v750：词条修正后概率
       }
     }
     var hh = '<div style="flex-basis:100%;max-width:100%;font-size:10px;color:#888;margin-top:2px;line-height:1.7">目标 '+th.join(' · ')+pTxt; // v712e：flex 容器内强制占满整行
@@ -12108,7 +12026,7 @@ function lbRoutePlanHtml(recs, attrs){
         });
         var nc = g.ks.length, PM = 1, modM = [];
         g.ks.forEach(function(kk){ var pk=lbRouteInhP(targetM, g.f, kk); PM*=pk; if(Math.abs(pk-0.55)>1e-9) modM.push([kk,pk]); }); // v750：Robust/Frail 词条修正（targetM×该母）
-        var pTxt = (nc===0) ? '（55%）' : (modM.length ? ('（'+modM.map(function(o){ return lbRouteInhBadge(targetM, g.f, o[0])+'<span style="color:#a78bfa;font-size:9px;margin-right:4px">→'+(o[1]*100).toFixed(1)+'%</span>'; }).join('')+' → 单只≈'+(PM*100).toFixed(1)+'% · 平均≈'+Math.round(1/PM)+'只出1只全达）') : ((nc<=1) ? '（55%）' : (function(){ var p1=Math.pow(0.55,nc); return '（55%×'+nc+'：单只≈'+(p1*100).toFixed(1)+'% · 平均≈'+Math.round(1/p1)+'只出1只全达）'; }())));
+        var pTxt = (nc===0) ? '（55%）' : (modM.length ? ('（🧬'+modM.map(function(o){ return LB_BREED_LABEL[o[0]]+(o[1]*100).toFixed(1)+'%'; }).join('·')+' → 单只≈'+(PM*100).toFixed(1)+'% · 平均≈'+Math.round(1/PM)+'只出1只全达）') : ((nc<=1) ? '（55%）' : (function(){ var p1=Math.pow(0.55,nc); return '（55%×'+nc+'：单只≈'+(p1*100).toFixed(1)+'% · 平均≈'+Math.round(1/p1)+'只出1只全达）'; }())));
         return per.join('·')+' '+pTxt;
       });
       var mN = fGrps.length;
@@ -12231,7 +12149,7 @@ function lbRoutePlanHtml(recs, attrs){
         });
         var _cntM = needKs.length, _PM = 1, _modM = [];
         needKs.forEach(function(k){ var _pk=lbRouteInhP(male,female,k); _PM*=_pk; if(Math.abs(_pk-0.55)>1e-9) _modM.push([k,_pk]); }); // v750：Robust/Frail 词条修正
-        var _ptxtM = (_cntM===0) ? (th.length ? '（必达）' : '（55%）') : (_modM.length ? ('（'+_modM.map(function(o){ return lbRouteInhBadge(male, female, o[0])+'<span style="color:#a78bfa;font-size:9px;margin-right:4px">→'+(o[1]*100).toFixed(1)+'%</span>'; }).join('')+' → 单只≈'+(_PM*100).toFixed(1)+'% · 平均≈'+Math.round(1/_PM)+'只出1只全达）') : ((_cntM===1) ? '（55%）' : (function(){ var p1=Math.pow(0.55,_cntM); return '（55%×'+_cntM+'：单只≈'+(p1*100).toFixed(1)+'% · 平均≈'+Math.round(1/p1)+'只出1只全达）'; }()))); // v729：仅赌不同值达顶属性；同值必达
+        var _ptxtM = (_cntM===0) ? (th.length ? '（必达）' : '（55%）') : (_modM.length ? ('（🧬'+_modM.map(function(o){ return LB_BREED_LABEL[o[0]]+(o[1]*100).toFixed(1)+'%'; }).join('·')+' → 单只≈'+(_PM*100).toFixed(1)+'% · 平均≈'+Math.round(1/_PM)+'只出1只全达）') : ((_cntM===1) ? '（55%）' : (function(){ var p1=Math.pow(0.55,_cntM); return '（55%×'+_cntM+'：单只≈'+(p1*100).toFixed(1)+'% · 平均≈'+Math.round(1/p1)+'只出1只全达）'; }()))); // v729：仅赌不同值达顶属性；同值必达
         var line = '<div style="flex-basis:100%;max-width:100%;margin-top:'+(gi?3:0)+'px">' // v717：内部并行无分隔线（多线合并）
           + '<div style="font-size:11px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
           + (pairs.length>1 ? paraBadge(gi) : '') // v719：统一徽章函数 paraBadge（与负线内部并行完全一致）
