@@ -383,7 +383,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260905-810';
+var LB_VERSION = 'v20260905-805';
 // ====== PWA：Service Worker 注册（2026-08-29，配合 manifest 使移动端 Edge/Chrome 可安装为应用） ======
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function(){
@@ -9545,7 +9545,7 @@ async function lbFindPlayerPosInner(){
   }));
   for(var i=0;i<results.length;i++){
     var pos = results[i];
-    if(pos){ LB._posTs = Date.now(); try{ localStorage.setItem(_lkey, pos.server); }catch(e){} return pos; } // v806：记录玩家位置新鲜时间（供 LOST 复用判断）
+    if(pos){ try{ localStorage.setItem(_lkey, pos.server); }catch(e){} return pos; }
   }
   return null;
 }
@@ -9720,17 +9720,8 @@ async function lbTrackWildFrom(server, idx, ev, dinoData){
       lbToast('您当前在 '+LB.servName(playerSrv)+'，该龙在 '+LB.servName(server)+'，无法追踪');
       return;
     }
-    // v809：蛋目标 → 坐标打点 TrackLocation（蛋不是龙，TrackDino/ArkGetDino 均查不到 → 打点失败）；蛋有静态 x/y/z 坐标直接打点
-    var _eggD2 = false;
-    if(dino){
-      var _e1v2 = (dino.dinoId1 !== undefined && dino.dinoId1 !== null) ? dino.dinoId1 : dino.id1;
-      _eggD2 = !!(dino._isEgg || dino.containerType==='egg' || dino.containerType==='embryo'
-        || dino.source==='egg' || dino.source==='embryo' || (String(_e1v2||'').indexOf('_') >= 0));
-    }
-    var ok = _eggD2
-      ? await lbTrackLoc(server, Number(dino.x), Number(dino.y), Number(dino.z))
-      : await lbTrackDino(server, dino, false); // v319：found=0=未加载也接受，任务挂起后龙出现自动追踪
-    if(!ok){ lbToast(_eggD2 ? '蛋坐标打点失败（TrackLocation 无响应/后端未更新）' : '追踪失败，请检查服务器/玩家'); return; }
+    var ok = await lbTrackDino(server, dino, false); // v319：found=0=未加载也接受，任务挂起后龙出现自动追踪
+    if(!ok){ lbToast('追踪失败，请检查服务器/玩家'); return; }
     var pos = cur && cur.pos ? cur.pos : null;
     LB._trackState = { tracking:true, server: server, dinoId: targetId, dino: dino, player: LB.playerEos, pos: pos, from:'card' }; // v331：来源=卡片追踪→悬浮按钮仅停止
     // v765-B：卡内追踪成功 → 自动打开分布地图并定位选中该目标
@@ -9748,47 +9739,6 @@ async function lbTrackWildFrom(server, idx, ev, dinoData){
     LB._trackBusy = false;
   }
 }
-// v809：蛋/静态坐标目标打点——POST /api/track_location → 后端 RCON TrackLocation <player> <x> <y> <z>
-// 蛋非龙（TrackDino 查不到 found=0）但有静态坐标 → 直接按坐标打点；清除复用 /api/stop_track_dino（StopTrackDino 同命令）
-async function lbTrackLoc(server, x, y, z){
-  var isNew = (LB_ARCH === 'new');
-  var token = isNew ? 'new' : await lbHaTokenRefresh();
-  if(!token) return false;
-  try{
-    var baseTs = null;
-    try{
-      var b = await fetch(LB_API + '/api/states/sensor.track_dino_status', { headers: isNew ? {} : { 'Authorization': 'Bearer ' + token } });
-      if(b.ok){ var bj = await b.json(); var ba = bj.attributes || {}; if(ba.server === server) baseTs = ba.ts; }
-    }catch(e){}
-    var ac = new AbortController();
-    var _t = setTimeout(function(){ try{ ac.abort(); }catch(e){} }, 20000);
-    var res;
-    try{
-      res = await fetch(LB_API + '/api/track_location', {
-        method:'POST', signal: ac.signal,
-        headers: isNew ? {'Content-Type':'application/json'} : {'Authorization':'Bearer '+token, 'Content-Type':'application/json'},
-        body: JSON.stringify({server: server, player: LB.playerEos, x: String(Math.round(Number(x)||0)), y: String(Math.round(Number(y)||0)), z: String(Math.round(Number(z)||0))})
-      });
-    }catch(e){ return false; }
-    finally{ clearTimeout(_t); }
-    if(!res.ok) return false;
-    var deadline = Date.now() + 12000;
-    while(Date.now() < deadline){
-      await new Promise(function(r){ setTimeout(r, 300); });
-      try{
-        var st = await fetch(LB_API + '/api/states/sensor.track_dino_status', { headers: isNew ? {} : { 'Authorization': 'Bearer ' + token } });
-        if(st.ok){
-          var obj = await st.json();
-          var attrs = obj.attributes || {};
-          if(attrs.server === server && attrs.ts !== baseTs){
-            return !!attrs.ok;
-          }
-        }
-      }catch(e){}
-    }
-    return false;
-  }catch(e){ return false; }
-}
 // v304：野生卡片追踪按钮文案（共用状态判断；idx 对应 _breedCands）
 // v333：卡片追踪按钮静态化——永远显示「追踪」（不随追踪状态变「取消追踪」）；停止/取消统一走悬浮按钮
 function lbTrackWildBtnLabel(server, idx){
@@ -9804,42 +9754,28 @@ function lbStartTrackPoll(){
     if(LB._trackPollBusy) return; // v336：上一轮检测未完成，跳过（独立标志）
     var st = LB._trackState;
     if(!st.server || !st.dinoId) return;
-    // v807：蛋目标不做死亡检测——蛋不会死亡（追踪蛋=定位后去偷，偷完手动停）；TrackDino 对蛋 found=0 曾每轮累积误判"已死亡"
-    // v808：蛋判定补 dinoId1 组合串特征——追踪按钮内联 _wj 不含 _isEgg，仅 _isEgg 判据漏判（蛋 dinoId1='a_b' 组合串、成年/未成年龙为纯数字）
-    var _isEggT = false;
-    if(st.dino){
-      var _id1v = (st.dino.dinoId1 !== undefined && st.dino.dinoId1 !== null) ? st.dino.dinoId1 : st.dino.id1;
-      _isEggT = !!(st.dino._isEgg || st.dino.containerType==='egg' || st.dino.containerType==='embryo'
-        || st.dino.source==='egg' || st.dino.source==='embryo' || (String(_id1v||'').indexOf('_') >= 0));
-    } else {
-      _isEggT = String(st.dinoId||'').split('_').length >= 3;
-    }
-    if(_isEggT) return;
     LB._trackPollBusy = true; // v336：轮询用独立 busy，不再占用 _trackBusy 操作锁
     (async function(){
       try{
         // 重新追踪同一目标：RCON TrackDino 实时返回 found（v780：lbTrackDino detail 模式返回 {ok,found}；null=超时/网络失败）
         // v335：轮询用 3s 短超时——RCON 无响应快速失败，避免 _trackBusy 长时间占用导致切换按钮「追踪处理中」
         // v780：区分「未加载挂起(ok=1 found=0)」与「真死亡/超时」——切换后新目标未加载不再连续误判死亡掉追踪
-        var dr = await lbTrackDino(st.server, st.dino, undefined, 1500, true); // v806：轮询超时 3s→1.5s（TrackDino RCON 正常 <1s，超时更快判 null）
+        var dr = await lbTrackDino(st.server, st.dino, undefined, 3000, true);
         if(dr && dr.ok && dr.found){
           LB._trackMiss = 0; // 目标仍在，重置连续失败计数
           // v349：被驯服检测——TrackDino found=1 不区分野生/驯服（已驯服龙同样返回 found=1）；
           // ArkGetDino 单只实时查询：tribeId>0 = 已被驯服 → 按目标丢失处理（单只 RCON 极轻量，替换 v348 recs 快照）
-          // v806：驯服检测降频——原每轮都查 ArkGetDino(4s) 拉长单轮周期拖慢死亡响应；改每 3 轮查一次（察觉驯服晚 ~3-5s 可接受）
-          LB._tameChk = ((LB._tameChk || 0) + 1) % 3;
-          if(LB._tameChk === 0){
-            var still = await lbCheckTargetTamed(st);
-            if(still){
-              lbHandleTrackLost(st, '已被驯服');
-              return;
-            }
+          // 2026-08-28 修复：lbCheckTargetTamed 返回 true=已被驯服，此前 !still 条件反了导致野生龙被误报"已被驯服"（用户反馈追踪最近一直误切）
+          var still = await lbCheckTargetTamed(st);
+          if(still){
+            lbHandleTrackLost(st, '已被驯服');
+            return;
           }
           return;
         }
         // ok=1 found=0：目标未加载（挂起，切换后常见）或真死亡。切换宽容窗口（8s）内视为挂起，不计死亡
         if(dr && dr.ok && !dr.found){
-          if(LB._trackSwitchAt && (Date.now() - LB._trackSwitchAt) < 3500){ lbDiag('POLL hang(ok,f0) 窗口内跳过 did='+st.dinoId); return; } // v780：切换宽容窗口；v806：8s→3.5s（新目标加载一般 <2s，缩短白等）
+          if(LB._trackSwitchAt && (Date.now() - LB._trackSwitchAt) < 8000){ lbDiag('POLL hang(ok,f0) 窗口内跳过 did='+st.dinoId); return; } // v780：切换宽容窗口
           LB._trackMiss = (LB._trackMiss || 0) + 1;
           lbDiag('POLL ok-f0 miss='+LB._trackMiss+' did='+st.dinoId);
           if(LB._trackMiss < 2) return;
@@ -9857,7 +9793,7 @@ function lbStartTrackPoll(){
       }catch(e){}
       finally{ LB._trackPollBusy = false; } // v336
     })();
-  }, 1000); // v316：检测周期 15s→2s；v806：2s→1s（配合 1.5s 轮询超时，死亡检测更快）
+  }, 2000); // v316：检测周期 15s → 2s
 }
 // v347：目标丢失统一处理（死亡 / 被驯服共用）——单追踪(card)直接停止；追踪最近(nearest)自动切下一只
 async function lbHandleTrackLost(st, reason){
@@ -9866,23 +9802,13 @@ async function lbHandleTrackLost(st, reason){
   if(cls2) LB.curClass = cls2; // v315：确保 lbNearestWild 用对物种（野生卡片追踪时 curClass 可能为空）
   // 2026-08-29 修复：card 分支也先确认玩家在线——玩家下线时 TrackDino found=0 连续 2 次会被误判"目标已死亡"，
   // 实际是玩家不在线（RCON TrackDino 找不到玩家也返回 found=0）。先查玩家位置，不在线报"玩家可能已下线"而非"已死亡"。
-  // v807：回滚 v806「复用 st.pos」——st.pos 冻结导致自动切换后地图玩家位置不更新；恢复实时查询，
-  // 单服（st.server）快速查优先（玩家追踪中应在该服），查不到（下线/传服）再全服兜底+重试
-  var pos = null;
-  if(st.server){
-    try{ pos = await lbQueryPlayerPos(st.server, (LB_ARCH==='new') ? 'new' : null, LB.playerEos || st.player); }catch(e){ pos = null; }
-    if(pos){ lbDiag('LOST pos 单服查到 srv='+pos.server); LB._posTs = Date.now(); } // v781 埋点
-  }
+  var pos = await lbFindPlayerPos();
   if(!pos){
+    // v780：玩家位置查询偶发失败（切换后 RCON 忙）先重试 1 次，仍失败才判定下线停止——防误杀正在追踪的会话（误判下线→stop 是掉追踪主因之一）
+    await new Promise(function(r){ setTimeout(r, 1200); });
     pos = await lbFindPlayerPos();
-    if(!pos){
-      // v780：玩家位置查询偶发失败（切换后 RCON 忙）先重试 1 次，仍失败才判定下线停止——防误杀正在追踪的会话（误判下线→stop 是掉追踪主因之一）
-      await new Promise(function(r){ setTimeout(r, 1200); });
-      pos = await lbFindPlayerPos();
-      if(pos) lbDiag('LOST pos 全服重试成功 srv='+pos.server); else lbDiag('LOST pos 重试仍失败 → 判定下线停止'); // v781 埋点
-    } else lbDiag('LOST pos 全服一次查到 srv='+pos.server); // v781 埋点
-    if(pos){ LB._posTs = Date.now(); } // 记录玩家位置新鲜时间
-  }
+    if(pos) lbDiag('LOST pos 重试成功 srv='+pos.server); else lbDiag('LOST pos 重试仍失败 → 判定下线停止'); // v781 埋点
+  } else lbDiag('LOST pos 一次查到 srv='+pos.server); // v781 埋点
   if(!pos){ lbToast('未找到玩家位置（玩家可能已下线），已停止追踪'); lbTrackStop(true); return; }
   // v345：单追踪（卡片指定）目标丢失 → 直接停止，不自动切换（用户指定追踪这一只，死了就停）
   if(st.from === 'card'){
@@ -9890,7 +9816,8 @@ async function lbHandleTrackLost(st, reason){
     lbTrackStop(true);
     return;
   }
-  // v338：nearest 分支切换前已确认玩家位置（复用或实时查询），此时玩家在线，正常自动切换
+  // v338：nearest 分支切换前已重新确认玩家在线（上面统一查了），此时玩家在线，正常自动切换
+  if(!pos){ lbToast('未找到玩家位置（玩家可能已下线），已停止追踪'); lbTrackStop(true); return; }
   // v318：从缓存剔除已死亡目标，避免来回切（A↔B 反复）
   var wc3 = LB._wildCache && LB._wildCache[cls2];
   if(wc3 && wc3[st.server] && Array.isArray(wc3[st.server].dinos)){
@@ -11390,9 +11317,7 @@ function lbOpenDistSel(server, id1, id2){
 // v766-C：分布地图顶卡按钮组（模式化）——r=当前追踪目标 → 控制组（nearest=切换+停止 / card=仅停止）；否则 [▶ 追踪]
 function lbWildTopBtnHtml(abbr, idx, r){
   var st = LB._trackState;
-  // v810：isTarget 用 lbDidK 统一键比较——原裸拼接 dinoId1+'_'+dinoId2 中 dinoId2=0 被 `||''` 吞尾 0（0||''=''），
-  // 而 st.dinoId 是 lbDidK 键（空补 0）→ 蛋(dinoId2=0)已追踪仍不匹配 → 顶卡错误显示"追踪"而非"停止"
-  var isTarget = !!(r && st && st.tracking && st.server === abbr && String(st.dinoId||'') === lbDidK(r));
+  var isTarget = !!(r && st && st.tracking && st.server === abbr && String(st.dinoId||'') === String(r.dinoId1||'')+'_'+String(r.dinoId2||''));
   if(isTarget){
     var hb = '';
     if(st.from === 'nearest'){

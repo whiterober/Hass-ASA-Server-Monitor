@@ -383,7 +383,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260905-810';
+var LB_VERSION = 'v20260905-809';
 // ====== PWA：Service Worker 注册（2026-08-29，配合 manifest 使移动端 Edge/Chrome 可安装为应用） ======
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function(){
@@ -11390,9 +11390,7 @@ function lbOpenDistSel(server, id1, id2){
 // v766-C：分布地图顶卡按钮组（模式化）——r=当前追踪目标 → 控制组（nearest=切换+停止 / card=仅停止）；否则 [▶ 追踪]
 function lbWildTopBtnHtml(abbr, idx, r){
   var st = LB._trackState;
-  // v810：isTarget 用 lbDidK 统一键比较——原裸拼接 dinoId1+'_'+dinoId2 中 dinoId2=0 被 `||''` 吞尾 0（0||''=''），
-  // 而 st.dinoId 是 lbDidK 键（空补 0）→ 蛋(dinoId2=0)已追踪仍不匹配 → 顶卡错误显示"追踪"而非"停止"
-  var isTarget = !!(r && st && st.tracking && st.server === abbr && String(st.dinoId||'') === lbDidK(r));
+  var isTarget = !!(r && st && st.tracking && st.server === abbr && String(st.dinoId||'') === String(r.dinoId1||'')+'_'+String(r.dinoId2||''));
   if(isTarget){
     var hb = '';
     if(st.from === 'nearest'){

@@ -383,7 +383,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260905-810';
+var LB_VERSION = 'v20260905-807';
 // ====== PWA：Service Worker 注册（2026-08-29，配合 manifest 使移动端 Edge/Chrome 可安装为应用） ======
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function(){
@@ -9720,17 +9720,8 @@ async function lbTrackWildFrom(server, idx, ev, dinoData){
       lbToast('您当前在 '+LB.servName(playerSrv)+'，该龙在 '+LB.servName(server)+'，无法追踪');
       return;
     }
-    // v809：蛋目标 → 坐标打点 TrackLocation（蛋不是龙，TrackDino/ArkGetDino 均查不到 → 打点失败）；蛋有静态 x/y/z 坐标直接打点
-    var _eggD2 = false;
-    if(dino){
-      var _e1v2 = (dino.dinoId1 !== undefined && dino.dinoId1 !== null) ? dino.dinoId1 : dino.id1;
-      _eggD2 = !!(dino._isEgg || dino.containerType==='egg' || dino.containerType==='embryo'
-        || dino.source==='egg' || dino.source==='embryo' || (String(_e1v2||'').indexOf('_') >= 0));
-    }
-    var ok = _eggD2
-      ? await lbTrackLoc(server, Number(dino.x), Number(dino.y), Number(dino.z))
-      : await lbTrackDino(server, dino, false); // v319：found=0=未加载也接受，任务挂起后龙出现自动追踪
-    if(!ok){ lbToast(_eggD2 ? '蛋坐标打点失败（TrackLocation 无响应/后端未更新）' : '追踪失败，请检查服务器/玩家'); return; }
+    var ok = await lbTrackDino(server, dino, false); // v319：found=0=未加载也接受，任务挂起后龙出现自动追踪
+    if(!ok){ lbToast('追踪失败，请检查服务器/玩家'); return; }
     var pos = cur && cur.pos ? cur.pos : null;
     LB._trackState = { tracking:true, server: server, dinoId: targetId, dino: dino, player: LB.playerEos, pos: pos, from:'card' }; // v331：来源=卡片追踪→悬浮按钮仅停止
     // v765-B：卡内追踪成功 → 自动打开分布地图并定位选中该目标
@@ -9748,47 +9739,6 @@ async function lbTrackWildFrom(server, idx, ev, dinoData){
     LB._trackBusy = false;
   }
 }
-// v809：蛋/静态坐标目标打点——POST /api/track_location → 后端 RCON TrackLocation <player> <x> <y> <z>
-// 蛋非龙（TrackDino 查不到 found=0）但有静态坐标 → 直接按坐标打点；清除复用 /api/stop_track_dino（StopTrackDino 同命令）
-async function lbTrackLoc(server, x, y, z){
-  var isNew = (LB_ARCH === 'new');
-  var token = isNew ? 'new' : await lbHaTokenRefresh();
-  if(!token) return false;
-  try{
-    var baseTs = null;
-    try{
-      var b = await fetch(LB_API + '/api/states/sensor.track_dino_status', { headers: isNew ? {} : { 'Authorization': 'Bearer ' + token } });
-      if(b.ok){ var bj = await b.json(); var ba = bj.attributes || {}; if(ba.server === server) baseTs = ba.ts; }
-    }catch(e){}
-    var ac = new AbortController();
-    var _t = setTimeout(function(){ try{ ac.abort(); }catch(e){} }, 20000);
-    var res;
-    try{
-      res = await fetch(LB_API + '/api/track_location', {
-        method:'POST', signal: ac.signal,
-        headers: isNew ? {'Content-Type':'application/json'} : {'Authorization':'Bearer '+token, 'Content-Type':'application/json'},
-        body: JSON.stringify({server: server, player: LB.playerEos, x: String(Math.round(Number(x)||0)), y: String(Math.round(Number(y)||0)), z: String(Math.round(Number(z)||0))})
-      });
-    }catch(e){ return false; }
-    finally{ clearTimeout(_t); }
-    if(!res.ok) return false;
-    var deadline = Date.now() + 12000;
-    while(Date.now() < deadline){
-      await new Promise(function(r){ setTimeout(r, 300); });
-      try{
-        var st = await fetch(LB_API + '/api/states/sensor.track_dino_status', { headers: isNew ? {} : { 'Authorization': 'Bearer ' + token } });
-        if(st.ok){
-          var obj = await st.json();
-          var attrs = obj.attributes || {};
-          if(attrs.server === server && attrs.ts !== baseTs){
-            return !!attrs.ok;
-          }
-        }
-      }catch(e){}
-    }
-    return false;
-  }catch(e){ return false; }
-}
 // v304：野生卡片追踪按钮文案（共用状态判断；idx 对应 _breedCands）
 // v333：卡片追踪按钮静态化——永远显示「追踪」（不随追踪状态变「取消追踪」）；停止/取消统一走悬浮按钮
 function lbTrackWildBtnLabel(server, idx){
@@ -9805,16 +9755,7 @@ function lbStartTrackPoll(){
     var st = LB._trackState;
     if(!st.server || !st.dinoId) return;
     // v807：蛋目标不做死亡检测——蛋不会死亡（追踪蛋=定位后去偷，偷完手动停）；TrackDino 对蛋 found=0 曾每轮累积误判"已死亡"
-    // v808：蛋判定补 dinoId1 组合串特征——追踪按钮内联 _wj 不含 _isEgg，仅 _isEgg 判据漏判（蛋 dinoId1='a_b' 组合串、成年/未成年龙为纯数字）
-    var _isEggT = false;
-    if(st.dino){
-      var _id1v = (st.dino.dinoId1 !== undefined && st.dino.dinoId1 !== null) ? st.dino.dinoId1 : st.dino.id1;
-      _isEggT = !!(st.dino._isEgg || st.dino.containerType==='egg' || st.dino.containerType==='embryo'
-        || st.dino.source==='egg' || st.dino.source==='embryo' || (String(_id1v||'').indexOf('_') >= 0));
-    } else {
-      _isEggT = String(st.dinoId||'').split('_').length >= 3;
-    }
-    if(_isEggT) return;
+    if(st.dino && st.dino._isEgg) return;
     LB._trackPollBusy = true; // v336：轮询用独立 busy，不再占用 _trackBusy 操作锁
     (async function(){
       try{
@@ -11390,9 +11331,7 @@ function lbOpenDistSel(server, id1, id2){
 // v766-C：分布地图顶卡按钮组（模式化）——r=当前追踪目标 → 控制组（nearest=切换+停止 / card=仅停止）；否则 [▶ 追踪]
 function lbWildTopBtnHtml(abbr, idx, r){
   var st = LB._trackState;
-  // v810：isTarget 用 lbDidK 统一键比较——原裸拼接 dinoId1+'_'+dinoId2 中 dinoId2=0 被 `||''` 吞尾 0（0||''=''），
-  // 而 st.dinoId 是 lbDidK 键（空补 0）→ 蛋(dinoId2=0)已追踪仍不匹配 → 顶卡错误显示"追踪"而非"停止"
-  var isTarget = !!(r && st && st.tracking && st.server === abbr && String(st.dinoId||'') === lbDidK(r));
+  var isTarget = !!(r && st && st.tracking && st.server === abbr && String(st.dinoId||'') === String(r.dinoId1||'')+'_'+String(r.dinoId2||''));
   if(isTarget){
     var hb = '';
     if(st.from === 'nearest'){

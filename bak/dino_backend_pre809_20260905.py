@@ -116,7 +116,6 @@ SERVER_THEMES = {
 CMD_TAMED = 'TransferIdentityFix.ArkTamedDinos'
 CMD_WILD = 'TransferIdentityFix.WildDinos'
 CMD_TRACK = 'TransferIdentityFix.TrackDino'
-CMD_TRACK_LOC = 'TransferIdentityFix.TrackLocation'  # v809：坐标打点（蛋/静态目标）
 CMD_STOP_TRACK = 'TransferIdentityFix.StopTrackDino'
 CMD_PLAYER_POS = 'TransferIdentityFix.PlayerPos'
 CMD_GET_DINO = 'TransferIdentityFix.ArkGetDino'
@@ -650,28 +649,6 @@ def track_dino(server, player, dino1, dino2):
          'dino': '%s_%s' % (dino1, dino2), 'found': found, 'error': err,
          'result': str(result)[:200], 'ts': str(datetime.now())}
     mem_status('sensor.track_dino_status', 'ok' if ok else 'error', r)
-    return r
-
-
-# v809：坐标打点（蛋/静态目标）——RCON TrackLocation <player> <x> <y> <z>；蛋非龙 TrackDino 查不到，改按坐标打点；清除复用 StopTrackDino
-def track_location(server, player, x, y, z):
-    port = SERVERS.get(server)
-    if not port:
-        return {'ok': False, 'server': server, 'error': 'unknown server'}
-    try:
-        success, result = _rcon_str(port, '%s %s %s %s %s' % (CMD_TRACK_LOC, player, x, y, z or 0))
-    except Exception as e:
-        return {'ok': False, 'server': server, 'player': player, 'error': str(e)}
-    ok = False
-    if success and result:
-        try:
-            j = json.loads(result)
-            ok = bool(j.get('ok'))
-        except Exception:
-            ok = True
-    r = {'ok': ok, 'server': server, 'player': player, 'loc': '%s,%s,%s' % (x, y, z or 0),
-         'result': str(result)[:200], 'ts': str(datetime.now())}
-    mem_status('sensor.track_dino_status', 'ok' if ok else 'error', r)  # 复用 track_dino_status 供前端轮询（ts 变化即本次结果）
     return r
 
 
@@ -1211,16 +1188,6 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(400, {'ok': False, 'error': 'missing args'})
                 return
             self._send(200, track_dino(server, player, d1, d2))
-        elif path.endswith('track_location'):  # v809：坐标打点（蛋/静态目标）
-            server = g('server')
-            player = g('player')
-            x = g('x')
-            y = g('y')
-            z = g('z')
-            if not (server and player and x is not None and y is not None):
-                self._send(400, {'ok': False, 'error': 'missing args'})
-                return
-            self._send(200, track_location(server, player, x, y, z))
         elif path.endswith('get_dino'):
             server = g('server')
             d1 = g('dino1')

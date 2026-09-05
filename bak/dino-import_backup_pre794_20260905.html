@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"> <!-- v801：禁移动端整页缩放（分布地图已 touch-action:none） -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <!-- PWA 声明（2026-08-29）：移动端可安装为应用 -->
 <meta name="theme-color" content="#7c3aed">
 <link rel="manifest" href="/manifest.webmanifest">
@@ -383,7 +383,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260905-810';
+var LB_VERSION = 'v20260905-793';
 // ====== PWA：Service Worker 注册（2026-08-29，配合 manifest 使移动端 Edge/Chrome 可安装为应用） ======
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function(){
@@ -5716,9 +5716,8 @@ function lbRenderView(data, player, classFilter){
 
   // ===== 分块渲染（避免一次性生成+插入 7k+ 卡片卡死 UI；每次渲染先给「⏳ 渲染中」反馈）=====
   var plan=[], total=0, tabLabel='';
-  var _colN = lbColCount(); // v797：≥1180 三列 / 860~1179 两列 / <860 一列（主列表与聚落同源 lbColCount）
-  var _isPC = _colN > 1;
-  var _colOpen = '<div class="lb-cards-masonry" style="column-count:'+_colN+';column-gap:6px">', _colClose = '</div>'; // 瀑布流容器（卡间距沿用各自原始 margin，仅列间距 6px）
+  var _isPC = (window.innerWidth||document.documentElement.clientWidth) > 860; // v772：PC 瀑布流开关（>860 双列）
+  var _colOpen = '<div class="lb-cards-masonry" style="column-count:2;column-gap:6px">', _colClose = '</div>'; // v772：瀑布流容器（卡间距沿用各自原始 margin，仅列间距 6px）
   function lbPushPlan(sumHtml, recs, emptyCnt, extraHtml){ // v774：容器由渲染层状态机统一管理，此处仅存结构标记
     if(sumHtml) plan.push({t:'sum', html:sumHtml});
     if(extraHtml) plan.push({t:'raw', html:extraHtml});
@@ -6986,14 +6985,14 @@ function lbBuildSettleContainerHtml(grp, settleKey){
       +'<span class="acc-sum-name">'+lbContainerLabel(cg[0])+'</span>'
       +'<span class="acc-cnt">'+fullH+v6H+scnMark+sepH+emptyH+'</span></summary>';
     h+=sumHtml;
-    // v780：容器内卡流（基因枪/生物卡）瀑布流（与主列表同源 lbColCount；空球行/空容器提示保持通栏）
-    var _colN2 = lbColCount(); // v797：≥1180 三列 / 860~1179 两列 / <860 一列
+    // v780：容器内卡流（基因枪/生物卡）PC>860 两列瀑布流（与主列表 .lb-cards-masonry 同口径；空球行/空容器提示保持通栏）
+    var _isPCw = (window.innerWidth||document.documentElement.clientWidth) > 860;
     var _inner = scnHtml + neArr.map(function(r){
       var idx = -1;
       if(scattered){ LB._settleBioMap.push(r); idx = LB._settleBioMap.length - 1; }
       return lbDinoHTML(r, {mapIdx: idx});
     }).join('');
-    if(_colN2 > 1 && _inner) h += '<div class="lb-cards-masonry" style="column-count:'+_colN2+';column-gap:6px">'+_inner+'</div>';
+    if(_isPCw && _inner) h += '<div class="lb-cards-masonry" style="column-count:2;column-gap:6px">'+_inner+'</div>';
     else h += _inner;
     if(ecnt>0) h+=lbEmptyRowHtml(ecnt);
     else if(isEmptyFacility) h+='<div style="display:flex;align-items:center;background:#15151f;border:1px dashed #333;border-radius:8px;padding:8px 12px;margin:8px 0;font-size:12px;color:#888">🧊 空容器（无低温仓球）</div>';
@@ -9545,7 +9544,7 @@ async function lbFindPlayerPosInner(){
   }));
   for(var i=0;i<results.length;i++){
     var pos = results[i];
-    if(pos){ LB._posTs = Date.now(); try{ localStorage.setItem(_lkey, pos.server); }catch(e){} return pos; } // v806：记录玩家位置新鲜时间（供 LOST 复用判断）
+    if(pos){ try{ localStorage.setItem(_lkey, pos.server); }catch(e){} return pos; }
   }
   return null;
 }
@@ -9588,13 +9587,6 @@ async function lbTrackDino(server, dino, requireFound, timeoutMs, wantDetail){ /
   // v304：兼容 dinoId1/dinoId2（_breedCands 包装的 rec）与 id1/id2（_wildCache 原始）
   var _id1 = (dino.dinoId1 !== undefined && dino.dinoId1 !== null) ? dino.dinoId1 : dino.id1;
   var _id2 = (dino.dinoId2 !== undefined && dino.dinoId2 !== null) ? dino.dinoId2 : dino.id2;
-  // v796：蛋 dinoId1 常为 'a_b' 组合串（dinoId2 空/0）→ RCON TrackDino <player> <dino1> <dino2> 需单段数字，发前拆成两段
-  // v805：拆分条件改为「dinoId1 含 '_' 即拆」——v796 原条件 `含'_' 且 dinoId2===null` 有回归：
-  // 蛋 rec 经 _breedCands 包装后 dinoId2 被补成 0（非 null）→ 不拆分 → RCON 收到组合串 → 追踪失败
-  _id1 = String(_id1);
-  _id2 = (_id2 === undefined || _id2 === null || String(_id2) === '') ? null : String(_id2);
-  if(_id1.indexOf('_') >= 0){ var _pi = _id1.indexOf('_'); _id2 = _id1.slice(_pi+1); _id1 = _id1.slice(0, _pi); }
-  else if(_id2 === null){ _id2 = '0'; }
   try{
     var baseTs = null;
     try{
@@ -9694,7 +9686,7 @@ async function lbTrackWildFrom(server, idx, ev, dinoData){
   if(!dino){ lbToast('数据未就绪'); return; }
   if(!LB.playerEos){ lbToast('请先登录（需要玩家 EOSID）'); return; }
   if(LB._trackBusy){ lbToast('追踪处理中，请稍候…'); return; }
-  var targetId = lbDidK(dino); // v796：统一键（蛋 dinoId2=0 不再被 || 塌成 undefined → targetId='xxx_undefined' 导致追踪状态/地图匹配错乱）
+  var targetId = String(dino.dinoId1 || dino.id1)+'_'+String(dino.dinoId2 || dino.id2);
   var cur = LB._trackState;
   // 正在追踪同一条 → 取消
   if(cur && cur.tracking && cur.server === server && cur.dinoId === targetId){
@@ -9720,17 +9712,8 @@ async function lbTrackWildFrom(server, idx, ev, dinoData){
       lbToast('您当前在 '+LB.servName(playerSrv)+'，该龙在 '+LB.servName(server)+'，无法追踪');
       return;
     }
-    // v809：蛋目标 → 坐标打点 TrackLocation（蛋不是龙，TrackDino/ArkGetDino 均查不到 → 打点失败）；蛋有静态 x/y/z 坐标直接打点
-    var _eggD2 = false;
-    if(dino){
-      var _e1v2 = (dino.dinoId1 !== undefined && dino.dinoId1 !== null) ? dino.dinoId1 : dino.id1;
-      _eggD2 = !!(dino._isEgg || dino.containerType==='egg' || dino.containerType==='embryo'
-        || dino.source==='egg' || dino.source==='embryo' || (String(_e1v2||'').indexOf('_') >= 0));
-    }
-    var ok = _eggD2
-      ? await lbTrackLoc(server, Number(dino.x), Number(dino.y), Number(dino.z))
-      : await lbTrackDino(server, dino, false); // v319：found=0=未加载也接受，任务挂起后龙出现自动追踪
-    if(!ok){ lbToast(_eggD2 ? '蛋坐标打点失败（TrackLocation 无响应/后端未更新）' : '追踪失败，请检查服务器/玩家'); return; }
+    var ok = await lbTrackDino(server, dino, false); // v319：found=0=未加载也接受，任务挂起后龙出现自动追踪
+    if(!ok){ lbToast('追踪失败，请检查服务器/玩家'); return; }
     var pos = cur && cur.pos ? cur.pos : null;
     LB._trackState = { tracking:true, server: server, dinoId: targetId, dino: dino, player: LB.playerEos, pos: pos, from:'card' }; // v331：来源=卡片追踪→悬浮按钮仅停止
     // v765-B：卡内追踪成功 → 自动打开分布地图并定位选中该目标
@@ -9748,47 +9731,6 @@ async function lbTrackWildFrom(server, idx, ev, dinoData){
     LB._trackBusy = false;
   }
 }
-// v809：蛋/静态坐标目标打点——POST /api/track_location → 后端 RCON TrackLocation <player> <x> <y> <z>
-// 蛋非龙（TrackDino 查不到 found=0）但有静态坐标 → 直接按坐标打点；清除复用 /api/stop_track_dino（StopTrackDino 同命令）
-async function lbTrackLoc(server, x, y, z){
-  var isNew = (LB_ARCH === 'new');
-  var token = isNew ? 'new' : await lbHaTokenRefresh();
-  if(!token) return false;
-  try{
-    var baseTs = null;
-    try{
-      var b = await fetch(LB_API + '/api/states/sensor.track_dino_status', { headers: isNew ? {} : { 'Authorization': 'Bearer ' + token } });
-      if(b.ok){ var bj = await b.json(); var ba = bj.attributes || {}; if(ba.server === server) baseTs = ba.ts; }
-    }catch(e){}
-    var ac = new AbortController();
-    var _t = setTimeout(function(){ try{ ac.abort(); }catch(e){} }, 20000);
-    var res;
-    try{
-      res = await fetch(LB_API + '/api/track_location', {
-        method:'POST', signal: ac.signal,
-        headers: isNew ? {'Content-Type':'application/json'} : {'Authorization':'Bearer '+token, 'Content-Type':'application/json'},
-        body: JSON.stringify({server: server, player: LB.playerEos, x: String(Math.round(Number(x)||0)), y: String(Math.round(Number(y)||0)), z: String(Math.round(Number(z)||0))})
-      });
-    }catch(e){ return false; }
-    finally{ clearTimeout(_t); }
-    if(!res.ok) return false;
-    var deadline = Date.now() + 12000;
-    while(Date.now() < deadline){
-      await new Promise(function(r){ setTimeout(r, 300); });
-      try{
-        var st = await fetch(LB_API + '/api/states/sensor.track_dino_status', { headers: isNew ? {} : { 'Authorization': 'Bearer ' + token } });
-        if(st.ok){
-          var obj = await st.json();
-          var attrs = obj.attributes || {};
-          if(attrs.server === server && attrs.ts !== baseTs){
-            return !!attrs.ok;
-          }
-        }
-      }catch(e){}
-    }
-    return false;
-  }catch(e){ return false; }
-}
 // v304：野生卡片追踪按钮文案（共用状态判断；idx 对应 _breedCands）
 // v333：卡片追踪按钮静态化——永远显示「追踪」（不随追踪状态变「取消追踪」）；停止/取消统一走悬浮按钮
 function lbTrackWildBtnLabel(server, idx){
@@ -9804,42 +9746,28 @@ function lbStartTrackPoll(){
     if(LB._trackPollBusy) return; // v336：上一轮检测未完成，跳过（独立标志）
     var st = LB._trackState;
     if(!st.server || !st.dinoId) return;
-    // v807：蛋目标不做死亡检测——蛋不会死亡（追踪蛋=定位后去偷，偷完手动停）；TrackDino 对蛋 found=0 曾每轮累积误判"已死亡"
-    // v808：蛋判定补 dinoId1 组合串特征——追踪按钮内联 _wj 不含 _isEgg，仅 _isEgg 判据漏判（蛋 dinoId1='a_b' 组合串、成年/未成年龙为纯数字）
-    var _isEggT = false;
-    if(st.dino){
-      var _id1v = (st.dino.dinoId1 !== undefined && st.dino.dinoId1 !== null) ? st.dino.dinoId1 : st.dino.id1;
-      _isEggT = !!(st.dino._isEgg || st.dino.containerType==='egg' || st.dino.containerType==='embryo'
-        || st.dino.source==='egg' || st.dino.source==='embryo' || (String(_id1v||'').indexOf('_') >= 0));
-    } else {
-      _isEggT = String(st.dinoId||'').split('_').length >= 3;
-    }
-    if(_isEggT) return;
     LB._trackPollBusy = true; // v336：轮询用独立 busy，不再占用 _trackBusy 操作锁
     (async function(){
       try{
         // 重新追踪同一目标：RCON TrackDino 实时返回 found（v780：lbTrackDino detail 模式返回 {ok,found}；null=超时/网络失败）
         // v335：轮询用 3s 短超时——RCON 无响应快速失败，避免 _trackBusy 长时间占用导致切换按钮「追踪处理中」
         // v780：区分「未加载挂起(ok=1 found=0)」与「真死亡/超时」——切换后新目标未加载不再连续误判死亡掉追踪
-        var dr = await lbTrackDino(st.server, st.dino, undefined, 1500, true); // v806：轮询超时 3s→1.5s（TrackDino RCON 正常 <1s，超时更快判 null）
+        var dr = await lbTrackDino(st.server, st.dino, undefined, 3000, true);
         if(dr && dr.ok && dr.found){
           LB._trackMiss = 0; // 目标仍在，重置连续失败计数
           // v349：被驯服检测——TrackDino found=1 不区分野生/驯服（已驯服龙同样返回 found=1）；
           // ArkGetDino 单只实时查询：tribeId>0 = 已被驯服 → 按目标丢失处理（单只 RCON 极轻量，替换 v348 recs 快照）
-          // v806：驯服检测降频——原每轮都查 ArkGetDino(4s) 拉长单轮周期拖慢死亡响应；改每 3 轮查一次（察觉驯服晚 ~3-5s 可接受）
-          LB._tameChk = ((LB._tameChk || 0) + 1) % 3;
-          if(LB._tameChk === 0){
-            var still = await lbCheckTargetTamed(st);
-            if(still){
-              lbHandleTrackLost(st, '已被驯服');
-              return;
-            }
+          // 2026-08-28 修复：lbCheckTargetTamed 返回 true=已被驯服，此前 !still 条件反了导致野生龙被误报"已被驯服"（用户反馈追踪最近一直误切）
+          var still = await lbCheckTargetTamed(st);
+          if(still){
+            lbHandleTrackLost(st, '已被驯服');
+            return;
           }
           return;
         }
         // ok=1 found=0：目标未加载（挂起，切换后常见）或真死亡。切换宽容窗口（8s）内视为挂起，不计死亡
         if(dr && dr.ok && !dr.found){
-          if(LB._trackSwitchAt && (Date.now() - LB._trackSwitchAt) < 3500){ lbDiag('POLL hang(ok,f0) 窗口内跳过 did='+st.dinoId); return; } // v780：切换宽容窗口；v806：8s→3.5s（新目标加载一般 <2s，缩短白等）
+          if(LB._trackSwitchAt && (Date.now() - LB._trackSwitchAt) < 8000){ lbDiag('POLL hang(ok,f0) 窗口内跳过 did='+st.dinoId); return; } // v780：切换宽容窗口
           LB._trackMiss = (LB._trackMiss || 0) + 1;
           lbDiag('POLL ok-f0 miss='+LB._trackMiss+' did='+st.dinoId);
           if(LB._trackMiss < 2) return;
@@ -9857,7 +9785,7 @@ function lbStartTrackPoll(){
       }catch(e){}
       finally{ LB._trackPollBusy = false; } // v336
     })();
-  }, 1000); // v316：检测周期 15s→2s；v806：2s→1s（配合 1.5s 轮询超时，死亡检测更快）
+  }, 2000); // v316：检测周期 15s → 2s
 }
 // v347：目标丢失统一处理（死亡 / 被驯服共用）——单追踪(card)直接停止；追踪最近(nearest)自动切下一只
 async function lbHandleTrackLost(st, reason){
@@ -9866,23 +9794,13 @@ async function lbHandleTrackLost(st, reason){
   if(cls2) LB.curClass = cls2; // v315：确保 lbNearestWild 用对物种（野生卡片追踪时 curClass 可能为空）
   // 2026-08-29 修复：card 分支也先确认玩家在线——玩家下线时 TrackDino found=0 连续 2 次会被误判"目标已死亡"，
   // 实际是玩家不在线（RCON TrackDino 找不到玩家也返回 found=0）。先查玩家位置，不在线报"玩家可能已下线"而非"已死亡"。
-  // v807：回滚 v806「复用 st.pos」——st.pos 冻结导致自动切换后地图玩家位置不更新；恢复实时查询，
-  // 单服（st.server）快速查优先（玩家追踪中应在该服），查不到（下线/传服）再全服兜底+重试
-  var pos = null;
-  if(st.server){
-    try{ pos = await lbQueryPlayerPos(st.server, (LB_ARCH==='new') ? 'new' : null, LB.playerEos || st.player); }catch(e){ pos = null; }
-    if(pos){ lbDiag('LOST pos 单服查到 srv='+pos.server); LB._posTs = Date.now(); } // v781 埋点
-  }
+  var pos = await lbFindPlayerPos();
   if(!pos){
+    // v780：玩家位置查询偶发失败（切换后 RCON 忙）先重试 1 次，仍失败才判定下线停止——防误杀正在追踪的会话（误判下线→stop 是掉追踪主因之一）
+    await new Promise(function(r){ setTimeout(r, 1200); });
     pos = await lbFindPlayerPos();
-    if(!pos){
-      // v780：玩家位置查询偶发失败（切换后 RCON 忙）先重试 1 次，仍失败才判定下线停止——防误杀正在追踪的会话（误判下线→stop 是掉追踪主因之一）
-      await new Promise(function(r){ setTimeout(r, 1200); });
-      pos = await lbFindPlayerPos();
-      if(pos) lbDiag('LOST pos 全服重试成功 srv='+pos.server); else lbDiag('LOST pos 重试仍失败 → 判定下线停止'); // v781 埋点
-    } else lbDiag('LOST pos 全服一次查到 srv='+pos.server); // v781 埋点
-    if(pos){ LB._posTs = Date.now(); } // 记录玩家位置新鲜时间
-  }
+    if(pos) lbDiag('LOST pos 重试成功 srv='+pos.server); else lbDiag('LOST pos 重试仍失败 → 判定下线停止'); // v781 埋点
+  } else lbDiag('LOST pos 一次查到 srv='+pos.server); // v781 埋点
   if(!pos){ lbToast('未找到玩家位置（玩家可能已下线），已停止追踪'); lbTrackStop(true); return; }
   // v345：单追踪（卡片指定）目标丢失 → 直接停止，不自动切换（用户指定追踪这一只，死了就停）
   if(st.from === 'card'){
@@ -9890,7 +9808,8 @@ async function lbHandleTrackLost(st, reason){
     lbTrackStop(true);
     return;
   }
-  // v338：nearest 分支切换前已确认玩家位置（复用或实时查询），此时玩家在线，正常自动切换
+  // v338：nearest 分支切换前已重新确认玩家在线（上面统一查了），此时玩家在线，正常自动切换
+  if(!pos){ lbToast('未找到玩家位置（玩家可能已下线），已停止追踪'); lbTrackStop(true); return; }
   // v318：从缓存剔除已死亡目标，避免来回切（A↔B 反复）
   var wc3 = LB._wildCache && LB._wildCache[cls2];
   if(wc3 && wc3[st.server] && Array.isArray(wc3[st.server].dinos)){
@@ -10587,7 +10506,7 @@ function lbRenderBreedResult(){
     var _isTrk = (_trkLbl === '取消追踪');
     var _trkBg = _isTrk ? '#f59e0b' : '#22c55e';
     var _trkIcon = _isTrk ? lbMdiSvg('mdi-stop', 11) : lbMdiSvg('mdi-play', 11);
-    return '<div class="lb-breed-card" onclick="lbOpenDistSel(\''+it.server+'\',\''+lbAttr(String(w.dinoId1||w.id1||0))+'\',\''+lbAttr(String(w.dinoId2||w.id2||0))+'\')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:6px 10px;margin-bottom:6px;font-size:12px">' // v765-F：野生最高卡主体点击 → 直接打开分布地图并选中该点（v795：id 包字符串引号——蛋 dinoId1 含下划线组合串，无引号会被 JS 数字分隔符解析错）
+    return '<div class="lb-breed-card" onclick="lbOpenDistSel(\''+it.server+'\','+(w.dinoId1||w.id1||0)+','+(w.dinoId2||w.id2||0)+')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:6px 10px;margin-bottom:6px;font-size:12px">' // v765-F：野生最高卡主体点击 → 直接打开分布地图并选中该点（替代单点浮窗）
       +'<div style="min-width:0">'+lbSexSvg(w.gender, 13, w.gender==='FEMALE'?'#f472b6':'#60a5fa')+(it.isEgg?'':' <b style="color:#fff">野生</b>')+' <span style="background:#22223a;border-radius:2px;padding:0 6px;color:#ccc">Lv.'+w.level+'</span>'+_tagHtml+lbGrowthBadgeHtml(w) // v511：未成年显示阶段徽章；v648：性别 SVG
       +'<br>'+attrHtml
       +gtHtml
@@ -10696,7 +10615,7 @@ function lbRenderBreedResult(){
         var _isTrk2 = (_trkLbl2 === '取消追踪');
         var _trkBg2 = _isTrk2 ? '#f59e0b' : '#22c55e';
         var _trkIcon2 = _isTrk2 ? lbMdiSvg('mdi-stop', 11) : lbMdiSvg('mdi-play', 11);
-        return '<div class="lb-breed-card" onclick="lbOpenDistSel(\''+x.server+'\',\''+lbAttr(String(w.dinoId1||w.id1||0))+'\',\''+lbAttr(String(w.dinoId2||w.id2||0))+'\')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:6px 10px;margin-bottom:6px;font-size:12px">' // v765-F：野生基因冠军(含蛋)卡主体点击 → 打开分布地图并选中该点（v795：id 包字符串引号）
+        return '<div class="lb-breed-card" onclick="lbOpenDistSel(\''+x.server+'\','+(w.dinoId1||w.id1||0)+','+(w.dinoId2||w.id2||0)+')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:6px 10px;margin-bottom:6px;font-size:12px">' // v765-F：野生基因冠军(含蛋)卡主体点击 → 打开分布地图并选中该点
           +'<div style="min-width:0">'+lbSexSvg(w.gender, 13, w.gender==='FEMALE'?'#f472b6':'#60a5fa')+(x.isEgg?'':' <b style="color:#fff">野生</b>')+' <span style="background:#22223a;border-radius:2px;padding:0 6px;color:#ccc">Lv.'+w.level+'</span>'+(x.isEgg?' <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:#f59e0b22;color:#f59e0b;border:1px solid #f59e0b44;vertical-align:1px">野生蛋</span>':'')+lbGrowthBadgeHtml(w) // v757：蛋徽章统一移到 Lv 右侧（对齐 wildChampRow/自家蛋 card：Lv→徽章；非蛋「野生」粗体保持 Lv 前）；v511/v648/v649
           +gtHtml
           +'</div>'
@@ -10867,19 +10786,6 @@ function lbBreedAlignResult(){
 }
 // 窗口尺寸变化（含移动端地址栏收起/旋转）时重新对齐结果浮层
 window.addEventListener('resize', function(){ lbBreedAlignResult(); });
-// v799：窗口尺寸变化 → 已渲染的瀑布流容器自动切换列数（CSS columns 改 column-count 即自动重排，无需重渲染列表）
-var _lbColTimer = null;
-window.addEventListener('resize', function(){
-  if(_lbColTimer) return;
-  _lbColTimer = setTimeout(function(){
-    _lbColTimer = null;
-    try{
-      var _cn = lbColCount();
-      var _cs = document.querySelectorAll('.lb-cards-masonry');
-      for(var _i=0;_i<_cs.length;_i++){ _cs[_i].style.columnCount = String(_cn); }
-    }catch(e){}
-  }, 150);
-});
 // ===== 搜ID（v109）：右上角搜ID输入框 → 匹配 dinoId1/dinoId2 → 弹生物卡片（含归属标签）=====
 // 我的归属标签（橙色）：地图 + 容器标签 + 聚落（v113 从繁育列表提升为顶层共用）
 function lbOwnerTagMy(r){
@@ -11007,110 +10913,6 @@ function lbZHeat(z, lo, hi){
   if(t < 0) t = 0; if(t > 1) t = 1;
   return 'hsl(' + (40 + t * 15).toFixed(1) + ',85%,' + (35 + t * 45).toFixed(1) + '%)';
 }
-// v794：dinoId 统一匹配键（data-wid/反查/顶卡/OpenSel 共用）——dinoId2 空按 0 处理，避免蛋 id2=0 被 ||'' 吞尾 0 导致匹配不上（2026-09-05 实锤：data-wid='x_0' vs 反查键='x_'）
-function lbDidK(d){
-  var _a = d ? (d.dinoId1 != null && d.dinoId1 !== '' ? d.dinoId1 : (d.id1 != null && d.id1 !== '' ? d.id1 : 0)) : 0;
-  var _b = d ? (d.dinoId2 != null && d.dinoId2 !== '' ? d.dinoId2 : (d.id2 != null && d.id2 !== '' ? d.id2 : 0)) : 0;
-  return String(_a) + '_' + String(_b);
-}
-// v798：分布地图局部缩放/平移——每张地图一个视口 .lb-map-vp，内含 .lb-map-zoom（translate+scale）；点位反向 scale(1/z) 保持 8px 恒定；
-// 交互：滚轮（光标为中心 1~10×）、拖拽平移（z>1）、双击还原/2×、移动端双指捏合+单指拖拽
-function lbZoomBind(vp){
-  if(!vp || vp._lbz) return;
-  var st = {z:1, tx:0, ty:0, moved:false};
-  vp._lbz = st;
-  var zoom = vp.querySelector('.lb-map-zoom');
-  if(!zoom) return;
-  function applyZ(){
-    zoom.style.transform = 'translate('+st.tx+'px,'+st.ty+'px) scale('+st.z+')';
-    var inv = 1 / st.z;
-    var ds = zoom.querySelectorAll('[data-wp]');
-    for(var i=0;i<ds.length;i++){ ds[i].style.transform = 'translate(-50%,-50%) scale('+inv.toFixed(4)+')'; } // 点位反向缩放，视觉恒定 8px
-    // v802：SVG 起点/当前标记（data-rt）围绕自身圆心反向缩放 → 缩放时标记视觉大小恒定
-    var _w = zoom.clientWidth || vp.clientWidth, _h = zoom.clientHeight || vp.clientHeight;
-    if(_w > 0 && _h > 0){
-      var rt = zoom.querySelectorAll('[data-rt]');
-      for(var j=0;j<rt.length;j++){
-        var _cxp = parseFloat(rt[j].getAttribute('data-cx')) / 100 * _w;
-        var _cyp = parseFloat(rt[j].getAttribute('data-cy')) / 100 * _h;
-        rt[j].setAttribute('transform', 'translate('+_cxp.toFixed(2)+','+_cyp.toFixed(2)+') scale('+inv.toFixed(4)+') translate('+(-_cxp).toFixed(2)+','+(-_cyp).toFixed(2)+')');
-      }
-    }
-    // v803：连线 stroke-width 按 1/z 反算（CSS scale 下 vector-effect 无效）→ 视觉线宽恒定 = data-sw
-    var lns = zoom.querySelectorAll('[data-sw]');
-    for(var k=0;k<lns.length;k++){
-      var _tsw = parseFloat(lns[k].getAttribute('data-sw'));
-      if(_tsw > 0){ lns[k].setAttribute('stroke-width', (_tsw / st.z).toFixed(3)); }
-    }
-  }
-  function clampPan(){
-    var w = vp.clientWidth, h = vp.clientHeight;
-    var mw = w * st.z, mh = h * st.z;
-    if(mw <= w){ st.tx = 0; } else { st.tx = Math.min(0, Math.max(w - mw, st.tx)); }
-    if(mh <= h){ st.ty = 0; } else { st.ty = Math.min(0, Math.max(h - mh, st.ty)); }
-  }
-  function zoomAt(mx, my, nz){
-    if(nz < 1) nz = 1; if(nz > 10) nz = 10; // v801：缩放上限 10×
-    var cx = (mx - st.tx) / st.z, cy = (my - st.ty) / st.z;
-    st.z = nz; st.tx = mx - cx * nz; st.ty = my - cy * nz;
-    clampPan(); applyZ();
-  }
-  vp._lbzApply = applyZ; // v804：暴露 applyZ，供 lbWildDistMap 重建后恢复各服缩放状态（切换/目标消失不再重置 1×）
-  applyZ();
-  // 桌面：滚轮以光标缩放（1~10×）；拖拽平移；双击 2×/还原
-  vp.addEventListener('wheel', function(e){
-    e.preventDefault();
-    var r = vp.getBoundingClientRect();
-    var f = (e.deltaY < 0) ? 1.15 : (1 / 1.15);
-    var nz = Math.min(10, Math.max(1, st.z * f)); // v801：上限 10×
-    if(Math.abs(nz - st.z) < 0.001) return;
-    zoomAt(e.clientX - r.left, e.clientY - r.top, nz);
-  }, {passive:false});
-  var drag = null;
-  vp.addEventListener('mousedown', function(e){
-    if(e.button !== 0 || st.z <= 1.001) return; // z=1 不拖（保留点击选点）
-    drag = {x:e.clientX, y:e.clientY, tx:st.tx, ty:st.ty};
-    st.moved = false;
-    e.preventDefault();
-  });
-  window.addEventListener('mousemove', function(e){
-    if(!drag) return;
-    var dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-    if(Math.abs(dx) + Math.abs(dy) > 3) st.moved = true;
-    st.tx = drag.tx + dx; st.ty = drag.ty + dy;
-    clampPan(); applyZ();
-  });
-  window.addEventListener('mouseup', function(){ drag = null; });
-  vp.addEventListener('click', function(e){ if(st.moved){ e.stopPropagation(); st.moved = false; } }, true); // 拖拽后抑制误触点选
-  vp.addEventListener('dblclick', function(e){
-    var r = vp.getBoundingClientRect();
-    if(st.z > 1.01){ st.z = 1; st.tx = 0; st.ty = 0; clampPan(); applyZ(); return; }
-    zoomAt(e.clientX - r.left, e.clientY - r.top, 2);
-  });
-  // 移动端：单指拖拽（z>1）+ 双指捏合缩放（中心为两指中点）
-  var tp = null;
-  function tmid(t){ return {x:(t[0].clientX + t[1].clientX)/2, y:(t[0].clientY + t[1].clientY)/2}; }
-  function tdist(t){ var dx = t[0].clientX - t[1].clientX, dy = t[0].clientY - t[1].clientY; return Math.sqrt(dx*dx + dy*dy); }
-  vp.addEventListener('touchstart', function(e){
-    if(e.touches.length === 1){ if(st.z > 1.001){ tp = {mode:'drag', x:e.touches[0].clientX, y:e.touches[0].clientY, tx:st.tx, ty:st.ty}; st.moved=false; } }
-    else if(e.touches.length === 2){ var m = tmid(e.touches); tp = {mode:'pinch', d:tdist(e.touches), z:st.z, mx:m.x, my:m.y, tx:st.tx, ty:st.ty}; }
-  }, {passive:true});
-  vp.addEventListener('touchmove', function(e){
-    if(!tp) return;
-    if(tp.mode === 'drag' && e.touches.length === 1){ st.tx = tp.tx + (e.touches[0].clientX - tp.x); st.ty = tp.ty + (e.touches[0].clientY - tp.y); clampPan(); applyZ(); }
-    else if(tp.mode === 'pinch' && e.touches.length >= 2){ var m = tmid(e.touches); var nd = tdist(e.touches); if(tp.d > 0){ var cx = (tp.mx - tp.tx) / tp.z, cy = (tp.my - tp.ty) / tp.z; st.z = Math.min(10, Math.max(1, tp.z * nd / tp.d)); st.tx = m.x - cx * st.z; st.ty = m.y - cy * st.z; clampPan(); applyZ(); } } // v801：双指缩放上限 10×
-  }, {passive:true});
-  vp.addEventListener('touchend', function(){ tp = null; });
-}
-// v798：卡片瀑布流列数（主列表与聚落同源）——≥1980 五列；≥1580 四列；≥1180 三列；860~1179 两列；<860 一列
-function lbColCount(){
-  var _w = window.innerWidth || document.documentElement.clientWidth;
-  if(_w >= 1980) return 5;
-  if(_w >= 1580) return 4;
-  if(_w >= 1180) return 3;
-  if(_w >= 860) return 2;
-  return 1;
-}
 // v790：三类点位统一普通圆（图例与点位 1:1）——成年=海拔填充+白实边；未成年=同圆+右上"黑色缺口"（background 叠黑圆，不用 mask/SVG → 不裁 box-shadow，ring/淡影全部正常）；野生蛋=统一圆+粉描边
 // fill=海拔填充色（点/图例传入同源）；返回不含定位与 box-shadow 的 body 样式串
 function lbMapDotBody(mt, fill){
@@ -11141,20 +10943,6 @@ function lbWildDistMap(){
   var wc = (LB._wildCache && LB._wildCache[cls]) || null;
   if(!wc){ lbToast('无野生数据，请先刷新野生'); return; }
   LB._wildDistOpen = true; // v428：分布遮罩模式（点遮罩不关闭）
-  // v804：重建前记录旧地图状态（当前滚动页 + 各服缩放 z/tx/ty）——切换/目标消失重建后恢复（缩放不重置、不闪回首页）
-  var _oldScrollLeft = 0, _oldZoom = {};
-  var _oldSc0 = document.getElementById('lbWildDistScroll');
-  if(_oldSc0){
-    _oldScrollLeft = _oldSc0.scrollLeft || 0;
-    var _ovp0 = _oldSc0.querySelectorAll('.lb-map-vp');
-    for(var _oi0 = 0; _oi0 < _ovp0.length; _oi0++){
-      try{
-        var _oab0 = _ovp0[_oi0].getAttribute('data-vp');
-        var _oz0 = _ovp0[_oi0]._lbz;
-        if(_oab0 && _oz0 && _oz0.z > 1.001){ _oldZoom[_oab0] = {z:_oz0.z, tx:_oz0.tx, ty:_oz0.ty}; }
-      }catch(e){}
-    }
-  }
   // v783：服集合 = wildCache 有数据的服 ∪ 有该物种野生蛋 rec 的服（纯蛋服也渲染，如只偷蛋无成年刷新的服）
   var pages = [];
   var _allAbbr = Object.keys(wc);
@@ -11267,12 +11055,10 @@ function lbWildDistMap(){
           +'<span style="display:inline-block;'+lbMapDotBody('baby','linear-gradient(90deg,#b45309,#fde047)')+';vertical-align:middle;margin:0 3px 0 10px"></span><span style="vertical-align:middle">未成年</span>'
           +(_cntE?'<span style="display:inline-block;'+lbMapDotBody('egg','linear-gradient(90deg,#b45309,#fde047)')+';vertical-align:middle;margin:0 3px 0 10px"></span><span style="vertical-align:middle">野生蛋</span>':'')
         +'</div>' : '') // v784：点位类型图例与真实点位同源（lbMapDotBody 1:1）
-      + '<div class="lb-map-vp" data-vp="'+abbr+'" style="position:relative;border-radius:10px;overflow:hidden;line-height:0;border:1px solid #2a2a3a;touch-action:none">' // v797：地图缩放视口（滚轮/拖拽/双击/双指缩放平移）；v800：touch-action:none 防移动端整页 pinch 抢走地图缩放
-      + '<div class="lb-map-zoom" style="transform-origin:0 0;transform:translate(0px,0px) scale(1)">'
+      + '<div style="position:relative;border-radius:10px;overflow:hidden;line-height:0;border:1px solid #2a2a3a">'
       + '<img src="'+LB_MAP_BASE+imgName+LB_MAP_EXT+'" style="width:100%;height:auto;display:block">'
       + lbRouteOverlaySvg(abbr, map) // v755-P4b：追踪最近(nearest)且该服顺路 route 存在 → 叠加玩家起点→各目标连线+序号+当前目标高亮
       + dots // v777：点位 DOM 渲染在线路 SVG 之后 → 点位压在线路之上（线路不盖点位；SVG pointer-events:none 不影响点点击）
-      + '</div>'
       + '</div></div>');
   });
   if(!pages.length){ LB._wildDistOpen = false; lbToast('无野生分布数据'); return; }
@@ -11295,22 +11081,6 @@ function lbWildDistMap(){
     + '<button onclick="event.stopPropagation();lbWildDistScrollBy(1)" title="下一张" style="position:fixed;right:0;top:0;bottom:0;width:44px;z-index:20;background:transparent;border:none;padding:0;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:30px;line-height:1;opacity:.5;transition:opacity .15s">›</button>' // v432：热区整页高度；v436：宽度 60→44 更贴边
     + '</div>';
   ov.style.display = 'block';
-  // v797：为每张地图绑定缩放/平移（滚轮/拖拽/双击/双指）
-  var _vpL = body.querySelectorAll('.lb-map-vp');
-  for(var _vi = 0; _vi < _vpL.length; _vi++){ try{ lbZoomBind(_vpL[_vi]); }catch(e){} }
-  // v804：恢复重建前状态——先恢复滚动页（防闪回第一页），再恢复各服缩放（切换/目标消失不再重置 1×）
-  var _nSc0 = document.getElementById('lbWildDistScroll');
-  if(_nSc0 && _oldScrollLeft > 0){ try{ _nSc0.scrollLeft = _oldScrollLeft; }catch(e){} }
-  for(var _vi2 = 0; _vi2 < _vpL.length; _vi2++){
-    try{
-      var _nab2 = _vpL[_vi2].getAttribute('data-vp');
-      var _ozz = _nab2 ? _oldZoom[_nab2] : null;
-      if(_ozz && _vpL[_vi2]._lbz && _vpL[_vi2]._lbzApply){
-        _vpL[_vi2]._lbz.z = _ozz.z; _vpL[_vi2]._lbz.tx = _ozz.tx; _vpL[_vi2]._lbz.ty = _ozz.ty;
-        _vpL[_vi2]._lbzApply();
-      }
-    }catch(e){}
-  }
 }
 // v755-P2b：分布地图点选 → 就地替换该页上方「当前选中卡」（最高卡区）为该龙卡 + 追踪按钮 + 点高亮（不弹浮窗）
 // v775：wid=dinoId 键(abbr:id1_id2) → 优先反查 _breedCands（追踪刷新/列表重建后旧索引漂移仍可精确选中）；高亮非选中点按 data-bs 还原默认阴影（保住黑色外发光）
@@ -11322,18 +11092,17 @@ function lbWildPick(abbr, idx, ev, wid){
     var _key2 = _pp2 >= 0 ? String(wid).slice(_pp2+1) : String(wid);
     for(var _q=0; _q<(LB._breedCands||[]).length; _q++){
       var _cc = LB._breedCands[_q];
-      if(_cc && _cc.server === abbr && lbDidK(_cc) === _key2){ r = _cc; idx = _q; break; } // v794：lbDidK 统一键（蛋 id2=0 尾 0 不再丢失）
+      if(_cc && _cc.server === abbr && String(_cc.dinoId1||'')+'_'+String(_cc.dinoId2||'') === _key2){ r = _cc; idx = _q; break; }
     }
     if(!r && LB._mapCands && LB._mapCands[abbr]){
       // v793：_breedCands 被列表重建清空时，从地图独立候选池按 did 命中（对象引用仍存活）
       for(var _m2=0;_m2<LB._mapCands[abbr].length;_m2++){
         var _cc2 = LB._mapCands[abbr][_m2];
-        if(_cc2 && lbDidK(_cc2) === _key2){ r = _cc2; idx = 0; break; }
+        if(_cc2 && String(_cc2.dinoId1||'')+'_'+String(_cc2.dinoId2||'') === _key2){ r = _cc2; idx = _q = 0; break; }
       }
     }
   }
-  // v794：带 wid 反查失败 → 直接返回不落回 idx（_breedCands 被清/蛋 0 键错位时 idx 可能指向成年 → "点蛋选中成年"）；仅无 wid 的旧调用（lbOpenDistSel 传索引）保留 idx 回退
-  if(!r && !wid) r = (LB._breedCands && LB._breedCands[idx]) || null;
+  if(!r) r = (LB._breedCands && LB._breedCands[idx]) || null;
   if(!r) return;
   var wrap = document.getElementById('lbWildTop_'+abbr);
   if(!wrap) return;
@@ -11344,7 +11113,7 @@ function lbWildPick(abbr, idx, ev, wid){
   // 选中点高亮（其余按 data-bs 还原默认阴影）——v774 起按 dinoId(data-wid) 匹配；v775：非选中点还原 data-bs 而非清空（外发光不丢）
   var sc = document.getElementById('lbWildDistScroll');
   if(sc){
-    var _widT = lbDidK(r); // v794：统一键（蛋 dinoId2=0 尾 0 保留，与 data-wid 一致才能命中高亮）
+    var _widT = String(r.dinoId1||'')+'_'+String(r.dinoId2||'');
     var ds = sc.querySelectorAll('[data-wp="'+abbr+'"]');
     for(var i=0;i<ds.length;i++){
       var el = ds[i];
@@ -11366,7 +11135,7 @@ function lbWildPick(abbr, idx, ev, wid){
 // v765-F/B：打开分布地图并定位选中指定点（server + dinoId1/dinoId2）——野生(蛋)最高卡主体点击、追踪最近/卡内追踪成功复用
 function lbOpenDistSel(server, id1, id2){
   if(!server || !LB.curClass) return;
-  var _que = {server:server, id: lbDidK({dinoId1:id1, dinoId2:id2})}; // v794：统一键（id2=0 不再被吞）
+  var _que = {server:server, id:String(id1||'')+'_'+String(id2||'')};
   lbWildDistMap(); // 同步渲染（重建 _breedCands；可偷蛋物种并入巢蛋点）
   var sc = document.getElementById('lbWildDistScroll');
   if(!sc){ return; }
@@ -11379,7 +11148,7 @@ function lbOpenDistSel(server, id1, id2){
   // 选中目标点（_breedCands 重建后按 server+id 找新索引）
   for(var i=0;i<LB._breedCands.length;i++){
     var c = LB._breedCands[i];
-    if(c.server === server && lbDidK(c) === _que.id){ // v794：统一键
+    if(c.server === server && (String(c.dinoId1||'')+'_'+String(c.dinoId2||''))===_que.id){
       lbWildPick(server, i);
       return;
     }
@@ -11390,9 +11159,7 @@ function lbOpenDistSel(server, id1, id2){
 // v766-C：分布地图顶卡按钮组（模式化）——r=当前追踪目标 → 控制组（nearest=切换+停止 / card=仅停止）；否则 [▶ 追踪]
 function lbWildTopBtnHtml(abbr, idx, r){
   var st = LB._trackState;
-  // v810：isTarget 用 lbDidK 统一键比较——原裸拼接 dinoId1+'_'+dinoId2 中 dinoId2=0 被 `||''` 吞尾 0（0||''=''），
-  // 而 st.dinoId 是 lbDidK 键（空补 0）→ 蛋(dinoId2=0)已追踪仍不匹配 → 顶卡错误显示"追踪"而非"停止"
-  var isTarget = !!(r && st && st.tracking && st.server === abbr && String(st.dinoId||'') === lbDidK(r));
+  var isTarget = !!(r && st && st.tracking && st.server === abbr && String(st.dinoId||'') === String(r.dinoId1||'')+'_'+String(r.dinoId2||''));
   if(isTarget){
     var hb = '';
     if(st.from === 'nearest'){
@@ -11424,7 +11191,7 @@ function lbRouteOverlaySvg(abbr, map){
     if(!isFinite(wx) || !isFinite(wy) || (wx===0 && wy===0)) return;
     var p = lbWorldToPx(wx, wy, map);
     var isCur = !!(curId && curId === String(w.id1||'')+'_'+String(w.id2||''));
-    pts.push({x:p.x, y:p.y, cur:isCur, z:Number(w.z)});
+    pts.push({x:p.x, y:p.y, cur:isCur, seq:i+1, z:Number(w.z)});
   });
   if(pts.length < 2) return '';
   // v765-G：连线海拔带 = 该组点 z min~max（含玩家起点）
@@ -11432,24 +11199,24 @@ function lbRouteOverlaySvg(abbr, map){
   pts.forEach(function(p){ if(p.z !== undefined && isFinite(p.z)) _za.push(p.z); });
   var zl = _za.length ? Math.min.apply(null, _za) : null, zh = _za.length ? Math.max.apply(null, _za) : null;
   if(zl === null || zh === null || zh <= zl){ zl = null; zh = null; }
-  var segs = '', marks = '';
+  var segs = '', marks = '', txts = '';
   for(var i=0; i<pts.length-1; i++){
     // v759：白描边衬底；v776：线路细点——白 4→3px、彩 1.8→1.5px；白描边外黑淡影交给整组 feDropShadow filter（见 return）
-    // v803：CSS transform scale 对 vector-effect 无效 → 用 data-sw 记目标线宽，applyZ 内 stroke-width=target/z 反算（视觉恒定）
-    segs += '<line data-sw="3" x1="'+pts[i].x.toFixed(2)+'%" y1="'+pts[i].y.toFixed(2)+'%" x2="'+pts[i+1].x.toFixed(2)+'%" y2="'+pts[i+1].y.toFixed(2)+'%" stroke="rgba(255,255,255,.95)" stroke-width="3"/>';
+    segs += '<line x1="'+pts[i].x.toFixed(2)+'%" y1="'+pts[i].y.toFixed(2)+'%" x2="'+pts[i+1].x.toFixed(2)+'%" y2="'+pts[i+1].y.toFixed(2)+'%" stroke="rgba(255,255,255,.95)" stroke-width="3"/>';
     var _az = (zl !== null && isFinite(pts[i].z) && isFinite(pts[i+1].z)) ? ((pts[i].z + pts[i+1].z) / 2) : null;
     var _sc = (_az !== null) ? lbZHeat(_az, zl, zh) : 'rgba(34,197,94,.9)';
-    segs += '<line data-sw="1.5" x1="'+pts[i].x.toFixed(2)+'%" y1="'+pts[i].y.toFixed(2)+'%" x2="'+pts[i+1].x.toFixed(2)+'%" y2="'+pts[i+1].y.toFixed(2)+'%" stroke="'+_sc+'" stroke-width="1.5"/>';
+    segs += '<line x1="'+pts[i].x.toFixed(2)+'%" y1="'+pts[i].y.toFixed(2)+'%" x2="'+pts[i+1].x.toFixed(2)+'%" y2="'+pts[i+1].y.toFixed(2)+'%" stroke="'+_sc+'" stroke-width="1.5"/>';
   }
   pts.forEach(function(p){
     var _cx = p.x.toFixed(2), _cy = p.y.toFixed(2);
-    if(p.start){ marks += '<circle data-rt="1" data-cx="'+_cx+'" data-cy="'+_cy+'" cx="'+_cx+'%" cy="'+_cy+'%" r="4.5" fill="#22c55e" stroke="#fff" stroke-width="1.2"/>'; } // v776：去 v775 黑底圈 → 细白描边（黑 4px 淡影由整组 filter 提供）；v803：data-rt transform 反缩放即恒定（vector-effect 对 CSS scale 无效且会干扰反缩放，已移除）
-    if(p.cur){ marks += '<circle data-rt="1" data-cx="'+_cx+'" data-cy="'+_cy+'" cx="'+_cx+'%" cy="'+_cy+'%" r="7" fill="none" stroke="#fff" stroke-width="1.8"/>'; } // v776：白 ring 细点 + 组 filter 黑淡影（浅色地图可辨）；v803：同上
-  }); // v801：去掉顺路序号数字（缩放时突兀；保留连线+起点绿点+当前目标白圈）
+    if(p.start){ marks += '<circle cx="'+_cx+'%" cy="'+_cy+'%" r="4.5" fill="#22c55e" stroke="#fff" stroke-width="1.2"/>'; } // v776：去 v775 黑底圈 → 细白描边（黑 4px 淡影由整组 filter 提供）
+    if(p.cur){ marks += '<circle cx="'+_cx+'%" cy="'+_cy+'%" r="7" fill="none" stroke="#fff" stroke-width="1.8"/>'; } // v776：白 ring 细点 + 组 filter 黑淡影（浅色地图可辨）
+    if(!p.start && p.seq){ txts += '<text x="'+_cx+'%" y="'+_cy+'%" dx="7" dy="-7" fill="#fff" font-size="11" font-weight="bold" text-anchor="middle" style="paint-order:stroke" stroke="rgba(0,0,0,.9)" stroke-width="3">'+p.seq+'</text>'; } // v758：paint-order:stroke=先描边后填白字（修复黑描边盖字难看清）；dx/dy 偏移到点右上方不压点
+  });
   // v776：线路/起点/当前目标白描边外统一加黑 ~4px 淡影（feDropShadow stdDeviation=2≈4px 直径），浅色地图可辨；序号文字自带黑描边不叠加
   return '<svg style="position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none">'
     + '<filter id="lbRtDs" x="-60%" y="-60%" width="220%" height="220%"><feDropShadow dx="0" dy="0" stdDeviation="2" flood-color="#000" flood-opacity=".75"/></filter>'
-    + '<g filter="url(#lbRtDs)">'+segs+marks+'</g></svg>';
+    + '<g filter="url(#lbRtDs)">'+segs+marks+'</g>'+txts+'</svg>';
 }
 // v426：分布地图左右箭头翻页（按容器宽度滚动一屏）
 function lbWildDistScrollBy(dir){
