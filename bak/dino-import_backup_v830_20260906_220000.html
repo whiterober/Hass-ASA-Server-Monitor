@@ -217,17 +217,16 @@ html.ios .lb-sex{transform:translateY(-0.08em)}
 .settle-wrap-cluster,.settle-wrap-scattered,.settle-wrap-single{display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:10px}
 .settle-wrap-single{margin-bottom:8px}
 .lb-col{display:flex;flex-direction:column;gap:8px;flex:0 0 auto;min-width:0}
-.settle-wrap-single .settle-btn{width:126px;height:auto;padding:6px}
+.settle-wrap-single .settle-btn{width:124px;height:auto;padding:5px}
 .settle-wrap-single .settle-btn .settle-title{display:flex;align-items:center;gap:4px;min-width:0;width:100%}
 .settle-wrap-single .settle-btn .settle-title .settle-name{white-space:normal;word-break:break-word;line-height:1.3;flex:1;min-width:0}
 .settle-wrap-single .settle-btn .settle-cnt{width:100%;text-align:right;font-size:11px;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-/* v831：离散卡——地图对齐聚合框内地图 211×211（同 cluster-main cover 全图），卡宽 225=211+6*2+2border；标题行=⛺离散+数据同行右对齐 */
-.settle-wrap-scattered .settle-btn{width:225px;height:auto;padding:6px}
+/* v830：离散卡——宽 236（完整图两倍宽），完整大地图铺满；标题行=⛺离散+数据同行右对齐（不放地图下方） */
+.settle-wrap-scattered .settle-btn{width:236px;height:auto;padding:6px}
 .settle-wrap-scattered .settle-btn .settle-title{display:flex;align-items:center;gap:4px;min-width:0;width:100%}
 .settle-wrap-scattered .settle-btn .settle-title .settle-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3;flex:1;min-width:0}
 .settle-wrap-scattered .settle-btn .settle-title .settle-cnt{margin-left:auto;font-size:11px;color:#666;white-space:nowrap}
-.settle-wrap-scattered .settle-btn .settle-map{width:211px;height:211px;flex:0 0 auto;border-radius:6px;overflow:hidden}
-.settle-wrap-scattered .settle-btn .settle-map img{width:100%;height:100%;display:block;object-fit:cover}
+.settle-wrap-scattered .settle-btn .settle-map img{width:100%;height:auto;display:block;max-height:236px}
 .settle-btn{box-sizing:border-box;background:#1a1a24;border:1px solid #2a2a3a;border-radius:10px;padding:8px;cursor:pointer;font-size:13px;color:#ccc;user-select:none;transition:all .15s}
 .settle-btn:hover{background:#1d1d29;color:#fff;border-color:#a78bfa88}
 .settle-btn.active{background:#2a2340;border-color:#a78bfa;color:#fff}
@@ -265,9 +264,7 @@ html.ios .lb-sex{transform:translateY(-0.08em)}
 @media (max-width:640px){
   .settle-wrap-cluster{display:grid;grid-template-columns:1fr;flex-wrap:nowrap}
   .settle-wrap-scattered{display:grid;grid-template-columns:1fr;flex-wrap:nowrap}
-  .settle-wrap-scattered .settle-btn{width:100%;padding:6px}
-  .settle-wrap-scattered .settle-btn .settle-map{width:auto;height:auto;flex:1 1 auto}
-  .settle-wrap-scattered .settle-btn .settle-map img{width:100%;height:auto;object-fit:initial;max-height:none}
+  .settle-wrap-scattered .settle-btn{width:100%;padding:8px}
   .settle-wrap-single{display:grid;grid-template-columns:repeat(3,1fr);justify-items:stretch}
   .settle-wrap-single .settle-btn{width:100%;padding:6px}
   .settle-wrap-single .settle-btn .settle-title .settle-name{font-size:12px}
@@ -411,7 +408,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260906-833';
+var LB_VERSION = 'v20260906-830';
 // ====== PWA：Service Worker 注册（2026-08-29，配合 manifest 使移动端 Edge/Chrome 可安装为应用） ======
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function(){
@@ -5924,16 +5921,16 @@ function lbRenderView(data, player, classFilter){
       _cluGroup.forEach(function(clu){ plan.push({t:'settle', html:lbSettleClusterHtml(clu)}); });
       plan.push({t:'settle', html:'</div>'});
     }
-    // C. 单聚落集合瀑布流（v832：位于离散集合之前，离散排最后）
-    if(_singleGroup.length){
-      plan.push({t:'settle', html:'<div class="settle-wrap settle-wrap-single">'});
-      _singleGroup.forEach(function(clu){ plan.push({t:'settle', html:lbSettleClusterHtml(clu)}); });
-      plan.push({t:'settle', html:'</div>'});
-    }
-    // B. 离散集合瀑布流（v830：独立容器排最后；卡宽 225=211+6×2+2border、完整大地图 211×211 同聚合框；移动端占满整行）
+    // B. 离散集合瀑布流（v830：独立容器，卡宽 236=112×2+6+6、完整大地图；移动端占满整行）
     if(_scatGroup.length){
       plan.push({t:'settle', html:'<div class="settle-wrap settle-wrap-scattered">'});
       _scatGroup.forEach(function(clu){ plan.push({t:'settle', html:lbSettleClusterHtml(clu)}); });
+      plan.push({t:'settle', html:'</div>'});
+    }
+    // C. 单聚落集合瀑布流
+    if(_singleGroup.length){
+      plan.push({t:'settle', html:'<div class="settle-wrap settle-wrap-single">'});
+      _singleGroup.forEach(function(clu){ plan.push({t:'settle', html:lbSettleClusterHtml(clu)}); });
       plan.push({t:'settle', html:'</div>'});
     }
     // 聚落详情子页面（点击聚落进入，返回按钮恢复列表）
@@ -6162,19 +6159,13 @@ function lbSettleBtnHtml(it){
         var _zB = lbSettleBand(s.server); // v774：带源=该服全部带坐标 rec 的 z
         var _czv = Number(st.center.z);
         var _zbg = (_zB && _zB[1] > _zB[0]) ? (isFinite(_czv) ? lbZHeat(_czv, _zB[0], _zB[1]) : lbZHeat((_zB[0]+_zB[1])/2, _zB[0], _zB[1])) : ''; // 聚落单点海拔着色（中心无 z 取带中档保有色）
-        // v830b：非中央视野（四角 1/4）加角渐隐 cf——双端统一在此生成（PC 由 onload 触发尺寸、移动端静态已含）；中央视野不加
-        var fadeH = '';
-        if(!isC){
-          var fax = vx === 0 ? 0 : 100, fay = vy === 0 ? 0 : 100;
-          fadeH = '<div class="settle-cf" style="position:absolute;inset:0;pointer-events:none;z-index:2;background:radial-gradient(circle at '+fax+'% '+fay+'%, rgba(0,0,0,.42) 0%, rgba(0,0,0,0) 62%)"></div>';
-        }
         if((window.innerWidth || document.documentElement.clientWidth) <= 640){
           var ox = vx === 25 ? '50%' : (vx ? '100%' : '0%');
           var oy = vy === 25 ? '50%' : (vy ? '100%' : '0%');
-          mapHtml = '<div class="settle-map"><img src="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" data-lbasset="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" alt="" loading="lazy" style="transform:scale(2);transform-origin:'+ox+' '+oy+'" onerror="this.parentNode.style.display=&quot;none&quot;">'+fadeH+'<div class="settle-dot" style="left:'+dx+'%;top:'+dy+'%' + (_zbg ? ';background:'+_zbg : '') + '"></div></div>';
+          mapHtml = '<div class="settle-map"><img src="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" data-lbasset="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" alt="" loading="lazy" style="transform:scale(2);transform-origin:'+ox+' '+oy+'" onerror="this.parentNode.style.display=&quot;none&quot;"><div class="settle-dot" style="left:'+dx+'%;top:'+dy+'%' + (_zbg ? ';background:'+_zbg : '') + '"></div></div>';
           cls = ' with-map qcrop';
         } else {
-          mapHtml = '<div class="settle-map"><img src="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" data-lbasset="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" alt="" loading="lazy" onload="lbSettleCrop(this,'+vx+','+vy+')" onerror="this.parentNode.style.display=&quot;none&quot;">'+fadeH+'<div class="settle-dot" style="left:'+dx+'%;top:'+dy+'%' + (_zbg ? ';background:'+_zbg : '') + '"></div></div>';
+          mapHtml = '<div class="settle-map"><img src="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" data-lbasset="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" alt="" loading="lazy" onload="lbSettleCrop(this,'+vx+','+vy+')" onerror="this.parentNode.style.display=&quot;none&quot;"><div class="settle-dot" style="left:'+dx+'%;top:'+dy+'%' + (_zbg ? ';background:'+_zbg : '') + '"></div></div>';
           cls = ' with-map qcrop';
         }
       }
@@ -6253,7 +6244,22 @@ function lbSettleCrop(img, vx, vy){
   img.style.width = (2 * w) + 'px';
   img.style.left = (-((vx||0) / 50) * w) + 'px';
   img.style.top = (-((vy||0) / 50) * w * R) + 'px';
-  // v830b：角渐隐 cf 已由 lbSettleBtnHtml 静态生成于 mapHtml（双端统一），此处仅负责尺寸换算，不再增删 cf
+  // v829：四角视野（vx/vy∈{0,50}，非中央25）时，仅对该视野对应的"遮住方向"外侧角加极轻微渐隐，提示大地图延伸方向；中央视野不加
+  var cf = wrap.querySelector('.settle-cf');
+  if(cf) cf.parentNode.removeChild(cf);
+  var nvx = Number(vx||0), nvy = Number(vy||0);
+  var isCorner = (nvx===0 || nvx===50) && (nvy===0 || nvy===50);
+  if(isCorner){
+    var ax = nvx===0 ? 0 : 100; // 视野左/右半 → 角的水平位置
+    var ay = nvy===0 ? 0 : 100; // 视野上/下半 → 角的垂直位置
+    var ov = document.createElement('div');
+    ov.className = 'settle-cf';
+    ov.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:1;'
+      + 'background:radial-gradient(circle at '+ax+'% '+ay+'%, rgba(0,0,0,.15) 0%, rgba(0,0,0,0) 55%);';
+    // 插在 img 之后、红点之前（不遮挡红点）
+    var dot = wrap.querySelector('.settle-dot');
+    if(dot) wrap.insertBefore(ov, dot); else wrap.appendChild(ov);
+  }
 }
 // v827：聚落双区 JS/flex 分列瀑布流（列间高度完全独立、互不影响）
 // 原理：settle-wrap 内直接子卡（聚合框 .settle-cluster / 单卡 .settle-btn）按容器宽重排成 N 个 .lb-col 列（每列独立 flex column，列宽=卡宽固定），卡贪心放最矮列 → 无 grid 行高互相拉伸
@@ -6262,7 +6268,7 @@ function lbSettleWaterfall(){
   if(winW <= 640) return; // 移动端保留 CSS grid（lbSettleWaterfall 不执行）
   var list = document.getElementById('lbList');
   if(!list) return;
-  var defs = [['settle-wrap-cluster', 430], ['settle-wrap-scattered', 225], ['settle-wrap-single', 126]];
+  var defs = [['settle-wrap-cluster', 430], ['settle-wrap-scattered', 236], ['settle-wrap-single', 124]];
   for(var di=0; di<defs.length; di++){
     var sel = '.'+defs[di][0], cardW = defs[di][1];
     var wraps = list.querySelectorAll(sel);
