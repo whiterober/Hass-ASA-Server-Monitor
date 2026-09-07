@@ -424,7 +424,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260907-875';
+var LB_VERSION = 'v20260907-876';
 // ====== PWA：Service Worker 注册（2026-08-29，配合 manifest 使移动端 Edge/Chrome 可安装为应用） ======
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function(){
@@ -13474,15 +13474,7 @@ function lbRoutePlanHtml(recs, attrs){
         return g.ks.map(function(kk){ return LB_BREED_LABEL[kk]+'变异'+lbRouteMut(g.f,kk); }).join('·')+'·变异冠军'+_stTxt(g.f);
       }
       var fParts = fGrps.map(function(g){ return '<span style="color:#666">×</span>' + lbRoutePlanDino(g.f, null, 12, fSub(g)); }).join('');
-      var upTxt = [];
-      fGrps.forEach(function(g){
-        g.ks.forEach(function(kk){
-          var fm = lbRouteMut(g.f, kk);
-          var mm = lbRouteMut(targetM, kk);
-          upTxt.push(LB_BREED_LABEL[kk]+'变异 '+mm+'→'+fm);
-        });
-      });
-      // 理论行（按母分窝）：每母把其冠军变异带给目标公；达变异冠军绿
+      // 理论行（按母分窝）：每母把其冠军变异带给目标公；达变异冠军绿（v876：不再叠加 upTxt 箭头，目标行已含变异值）
       var thParts = fGrps.map(function(g){
         var per = g.ks.map(function(kk){
           var fm = lbRouteMut(g.f, kk);
@@ -13500,7 +13492,6 @@ function lbRoutePlanHtml(recs, attrs){
         rw.push('<div style="flex-basis:100%;max-width:100%">'
           + lbRoutePlanDino(targetM, null, 12, '次 '+lbRouteCountM(targetM)+'/'+lbRouteCountF(targetM))
           + fParts
-          + (upTxt.length ? ' → '+upTxt.join(' · ') : '')
           + '<div style="font-size:10px;color:#888;margin-top:1px;line-height:1.6">目标 '+thParts.join(' · ')+'</div>' // v7xx：合全能公=变异冠军收拢，不加变异段（变异推进归叠变异卡）
           + '</div>');
       }
