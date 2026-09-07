@@ -424,7 +424,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260907-875';
+var LB_VERSION = 'v20260907-866';
 // ====== PWA：Service Worker 注册（2026-08-29，配合 manifest 使移动端 Edge/Chrome 可安装为应用） ======
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function(){
@@ -892,12 +892,10 @@ function lbColorHex(id){
   return (c && c.hex) ? c.hex : '#3a3a4a';
 }
 // 拆前缀：返回 {prefixes:[小写前缀], base:基础英文名}（支持 R-/X- 与多重前缀；空值前缀如 brute 也剥离）
-// v868：LB_PREFIX_ZH 汉化未加载时直接原样返回（不再 in null TypeError；v469 重渲机制就绪后自动补中文）
 function lbStripPrefix(eng){
   var prefixes=[];
   var base=eng||'';
   if(!base) return {prefixes:prefixes, base:''};
-  if(!LB_PREFIX_ZH) return {prefixes:prefixes, base:base};
   var rm=base.match(/^(R-|X-)(.+)$/);
   if(rm && (rm[1].toLowerCase() in LB_PREFIX_ZH)){ prefixes.push(rm[1].toLowerCase()); base=rm[2]; }
   var words=base.split(/\s+/);
@@ -8845,39 +8843,8 @@ function lbPickerFilter(){
       if(!q){ it.style.display=''; return; }
       it.style.display=((it.textContent||'').toLowerCase().indexOf(q)>=0)?'':'none';
     });
-    // v867：隐藏搜索后无可见结果的二级分组标题（可拥有/可偷蛋/可捕获/预览），q 空自动恢复
-    var eg=document.getElementById('lbExtraGrid');
-    if(eg) lbPickerHideEmptySections(eg);
   }
-  // v869：一级折叠分类（未驯/变体/特殊）搜索无可见结果时整体隐藏；q 空 items 全显示自动恢复
-  function _zoneVisible(det){
-    if(!det) return true;
-    var its=det.querySelectorAll('.lb-picker-item');
-    for(var zi=0;zi<its.length;zi++){ if(its[zi].style.display!=='none') return true; }
-    return false;
-  }
-  [noHave,special,extra].forEach(function(det){ if(det) det.style.display = _zoneVisible(det) ? '' : 'none'; });
   setTimeout(lbPickerFitScroll, 60); // v865：过滤后内容不满容器收紧高度
-}
-// v867：隐藏无可见结果的二级分组标题（跨列 head/分隔，其后到下一 head 之间无可见 item 则隐藏）
-function lbPickerHideEmptySections(gridEl){
-  var kids = Array.prototype.slice.call(gridEl.children||[]);
-  for(var i=0;i<kids.length;i++){
-    var k=kids[i];
-    if(k.classList && k.classList.contains('lb-picker-item')) continue;
-    if(k.getAttribute('data-cls')) continue;
-    if((k.getAttribute('style')||'').indexOf('grid-column:1/-1')<0) continue; // 仅跨列标题/分隔线
-    var any=false;
-    for(var j=i+1;j<kids.length;j++){
-      var s=kids[j];
-      if(s.classList && s.classList.contains('lb-picker-item')){
-        if(s.style.display!=='none'){ any=true; break; }
-      } else if(s.getAttribute('data-cls')){
-        if(s.style.display!=='none'){ any=true; break; }
-      } else { break; } // 遇到下一标题/分隔
-    }
-    k.style.display = any ? '' : 'none';
-  }
 }
 function lbPickerSelect(el){
   LB.curClass=el.getAttribute('data-cls')||'';
@@ -13036,17 +13003,6 @@ function lbRoutePlanHtml(recs, attrs){
   // ---- 1. v712：属性线预计算（换代潜在 / 缺♂ / 0/0 母池）
   var zeroFems = lbRouteZeroAdF(recs);          // 任意 0/0 成年母（母系不看属性）
   var zeroMales = recs.filter(function(r){ return r.gender==='MALE' && lbRouteAdult(r) && lbRouteCountM(r)+lbRouteCountF(r)===0; });
-  var juvZeroF = [], juvZeroM = []; // v874：未成年 0/0 母/公（待成年可内补，不足提示优先列内部路线，非直接外抓）
-  recs.forEach(function(r){
-    if(lbRouteAdult(r) || (lbRouteCountM(r)+lbRouteCountF(r))!==0) return;
-    if(r.gender==='FEMALE') juvZeroF.push(r); else if(r.gender==='MALE') juvZeroM.push(r);
-  });
-  function _stTxt(r){ // v875：资源阶段标注（蛋/胚胎=待孵化→养育；幼=待成年；其他空）
-    if(!r) return '';
-    if(lbRouteIsEgg(r)) return '·待孵化';
-    if(!lbRouteAdult(r)) return '·待成年';
-    return '';
-  }
   var genPot = {}, missM = {}, missMAlt = {}, missMAll = {}, missMBest = {};
   attrs.forEach(function(k){
     var rep = lineRep[k];
@@ -13274,7 +13230,6 @@ function lbRoutePlanHtml(recs, attrs){
   var washCands = lbRouteWashCand(recs, attrs);
   if(needCompress.length && washCands.length){
     var usedWash = [];
-    var _cRows = [], _ci = 0; // v870：多条带垃圾属性合并为一张压垃圾组卡，组内每属性一行内部并行
     needCompress.slice(0,3).forEach(function(o){
       var wash = null;
       for(var wi=0; wi<washCands.length; wi++){ if(usedWash.indexOf(washCands[wi])<0){ wash = washCands[wi]; break; } }
@@ -13282,25 +13237,18 @@ function lbRoutePlanHtml(recs, attrs){
       usedWash.push(wash);
       var jk = lbRouteJunkPts(o.rep, attrs);
       var wj = lbRouteJunkPts(wash, attrs); // v7xx：洗剂垃圾值（门槛 <10，动态显示）
-      _cRows.push('<div style="flex-basis:100%;max-width:100%;margin-top:'+(_ci?3:0)+'px">' // v870：并行行（同负线多种子样式）
-        + (needCompress.length>1 ? paraBadge(_ci) : '')
-        + lbRoutePlanDino(o.rep, null, 13, lbRouteAttrTag(o.k)+lbRoutePtDisp(o.rep,o.k)+'·垃圾'+jk+'级(未选)'+(lbRouteAdult(o.rep)?'':'·待成年'))
-        + '<span style="color:#666">×</span>' + lbRoutePlanDino(wash, null, 13, '垃圾'+wj)
-        + '<div style="font-size:10px;color:#888;margin-top:1px;line-height:1.7">目标 未选垃圾 '+jk+' '+(wj===0?('→ ~'+Math.ceil(jk/2)+'（子代 45% 继承无垃圾侧）'):('→ '+wj+'（子代 45% 继承洗剂低垃圾侧，可续压更低）'))+'</div></div>'); // v7xx：洗剂门槛<10
-      _ci++;
+      groups.push({order:1, ai:attrs.indexOf(o.k), tag:'并行', title:'压垃圾 · 垃圾'+jk+(wj===0?'→0':'→'+wj),
+        body: lbRoutePlanDino(o.rep, null, 13, lbRouteAttrTag(o.k)+lbRoutePtDisp(o.rep,o.k)+'·垃圾'+jk+'级(未选)')
+          + '<span style="color:#666">×</span>' + lbRoutePlanDino(wash, null, 13, '垃圾'+wj)
+          + '<div style="flex-basis:100%;max-width:100%;font-size:10px;color:#888;margin-top:2px;line-height:1.7">目标 未选垃圾 '+jk+' '+(wj===0?('→ ~'+Math.ceil(jk/2)+'（子代 45% 继承无垃圾侧）'):('→ '+wj+'（子代 45% 继承洗剂低垃圾侧，可续压更低）'))+'</div>', // v7xx：洗剂门槛<10
+        note:(wj===0 ? '预期子代未选中属性垃圾 ~50% 清零 → 后续筛 选中属性达标且垃圾全 0 的新种续线（归还等级空间）' : '后续筛 选中属性达标且垃圾 ≤'+wj+' 的新种续线（归还等级空间）；需更低再配更低垃圾洗剂续压')});
     });
-    if(_cRows.length){ // v870：单组卡（原每属性独立卡 → 合并组内并行）
-      var _wAllZero = _cRows.every(function(){ return true; }); // 占位（标题不依赖）
-      groups.push({order:1, ai:0, tag:'并行', title:(_ci>1?('压垃圾 · '+_ci+' 线并行'):'压垃圾'), body:_cRows.join(''),
-        note:'各线：子代未选中属性垃圾清零/压低 → 筛 选中属性达标且垃圾更低的新种续线（归还等级空间）；多线并行洗剂互不共用'});
-    }
   } else if(needCompress.length){
     var rp = needCompress[0].rep;
     compressSuffix = '（带垃圾 '+lbRouteJunkPts(rp, attrs)+' 点，无垃圾<10 的种 → 先抓 1 只垃圾<10 再压）';
   }
   // ---- 3. 叠变异（v7xx 冠军权重主配）：主配 = 覆盖最多冠军属性的成年公（负公且≥1冠军优先；不再要求全达顶才存在）
   var usedMothers = [];
-  var _dieCard = false, _dieNoMom = false, _heCard = false; // v871：叠变异主线说明卡状态（能执行出真卡；不能则出说明卡）
   var omni = null;                        // 主配公种（覆盖≥1冠军的成年公中冠军覆盖最多者）
   var omniCov = 0;
   function _routeCov(r){ var c=0; for(var ci=0; ci<attrs.length; ci++){ var kk=attrs[ci]; if(mxMutAll[kk]>0 && lbRouteMut(r,kk)>=mxMutAll[kk]) c++; } return c; } // v7xx：覆盖=变异冠军
@@ -13325,9 +13273,8 @@ function lbRoutePlanHtml(recs, attrs){
     if(!omni || c>omniCov || (c===omniCov && _routeBetter(r, omni))){ omni=r; omniCov=c; }
   });
   // v7xx：零变异起始 fallback —— 全库存无任何变异冠军且无负公时，选基础覆盖最高的 0/0 成年♂ 作起始主配（首窝孵出变异落点即开线）
-  // v862：未成年冠军降级；v870：分性别 —— 未成年♂冠军 → 直接作叠变异公种展示（提示待成年）；仅未成年♀冠军 → 不叠变异、走合全能公（待成年后收拢）
-  var _waitChamp = null;   // 待成年冠军提示文本（未成年冠军明细）
-  var _waitJuvM = null;    // 未成年♂ 冠军（v870 规则1：作叠变异公种）
+  // v862：未成年冠军降级 —— 变异冠军仅存于未成年龙（无成年♂可覆盖、无成年♀冠军源可合体）→ 等效 0/0 起步（先推基础线，冠军待成年自动并入）
+  var _waitChamp = null;
   if(!omni && !hasNegM){
     var _zAllZero = true;
     attrs.forEach(function(k){ if((mxMutAll[k]||0) > 0) _zAllZero = false; });
@@ -13337,31 +13284,27 @@ function lbRoutePlanHtml(recs, attrs){
         if((mxMutAll[k]||0) <= 0) return;
         recs.forEach(function(r){ if(lbRouteAdult(r) && lbRouteMut(r,k) >= mxMutAll[k]) _adChamp = true; });
       });
-      if(!_adChamp){ // 冠军仅未成年（含蛋/胚胎）→ 收集待成年冠军明细（每属性一例）；未成年♂/蛋♂ 冠军单独记录
+      if(!_adChamp){ // 冠军仅未成年 → 收集待成年冠军明细（每属性一例）
         var _juv = [];
         attrs.forEach(function(k){
           if((mxMutAll[k]||0) <= 0) return;
           recs.forEach(function(r){
             if(lbRouteAdult(r) || lbRouteMut(r,k) < mxMutAll[k]) return;
-            if(r.gender==='MALE' && !_waitJuvM) _waitJuvM = r; // v870：未成年♂ 冠军（取首只，含蛋/胚胎）
             var _dup = false; for(var qi=0; qi<_juv.length; qi++){ if(_juv[qi].k===k){ _dup = true; break; } }
-            if(!_dup) _juv.push({k:k, g:r.gender, mv:lbRouteMut(r,k), nm:lbRouteName(r), r:r});
+            if(!_dup) _juv.push({k:k, g:r.gender, mv:lbRouteMut(r,k), nm:lbRouteName(r)});
           });
         });
-        if(_juv.length) _waitChamp = _juv.map(function(j){ return LB_BREED_LABEL[j.k]+'变异'+j.mv+(j.g==='MALE'?'♂':'♀')+(j.nm?(' '+j.nm):'')+_stTxt(j.r); }).join('、'); // v875：蛋/胚胎标注待孵化
+        if(_juv.length) _waitChamp = _juv.map(function(j){ return LB_BREED_LABEL[j.k]+'变异'+j.mv+(j.g==='MALE'?'♂':'♀')+(j.nm?(' '+j.nm):''); }).join('、');
       }
     }
-    if(_zAllZero){ // 全 0 场 → 0/0 公起步
+    if(_zAllZero || _waitChamp){ // 全 0 场 或 冠军待成年场 → 0/0 公起步
       var _zs = null, _zc = -1;
       zeroMales.forEach(function(r){
         var cc = 0; attrs.forEach(function(k){ if((mxBaseAll[k]||0) > 0 && lbRouteBase(r,k) >= mxBaseAll[k]) cc++; });
         if(cc > _zc || (cc === _zc && (!_zs || lbRouteBirth(r) < lbRouteBirth(_zs)))){ _zc = cc; _zs = r; }
       });
       if(_zs){ omni = _zs; omniCov = 0; }
-    } else if(_waitJuvM){ // v870 规则1：未成年♂ 冠军直接作叠变异公种（成年后开配）
-      omni = _waitJuvM; omniCov = 0;
     }
-    // v870 规则2：仅未成年♀ 冠军 → omni 保持空 → 由合全能公 gaps 提示「待成年冠军母」
   }
   var poolN = lbRouteMomGet();
   if(omni && (lbRouteCountM(omni)+lbRouteCountF(omni))>=20) poolN = Math.min(30, poolN*2); // v727：总到20 → 池目标×2
@@ -13384,19 +13327,13 @@ function lbRoutePlanHtml(recs, attrs){
       var parts3 = [lbRoutePlanDino(omni, null, 13, cntTxt)];
       usedZ.forEach(function(fm){ parts3.push('<span style="color:#666">×</span>' + lbRoutePlanDino(fm, null, 13, '0/0')); });
       var t3 = parts3.join('') + mutSeg(omni); // v7xx：叠变异无确定性目标 → 去掉 thRow(目标) 行；body=公×母+变异段
-      var _isWaitMale = !!_waitJuvM; // v870：未成年♂/蛋♂ 冠军公种
-      var _stM = _stTxt(omni).replace(/^·/,''); // v875：待孵化/待成年
-      var titleTxt = (omniCov>=attrs.length) ? '叠变异（全能公）' : ((omniCov===0) ? (_isWaitMale ? ('叠变异 · 冠军'+(_stM||'待成年')+'（公种）') : (_waitChamp ? '叠变异 · 冠军待成年（0/0 起步）' : '叠变异 · 0变异起始')) : ('叠变异 · 冠军主配（覆盖 '+omniCov+'/'+attrs.length+'）'));
+      var titleTxt = (omniCov>=attrs.length) ? '叠变异（全能公）' : ((omniCov===0) ? (_waitChamp ? '叠变异 · 冠军待成年（0/0 起步）' : '叠变异 · 0变异起始') : ('叠变异 · 冠军主配（覆盖 '+omniCov+'/'+attrs.length+'）'));
       var covTxt = (omniCov===0)
-        ? (_isWaitMale ? ('；公种 '+lbRouteName(omni)+' '+(_stM||'未成年待成年')+'（携带 '+_waitChamp+'）→ 当前仅作计划展示，就绪后直接开配')
-           : (_waitChamp ? ('；变异冠军 '+_waitChamp+' 待成年（当前无法配种）→ 先用 0/0 公起步推基础线，冠军成年后作冠军母并入收拢')
-              : '；全库存尚无变异层 → 本窝为起始（变异落点随机，落在选中属性即开对应线）'))
+        ? (_waitChamp ? ('；变异冠军 '+_waitChamp+' 待成年（当前无法配种）→ 先用 0/0 公起步推基础线，冠军成年后作冠军母并入收拢')
+           : '；全库存尚无变异层 → 本窝为起始（变异落点随机，落在选中属性即开对应线）')
         : ((omniCov<attrs.length) ? ('；当前覆盖 '+omniCov+'/'+attrs.length+' 冠军，命中未覆盖目标属性会浪费 → 用空窗顺带合体补覆盖') : '');
-      _dieCard = true; // v871：叠变异主线卡已生成
       groups.push({order:1, ai:0, tag:'主配', title:titleTxt, body:t3, // v7xx：出生上限提示已上移顶部提示框
         note:''+lbRouteName(omni)+' 主配 × 公用 0/0 母群（'+usedZ.length+' 只）→ 每窝子代 55% 拿各属性高值；变异随机落点 → 孵出看变异落在 '+tK+' 哪个属性即推进哪个（落点分散，非目标落点淘汰）；父系栏随总变异累积（仔=父本总/母本总）'+covTxt+yldTxt});
-    } else {
-      _dieNoMom = true; // v871：公种就绪但无 0/0 母群 → 出说明卡
     }
   } // v721f：无全能公（omni）时叠变异无法执行 → 整组隐藏（不再 push 空提示卡）
   // ---- 3.5 合全能公（v7xx 变异冠军收拢）：目标♂ 未覆盖全部变异冠军 → 高变异冠军母合体收拢（子代变异通道取高）；深负公完全并入
@@ -13426,25 +13363,22 @@ function lbRoutePlanHtml(recs, attrs){
         if(mxMutAll[k] <= 0) return;                 // 无变异冠军（纯基础/0）→ 非合全能公职责
         var mmT = lbRouteMut(targetM, k);
         if(mmT >= mxMutAll[k]) return;               // targetM 已覆盖该变异冠军 → 无需收
-        var hi = null, hiJuv = null;
-        recs.forEach(function(r){                    // v873：冠军母 = 成年♀ 优先；未成年♀ 兜底（仍作流程主体，标待成年）
-          if(r.gender!=='FEMALE' || usedMothers.indexOf(r)>=0) return;
-          if(lbRouteMut(r,k) < mxMutAll[k]) return;
-          if(lbRouteAdult(r)){ if(!hi || lbRouteMut(r,k) > lbRouteMut(hi,k)) hi = r; }
-          else if(!hiJuv || lbRouteMut(r,k) > lbRouteMut(hiJuv,k)) hiJuv = r;
+        var hi = null;
+        recs.forEach(function(r){                    // 找携带该属性变异冠军的成年♀（可锁：继承取高与锁无关）
+          if(r.gender!=='FEMALE' || !lbRouteAdult(r) || usedMothers.indexOf(r)>=0) return;
+          if(lbRouteMut(r,k) >= mxMutAll[k] && (!hi || lbRouteMut(r,k) > lbRouteMut(hi,k))) hi = r;
         });
-        if(!hi && hiJuv) hi = hiJuv; // v873：未成年♀冠军兜底
         if(hi){
-          needKs.push(k); // v7xx：可直接用冠军母与目标公合体收拢（未成年母 → 配对行标待成年）
+          needKs.push(k); // v7xx：可直接用冠军母与目标公合体收拢
         } else {
-          // 变异冠军存在但无成年♀携带 → 冠军在成年♂身上需转♀，或仅未成年携带待成年（v870）
+          // 变异冠军存在但无♀携带 → 冠军在♂身上，需先转♀
           var champM = null;
           recs.forEach(function(r){ if(r.gender==='MALE' && r!==targetM && lbRouteMut(r,k)>=mxMutAll[k]) champM = r; });
           if(champM){
             var needTxt = '变异冠军在 ♂ '+lbRouteName(champM)+' 身上（变异 '+mxMutAll[k]+'）→ 先用它 × 0/0 母产携带♀，再与目标♂合体收拢';
             gaps.push('<div style="flex-basis:100%;max-width:100%;margin-top:3px;color:#f59e0b">· '+LB_BREED_LABEL[k]+'：'+needTxt+'</div>');
           }
-          // v872：冠军仅未成年♀ → 不生成合全能公空壳（只有说明无配对）；信息由叠变异主线说明卡承载（待冠军成年）
+          // 无任何变异冠军携带者（含♂）→ 静默（靠主配叠变异推进）
         }
       });
     }
@@ -13454,14 +13388,11 @@ function lbRoutePlanHtml(recs, attrs){
       var fGrps = []; // {f, ks:[]}
       needKs.forEach(function(k){
         if(mxMutAll[k] <= 0) return;
-        var hi = null, hiJuv = null;
+        var hi = null;
         recs.forEach(function(r){
-          if(r.gender!=='FEMALE' || usedMothers.indexOf(r)>=0) return;
-          if(lbRouteMut(r,k) < mxMutAll[k]) return;
-          if(lbRouteAdult(r)){ if(!hi || lbRouteMut(r,k) > lbRouteMut(hi,k)) hi = r; }
-          else if(!hiJuv || lbRouteMut(r,k) > lbRouteMut(hiJuv,k)) hiJuv = r; // v873：未成年♀冠军兜底
+          if(r.gender!=='FEMALE' || !lbRouteAdult(r) || usedMothers.indexOf(r)>=0) return;
+          if(lbRouteMut(r,k) >= mxMutAll[k] && (!hi || lbRouteMut(r,k) > lbRouteMut(hi,k))) hi = r;
         });
-        if(!hi && hiJuv) hi = hiJuv;
         if(hi){
           var g = null;
           for(var gi=0; gi<fGrps.length; gi++){ if(fGrps[gi].f===hi){ g=fGrps[gi]; break; } }
@@ -13470,8 +13401,8 @@ function lbRoutePlanHtml(recs, attrs){
         }
       });
       fGrps.forEach(function(g){ if(usedMothers.indexOf(g.f)<0) usedMothers.push(g.f); }); // v7xx：变异冠军母入统一池
-      function fSub(g){ // 母子标签：其冠军属性+变异点（蛋=待孵化；幼=待成年）
-        return g.ks.map(function(kk){ return LB_BREED_LABEL[kk]+'变异'+lbRouteMut(g.f,kk); }).join('·')+'·变异冠军'+_stTxt(g.f);
+      function fSub(g){ // 母子标签：其冠军属性+变异点
+        return g.ks.map(function(kk){ return LB_BREED_LABEL[kk]+'变异'+lbRouteMut(g.f,kk); }).join('·')+'·变异冠军';
       }
       var fParts = fGrps.map(function(g){ return '<span style="color:#666">×</span>' + lbRoutePlanDino(g.f, null, 12, fSub(g)); }).join('');
       var upTxt = [];
@@ -13496,52 +13427,22 @@ function lbRoutePlanHtml(recs, attrs){
         return per.join('·')+' '+pTxt;
       });
       var mN = fGrps.length;
-      if(fGrps.length){ // v870：仅 gaps（如冠军待成年♀无配对母）时不渲染目标配对行
-        rw.push('<div style="flex-basis:100%;max-width:100%">'
-          + lbRoutePlanDino(targetM, null, 12, '次 '+lbRouteCountM(targetM)+'/'+lbRouteCountF(targetM))
-          + fParts
-          + (upTxt.length ? ' → '+upTxt.join(' · ') : '')
-          + '<div style="font-size:10px;color:#888;margin-top:1px;line-height:1.6">目标 '+thParts.join(' · ')+'</div>' // v7xx：合全能公=变异冠军收拢，不加变异段（变异推进归叠变异卡）
-          + '</div>');
-      }
+      rw.push('<div style="flex-basis:100%;max-width:100%">'
+        + lbRoutePlanDino(targetM, null, 12, '次 '+lbRouteCountM(targetM)+'/'+lbRouteCountF(targetM))
+        + fParts
+        + (upTxt.length ? ' → '+upTxt.join(' · ') : '')
+        + '<div style="font-size:10px;color:#888;margin-top:1px;line-height:1.6">目标 '+thParts.join(' · ')+'</div>' // v7xx：合全能公=变异冠军收拢，不加变异段（变异推进归叠变异卡）
+        + '</div>');
       gaps.forEach(function(g){ rw.push(g); });
       var targetTag = (targetM===omni) ? '（冠军公续收）' : (hasNegM ? '（深负公续收）' : '（打造变异全能公）');
       var stepTxt = (mN>1)
         ? ('<b>'+mN+' 只变异冠军母分窝推进</b>：目标♂ 分别配各母，每窝收拢对应冠军变异，逐窝筛达标仔合并，逐步全覆盖')
         : '子代♂ 变异通道取高 → 逐步收拢各冠军';
-      _heCard = true; // v871：已生成合全能公卡（供叠变异说明卡指引）
-      var _hasJuvF = fGrps.some(function(g){ return !lbRouteAdult(g.f); }); // v873：冠军母未成年（含蛋/胚胎）
-      var _hasEggF = fGrps.some(function(g){ return lbRouteIsEgg(g.f); }); // v875：冠军母为蛋/胚胎
       groups.push({order:1, ai:0, tag:'主配', title:'合全能公'+targetTag, body:rw.join(''), // v7xx：合全能公=变异冠军收拢
         note:''+lbRouteName(targetM)+' 未覆盖全部变异冠军 → 高变异冠军母合体收拢变异冠军：'+stepTxt+'，覆盖全部冠军即变异全能公'
           +(hasNegM?'；深负公合体后仍深负、续享无限叠':'')
-          +(_hasJuvF?(_hasEggF?'；冠军母为蛋/胚胎 → 待孵化→养育→成年后开配（先孵化养大，成体即可执行本卡）':'；冠军母未成年 → 待其成年后开配（当前先养大，成年即可执行本卡）'):'')
           +(gaps.length?('；另有 '+gaps.length+' 个变异冠军需先转♀再收拢'):'')});
     }
-  }
-  // v871：叠变异主线永久显示 —— 能执行时上方已出真卡；条件不足时保留说明卡（为什么没有 + 做什么才能开始）
-  if(!_dieCard){
-    var _dTitle = '', _dNote = '';
-    if(omni && _dieNoMom){
-      _dTitle = '叠变异 · 待补 0/0 母群';
-      _dNote = '公种 '+lbRouteName(omni)+' 已就绪，但公用 0/0 母群为空 → 0/0 只能由 0/0×0/0 产出：'+(juvZeroF.length?('另有未成年 0/0♀ '+juvZeroF.length+' 只 → 待成年入池即可内补，无需外抓'):'先抓/孵 0/0♀ 或外部交换')+'，补足母群后叠变异自动开始';
-    } else if(_waitJuvM){
-      _dTitle = '叠变异 · 冠军'+(lbRouteIsEgg(omni)?'待孵化':'待成年')+'（公种）';
-      _dNote = '冠军公种 '+lbRouteName(omni)+'（'+_waitChamp+'）'+(lbRouteIsEgg(omni)?'待孵化→养育→成年':'未成年待成年')+' → 就绪后配 0/0 母群即开始叠变异'+(zeroFems.length?'':'；当前也无 0/0 母群，需先补母');
-    } else if(_waitChamp){
-      _dTitle = '叠变异 · 待冠军成年（未成年♀）';
-      _dNote = '变异冠军 '+_waitChamp+' 全在未成年♀ → 待其成年后作冠军母与 0/0 目标♂ 合体收拢（上方合全能公）→ 出「成年♂ 带冠军」后叠变异自动开启';
-    } else if(_heCard){
-      _dTitle = '叠变异 · 待合出全能公';
-      _dNote = '当前无「成年♂ 覆盖变异冠军」→ 先按上方「合全能公」把变异冠军收拢到公身上，出带冠军的公后叠变异自动开启';
-    } else if(zeroMales.length === 0){
-      _dTitle = '叠变异 · 缺 0/0 种公';
-      _dNote = (juvZeroM.length?('另有未成年 0/0♂ '+juvZeroM.length+' 只 → 待成年即可作起点内补'):'无 0/0 成年♂ → 抓/孵 0/0♂（选中属性基础尽量高）')+'，再配 0/0♀ 开叠变异';
-    } else {
-      _dTitle = '叠变异 · 待就绪';
-      _dNote = '需「成年♂ 已带变异冠军」作公种 + 0/0 母群；按上方各卡先补足，条件满足后叠变异自动开启';
-    }
-    if(_dTitle) groups.push({order:1, ai:0, tag:'主配', title:_dTitle, body:'', note:'（主线）叠变异 = 冠军公 × 0/0 母群量产变异：'+_dNote});
   }
   // 公用扩母卡（单条、不分属性；v741：叠变异/合全能公优先占母后取剩余，统一 usedMothers 池排重）
   if(avail0 < poolN){
@@ -13558,10 +13459,8 @@ function lbRoutePlanHtml(recs, attrs){
       groups.push({order:2, ai:0, tag:'主配', title:'扩母群 · 0/0母 '+freeF.length+'/'+poolN, body:mB2, // v740：主配内排最后；v741：主配叠组优先后取剩余
         note:'0/0 母公用池 '+avail0+'/'+poolN+' 未满（'+attrs.length+' 条属性线共用、不分属性）→ 主配叠组优先占用后剩余 '+freeF.length+' 只 0/0♀ 扩产（'+breedF2.length+' 源）→ 筛 0/0 ♀ 补足后再单公推进；母本不限属性'});
     } else {
-      var _jMtxt = juvZeroM.length ? ('；另有未成年 0/0♂ '+juvZeroM.length+' 只 → 待成年即可作种公内补，无需外抓') : '；当前无 0/0 种公 → 只能外部 抓/孵/交换 0/0♀';
-      var _jFtxt = juvZeroF.length ? ('；另有未成年 0/0♀ '+juvZeroF.length+' 只 → 待成年入池内补') : '';
       groups.push({order:2, ai:0, tag:'主配', title:'扩母群 · 0/0母 '+freeF.length+'/'+poolN, body:'', // v741
-        note:'0/0 母公用池 '+avail0+'/'+poolN+' 不足：0/0 只能由 0/0×0/0 产出 → '+(seedM2?('0/0♀ 已全部投入主配叠组/合全能公'+(_jFtxt||'，先抓/孵补池')):(_jMtxt+_jFtxt))});
+        note:'0/0 母公用池 '+avail0+'/'+poolN+' 不足：0/0 只能由 0/0×0/0 产出 → '+(seedM2?'0/0♀ 已全部投入主配叠组/合全能公，先抓/孵补池':'当前无 0/0 种公 → 只能外部 抓/孵/交换 0/0♀')});
     }
   }
   // ---- 4. 负变异溢出线（并行紫 · v712 多种子线并行 ≤3）：挑闲置 0/0 种子对（不与线代表/叠母重种）
