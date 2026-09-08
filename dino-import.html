@@ -424,7 +424,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260908-893';
+var LB_VERSION = 'v20260908-895';
 // ====== PWA：Service Worker 注册（2026-08-29，配合 manifest 使移动端 Edge/Chrome 可安装为应用） ======
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function(){
@@ -10862,6 +10862,11 @@ function lbBreedMask(show){
   var m = document.getElementById('lbBreedMask');
   if(m) m.style.display = show ? 'block' : 'none';
 }
+// v894+v895：繁育结果年龄折叠手风琴互斥切换（_key=gkey|阶段；同 key 再点=收起，跨阶段自动互斥，我的/外部各自独立）
+function lbStageFoldToggle(k){
+  LB._stageFoldKey = (LB._stageFoldKey===k) ? null : k;
+  if(LB.breedResult && typeof lbRenderBreedResult==='function') lbRenderBreedResult(); // v895：仅结果开启时重绘
+}
 function lbRenderBreedResult(){
   var c = document.getElementById('lbBreedResult');
   if(!c) return;
@@ -11288,14 +11293,16 @@ function lbRenderBreedResult(){
     if(r && (r.source==='egg'||r.source==='embryo'||r._isEgg||r.containerType==='egg'||r.containerType==='embryo')) return '蛋·胚胎';
     var _g = lbGrowthStage(r); return _g ? _g.text : '成年';
   }
-  function _foldGroup(items, mapFn){
+  function _foldGroup(items, mapFn, gkey){
     if(items.length<=10) return items.map(mapFn).join('');
     var gs={婴儿:[],幼崽:[],青年:[],成年:[],'蛋·胚胎':[]};
     items.forEach(function(it){ gs[_stgOf(it)].push(it); });
     var hh=''; var ord=['婴儿','幼崽','青年','成年','蛋·胚胎'];
     ord.forEach(function(k){ if(!gs[k].length) return;
+      var _key = gkey+'|'+k; // v894：手风琴互斥键（我的/外部各自独立互斥）
+      var _isOpen = (LB._stageFoldKey === _key);
       var _ic = k==='婴儿'?'🐣':k==='幼崽'?'🐤':k==='青年'?'🌱':k==='蛋·胚胎'?'🥚':'🦖';
-      hh+='<details class="lb-stage-fold" style="margin:2px 0"><summary style="cursor:pointer;font-size:11px;color:#ccc;background:#1a1a24;border:1px solid #2a2a3a;border-radius:6px;padding:4px 8px;margin-bottom:3px;display:flex;align-items:center;gap:5px">'
+      hh+='<details class="lb-stage-fold" '+(_isOpen?'open':'')+' style="margin:2px 0"><summary onclick="event.preventDefault();event.stopPropagation();lbStageFoldToggle(\''+_key+'\')" style="cursor:pointer;font-size:11px;color:#ccc;background:#1a1a24;border:1px solid #2a2a3a;border-radius:6px;padding:4px 8px;margin-bottom:3px;display:flex;align-items:center;gap:5px">'
         +'<span class="lb-fold-tri"></span><span>'+_ic+' '+k+' · '+gs[k].length+'</span></summary>'
         +'<div style="padding:2px 0">'+gs[k].map(mapFn).join('')+'</div></details>';
     });
@@ -11304,11 +11311,11 @@ function lbRenderBreedResult(){
   if(myAllChamp.length){
     var pn = lbPlayer() || '';
     h += '<div style="font-size:12px;color:#a78bfa;font-weight:600;margin-bottom:4px">'+(pn||'我的')+'</div>'
-      + _foldGroup(myAllChamp, function(it){ return card(it, lbOwnerTagMy(it.r), it.attrs, false); });
+      + _foldGroup(myAllChamp, function(it){ return card(it, lbOwnerTagMy(it.r), it.attrs, false); }, 'my');
   }
   if(extAll.length){
     h += '<div style="font-size:12px;color:#999;font-weight:600;margin:6px 0 4px">外部更高</div>'
-      + _foldGroup(extAll, function(it){ return card(it, lbOwnerTagExt(it.r), it.attrs, true); });
+      + _foldGroup(extAll, function(it){ return card(it, lbOwnerTagExt(it.r), it.attrs, true); }, 'ext');
   }
   // 野生最高组（搜野生结果）：青色标题，每属性取野生点数最高 2 条（跨服合并），非「高于我的」；卡片带等级/属性值/服务器/基因词条；点击弹生物卡片（包装 rec 加入候选）
   // v655：可偷蛋物种该组只含巢蛋 → 标题改「野生蛋最高」；v657：加数字徽章显示该物种可见野生蛋总数
