@@ -424,7 +424,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260908-898';
+var LB_VERSION = 'v20260908-900';
 // ====== PWA：Service Worker 注册（2026-08-29，配合 manifest 使移动端 Edge/Chrome 可安装为应用） ======
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function(){
@@ -12787,8 +12787,7 @@ var LB_ROUTE_MUT_SIDE = 1 - Math.pow(1 - LB_ROUTE_MUT_P, LB_ROUTE_MUT_ROLLS); //
 var LB_ROUTE_MUT_ANY  = 1 - Math.pow(1 - LB_ROUTE_MUT_SIDE, 2);               // ≈14.6%
 LB._routeRecs = [];                   // 当前渲染生物索引（点卡/名字用）
 LB._routeOpen = false;
-LB._routeOpenWaste = false;             // v7xx：废种折叠开关（不互斥线占展）
-LB._routeOpenLine = -1;               // 折叠互斥：当前展开线（-1=全收）
+LB._routeOpenLine = -1;               // 折叠互斥（线区+废种手风琴 v900）：当前展开线 idx（-1=全收；'waste'=废种展开）
 LB._routeCol = null;                  // 按物种持久化 {cls:[region 色id...]}
 LB._routeMomN = 0;                    // 叠组母群数量上限（0=未加载）
 LB._routeMomCls = '';                 // 上次加载母群数的物种（按物种持久化）
@@ -12816,8 +12815,9 @@ function lbMomPresets(){ var _b = LB_ROUTE_MOM_PRESETS.slice(0,4); var _n = lbRo
 /* 母群数量：按物种持久化（仿 breedSel lbFilterMap 机制），档位 3/6/12/24/48，默认 6 */
 function lbRouteMomGet(){
   var cls = LB.curClass || '';
-  var _sig = lbMomPresets().join(','); // v898：档位签名——N_opt/叠组/选中属性变化使档位变时缓存失效，momN 恒落在当前档位内（必有一档高亮且 poolN 一致）
-  if(LB._routeMomCls !== cls || !LB._routeMomN || LB._routeMomSig !== _sig){
+  var _prs = lbMomPresets();
+  var _sig = _prs.join(','); // v898：档位签名——N_opt/叠组/选中属性变化使档位变时缓存失效，momN 恒落在当前档位内（必有一档高亮且 poolN 一致）
+  if(LB._routeMomCls !== cls || !LB._routeMomN || LB._routeMomSig !== _sig || _prs.indexOf(LB._routeMomN) < 0){ // v899：值落档校验——签名未变但缓存值已落出当前档位（旧手动值/跨版本残留）也强制重算归一化
     var v = lbRouteMomNopt(); // v879：默认推荐 = N_opt（24h/1 有效变异目标）
     try{
       var m = JSON.parse(localStorage.getItem('lbRouteMomMap') || '{}');
@@ -12825,7 +12825,7 @@ function lbRouteMomGet(){
       if(isFinite(s) && s>=1 && s<=30) v = s; // 手选/旧档值，随后归一化到当前档位
     }catch(e){}
     // 归一化到最近档位（v879+v898：动态档含 N_opt，防旧值/手改值无高亮）
-    var _prs = lbMomPresets();
+    _prs = lbMomPresets();
     var best = _prs[0], bd = Math.abs(v - _prs[0]);
     for(var pi=1; pi<_prs.length; pi++){
       var d = Math.abs(v - _prs[pi]);
@@ -13667,6 +13667,8 @@ function lbRoutePlanHtml(recs, attrs){
     if(_dTitle) groups.push({order:1, ai:0, tag:'主配', title:_dTitle, body:'', note:'（主线）叠变异 = 冠军公 × 0/0 母群量产变异：'+_dNote});
   }
   // 公用扩母卡（单条、不分属性；v741：叠变异/合全能公优先占母后取剩余，统一 usedMothers 池排重）
+  poolN = lbRouteMomGet(); // v899：扩母群池目标在叠变异 mutSeg 之后重取（叠组口径，与顶部按钮/推荐档同源）——旧 poolN 是 mutSeg 前按 fallback 档位命中缓存（如残留 23），会导致扩母群标题与按钮高亮不一致
+  if(omni && (lbRouteCountM(omni)+lbRouteCountF(omni))>=20) poolN = Math.min(30, poolN*2); // 保留 v727：总到20 → 池目标×2
   if(avail0 < poolN){
     var seedM2 = null;
     zeroMales.forEach(function(r){ if(!seedM2 && usedMothers.indexOf(r)<0) seedM2 = r; });
@@ -14130,9 +14132,15 @@ function lbRouteWasteList(recs, attrs){
   list.sort(function(a,b){ return lbRouteBirth(a.r)-lbRouteBirth(b.r); });
   return list;
 }
-function lbRouteWasteToggle(){
-  LB._routeOpenWaste = !LB._routeOpenWaste;
-  if(typeof lbRouteRender==='function') lbRouteRender(true);
+function lbRouteWasteToggle(ev){
+  var el = ev && ev.currentTarget;
+  if(el && el.getAttribute && el.getAttribute('data-open')==='1' && ev && typeof ev.clientY==='number'){
+    // v900：展开态仅顶部标题带（≈30px）可折叠；点击下方废种条目/说明不触发（同线折叠）
+    var rc = el.getBoundingClientRect();
+    if((ev.clientY - rc.top) > 30) return;
+  }
+  LB._routeOpenLine = (LB._routeOpenLine==='waste') ? -1 : 'waste'; // v900：并入线区互斥系统（哨兵 'waste'——开废种收线、开线收废种）
+  if(LB._routeOpen) lbRouteRender(true);
 }
 
 function lbRouteLineBlock(recs, k, idx, color){
@@ -14247,14 +14255,14 @@ function lbRouteRender(preserve){
     // v7xx：废种折叠（当前方案判定用不到；每只标注理由）
     var wastes = lbRouteWasteList(recs, attrs);
     if(wastes.length){
-      var wOpen = !!LB._routeOpenWaste;
+      var wOpen = (LB._routeOpenLine === 'waste'); // v900：废种并入线区互斥系统（哨兵 'waste'）
       var wtri = '<span style="display:inline-block;width:4px;height:8px;background:#777;clip-path:polygon(0 0,0 100%,100% 50%);flex-shrink:0;transition:transform .15s'+(wOpen?';transform:rotate(90deg)':'')+'"></span>';
-      h += '<div style="margin-top:6px;background:#1a1a24;border:1px solid #4a3030;border-radius:8px;padding:8px 10px" data-waste="'+(wOpen?1:0)+'">'
-        + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:pointer" onclick="lbRouteWasteToggle()">' // v896：整条标题行可点（同线折叠 v891），穿透展开/折叠；删误导提示
+      h += '<div style="margin-top:6px;background:#1a1a24;border:1px solid #4a3030;border-radius:8px;padding:8px 10px;cursor:pointer" data-waste="'+(wOpen?1:0)+'" data-open="'+(wOpen?1:0)+'" onclick="lbRouteWasteToggle(event)" title="点击折叠/展开">' // v900：热区整块圆角栏（同线折叠 v891+v893），展开态仅顶部标题带可折叠（clientY>30 拦截）；内容区 cursor:default 抵消
+        + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:pointer">'
         + '<span style="display:inline-flex;align-items:center;gap:5px;flex:1;min-width:0">'
         + wtri + '<span style="font-size:13px;color:#f87171;font-weight:bold">废种</span><span style="font-size:10px;padding:1px 6px;border-radius:9px;background:#f8717122;color:#f87171;border:1px solid #f8717144;vertical-align:1px;margin-left:5px;font-weight:bold">'+wastes.length+' 只</span>' // v897：计数徽章样式
         + '</span></div>'
-        + '<div style="margin-top:5px;display:flex;flex-direction:column;gap:4px;'+(wOpen?'':'display:none;')+'">'
+        + '<div style="margin-top:5px;display:flex;flex-direction:column;gap:4px;cursor:default;'+(wOpen?'':'display:none;')+'">'
         + wastes.map(function(w){
             return '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:1px 0">'+lbRouteMemberChip(w.r, null)
               + (w.count>1 ? '<span style="color:#f87171;font-size:10px;font-weight:bold;border:1px solid #f8717155;background:#f8717118;border-radius:8px;padding:0 5px;line-height:1.6">×'+w.count+'</span>' : '')
