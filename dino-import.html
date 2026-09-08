@@ -424,7 +424,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260908-895';
+var LB_VERSION = 'v20260908-898';
 // ====== PWA：Service Worker 注册（2026-08-29，配合 manifest 使移动端 Edge/Chrome 可安装为应用） ======
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function(){
@@ -12816,14 +12816,15 @@ function lbMomPresets(){ var _b = LB_ROUTE_MOM_PRESETS.slice(0,4); var _n = lbRo
 /* 母群数量：按物种持久化（仿 breedSel lbFilterMap 机制），档位 3/6/12/24/48，默认 6 */
 function lbRouteMomGet(){
   var cls = LB.curClass || '';
-  if(LB._routeMomCls !== cls || !LB._routeMomN){ // v7xx：未初始化/为0 时也初始化（避免回传 0 导致母群数 0）
+  var _sig = lbMomPresets().join(','); // v898：档位签名——N_opt/叠组/选中属性变化使档位变时缓存失效，momN 恒落在当前档位内（必有一档高亮且 poolN 一致）
+  if(LB._routeMomCls !== cls || !LB._routeMomN || LB._routeMomSig !== _sig){
     var v = lbRouteMomNopt(); // v879：默认推荐 = N_opt（24h/1 有效变异目标）
     try{
       var m = JSON.parse(localStorage.getItem('lbRouteMomMap') || '{}');
       var s = parseInt(m[cls], 10);
-      if(isFinite(s) && s>=1 && s<=30) v = s;
+      if(isFinite(s) && s>=1 && s<=30) v = s; // 手选/旧档值，随后归一化到当前档位
     }catch(e){}
-    // 归一化到最近档位（v879：动态档含 N_opt，防旧值/手改值无高亮）
+    // 归一化到最近档位（v879+v898：动态档含 N_opt，防旧值/手改值无高亮）
     var _prs = lbMomPresets();
     var best = _prs[0], bd = Math.abs(v - _prs[0]);
     for(var pi=1; pi<_prs.length; pi++){
@@ -12832,6 +12833,7 @@ function lbRouteMomGet(){
     }
     LB._routeMomN = best;
     LB._routeMomCls = cls;
+    LB._routeMomSig = _sig;
   }
   return LB._routeMomN;
 }
@@ -12839,6 +12841,7 @@ function lbRouteMomSet(v){
   v = parseInt(v, 10); var _prs = lbMomPresets(); if(_prs.indexOf(v) < 0) v = _prs[0]; // v879：动态档含 N_opt；无效值回退最小档
   LB._routeMomN = v;
   LB._routeMomCls = LB.curClass || '';
+  LB._routeMomSig = lbMomPresets().join(','); // v898：同步档位签名
   try{
     var m = JSON.parse(localStorage.getItem('lbRouteMomMap') || '{}');
     m[LB._routeMomCls] = v;
@@ -14247,10 +14250,10 @@ function lbRouteRender(preserve){
       var wOpen = !!LB._routeOpenWaste;
       var wtri = '<span style="display:inline-block;width:4px;height:8px;background:#777;clip-path:polygon(0 0,0 100%,100% 50%);flex-shrink:0;transition:transform .15s'+(wOpen?';transform:rotate(90deg)':'')+'"></span>';
       h += '<div style="margin-top:6px;background:#1a1a24;border:1px solid #4a3030;border-radius:8px;padding:8px 10px" data-waste="'+(wOpen?1:0)+'">'
-        + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
-        + '<span style="display:inline-flex;align-items:center;gap:5px;flex:1;min-width:0;cursor:pointer" onclick="lbRouteWasteToggle()">'
-        + wtri + '<span style="font-size:13px;color:#f87171;font-weight:bold">废种（'+wastes.length+'只）</span>'
-        + '</span><span style="font-size:10px;color:#777">判定随属性选择变化 · 点击展开查看</span></div>'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:pointer" onclick="lbRouteWasteToggle()">' // v896：整条标题行可点（同线折叠 v891），穿透展开/折叠；删误导提示
+        + '<span style="display:inline-flex;align-items:center;gap:5px;flex:1;min-width:0">'
+        + wtri + '<span style="font-size:13px;color:#f87171;font-weight:bold">废种</span><span style="font-size:10px;padding:1px 6px;border-radius:9px;background:#f8717122;color:#f87171;border:1px solid #f8717144;vertical-align:1px;margin-left:5px;font-weight:bold">'+wastes.length+' 只</span>' // v897：计数徽章样式
+        + '</span></div>'
         + '<div style="margin-top:5px;display:flex;flex-direction:column;gap:4px;'+(wOpen?'':'display:none;')+'">'
         + wastes.map(function(w){
             return '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:1px 0">'+lbRouteMemberChip(w.r, null)
