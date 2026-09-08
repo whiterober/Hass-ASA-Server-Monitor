@@ -3,7 +3,7 @@
  * 其他同源静态资源（图标/manifest）cache-first。
  * 2026-08-29 首次上线
  */
-var CACHE = 'dino-import-v20260907-876';
+var CACHE = 'dino-import-v20260908-893';
 var CORE = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', function (e) {
@@ -32,16 +32,20 @@ self.addEventListener('fetch', function (e) {
   var url = new URL(req.url);
   if (url.origin !== location.origin) return;
 
-  // 首页/主文档：network-first
+  // 首页/主文档：network-first + 6s 超时回落缓存（2026-09-08：网络抖动/实例异常时防无限 Loading）
   if (url.pathname === '/' || url.pathname === '/index.html') {
+    var ac = new AbortController();
+    var to = setTimeout(function () { try { ac.abort(); } catch (e2) {} }, 6000);
     e.respondWith(
-      fetch(req).then(function (res) {
+      fetch(req, { signal: ac.signal }).then(function (res) {
+        clearTimeout(to);
         if (res.ok) {
           var copy = res.clone();
           caches.open(CACHE).then(function (c) { c.put(req, copy); });
         }
         return res;
       }).catch(function () {
+        clearTimeout(to);
         return caches.match(req).then(function (hit) { return hit || caches.match('/'); });
       })
     );

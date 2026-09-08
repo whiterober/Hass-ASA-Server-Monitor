@@ -800,9 +800,11 @@ def get_dino(server, dino1, dino2):
             err = j.get('error')
             if ok and found:
                 # v16（2026-09-02）：+ 实时属性字段（statValues/currentStatValues/statPoints/statMutations/saddle/colors）——前端关注浮窗每 5s 需刷新当前属性值，v15 仅透传成长字段导致只刷成长度
+                # v17（2026-09-08）：+ worldSecondsNow / nextAllowedMatingTime（ArkGetDino 纯追加输出）——路线浮窗「交配倒计时手动刷新」用
                 for k in ['babyAge', 'isBaby', 'level', 'name', 'dinoClass', 'gender',
                           'x', 'y', 'z', 'stasised', 'dinoId1', 'dinoId2', 'randomMutationsMale',
-                          'saddle', 'colors', 'statValues', 'currentStatValues', 'statPoints', 'statMutations']:
+                          'saddle', 'colors', 'statValues', 'currentStatValues', 'statPoints', 'statMutations',
+                          'worldSecondsNow', 'nextAllowedMatingTime']:
                     if k in j:
                         extra[k] = j[k]
         except Exception:
