@@ -426,7 +426,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260909-952';
+var LB_VERSION = 'v20260909-949';
 // ====== PWA：Service Worker 注册（2026-08-29，配合 manifest 使移动端 Edge/Chrome 可安装为应用） ======
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function(){
@@ -3264,41 +3264,33 @@ function lbHeadLm(url){
 
 // v208：数据下载——优先静态 .json.gz（预压缩，nginx 从 WebDAV 拉小文件），404 回退 .json
 // 自动解压：gzip magic 检测 → DecompressionStream('gzip')；nginx 动态 gzip 由浏览器自动解压
-// v951：全链 25s 超时（AbortController）——后端 CORS/重建偶发挂起不再让 lbLoad 永久停在「检查数据更新/资源加载中」
 function lbFetchDataJson(base, gzUrl){
-  var _ac = new AbortController();
-  var _tm = setTimeout(function(){ try{ _ac.abort(); }catch(e){} }, 25000);
-  var _opts = function(){ return { signal: _ac.signal }; };
-  function _clr(){ try{ clearTimeout(_tm); }catch(e){} }
-  return authFetch(gzUrl, _opts()).then(function(res){
+  return authFetch(gzUrl, {}).then(function(res){
     if(res.ok){
       return res.arrayBuffer().then(function(buf){
         var u8 = new Uint8Array(buf);
         if(u8.length>2 && u8[0]===0x1f && u8[1]===0x8b){ // gzip magic
           if(typeof DecompressionStream !== 'undefined'){
             var stream = new Response(buf).body.pipeThrough(new DecompressionStream('gzip'));
-            return new Response(stream).text().then(function(t){ _clr(); return JSON.parse(t); });
+            return new Response(stream).text().then(function(t){ return JSON.parse(t); });
           }
           // 极老浏览器无 DecompressionStream → 回退请求 .json（nginx 动态 gzip）
-          return authFetch(base, _opts()).then(function(r2){ _clr(); return r2.ok ? r2.json() : null; });
+          return authFetch(base, {}).then(function(r2){ return r2.ok ? r2.json() : null; });
         }
-        _clr();
         return JSON.parse(new TextDecoder().decode(buf));
       });
     }
     if(res.status === 404){
       // 回退 .json
-      return authFetch(base, _opts()).then(function(r2){
-        _clr();
+      return authFetch(base, {}).then(function(r2){
         if(!r2.ok) return null;
         var enc = (r2.headers.get('content-encoding')||'').toLowerCase();
         if(enc.indexOf('gzip')>=0) return r2.json(); // nginx 动态 gzip，浏览器自动解压
         return r2.arrayBuffer().then(function(b2){ return JSON.parse(new TextDecoder().decode(b2)); });
       });
     }
-    _clr();
     return null;
-  }).catch(function(){ try{ _clr(); }catch(e){} return null; });
+  }).catch(function(){ return null; });
 }
 
 // v211：HEAD 探测 .gz 优先（后端 zlib 改造后可能只输出 .json.gz 不保留明文 .json），404 回退 .json；返回 {lm, ext}
@@ -4889,28 +4881,20 @@ function lbEggCacheSet(cache, lm){
 }
 // v527：后台 HEAD 增量检查——对比缓存 Last-Modified，有变化的服才重拉
 async function lbEggHeadCheck(servers, oldLm){
-  // v951：Bob（俱乐部）黑名单服——主数据 lbLoad 已统一剔除，蛋数据这里也对齐（Bob 无蛋导出，避免每次必 404）
-  servers = (servers||[]).filter(function(s){ return s !== 'Bob'; });
-  if(!servers.length) return;
   var changed = [];
   try{
     await Promise.all(servers.map(function(abbr){
-      var ac = new AbortController();
-      var _t = setTimeout(function(){ try{ ac.abort(); }catch(e){} }, 10000); // v951：10s 超时——后端偶发挂起不再拖住增量检查
-      return fetch(DINO_JSON + abbr + '_eggs.json.gz', { method:'HEAD', cache:'no-store', signal: ac.signal })
+      return fetch(DINO_JSON + abbr + '_eggs.json.gz', { method:'HEAD', cache:'no-store' })
         .then(function(r){
-          clearTimeout(_t);
           var lm = (r.headers.get('Last-Modified') || '').trim();
           if(lm && (!oldLm[abbr] || String(oldLm[abbr]).trim() !== lm)) changed.push(abbr);
           return lm;
-        }).catch(function(){ try{ clearTimeout(_t); }catch(e2){} return ''; });
+        }).catch(function(){ return ''; });
     }));
   }catch(e){}
   if(changed.length) lbLoadEggs(changed, true); // 变化服强制重拉
 }
 async function lbLoadEggs(servers, force){
-  // v951：Bob（俱乐部）黑名单服——对齐主数据 lbLoad（Bob 无蛋导出，避免每次刷新必 404 刷屏）
-  servers = (servers||[]).filter(function(s){ return s !== 'Bob'; });
   if(!servers || !servers.length) return {};
   // v527：非强制时优先 IndexedDB 蛋缓存（刷新秒开），后台 HEAD 增量检查（未变化不重拉，对齐 tamed）
   if(!force && !LB._eggCache){
@@ -4929,10 +4913,7 @@ async function lbLoadEggs(servers, force){
   // v528：首次/强制拉取提示（避免「干等初始化」无反馈）
   try{ lbToast('正在下载蛋数据…'); }catch(e){}
   return Promise.all(servers.map(function(abbr){
-    var _ac = new AbortController();
-    var _tm = setTimeout(function(){ try{ _ac.abort(); }catch(e){} }, 20000); // v951：20s 下载超时——后端 CORS/重建偶发不挂死加载；失败该服跳过其余继续
-    return authFetch(DINO_JSON + abbr + '_eggs.json.gz?cb=' + Date.now(), { signal: _ac.signal }).then(function(r){
-      clearTimeout(_tm);
+    return authFetch(DINO_JSON + abbr + '_eggs.json.gz?cb=' + Date.now(), {}).then(function(r){
       try{ lm[abbr] = (r.headers.get('Last-Modified') || '').trim(); }catch(e){}
       if(!r.ok) return {server:abbr, eggs:[]};
       return r.arrayBuffer();
@@ -4951,7 +4932,7 @@ async function lbLoadEggs(servers, force){
         LB._eggWorldByServer[abbr] = (j && typeof j.worldSecondsNow==='number' && isFinite(j.worldSecondsNow)) ? j.worldSecondsNow : null;
         return {server:abbr, eggs: list.map(function(e){ return lbEggToRec(e, abbr); })};
       });
-    }).catch(function(){ try{ clearTimeout(_tm); }catch(e){} return {server:abbr, eggs:[]}; });
+    }).catch(function(){ return {server:abbr, eggs:[]}; });
   })).then(function(results){
     // v656：部分服强制重拉（HEAD 增量/单服刷新）时合并进现有缓存，禁止整体覆盖——否则其余服的蛋被清空，
     //      recs 蛋层按 eggCache 重建（v646）→ 该服野生蛋/巢蛋消失（如熔岩龙 Gen 蛋丢失）。首次全量拉时 cache 为空等效全量。
@@ -8414,7 +8395,7 @@ function lbLoadIconList(){
     var by={}, cats={};
     // 额外收录的非 biology/units 精选图标（如「全部物种」的 HubTameIcon，GUI 分类；以及手风琴 summary 容器图标 facility/skins/GUI）
     var extra={'HubTameIcon':1, 'Cryofridge':1, 'Display_Case':1, 'HUD_CryoHospital_Icon':1, 'HUD_MedicalStand_Icon':1, 'HUD_PetDisplayStand_Wall_Thatch_Icon':1, 'Tek_Replicator':1, 'SmallStorage_Icon':1, 'RW_Tracking_dino':1, 'Cryopod':1, 'RW_Store_chibi':1, 'RW_equip_saddle':1, 'TEK_Icon':1, 'RW_Garage_roof_show':1, 'HubInventoryIcon':1, 'RW_wants_to_cuddle':1, 'Feeding_Trough':1,
-      'Tek Transmitter':1, 'TEKPortal_Icon':1, 'WoodFridge_Icon':1, 'Industrial_Preserving_Bin':1, 'Icon_DedicatedStorage':1, 'LargeStorage_Icon':1, 'Linked_Storage_Box':1, 'Library_Storage':1, 'Large_Storage_Box':1, 'Egg_Incubator':1, 'Embryo_Incubator':1, 'Gene_Storage':1, 'Pet_Display':1, 'Tek_Sleeping_Pod':1, 'HUD_CompanionBed_Icon':1, 'RW_cryopod':1, 'Gene_Scanner':1, 'Vault':1, 'RaptorHead Icon':1, 'Simple_Bed':1, 'ModernBed_Icon':1, 'Coffin':1, 'Gravestone':1, 'GraveStone1_Icon':1, 'DinoLeash_Icon':1, 'Clockface':1}; // v591：刷新浮窗饲料槽图标（misc 分类）// v819：设施区（床/墓碑/钟）图标收录（facility 分类）// v952：Dino Leash（tools 目录）图标收录——聚落设施可放置
+      'Tek Transmitter':1, 'TEKPortal_Icon':1, 'WoodFridge_Icon':1, 'Industrial_Preserving_Bin':1, 'Icon_DedicatedStorage':1, 'LargeStorage_Icon':1, 'Linked_Storage_Box':1, 'Library_Storage':1, 'Large_Storage_Box':1, 'Egg_Incubator':1, 'Embryo_Incubator':1, 'Gene_Storage':1, 'Pet_Display':1, 'Tek_Sleeping_Pod':1, 'HUD_CompanionBed_Icon':1, 'RW_cryopod':1, 'Gene_Scanner':1, 'Vault':1, 'RaptorHead Icon':1, 'Simple_Bed':1, 'ModernBed_Icon':1, 'Coffin':1, 'Gravestone':1, 'GraveStone1_Icon':1, 'Clockface':1}; // v591：刷新浮窗饲料槽图标（misc 分类）// v819：设施区（床/墓碑/钟）图标收录（facility 分类）
     (d||[]).forEach(function(it){
       if(!it || !it.url || !it.name) return;
       var m=it.url.match(/\/ASA\/([^/]+)\//);
@@ -14175,23 +14156,12 @@ function lbRoutePlanHtml(recs, attrs){
   // ---- 5. 多线合并（可选金）——常驻（v691：全局最优配对，非固定某线代表）
   if(attrs.length>=2){
     // 候选池 = 各线 ♂/♀ 代表去重；各属性线水平 = 该属性全局最高
-    // 候选池 = 各线 ♂/♀ 成年优先代表去重（v950：实际配种建议 → 各线取首位成年；仅无线成年时才用未成年蛋/幼兜底）；各属性线水平 = 该属性全局最高
     var mPools = [], fPools = [], mxA = {};
-    function _adultRep(mem, sex){ // 该线该性别成年优先代表（mem 已按覆盖→垃圾→成年排序；优先取首个 adult，无 adult 才回落未成年）
-      var ad = null, jv = null;
-      for(var ai=0; ai<mem.length; ai++){
-        if(mem[ai].gender !== sex) continue;
-        if(lbRouteAdult(mem[ai])){ if(!ad) ad = mem[ai]; }
-        else if(!jv) jv = mem[ai];
-      }
-      return ad || jv;
-    }
     attrs.forEach(function(k){
       var memk = lbRouteLineMembers(recs, k, attrs);
       mxA[k] = memk.length ? lbRoutePoint(memk[0], k) : 0;
-      var mr = _adultRep(memk, 'MALE'), fr = _adultRep(memk, 'FEMALE');
-      if(mr && mPools.indexOf(mr)<0) mPools.push(mr);
-      if(fr && fPools.indexOf(fr)<0) fPools.push(fr);
+      if(lineRep[k] && lineRep[k].m && mPools.indexOf(lineRep[k].m)<0) mPools.push(lineRep[k].m);
+      if(lineRep[k] && lineRep[k].f && fPools.indexOf(lineRep[k].f)<0) fPools.push(lineRep[k].f);
     });
     // v949：属性集中候选池排序 —— 覆盖冠军数同 → 成年优先 → 垃圾少（属性集中是实际配种建议，成年可立即执行优先于垃圾少；lbRouteLineMembers 的“垃圾少→成年”仅服务展示型最优，不适用于本卡）
     function _poolCov(r){ var c=0; attrs.forEach(function(kk){ if(mxA[kk]>0 && lbRoutePoint(r,kk)>=mxA[kk]) c++; }); return c; }
