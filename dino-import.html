@@ -426,7 +426,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260909-942';
+var LB_VERSION = 'v20260909-949';
 // ====== PWA：Service Worker 注册（2026-08-29，配合 manifest 使移动端 Edge/Chrome 可安装为应用） ======
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function(){
@@ -13404,24 +13404,31 @@ function lbRouteStat(recs){
   });
   return st;
 }
-/* 单线成员：只收「该属性点数 = 该属性全场最高值」的种（v682）；v942：成人优先 → 垃圾少优先（同值按原序） */
+/* 单线成员：只收「该属性点数 = 该属性全场最高值」的种（v682）；v944：线代表择优 = 覆盖冠军属性数(降) → 垃圾少(升) → 成人(最后) → 原序（v942 曾把垃圾提前致 7593 类残缺龙当选；v943 又完全弃垃圾——正确应为综合冠军优先、垃圾仅平局兜底、成人最末） */
 function lbRouteLineMembers(recs, k, attrs){
   var mx = 0;
   recs.forEach(function(r){ var v = lbRoutePoint(r,k); if(v>mx) mx=v; });
   if(mx <= 0) return [];
+  // v944：计算各选中属性全场最高（lbRoutePoint 口径，同 mx）→ 覆盖冠军数 = 达线属性数
+  var ch = {};
+  if(attrs && attrs.length){
+    attrs.forEach(function(k2){ var m2=0; recs.forEach(function(r2){ var v2=lbRoutePoint(r2,k2); if(v2>m2) m2=v2; }); ch[k2]=m2; });
+  }
+  function _cov(r){ var c=0; if(attrs){ for(var ci=0; ci<attrs.length; ci++){ var kk=attrs[ci]; if(ch[kk]>0 && lbRoutePoint(r,kk)>=ch[kk]) c++; } } return c; }
   return recs.filter(function(r){ return lbRoutePoint(r,k) === mx; }).sort(function(a,b){
-    var av=lbRouteAdult(a)?1:0, bv=lbRouteAdult(b)?1:0;
-    if(av!==bv) return bv-av;
+    var ca=_cov(a), cb=_cov(b);
+    if(ca!==cb) return cb-ca; // v944：主判据=覆盖冠军属性数降序（综合最强优先，9645 类全冠军当选）
     if(attrs){
       var ja=lbRouteJunkPts(a,attrs), jb=lbRouteJunkPts(b,attrs);
-      if(ja!==jb) return ja-jb;
+      if(ja!==jb) return ja-jb; // v944：垃圾少仅作平局兜底
     }
+    var av=lbRouteAdult(a)?1:0, bv=lbRouteAdult(b)?1:0;
+    if(av!==bv) return bv-av; // v944：成人判断放最后（lbRouteRep 已独立保证代表成年）
     return 0;
   });
 }
-function lbRouteRep(members, sex){ // 该性别的首位代表（成人优先）
-  for(var i=0;i<members.length;i++){ if(members[i].gender===sex && lbRouteAdult(members[i])) return members[i]; }
-  for(var j=0;j<members.length;j++){ if(members[j].gender===sex) return members[j]; }
+function lbRouteRep(members, sex){ // 该性别排序首位代表（v945：排序已含「覆盖→垃圾→成人最后」，不再强制 adult 跳位——未成年若综合更优可当选）
+  for(var i=0;i<members.length;i++){ if(members[i].gender===sex) return members[i]; }
   return null;
 }
 function lbRouteBestMy(recs, sex, k){ // 全部种龙内该性别点数最高
@@ -13546,11 +13553,11 @@ function lbRouteEggJuvZero(recs, k){
     return !lbRouteAdult(r) && lbRouteCountM(r)+lbRouteCountF(r)===0 && lbRoutePoint(r,k)>0;
   }).sort(function(a,b){ return lbRoutePoint(b,k)-lbRoutePoint(a,k); });
 }
-function lbRouteWashCand(recs, attrs){ // v7xx：洗剂 = 未选中属性垃圾 <10 的成年种（垃圾低优先，同垃圾按出生低）
+function lbRouteWashCand(recs, attrs){ // v7xx：洗剂 = 未选中属性垃圾 <10 的成年种（垃圾低优先，同垃圾按原序——v948 去出生早伪判断）
   return recs.filter(function(r){ return lbRouteAdult(r) && lbRouteJunkPts(r, attrs) < 10; }).sort(function(a,b){
     var ja=lbRouteJunkPts(a, attrs), jb=lbRouteJunkPts(b, attrs);
     if(ja!==jb) return ja-jb;
-    return lbRouteBirth(a)-lbRouteBirth(b);
+    return 0;
   });
 }
 /* 生成一组（tag/color/title/body/note/order） */
@@ -13859,23 +13866,26 @@ function lbRoutePlanHtml(recs, attrs){
   function _routeNeg(r){ var t=lbRouteCountM(r)+lbRouteCountF(r); return t<0; }
   function _routeSum(r){ var s=0; for(var si=0; si<attrs.length; si++){ s+=lbRouteMut(r,attrs[si]); } return s; } // v7xx：层和=变异点
   function _routeBaseSum(r){ var s=0; for(var bi=0; bi<attrs.length; bi++){ s+=lbRouteBase(r,attrs[bi]); } return s; } // v7xx：基础点和（同变异点数时优先基础高的）
-  function _routeBetter(a,b){             // tie-break：负公优先 → 总变异计数低 → 层和(变异点)高 → 基础点和高 → 出生早
+  function _routeBetter(a,b){             // tie-break：负公优先 → 层和(变异点)高 → 基础点和高 → 总变异计数低 → 垃圾少 → 成年（v948：去出生早伪判断；计数低移到基础高之后）
     var na=_routeNeg(a), nb=_routeNeg(b);
     if(na!==nb) return na;
-    var ta=lbRouteCountM(a)+lbRouteCountF(a), tb=lbRouteCountM(b)+lbRouteCountF(b);
-    if(ta!==tb) return ta<tb;
     var sa=_routeSum(a), sb=_routeSum(b);
     if(sa!==sb) return sa>sb;
     var ba=_routeBaseSum(a), bb2=_routeBaseSum(b);
     if(ba!==bb2) return ba>bb2;
-    var ja2=lbRouteJunkPts(a,attrs), jb2=lbRouteJunkPts(b,attrs); // v942：垃圾少优先
-    if(ja2!==jb2) return ja2<jb2;
-    return lbRouteBirth(a)<lbRouteBirth(b);
+    var ta=lbRouteCountM(a)+lbRouteCountF(a), tb=lbRouteCountM(b)+lbRouteCountF(b);
+    if(ta!==tb) return ta<tb;
+    var ja2=lbRouteJunkPts(a,attrs), jb2=lbRouteJunkPts(b,attrs);
+    if(ja2!==jb2) return ja2<jb2; // 垃圾少：基础/计数平局后的 tie-break
+    var aa2=lbRouteAdult(a)?1:0, ab2=lbRouteAdult(b)?1:0;
+    if(aa2!==ab2) return aa2>ab2; // 成年作为最终 tie-break（放在垃圾之后，最末）
+    return false;
   }
   recs.forEach(function(r){
-    if(r.gender!=='MALE' || !lbRouteAdult(r)) return;
+    if(r.gender!=='MALE') return;
     var c = _routeCov(r);
     if(c<=0) return;                       // 须至少覆盖 1 条冠军
+    // v947：未成年♂冠军可参与择优（不再 !adult 硬排除）；同覆盖走 _routeBetter 完整链（含垃圾少→成年最末 tie-break）——绝不把成年插在实力判据前
     if(!omni || c>omniCov || (c===omniCov && _routeBetter(r, omni))){ omni=r; omniCov=c; }
   });
   // v7xx：零变异起始 fallback —— 全库存无任何变异冠军且无负公时，选基础覆盖最高的 0/0 成年♂ 作起始主配（首窝孵出变异落点即开线）
@@ -13910,7 +13920,7 @@ function lbRoutePlanHtml(recs, attrs){
       zeroMales.forEach(function(r){
         var cc = 0; attrs.forEach(function(k){ if((mxBaseAll[k]||0) > 0 && lbRouteBase(r,k) >= mxBaseAll[k]) cc++; });
         if(cc > _zc){ _zc = cc; _zs = r; }
-        else if(cc === _zc && _zs){ var _jj=lbRouteJunkPts(r,attrs)-lbRouteJunkPts(_zs,attrs); if(_jj<0 || (_jj===0 && lbRouteBirth(r)<lbRouteBirth(_zs))){ _zs = r; } } // v942：同覆盖垃圾少优先
+        else if(cc === _zc && _zs && lbRouteJunkPts(r,attrs) < lbRouteJunkPts(_zs,attrs)){ _zs = r; } // v948：同覆盖垃圾少优先（去出生早伪判断）
       });
       if(_zs){ omni = _zs; omniCov = 0; }
     } else if(_waitJuvM){ // v870 规则1：未成年♂ 冠军直接作叠变异公种（成年后开配）
@@ -13926,8 +13936,7 @@ function lbRoutePlanHtml(recs, attrs){
     var zf = zeroFems.filter(function(r){ return usedMothers.indexOf(r)<0; }).sort(function(a,b){
       function dc(rr){ var c=0; attrs.forEach(function(k){ var iB=LB_BREED_IDX[k]; var mb=(omni.statPoints&&iB!=null)?(Number(omni.statPoints[iB])||0):0; var rb=(rr.statPoints&&iB!=null)?(Number(rr.statPoints[iB])||0):0; if(rb>=mb) c++; }); return c; }
       var d = dc(b)-dc(a); if(d!==0) return d;
-      var jd = lbRouteJunkPts(a,attrs)-lbRouteJunkPts(b,attrs); if(jd!==0) return jd; // v942：同达线垃圾少优先
-      return lbRouteBirth(a)-lbRouteBirth(b);
+      return lbRouteJunkPts(a,attrs)-lbRouteJunkPts(b,attrs); // v948：同达线垃圾少优先（去出生早伪判断）
     });
     // v744：扩母群需求（avail0<poolN）且 0/0 母有限（avail0≥2）→ 叠变异让渡：只留 1 只启动，其余 0/0 母给扩母群补池（母不是没有而是全被占时）
     var usedN = (avail0 < poolN && avail0 >= 2) ? 1 : poolN;
@@ -13940,14 +13949,18 @@ function lbRoutePlanHtml(recs, attrs){
       var parts3 = [lbRoutePlanDino(omni, null, 13, cntTxt)];
       usedZ.forEach(function(fm){ parts3.push('<span style="color:#666">×</span>' + lbRoutePlanDino(fm, null, 13, '0/0')); });
       var t3 = parts3.join('') + mutSeg(omni); // v7xx：叠变异无确定性目标 → 去掉 thRow(目标) 行；body=公×母+变异段
-      var _isWaitMale = !!_waitJuvM; // v870：未成年♂/蛋♂ 冠军公种
+      var _isWaitMale = !!_waitJuvM || (omni && !lbRouteAdult(omni)); // v870/v946：未成年♂/蛋♂ 冠军公种（含择优入选未成年）
       var _stM = _stTxt(omni).replace(/^·/,''); // v875：待孵化/待成年
-      var titleTxt = (omniCov>=attrs.length) ? '叠变异（全能公）' : ((omniCov===0) ? (_isWaitMale ? ('叠变异 · 冠军'+(_stM||'待成年')+'（公种）') : (_waitChamp ? '叠变异 · 冠军待成年（0/0 起步）' : '叠变异 · 0变异起始')) : ('叠变异 · 冠军主配（覆盖 '+omniCov+'/'+attrs.length+'）'));
-      var covTxt = (omniCov===0)
+      var titleTxt = (omni && !lbRouteAdult(omni))
+        ? ('叠变异 · 冠军'+(_stM||'待成年')+(omniCov>0?('（覆盖 '+omniCov+'/'+attrs.length+'）'):'')+'（公种）') // v946：未成年冠军公种（即使有覆盖也标待成年）
+        : ((omniCov>=attrs.length) ? '叠变异（全能公）' : ((omniCov===0) ? (_isWaitMale ? ('叠变异 · 冠军'+(_stM||'待成年')+'（公种）') : (_waitChamp ? '叠变异 · 冠军待成年（0/0 起步）' : '叠变异 · 0变异起始')) : ('叠变异 · 冠军主配（覆盖 '+omniCov+'/'+attrs.length+'）')));
+      var covTxt = (omni && !lbRouteAdult(omni))
+        ? ('；公种 '+lbRouteName(omni)+' '+(_stM||'未成年待成年')+'（携带 '+(_waitChamp||'冠军')+'）→ 当前仅作计划展示，就绪后直接开配') // v946：未成年公种（含择优入选）
+        : ((omniCov===0)
         ? (_isWaitMale ? ('；公种 '+lbRouteName(omni)+' '+(_stM||'未成年待成年')+'（携带 '+_waitChamp+'）→ 当前仅作计划展示，就绪后直接开配')
            : (_waitChamp ? ('；变异冠军 '+_waitChamp+' 待成年（当前无法配种）→ 先用 0/0 公起步推基础线，冠军成年后作冠军母并入收拢')
               : '；全库存尚无变异层 → 本窝为起始（变异落点随机，落在选中属性即开对应线）'))
-        : ((omniCov<attrs.length) ? ('；当前覆盖 '+omniCov+'/'+attrs.length+' 冠军，命中未覆盖目标属性会浪费 → 用空窗顺带合体补覆盖') : '');
+        : ((omniCov<attrs.length) ? ('；当前覆盖 '+omniCov+'/'+attrs.length+' 冠军，命中未覆盖目标属性会浪费 → 用空窗顺带合体补覆盖') : ''));
       _dieCard = true; // v871：叠变异主线卡已生成
       groups.push({order:1, ai:0, tag:'主配', title:titleTxt, body:t3, // v7xx：出生上限提示已上移顶部提示框
         note:''+lbRouteName(omni)+' 主配 × 公用 0/0 母群（'+usedZ.length+' 只）→ 每窝子代 55% 拿各属性高值；变异随机落点 → 孵出看变异落在 '+tK+' 哪个属性即推进哪个（落点分散，非目标落点淘汰）；父系栏随总变异累积（仔=父本总/母本总）'+covTxt+yldTxt});
@@ -14095,7 +14108,7 @@ function lbRoutePlanHtml(recs, attrs){
   if(omni && (lbRouteCountM(omni)+lbRouteCountF(omni))>=20) poolN = Math.min(30, poolN*2); // 保留 v727：总到20 → 池目标×2
   if(avail0 < poolN){
     var seedM2 = null;
-    zeroMales.forEach(function(r){ if(usedMothers.indexOf(r)<0 && (!seedM2 || lbRouteJunkPts(r,attrs) < lbRouteJunkPts(seedM2,attrs))) seedM2 = r; }); // v942：闲置 0/0♂ 垃圾少优先
+    zeroMales.forEach(function(r){ if(!seedM2 && usedMothers.indexOf(r)<0) seedM2 = r; }); // v943：回退 v942——闲置 0/0♂ 取第一个未用（原序）
     var freeF = zeroFems.filter(function(r){ return usedMothers.indexOf(r)<0; });
     var breedF2 = freeF.slice(0, 3);
     if(seedM2 && breedF2.length){
@@ -14122,7 +14135,7 @@ function lbRoutePlanHtml(recs, attrs){
     var seedPool = zeroFems.concat(zeroMales).filter(function(r){ return usedArr.indexOf(r)<0; });
     var idlePool = seedPool.filter(function(r){ return idleOf(r); });
     if(idlePool.length >= 2) seedPool = idlePool;
-    seedPool = seedPool.slice().sort(function(a2,b2){ return lbRouteJunkPts(a2,attrs)-lbRouteJunkPts(b2,attrs); }); // v942：种子池垃圾少优先
+    // v943：删除 v942 种子池垃圾少排序——负线种子按原序（zeroFems 在前 + zeroMales 在后）取前 3 对
     var ms = [], fs = [];
     seedPool.forEach(function(r){ if(r.gender==='MALE') ms.push(r); else fs.push(r); });
     var seedPairs = [];
@@ -14150,6 +14163,18 @@ function lbRoutePlanHtml(recs, attrs){
       if(lineRep[k] && lineRep[k].m && mPools.indexOf(lineRep[k].m)<0) mPools.push(lineRep[k].m);
       if(lineRep[k] && lineRep[k].f && fPools.indexOf(lineRep[k].f)<0) fPools.push(lineRep[k].f);
     });
+    // v949：属性集中候选池排序 —— 覆盖冠军数同 → 成年优先 → 垃圾少（属性集中是实际配种建议，成年可立即执行优先于垃圾少；lbRouteLineMembers 的“垃圾少→成年”仅服务展示型最优，不适用于本卡）
+    function _poolCov(r){ var c=0; attrs.forEach(function(kk){ if(mxA[kk]>0 && lbRoutePoint(r,kk)>=mxA[kk]) c++; }); return c; }
+    function _poolCmp(a,b){
+      var ca=_poolCov(a), cb=_poolCov(b);
+      if(ca!==cb) return cb-ca;
+      var aa=lbRouteAdult(a)?1:0, ab=lbRouteAdult(b)?1:0;
+      if(aa!==ab) return ab-aa; // 成年优先（可立即配）
+      var ja=lbRouteJunkPts(a,attrs), jb=lbRouteJunkPts(b,attrs);
+      if(ja!==jb) return ja-jb; // 垃圾少（成年后的次 tie-break）
+      return 0;
+    }
+    mPools.sort(_poolCmp); fPools.sort(_poolCmp);
     // v755-P3b：自动择优（用户口径 2026-09-05：总赌线最少 + 纯自动）——
     // S=单组全覆盖（覆盖全部缺口配对中赌线最少） vs D=赌线最少分解（≤3 组互不共用龙、覆盖全部缺口、总赌线最小，bounded DFS），自动用总赌线少者
     function _pc(m, f){ // {c:覆盖缺口数, n:赌线数(达顶且父母不同值)}
