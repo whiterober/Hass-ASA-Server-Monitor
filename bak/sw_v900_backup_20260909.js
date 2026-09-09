@@ -3,7 +3,7 @@
  * 其他同源静态资源（图标/manifest）cache-first。
  * 2026-08-29 首次上线
  */
-var CACHE = 'dino-import-v20260909-942';
+var CACHE = 'dino-import-v20260908-900';
 var CORE = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', function (e) {

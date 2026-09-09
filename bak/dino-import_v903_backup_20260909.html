@@ -202,8 +202,6 @@ html.ios .lb-sex{transform:translateY(-0.08em)}
 .lb-breed-card .lb-sum-ic{width:16px;height:16px;vertical-align:-3px;margin-right:3px;border-radius:3px;object-fit:contain}
 #lbBreedOverlayBody .lb-sum-ic{width:16px;height:16px;vertical-align:-3px;border-radius:3px;object-fit:contain}
 .acc{border-radius:8px;margin-bottom:6px;background:transparent;overflow:hidden}
-/* v938b：聚落详情（lbSettleBody）首个容器手风琴与上方操作栏 border-bottom 分隔线保持 10px 间隔（防紧贴） */
-#lbSettleBody > details.acc:first-child{margin-top:10px}
 .acc summary{padding:8px 12px;cursor:pointer;font-size:13px;color:#ccc;user-select:none;display:flex;justify-content:space-between;align-items:center;transition:all .15s}
 .acc summary .acc-sum-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-flex;align-items:center;gap:4px}
 .acc summary:hover{background:#1d1d29;color:#fff}
@@ -426,7 +424,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260909-942';
+var LB_VERSION = 'v20260909-903';
 // ====== PWA：Service Worker 注册（2026-08-29，配合 manifest 使移动端 Edge/Chrome 可安装为应用） ======
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function(){
@@ -1968,15 +1966,6 @@ function toggleLevelInfo(e, total, base, wild, bonus, xp, isBred) {
 
 /* ================= 最新生物 TAB ================= */
 var LB = {};
-// v920：函数级诊断打点——内存 marks + localStorage 持久化（主线程冻结时仍可从同源另一页面读取）
-LB._bd = function(tag, extra){
-  try{
-    var now = Date.now();
-    if(!LB._bootDiag){ LB._bootDiag = { t0: now, marks: [] }; }
-    LB._bootDiag.marks.push([now - LB._bootDiag.t0, tag, (extra===undefined?'':String(extra))]);
-    try{ localStorage.setItem('dino_pfdiag', JSON.stringify({ t: now, t0: LB._bootDiag.t0, tag: tag, extra: (extra===undefined?'':String(extra)), cur: LB._assetCur||'' })); }catch(e2){}
-  }catch(e){}
-};
 // 注：LB_VERSION 定义已提前到顶部双架构常量区（静态 JSON ?v= 缓存参数需要提前可用）
 // 方案A(2026-08-27)：版本自检——启动时对比服务器 dino-import.version，发现新版自动刷新，防客户端跑旧版
 function lbCheckVersion(){
@@ -2067,11 +2056,7 @@ var LB_MAP_EXT = (LB_ARCH === 'new') ? '.webp' : '.jpg'; // 地图扩展名（�
 // ===== 资源包预取缓存（2026-08-27 v311）：地图+图标 Cache Storage 提前下载；初始化/换客户端首次打开自动预取 =====
 var LB_ASSET_CACHE = 'dino-assets-v1'; // 缓存版本号：资源集变化时 +1 使旧缓存作废重预取
 function lbAssetCache(){
-  try{ return Promise.race([caches.open(LB_ASSET_CACHE), new Promise(function(_r){ setTimeout(function(){ _r(null); }, 3000); })]); }catch(e){ return Promise.resolve(null); }
-}
-// v928：Cache Storage 命中检查超时兜底（storage 挂起 3s 放弃走网络，防 16 并发全卡进度冻结）
-function _lbCacheMatch(cache, u){
-  try{ return Promise.race([cache.match(u), new Promise(function(_r){ setTimeout(function(){ _r(null); }, 3000); })]); }catch(e){ return Promise.resolve(null); }
+  try{ return caches.open(LB_ASSET_CACHE); }catch(e){ return Promise.resolve(null); }
 }
 // 预取单个资源：Image 预加载（跨域无 CORS 限制，直接进浏览器 HTTP 缓存），onload/onerror 完成回调驱动真实进度（v312）
 function lbPrefetchOne(url){
@@ -2117,42 +2102,32 @@ function _lbPrefetchBody(){
     if(by){ priKeys.forEach(function(n){ if(by[n] && urls[by[n]]){ priUrls[by[n]] = 1; } }); }
     var list = Object.keys(priUrls).concat(Object.keys(urls).filter(function(u){ return !priUrls[u]; }));
     var total = list.length, done = 0, idx = 0, shown = false;
-    // v919：内存计时诊断（零 DOM）——启动/每128张采样/5s心跳；主线程冻结时心跳停跳，恢复后读 LB._pfDiag 可得冻结时长与卡点 URL
-    LB._pfDiag = { start: Date.now(), samples: [], hbLast: 0, hbDone: 0, hbCur: '' };
-    LB._pfDiag.samples.push([0, done, LB._assetCur || '']);
-    LB._pfHb = setInterval(function(){ try{ LB._pfDiag.hbLast = Date.now(); LB._pfDiag.hbDone = done; LB._pfDiag.hbCur = LB._assetCur || ''; try{ localStorage.setItem('dino_pfdiag', JSON.stringify({ t: Date.now(), t0: LB._pfDiag.start, tag: 'pf:hb', done: done, cur: LB._assetCur||'' })); }catch(e4){} }catch(e){} }, 5000);
     var CONC = 16; // v20260828：HTTP/2 多路复用下并发 16 提速（原 8，近 2 倍）
     // 延迟 300ms 显示进度条：全缓存瞬间完成则不打扰
     var showTimer = setTimeout(function(){ if(done < total){ shown = true; lbAssetProgShow(done, total); } }, 300);
     function maybeFinish(){
       if(shown) lbAssetProgShow(done, total);
-      try{ if((done & 15) === 0) LB._pfDiag.samples.push([Date.now()-LB._pfDiag.start, done, LB._assetCur || '']); }catch(e){} // v928：采样粒度 128→16（看清卡死段）
       if(done >= total){
         if(showTimer) clearTimeout(showTimer);
-        if(LB._pfHb){ try{ clearInterval(LB._pfHb); LB._pfHb = null; }catch(e2){} }
-        try{ LB._pfDiag.samples.push([Date.now()-LB._pfDiag.start, total, 'DONE']); }catch(e3){}
         lbAssetProgHide();
         lbUpgradeAssets();
       }
     }
-    function _lbDone(){ done++; maybeFinish(); }
-    function _lbNext(){ setTimeout(worker, 0); } // v930：完成一张后宏任务让出调度下一张，防 Cache 命中微任务风暴饿死 setInterval 心跳/渲染/输入（主线程假冻结根因）
     function worker(){
       if(idx >= total) return; // 无任务，worker 结束
       var u = list[idx]; idx++;
-      LB._assetCur = u || ''; // v918：仅内存记录当前 URL（诊断用，不做 DOM 更新避免 reflow 风暴）
       // 2026-08-28 省流：Cache Storage 持久缓存命中 → 跳过（不重复下载）
       lbAssetCache().then(function(cache){
         if(cache && cache.match){
-          _lbCacheMatch(cache, u).then(function(hit){
-            if(hit){ _lbDone(); _lbNext(); return; }
-            lbPrefetchOne(u).then(function(){ _lbDone(); _lbNext(); });
-          }).catch(function(){ lbPrefetchOne(u).then(function(){ _lbDone(); _lbNext(); }); });
+          cache.match(u).then(function(hit){
+            if(hit){ done++; maybeFinish(); worker(); return; }
+            lbPrefetchOne(u).then(function(){ done++; maybeFinish(); worker(); });
+          }).catch(function(){ lbPrefetchOne(u).then(function(){ done++; maybeFinish(); worker(); }); });
         } else {
-          lbPrefetchOne(u).then(function(){ _lbDone(); _lbNext(); });
+          lbPrefetchOne(u).then(function(){ done++; maybeFinish(); worker(); });
         }
       }).catch(function(){
-        lbPrefetchOne(u).then(function(){ _lbDone(); _lbNext(); });
+        lbPrefetchOne(u).then(function(){ done++; maybeFinish(); worker(); });
       });
     }
     for(var w=0; w<CONC && w<total; w++) worker();
@@ -2160,12 +2135,7 @@ function _lbPrefetchBody(){
   }).catch(function(){ return 0; });
 }
 // 资源包下载进度条（右上角小浮窗，v312 右下角 → v350 右上角）
-// v917：URL 只记录在 LB._assetCur（诊断可读），不显示给前端（UI 保持干净）
-var _lbProgLast = 0; // v929：进度 DOM 节流（200ms 内非最终不更新，防 storage 恢复后爆发 done++ 连续 innerHTML reflow 风暴冻结主线程）
 function lbAssetProgShow(done, total){
-  var _now = Date.now();
-  if(done < total && _now - _lbProgLast < 200) return;
-  _lbProgLast = _now;
   var el = document.getElementById('lbAssetProg');
   if(!el){
     el = document.createElement('div');
@@ -3294,13 +3264,7 @@ function lbFetchDataJson(base, gzUrl){
 }
 
 // v211：HEAD 探测 .gz 优先（后端 zlib 改造后可能只输出 .json.gz 不保留明文 .json），404 回退 .json；返回 {lm, ext}
-// v910：tryGz=false 跳过 .gz 探测——tamed 固定明文 .json（物理服务器从不 gz 化），直接 HEAD .json，省 1 次必 404 的 HEAD/服；若未来 tamed 改 gz 需改回 true
-function lbHeadPick(base, tryGz){
-  if(tryGz === false){
-    return lbHeadLm(base+'?cb='+Date.now()).then(function(lm){
-      return { lm: lm, ext: (lm===LB_LM_404) ? null : '' };
-    });
-  }
+function lbHeadPick(base){
   return lbHeadLm(base+'.gz?cb='+Date.now()).then(function(lm){
     if(lm !== LB_LM_404) return { lm: lm, ext: '.gz' };
     return lbHeadLm(base+'?cb='+Date.now()).then(function(lm2){
@@ -3312,8 +3276,6 @@ function lbHeadPick(base, tryGz){
 // 加载 + 归一化（cryo∪tamed，跨服去重：同一 dinoId 只保留一条，优先 sortWorldSec 大的）
 // 两阶段：①全部并发 HEAD 收集 Last-Modified + 变化清单（HEAD 不与下载抢连接）②分批只下载变化的文件，未变化的复用旧 recs
 async function lbLoad(servers, oldData, onProgress){ // v207：onProgress({phase:'head'|'dl', done, total, msg}) 下载进度回调
-  // v910：Bob（俱乐部）为黑名单服（无数据导出，UI 层 lbRenderServers/搜野生/拥有地图均已排除）→ 数据加载统一剔除，省每次 4 次必 404 的 HEAD；此处为唯一加载入口，覆盖 lbView/强制刷新/增量合并所有调用点
-  servers = servers.filter(function(s){ return s !== 'Bob'; });
   var _seq = ++LB._dlSeq; // v215：本次下载令牌，新下载启动后本任务自我作废（防并发进度回退）
   var recs=[], recMap={}, tribesByServer={}, worldNowByServer={};
   var structures = []; // v6：床/棺材/睡眠舱结构（聚落建筑命名）
@@ -3391,7 +3353,7 @@ async function lbLoad(servers, oldData, onProgress){ // v207：onProgress({phase
     var tamedBase = DINO_JSON+abbr+'_tamed.json';
     var oCryo = oldLm[abbr] && oldLm[abbr].cryo;
     var oTamed = oldLm[abbr] && oldLm[abbr].tamed;
-    return Promise.all([ lbHeadPick(cryoBase), lbHeadPick(tamedBase, false) ]).then(function(res){ // v910：tamed 固定明文 .json，跳过 .gz 探测
+    return Promise.all([ lbHeadPick(cryoBase), lbHeadPick(tamedBase) ]).then(function(res){
       var cryoRes = res[0], tamedRes = res[1];
       lm[abbr] = { cryo: cryoRes.lm || null, tamed: tamedRes.lm || null, cryoExt: cryoRes.ext, tamedExt: tamedRes.ext };
       var cryoSkip = !!(cryoRes.lm && oCryo && cryoRes.lm === oCryo);
@@ -3454,7 +3416,7 @@ async function lbLoad(servers, oldData, onProgress){ // v207：onProgress({phase
           // 容器 vs 设施不再由词表预判分裂——渲染时按「该设施有无内容 rec(球/基因/蓝图)」动态判定：
           //   有内容 → 容器手风琴；无内容 → 设施 chips；装饰类 → 显示排除
           // 容器子类型词表（LB_CONTAINER_DISP._cls）仅作命名/图标/排序用（lbContainerTypeOf 派生），不再决定是否生成 rec
-          var _decorRe = /Lamp|Light|Torch|Chair|Seat|Bench|Stool|Sign_Large_Metal|WoodSign|MetalSign|Painting|DrawingSheet|Poster|Canvas|Mirror|Decor|Display_Box|Snowman|ChristmasTree/i; // 装饰类（显示排除，不进容器/设施）v914：+Decor（装饰箱）v927：+Snowman/ChristmasTree（节日树/雪人）
+          var _decorRe = /Lamp|Light|Torch|Chair|Seat|Bench|Stool|Sign_Large_Metal|WoodSign|MetalSign|Painting|DrawingSheet|Poster|Canvas|Mirror/i; // 装饰类（显示排除，不进容器/设施）
           (cryo.facilities||[]).forEach(function(f){
             if(!f || !f.class) return;
             var _cc = f.class || '';
@@ -3530,7 +3492,6 @@ function lbClusterHasBed(data, clu){
   return false;
 }
 function lbBuildSettlements(data){
-  LB._bd('bs:enter', (data && data.recs) ? data.recs.length : 0); // v920：聚落构建入口打点（20651 条最重嫌疑段）
   var byServer = {}, byDinoKey = {}, byContainer = {}, byGeneDevice = {}, byBed = {};
   if(!data || !Array.isArray(data.recs)) return {byServer:byServer, byDinoKey:byDinoKey, byContainer:byContainer, byGeneDevice:byGeneDevice, byBed:byBed, buildAt:Date.now()};
   // v194：structures 按部落预分组（床纳入中心性能：全服床 52万条，避免逐聚落全量过滤）
@@ -3542,7 +3503,6 @@ function lbBuildSettlements(data){
   var servers = {};
   data.recs.forEach(function(r){ if(r.server) servers[r.server]=1; });
   Object.keys(servers).forEach(function(abbr){
-    LB._bd('bs:srv', abbr); // v920：每服处理前打点（卡死可定位到服）
     var recs = data.recs.filter(function(r){ return r.server===abbr; });
     // 1. 容器聚合：containerId → {x,y,type,tribeId,球数,印痕者集合,dinoKeys}
     var ctn = {};
@@ -3775,7 +3735,7 @@ function lbBuildSettlements(data){
     });
     // v821 设施唯一归属：structures(床/墓碑/棺材等) 同部落最近聚落（设施 rec 已统一进容器体系，不再需要独立归属通道）
     // 每设施消费唯一化（与 bedOwner 同模式）；装饰（灯/椅/牌/画）不参与归属 → 存 s.facilityList（设施区显示）
-    var _facDecorRe = /Lamp|Light|Torch|Chair|Seat|Bench|Stool|Sign_Large_Metal|WoodSign|MetalSign|Painting|DrawingSheet|Poster|Canvas|Mirror|Decor|Display_Box|Snowman|ChristmasTree/i; // v914：+Decor（装饰箱）v927：+Snowman/ChristmasTree
+    var _facDecorRe = /Lamp|Light|Torch|Chair|Seat|Bench|Stool|Sign_Large_Metal|WoodSign|MetalSign|Painting|DrawingSheet|Poster|Canvas|Mirror/i;
     var _facCands = [];
     (Array.isArray(data.structures)?data.structures:[]).forEach(function(x){ _facCands.push(x); }); // v821：facilityStructs 已弃用（已放置设施统一生成 facility rec，经容器聚合自动入聚落）
     var _facOwner = {}; // class|tribeId|x|y -> {setId, st}
@@ -4048,108 +4008,9 @@ function lbResolveImprinterPidByEos(data, eosId, memberPids){
   return null;
 }
 // 幂等构建聚落：data._settlements 不存在则计算并缓存（会话内复用；数据变化由 _schemaVer/缓存失效触发重算）
-var LB_SETTLE_VER = 1; // v931：聚落构建版本号（算法升级 +1 强制重建；构建结果随 IndexedDB 持久化，缓存命中跳过 80s 同步构建）
-// v933：重建期 UI 反馈覆盖层——CSS transform 动画走合成器线程，主线程同步构建期间 spinner 仍转动（DOM 更新冻结但动画可见）
-function lbSettleBuildShow(data, reason){
-  try{
-    if(document.getElementById('lbSettleBuildOv')) return;
-    var n = (data && Array.isArray(data.recs)) ? data.recs.length : 0;
-    // v934：按数据量估算（实测 2 万条全服约 80s）
-    var est = n > 35000 ? '约 1.5-2 分钟' : n > 20000 ? '约 1 分钟' : n > 8000 ? '约 30-50 秒' : '约 10-30 秒';
-    var _reason = reason || '首次加载，或检测到服务器数据有更新';
-    var ov = document.createElement('div');
-    ov.id = 'lbSettleBuildOv';
-    ov.style.cssText = 'position:fixed;inset:0;z-index:99998;background:rgba(10,10,22,.72);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:#e6e6e6;font-size:14px;text-align:center;padding:20px';
-    ov.innerHTML = '<div style="width:46px;height:46px;border:4px solid #333;border-top-color:#7c3aed;border-radius:50%;animation:lbSpin 1s linear infinite"></div>'
-      + '<div style="font-size:15px;font-weight:bold">🏗️ 正在重建聚落数据</div>'
-      + '<div style="font-size:13px;color:#c4b5fd">原因：'+_reason+'</div>'
-      + '<div style="font-size:13px;color:#ccc">数据量 '+n.toLocaleString()+' 条 ｜ 预估耗时：'+est+'</div>'
-      + '<div style="font-size:12px;color:#999">计算期间页面无响应属正常，请勿刷新/关闭</div>';
-    if(!document.getElementById('lbSettleBuildSt')){
-      var st = document.createElement('style');
-      st.id = 'lbSettleBuildSt';
-      st.textContent = '@keyframes lbSpin{to{transform:rotate(360deg)}}';
-      document.head.appendChild(st);
-    }
-    document.body.appendChild(ov);
-  }catch(e){}
-}
-function lbSettleBuildHide(){
-  try{
-    var ov = document.getElementById('lbSettleBuildOv'); if(ov && ov.parentNode) ov.parentNode.removeChild(ov);
-    var st = document.getElementById('lbSettleBuildSt'); if(st && st.parentNode) st.parentNode.removeChild(st);
-  }catch(e){}
-}
-// v935：容器聚合（与 lbBuildSettlements 聚合段同步；供增量刷统计复用）
-function lbAggContainers(recs){
-  var ctn = {};
-  (recs||[]).forEach(function(r){
-    if(!r) return;
-    if(lbContainerTypeOf(r)==='player') return;
-    var cid, tid;
-    if(lbContainerTypeOf(r)==='released'){
-      cid = 'rel_'+(r.dinoId1||'')+'_'+(r.dinoId2||'');
-      tid = r.tribeId||r.containerTribe||0;
-    } else {
-      cid = r.containerId || ('noid_'+(lbContainerTypeOf(r)||''));
-      tid = r.containerTribe||r.tribeId||0;
-    }
-    var c = ctn[cid] = ctn[cid] || { id:cid, type:lbContainerTypeOf(r), x:r.containerX||0, y:r.containerY||0, z:r.containerZ||0, tribeId:tid, count:0, imps:{}, impEos:{}, keys:[] };
-    if(r.src !== 'facility') c.count++;
-    if(!r.isEmpty && r.imprinterEosId) c.impEos[r.imprinterEosId] = (c.impEos[r.imprinterEosId]||0)+1;
-    else if(!r.isEmpty && r.imprinterName) c.imps[r.imprinterName] = (c.imps[r.imprinterName]||0)+1;
-    if(!r.isEmpty) c.keys.push(String(r.dinoId1||'')+'_'+String(r.dinoId2||''));
-  });
-  return ctn;
-}
-// v935：容器结构指纹（posCtn 级：cid|坐标|部落 去重 + FNV）——仅球内容变化时指纹不变 → 跳过重建只刷统计
-function lbSettlePosFingerprint(recs){
-  var seen = {}, n = 0, h1 = 2166136261;
-  (recs||[]).forEach(function(r){
-    if(!r) return;
-    if(lbContainerTypeOf(r)==='player') return;
-    var x = Number(r.containerX)||0, y = Number(r.containerY)||0;
-    if(!x && !y) return;
-    var t = lbContainerTypeOf(r);
-    var cid = (t==='released') ? ('rel_'+(r.dinoId1||'')+'_'+(r.dinoId2||'')) : (r.containerId || ('noid_'+t));
-    var k = cid + '|' + Math.round(x) + '|' + Math.round(y) + '|' + (r.tribeId||r.containerTribe||0);
-    if(seen[k]) return; seen[k]=1; n++;
-    for(var i=0;i<k.length;i++){ h1 ^= k.charCodeAt(i); h1 = (h1*16777619)>>>0; }
-  });
-  return n + '_' + (h1>>>0).toString(36);
-}
-// v935：结构未变 → 用新数据重算各聚落容器统计/冠名（复用 lbFinalizeSettlement），不重跑 DBSCAN（秒级）
-function lbRefreshSettleStats(data){
-  try{
-    var ss = data && data._settlements;
-    if(!ss || !ss.byServer) return;
-    var ctn2 = lbAggContainers((data.recs)||[]);
-    Object.keys(ss.byServer).forEach(function(abbr){
-      var sv = ss.byServer[abbr];
-      if(!sv || !Array.isArray(sv.settlements)) return;
-      sv.settlements = sv.settlements.map(function(s){
-        var nc = (s.containers||[]).map(function(c){ return ctn2[c.id]; }).filter(Boolean);
-        if(!nc.length) return s;
-        try{ return lbFinalizeSettlement(data, abbr, s.tribeId, s.id, nc); }catch(e){ return s; }
-      });
-    });
-  }catch(e){}
-}
 function lbEnsureSettlements(data){
   if(!data) return null;
   if(!data._settlements){
-    // v935：容器结构指纹未变（仅球/内容变化）→ 复用旧结构增量刷统计，跳过 80s 全量重建
-    var _fpNow = lbSettlePosFingerprint((data.recs)||[]);
-    var _pv = LB._prevSettles;
-    if(_pv && _pv._fp === _fpNow && _pv.byServer){
-      data._settlements = _pv;
-      try{ lbRefreshSettleStats(data); }catch(e){}
-      data._settleVer = LB_SETTLE_VER;
-      try{ if(typeof lbCacheSet==='function') lbCacheSet(data); }catch(e){}
-      LB._prevSettles = null;
-      return data._settlements;
-    }
-    LB._prevSettles = null;
     // v550：首次构建前并入已有蛋缓存——蛋容器属设施，聚落构建含蛋容器（byContainer 有 CropPlot/IceBox），蛋无需重建即可归属
     if(LB._eggCache && Array.isArray(data.recs)){
       var _existE = {};
@@ -4161,15 +4022,7 @@ function lbEnsureSettlements(data){
       });
       data._eggInSettles = true; // v551：聚落构建已含蛋容器（蛋合并无需重建）
     }
-    try{ lbSettleBuildShow(data, (LB._cache && LB._cache.data) ? '检测到服务器数据有更新（如设施/生物变化）' : '首次加载'); }catch(e){} // v934：重建期 UI 反馈（spinner 合成器动画 + 原因 + 预估时间）
-    try{
-      data._settlements = lbBuildSettlements(data);
-    } finally {
-      try{ lbSettleBuildHide(); }catch(e){}
-    }
-    try{ data._settlements._fp = _fpNow; }catch(e){} // v935：记录结构指纹（下次增量对比）
-    data._settleVer = LB_SETTLE_VER; // v931：记录构建版本
-    try{ if(typeof lbCacheSet==='function') lbCacheSet(data); }catch(e){} // v931：构建结果回写 IndexedDB（下次缓存命中跳过重建）
+    data._settlements = lbBuildSettlements(data);
   }
   return data._settlements;
 }
@@ -4550,10 +4403,9 @@ function lbDinoHTML(r, opts){
   }
   // v878+v888：全库存(我的)最优属性高亮——仅「我的」卡且该属性基础/变异点数 == 全库存最高时，主值数字变色加粗（基础金 #fbbf24 / 变异紫 #c084fc）；不新增角标
   // v888：全部物种模式(LB.curClass 空)按卡片自身 dinoClass 计算（缓存按物种 key，跨物种自动重算）
-  // v9xx：蛋/胚胎卡纳入——去掉 !isEgg（蛋有真实 statPoints/statMutations 可参与点数高亮；主值 val 用 lbEggCalcStat 推算，与 lbBestMxMx 统计口径一致）
   var _bst = null, _bstPs = null, _bstPid = 0;
   var _bCls = LB.curClass || ((r && r.dinoClass) ? String(r.dinoClass) : '');
-  if(_bCls && r.containerType !== 'wild'){
+  if(_bCls && !isEgg && r.containerType !== 'wild'){
     if(!LB._bstArr || LB._bstClsKey !== _bCls){ try{ LB._bstArr = lbBestMxMx(_bCls); LB._bstClsKey = _bCls; }catch(e){ LB._bstArr = null; LB._bstClsKey = _bCls; } }
     _bst = LB._bstArr;
     if(_bst){ _bstPid = lbCurPid()||0; if(!LB._bstPs){ LB._bstPs = _bstPid ? lbPlayerTribes(((LB._cache&&LB._cache.data&&LB._cache.data.tribesByServer)||{}), _bstPid) : null; } _bstPs = LB._bstPs; }
@@ -5184,43 +5036,19 @@ function lbMyStatsBest(cls, mode){ // mode 'max'/'min'：当前角色拥有的�
   return out;
 }
 // v878：全库存（当前角色·我的）该物种 6 属性基础/变异点数 max——lbDinoHTML 高亮「全库存最优」用（基础金 #fbbf24 / 变异紫 #c084fc）
-// v936：蛋/胚胎纳入统计（与全库存混合比）——①匹配用 lbSpeciesMatch（蛋 dinoClass=短名 Rex ↔ 生物蓝图 Rex_Character_BP_C 前向）；②蛋短名发起(cls=短名)时加蓝图前缀对称兜底（findSpeciesByClass 短名歧义如 Rex→Corrupt，不可作反向依据）；③蛋无 statValues → val 用 lbEggCalcStat 推算 MAX 入池；④排除野生巢蛋(source='wild')（非玩家库存）
 function lbBestMxMx(cls){
   var data = (LB._cache && LB._cache.data) || null;
-  var out = { base:{}, mut:{}, val:{} }; // v890：val = 显示属性值(statValues/蛋推算MAX) 全库存最高（主值金色判定用）
+  var out = { base:{}, mut:{}, val:{} }; // v890：val = 显示属性值(statValues) 全库存最高（主值金色判定用）
   if(!data || !Array.isArray(data.recs)) return out;
   var curPid = lbCurPid(); if(!curPid) return out;
   var ps = curPid ? lbPlayerTribes(data.tribesByServer||{}, curPid) : null;
   [0,1,3,4,7,8].forEach(function(i){ out.base[i]=0; out.mut[i]=0; out.val[i]=0; });
-  function _inPool(r){
-    if(!cls) return true;
-    if(lbSpeciesMatch(r, cls)) return true; // 生物发起（cls 蓝图）→ 蛋经蛋分支进池；蛋发起但 r 为蛋短名相同 → 相等进池
-    // v936 反向兜底：cls 为蛋短名（不含 _Character_BP）而 r 为蓝图生物 → 前缀对称比较（绕开 findSpeciesByClass 短名歧义）
-    var _a = String(r.dinoClass||'').toLowerCase();
-    var _b = String(cls||'').toLowerCase();
-    if(_a.indexOf('character_bp') >= 0 && _b.indexOf('character_bp') < 0){
-      var _p1 = _a.split('_character_bp')[0];
-      var _p2 = _b.split('_character_bp')[0];
-      if(_p1 && _p2 && (_p1===_p2 || _p1.indexOf(_p2)>=0 || _p2.indexOf(_p1)>=0)) return true;
-    }
-    return false;
-  }
   data.recs.forEach(function(r){
-    if(!r || r.isEmpty) return;
-    if(!_inPool(r)) return;
-    if(r.containerType==='wild' || (r._isEgg && r.source==='wild')) return; // v936：野生/野生巢蛋不算库存（不再排除普通蛋/胚胎）
+    if(String(r.dinoClass||'')!==cls || r.isEmpty) return;
+    if(r.source==='egg'||r.source==='embryo'||r.containerType==='wild') return;
     if(!lbIsMyRec(r, ps, curPid)) return;
-    var _isEggR = !!(r._isEgg || r.source==='egg' || r.source==='embryo'); // v936：蛋/胚胎识别
     var sp=r.statPoints||[], sm=r.statMutations||[], sv=r.statValues||[];
-    [0,1,3,4,7,8].forEach(function(i){
-      var bv=Number(sp[i])||0, mv=Number(sm[i])||0;
-      if(bv>out.base[i])out.base[i]=bv;
-      if(mv>out.mut[i])out.mut[i]=mv;
-      var vv;
-      if(_isEggR){ var _ev=lbEggCalcStat(r, i); vv = (_ev && _ev>0) ? _ev : 0; } // v936：蛋无 statValues → 推算 MAX 入池
-      else { vv = Number(sv[i]); }
-      if(isFinite(vv) && vv>out.val[i]) out.val[i]=vv;
-    });
+    [0,1,3,4,7,8].forEach(function(i){ var bv=Number(sp[i])||0, mv=Number(sm[i])||0, vv=Number(sv[i]); if(bv>out.base[i])out.base[i]=bv; if(mv>out.mut[i])out.mut[i]=mv; if(isFinite(vv)&&vv>out.val[i])out.val[i]=vv; });
   });
   return out;
 }
@@ -5585,21 +5413,13 @@ var LB_IDB_NAME = 'dinoImportDB', LB_IDB_STORE = 'lbCache';
 function lbCacheOpen(){
   return new Promise(function(resolve, reject){
     if(!window.indexedDB){ reject(new Error('no indexedDB')); return; }
-    var _done = false;
-    var _fin = function(fn, v){ if(!_done){ _done = true; try{ fn(v); }catch(e){} } };
-    // v921：IndexedDB 打开 3s 超时兑底——DB 损坏/锁（多标签/僵尸删除）导致 open 永不回调时，走网络下载不再永久「正在初始化」
-    var _timer = setTimeout(function(){ _fin(reject, new Error('idb timeout')); }, 3000);
     var req = indexedDB.open(LB_IDB_NAME, 1);
     req.onupgradeneeded = function(e){
       var db = e.target.result;
       if(!db.objectStoreNames.contains(LB_IDB_STORE)) db.createObjectStore(LB_IDB_STORE);
     };
-    req.onsuccess = function(){
-      clearTimeout(_timer);
-      if(_done){ try{ req.result && req.result.close(); }catch(e2){} return; } // 超时后迟到的打开：关闭防连接泄漏
-      _fin(resolve, req.result);
-    };
-    req.onerror = function(){ clearTimeout(_timer); _fin(reject, req.error); };
+    req.onsuccess = function(){ resolve(req.result); };
+    req.onerror = function(){ reject(req.error); };
   });
 }
 function lbCacheGet(){
@@ -5612,8 +5432,8 @@ function lbCacheGet(){
         // 版本校验：旧结构（无 _schemaVer===3 / 无 players / rec 无 containerOwnerPid）→ 判失效
         if(v && v.data){
           var d = v.data;
-          // v931：_settlements 随缓存持久化（缓存命中跳过 80s 重建）；仅聚落算法版本不符时剔除强制重建
-          if(d._settleVer !== LB_SETTLE_VER && d._settlements) delete d._settlements;
+          // 派生数据不持久化：剔除 _settlements，每次加载用当前算法重建
+          if(d._settlements) delete d._settlements;
           var okVer = d._schemaVer === 13; // v13：v821 纯动态重构（旧缓存 12 判失效强制重拉）
           var okPlayers = Array.isArray(d.players);
           var okPid = true;
@@ -5635,7 +5455,9 @@ function lbCacheGet(){
   }).catch(function(){ return null; });
 }
 function lbCacheSet(data){
-  // v931：_settlements 随缓存持久化（不再剔除；蛋 v607 起坐标动态匹配不需重建，_eggBuiltOnce 保留防重复重建）
+  // 派生数据不持久化：剔除 _settlements；v548：_eggBuiltOnce 也剔除（缓存恢复后新 data 首次蛋合并仍触发重建，否则蛋容器不进聚落）
+  if(data && data._settlements) delete data._settlements;
+  if(data && data._eggBuiltOnce) delete data._eggBuiltOnce;
   return lbCacheOpen().then(function(db){
     return new Promise(function(resolve){
       var tx = db.transaction(LB_IDB_STORE, 'readwrite');
@@ -5820,8 +5642,6 @@ function lbDtcDinoClass(r){
 // v189 统一容器体系：装球容器（containerType）+ other（containerClass）合并一张表
 // 中文统一 zhName(JSON key) 动态查，无词条显示英文（不脑补）；图标统一 LB_ICON_BY_NAME PNG / MDI 兑底
 var LB_CONTAINER_DISP = {
-  geneInfuser: { key:'gene_storage', iconKey:'Gene_Storage', mdi:'mdi-dna' },   // v909：基因台并入容器命名/词表（与 facility_zh GeneInfuser 同义）
-  geneScanner: { key:'gene_scanner', iconKey:'Gene_Scanner', mdi:'mdi-dna' },    // v909：基因枪（孤儿容器/手持设备标题统一）
   fridge: { key:'cryofridge', iconKey:'Cryofridge', mdi:'mdi-fridge-outline' },
   display: { key:'display_case', iconKey:'Display_Case', mdi:'mdi-cog' },
   stand: { key:'hud_petdisplaystand_wall_thatch_icon', iconKey:'HUD_PetDisplayStand_Wall_Thatch_Icon', mdi:'mdi-basket-outline' },
@@ -5835,8 +5655,6 @@ var LB_CONTAINER_DISP = {
     { re:/Display_Case|DisplayCase/i, type:'display', key:'display_case', iconKey:'Display_Case', mdi:'mdi-cog' },
     { re:/Feeding_Trough|FeedingTrough/i, type:'other', key:'feeding_trough', iconKey:'Feeding_Trough', mdi:'mdi-cog' },
     { re:/GeneStorage/i, type:'other', key:'gene_storage', iconKey:'Gene_Storage', mdi:'mdi-dna' },
-    { re:/GeneInfuser/i, type:'geneInfuser', key:'gene_storage', iconKey:'Gene_Storage', mdi:'mdi-dna' }, // v909：基因台（StructureBP_GeneInfuser）
-    { re:/WeaponGeneScanner/i, type:'geneScanner', key:'gene_scanner', iconKey:'Gene_Scanner', mdi:'mdi-dna' }, // v909：基因枪（PrimalItem_WeaponGeneScanner）
     { re:/EggIncubator/i, type:'other', key:'egg_incubator', iconKey:'Egg_Incubator', mdi:'mdi-cog' },
     { re:/EmbryoIncubator/i, type:'other', key:'embryo_incubator', iconKey:'Embryo_Incubator', mdi:'mdi-cog' },
     { re:/PreservingBin/i, type:'other', key:'industrial_preserving_bin', iconKey:'Industrial_Preserving_Bin', mdi:'mdi-fridge-outline' },
@@ -5879,7 +5697,7 @@ function lbContainerDisp(type, cls){
     var arr = LB_CONTAINER_DISP._cls || [];
     for(var i=0;i<arr.length;i++){ if(arr[i].re.test(cls)){ e = arr[i]; break; } }
     if(!e){
-      var n = String(cls).replace(/^DinoTamedInventoryComponent_/,'').replace(/^PrimalInventory(?:BP_)?/,'').replace(/_C_\d+$/,'').replace(/_C\d*$/,'');
+      var n = String(cls).replace(/^DinoTamedInventoryComponent_/,'').replace(/^PrimalInventory(?:BP_)?/,'').replace(/_C\d*$/,'');
       en = lbCamelSplit(n);
     }
   }
@@ -5922,14 +5740,7 @@ function lbContainerLabel(r){
     }
   }
   var hasName = r.containerName && r.containerName!=='?' && r.containerName!=='';
-  // v904：结构类容器（非恐龙背包）→ 类型英文小字（facility_zh 表命中时），有内容/自定义名容器同样显示
-  var enTag = '';
-  var _cc0 = String(r.containerClass || '');
-  if(_cc0 && _cc0.indexOf('DinoTamedInventoryComponent') < 0){
-    var _mm = (LB_FACILITY_ZH && Object.keys(LB_FACILITY_ZH).length) ? lbSettleFacMeta(_cc0) : null;
-    if(_mm && _mm.en) enTag = '<span style="opacity:.55;font-size:9px;margin-left:4px">'+_mm.en+'</span>';
-  }
-  if(hasName) return '<span class="acc-title">'+icon+' '+r.containerName+enTag+'</span>';
+  if(hasName) return '<span class="acc-title">'+icon+' '+r.containerName+'</span>';
   // 恐龙背包容器：显示对应生物中文种名（复用选物种 lbSpName）
   if(dtcCls){
     var dnm = lbSpName(dtcCls);
@@ -5939,12 +5750,11 @@ function lbContainerLabel(r){
   // player（玩家背包）固定标「背包」；other/装球用 disp.zh（JSON 动态，无词条英文提取名）
   var tzh = sub==='player' ? '背包' : (disp ? disp.zh : '');
   var name = tzh || sub; // JSON 无中文 → 回退子类型名（不脑补）
-  var _idTxt = ''; // v908：ID 拆出（放在英文之后）——顺序：中文名 + 灰小英文 + #ID
   if(sub!=='display' && sub!=='stand' && sub!=='released' && sub!=='player'){
     var id = r.containerId || '';
-    _idTxt = ' #' + (id.length>6 ? id.slice(-6) : id);
+    name += ' #' + (id.length>6 ? id.slice(-6) : id);
   }
-  return '<span class="acc-title">'+icon+' '+name+enTag+_idTxt+'</span>';
+  return '<span class="acc-title">'+icon+' '+name+'</span>';
 }
 // v751b：视口跨 640 断点时自动重渲染（PC 半块 ↔ 移动 1/4 撑满切换，无需刷新）
 (function(){
@@ -6042,7 +5852,7 @@ function lbDlProgUpdate(done,total,active){
 // 空球行 HTML：低温仓图标 + 文字（宽度与卡片一致：margin 仅上下 8px）
 function lbEmptyRowHtml(n){
   var ic = (LB_ICON_BY_NAME && LB_ICON_BY_NAME['Cryopod']) ? '<img src="'+LB_ICON_BY_NAME['Cryopod']+'" class="lb-empty-ic">' : '';
-  return '<div style="display:flex;align-items:center;background:#15151f;border:1px dashed #333;border-radius:10px;padding:8px 12px;margin:8px 0;font-size:12px;color:#888">'+ic+' ×'+n+'</div>';
+  return '<div style="display:flex;align-items:center;background:#15151f;border:1px dashed #333;border-radius:8px;padding:8px 12px;margin:8px 0;font-size:12px;color:#888">'+ic+' ×'+n+'</div>';
 }
 // v176：该服务器基因设备是否含当前物种（或任意）基因——选物种后服务器 tab 按基因过滤（hasContent 用）
 // v176：该服务器含当前物种基因的设备 slot 总数（tab 徽标显示用）
@@ -6075,7 +5885,6 @@ function lbServerHasGene(abbr, cls){
       || (gd.scanners||[]).some(function(d){ return isMyDev('基因枪', d) && has(d); });
 }
 function lbRenderView(data, player, classFilter){
-  LB._bd('rv:enter', (data && data.recs) ? data.recs.length : 0); // v920：渲染入口打点
   // v469：修复偶发「生物卡片类名未翻译」——ZH_MAP/LB_PREFIX_ZH 异步加载，生物数据可能先到触发渲染
   // 翻译未就绪时先渲染（英文兜底），翻译就绪后自动重渲染一次（变中文）
   var _zhMapOk = (typeof ZH_MAP!=='undefined' && ZH_MAP && Object.keys(ZH_MAP).length>0);
@@ -6105,7 +5914,6 @@ function lbRenderView(data, player, classFilter){
     return;
   }
   lbEnsureSettlements(data); // 构建聚落（幂等：data._settlements 缓存）
-  LB._bd('rv:settled'); // v920：聚落构建完成打点（进入后续收集/排序/渲染）
   LB._geneDevices = (data && data.geneDevices) || LB._geneDevices || {}; // v134：基因台/基因枪
   LB.curClass = classFilter || ''; // 物种名仅在「全部物种」模式显示（LB.curClass 为空）
   lbRenderBreedBar(); // 繁育栏：选中具体物种才显示
@@ -6238,7 +6046,7 @@ function lbRenderView(data, player, classFilter){
     var scnHtml = myScanners.length ? myScanners.map(function(d){
         var sl=(d.slots||[]).filter(geneSlotShow); // v142：按当前物种过滤
         var genes = sl.length ? sl.map(function(s){ return lbGeneTagHtml(s.trait,s.level,s.species,undefined,s.dinoClass); }).join('') : '<span style="color:#666">无基因</span>';
-        return '<div style="font-size:12px;padding:8px 10px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:10px;margin-bottom:6px">'+lbGeneDevIcon('基因枪')+'<b style="color:#c4b5fd">'+lbGeneDevZh('基因枪', d.class)+'</b><div style="margin-top:4px">'+genes+'</div></div>';
+        return '<div style="font-size:12px;padding:8px 10px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;margin-bottom:6px">'+lbGeneDevIcon('基因枪')+'<b style="color:#c4b5fd">'+lbGeneDevZh('基因枪')+'</b><div style="margin-top:4px">'+genes+'</div></div>';
       }).join('') : ''; // v773：先算，并入玩家组瀑布流 col 首块（自动左右分列）
     if(playerCarried.length){
       playerCarried.sort(cmpSp);
@@ -6649,8 +6457,6 @@ function lbSettleWaterfall(){
     var wraps = list.querySelectorAll(sel);
     for(var wi=0; wi<wraps.length; wi++){
       var wrap = wraps[wi];
-      // v938：跳过已隐藏的 wrap（聚落详情打开时 lbOpenSettle 设 display:none）——否则 500ms 延迟重排会把详情下隐藏的聚落列表复活，与详情上下并存
-      if(wrap.style.display === 'none') continue;
       // 还原：若已有 .lb-col 结构，先取回其中卡
       var cards = [];
       var prevCols = wrap.querySelectorAll(':scope > .lb-col');
@@ -7363,19 +7169,9 @@ function lbWildGeneSet(){
   return out;
 }
 // v173：基因设备显示名调用翻译 JSON（icon_zh_map.json）——Gene_Storage=基因存储器 / Gene_Scanner=基因扫描仪；type 逻辑标识（基因台/基因枪）不变
-// v173：基因设备显示名调用翻译 JSON（icon_zh_map.json）——Gene_Storage=基因存储器 / Gene_Scanner=基因扫描仪；type 逻辑标识（基因台/基因枪）不变
-// v907：并入统一设施命名源（facility_zh 优先，传 cls 命中权威表；未命中回退 icon_zh_map gene_*）
-function lbGeneDevZh(type, cls){
-  if(cls && LB_FACILITY_ZH && Object.keys(LB_FACILITY_ZH).length){
-    try{ var _m = lbSettleFacMeta(String(cls)); if(_m && _m.zh) return _m.zh; }catch(e){}
-  }
-  return (type==='基因枪' || type==='scanner') ? (zhName('gene_scanner') || '基因枪') : (zhName('gene_storage') || '基因台');
-}
-function lbGeneDevEn(type, cls){
-  if(cls && LB_FACILITY_ZH && Object.keys(LB_FACILITY_ZH).length){
-    try{ var _m = lbSettleFacMeta(String(cls)); if(_m && _m.en) return _m.en; }catch(e){}
-  }
-  return (type==='基因枪' || type==='scanner') ? 'Gene Scanner' : 'Gene Storage';
+function lbGeneDevZh(type){
+  if(type==='基因枪' || type==='scanner') return zhName('gene_scanner') || '基因枪';
+  return zhName('gene_storage') || '基因台';
 }
 // v138：基因设备实际图标（基因台=Gene_Storage 设施图标 / 基因枪=Gene_Scanner 工具图标）；图标未加载回退 🧬
 function lbGeneDevIcon(type, size){
@@ -7640,19 +7436,7 @@ function lbBuildSettleContainerHtml(grp, settleKey){
     var sc2 = scanners.some(function(m){ return m.item.containerId===cid2 && (m.item.slots||[]).some(geneSlotShow); }); // v203：只认有基因的枪（空枪不影响展开判断）
     if(nn || sc2) renderCnt++;
   });
-  // v909：基因台（infuser）并入容器动态语义——有基因(任意)才占手风琴行；全空台下沉设施 chips（无内容=设施，同 v821 空容器）
-  var infusersShow = [];
-  infusers.forEach(function(m){
-    var d = m.item;
-    if((d.slots && d.slots.length) || LB.curClass){ infusersShow.push(m); return; }
-    if(!d.class) return;
-    (emptyFacArr = emptyFacArr || []).push({ cls:String(d.class), name:(d.name && d.name!=='?' ? String(d.name) : ''), dispName: lbGeneDevZh('基因台', String(d.class)) }); // v914：基因台自定义名透传
-  });
-  // v909：设备→容器 rec 适配（标题/图标/英文/#ID/自定义名 全走 lbContainerLabel 统一逻辑）
-  function geneDevAsRec(d, type){
-    return { containerClass: (d && d.class) || '', containerName: (d && d.name) || '', containerType: type || '', containerId: (d && (d.containerId || d.key)) || '' };
-  }
-  var autoOpen = (renderCnt + infusersShow.length + orphanKeys.length) === 1 ? ' open' : '';
+  var autoOpen = (renderCnt + infusers.length + orphanKeys.length) === 1 ? ' open' : '';
   grpKeys.forEach(function(k){
     var cg=contGroups[k];
     // v177：容器分组内容按物种过滤（按钮结构不变），纯空球/无匹配的容器分组隐藏
@@ -7666,16 +7450,13 @@ function lbBuildSettleContainerHtml(grp, settleKey){
     // v821/v822：纯空设施组——不占手风琴行，下沉到设施 chips（无内容=设施）；后续 if(LB.curClass) 也跳过
     if(isEmptyFacility && !LB.curClass){
       var _efCls = String(cg[0].containerClass||'');
-      var _efDispName = '';
+      var _efName = '';
       try{
         var _efDisp = lbContainerDisp(lbContainerTypeOf(cg[0]), _efCls);
-        _efDispName = (_efDisp && _efDisp.zh) ? String(_efDisp.zh) : '';
-      }catch(e){ _efDispName=''; }
-      if(!_efDispName){ try{ var _m1 = lbSettleFacMeta(_efCls); if(_m1 && _m1.zh) _efDispName = String(_m1.zh); }catch(e3){} }
-      if(!_efDispName) _efDispName = '空容器';
-      // v914：透传自定义名（containerName）——传送器/冰箱等已命名设施 chips 显示自定义名（如「天台A」），无名才按类型合并
-      var _cn2 = String(cg[0].containerName||'').trim();
-      (emptyFacArr=emptyFacArr||[]).push({ cls:_efCls, name:(_cn2 && _cn2!=='?' ? _cn2 : ''), dispName:_efDispName });
+        _efName = (_efDisp && _efDisp.zh) ? String(_efDisp.zh) : '';
+      }catch(e){ _efName=''; }
+      if(!_efName) _efName = String(cg[0].containerName||'空容器');
+      (emptyFacArr=emptyFacArr||[]).push({ cls:_efCls, name:'', dispName:_efName });
       return;
     }
     // v134/v183：容器内基因枪（scanners 已统一归属+物种过滤，containerId 匹配）
@@ -7698,7 +7479,7 @@ function lbBuildSettleContainerHtml(grp, settleKey){
     var scnHtml = cScanners.map(function(d){
       var sl=(d.slots||[]).filter(geneSlotShow); // v142：按当前物种过滤
       sl = lbSortGeneSlots(sl); // v171：物种>稀有度>后主体词拼音 排序
-      return '<div style="font-size:12px;padding:8px 10px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;margin-bottom:6px">'+lbGeneDevIcon('基因枪')+'<b style="color:#c4b5fd">'+lbGeneDevZh('基因枪', d.class)+'</b><div style="margin-top:4px">'+sl.map(function(s){ return lbGeneTagHtml(s.trait,s.level,s.species,undefined,s.dinoClass); }).join('')+'</div></div>';
+      return '<div style="font-size:12px;padding:8px 10px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;margin-bottom:6px">'+lbGeneDevIcon('基因枪')+'<b style="color:#c4b5fd">'+lbGeneDevZh('基因枪')+'</b><div style="margin-top:4px">'+sl.map(function(s){ return lbGeneTagHtml(s.trait,s.level,s.species,undefined,s.dinoClass); }).join('')+'</div></div>';
     }).join('');
     var scnMark = cScanners.length ? '<span style="color:#a78bfa">✦'+cScanners.length+'</span>' : ''; // v206：星号在前
     var sepH = (fullH||v6H||scnMark) && emptyH ? ' ' : '';
@@ -7719,14 +7500,15 @@ function lbBuildSettleContainerHtml(grp, settleKey){
     else if(isEmptyFacility) h+='<div style="display:flex;align-items:center;background:#15151f;border:1px dashed #333;border-radius:8px;padding:8px 12px;margin:8px 0;font-size:12px;color:#888">🧊 空容器（无低温仓球）</div>';
     h+='</details>';
   });
-  // v177/v183：infusers 已在上面提前计算（统一归属）；v909：标题走 lbContainerLabel（容器同款：中文/英文/#ID/自定义名）
-  if(infusersShow.length){
-    h += infusersShow.map(function(m){
+  // v177/v183：infusers 已在上面提前计算（统一归属）
+  if(infusers.length){
+    h += infusers.map(function(m){
       var d=m.item;
       var sl=(d.slots||[]).filter(geneSlotShow); // v142：按当前物种过滤
       sl = lbSortGeneSlots(sl); // v171：物种>稀有度>后主体词拼音 排序
       var genes = sl.length ? sl.map(function(s){ return lbGeneTagHtml(s.trait,s.level,s.species,undefined,s.dinoClass); }).join('') : '';
-      return '<details class="acc"'+autoOpen+' onclick="lbAccOnly(this)"><summary><span class="acc-sum-name">'+lbContainerLabel(geneDevAsRec(d,'geneInfuser'))+'</span><span class="acc-cnt">'+(sl.length?'✦'+sl.length:'')+'</span></summary>'
+      // v138：实际图标 + 无需坐标；v142：互斥手风琴；v181：纯基因聚落唯一分组自动展开
+      return '<details class="acc"'+autoOpen+' onclick="lbAccOnly(this)"><summary><span class="acc-sum-name">'+lbGeneDevIcon('基因台')+lbGeneDevZh('基因台')+'</span><span class="acc-cnt">'+(sl.length?'✦'+sl.length:'')+'</span></summary>'
         + (genes ? '<div style="padding:6px 8px">'+genes+'</div>' : '<div style="color:#666;font-size:11px;padding:4px 8px">无基因</div>')
         + '</details>';
     }).join('');
@@ -7750,7 +7532,7 @@ function lbBuildSettleContainerHtml(grp, settleKey){
             var sl2=(d2.slots||[]).filter(geneSlotShow);
             sl2 = lbSortGeneSlots(sl2);
             return sl2.length
-              ? '<div style="font-size:12px;padding:8px 10px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;margin-bottom:6px">'+lbGeneDevIcon('基因枪')+'<b style="color:#c4b5fd">'+lbGeneDevZh('基因枪', d2.class)+'</b><div style="margin-top:4px">'+sl2.map(function(s){ return lbGeneTagHtml(s.trait,s.level,s.species,undefined,s.dinoClass); }).join('')+'</div></div>'
+              ? '<div style="font-size:12px;padding:8px 10px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;margin-bottom:6px">'+lbGeneDevIcon('基因枪')+'<b style="color:#c4b5fd">'+lbGeneDevZh('基因枪')+'</b><div style="margin-top:4px">'+sl2.map(function(s){ return lbGeneTagHtml(s.trait,s.level,s.species,undefined,s.dinoClass); }).join('')+'</div></div>'
               : '';
           }).join('')
         : '<div style="display:flex;align-items:center;background:#15151f;border:1px dashed #333;border-radius:8px;padding:8px 12px;margin:8px 0;font-size:12px;color:#888">🧊 空容器（无低温仓球）</div>';
@@ -7788,11 +7570,10 @@ function lbBuildSettleContainerHtml(grp, settleKey){
           if(_contentPos[_bcl+'|'+_px+'|'+_py]) return; // 该设施有球/基因已在容器区，不重复
           _fList.push({cls:_cl, name:_st.name||''});
         });
-        // 3) v820：纯空容器（无球无基因，从手风琴区下沉）——按类型合并计数；v914：有名设施（自定义名）独立显示
+        // 3) v820：纯空容器（无球无基因，从手风琴区下沉）——按类型合并计数
         if(emptyFacArr && emptyFacArr.length){
           var _efG = {};
           emptyFacArr.forEach(function(_e){
-            if(_e.name){ _fList.push({cls:_e.cls, name:_e.name}); return; } // v914：自定义名设施走 named 独立 chip
             var _ek = _e.dispName || _e.cls || '其他';
             (_efG[_ek]=_efG[_ek]||{cls:_e.cls, dispName:_e.dispName, n:0});
             _efG[_ek].n++;
@@ -7848,116 +7629,52 @@ function lbFacilityZhLoad(){
     return LB_FACILITY_ZH;
   }).catch(function(){ LB_FACILITY_ZH = {}; return LB_FACILITY_ZH; });
 }
-// v911：设施图标特例表（en基名 → icons2 精确键）——设施命名与图标键脱节（Bed_Simple vs Bed_icon/HUD_*_Icon），
-// 歧义/无直键项在此钉死；键均已在 icons2 验证存在（Refrigerator/Industrial_Forge/ModernBed_Icon 等）
-var LB_FACILITY_ICON_SPECIAL = {
-  'Fridge':'Refrigerator', 'Refrigerator':'Refrigerator',
-  'Forge':'Forge2_Icon', 'IndustrialForge':'Industrial_Forge', 'IndustrialCookingPot':'Industrial_Cooker', 'IndustrialPreservinBin':'Industrial_Preserving_Bin',
-  'Fireplace':'Stone_Fireplace',
-  'AutoTurret':'Auto_Turret', 'Turret':'Auto_Turret',
-  'TurretTek':'Tek_Turret', 'TurretBaseBP_Heavy':'LargeTurret_Icon', 'HeavyTurret':'LargeTurret_Icon',
-  'TurretMinigun':'Minigun', 'TurretBallista':'Ballista_Turret', 'TurretCatapult':'Catapult_Turret', 'TurretRocket':'MountedRocketTurret_Icon', 'StructureTurretRocket':'MountedRocketTurret_Icon',
-  'TeslaCoil':'HUD_Steampunk_TeslaCoil_Icon',
-  'MedicalStand':'HUD_MedicalStand_Icon', 'Market':'HUD_Market_Icon',
-  'TownBell':'HUD_Frontier_TownBell_Icon', 'TekJumpPad':'HUD_TEKJumpPad_Icon', 'TekAlarm':'HUD_TEKAlarm_Icon',
-  'Warbench':'HUD_Warbench_Icon', 'Fishtank_ToF':'HUD_FishTank_Icon', 'Shipyard_Large':'HUD_TOF_Shipyard_Icon',
-  'SaloonStool':'HUD_Frontier_SaloonStool_Icon', 'Furniture_SaloonChair':'HUD_Frontier_SaloonChair_Icon',
-  'Furniture_SaloonTable':'HUD_Frontier_SaloonTable_Icon', 'Furniture_FancyCouch':'HUD_Frontier_FancyCouch_Icon',
-  'DrawingSheet':'HUD_Frontier_DrawingSheet_Icon', 'PressurePlate':'HUD_PressurePlate_Icon', 'FancyChair':'HUD_Frontier_FancyArmChair_Icon', 'Furniture_FancyChair':'HUD_Frontier_FancyArmChair_Icon',
-  'DedicatedStorage':'Icon_DedicatedStorage', 'TrophyBase':'Icon_TrophyBase', 'TrophyBaseBP':'Icon_TrophyBase', 'AmmoContainer':'Ammo_Box', 'Keypad2':'Keypad_Icon', 'ElectricGenerator':'PowerGeneratorIcon',
-  'Stocking':'Holiday_Stocking', 'ChristmasTree':'Holiday_Tree', 'Furniture_ChristmasTree':'Holiday_Tree',
-  'BearTrap_Large':'LargeBearTrap_Icon', 'BearTrap':'Bear_Trap', 'HW_Grave':'GraveStone1_Icon', 'GeneInfuser':'Gene_Storage', 'FishMount_Coel':'Coelacanth',
-  'WaterTank':'MetalWaterTank_Icon', 'WaterTankMetal':'MetalWaterTank_Icon', 'WaterTank_Large':'MetalWaterTank_Icon', 'WaterTank_Metal':'MetalWaterTank_Icon',
-  'LinkedStorage':'Linked_Storage_Box', 'StorageBox':'SmallStorage_Icon',
-  'StorageBox_Small':'SmallStorage_Icon', 'StorageBox_Large':'Large_Storage_Box', 'StorageBox_Huge':'Vault',
-  'StorageBox_Balloon':'HUD_StorageBox_Icon', 'StorageBox_Barrel':'HUD_Frontier_Barrel_Icon', 'StorageBox_ChristmasGift_WW':'Holiday_Stocking',
-  'StorageBox_AnvilBench':'Smithy', 'StorageBox_ChemBench_Tek':'Chemistry_Bench', 'StorageBox_Fabricator':'MachinedWorkbench_Icon', 'StorageBox_IndustrialGrinder':'Industrial_Grinder',
-  'StorageBox_TekGenerator':'Tek_Generator', 'StorageBox_TekReplicator':'Tek_Replicator', 'StorageBox_TekTransmitter':'TEKPortal_Icon', 'TekTransmitter':'TEKPortal_Icon',
-  'DecorBox_Small':'Decor_Box', 'DecorBox_Medium':'Decor_Box', 'ReverseVacuumComparment':'HUD_TOF_AquaticCompartment_Icon',
-  'Bed_Modern':'ModernBed_Icon', 'Bed_Simple':'Simple_Bed', 'Bed_Tek':'Tek_Sleeping_Pod',
-  'Furniture_Gravestone':'Gravestone', 'Furniture_Snowman':'HUD_SnowmanHat_Icon', 'Furniture_WoodChair':'Wooden_Chair',
-  'Furniture_WoodTable':'Wooden_Table', 'Furniture_WoodBench':'Wooden_Bench', 'Furniture_SaloonTable':'HUD_Frontier_SaloonTable_Icon',
-  'Pumpkin_Standing':'PumpkinSeed_Icon', 'Wreath_Flower':'Wreath', 'TreeSapTap_SM':'Tree_Sap_Tap', 'TreeTap':'Tree_Sap_Tap', 'TrophyWall':'Trophy_Wall-Mount',
-  'MortarAndPestle':'MortarPestle_Icon', 'ChemBench':'Chemistry_Bench', 'ChemBench_Tek':'Chemistry_Bench', 'Fabricator':'MachinedWorkbench_Icon',
-  'CookingPot':'CookingCampfire_Icon', 'CropPlot':'CropPlot_Icon', 'CropPlot_Large':'Medium_Crop_Plot', 'CropPlot_Medium':'Medium_Crop_Plot',
-  'CropPlot_Small':'Small_Crop_Plot', 'CropPlot_Tek':'Tek_Crop_Plot', 'PreservingBin':'WoodFridge_Icon', 'Grinder':'Industrial_Grinder',
-  'IceBox':'Refrigerator', 'Vault':'Vault', 'Smithy':'Smithy', 'AnvilBench':'Smithy', 'EggIncubator':'Egg_Incubator',
-  'TrainingDummy':'TargetDummy_Icon', 'WindTrubine':'WindTurbine_Icon', 'Grill':'Grill_Icon', 'BountyBoard':'HUD_BountyBoard_Icon',
-  'PokerTableSH':'HUD_Frontier_PokerTable_Icon', 'SaloonPiano':'HUD_Frontier_SalonPiano_Icon', 'TekTeleporter':'TEKTeleporter_Icon',
-  'TekTeleporterMini':'Small_Tek_Teleporter', 'TekTeleporterSmall':'Medium_Tek_Teleporter', 'TekCloningChamber':'TEKCloningChamber_Icon', 'UnderwaterBase':'TEKUnderwaterCubeA_Icon', 'AirConditioner':'ACIcon'
-};
-// v911：设施图标强查找（对齐物种 lbIconForDinoClass 强度）——特例表→直配→变体裁剪→词元→norm 双向包含；
-// 解决「无图标键」根因：设施基名与 icons2 键命名脱节（HUD_*_Icon/变体键），运行时现查不再押注离线表
-function lbFacilityIconFind(en){
-  if(!en || !LB_ICON_BY_NAME) return '';
-  var e = String(en).replace(/_C_\d+$/,'').replace(/_C\d*$/,'');
-  if(!e) return '';
-  var sp = LB_FACILITY_ICON_SPECIAL[e] || LB_FACILITY_ICON_SPECIAL[e.replace(/^Furniture_/,'')];
-  if(sp && LB_ICON_BY_NAME[sp]) return sp;
-  if(LB_ICON_BY_NAME[e]) return e;
-  var eU = e.replace(/ /g,'_');
-  if(LB_ICON_BY_NAME[eU]) return eU;
-  if(LB_ICON_BY_NAME[e+'_Icon']) return e+'_Icon';
-  // 变体裁剪重试（_Large/_Small/_Tek/_Hide/_Balloon/_Barrel/_SM/_Metal/_ToF... 与 Furniture_/BP 前缀尾缀）
-  var core = e.replace(/^Furniture_/,'').replace(/_(Large|Medium|Small|Tek|Hide|Balloon|Barrel|SM|Standing|Flower|Metal|ToF|Modern|Simple|ChristmasGift_WW)$/,'').replace(/BP$/,'');
-  if(core !== e && core){
-    var ci = lbFacilityIconFind(core);
-    if(ci) return ci;
-  }
-  // 词元优先（Bed_Simple→Bed→Bed_icon；CropPlot→CropPlot_Icon）
-  var toks = core.split(/_|(?=[A-Z])/);
-  for(var t=0;t<toks.length;t++){
-    var w = toks[t];
-    if(!w || w.length<3) continue;
-    if(LB_ICON_BY_NAME[w]) return w;
-    if(LB_ICON_BY_NAME[w+'_Icon']) return w+'_Icon';
-  }
-  // norm 双向包含（键长 4-40 防误配；跳过 RW_ 控制类）——覆盖 HUD_*_Icon 等命名空间
-  var enN = core.replace(/[_-\s]/g,'').toLowerCase();
-  if(enN.length>=4){
-    for(var k in LB_ICON_BY_NAME){
-      if(k.indexOf('RW_')===0) continue;
-      var kN = k.replace(/[_-\s]/g,'').toLowerCase();
-      if(kN.length<4 || kN.length>40) continue;
-      if(kN.indexOf(enN)>=0 || enN.indexOf(kN)>=0) return k;
-    }
-  }
-  return '';
-}
 // v820：设施元信息（中文名+图标）——已知 8 类精确词条；其余从 class 提取英文名 → zhName 中文/友好化，图标用 icons2 模糊匹配
 function lbSettleFacMeta(cls){
   cls = String(cls||'');
   var def = [
-    {re:/SimpleBed/i, key:'bed', zh:'床', icon:'Simple_Bed', en:'Simple Bed'},
-    {re:/ModernBed/i, key:'bed_m', zh:'现代床', icon:'ModernBed_Icon', en:'Modern Bed'},
-    {re:/CompanionBed/i, key:'bed_c', zh:'伙伴床', icon:'HUD_CompanionBed_Icon', en:'Companion Bed'},
-    {re:/TekBed/i, key:'bed_t', zh:'泰克床', icon:'Tek_Sleeping_Pod', en:'Tek Sleeping Pod'},
-    {re:/SleepingPod/i, key:'pod', zh:'睡眠舱', icon:'Tek_Sleeping_Pod', en:'Tek Sleeping Pod'},
-    {re:/Coffin/i, key:'coffin', zh:'棺材', icon:'Coffin', en:'Coffin'},
-    {re:/Gravestone/i, key:'tomb', zh:'墓碑', icon:'Gravestone', en:'Gravestone'},
-    {re:/Clock|SteampunkClock/i, key:'clock', zh:'钟', icon:'Clockface', en:'Clock'}
+    {re:/SimpleBed/i, key:'bed', zh:'床', icon:'Simple_Bed'},
+    {re:/ModernBed/i, key:'bed_m', zh:'现代床', icon:'ModernBed_Icon'},
+    {re:/CompanionBed/i, key:'bed_c', zh:'伙伴床', icon:'HUD_CompanionBed_Icon'},
+    {re:/TekBed/i, key:'bed_t', zh:'泰克床', icon:'Tek_Sleeping_Pod'},
+    {re:/SleepingPod/i, key:'pod', zh:'睡眠舱', icon:'Tek_Sleeping_Pod'},
+    {re:/Coffin/i, key:'coffin', zh:'棺材', icon:'Coffin'},
+    {re:/Gravestone/i, key:'tomb', zh:'墓碑', icon:'Gravestone'},
+    {re:/Clock|SteampunkClock/i, key:'clock', zh:'钟', icon:'Clockface'}
   ];
   for(var i=0;i<def.length;i++){ if(def[i].re.test(cls)) return def[i]; }
   // v903：facility_zh 权威表（已加载时）——真实在用设施三字段同对（图/英/中），优先于正则猜名
   if(LB_FACILITY_ZH && Object.keys(LB_FACILITY_ZH).length){
-    var _b = String(cls).replace(/^PrimalItemStructure_/,'').replace(/^StructureBP_/,'').replace(/^Structure_/,'').replace(/^Structure/,'').replace(/^BP_/,'').replace(/^PrimalInventoryBP_/,'').replace(/^PrimalInventory/,'').replace(/^PrimalItem_/,'').replace(/^PrimalStructure_/,'').replace(/_C_\d+$/,'').replace(/_C\d*$/,''); // v905：尾缀兼容 _C / _C1 / _C_123（容器类名 PrimalInventoryBP_CryoFridge_C1）；v907：PrimalItem_ 前缀（基因枪手持物）
+    var _b = String(cls).replace(/^PrimalItemStructure_/,'').replace(/^StructureBP_/,'').replace(/^Structure_/,'').replace(/^Structure/,'').replace(/^BP_/,'').replace(/^PrimalInventoryBP_/,'').replace(/^PrimalInventory/,'').replace(/^PrimalStructure_/,'').replace(/_C_\d+$/,'').replace(/_C$/,'');
     var _fe = LB_FACILITY_ZH[_b];
-    if(_fe){
-      // v936：表内 icon 若在 icons2 不存在（历史空格显示名如 'Heavy Auto Turret'）→ 回退 lbFacilityIconFind 强查找（特例表已改下划线真实键）
-      var _feIcon = (_fe.icon && LB_ICON_BY_NAME[_fe.icon]) ? _fe.icon : (lbFacilityIconFind(_b) || '');
-      return {key:'f_'+_b, zh:_fe.zh || _b, en:_fe.en || '', icon:_feIcon, base:_b}; // v912：表内 icon 缺失时自动查找兑底（对齐物种强度）；v936：表 icon 无效也兑底
-    }
+    if(_fe){ return {key:'f_'+_b, zh:_fe.zh || _b, en:_fe.en || '', icon:_fe.icon || '', base:_b}; }
   }
-  // 通用：提取英文基名（去前缀/尾缀；v905：尾缀兼容 _C / _C1 / _C_123——容器类名常为 PrimalInventoryBP_X_C1；v907：PrimalItem_ 前缀）
-  var en = String(cls).replace(/^PrimalItemStructure_/,'').replace(/^StructureBP_/,'').replace(/^Structure_/,'').replace(/^Structure/,'').replace(/^BP_/,'').replace(/^PrimalInventoryBP_/,'').replace(/^PrimalInventory/,'').replace(/^PrimalItem_/,'').replace(/_C_\d+$/,'').replace(/_C\d*$/,'');
+  // 通用：提取英文基名（去前缀/尾缀）
+  var en = String(cls).replace(/^PrimalItemStructure_/,'').replace(/^StructureBP_/,'').replace(/^Structure_/,'').replace(/^Structure/,'').replace(/^BP_/,'').replace(/^PrimalInventoryBP_/,'').replace(/^PrimalInventory/,'').replace(/_C$/,'');
   en = en.replace(/_C_\d+$/,'');
   var key = en || cls;
   // 中文：zhName 精确 → 规范化 → 兜底友好英文（camel 拆词）
   var zh = '';
   try{ zh = zhName(en) || lbZhDeep(en) || ''; }catch(e){ zh=''; }
   if(!zh) zh = en.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_]+/g, ' ').trim();
-  // 图标：v911 强查找（特例表→直配→变体裁剪→词元→norm 双向；复用物种 lbIconForDinoClass 思路，运行时现查）
-  var icon = lbFacilityIconFind(en);
+  // 图标：icons2 收录 facility 分类后按多种候选名查
+  var icon = '';
+  if(LB_ICON_BY_NAME){
+    var cands = [en, en+'_Icon', en.replace(/([a-z])([A-Z])/g,'$1_$2'), en.replace(/ /g,'_')];
+    for(var c=0;c<cands.length;c++){ if(LB_ICON_BY_NAME[cands[c]]){ icon=cands[c]; break; } }
+    if(!icon){
+      // 模糊：任意已收录 key 含基名（长度保护防误配）
+      if(en.length>=5){
+        var enL = en.toLowerCase();
+        for(var k in LB_ICON_BY_NAME){
+          var kl = k.toLowerCase();
+          if((kl.indexOf(enL)>=0 || enL.indexOf(kl.replace(/_icon$/,''))>=0) && kl.length <= enL.length+12){
+            icon = k; break;
+          }
+        }
+      }
+    }
+  }
   return { key:'f_'+key, zh:zh, icon:icon };
 }
 // v820：设施小标签（icons2 图标回退 emoji/MDI + 名字 / 中文×N），自适应宽度不独占行
@@ -7966,10 +7683,12 @@ function lbSettleFacChip(meta, name, cnt){
   var ic = '';
   if(url) ic = '<img src="'+url+'" style="width:16px;height:16px;object-fit:contain;vertical-align:-3px;display:inline-block"'+lbIconFilterStyle(url)+'>';
   var label = name ? name : meta.zh;
-  // v903+v904：灰小英文类型标注——系统名与自定义名都显示（对齐物种浮窗）；×计数仅系统无名项
+  // v903：系统设施名（无自定义 name）= 中文主 + 灰小英文（对齐物种浮窗）；自定义名/×计数保持原样
   var extra = '';
-  if(meta.en) extra += '<span style="opacity:.55;font-size:9px;margin-left:4px">'+meta.en+'</span>';
-  if(!name && cnt > 1) extra += ' ×'+cnt;
+  if(!name){
+    if(meta.en) extra += '<span style="opacity:.55;font-size:9px;margin-left:4px">'+meta.en+'</span>';
+    if(cnt > 1) extra += ' ×'+cnt;
+  }
   return '<span style="display:inline-flex;align-items:center;gap:4px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:6px;padding:3px 8px;font-size:12px;color:#ccc;white-space:nowrap;cursor:default">'+ic+label+extra+'</span>';
 }
 // 手风琴互斥：展开当前容器时收起同组其他容器（同时只能展开一个）
@@ -8293,8 +8012,6 @@ function lbSilentRefresh(){
     var newLm = data._lm || {};
     var changed = JSON.stringify(oldLm) !== JSON.stringify(newLm);
     if(changed){
-      LB._prevSettles = (oldData && oldData._settlements) ? oldData._settlements : null; // v935：暂存旧聚落供 ensure 指纹对比（结构同则增量刷统计）
-      if(data._settlements) delete data._settlements; // v932：设施数据变化（_lm 变）→ 删聚落强制重建（持久化后不残留旧聚落）
       LB._cache = { data: data, ts: Date.now() };
       lbCacheSet(data);
       lbResolveIdentity();
@@ -8332,11 +8049,6 @@ function lbReloadIncremental(){
         });
       }
       LB._cache={ data:data, ts:Date.now() };
-      LB._prevSettles = (oldData && oldData._settlements) ? oldData._settlements : null; // v935：暂存旧聚落供 ensure 指纹对比
-      // v932：手动刷新按 _lm 变化判断——有设施变化才删聚落重建（无变化复用缓存聚落，不白跑 80s）
-      var _oldLm2 = (oldData && oldData._lm) ? oldData._lm : {};
-      var _newLm2 = data._lm || {};
-      if(JSON.stringify(_oldLm2) !== JSON.stringify(_newLm2) && data._settlements) delete data._settlements;
       lbCacheSet(data);
       lbRenderView(data, lbPlayer(), LB.curClass||'');
       // v500：后台加载蛋数据（阶段一：仅缓存，展示 tab 后续接入）
@@ -8394,7 +8106,7 @@ function lbLoadIconList(){
     var d = arr[0], tm = arr[1] || {};
     var by={}, cats={};
     // 额外收录的非 biology/units 精选图标（如「全部物种」的 HubTameIcon，GUI 分类；以及手风琴 summary 容器图标 facility/skins/GUI）
-    var extra={'HubTameIcon':1, 'Cryofridge':1, 'Display_Case':1, 'HUD_CryoHospital_Icon':1, 'HUD_MedicalStand_Icon':1, 'HUD_PetDisplayStand_Wall_Thatch_Icon':1, 'Tek_Replicator':1, 'SmallStorage_Icon':1, 'RW_Tracking_dino':1, 'Cryopod':1, 'RW_Store_chibi':1, 'RW_equip_saddle':1, 'TEK_Icon':1, 'RW_Garage_roof_show':1, 'HubInventoryIcon':1, 'RW_wants_to_cuddle':1, 'Feeding_Trough':1,
+    var extra={'HubTameIcon':1, 'Cryofridge':1, 'Display_Case':1, 'HUD_CryoHospital_Icon':1, 'HUD_PetDisplayStand_Wall_Thatch_Icon':1, 'Tek_Replicator':1, 'SmallStorage_Icon':1, 'RW_Tracking_dino':1, 'Cryopod':1, 'RW_Store_chibi':1, 'RW_equip_saddle':1, 'TEK_Icon':1, 'RW_Garage_roof_show':1, 'HubInventoryIcon':1, 'RW_wants_to_cuddle':1, 'Feeding_Trough':1,
       'Tek Transmitter':1, 'TEKPortal_Icon':1, 'WoodFridge_Icon':1, 'Industrial_Preserving_Bin':1, 'Icon_DedicatedStorage':1, 'LargeStorage_Icon':1, 'Linked_Storage_Box':1, 'Library_Storage':1, 'Large_Storage_Box':1, 'Egg_Incubator':1, 'Embryo_Incubator':1, 'Gene_Storage':1, 'Pet_Display':1, 'Tek_Sleeping_Pod':1, 'HUD_CompanionBed_Icon':1, 'RW_cryopod':1, 'Gene_Scanner':1, 'Vault':1, 'RaptorHead Icon':1, 'Simple_Bed':1, 'ModernBed_Icon':1, 'Coffin':1, 'Gravestone':1, 'GraveStone1_Icon':1, 'Clockface':1}; // v591：刷新浮窗饲料槽图标（misc 分类）// v819：设施区（床/墓碑/钟）图标收录（facility 分类）
     (d||[]).forEach(function(it){
       if(!it || !it.url || !it.name) return;
@@ -13404,18 +13116,14 @@ function lbRouteStat(recs){
   });
   return st;
 }
-/* 单线成员：只收「该属性点数 = 该属性全场最高值」的种（v682）；v942：成人优先 → 垃圾少优先（同值按原序） */
-function lbRouteLineMembers(recs, k, attrs){
+/* 单线成员：只收「该属性点数 = 该属性全场最高值」的种（v682）；成人优先，同值按原序 */
+function lbRouteLineMembers(recs, k){
   var mx = 0;
   recs.forEach(function(r){ var v = lbRoutePoint(r,k); if(v>mx) mx=v; });
   if(mx <= 0) return [];
   return recs.filter(function(r){ return lbRoutePoint(r,k) === mx; }).sort(function(a,b){
     var av=lbRouteAdult(a)?1:0, bv=lbRouteAdult(b)?1:0;
     if(av!==bv) return bv-av;
-    if(attrs){
-      var ja=lbRouteJunkPts(a,attrs), jb=lbRouteJunkPts(b,attrs);
-      if(ja!==jb) return ja-jb;
-    }
     return 0;
   });
 }
@@ -13575,7 +13283,7 @@ function lbRoutePlanHtml(recs, attrs){
   // 各属性线代表
   var lineRep = {}; // k -> {m:..., f:...}
   attrs.forEach(function(k){
-    var mem = lbRouteLineMembers(recs, k, attrs);
+    var mem = lbRouteLineMembers(recs, k);
     lineRep[k] = { m: lbRouteRep(mem,'MALE'), f: lbRouteRep(mem,'FEMALE') };
   });
   // v709：负公检测提前（换代卡折叠展示 + 负线 section4 复用）
@@ -13616,9 +13324,8 @@ function lbRoutePlanHtml(recs, attrs){
         altAll.push(r);
         if(lbRouteAdult(r)) altA.push(r);
       });
-      function _altCmp(a2,b2){ var d2=lbRoutePoint(b2,k)-lbRoutePoint(a2,k); if(d2) return d2; return lbRouteJunkPts(a2,attrs)-lbRouteJunkPts(b2,attrs); } // v942：同点数垃圾少优先
-      altA.sort(_altCmp);
-      altAll.sort(_altCmp);
+      altA.sort(function(a,b){ return lbRoutePoint(b,k)-lbRoutePoint(a,k); });
+      altAll.sort(function(a,b){ return lbRoutePoint(b,k)-lbRoutePoint(a,k); });
       missMAlt[k] = altA; missMAll[k] = altAll;
       missMBest[k] = (altA.length ? altA[0] : null);
       genPot[k] = null;
@@ -13650,8 +13357,7 @@ function lbRoutePlanHtml(recs, attrs){
       var ab = lbRoutePoint(a,k), bb = lbRoutePoint(b,k);
       var aok = (ab>=mxBaseK), bok = (bb>=mxBaseK);
       if(aok!==bok) return aok?-1:1;
-      var d2 = bb-ab; if(d2!==0) return d2; // v942：同点数垃圾少优先
-      return lbRouteJunkPts(a,attrs)-lbRouteJunkPts(b,attrs);
+      return bb-ab;
     });
   }
   // 卡内并行徽章（v712b：仅真并行组用——负线多种子线；同公多母不算并行）
@@ -13868,8 +13574,6 @@ function lbRoutePlanHtml(recs, attrs){
     if(sa!==sb) return sa>sb;
     var ba=_routeBaseSum(a), bb2=_routeBaseSum(b);
     if(ba!==bb2) return ba>bb2;
-    var ja2=lbRouteJunkPts(a,attrs), jb2=lbRouteJunkPts(b,attrs); // v942：垃圾少优先
-    if(ja2!==jb2) return ja2<jb2;
     return lbRouteBirth(a)<lbRouteBirth(b);
   }
   recs.forEach(function(r){
@@ -13909,8 +13613,7 @@ function lbRoutePlanHtml(recs, attrs){
       var _zs = null, _zc = -1;
       zeroMales.forEach(function(r){
         var cc = 0; attrs.forEach(function(k){ if((mxBaseAll[k]||0) > 0 && lbRouteBase(r,k) >= mxBaseAll[k]) cc++; });
-        if(cc > _zc){ _zc = cc; _zs = r; }
-        else if(cc === _zc && _zs){ var _jj=lbRouteJunkPts(r,attrs)-lbRouteJunkPts(_zs,attrs); if(_jj<0 || (_jj===0 && lbRouteBirth(r)<lbRouteBirth(_zs))){ _zs = r; } } // v942：同覆盖垃圾少优先
+        if(cc > _zc || (cc === _zc && (!_zs || lbRouteBirth(r) < lbRouteBirth(_zs)))){ _zc = cc; _zs = r; }
       });
       if(_zs){ omni = _zs; omniCov = 0; }
     } else if(_waitJuvM){ // v870 规则1：未成年♂ 冠军直接作叠变异公种（成年后开配）
@@ -13926,7 +13629,6 @@ function lbRoutePlanHtml(recs, attrs){
     var zf = zeroFems.filter(function(r){ return usedMothers.indexOf(r)<0; }).sort(function(a,b){
       function dc(rr){ var c=0; attrs.forEach(function(k){ var iB=LB_BREED_IDX[k]; var mb=(omni.statPoints&&iB!=null)?(Number(omni.statPoints[iB])||0):0; var rb=(rr.statPoints&&iB!=null)?(Number(rr.statPoints[iB])||0):0; if(rb>=mb) c++; }); return c; }
       var d = dc(b)-dc(a); if(d!==0) return d;
-      var jd = lbRouteJunkPts(a,attrs)-lbRouteJunkPts(b,attrs); if(jd!==0) return jd; // v942：同达线垃圾少优先
       return lbRouteBirth(a)-lbRouteBirth(b);
     });
     // v744：扩母群需求（avail0<poolN）且 0/0 母有限（avail0≥2）→ 叠变异让渡：只留 1 只启动，其余 0/0 母给扩母群补池（母不是没有而是全被占时）
@@ -14095,7 +13797,7 @@ function lbRoutePlanHtml(recs, attrs){
   if(omni && (lbRouteCountM(omni)+lbRouteCountF(omni))>=20) poolN = Math.min(30, poolN*2); // 保留 v727：总到20 → 池目标×2
   if(avail0 < poolN){
     var seedM2 = null;
-    zeroMales.forEach(function(r){ if(usedMothers.indexOf(r)<0 && (!seedM2 || lbRouteJunkPts(r,attrs) < lbRouteJunkPts(seedM2,attrs))) seedM2 = r; }); // v942：闲置 0/0♂ 垃圾少优先
+    zeroMales.forEach(function(r){ if(!seedM2 && usedMothers.indexOf(r)<0) seedM2 = r; });
     var freeF = zeroFems.filter(function(r){ return usedMothers.indexOf(r)<0; });
     var breedF2 = freeF.slice(0, 3);
     if(seedM2 && breedF2.length){
@@ -14122,7 +13824,6 @@ function lbRoutePlanHtml(recs, attrs){
     var seedPool = zeroFems.concat(zeroMales).filter(function(r){ return usedArr.indexOf(r)<0; });
     var idlePool = seedPool.filter(function(r){ return idleOf(r); });
     if(idlePool.length >= 2) seedPool = idlePool;
-    seedPool = seedPool.slice().sort(function(a2,b2){ return lbRouteJunkPts(a2,attrs)-lbRouteJunkPts(b2,attrs); }); // v942：种子池垃圾少优先
     var ms = [], fs = [];
     seedPool.forEach(function(r){ if(r.gender==='MALE') ms.push(r); else fs.push(r); });
     var seedPairs = [];
@@ -14145,7 +13846,7 @@ function lbRoutePlanHtml(recs, attrs){
     // 候选池 = 各线 ♂/♀ 代表去重；各属性线水平 = 该属性全局最高
     var mPools = [], fPools = [], mxA = {};
     attrs.forEach(function(k){
-      var memk = lbRouteLineMembers(recs, k, attrs);
+      var memk = lbRouteLineMembers(recs, k);
       mxA[k] = memk.length ? lbRoutePoint(memk[0], k) : 0;
       if(lineRep[k] && lineRep[k].m && mPools.indexOf(lineRep[k].m)<0) mPools.push(lineRep[k].m);
       if(lineRep[k] && lineRep[k].f && fPools.indexOf(lineRep[k].f)<0) fPools.push(lineRep[k].f);
@@ -14568,8 +14269,8 @@ function lbRouteWasteToggle(ev){
   if(LB._routeOpen) lbRouteRender(true);
 }
 
-function lbRouteLineBlock(recs, k, idx, color, attrs){
-  var mem = lbRouteLineMembers(recs, k, attrs);
+function lbRouteLineBlock(recs, k, idx, color){
+  var mem = lbRouteLineMembers(recs, k);
   var mRep = lbRouteRep(mem,'MALE'), fRep = lbRouteRep(mem,'FEMALE');
   var open = (LB._routeOpenLine===idx);
   var status = '';
@@ -14675,7 +14376,7 @@ function lbRouteRender(preserve){
     // X 线区块
     var lineCols = ['#22d3ee','#a78bfa','#fbbf24','#60a5fa','#f472b6','#4ade80'];
     attrs.forEach(function(k,i){
-      h += lbRouteLineBlock(recs, k, i, lineCols[i%lineCols.length], attrs);
+      h += lbRouteLineBlock(recs, k, i, lineCols[i%lineCols.length]);
     });
     // v7xx：废种折叠（当前方案判定用不到；每只标注理由）
     var wastes = lbRouteWasteList(recs, attrs);
