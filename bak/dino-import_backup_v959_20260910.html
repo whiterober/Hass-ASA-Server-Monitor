@@ -426,7 +426,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260910-966';
+var LB_VERSION = 'v20260910-959';
 // ====== PWA：Service Worker 注册（2026-08-29，配合 manifest 使移动端 Edge/Chrome 可安装为应用） ======
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function(){
@@ -3326,8 +3326,7 @@ async function lbLoad(servers, oldData, onProgress){ // v207：onProgress({phase
   var recs=[], recMap={}, tribesByServer={}, worldNowByServer={};
   var structures = []; // v6：床/棺材/睡眠舱结构（聚落建筑命名）
   var facilityStructs = []; // v821：已弃用——cryo.facilities 已放置非装饰设施全部统一生成 facility rec（纯动态，容器/设施由渲染按内容判定）；此数组仅缓存兼容占位，不再填充
-  var geneDevices = {}; // v134：基因台/基因枪（v966：{server:{infusers:[],scanners:[]}}）
-  var itemsByServer = {}; // v966：库存物品索引（item.json.gz）——{abbr:{byCid,byPos,byTribe,count,counts,ts}}
+  var geneDevices = {}; // v134：基因台/基因枪（{server:{infusers:[],scanners:[]}}）
   var playersByEos = {}; // eosId → {eosId, name, roles:{pid:characterName}}（跨服合并）
   var oldRecs = (oldData && Array.isArray(oldData.recs)) ? oldData.recs : null;
   var oldLm = (oldData && oldData._lm) ? oldData._lm : {};
@@ -3398,13 +3397,11 @@ async function lbLoad(servers, oldData, onProgress){ // v207：onProgress({phase
     if(!s) return Promise.resolve();
     var cryoBase = DINO_JSON+abbr+'_cryo.json';
     var tamedBase = DINO_JSON+abbr+'_tamed.json';
-    var itemBase = DINO_JSON+abbr+'_item.json'; // v966：库存物品（同 cryo 链路）
     var oCryo = oldLm[abbr] && oldLm[abbr].cryo;
     var oTamed = oldLm[abbr] && oldLm[abbr].tamed;
-    var oItem = oldLm[abbr] && oldLm[abbr].item;
-    return Promise.all([ lbHeadPick(cryoBase), lbHeadPick(tamedBase, false), lbHeadPick(itemBase) ]).then(function(res){ // v910：tamed 固定明文 .json，跳过 .gz 探测；v966：+item
-      var cryoRes = res[0], tamedRes = res[1], itemRes = res[2];
-      lm[abbr] = { cryo: cryoRes.lm || null, tamed: tamedRes.lm || null, item: (itemRes && itemRes.lm) || null, cryoExt: cryoRes.ext, tamedExt: tamedRes.ext, itemExt: (itemRes && itemRes.ext) };
+    return Promise.all([ lbHeadPick(cryoBase), lbHeadPick(tamedBase, false) ]).then(function(res){ // v910：tamed 固定明文 .json，跳过 .gz 探测
+      var cryoRes = res[0], tamedRes = res[1];
+      lm[abbr] = { cryo: cryoRes.lm || null, tamed: tamedRes.lm || null, cryoExt: cryoRes.ext, tamedExt: tamedRes.ext };
       var cryoSkip = !!(cryoRes.lm && oCryo && cryoRes.lm === oCryo);
       // v545：旧数据该服 facility rec 缺失（曾因 cryoSkip 未复用丢失，聚落依赖 facility 容器）→ 强制重新下载 cryo 恢复
       if(cryoSkip && oldRecs){
@@ -3413,9 +3410,6 @@ async function lbLoad(servers, oldData, onProgress){ // v207：onProgress({phase
         if(_fc === 0) cryoSkip = false;
       }
       var tamedSkip = !!(tamedRes.lm && oTamed && tamedRes.lm === oTamed);
-      // v966：item 未变化则复用旧索引（与 cryo/tamed 同策略）
-      var itemSkip = !!(itemRes && itemRes.lm && oItem && itemRes.lm === oItem);
-      if(itemSkip && oldData && oldData.itemsByServer && oldData.itemsByServer[abbr]) itemsByServer[abbr] = oldData.itemsByServer[abbr];
       // 未变化的文件：立即复用旧 recs + 旧 tribes/worldNow（players 也复用）
       var reused = oldRecs ? oldRecs.filter(function(r){ return r.server === abbr; }) : [];
       if(cryoSkip){ reused.filter(function(r){ return r.src === 'cryo'; }).forEach(lbAddRec);
@@ -3429,18 +3423,18 @@ async function lbLoad(servers, oldData, onProgress){ // v207：onProgress({phase
       }
       if(tamedSkip){ reused.filter(function(r){ return r.src === 'tamed'; }).forEach(lbAddRec);
         if(oldData && oldData.worldNowByServer && oldData.worldNowByServer[abbr]) worldNowByServer[abbr] = oldData.worldNowByServer[abbr]; } // v7xx：tamed 未变时从旧缓存补世界时间
-      return { abbr:abbr, needCryo:!cryoSkip, needTamed:!tamedSkip, needItem:!itemSkip };
+      return { abbr:abbr, needCryo:!cryoSkip, needTamed:!tamedSkip };
     });
   });
   var headResults = await Promise.all(headTasks);
   // 阶段②：只下载变化的文件（分批 3 台，每台内 cryo+tamed 并行）
-  var needList = headResults.filter(function(r){ return r && (r.needCryo || r.needTamed || r.needItem); }); // v966：+item
+  var needList = headResults.filter(function(r){ return r && (r.needCryo || r.needTamed); });
   var BATCH = 3;
   // v207：下载进度统计（总文件数 = 需下载的 cryo+tamed）
   var _dlTotal = 0, _dlDone = 0;
   // v214：在途下载服务器计数（abbr→文件数，>0 即正在下载中，用于进度条文本显示）
   var _dlActive = {};
-  needList.forEach(function(r){ if(r.needCryo) _dlTotal++; if(r.needTamed) _dlTotal++; if(r.needItem) _dlTotal++; }); // v966：+item
+  needList.forEach(function(r){ if(r.needCryo) _dlTotal++; if(r.needTamed) _dlTotal++; });
   function _dlProg(){
     if(_seq !== LB._dlSeq) return; // v215：已被新下载取代，不再更新进度（防回退）
     var _act = [];
@@ -3452,7 +3446,6 @@ async function lbLoad(servers, oldData, onProgress){ // v207：onProgress({phase
       var abbr = item.abbr;
       var cryoBase = DINO_JSON+abbr+'_cryo.json';
       var tamedBase = DINO_JSON+abbr+'_tamed.json';
-      var itemBase = DINO_JSON+abbr+'_item.json'; // v966
       var tasks = [];
       // v211：按 HEAD 探测的 ext 决定下载 .gz 或 .json
       var cryoDl = (lm[abbr].cryoExt==='.gz') ? (cryoBase+'.gz?cb='+Date.now()) : (cryoBase+'?cb='+Date.now());
@@ -3505,14 +3498,6 @@ async function lbLoad(servers, oldData, onProgress){ // v207：onProgress({phase
           (tamed.dinos||[]).forEach(function(d){ addTamedRec(abbr, d); }); }
       }).catch(function(){}));
       }
-      // v966：库存物品 item.json.gz（与 cryo 同链路：HEAD 探测扩展名 → 下载 → 建索引）
-      var itemDl = (lm[abbr].itemExt==='.gz') ? (itemBase+'.gz?cb='+Date.now()) : (itemBase+'?cb='+Date.now());
-      if(item.needItem && lm[abbr].item !== LB_LM_404){ _dlActive[abbr] = (_dlActive[abbr]||0)+1;
-        tasks.push(lbFetchDataJson(itemBase, itemDl).then(function(itj){
-        _dlDone++; _dlActive[abbr]--; if(_dlActive[abbr]<=0) delete _dlActive[abbr]; _dlProg();
-        if(itj){ itemsByServer[abbr] = lbBuildItemIndex(abbr, itj); }
-      }).catch(function(){}));
-      }
       return Promise.all(tasks);
     });
     await Promise.all(batch);
@@ -3523,36 +3508,10 @@ async function lbLoad(servers, oldData, onProgress){ // v207：onProgress({phase
   out.structures = structures; // v6：床/棺材/睡眠舱结构（聚落建筑命名）
   out.facilityStructs = facilityStructs; // v821：已弃用（始终空数组；已放置设施统一 facility rec，容器/设施渲染动态分流）——保留字段防旧缓存合并崩溃
   out.geneDevices = geneDevices; // v134：基因台/基因枪
-  out.itemsByServer = itemsByServer; // v966：库存物品索引（item.json.gz，byCid/byPos/byTribe）
-  out._schemaVer = 14; // v14：item.gz 接入（旧缓存 13 判失效强制重拉）
+  out._schemaVer = 13; // v13：v821 纯动态重构（facility 全量统一 rec + baseClass+坐标 容器分组），旧缓存 12 判失效强制重拉
   out._lm = lm;
   if(_seq !== LB._dlSeq) return null; // v215：被新下载取代，放弃结果（防旧数据覆盖新数据）
   return out;
-}
-// v966：库存物品索引构建——item.json.gz → {byCid, byPos, byTribe, count, counts, ts}
-// 数据语义（见 报告/itemgz离线库存数据_前端调用文档_20260910.md）：普通容器逐堆明细（同资源多条需 sum）；泰克专储 containerType='dedicated' 一柜一条（quantity=总量）；blueprint 类已按 rated=1 过滤
-function lbBuildItemIndex(abbr, j){
-  var byCid = {}, byPos = {}, byTribe = {}, cnt = 0;
-  var list = (j && j.items) || [];
-  for(var i=0;i<list.length;i++){
-    var it = list[i]; if(!it) continue; cnt++;
-    var cid = String(it.containerId||'');
-    if(cid){ (byCid[cid] = byCid[cid] || []).push(it); }
-    var px = Math.round(Number(it.x)||0), py = Math.round(Number(it.y)||0);
-    if(px || py){ var pk = px+','+py; (byPos[pk] = byPos[pk] || []).push(it); }
-    var tb = Number(it.containerTribe||0);
-    if(tb){ (byTribe[tb] = byTribe[tb] || []).push(it); }
-  }
-  return { byCid:byCid, byPos:byPos, byTribe:byTribe, count:cnt, counts:(j && j.counts) || null, ts:Date.now() };
-}
-// v966：取某容器的库存条目（优先精确 containerId；宓底 class+坐标，容器识别同 lbSameContainer 思路）
-function lbItemsOfContainer(server, containerId, cls, x, y){
-  var s = (LB._cache && LB._cache.data && LB._cache.data.itemsByServer) ? LB._cache.data.itemsByServer[server] : null;
-  if(!s) return null;
-  if(containerId && s.byCid[containerId]) return s.byCid[containerId];
-  var pk = Math.round(Number(x)||0)+','+Math.round(Number(y)||0);
-  if(s.byPos[pk]) return s.byPos[pk];
-  return null;
 }
 
 // ===== 聚落算法（2026-08-11 前端自实现；数据源：容器坐标 + 印痕者）=====
@@ -12655,25 +12614,6 @@ function lbOpenWildMap(idx){
   body.innerHTML = h;
   ov.style.display = 'block';
 }
-// v961：离散聚落同批色——散落生物（LB._settleBioMap）+ 散落设施（LB._settleFacMap）合并 z 带取色，
-// 与离散聚落卡片地图点色（v760）规则一致；批带退化 → 该服通用带 lbSettleBand；仍无 → 带中档保有色
-function lbSettleSameBatchColor(r, Z){
-  var zv = Number(Z);
-  if(!isFinite(zv)) return 'rgba(148,163,184,.9)';
-  var zs = [];
-  try{ (LB._settleBioMap||[]).forEach(function(x){ var v = Number(x && x.containerZ); if(isFinite(v)) zs.push(v); }); }catch(e){}
-  try{ (LB._settleFacMap||[]).forEach(function(g){ ((g && g.items)||[]).forEach(function(it){ var v = Number(it && it.z); if(isFinite(v)) zs.push(v); }); }); }catch(e){}
-  if(zs.length){
-    zs.sort(function(a,b){ return a-b; });
-    var _lo = zs[0], _hi = zs[zs.length-1];
-    return (_hi > _lo) ? lbZHeat(zv, _lo, _hi) : lbZHeat(_lo, _lo, _hi);
-  }
-  var _b = null;
-  try{ _b = lbSettleBand(String((r && r.server) || LB.tab || '')); }catch(e){ _b = null; }
-  if(_b && _b[1] > _b[0]) return lbZHeat(zv, _b[0], _b[1]);
-  if(_b && _b[1] === _b[0]) return lbZHeat(_b[0], _b[0], _b[1]);
-  return '#fbbf24';
-}
 // 离散聚落生物卡片单击：地图浮窗（仅地图+黄点标位；交互同繁育候选浮窗 #lbBreedOverlay，点遮罩关闭）
 function lbOpenBioMap(idx){
   var r = (LB._settleBioMap && LB._settleBioMap[idx]) || null;
@@ -12689,13 +12629,11 @@ function lbOpenBioMap(idx){
     // LL 坐标（纬度 经度，加粗居中，2 位小数）
     var lat = (Y/map.multLat + map.shiftLat).toFixed(2);
     var lon = (X/map.multLon + map.shiftLon).toFixed(2);
-    // v961：标题去掉海拔数值（海拔改由点色体现）；点色改用离散聚落同批色
-    var _bDotBg = lbSettleSameBatchColor(r, Z);
     var imgName = map.img.replace(/_s$/,''); // 高清大图（不带 _s 缩略）
-    h += '<div style="font-weight:bold;font-size:14px;color:#fff;text-align:center;margin-bottom:8px">'+lat+' '+lon+'</div>'
+    h += '<div style="font-weight:bold;font-size:14px;color:#fff;text-align:center;margin-bottom:8px">'+lat+' '+lon+(isFinite(Z) ? ' · <span style="color:#f59e0b;font-size:13px">海拔 '+Math.round(Z)+'</span>' : '')+'</div>' // v761：标题加海拔 z（离散生物）；v762：点色同服同物种 wildCache z 带渐变
       + '<div style="position:relative;border-radius:10px;overflow:hidden;line-height:0;border:1px solid #2a2a3a">'
       + '<img src="'+LB_MAP_BASE+imgName+LB_MAP_EXT+'" style="width:100%;height:auto;display:block">'
-      + '<div style="position:absolute;left:'+p.x.toFixed(2)+'%;top:'+p.y.toFixed(2)+'%;width:14px;height:14px;border-radius:50%;background:'+_bDotBg+';border:2px solid #fff;transform:translate(-50%,-50%);box-shadow:0 0 8px rgba(0,0,0,.8)"></div>'
+      + '<div style="position:absolute;left:'+p.x.toFixed(2)+'%;top:'+p.y.toFixed(2)+'%;width:14px;height:14px;border-radius:50%;background:'+lbZHeatForServer(String(r.server||''), String(r.dinoClass||LB.curClass||''), Z)+';border:2px solid #fff;transform:translate(-50%,-50%);box-shadow:0 0 8px rgba(0,0,0,.8)"></div>'
       + '</div>';
   } else {
     h += '<div style="color:#666;font-size:12px;text-align:center;padding:20px">无坐标</div>';
@@ -12721,62 +12659,14 @@ function lbOpenFacMap(k){
     if(map0){
       var lat0 = (Number(it0.y)/map0.multLat + map0.shiftLat).toFixed(2);
       var lon0 = (Number(it0.x)/map0.multLon + map0.shiftLon).toFixed(2);
-      // v960：标题不再显示海拔数值（海拔改由点色体现）；v962：多点时标题下坐标行隐藏（各点坐标改由徽章展示）
-      if(items.length <= 1){
-        h += '<div style="font-weight:bold;font-size:13px;color:#fff;text-align:center;margin-bottom:8px">'+lat0+' '+lon0+'</div>';
-      }
-      // v960：点色=页面通用海拔色——优先本批设施 z 带（同批无级渐变，与离散聚落卡片一致 v760）；
-      // 单点/退化批带走该服通用 z 带（lbSettleBand，同普通聚落单点着色 v774）；无带时取带中档保有色。
-      var _zs = items.map(function(it){ return Number(it.z); }).filter(function(v){ return isFinite(v); }).sort(function(a,b){ return a-b; });
-      var _zlo = _zs.length ? _zs[0] : null, _zhi = _zs.length ? _zs[_zs.length-1] : null;
-      function _facDot(it){
-        var zv = Number(it.z);
-        if(!isFinite(zv)) return 'rgba(148,163,184,.9)'; // 无 z：中性灰（无从着色）
-        if(_zlo !== null && _zhi !== null && _zhi > _zlo) return lbZHeat(zv, _zlo, _zhi); // 多点：本批同色渐变
-        var _b = null;
-        try{ _b = lbSettleBand(String(it.server || LB.tab || '')); }catch(e){ _b = null; } // 单点/退化：该服通用 z 带
-        if(_b && _b[1] > _b[0]) return lbZHeat(zv, _b[0], _b[1]);
-        if(_b && _b[1] === _b[0]) return lbZHeat(_b[0], _b[0], _b[1]); // 退化带：取中档保有色
-        return '#fbbf24'; // 极端兜底（该服无带坐标数据）
-      }
+      h += '<div style="font-weight:bold;font-size:13px;color:#fff;text-align:center;margin-bottom:8px">'+lat0+' '+lon0
+        + (items.length===1 && isFinite(Number(it0.z)) ? ' · <span style="color:#f59e0b;font-size:12px">海拔 '+Math.round(Number(it0.z))+'</span>' : '') + '</div>';
       var imgName = map0.img.replace(/_s$/,'');
-      h += '<div class="lb-fac-map" style="position:relative;border-radius:10px;overflow:hidden;line-height:0;border:1px solid #2a2a3a">'
+      h += '<div style="position:relative;border-radius:10px;overflow:hidden;line-height:0;border:1px solid #2a2a3a">'
         + '<img src="'+LB_MAP_BASE+imgName+LB_MAP_EXT+'" style="width:100%;height:auto;display:block">';
-      // v961：多点时每点旁加坐标徽章（LL），自动避让（按 y 排序，过近则逐级下移；百分比碰撞检测）
-      var _dots = items.map(function(it){
+      items.forEach(function(it){
         var p = lbWorldToPx(Number(it.x), Number(it.y), map0);
-        var _lat = (Number(it.y)/map0.multLat + map0.shiftLat).toFixed(2);
-        var _lon = (Number(it.x)/map0.multLon + map0.shiftLon).toFixed(2);
-        return { it: it, p: p, lat: _lat, lon: _lon, dy: 0 };
-      });
-      if(_dots.length > 1){
-        _dots.sort(function(a,b){ return a.p.y - b.p.y; });
-        var _placed = [];
-        _dots.forEach(function(d){
-          var dy = 0, guard = 0;
-          while(guard++ < 40){
-            var clash = _placed.some(function(q){ return Math.abs(q.x - d.p.x) < 6.5 && Math.abs(q.y - (d.p.y + dy)) < 4.2; });
-            if(!clash) break;
-            dy += 5; // 逐级下移（% 高度）
-          }
-          d.dy = dy;
-          _placed.push({ x: d.p.x, y: d.p.y + dy });
-        });
-      }
-      // v963：徽章默认不显示——点某个点才显示该点的「坐标 + 海拔」（再点收起；点其他点自动切换）
-      _dots.forEach(function(d){
-        // v965：徽章仅显示坐标（不再带海拔）；靠边自动翻转（右缘→左置、上缘→下置）避免被地图边缘裁切
-        var _bLeft = d.p.x > 68 ? -16 : 16;
-        var _bTop = d.p.y < 14 ? 14 : -18;
-        var _bTf = d.p.x > 68 ? 'transform:translateX(-100%);' : '';
-        var _badge = (_dots.length > 1)
-          ? '<span class="lb-fac-badge" style="display:none;position:absolute;left:'+_bLeft+'px;top:'+_bTop+'px;'+_bTf+'font-size:9px;line-height:1.2;background:rgba(15,15,22,.92);border:1px solid rgba(167,139,250,.65);border-radius:4px;padding:1px 4px;color:#cbd5e1;white-space:nowrap;cursor:default">'
-            + d.lat+' '+d.lon+'</span>'
-          : '';
-        h += '<div class="lb-fac-node" style="position:absolute;left:'+d.p.x.toFixed(2)+'%;top:'+d.p.y.toFixed(2)+'%;transform:translate(-50%,-50%)">'
-          + '<div onclick="lbFacDotTap(this)" style="width:14px;height:14px;border-radius:50%;background:'+_facDot(d.it)+';border:2px solid #fff;box-shadow:0 0 8px rgba(0,0,0,.8);cursor:pointer"></div>'
-          + _badge
-          + '</div>';
+        h += '<div style="position:absolute;left:'+p.x.toFixed(2)+'%;top:'+p.y.toFixed(2)+'%;width:14px;height:14px;border-radius:50%;background:#a78bfa;border:2px solid #fff;transform:translate(-50%,-50%);box-shadow:0 0 8px rgba(0,0,0,.8)"></div>';
       });
       h += '</div>';
     } else {
@@ -12788,35 +12678,11 @@ function lbOpenFacMap(k){
   body.innerHTML = h;
   ov.style.display = 'block';
 }
-// v963：设施点位点击——默认不显示徽章，点某点才显示该点「坐标+海拔」（再点收起；点其他点自动切换）
-function lbFacDotTap(dot){
-  if(!dot) return;
-  var node = dot.parentNode;
-  var b = node ? node.querySelector('.lb-fac-badge') : null;
-  if(!b) return;
-  var on = (b.style.display === 'none');
-  var map = node.parentNode;
-  if(map){
-    var all = map.querySelectorAll('.lb-fac-badge');
-    for(var i=0;i<all.length;i++){ all[i].style.display = 'none'; }
-  }
-  if(on){ b.style.display = 'inline-block'; }
-}
-// v962 兼容保留（旧缓存页可能仍引用）
-function lbFacBadgeTap(el){
-  if(!el) return;
-  var z = el.querySelector('.lb-fac-badge-z');
-  if(!z) return;
-  var on = (z.style.display !== 'inline');
-  z.style.display = on ? 'inline' : 'none';
-}
 // 浮窗：点卡片以外的任何区域自动关闭
 function lbBreedOverlayClick(e){
   // v428：分布遮罩模式（LB._wildDistOpen）——点遮罩不关闭（只右上角关闭图标可关），不影响其它遮罩
   // v617：联盟地图模态（LB._alliModal：地图信息/成员分布）——同分布遮罩，点遮罩不关闭（点关闭按钮才关）
   if(LB._wildDistOpen || LB._alliModal || LB._routeHelpOpen) return;
-  // v964：设施地图浮窗——点地图本体（含点位/徽章）不关闭，只有点地图之外的遮罩才关闭
-  if(e.target && e.target.closest && e.target.closest('.lb-fac-map')) return;
   if(!e.target || !e.target.closest || !e.target.closest('.lb-card')){
     document.getElementById('lbBreedOverlay').style.display = 'none';
   }
