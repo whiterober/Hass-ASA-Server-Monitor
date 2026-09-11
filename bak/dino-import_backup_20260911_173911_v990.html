@@ -427,7 +427,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260912-1024';
+var LB_VERSION = 'v20260911-990';
 var LB_SCHEMA_VER = 14;  // v971：数据 schema 版本唯一来源（下载写入与 3 处校验统一引用）
 // 历史 BUG：_schemaVer 从 13 升 14（v966 item.gz 接入）时，校验处未同步写死 13
 // → 缓存恒判失效 → 每次切 Tab 都重下全量数据（30 个文件）。同 6→10 时的旧事故
@@ -2195,10 +2195,7 @@ function _lbPrefetchBody(){
       if(idx >= total) return; // 无任务，worker 结束
       // v986：数据下载优先 —— 数据加载期间预取让路（每 500ms 复查）；
       //       带 5 分钟超时保护，防标志未清除时预取永久停摆
-      if(LB._dataLoading && (!LB._dataLoadingAt || Date.now() - LB._dataLoadingAt < 90000)){ // v991：5分钟→90秒（与数据超时对齐，防长时间死卡 0%）
-        if(shown) lbAssetProgShow(done, total);   // v991：让路期间刷新文案为「等待数据加载…」
-        setTimeout(worker, 500); return;
-      }
+      if(LB._dataLoading && (!LB._dataLoadingAt || Date.now() - LB._dataLoadingAt < 300000)){ setTimeout(worker, 500); return; }
       var u = list[idx]; idx++;
       LB._assetCur = u || ''; // v918：仅内存记录当前 URL（诊断用，不做 DOM 更新避免 reflow 风暴）
       // 2026-08-28 省流：Cache Storage 持久缓存命中 → 跳过（不重复下载）
@@ -2234,9 +2231,7 @@ function lbAssetProgShow(done, total){
     document.body.appendChild(el);
   }
   var pct = total ? Math.round(done/total*100) : 100;
-  el.innerHTML = LB._dataLoading
-    ? '⏸️ 资源预取已暂停（数据下载中） ' + done + '/' + total   // v20260912-1021：原文案「等待数据加载」易被误读成卡在下载
-    : '🗺️ 资源加载中 ' + done + '/' + total + '（' + pct + '%）';
+  el.innerHTML = '🗺️ 资源加载中 ' + done + '/' + total + '（' + pct + '%）';
 }
 function lbAssetProgHide(){
   var el = document.getElementById('lbAssetProg');
@@ -3391,7 +3386,6 @@ function lbHeadPick(base, tryGz){
 // 两阶段：①全部并发 HEAD 收集 Last-Modified + 变化清单（HEAD 不与下载抢连接）②分批只下载变化的文件，未变化的复用旧 recs
 async function lbLoad(servers, oldData, onProgress){ // v207：onProgress({phase:'head'|'dl', done, total, msg}) 下载进度回调
   LB._dataLoading = true; LB._dataLoadingAt = Date.now(); // v986：数据优先——期间资源预取让路（防争抢连接导致数据请求超时）
-  try { // v991：全函数 try/finally —— 防异常/提前返回路径泄漏 _dataLoading（预取永久停摆 → 页面死卡「0% 资源加载中」）
   // v910：Bob（俱乐部）为黑名单服（无数据导出，UI 层 lbRenderServers/搜野生/拥有地图均已排除）→ 数据加载统一剔除，省每次 4 次必 404 的 HEAD；此处为唯一加载入口，覆盖 lbView/强制刷新/增量合并所有调用点
   servers = servers.filter(function(s){ return s !== 'Bob'; });
   var _seq = ++LB._dlSeq; // v215：本次下载令牌，新下载启动后本任务自我作废（防并发进度回退）
@@ -3569,12 +3563,11 @@ async function lbLoad(servers, oldData, onProgress){ // v207：onProgress({phase
           // 容器 vs 设施不再由词表预判分裂——渲染时按「该设施有无内容 rec(球/基因/蓝图)」动态判定：
           //   有内容 → 容器手风琴；无内容 → 设施 chips；装饰类 → 显示排除
           // 容器子类型词表（LB_CONTAINER_DISP._cls）仅作命名/图标/排序用（lbContainerTypeOf 派生），不再决定是否生成 rec
-          var _decorRe = /Lamp|Light|Chair|Seat|WoodBench|Stool|Sign_Large_Metal|WoodSign|MetalSign|Painting|DrawingSheet|Poster|Canvas|Mirror|Decor|Display_Box|Snowman|ChristmasTree/i; // 装饰类（显示排除，不进容器/设施）v914：+Decor（装饰箱）v927：+Snowman/ChristmasTree（节日树/雪人）v1000：-Torch（火把类设施已采集，需显示并合并）v20260912-1022：Bench→WoodBench（原宽泛词误杀铁匠台 AnvilBench 等 7 个生产设施）
-          var _decorKeepRe = /LightningRod|AnvilBench|ChemBench|Warbench/i; // v20260912-1022：含装饰词但确为生产设施 → 豁免（防 Light 误伤避雷针、防未来回归）
+          var _decorRe = /Lamp|Light|Torch|Chair|Seat|Bench|Stool|Sign_Large_Metal|WoodSign|MetalSign|Painting|DrawingSheet|Poster|Canvas|Mirror|Decor|Display_Box|Snowman|ChristmasTree/i; // 装饰类（显示排除，不进容器/设施）v914：+Decor（装饰箱）v927：+Snowman/ChristmasTree（节日树/雪人）
           (cryo.facilities||[]).forEach(function(f){
             if(!f || !f.class) return;
             var _cc = f.class || '';
-            if(_decorRe.test(_cc) && !_decorKeepRe.test(_cc)) return; // 装饰类：不生成 rec（纯显示排除）；生产设施豁免
+            if(_decorRe.test(_cc)) return; // 装饰类：不生成 rec（纯显示排除）
             if(!(Number(f.x)||Number(f.y))) return; // 无坐标跳过（蓝图/未放置）
             if(!f.tribeId) return; // 无部落跳过（野生/公共设施不归属玩家聚落）
             var _sub = lbContainerTypeOf({ containerClass:_cc, containerType:'' }); // 容器子类型命名（词表不生成分流）
@@ -3631,6 +3624,7 @@ async function lbLoad(servers, oldData, onProgress){ // v207：onProgress({phase
     await Promise.all(batch);
   }
   recs = Object.values(recMap);
+  LB._dataLoading = false; // v986：下载阶段结束，恢复资源预取（预取自身另有 5 分钟超时保护）
   var out = {recs:recs, tribesByServer:tribesByServer, worldNowByServer:worldNowByServer};
   out.players = Object.keys(playersByEos).map(function(eos){ return playersByEos[eos]; });
   out.structures = structures; // v6：床/棺材/睡眠舱结构（聚落建筑命名）
@@ -3641,9 +3635,6 @@ async function lbLoad(servers, oldData, onProgress){ // v207：onProgress({phase
   out._lm = lm;
   if(_seq !== LB._dlSeq) return null; // v215：被新下载取代，放弃结果（防旧数据覆盖新数据）
   return out;
-  } finally {                     // v991：任何路径（正常/异常/提前返回）都恢复资源预取
-    LB._dataLoading = false;
-  }
 }
 // v966：库存物品索引构建——item.json.gz → {byCid, byPos, byTribe, count, counts, ts}
 // 数据语义（见 报告/itemgz离线库存数据_前端调用文档_20260910.md）：普通容器逐堆明细（同资源多条需 sum）；泰克专储 containerType='dedicated' 一柜一条（quantity=总量）；blueprint 类已按 rated=1 过滤
@@ -3677,27 +3668,14 @@ function lbItemsOfContainer(server, containerId, cls, x, y){
 // 输出：{ byServer: {abbr: {settlements:[], scatteredCnt}}, byDinoKey: {dinoKey: {setId, dist, server, tribeId}}, buildAt }
 var LB_SETTLE_EPS = 8000; // 聚类距离阈值（2026-08-12 6000→8000，聚类更宽松）
 var LB_SPLIT_EPS = 6000;  // 大簇切割阈值（独立保持 6000：radius>6000 的桥接簇仍切割，防 released 桥接分离基地）
-// v20260912：床/棺/睡眠舱正则预编译（原 4 处 filter 内联重建正则 → 数千万次重复编译，卡死主因之一）
-var LB_BED_RE = /SimpleBed|ModernBed|TekBed|CompanionBed|Coffin|SleepingPod/i;
-// v20260912-1018：命名设施正则（墓碑/木牌）——由 lbBuildSettlements 内的 _signRe 提升为模块级，供结构指纹复用
-var LB_SIGN_RE = /Gravestone|WoodSign_Large|MetalSign_Large/i;
-// v20260912：structures 按部落索引（lbBuildSettlements 内构建，供 lbClusterHasBed / lbSettlementBuildingName 复用）
-// 原 3 处各自全量扫 52 万条 structures → O(簇数×52万) + O(部落数×52万) + O(聚落数×52万)，Gen 服卡死 11 分钟根因
-var LB_STRUCTS_BY_TRIBE = null;
 // 聚落成立判定（2026-08-12）：簇内有床/棺材/睡眠舱建筑（同部落，距簇内任一容器 ≤eps）→ 成聚落；不再校验容器数量
 function lbClusterHasBed(data, clu){
-  if(!clu || !clu.length) return false;
+  var sts = (data && Array.isArray(data.structures)) ? data.structures : [];
+  if(!sts.length || !clu || !clu.length) return false;
   var tid = clu[0].tribeId;
-  // v20260912：走 structsByTribe 索引（原每簇全量扫 52 万条 structures，仅索引缺失时兜底全量）
-  var pool = (LB_STRUCTS_BY_TRIBE && LB_STRUCTS_BY_TRIBE[String(tid)]) || null;
-  if(!pool){
-    var sts = (data && Array.isArray(data.structures)) ? data.structures : [];
-    if(!sts.length) return false;
-    pool = sts.filter(function(s){ return Number(s.tribeId)===Number(tid); });
-  }
-  if(!pool.length) return false;
-  var beds = [];
-  for(var _bi=0;_bi<pool.length;_bi++){ if(LB_BED_RE.test(pool[_bi].class||'')) beds.push(pool[_bi]); }
+  var beds = sts.filter(function(s){
+    return Number(s.tribeId)===Number(tid) && /SimpleBed|ModernBed|TekBed|CompanionBed|Coffin|SleepingPod/i.test(s.class||'');
+  });
   if(!beds.length) return false;
   for(var i=0;i<clu.length;i++){
     for(var j=0;j<beds.length;j++){
@@ -3717,8 +3695,6 @@ function lbBuildSettlements(data){
     var st = String(s.tribeId||0);
     (structsByTribe[st]=structsByTribe[st]||[]).push(s);
   });
-  LB_STRUCTS_BY_TRIBE = structsByTribe; // v20260912：暴露给 lbClusterHasBed / lbSettlementBuildingName 复用（消除各自全量扫描）
-  lbSettlePhase('索引就绪(部落数=' + Object.keys(structsByTribe).length + ')');
   var servers = {};
   data.recs.forEach(function(r){ if(r.server) servers[r.server]=1; });
   Object.keys(servers).forEach(function(abbr){
@@ -3745,7 +3721,6 @@ function lbBuildSettlements(data){
       else if(!r.isEmpty && r.imprinterName) c.imps[r.imprinterName] = (c.imps[r.imprinterName]||0)+1;
       if(!r.isEmpty) c.keys.push(String(r.dinoId1||'')+'_'+String(r.dinoId2||'')); // 空球无 dinoId，仅建 byContainer
     });
-    lbSettlePhase(abbr + ':聚合完成');
     // 2. 排除无坐标容器
     var posCtn = Object.keys(ctn).map(function(k){ return ctn[k]; }).filter(function(c){
       return c.type !== 'player' && (Number(c.x)!==0 || Number(c.y)!==0);
@@ -3759,8 +3734,9 @@ function lbBuildSettlements(data){
       var grp = byTribe[tid];
       var clusters = lbDbscan(grp, LB_SETTLE_EPS, 1);
       // 本部落床池（床消费唯一化 2026-08-12：一张床只能归属一个聚落）
-      // v20260912：走 structsByTribe 索引（原每部落全量扫 52 万条 structures）
-      var beds = (structsByTribe[String(tid)] || []).filter(function(s){ return LB_BED_RE.test(s.class||''); });
+      var beds = (Array.isArray(data.structures) ? data.structures : []).filter(function(s){
+        return Number(s.tribeId) === Number(tid) && /SimpleBed|ModernBed|TekBed|CompanionBed|Coffin|SleepingPod/i.test(s.class||'');
+      });
       // 候选子簇（原 lbClusterHasBed 为真的簇拆分而来）
       var cands = [];
       clusters.forEach(function(clu, ci){
@@ -3808,7 +3784,6 @@ function lbBuildSettlements(data){
         }
       });
     });
-    lbSettlePhase(abbr + ':聚类+聚落成立完成(n=' + settlements.length + ')');
     // 4. 离散兜底：posCtn 中未被任何 settlement 覆盖的容器 → scattered（_scattered 防重复）
     var covered = {};
     settlements.forEach(function(s){ (s.containers||[]).forEach(function(c){ covered[c.id]=1; }); });
@@ -3853,7 +3828,7 @@ function lbBuildSettlements(data){
       var tSettles = tribeSettles[t] || [];
       if(!tSettles.length) return;
       (structsByTribe[t]||[]).forEach(function(b){
-        if(!LB_BED_RE.test(b.class||'')) return;
+        if(!/SimpleBed|ModernBed|TekBed|CompanionBed|Coffin|SleepingPod/i.test(b.class||'')) return;
         var best=null, bd=Infinity;
         for(var i=0;i<tSettles.length;i++){
           var s0=tSettles[i];
@@ -3895,33 +3870,27 @@ function lbBuildSettlements(data){
           var dd = Math.sqrt(Math.pow(Number(st.x)-s0.center.x,2)+Math.pow(Number(st.y)-s0.center.y,2));
           if(dd<bd){ bd=dd; best=s0; }
         }
-        if(best) nameOwner[(st.class||'')+'|'+Math.round(Number(st.x))+'|'+Math.round(Number(st.y))] = { id:best.id, st:st }; // v20260912：同时存设施引用供逆映射
+        if(best) nameOwner[(st.class||'')+'|'+Math.round(Number(st.x))+'|'+Math.round(Number(st.y))] = best.id;
       });
     });
     // v200 命名：只取归属本聚落的最近命名设施（墓碑优先→M床→任意）；无则冠名/S编号
-    // v20260912：预建「聚落 → 归属设施」逆映射（原 sNameOf 每个聚落都全量遍历该部落建筑 ×3）
-    var _ownBySet = {};
-    Object.keys(nameOwner).forEach(function(k){
-      var o = nameOwner[k];
-      if(!o || !o.st) return;
-      (_ownBySet[o.id] = _ownBySet[o.id] || []).push(o.st);
-    });
     var sNameOf = function(s){
-      var own = _ownBySet[s.id] || [];
-      if(!own.length) return null;
-      function nearest(t){
+      var sts2 = structsByTribe[String(s.tribeId)] || [];
+      function owned(t){
         var best=null, bd=Infinity;
         t.forEach(function(st){
+          var k = (st.class||'')+'|'+Math.round(Number(st.x))+'|'+Math.round(Number(st.y));
+          if(nameOwner[k]!==s.id) return;
           var dd = Math.sqrt(Math.pow(Number(st.x)-s.center.x,2)+Math.pow(Number(st.y)-s.center.y,2));
           if(dd<bd){ bd=dd; best=st; }
         });
         return best;
       }
-      var b1 = nearest(own.filter(function(st){ return _signRe.test(st.class||''); }));
+      var b1 = owned(sts2.filter(function(st){ return _signRe.test(st.class||''); }));
       if(b1) return b1.name;
-      var b2 = nearest(own.filter(function(st){ return /M$/.test(String(st.name||'').trim()) && !_signRe.test(st.class||''); }));
+      var b2 = owned(sts2.filter(function(st){ return /M$/.test(String(st.name||'').trim()) && !_signRe.test(st.class||''); }));
       if(b2) return b2.name;
-      var b3 = nearest(own.filter(function(st){ return !_signRe.test(st.class||''); }));
+      var b3 = owned(sts2.filter(function(st){ return !_signRe.test(st.class||''); }));
       if(b3) return b3.name;
       return null;
     };
@@ -3960,18 +3929,16 @@ function lbBuildSettlements(data){
         byBed[abbr+'_'+(b._bk||bedKey(b))] = { setId:s.id, scattered:false, server:abbr, tribeId:Number(s.tribeId) };
       });
     });
-    lbSettlePhase(abbr + ':床/命名归属完成');
     // v821 设施唯一归属：structures(床/墓碑/棺材等) 同部落最近聚落（设施 rec 已统一进容器体系，不再需要独立归属通道）
     // 每设施消费唯一化（与 bedOwner 同模式）；装饰（灯/椅/牌/画）不参与归属 → 存 s.facilityList（设施区显示）
-    var _facDecorRe = /Lamp|Light|Chair|Seat|WoodBench|Stool|Sign_Large_Metal|WoodSign|MetalSign|Painting|DrawingSheet|Poster|Canvas|Mirror|Decor|Display_Box|Snowman|ChristmasTree/i; // v914：+Decor（装饰箱）v927：+Snowman/ChristmasTree v20260912-1022：Bench→WoodBench（同源误伤修复）
-    var _facDecorKeepRe = /LightningRod|AnvilBench|ChemBench|Warbench/i; // v20260912-1022：生产设施豁免
-    var _facCands = (Array.isArray(data.structures)?data.structures:[]); // v821：facilityStructs 已弃用（已放置设施统一生成 facility rec，经容器聚合自动入聚落）
-    // v20260912：去掉 52 万条数组复制（原 forEach push 深复制一遍，纯浪费内存与时间）
+    var _facDecorRe = /Lamp|Light|Torch|Chair|Seat|Bench|Stool|Sign_Large_Metal|WoodSign|MetalSign|Painting|DrawingSheet|Poster|Canvas|Mirror|Decor|Display_Box|Snowman|ChristmasTree/i; // v914：+Decor（装饰箱）v927：+Snowman/ChristmasTree
+    var _facCands = [];
+    (Array.isArray(data.structures)?data.structures:[]).forEach(function(x){ _facCands.push(x); }); // v821：facilityStructs 已弃用（已放置设施统一生成 facility rec，经容器聚合自动入聚落）
     var _facOwner = {}; // class|tribeId|x|y -> {setId, st}
     _facCands.forEach(function(st){
       if(!st || !(Number(st.x)||Number(st.y))) return;
       if(!st.tribeId) return;
-      if(_facDecorRe.test(String(st.class||'')) && !_facDecorKeepRe.test(String(st.class||''))) return; // 装饰排除（生产设施豁免）
+      if(_facDecorRe.test(String(st.class||''))) return; // 装饰排除
       var tSettles = tribeSettles[String(st.tribeId)] || [];
       if(!tSettles.length) return;
       var best=null, bd=Infinity;
@@ -3981,7 +3948,7 @@ function lbBuildSettlements(data){
         if(dd<bd){ bd=dd; best=s0; }
       }
       // 阈值对齐离散吸收（20000），保证远距设施不误挂；床已在 s.beds，避免重复挂 bed 类（详情显示用 s.beds + facilityList）
-      if(best && bd<=ABSORB_EPS && !LB_BED_RE.test(String(st.class||''))){
+      if(best && bd<=ABSORB_EPS && !/SimpleBed|ModernBed|TekBed|CompanionBed|Coffin|SleepingPod/i.test(String(st.class||''))){
         _facOwner[(st.class||'')+'|'+(st.tribeId||0)+'|'+Math.round(Number(st.x))+'|'+Math.round(Number(st.y))] = { setId:best.id, st:st };
       }
     });
@@ -4145,14 +4112,9 @@ function lbNearestStructure(arr, cx, cy){
 }
 // 聚落建筑命名优先级（2026-08-12）：①墓碑/木牌/金属牌(Gravestone/WoodSign_Large/MetalSign_Large)自定义名(同组取距center最近) → ②床/棺材/睡眠舱 name 以大写 M 结尾(取最近) → ③床/棺材/睡眠舱最近带名字；无则 null
 function lbSettlementBuildingName(data, abbr, tid, cx, cy){
-  // v20260912：走 structsByTribe 索引（原每聚落全量扫 52 万条 → O(聚落数×52万)）
-  var pool = (LB_STRUCTS_BY_TRIBE && LB_STRUCTS_BY_TRIBE[String(tid)]) || null;
-  if(!pool){
-    var sts = (data && Array.isArray(data.structures)) ? data.structures : [];
-    if(!sts.length) return null;
-    pool = sts.filter(function(s){ return Number(s.tribeId) === Number(tid); });
-  }
-  var cands = pool.filter(function(s){ return !!s.name; });
+  var sts = (data && Array.isArray(data.structures)) ? data.structures : [];
+  if(!sts.length) return null;
+  var cands = sts.filter(function(s){ return Number(s.tribeId) === Number(tid) && s.name; });
   if(!cands.length) return null;
   var sign = cands.filter(function(s){ return /Gravestone|WoodSign_Large|MetalSign_Large/i.test(s.class||''); });
   if(sign.length) return lbNearestStructure(sign, cx, cy);
@@ -4243,40 +4205,6 @@ function lbResolveImprinterPidByEos(data, eosId, memberPids){
 }
 // 幂等构建聚落：data._settlements 不存在则计算并缓存（会话内复用；数据变化由 _schemaVer/缓存失效触发重算）
 var LB_SETTLE_VER = 1; // v931：聚落构建版本号（算法升级 +1 强制重建；构建结果随 IndexedDB 持久化，缓存命中跳过 80s 同步构建）
-// v20260912-1021：聚落构建/重算「分阶段计时」——写独立 localStorage 键 dino_settletiming
-//   为什么独立：主线程被同步构建占满时，PW evaluate 读不到内存变量；而 localStorage 同源可读，
-//   故页面卡住时可由外部轻量页读出「最后推进到哪个阶段、各阶段耗时」。
-function lbSettlePhase(tag){
-  try{
-    var now = Date.now();
-    if(!LB._spT0){ LB._spT0 = now; LB._spLog = []; LB._spLog.push(['bs:start', 0]); }
-    LB._spLog.push([String(tag), now - LB._spT0]);
-    try{ localStorage.setItem('dino_settletiming', JSON.stringify(LB._spLog.slice(-80))); }catch(e2){}
-    var el = document.getElementById('lbSettleBuildPhase');
-    if(el) el.textContent = String(tag);
-  }catch(e){}
-}
-// v20260912-1021：重算期独立覆盖层（容器结构未变 → 只刷统计/冠名，不重跑聚类）
-function lbSettleRefreshShow(reason){
-  try{
-    if(document.getElementById('lbSettleRefreshOv')) return;
-    if(!document.getElementById('lbSettleBuildSt')){
-      var st = document.createElement('style'); st.id = 'lbSettleBuildSt';
-      st.textContent = '@keyframes lbSpin{to{transform:rotate(360deg)}}';
-      document.head.appendChild(st);
-    }
-    var ov = document.createElement('div');
-    ov.id = 'lbSettleRefreshOv';
-    ov.style.cssText = 'position:fixed;inset:0;z-index:99997;background:rgba(10,10,22,.72);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#e6e6e6;font-size:14px;text-align:center;padding:20px';
-    ov.innerHTML = '<div style="width:38px;height:38px;border:4px solid #333;border-top-color:#38bdf8;border-radius:50%;animation:lbSpin 1s linear infinite"></div>'
-      + '<div style="font-size:15px;font-weight:bold">🔄 正在重算聚落统计</div>'
-      + '<div style="font-size:13px;color:#93c5fd">' + (reason || '容器结构未变，仅刷新统计与冠名（不重跑聚类）') + '</div>';
-    document.body.appendChild(ov);
-  }catch(e){}
-}
-function lbSettleRefreshHide(){
-  try{ var o = document.getElementById('lbSettleRefreshOv'); if(o && o.parentNode) o.parentNode.removeChild(o); }catch(e){}
-}
 // v933：重建期 UI 反馈覆盖层——CSS transform 动画走合成器线程，主线程同步构建期间 spinner 仍转动（DOM 更新冻结但动画可见）
 function lbSettleBuildShow(data, reason){
   try{
@@ -4292,7 +4220,6 @@ function lbSettleBuildShow(data, reason){
       + '<div style="font-size:15px;font-weight:bold">🏗️ 正在重建聚落数据</div>'
       + '<div style="font-size:13px;color:#c4b5fd">原因：'+_reason+'</div>'
       + '<div style="font-size:13px;color:#ccc">数据量 '+n.toLocaleString()+' 条 ｜ 预估耗时：'+est+'</div>'
-      + '<div style="font-size:13px;color:#a78bfa" id="lbSettleBuildPhase">准备中…</div>'
       + '<div style="font-size:12px;color:#999">计算期间页面无响应属正常，请勿刷新/关闭</div>';
     if(!document.getElementById('lbSettleBuildSt')){
       var st = document.createElement('style');
@@ -4332,7 +4259,7 @@ function lbAggContainers(recs){
   return ctn;
 }
 // v935：容器结构指纹（posCtn 级：cid|坐标|部落 去重 + FNV）——仅球内容变化时指纹不变 → 跳过重建只刷统计
-function lbSettlePosFingerprint(recs, structures){
+function lbSettlePosFingerprint(recs){
   var seen = {}, n = 0, h1 = 2166136261;
   (recs||[]).forEach(function(r){
     if(!r) return;
@@ -4345,28 +4272,10 @@ function lbSettlePosFingerprint(recs, structures){
     if(seen[k]) return; seen[k]=1; n++;
     for(var i=0;i<k.length;i++){ h1 ^= k.charCodeAt(i); h1 = (h1*16777619)>>>0; }
   });
-  // ===== v20260912-1018：并入「参与聚落算法的建筑」指纹 =====
-  // 为什么必须并入：原指纹只吃 recs（容器/球），而 床/棺材/睡眠舱、墓碑/木牌 只存在于 structures
-  // （不生成 rec）→ 游戏里新盖床 / 新立墓碑 / 给设施改名时指纹不变 → 跳过重建 →
-  // 聚落中心、聚落名称、乃至「本该成立的新聚落」永久滞后。
-  // 纳入范围（仅参与聚落算法的）：床类 ∪ 墓碑/木牌类 ∪ 任何带自定义 name 的设施
-  //   - 床类 → 决定聚落是否成立（lbClusterHasBed）、聚落中心（床纳入中心）、bedOwner 归属
-  //   - 墓碑/木牌 与 带 name 设施 → 决定聚落命名（lbSettlementBuildingName / sNameOf）
-  //   注：炮塔/冰箱等设施由后端统一生成 facility rec（已含在 recs 指纹内），此处不重复计入
-  var sn = 0;
-  (structures||[]).forEach(function(s){
-    if(!s) return;
-    var c = String(s.class||'');
-    if(!s.name && !LB_BED_RE.test(c) && !LB_SIGN_RE.test(c)) return;
-    sn++;
-    var tk = c + '|' + (s.tribeId||0) + '|' + Math.round(Number(s.x)||0) + '|' + Math.round(Number(s.y)||0) + '|' + Math.round(Number(s.z)||0) + '|' + String(s.name||'');
-    for(var j=0;j<tk.length;j++){ h1 ^= tk.charCodeAt(j); h1 = (h1*16777619)>>>0; }
-  });
-  return n + '_' + (h1>>>0).toString(36) + '_s' + sn;
+  return n + '_' + (h1>>>0).toString(36);
 }
 // v935：结构未变 → 用新数据重算各聚落容器统计/冠名（复用 lbFinalizeSettlement），不重跑 DBSCAN（秒级）
 function lbRefreshSettleStats(data){
-  try{ lbSettleRefreshShow(); }catch(e){}
   try{
     var ss = data && data._settlements;
     if(!ss || !ss.byServer) return;
@@ -4380,13 +4289,13 @@ function lbRefreshSettleStats(data){
         try{ return lbFinalizeSettlement(data, abbr, s.tribeId, s.id, nc); }catch(e){ return s; }
       });
     });
-  }catch(e){} finally { try{ lbSettleRefreshHide(); }catch(e2){} }
+  }catch(e){}
 }
 function lbEnsureSettlements(data){
   if(!data) return null;
   if(!data._settlements){
     // v935：容器结构指纹未变（仅球/内容变化）→ 复用旧结构增量刷统计，跳过 80s 全量重建
-    var _fpNow = lbSettlePosFingerprint((data.recs)||[], data.structures); // v20260912-1018：并入建筑指纹
+    var _fpNow = lbSettlePosFingerprint((data.recs)||[]);
     var _pv = LB._prevSettles;
     if(_pv && _pv._fp === _fpNow && _pv.byServer){
       data._settlements = _pv;
@@ -5950,9 +5859,6 @@ var LB_CONTENT_KINDS = [
 // v972：支持多容器合并取件——泰克专储同聚落合并后，一个组可能代表多个柜子（按 containerId|key|class 去重汇总）
 function lbGroupItems(cg){
   if(!cg || !cg.length) return [];
-  // v996：放出 = 野外放养生物的虚拟容器（containerId 为空，坐标仅代表生物位置）——无真实库存。
-  //   若照常按坐标查库存，会误取到生物附近的真实容器（冰箱/箱子）的物品 —— 用户实测「放出组里出现资源/弹药」
-  if(String((cg[0] || {}).containerType || '') === 'released') return [];
   if(cg.length === 1){
     var r0 = cg[0], l0 = null;
     try{ l0 = lbItemsOfContainer(String(r0.server || (LB.tab||'')), r0.containerId, r0.containerClass, r0.containerX, r0.containerY); }catch(e){ l0 = null; }
@@ -5978,17 +5884,6 @@ function lbIsDedicatedStorage(r){
   if(String(r.containerType||'') === 'dedicated') return true;
   return /DedicatedStorage/i.test(String(r.containerClass||''));
 }
-// v997：可合并设施判定——同聚落内「同类型」合并为一行（泰克专储 + 炮台类 + 立式火把 + 特斯拉电塔）
-// 用户确认：发电机（泰克发电机/发电机）**不合并**，故不入白名单
-// v999 根因修正：白名单原按「容器背包类名」枚举（Turret/HeavyTurret/TurretTek…），但聚落 rec 实际带的是
-//   **世界结构类名**（StructureTurretBaseBP_C_x / StructureTurretBaseBP_Heavy_C_x）→ 枚举永不命中 → 炮台不合并。
-//   改为按「族」判定（含 Turret / Torch / TeslaCoil），两套类名一并覆盖；发电机不含这三个词，天然排除。
-var LB_MERGE_FAC_RE = /Turret|Torch|TeslaCoil/i;
-function lbIsMergeableFacility(r){
-  if(!r) return false;
-  if(lbIsDedicatedStorage(r)) return true;
-  return LB_MERGE_FAC_RE.test(String(r.containerClass||''));
-}
 // v975：制造设施判定（泰克复制器 / 铁匠台 / 机床）——其蓝图若与本聚落书柜重复（书柜远程分享）则不显示
 function lbIsCraftStation(r){
   if(!r) return false;
@@ -6007,20 +5902,9 @@ function lbIsBp(it){
 //   实测 Ext 服 4 个互不相关部落的 TekReplicator 共享完全相同的 32 个基名，各出现 1 次）→ 视为无内容。
 //   L3640 数据契约原写「blueprint 类已按 rated=1 过滤」，但过滤条件绑定了 type==='blueprint'，
 //   而固定配方 type='ammo'/'resource' → 890 条漏网（与 v989 同一错误模式的第二处）。
-// v20260912-1020：固定配方蓝图（游戏自带、非玩家物品）判定 —— 统一判据
-//   背景：v990 注释已写明「rated=0 / rating=-1」两个条件，但代码只实现了 rated；
-//   而固定配方在数据里的真实形态是 rated:1 + rating:-1 + qidx:-1
-//   （实测 Ast/Isl 服 ScoutRemote：TekReplicator 内 {rated:1,rating:-1,qidx:-1}，
-//     而书柜 LibraryStorage 内 {rated:1,rating:725,qidx:5}）
-//   → 单看 rated 必然漏，实测全库漏网 7384 条 / 117 种（复制器/铁匠台内那批资源与弹药固定配方）
-function lbIsFixedRecipeBp(it){
-  if(!it) return true;
-  if(!Number(it.rated)) return true;          // rated=0：无品质
-  return Number(it.rating) === -1;            // rating=-1：固定配方
-}
 function lbIsEmptyItem(it){
   if(!it) return true;
-  if(lbIsBp(it)) return lbIsFixedRecipeBp(it);   // v20260912-1020：补全 rating===-1
+  if(lbIsBp(it)) return !Number(it.rated);
   return (Number(it.quantity) || 0) <= 0;
 }
 // v975：物品归一基名（跨容器比对同一蓝图用；与 lbInvListHtml 聚合键同源）
@@ -6051,10 +5935,9 @@ function lbGroupInvHas(cg, k, ctx){
   var skip = (k === 'blueprint' && shelf && craft) ? shelf : null;
   for(var i=0;i<l.length;i++){
     var it = l[i]; if(!it) continue;
-    if(lbIsEmptyItem(it)) continue;  // v993：与计数/渲染同标准 —— 0 数量实物与固定配方蓝图都不算内容（空容器得以下沉设施 chips）
     if(k==='blueprint'){
       if(!lbIsBp(it)) continue;                                     // v989：以 isBlueprint 为准
-      if(lbIsFixedRecipeBp(it)) continue;                           // v20260912-1020：固定配方(rated=0 或 rating=-1)不计入内容
+      if(!Number(it.rated)) continue;                                // v990：无品质(rated=0)=固定配方，不计入内容
       if(skip){ var b = lbBaseOfItem(it); if(b && skip[b]) continue; }
       return true;
     } else if(it.kind===k) return true;
@@ -6075,28 +5958,24 @@ function lbInvAgg(items){
     var it = items[i]; if(!it) continue;
     if(lbIsEmptyItem(it)) continue;                                 // v989：数量<=0 的实物（存档空槽残留）不计数
     var k = lbIsBp(it) ? 'blueprint' : (it.kind || 'other');        // v989：以 isBlueprint 为准
-    // v999：计数口径改「组数」——每条记录 = 1 堆 = 1 组（原为数量求和，会显示 47979 这种总量）
-    g[k] = (g[k]||0) + 1;
+    var q = Number(it.quantity)||0;
+    if(lbIsBp(it) && !q) q = 1;   // 蓝图 quantity 恒为 0 → 按 1 件计（条目数）
+    g[k] = (g[k]||0) + q;
   }
   return g;
 }
 // v968：摘要行计数标注（资源⛏N｜弹药➤N｜蓝图📘N）
-// v991：①去掉三色着色（统一继承 .acc-cnt 灰，对齐球基因风格）②弹药图标 ➤ → ◎（箭头不合适）
-//       ③withSep 由调用方按「前面是否已有内容」决定，消除孤立分隔线
-function lbInvCountMark(items, withSep){
+function lbInvCountMark(items){
   if(!items || !items.length) return '';
   var g = lbInvAgg(items), o = '';
-  if(g.resource)  o += '◆'+lbFmtQty(g.resource);   // v993：⛏ 是铁锹 emoji，易误读为工具 → 换纯符号
-  if(g.ammo)      o += '◎'+lbFmtQty(g.ammo);
-  if(g.blueprint) o += '▤'+lbFmtQty(g.blueprint);  // v993：📘 是蓝书 emoji（自带固有色，CSS 去不掉）→ 换纯符号
-  if(!o) return '';
-  return (withSep ? '<span style="opacity:.5">|</span>' : '') + o;
+  if(g.resource)  o += '<span style="color:#6ee7b7">⛏'+lbFmtQty(g.resource)+'</span>';
+  if(g.ammo)      o += '<span style="color:#fbbf24">➤'+lbFmtQty(g.ammo)+'</span>';
+  if(g.blueprint) o += '<span style="color:#93c5fd">📘'+lbFmtQty(g.blueprint)+'</span>';
+  return o ? '<span style="opacity:.5">|</span>'+o : '';
 }
 // v968：容器物品清单块（图标 + 中文 + ×数量；按数量降序；图标走 P3 物品表 → WebP 缩略图）
-function lbInvListHtml(items, opts){
+function lbInvListHtml(items){
   if(!items || !items.length) return '';
-  // v1014：个体自定义名——低可视化写在每个物品徽章**内部**（不另套外层块）
-  var _nm = (opts && opts.name) ? String(opts.name) : '';
   // v970：聚合键改用「归一基名」——普通容器逐堆明细的 class 带实例后缀（_C_<ID>），
   // 用完整 class 聚合会导致同种物品每堆各占一行且组数恒为 1（v969 缺陷）；加 meta 缓存避免重复计算
   var agg = {}, order = [], metaCache = {};
@@ -6125,25 +6004,21 @@ function lbInvListHtml(items, opts){
   }
   var rows = order.map(function(c){ return agg[c]; });
   rows.sort(function(a,b){ if(b.qty !== a.qty) return b.qty - a.qty; return a.cls.localeCompare(b.cls); });
-  // v1016：inline 模式——不返回外层 flex div，由调用方把所有个体的徽章拼进**同一个**容器
-  //   （v1014 每个个体各调一次 → 各返回一个块级 div → 实测每个个体/徒章强制换行）
-  var _inline = !!(opts && opts.inline);
-  var o = _inline ? '' : '<div style="display:flex;flex-wrap:wrap;gap:6px;padding:6px 8px">';
+  var o = '<div style="display:flex;flex-wrap:wrap;gap:6px;padding:6px 8px">';
   for(var j=0;j<rows.length;j++){
     var r = rows[j];
     var url = (r.icon && LB_ITEM_ICON_URL) ? (LB_ITEM_ICON_URL[r.icon]||'') : '';
     var label = r.zh || r.en || r.cls.replace(/^PrimalItem[A-Za-z]*_?/,'');
     o += '<span style="display:inline-flex;align-items:center;gap:4px;background:#1a1a24;border:1px solid '+(r.isBp?'#3b4a6b':'#2a2a3a')+';border-radius:8px;padding:3px 7px;font-size:12px" title="'+r.cls+'">'
-      + (_nm ? '<span style="color:#64748b;font-size:10px">'+_nm+'</span>' : '')
       + (url ? '<img src="'+url+'" style="width:16px;height:16px;object-fit:contain"'+lbIconFilterStyle(url)+'>' : '')
       + '<span style="color:#cbd5e1">'+label+'</span>'
       + '<span style="color:#475569;font-size:10px">·</span>'
-      + (r.n > 1 ? '<span style="color:#94a3b8;font-size:11px">'+r.n+'组</span><span style="color:#475569;font-size:10px">·</span>' : '')   // v1000：还原 v996 前写法（仅 >1 时显示「N组 ·」，其后固定显示总数量）
+      + (r.n > 1 ? '<span style="color:#94a3b8;font-size:11px">'+r.n+'组</span><span style="color:#475569;font-size:10px">·</span>' : '')
       + '<span style="color:#64748b">'+lbFmtQty(r.qty)+'</span>'
       + (r.isBp ? '<span style="color:#93c5fd;font-size:10px">蓝图</span>' : '')
       + '</span>';
   }
-  return _inline ? o : (o + '</div>');
+  return o + '</div>';
 }
 // v957：同容器双 ID 通道判定——设施扫描 rec 与库存扫描设备（基因枪）的 containerId 来自不同上报通道
 //（如 rec=StorageBox_Huge_C_* / 枪=PrimalInventoryBP_StorageBox_Huge_C*），仅比 containerId 会误判；
@@ -6322,8 +6197,7 @@ var LB_CONTAINER_DISP = {
     { re:/TekReplicator/i, type:'replicator', key:'tek_replicator', iconKey:'Tek_Replicator', mdi:'mdi-cog' },
     { re:/TekTransmitter/i, type:'other', key:'tek_transmitter', iconKey:'TEKPortal_Icon', mdi:'mdi-cog' },
     { re:/CompanionBed/i, type:'other', key:'hud_companionbed_icon', iconKey:'HUD_CompanionBed_Icon', mdi:'mdi-cog' },
-    { re:/TekSleepingPod/i, type:'other', key:'tek_sleeping_pod', iconKey:'Tek_Sleeping_Pod', mdi:'mdi-cog' },
-    { re:/Refrigerator/i, type:'other', key:'refrigerator', iconKey:'Refrigerator', mdi:'mdi-fridge-outline' }   // v996：冰箱（原先无正则命中 → 回退 storage → 误用储物箱图标）
+    { re:/TekSleepingPod/i, type:'other', key:'tek_sleeping_pod', iconKey:'Tek_Sleeping_Pod', mdi:'mdi-cog' }
   ]
 };
 // v190 容器识别统一派生：位置态（released/player）原样；容器由 containerClass 正则派生子类型
@@ -6375,10 +6249,7 @@ function lbContainerLabel(r, opts){
   var dtcCls = '';
   // v190 统一：容器子类型由 lbContainerTypeOf 派生（位置态 released/player + containerClass 正则）
   var sub = lbContainerTypeOf(r);
-  // v996 根因修复：原来只在 sub==='other' 时才传 containerClass —— 而 Refrigerator 不匹配 _cls 任何正则，
-  //   lbContainerTypeOf 回退到后端 containerType='storage' → cls 永为 null → **facility_zh 从不被查询**
-  //   → 图标回退 SmallStorage_Icon（储物箱）、中文回退英文（用户实测冰箱显示储物箱图标）
-  var disp = lbContainerDisp(sub, r.containerClass || null);
+  var disp = lbContainerDisp(sub, (sub==='other') ? r.containerClass : null);
   // 恐龙背包容器（DinoTamedInventoryComponent_xxx 或 containerType='dino'）：复用选物种方法（lbIconForDinoClass 图标 + lbSpName 中文名）
   // v530：新数据（EggProbe 42 字段）containerType='dino' 且 containerClass 直接是恐龙类名（如 Oviraptor_Character_BP_C），无需反查
   if(r.containerClass && LB_ICON_BY_NAME){
@@ -6420,26 +6291,11 @@ function lbContainerLabel(r, opts){
   // v904：结构类容器（非恐龙背包）→ 类型英文小字（facility_zh 表命中时），有内容/自定义名容器同样显示
   var enTag = '';
   var _cc0 = String(r.containerClass || '');
-  var _mm = null;
   if(_cc0 && _cc0.indexOf('DinoTamedInventoryComponent') < 0){
-    // v1012：去掉 LB_FACILITY_ZH 加载状态门控 —— lbSettleFacMeta 内部已自行判断（表未加载时走通用兜底，
-    //   而该分支 v1011 起也返回 en）→ 原门控会让 enTag 与“默认英文名→中文”判定在表未加载时全部失效（冰箱实测）
-    _mm = lbSettleFacMeta(_cc0);
+    var _mm = (LB_FACILITY_ZH && Object.keys(LB_FACILITY_ZH).length) ? lbSettleFacMeta(_cc0) : null;
     if(_mm && _mm.en) enTag = '<span style="opacity:.55;font-size:9px;margin-left:4px">'+_mm.en+'</span>';
   }
-  if(hasName){
-    // v1010 根因修复：containerName 多数是**默认英文名**（插件导出的设施英文名，如 Refrigerator），
-    //   原先无条件当“自定义名”直显 → 标题永远英文（且与右侧灰字重复成 “Refrigerator Refrigerator”）。
-    //   规则：containerName 与 facility_zh 的 en 相同（忽略大小写）→ 认作默认名 → 用 zh；
-    //         否则保留真实自定义名（如「天台A」）不动。
-    var nameTxt = String(r.containerName);
-    var _en0 = (_mm && _mm.en) ? String(_mm.en).trim() : '';
-    // v1015：比较前归一（去空格/下划线/连字符 + 小写）——实测火把 containerName='Standing Torch'
-    //   而 facility_zh.en='StandingTorch'（无空格），严格比较会漏→标题恒为英文
-    var _nrm = function(s){ return String(s).toLowerCase().replace(/[\s_\-]+/g,''); };
-    if(_en0 && _mm.zh && _nrm(nameTxt) === _nrm(_en0)) nameTxt = _mm.zh;
-    return '<span class="acc-title">'+icon+' '+nameTxt+enTag+'</span>';
-  }
+  if(hasName) return '<span class="acc-title">'+icon+' '+r.containerName+enTag+'</span>';
   // 恐龙背包容器：显示对应生物中文种名（复用选物种 lbSpName）
   if(dtcCls){
     var dnm = lbSpName(dtcCls);
@@ -8115,10 +7971,7 @@ function lbBuildSettleContainerHtml(grp, settleKey){
     var k=lbContainerKey(r);
     // v972：泰克专储特殊显示——同一聚落内「有内容」的专储合并为一个条目（键聚落级固定）；
     // 无内容的专储键不变 → 仍走下方 isEmptyFacility 下沉到设施 chips
-    // v997：扩展为「可合并设施」——炮台/立式火把/特斯拉电塔同样按「同聚落+同类型」合并（键含类型基名，异类不混）
-    if(lbIsMergeableFacility(r) && lbGroupItems([r]).length){
-      k = (lbIsDedicatedStorage(r) ? '__dedicated__' : '__merged__' + lbFacBase(r.containerClass||'')) + settleKey;
-    }
+    if(lbIsDedicatedStorage(r) && lbGroupItems([r]).length){ k = '__dedicated__' + settleKey; }
     (contGroups[k]=contGroups[k]||[]).push(r);
   });
   // v821：组内排序——有名字优先、非空球优先（同组可能混入 facility 空 rec，需保证代表 rec 是真实内容/命名容器）
@@ -8237,28 +8090,9 @@ function lbBuildSettleContainerHtml(grp, settleKey){
     var scnMark = cScanners.length ? '<span style="color:#a78bfa">✦'+cScanners.length+'</span>' : ''; // v206：星号在前
     // v968：库存物品（资源/弹药/蓝图）——摘要计数 + 展开清单（全设施通用）
     // v972：泰克专储合并组标题加 ×N（该组代表多个柜子）；v973：合并组同时隐藏 #ID
-    // v997：合并组判定从「仅泰克专储」扩展为「可合并设施」（炮台/火把/特斯拉电塔）
-    var _dedMerge = (cg.length > 1 && lbIsMergeableFacility(cg[0]));
+    var _dedMerge = (cg.length > 1 && lbIsDedicatedStorage(cg[0]));
     var _dedN = _dedMerge ? ('<span style="opacity:.7;font-size:11px;margin-left:4px">×'+cg.length+'</span>') : '';
     var invItems = lbGroupItems(cg);
-    // v1013：合并组（炮台/火把/特斯拉电塔/泰克专储）——按**个体**分别渲染物品徽章，
-    //   不再把 N 个个体的物品合并成一个徽章（用户实测：3 个炮台的弹药被并成 ◎12）。
-    //   有自定义名的个体在徽章块内先显示名称；无名字的只显示正常徽章。
-    var _dedParts = null;
-    if(_dedMerge){
-      _dedParts = [];
-      for(var _di=0;_di<cg.length;_di++){
-        var _dr = cg[_di], _dl = null;
-        try{ _dl = lbItemsOfContainer(String(_dr.server||(LB.tab||'')), _dr.containerId, _dr.containerClass, _dr.containerX, _dr.containerY); }catch(e){ _dl = null; }
-        if(!_dl || !_dl.length) continue;
-        var _has=false;
-        for(var _dj=0;_dj<_dl.length;_dj++){ if(_dl[_dj] && !lbIsEmptyItem(_dl[_dj])){ _has=true; break; } }
-        if(!_has) continue;
-        var _dn = String(_dr.containerName||'').trim();
-        if(_dn === '?') _dn = '';
-        _dedParts.push({ name:_dn, list:_dl });
-      }
-    }
     // v975：制造设施（泰克复制器/铁匠台/机床）剔除与书柜重复的蓝图（书柜远程分享的，只在书柜显示）
     if(invItems.length && cg.length && lbIsCraftStation(cg[0]) && Object.keys(_shelfBp).length){
       invItems = invItems.filter(function(it){
@@ -8267,24 +8101,13 @@ function lbBuildSettleContainerHtml(grp, settleKey){
         return !(b && _shelfBp[b]);
       });
     }
-    var invMark = _dedMerge ? '' : lbInvCountMark(invItems, !!(fullH||v6H||scnMark)); // v991：前面无内容则不加分隔线（消除孤立 |）；v1013：合并组不聚合物品徽章
+    var invMark = lbInvCountMark(invItems);
     var sepH = (fullH||v6H||scnMark||invMark) && emptyH ? ' ' : '';
     var sumHtml='<details class="acc"'+autoOpen+' onclick="lbAccOnly(this)"><summary>'
       +'<span class="acc-sum-name">'+lbContainerLabel(cg[0], (_dedMerge ? {hideId:true} : null))+_dedN+'</span>'
       +'<span class="acc-cnt">'+fullH+v6H+scnMark+invMark+sepH+emptyH+'</span></summary>';
     h+=sumHtml;
-    if(_dedMerge){
-      // v1016：合并组——所有个体的徽章拼进**同一个 flex 容器**（v1014 逐个体一个 div → 每个个体强制换行）；
-      //   个体边界靠“有名字的徽章内带名字”区分，不再套块也不逐行
-      if(_dedParts && _dedParts.length){
-        var _mgInner = '';
-        for(var _pi=0;_pi<_dedParts.length;_pi++){
-          var _pp = _dedParts[_pi];
-          _mgInner += lbInvListHtml(_pp.list, {inline:true, name:_pp.name || ''});
-        }
-        if(_mgInner) h += '<div style="display:flex;flex-wrap:wrap;gap:6px;padding:6px 8px">'+_mgInner+'</div>';
-      }
-    } else if(invItems.length) h += lbInvListHtml(invItems);
+    if(invItems.length) h += lbInvListHtml(invItems);
     // v780：容器内卡流（基因枪/生物卡）瀑布流（与主列表同源 lbColCount；空球行/空容器提示保持通栏）
     var _colN2 = lbColCount(); // v797：≥1180 三列 / 860~1179 两列 / <860 一列
     var _inner = scnHtml + neArr.map(function(r){
@@ -8425,7 +8248,7 @@ function lbBuildSettleContainerHtml(grp, settleKey){
           });
           if(_chips.length){
             h += '<div style="margin-top:10px;padding-top:8px;border-top:1px dashed #333">';
-            // v993：去掉「设施」小标题（用户要求）—— chips 自带图标与名称，标题冗余
+            h += '<div style="font-size:11px;color:#888;margin-bottom:6px">设施</div>';
             h += '<div style="display:flex;flex-wrap:wrap;gap:6px">'+_chips.join('')+'</div>';
             h += '</div>';
           }
@@ -8437,14 +8260,11 @@ function lbBuildSettleContainerHtml(grp, settleKey){
 // v903：设施权威表 {基名: {icon, en, zh}}（facility_zh.json，生成见 汉化/_build_facility_zh.py；表在服务器维护免发版）
 var LB_FACILITY_ZH = null;
 function lbFacilityZhLoad(){
-  // v1015 根因修复：原 `if(LB_FACILITY_ZH) return` —— 失败时被置 {} 也算“已加载” → **永久短路永不重试**，
-  //   整个 session 内设施中文/图标全部退化（实测：冰箱、立式火把/挂壁火把标题恒为英文）。
-  //   改为「非空才算已加载；失败不缓存空表」→ 下次调用可重试。
-  if(LB_FACILITY_ZH && Object.keys(LB_FACILITY_ZH).length) return Promise.resolve(LB_FACILITY_ZH);
+  if(LB_FACILITY_ZH) return Promise.resolve(LB_FACILITY_ZH);
   return authFetch(LB_ASA + '/facility_zh.json?v='+LB_VERSION, {}).then(function(r){return r.json();}).then(function(d){
-    if(d && typeof d==='object' && Object.keys(d).length){ LB_FACILITY_ZH = d; }
-    return LB_FACILITY_ZH || {};
-  }).catch(function(){ return LB_FACILITY_ZH || {}; });
+    LB_FACILITY_ZH = (d && typeof d==='object') ? d : {};
+    return LB_FACILITY_ZH;
+  }).catch(function(){ LB_FACILITY_ZH = {}; return LB_FACILITY_ZH; });
 }
 // v967：物品权威表 {基名: {icon, en, zh, kind}}（item_zh.json，510 条；生成见 汉化/_build_item_zh.py 系列；表在服务器维护免发版）
 // 基名归一采用「多级剥离 + 多候选」，已用 34270 个真实存档类名验证 100% 命中（含 PrimalItem_Weapon* 去 Weapon、PrimalItemC4Ammo 保留全名两类特例）
@@ -8509,14 +8329,14 @@ var LB_FACILITY_ICON_SPECIAL = {
   'LinkedStorage':'Linked_Storage_Box', 'StorageBox':'SmallStorage_Icon',
   'StorageBox_Small':'SmallStorage_Icon', 'StorageBox_Large':'Large_Storage_Box', 'StorageBox_Huge':'Vault',
   'StorageBox_Balloon':'HUD_StorageBox_Icon', 'StorageBox_Barrel':'HUD_Frontier_Barrel_Icon', 'StorageBox_ChristmasGift_WW':'Holiday_Stocking',
-  'StorageBox_AnvilBench':'Smithy', 'StorageBox_ChemBench':'Chemistry_Bench', 'StorageBox_ChemBench_Tek':'Makeshift_Megalab', 'StorageBox_Fabricator':'MachinedWorkbench_Icon', 'StorageBox_IndustrialGrinder':'Industrial_Grinder',
+  'StorageBox_AnvilBench':'Smithy', 'StorageBox_ChemBench_Tek':'Chemistry_Bench', 'StorageBox_Fabricator':'MachinedWorkbench_Icon', 'StorageBox_IndustrialGrinder':'Industrial_Grinder',
   'StorageBox_TekGenerator':'Tek_Generator', 'StorageBox_TekReplicator':'Tek_Replicator', 'StorageBox_TekTransmitter':'TEKPortal_Icon', 'TekTransmitter':'TEKPortal_Icon',
   'DecorBox_Small':'Decor_Box', 'DecorBox_Medium':'Decor_Box', 'ReverseVacuumComparment':'HUD_TOF_AquaticCompartment_Icon',
   'Bed_Modern':'ModernBed_Icon', 'Bed_Simple':'Simple_Bed', 'Bed_Tek':'Tek_Sleeping_Pod',
   'Furniture_Gravestone':'Gravestone', 'Furniture_Snowman':'HUD_SnowmanHat_Icon', 'Furniture_WoodChair':'Wooden_Chair',
   'Furniture_WoodTable':'Wooden_Table', 'Furniture_WoodBench':'Wooden_Bench', 'Furniture_SaloonTable':'HUD_Frontier_SaloonTable_Icon',
   'Pumpkin_Standing':'PumpkinSeed_Icon', 'Wreath_Flower':'Wreath', 'TreeSapTap_SM':'Tree_Sap_Tap', 'TreeTap':'Tree_Sap_Tap', 'TrophyWall':'Trophy_Wall-Mount',
-  'MortarAndPestle':'MortarPestle_Icon', 'ChemBench':'Chemistry_Bench', 'ChemBench_Tek':'Makeshift_Megalab', 'Fabricator':'MachinedWorkbench_Icon',
+  'MortarAndPestle':'MortarPestle_Icon', 'ChemBench':'Chemistry_Bench', 'ChemBench_Tek':'Chemistry_Bench', 'Fabricator':'MachinedWorkbench_Icon',
   'CookingPot':'CookingCampfire_Icon', 'CropPlot':'CropPlot_Icon', 'CropPlot_Large':'Medium_Crop_Plot', 'CropPlot_Medium':'Medium_Crop_Plot',
   'CropPlot_Small':'Small_Crop_Plot', 'CropPlot_Tek':'Tek_Crop_Plot', 'PreservingBin':'WoodFridge_Icon', 'Grinder':'Industrial_Grinder',
   'IceBox':'Refrigerator', 'Vault':'Vault', 'Smithy':'Smithy', 'AnvilBench':'Smithy', 'EggIncubator':'Egg_Incubator',
@@ -8596,10 +8416,7 @@ function lbSettleFacMeta(cls){
   if(!zh) zh = en.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_]+/g, ' ').trim();
   // 图标：v911 强查找（特例表→直配→变体裁剪→词元→norm 双向；复用物种 lbIconForDinoClass 思路，运行时现查）
   var icon = lbFacilityIconFind(en);
-  // v1011 根因修复：原先通用分支**不返回 en** → 调用方（lbContainerLabel 标题、enTag）在
-  //   LB_FACILITY_ZH 未加载/加载失败时拿不到 en → “默认英文名→中文”判定永远不成立（冰箱标题永远英文）。
-  //   此处补上提取后的英文基名（与 facility_zh 命中分支字段一致）。
-  return { key:'f_'+key, zh:zh, icon:icon, en:en };
+  return { key:'f_'+key, zh:zh, icon:icon };
 }
 // v820：设施小标签（icons2 图标回退 emoji/MDI + 名字 / 中文×N），自适应宽度不独占行
 // v959：第 4 参 opts.fi（设施索引号，≥0 时可点击）——仅离散聚落传入，点击弹地图浮窗（同点生物界面）
@@ -9071,7 +8888,7 @@ function lbLoadIconList(){
     var by={}, cats={};
     // 额外收录的非 biology/units 精选图标（如「全部物种」的 HubTameIcon，GUI 分类；以及手风琴 summary 容器图标 facility/skins/GUI）
     var extra={'HubTameIcon':1, 'Cryofridge':1, 'Display_Case':1, 'HUD_CryoHospital_Icon':1, 'HUD_MedicalStand_Icon':1, 'HUD_PetDisplayStand_Wall_Thatch_Icon':1, 'Tek_Replicator':1, 'SmallStorage_Icon':1, 'RW_Tracking_dino':1, 'Cryopod':1, 'RW_Store_chibi':1, 'RW_equip_saddle':1, 'TEK_Icon':1, 'RW_Garage_roof_show':1, 'HubInventoryIcon':1, 'RW_wants_to_cuddle':1, 'Feeding_Trough':1,
-      'Tek Transmitter':1, 'TEKPortal_Icon':1, 'WoodFridge_Icon':1, 'Industrial_Preserving_Bin':1, 'Icon_DedicatedStorage':1, 'LargeStorage_Icon':1, 'Linked_Storage_Box':1, 'Library_Storage':1, 'Large_Storage_Box':1, 'Egg_Incubator':1, 'Embryo_Incubator':1, 'Gene_Storage':1, 'Pet_Display':1, 'Tek_Sleeping_Pod':1, 'HUD_CompanionBed_Icon':1, 'RW_cryopod':1, 'Gene_Scanner':1, 'Vault':1, 'RaptorHead Icon':1, 'Simple_Bed':1, 'ModernBed_Icon':1, 'Coffin':1, 'Gravestone':1, 'GraveStone1_Icon':1, 'DinoLeash_Icon':1, 'Clockface':1, 'Torch':1, 'Bear_Trap':1, 'LargeBearTrap_Icon':1, 'FishBasket_Icon':1, 'HUD_SnowmanHat_Icon':1, 'PlantSpeciesYTrap_Icon':1, 'Pumpkin':1, 'PumpkinSeed_Icon':1, 'Scarecrow':1, 'ToF_Skill_Sea_Mines_glow':1, 'Snowman':1, 'HUD_StorageBox_Icon':1, 'HUD_TEKAlarm_Icon':1, 'TEKBridge_Icon':1, 'TEKShield_Icon':1}; // v591：刷新浮窗饲料槽图标（misc 分类）// v819：设施区（床/墓碑/钟）图标收录（facility 分类）// v952：Dino Leash（tools 目录）图标收录——聚落设施可放置
+      'Tek Transmitter':1, 'TEKPortal_Icon':1, 'WoodFridge_Icon':1, 'Industrial_Preserving_Bin':1, 'Icon_DedicatedStorage':1, 'LargeStorage_Icon':1, 'Linked_Storage_Box':1, 'Library_Storage':1, 'Large_Storage_Box':1, 'Egg_Incubator':1, 'Embryo_Incubator':1, 'Gene_Storage':1, 'Pet_Display':1, 'Tek_Sleeping_Pod':1, 'HUD_CompanionBed_Icon':1, 'RW_cryopod':1, 'Gene_Scanner':1, 'Vault':1, 'RaptorHead Icon':1, 'Simple_Bed':1, 'ModernBed_Icon':1, 'Coffin':1, 'Gravestone':1, 'GraveStone1_Icon':1, 'DinoLeash_Icon':1, 'Clockface':1}; // v591：刷新浮窗饲料槽图标（misc 分类）// v819：设施区（床/墓碑/钟）图标收录（facility 分类）// v952：Dino Leash（tools 目录）图标收录——聚落设施可放置
     (d||[]).forEach(function(it){
       if(!it || !it.url || !it.name) return;
       LB_ITEM_ICON_URL[it.name] = tm[it.url] || it.url;   // v967：物品图标全量收录（不受下方 cat 过滤限制）

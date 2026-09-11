@@ -949,47 +949,19 @@ def safe_join(base, rel):
 # ================= HTTP =================
 # v988：并发上限 —— 防「线程爆炸」：ThreadingHTTPServer 每请求一线程，前端刷新轮询风暴时
 #       会瞬间起上千线程 → 内存/句柄耗尽 → 进程退出 → cloudflared 报 actively refused（502）
-# v996：32 → 64（实测页面一轮数据下载就要 33 个 HEAD，32 上限必然打满后静默断连）
-_CONC_LIMIT = 64
+_CONC_LIMIT = 32
 _CONC = __import__('threading').Semaphore(_CONC_LIMIT)
 
 
 class _GuardedServer(ThreadingHTTPServer):
     daemon_threads = True
-    # v995 根因修复：accept backlog 默认仅 5（socketserver.TCPServer 默认值）—— 并发稍高即溢出，
-    #   内核对新 SYN 回 RST → cloudflared 报 "actively refused"（09:50 / 10:07 实测，且 worker 日志无崩溃记录）
-    request_queue_size = 512
 
     # v992 根因修正：v988 把信号量放在 process_request_thread —— 而 ThreadingHTTPServer 的顺序是
     #   process_request 先 threading.Thread().start()，线程体内才调 process_request_thread
     #   → 信号量只在「线程已创建之后」排队，线程照样爆（09:29:48 / 09:39:51 两次崩溃证实 v988 未生效）。
     #   正确做法：覆盖 process_request，在**创建线程之前**获取令牌 —— 背压落在 accept 层。
     def process_request(self, request, client_address):
-        # v995：**非阻塞**限流 —— v992/v994 在 accept 循环内阻塞等待（10s 超时仍过长），
-        #   会让 accept 停滞 → backlog 溢出 → actively refused。拿不到令牌立即快速失败（前端 v977 自带重试）
-        # v996 根因修复：v995 的「快速失败」= 直接 shutdown_request → **不回任何 HTTP 响应**，
-        #   cloudflared 侧表现为 "Unable to reach the origin service: EOF"（13:23:58 实测成批出现）。
-        #   改为回 **503 + Retry-After:1**（正常 HTTP 响应，隧道不再报 EOF，前端可据此退避重试）。
-        if not _CONC.acquire(blocking=False):
-            try:
-                _busy = b'{"ok":false,"busy":true,"error":"server busy, retry"}'
-                request.sendall(
-                    b'HTTP/1.1 503 Service Unavailable\r\n'
-                    b'Content-Type: application/json; charset=utf-8\r\n'
-                    b'Access-Control-Allow-Origin: ' + ALLOW_ORIGIN.encode('utf-8') + b'\r\n'
-                    b'Access-Control-Allow-Credentials: true\r\n'
-                    b'Retry-After: 1\r\n'
-                    b'Cache-Control: no-cache\r\n'
-                    b'Content-Length: ' + str(len(_busy)).encode('ascii') + b'\r\n'
-                    b'Connection: close\r\n\r\n' + _busy
-                )
-            except Exception:
-                pass
-            try:
-                self.shutdown_request(request)
-            except Exception:
-                pass
-            return
+        _CONC.acquire()
         try:
             t = __import__('threading').Thread(target=self._lb_guarded_run, args=(request, client_address))
             t.daemon = True
@@ -1399,14 +1371,6 @@ def _wlog(msg):
 
 def _watchdog():
     import subprocess, sys
-    # v994：忽略 Ctrl+C —— 用户 2026-09-11 实测「Ctrl+C 关隧道」会连同 watchdog/worker 一起杀掉
-    #       （后端日志只剩一行 "watchdog started"、无 worker exited 记录，即此因）。
-    #       worker 子进程仍会被 Ctrl+C 终止 → 由本 watchdog 自动拉起，符合设计预期。
-    try:
-        import signal
-        signal.signal(signal.SIGINT, signal.SIG_IGN)
-    except Exception:
-        pass
     _wlog('[watchdog] dino_backend watchdog started (never exits, worker auto-restart)  log={}'.format(_CRASH_LOG))
     crashes = 0
     last = time.time()

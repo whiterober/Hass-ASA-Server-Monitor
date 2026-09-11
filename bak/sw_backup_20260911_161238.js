@@ -9,7 +9,7 @@
  *   并保留历史单缓存（dino-import-v*）不删，让已下载资源继续命中
  * 策略：index.html 走 network-first（保证新版本刷新即生效），其他同源静态 cache-first。
  */
-var VER = 'v20260911-987';
+var VER = 'v20260911-985';
 var SHELL = 'dino-import-shell-' + VER;
 var ASSETS = 'dino-import-assets';
 var ASSETS_MAX = 600;
@@ -83,8 +83,7 @@ self.addEventListener('fetch', function (e) {
   //              put 全程 catch、跨缓存兑底（含旧壳）、最终兑底为「自动重试页」而非 offline 文本。
   if (url.pathname === '/' || url.pathname === '/index.html') {
     var ac = new AbortController();
-    // v987：12s → 30s（实测链路忙时 HTML 下载可超 12s，超时回退旧缓存会把整页退回旧代码）
-    var to = setTimeout(function () { try { ac.abort(); } catch (e2) {} }, 30000);
+    var to = setTimeout(function () { try { ac.abort(); } catch (e2) {} }, 12000);
     e.respondWith(
       fetch(req, { signal: ac.signal }).then(function (res) {
         clearTimeout(to);
@@ -100,22 +99,10 @@ self.addEventListener('fetch', function (e) {
         });
       }).catch(function () {
         clearTimeout(to);
-        // v987：兑底文档必须取「最新」副本 —— caches.match() 按缓存创建顺序命中最旧的那个
-        //       （实测因此把页面退回到 v976 旧代码）；改为：当前壳 → 其余壳按名字倒序 → 最后才全缓存
-        return caches.keys().then(function (keys) {
-          var shells = keys.filter(function (k) { return k.indexOf('dino-import-shell-') === 0; }).sort().reverse();
-          var order = [SHELL].concat(shells.filter(function (k) { return k !== SHELL; }));
-          return order.reduce(function (p, k) {
-            return p.then(function (found) {
-              if (found) return found;
-              return caches.open(k).then(function (c) { return c.match('/'); }).catch(function () { return null; });
-            });
-          }, Promise.resolve(null));
-        }).then(function (doc) {
-          if (doc) return doc;
-          return caches.match('/').catch(function () { return null; });
-        }).then(function (doc2) {
-          return doc2 || new Response(RETRY_HTML, { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+        return caches.match(req).catch(function () { return null; }).then(function (r) {
+          return r || caches.match('/').catch(function () { return null; });
+        }).then(function (r) {
+          return r || new Response(RETRY_HTML, { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
         }).catch(function () {
           return new Response(RETRY_HTML, { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
         });

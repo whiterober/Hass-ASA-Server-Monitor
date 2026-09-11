@@ -9,7 +9,7 @@
  *   并保留历史单缓存（dino-import-v*）不删，让已下载资源继续命中
  * 策略：index.html 走 network-first（保证新版本刷新即生效），其他同源静态 cache-first。
  */
-var VER = 'v20260911-987';
+var VER = 'v20260911-984';
 var SHELL = 'dino-import-shell-' + VER;
 var ASSETS = 'dino-import-assets';
 var ASSETS_MAX = 600;
@@ -78,46 +78,41 @@ self.addEventListener('fetch', function (e) {
   // ② res.clone() 写缓存会与浏览器流式解析争抢 tee 缓冲 → 可能背压阻塞文档。
   // 现改为：命中当前壳缓存立即返回；后台完整下载 → 校验 → 回写缓存（无 tee 背压）。
   // 「立即刷新」按钮（lbHardReload）会先清掉本文档缓存再 reload，保证一键拿新版。
-  // 首页/主文档：v985 回到 network-first（总是先取网络 → 部署即生效），失败再回退缓存。
-  // 保留的加固：12s 超时（防链路挂起导致整页卡死）、完整读取后写缓存（无 tee 背压）、
-  //              put 全程 catch、跨缓存兑底（含旧壳）、最终兑底为「自动重试页」而非 offline 文本。
   if (url.pathname === '/' || url.pathname === '/index.html') {
-    var ac = new AbortController();
-    // v987：12s → 30s（实测链路忙时 HTML 下载可超 12s，超时回退旧缓存会把整页退回旧代码）
-    var to = setTimeout(function () { try { ac.abort(); } catch (e2) {} }, 30000);
+    // v984：?_nocache=<ts> = 强制走网络（「立即刷新」按钮用），不再靠删缓存绕过
+    var forceNet = url.search.indexOf('_nocache=') >= 0;
     e.respondWith(
-      fetch(req, { signal: ac.signal }).then(function (res) {
-        clearTimeout(to);
-        if (!res.ok) return res;
-        return res.arrayBuffer().then(function (buf) {
-          if (!buf || buf.byteLength < 50000) throw new Error('doc too small'); // 断流防护
-          var hdr = new Headers(res.headers);
-          hdr.delete('content-encoding'); // buf 已是解压后数据，保留此头会让浏览器二次解压失败
-          hdr.delete('content-length');
-          var mk = function () { return new Response(buf, { status: res.status, statusText: res.statusText, headers: hdr }); };
-          caches.open(SHELL).then(function (c2) { return c2.put(new Request('/'), mk()).catch(function () {}); }).catch(function () {});
-          return mk();
-        });
-      }).catch(function () {
-        clearTimeout(to);
-        // v987：兑底文档必须取「最新」副本 —— caches.match() 按缓存创建顺序命中最旧的那个
-        //       （实测因此把页面退回到 v976 旧代码）；改为：当前壳 → 其余壳按名字倒序 → 最后才全缓存
-        return caches.keys().then(function (keys) {
-          var shells = keys.filter(function (k) { return k.indexOf('dino-import-shell-') === 0; }).sort().reverse();
-          var order = [SHELL].concat(shells.filter(function (k) { return k !== SHELL; }));
-          return order.reduce(function (p, k) {
-            return p.then(function (found) {
-              if (found) return found;
-              return caches.open(k).then(function (c) { return c.match('/'); }).catch(function () { return null; });
-            });
-          }, Promise.resolve(null));
-        }).then(function (doc) {
-          if (doc) return doc;
-          return caches.match('/').catch(function () { return null; });
-        }).then(function (doc2) {
-          return doc2 || new Response(RETRY_HTML, { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
-        }).catch(function () {
-          return new Response(RETRY_HTML, { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+      (forceNet ? Promise.resolve(null) : caches.open(SHELL).then(function (c) { return c.match(req); }).catch(function () { return null; })).then(function (hit) {
+        // v982：恢复 8s 超时 —— v978 误删超时后，网络挂起会让文档请求无限等待（用户端表现为整页卡死）
+        var ac = new AbortController();
+        var to = setTimeout(function () { try { ac.abort(); } catch (e2) {} }, 8000);
+        var netP = fetch(req, { signal: ac.signal }).then(function (res) {
+          clearTimeout(to);
+          if (!res.ok) return res;
+          return res.arrayBuffer().then(function (buf) {
+            clearTimeout(to);
+            if (!buf || buf.byteLength < 50000) throw new Error('doc too small'); // 断流防护
+            var hdr = new Headers(res.headers);
+            hdr.delete('content-encoding'); // buf 已是解压后数据，保留此头会让浏览器二次解压失败
+            hdr.delete('content-length');
+            var mk = function () { return new Response(buf, { status: res.status, statusText: res.statusText, headers: hdr }); };
+            // v982：put 补 catch —— 链路抖动时流中断会让 put 抛 NetworkError（未处理拒绝会刷控制台）
+            // v984：缓存键固定为 '/'（带 _nocache 的导航 URL 不污染缓存键）
+            caches.open(SHELL).then(function (c2) { return c2.put(new Request('/'), mk()).catch(function () {}); }).catch(function () {});
+            return mk();
+          });
+        }).catch(function (e3) { clearTimeout(to); throw e3; });
+        if (hit) { netP.catch(function () {}); return hit; }   // 命中缓存：立即返回，后台刷新
+        return netP.catch(function () {
+          // v980：兑底改为**跨全部缓存**查找（新壳为空时回退到旧壳文档）——只查当前壳会导致 offline 白屏
+          return caches.match(req).catch(function () { return null; }).then(function (r) {
+            return r || caches.match('/').catch(function () { return null; });
+          }).then(function (r) {
+            // v984：连缓存都没有时返回「自动重试页」而不是纯文本 offline —— 用户不再看到白屏字样
+            return r || new Response(RETRY_HTML, { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+          }).catch(function () {
+            return new Response(RETRY_HTML, { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+          });
         });
       })
     );
@@ -128,10 +123,9 @@ self.addEventListener('fetch', function (e) {
   e.respondWith(
     caches.match(req).then(function (hit) {
       if (hit) return hit;
-      // v982：put 全程 catch —— 流被链路抖动中断时 put 会抛 NetworkError，不能成为未处理拒绝
-      // v985：10s → 20s（实测链路延迟上限 13.4s，10s 会把慢资源误判为失败）
+      // v982：加 10s 超时；put 全程 catch —— 流被链路抖动中断时 put 会抛 NetworkError，不能成为未处理拒绝
       var ac = new AbortController();
-      var to = setTimeout(function () { try { ac.abort(); } catch (e2) {} }, 20000);
+      var to = setTimeout(function () { try { ac.abort(); } catch (e2) {} }, 10000);
       return fetch(req, { signal: ac.signal }).then(function (res) {
         clearTimeout(to);
         if (res.ok) {
