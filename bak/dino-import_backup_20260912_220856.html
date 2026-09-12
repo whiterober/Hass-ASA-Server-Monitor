@@ -427,7 +427,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260912-1070';
+var LB_VERSION = 'v20260912-1069';
 var LB_SCHEMA_VER = 15;  // v1069：14→15 强制 IndexedDB 缓存重建——根因：recs 构建结果随 IndexedDB 持久化（v931）、
                          //   命中后跳过重建；仅改 _decorRe 等**构建期过滤**时，旧 rec 会长期残留（实测南瓜 rec 改过滤后仍显示）。
                          //   lbCacheGet 校验 _schemaVer !== LB_SCHEMA_VER → resolve(null) → 全量重拉重建。
@@ -6624,15 +6624,8 @@ function lbContainerLabel(r, opts){
     // v1015：比较前归一（去空格/下划线/连字符 + 小写）——实测火把 containerName='Standing Torch'
     //   而 facility_zh.en='StandingTorch'（无空格），严格比较会漏→标题恒为英文
     var _nrm = function(s){ return String(s).toLowerCase().replace(/[\s_\-]+/g,''); };
-    if(_en0 && _mm.zh && _nrm(nameTxt) === _nrm(_en0)){
-      // v1070：**默认英文名 ≠ 自定义名**（它等于 facility_zh.en，是插件导出的设施英文名）
-      //   根因：此前这里只把名字换成中文显示，却**仍走「具名路径」直接 return** ⇒ 不显示 #ID；
-      //   而用户口径是「没有自定义名称就应该显示 #ID」（区分同类设施，实测泰克饲料槽反馈）。
-      //   改为 hasName=false 落到下方无名路径 ⇒ 中文名 + 灰英文 + #ID，与完全无名容器口径统一。
-      hasName = false;
-    } else {
-      return '<span class="acc-title">'+icon+' '+nameTxt+enTag+'</span>';
-    }
+    if(_en0 && _mm.zh && _nrm(nameTxt) === _nrm(_en0)) nameTxt = _mm.zh;
+    return '<span class="acc-title">'+icon+' '+nameTxt+enTag+'</span>';
   }
   // 恐龙背包容器：显示对应生物中文种名（复用选物种 lbSpName）
   if(dtcCls){
