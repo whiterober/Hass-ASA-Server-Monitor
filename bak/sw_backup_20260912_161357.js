@@ -5,14 +5,14 @@
  *       → 每部署一次就清空图标/地图缓存（5000+ 张）→ 用户端全量重下，「资源加载中」极慢
  * 修法：把「页面壳」与「静态资源」拆成两个缓存
  *   · dino-import-shell-<VER>：index.html 等文档，随版本变（network-first，部署即生效）
- *   · dino-import-assets     ：图标/地图/json 等，**跨版本永久复用**（cache-first，超 1200 条淘汰最旧）
+ *   · dino-import-assets     ：图标/地图/json 等，**跨版本永久复用**（cache-first，超 600 条淘汰最旧）
  *   并保留历史单缓存（dino-import-v*）不删，让已下载资源继续命中
  * 策略：index.html 走 network-first（保证新版本刷新即生效），其他同源静态 cache-first。
  */
 var VER = 'v20260911-987';
 var SHELL = 'dino-import-shell-' + VER;
 var ASSETS = 'dino-import-assets';
-var ASSETS_MAX = 1200; // v20260912-1029：600→1200（实测预取需 717 张，600 上限导致缓存震荡：每写一张即淘汰一张）
+var ASSETS_MAX = 600;
 var CORE = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 // v984：网络与缓存都不可用时的「自动重试页」（避免用户看到 'offline' 白屏字样）
 var RETRY_HTML = '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>正在重试…</title></head><body style="background:#0f0f13;color:#ddd;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><div style="text-align:center"><div style="font-size:15px;margin-bottom:10px">网络暂时不可用，正在自动重试…</div><div id="t" style="font-size:12px;color:#888">3 秒后重试</div></div><script>var n=3;setInterval(function(){n--;var e=document.getElementById("t");if(e)e.textContent=n>0?(n+" 秒后重试"):"正在重试…";if(n<=0)location.reload();},1000);</script></body></html>';

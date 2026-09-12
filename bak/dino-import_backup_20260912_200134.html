@@ -427,11 +427,8 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260912-1069';
-var LB_SCHEMA_VER = 15;  // v1069：14→15 强制 IndexedDB 缓存重建——根因：recs 构建结果随 IndexedDB 持久化（v931）、
-                         //   命中后跳过重建；仅改 _decorRe 等**构建期过滤**时，旧 rec 会长期残留（实测南瓜 rec 改过滤后仍显示）。
-                         //   lbCacheGet 校验 _schemaVer !== LB_SCHEMA_VER → resolve(null) → 全量重拉重建。
-                         //   （v971 原注释：数据 schema 版本唯一来源，下载写入与 3 处校验统一引用）
+var LB_VERSION = 'v20260912-1044';
+var LB_SCHEMA_VER = 14;  // v971：数据 schema 版本唯一来源（下载写入与 3 处校验统一引用）
 // 历史 BUG：_schemaVer 从 13 升 14（v966 item.gz 接入）时，校验处未同步写死 13
 // → 缓存恒判失效 → 每次切 Tab 都重下全量数据（30 个文件）。同 6→10 时的旧事故
 // ====== PWA：Service Worker 注册（2026-08-29，配合 manifest 使移动端 Edge/Chrome 可安装为应用） ======
@@ -3631,7 +3628,7 @@ async function lbLoad(servers, oldData, onProgress){ // v207：onProgress({phase
           // 容器 vs 设施不再由词表预判分裂——渲染时按「该设施有无内容 rec(球/基因/蓝图)」动态判定：
           //   有内容 → 容器手风琴；无内容 → 设施 chips；装饰类 → 显示排除
           // 容器子类型词表（LB_CONTAINER_DISP._cls）仅作命名/图标/排序用（lbContainerTypeOf 派生），不再决定是否生成 rec
-          var _decorRe = /Lamp|Light|Chair|Seat|WoodBench|Stool|Sign_Large_Metal|WoodSign|MetalSign|Sign_Small_Wood|Sign_Small_Metal|HangingSign|Sign_Large_Wood|MetalSign_Large|WoodSign_Large|Painting|DrawingSheet|Poster|Canvas|Mirror|Decor|Display_Box|Snowman|ChristmasTree|Pumpkin|Wreath/i; // 装饰类（显示排除，不进容器/设施）v914：+Decor（装饰箱）v927：+Snowman/ChristmasTree（节日树/雪人）v1000：-Torch（火把类设施已采集，需显示并合并）v20260912-1022：Bench→WoodBench（原宽泛词误杀铁匠台 AnvilBench 等 7 个生产设施）v1036：+6 个标牌类（小木牌/小金属牌/悬挂牌/大牌旧词序）——标识牌不显示在设施列表；墓碑不在内（保留）v1068：+Pumpkin/Wreath（立式南瓜等节日装饰；用户实测 StructureBP_Pumpkin_Standing 显示在设施里）
+          var _decorRe = /Lamp|Light|Chair|Seat|WoodBench|Stool|Sign_Large_Metal|WoodSign|MetalSign|Sign_Small_Wood|Sign_Small_Metal|HangingSign|Sign_Large_Wood|MetalSign_Large|WoodSign_Large|Painting|DrawingSheet|Poster|Canvas|Mirror|Decor|Display_Box|Snowman|ChristmasTree/i; // 装饰类（显示排除，不进容器/设施）v914：+Decor（装饰箱）v927：+Snowman/ChristmasTree（节日树/雪人）v1000：-Torch（火把类设施已采集，需显示并合并）v20260912-1022：Bench→WoodBench（原宽泛词误杀铁匠台 AnvilBench 等 7 个生产设施）v1036：+6 个标牌类（小木牌/小金属牌/悬挂牌/大牌旧词序）——标识牌不显示在设施列表；墓碑不在内（保留）
           var _decorKeepRe = /LightningRod|AnvilBench|ChemBench|Warbench/i; // v20260912-1022：含装饰词但确为生产设施 → 豁免（防 Light 误伤避雷针、防未来回归）
           (cryo.facilities||[]).forEach(function(f){
             if(!f || !f.class) return;
@@ -3795,7 +3792,7 @@ var LB_SPLIT_EPS = 6000;  // 大簇切割阈值（独立保持 6000：radius>600
 //   TOL  = z 层容差（同层认定上限）
 //   EPS  = 层内 x/y 平面聚类阈值（区分「同一楼层的独立设施堆」；远小于聚落聚类 8000）
 //   MINPTS = 单点处理（2 = 孤立设施自成一区，避免被强行并入邻近堆）
-var LB_FAC_LAYER_TOL = 300; // v1055：50 → 300（用户「层分得太多，高度差宽容度要大些」；实测 Isl 工作間：50→29 层/35 区、150→17/24、200→16/23、300→10/15）
+var LB_FAC_LAYER_TOL = 50; // v1043：500 → 50（实测用户建筑每层 z 高 ≈ 53：Sco 聚落 -1楼(-20375) 与 3楼(-20163) 差 212 = 4 层 ⇒ 层高 53。500 相当于 9 层楼，会把 -1~3 楼并成一层）
 var LB_FAC_AREA_EPS = 1800;
 var LB_FAC_AREA_MINPTS = 2;
 // v20260912：床/棺/睡眠舱正则预编译（原 4 处 filter 内联重建正则 → 数千万次重复编译，卡死主因之一）
@@ -4096,7 +4093,7 @@ function lbBuildSettlements(data){
     lbSettlePhase(abbr + ':床/命名归属完成');
     // v821 设施唯一归属：structures(床/墓碑/棺材等) 同部落最近聚落（设施 rec 已统一进容器体系，不再需要独立归属通道）
     // 每设施消费唯一化（与 bedOwner 同模式）；装饰（灯/椅/牌/画）不参与归属 → 存 s.facilityList（设施区显示）
-    var _facDecorRe = /Lamp|Light|Chair|Seat|WoodBench|Stool|Sign_Large_Metal|WoodSign|MetalSign|Sign_Small_Wood|Sign_Small_Metal|HangingSign|Sign_Large_Wood|MetalSign_Large|WoodSign_Large|Painting|DrawingSheet|Poster|Canvas|Mirror|Decor|Display_Box|Snowman|ChristmasTree|Pumpkin|Wreath/i; // v914：+Decor（装饰箱）v927：+Snowman/ChristmasTree v20260912-1022：Bench→WoodBench（同源误伤修复）v1036：+6 个标牌类（标识牌不进 facilityList；墓碑 StructureBP_Gravestone 不在内，保留显示）v1068：+Pumpkin/Wreath（同源同步）
+    var _facDecorRe = /Lamp|Light|Chair|Seat|WoodBench|Stool|Sign_Large_Metal|WoodSign|MetalSign|Sign_Small_Wood|Sign_Small_Metal|HangingSign|Sign_Large_Wood|MetalSign_Large|WoodSign_Large|Painting|DrawingSheet|Poster|Canvas|Mirror|Decor|Display_Box|Snowman|ChristmasTree/i; // v914：+Decor（装饰箱）v927：+Snowman/ChristmasTree v20260912-1022：Bench→WoodBench（同源误伤修复）v1036：+6 个标牌类（标识牌不进 facilityList；墓碑 StructureBP_Gravestone 不在内，保留显示）
     var _facDecorKeepRe = /LightningRod|AnvilBench|ChemBench|Warbench/i; // v20260912-1022：生产设施豁免
     var _facCands = (Array.isArray(data.structures)?data.structures:[]); // v821：facilityStructs 已弃用（已放置设施统一生成 facility rec，经容器聚合自动入聚落）
     // v20260912：去掉 52 万条数组复制（原 forEach push 深复制一遍，纯浪费内存与时间）
@@ -6309,73 +6306,23 @@ function lbFacBase(c){
   s = s.replace(/_C\d*$/,'').replace(/_C_\d+$/,'');
   return s;
 }
-// v1050：容器合并「区域粒度」公共键——楼层桶(z/50) + 平面粗格(x,y/3000)
-//   统一口径：同层同块 → 合并成一行；跨层 / 相距 >30 米 → 仍分开
-function lbContGeo(r){
-  var _x = Number(r.containerX!=null?r.containerX:(r.x||0))||0;
-  var _y = Number(r.containerY!=null?r.containerY:(r.y||0))||0;
-  var _z = Number(r.containerZ!=null?r.containerZ:(r.z||0))||0;
-  return (Math.round(_z/50)*50) + '|' + Math.round(_x/3000) + ',' + Math.round(_y/3000);
-}
-// v1051：平面粗格（不含 z）——用于「z 天然散布」的放出/玩家容器合并（同片区域 → 一组）
-function lbContCell(r){
-  var _x = Number(r.containerX!=null?r.containerX:(r.x||0))||0;
-  var _y = Number(r.containerY!=null?r.containerY:(r.y||0))||0;
-  return Math.round(_x/3000) + ',' + Math.round(_y/3000);
-}
 // 容器 key：display/stand 未命名可合并（无 ID）；命名容器按名合并；
-// v1050：**全部容器合并组**统一「区域粒度」（用户要求：tek箱子/炮台/火把/放出 等与展示柜同口径）
-//   原实现的两处偏差：物理容器按 baseClass+**精确坐标**（同区几十个箱子各占一行）、
-//   released/player 按 containerId（released 的 id 为空 ⇒ 全服并成 1 组）——均不符合「按区域合并」
+// v821 纯动态：未命名物理容器改按 baseClass+round 坐标 分组（同容器球 rec 与 facility rec 同 key，双 ID 拆组根治），
+// released/player 无真实结构仍按 containerId（released containerId='' 天然全合并）
 function lbContainerKey(r){
   var t = lbContainerTypeOf(r); // v190：合并键用统一派生类型
   if(t==='display' || t==='stand'){
     var hasName = r.containerName && r.containerName!=='?' && r.containerName!=='';
-    if(hasName) return (r.server||'?')+'|'+t+'|'+r.containerName;
-    // v1048 根因修复：无自定义名时**必须带坐标**——原实现只按 server|type|名 合并，
-    //   导致同服所有展示柜/展示台被并为 1 组（实测 Isl 展示柜 103 个跨 4 个 z、93 个位置合成一组）
-    //   ⇒ 组归属取首条坐标 ⇒ 整组被塞进首条所在的那一层（用户实测：柜里的生物散落在不同楼层却同区显示）
-    // v1049：分组粒度 =「楼层桶(z/50) + 平面粗格(x,y/3000)」
-    //   用户要求「同一区域的展示柜要合并成一行」——精确坐标会让同区几十个柜子各占一行；
-    //   改为按楼层与平面粗格合并：同层同块 → 一行；跨层 / 相距 >30 米 → 仍分开（保 v1048 的跨层修复）
-    // v1061：未命名展示柜/展台 → **聚落级 + 类名**（不再按几何网格分组）
-    //   根因：几何网格(3000)会把同一区域切成 2 组（实测 📍Uncommon 出现「展示柜 ×26」与「×2」两行）；
-    //   区域粒度改由渲染前的 _areaIdxOf 分桶统一提供（同区域 → 同一桶 → 一行）
-    return (r.server||'?')+'|'+t+'|'+lbFacBase(r.containerClass||'');
+    return (r.server||'?')+'|'+t+'|'+(hasName ? r.containerName : '');
   }
   if(t!=='released' && t!=='player'){
     var _fb = lbFacBase(r.containerClass||'');
     if(_fb){
-      // v1057：有自定义名 ⇒ **按名独立成组**——原按 baseClass+区域键 ⇒ 同层同格多个具名柜子被并成一行，
-      //   标题只显示组首条的名字（实测工作間 WEP 掩盖了 ARMOR/TOOL/STRUCT/Res.，用户「少了好多个保险柜」）
-      var _cnm = String(r.containerName||'').trim();
-      if(_cnm && _cnm !== '?'){
-        // v1068：**默认英文名不算自定义名**（与显示层 lbContainerLabel 的 v1010 口径一致）——实测 Abe 服泰克饲料槽
-        //   同一坐标两条 rec：`facility` 无名 + `egg` 带 containerName="Tek Trough"（正是 facility_zh.en）
-        //   ⇒ 被 v1057 的具名分支拆成两组、同一设施显示两行；归一后两条合并回一组件
-        var _enD = '';
-        try{ var _mmD = lbSettleFacMeta(String(r.containerClass||'')); _enD = (_mmD && _mmD.en) ? String(_mmD.en) : ''; }catch(e){ _enD = ''; }
-        var _nrmD = function(_s){ return String(_s).toLowerCase().replace(/[\s_\-]+/g,''); };
-        if(!(_enD && _nrmD(_cnm) === _nrmD(_enD))) return (r.server||'?')+'|phys|'+_fb+'|'+_cnm; // v1069：t→phys
-      }
       var _kx = Math.round(Number(r.containerX!=null?r.containerX:(r.x||0))||0);
       var _ky = Math.round(Number(r.containerY!=null?r.containerY:(r.y||0))||0);
-      // v1058：无名物理容器（肥料箱/冰箱/储物箱/熔炉…）**逐个独立**（v821 精确坐标口径）——
-      //   v1050 把它们也按「楼层+平面格」合并属改过头：用户只要求 display/stand 与白名单设施
-      //   （专储/炮台/立式火把/特斯拉电塔）按区域合并，其余有内容的容器应各自成行、各显各的物品
-      // v1069：**键前缀 t → 固定 phys**——根因：t 是由 containerClass 正则派生的**容器子类型**
-      //   （other/storage/egg/cryo…），而同一物理设施常由两条 rec 表示（纯结构 rec=other + 储物 rec=storage，
-      //   实测 Abe 服泰克饲料槽 cid 3852de[other] 与 214148[storage] 同坐标 -79719,-23067,15729）
-      //   ⇒ 前缀天然分叉，v1068 的「默认英文名归一」也救不回来 ⇒ 同一设施渲染两行。
-      //   改为固定 phys 后：同 server + 同 baseClass + **精确坐标相同** ⇒ 无条件合并（精确同坐标即同一位置，零误并）。
-      //   display/stand/released/player 三支分支保持原样（其 t 恒定，语义不变）。
-      if(_kx!==0 || _ky!==0) return (r.server||'?')+'|phys|'+_fb+'@'+_kx+','+_ky;
+      if(_kx!==0 || _ky!==0) return (r.server||'?')+'|'+t+'|'+_fb+'@'+_kx+','+_ky;
     }
   }
-  // v1062：放出 —— 键**不含几何**（containerId 常为空 ⇒ 聚落级一组），区域粒度改由渲染前的 `_areaIdxOf` 分桶提供
-  //   原用平面格 3000（v1051）：同区域被网格切成多行——实测 S1 聚落 30 个放出（x 跨 5254 / y 跨 5120）
-  //   被切成 5 组（14/10/3/2/1），用户看到「明明在一个区域却分开了」
-  //   player 保留 containerId（每个玩家背包唯一）⇒ 天然不合并，无需分桶（合并会混玩家）
   return (r.server||'?')+'|'+t+'|'+(r.containerId||'');
 }
 // v189：容器查词/图标统一到 LB_CONTAINER_DISP（装球容器 + other 一张表，中文 JSON 动态）
@@ -6537,7 +6484,7 @@ function lbContainerDisp(type, cls){
     var arr = LB_CONTAINER_DISP._cls || [];
     for(var i=0;i<arr.length;i++){ if(arr[i].re.test(cls)){ e = arr[i]; break; } }
     if(!e){
-      var n = String(cls).replace(/^DinoTamedInventoryComponent_/,'').replace(/^PrimalInventory(?:BP)?_?/,'').replace(/_C_\d+$/,'').replace(/_C\d*$/,'').replace(/^_+/,''); // v1047：+_? 与 ^_+ 兜底（原 PrimalInventory_DisplayCase → _DisplayCase 残留下划线）
+      var n = String(cls).replace(/^DinoTamedInventoryComponent_/,'').replace(/^PrimalInventory(?:BP_)?/,'').replace(/_C_\d+$/,'').replace(/_C\d*$/,'');
       en = lbCamelSplit(n);
     }
   }
@@ -8323,8 +8270,6 @@ function lbBuildSettleContainerHtml(grp, settleKey){
     // 无内容的专储键不变 → 仍走下方 isEmptyFacility 下沉到设施 chips
     // v997：扩展为「可合并设施」——炮台/立式火把/特斯拉电塔同样按「同聚落+同类型」合并（键含类型基名，异类不混）
     if(lbIsMergeableFacility(r) && lbGroupItems([r]).length){
-      // v1051-①：先按「聚落 + 类型」把同类 rec 收进同一组；分区域拆桶延后到区域算出之后（见 renderSeg 二次分桶）
-      //   原 v1050 用几何（z桶+平面格）当分组键 ⇒ 同区域被网格边界劈成 6 组（实测 Isl 工作間 10 个专储 → 6 组“两两合并”）
       k = (lbIsDedicatedStorage(r) ? '__dedicated__' : '__merged__' + lbFacBase(r.containerClass||'')) + settleKey;
     }
     (contGroups[k]=contGroups[k]||[]).push(r);
@@ -8357,12 +8302,10 @@ function lbBuildSettleContainerHtml(grp, settleKey){
   // v957：knownPos 坐标表兜底——同容器双 ID 通道时 containerId 失配，用坐标（round）判定同容器
   var knownCids = {}, knownPos = {};
   grpKeys.forEach(function(k){
-    // v1050：登记组内**全部** rec（合并粒度变粗后，只登记首条会让同组其他物理容器被误判为「孤儿容器」→ 重复显示基因枪）
-    contGroups[k].forEach(function(_rr){
-      knownCids[_rr.containerId]=1;
-      var _px0 = Math.round(Number(_rr.containerX)||0), _py0 = Math.round(Number(_rr.containerY)||0);
-      if(_px0 || _py0) knownPos[_px0+','+_py0]=1;
-    });
+    var _r0 = contGroups[k][0];
+    knownCids[_r0.containerId]=1;
+    var _px0 = Math.round(Number(_r0.containerX)||0), _py0 = Math.round(Number(_r0.containerY)||0);
+    if(_px0 || _py0) knownPos[_px0+','+_py0]=1;
   });
   var orphanGroups = {};
   scanners.forEach(function(m){ // v183：scanners 已统一归属+物种过滤
@@ -8399,9 +8342,7 @@ function lbBuildSettleContainerHtml(grp, settleKey){
     return { containerClass: (d && d.class) || '', containerName: (d && d.name) || '', containerType: type || '', containerId: (d && (d.containerId || d.key)) || '' };
   }
   var autoOpen = (renderCnt + infusersShow.length + orphanKeys.length) === 1 ? ' open' : '';
-  // v1051-①：可合并设施（专储/炮台/火把/特斯拉）延后渲染——需先算区域，再按区域分桶，实现「同区域合并成一个条目」
-  var _mergeKeys = [];
-  var renderSeg = function(k){
+  grpKeys.forEach(function(k){
     var _segStart = h.length; // v1041：本组 HTML 起点（循环尾切片收集，供区域归类）
     var cg=contGroups[k];
     // v177：容器分组内容按物种过滤（按钮结构不变），纯空球/无匹配的容器分组隐藏
@@ -8423,13 +8364,8 @@ function lbBuildSettleContainerHtml(grp, settleKey){
       if(!_efDispName){ try{ var _m1 = lbSettleFacMeta(_efCls); if(_m1 && _m1.zh) _efDispName = String(_m1.zh); }catch(e3){} }
       if(!_efDispName) _efDispName = '空容器';
       // v914：透传自定义名（containerName）——传送器/冰箱等已命名设施 chips 显示自定义名（如「天台A」），无名才按类型合并
-      // v1055：**逐条**推入——原实现每组只推首条（v1050 后容器键含坐标 ⇒ 同类空容器先并成 N 组），
-      //   实测工作間 17 台 AirConditioner 只显示 2 台；凡「无内容设施」都存在此问题（用户：「不止是空调」）
-      cg.forEach(function(_er){
-        var _cn2 = String(_er.containerName||'').trim();
-        (emptyFacArr=emptyFacArr||[]).push({ cls:String(_er.containerClass||_efCls), name:(_cn2 && _cn2!=='?' ? _cn2 : ''), dispName:_efDispName,
-          x:Number(_er.containerX||0), y:Number(_er.containerY||0), z:Number(_er.containerZ||0), server:String(_er.server||LB.tab||'') }); // v959：补坐标/服
-      });
+      var _cn2 = String(cg[0].containerName||'').trim();
+      (emptyFacArr=emptyFacArr||[]).push({ cls:_efCls, name:(_cn2 && _cn2!=='?' ? _cn2 : ''), dispName:_efDispName, x:Number(cg[0].containerX||0), y:Number(cg[0].containerY||0), z:Number(cg[0].containerZ||0), server:String(cg[0].server||LB.tab||'') }); // v959：补坐标/服（离散聚落点击看地图）
       return;
     }
     // v134/v183：容器内基因枪（scanners 已统一归属+物种过滤，containerId 匹配）
@@ -8458,22 +8394,8 @@ function lbBuildSettleContainerHtml(grp, settleKey){
     // v968：库存物品（资源/弹药/蓝图）——摘要计数 + 展开清单（全设施通用）
     // v972：泰克专储合并组标题加 ×N（该组代表多个柜子）；v973：合并组同时隐藏 #ID
     // v997：合并组判定从「仅泰克专储」扩展为「可合并设施」（炮台/火把/特斯拉电塔）
-    // v1059：**台数口径 = 组内唯一坐标数**（不是 rec 条数）——根因：
-    //   ① 低温冰箱的 rec 是**按低温仓球展开**的（实测 1 台冰箱 121 条 rec / 121 个球、containerId 仅 2 个）⇒ cg.length 显示成 ×121；
-    //   ② 展示柜存在**同坐标双 ID rec**（一条 src=cryo 带生物 + 一条 src=facility 空，实测 103 条 rec = 93 台）⇒ ×34 实际 26、×4 实际 2；
-    //   生物卡与物品清单仍按 rec 渲染（球级信息不能丢），仅**台数**回到物理容器口径
-    var _unitN = (function(_a){
-      var _s = {}, _n = 0;
-      for(var _ui = 0; _ui < _a.length; _ui++){
-        var _ur = _a[_ui];
-        var _uk = Math.round(Number(_ur.containerX)||0) + ',' + Math.round(Number(_ur.containerY)||0) + ',' + Math.round(Number(_ur.containerZ)||0);
-        if(!_s[_uk]){ _s[_uk] = 1; _n++; }
-      }
-      return _n;
-    })(cg);
-    var _dedMerge = (_unitN > 1 && lbIsMergeableFacility(cg[0]));
-    var _cnm0 = String(cg[0].containerName||'').trim();
-    var _dedN = (_dedMerge || (_unitN > 1 && (!_cnm0 || _cnm0 === '?'))) ? ('<span style="opacity:.7;font-size:11px;margin-left:4px">×'+_unitN+'</span>') : '';
+    var _dedMerge = (cg.length > 1 && lbIsMergeableFacility(cg[0]));
+    var _dedN = _dedMerge ? ('<span style="opacity:.7;font-size:11px;margin-left:4px">×'+cg.length+'</span>') : '';
     var invItems = lbGroupItems(cg);
     // v1013：合并组（炮台/火把/特斯拉电塔/泰克专储）——按**个体**分别渲染物品徽章，
     //   不再把 N 个个体的物品合并成一个徽章（用户实测：3 个炮台的弹药被并成 ◎12）。
@@ -8537,13 +8459,6 @@ function lbBuildSettleContainerHtml(grp, settleKey){
         rel:(lbContainerTypeOf(_cr0)==='released'), html:h.slice(_segStart) });
       h = h.slice(0, _segStart);
     }
-  };
-  grpKeys.forEach(function(k){
-    // v1051-①：可合并设施延后到区域算出后分桶；v1060：展示柜/展台同样按**区域**分桶
-    //   （原按平面格 3000 分组 ⇒ 同一区域内被网格切成 2 行，用户看到「展示柜 ×26」与实际不符）
-    var _t0 = lbContainerTypeOf(contGroups[k][0]);
-    if(lbIsMergeableFacility(contGroups[k][0]) || _t0 === 'display' || _t0 === 'stand' || _t0 === 'released'){ _mergeKeys.push(k); return; } // v1062：+released（放出）
-    renderSeg(k);
   });
   // v177/v183：infusers 已在上面提前计算（统一归属）；v909：标题走 lbContainerLabel（容器同款：中文/英文/#ID/自定义名）
   if(infusersShow.length){
@@ -8613,10 +8528,6 @@ function lbBuildSettleContainerHtml(grp, settleKey){
           if(_bc) _contentPos[_bc+'|'+_px+'|'+_py]=1;
         });
         var _fList = [];
-        // v1052：空容器条目单独存放——**不参与区域定义**（逐条空容器会把聚类撑碎：实测区域段 21→35），
-        //   仅按坐标归入已有区域，再由 _mkAreaChips 在区域内按类型聚合（同区域 ×N / 跨区域各自一条）
-        var _efList = [];
-        var _signList = []; // v1064：区域命名小牌（**不参与**区域划分，仅用于命名）
         // v958：beds/facilityList 依赖聚落对象——散落聚落（_sObj=null）跳过，仅走 emptyFacArr
         if(_sObj){
           // 1) 床/棺材/睡眠舱（s.beds 消费唯一化）
@@ -8632,13 +8543,16 @@ function lbBuildSettleContainerHtml(grp, settleKey){
         }
         // 3) v820：纯空容器（无球无基因，从手风琴区下沉）——按类型合并计数；v914：有名设施（自定义名）独立显示
         if(emptyFacArr && emptyFacArr.length){
-          // v1051-②：**去掉聚落级预聚合**——原先同类型空容器在整聚落先并成 1 条，再整体归入某一个区域，
-          //   导致其余区域看不到该设施（用户实测：遥控板等集中显示在一个区域）
-          //   现改为每条独立入列表，由 _mkAreaChips 在**区域内**按类型聚合（同区域 → ×N；跨区域 → 各自一条）
+          var _efG = {};
           emptyFacArr.forEach(function(_e){
-            _efList.push({cls:_e.cls, name:(_e.name || ''), emptyN:1, emptyName:(_e.dispName || _e.cls || '其他'),
-              items:[_e], x:Number(_e.x), y:Number(_e.y), z:Number(_e.z)}); // v1052：统一进 _efList（有自定义名由 _mkAreaChips 走 named 独立 chip）
+            // v959：记录成员坐标（离散聚落点击数标点用）
+            if(_e.name){ _fList.push({cls:_e.cls, name:_e.name, items:[_e], x:Number(_e.x), y:Number(_e.y), z:Number(_e.z)}); return; } // v914：自定义名设施走 named 独立 chip；v1037：补 x/y/z
+            var _ek = _e.dispName || _e.cls || '其他';
+            (_efG[_ek]=_efG[_ek]||{cls:_e.cls, dispName:_e.dispName, n:0, items:[], x:Number(_e.x), y:Number(_e.y), z:Number(_e.z)}); // v1037：组代表坐标（首条）
+            _efG[_ek].n++;
+            _efG[_ek].items.push(_e);
           });
+          Object.keys(_efG).forEach(function(_ek){ _fList.push({cls:_efG[_ek].cls, name:'', emptyN:_efG[_ek].n, emptyName:_efG[_ek].dispName, items:_efG[_ek].items, x:_efG[_ek].x, y:_efG[_ek].y, z:_efG[_ek].z}); });
         }
         // v1042-③：标识牌（data.structures 里的小牌/悬挂牌）接入分区——**仅用于区域命名，不渲染为设施 chip**
         //   根因：原先 _fList 只消费 beds / facilityList / emptyFacArr，data.structures 从未进入
@@ -8652,27 +8566,10 @@ function lbBuildSettleContainerHtml(grp, settleKey){
             if(!String(_st.name||'').trim()) continue;               // 无文字不参与
             if(!Number(_st.x) && !Number(_st.y)) continue;           // 无坐标不参与（防制造 z=0 幽灵层）
             if(_tid2 && Number(_st.tribeId||0) !== _tid2) continue;  // 同部落
-            _signList.push({ cls:String(_st.class||''), name:String(_st.name||'').trim(),
-              x:Number(_st.x)||0, y:Number(_st.y)||0, z:Number(_st.z)||0, _sign:true }); // v1064：不进 _fList（否则小牌位置会影响分层与聚类）
+            _fList.push({ cls:String(_st.class||''), name:String(_st.name||'').trim(),
+              x:Number(_st.x)||0, y:Number(_st.y)||0, z:Number(_st.z)||0, _sign:true });
           }
         }
-        // v1060：**有内容容器的位置**也参与分层/区域定义（标记 _silent，不渲染 chip）
-        //   根因：设施列表只收 beds / facilityList / **空容器**（lbGroupHasContent=false 才下沉）/ 小牌，
-        //   ⇒ 有内容的容器（酒桶/泰克复制器/发电机…）坐标从未进入列表 ⇒ 其所在深度没有「层」⇒ 归区找不到层 → 落顶部
-        //   （实测：酒桶 z=-4362、复制器 z=-3762、发电机 z=-2862 均落顶部；展示柜因双 ID 中的「空 rec」被下沉才幸免）
-        var _slSeen = {};
-        grp.forEach(function(_sr){
-          if(!_sr) return;
-          // v1061：**不按 isEmpty 过滤**——实测酒桶/泰克复制器/发电机的 isEmpty 标记为 true 却带物品（2/111/6 件），
-          //   原过滤把它们全部排除 ⇒ _silent 没收到任何一条 ⇒ 顶部 3 条始终无法归区。
-          //   （纯空容器重复入列表无害：_silent 不渲染 chip，只参与分层/聚类）
-          var _sx = Number(_sr.containerX) || 0, _sy = Number(_sr.containerY) || 0, _sz = Number(_sr.containerZ) || 0;
-          if(!Math.round(_sx) && !Math.round(_sy)) return;
-          var _sk2 = String(_sr.containerClass||'').replace(/_\d+$/,'').replace(/_C$/,'') + '|' + Math.round(_sx) + '|' + Math.round(_sy);
-          if(_slSeen[_sk2]) return;
-          _slSeen[_sk2] = 1;
-          _fList.push({ cls:String(_sr.containerClass||''), name:'', x:_sx, y:_sy, z:_sz, _silent:true });
-        });
         if(_fList.length){
           // ===== v1037：区域分组（z 分层 → 层内 x/y 聚类 → 区域标题 → 每区域各自 chips）=====
           //   退化保证：若任一条目缺坐标（散落聚落/数据缺失）⇒ 走原「全局平铺」，行为与改动前完全一致
@@ -8680,15 +8577,12 @@ function lbBuildSettleContainerHtml(grp, settleKey){
           // 把原「全局聚合」抽为可复用函数（区域 / 退化路径共用，逻辑与原实现逐行一致）
           var _mkAreaChips = function(list){
             var _named = [], _grp = {};
-            // v1055：区域内排序——按 x 降序、同 x 按 y 降序（用户要求）
-            list = list.slice().sort(function(_p,_q){ return ((Number(_q.x)||0) - (Number(_p.x)||0)) || ((Number(_q.y)||0) - (Number(_p.y)||0)); });
             list.forEach(function(_f){
-              if(_f._sign || _f._silent) return; // v1042 标识牌仅用于命名 / v1060 有内容容器位置：仅参与层与区域定义，均不渲染 chip
+              if(_f._sign) return; // v1042：标识牌仅用于区域命名，不渲染为设施 chip（遵用户"标牌不出现在设施里"）
               if(_f.emptyN !== undefined){
                 var _ek = _f.emptyName || _f.cls || '其他';
                 var _meta0 = lbSettleFacMeta(_f.cls || '');
                 if(!_meta0) _meta0 = { key:'empty_'+_ek, zh:_f.emptyName || _ek, icon:'' };
-                if(_f.name && _f.name !== '?'){ _named.push({meta:_meta0, name:_f.name, items:_f.items||[]}); return; } // v1052：自定义名空容器 → 独立 chip
                 (_grp[_ek]=_grp[_ek]||{meta:_meta0, n:0, items:[]});
                 _grp[_ek].n += (_f.emptyN||1);
                 if(_f.items) _grp[_ek].items = _grp[_ek].items.concat(_f.items); // v959
@@ -8720,109 +8614,30 @@ function lbBuildSettleContainerHtml(grp, settleKey){
           };
           var _okXYZ = _fList.every(function(_f){
             return isFinite(Number(_f.x)) && isFinite(Number(_f.y)) && isFinite(Number(_f.z));
-          }) && _efList.every(function(_f){
-            return isFinite(Number(_f.x)) && isFinite(Number(_f.y)) && isFinite(Number(_f.z));
           });
           var _areaHtml = '';
           // ===== v1041：区域化组装（用户三点定稿）=====
           //   ① 区域只用三种小牌命名（找不到 ⇒ 不显示标题，不再回退设施自定义名）
           //   ② 区域一律不折叠（层壳去掉）；每区域内部 = 有内容设施（容器组/基因台/孤儿容器）+ 无内容设施（chips）
-          //   ③ 未入区的离散设施 → 顶层（v1050：放出组改为随所在区域，不再强制顶层）
+          //   ③ 放出生物与未入区的离散设施 → 顶层
           var _contTop = [], _facTop = [], _areasAll = [];
           var _areaReady = false;
           if(_okXYZ && _sObj){
-            // v1054：区域/层定义纳入**全部设施点**（含逐条空容器）——否则只由 beds/facilityList/小牌 定层，
-            //   实测工作間层数掉到 6、区域掉到 7（v1050 为 17 层 / 21 区）；空容器所在楼层本身就是设施层
-            var _sorted = _fList.concat(_efList).sort(function(a,b){ return Number(a.z) - Number(b.z); });
+            var _sorted = _fList.slice().sort(function(a,b){ return Number(a.z) - Number(b.z); });
             var _lyr = lbFacLayerize(_sorted, LB_FAC_LAYER_TOL);
             _lyr.forEach(function(L){
               var _ars = lbFacSplitAreas(L.items, LB_FAC_AREA_EPS, LB_FAC_AREA_MINPTS);
-              _ars.forEach(function(a){ _areasAll.push({ items:a.items, name:null, zMin:L.zMin, zMax:L.zMax, _L:L }); }); // v1042：+_L；v1064：命名后置（小牌不参与分区）
+              _ars.forEach(function(a){ _areasAll.push({ items:a.items, name:lbFacAreaName(a.items), zMin:L.zMin, zMax:L.zMax, _L:L }); }); // v1042：+_L 层引用（容器按层归类用）
             });
-            // v1045：区域按「z 从高到低」排列（楼层自上而下，更符合直觉）；同层内仍大区在前
+            // v1044：区域按「z 从低到高」排列（楼层自下而上：-1 楼 → 1 楼 → 3 楼…）；同层内仍大区在前
             _areasAll.sort(function(p,q){
-              if(p.zMin !== q.zMin) return q.zMin - p.zMin;
+              if(p.zMin !== q.zMin) return p.zMin - q.zMin;
               return q.items.length - p.items.length;
             });
-            // v1053：区域归属函数 + 空容器归区 **前置**（原在下方 → ①_efLeft 未初始化 ②_facTop 收集时还没归区）
-            var _areaIdxOf = function(px, py, pz){
-              if(!_areasAll.length || !_lyr) return -1;
-            var _bl3 = null, _bld3 = Infinity;
-              for(var _li3 = 0; _li3 < _lyr.length; _li3++){
-                var _L3 = _lyr[_li3], _dz3 = 0;
-                if(pz < _L3.zMin) _dz3 = _L3.zMin - pz; else if(pz > _L3.zMax) _dz3 = pz - _L3.zMax;
-                if(_dz3 < _bld3){ _bld3 = _dz3; _bl3 = _L3; }
-              }
-              var _bi3 = -1, _bd3 = Infinity;
-              for(var _ai3 = 0; _ai3 < _areasAll.length; _ai3++){
-                var _ar3 = _areasAll[_ai3];
-                if(_bl3 && _ar3._L !== _bl3) continue; // 只在本层内选
-                for(var _ii3 = 0; _ii3 < _ar3.items.length; _ii3++){
-                  var _dx3 = (Number(_ar3.items[_ii3].x)||0) - px, _dy3 = (Number(_ar3.items[_ii3].y)||0) - py;
-                  var _v3 = _dx3*_dx3 + _dy3*_dy3; if(_v3 < _bd3){ _bd3 = _v3; _bi3 = _ai3; }
-                }
-              }
-              return _bi3;
-            };
-            // v1054：空容器已在区域 items 中（参与 _sorted 定义）→ 此处不再 push（避免重复显示）
-            var _efLeft = [];
             var _inArea = {};
             _areasAll.forEach(function(a){ a.items.forEach(function(it){ _inArea[_fList.indexOf(it)] = 1; }); });
             _fList.forEach(function(it, _fi){ if(!_inArea[_fi]) _facTop.push(it); }); // v1041-③：未入区离散设施 → 顶层
-            _efLeft.forEach(function(it){ _facTop.push(it); }); // v1052：未能归区的空容器 → 顶层
             _areaReady = _areasAll.length > 0;
-          }
-          // v1051-①：可合并设施按「区域」分桶渲染——同区域 → 一个条目（×N）；不同区域 → 各自一个
-          //   （区域归属函数 _areaIdxOf 见上方 _inArea 计算处）
-          // v1064：区域命名后置——小牌不参与区域划分；命名时只在「位置落在本区内」的小牌里取
-          //   **离包围盒中心最近**的那一块（用户要求）；区内无小牌 ⇒ 不命名（不显示标题）
-          if(_signList.length && _areasAll.length){
-            _areasAll.forEach(function(a, _ai6){
-              var _mnx = Infinity, _mxx = -Infinity, _mny = Infinity, _mxy = -Infinity;
-              a.items.forEach(function(it){
-                var _ix = Number(it.x) || 0, _iy = Number(it.y) || 0;
-                if(_ix < _mnx) _mnx = _ix; if(_ix > _mxx) _mxx = _ix;
-                if(_iy < _mny) _mny = _iy; if(_iy > _mxy) _mxy = _iy;
-              });
-              if(_mnx === Infinity) return;
-              var _cx6 = (_mnx + _mxx) / 2, _cy6 = (_mny + _mxy) / 2;
-              var _bs = null, _bd6 = Infinity;
-              _signList.forEach(function(sg){
-                var _sx = Number(sg.x) || 0, _sy = Number(sg.y) || 0, _sz = Number(sg.z) || 0;
-                // v1065：判据 = **小牌位置落在本区包围盒内**（x/y 在区内 min~max；z 允许 ±半层容差）
-                //   原用 `_areaIdxOf(sg) !== _ai6`（单一「最近区域」）⇒ 24 个小牌几乎全部指向同一两个区域，
-                //   实测工作間 20 个区域只有 2 个拿到名字；用户口径是「位置在区内的牌子」→ 包围盒包含即算
-                if(!(_sx >= _mnx && _sx <= _mxx && _sy >= _mny && _sy <= _mxy)) return;
-                // v1066：z 容差 ±TOL/2 → **±TOL**——小牌是挂墙/吊牌，高度普遍高于同区设施（实测工作間小牌 z=-1982/-2285，
-                //   而该区设施 z≈-2262，差 280 > 150）⇒ ±150 把 24 块牌子里的 22 块挡掉，只剩 2 个区域拿到名字
-                if(_sz < (a.zMin - LB_FAC_LAYER_TOL) || _sz > (a.zMax + LB_FAC_LAYER_TOL)) return;
-                var _dx6 = _sx - _cx6, _dy6 = _sy - _cy6;
-                var _d6 = _dx6*_dx6 + _dy6*_dy6;
-                if(_d6 < _bd6){ _bd6 = _d6; _bs = sg; }
-              });
-              if(_bs){ var _nm6 = String(_bs.name||'').trim(); if(_nm6) a.name = _nm6; }
-            });
-          }
-          if(_mergeKeys.length){
-            if(!_areasAll.length){
-              _mergeKeys.forEach(function(k){ renderSeg(k); }); // 退化：无区域信息 → 保持聚落级合并
-            } else {
-              _mergeKeys.forEach(function(k){
-                var _bk = {};
-                contGroups[k].forEach(function(r){
-                  var _px3 = Number(r.containerX!=null?r.containerX:(r.x||0))||0;
-                  var _py3 = Number(r.containerY!=null?r.containerY:(r.y||0))||0;
-                  var _pz3 = Number(r.containerZ!=null?r.containerZ:(r.z||0))||0;
-                  var _ai4 = _areaIdxOf(_px3, _py3, _pz3);
-                  (_bk[_ai4] = _bk[_ai4] || []).push(r);
-                });
-                Object.keys(_bk).forEach(function(_bi4){
-                  var _nk = k + '#a' + _bi4;
-                  contGroups[_nk] = _bk[_bi4];
-                  renderSeg(_nk);
-                });
-              });
-            }
           }
           if(_areaReady){
             // v1042-②：容器归属改为「z 就近层 → 该层内 x/y 最近的区」
@@ -8831,20 +8646,18 @@ function lbBuildSettleContainerHtml(grp, settleKey){
             // v1043：用户规则「z 只看正向（只升不降）」+ 半层容差
             //   容器 z 必须落在该层 [zMin, zMax] 的 ±半层(LB_FAC_LAYER_TOL/2) 内才可归属；否则 → 顶层。
             //   原实现用整层容差（±TOL）⇒ 容差 = 1 倍层高 ⇒ 实际允许跨到隔壁层（违背只升规则）。
-            var _pickLayer = function(s, loose){
+            var _pickLayer = function(s){
               var _bl = null, _bld = Infinity;
               for(var _li = 0; _li < _lyr.length; _li++){
                 var _L2 = _lyr[_li], _dz = 0;
                 if(s.z < _L2.zMin) _dz = _L2.zMin - s.z; else if(s.z > _L2.zMax) _dz = s.z - _L2.zMax;
                 if(_dz < _bld){ _bld = _dz; _bl = _L2; }
               }
-              if(loose) return _bl; // v1051-③：放出组不限容差（保证归入区域 → 顶层不再出现放出组）
               return (_bl && _bld <= LB_FAC_LAYER_TOL / 2) ? _bl : null;
             };
             _contSegs.forEach(function(s){
-              // v1050：放出组不再强制顶层——按 z 就近层 + 该层内 x/y 最近区域归入各自区域（用户要求）
-              // v1051-③：放出组放宽层容差（loose）且不限归区距离 ⇒ 一律归入区域
-              var _Lsel = _pickLayer(s, !!s.rel);
+              if(s.rel){ _contTop.push(s); return; } // v1041-③：放出生物始终顶层
+              var _Lsel = _pickLayer(s);
               if(!_Lsel){ _contTop.push(s); return; } // v1042：不在任何层的容差内 → 顶层
               var _best = null, _bd = Infinity;
               for(var _ai = 0; _ai < _areasAll.length; _ai++){
@@ -8857,42 +8670,34 @@ function lbBuildSettleContainerHtml(grp, settleKey){
                 }
                 if(_d2 < _bd){ _bd = _d2; _best = _ar; }
               }
-              if(_best && (_bd <= LB_FAC_AREA_EPS * LB_FAC_AREA_EPS || s.rel)){ (_best.cont = _best.cont || []).push(s); return; } // v1051-③：放出组不限距离
+              if(_best && _bd <= LB_FAC_AREA_EPS * LB_FAC_AREA_EPS){ (_best.cont = _best.cont || []).push(s); return; }
               _contTop.push(s); // 无归属容器 → 顶层
             });
             _contConsumed = true;
             var _topH = '';
-            // v1055：顶层同样按 x 降序、同 x 按 y 降序
-            _contTop.slice().sort(function(_p,_q){ return ((Number(_q.x)||0) - (Number(_p.x)||0)) || ((Number(_q.y)||0) - (Number(_p.y)||0)); }).forEach(function(s){ _topH += s.html; });
+            _contTop.forEach(function(s){ _topH += s.html; });
             if(_facTop.length){ var _tc = _mkAreaChips(_facTop); if(_tc.length) _topH += '<div style="display:flex;flex-wrap:wrap;gap:6px">'+_tc.join('')+'</div>'; }
             _areaHtml += _topH;
-            var _lastL = null; // v1045：层首检测（每层第一个可见区域用紫色双实线，层内区域之间仍虚线）
-            var _firstVis = true; // v1063：第一个可见区域不画分隔线（用户：页面最上方那条紫虚线不需要）
             _areasAll.forEach(function(a){
-              // v1055：区域内容器段与 chips 同序（x 降序、同 x 按 y 降序）
-              var _ccH = ''; (a.cont || []).slice().sort(function(_p,_q){ return ((Number(_q.x)||0) - (Number(_p.x)||0)) || ((Number(_q.y)||0) - (Number(_p.y)||0)); }).forEach(function(s){ _ccH += s.html; });
+              var _ccH = ''; (a.cont || []).forEach(function(s){ _ccH += s.html; });
               var _fc = _mkAreaChips(a.items);
               var _fcH = _fc.length ? '<div style="display:flex;flex-wrap:wrap;gap:6px">'+_fc.join('')+'</div>' : '';
               var _vN = 0; // v1042：可见项数（排除仅用于命名的标识牌）
               for(var _vi = 0; _vi < a.items.length; _vi++){ if(!a.items[_vi]._sign) _vN++; }
               _vN += (a.cont || []).length;
               if(!_ccH && !_fcH && !a.name) return; // v1042：有区域名（小牌）即显示标题
-              var _isLyrHead = (a._L !== _lastL); // v1045：本区域是否为所在层的首个可见区域
-              _lastL = a._L;
-              var _bt2 = _firstVis ? 'none' : (_isLyrHead ? '1px dashed #7c3aed66' : '1px dashed #2a2a3a'); // v1063：首个区域不画线
-              _firstVis = false;
               var _head = a.name ? ('<div style="font-size:12px;color:#a78bfa;margin:2px 0 4px">\uD83D\uDCCD ' + _escNm(a.name) + '<span style="color:#666;margin-left:6px">' + _vN + ' 项</span></div>') : ''; // v1041-①：无小牌名 ⇒ 不显示标题
-              _areaHtml += '<div style="margin:8px 0 2px;padding-top:6px;border-top:' + _bt2 + '">' + _head + _ccH + _fcH + '</div>'; // v1048：层首=紫色单虚线、层内=原色虚线；v1063：首个区域无上分隔线
+              _areaHtml += '<div style="margin:8px 0 2px;padding-top:6px;border-top:1px dashed #2a2a3a">' + _head + _ccH + _fcH + '</div>';
             });
           }
           if(!_areaReady){
             // 退化（无坐标 / 散落聚落 / 无区域）：原平铺——容器段 + 全部设施 chips，行为与改动前一致
             if(_contSegs.length){ _contConsumed = true; _contSegs.forEach(function(s){ _areaHtml += s.html; }); }
-            var _c0 = _mkAreaChips(_fList.concat(_efList)); // v1054：退化路径也带上空容器设施
+            var _c0 = _mkAreaChips(_fList);
             if(_c0.length) _areaHtml += '<div style="display:flex;flex-wrap:wrap;gap:6px">'+_c0.join('')+'</div>';
           }
           if(_areaHtml){
-            h += '<div style="margin-top:10px;padding-top:8px">'; // v1046：去掉最上方重复虚线（区域块自带分隔线）
+            h += '<div style="margin-top:10px;padding-top:8px;border-top:1px dashed #333">';
             h += _areaHtml;
             h += '</div>';
           }
@@ -9069,24 +8874,9 @@ function lbFacSplitAreas(layerItems, epsXY, minPts){
     }
     if(arr.length) out.push({ items: arr });
   });
-  // v1056：噪声点（未入簇）**归入同层最近簇**——原实现 `used` 计算错误且从未被使用 ⇒ 噪声点被静默丢弃，
-  //   实测工作間 17 台孤立空调整批消失（v1054 时只 2 条恰好落在簇内才显示）；归入最近簇可同时保证「不丢点 + 不增区域数」
-  var _used = {};
-  clusters.forEach(function(clu){ clu.forEach(function(p){ if(p && p._i !== undefined) _used[p._i] = 1; }); });
-  var _left = [];
-  for(var _li2 = 0; _li2 < layerItems.length; _li2++){ if(!_used[_li2]) _left.push(layerItems[_li2]); }
-  _left.forEach(function(it){
-    var _bx = Number(it.x)||0, _by = Number(it.y)||0;
-    var _bc = null, _bd = Infinity;
-    for(var _ci = 0; _ci < out.length; _ci++){
-      var _arr = out[_ci].items;
-      for(var _ai = 0; _ai < _arr.length; _ai++){
-        var _dx = (Number(_arr[_ai].x)||0) - _bx, _dy = (Number(_arr[_ai].y)||0) - _by;
-        var _vv = _dx*_dx + _dy*_dy; if(_vv < _bd){ _bd = _vv; _bc = out[_ci]; }
-      }
-    }
-    if(_bc) _bc.items.push(it); else out.push({ items:[it] });
-  });
+  // 未入簇的剩余项（防御）：作为独立区
+  var used = {};
+  out.forEach(function(a){ a.items.forEach(function(it){ used[pts.length + (it.__k||0)] = 1; }); });
   return out;
 }
 // ③ 区域命名（v1041 用户定稿：**只用三种小牌**；找不到 ⇒ 返回 null = 该区域不显示标题）
@@ -9116,7 +8906,7 @@ function lbSettleFacMeta(cls){
   for(var i=0;i<def.length;i++){ if(def[i].re.test(cls)) return def[i]; }
   // v903：facility_zh 权威表（已加载时）——真实在用设施三字段同对（图/英/中），优先于正则猜名
   if(LB_FACILITY_ZH && Object.keys(LB_FACILITY_ZH).length){
-    var _b = String(cls).replace(/^PrimalItemStructure_/,'').replace(/^StructureBP_/,'').replace(/^Structure_/,'').replace(/^Structure/,'').replace(/^BP_/,'').replace(/^PrimalInventory(?:BP)?_?/,'').replace(/^PrimalItem_/,'').replace(/^PrimalStructure_/,'').replace(/_C_\d+$/,'').replace(/_C\d*$/,'').replace(/^_+/,''); // v1047：PrimalInventory(BP)_? 合并 + 去前导下划线 // v905：尾缀兼容 _C / _C1 / _C_123（容器类名 PrimalInventoryBP_CryoFridge_C1）；v907：PrimalItem_ 前缀（基因枪手持物）
+    var _b = String(cls).replace(/^PrimalItemStructure_/,'').replace(/^StructureBP_/,'').replace(/^Structure_/,'').replace(/^Structure/,'').replace(/^BP_/,'').replace(/^PrimalInventoryBP_/,'').replace(/^PrimalInventory/,'').replace(/^PrimalItem_/,'').replace(/^PrimalStructure_/,'').replace(/_C_\d+$/,'').replace(/_C\d*$/,''); // v905：尾缀兼容 _C / _C1 / _C_123（容器类名 PrimalInventoryBP_CryoFridge_C1）；v907：PrimalItem_ 前缀（基因枪手持物）
     var _fe = LB_FACILITY_ZH[_b];
     if(_fe){
       // v936：表内 icon 若在 icons2 不存在（历史空格显示名如 'Heavy Auto Turret'）→ 回退 lbFacilityIconFind 强查找（特例表已改下划线真实键）
@@ -9125,7 +8915,7 @@ function lbSettleFacMeta(cls){
     }
   }
   // 通用：提取英文基名（去前缀/尾缀；v905：尾缀兼容 _C / _C1 / _C_123——容器类名常为 PrimalInventoryBP_X_C1；v907：PrimalItem_ 前缀）
-  var en = String(cls).replace(/^PrimalItemStructure_/,'').replace(/^StructureBP_/,'').replace(/^Structure_/,'').replace(/^Structure/,'').replace(/^BP_/,'').replace(/^PrimalInventory(?:BP)?_?/,'').replace(/^PrimalItem_/,'').replace(/_C_\d+$/,'').replace(/_C\d*$/,'').replace(/^_+/,''); // v1047：同上前缀合并 + 去前导下划线
+  var en = String(cls).replace(/^PrimalItemStructure_/,'').replace(/^StructureBP_/,'').replace(/^Structure_/,'').replace(/^Structure/,'').replace(/^BP_/,'').replace(/^PrimalInventoryBP_/,'').replace(/^PrimalInventory/,'').replace(/^PrimalItem_/,'').replace(/_C_\d+$/,'').replace(/_C\d*$/,'');
   en = en.replace(/_C_\d+$/,'');
   var key = en || cls;
   // 中文：zhName 精确 → 规范化 → 兜底友好英文（camel 拆词）
