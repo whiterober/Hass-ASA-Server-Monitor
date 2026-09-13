@@ -9,7 +9,9 @@
  *   并保留历史单缓存（dino-import-v*）不删，让已下载资源继续命中
  * 策略：index.html 走 network-first（保证新版本刷新即生效），其他同源静态 cache-first。
  */
-var VER = 'v20260911-987';
+var VER = 'v20260913-1106'; // v1106：随前端版本递增，强制移动端（PWA/Safari）拿到新壳并丢弃旧 shell 缓存
+//   背景：手机/iPad 曾长期停留在旧版前端（跑旧的逐台加载逻辑 ⇒ 卡在「存档已落盘」达 10 分钟）；
+//   index.html 虽为 network-first，但弱网/离线时仍回退旧缓存 ⇒ 每次部署同步递增本版本号可确保换壳生效。
 var SHELL = 'dino-import-shell-' + VER;
 var ASSETS = 'dino-import-assets';
 var ASSETS_MAX = 1200; // v20260912-1029：600→1200（实测预取需 717 张，600 上限导致缓存震荡：每写一张即淘汰一张）

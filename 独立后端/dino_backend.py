@@ -55,6 +55,8 @@ ACCOUNTS_FILE = os.environ.get('ACCOUNTS_FILE', r'D:\dino_backend\accounts.json'
 # R2 / WebP 全自动更新配置（cf_config.json：api_token/account_id/r2_bucket/r2_endpoint/r2_s3_access_key/r2_s3_secret_key）
 CF_CONFIG_FILE = os.environ.get('CF_CONFIG_FILE', os.path.join(os.path.dirname(ACCOUNTS_FILE), 'cf_config.json'))
 WEBP_MAP_FILE = os.path.join(os.path.dirname(ACCOUNTS_FILE), 'webp_map.json')
+VOLCANO_FILE = os.path.join(os.path.dirname(ACCOUNTS_FILE), 'volcano_anchor.json')  # v1096：火山喷发锚点（全用户共享）
+VOLCANO_SERVERS = {'Gen'}  # 阶段一：仅创世有火山计时
 WEBP_DIR = os.path.join(os.path.dirname(ACCOUNTS_FILE), 'webp96')
 
 # 服务器 RCON 端口表（与 apps.yaml 对齐）
@@ -125,6 +127,8 @@ CMD_MOVE_ALL_PENDINGS = 'TransferIdentityFix.MoveAllPendings'
 CMD_RENAME_DINO = 'TransferIdentityFix.RenameDino'
 CMD_EGG_PROBE = 'TransferIdentityFix.EggProbe'
 CMD_INV_PROBE = 'TransferIdentityFix.InvProbe'  # 2026-09-04：库存扫描（饲料槽/风行蜥/未成年背包物品）
+CMD_CRAFTING_COST = 'TransferIdentityFix.CraftingCost'  # 2026-09-13：单蓝图制作材料（只读、无副作用）
+CRAFTING_COST_SERVERS = {'Abe'}  # 阶段一白名单（仅 Abe 已部署该命令；逐服放开只改这一行）
 CMD_LIST_PLAYERS = 'ListPlayers'  # v532：原生 RCON 在线玩家列表（联盟位置只查在线成员）
 CMD_SAVE_WORLD = 'SaveWorld'  # v17：原生 RCON 保存世界（强制存档，cryo.json.gz 落地后前端拉最新球数据）
 
@@ -775,6 +779,73 @@ def inv_probe(server, filter_s, tribe_id, max_n):
             'ts': str(datetime.now())}
 
 
+def crafting_cost(server, item_cls):
+    """单蓝图制作材料：RCON TransferIdentityFix.CraftingCost <itemClass>（只读、无副作用）。
+    2026-09-13 新增：前端蓝图卡「关注 / 待制作」按需单查；配方为类默认值 ⇒ 前端可永久缓存。
+    注意：类名需为运行时类名（去掉 _C_<数字> 实例后缀）；目标类需在服务器上存在实例才命中。"""
+    port = SERVERS.get(server)
+    if not port:
+        return {'ok': False, 'server': server, 'error': 'unknown server'}
+    if server not in CRAFTING_COST_SERVERS:
+        return {'ok': False, 'server': server, 'error': 'server not ready (crafting_cost: %s)' % server}
+    cls = (item_cls or '').strip()
+    i = cls.rfind('_C_')
+    if i > 0 and cls[i + 3:].isdigit():
+        cls = cls[:i + 2]   # 2145841018 → PrimalItemXxx_C
+    if not cls:
+        return {'ok': False, 'server': server, 'error': 'missing cls'}
+    try:
+        success, result = _rcon_str(port, '%s %s' % (CMD_CRAFTING_COST, cls))
+    except Exception as e:
+        return {'ok': False, 'server': server, 'error': str(e)}
+    if not success or not result:
+        return {'ok': False, 'server': server, 'error': 'rcon empty'}
+    try:
+        j = json.loads(result)
+    except Exception:
+        return {'ok': False, 'server': server, 'error': 'bad json', 'raw': str(result)[:200]}
+    if not isinstance(j, dict) or not j.get('ok'):
+        return {'ok': False, 'server': server, 'cls': cls,
+                'error': (j or {}).get('error') or 'crafting cost failed'}
+    return {'ok': True, 'server': server, 'cls': cls, 'itemClass': j.get('itemClass'),
+            'foundIn': j.get('foundIn'), 'costs': j.get('costs') or [], 'count': j.get('count'),
+            'ts': str(datetime.now())}
+
+
+def volcano_anchor_get(server):
+    """v1096：读火山锚点（全用户共享）。POST {server} 即读。"""
+    if server not in VOLCANO_SERVERS:
+        return {'ok': False, 'server': server, 'error': 'server not ready (volcano: %s)' % server}
+    try:
+        with open(VOLCANO_FILE, 'r', encoding='utf-8') as f:
+            j = json.load(f)
+    except Exception:
+        j = {}
+    a = (j or {}).get(server) if isinstance(j, dict) else None
+    return {'ok': True, 'server': server, 'anchor': a, 'ts': str(datetime.now())}
+
+
+def volcano_anchor_set(server, node, by):
+    """v1096：写火山锚点（任何已登录用户均可）。node 为校准事件；anchorMs = 服务器当前现实时间戳。"""
+    if server not in VOLCANO_SERVERS:
+        return {'ok': False, 'server': server, 'error': 'server not ready (volcano: %s)' % server}
+    try:
+        with open(VOLCANO_FILE, 'r', encoding='utf-8') as f:
+            j = json.load(f)
+    except Exception:
+        j = {}
+    if not isinstance(j, dict):
+        j = {}
+    anchor = {'node': node or 'erupt_start', 'anchorMs': int(datetime.now().timestamp() * 1000),
+              'by': (by or '')[:40], 'ts': str(datetime.now())}
+    j[server] = anchor
+    tmp = VOLCANO_FILE + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(j, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, VOLCANO_FILE)
+    return {'ok': True, 'server': server, 'anchor': anchor}
+
+
 def get_dino(server, dino1, dino2):
     """单龙实时查询：RCON ArkGetDino。返回 {found, tribeId, babyAge, ...}。
     v14（2026-09-02）：扩展返回完整实时字段（babyAge/isBaby/level/name/坐标等）——
@@ -1307,6 +1378,23 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(400, {'ok': False, 'error': 'missing server'})
                 return
             self._send(200, inv_probe(server, g('filter'), g('tribe_id', '0'), g('max', '5')))
+        elif path.endswith('volcano_anchor'):  # v1096：火山锚点读/写（带 node = 校准写入，否则读取）
+            server = g('server')
+            if not server:
+                self._send(400, {'ok': False, 'error': 'missing server'})
+                return
+            node = g('node')
+            if node:
+                self._send(200, volcano_anchor_set(server, node, g('by') or ''))
+            else:
+                self._send(200, volcano_anchor_get(server))
+        elif path.endswith('crafting_cost'):  # 2026-09-13：单蓝图制作材料（蓝图卡/待制作）
+            server = g('server')
+            cls = g('cls')
+            if not (server and cls):
+                self._send(400, {'ok': False, 'error': 'missing args'})
+                return
+            self._send(200, crafting_cost(server, cls))
         elif path.endswith('player_pos'):
             server = g('server')
             player = g('player')
