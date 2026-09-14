@@ -929,6 +929,45 @@ def volcano_log(server):
     return out
 
 
+def volcano_erupt_anchor_get():
+    """v1138：读取共享「真喷发锚点」（不存在时返回 anchor=None）。"""
+    try:
+        with open(VOLCANO_ERUPT_FILE, 'r', encoding='utf-8') as f:
+            d = json.load(f)
+        if isinstance(d, dict) and d.get('w'):
+            return {'ok': True, 'anchor': d}
+    except Exception:
+        pass
+    return {'ok': True, 'anchor': None}
+
+
+def volcano_erupt_anchor_set(w, world_snap, by):
+    """v1138：写入共享锚点。w=喷发开始的世界秒；world_snap=当时 worldTimeSeconds（前端用它做世界重启检测）。
+    v1139：预计上报（by=estimate）**不得覆盖**真喷发锚点（by=eruption）。"""
+    by = str(by or 'eruption')[:32]
+    try:
+        with open(VOLCANO_ERUPT_FILE, 'r', encoding='utf-8') as f:
+            old = json.load(f)
+        if isinstance(old, dict) and old.get('by') == 'eruption' and by != 'eruption':
+            return {'ok': True, 'anchor': old, 'skipped': 'eruption anchor kept'}
+    except Exception:
+        pass
+    try:
+        d = {'w': float(w),
+             'ws': float(world_snap) if str(world_snap) not in ('', 'None', 'none') else None,
+             'by': by, 'at': int(time.time() * 1000)}
+    except Exception as e:
+        return {'ok': False, 'error': 'bad args: %s' % e}
+    try:
+        tmp = VOLCANO_ERUPT_FILE + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(d, f, ensure_ascii=False)
+        os.replace(tmp, VOLCANO_ERUPT_FILE)
+    except Exception as e:
+        return {'ok': False, 'error': 'write: %s' % e}
+    return {'ok': True, 'anchor': d}
+
+
 def get_dino(server, dino1, dino2):
     """单龙实时查询：RCON ArkGetDino。返回 {found, tribeId, babyAge, ...}。
     v14（2026-09-02）：扩展返回完整实时字段（babyAge/isBaby/level/name/坐标等）——
@@ -1483,6 +1522,12 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, volcano_anchor_set(server, node, g('by') or ''))
             else:
                 self._send(200, volcano_anchor_get(server))
+        elif path.endswith('volcano_erupt_anchor'):  # v1138：共享真喷发锚点（带 w 参数=写入；否则读取）
+            _w = g('w')
+            if _w:
+                self._send(200, volcano_erupt_anchor_set(_w, g('ws'), g('by') or ''))
+            else:
+                self._send(200, volcano_erupt_anchor_get())
         elif path.endswith('crafting_cost'):  # 2026-09-13：单蓝图制作材料（蓝图卡/待制作）
             server = g('server')
             cls = g('cls')

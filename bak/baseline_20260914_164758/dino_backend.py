@@ -56,10 +56,8 @@ ACCOUNTS_FILE = os.environ.get('ACCOUNTS_FILE', r'D:\dino_backend\accounts.json'
 CF_CONFIG_FILE = os.environ.get('CF_CONFIG_FILE', os.path.join(os.path.dirname(ACCOUNTS_FILE), 'cf_config.json'))
 WEBP_MAP_FILE = os.path.join(os.path.dirname(ACCOUNTS_FILE), 'webp_map.json')
 VOLCANO_FILE = os.path.join(os.path.dirname(ACCOUNTS_FILE), 'volcano_anchor.json')  # v1096：火山喷发锚点（已弃用，保留兼容；v1107 改用插件权威查询）
-VOLCANO_ERUPT_FILE = os.path.join(os.path.dirname(ACCOUNTS_FILE), 'volcano_erupt_anchor.json')  # v1138：共享「真喷发锚点」——任何客户端捕获 phase→eruption 后上报，落盘持久化（跨客户端/换设备/后端重启均不丢）
 VOLCANO_SERVERS = {'Gen'}  # 阶段一：仅创世有火山计时
 VOLC_STATE_TTL_MS = 3000   # 2026-09-14：火山状态内存缓存 TTL——后端单点轮询 ⇒ N 个客户端也只 3s 一次 RCON（插件文档 §4 强约束）
-VOLC_LOG_TTL_MS = 2000     # v1146（用户定稿）：火山**事件台账**独立缓存槽——仅当 hooks.events 变化 / 30s 兜底时才被前端请求
 _VOLC_STATE_CACHE = {}     # server -> {'ts': epoch_ms, 'data': {...}}
 WEBP_DIR = os.path.join(os.path.dirname(ACCOUNTS_FILE), 'webp96')
 
@@ -889,46 +887,6 @@ def volcano_state(server, fresh=False):
     return out
 
 
-_VOLC_LOG_CACHE = {}   # v1146：事件台账缓存（独立槽位，与状态槽互不影响）
-
-
-def volcano_log(server):
-    """v1146（用户定稿）：火山**事件台账**——RCON `TransferIdentityFix.Volcano log`。
-    返回 `history[]`（`{kind, cls, worldSec, durSec}`，kind ∈ begin/end/warmupOn/warmupOff/activeOn/activeOff）
-    与 `hooks`。台账为插件内存态（64 条上限，插件重载/服务器重启清空）。
-    前端调用时机：开窗 / 切服 / 重启恢复 ⇒ 立即一次；之后每 30s 兜底一次；hooks.events 变化时顺手一次。"""
-    if server not in VOLCANO_SERVERS:
-        return {'ok': False, 'server': server, 'error': 'server not ready (volcano: %s)' % server}
-    port = SERVERS.get(server)
-    if not port:
-        return {'ok': False, 'server': server, 'error': 'unknown server'}
-    now_ms = int(time.time() * 1000)
-    c = _VOLC_LOG_CACHE.get(server)
-    if c and (now_ms - c['ts'] < VOLC_LOG_TTL_MS):
-        d = dict(c['data'])
-        d['cacheAgeMs'] = now_ms - c['ts']
-        d['serverNowMs'] = now_ms
-        return d
-    try:
-        success, result = _rcon_str(port, CMD_VOLCANO + ' log', timeout=8)
-    except Exception as e:
-        return {'ok': False, 'server': server, 'error': 'rcon: ' + str(e), 'serverNowMs': now_ms}
-    if not success or not result:
-        return {'ok': False, 'server': server, 'error': 'rcon empty', 'serverNowMs': now_ms}
-    try:
-        j = json.loads(result)
-    except Exception:
-        return {'ok': False, 'server': server, 'error': 'bad json', 'raw': str(result)[:200], 'serverNowMs': now_ms}
-    if not isinstance(j, dict):
-        return {'ok': False, 'server': server, 'error': 'bad payload', 'serverNowMs': now_ms}
-    j['server'] = server
-    _VOLC_LOG_CACHE[server] = {'ts': now_ms, 'data': j}
-    out = dict(j)
-    out['cacheAgeMs'] = 0
-    out['serverNowMs'] = now_ms
-    return out
-
-
 def get_dino(server, dino1, dino2):
     """单龙实时查询：RCON ArkGetDino。返回 {found, tribeId, babyAge, ...}。
     v14（2026-09-02）：扩展返回完整实时字段（babyAge/isBaby/level/name/坐标等）——
@@ -1467,12 +1425,6 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(400, {'ok': False, 'error': 'missing server'})
                 return
             self._send(200, volcano_state(server, bool(g('fresh'))))
-        elif path.endswith('volcano_log'):  # v1146（用户定稿）：火山事件台账（history[] / hooks）——与状态同源，独立缓存槽
-            server = g('server')
-            if not server:
-                self._send(400, {'ok': False, 'error': 'missing server'})
-                return
-            self._send(200, volcano_log(server))
         elif path.endswith('volcano_anchor'):  # v1096 旧接口（人工校准锚点）——已弃用，保留兼容；v1107 起前端不再调用
             server = g('server')
             if not server:

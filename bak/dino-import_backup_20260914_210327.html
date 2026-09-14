@@ -429,7 +429,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260914-1170';
+var LB_VERSION = 'v20260914-1154';
 var LB_SCHEMA_VER = 15;  // v1069：14→15 强制 IndexedDB 缓存重建——根因：recs 构建结果随 IndexedDB 持久化（v931）、
                          //   命中后跳过重建；仅改 _decorRe 等**构建期过滤**时，旧 rec 会长期残留（实测南瓜 rec 改过滤后仍显示）。
                          //   lbCacheGet 校验 _schemaVer !== LB_SCHEMA_VER → resolve(null) → 全量重拉重建。
@@ -11740,7 +11740,7 @@ var LB_VOLC = { speed:13.57, pollMs:3000, slowMs:30000, warnMs:120000, afterEndM
 //   依据：插件改版后提供 status 字段 + history[] 事件台账（begin/end 帧级精确；warmupOn/Off 由服务端 1Hz 记录器写入）
 //   铁律（用户）：大字位**永远显示时间**；状态词**每段唯一**，禁止含糊词（平静中/正在震动/冷却中…）
 LB_VOLC.pollMs = 3000;      // 状态轮询节奏（用户要求：保持现状）
-LB_VOLC.logMs  = 15000;     // v1168：台账兜底校准 30s→15s（增量判据已改 lastEvent，缩短兜底窗口）
+LB_VOLC.logMs  = 30000;     // 台账兜底校准间隔（30~60s 取快档，可调）
 LB_VOLC.warnMs = 120000;    // 距下次事件 <2 分钟 ⇒ 大字转红
 LB_VOLC.phaseCol = { idle:'#94a3b8', warmup:'#facc15', eruption:'#ef4444', cooldown:'#60a5fa' };
 LB_VOLC.kindZh = { begin:'事件开始', end:'喷发结束', warmupOn:'地震开始', warmupOff:'地震结束', activeOn:'喷发开始', activeOff:'喷发结束' };
@@ -11751,20 +11751,12 @@ LB._volcHist = [];           // 事件台账（worldSec 升序）
 LB._volcLogMs = 0;           // 上次成功拉台账时刻
 LB._volcLogBusy = false;     // 台账请求在途
 LB._volcLogErr = '';         // 台账错误
-LB._volcEvCount = -1;        // [废弃 v1168] hooks.events（文档已证伪，恒为 0）
-LB._volcLastEvtSeen = 0;     // v1168：上次见到的 lastEvent（台账增量判据，文档 §4.1 推荐）
+LB._volcEvCount = -1;        // hooks.events 上次值（仅作"顺手加拉一次"的机会触发，不作为依据）
 LB._volcQuakeNo = 0;         // 本轮（最近一次喷发之后）地震次数
 LB._volcInQuake = false;     // v1147：当前是否正处于某次地震（warmupOn 之后无配对 warmupOff）
 LB._volcLastQuakeDur = null; // 最近一次地震实测时长（秒）
 LB._volcIntervalSec = null;  // v1150：实测事件间隔（begin.durSec）
 LB._volcLastEruptDur = null; // 最近一次喷发实测时长（秒）
-LB._volcErupting = false;    // v1160：是否正在喷发（以台账 activeOn/activeOff 判定；插件 phase 喷发期仍报 warmup）
-LB._volcEruptOnSec = null;   // v1160：最近一次「喷发开始」worldSec
-LB._volcCycleLen = null;     // v1160：实测整周期（相邻两次「喷发开始」之差 ≈2240s）
-LB._volcLastWarmupOn = null; // v1160：最近一次地震开始 worldSec（下一震 = 此值 + 间隔 I）
-LB._volcCycQ = 0;            // v1160：本轮已发生地震数（与事件命名同源）
-LB._volcRecvMono = 0;        // v1162：响应到达时的单调时钟（performance.now，抗系统时钟跳变）
-LB._volcGuard = {};          // v1162：倒计时防抖守卫（按标签各一份，只降不升）
 LB._volcRecvMs = 0; LB._volcErr = '';
 LB._volcTimer = null; LB._volcPoll = null; LB._volcSlow = null; LB._funcTimer = null;
 function lbVolcServer(){ return (LB.tab && LB.tab !== 'player') ? String(LB.tab) : ''; }
@@ -11792,63 +11784,6 @@ function lbVolcClock(ms){
   var d = new Date(base), p = function(n){ return (n < 10 ? '0' : '') + n; };
   return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()); }
 function lbVolcFmt(ms){ var s = Math.max(0, Math.round(Number(ms || 0) / 1000)), m = Math.floor(s / 60); s = s % 60; return m + ':' + (s < 10 ? '0' : '') + s; }
-// ---- v1160：以台账推算「距喷发 / 距下一震」（插件 nextEventInSec 基于错误的 between=400，不可用）----
-// v1162：本地单调时钟（performance.now，抗系统时钟调整）
-function lbVolcMonoMs(){
-  try{ return (window.performance && performance.now) ? performance.now() : Date.now(); }catch(e){ return Date.now(); }
-}
-// v1162：倒计时格式化（向上取整 ⇒ 0:00 只在真正到点出现；「X 前」仍用 lbVolcFmt 的四舍五入）
-function lbVolcCd(ms){ var s = Math.max(0, Math.ceil(Number(ms || 0) / 1000)), m = Math.floor(s / 60); s = s % 60; return m + ':' + (s < 10 ? '0' : '') + s; }
-// v1162：防抖守卫——同一标签的倒计时**只降不升**（上跳 = 重锚定噪声 ⇒ 冻结，随后自然追平）
-function lbVolcGuard(key, ms){
-  var now = lbVolcMonoMs();
-  if(ms === null || ms === undefined || !isFinite(ms)){ try{ delete LB._volcGuard[key]; }catch(e){} return null; }
-  var g = LB._volcGuard[key];
-  if(!g || (now - g.t) > 4000 || ms > g.v + 5000){ LB._volcGuard[key] = { v: ms, t: now }; return ms; }   // 新锚 / 断档 / 大幅真实变化 ⇒ 重置
-  var v = (ms > g.v) ? g.v : ms;
-  LB._volcGuard[key] = { v: v, t: now };
-  return v;
-}
-function lbVolcWorldNow(){
-  var s = LB._volcS; if(!s) return null;
-  var w = Number(s.worldTimeSeconds); if(!isFinite(w)) return null;
-  // v1162（实测根因）：必须补「后端缓存年龄」+「服务器→本地传输延迟」
-  //   后端状态缓存 TTL 3s（命中时 cacheAgeMs 最大 ~2986ms），传输延迟实测 844~1913ms；
-  //   旧式缺这两项 ⇒ 每次重锚定带入 0.8~4.9s 随机偏差 ⇒ 倒计时 ±1~3s 跳变
-  var cAge = Number(s.cacheAgeMs); if(!isFinite(cAge) || cAge < 0 || cAge > 60000) cAge = 0;
-  var sNow = Number(s.serverNowMs), delay = 0;
-  if(isFinite(sNow) && sNow > 0){ delay = (LB._volcRecvMs || Date.now()) - sNow; if(!(delay >= 0) || delay > 15000) delay = 0; }
-  var monoRef = Number(LB._volcRecvMono) || 0;
-  var since = monoRef ? (lbVolcMonoMs() - monoRef) / 1000 : (Date.now() - (LB._volcRecvMs || Date.now())) / 1000;
-  return w + (cAge + delay) / 1000 + since;
-}
-function lbVolcNextEruptMs(){          // 距**喷发开始**
-  var wn = lbVolcWorldNow(); if(wn === null) return null;
-  var iv = Number(LB._volcIntervalI) || Number(LB._volcIntervalSec);
-  var dly = Number(LB._volcEruptDelayD);
-  var cyc = Number(LB._volcCycleLen); if(!(cyc > 60)) cyc = (iv > 60) ? iv * 3 : 0;
-  var t = null;
-  // ① v1162：本轮首震已知 ⇒ 用本轮全实测参数 S + 2I + D（比上一轮周期更准，削掉 ±1~2s 系统漂移）
-  var s0 = Number(LB._volcCycleStart);
-  if(isFinite(s0) && iv > 60 && dly > 10){ var t1 = s0 + 2 * iv + dly; if(t1 > wn - 1) t = t1; }
-  // ② 空档期（喷发结束→下一轮首震之间，本轮首震尚未发生）⇒ 上次喷发开始 + 整周期，按周期滚动
-  if(t === null){
-    var eOn = Number(LB._volcEruptOnSec);
-    // v1167：eOn 为 null 时 Number(null)=0 且 isFinite(0) 为真 ⇒ 旧式会拿"0 + 周期"当喷发时刻（远古时间）
-    if(!isFinite(eOn) || !(eOn > 0) || !(cyc > 60)) return null;
-    t = eOn + cyc; var guard = 0;
-    while(t <= wn - 1 && guard++ < 5000) t += cyc;
-  }
-  return (t - wn) * 1000;
-}
-function lbVolcNextQuakeMs(){          // 距**下一震开始**：最近一次地震开始 + 间隔 I，按间隔滚动到未来
-  var wn = lbVolcWorldNow(); if(wn === null) return null;
-  var lw = Number(LB._volcLastWarmupOn), iv = Number(LB._volcIntervalI) || Number(LB._volcIntervalSec);
-  if(!isFinite(lw) || !(lw > 0) || !(iv > 60)) return null;   // v1167：同上，null 不得当 0 用
-  var t = lw + iv, guard = 0;
-  while(t <= wn - 1 && guard++ < 5000) t += iv;
-  return (t - wn) * 1000;
-}
 // ---- 本地外推：只用接口给的两个基准，不做任何周期/节点推算 ----
 function lbVolcNextMs(){        // 距下次事件（可负 = 已过点）
   var s = LB._volcS; if(!s) return null;
@@ -11913,26 +11848,19 @@ function lbVolcLogDerive(){
     if(kb === 'end' && isFinite(db) && db > 0) LB._volcLastEruptDur = db;
     if(kb === 'begin' && isFinite(db) && db > 0) LB._volcIntervalSec = db;   // v1150：实测间隔（插件 between=400 是错的）
   }
-  // ②' v1160：喷发时长 = activeOn → activeOff 配对相减（实测 ≈248s；台账里并不出现 `end`，不可依赖）
-  var aeOn = null;
-  for(var y0 = 0; y0 < h.length; y0++){
-    var ky0 = String(h[y0].kind), wy0 = Number(h[y0].worldSec);
-    if(ky0 === 'activeOn'){ aeOn = wy0; }
-    else if(ky0 === 'activeOff' && aeOn !== null){ var dy0 = wy0 - aeOn; if(dy0 > 0) LB._volcLastEruptDur = dy0; aeOn = null; }
-  }
   // ③ 本轮地震序号 = 最近一次喷发结束(end)之后的 begin 条数（无 end ⇒ 台账内全部 begin）
   var q = 0;
   for(var c = 0; c < h.length; c++){ if(c > lastEnd && String(h[c].kind) === 'begin') q++; }
   LB._volcQuakeNo = q;
   // ④' v1154：逐条算出「具体事件名」（对应 7 事件）+ 下一个事件名 + 台账更新时间
   LB._volcNames = [];
-  var cycQ = 0;                                       // v1158：本轮已发生的第几次地震（仅在周期边界重置）
+  var qi = 0, openQuake = 0;
   for(var m = 0; m < h.length; m++){
     var km = String(h[m].kind), nmv = '';
-    if(km === 'end' || km === 'activeOff'){ cycQ = 0; nmv = '喷发结束'; }   // 周期边界
+    if(km === 'warmupOn'){ openQuake++; nmv = (LB_VOLC.quakeFull[openQuake] || '地震') + '开始'; }
+    else if(km === 'warmupOff' && openQuake){ nmv = (LB_VOLC.quakeFull[openQuake] || '地震') + '结束'; openQuake = 0; }
     else if(km === 'activeOn'){ nmv = '喷发开始'; }
-    else if(km === 'warmupOn'){ cycQ++; nmv = (LB_VOLC.quakeFull[cycQ] || '地震') + '开始'; }
-    else if(km === 'warmupOff'){ nmv = (cycQ > 0 && cycQ < 3) ? ((LB_VOLC.quakeFull[cycQ] || '地震') + '结束') : ''; }   // v1160：本轮第 3 震(主震)的 warmupOff 与「喷发结束」同刻 ⇒ 不命名
+    else if(km === 'activeOff' || km === 'end'){ nmv = '喷发结束'; }
     else if(km === 'begin'){ nmv = ''; }              // begin 与 warmupOn/activeOn 同秒 ⇒ 不单独展示（避免模糊）
     LB._volcNames.push(nmv);
     if(nmv) LB._volcLastNamed = nmv;
@@ -11942,52 +11870,13 @@ function lbVolcLogDerive(){
   for(var z = h.length - 1; z >= 0; z--){ if(LB._volcNames[z]){ lastNamed = LB._volcNames[z]; lastNamedIdx = z; break; } }
   LB._volcLastEventName = lastNamed;
   LB._volcLastEventSec = lastNamedIdx >= 0 ? Number(h[lastNamedIdx].worldSec) : null;
-  // v1160：喷发 / 周期参数（一律以台账为准；插件在喷发期间 phase 仍报 warmup、inEvent=0，不可依赖）
-  var eons = [], lwo = null;
-  for(var q1 = 0; q1 < h.length; q1++){
-    var kq = String(h[q1].kind), wq = Number(h[q1].worldSec);
-    if(kq === 'activeOn') eons.push(wq);
-    if(kq === 'warmupOn') lwo = wq;
-  }
-  LB._volcEruptOnSec = eons.length ? eons[eons.length - 1] : null;
-  LB._volcCycleLen = (eons.length >= 2) ? (eons[eons.length - 1] - eons[eons.length - 2]) : null;   // 相邻两次喷发开始之差 = 整周期
-  LB._volcLastWarmupOn = lwo;
-  LB._volcCycQ = cycQ;
-  LB._volcErupting = (String(lastNamed) === '喷发开始');
-  LB._volcInQuakeNow = !LB._volcErupting && /^(首震|余震|主震)开始$/.test(String(lastNamed || ''));
-  // v1157：周期参数（供"距喷发开始"推算）——I=实测事件间隔  D=主震开始→喷发开始延迟  S=本轮首震开始
-  LB._volcIntervalI = null; LB._volcEruptDelayD = null; LB._volcCycleStart = null;
-  var wons = [];
-  for(var p = 0; p < h.length; p++){ if(String(h[p].kind) === 'warmupOn') wons.push(Number(h[p].worldSec)); }
-  for(var p2 = h.length - 1; p2 >= 0; p2--){
-    var db2 = Number(h[p2].durSec);
-    if(String(h[p2].kind) === 'begin' && isFinite(db2) && db2 > 10){ LB._volcIntervalI = db2; break; }
-  }
-  if(!LB._volcIntervalI && wons.length >= 2) LB._volcIntervalI = wons[wons.length - 1] - wons[wons.length - 2];
-  for(var p3 = h.length - 1; p3 >= 0; p3--){
-    if(String(h[p3].kind) === 'activeOn'){
-      var aw = Number(h[p3].worldSec), bestOn = null;
-      for(var p4 = 0; p4 < h.length; p4++){
-        if(String(h[p4].kind) === 'warmupOn' && Number(h[p4].worldSec) <= aw) bestOn = Number(h[p4].worldSec);
-      }
-      if(bestOn !== null) LB._volcEruptDelayD = aw - bestOn;
-      break;
-    }
-  }
-  var s0 = null;
-  for(var p5 = 0; p5 < h.length; p5++){
-    if(p5 > lastEnd && String(h[p5].kind) === 'warmupOn'){ s0 = Number(h[p5].worldSec); break; }
-  }
-  if(s0 === null && wons.length) s0 = wons[0];
-  LB._volcCycleStart = s0;
+  LB._volcInQuakeNow = (h.length && String(h[h.length - 1].kind) === 'warmupOn');
   // 下一事件名（按本轮地震序号：0⇒首震开始 1⇒余震开始 2⇒主震开始 ≥3⇒喷发开始）
-  // v1160：下一事件名（与命名同源；喷发中 ⇒ 喷发结束）
-  if(LB._volcErupting){ LB._volcNextName = '喷发结束'; }
-  else if(LB._volcInQuakeNow){ LB._volcNextName = String(LB._volcLastEventName).replace(/开始$/, '结束'); }
-  else {
-    var qSoFar = Number(cycQ) || 0;
-    LB._volcNextName = (qSoFar >= 3) ? '喷发开始' : ((LB_VOLC.quakeFull[qSoFar + 1] || '首震') + '开始');
-  }
+  var qSoFar = 0;
+  for(var y = 0; y < h.length; y++){ if(y > lastEnd && String(h[y].kind) === 'warmupOn') qSoFar++; }
+  if(LB._volcInQuakeNow) LB._volcNextName = (LB_VOLC.quakeFull[qSoFar] || '地震') + '结束';
+  else if(qSoFar >= 3) LB._volcNextName = '喷发开始';
+  else LB._volcNextName = (LB_VOLC.quakeFull[qSoFar + 1] || '首震') + '开始';
   // ⑤ 当前是否正处于某次地震（warmupOn 之后没有配对的 warmupOff）
   LB._volcInQuake = false;
   if(h.length && String(h[h.length - 1].kind) === 'warmupOn') LB._volcInQuake = true;
@@ -12005,86 +11894,26 @@ function lbVolcStageName(){
   var s = LB._volcS || {};
   var h = LB._volcHist || [];
   var hasLog = !!(h && h.length);
-  // v1161（用户口径）：**台账优先**——实测插件 phase 在喷发期滞后（报 warmup、inEvent=0），震期同理；
-  //   台账可用时一律以台账事件名为准，只有台账不可用才退回插件状态（绝不编造事件名）
-  if(hasLog){
-    if(LB._volcErupting === true) return '正在喷发';
-    var mq = String(LB._volcLastEventName || '').match(/^(首震|余震|主震)开始$/);
-    if(mq && LB._volcInQuakeNow === true) return '正在' + mq[1];
-    if(LB._volcLastEventName){
-      var nm2 = String(LB._volcLastEventName);
-      return /结束$/.test(nm2) ? nm2.replace(/结束$/, '后冷却') : nm2;   // 不存在"无事件"状态 ⇒ 一律「XX后冷却」
-    }
-  }
-  // 台账不可用 ⇒ 只用插件状态兜底（绝不编造事件名/序号）
   if(String(s.phase) === 'eruption' || Number((s.hooks || {}).inEvent) === 1) return '正在喷发';
-  // v1164：无台账时分不清首震/余震/主震 ⇒ 一律统一文案（旧式会用计数器猜出「正在首震」）
+  if(Number(s.warmUpActive) === 1 || String(s.phase) === 'warmup'){
+    if(!hasLog) return '台账不可用（当前事件无法确认）';
+    var n = Number(LB._volcQuakeNo) || 0;
+    if(n > 3) n = ((n - 1) % 3) + 1;          // 缺喷发标记时按 3 取模归位（绝不出现「第 N 次」）
+    var nm = LB_VOLC.quakeZh[n];
+    return '正在' + (nm || '首震');
+  }
+  if(hasLog && LB._volcLastEventName){
+    return '当前无事件（最近：' + LB._volcLastEventName + (LB._volcLastEventSec ? (' · ' + lbVolcWorldToClock(LB._volcLastEventSec)) : '') + '）';
+  }
   return '台账不可用（当前事件无法确认）';
 }
-function lbVolcLedgerHint(){
-  // v1165（用户要求）：台账信息不足时必须给提示 + 估算"就绪"的大致剩余时间
-  var s = LB._volcS || {}, h = LB._volcHist || [];
-  var iv = Number(LB._volcIntervalI) || Number(LB._volcIntervalSec);   // 事件间隔 I（begin.durSec ≈745s）
-  var dly = Number(LB._volcEruptDelayD);                               // 主震开始→喷发开始 D（≈96s）
-  // v1166：无 activeOn 时 D 无实测 ⇒ 用「本震实测时长」兜底（实测 D 95.5~97s ≈ 本震时长），保证情形②也能给就绪时间
-  if(!(dly > 10)){ var qdF = Number(LB._volcLastQuakeDur); dly = (qdF > 10) ? qdF : null; }
-  if(!(dly > 10)) dly = null;
-  // v1169：原「区间格式化」辅助函数已弃用（情形②改为单值 + 双通道位置校验）
-  // ① 台账接口失败 ⇒ 给出重试剩余（后端/前端兜底节奏 30s）
-  if(LB._volcLogErr){
-    var cycS = Math.max(5, Math.round(LB_VOLC.logMs / 1000));
-    var wait = LB._volcLogMs ? Math.round(cycS - (Date.now() - LB._volcLogMs) / 1000) : cycS;
-    if(!(wait >= 1) || wait > cycS) wait = cycS;
-    return '⏳ 台账不可达 · 最多 ' + wait + ' 秒后自动重试';
-  }
-  if(!h.length) return '⏳ 台账准备中：等待首次事件记录（插件/服务器可能刚重启）';
-  var hasActive = false;
-  for(var i = 0; i < h.length; i++){ if(String(h[i].kind) === 'activeOn'){ hasActive = true; break; } }
-  var inQ = (Number(s.warmUpActive) === 1) || (String(s.phase) === 'warmup');
-  var inE = (LB._volcErupting === true) || (String(s.phase) === 'eruption') || (Number((s.hooks || {}).inEvent) === 1);
-  var wn = lbVolcWorldNow();
-  // ② v1169：台账无「喷发开始」⇒ 用**周期位置**定位主震 ⇒ 给**单值**就绪时间（双通道校验）
-  if(!hasActive){
-    var cycP = Number(LB._volcCycQ) || 0;                       // A 通道：台账推出的本轮震数
-    var fsiP = Number(s.falseStartInt);                         // B 通道：插件假喷发计数
-    var posA = inQ ? Math.max(1, cycP) : (cycP + 1);            // 震中=本震序号；冷却=下一震序号
-    // v1170：fsi 在震中已计入本次震 ⇒ 震中取 fsi、冷却才 +1（与台账通道同构）
-    var posB = (isFinite(fsiP) && fsiP >= 0 && fsiP <= 3) ? (inQ ? Math.max(1, fsiP) : (fsiP + 1)) : null;
-    function etaFor(pos){
-      if(!(iv > 60 && dly) || !(pos >= 1)) return null;
-      if(inQ){
-        var w0 = Number(LB._volcLastWarmupOn);
-        if(!(isFinite(w0) && w0 > 0) || wn === null) return null;
-        var e0 = (w0 + (3 - pos) * iv + dly - wn) * 1000;       // 本震开始 + 剩余间隔 + D
-        return (e0 > 0) ? e0 : null;
-      }
-      var toQ = lbVolcNextQuakeMs();                            // 距下一震开始
-      if(toQ === null) return null;
-      var e1 = toQ + ((3 - pos) * iv + dly) * 1000;
-      return (e1 > 0) ? e1 : null;
-    }
-    var eA = etaFor(posA), eB = (posB !== null) ? etaFor(posB) : null;
-    var lo = null, hi = null;
-    if(eA !== null && eB !== null){ lo = Math.min(eA, eB); hi = Math.max(eA, eB); }
-    else if(eA !== null){ lo = eA; hi = eA; }
-    else if(eB !== null){ lo = eB; hi = eB; }
-    if(lo === null) return '⏳ 台账准备中：等待首次「喷发开始」记录（就绪时间未知）';
-    if(hi - lo < 2000) return '⏳ 台账准备中：等待首次「喷发开始」记录（预计 ' + lbVolcCd(lo) + ' 后就绪）';
-    return '⏳ 台账准备中：等待首次「喷发开始」记录（预计 ' + lbVolcCd(lo) + ' ~ ' + lbVolcCd(hi) + ' 后就绪）';
-  }
-  // ③ 部分缺失：喷发时长未测得（大字 --:--）
-  if(inE && !(Number(LB._volcLastEruptDur) > 0)){
-    var eOn = Number(LB._volcEruptOnSec), el2 = null;
-    if(LB._volcErupting === true && wn !== null && isFinite(eOn) && eOn > 0) el2 = Math.max(0, wn - eOn);
-    return '⏳ 台账准备中：等待本次喷发结束以测得喷发时长' + (el2 !== null ? '（喷发已持续 ' + lbVolcCd(el2 * 1000) + '）' : '');
-  }
-  // ③ 部分缺失：本次地震时长未测得（小字「距本震结束」无法显示）
-  if(inQ && !inE && !(Number(LB._volcLastQuakeDur) > 0)){
-    var w1 = Number(LB._volcLastWarmupOn), el3 = null;
-    if(wn !== null && isFinite(w1) && w1 > 0) el3 = Math.max(0, wn - w1);
-    return '⏳ 台账准备中：等待本次地震结束以测得地震时长' + (el3 !== null ? '（本次地震已持续 ' + lbVolcCd(el3 * 1000) + '）' : '');
-  }
-  return '';
+function lbVolcLogLine(){
+  var parts = [];
+  if(LB._volcLogErr) parts.push('台账不可达');
+  else if(LB._volcLogMs) parts.push('台账 ' + lbVolcFmt(Date.now() - LB._volcLogMs) + ' 前');
+  if(LB._volcLastQuakeDur) parts.push('上次地震 ' + Math.round(LB._volcLastQuakeDur) + 's');
+  if(LB._volcLastEruptDur) parts.push('上次喷发 ' + lbVolcFmt(LB._volcLastEruptDur * 1000));
+  return parts.join(' · ') || '等待台账…';
 }
 // ---- 取数：状态轮询（3s）+ 台账（开窗/每30s兜底/events变化时顺手）----
 function lbVolcSync(){
@@ -12093,13 +11922,11 @@ function lbVolcSync(){
     .then(function(r){ return r.json(); })
     .then(function(j){
       LB._volcRecvMs = Date.now();
-      LB._volcRecvMono = lbVolcMonoMs();                       // v1162：锚点计时用单调时钟
       if(j && j.ok){ LB._volcS = j; LB._volcErr = ''; } else { LB._volcS = null; LB._volcErr = String((j && j.error) || '查询失败'); }
       try{
-        // v1168（文档 §4.1）：增量判据改用 lastEvent 变化——hooks.events 已实服证伪（恒为 0，不可依赖）
-        var le = Number(j && j.lastEvent);
-        var changed = isFinite(le) && le > 0 && LB._volcLastEvtSeen > 0 && le !== LB._volcLastEvtSeen;
-        if(isFinite(le) && le > 0) LB._volcLastEvtSeen = le;
+        var ev = Number(((j && j.hooks) || {}).events);
+        var changed = isFinite(ev) && LB._volcEvCount >= 0 && ev !== LB._volcEvCount;
+        if(isFinite(ev)) LB._volcEvCount = ev;
         if(changed || (Date.now() - (LB._volcLogMs || 0) > LB_VOLC.logMs)) lbVolcLogPull();
       }catch(e){}
       lbVolcRender();
@@ -12126,8 +11953,6 @@ function lbVolcanoOpen(){
   document.body.appendChild(overlay);
   LB._volcErr = ''; LB._volcHist = []; LB._volcLogMs = 0; LB._volcLogErr = '';
   LB._volcEvCount = -1; LB._volcQuakeNo = 0; LB._volcLastQuakeDur = null; LB._volcLastEruptDur = null; LB._volcIntervalSec = null;
-  LB._volcErupting = false; LB._volcEruptOnSec = null; LB._volcCycleLen = null; LB._volcLastWarmupOn = null; LB._volcCycQ = 0;
-  LB._volcRecvMono = 0; LB._volcGuard = {};
   lbVolcLogPull();      // v1146（用户定稿）：开窗先拉一次台账，建立基准
   lbVolcPollStart();    // 之后按现有节奏取状态；台账每 30s 兜底校准一次
 }
@@ -12143,8 +11968,7 @@ function lbVolcRender(){
   var s = LB._volcS, h = '';
   var errTxt = '';
   if(LB._volcErr){
-    if(/not a volcanic map/i.test(LB._volcErr)) errTxt = '本图无火山事件（火山仅创世纪 Gen 有效）';   // v1168（文档 §7）
-    else if(/hazard actor not found/i.test(LB._volcErr)) errTxt = '本图无火山事件（插件未在世界上找到火山装置）';
+    if(/hazard actor not found/i.test(LB._volcErr)) errTxt = '本图无火山事件（插件未在世界上找到火山装置）';
     else if(/not ready|unknown server/i.test(LB._volcErr)) errTxt = '该服务器不支持火山状态查询';
     else errTxt = '权威数据不可达：' + LB._volcErr;
   }
@@ -12154,66 +11978,46 @@ function lbVolcRender(){
       + '<div style="font-size:26px;color:#555;letter-spacing:1px;text-align:center;padding:4px 0">--:--</div>';
   } else {
     var vph = String(s.phase || '');
-    var hasLog2 = !!(LB._volcHist && LB._volcHist.length);
-    // v1161：台账可用 ⇒ 分支一律以台账为准（插件喷发期 phase 滞后已实测；震期同理）
-    var vErupt = hasLog2 ? (LB._volcErupting === true) : ((vph === 'eruption') || (Number((s.hooks || {}).inEvent) === 1));
-    var vWarm = hasLog2 ? (LB._volcInQuakeNow === true) : ((Number(s.warmUpActive) === 1) || (vph === 'warmup'));
+    var vWarm = (Number(s.warmUpActive) === 1) || (vph === 'warmup');
+    var vErupt = (vph === 'eruption') || (Number((s.hooks || {}).inEvent) === 1);
     var vFresh = lbVolcFreshMs();
-    var wnNow = lbVolcWorldNow();
-    var toErMs = lbVolcNextEruptMs();
-    var toQMs = lbVolcNextQuakeMs();
-    var vCol = '#60a5fa', vBig = '--:--', vLbl = '距喷发', vLine = '';
+    var vCol = '#60a5fa', vBig = '--:--', vLbl = '距下次事件';
     if(!isFinite(Number(s.lastEvent)) || Number(s.lastEvent) === 0){
-      vLbl = '距喷发'; vBig = '--:--'; vCol = '#94a3b8';                              // v1160：大字标签只允许 2 种
+      vLbl = '等待首次事件'; vBig = '--:--'; vCol = '#94a3b8';                       // v1146：服务器刚重启场景
     } else if(vErupt){
-      // v1160：喷发中 ⇒ 大字 = 距喷发结束（台账 activeOn 起算 + 实测喷发时长 248s）
-      vCol = '#ef4444'; vLbl = '距喷发结束';
-      var eDur2 = Number(LB._volcLastEruptDur) || 0;
-      var eOn2 = Number(LB._volcEruptOnSec);
-      // v1164：台账无 activeOn 时 Number(null)=0 而 isFinite(0) 为真 ⇒ 旧式把 0 当起始点，算出 ≈20.6 亿秒（大字爆炸）
-      var eOnOk = isFinite(eOn2) && eOn2 > 0;
-      var eEl2 = (wnNow !== null && eOnOk) ? (wnNow - eOn2) : 0;
-      var eRem2 = (eOnOk && eDur2 > 0) ? Math.max(0, eDur2 - eEl2) * 1000 : null;
-      vBig = (eRem2 === null) ? '--:--' : lbVolcCd(lbVolcGuard('big|喷发结束', eRem2));   // v1164：无法推算 ⇒ 显示 --:--（绝不显示乱值）
+      var eSince = lbVolcSinceMs() || 0, eDur = LB._volcLastEruptDur;
+      vCol = '#ef4444';
+      var eRem = eDur ? (eDur * 1000 - eSince) : -1;
+      if(eRem > 0){ vLbl = '距喷发结束'; vBig = lbVolcFmt(eRem); }        // v1150：去掉「（预计）」
+      else { vLbl = '本次喷发已持续'; vBig = lbVolcFmt(eSince); }
     } else if(vWarm){
-      // v1160：地震期间大字仍是「距喷发」（禁止再出现「距本次地震结束」/「已持续」）；本震剩余时间放小字
-      vLbl = '距喷发';
-      var toErG = lbVolcGuard('big|喷发', toErMs);                                                  // v1162：大字防抖
-      if(toErG === null){ vBig = '--:--'; vCol = '#94a3b8'; }
-      else { vBig = lbVolcCd(toErG); vCol = (toErG <= LB_VOLC.warnMs) ? '#ef4444' : '#facc15'; }
-      var qd2 = Number(LB._volcLastQuakeDur) || 0, qOn2 = Number(LB._volcLastWarmupOn);
-      if(LB._volcNextName && qd2 > 0 && wnNow !== null && isFinite(qOn2)){
-        var nxW = lbVolcGuard('sm|' + LB._volcNextName, Math.max(0, (qOn2 + qd2 - wnNow) * 1000));   // v1162：小字防抖
-        vLine = '距' + LB._volcNextName + ' <span style="color:#c4b5fd">' + lbVolcCd(nxW) + '</span>';
-      }
+      var qSince = lbVolcSinceMs() || 0, qDur = LB._volcLastQuakeDur;
+      vCol = '#facc15';
+      var qRem = qDur ? (qDur * 1000 - qSince) : -1;
+      if(qRem > 0){ vLbl = '距本次地震结束'; vBig = lbVolcFmt(qRem); }     // v1150：去掉「（预计）」
+      else { vLbl = '本次地震已持续'; vBig = lbVolcFmt(qSince); }   // v1148：超过预计时长仍为 0:00 不可读
     } else {
-      // v1160：冷却期 ⇒ 大字 = 距喷发（目标 = 上次喷发开始 + 实测周期，按周期滚动）
-      vLbl = '距喷发';
-      var toErG2 = lbVolcGuard('big|喷发', toErMs);                                                 // v1162：大字防抖
-      if(toErG2 === null){ vBig = '--:--'; vCol = '#94a3b8'; }
-      else { vBig = lbVolcCd(toErG2); vCol = (toErG2 <= LB_VOLC.warnMs) ? '#ef4444' : '#60a5fa'; }
-      // 小字：距下一具体事件（7 事件之一）——下一事件是"下一震开始"，喷发开始则用喷发倒计时
-      var nx3 = (String(LB._volcNextName) === '喷发开始') ? toErMs : toQMs;
-      if(LB._volcNextName && nx3 !== null){
-        var nx3g = lbVolcGuard('sm|' + LB._volcNextName, nx3);                                      // v1162：小字防抖
-        vLine = '距' + LB._volcNextName + ' <span style="color:#c4b5fd">' + lbVolcCd(nx3g) + '</span>';
-      }
+      var rem = lbVolcNextMs();
+      // v1150：插件的 nextEventInSec 基于错误的 between=400；有台账实测间隔时改用「实测间隔 − 已过」
+      var iv = Number(LB._volcIntervalSec), sinceMs = lbVolcSinceMs();
+      if(iv > 0 && sinceMs !== null) rem = (iv * 1000 - sinceMs);
+      if(rem === null){ vLbl = '待首次事件'; vBig = '--:--'; vCol = '#94a3b8'; }
+      else if(rem >= 0){ vLbl = '距' + (LB._volcNextName || '首震开始'); vBig = lbVolcFmt(rem); vCol = (rem <= LB_VOLC.warnMs) ? '#ef4444' : '#60a5fa'; }
+      else { vLbl = '已过点（等待触发）'; vBig = '+' + lbVolcFmt(-rem); vCol = '#94a3b8'; }
     }
     var _stCol = LB_VOLC.phaseCol[vph] || '#cbd5e1';
-    var _llTxt = lbVolcLedgerHint();                     // v1165：台账不足 ⇒ 就绪提示 + 预计剩余
     var _stHtml = '<div style="font-size:14px;font-weight:bold;color:' + _stCol + ';margin-top:1px">' + lbAttr(lbVolcStageName()) + '</div>'
-      + (_llTxt ? '<div style="font-size:12px;color:#fcd34d;margin-top:1px">' + lbAttr(_llTxt) + '</div>' : '');
+      + '<div style="font-size:12px;color:#94a3b8;margin-top:1px">' + lbAttr(lbVolcLogLine()) + '</div>';
     h += '<div style="text-align:center;padding:2px 0"><div style="font-size:11px;color:#888">' + vLbl + '</div>'
       + '<div style="font-size:30px;color:' + vCol + ';font-weight:bold;letter-spacing:1px">' + vBig + '</div>'
       + _stHtml
-      + (vLine ? '<div style="font-size:13px;font-weight:bold;color:#e2e8f0;margin-top:2px">' + vLine + '</div>' : '')
       + '</div>';
     h += '<div style="margin-top:8px;border-top:1px dashed #2a2a3a;padding-top:6px;font-size:11px;color:#888;line-height:1.8">'
       + '数据更新于 <span style="color:#cbd5e1">' + (vFresh === null ? '—' : lbVolcFmt(vFresh) + ' 前') + '</span>'
       + ' · 台账更新于 <span style="color:#cbd5e1">' + (LB._volcLogMs ? lbVolcFmt(Date.now() - LB._volcLogMs) + ' 前' : '—') + '</span>'
       + '</div>';
   }
-  h += '<div style="margin-top:8px;font-size:10px;color:#555">数据来自游戏内火山装置（事件台账）</div>';
+  h += '<div style="margin-top:8px;font-size:10px;color:#555">数据来自游戏内火山装置（事件台账） · 倒计时以游戏内为准</div>';
   el.innerHTML = h;
   if(!LB._volcTimer) LB._volcTimer = setInterval(function(){ lbVolcRender(); }, 1000);
 }

@@ -429,7 +429,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260914-1170';
+var LB_VERSION = 'v20260914-1117';
 var LB_SCHEMA_VER = 15;  // v1069：14→15 强制 IndexedDB 缓存重建——根因：recs 构建结果随 IndexedDB 持久化（v931）、
                          //   命中后跳过重建；仅改 _decorRe 等**构建期过滤**时，旧 rec 会长期残留（实测南瓜 rec 改过滤后仍显示）。
                          //   lbCacheGet 校验 _schemaVer !== LB_SCHEMA_VER → resolve(null) → 全量重拉重建。
@@ -2159,10 +2159,9 @@ function lbImgPlaceholder(img){
 // v1117（用户要求）：弱网**只提示、不跳过预取**；提示与「资源加载中」横幅**共用同一个框**（同 id/同位置/同样式，不再另建右下角角标）
 // v1118（用户报「附件为啥常驻」）：改为**一次性提示**——显示 10 秒自动收起，随后 10 分钟内不再弹（网速状态变化才重置）
 function lbNetChipUpdate(){
-  try{ lbPackProgShow(); }catch(e){}   // v1129：每 30s 的定时巡检顺便纠正分包横幅（让位/完成时自动清理，防残影常驻）
   var el = document.getElementById('lbAssetProg');
   var slow = (typeof lbNetSlow === 'function') && lbNetSlow();
-  var busy = !!LB._dataLoading || !!LB._assetRunning || !!LB._pfHb || (LB._packTotal > 0 && LB._packDone < LB._packTotal);   // v1126：分包下载中也让位（否则弱网提示会盖掉分包横幅）
+  var busy = !!LB._dataLoading || !!LB._assetRunning || !!LB._pfHb;   // 有预取/下载在跑 ⇒ 横幅自己会显示（含弱网后缀）
   var _hide = function(){ if(el && el.getAttribute('data-netnotice') === '1' && el.parentNode) el.parentNode.removeChild(el); };
   if(!slow || busy){ _hide(); LB._netNoticeShownAt = 0; if(LB._netNoticeTimer){ clearTimeout(LB._netNoticeTimer); LB._netNoticeTimer = null; } return; }
   // 冷却：10 分钟内已提示过一次 → 不再占屏
@@ -2174,249 +2173,10 @@ function lbNetChipUpdate(){
     document.body.appendChild(el);
   }
   el.setAttribute('data-netnotice', '1');
-  el.innerHTML = '⚠️ 网络较慢（' + (lbNetLabel() || '弱网') + '）· 已降低预取并发';   // v1128：只描述“因网慢而变”的行为（分包/按需加载是恒定行为，不分网速）
+  el.innerHTML = '⚠️ 网络较慢（' + (lbNetLabel() || '弱网') + '）· 图片将随浏览逐张加载';
   LB._netNoticeShownAt = Date.now();
   if(LB._netNoticeTimer) clearTimeout(LB._netNoticeTimer);
   LB._netNoticeTimer = setTimeout(function(){ LB._netNoticeTimer = null; try{ lbNetChipUpdate(); }catch(e){} }, 10000);   // 10s 后自动收起
-}
-// ===== v1119：资源包（按类型分包）——消灭 5000+ 请求 =====
-//   索引 assets.idx（gzip JSON）→ packs/<type>.<i>.bin（thumbs 12.4MB/4 片、maps 10.1MB/3 片、mdi、icons）
-//   命中资源直接返回 blobURL（内存映射），未命中回退 CDN URL；包本身写入 Cache Storage，二次访问秒开
-LB._packIdx = null; LB._packParts = {}; LB._packUrls = {}; LB._packLoading = false;
-LB._packTotal = 0; LB._packDone = 0; LB._packStart = 0;   // v1126：分包进度（每个分包按 1 项计）
-function lbPackKey(p){ return String(p).replace(/^https?:\/\/[^\/]+/, '').replace(/^\//, ''); }
-function lbPackHas(p){ try{ return !!(LB._packIdx && LB._packIdx.map && LB._packIdx.map[lbPackKey(p)]); }catch(e){ return false; } }
-function lbPackURL(p){
-  try{
-    var k = lbPackKey(p);
-    if(!LB._packIdx || !LB._packIdx.map || !LB._packIdx.map[k]) return '';
-    if(LB._packUrls[k]) return LB._packUrls[k];
-    var e = LB._packIdx.map[k];                       // [type, part, off, len]
-    var b = LB._packParts[e[0] + ':' + e[1]];
-    if(!b){ lbPackDemand(e[0], e[1], k); return ''; }   // v1130：分片未到 → 记账（达阀值就按需拉整片）先回落 CDN 保证可见
-    var u = URL.createObjectURL(b.slice(e[2], e[2] + e[3]));
-    LB._packUrls[k] = u;
-    return u;
-  }catch(err){ return ''; }
-}
-// ===== v1130：按需拉分片（用户定策：同一分片 5s 内被要 ≥3 张才拉整片，零散 1-2 张继续单张 CDN）=====
-//   背景：4000+ 缩略图只在包里躺着、启动不下载；若零散命中就拉 2.3–4.2MB 整片，慢网亏死
-LB._packSeen = {};        // 图片 key → 最后一次记账时间（防同一张重复计数）
-LB._packDemand = {};      // 分片 key → [时间戳]
-LB._packPartLoading = {}; // 分片 key → true（在途）
-var LB_PART_DEMAND_N = 3, LB_PART_DEMAND_WIN = 5000, LB_PART_MAX_INFLIGHT = 2;
-function lbPackDemand(type, part, imgKey){
-  try{
-    if(LB._packNoDemand) return;   // v1130：全页升级扫描期间不记账（那是扫描，不是真实需求）
-    var pk = type + ':' + part;
-    if(LB._packParts[pk] || LB._packPartLoading[pk]) return;
-    var now = Date.now();
-    if(LB._packSeen[imgKey] && now - LB._packSeen[imgKey] < LB_PART_DEMAND_WIN) return;   // 同一张在窗口内只计一次
-    LB._packSeen[imgKey] = now;
-    var arr = (LB._packDemand[pk] || []).filter(function(t){ return now - t < LB_PART_DEMAND_WIN; });
-    arr.push(now); LB._packDemand[pk] = arr;
-    if(arr.length >= LB_PART_DEMAND_N) lbPackFetchPart(type, part, 0);
-  }catch(e){}
-}
-function lbPackFetchPart(type, part, attempt){
-  var pk = type + ':' + part;
-  if(LB._packParts[pk] || LB._packPartLoading[pk]) return;
-  var inflight = Object.keys(LB._packPartLoading).length;
-  // 让路：启动分包/router 在下载、或数据下载活跃中则稍后重试（最多 ~45s）
-  var _dlBusy = LB._dataLoading && (Date.now() - (LB._dlBeat || LB._dataLoadingAt || Date.now()) < LB_DL_STALL_MS);
-  if(LB._packLoading || _dlBusy || inflight >= LB_PART_MAX_INFLIGHT){
-    if((attempt || 0) < 30){ setTimeout(function(){ try{ lbPackFetchPart(type, part, (attempt || 0) + 1); }catch(e){} }, 1500); }
-    return;
-  }
-  LB._packPartLoading[pk] = true;
-  LB._packTotal = (LB._packTotal || 0) + 1;   // 计入横幅（按需也按「1 片 = 1 项」）
-  try{ lbPackProgShow(); }catch(e){}
-  (async function(){
-    var url = lbPackPartURL(type, part);   // v1131：缓存键 = 分片内容哈希（跨版本命中）
-    var blob = null;
-    var cache = null; try{ cache = await lbAssetCache(); }catch(e){}
-    try{ if(cache){ var hit = await cache.match(url); if(hit) blob = await hit.blob(); } }catch(e){}
-    if(!blob){
-      for(var _at = 0; _at < 2 && !blob; _at++){
-        try{
-          var r = await fetch(url);
-          if(r.ok){ blob = await r.blob(); try{ if(cache) cache.put(url, new Response(blob)); }catch(e){} }
-        }catch(e){}
-        if(!blob) await new Promise(function(res){ setTimeout(res, 1500); });
-      }
-    }
-    delete LB._packPartLoading[pk];
-    if(!blob){ try{ lbPackProgShow(); }catch(e){} return; }
-    LB._packParts[pk] = blob;
-    LB._packDone = (LB._packDone || 0) + 1;
-    LB._packDemand[pk] = [];
-    try{ lbPackageSwapImgs(); }catch(e){}   // 已渲染的图换成 blob（同分片后续命中内存，不再逐张请求）
-    try{ lbPackProgShow(); }catch(e){}      // 到位 → 自动收起
-  })();
-}
-// v1130：全页升级——不依赖 data-lbasset（图标 img 大多无该属性），按 src 回查包内映射
-function lbPackageSwapImgs(){
-  LB._packNoDemand = true;
-  try{
-    var imgs = document.querySelectorAll('img');
-    Array.prototype.forEach.call(imgs, function(img){
-      var s = img.getAttribute('src') || '';
-      if(!s || s.indexOf('blob:') === 0 || s.indexOf('data:') === 0) return;
-      var b = lbPackURL(s);
-      if(b) img.src = b;
-    });
-  }catch(e){}finally{ LB._packNoDemand = false; }
-}
-// v1121：资源是否**已进内存**（分片已拉下来）——用于预取过滤；仅「索引进包」不算（按需资源要照常走 CDN/预取）
-function lbPackLoaded(p){ try{ return !!lbPackURL(p); }catch(e){ return false; } }
-function lbResURL(u){ if(!u || u.indexOf('blob:') === 0) return u; var b = lbPackURL(u); return b || u; }
-// v1126（用户要求）：**资源分包进度也显示在横幅**——每个分包（<type>.<i>.bin）按 **1 项**计
-//   原实现分包在后台静默下载（且被 _assetRunning 卡住不显示）→ 用户看到的是「717 逐张」而无包体反馈
-function lbPackProgShow(){
-  var el = document.getElementById('lbAssetProg');
-  var own = !!(el && el.getAttribute('data-packprog') === '1');
-  var t = LB._packTotal || 0, d = LB._packDone || 0;
-  // v1129（用户实测「卡在 1/6、数据加载完后又出现一次」）：让位时**必须清掉自己留下的残影**
-  //   原实现遇 _assetRunning/_dataLoading 直接 return ⇒ 后续分包完成不再刷新、也永不清理 ⇒ 旧数字常驻
-  if(LB._assetRunning || LB._dataLoading){
-    if(own && el.parentNode) el.parentNode.removeChild(el);
-    return;
-  }
-  if(!t || d >= t){ if(own && el.parentNode) el.parentNode.removeChild(el); return; }
-  if(!el){
-    el = document.createElement('div'); el.id = 'lbAssetProg';
-    el.style.cssText = 'position:fixed;right:16px;top:16px;z-index:9999;background:rgba(20,20,35,.92);color:#fff;font-size:12px;padding:8px 14px;border-radius:10px;border:1px solid #7c3aed;box-shadow:0 2px 12px rgba(0,0,0,.4)';
-    document.body.appendChild(el);
-  }
-  el.setAttribute('data-packprog', '1');   // v1129：归属标记——告诉 lbAssetProgHide / lbAssetProgShow 这个框是谁的
-  el.removeAttribute('data-netnotice');
-  var _el = LB._packStart ? (Date.now() - LB._packStart) / 1000 : 0;
-  var _extra = '';
-  if(_el > 3 && d > 0){
-    var _sp = _el / d;
-    _extra = ' · ' + _sp.toFixed(1) + 's/片 · 剩余约 ' + lbFmtDur((t - d) * _sp);
-  }
-  if(lbNetSlow()) _extra += ' · ⚠️ 网络较慢（' + (lbNetLabel() || '弱网') + '）';
-  el.innerHTML = '📦 资源分包加载中 ' + d + '/' + t + ' 片' + _extra;
-}
-// v1131：分片 URL —— 用 **分片内容哈希** 作缓存键（打包器写入 packs[type].hashes）
-//   目的：内容没变时**跨版本命中 Cache Storage**（之前用 ?v=LB_VERSION ⇒ 每次部署变 key ⇒ 13MB 重下）
-function lbPackPartURL(type, i){
-  var m = LB._packIdx && LB._packIdx.packs && LB._packIdx.packs[type];
-  var h = (m && m.hashes && m.hashes[i]) ? m.hashes[i] : LB_VERSION;
-  return LB_ASA + '/packs/' + type + '.' + i + '.bin?v=' + h;
-}
-// v1131：清理旧版本遗留的分片缓存（同一分片内容变了才会换 key，旧 key 不再会被命中）
-function lbPackCacheCleanup(){
-  if(LB._packCleanDone) return; LB._packCleanDone = true;
-  try{
-    var valid = {};
-    var packs = (LB._packIdx && LB._packIdx.packs) || {};
-    Object.keys(packs).forEach(function(t){
-      var m = packs[t]; (m.hashes || []).forEach(function(h, idx){ valid['/packs/' + t + '.' + idx + '.bin?v=' + h] = 1; });
-    });
-    lbAssetCache().then(function(cache){
-      if(!cache || !cache.keys) return;
-      cache.keys().then(function(reqs){
-        reqs.forEach(function(rq){
-          var u = rq.url || '';
-          if(u.indexOf('/packs/') < 0) return;
-          var path = u.replace(/^https?:\/\/[^\/]+/, '');
-          if(!valid[path]){ cache.delete(rq).catch(function(){}); }
-        });
-      }).catch(function(){});
-    }).catch(function(){});
-  }catch(e){}
-}
-async function lbPackFetchType(type){
-  var meta = LB._packIdx && LB._packIdx.packs && LB._packIdx.packs[type];
-  if(!meta) return;
-  try{ lbPackCacheCleanup(); }catch(e){}
-  // v1121：只拉「必拉片」（meta.load，thumbs=1 片优先集）；其余片不主动拉 → 按需回落 CDN
-  var need = meta.parts.length;
-  if(typeof meta.load === 'number' && meta.load > 0 && meta.load < need) need = meta.load;
-  var cache = null; try{ cache = await lbAssetCache(); }catch(e){}
-  for(var i = 0; i < need; i++){
-    var key = type + ':' + i;
-    if(LB._packParts[key]){ LB._packDone++; try{ lbPackProgShow(); }catch(e){} continue; }   // v1126：缓存已有也算已完成（否则进度永远到不了 100%）
-    var url = lbPackPartURL(type, i);   // v1131：缓存键 = 分片内容哈希（跨版本命中）
-    var blob = null;
-    try{ if(cache){ var hit = await cache.match(url); if(hit) blob = await hit.blob(); } }catch(e){}
-    if(!blob){
-      // v1125：弱网/504/连接中断时重试 1 次（否则一个大分片失败就白丢整包体收益；仅 1 次，不长期占用）
-      for(var _at = 0; _at < 2 && !blob; _at++){
-        try{
-          var r = await fetch(url);
-          if(r.ok){ blob = await r.blob(); try{ if(cache) cache.put(url, new Response(blob)); }catch(e){} }
-        }catch(e){}
-        if(!blob) await new Promise(function(res){ setTimeout(res, 1500); });
-      }
-      if(!blob) continue;
-    }
-    LB._packParts[key] = blob;
-    try{ LB._packDone++; lbPackProgShow(); }catch(e){}
-  }
-}
-// v1124：索引可能是 **gzip 字节**（CF Workers Assets 对 .idx 不作 Content-Encoding，原样吐 gzip）
-//   → 必须走 arrayBuffer + DecompressionStream('gzip') 自己解压；旧浏览器回落明文 assets.idx.json
-//   （v1119~v1123 的 717 逐张根因：r.text()+JSON.parse 在 gzip 上必抛异常 ⇒ 索引静默丢失 ⇒ 预取过滤失效）
-async function lbPackIdxText(cache, url, noCache){
-  var ab = null;
-  try{ if(cache && !noCache){ var hit = await cache.match(url); if(hit) ab = await hit.arrayBuffer(); } }catch(e){}
-  if(!ab){
-    try{ var r = await fetch(url, {cache:'no-store'}); if(r.ok){ ab = await r.arrayBuffer(); try{ if(cache) cache.put(url, new Response(ab)); }catch(e){} } }catch(e){}
-  }
-  if(!ab) return '';
-  try{
-    var b = new Uint8Array(ab);
-    if(b[0] === 0x1f && b[1] === 0x8b){                 // gzip magic
-      if(typeof DecompressionStream === 'undefined') return '';   // 旧浏览器 → 交给明文兜底
-      var sr = new Response(new Blob([ab]).stream().pipeThrough(new DecompressionStream('gzip')));
-      return await sr.text();
-    }
-    return new TextDecoder('utf-8').decode(b);
-  }catch(e){ return ''; }
-}
-async function lbPackInit(){
-  if(LB._packRun) return; LB._packRun = true; LB._packLoading = true;
-  var cache = null; try{ cache = await lbAssetCache(); }catch(e){}
-  var txt = '';
-  var idxUrls = [LB_ASA + '/assets.idx?v=' + LB_VERSION, LB_ASA + '/assets.idx.json?v=' + LB_VERSION];   // gz 优先，明文兜底
-  // v1123：索引拉取自动重试 3 次（弱网/504 时首次常失败 → 之前直接放弃，导致预取又回到 717 单张模式）
-  for(var _u = 0; _u < idxUrls.length && !txt; _u++){
-    var _max = (_u === 0) ? 3 : 2;
-    for(var _try = 0; _try < _max && !txt; _try++){
-      txt = await lbPackIdxText(cache, idxUrls[_u], _try > 0 || _u > 0);
-      if(!txt) await new Promise(function(res){ setTimeout(res, 1200 * (_try + 1)); });
-    }
-  }
-  if(!txt){ LB._packLoading = false; if(LB._packFailed) LB._packFailed(); return; }
-  var idx = null; try{ idx = JSON.parse(txt); }catch(e){ LB._packLoading = false; if(LB._packFailed) LB._packFailed(); return; }
-  if(!idx || !idx.files){ LB._packLoading = false; if(LB._packFailed) LB._packFailed(); return; }
-  var map = {};
-  for(var i = 0; i < idx.files.length; i++){ var f = idx.files[i]; map[f[0]] = [f[1], f[2], f[3], f[4]]; }
-  idx.map = map; LB._packIdx = idx;
-  LB._packReady = true;
-  // v1126：分包总数（每片按 1 项计）——横幅用它显示进度，不再静默后台下载
-  try{
-    var _pt = 0;
-    Object.keys(idx.packs || {}).forEach(function(k){
-      var _m = idx.packs[k]; if(!_m || !_m.parts) return;
-      var _n = _m.parts.length;
-      if(typeof _m.load === 'number' && _m.load > 0 && _m.load < _n) _n = _m.load;
-      _pt += _n;
-    });
-    LB._packTotal = _pt; LB._packDone = 0; LB._packStart = Date.now();
-    lbPackProgShow();
-  }catch(e){}
-  if(LB._packReady_) { try{ LB._packReady_(); }catch(e){} }   // v1123：通知等索引的预取启动
-  await lbPackFetchType('mdi'); await lbPackFetchType('icons'); await lbPackFetchType('maps');
-  await lbPackFetchType('thumbs');
-  LB._packLoading = false;
-  lbPackProgShow();   // v1126：全部到位 → 自动收起分包横幅（d>=t 时内部直接移除）
-  try{ var el = document.getElementById('lbAssetProg'); if(el && el.getAttribute('data-netnotice') === '1' && el.parentNode) el.parentNode.removeChild(el); }catch(e){}
-  try{ lbPackageSwapImgs(); }catch(e){}   // v1130：启动分包到齐后做一次全页升级（图标 img 大多无 data-lbasset）
-  try{ lbUpgradeAssets(); }catch(e){}   // 已渲染的图换成 blob（秒开）
 }
 function lbPrefetchOne(url){
   if(!url) return Promise.resolve(false);
@@ -2444,13 +2204,13 @@ function lbPrefetchOne(url){
 // 初始化资源包预取：地图（LB_MAP_INFO 全部小图+海洋图）+ 图标（icons2 全部 URL 去重），后台低优先级串行下载；带下载进度提示（v312）
 // v457：优先完成汉化文件（icon_zh_map/gene_traits_zh/dino_prefix_zh）再预取地图+图标——「资源加载中」期间中文名已就绪
 // v1110：弱网判定（浏览器实测 effectiveType/downlink）——弱网降并发 + 只预取常用图标（其余按需）
-var LB_NET_MBPS = 0.1;   // v1127（用户明确）：仅 < 0.1Mbps 才算弱网（原 1Mbps 过宽；实测 1.45Mbps 链路属正常，不再判慢）
 function lbNetSlow(){
   try{
     var c = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
     if(!c) return false;
-    if(String(c.effectiveType || '') === 'slow-2g') return true;                                     // 最慢档（≈ <50kbps）
-    if(typeof c.downlink === 'number' && c.downlink > 0 && c.downlink < LB_NET_MBPS) return true;     // v1127：<0.1Mbps
+    var et = String(c.effectiveType || '');
+    if(et === 'slow-2g' || et === '2g' || et === '3g') return true;
+    if(typeof c.downlink === 'number' && c.downlink > 0 && c.downlink < 1) return true;
   }catch(e){}
   return false;
 }
@@ -2497,10 +2257,6 @@ function _lbPrefetchBody(){
     var priUrls = {};
     if(by){ priKeys.forEach(function(n){ if(by[n] && urls[by[n]]){ priUrls[by[n]] = 1; } }); }
     var list = Object.keys(priUrls).concat(Object.keys(urls).filter(function(u){ return !priUrls[u]; }));
-    // v1119：已在资源包里的资源无需单独预取（5000+ 请求 → 几个包）
-    // v1124：改为「**索引进包即跳过**」——预取在索引就绪时启动（分片可能还在下），用 lbPackLoaded 会因竞态全部漏筛；
-    //        必拉集（717 = maps 11 + icons 706）已独占 thumbs part0 且 maps/mdi/icons 全量必拉，故跳过安全；未到分片时渲染自动回落 CDN URL
-    if(LB._packIdx) list = list.filter(function(u){ return !lbPackHas(u); });
     // v1110：弱网只预取「常用 GUI + 地图」这批，其余图标改为按需加载（卡片渲染时才拉，避免 700+ 张全量拖死弱网）
     LB._assetSkipped = 0;   // v1117（用户要求）：弱网**只提示、不跳过预取** —— 全量照常预取（不再按弱网截断）
     LB._assetRunning = true;   // v1116：防并发（换服/换页可能重复触发）
@@ -2513,17 +2269,6 @@ function _lbPrefetchBody(){
     var CONC = CONC_INIT; // v986：16→6 —— 数据下载与资源预取争抢连接，实测导致数据请求 90s 超时全灭（16 为 2026-08-28 提速值）
     // 延迟 300ms 显示进度条：全缓存瞬间完成则不打扰
     var showTimer = setTimeout(function(){ if(done < total){ shown = true; lbAssetProgShow(done, total); } }, 300);
-    // v1125：清单为空（资源包已覆盖全部预取项）时直接收尾——原代码不启动 worker ⇒ maybeFinish 永不触发
-    //        ⇒ LB._assetRunning 卡 true ⇒ 弱网角标/资源包进度条永远不显示（busy 判定）
-    if(total === 0){
-      if(showTimer) clearTimeout(showTimer);
-      if(LB._pfHb){ try{ clearInterval(LB._pfHb); LB._pfHb = null; }catch(e2){} }
-      LB._assetRunning = false;
-      try{ lbPackProgShow(); }catch(e){}
-      try{ lbUpgradeAssets(); }catch(e){}
-      if(typeof lbNetChipUpdate === 'function') lbNetChipUpdate();
-      return 0;
-    }
     function maybeFinish(){
       if(shown) lbAssetProgShow(done, total);
       try{ if((done & 15) === 0) LB._pfDiag.samples.push([Date.now()-LB._pfDiag.start, done, LB._assetCur || '']); }catch(e){} // v928：采样粒度 128→16（看清卡死段）
@@ -2531,10 +2276,9 @@ function _lbPrefetchBody(){
         if(showTimer) clearTimeout(showTimer);
         if(LB._pfHb){ try{ clearInterval(LB._pfHb); LB._pfHb = null; }catch(e2){} }
         try{ LB._pfDiag.samples.push([Date.now()-LB._pfDiag.start, total, 'DONE']); }catch(e3){}
-        LB._assetRunning = false;   // v1116：本轮预取结束
         lbAssetProgHide();
-        try{ lbPackProgShow(); }catch(e){}   // v1126：预取收起后若分包仍在下载 → 横幅接着显示分包进度
         lbUpgradeAssets();
+        LB._assetRunning = false;   // v1116：本轮预取结束
         if(typeof lbNetChipUpdate === 'function') lbNetChipUpdate();
       }
     }
@@ -2550,13 +2294,11 @@ function _lbPrefetchBody(){
       var _dlIdle = Date.now() - (LB._dlBeat || LB._dataLoadingAt || Date.now());
       var _dlWait = Date.now() - (LB._dataLoadingAt || Date.now());
       if(LB._loginBusy){ setTimeout(worker, 300); return; }   // v1109：登录优先——登录在途时预取让路（不抢连接）
-      if(LB._packLoading){ setTimeout(worker, 500); return; }   // v1119：资源包在下载时预取让路（包已含绝大部分资源）
       if(LB._dataLoading && _dlIdle < LB_DL_STALL_MS && _dlWait < 90000){
         if(shown) lbAssetProgShow(done, total);   // v1031：让路期间浮窗同时显示数据下载进度
         setTimeout(worker, 500); return;
       }
       var u = list[idx]; idx++;
-      if(lbPackHas(u)){ _lbDone(); _lbNext(); return; }   // v1123：索引后到也能动态跳过包内资源（双保险）
       LB._assetCur = u || ''; // v918：仅内存记录当前 URL（诊断用，不做 DOM 更新避免 reflow 风暴）
       // 2026-08-28 省流：Cache Storage 持久缓存命中 → 跳过（不重复下载）
       lbAssetCache().then(function(cache){
@@ -2599,7 +2341,6 @@ function lbAssetProgShow(done, total){
     document.body.appendChild(el);
   }
   el.removeAttribute('data-netnotice');   // v1117：横幅接管本框（清除弱网提示标记，防被误删）
-  el.removeAttribute('data-packprog');    // v1129：同时解除分包横幅归属（否则以为还能被分包进度回收）
   var pct = total ? Math.round(done/total*100) : 100;
   // v1031：让路模式下同时呈现「数据下载」实况 —— 文案恢复百分比 + 每服一格迷你分段条（不占用 #lbList，避免顶掉列表）
   var _pctTxt = done + '/' + total + '（' + pct + '%）';
@@ -2615,10 +2356,6 @@ function lbAssetProgShow(done, total){
   }catch(e){}
   if(lbNetSlow()) _extra += ' · ⚠️ 网络较慢（' + (lbNetLabel() || '弱网') + '）';
   var _dlHtml = '';
-  // v1126（用户要求）：横幅里同时呈现「资源分包」进度——每个分包（<type>.<i>.bin）按 1 项计
-  if(LB._packTotal > 0 && LB._packDone < LB._packTotal){
-    _dlHtml += '<div style="margin-top:6px;font-size:11px;color:#9ca3af">📦 资源分包 ' + LB._packDone + '/' + LB._packTotal + ' 片</div>';
-  }
   var _yield = lbAssetYielding();   // v1108：只有真正在让路才写「已暂停」
   if(LB._dataLoading){
     var _dT = LB._dlTotal || 0, _dD = LB._dlDone || 0;
@@ -2639,20 +2376,16 @@ function lbAssetProgShow(done, total){
 }
 function lbAssetProgHide(){
   var el = document.getElementById('lbAssetProg');
-  if(el && el.getAttribute('data-packprog') === '1') return;   // v1129：分包横幅不归本函数管（它自己按完成度收起）
   if(el && el.parentNode) el.parentNode.removeChild(el);
 }
 // 页面内 data-lbasset 图片：Cache 命中 → 替换为本地 blob（秒开/离线）
 function lbUpgradeAssets(){
-  LB._packNoDemand = true;   // v1130：扫描期间不记账需求
   try{
     var imgs = document.querySelectorAll('img[data-lbasset]');
     Array.prototype.forEach.call(imgs, function(img){
       if(img._lbDone) return; img._lbDone = true;
       var url = img.getAttribute('data-lbasset');
       if(!url) return;
-      // v1119：资源包命中 → 直接换 blobURL（无需 Cache Storage 单文件命中）
-      try{ var _pb = lbPackURL(url); if(_pb){ img.src = _pb; return; } }catch(e){}
       lbAssetCache().then(function(cache){
         if(!cache) return;
         cache.match(url).then(function(hit){
@@ -2663,7 +2396,7 @@ function lbUpgradeAssets(){
         });
       });
     });
-  }catch(e){}finally{ LB._packNoDemand = false; }
+  }catch(e){}
 }
 // 选图：Gen 按 z>=oceanZ 用海洋图；返回 {img,shiftLat,shiftLon,multLat,multLon} 或 null
 function lbMapForServer(abbr, z){
@@ -3012,15 +2745,7 @@ function lbInit(){
     lbView();
   });
   // v311：资源包预取（地图+图标），首次初始化或换客户端自动提前下载
-  // v1119：优先拉资源包（按类型分包）——它已包含缩略图/地图/字体，预取只处理包外剩余项
-  // v1123：预取**等资源包索引就绪**再跑（最多 20s）——否则清单先建好，又被单张拉一遍（717 逐张的根因）
-  if(!LB._assetPackInited){
-    LB._assetPackInited = true;
-    LB._packReady_ = function(){ if(!LB._assetsPrefetched){ LB._assetsPrefetched = true; try{ lbPrefetchAssets(); }catch(e){} } };
-    setTimeout(function(){ try{ LB._packReady_(); }catch(e){} }, 20000);   // 包失败/太慢⇒兜底照样预取
-    try{ lbPackInit(); }catch(e){}
-  }
-  // v1123：预取不再在此处立即启动——由 _packReady_（索引就绪）或 20s 兜底触发
+  if(!LB._assetsPrefetched){ LB._assetsPrefetched = true; lbPrefetchAssets(); }
   // v1114：弱网角标定时刷新 + 网络恢复时自动补一句（角标由 lbNetChipUpdate 决定显隐）
   if(!LB._netChipStarted){
     LB._netChipStarted = true;
@@ -7973,10 +7698,10 @@ function lbSettleBtnHtml(it){
         if((window.innerWidth || document.documentElement.clientWidth) <= 640){
           var ox = vx === 25 ? '50%' : (vx ? '100%' : '0%');
           var oy = vy === 25 ? '50%' : (vy ? '100%' : '0%');
-          mapHtml = '<div class="settle-map"><img src="'+lbResURL(LB_MAP_BASE+map.img+LB_MAP_EXT)+'" data-lbasset="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" alt="" loading="lazy" style="transform:scale(2);transform-origin:'+ox+' '+oy+'" onerror="lbImgRetry(this)">'+fadeH+'<div class="settle-dot" style="left:'+dx+'%;top:'+dy+'%' + (_zbg ? ';background:'+_zbg : '') + '"></div></div>';
+          mapHtml = '<div class="settle-map"><img src="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" data-lbasset="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" alt="" loading="lazy" style="transform:scale(2);transform-origin:'+ox+' '+oy+'" onerror="lbImgRetry(this)">'+fadeH+'<div class="settle-dot" style="left:'+dx+'%;top:'+dy+'%' + (_zbg ? ';background:'+_zbg : '') + '"></div></div>';
           cls = ' with-map qcrop';
         } else {
-          mapHtml = '<div class="settle-map"><img src="'+lbResURL(LB_MAP_BASE+map.img+LB_MAP_EXT)+'" data-lbasset="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" alt="" loading="lazy" onload="lbSettleCrop(this,'+vx+','+vy+')" onerror="lbImgRetry(this)">'+fadeH+'<div class="settle-dot" style="left:'+dx+'%;top:'+dy+'%' + (_zbg ? ';background:'+_zbg : '') + '"></div></div>';
+          mapHtml = '<div class="settle-map"><img src="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" data-lbasset="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" alt="" loading="lazy" onload="lbSettleCrop(this,'+vx+','+vy+')" onerror="lbImgRetry(this)">'+fadeH+'<div class="settle-dot" style="left:'+dx+'%;top:'+dy+'%' + (_zbg ? ';background:'+_zbg : '') + '"></div></div>';
           cls = ' with-map qcrop';
         }
       }
@@ -8007,7 +7732,7 @@ function lbSettleBtnHtml(it){
           var _f2 = (zlo2 !== null && zhi2 !== null && zhi2 > zlo2 && isFinite(p.z)) ? lbZHeat(p.z, zlo2, zhi2) : ''; // v760：离散点 z 同色系无级渐变
           return '<div class="settle-dot scat" style="left:'+q.x.toFixed(2)+'%;top:'+q.y.toFixed(2)+'%' + (_f2 ? ';background:'+_f2 : '') + '"></div>';
         }).join('');
-        mapHtml = '<div class="settle-map"><img src="'+lbResURL(LB_MAP_BASE+map.img+LB_MAP_EXT)+'" data-lbasset="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" alt="" loading="lazy" onerror="lbImgRetry(this)">'+dots+'</div>';
+        mapHtml = '<div class="settle-map"><img src="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" data-lbasset="'+LB_MAP_BASE+map.img+LB_MAP_EXT+'" alt="" loading="lazy" onerror="lbImgRetry(this)">'+dots+'</div>';
         cls = ' scattered with-map'; // v830：保留 scattered 标识（完整大地图非 1/4）
       }
     }
@@ -9694,7 +9419,7 @@ function lbItemMeta(cls){
 function lbItemZh(cls){ var m=lbItemMeta(cls); return m.zh || ''; }
 function lbItemEn(cls){ var m=lbItemMeta(cls); return m.en || ''; }
 function lbItemIcon(cls){ var m=lbItemMeta(cls); return m.icon || ''; }
-function lbItemIconUrl(cls){ var m=lbItemMeta(cls); var u = (m.icon && LB_ITEM_ICON_URL) ? (LB_ITEM_ICON_URL[m.icon] || '') : ''; if(u){ var _b = lbPackURL(u); if(_b) return _b; } return u; }
+function lbItemIconUrl(cls){ var m=lbItemMeta(cls); return (m.icon && LB_ITEM_ICON_URL) ? (LB_ITEM_ICON_URL[m.icon] || '') : ''; }
 // v911：设施图标特例表（en基名 → icons2 精确键）——设施命名与图标键脱节（Bed_Simple vs Bed_icon/HUD_*_Icon），
 // 歧义/无直键项在此钉死；键均已在 icons2 验证存在（Refrigerator/Industrial_Forge/ModernBed_Icon 等）
 var LB_FACILITY_ICON_SPECIAL = {
@@ -11730,382 +11455,81 @@ LB.filter = LB.filter || { attrs: LB.breedSel, genes: LB.breedGene };
 LB.breedResult = LB.breedResult || false;
 // ===== v1096：底部功能条（能力表驱动）+ 火山计时（Gen）=====
 var LB_SRV_FUNCS = { Gen: ['volcano'] };   // 逐服能力（无功能的服 → 功能条整条隐藏）
-var LB_FUNC_DEF = { volcano: { label:'🌋 火山计时', color:'#f97316', open:'lbVolcanoOpen', title:'创世·火山事件状态（插件权威数据）' } };
+var LB_FUNC_DEF = { volcano: { label:'🌋 火山计时', color:'#f97316', open:'lbVolcanoOpen', title:'创世·火山喷发状态（插件权威数据）' } };
 // v1107：数据源换成插件权威查询（TransferIdentityFix.Volcano v0.5.0）——phase / worldTimeSeconds / nextEventInSec 全用返回字段，不硬编码周期
 // speed 仅用于「游戏 +XhYm」显示换算（游戏秒:现实秒），与事件周期无关
 var LB_VOLC = { speed:13.57, pollMs:3000, slowMs:30000, warnMs:120000, afterEndMs:30000, staleMs:60000,
   phaseZh:{ idle:'空闲', warmup:'预热中', eruption:'喷发中', cooldown:'冷却中' },
   phaseCol:{ idle:'#94a3b8', warmup:'#facc15', eruption:'#ef4444', cooldown:'#60a5fa' } };
-// ===== v1146（用户定稿）：双通道取数 —— ①状态轮询 ②事件台账(log)；**彻底删除本地周期推算** =====
-//   依据：插件改版后提供 status 字段 + history[] 事件台账（begin/end 帧级精确；warmupOn/Off 由服务端 1Hz 记录器写入）
-//   铁律（用户）：大字位**永远显示时间**；状态词**每段唯一**，禁止含糊词（平静中/正在震动/冷却中…）
-LB_VOLC.pollMs = 3000;      // 状态轮询节奏（用户要求：保持现状）
-LB_VOLC.logMs  = 15000;     // v1168：台账兜底校准 30s→15s（增量判据已改 lastEvent，缩短兜底窗口）
-LB_VOLC.warnMs = 120000;    // 距下次事件 <2 分钟 ⇒ 大字转红
-LB_VOLC.phaseCol = { idle:'#94a3b8', warmup:'#facc15', eruption:'#ef4444', cooldown:'#60a5fa' };
-LB_VOLC.kindZh = { begin:'事件开始', end:'喷发结束', warmupOn:'地震开始', warmupOff:'地震结束', activeOn:'喷发开始', activeOff:'喷发结束' };
-LB_VOLC.quakeFull = { 1:'首震', 2:'余震', 3:'主震' };   // v1154：台账条目 → 7 事件具体名（逐条计算，见 lbVolcLogDerive）
-LB_VOLC.quakeZh = { 1:'首震', 2:'余震', 3:'主震' };   // 用户定名：一个喷发周期内第 N 次地震
-LB._volcS = null;            // 状态快照
-LB._volcHist = [];           // 事件台账（worldSec 升序）
-LB._volcLogMs = 0;           // 上次成功拉台账时刻
-LB._volcLogBusy = false;     // 台账请求在途
-LB._volcLogErr = '';         // 台账错误
-LB._volcEvCount = -1;        // [废弃 v1168] hooks.events（文档已证伪，恒为 0）
-LB._volcLastEvtSeen = 0;     // v1168：上次见到的 lastEvent（台账增量判据，文档 §4.1 推荐）
-LB._volcQuakeNo = 0;         // 本轮（最近一次喷发之后）地震次数
-LB._volcInQuake = false;     // v1147：当前是否正处于某次地震（warmupOn 之后无配对 warmupOff）
-LB._volcLastQuakeDur = null; // 最近一次地震实测时长（秒）
-LB._volcIntervalSec = null;  // v1150：实测事件间隔（begin.durSec）
-LB._volcLastEruptDur = null; // 最近一次喷发实测时长（秒）
-LB._volcErupting = false;    // v1160：是否正在喷发（以台账 activeOn/activeOff 判定；插件 phase 喷发期仍报 warmup）
-LB._volcEruptOnSec = null;   // v1160：最近一次「喷发开始」worldSec
-LB._volcCycleLen = null;     // v1160：实测整周期（相邻两次「喷发开始」之差 ≈2240s）
-LB._volcLastWarmupOn = null; // v1160：最近一次地震开始 worldSec（下一震 = 此值 + 间隔 I）
-LB._volcCycQ = 0;            // v1160：本轮已发生地震数（与事件命名同源）
-LB._volcRecvMono = 0;        // v1162：响应到达时的单调时钟（performance.now，抗系统时钟跳变）
-LB._volcGuard = {};          // v1162：倒计时防抖守卫（按标签各一份，只降不升）
-LB._volcRecvMs = 0; LB._volcErr = '';
-LB._volcTimer = null; LB._volcPoll = null; LB._volcSlow = null; LB._funcTimer = null;
+LB._volcS = null;       // 最新权威快照（插件 JSON）
+LB._volcRecvMs = 0;     // 快照本地接收时刻（本地外推基准）
+LB._volcErr = '';       // 错误文案
+LB._volcTimer = null;   // 1s 渲染定时器（浮窗打开时）
+LB._volcPoll = null;    // 3s 轮询定时器（浮窗打开时）
+LB._volcSlow = null;    // （已弃用）30s 轻轮询——v1115 删除：功能条按钮不显示倒计时，不需要任何后台轮询
+LB._funcTimer = null;   // （已弃用）1s 功能条重绘
 function lbVolcServer(){ return (LB.tab && LB.tab !== 'player') ? String(LB.tab) : ''; }
-// v1149（修复）：lbRenderFuncBar / lbFuncList 在 v1146 改写时被误删 ⇒ 功能条永不显示，此处补回
 function lbFuncList(ab){ return (ab && LB_SRV_FUNCS[ab]) || []; }
 // 功能条渲染：有功能才显示；聚落详情打开时隐藏（详情有吸顶条）
 function lbRenderFuncBar(){
   var bar = document.getElementById('lbFuncBar'); if(!bar) return;
   var ab = lbVolcServer(), fs = lbFuncList(ab), h = '';
-  for(var i = 0; i < fs.length; i++){
+  for(var i=0;i<fs.length;i++){
     var d = LB_FUNC_DEF[fs[i]]; if(!d) continue;
-    h += '<button onclick="' + d.open + '()" title="' + lbAttr(d.title || '') + '" style="flex-shrink:0;background:' + d.color + ';color:#fff;border:none;border-radius:6px;padding:4px 14px;font-size:12px;cursor:pointer">' + d.label + '</button>';
+    var lbl = d.label;
+    h += '<button onclick="' + d.open + '()" title="' + lbAttr(d.title || '') + '" style="flex-shrink:0;background:' + d.color + ';color:#fff;border:none;border-radius:6px;padding:4px 14px;font-size:12px;cursor:pointer">' + lbl + '</button>';
   }
   var _d = document.getElementById('lbSettleDetail');
   var _detailOpen = !!(_d && _d.style.display === 'block');
-  bar.style.display = (!_detailOpen && !!h) ? 'block' : 'none';
+  var show = !_detailOpen && !!h;   // v1097：以 DOM 真实状态判断（LB._settleOpenKey 会残留 → 列表页被误隐藏）
+  bar.style.display = show ? 'block' : 'none';
   var act = document.getElementById('lbFuncActions'); if(act) act.innerHTML = h;
-  var tt = document.getElementById('lbFuncTitle'); if(tt) tt.textContent = '';
-  lbVolcFuncTick();
+  var tt = document.getElementById('lbFuncTitle');
+  if(tt) tt.textContent = '';   // v1098：功能条不显示地图名（用户要求）
+  lbVolcFuncTick();   // v1115：仅清理弃用的后台定时器（按钮不再显示倒计时 ⇒ 无后台轮询）
 }
-// ---- 时间工具 ----
+// ===== 火山计时 =====
+// 双时间格式工具（v1098）：现实＝本地时钟 HH:MM:SS；游戏＝周期内游戏时长（speed 换算，仅显示用）
 function lbVolcClock(ms){
   var base = (ms === undefined || ms === null || ms === '') ? Date.now() : Number(ms);
   if(isNaN(base)) base = Date.now();
   var d = new Date(base), p = function(n){ return (n < 10 ? '0' : '') + n; };
   return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()); }
+function lbVolcGameOf(minG){ var m = Math.round(Number(minG) || 0), h = Math.floor(m / 60); m = m % 60;
+  return h ? (h + 'h' + (m ? m + 'm' : '')) : (m + 'm'); }
+function lbVolcRealOf(msG){ return lbVolcGameOf(Number(msG) / 1000 * LB_VOLC.speed / 60); }
+// 双格式时间串
+function lbVolcDual(realMs, gameMin){ return '现实 ' + lbVolcClock(realMs) + ' ｜ 游戏 +' + (gameMin !== undefined ? lbVolcGameOf(gameMin) : lbVolcRealOf(realMs)); }
 function lbVolcFmt(ms){ var s = Math.max(0, Math.round(Number(ms || 0) / 1000)), m = Math.floor(s / 60); s = s % 60; return m + ':' + (s < 10 ? '0' : '') + s; }
-// ---- v1160：以台账推算「距喷发 / 距下一震」（插件 nextEventInSec 基于错误的 between=400，不可用）----
-// v1162：本地单调时钟（performance.now，抗系统时钟调整）
-function lbVolcMonoMs(){
-  try{ return (window.performance && performance.now) ? performance.now() : Date.now(); }catch(e){ return Date.now(); }
-}
-// v1162：倒计时格式化（向上取整 ⇒ 0:00 只在真正到点出现；「X 前」仍用 lbVolcFmt 的四舍五入）
-function lbVolcCd(ms){ var s = Math.max(0, Math.ceil(Number(ms || 0) / 1000)), m = Math.floor(s / 60); s = s % 60; return m + ':' + (s < 10 ? '0' : '') + s; }
-// v1162：防抖守卫——同一标签的倒计时**只降不升**（上跳 = 重锚定噪声 ⇒ 冻结，随后自然追平）
-function lbVolcGuard(key, ms){
-  var now = lbVolcMonoMs();
-  if(ms === null || ms === undefined || !isFinite(ms)){ try{ delete LB._volcGuard[key]; }catch(e){} return null; }
-  var g = LB._volcGuard[key];
-  if(!g || (now - g.t) > 4000 || ms > g.v + 5000){ LB._volcGuard[key] = { v: ms, t: now }; return ms; }   // 新锚 / 断档 / 大幅真实变化 ⇒ 重置
-  var v = (ms > g.v) ? g.v : ms;
-  LB._volcGuard[key] = { v: v, t: now };
-  return v;
-}
-function lbVolcWorldNow(){
+// ===== v1107：权威数据（插件 TransferIdentityFix.Volcano）=====
+// 本地外推：距下次事件毫秒（可为负 = 已过公式点）；基准 = worldTimeSeconds + 本地已流逝秒
+function lbVolcRemainMs(){
   var s = LB._volcS; if(!s) return null;
-  var w = Number(s.worldTimeSeconds); if(!isFinite(w)) return null;
-  // v1162（实测根因）：必须补「后端缓存年龄」+「服务器→本地传输延迟」
-  //   后端状态缓存 TTL 3s（命中时 cacheAgeMs 最大 ~2986ms），传输延迟实测 844~1913ms；
-  //   旧式缺这两项 ⇒ 每次重锚定带入 0.8~4.9s 随机偏差 ⇒ 倒计时 ±1~3s 跳变
-  var cAge = Number(s.cacheAgeMs); if(!isFinite(cAge) || cAge < 0 || cAge > 60000) cAge = 0;
-  var sNow = Number(s.serverNowMs), delay = 0;
-  if(isFinite(sNow) && sNow > 0){ delay = (LB._volcRecvMs || Date.now()) - sNow; if(!(delay >= 0) || delay > 15000) delay = 0; }
-  var monoRef = Number(LB._volcRecvMono) || 0;
-  var since = monoRef ? (lbVolcMonoMs() - monoRef) / 1000 : (Date.now() - (LB._volcRecvMs || Date.now())) / 1000;
-  return w + (cAge + delay) / 1000 + since;
+  var w0 = Number(s.worldTimeSeconds); if(!isFinite(w0)) return null;
+  var els = (Date.now() - (LB._volcRecvMs || Date.now())) / 1000;
+  return (w0 + Number(s.nextEventInSec || 0) - (w0 + els)) * 1000;
 }
-function lbVolcNextEruptMs(){          // 距**喷发开始**
-  var wn = lbVolcWorldNow(); if(wn === null) return null;
-  var iv = Number(LB._volcIntervalI) || Number(LB._volcIntervalSec);
-  var dly = Number(LB._volcEruptDelayD);
-  var cyc = Number(LB._volcCycleLen); if(!(cyc > 60)) cyc = (iv > 60) ? iv * 3 : 0;
-  var t = null;
-  // ① v1162：本轮首震已知 ⇒ 用本轮全实测参数 S + 2I + D（比上一轮周期更准，削掉 ±1~2s 系统漂移）
-  var s0 = Number(LB._volcCycleStart);
-  if(isFinite(s0) && iv > 60 && dly > 10){ var t1 = s0 + 2 * iv + dly; if(t1 > wn - 1) t = t1; }
-  // ② 空档期（喷发结束→下一轮首震之间，本轮首震尚未发生）⇒ 上次喷发开始 + 整周期，按周期滚动
-  if(t === null){
-    var eOn = Number(LB._volcEruptOnSec);
-    // v1167：eOn 为 null 时 Number(null)=0 且 isFinite(0) 为真 ⇒ 旧式会拿"0 + 周期"当喷发时刻（远古时间）
-    if(!isFinite(eOn) || !(eOn > 0) || !(cyc > 60)) return null;
-    t = eOn + cyc; var guard = 0;
-    while(t <= wn - 1 && guard++ < 5000) t += cyc;
-  }
-  return (t - wn) * 1000;
-}
-function lbVolcNextQuakeMs(){          // 距**下一震开始**：最近一次地震开始 + 间隔 I，按间隔滚动到未来
-  var wn = lbVolcWorldNow(); if(wn === null) return null;
-  var lw = Number(LB._volcLastWarmupOn), iv = Number(LB._volcIntervalI) || Number(LB._volcIntervalSec);
-  if(!isFinite(lw) || !(lw > 0) || !(iv > 60)) return null;   // v1167：同上，null 不得当 0 用
-  var t = lw + iv, guard = 0;
-  while(t <= wn - 1 && guard++ < 5000) t += iv;
-  return (t - wn) * 1000;
-}
-// ---- 本地外推：只用接口给的两个基准，不做任何周期/节点推算 ----
-function lbVolcNextMs(){        // 距下次事件（可负 = 已过点）
-  var s = LB._volcS; if(!s) return null;
-  var v = Number(s.nextEventInSec); if(!isFinite(v)) return null;
-  return (v - (Date.now() - (LB._volcRecvMs || Date.now())) / 1000) * 1000;
-}
-function lbVolcSinceMs(){       // 距上次事件已过（elapsedSec + 本地流逝）
-  var s = LB._volcS; if(!s) return null;
-  var v = Number(s.elapsedSec); if(!isFinite(v)) return null;
-  return (v + (Date.now() - (LB._volcRecvMs || Date.now())) / 1000) * 1000;
-}
+// 数据新鲜度（毫秒）= 后端内存缓存年龄 + 本地接收后流逝时间
+// v1112：不再用插件 cache.ageSec —— 那是「装置指针定位年龄」（长期不增长且常很大），不是数据年龄；实测显示成「30:22 前」很吓人
 function lbVolcFreshMs(){
   var s = LB._volcS; if(!s) return null;
   var base = isFinite(Number(s.cacheAgeMs)) ? Number(s.cacheAgeMs) : 0;
   return base + (Date.now() - (LB._volcRecvMs || Date.now()));
 }
-// ---- 台账（log）----
-function lbVolcLogPull(){
-  var sv = lbVolcServer(); if(!sv || LB._volcLogBusy) return;
-  LB._volcLogBusy = true;
-  fetch(LB_API + '/api/volcano_log', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ server: sv }) })
-    .then(function(r){ return r.json(); })
-    .then(function(j){
-      LB._volcLogBusy = false;
-      if(j && j.ok && j.history && j.history.length !== undefined){
-        LB._volcHist = j.history; LB._volcLogMs = Date.now(); LB._volcLogErr = '';
-      } else { LB._volcLogErr = String((j && j.error) || '台账不可达'); }
-      lbVolcLogDerive(); try{ lbVolcRender(); }catch(e){}
-    })
-    .catch(function(){ LB._volcLogBusy = false; LB._volcLogErr = '台账网络错误'; });
-}
-function lbVolcLogDerive(){
-  // v1147：按**实测台账结构**推导（实测：warmupOn 与 begin 同秒；warmupOn/Off 的 durSec 恒为 -1）
-  var h = (LB._volcHist || []).slice();
-  h.sort(function(a, b){ return Number(a.worldSec || 0) - Number(b.worldSec || 0); });   // 防乱序
-  LB._volcHist = h;
-  LB._volcLastQuakeDur = null; LB._volcLastEruptDur = null;
-  LB._volcIntervalSec = null;                                              // v1150：实测事件间隔（begin.durSec，≈745s）
-  // v1152：周期边界 = 最近一次 `end` **或 `activeOff`**（实测第 3 次事件带 activeOn→activeOff = 真喷发段，
-  //   其后第一个 warmupOn 是新周期的「首震」；只看 `end` 会让序号一路累加）
-  var lastEnd = -1;
-  for(var i = 0; i < h.length; i++){
-    var kz = String(h[i].kind);
-    if(kz === 'end' || kz === 'activeOff') lastEnd = i;
-  }
-  // ① 地震时长 = warmupOff.worldSec − 前一个 warmupOn.worldSec（配对相减；durSec 不可用）
-  var lastOn = null;
-  for(var a = 0; a < h.length; a++){
-    var kd = String(h[a].kind);
-    if(kd === 'warmupOn') lastOn = Number(h[a].worldSec);
-    // v1151：地震段 = warmupOn → 下一个 warmupOff**或 activeOn**（实测第 3 次事件含激活段，
-    //   原写法把整段 343s 当成"地震时长"，实际地震段只有 ~95s）
-    else if((kd === 'warmupOff' || kd === 'activeOn') && lastOn !== null){
-      var dq = Number(h[a].worldSec) - lastOn;
-      if(dq > 0) LB._volcLastQuakeDur = dq;
-      lastOn = null;
-    }
-  }
-  // ② 喷发时长 + 实测事件间隔（begin.durSec = 距上次开始；end.durSec = 本次持续）
-  for(var b = 0; b < h.length; b++){
-    var kb = String(h[b].kind), db = Number(h[b].durSec);
-    if(kb === 'end' && isFinite(db) && db > 0) LB._volcLastEruptDur = db;
-    if(kb === 'begin' && isFinite(db) && db > 0) LB._volcIntervalSec = db;   // v1150：实测间隔（插件 between=400 是错的）
-  }
-  // ②' v1160：喷发时长 = activeOn → activeOff 配对相减（实测 ≈248s；台账里并不出现 `end`，不可依赖）
-  var aeOn = null;
-  for(var y0 = 0; y0 < h.length; y0++){
-    var ky0 = String(h[y0].kind), wy0 = Number(h[y0].worldSec);
-    if(ky0 === 'activeOn'){ aeOn = wy0; }
-    else if(ky0 === 'activeOff' && aeOn !== null){ var dy0 = wy0 - aeOn; if(dy0 > 0) LB._volcLastEruptDur = dy0; aeOn = null; }
-  }
-  // ③ 本轮地震序号 = 最近一次喷发结束(end)之后的 begin 条数（无 end ⇒ 台账内全部 begin）
-  var q = 0;
-  for(var c = 0; c < h.length; c++){ if(c > lastEnd && String(h[c].kind) === 'begin') q++; }
-  LB._volcQuakeNo = q;
-  // ④' v1154：逐条算出「具体事件名」（对应 7 事件）+ 下一个事件名 + 台账更新时间
-  LB._volcNames = [];
-  var cycQ = 0;                                       // v1158：本轮已发生的第几次地震（仅在周期边界重置）
-  for(var m = 0; m < h.length; m++){
-    var km = String(h[m].kind), nmv = '';
-    if(km === 'end' || km === 'activeOff'){ cycQ = 0; nmv = '喷发结束'; }   // 周期边界
-    else if(km === 'activeOn'){ nmv = '喷发开始'; }
-    else if(km === 'warmupOn'){ cycQ++; nmv = (LB_VOLC.quakeFull[cycQ] || '地震') + '开始'; }
-    else if(km === 'warmupOff'){ nmv = (cycQ > 0 && cycQ < 3) ? ((LB_VOLC.quakeFull[cycQ] || '地震') + '结束') : ''; }   // v1160：本轮第 3 震(主震)的 warmupOff 与「喷发结束」同刻 ⇒ 不命名
-    else if(km === 'begin'){ nmv = ''; }              // begin 与 warmupOn/activeOn 同秒 ⇒ 不单独展示（避免模糊）
-    LB._volcNames.push(nmv);
-    if(nmv) LB._volcLastNamed = nmv;
-  }
-  // 台账里最后一个「有名字的事件」
-  var lastNamed = null, lastNamedIdx = -1;
-  for(var z = h.length - 1; z >= 0; z--){ if(LB._volcNames[z]){ lastNamed = LB._volcNames[z]; lastNamedIdx = z; break; } }
-  LB._volcLastEventName = lastNamed;
-  LB._volcLastEventSec = lastNamedIdx >= 0 ? Number(h[lastNamedIdx].worldSec) : null;
-  // v1160：喷发 / 周期参数（一律以台账为准；插件在喷发期间 phase 仍报 warmup、inEvent=0，不可依赖）
-  var eons = [], lwo = null;
-  for(var q1 = 0; q1 < h.length; q1++){
-    var kq = String(h[q1].kind), wq = Number(h[q1].worldSec);
-    if(kq === 'activeOn') eons.push(wq);
-    if(kq === 'warmupOn') lwo = wq;
-  }
-  LB._volcEruptOnSec = eons.length ? eons[eons.length - 1] : null;
-  LB._volcCycleLen = (eons.length >= 2) ? (eons[eons.length - 1] - eons[eons.length - 2]) : null;   // 相邻两次喷发开始之差 = 整周期
-  LB._volcLastWarmupOn = lwo;
-  LB._volcCycQ = cycQ;
-  LB._volcErupting = (String(lastNamed) === '喷发开始');
-  LB._volcInQuakeNow = !LB._volcErupting && /^(首震|余震|主震)开始$/.test(String(lastNamed || ''));
-  // v1157：周期参数（供"距喷发开始"推算）——I=实测事件间隔  D=主震开始→喷发开始延迟  S=本轮首震开始
-  LB._volcIntervalI = null; LB._volcEruptDelayD = null; LB._volcCycleStart = null;
-  var wons = [];
-  for(var p = 0; p < h.length; p++){ if(String(h[p].kind) === 'warmupOn') wons.push(Number(h[p].worldSec)); }
-  for(var p2 = h.length - 1; p2 >= 0; p2--){
-    var db2 = Number(h[p2].durSec);
-    if(String(h[p2].kind) === 'begin' && isFinite(db2) && db2 > 10){ LB._volcIntervalI = db2; break; }
-  }
-  if(!LB._volcIntervalI && wons.length >= 2) LB._volcIntervalI = wons[wons.length - 1] - wons[wons.length - 2];
-  for(var p3 = h.length - 1; p3 >= 0; p3--){
-    if(String(h[p3].kind) === 'activeOn'){
-      var aw = Number(h[p3].worldSec), bestOn = null;
-      for(var p4 = 0; p4 < h.length; p4++){
-        if(String(h[p4].kind) === 'warmupOn' && Number(h[p4].worldSec) <= aw) bestOn = Number(h[p4].worldSec);
-      }
-      if(bestOn !== null) LB._volcEruptDelayD = aw - bestOn;
-      break;
-    }
-  }
-  var s0 = null;
-  for(var p5 = 0; p5 < h.length; p5++){
-    if(p5 > lastEnd && String(h[p5].kind) === 'warmupOn'){ s0 = Number(h[p5].worldSec); break; }
-  }
-  if(s0 === null && wons.length) s0 = wons[0];
-  LB._volcCycleStart = s0;
-  // 下一事件名（按本轮地震序号：0⇒首震开始 1⇒余震开始 2⇒主震开始 ≥3⇒喷发开始）
-  // v1160：下一事件名（与命名同源；喷发中 ⇒ 喷发结束）
-  if(LB._volcErupting){ LB._volcNextName = '喷发结束'; }
-  else if(LB._volcInQuakeNow){ LB._volcNextName = String(LB._volcLastEventName).replace(/开始$/, '结束'); }
-  else {
-    var qSoFar = Number(cycQ) || 0;
-    LB._volcNextName = (qSoFar >= 3) ? '喷发开始' : ((LB_VOLC.quakeFull[qSoFar + 1] || '首震') + '开始');
-  }
-  // ⑤ 当前是否正处于某次地震（warmupOn 之后没有配对的 warmupOff）
-  LB._volcInQuake = false;
-  if(h.length && String(h[h.length - 1].kind) === 'warmupOn') LB._volcInQuake = true;
-}
-function lbVolcLogLast(){ var h = LB._volcHist || []; return h.length ? h[h.length - 1] : null; }
-function lbVolcWorldToClock(ws){
-  var s = LB._volcS; if(!s) return '';
-  var w = Number(s.worldTimeSeconds), v = Number(ws);
-  if(!isFinite(w) || !isFinite(v)) return '';
-  return lbVolcClock(Date.now() - (w - v) * 1000);
-}
-// ---- 状态词（每段唯一；台账缺失时不编造序号）----
-function lbVolcStageName(){
-  // v1153（用户原则）：台账在 ⇒ 只输出能对应到具体事件的名字；台账不在 ⇒ 才允许兜底文案
-  var s = LB._volcS || {};
-  var h = LB._volcHist || [];
-  var hasLog = !!(h && h.length);
-  // v1161（用户口径）：**台账优先**——实测插件 phase 在喷发期滞后（报 warmup、inEvent=0），震期同理；
-  //   台账可用时一律以台账事件名为准，只有台账不可用才退回插件状态（绝不编造事件名）
-  if(hasLog){
-    if(LB._volcErupting === true) return '正在喷发';
-    var mq = String(LB._volcLastEventName || '').match(/^(首震|余震|主震)开始$/);
-    if(mq && LB._volcInQuakeNow === true) return '正在' + mq[1];
-    if(LB._volcLastEventName){
-      var nm2 = String(LB._volcLastEventName);
-      return /结束$/.test(nm2) ? nm2.replace(/结束$/, '后冷却') : nm2;   // 不存在"无事件"状态 ⇒ 一律「XX后冷却」
-    }
-  }
-  // 台账不可用 ⇒ 只用插件状态兜底（绝不编造事件名/序号）
-  if(String(s.phase) === 'eruption' || Number((s.hooks || {}).inEvent) === 1) return '正在喷发';
-  // v1164：无台账时分不清首震/余震/主震 ⇒ 一律统一文案（旧式会用计数器猜出「正在首震」）
-  return '台账不可用（当前事件无法确认）';
-}
-function lbVolcLedgerHint(){
-  // v1165（用户要求）：台账信息不足时必须给提示 + 估算"就绪"的大致剩余时间
-  var s = LB._volcS || {}, h = LB._volcHist || [];
-  var iv = Number(LB._volcIntervalI) || Number(LB._volcIntervalSec);   // 事件间隔 I（begin.durSec ≈745s）
-  var dly = Number(LB._volcEruptDelayD);                               // 主震开始→喷发开始 D（≈96s）
-  // v1166：无 activeOn 时 D 无实测 ⇒ 用「本震实测时长」兜底（实测 D 95.5~97s ≈ 本震时长），保证情形②也能给就绪时间
-  if(!(dly > 10)){ var qdF = Number(LB._volcLastQuakeDur); dly = (qdF > 10) ? qdF : null; }
-  if(!(dly > 10)) dly = null;
-  // v1169：原「区间格式化」辅助函数已弃用（情形②改为单值 + 双通道位置校验）
-  // ① 台账接口失败 ⇒ 给出重试剩余（后端/前端兜底节奏 30s）
-  if(LB._volcLogErr){
-    var cycS = Math.max(5, Math.round(LB_VOLC.logMs / 1000));
-    var wait = LB._volcLogMs ? Math.round(cycS - (Date.now() - LB._volcLogMs) / 1000) : cycS;
-    if(!(wait >= 1) || wait > cycS) wait = cycS;
-    return '⏳ 台账不可达 · 最多 ' + wait + ' 秒后自动重试';
-  }
-  if(!h.length) return '⏳ 台账准备中：等待首次事件记录（插件/服务器可能刚重启）';
-  var hasActive = false;
-  for(var i = 0; i < h.length; i++){ if(String(h[i].kind) === 'activeOn'){ hasActive = true; break; } }
-  var inQ = (Number(s.warmUpActive) === 1) || (String(s.phase) === 'warmup');
-  var inE = (LB._volcErupting === true) || (String(s.phase) === 'eruption') || (Number((s.hooks || {}).inEvent) === 1);
-  var wn = lbVolcWorldNow();
-  // ② v1169：台账无「喷发开始」⇒ 用**周期位置**定位主震 ⇒ 给**单值**就绪时间（双通道校验）
-  if(!hasActive){
-    var cycP = Number(LB._volcCycQ) || 0;                       // A 通道：台账推出的本轮震数
-    var fsiP = Number(s.falseStartInt);                         // B 通道：插件假喷发计数
-    var posA = inQ ? Math.max(1, cycP) : (cycP + 1);            // 震中=本震序号；冷却=下一震序号
-    // v1170：fsi 在震中已计入本次震 ⇒ 震中取 fsi、冷却才 +1（与台账通道同构）
-    var posB = (isFinite(fsiP) && fsiP >= 0 && fsiP <= 3) ? (inQ ? Math.max(1, fsiP) : (fsiP + 1)) : null;
-    function etaFor(pos){
-      if(!(iv > 60 && dly) || !(pos >= 1)) return null;
-      if(inQ){
-        var w0 = Number(LB._volcLastWarmupOn);
-        if(!(isFinite(w0) && w0 > 0) || wn === null) return null;
-        var e0 = (w0 + (3 - pos) * iv + dly - wn) * 1000;       // 本震开始 + 剩余间隔 + D
-        return (e0 > 0) ? e0 : null;
-      }
-      var toQ = lbVolcNextQuakeMs();                            // 距下一震开始
-      if(toQ === null) return null;
-      var e1 = toQ + ((3 - pos) * iv + dly) * 1000;
-      return (e1 > 0) ? e1 : null;
-    }
-    var eA = etaFor(posA), eB = (posB !== null) ? etaFor(posB) : null;
-    var lo = null, hi = null;
-    if(eA !== null && eB !== null){ lo = Math.min(eA, eB); hi = Math.max(eA, eB); }
-    else if(eA !== null){ lo = eA; hi = eA; }
-    else if(eB !== null){ lo = eB; hi = eB; }
-    if(lo === null) return '⏳ 台账准备中：等待首次「喷发开始」记录（就绪时间未知）';
-    if(hi - lo < 2000) return '⏳ 台账准备中：等待首次「喷发开始」记录（预计 ' + lbVolcCd(lo) + ' 后就绪）';
-    return '⏳ 台账准备中：等待首次「喷发开始」记录（预计 ' + lbVolcCd(lo) + ' ~ ' + lbVolcCd(hi) + ' 后就绪）';
-  }
-  // ③ 部分缺失：喷发时长未测得（大字 --:--）
-  if(inE && !(Number(LB._volcLastEruptDur) > 0)){
-    var eOn = Number(LB._volcEruptOnSec), el2 = null;
-    if(LB._volcErupting === true && wn !== null && isFinite(eOn) && eOn > 0) el2 = Math.max(0, wn - eOn);
-    return '⏳ 台账准备中：等待本次喷发结束以测得喷发时长' + (el2 !== null ? '（喷发已持续 ' + lbVolcCd(el2 * 1000) + '）' : '');
-  }
-  // ③ 部分缺失：本次地震时长未测得（小字「距本震结束」无法显示）
-  if(inQ && !inE && !(Number(LB._volcLastQuakeDur) > 0)){
-    var w1 = Number(LB._volcLastWarmupOn), el3 = null;
-    if(wn !== null && isFinite(w1) && w1 > 0) el3 = Math.max(0, wn - w1);
-    return '⏳ 台账准备中：等待本次地震结束以测得地震时长' + (el3 !== null ? '（本次地震已持续 ' + lbVolcCd(el3 * 1000) + '）' : '');
-  }
-  return '';
-}
-// ---- 取数：状态轮询（3s）+ 台账（开窗/每30s兜底/events变化时顺手）----
+// 拉取权威状态（后端 3s TTL ⇒ 多客户端也只 3s 一次 RCON）
 function lbVolcSync(){
   var sv = lbVolcServer(); if(!sv) return;
   fetch(LB_API + '/api/volcano_state', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ server: sv }) })
     .then(function(r){ return r.json(); })
     .then(function(j){
       LB._volcRecvMs = Date.now();
-      LB._volcRecvMono = lbVolcMonoMs();                       // v1162：锚点计时用单调时钟
-      if(j && j.ok){ LB._volcS = j; LB._volcErr = ''; } else { LB._volcS = null; LB._volcErr = String((j && j.error) || '查询失败'); }
-      try{
-        // v1168（文档 §4.1）：增量判据改用 lastEvent 变化——hooks.events 已实服证伪（恒为 0，不可依赖）
-        var le = Number(j && j.lastEvent);
-        var changed = isFinite(le) && le > 0 && LB._volcLastEvtSeen > 0 && le !== LB._volcLastEvtSeen;
-        if(isFinite(le) && le > 0) LB._volcLastEvtSeen = le;
-        if(changed || (Date.now() - (LB._volcLogMs || 0) > LB_VOLC.logMs)) lbVolcLogPull();
-      }catch(e){}
+      if(j && j.ok){ LB._volcS = j; LB._volcErr = ''; }
+      else { LB._volcS = null; LB._volcErr = String((j && j.error) || '查询失败'); }
       lbVolcRender();
     })
     .catch(function(){ LB._volcRecvMs = Date.now(); LB._volcS = null; LB._volcErr = '网络错误'; lbVolcRender(); });
 }
+// 3s 轮询（浮窗打开时）
 function lbVolcPollStart(){
   if(LB._volcPoll) return;
   lbVolcSlowStop();
@@ -12113,27 +11537,27 @@ function lbVolcPollStart(){
   LB._volcPoll = setInterval(function(){ lbVolcSync(); }, LB_VOLC.pollMs);
 }
 function lbVolcPollStop(){ if(LB._volcPoll){ clearInterval(LB._volcPoll); LB._volcPoll = null; } }
-// v1115：只在浮窗打开时轮询（按钮不显示倒计时 ⇒ 无后台轮询）
-function lbVolcFuncTick(){ if(LB._funcTimer){ clearInterval(LB._funcTimer); LB._funcTimer = null; } lbVolcSlowStop(); }
+// v1115（用户要求）：**只在浮窗打开时轮询**——删除 30s 轻轮询与 1s 功能条重绘；
+//   理由：① 用户确认「按钮无需显示倒计时」② 客户端不应全程轮询（省请求与 RCON）
+function lbVolcFuncTick(){
+  if(LB._funcTimer){ clearInterval(LB._funcTimer); LB._funcTimer = null; }
+  lbVolcSlowStop();
+}
 function lbVolcSlowStop(){ if(LB._volcSlow){ clearInterval(LB._volcSlow); LB._volcSlow = null; } }
 function lbVolcanoOpen(){
   var old = document.querySelector('.lb-picker-overlay'); if(old) old.remove();
   var overlay = document.createElement('div'); overlay.className = 'lb-picker-overlay';
   overlay.onclick = function(e){ if(e.target === overlay) lbVolcClose(); };
   overlay.innerHTML = '<div class="lb-picker-panel" onclick="event.stopPropagation()">'
-    + '<div class="lb-picker-header"><span style="flex:1;font-weight:bold;color:#a78bfa;font-size:13px">🌋 火山计时</span><button class="lb-picker-close" onclick="lbVolcClose()" title="关闭">✕</button></div>'
+    + '<div class="lb-picker-header"><span style="flex:1;font-weight:bold;color:#a78bfa;font-size:13px">🌋 火山计时 · ' + lbAttr(lbVolcServer()) + '</span><button class="lb-picker-close" onclick="lbVolcClose()" title="关闭">✕</button></div>'
     + '<div id="lbVolcBody" style="padding:10px 12px;overflow-y:auto;min-height:0;flex:1 1 auto"></div></div>';
   document.body.appendChild(overlay);
-  LB._volcErr = ''; LB._volcHist = []; LB._volcLogMs = 0; LB._volcLogErr = '';
-  LB._volcEvCount = -1; LB._volcQuakeNo = 0; LB._volcLastQuakeDur = null; LB._volcLastEruptDur = null; LB._volcIntervalSec = null;
-  LB._volcErupting = false; LB._volcEruptOnSec = null; LB._volcCycleLen = null; LB._volcLastWarmupOn = null; LB._volcCycQ = 0;
-  LB._volcRecvMono = 0; LB._volcGuard = {};
-  lbVolcLogPull();      // v1146（用户定稿）：开窗先拉一次台账，建立基准
-  lbVolcPollStart();    // 之后按现有节奏取状态；台账每 30s 兜底校准一次
+  LB._volcErr = '';
+  lbVolcPollStart();   // v1107：打开即拉权威状态 + 每 3s 轮询（关闭即停）
 }
 function lbVolcClose(){
   if(LB._volcTimer){ clearInterval(LB._volcTimer); LB._volcTimer = null; }
-  lbVolcPollStop();
+  lbVolcPollStop();    // v1107：关闭浮窗停止 3s 轮询（v1115：不再有 30s 轻轮询接管 ⇒ 关闭后彻底无后台请求）
   var o = document.querySelector('.lb-picker-overlay'); if(o) o.remove();
   try{ lbRenderFuncBar(); }catch(e){}
 }
@@ -12143,77 +11567,55 @@ function lbVolcRender(){
   var s = LB._volcS, h = '';
   var errTxt = '';
   if(LB._volcErr){
-    if(/not a volcanic map/i.test(LB._volcErr)) errTxt = '本图无火山事件（火山仅创世纪 Gen 有效）';   // v1168（文档 §7）
-    else if(/hazard actor not found/i.test(LB._volcErr)) errTxt = '本图无火山事件（插件未在世界上找到火山装置）';
+    if(/hazard actor not found/i.test(LB._volcErr)) errTxt = '本图无火山事件（插件未在世界上找到喷发装置）';
     else if(/not ready|unknown server/i.test(LB._volcErr)) errTxt = '该服务器不支持火山状态查询';
     else errTxt = '权威数据不可达：' + LB._volcErr;
   }
   if(errTxt) h += '<div style="background:#78350f33;border:1px solid #f59e0b55;border-radius:8px;padding:8px 10px;margin:4px 0;font-size:12px;color:#fcd34d">⚠️ ' + lbAttr(errTxt) + '</div>';
   if(!s){
-    h += '<div style="font-size:12px;color:#888;padding:4px 0 8px">' + (errTxt ? '等待重试…' : '读取游戏内火山装置…') + '</div>'
+    h += '<div style="font-size:12px;color:#888;padding:4px 0 8px">' + (errTxt ? '等待重试…' : '读取游戏内喷发装置…') + '</div>'
       + '<div style="font-size:26px;color:#555;letter-spacing:1px;text-align:center;padding:4px 0">--:--</div>';
   } else {
     var vph = String(s.phase || '');
-    var hasLog2 = !!(LB._volcHist && LB._volcHist.length);
-    // v1161：台账可用 ⇒ 分支一律以台账为准（插件喷发期 phase 滞后已实测；震期同理）
-    var vErupt = hasLog2 ? (LB._volcErupting === true) : ((vph === 'eruption') || (Number((s.hooks || {}).inEvent) === 1));
-    var vWarm = hasLog2 ? (LB._volcInQuakeNow === true) : ((Number(s.warmUpActive) === 1) || (vph === 'warmup'));
-    var vFresh = lbVolcFreshMs();
-    var wnNow = lbVolcWorldNow();
-    var toErMs = lbVolcNextEruptMs();
-    var toQMs = lbVolcNextQuakeMs();
-    var vCol = '#60a5fa', vBig = '--:--', vLbl = '距喷发', vLine = '';
-    if(!isFinite(Number(s.lastEvent)) || Number(s.lastEvent) === 0){
-      vLbl = '距喷发'; vBig = '--:--'; vCol = '#94a3b8';                              // v1160：大字标签只允许 2 种
-    } else if(vErupt){
-      // v1160：喷发中 ⇒ 大字 = 距喷发结束（台账 activeOn 起算 + 实测喷发时长 248s）
-      vCol = '#ef4444'; vLbl = '距喷发结束';
-      var eDur2 = Number(LB._volcLastEruptDur) || 0;
-      var eOn2 = Number(LB._volcEruptOnSec);
-      // v1164：台账无 activeOn 时 Number(null)=0 而 isFinite(0) 为真 ⇒ 旧式把 0 当起始点，算出 ≈20.6 亿秒（大字爆炸）
-      var eOnOk = isFinite(eOn2) && eOn2 > 0;
-      var eEl2 = (wnNow !== null && eOnOk) ? (wnNow - eOn2) : 0;
-      var eRem2 = (eOnOk && eDur2 > 0) ? Math.max(0, eDur2 - eEl2) * 1000 : null;
-      vBig = (eRem2 === null) ? '--:--' : lbVolcCd(lbVolcGuard('big|喷发结束', eRem2));   // v1164：无法推算 ⇒ 显示 --:--（绝不显示乱值）
-    } else if(vWarm){
-      // v1160：地震期间大字仍是「距喷发」（禁止再出现「距本次地震结束」/「已持续」）；本震剩余时间放小字
-      vLbl = '距喷发';
-      var toErG = lbVolcGuard('big|喷发', toErMs);                                                  // v1162：大字防抖
-      if(toErG === null){ vBig = '--:--'; vCol = '#94a3b8'; }
-      else { vBig = lbVolcCd(toErG); vCol = (toErG <= LB_VOLC.warnMs) ? '#ef4444' : '#facc15'; }
-      var qd2 = Number(LB._volcLastQuakeDur) || 0, qOn2 = Number(LB._volcLastWarmupOn);
-      if(LB._volcNextName && qd2 > 0 && wnNow !== null && isFinite(qOn2)){
-        var nxW = lbVolcGuard('sm|' + LB._volcNextName, Math.max(0, (qOn2 + qd2 - wnNow) * 1000));   // v1162：小字防抖
-        vLine = '距' + LB._volcNextName + ' <span style="color:#c4b5fd">' + lbVolcCd(nxW) + '</span>';
-      }
+    var vActive = Number(s.anyEventActive) === 1;
+    var vDue = Number(s.dueNow) === 1;
+    var vRem = lbVolcRemainMs(), vFresh = lbVolcFreshMs();
+    var vElapsedMs = Number(s.elapsedSec || 0) * 1000;
+    var vCol = LB_VOLC.phaseCol[vph] || '#f97316', vBig = '', vLbl = '距离下次喷发', vSub = '', vLine = '';
+    if(vph === 'eruption' || (vActive && vph !== 'warmup')){   // v1107：权威 phase=eruption，或任何事件进行中
+      vLbl = '当前状态'; vBig = '喷发中'; vCol = '#ef4444';
+      vSub = '<div style="font-size:11px;color:#94a3b8">喷发已持续 <span style="font-size:16px;color:' + vCol + ';font-weight:bold">' + lbVolcFmt(vElapsedMs) + '</span></div>';
+      if(vRem !== null && vRem > 0) vLine = '距下次事件 ' + lbVolcFmt(vRem) + '（现实 ' + lbVolcClock(Date.now() + vRem) + '）';
+    } else if(vDue && vRem !== null && vRem <= 0){   // v1107：已到点但未触发（存在前置门控，不是错误）
+      vLbl = '当前状态'; vBig = '已到点'; vCol = '#f59e0b';
+      vSub = '<div style="font-size:11px;color:#94a3b8">等待触发条件（需玩家在火山附近）</div>';
     } else {
-      // v1160：冷却期 ⇒ 大字 = 距喷发（目标 = 上次喷发开始 + 实测周期，按周期滚动）
-      vLbl = '距喷发';
-      var toErG2 = lbVolcGuard('big|喷发', toErMs);                                                 // v1162：大字防抖
-      if(toErG2 === null){ vBig = '--:--'; vCol = '#94a3b8'; }
-      else { vBig = lbVolcCd(toErG2); vCol = (toErG2 <= LB_VOLC.warnMs) ? '#ef4444' : '#60a5fa'; }
-      // 小字：距下一具体事件（7 事件之一）——下一事件是"下一震开始"，喷发开始则用喷发倒计时
-      var nx3 = (String(LB._volcNextName) === '喷发开始') ? toErMs : toQMs;
-      if(LB._volcNextName && nx3 !== null){
-        var nx3g = lbVolcGuard('sm|' + LB._volcNextName, nx3);                                      // v1162：小字防抖
-        vLine = '距' + LB._volcNextName + ' <span style="color:#c4b5fd">' + lbVolcCd(nx3g) + '</span>';
-      }
+      // v1107：大红色沿用 v1105 两条规则——距喷发 ≤120s；刚喷完 30s 内（cooldown 且距上次事件 ≤30s）
+      var vRed = (vRem !== null && vRem <= LB_VOLC.warnMs) || (vph === 'cooldown' && vElapsedMs <= LB_VOLC.afterEndMs);
+      if(vph === 'warmup'){ vLbl = '预热中（地震表现期）· 距喷发'; vCol = vRed ? '#ef4444' : '#facc15'; }
+      else if(vRed) vCol = '#ef4444';
+      vBig = lbVolcFmt(Math.max(0, vRem || 0));
+      if(vRem !== null) vLine = lbVolcDual(Date.now() + Math.max(0, vRem), Math.max(0, vRem) / 1000 * LB_VOLC.speed / 60);
     }
-    var _stCol = LB_VOLC.phaseCol[vph] || '#cbd5e1';
-    var _llTxt = lbVolcLedgerHint();                     // v1165：台账不足 ⇒ 就绪提示 + 预计剩余
-    var _stHtml = '<div style="font-size:14px;font-weight:bold;color:' + _stCol + ';margin-top:1px">' + lbAttr(lbVolcStageName()) + '</div>'
-      + (_llTxt ? '<div style="font-size:12px;color:#fcd34d;margin-top:1px">' + lbAttr(_llTxt) + '</div>' : '');
     h += '<div style="text-align:center;padding:2px 0"><div style="font-size:11px;color:#888">' + vLbl + '</div>'
       + '<div style="font-size:30px;color:' + vCol + ';font-weight:bold;letter-spacing:1px">' + vBig + '</div>'
-      + _stHtml
-      + (vLine ? '<div style="font-size:13px;font-weight:bold;color:#e2e8f0;margin-top:2px">' + vLine + '</div>' : '')
+      + vSub
+      + (vLine ? '<div style="font-size:11px;color:#94a3b8">' + vLine + '</div>' : '')
       + '</div>';
+    var vFsMax = Number(s.maxFalseStarts), vFsCur = Number(s.falseStartInt);
+    var vFake = (isFinite(vFsMax) && vFsMax > 0) ? (Math.max(0, vFsCur || 0) + '/' + vFsMax) : '';
+    var vBetween = Number(s.between), vEls = Number(s.elapsedSec);
+    var vScan = (s.cache && isFinite(Number(s.cache.ageSec))) ? ('装置定位 ' + Math.round(Number(s.cache.ageSec)) + 's 前') : '';
     h += '<div style="margin-top:8px;border-top:1px dashed #2a2a3a;padding-top:6px;font-size:11px;color:#888;line-height:1.8">'
-      + '数据更新于 <span style="color:#cbd5e1">' + (vFresh === null ? '—' : lbVolcFmt(vFresh) + ' 前') + '</span>'
-      + ' · 台账更新于 <span style="color:#cbd5e1">' + (LB._volcLogMs ? lbVolcFmt(Date.now() - LB._volcLogMs) + ' 前' : '—') + '</span>'
+      + '当前阶段：<span style="color:#cbd5e1">' + lbAttr(LB_VOLC.phaseZh[vph] || vph || '未知') + '</span>'
+      + (vFake ? ' · 假喷发：<span style="color:#cbd5e1">' + lbAttr(vFake) + '</span>' : '') + '<br>'
+      + '数据新鲜度：<span style="color:#cbd5e1">' + (vFresh === null ? '—' : lbVolcFmt(vFresh) + ' 前') + '</span>（后端缓存 ' + (isFinite(Number(s.cacheAgeMs)) ? (Number(s.cacheAgeMs) / 1000).toFixed(1) + 's' : '—') + ' ＋ 本地外推）<br>'
+      + '事件间隔：<span style="color:#cbd5e1">' + (isFinite(vBetween) ? vBetween + 's' : '—') + '</span> · 距上次事件：<span style="color:#cbd5e1">' + (isFinite(vEls) ? vEls.toFixed(1) + 's' : '—') + '</span>'
+      + (vScan ? ' · <span style="color:#666">' + lbAttr(vScan) + '</span>' : '') + '<br>'
+      + '装置：<span style="color:#cbd5e1">' + lbAttr(String(s['class'] || '—')) + '</span>（关卡 ' + lbAttr(String(s.level === undefined ? '—' : s.level)) + '）'
       + '</div>';
   }
-  h += '<div style="margin-top:8px;font-size:10px;color:#555">数据来自游戏内火山装置（事件台账）</div>';
+  h += '<div style="margin-top:8px;font-size:10px;color:#555">数据来源：游戏内喷发装置（插件 v0.5.0 · TransferIdentityFix.Volcano）· 前端每 3 秒同步 ＋ 本地 1 秒外推 · 阶段：空闲 / 预热 / 喷发 / 冷却</div>';
   el.innerHTML = h;
   if(!LB._volcTimer) LB._volcTimer = setInterval(function(){ lbVolcRender(); }, 1000);
 }
