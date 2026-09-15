@@ -273,6 +273,7 @@ html.ios .lb-sex{transform:translateY(-0.08em)}
 .acc[open] > summary .lb-rel-rename{display:inline-flex;align-items:center;justify-content:center;gap:3px;line-height:1}
 .acc[open] > summary .acc-cnt-rel{display:none}   /* v1225：放出组展开时数量位被按钮替换 */
 .acc[open]::after{content:'';display:block;height:0;border-top:1px dashed #7c3aed;margin:8px 0 2px}   /* v1226：容器组展开时底部自动虚线（颜色与容器组选中色一致） */
+.lb-rel-rename .mdi{font-size:11px;line-height:1;display:inline-flex;align-items:center}
 /* 移动端响应式（置于聚落 CSS 之后确保覆盖）：v830 下 <640；聚合框单列、离散卡占满整行、单聚落固定 3 列 */
 @media (max-width:640px){
   .settle-wrap-cluster{display:grid;grid-template-columns:1fr;flex-wrap:nowrap}
@@ -437,7 +438,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260914-1227';
+var LB_VERSION = 'v20260914-1226';
 var LB_SCHEMA_VER = 15;  // v1069：14→15 强制 IndexedDB 缓存重建——根因：recs 构建结果随 IndexedDB 持久化（v931）、
                          //   命中后跳过重建；仅改 _decorRe 等**构建期过滤**时，旧 rec 会长期残留（实测南瓜 rec 改过滤后仍显示）。
                          //   lbCacheGet 校验 _schemaVer !== LB_SCHEMA_VER → resolve(null) → 全量重拉重建。
@@ -7822,7 +7823,6 @@ function lbSpSaddleBadge(it){
         var x = its[j];
         if(!x || lbIsEmptyItem(x)) continue;
         if(String(x.kind || '') !== 'saddle') continue;
-        if(lbIsBp(x)) continue; // v1227：蓝图不算实体鞍（角标只数实物；原实现把鞍蓝图也计进去 → 只有蓝图也显示鞍角标）
         if(!lbSaddleBpIsBase(String(x['class'] || ''), set)) continue;
         n++; if(!sc) sc = String(x['class'] || '');
       }
@@ -9617,7 +9617,7 @@ function lbBuildSettleContainerHtml(grp, settleKey){
       +'<span class="acc-sum-name">'+lbContainerLabel(cg[0], (_dedMerge ? {hideId:true} : null))+_dedN+'</span>'
       // v1225：放出组——数量角标加 acc-cnt-rel（展开时被「一键起名」按钮替换）；按钮回到最右（右对齐）
       +'<span class="acc-cnt'+(lbContainerTypeOf(cg[0])==='released' ? ' acc-cnt-rel' : '')+'">'+fullH+v6H+scnMark+invMark+sepH+emptyH+'</span>'
-      +((lbContainerTypeOf(cg[0])==='released') ? '<button class="lb-rel-rename" data-gk="'+lbAttr(k)+'" onclick="event.stopPropagation();lbSettleBatchRename(this)" title="一键命名本组未命名放出生物">一键起名</button>' : '')
+      +((lbContainerTypeOf(cg[0])==='released') ? '<button class="lb-rel-rename" data-gk="'+lbAttr(k)+'" onclick="event.stopPropagation();lbSettleBatchRename(this)" title="一键命名本组未命名放出生物"><i class="mdi mdi-pencil"></i> 一键起名</button>' : '')
       +'</summary>';
     h+=sumHtml;
     var _eqHtml = ''; // v1216：实物卡延迟并入瀑布流（此前直接 h+= 在 masonry 之外 → 失去自动分列）

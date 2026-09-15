@@ -9,7 +9,7 @@
  *   并保留历史单缓存（dino-import-v*）不删，让已下载资源继续命中
  * 策略：index.html 走 network-first（保证新版本刷新即生效），其他同源静态 cache-first。
  */
-var VER = 'v20260914-1227'; // v1145：随前端版本递增，强制移动端（PWA/Safari）拿到新壳并丢弃旧 shell 缓存
+var VER = 'v20260914-1174'; // v1145：随前端版本递增，强制移动端（PWA/Safari）拿到新壳并丢弃旧 shell 缓存
 //   背景：手机/iPad 曾长期停留在旧版前端（跑旧的逐台加载逻辑 ⇒ 卡在「存档已落盘」达 10 分钟）；
 //   index.html 虽为 network-first，但弱网/离线时仍回退旧缓存 ⇒ 每次部署同步递增本版本号可确保换壳生效。
 var SHELL = 'dino-import-shell-' + VER;
@@ -72,11 +72,6 @@ self.addEventListener('activate', function (e) {
 self.addEventListener('fetch', function (e) {
   var req = e.request;
   if (req.method !== 'GET') return;
-  // v1175（用户定策 B，2026-09-15）：**导航请求不再由 SW 接管** —— 浏览器直连 Cloudflare Assets。
-  //   原实现要 res.arrayBuffer() 整份读完才 respondWith，且 delete('content-encoding')
-  //   ⇒ 首字节 = 最后一字节，且 1.17MB 明文（实测 TTFB 12,735ms / HTML 1,170,501 B 未压缩）。
-  //   代价（已确认接受）：断网或服务器不可用时页面打不开（旧壳回退链失效）；资源/分片缓存策略不变。
-  if (req.mode === 'navigate') return;
   var url = new URL(req.url);
   if (url.origin !== location.origin) return;
 
