@@ -468,7 +468,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260917-3321';
+var LB_VERSION = 'v20260917-3319';
 var LB_SCHEMA_VER = 16;  // v1323：15→16 强制缓存重建——recs 新增 colorRegions（建筑涂装）字段，旧缓存无此字段 ⇒ 着色不显示
 // 历史：v1069 14→15——根因：recs 构建结果随 IndexedDB 持久化（v931）、
                          //   命中后跳过重建；仅改 _decorRe 等**构建期过滤**时，旧 rec 会长期残留（实测南瓜 rec 改过滤后仍显示）。
@@ -7361,7 +7361,7 @@ function lbRankRender(){
   var keys = avail.map(function(a){ return a.key; });
   if(!LB._rankTab || keys.indexOf(LB._rankTab) < 0) LB._rankTab = keys[0];
   var h = '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px">'
-    // v1346（用户要求）：去掉面板顶部「装备榜 · 物种名」标题（只留 TAB 行；物种名由上方筛选栏体现）
+    + '<span style="font-size:12px;font-weight:700;color:#e8e8ee;margin-right:4px">\u88c5\u5907\u699c \u00b7 ' + lbAttr(spName) + '</span>'
     // v1344（用户要求）：装备榜 TAB 完全对齐页面 TAB（.server-tab：图标 + active 紫 + 右上角数字角标）
     //   图标与「聚落按钮角标」同源，不新增图标：鞍 = RW_equip_saddle、蓝图 = IconMiscNoteType
     + avail.map(function(k){
@@ -11588,17 +11588,7 @@ function lbFacSplitAreas(layerItems, epsXY, minPts){
 //   注：原「设施自定义名（按频次/几何中心）」二级回退已删除——它会把设施名（如「庇护所东部」）误当区域名显示。
 // v1319（用户提供真实类名）：区域命名白名单 = 立式小铁牌 Sign_Small_Metal_C + **壁挂金属牌 Sign_Wall_Metal_C**
 //   用户口径：壁挂木牌 Sign_Wall_Wood_C **不参与**命名；悬挂牌 / 大型广告牌同样不参与
-// v1347（用户要求）：**墙上挂的圣诞袜 Sign_Wall_Stocking 也参与命名**，但**优先级低于铁牌**（见 lbAreaSignRank）
-//   ⚠ 后端依赖：袜子当前不在牌子白名单（cryo.signDiag 里 inWhitelist=0）⇒ 未写进 structures ⇒
-//   需后端把 Sign_Wall_Stocking 加入牌子白名单后前端才能拿到（用户选择「方案A：等后端改」）
-var LB_AREA_SIGN_RE = /Sign_Small_Metal|Sign_Wall_Metal|Sign_Wall_Stocking/i;
-// v1347：区域命名牌子优先级（数字越小优先）——0 = 金属铁牌；1 = 圣诞袜；99 = 不参与
-function lbAreaSignRank(cls){
-  var c = String(cls || '');
-  if(/Sign_Small_Metal|Sign_Wall_Metal/i.test(c)) return 0;
-  if(/Sign_Wall_Stocking/i.test(c)) return 1;
-  return 99;
-}
+var LB_AREA_SIGN_RE = /Sign_Small_Metal|Sign_Wall_Metal/i;
 function lbFacAreaName(items){
   if(!items || !items.length) return null;
   for(var i=0;i<items.length;i++){
@@ -11655,13 +11645,11 @@ function lbFacAreasBuild(fList, efList, signList){
     });
     out.forEach(function(a, ai){
       var bb = bbs[ai]; if(!bb) return;
-      var bs = null, bd = Infinity, bsRank = 99;
+      var bs = null, bd = Infinity;
       sl.forEach(function(sg, si){
         if(sOwner[si] !== ai) return;
-        var rk = lbAreaSignRank(sg.cls);            // v1347：铁牌(0) > 圣诞袜(1)；优先级更低者直接不看
-        if(rk > bsRank) return;
         var dx = (Number(sg.x) || 0) - bb.cx, dy = (Number(sg.y) || 0) - bb.cy, d = dx * dx + dy * dy;
-        if(rk < bsRank || d < bd){ bsRank = rk; bd = d; bs = sg; }
+        if(d < bd){ bd = d; bs = sg; }
       });
       if(bs){ var nm = String(bs.name || '').trim(); if(nm) a.name = nm; }
     });
