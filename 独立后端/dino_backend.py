@@ -129,6 +129,7 @@ CMD_GET_DINO = 'TransferIdentityFix.ArkGetDino'
 CMD_MOVE_DEATH_BAG = 'TransferIdentityFix.MoveDeathBag'
 CMD_MOVE_ALL_PENDINGS = 'TransferIdentityFix.MoveAllPendings'
 CMD_RENAME_DINO = 'TransferIdentityFix.RenameDino'
+CMD_RENAME_CONTAINER = 'TransferIdentityFix.RenameContainer'   # v1326：容器箱改名（仅容器，床/棺/牌/碑后端会拒绝并给 hint）
 CMD_EGG_PROBE = 'TransferIdentityFix.EggProbe'
 CMD_INV_PROBE = 'TransferIdentityFix.InvProbe'  # 2026-09-04：库存扫描（饲料槽/风行蜥/未成年背包物品）
 CMD_CRAFTING_COST = 'TransferIdentityFix.CraftingCost'  # 2026-09-13：单蓝图制作材料（只读、无副作用）
@@ -757,6 +758,52 @@ def rename_dino(server, dino_id1, dino_id2, new_name):
          'dino_id1': dino_id1, 'dino_id2': dino_id2, 'name': new_name,
          'detail': detail, 'result': str(result)[:800], 'ts': str(datetime.now())}
     return r
+
+
+def rename_container(server, obj, new_name):
+    """容器箱改名（v1326）：RCON TransferIdentityFix.RenameContainer <objName|实例尾号> <新名>（tif.operator 权限）。
+
+    - 仅 APrimalStructureItemContainer 及子类（储物箱/保险柜/低温冰箱/展示台/泰克专储/工业熔炉/化学台…）可改；
+      床 / 棺材 / 牌子无官方同步通道 ⇒ DLL 返回 container not found + hint。
+    - 名字限制：非空、≤60 UTF-8 字节、不含控制字符（前端已拦截，这里兜底）。
+    - 返回：DLL 的 JSON 原样透传（ok / objName / class / field / old / new / readback / verified / dup / detail），
+      解析失败时返回 {ok, server, obj, name, result}。
+    """
+    port = SERVERS.get(server)
+    if not port:
+        return {'ok': False, 'server': server, 'error': 'unknown server'}
+    obj_s = str(obj or '').strip()
+    name = (new_name or '').strip()
+    if not obj_s:
+        return {'ok': False, 'server': server, 'error': 'usage: RenameContainer <objName|instanceSuffix> <new name>'}
+    if not name:
+        return {'ok': False, 'server': server, 'error': 'name empty'}
+    nbytes = len(name.encode('utf-8'))
+    if nbytes > 60:
+        return {'ok': False, 'server': server, 'error': 'name too long (%d bytes, max 60)' % nbytes}
+    if any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in name):
+        return {'ok': False, 'server': server, 'error': 'name contains control char'}
+    try:
+        success, result = _rcon_str(port, '%s %s %s' % (CMD_RENAME_CONTAINER, obj_s, name))
+    except Exception as e:
+        return {'ok': False, 'server': server, 'obj': obj_s, 'error': str(e)}
+    detail = {}
+    if result:
+        try:
+            j = json.loads(result)
+            if isinstance(j, dict):
+                detail = j
+        except Exception:
+            pass
+    if detail:
+        out = dict(detail)
+        out.setdefault('server', server)
+        out.setdefault('obj', obj_s)
+        out.setdefault('name', name)
+        out.setdefault('ts', str(datetime.now()))
+        return out
+    return {'ok': bool(success), 'server': server, 'obj': obj_s, 'name': name,
+            'result': str(result)[:800], 'ts': str(datetime.now())}
 
 
 def inv_probe(server, filter_s, tribe_id, max_n):
@@ -1538,6 +1585,19 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(400, {'ok': False, 'error': 'missing args'})
                 return
             self._send(200, rename_dino(server, dino_id1, dino_id2, name))
+        # 容器箱改名（登录用户，前端仅自己部落的容器箱显示「改名」按钮）：/api/rename_container
+        elif path.endswith('rename_container'):
+            username = g('username')
+            if not username:
+                self._send(401, {'ok': False, 'error': 'login required'})
+                return
+            server = g('server')
+            obj = g('obj') or g('objName') or g('objname')
+            name = g('name')
+            if not (server and obj and name):
+                self._send(400, {'ok': False, 'error': 'missing args'})
+                return
+            self._send(200, rename_container(server, obj, name))
         else:
             self._send(404, {'ok': False, 'error': 'not found'})
 

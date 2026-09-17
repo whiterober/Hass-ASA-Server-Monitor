@@ -68,11 +68,11 @@ html::-webkit-scrollbar-track{background:transparent}
 html::-webkit-scrollbar-thumb{background:#333;border-radius:3px}
 html::-webkit-scrollbar-thumb:hover{background:#555}
 /* 统一滚动条样式（所有可滚动容器，2026-08-12）：筛选列表/物种选择/浮窗等与主列表一致（scrollbar-width 非继承、::-webkit-scrollbar 不继承，需逐容器声明） */
-#rightCol,#lbList,.file-list,.lb-picker-grid,.lb-confirm-overlay,.lb-modal-box,#previewPopupContent,#lbBreedResult,#lbBreedOverlay,.lb-modal-scroll{scrollbar-width:thin;scrollbar-color:#333 transparent}
-#rightCol::-webkit-scrollbar,#lbList::-webkit-scrollbar,.file-list::-webkit-scrollbar,.lb-picker-grid::-webkit-scrollbar,.lb-confirm-overlay::-webkit-scrollbar,.lb-modal-box::-webkit-scrollbar,#previewPopupContent::-webkit-scrollbar,#lbBreedResult::-webkit-scrollbar,#lbBreedOverlay::-webkit-scrollbar,.lb-modal-scroll::-webkit-scrollbar{width:5px}
-#rightCol::-webkit-scrollbar-track,#lbList::-webkit-scrollbar-track,.file-list::-webkit-scrollbar-track,.lb-picker-grid::-webkit-scrollbar-track,.lb-confirm-overlay::-webkit-scrollbar-track,.lb-modal-box::-webkit-scrollbar-track,#previewPopupContent::-webkit-scrollbar-track,#lbBreedResult::-webkit-scrollbar-track,#lbBreedOverlay::-webkit-scrollbar-track,.lb-modal-scroll::-webkit-scrollbar-track{background:transparent}
-#rightCol::-webkit-scrollbar-thumb,#lbList::-webkit-scrollbar-thumb,.file-list::-webkit-scrollbar-thumb,.lb-picker-grid::-webkit-scrollbar-thumb,.lb-confirm-overlay::-webkit-scrollbar-thumb,.lb-modal-box::-webkit-scrollbar-thumb,#previewPopupContent::-webkit-scrollbar-thumb,#lbBreedResult::-webkit-scrollbar-thumb,#lbBreedOverlay::-webkit-scrollbar-thumb,.lb-modal-scroll::-webkit-scrollbar-thumb{background:#333;border-radius:3px}
-#rightCol::-webkit-scrollbar-thumb:hover,#lbList::-webkit-scrollbar-thumb:hover,.file-list::-webkit-scrollbar-thumb:hover,.lb-picker-grid::-webkit-scrollbar-thumb:hover,.lb-confirm-overlay::-webkit-scrollbar-thumb:hover,.lb-modal-box::-webkit-scrollbar-thumb:hover,#previewPopupContent::-webkit-scrollbar-thumb:hover,#lbBreedResult::-webkit-scrollbar-thumb:hover,#lbBreedOverlay::-webkit-scrollbar-thumb:hover{background:#555}
+#rightCol,#lbList,.file-list,.lb-picker-grid,.lb-confirm-overlay,.lb-modal-box,#previewPopupContent,#lbBreedResult,#lbRankResult,#lbBreedOverlay,.lb-modal-scroll{scrollbar-width:thin;scrollbar-color:#333 transparent}
+#rightCol::-webkit-scrollbar,#lbList::-webkit-scrollbar,.file-list::-webkit-scrollbar,.lb-picker-grid::-webkit-scrollbar,.lb-confirm-overlay::-webkit-scrollbar,.lb-modal-box::-webkit-scrollbar,#previewPopupContent::-webkit-scrollbar,#lbBreedResult::-webkit-scrollbar,#lbRankResult::-webkit-scrollbar,#lbBreedOverlay::-webkit-scrollbar,.lb-modal-scroll::-webkit-scrollbar{width:5px}
+#rightCol::-webkit-scrollbar-track,#lbList::-webkit-scrollbar-track,.file-list::-webkit-scrollbar-track,.lb-picker-grid::-webkit-scrollbar-track,.lb-confirm-overlay::-webkit-scrollbar-track,.lb-modal-box::-webkit-scrollbar-track,#previewPopupContent::-webkit-scrollbar-track,#lbBreedResult::-webkit-scrollbar-track,#lbRankResult::-webkit-scrollbar-track,#lbBreedOverlay::-webkit-scrollbar-track,.lb-modal-scroll::-webkit-scrollbar-track{background:transparent}
+#rightCol::-webkit-scrollbar-thumb,#lbList::-webkit-scrollbar-thumb,.file-list::-webkit-scrollbar-thumb,.lb-picker-grid::-webkit-scrollbar-thumb,.lb-confirm-overlay::-webkit-scrollbar-thumb,.lb-modal-box::-webkit-scrollbar-thumb,#previewPopupContent::-webkit-scrollbar-thumb,#lbBreedResult::-webkit-scrollbar-thumb,#lbRankResult::-webkit-scrollbar-thumb,#lbBreedOverlay::-webkit-scrollbar-thumb,.lb-modal-scroll::-webkit-scrollbar-thumb{background:#333;border-radius:3px}
+#rightCol::-webkit-scrollbar-thumb:hover,#lbList::-webkit-scrollbar-thumb:hover,.file-list::-webkit-scrollbar-thumb:hover,.lb-picker-grid::-webkit-scrollbar-thumb:hover,.lb-confirm-overlay::-webkit-scrollbar-thumb:hover,.lb-modal-box::-webkit-scrollbar-thumb:hover,#previewPopupContent::-webkit-scrollbar-thumb:hover,#lbBreedResult::-webkit-scrollbar-thumb:hover,#lbRankResult::-webkit-scrollbar-thumb:hover,#lbBreedOverlay::-webkit-scrollbar-thumb:hover{background:#555}
 /* #lbList 隐藏原生滚动条（v363 方案B：滚动条不占内容宽度；overlay 已废弃回退 auto，故用隐藏方案） */
 #lbList{scrollbar-width:none;-ms-overflow-style:none}
 #lbList::-webkit-scrollbar{display:none}
@@ -468,8 +468,9 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260916-2895';
-var LB_SCHEMA_VER = 15;  // v1069：14→15 强制 IndexedDB 缓存重建——根因：recs 构建结果随 IndexedDB 持久化（v931）、
+var LB_VERSION = 'v20260917-3319';
+var LB_SCHEMA_VER = 16;  // v1323：15→16 强制缓存重建——recs 新增 colorRegions（建筑涂装）字段，旧缓存无此字段 ⇒ 着色不显示
+// 历史：v1069 14→15——根因：recs 构建结果随 IndexedDB 持久化（v931）、
                          //   命中后跳过重建；仅改 _decorRe 等**构建期过滤**时，旧 rec 会长期残留（实测南瓜 rec 改过滤后仍显示）。
                          //   lbCacheGet 校验 _schemaVer !== LB_SCHEMA_VER → resolve(null) → 全量重拉重建。
                          //   （v971 原注释：数据 schema 版本唯一来源，下载写入与 3 处校验统一引用）
@@ -530,6 +531,7 @@ function loadASB() {
       if (bpNoC !== s.blueprintPath) ASB_DB._byBp[bpNoC] = s;
     }
     LB_FSBC_CACHE = {}; // v598：ASB 加载完成后清空 findSpeciesByClass 缓存（加载前可能缓存了 null）
+    LB_RANK_SP_CACHE = {}; LB_ASB_NAME_MAP = null; // v1316：装备榜物种键同样依赖 ASB 权威名 → 一并清空重建
     console.log('ASB loaded: ' + db.species.length + ' species');
     return ASB_DB;
   });
@@ -4028,7 +4030,9 @@ async function lbLoad(servers, oldData, onProgress){ // v207：onProgress({phase
   var lm = {}; // 本次各文件 Last-Modified 记录（存缓存）
   var dlBad = {}; // v1228：每服数据不全记录 {abbr:[原因...]}——聚落计算跳过 + UI 提醒
   function lbAddRec(rec){
-    var key = rec.isEmpty ? ('empty_'+(rec.podId||rec.containerId||'empty')) : ((rec.dinoId1||'') + '_' + (rec.dinoId2||''));
+    // v1300：dinoId 空值统一归一为 0 —— 旧缓存 dinoId2=''（键 '123_'）与新数据 dinoId2=0（键 '123_0'）会各存一条 ⇒
+    //   同一颗球首次刷新出现「复制体」，再刷新（两边格式一致）又消失。实测用户 iPad 现象完全吻合。
+    var key = rec.isEmpty ? ('empty_'+(rec.podId||rec.containerId||'empty')) : (String(rec.dinoId1||0) + '_' + String(rec.dinoId2||0));
     var old = recMap[key];
     if(!old || (rec.sortWorldSec||0) > (old.sortWorldSec||0)) recMap[key] = rec;
   }
@@ -4101,7 +4105,7 @@ async function lbLoad(servers, oldData, onProgress){ // v207：onProgress({phase
       name:p.name||'', level:p.level||0, gender:p.gender||'', babyAge:p.babyAge, isBaby:p.isBaby, tribeId:p.tribeId,
       statValues:p.statValues||[], statPoints:p.statPoints||[], statMutations:p.statMutations||[], imprintingQuality:p.imprintingQuality,
       randomMutationsMale:p.randomMutationsMale, randomMutationsFemale:p.randomMutationsFemale, ancestors:p.ancestors||[], colors:p.colors||'',
-      saddle:p.saddle||'', cryoVersion:p.cryoVersion, sortWorldSec:p.packedAtWorldSec||0, srcWorld:'packed', absMs:p.downloadedAtMs||0, geneTraits:p.geneTraits||[],
+      saddle:p.saddle||'', saddleInfo:(p.saddleInfo||null), cryoVersion:p.cryoVersion, sortWorldSec:p.packedAtWorldSec||0, srcWorld:'packed', absMs:p.downloadedAtMs||0, geneTraits:p.geneTraits||[],   // v1305：球内鞍属性块（has/rating/qidx/durability/blueprint/stats[8]）
       containerId:p.containerId, containerType:ct, containerName:p.containerName||'', containerClass:p.containerClass||'', containerTribe:p.containerTribe,
       ownerTribeId:p.containerTribe||0, playerName:p.playerName||'',
       containerOwnerPid:(p.containerOwnerPid!==undefined?p.containerOwnerPid:null), containerOwnerEosId:(p.containerOwnerEosId!==undefined?p.containerOwnerEosId:null),
@@ -4115,7 +4119,7 @@ async function lbLoad(servers, oldData, onProgress){ // v207：onProgress({phase
       name:d.name||'', level:d.level||0, gender:d.gender||'', babyAge:d.babyAge, isBaby:d.isBaby, tribeId:d.tribeId,
       currentStatValues:d.currentStatValues||[], statValues:d.statValues||[], statPoints:d.statPoints||[], statMutations:d.statMutations||[], imprintingQuality:d.imprintingQuality,
       randomMutationsMale:d.randomMutationsMale, randomMutationsFemale:d.randomMutationsFemale, ancestors:d.ancestors||[], colors:d.colors||'',
-      saddle:d.saddle||'', cryoVersion:0, sortWorldSec:ws, srcWorld:(d.downloadedAtWorldSec?'downloaded':(d.tamedAtWorldSec?'tamed':'')), absMs:0, geneTraits:d.geneTraits||[],
+      saddle:d.saddle||'', saddleInfo:(d.saddleInfo||null), cryoVersion:0, sortWorldSec:ws, srcWorld:(d.downloadedAtWorldSec?'downloaded':(d.tamedAtWorldSec?'tamed':'')), absMs:0, geneTraits:d.geneTraits||[],   // v1305：放出鞍属性块（后端已全地图统一补）
       nextAllowedMatingTime:(d.nextAllowedMatingTime?Number(d.nextAllowedMatingTime)||0:0), // v7xx：交配冷却世界秒
       containerId:'', containerType:'released', containerName:'放出', containerClass:'', containerTribe:0, ownerTribeId:d.tribeId||0,
       containerX:(d.x!==undefined?d.x:0), containerY:(d.y!==undefined?d.y:0), containerZ:(d.z!==undefined?d.z:0),
@@ -4242,7 +4246,7 @@ async function lbLoad(servers, oldData, onProgress){ // v207：onProgress({phase
           // 容器 vs 设施不再由词表预判分裂——渲染时按「该设施有无内容 rec(球/基因/蓝图)」动态判定：
           //   有内容 → 容器手风琴；无内容 → 设施 chips；装饰类 → 显示排除
           // 容器子类型词表（LB_CONTAINER_DISP._cls）仅作命名/图标/排序用（lbContainerTypeOf 派生），不再决定是否生成 rec
-          var _decorRe = /Lamp|Light|Chair|Seat|WoodBench|Stool|Sign_Large_Metal|WoodSign|MetalSign|Sign_Small_Wood|Sign_Small_Metal|HangingSign|Sign_Large_Wood|MetalSign_Large|WoodSign_Large|Painting|DrawingSheet|Poster|Canvas|Mirror|Decor|Display_Box|Snowman|ChristmasTree|Pumpkin|Wreath/i; // 装饰类（显示排除，不进容器/设施）v914：+Decor（装饰箱）v927：+Snowman/ChristmasTree（节日树/雪人）v1000：-Torch（火把类设施已采集，需显示并合并）v20260912-1022：Bench→WoodBench（原宽泛词误杀铁匠台 AnvilBench 等 7 个生产设施）v1036：+6 个标牌类（小木牌/小金属牌/悬挂牌/大牌旧词序）——标识牌不显示在设施列表；墓碑不在内（保留）v1068：+Pumpkin/Wreath（立式南瓜等节日装饰；用户实测 StructureBP_Pumpkin_Standing 显示在设施里）
+          var _decorRe = /Lamp|Light|Chair|Seat|WoodBench|Stool|Sign_Large_Metal|WoodSign|MetalSign|Sign_Small_Wood|Sign_Small_Metal|Sign_Wall_Metal|Sign_Wall_Wood|HangingSign|Sign_Large_Wood|MetalSign_Large|WoodSign_Large|Painting|DrawingSheet|Poster|Canvas|Mirror|Decor|Display_Box|Snowman|ChristmasTree|Pumpkin|Wreath/i; // 装饰类（显示排除，不进容器/设施）v914：+Decor（装饰箱）v927：+Snowman/ChristmasTree（节日树/雪人）v1000：-Torch（火把类设施已采集，需显示并合并）v20260912-1022：Bench→WoodBench（原宽泛词误杀铁匠台 AnvilBench 等 7 个生产设施）v1036：+6 个标牌类（小木牌/小金属牌/悬挂牌/大牌旧词序）——标识牌不显示在设施列表；墓碑不在内（保留）v1068：+Pumpkin/Wreath（立式南瓜等节日装饰；用户实测 StructureBP_Pumpkin_Standing 显示在设施里）
           var _decorKeepRe = /LightningRod|AnvilBench|ChemBench|Warbench/i; // v20260912-1022：含装饰词但确为生产设施 → 豁免（防 Light 误伤避雷针、防未来回归）
           (cryo.facilities||[]).forEach(function(f){
             if(!f || !f.class) return;
@@ -4257,6 +4261,7 @@ async function lbLoad(servers, oldData, onProgress){ // v207：onProgress({phase
               randomMutationsMale:0, randomMutationsFemale:0, ancestors:[], colors:'',
               saddle:'', cryoVersion:0, sortWorldSec:0, srcWorld:'', absMs:0, geneTraits:[],
               containerId:f.key, containerType:_sub, containerName:f.name||'', containerClass:_cc, containerTribe:Number(f.tribeId||0), ownerTribeId:Number(f.tribeId||0),
+              colorRegions:(f.colorRegions||null),   // v1322：建筑涂装（变长 0–5 下标；-1=未设置；值=ARK 调色板索引；缺省=无染色数据）
               playerName:'', containerOwnerPid:null, containerOwnerEosId:null,
               containerX:Number(f.x)||0, containerY:Number(f.y)||0, containerZ:Number(f.z)||0,
               imprinterName:'', imprinterEosId:'' });
@@ -4304,6 +4309,16 @@ async function lbLoad(servers, oldData, onProgress){ // v207：onProgress({phase
     await Promise.all(batch);
   }
   recs = Object.values(recMap);
+  // v1300：出口兜底二次去重（归一键）——防增量路径（eggCache/缓存复用等）再次引入同键记录
+  (function(){
+    var _seen = {};
+    recs = recs.filter(function(r){
+      var k = r.isEmpty ? ('empty_'+(r.podId||r.containerId||'empty')) : (String(r.dinoId1||0) + '_' + String(r.dinoId2||0));
+      if(_seen[k]) return false;
+      _seen[k] = 1;
+      return true;
+    });
+  })();
   var out = {recs:recs, tribesByServer:tribesByServer, worldNowByServer:worldNowByServer};
   out.players = Object.keys(playersByEos).map(function(eos){ return playersByEos[eos]; });
   // v1040：角色→服务器映射自愈（零下载，三路补齐）
@@ -4704,7 +4719,10 @@ function lbBuildSettlements(data){
       if(g2) return g2.name;
       var g3 = _pick(/Gravestone/i);                                                       // ③ 墓碑（降级至广告牌与床之后）
       if(g3) return g3.name;
-      var g4 = _pick(/./);                                                                 // ④ 其余带名字者
+      // v1320（用户要求）：④ 兜底同样**剔除全部小牌 / 壁挂牌**（两处聚落命名路径口径必须一致）
+      var _g4ex = /Sign_|MetalSign|WoodSign|HangingSign|Billboard/i;
+      var _g4t = own.filter(function(st){ return st && st.name && !_g4ex.test(String(st.class||'')); });
+      var g4 = _g4t.length ? nearest(_g4t) : null;                                        // ④ 其余带名字者（不含小牌）
       if(g4) return g4.name;
       return null;
     };
@@ -4746,7 +4764,7 @@ function lbBuildSettlements(data){
     lbSettlePhase(abbr + ':床/命名归属完成');
     // v821 设施唯一归属：structures(床/墓碑/棺材等) 同部落最近聚落（设施 rec 已统一进容器体系，不再需要独立归属通道）
     // 每设施消费唯一化（与 bedOwner 同模式）；装饰（灯/椅/牌/画）不参与归属 → 存 s.facilityList（设施区显示）
-    var _facDecorRe = /Lamp|Light|Chair|Seat|WoodBench|Stool|Sign_Large_Metal|WoodSign|MetalSign|Sign_Small_Wood|Sign_Small_Metal|HangingSign|Sign_Large_Wood|MetalSign_Large|WoodSign_Large|Painting|DrawingSheet|Poster|Canvas|Mirror|Decor|Display_Box|Snowman|ChristmasTree|Pumpkin|Wreath/i; // v914：+Decor（装饰箱）v927：+Snowman/ChristmasTree v20260912-1022：Bench→WoodBench（同源误伤修复）v1036：+6 个标牌类（标识牌不进 facilityList；墓碑 StructureBP_Gravestone 不在内，保留显示）v1068：+Pumpkin/Wreath（同源同步）
+    var _facDecorRe = /Lamp|Light|Chair|Seat|WoodBench|Stool|Sign_Large_Metal|WoodSign|MetalSign|Sign_Small_Wood|Sign_Small_Metal|Sign_Wall_Metal|Sign_Wall_Wood|HangingSign|Sign_Large_Wood|MetalSign_Large|WoodSign_Large|Painting|DrawingSheet|Poster|Canvas|Mirror|Decor|Display_Box|Snowman|ChristmasTree|Pumpkin|Wreath/i; // v914：+Decor（装饰箱）v927：+Snowman/ChristmasTree v20260912-1022：Bench→WoodBench（同源误伤修复）v1036：+6 个标牌类（标识牌不进 facilityList；墓碑 StructureBP_Gravestone 不在内，保留显示）v1068：+Pumpkin/Wreath（同源同步）
     var _facDecorKeepRe = /LightningRod|AnvilBench|ChemBench|Warbench/i; // v20260912-1022：生产设施豁免
     var _facCands = (Array.isArray(data.structures)?data.structures:[]); // v821：facilityStructs 已弃用（已放置设施统一生成 facility rec，经容器聚合自动入聚落）
     // v20260912：去掉 52 万条数组复制（原 forEach push 深复制一遍，纯浪费内存与时间）
@@ -4945,7 +4963,11 @@ function lbSettlementBuildingName(data, abbr, tid, cx, cy){
   if(beds.length) return lbNearestStructure(beds, cx, cy);
   var tomb = cands.filter(function(s){ return /Gravestone/i.test(s.class||''); });
   if(tomb.length) return lbNearestStructure(tomb, cx, cy);
-  return lbNearestStructure(cands, cx, cy);
+  // v1320（用户要求）：④ 兜底**剔除全部小牌 / 壁挂牌**（Sign_Small_* / Sign_Wall_* / MetalSign / WoodSign / HangingSign）
+  //   原因：小牌专用于「区域命名」（LB_AREA_SIGN_RE 通道），不该抢聚落名；大广告牌已在 ① 处理，不受影响
+  var _rest = cands.filter(function(s){ return !/Sign_|MetalSign|WoodSign|HangingSign|Billboard/i.test(String(s.class||'')); });
+  if(!_rest.length) return null;
+  return lbNearestStructure(_rest, cx, cy);
 }
 // 聚落收尾：计算 center/radius/容器数/球数 + 冠名（§8）
 function lbFinalizeSettlement(data, abbr, tid, sid, containers){
@@ -5650,6 +5672,47 @@ function lbTamedDom(r){
   if(r._dom){ store[ckey] = r._dom; lbDomSaveStore(store); }
   return r._dom;
 }
+// v1305：点击鞍图标 → 复用物品大卡片 + 既有浮窗显示「完整鞍卡片」
+//   数据来自 data-saddle（鞍类名）/ data-info（saddleInfo JSON）
+//   要点：stats 是原始 uint16（65534≈满值，不是 100）⇒ 交给 lbStatRows 换算；
+//         stats=[] 表示未解析到属性（非白鞍）；rating<=0（-1=白鞍）不显示评分。
+function lbShowSaddleCard(el){
+  var saddle = (el && el.getAttribute) ? (el.getAttribute('data-saddle') || '') : '';
+  if(!saddle) return;
+  var info = null;
+  try{ info = JSON.parse(el.getAttribute('data-info') || 'null'); }catch(e){ info = null; }
+  lbShowSaddleInfo(saddle, info);
+}
+// v1311：鞍卡渲染核心（抽自 lbShowSaddleCard，供「搜ID」结果直接复用）
+function lbShowSaddleInfo(saddle, info){
+  try{
+    if(!saddle) return;
+    if(!info || typeof info !== 'object') info = {};
+    var st = Array.isArray(info.stats) ? info.stats : [];                       // [] = 无属性数据
+    var rt = (Number(info.rating) > 0) ? Number(info.rating) : 0;               // -1（白鞍）→ 不显示评分
+    var qd = (Number(info.qidx) >= 0) ? Number(info.qidx) : 0;
+    var mm = null; try{ mm = lbItemMeta(saddle); }catch(e){ mm = null; }
+    var ov = document.getElementById('lbBreedOverlay');
+    var body = document.getElementById('lbBreedOverlayBody');
+    if(!ov || !body) return;
+    body.innerHTML = lbItemCardHtml({
+      cls: saddle, inst: '', zh: (mm && mm.zh) || '', en: (mm && mm.en) || '',
+      icon: (mm && mm.icon) || '', kind: 'saddle', qty: 0, n: 1,
+      best: { 'class': saddle, zh: (mm && mm.zh) || '', en: (mm && mm.en) || '', icon: (mm && mm.icon) || '',
+              kind: 'saddle', key: '', qidx: qd, rating: rt, stats: st,
+              // v1310：鞍实例 ID（后端 saddleInfo.id1/id2）→ ID 按钮显示/复制 #id1_id2（与生物卡同款）
+              sid: ((info.id1 !== undefined && info.id1 !== null && info.id2 !== undefined && info.id2 !== null) ? ('#' + info.id1 + '_' + info.id2) : '') },
+      onlySlots: [1, 2]   // v1306：鞍只渲染 stats[1] 护甲 / stats[2] 耐久（其余槽恒 0、无意义）
+    });
+    ov.style.display = 'block';
+    // 属性模板表未就绪时 lbStatRows 会回退原始值 → 就绪后补渲染一次（同 lbRankOpen 做法）
+    try{
+      if(!LB_ITEM_STATS && typeof lbItemStatsLoad === 'function'){
+        lbItemStatsLoad().then(function(){ if(ov.style.display === 'block') lbShowSaddleCard(el); });
+      }
+    }catch(e){}
+  }catch(e){}
+}
 function lbDinoHTML(r, opts){
   var isEgg = !!(r._isEgg || r.source==='egg'); // v500：蛋记录（_eggs.json.gz 转换）
   // 物种名：仅「全部物种」模式显示（LB.curClass 为空）；直接复用浮窗 lbSpName（完整逻辑：特殊名/前缀/深度查询，与浮窗一致），无中文显示英文
@@ -5952,7 +6015,7 @@ function lbDinoHTML(r, opts){
     +(r.name ? '<b data-dn="'+r.dinoId1+'_'+r.dinoId2+'" style="color:#fff;font-size:14px">'+lbDispName(r)+'</b>' : '') // v613：繁殖默认名（婴儿 XX-等级N）净化显示空白
     +'<span style="display:inline-flex;align-items:center;height:18px;background:#22223a;border:1px solid #333;border-radius:2px;padding:0 8px;font-size:11px;color:#ccc;line-height:1">Lv.'+r.level+'</span>'
     +(isEgg && lbIsEggIncubator(r) && typeof r.slotIndex==='number' && r.slotIndex>=0 && r.slotIndex<10 ? '<span style="display:inline-flex;align-items:center;height:18px;background:#7c3aed33;border:1px solid #7c3aed66;border-radius:2px;padding:0 6px;font-size:10px;color:#c4b5fd;line-height:1" title="孵化器栏位">槽'+(r.slotIndex+1)+'</span>' : '') // v603：槽位徽章仅 Egg Incubator 容器显示 + 槽N（slotIndex+1，槽1~槽10）
-    +(r.saddle?'<span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:2px;background:'+(/platform/i.test(r.saddle)?'#fb923c':(/tek/i.test(r.saddle)?'#7c3aed':'#38bdf8'))+';color:#fff">'+lbSaddleImg(r.saddle)+'</span>':'')
+    +(r.saddle?'<span onclick="event.stopPropagation();lbShowSaddleCard(this)" data-saddle="'+lbAttr(r.saddle)+'" data-info="'+lbAttr(r.saddleInfo?JSON.stringify(r.saddleInfo):'')+'" title="点击查看鞍卡片" style="cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:2px;background:'+(/platform/i.test(r.saddle)?'#fb923c':(/tek/i.test(r.saddle)?'#7c3aed':'#38bdf8'))+';color:#fff">'+lbSaddleImg(r.saddle)+'</span>':'')   // v1305：点击弹完整鞍卡片（卡片其余不变）
     +tbTag
     +(opts && opts.trackBtn ? '<span style="display:inline-flex;align-items:center">'+opts.trackBtn+'</span>' : '') // v435：可选追踪按钮；v440：移到第一行末尾（鞍/留痕图标之后，流右侧）
     +'</div>'
@@ -6877,21 +6940,62 @@ var LB_ITEM_RANK_KINDS = [
   { key:'bp',     label:'蓝图', mineOnly:false, externalMax:5,
     pick:function(it){ return lbIsBp(it) && !lbIsFixedRecipeBp(it); } }
 ];
-// 物品 class → 物种英文短名（PrimalItemArmor_MegalaniaSaddle_C_2143343857 → Megalania；带缓存）
-// 生物 class 同样可用（Rex_Character_BP_C → Rex），保证两边同一量纲便于比对
+// v1316（用户指正）：装备榜物种键**改用 ASB 权威名**，不再自造字符串归一
+//   旧问题：恐龙类名归一得 "Argent"，而鞍类名归一得 "Argentavis" ⇒ 两侧键不一致 ⇒ 按钮/结果全空
+//   新规则：① 恐龙类名 → findSpeciesByClass().name（ASB 权威，如 Argent_Character_BP_C → Argentavis）
+//          ② 物品类名 → item_zh.json 权威英文名剥离鞍后缀（"Argentavis Saddle (Platform)" → Argentavis）→ 查 ASB 名表
+//          ③ 两路都未命中才回退字符串规则（兜底：无 ASB 数据的特殊项）
 var LB_RANK_SP_CACHE = {};
+var LB_ASB_NAME_MAP = null;
+function lbAsbNameMap(){
+  if(LB_ASB_NAME_MAP) return LB_ASB_NAME_MAP;
+  var m = {};
+  try{
+    if(typeof ASB_DB !== 'undefined' && ASB_DB && ASB_DB._byBp){
+      for(var k in ASB_DB._byBp){
+        var sp = ASB_DB._byBp[k];
+        if(sp && sp.name) m[String(sp.name).toLowerCase()] = String(sp.name);
+      }
+    }
+  }catch(e){}
+  LB_ASB_NAME_MAP = m;
+  return m;
+}
+// 物品权威英文名 → 物种名（剥「Saddle / Harness」及其后的括号/附加词）
+function lbSpFromItemName(en){
+  var s = String(en || '').trim();
+  if(!s) return '';
+  s = s.replace(/\s*[\(（].*$/, '');
+  s = s.replace(/\s*\b(?:Saddle|Harness)\b.*$/i, '');
+  return s.trim();
+}
 function lbRankSpecies(it){
   var c = String((it && it.class) || '');
   if(!c) return '';
   if(LB_RANK_SP_CACHE[c] !== undefined) return LB_RANK_SP_CACHE[c];
-  var s = c.replace(/_C_\d+$/, '').replace(/_C$/, '');
-  s = s.replace(/^PrimalItem(Structure|Armor|Weapon|Ammo|Resource|Consumable|Egg|Trophy|Skin|Dino)?_/, '');
-  s = s.replace(/^Tek(?:Saddle|Armor)_/, '');            // v1284：TekSaddle_X / TekArmor_X 前缀式
-  s = s.replace(/_Tek$/, '');                          // v1284：XSaddle_Tek 后缀式（实测真实类名，如 PrimalItemArmor_RexSaddle_Tek_C_2144618447）
-  s = s.replace(/_Character_BP.*$/, '').replace(/_BP.*$/, '');
-  s = s.replace(/Saddle$/, '');
-  LB_RANK_SP_CACHE[c] = s;
-  return s;
+  var out = '';
+  try{                                   // ① 生物类名 → ASB 权威名
+    var s1 = findSpeciesByClass(c);
+    if(s1 && s1.name) out = String(s1.name);
+  }catch(e){}
+  if(!out){                              // ② 物品类名 → 权威英文名剥鞍后缀 → ASB 名表对齐（大小写照 ASB）
+    try{
+      var mm = lbItemMeta(c), en = (mm && mm.en) || '';
+      var cand = lbSpFromItemName(en);
+      if(cand){ var hit = lbAsbNameMap()[cand.toLowerCase()]; if(hit) out = hit; }
+    }catch(e){}
+  }
+  if(!out){                              // ③ 兜底：原字符串归一
+    var s = c.replace(/_C_\d+$/, '').replace(/_C$/, '');
+    s = s.replace(/^PrimalItem(Structure|Armor|Weapon|Ammo|Resource|Consumable|Egg|Trophy|Skin|Dino)?_/, '');
+    s = s.replace(/^Tek(?:Saddle|Armor)_/, '');
+    s = s.replace(/_Tek$/, '');
+    s = s.replace(/_Character_BP.*$/, '').replace(/_BP.*$/, '');
+    s = s.replace(/Saddle$/, '');
+    out = s;
+  }
+  LB_RANK_SP_CACHE[c] = out;
+  return out;
 }
 // 惰性索引：全库 4.4 万条一次扫描；以 LB._cache 对象引用为缓存键（数据重载自动失效）
 function lbRankEnsure(){
@@ -6902,6 +7006,35 @@ function lbRankEnsure(){
   var curPid = (typeof lbCurPid === 'function') ? lbCurPid() : 0;
   var ps = curPid ? lbPlayerTribes(d.tribesByServer || {}, curPid) : {};
   var idx = { _c:LB._cache, sp:{}, n:0 };
+  // v1338（用户要求）：建两个只读索引——
+  //   ① 容器名索引：物品数据没 containerName，用 containerId 反查容器记录的名字（供小卡显示“鞍在哪个容器”）
+  //   ② 「容器内装鞍生物」索引：实物鞍条目点开时要配一张生物卡（该鞍装在哪个生物身上）——按 server+containerId+鞍基名 匹配
+  var _cnameById = {}, _dinoBySaddle = {};
+  // v1340（用户要求）：**恐龙背包容器 → 具体恐龙** 索引
+  //   实测（Isl/Ext/Sco 三服）：容器坐标与恐龙坐标**完全重合**（距离 0），且「同物种 + 同坐标」候选数恒为 1 ⇒ 零歧义
+  //   命中率：Isl 79/127(62%)、Ext 30/50(60%)、Sco 6/11(55%)；未命中的是「该恐龙不在 tamed 清单里」
+  //   恐龙物种词：去掉 _Character_BP_C / _Character_BP_Aberrant_C / _Character_BP 尾缀；坐标取 containerX/Y（tamed 侧=恐龙自身坐标）
+  var _dinoByPosSp = {};
+  (d.recs || []).forEach(function(_r){
+    if(!_r || !_r.dinoClass) return;
+    if(_r.src !== 'tamed' && _r.src !== 'cryo') return;
+    var _sp = String(_r.dinoClass).replace(/_Character_BP_Aberrant_C$/, '').replace(/_Character_BP_C$/, '').replace(/_Character_BP.*$/, '');
+    if(!_sp) return;
+    var _px = Math.round(Number(_r.containerX !== undefined ? _r.containerX : _r.x) || 0);
+    var _py = Math.round(Number(_r.containerY !== undefined ? _r.containerY : _r.y) || 0);
+    var _k = _r.server + '|' + _sp + '|' + _px + '|' + _py;
+    if(_dinoByPosSp[_k] === undefined) _dinoByPosSp[_k] = _r;
+  });
+  (d.recs || []).forEach(function(_r){
+    if(!_r) return;
+    var _cid = String(_r.containerId || ''), _cn = String(_r.containerName || '');
+    var _ck = _r.server + '_' + _cid;
+    if(_cid && _cn && _cn !== '?' && _cnameById[_ck] === undefined) _cnameById[_ck] = _cn;
+    if(!_r.isEmpty && _r.saddle && _cid){
+      var _sk = _ck + '_' + (typeof lbFacBaseKey === 'function' ? lbFacBaseKey(_r.saddle) : String(_r.saddle));
+      if(_dinoBySaddle[_sk] === undefined) _dinoBySaddle[_sk] = _r;
+    }
+  });
   Object.keys(d.itemsByServer).forEach(function(sv){
     if(!ownedMap[sv]) return;
     var bc = (d.itemsByServer[sv] && d.itemsByServer[sv].byCid) || {};
@@ -6912,16 +7045,134 @@ function lbRankEnsure(){
         var kk = null;
         for(var j = 0; j < LB_ITEM_RANK_KINDS.length; j++){ if(LB_ITEM_RANK_KINDS[j].pick(it)){ kk = LB_ITEM_RANK_KINDS[j].key; break; } }
         if(!kk) continue;
+        if(Number(it.qidx) === 0) continue;   // v1313（用户要求）：装备榜过滤「原始」品质（qidx=0；-1 未评级保留）
         var sp = lbRankSpecies(it); if(!sp) continue;
         var mine = !!ps[sv + ':' + Number(it.containerTribe || 0)];
+        // v1338：挂上容器名 + 关联生物（供小卡显示“在哪”+ 点开配生物卡）
+        it._cName = _cnameById[sv + '_' + String(it.containerId || '')] || '';
+        it._dinoRec = _dinoBySaddle[sv + '_' + String(it.containerId || '') + '_' + (typeof lbFacBaseKey === 'function' ? lbFacBaseKey(it['class'] || '') : String(it['class'] || ''))] || null;
+        // v1340（用户要求）：物品在**恐龙背包容器**里 ⇒ 用「物种 + 坐标」直接关联到那只恐龙
+        //   例：PrimalItemArmor_ArgentavisSaddle_C_2146404743 位于 DinoTamedInventoryComponent_Argent_C_2146405256
+        //       ⇒ 容器物种词 Argent + 容器坐标 ⇒ 命中 tamed 里同物种同坐标的阿根廷鹫 ⇒ 点开出生物卡
+        if(!it._dinoRec){
+          var _ccls = String(it.containerClass || '');
+          if(_ccls.indexOf('DinoTamedInventoryComponent') >= 0){
+            var _cm = _ccls.match(/^DinoTamedInventoryComponent_([A-Za-z0-9]+?)(?:_C_\d+)?$/);
+            var _spw = _cm ? _cm[1] : '';
+            if(_spw){
+              var _px2 = Math.round(Number(it.x) || 0), _py2 = Math.round(Number(it.y) || 0);
+              it._dinoRec = _dinoByPosSp[sv + '|' + _spw + '|' + _px2 + '|' + _py2] || null;
+              if(!it._dinoRec){   // 物种词与恐龙类名不完全同名时（缩写/变体）→ 前缀模糊匹配（仅同坐标）
+                var _pfx = sv + '|';
+                for(var _kk in _dinoByPosSp){
+                  if(_kk.indexOf(_pfx) !== 0) continue;
+                  var _seg = _kk.split('|');
+                  if(_seg[3] !== String(_px2) || _seg[4] !== String(_py2)) continue;
+                  if(_seg[1].indexOf(_spw) === 0 || _spw.indexOf(_seg[1]) === 0){ it._dinoRec = _dinoByPosSp[_kk]; break; }
+                }
+              }
+            }
+          }
+        }
+        // v1342（用户实测修复）：**同实例去重** —— 该物品若已定位到恐龙，且恐龙 saddleInfo 的护甲/耐久与该条 stats 逐位相同
+        //   ⇒ 实为同一件鞍（恐龙身上穿着那件，既出现在背包物品表、又出现在恐龙 saddleInfo）
+        //   实测：PrimalItemArmor_ArgentavisSaddle_C_2146404743（评分 15.2）与放出鹰 global 的 saddleInfo（评分 15.0，id1=347453248）
+        //         stats 逐位相同 [23896,17636] ⇒ 同一实例。保留「恐龙侧」条目（数值口径与鞍卡一致 + 自带生物卡）
+        //   v1343：必须同时满足「恐龙侧确实会入榜」（qidx≠0；注意恐龙侧对 qidx=0 的原始品质会过滤）
+        //   否则物品侧被跳过 + 恐龙侧被过滤 ⇒ 该鞍从榜上彻底消失（实测 Ast MegalaniaSaddle 1 例）
+        if(kk === 'saddle' && it._dinoRec && it._dinoRec.saddleInfo && it._dinoRec.saddleInfo.has && Number(it._dinoRec.saddleInfo.qidx) !== 0){
+          var _si0 = it._dinoRec.saddleInfo;
+          var _st0 = Array.isArray(it.stats) ? it.stats : [];
+          var _arm0 = (_st0.length >= 3) ? (Number(_st0[1]) || 0) : (Number(_st0[0]) || 0);
+          var _dur0 = (_st0.length >= 3) ? (Number(_st0[2]) || 0) : (Number(_st0[1]) || 0);
+          var _ss0 = Array.isArray(_si0.stats) ? _si0.stats : [];
+          if(_arm0 > 0 && _dur0 > 0 && Number(_ss0[1]) === _arm0 && Number(_ss0[2]) === _dur0) continue;   // 同一实例 ⇒ 跳过物品侧
+        }
         var bucket = (idx.sp[sp] = idx.sp[sp] || {});
         (bucket[kk] = bucket[kk] || []).push({ it:it, sv:sv, mine:mine, r:Number(it.rating) || 0, q:Number(it.qidx) });
         idx.n++;
       }
     });
   });
+  // v1312（用户要求）：球内鞍 / 放出龙的鞍 并入装备榜「鞍」标签
+  //   数据源：recs（恐龙记录）的 saddle + saddleInfo；归属用恐龙 tribeId，与物品口径一致（ps[server:tribeId]）
+  var recs0 = d.recs || [];
+  for(var ri = 0; ri < recs0.length; ri++){
+    var rr = recs0[ri];
+    if(!rr || rr.isEmpty) continue;
+    var sd = String(rr.saddle || ''), sif = rr.saddleInfo;
+    if(!sd || !sif || !sif.has) continue;
+    if(Number(sif.qidx) === 0) continue;   // v1313（用户要求）：同物品口径——过滤「原始」品质
+    var sv3 = String(rr.server || '');
+    if(!sv3 || !ownedMap[sv3]) continue;
+    var hasSaddleKind = false;
+    for(var j3 = 0; j3 < LB_ITEM_RANK_KINDS.length; j3++){ if(LB_ITEM_RANK_KINDS[j3].key === 'saddle'){ hasSaddleKind = true; break; } }
+    if(!hasSaddleKind) continue;
+    var sp3 = lbRankSpecies({ 'class': sd }); if(!sp3) continue;
+    var tb3 = Number(rr.tribeId || 0);
+    var it3 = {
+      'class': sd, key: '', kind: 'saddle', qidx: Number(sif.qidx), rating: Number(sif.rating), stats: sif.stats, quantity: 0,
+      containerId: String(rr.containerId || ''), containerType: String(rr.containerType || ''),
+      containerClass: String(rr.containerClass || ''), containerName: String(rr.containerName || ''),
+      containerTribe: tb3, containerTribeName: String(rr.containerTribeName || ''),
+      x: Number(rr.x) || 0, y: Number(rr.y) || 0, z: Number(rr.z) || 0,
+      _saddleSrc: true, _saddleName: sd, _saddleInfo: sif, _dinoName: String(rr.name || ''),
+      _dinoRec: rr, _cName: String(rr.containerName || '')   // v1338：点开配生物卡 + 小卡显示所在容器名
+    };
+    var mine3 = !!ps[sv3 + ':' + tb3];
+    var bucket3 = (idx.sp[sp3] = idx.sp[sp3] || {});
+    (bucket3['saddle'] = bucket3['saddle'] || []).push({ it: it3, sv: sv3, mine: mine3, r: Number(sif.rating) || 0, q: Number(sif.qidx) });
+    idx.n++;
+  }
   LB._rankIdx = idx;
   return idx;
+}
+// v1315（用户反馈修复）：装备榜按钮显隐判据修正
+//   原 v1309 判据「库存索引里有该物种的鞍/图纸」会让「物种能装鞍、但保存库里暂时没有」的情况也隐藏按钮；
+//   现改为：① 物种在**全量物品表**里有鞍定义（与库存无关）→ 显示；② 否则再看库存索引是否有鞍/图纸
+var LB_RANK_SP_SHAS = null, LB_RANK_SP_SHAS_TRIED = false;
+function lbRankSpeciesHasSaddle(sp){
+  if(!sp) return false;
+  if(!LB_RANK_SP_SHAS_TRIED){
+    LB_RANK_SP_SHAS_TRIED = true;
+    var m = {};
+    var add = function(k){ if(!/Saddle/i.test(String(k || ''))) return; var s = lbRankSpecies({ 'class': String(k) }); if(s) m[s] = 1; };
+    try{ if(LB_ITEM_STATS) for(var k1 in LB_ITEM_STATS) add(k1); }catch(e){}
+    try{ if(LB_ITEM_ZH) for(var k2 in LB_ITEM_ZH) add(k2); }catch(e){}
+    LB_RANK_SP_SHAS = m;                       // 两表都空也记下（由 lbRankTablesEnsure 在加载后重置重试）
+    if(Object.keys(m).length === 0) LB_RANK_SP_SHAS_TRIED = true;
+    return !!m[sp];
+  }
+  return !!(LB_RANK_SP_SHAS && LB_RANK_SP_SHAS[sp]);
+}
+// v1315：物品表是懒加载——表未就绪时触发加载，就绪后重置缓存并重渲染繁育栏（按钮显隐依赖表内容）
+function lbRankTablesEnsure(){
+  try{
+    var ps = [];
+    if(!LB_ITEM_STATS && typeof lbItemStatsLoad === 'function') ps.push(lbItemStatsLoad());
+    if(!LB_ITEM_ZH && typeof lbItemZhLoad === 'function') ps.push(lbItemZhLoad());
+    if(ps.length) Promise.all(ps).then(function(){
+      LB_RANK_SP_SHAS = null; LB_RANK_SP_SHAS_TRIED = false;
+      if(typeof lbRenderBreedBar === 'function') lbRenderBreedBar();
+    });
+  }catch(e){}
+}
+function lbRankHasAny(){
+  try{
+    var sp = (typeof lbRankSpecies === 'function') ? lbRankSpecies({ 'class': LB.curClass || '' }) : '';
+    if(sp && lbRankSpeciesHasSaddle(sp)) return true;   // ① 物种能装鞍（全量物品表判定，与库存无关）
+    lbRankTablesEnsure();                               // 表未加载 ⇒ 加载完成后自动重渲染
+    var d = LB._cache && LB._cache.data;
+    if(!d || !d.itemsByServer) return true;             // 数据未就绪：保持显示
+    var idx = lbRankEnsure(); if(!idx) return true;
+    var bucket = (sp && idx.sp[sp]) || null;
+    if(!bucket) return false;
+    for(var i = 0; i < LB_ITEM_RANK_KINDS.length; i++){
+      var k = LB_ITEM_RANK_KINDS[i];
+      if(bucket[k.key] && bucket[k.key].length) return true;
+    }
+    return false;
+  }catch(e){ return true; }
 }
 // 取排行：mineOnly 类别只给我的；否则我的全列 + 外部 rating 高于我的最高的前 externalMax 条
 function lbRankData(sp, kindKey){
@@ -6990,7 +7241,13 @@ function lbRankRow(x, i, kindKey, arrIdx, sect){
   var col = (typeof lbBpStageCol === 'function') ? lbBpStageCol(x.q) : '#475569';
   // ---- 属性行（照抄大卡片：首项 #38bdf8，其余 #999；整行 flex + gap:4px 12px）----
   var rows = [];
-  try{ rows = lbStatRows(clsRaw, Array.isArray(it.stats) ? it.stats : [], String(it.kind || '')); }catch(e){ rows = []; }
+  // v1312：鞍条目（含并入的球内/放出鞍）只显示 护甲/耐久 两槽（与鞍卡一致，避免 8 槽补 0 刷屏）
+  // v1342（用户实测修复）：**槽位归一** —— 库存实物鞍的 stats 只有 2 项 [护甲,耐久]（缺标准槽 0），
+  //   直接按 8 槽语义解析会整体错一位（实测显示成「护甲 239.0% 护甲 113.2%」且耐久丢失）
+  //   ⇒ 长度 ≤3 的补一个前导 0 槽，再统一按 onlySlots [1,2] 渲染（补后实测 = 护甲 144.5% 耐久 541，与鞍卡一致）
+  var _stR = Array.isArray(it.stats) ? it.stats.slice() : [];
+  if(String(it.kind || '') === 'saddle' && _stR.length > 0 && _stR.length <= 3) _stR = [0].concat(_stR);
+  try{ rows = lbStatRows(clsRaw, _stR, String(it.kind || ''), String(it.kind || '') === 'saddle' ? [1, 2] : null); }catch(e){ rows = []; }
   var attrHtml = (rows || []).map(function(rw, ri){
     return '<span style="margin-right:6px;color:' + (ri === 0 ? '#38bdf8' : '#999') + '">' + rw.label + ' ' + rw.txt + '</span>';
   }).join('');   // v1289：改行内 span 串（选种同款），不再用块级 div（原照抄大卡片带 margin-top:6px，撑高小卡）
@@ -7010,6 +7267,11 @@ function lbRankRow(x, i, kindKey, arrIdx, sect){
       tribeId: Number(it.containerTribe || 0),
       containerX: Number(it.x) || 0, containerY: Number(it.y) || 0, containerZ: Number(it.z) || 0,
       x: Number(it.x) || 0, y: Number(it.y) || 0, z: Number(it.z) || 0,
+      // v1339（根因修复）：带上恐龙身份字段 ⇒ lbSettlementOf 才会走 byDinoKey（服务端|dinoId1|dinoId2 索引，1.1 万条）
+      //   否则伪 rec 既无 dinoId 又无 containerId，聚落恒为 null ⇒ 右侧聚落标签永远为空（用户实测：两条都无聚落名）
+      dinoId1: (it._dinoRec ? it._dinoRec.dinoId1 : undefined),
+      dinoId2: (it._dinoRec ? it._dinoRec.dinoId2 : undefined),
+      source: (it._dinoRec ? it._dinoRec.src : ''),
       isEmpty: false, _rankItem: true
     };
     owner = (sect === 'ext') ? lbOwnerTagExt(rec) : lbOwnerTagMy(rec, { noEn:true });   // v1284：小卡不显示容器英文小字（用户明确要求）
@@ -7041,6 +7303,32 @@ function lbRankShowCard(kindKey, arrIdx){
     var body = document.getElementById('lbBreedOverlayBody');
     if(!ov || !body) return;
     var mm = null; try{ mm = lbItemMeta(String(it['class'] || '')); }catch(e){ mm = null; }
+    // v1338（用户要求）：鞍条目 → **鞍卡 + 生物卡**两张（原实现只弹鞍卡就 return）
+    //   球内鞍 / 放出鞍：it._saddleSrc + _saddleInfo + _dinoRec（同一条恐龙 rec）
+    //   库存实物鞍：it._dinoRec（由「容器内装鞍生物」索引按 server+containerId+鞍基名 匹配而来）
+    if(kindKey === 'saddle' && it){
+      var _sif = (it._saddleSrc && it._saddleInfo) ? it._saddleInfo : it;
+      var _st2 = Array.isArray(_sif.stats) ? _sif.stats.slice() : (Array.isArray(it.stats) ? it.stats.slice() : []);
+      // v1342：库存实物鞍 stats 缺标准槽 0 ⇒ 补前导 0（与列表行同口径；否则弹窗只显示 1 条属性且数值错位）
+      if(!it._saddleSrc && _st2.length > 0 && _st2.length <= 3) _st2 = [0].concat(_st2);
+      var _rt2 = (Number(_sif.rating) > 0) ? Number(_sif.rating) : 0;
+      var _qd2 = (Number(_sif.qidx) >= 0) ? Number(_sif.qidx) : 0;
+      var _sid2 = ((_sif.id1 !== undefined && _sif.id1 !== null && _sif.id2 !== undefined && _sif.id2 !== null) ? ('#' + _sif.id1 + '_' + _sif.id2) : '');
+      var _saddleHtml = lbItemCardHtml({
+        cls: String(it['class'] || ''), inst: '', zh: (mm && mm.zh) || '', en: (mm && mm.en) || '',
+        icon: (mm && mm.icon) || '', kind: 'saddle', qty: 0, n: 1,
+        best: { 'class': String(it['class'] || ''), zh: (mm && mm.zh) || '', en: (mm && mm.en) || '', icon: (mm && mm.icon) || '',
+                kind: 'saddle', key: '', qidx: _qd2, rating: _rt2, stats: _st2, sid: _sid2 },
+        onlySlots: [1, 2]
+      });
+      var _dinoHtml2 = '';
+      if(it._dinoRec && typeof lbDinoHTML === 'function'){
+        try{ _dinoHtml2 = '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #2a2a3a">' + lbDinoHTML(it._dinoRec) + '</div>'; }catch(e){ _dinoHtml2 = ''; }
+      }
+      body.innerHTML = _saddleHtml + _dinoHtml2;
+      ov.style.display = 'block';
+      return;
+    }
     if(kindKey === 'bp'){
       // v1287：蓝图条目 → 蓝图卡片（lbBpCardHtml）；原先统一用实物卡 lbItemCardHtml，导致蓝图点开显示成「实物」样式
       body.innerHTML = lbBpCardHtml({
@@ -7074,11 +7362,17 @@ function lbRankRender(){
   if(!LB._rankTab || keys.indexOf(LB._rankTab) < 0) LB._rankTab = keys[0];
   var h = '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px">'
     + '<span style="font-size:12px;font-weight:700;color:#e8e8ee;margin-right:4px">\u88c5\u5907\u699c \u00b7 ' + lbAttr(spName) + '</span>'
+    // v1344（用户要求）：装备榜 TAB 完全对齐页面 TAB（.server-tab：图标 + active 紫 + 右上角数字角标）
+    //   图标与「聚落按钮角标」同源，不新增图标：鞍 = RW_equip_saddle、蓝图 = IconMiscNoteType
     + avail.map(function(k){
         var n = bucket[k.key].length, on = (k.key === LB._rankTab);
-        return '<span onclick="lbRankTab(\'' + k.key + '\')" style="cursor:pointer;font-size:12px;padding:3px 9px;border-radius:6px;border:1px solid '
-          + (on ? '#7c3aed' : '#3a3a42') + ';background:' + (on ? '#7c3aed' : 'transparent') + ';color:' + (on ? '#fff' : '#bbb') + '">'
-          + k.label + ' ' + n + '</span>';
+        // v1345（用户要求）：图标与页面 TAB 完全同款——15px、**无外边距**
+        //   （lbWebpIc 自带 margin:0 2px 0 3px = 5px ⇒ 按钮宽出 5px：实测 37.14px vs 页面 TAB 32.14px）
+        var _k2 = (k.key === 'saddle') ? 'RW_equip_saddle' : 'IconMiscNoteType';
+        var _u2 = (window.LB_ITEM_ICON_URL && LB_ITEM_ICON_URL[_k2]) || (LB_ICON_BY_NAME && LB_ICON_BY_NAME[_k2]) || '';
+        var _ic = _u2 ? '<img src="' + _u2 + '" style="width:15px;height:15px;object-fit:contain;vertical-align:-1px" onerror="this.style.display=\'none\'">' : '';
+        return '<span class="server-tab' + (on ? ' active' : '') + '" onclick="lbRankTab(\'' + k.key + '\')" title="' + k.label + ' ' + n + '">'
+          + _ic + '<em class="server-tab-cnt">' + n + '</em></span>';
       }).join('')
     + '</div>';
   var d = lbRankData(sp, LB._rankTab);
@@ -7483,9 +7777,21 @@ function lbMatServerIdx(){
   LB._matIdx = idx; LB._matIdxSig = sig;
   return idx;
 }
+// v1345（用户要求）：材料「或关系」别名——游戏里这些材料可互相替代（用户口径：ChitinOrKeratin = 甲壳素 **或** 角质）
+//   注：蓝图配方的 costs[].item 给的是 ChitinOrKeratin_C，而库存侧基名是 Chitin / Keratin 两个
+//   ⇒ 不加别名则 lbMatBestServer('ChitinOrKeratin') 恒为 null（汇总 chip 的「存量最多服 / 是否足够」显示不出来）
+var LB_MAT_OR_ALIAS = { 'ChitinOrKeratin': ['Chitin', 'Keratin'] };
 function lbMatBestServer(base){
   try{
-    var m = lbMatServerIdx()[base]; if(!m) return null;
+    var idx = lbMatServerIdx();
+    var bases = [base];
+    if(LB_MAT_OR_ALIAS[base]) bases = bases.concat(LB_MAT_OR_ALIAS[base]);   // v1345：把或关系的各 base 存量合并后再取最多的一服
+    var m = {};
+    for(var _bi = 0; _bi < bases.length; _bi++){
+      var mm = idx[bases[_bi]]; if(!mm) continue;
+      Object.keys(mm).forEach(function(ab){ m[ab] = (m[ab] || 0) + mm[ab]; });
+    }
+    if(!Object.keys(m).length) return null;
     var best = null;
     Object.keys(m).forEach(function(ab){ if(!best || m[ab] > best.qty) best = { ab:ab, qty:m[ab] }; });
     return best;
@@ -7566,7 +7872,7 @@ function lbBpCardHtml(r, sv, opt){
   }
   var bpId = String(it.key || '').trim();
   if(!bpId){ var _m = String(it['class'] || '').match(/_C_(\d{6,})$/); bpId = _m ? _m[1] : ''; }
-  bpId = bpId.slice(-6);
+  // v1310（用户要求）：蓝图卡 ID 同样改完整（原 bpId = bpId.slice(-6)）
   var inst = String((r && r.inst) || lbBpInstOf(it));
   var key = lbBpKey(sv, base, inst), ckey = lbBpCostKey(sv, rcls), on = lbBpFollowHas(sv, base, inst);
   var snap = JSON.stringify({ 'class':it['class'] || '', key:it.key || '', qidx:it.qidx, rating:it.rating, stats:it.stats, kind:it.kind });
@@ -7617,20 +7923,20 @@ function lbItemCardHtml(a){
   var st = Array.isArray(best.stats) ? best.stats : [];
   var kind = String(best.kind || a.kind || '');
   var attrs = '';
-  var _rows = lbStatRows(String(best['class']||''), st, kind); // v1217：模板参数 → 游戏内数值
-  for(var i=0;i<st.length;i++){
-    var v = Number(st[i])||0;
-    attrs += '<span style="color:'+(_rows[i].first?'#38bdf8':'#999')+'">'+_rows[i].label+' '+_rows[i].txt+'</span>';
+  var _rows = lbStatRows(String(best['class']||''), st, kind, a.onlySlots); // v1217：模板参数 → 游戏内数值；v1306：透传 onlySlots
+  for(var _ri=0;_ri<_rows.length;_ri++){   // v1306：按返回行遍历（原按 st.length 取 _rows[i]，裁剪后会越界）
+    attrs += '<span style="color:'+(_rows[_ri].first?'#38bdf8':'#999')+'">'+_rows[_ri].label+' '+_rows[_ri].txt+'</span>';
   }
   var id = String(best.key||'').trim();
   if(!id){ var _m = String(best['class']||'').match(/_C_(\d{6,})$/); id = _m ? _m[1] : ''; }
-  id = id.slice(-6);
+  var sid = String(best.sid||'').trim();   // v1310：鞍实例 ID（#id1_id2，来自 saddleInfo.id1/id2）
+  var _idv = sid || id;                    // v1310（用户要求）：ID 按钮改完整显示（不再截断后 6 位）
   var col = (typeof lbBpStageCol === 'function') ? lbBpStageCol(best.qidx) : '#475569';
   var qtyTxt = (a.qty > 0) ? ((a.n>1 ? a.n+'组 · ' : '') + lbFmtQty(a.qty)) : '';
   return '<div class="lb-card" style="position:relative;overflow:hidden;background:#1a1a24;border:1px solid #2a2a3a;border-radius:10px;padding:10px 12px;box-sizing:border-box;margin-bottom:8px">'
     + '<div style="display:flex;height:6px;margin:-10px -12px 8px;border-radius:10px 10px 0 0;overflow:hidden"><i style="flex:1;background:'+col+'"></i></div>'
     + (url ? '<img class="lb-card-ic" src="'+lbAttr(url)+'" onerror="lbImgRetry(this)">' : '')
-    + (id ? '<span class="lb-id-btn" onclick="lbToggleId(event,this,\''+id+'\')" title="查看ID"><i class="mdi mdi-identifier"></i></span>' : '')
+    + (_idv ? '<span class="lb-id-btn" onclick="lbToggleId(event,this,\''+lbAttr(_idv)+'\')" title="查看ID"><i class="mdi mdi-identifier"></i></span>' : '')
     + '<div style="position:relative;z-index:1;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-right:52px">'
     + '<b style="color:#fff;font-size:14px">'+lbAttr(label)+'</b>'
     + (rating>0 ? '<span style="display:inline-flex;align-items:center;height:18px;background:#7c3aed33;border:1px solid #7c3aed66;border-radius:2px;padding:0 6px;font-size:10px;color:#c4b5fd;line-height:1">评分 '+rating.toFixed(1)+'</span>' : '')
@@ -8059,6 +8365,248 @@ function lbContainerDisp(type, cls){
   var zh = (typeof zhName==='function') ? (zhName(e.key) || '') : '';
   return { iconKey:(_fmIc || e.iconKey), mdi:e.mdi, zh:(_fmZh || zh || e.key || en) };
 }
+// v1314（用户要求）：只有「玩家会改名」的类别，在**未命名**时才显示 #ID 作替代标识；
+//   不可/从不改名的设施不显示 #ID，避免标题噪音。
+//   名单依据：10 服 cryo 全量统计（facilities 6 千余条 + structures 6 百余条）中**出现过自定义名**的类别
+//   —— 设施 13 类 + 结构 9 类（床/棺/牌/碑）；详见 tmp\_fac_rename2.txt
+var LB_FAC_RENAMEABLE = {
+  'CryoFridge':1, 'StorageBox_Huge':1, 'StorageBox_Large':1, 'IceBox':1, 'StructureBP_LibraryStorage':1,
+  'Refridgerator':1, 'Refrigerator':1,   // v1334（用户要求）：冰箱（游戏内原始拼写 Refridgerator，库存数据 491 条）
+  'BP_DisplayCase':1, 'TekTeleporterMini':1, 'StorageBox_Small':1, 'TekTeleporterSmall':1,
+  'StructureBP_DecorBox_Small':1, 'Structure_TrainingDummy':1, 'StructureBP_LinkedStorage':1, 'StorageBox_Barrel':1,
+  'SimpleBed':1, 'StructureBP_Gravestone':1, 'ModernBed':1, 'StructureBP_Coffin_Upright':1, 'TekBed_Standing':1,
+  'StructureBP_Coffin':1, 'StructureBP_HangingSign':1, 'TekBed':1, 'Sign_Large_Metal':1
+};
+// v1334（关键）：类名归一化 —— 剥常见前缀（PrimalInventoryBP_/StructureBP_/BP_ 等）+ 去尾缀（_C_数字 / _C1 等）
+//   背景：同一个容器在数据里有多种写法：
+//     设施本体  IceBox_C_2145828557          ← 带实例号
+//     设施本体  Refridgerator_C_2146xxxxx / StructureBP_LinkedStorage_C_xxx
+//     内胆（库存/低温仓） PrimalInventoryBP_Refridgerator_C1 / PrimalInventoryBP_CryoFridge_C1
+//   旧实现只用 /_C(_\d+)?$/ 去尾缀 ⇒ 内胆类名剥不掉（PrimalInventoryBP_ 前缀 + _C1 结尾）⇒ 白名单恒不命中。
+function lbFacBaseKey(cls){
+  var b = String(cls || '');
+  b = b.replace(/^PrimalItemStructure_/, '').replace(/^PrimalInventory(?:BP)?_?/, '')
+       .replace(/^PrimalStructure_/, '').replace(/^StructureBP_/, '').replace(/^Structure_/, '')
+       .replace(/^Structure/, '').replace(/^BP_/, '').replace(/^PrimalItem_/, '')
+       .replace(/_C_\d+$/, '').replace(/_C\d*$/, '').replace(/^_+/, '');
+  return b;
+}
+var LB_FAC_RENAMEABLE_N = null;   // 白名单键归一化缓存（首次调用时构建）
+function lbFacRenameable(cls){
+  if(LB_FAC_RENAMEABLE_N === null){
+    LB_FAC_RENAMEABLE_N = {};
+    for(var _k in LB_FAC_RENAMEABLE){ if(LB_FAC_RENAMEABLE.hasOwnProperty(_k)) LB_FAC_RENAMEABLE_N[lbFacBaseKey(_k)] = 1; }
+  }
+  return !!LB_FAC_RENAMEABLE_N[lbFacBaseKey(cls)];
+}
+// ══ v1322：容器改名（完全复用生物改名设计）+ 设施着色圆点 ══
+// 实例号：containerClass 形如 StorageBox_Huge_C_2144016418 ⇒ 尾部数字（后端 RenameContainer 第一个参数）
+function lbObjSuffix(cls){ var m = String(cls || '').match(/_C_(\d{4,})$/); return m ? m[1] : ''; }
+// 着色圆点（只画「已着色」区域；未设置 / 从未染色一律不画；只读）
+var _lbFColMemo = {};
+// v1330：⭐ 结构涂装色号是「ASA 染料色板索引（1-based，1..127）」，不是恐龙/官方色号！
+//   官方 Color ID 表 101..127 为空、254 封顶；实测 Isl 存档 structures.colorRegions 最大值 121（≤127），
+//   且 121/117/108/107/104 在官方表里**未定义** ⇒ 两套编号体系。1-based 索引 i → 官方色号 127+i（128..254）。
+//   自证：随身=67 → 194 Cobalt #0000B2（宝蓝，与用户描述一致）；减重=68 → 195 Blue；常用=12 → 139 Orange。
+function lbStructColorId(v){
+  var n = Number(v);
+  if(!isFinite(n) || n <= 0) return null;
+  return (n <= 127) ? (127 + n) : n;   // 超出 127 视为已是官方色号（兼容旧数据/例外）
+}
+function lbStructColorName(v){
+  var id = lbStructColorId(v);
+  if(id === null) return '';
+  var c = LB_COLORS && LB_COLORS[id];
+  return (c && c.name) ? c.name : '';
+}
+function lbFacColorHtml(cr){
+  if(!cr || !cr.length) return '';
+  var key = String(cr.join(','));
+  if(_lbFColMemo[key] !== undefined) return _lbFColMemo[key];
+  var tips = [], dots = '';
+  for(var i = 0; i < cr.length && i < 6; i++){
+    var v = cr[i];
+    if(v === undefined || v === null || v === -1) continue;   // 未设置 ⇒ 不画（数组未包含的下标 = 从未染色 ⇒ 同样不画）
+    var _hex = lbStructColorId(v) === null ? null : lbColorHex(lbStructColorId(v));   // v1330：结构色号 → 官方色号
+    if(!_hex) continue;
+    var _nm = lbStructColorName(v);
+    tips.push('区域' + (i + 1) + ' 色号' + v + (_nm ? '（' + _nm + '）' : ''));
+    dots += '<i style="width:8px;height:8px;border-radius:50%;background:' + _hex + ';border:1px solid #ffffff33;margin:0 2px 0 0"></i>';   // v1331：去掉 vertical-align（改由容器 inline-flex 居中，高度严格=8px）
+  }
+  if(!dots){ _lbFColMemo[key] = ''; return ''; }               // 全部未着色 ⇒ 整段不输出
+  var out = '<span class="lb-fcol" title="' + lbAttr(tips.join(' | ')) + '" style="display:inline-flex;align-items:center;margin-left:6px;vertical-align:2px;white-space:nowrap">' + dots + '</span>';   // v1333：非空设施行再上移 1px（middle→1px→2px）
+  _lbFColMemo[key] = out;
+  return out;
+}
+// 容器是否属于「我」的部落（与生物卡同一判据）
+function lbIsMyContainer(r){
+  try{
+    var data = LB._cache && LB._cache.data;
+    var curPid = lbCurPid();
+    var playerSet = curPid ? lbPlayerTribes((data && data.tribesByServer) || {}, curPid) : null;
+    return playerSet ? lbIsMyRec(r, playerSet, curPid) : false;
+  }catch(e){ return false; }
+}
+// 可改名判据：容器箱 + 我的部落 + 有实例号；床/棺/牌/碑（无官方同步通道）一律不给按钮
+function lbCanRenameContainer(r){
+  if(!r) return false;
+  var sub = lbContainerTypeOf(r);
+  if(sub === 'released' || sub === 'player') return false;
+  var cls = String(r.containerClass || '');
+  if(!cls || !lbObjSuffix(cls)) return false;
+  if(LB_BED_RE.test(cls) || LB_SIGN_RE.test(cls) || /Gravestone/i.test(cls)) return false;
+  // v1328（用户要求）：**仅「能显示 #ID」的设施类型**才允许改名 —— 复用 v1314 的 LB_FAC_RENAMEABLE 白名单
+  if(typeof lbFacRenameable === 'function' && !lbFacRenameable(cls)) return false;
+  if(!lbIsMyContainer(r)) return false;
+  return true;
+}
+// ⭐ v1334（用户口径）：无名容器组也要能改名
+//   根因（实测）：组内排序「有名字优先」（L10481-10489）⇒ 有名字组的代表 cg[0] 恰好是带实例号的设施本体记录
+//   （如 IceBox_C_2145828557）⇒ 按钮出现；无名组的代表是「内胆类」记录
+//   （如 PrimalInventoryBP_CryoFridge_C1 / PrimalInventoryBP_Refridgerator_C1 —— 名字里没有 _C_<数字>）
+//   ⇒ lbObjSuffix() 取不到实例号 ⇒ lbCanRenameContainer() 恒 false ⇒ 按钮莫名消失。
+//   ⇒ 这就是用户观察到的「只有自定义名的冰箱才有改名按钮」的真因（不是设施型号不同）。
+//   修法：不再只问 cg[0]，而是**在整组里挨个找第一条真正可改名的成员**（带实例号 + 白名单 + 我的部落）。
+function lbRenameTargetOfGroup(cg){
+  if(!cg || !cg.length) return null;
+  for(var i = 0; i < cg.length; i++){
+    var r = cg[i];
+    if(!r) continue;
+    if(lbContainerTypeOf(r) === 'released') continue;   // 放出组不参与容器改名
+    if(lbCanRenameContainer(r)) return r;
+  }
+  return null;
+}
+// 「改名」按钮（位置/样式基准 = .lb-rel-rename，与「一键起名」同款）
+function lbContainerRenameBtn(r){
+  try{
+    if(!lbCanRenameContainer(r)) return '';
+    var d = { srv:r.server, obj:lbObjSuffix(r.containerClass), cls:String(r.containerClass||''), cn:String(r.containerName||''), tribe:Number(r.containerTribe || 0) };
+    return '<button class="lb-rel-rename" data-cn="' + lbAttr(JSON.stringify(d)) + '"'
+         + ' onclick="event.stopPropagation();lbOpenContainerRename(event,this)" title="改名">改名</button>';
+  }catch(e){ return ''; }
+}
+// 改名弹窗（结构/尺寸/配色照搬 lbOpenRename，仅去掉「🎲 自动命名」）
+function lbOpenContainerRename(ev, btn){
+  if(ev && ev.stopPropagation) ev.stopPropagation();
+  var d = {}; try{ d = JSON.parse(btn.getAttribute('data-cn') || '{}'); }catch(e){}
+  if(!d.obj){ lbToast('该容器缺少实例号，无法改名'); return; }
+  var oldEl = document.querySelector('.lb-picker-overlay'); if(oldEl) oldEl.remove();
+  var overlay = document.createElement('div'); overlay.className = 'lb-picker-overlay';
+  overlay.onclick = function(e){ if(e.target === overlay) overlay.remove(); };
+  var inp = 'width:100%;box-sizing:border-box;padding:8px 10px;border-radius:6px;border:1px solid #333;background:#12121a;color:#ddd;margin-bottom:8px;font-size:13px';
+  var btnS = 'padding:7px 14px;border-radius:6px;border:none;background:#7c3aed;color:#fff;cursor:pointer;font-size:13px';
+  overlay.innerHTML = '<div style="background:#1a1a24;border:1px solid #7c3aed55;border-radius:12px;padding:24px;width:360px;max-width:92vw;box-shadow:0 10px 40px rgba(0,0,0,.6)" class="lb-modal-scroll">'
+    + '<div style="font-size:16px;font-weight:bold;color:#a78bfa;margin-bottom:4px">\u270f\ufe0f \u5bb9\u5668\u6539\u540d</div>'
+    + '<div style="font-size:12px;color:#888;margin-bottom:14px">' + LB.servName(d.srv || '') + ' \u00b7 \u5b9e\u4f8b ' + lbAttr(d.obj) + (d.cn ? ' \u00b7 \u5f53\u524d\u540d\uff1a<b style="color:#bbb">' + escapeHtml(d.cn) + '</b>' : '') + '</div>'
+    + '<input id="lbRenameInput" value="' + lbAttr(d.cn || '') + '" placeholder="\u8f93\u5165\u65b0\u540d\u5b57" style="' + inp + '">'
+    + '<button onclick="lbDoContainerRename(' + lbAttr(JSON.stringify(d)) + ')" style="' + btnS + ';width:100%;margin-bottom:8px">\u63d0\u4ea4\u6539\u540d</button>'
+    + '<div id="lbRenameMsg" style="font-size:12px;min-height:14px;margin-top:4px"></div>'
+    + '<div style="margin-top:14px;text-align:right"><button onclick="this.closest(\'.lb-picker-overlay\').remove()" style="padding:7px 16px;border-radius:6px;border:1px solid #333;background:transparent;color:#888;cursor:pointer;font-size:13px">\u5173\u95ed</button></div>'
+    + '</div>';
+  document.body.appendChild(overlay);
+  LB._renameData = d;
+  var input = document.getElementById('lbRenameInput'); if(input) input.focus();
+}
+// 提交改名（本地校验 + POST /api/rename_container + 回执/错误映射 + 本地写回）
+function lbDoContainerRename(d){
+  var input = document.getElementById('lbRenameInput'), msg = document.getElementById('lbRenameMsg');
+  if(!input || !msg) return;
+  var name = (input.value || '').trim();
+  var bytes = 0; try{ bytes = new TextEncoder().encode(name).length; }catch(e){ bytes = name.length; }
+  if(!name){ msg.textContent = '\u8bf7\u8f93\u5165\u65b0\u540d\u5b57'; msg.style.color = '#f87171'; return; }
+  if(bytes > 60){ msg.textContent = '\u540d\u5b57\u592a\u957f\uff08' + bytes + '/60 \u5b57\u8282\uff09'; msg.style.color = '#f87171'; return; }
+  if(/[\x00-\x1f\x7f]/.test(name)){ msg.textContent = '\u540d\u5b57\u542b\u975e\u6cd5\u5b57\u7b26'; msg.style.color = '#f87171'; return; }
+  if(d.cn && name === String(d.cn).trim()){ msg.textContent = '\u26a0 \u65b0\u540d\u4e0e\u5f53\u524d\u540d\u76f8\u540c\uff0c\u672a\u6539\u52a8'; msg.style.color = '#fbbf24'; return; }
+  msg.textContent = '\u6267\u884c\u4e2d\u2026'; msg.style.color = '#999';
+  var auth = null; try{ auth = JSON.parse(localStorage.getItem('dinoAuth') || 'null'); }catch(e){}
+  fetch(LB_API + '/api/rename_container', { method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ username: auth ? auth.user : '', server: d.srv, obj: d.obj, cls: d.cls, name: name }) })
+  .then(function(r){ return r.json(); }).then(function(j){
+    if(j && j.ok){
+      var lines = [];
+      if(j.old !== undefined && j.new !== undefined) lines.push('\u65e7\u540d\uff1a' + escapeHtml(String(j.old)) + ' \u2192 \u65b0\u540d\uff1a' + escapeHtml(String(j.new)));
+      if(j.verified !== undefined) lines.push('\u6e38\u620f\u5185\u5df2\u540c\u6b65\uff1a' + (j.verified ? '\u2705 \u662f' : '\u274c \u5426'));
+      if(j.readback) lines.push('\u8bfb\u56de\u786e\u8ba4\uff1a' + escapeHtml(String(j.readback)));
+      if(j.dup) lines.push('\u540c\u540d\u5bb9\u5668\uff1a' + j.dup + ' \u4e2a\uff08\u542b\u81ea\u8eab\uff09');
+      msg.innerHTML = '\u2705 \u6539\u540d\u6210\u529f' + (lines.length ? '<br>' + lines.join('<br>') : '');
+      msg.style.color = '#22c55e';
+      lbLocalApplyContainerRename(d.srv, d.obj, name);
+      if(typeof lbRenderKeepView === 'function') lbRenderKeepView();
+    } else {
+      var map = { 'name empty':'\u8bf7\u8f93\u5165\u540d\u5b57', 'name contains control char':'\u540d\u5b57\u542b\u975e\u6cd5\u5b57\u7b26', 'world/level not ready':'\u4e16\u754c\u672a\u5c31\u7eea\uff0c\u7a0d\u540e\u91cd\u8bd5' };
+      var err = String((j && j.error) || '\u672a\u77e5\u9519\u8bef');
+      var txt = map[err] || (/^name too long/.test(err) ? '\u540d\u5b57\u592a\u957f'
+              : (/^container not found/.test(err) ? '\u8be5\u8bbe\u65bd\u4e0d\u652f\u6301\u6539\u540d\uff08\u4ec5\u5bb9\u5668\u7bb1\u53ef\u6539\u540d\uff09'
+              : (/^ambiguous id/.test(err) ? '\u5b9e\u4f8b\u53f7\u547d\u4e2d\u591a\u4e2a\u5bf9\u8c61\uff0c\u8bf7\u5237\u65b0\u540e\u91cd\u8bd5' : err)));
+      msg.innerHTML = '\u274c \u6539\u540d\u5931\u8d25\uff1a' + escapeHtml(txt) + (j && j.hint ? '<br><span style="color:#888">' + escapeHtml(String(j.hint)) + '</span>' : '');
+      msg.style.color = '#f87171';
+    }
+  }).catch(function(e){ msg.textContent = '\u8bf7\u6c42\u5931\u8d25\uff1a' + e; msg.style.color = '#f87171'; });
+}
+// 本地写回（v1335 重写：整台设备的所有记录一起改，不再只改带实例号那一条）
+//   ⭐ 根因（页面实测 v3306）：同一台冰箱在 recs 里有多种记录——
+//     设施本体  CryoFridge_C_2137834067          （带实例号）
+//     低温仓球  PrimalInventoryBP_CryoFridge_C1  （无实例号，后端把 containerName 填成「空球」而非空串）
+//   旧实现匹配条件 = containerId===obj 或 类名含 _C_<obj> ⇒ 实测 命中Id=0（containerId 是 GUID）、
+//     命中Cls=1（只有设施本体）⇒ 球记录仍保留旧名 ⇒ 组代表 cg[0] 恰好是球记录 ⇒ 界面显示旧名
+//     （用户体感「改名后不重新加载数据就不显示新名字」），且球记录无实例号 ⇒ 改名按钮随之消失。
+//   新实现：以命中记录的坐标 (x,y,z) 为锚，把**同服同坐标同类型**的所有容器记录一起写新名
+//     （设施本体 + 低温仓球 + 内胆）⇒ 立刻显示新名、按钮不再消失；坐标约束保证不波及同区域其它柜子。
+function lbLocalApplyContainerRename(srv, obj, newName){
+  try{
+    var d = LB._cache && LB._cache.data; if(!d) return;
+    var recs = d.recs || [];
+    var _hit = '_C_' + String(obj);
+    function _isTgt(r){
+      return String(r.containerId || '') === String(obj) || String(r.containerClass || '').indexOf(_hit) >= 0;
+    }
+    // ① 找锚点（命中记录）并收集坐标 + 旧名
+    var anchors = [], oldName = null;
+    for(var i = 0; i < recs.length; i++){
+      var r = recs[i];
+      if(String(r.server) !== String(srv)) continue;
+      if(!_isTgt(r)) continue;
+      anchors.push([Math.round(Number(r.containerX) || 0), Math.round(Number(r.containerY) || 0), Math.round(Number(r.containerZ) || 0)]);
+      if(oldName === null && r.containerName !== undefined) oldName = r.containerName;
+      if(r.containerName !== undefined) r.containerName = newName;
+    }
+    // ② 同坐标 + 同基名 ⇒ 整台设备的所有记录一起改名
+    //   v1337 修正（页面预演发现）：v1336 的「名字必须等于旧名」策略在连续改名/历史不一致时失效——
+    //     实测该冰箱：facility 已是「测试2」，而 8 条 egg 仍停在更早的「测试」⇒ 名字比对不中 ⇒ 蛋记录再次被漏掉。
+    //   改用「类名基名 + 坐标」双条件：IceBox_C_2145828229（本体）/ IceBox_C（蛋）/ PrimalInventoryBP_IceBox_C1（内胆）
+    //     经 lbFacBaseKey 归一化后都是 IceBox ⇒ 同坐标即认作同一台设备；同坐标的其它类型设备基名不同 ⇒ 不会误改。
+    if(anchors.length){
+      var _bases = {};
+      for(var m = 0; m < recs.length; m++){
+        var rm = recs[m];
+        if(String(rm.server) !== String(srv)) continue;
+        if(!_isTgt(rm)) continue;
+        _bases[lbFacBaseKey(rm.containerClass || '')] = 1;
+      }
+      for(var j = 0; j < recs.length; j++){
+        var r2 = recs[j];
+        if(String(r2.server) !== String(srv)) continue;
+        if(r2.containerName === undefined) continue;
+        if(String(r2.containerType || '') === 'released') continue;   // 放出组不动
+        var x = Math.round(Number(r2.containerX) || 0), y = Math.round(Number(r2.containerY) || 0), z = Math.round(Number(r2.containerZ) || 0);
+        var _ok = false;
+        for(var a = 0; a < anchors.length; a++){
+          if(anchors[a][0] === x && anchors[a][1] === y && anchors[a][2] === z){ _ok = true; break; }
+        }
+        if(!_ok) continue;
+        if(!_bases[lbFacBaseKey(r2.containerClass || '')]) continue;   // 基名不同 ⇒ 不是同一台设备，跳过
+        r2.containerName = newName;
+      }
+    }
+    // ③ structures 同步（床/结构类）
+    (Array.isArray(d.structures) ? d.structures : []).forEach(function(s){
+      if(String(s.server) !== String(srv)) return;
+      if(String(s.class || '').indexOf(_hit) < 0) return;
+      s.name = newName;
+    });
+  }catch(e){}
+}
 function lbContainerLabel(r, opts){
   var icon = '';
   var dtcCls = '';
@@ -8106,6 +8654,8 @@ function lbContainerLabel(r, opts){
     }
   }
   var hasName = r.containerName && r.containerName!=='?' && r.containerName!=='';
+  // v1333（用户口径）：合并组（Tek 箱子 / 炮台等）**不显示色点**（代表 N 台，单台色点误导）
+  var _fcolH = (opts && opts.hideColor) ? '' : lbFacColorHtml(r.colorRegions);
   // v904：结构类容器（非恐龙背包）→ 类型英文小字（facility_zh 表命中时），有内容/自定义名容器同样显示
   var enTag = '';
   var _cc0 = String(r.containerClass || '');
@@ -8133,25 +8683,26 @@ function lbContainerLabel(r, opts){
       //   改为 hasName=false 落到下方无名路径 ⇒ 中文名 + 灰英文 + #ID，与完全无名容器口径统一。
       hasName = false;
     } else {
-      return '<span class="acc-title">'+icon+' '+nameTxt+enTag+'</span>';
+      return '<span class="acc-title">'+icon+' '+nameTxt+_fcolH+enTag+'</span>';   // v1333：+hideColor 支持
     }
   }
   // 恐龙背包容器：显示对应生物中文种名（复用选物种 lbSpName）
   if(dtcCls){
     var dnm = lbSpName(dtcCls);
     var dzh = (dnm && (dnm.zh || dnm.eng)) || '';
-    if(dzh) return '<span class="acc-title">'+icon+' '+dzh+'</span>';
+    if(dzh) return '<span class="acc-title">'+icon+' '+dzh+_fcolH+'</span>';   // v1333：+hideColor 支持
   }
   // player（玩家背包）固定标「背包」；other/装球用 disp.zh（JSON 动态，无词条英文提取名）
   var tzh = sub==='player' ? '背包' : (disp ? disp.zh : '');
   var name = tzh || sub; // JSON 无中文 → 回退子类型名（不脑补）
   var _idTxt = ''; // v908：ID 拆出（放在英文之后）——顺序：中文名 + 灰小英文 + #ID
   // v973：合并的泰克专储不显示 #ID（该条目代表 N 个柜子，单个 ID 无意义且误导）；opts.hideId 仅由合并组传入
-  if(!(opts && opts.hideId) && sub!=='display' && sub!=='stand' && sub!=='released' && sub!=='player'){
+  // v1314（用户要求）：仅「会改名」的类别展示 #ID（未命名时的替代标识）；其余设施不显示，避免噪音
+  if(!(opts && opts.hideId) && lbFacRenameable(r.containerClass) && sub!=='display' && sub!=='stand' && sub!=='released' && sub!=='player'){
     var id = r.containerId || '';
     _idTxt = ' #' + (id.length>6 ? id.slice(-6) : id);
   }
-  return '<span class="acc-title">'+icon+' '+name+enTag+_idTxt+'</span>';
+  return '<span class="acc-title">'+icon+' '+name+_fcolH+enTag+_idTxt+'</span>';   // v1333：+hideColor 支持
 }
 // v751b：视口跨 640 断点时自动重渲染（PC 半块 ↔ 移动 1/4 撑满切换，无需刷新）
 (function(){
@@ -10115,6 +10666,29 @@ function lbBuildSettleContainerHtml(grp, settleKey){
     infusers = infusers.filter(function(m){ return lbMemberMatch(m, LB.curClass); });
     scanners = scanners.filter(function(m){ return lbMemberMatch(m, LB.curClass); });
   }
+  // v1341（用户要求 · 冰箱改名后分裂修复）：同坐标「以本体名为准」
+  //   根因（页面实测）：同一台冰箱的 facility 记录已改名（"测试3"），而 8 条 egg 记录的 containerName 仍是旧名（"测试"）
+  //     —— 后端 RenameContainer 只改结构本体名，蛋/球侧字段未同步 ⇒ 分组键（服|类型|类名|名字）不同 ⇒ 同一台分裂成两条
+  //     （实测两条键：Isl|phys|IceBox|测试3 与 Isl|phys|IceBox|测试）。
+  //   修法：分组前做一次**内存归一** —— 同坐标若有 facility 记录且名字非空，则同坐标其它记录的分组名统一采用该名字。
+  try{
+    var _facNameByPos = {};
+    grp.forEach(function(_r){
+      if(!_r || _r.src !== 'facility') return;
+      var _cn = String(_r.containerName || '');
+      if(!_cn || _cn === '?') return;
+      var _k = Math.round(Number(_r.containerX) || 0) + '|' + Math.round(Number(_r.containerY) || 0) + '|' + Math.round(Number(_r.containerZ) || 0);
+      if(_facNameByPos[_k] === undefined) _facNameByPos[_k] = _cn;
+    });
+    grp.forEach(function(_r){
+      if(!_r || _r.src === 'facility') return;
+      var _cn2 = String(_r.containerName || '');
+      if(!_cn2 || _cn2 === '?') return;
+      var _k2 = Math.round(Number(_r.containerX) || 0) + '|' + Math.round(Number(_r.containerY) || 0) + '|' + Math.round(Number(_r.containerZ) || 0);
+      var _fn = _facNameByPos[_k2];
+      if(_fn && _cn2 !== _fn) _r.containerName = _fn;   // 仅内存归一（不写服务器）
+    });
+  }catch(e){}
   var contGroups={};
   LB._settleContGroups = contGroups; // v1221：供「命名本组」按钮按组收集未命名放出生物
   // v975：本聚落书柜内的蓝图基名集合（制造设施里与之重复的蓝图视为「书柜远程分享」→ 不显示）
@@ -10194,7 +10768,7 @@ function lbBuildSettleContainerHtml(grp, settleKey){
     var d = m.item;
     if((d.slots && d.slots.length) || LB.curClass){ infusersShow.push(m); return; }
     if(!d.class) return;
-    (emptyFacArr = emptyFacArr || []).push({ cls:String(d.class), name:(d.name && d.name!=='?' ? String(d.name) : ''), dispName: lbGeneDevZh('基因台', String(d.class)), x:Number(d.x||d.containerX||0), y:Number(d.y||d.containerY||0), z:Number(d.z||d.containerZ||0), server:String(d.server||LB.tab||'') }); // v914：基因台自定义名透传；v959：补坐标/服（离散聚落点击看地图）
+    (emptyFacArr = emptyFacArr || []).push({ cls:String(d.class), name:(d.name && d.name!=='?' ? String(d.name) : ''), dispName: lbGeneDevZh('基因台', String(d.class)), colorRegions:(d.colorRegions||null), x:Number(d.x||d.containerX||0), y:Number(d.y||d.containerY||0), z:Number(d.z||d.containerZ||0), server:String(d.server||LB.tab||'') }); // v914；v959；v1328：+涂装色点
   });
   // v909：设备→容器 rec 适配（标题/图标/英文/#ID/自定义名 全走 lbContainerLabel 统一逻辑）
   function geneDevAsRec(d, type){
@@ -10235,6 +10809,7 @@ function lbBuildSettleContainerHtml(grp, settleKey){
       cg.forEach(function(_er){
         var _cn2 = String(_er.containerName||'').trim();
         (emptyFacArr=emptyFacArr||[]).push({ cls:String(_er.containerClass||_efCls), name:(_cn2 && _cn2!=='?' ? _cn2 : ''), dispName:_efDispName,
+          colorRegions:(_er.colorRegions||null),   // v1328：下沉空设施同规则显示涂装色点
           x:Number(_er.containerX||0), y:Number(_er.containerY||0), z:Number(_er.containerZ||0), server:String(_er.server||LB.tab||'') }); // v959：补坐标/服
       });
       return;
@@ -10293,6 +10868,9 @@ function lbBuildSettleContainerHtml(grp, settleKey){
     })(cg);
     var _dedMerge = (_unitN > 1 && lbIsMergeableFacility(cg[0]));
     var _cnm0 = String(cg[0].containerName||'').trim();
+    // v1334（用户口径·通用修复）：无名组的代表 cg[0] 可能是无实例号的「内胆类」记录（PrimalInventoryBP_X_C1）
+    //   ⇒ 在整组里找第一条真正可改名的成员（带实例号 + 白名单 + 我的部落）；无则 null（不显示按钮）
+    var _rTgt = _dedMerge ? null : lbRenameTargetOfGroup(cg);
     var _dedN = (_dedMerge || (_unitN > 1 && (!_cnm0 || _cnm0 === '?'))) ? ('<span style="opacity:.7;font-size:11px;margin-left:4px">×'+_unitN+'</span>') : '';
     var invItems = lbGroupItems(cg);
     // v1013：合并组（炮台/火把/特斯拉电塔/泰克专储）——按**个体**分别渲染物品徽章，
@@ -10332,10 +10910,11 @@ function lbBuildSettleContainerHtml(grp, settleKey){
     var invMark = _dedMerge ? '' : lbInvCountMark(invItems, !!(fullH||v6H||scnMark), LB.curClass); // v991：前面无内容则不加分隔线（消除孤立 |）；v1013：合并组不聚合物品徽章；v1192：选中物种时蓝图只计该物种
     var sepH = (fullH||eggH||v6H||scnMark||invMark) && emptyH ? ' ' : ''; // v1270：+eggH
     var sumHtml='<details class="acc"'+autoOpen+' onclick="lbAccOnly(this)"><summary>'
-      +'<span class="acc-sum-name">'+lbContainerLabel(cg[0], (_dedMerge ? {hideId:true} : null))+_dedN+'</span>'
+      +'<span class="acc-sum-name">'+lbContainerLabel(cg[0], (_dedMerge ? {hideId:true, hideColor:true} : null))+_dedN+'</span>'
       // v1225：放出组——数量角标加 acc-cnt-rel（展开时被「一键起名」按钮替换）；按钮回到最右（右对齐）
-      +'<span class="acc-cnt'+(lbContainerTypeOf(cg[0])==='released' ? ' acc-cnt-rel' : '')+'">'+fullH+eggSepH+eggH+v6H+scnMark+invMark+sepH+emptyH+'</span>' // v1270：+蛋·胚胎计数（| 分隔）
+      +'<span class="acc-cnt'+((lbContainerTypeOf(cg[0])==='released' || (_rTgt && lbContainerTypeOf(_rTgt)!=='released')) ? ' acc-cnt-rel' : '')+'">'+fullH+eggSepH+eggH+v6H+scnMark+invMark+sepH+emptyH+'</span>' // v1334：角标替换改用组内可改名成员 _rTgt（原 cg[0]）
       +((lbContainerTypeOf(cg[0])==='released') ? '<button class="lb-rel-rename" data-gk="'+lbAttr(k)+'" onclick="event.stopPropagation();lbSettleBatchRename(this)" title="一键命名本组未命名放出生物">一键起名</button>' : '')
+      +(_dedMerge ? '' : (lbContainerTypeOf(cg[0])==='released' ? '' : (_rTgt ? lbContainerRenameBtn(_rTgt) : '')))   // v1334：从组代表 cg[0] 改为组内「带钥匙」成员 _rTgt
       +'</summary>';
     h+=sumHtml;
     var _eqHtml = ''; // v1216：实物卡延迟并入瀑布流（此前直接 h+= 在 masonry 之外 → 失去自动分列）
@@ -10491,6 +11070,7 @@ function lbBuildSettleContainerHtml(grp, settleKey){
           //   现改为每条独立入列表，由 _mkAreaChips 在**区域内**按类型聚合（同区域 → ×N；跨区域 → 各自一条）
           emptyFacArr.forEach(function(_e){
             _efList.push({cls:_e.cls, name:(_e.name || ''), emptyN:1, emptyName:(_e.dispName || _e.cls || '其他'),
+              colorRegions:(_e.colorRegions || null),   // v1328：涂装色点透传到 chip 层
               items:[_e], x:Number(_e.x), y:Number(_e.y), z:Number(_e.z)}); // v1052：统一进 _efList（有自定义名由 _mkAreaChips 走 named 独立 chip）
           });
         }
@@ -10539,6 +11119,13 @@ function lbBuildSettleContainerHtml(grp, settleKey){
             list = list.slice().sort(function(_p,_q){ return ((Number(_q.x)||0) - (Number(_p.x)||0)) || ((Number(_q.y)||0) - (Number(_p.y)||0)); });
             list.forEach(function(_f){
               if(_f._sign || _f._silent) return; // v1042 标识牌仅用于命名 / v1060 有内容容器位置：仅参与层与区域定义，均不渲染 chip
+              // v1328（用户要求）：**带涂装色点**的设施不参与合并 ⇒ 独立成 chip（否则色点会被合并吞掉）
+              var _fcol = lbFacColorHtml(_f.colorRegions);
+              if(_fcol){
+                var _cm2 = lbSettleFacMeta(_f.cls || '') || { key:'fac_' + String(_f.cls||''), zh:(_f.emptyName || _f.cls || ''), icon:'' };
+                _named.push({ meta:_cm2, name:((_f.name && _f.name !== '?') ? _f.name : ''), items:(_f.items || []), colorHtml:_fcol });
+                return;
+              }
               if(_f.emptyN !== undefined){
                 if(LB.curClass) return; // v1195：选中物种时隐藏空设施（空容器/空设施与物种无关）
                 var _ek = _f.emptyName || _f.cls || '其他';
@@ -10564,7 +11151,7 @@ function lbBuildSettleContainerHtml(grp, settleKey){
             var _chips = _named.map(function(_x){
               var _fi = -1;
               if(scattered){ LB._settleFacMap.push({ label:(_x.name || _x.meta.zh), en:_x.meta.en || '', items:(_x.items||[]).slice() }); _fi = LB._settleFacMap.length - 1; }
-              return lbSettleFacChip(_x.meta, _x.name, null, { fi:_fi });
+              return lbSettleFacChip(_x.meta, _x.name, null, { fi:_fi, colorHtml:_x.colorHtml });   // v1328：+涂装色点
             });
             Object.keys(_grp).forEach(function(_k){
               var _g = _grp[_k];
@@ -10589,75 +11176,21 @@ function lbBuildSettleContainerHtml(grp, settleKey){
           if(_okXYZ && _sObj){
             // v1054：区域/层定义纳入**全部设施点**（含逐条空容器）——否则只由 beds/facilityList/小牌 定层，
             //   实测工作間层数掉到 6、区域掉到 7（v1050 为 17 层 / 21 区）；空容器所在楼层本身就是设施层
-            var _sorted = _fList.concat(_efList).sort(function(a,b){ return Number(a.z) - Number(b.z); });
-            var _lyr = lbFacLayerize(_sorted, LB_FAC_LAYER_TOL);
-            _lyr.forEach(function(L){
-              var _ars = lbFacSplitAreas(L.items, LB_FAC_AREA_EPS, LB_FAC_AREA_MINPTS);
-              _ars.forEach(function(a){ _areasAll.push({ items:a.items, name:null, zMin:L.zMin, zMax:L.zMax, _L:L }); }); // v1042：+_L；v1064：命名后置（小牌不参与分区）
-            });
-            // v1045：区域按「z 从高到低」排列（楼层自上而下，更符合直觉）；同层内仍大区在前
-            _areasAll.sort(function(p,q){
-              if(p.zMin !== q.zMin) return q.zMin - p.zMin;
-              return q.items.length - p.items.length;
-            });
-            // v1053：区域归属函数 + 空容器归区 **前置**（原在下方 → ①_efLeft 未初始化 ②_facTop 收集时还没归区）
-            var _areaIdxOf = function(px, py, pz){
-              if(!_areasAll.length || !_lyr) return -1;
-            var _bl3 = null, _bld3 = Infinity;
-              for(var _li3 = 0; _li3 < _lyr.length; _li3++){
-                var _L3 = _lyr[_li3], _dz3 = 0;
-                if(pz < _L3.zMin) _dz3 = _L3.zMin - pz; else if(pz > _L3.zMax) _dz3 = pz - _L3.zMax;
-                if(_dz3 < _bld3){ _bld3 = _dz3; _bl3 = _L3; }
-              }
-              var _bi3 = -1, _bd3 = Infinity;
-              for(var _ai3 = 0; _ai3 < _areasAll.length; _ai3++){
-                var _ar3 = _areasAll[_ai3];
-                if(_bl3 && _ar3._L !== _bl3) continue; // 只在本层内选
-                for(var _ii3 = 0; _ii3 < _ar3.items.length; _ii3++){
-                  var _dx3 = (Number(_ar3.items[_ii3].x)||0) - px, _dy3 = (Number(_ar3.items[_ii3].y)||0) - py;
-                  var _v3 = _dx3*_dx3 + _dy3*_dy3; if(_v3 < _bd3){ _bd3 = _v3; _bi3 = _ai3; }
-                }
-              }
-              return _bi3;
-            };
-            // v1054：空容器已在区域 items 中（参与 _sorted 定义）→ 此处不再 push（避免重复显示）
+            // v1344（用户要求「详情页结果直接复用」）：区域构建整段抽到 lbFacAreasBuild()（唯一实现），
+            //   此处只调用 + 把结果**存一份**到 LB._facAreas[settleKey] —— 详情页与右侧信息共用同一份结果，不重复计算
+            var _built = lbFacAreasBuild(_fList, _efList, _signList);
+            var _lyr = _built.lyr;
+            _areasAll = _built.areas;
+            LB._facAreas[settleKey] = { areas: _areasAll, lyr: _lyr, at: Date.now() };
+            // v1053：区域归属函数（实现抽到 lbFacAreaIdxOf，与「缺时补算」共用同一逻辑）
+            var _areaIdxOf = function(px, py, pz){ return lbFacAreaIdxOf(_areasAll, _lyr, px, py, pz); };
+            // v1054：空容器已在区域 items 中（参与分层定义）→ 此处不再 push（避免重复显示）
             var _efLeft = [];
             var _inArea = {};
             _areasAll.forEach(function(a){ a.items.forEach(function(it){ _inArea[_fList.indexOf(it)] = 1; }); });
             _fList.forEach(function(it, _fi){ if(!_inArea[_fi]) _facTop.push(it); }); // v1041-③：未入区离散设施 → 顶层
             _efLeft.forEach(function(it){ _facTop.push(it); }); // v1052：未能归区的空容器 → 顶层
             _areaReady = _areasAll.length > 0;
-          }
-          // v1051-①：可合并设施按「区域」分桶渲染——同区域 → 一个条目（×N）；不同区域 → 各自一个
-          //   （区域归属函数 _areaIdxOf 见上方 _inArea 计算处）
-          // v1064：区域命名后置——小牌不参与区域划分；命名时只在「位置落在本区内」的小牌里取
-          //   **离包围盒中心最近**的那一块（用户要求）；区内无小牌 ⇒ 不命名（不显示标题）
-          if(_signList.length && _areasAll.length){
-            _areasAll.forEach(function(a, _ai6){
-              var _mnx = Infinity, _mxx = -Infinity, _mny = Infinity, _mxy = -Infinity;
-              a.items.forEach(function(it){
-                var _ix = Number(it.x) || 0, _iy = Number(it.y) || 0;
-                if(_ix < _mnx) _mnx = _ix; if(_ix > _mxx) _mxx = _ix;
-                if(_iy < _mny) _mny = _iy; if(_iy > _mxy) _mxy = _iy;
-              });
-              if(_mnx === Infinity) return;
-              var _cx6 = (_mnx + _mxx) / 2, _cy6 = (_mny + _mxy) / 2;
-              var _bs = null, _bd6 = Infinity;
-              _signList.forEach(function(sg){
-                var _sx = Number(sg.x) || 0, _sy = Number(sg.y) || 0, _sz = Number(sg.z) || 0;
-                // v1065：判据 = **小牌位置落在本区包围盒内**（x/y 在区内 min~max；z 允许 ±半层容差）
-                //   原用 `_areaIdxOf(sg) !== _ai6`（单一「最近区域」）⇒ 24 个小牌几乎全部指向同一两个区域，
-                //   实测工作間 20 个区域只有 2 个拿到名字；用户口径是「位置在区内的牌子」→ 包围盒包含即算
-                if(!(_sx >= _mnx && _sx <= _mxx && _sy >= _mny && _sy <= _mxy)) return;
-                // v1066：z 容差 ±TOL/2 → **±TOL**——小牌是挂墙/吊牌，高度普遍高于同区设施（实测工作間小牌 z=-1982/-2285，
-                //   而该区设施 z≈-2262，差 280 > 150）⇒ ±150 把 24 块牌子里的 22 块挡掉，只剩 2 个区域拿到名字
-                if(_sz < (a.zMin - LB_FAC_LAYER_TOL) || _sz > (a.zMax + LB_FAC_LAYER_TOL)) return;
-                var _dx6 = _sx - _cx6, _dy6 = _sy - _cy6;
-                var _d6 = _dx6*_dx6 + _dy6*_dy6;
-                if(_d6 < _bd6){ _bd6 = _d6; _bs = sg; }
-              });
-              if(_bs){ var _nm6 = String(_bs.name||'').trim(); if(_nm6) a.name = _nm6; }
-            });
           }
           if(_mergeKeys.length){
             if(!_areasAll.length){
@@ -10851,9 +11384,10 @@ var LB_STAT_LABELS = {1:'护甲', 2:'耐久', 3:'伤害', 5:'低温抗性', 7:'�
 var LB_STAT_INT = {2:1, 4:1, 9:1};   // 整数显示槽（耐久等）
 var LB_STAT_PCT = {1:1, 3:1};        // 百分比显示槽（护甲/伤害）
 // 属性行渲染数据：命中模板表 → 游戏内数值；未命中 → 回退原展示（raw 整数 / raw%）
-function lbStatRows(cls, st, kind){
+function lbStatRows(cls, st, kind, onlySlots){   // v1306：onlySlots 可选——只输出指定槽位（鞍用 [1,2]）
   var out = [];
   if(!st || !st.length) return out;
+  var _only = (onlySlots && onlySlots.length) ? onlySlots : null;
   // v1218fix：只剥「实例数字后缀」保留 _C（原 _C_\d+$ 会把 _C 一起吃 → 查表全失配）
   var _s = String(cls||''), arg = null;
   if(LB_ITEM_STATS){
@@ -10862,7 +11396,14 @@ function lbStatRows(cls, st, kind){
   }
   var fb = (kind==='weapon') ? ['伤害','耐久'] : (kind==='armor'||kind==='saddle') ? ['护甲','耐久','低温抗性','高温抗性'] : ['属性','耐久'];
   for(var i=0;i<st.length;i++){
-    var raw = Number(st[i]) || 0, si = -1, a = (arg && arg[i]) ? arg[i] : null;
+    if(_only && _only.indexOf(i) < 0) continue;   // v1306：非指定槽跳过
+    var raw = Number(st[i]) || 0, si = -1, a = null;
+    // v1307：模板为稀疏数组（元素 [0] = 真实槽位号，如鞍 [[1,25,..],[2,100,..]]）⇒ 必须按槽位号匹配，
+    //   原 arg[i] 按下标取会整体错位（i=1 取到槽2 → 误显示「耐久」，i=2 无项 → 回落「低温抗性」）
+    if(arg){
+      for(var _k = 0; _k < arg.length; _k++){ if(arg[_k] && Number(arg[_k][0]) === i){ a = arg[_k]; break; } }
+      if(!a && arg[i] && Number(arg[i][0]) === i) a = arg[i];   // 兼容「下标即槽位」的完整表
+    }
     if(a) si = Number(a[0]);
     var label = a ? (LB_STAT_LABELS[si] || ('属性'+(si+1))) : (fb[i] || ('属性'+(i+1)));
     var txt;
@@ -10876,8 +11417,10 @@ function lbStatRows(cls, st, kind){
     } else {
       txt = (i===1) ? String(Math.round(raw)) : ((Math.round(raw)/100).toFixed(1) + '%');
     }
-    out.push({ label:label, txt:txt, first:(i===0) });
+    out.push({ label:label, txt:txt, first:(out.length === 0) });   // v1306：first 按输出序号（原按槽号 i==0，裁剪后首项会丢高亮）
   }
+  // v1306：鞍专用调用（onlySlots）且模板未命中 → 返回空数组（避免回退分支输出 raw/100 的误导值，如「护甲 25.0%」）
+  if(_only && kind === 'saddle' && !out.length) return [];
   return out;
 }
 var LB_ITEM_PRES = ['PrimalItemResource','PrimalItemConsumable','PrimalItemAmmo','PrimalItemArmor','PrimalItemStructure','PrimalItemWeaponAttachment','PrimalItemSkin','PrimalItemTrophy','PrimalItemArtifact','PrimalItemShip','PrimalItemBossTribute','PrimalItemRecipeNote','PrimalItemTameable','PrimalItemWeapon','PrimalItem'];
@@ -11043,7 +11586,9 @@ function lbFacSplitAreas(layerItems, epsXY, minPts){
 }
 // ③ 区域命名（v1041 用户定稿：**只用小牌**；v1229 收窄：**只认铁牌子 = 小金属牌**；找不到 ⇒ 返回 null = 该区域不显示标题）
 //   注：原「设施自定义名（按频次/几何中心）」二级回退已删除——它会把设施名（如「庇护所东部」）误当区域名显示。
-var LB_AREA_SIGN_RE = /Sign_Small_Metal/i; // v1229：区域命名白名单——小木牌 / 悬挂牌 / 大型广告牌一律不参与（用户要求只看铁牌子）
+// v1319（用户提供真实类名）：区域命名白名单 = 立式小铁牌 Sign_Small_Metal_C + **壁挂金属牌 Sign_Wall_Metal_C**
+//   用户口径：壁挂木牌 Sign_Wall_Wood_C **不参与**命名；悬挂牌 / 大型广告牌同样不参与
+var LB_AREA_SIGN_RE = /Sign_Small_Metal|Sign_Wall_Metal/i;
 function lbFacAreaName(items){
   if(!items || !items.length) return null;
   for(var i=0;i<items.length;i++){
@@ -11051,6 +11596,147 @@ function lbFacAreaName(items){
     if(it && it.name && String(it.name).trim() && LB_AREA_SIGN_RE.test(String(it.cls||''))) return String(it.name).trim();
   }
   return null;
+}
+// ═══ v1344（用户要求）：区域结果「算一次 · 存一份 · 两处直读」 ═══
+//   背景：详情页原先每次渲染都重算区域（局部变量 _areasAll，算完即丢）⇒ 右侧信息无处可查，也不该另写一套算法。
+//   现在把那段算法**整段抽到这里**（逻辑逐行搬移，参数与判据完全一致）：
+//     · 详情页调用 lbFacAreasBuild() → 结果写入 LB._facAreas[server|setId]
+//     · 右侧信息只读这份缓存；聚落未渲染过时用**同一函数**补算一次并写入同一缓存
+//   ⇒ 算法只有一份、结果只有一份，不会重复计算。
+LB._facAreas = LB._facAreas || {};
+function lbFacAreasBuild(fList, efList, signList){
+  var out = [];
+  var sorted = (fList || []).concat(efList || []).sort(function(a, b){ return Number(a.z) - Number(b.z); });
+  if(!sorted.length) return { areas: [], lyr: [] };
+  var lyr = lbFacLayerize(sorted, LB_FAC_LAYER_TOL);
+  lyr.forEach(function(L){
+    lbFacSplitAreas(L.items, LB_FAC_AREA_EPS, LB_FAC_AREA_MINPTS).forEach(function(a){
+      out.push({ items: a.items, name: null, zMin: L.zMin, zMax: L.zMax, _L: L });
+    });
+  });
+  out.sort(function(p, q){
+    if(p.zMin !== q.zMin) return q.zMin - p.zMin;
+    return q.items.length - p.items.length;
+  });
+  var sl = signList || [];
+  if(sl.length && out.length){
+    var bbs = [];
+    out.forEach(function(a){
+      var mnx = Infinity, mxx = -Infinity, mny = Infinity, mxy = -Infinity;
+      a.items.forEach(function(it){
+        var ix = Number(it.x) || 0, iy = Number(it.y) || 0;
+        if(ix < mnx) mnx = ix;
+        if(ix > mxx) mxx = ix;
+        if(iy < mny) mny = iy;
+        if(iy > mxy) mxy = iy;
+      });
+      bbs.push(mnx === Infinity ? null : { mnx: mnx, mxx: mxx, mny: mny, mxy: mxy, cx: (mnx + mxx) / 2, cy: (mny + mxy) / 2 });
+    });
+    var sOwner = [], sDist = [];
+    out.forEach(function(a, ai){
+      var bb = bbs[ai]; if(!bb) return;
+      sl.forEach(function(sg, si){
+        var sx = Number(sg.x) || 0, sy = Number(sg.y) || 0, sz = Number(sg.z) || 0;
+        if(!(sx >= bb.mnx && sx <= bb.mxx && sy >= bb.mny && sy <= bb.mxy)) return;
+        if(sz < (a.zMin - LB_FAC_LAYER_TOL) || sz > (a.zMax + LB_FAC_LAYER_TOL)) return;
+        var dx = sx - bb.cx, dy = sy - bb.cy, d = dx * dx + dy * dy;
+        if(sOwner[si] === undefined || d < sDist[si]){ sOwner[si] = ai; sDist[si] = d; }
+      });
+    });
+    out.forEach(function(a, ai){
+      var bb = bbs[ai]; if(!bb) return;
+      var bs = null, bd = Infinity;
+      sl.forEach(function(sg, si){
+        if(sOwner[si] !== ai) return;
+        var dx = (Number(sg.x) || 0) - bb.cx, dy = (Number(sg.y) || 0) - bb.cy, d = dx * dx + dy * dy;
+        if(d < bd){ bd = d; bs = sg; }
+      });
+      if(bs){ var nm = String(bs.name || '').trim(); if(nm) a.name = nm; }
+    });
+  }
+  return { areas: out, lyr: lyr };
+}
+// 区域归属（与详情页 _areaIdxOf 同一实现）：先取 |dz| 最小层，再在该层内取 x/y 最近区域
+function lbFacAreaIdxOf(areas, lyr, px, py, pz){
+  if(!areas || !areas.length || !lyr || !lyr.length) return -1;
+  var bl = null, bld = Infinity;
+  for(var li = 0; li < lyr.length; li++){
+    var L = lyr[li], dz = 0;
+    if(pz < L.zMin) dz = L.zMin - pz; else if(pz > L.zMax) dz = pz - L.zMax;
+    if(dz < bld){ bld = dz; bl = L; }
+  }
+  var bi = -1, bd = Infinity;
+  for(var ai = 0; ai < areas.length; ai++){
+    var ar = areas[ai];
+    if(bl && ar._L !== bl) continue;
+    for(var ii = 0; ii < ar.items.length; ii++){
+      var dx = (Number(ar.items[ii].x) || 0) - px, dy = (Number(ar.items[ii].y) || 0) - py;
+      var v = dx * dx + dy * dy;
+      if(v < bd){ bd = v; bi = ai; }
+    }
+  }
+  return bi;
+}
+// 取区域表：缓存直读；未渲染过 ⇒ 用同一函数补算一次并写入同一缓存
+function lbFacAreasOf(server, setId){
+  var key = String(server) + '|' + String(setId);
+  if(LB._facAreas[key]) return LB._facAreas[key];
+  var res = { areas: [], lyr: [], at: 0 };
+  try{
+    var d = LB._cache && LB._cache.data;
+    if(!d) return res;
+    var so = null;
+    var sv = (d._settlements && d._settlements.byServer && d._settlements.byServer[server]) || null;
+    if(sv && Array.isArray(sv.settlements)){
+      sv.settlements.some(function(x){ if(x && x.id === setId){ so = x; return true; } return false; });
+    }
+    var tid = Number((so && so.tribeId) || 0);
+    var fList = [], signList = [];
+    var st = d.structures || [];
+    for(var i = 0; i < st.length; i++){
+      var s0 = st[i]; if(!s0) continue;
+      if(tid && Number(s0.tribeId || 0) !== tid) continue;
+      var x0 = Number(s0.x) || 0, y0 = Number(s0.y) || 0, z0 = Number(s0.z) || 0;
+      if(!Math.round(x0) && !Math.round(y0)) continue;
+      var cls0 = String(s0.class || ''), nm0 = String(s0.name || '').trim();
+      if(LB_AREA_SIGN_RE.test(cls0)){ if(nm0) signList.push({ cls: cls0, name: nm0, x: x0, y: y0, z: z0, _sign: true }); continue; }
+      fList.push({ cls: cls0, name: nm0, x: x0, y: y0, z: z0 });
+    }
+    (d.recs || []).forEach(function(r0){
+      if(!r0 || !r0.containerId) return;
+      if(tid && Number(r0.containerTribe || r0.tribeId || 0) !== tid) return;
+      var x1 = Number(r0.containerX) || 0, y1 = Number(r0.containerY) || 0, z1 = Number(r0.containerZ) || 0;
+      if(!Math.round(x1) && !Math.round(y1)) return;
+      fList.push({ cls: String(r0.containerClass || ''), name: '', x: x1, y: y1, z: z1, _silent: true });
+    });
+    var built = lbFacAreasBuild(fList, [], signList);
+    res = { areas: built.areas, lyr: built.lyr, at: Date.now() };
+  }catch(e){}
+  LB._facAreas[key] = res;
+  return res;
+}
+// 按 rec 反查区域名（查不到返回空串 ⇒ 调用处不显示）
+function lbAreaNameOf(r){
+  try{
+    if(!r) return '';
+    var s = lbSettlementOf(r);
+    if(!s || s.scattered) return '';
+    var cc = lbFacAreasOf(s.server, s.setId);
+    if(!cc || !cc.areas || !cc.areas.length) return '';
+    var px = Number(r.containerX != null ? r.containerX : r.x) || 0;
+    var py = Number(r.containerY != null ? r.containerY : r.y) || 0;
+    var pz = Number(r.containerZ != null ? r.containerZ : r.z) || 0;
+    var ai = lbFacAreaIdxOf(cc.areas, cc.lyr, px, py, pz);
+    if(ai < 0) return '';
+    var a = cc.areas[ai];
+    return (a && a.name) ? String(a.name) : '';
+  }catch(e){ return ''; }
+}
+// 区域名标签（与聚落标签同款：小图标 + 低可视灰字；无区域名 ⇒ 空串，不占位）
+function lbAreaTagOf(r){
+  var nm = lbAreaNameOf(r);
+  if(!nm) return '';
+  return ' <span style="opacity:.7;font-size:10px">' + lbMdiSvg('mdi-map-marker-multiple', 10) + ' ' + lbAttr(nm) + '</span>';
 }
 // v820：设施元信息（中文名+图标）——已知 8 类精确词条；其余从 class 提取英文名 → zhName 中文/友好化，图标用 icons2 模糊匹配
 function lbSettleFacMeta(cls){
@@ -11105,7 +11791,8 @@ function lbSettleFacChip(meta, name, cnt, opts){
   var _fi = (opts && opts.fi !== undefined && opts.fi >= 0) ? opts.fi : -1;
   var _attr = _fi >= 0 ? ' onclick="lbOpenFacMap('+_fi+')"' : '';
   var _cur = _fi >= 0 ? 'pointer' : 'default';
-  return '<span'+_attr+' style="display:inline-flex;align-items:center;gap:4px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:6px;padding:3px 8px;font-size:12px;color:#ccc;white-space:nowrap;cursor:'+_cur+'">'+ic+label+extra+'</span>';
+  var _colS = (opts && opts.colorHtml) ? opts.colorHtml : '';   // v1328：涂装色点（只画已着色区域）
+  return '<span'+_attr+' style="display:inline-flex;align-items:center;gap:4px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:6px;padding:3px 8px;font-size:12px;color:#ccc;white-space:nowrap;cursor:'+_cur+'">'+ic+label+_colS+extra+'</span>';   // v1330：色点移到灰英文之前
 }
 // 手风琴互斥：展开当前容器时收起同组其他容器（同时只能展开一个）
 function lbAccOnly(el){
@@ -13524,6 +14211,9 @@ function lbRenderBreedBar(){
   if(rbtn){
     // v1285：与「选种」同机制——面板打开时按钮变「取消」（面板本身无头部关闭按钮）
     var _ro = (typeof lbRankIsOpen === 'function') && lbRankIsOpen();
+    // v1309（用户要求）：无鞍/无图纸数据的物种不显示装备榜按钮（面板打开中始终显示，便于点「取消」关闭）
+    var _rhas = _ro || ((typeof lbRankHasAny === 'function') && lbRankHasAny());
+    rbtn.style.display = _rhas ? '' : 'none';
     rbtn.innerHTML = lbMdiSvg(_ro ? 'mdi-close' : 'mdi-crown', 13) + ' ' + (_ro ? '\u53d6\u6d88' : '\u88c5\u5907\u699c');
   }
   var btn = document.getElementById('lbBreedBtn');
@@ -15710,7 +16400,7 @@ function lbOwnerTagMy(r, opts){ // v1177：新增 opts（{noEn:true} = 不显示
       : lbMdiSvg('mdi-bag-personal', 14);
     return '<span style="color:#f59e0b">'+bag+' 背包</span>';
   }
-  return '<span style="color:#f59e0b">'+lbMdiSvg(mdi, 12)+' '+lbContainerLabel(r, opts)+' '+lbSettlementLabel(r, false)+'</span>';
+  return '<span style="color:#f59e0b">'+lbMdiSvg(mdi, 12)+' '+lbContainerLabel(r, opts)+' '+lbSettlementLabel(r, false)+lbAreaTagOf(r)+'</span>';   // v1344：聚落之后追加区域名（无区域名则不显示）
 }
 // 外部归属标签（灰色）：地图 + 部落/玩家名 + 聚落⛺冠名第一人 / 皇冠👑部落长（v113 提升为顶层共用）
 function lbOwnerTagExt(r){
@@ -15738,15 +16428,80 @@ function lbOwnerTagExt(r){
     if(tribeOwner && tribeOwner !== name){ name += ' <span style="opacity:.55">'+lbMdiSvg('mdi-crown', 11)+' '+tribeOwner+'</span>'; }
   }
   // 配色：外部低可视灰色（#999），仅显示玩家+聚落主人/部落长
-  return '<span style="color:#999">'+lbMdiSvg(mdi, 12)+' '+name+'</span>';
+  return '<span style="color:#999">'+lbMdiSvg(mdi, 12)+' '+name+lbAreaTagOf(r)+'</span>';   // v1344：聚落之后追加区域名（无区域名则不显示）
 }
 // 归属标签（v113）：按归属调用顶层函数（我的橙/外部灰），不含「我的/外部」前缀
-function lbOwnerTag(r){
+function lbOwnerTag(r, opts){   // v1308：新增 opts 透传（{noEn:true} = 大卡上方容器信息不显示英文小字）
   var data = LB._cache && LB._cache.data;
   var curPid = lbCurPid();
   var playerSet = curPid ? lbPlayerTribes((data && data.tribesByServer) || {}, curPid) : null;
   var isMy = playerSet ? lbIsMyRec(r, playerSet, curPid) : false;
-  return isMy ? lbOwnerTagMy(r) : lbOwnerTagExt(r);
+  return isMy ? lbOwnerTagMy(r, opts) : lbOwnerTagExt(r);
+}
+// ═══ v1311（用户要求）：搜ID 扩展——支持 恐龙 / 鞍 / 物品 / 蓝图 四类匹配 ═══
+// 物品 ID 索引（key 完整串 + class 尾号 ⇒ {it, sv}）；按 LB._cache 引用缓存，数据重载自动失效
+function lbItemIdIndex(){
+  var d = LB._cache && LB._cache.data;
+  if(!d || !d.itemsByServer) return null;
+  if(LB._idIdx && LB._idIdx._c === LB._cache) return LB._idIdx.m;
+  var m = {}, ibs = d.itemsByServer, svs = Object.keys(ibs);
+  for(var s = 0; s < svs.length; s++){
+    var sv = svs[s], bc = (ibs[sv] && ibs[sv].byCid) || {}, cids = Object.keys(bc);
+    for(var ci = 0; ci < cids.length; ci++){
+      var arr = bc[cids[ci]]; if(!Array.isArray(arr)) continue;
+      for(var i = 0; i < arr.length; i++){
+        var it = arr[i]; if(!it) continue;
+        var kk = String(it.key || '').trim();
+        if(kk && !m[kk]) m[kk] = { it: it, sv: sv };
+        var mm = String(it['class'] || '').match(/_C_(\d{6,})$/);
+        if(mm && !m[mm[1]]) m[mm[1]] = { it: it, sv: sv };
+      }
+    }
+  }
+  LB._idIdx = { _c: LB._cache, m: m };
+  return m;
+}
+// 统一查找：命中返回 {type:'dino'|'saddle'|'item'|'bp', ...}，未命中返回 null
+function lbSearchFind(q){
+  var data = LB._cache && LB._cache.data;
+  if(!data || !q) return null;
+  var recs = data.recs || [];
+  for(var i = 0; i < recs.length; i++){                     // 1) 恐龙  2) 鞍（saddleInfo.id1_id2，与 ID 按钮同源）
+    var r = recs[i]; if(r.isEmpty) continue;
+    var id1 = String(r.dinoId1 || ''), id2 = String(r.dinoId2 || '');
+    if(id1 === q || id2 === q || (id1 && id2 && id1 + '_' + id2 === q)) return { type: 'dino', rec: r };
+    var si = r.saddleInfo;
+    if(si && si.id1 !== undefined && si.id1 !== null && si.id2 !== undefined && si.id2 !== null && r.saddle){
+      var s1 = String(si.id1), s2 = String(si.id2);
+      if(s1 === q || s2 === q || (s1 + '_' + s2) === q) return { type: 'saddle', rec: r, saddle: String(r.saddle), info: si };
+    }
+  }
+  var idx = lbItemIdIndex();                                 // 3) 物品 / 4) 蓝图（key 完整串 或 class 尾号）
+  if(idx && idx[q]){ var h = idx[q]; return { type: (typeof lbIsBp === 'function' && lbIsBp(h.it)) ? 'bp' : 'item', it: h.it, sv: h.sv }; }
+  return null;
+}
+// 按命中类型渲染对应卡片（复用既有渲染器，不新增样式）
+function lbShowSearchResult(h){
+  var ov = document.getElementById('lbBreedOverlay');
+  var body = document.getElementById('lbBreedOverlayBody');
+  if(!ov || !body || !h) return;
+  if(h.type === 'dino'){ lbShowIdCard(h.rec); return; }
+  if(h.type === 'saddle'){ lbShowSaddleInfo(h.saddle, h.info); return; }
+  var it = h.it, mm = null;
+  try{ mm = lbItemMeta(String(it['class'] || '')); }catch(e){ mm = null; }
+  if(h.type === 'bp'){
+    body.innerHTML = lbBpCardHtml({
+      cls: (mm && mm.base) || String(it['class'] || '').replace(/_C_\d+$/, ''),
+      inst: (typeof lbBpInstOf === 'function') ? lbBpInstOf(it) : '',
+      zh: (mm && mm.zh) || '', en: (mm && mm.en) || '', icon: (mm && mm.icon) || '', best: it
+    }, h.sv);
+  } else {
+    body.innerHTML = lbItemCardHtml({
+      cls: String(it['class'] || ''), inst: '', zh: (mm && mm.zh) || '', en: (mm && mm.en) || '', icon: (mm && mm.icon) || '',
+      kind: String(it.kind || ''), qty: Number(it.quantity) || 0, n: 1, best: it
+    });
+  }
+  ov.style.display = 'block';
 }
 // 搜ID实时匹配（v112）：input 输入/粘贴即匹配，宽度随内容自适应；清空关浮窗，未找到不显示任何提示
 // v632：搜ID改 mdi 图标按钮——点击自动读取剪贴板中的生物ID → 匹配显示卡片；找不到提示无效
@@ -15758,20 +16513,12 @@ async function lbSearchFromClipboard(){
   var raw = String(txt).trim();
   var q = raw.replace(/^#/,'').trim().replace(/_+$/,'');
   if(!q){ lbToast('剪贴板内容为空，无法搜索'); return; }
-  var data = LB._cache && LB._cache.data;
-  var recs = (data && data.recs) || [];
-  var found = null;
-  for(var i=0;i<recs.length;i++){
-    var r = recs[i];
-    if(r.isEmpty) continue;
-    var id1 = String(r.dinoId1||''), id2 = String(r.dinoId2||'');
-    if(id1===q || id2===q || (id1 && id2 && id1+'_'+id2===q)){ found = r; break; }
-  }
-  if(found){
-    lbShowIdCard(found);
-    lbToast('✅ 已找到 ID '+q+'，显示生物卡');
+  var hit = lbSearchFind(q);   // v1311：支持 恐龙 / 鞍 / 物品 / 蓝图 四类
+  if(hit){
+    lbShowSearchResult(hit);
+    lbToast('✅ 已找到 ID '+q+'，显示卡片');
   } else {
-    lbToast('剪贴板内容「'+raw+'」不是有效的生物 ID');
+    lbToast('剪贴板内容「'+raw+'」未匹配到恐龙 / 鞍 / 物品 / 蓝图 ID');
   }
 }
 function lbSearchLive(){
@@ -15786,16 +16533,8 @@ function lbSearchLive(){
   var ov = document.getElementById('lbBreedOverlay');
   if(!ov) return;
   if(!q){ ov.style.display='none'; return; } // 清空 → 关闭浮窗
-  var data = LB._cache && LB._cache.data;
-  var recs = (data && data.recs) || [];
-  var found = null;
-  for(var i=0;i<recs.length;i++){
-    var r = recs[i];
-    if(r.isEmpty) continue;
-    var id1 = String(r.dinoId1||''), id2 = String(r.dinoId2||'');
-    if(id1===q || id2===q || (id1 && id2 && id1+'_'+id2===q)){ found=r; break; }
-  }
-  if(found){ lbShowIdCard(found); }
+  var hit = lbSearchFind(q);   // v1311：支持 恐龙 / 鞍 / 物品 / 蓝图 四类
+  if(hit){ lbShowSearchResult(hit); }
   else { ov.style.display = 'none'; } // 未找到：不显示遮罩/提示（v112）
 }
 // 兼容旧引用（Enter/按钮）
@@ -15805,7 +16544,7 @@ function lbShowIdCard(r){
   var ov = document.getElementById('lbBreedOverlay');
   var body = document.getElementById('lbBreedOverlayBody');
   if(!ov || !body) return;
-  body.innerHTML = '<div style="padding:4px 2px 10px;font-size:12px">'+lbOwnerTag(r)+'</div>'
+  body.innerHTML = '<div style="padding:4px 2px 10px;font-size:12px">'+lbOwnerTag(r, {noEn:true})+'</div>'   // v1308（用户要求）：大卡上方容器信息不显示英文小字
     + lbDinoHTML(r);
   ov.style.display = 'block';
 }
@@ -18778,7 +19517,7 @@ function lbRouteViewRec(i){
   var body = document.getElementById('lbBreedOverlayBody');
   if(!ov || !body) return;
   ov.style.zIndex = '100000'; // 从路线浮窗内点开不被遮挡
-  body.innerHTML = '<div style="padding:4px 2px 10px;font-size:12px">'+lbOwnerTag(r)+'</div>' + lbDinoHTML(r);
+  body.innerHTML = '<div style="padding:4px 2px 10px;font-size:12px">'+lbOwnerTag(r, {noEn:true})+'</div>' + lbDinoHTML(r);   // v1308（用户要求）：大卡上方容器信息不显示英文小字
   ov.style.display = 'block';
 }
 /* H 说明帮助（复用 #lbBreedOverlay 行列表样式） */
@@ -18888,5 +19627,91 @@ function lbRouteHelpClose(){
     <div id="lbRouteOverlayBody" style="flex:1;min-height:0;display:flex;flex-direction:column"></div>
   </div>
 </div>
+<script>
+// v1299：诊断入口（iPad/Safari 无法执行 javascript: 书签时的替代方案）
+//   自动：数据就绪后检测「玩家携带 已装球 同 dinoId 重复」，有重复才弹框（无重复不打扰）
+//   手动：?diag=dup / ?diag=rec 强制弹框；?diag=off 关闭自动检测
+(function(){
+  try{
+    var q = '';
+    try{ q = String(location.search || ''); }catch(e){}
+    var mm = /[?&]diag=([a-z]+)/i.exec(q);
+    var mode = mm ? mm[1].toLowerCase() : 'auto';
+    if(mode === 'off') return;
+
+    var box = null;
+    function ensureBox(){
+      if(box && box.parentNode) return box;
+      box = document.createElement('div');
+      box.id = 'lbDiagBox';
+      box.style.cssText = 'position:fixed;left:8px;right:8px;top:8px;z-index:2147483647;background:#0b0b0b;color:#22ff88;border:1px solid #22ff88;border-radius:10px;padding:10px 12px;font-size:11px;line-height:1.5;white-space:pre-wrap;word-break:break-all;max-height:78vh;overflow:auto;font-family:ui-monospace,Menlo,monospace';
+      box.onclick = function(){ try{ box.remove(); box = null; }catch(e){} };
+      try{ document.body.appendChild(box); }catch(e){}
+      return box;
+    }
+
+    var t0 = Date.now();
+    var timer = setInterval(function(){
+      var d = (window.LB && LB._cache) ? LB._cache.data : null;
+      if(!d || !Array.isArray(d.recs) || !d.recs.length){
+        if(Date.now() - t0 > 180000){
+          clearInterval(timer);
+          if(mode !== 'auto'){ ensureBox().textContent = '诊断超时：数据未就绪'; }
+        }
+        return;
+      }
+      clearInterval(timer);
+
+      var all = d.recs || [];
+      var pl = all.filter(function(r){ return String(r.containerType || '') === 'player'; });
+      var pf = pl.filter(function(r){ return !r.isEmpty; });
+      var c = {}, order = [];
+      pf.forEach(function(r){
+        var k = String(r.dinoId1 == null ? '' : r.dinoId1) + '_' + String(r.dinoId2 == null ? '' : r.dinoId2);
+        if(!c[k]){ c[k] = []; order.push(k); }
+        c[k].push(r);
+      });
+      var dup = order.filter(function(k){ return c[k].length > 1; });
+
+      if(mode === 'auto' && !dup.length) return;   // 无重复不打扰
+
+      var out = [];
+      out.push('诊断 ver=' + (window.LB_VERSION || '?') + '  recs=' + all.length);
+      out.push('player 全部=' + pl.length + '  已装球=' + pf.length + '  空球=' + (pl.length - pf.length));
+      out.push('同 dinoId 重复组=' + dup.length + '  (0 = 无重复)');
+      dup.slice(0, 8).forEach(function(k){
+        out.push('■ ' + k + '  x' + c[k].length);
+        c[k].forEach(function(r, i){
+          out.push('   [' + i + '] src=' + (r.src || '?') + ' sv=' + (r.server || '?') + ' lv=' + (r.level || 0)
+            + ' w=' + (r.sortWorldSec || 0) + ' cid=' + String(r.containerId || '').slice(0, 12)
+            + ' cls=' + String(r.dinoClass || '').slice(0, 24) + ' pod=' + (r.podId || ''));
+        });
+      });
+      var c2 = {}, o2 = [];
+      pf.forEach(function(r){
+        var k2 = String(r.dinoClass || '') + '|' + String(r.level || 0) + '|' + String(r.podId || '');
+        if(!c2[k2]){ c2[k2] = []; o2.push(k2); }
+        c2[k2].push(r);
+      });
+      var dup2 = o2.filter(function(k){ return c2[k].length > 1; });
+      out.push('');
+      out.push('同(种|等级|pod) 重复组=' + dup2.length);
+      dup2.slice(0, 5).forEach(function(k){
+        out.push('□ ' + k + '  x' + c2[k].length + '  dinoIds=' + c2[k].map(function(r){ return r.dinoId1 + '_' + r.dinoId2; }).slice(0, 5).join(','));
+      });
+      if(mode === 'rec'){
+        var byType = {};
+        all.forEach(function(r){ var tt = String(r.containerType || '∅'); byType[tt] = (byType[tt] || 0) + 1; });
+        out.push('');
+        out.push('containerType 分布：');
+        Object.keys(byType).sort(function(a, b){ return byType[b] - byType[a]; }).slice(0, 12).forEach(function(k){ out.push('   ' + k + ' = ' + byType[k]); });
+      }
+      out.push('');
+      out.push('（点击本框关闭）');
+      ensureBox().textContent = out.join('\n');
+    }, 400);
+  }catch(e){}
+})();
+</script>
 </body>
 </html>
