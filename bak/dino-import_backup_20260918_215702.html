@@ -478,7 +478,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260918-3382';
+var LB_VERSION = 'v20260918-3376';
 var LB_SCHEMA_VER = 16;  // v1323：15→16 强制缓存重建——recs 新增 colorRegions（建筑涂装）字段，旧缓存无此字段 ⇒ 着色不显示
 // 历史：v1069 14→15——根因：recs 构建结果随 IndexedDB 持久化（v931）、
                          //   命中后跳过重建；仅改 _decorRe 等**构建期过滤**时，旧 rec 会长期残留（实测南瓜 rec 改过滤后仍显示）。
@@ -6814,7 +6814,6 @@ function lbClassPressStart(ev){
     LB_CLASS_PRESS_TM = null;
     LB._classPressed = true;
     LB.curClass = '';
-    LB.pickItem = null;   // v3378（用户要求）：物品筛选同样清空（长按=全部，对齐物种）
     lbView();
     lbToast('已切换到：全部');
   }, 500);
@@ -7658,16 +7657,13 @@ var LB_TYPE_BADGE = {
   weapon:{ic:'RW_WT', col:'#f59e0b'}, armor:{ic:'Fortitude_Icon_white', col:'#34d399'},
   saddle:{ic:'RW_equip_saddle', col:'#38bdf8'}, platform:{ic:'RW_Garage_roof_show', col:'#fb923c'},
   tek:{ic:'TEK_Icon', col:'#7c3aed'}, trait:{ic:'trait_icon', col:'#14b8a6'}, other:{ic:'RW_Train_drive', col:'#64748b'}, // v1222：other → RW_Train_drive；v1241：trait → trait_icon（物品特性 PrimalItem_ItemTrait_*）
-  recipe:{ic:'Food_Icon_white', col:'#e11d48'}, // v3377（用户要求）：自定义食谱专用徽章——暖色玟红（现有 7 种底色无红系 ⇒ 不撞色）
   // v1358（用户指正）：卡片徽章**只服务装备类**——消耗品/战利品/祭品属「容器内容类别」（LB_CONTENT_KINDS），
   //   只在容器摘要行出角标，不会出现在物品卡片上 ⇒ v1352 误加的 3 条已删除
 };
 function lbTypeBadgeHtml(kind, rcls){
   try{
     var t = String(kind||''), s = String(rcls||''), k = 'other';
-    // v3377（用户要求）：自定义食谱（PrimalItemCustomFoodRecipe* / CustomDrinkRecipe*）优先判定——kind=consumable 否则落入 other 兜底
-    if(/PrimalItemCustom(Food|Drink)Recipe/i.test(s)) k = 'recipe';
-    else if(/platform/i.test(s)) k = 'platform';
+    if(/platform/i.test(s)) k = 'platform';
     else if(t === 'trait') k = 'trait';   // v1241：物品特性（PrimalItem_ItemTrait_*）
     else if(t === 'weapon') k = 'weapon';
     else if(t === 'armor') k = 'armor';
@@ -7934,15 +7930,6 @@ function lbMatIsMine(ab, it){
 }
 // v1089：材料→各服存量索引（按基名统计实物数量；按 ts 签名缓存，刷新后自动重建）
 //   v1093：只统计**当前角色拥有**（携带按角色名 / 容器按所属部落），且签名含 curPid（切角色自动重建）
-// v3380（BUG 修复）：材料基名规范化——词表同一材料可能同时存在短键（Chitin）与长键（PrimalItemResource_Chitin），
-//   lbItemMeta 优先命中长键 ⇒ 索引键与查询键不一致 ⇒ LB_MAT_OR_ALIAS 的「或关系」永远查不到（待制作显示「没有」）。
-//   统一剥掉 PrimalItem<类别>_ 前缀后再建索引/查询。
-function lbMatCanon(b){
-  var s = String(b || '');
-  var m = s.match(/^PrimalItem[A-Za-z]+_(.+)$/);
-  if(m && m[1]) return m[1];
-  return s.replace(/^PrimalItem_/, '');
-}
 function lbMatServerIdx(){
   var ibs = (LB._cache && LB._cache.data && LB._cache.data.itemsByServer) || {};
   var sig = 'p' + String(lbCurPid()) + '|' + Object.keys(ibs).map(function(k){ return k + ':' + ((ibs[k] && ibs[k].ts) || 0); }).join(',');
@@ -7959,10 +7946,8 @@ function lbMatServerIdx(){
         if(!lbMatIsMine(ab, it)) continue;
         var b = ''; try{ b = lbBaseOfItem(it); }catch(e){ b = ''; }
         if(!b) continue;
-        var bk = lbMatCanon(b);   // v3380：统一短名落键（与查询侧同口径）
-        if(!bk) continue;
-        if(!idx[bk]) idx[bk] = {};
-        idx[bk][ab] = (idx[bk][ab] || 0) + q0;
+        if(!idx[b]) idx[b] = {};
+        idx[b][ab] = (idx[b][ab] || 0) + q0;
       }
     });
   });
@@ -7976,9 +7961,8 @@ var LB_MAT_OR_ALIAS = { 'ChitinOrKeratin': ['Chitin', 'Keratin'] };
 function lbMatBestServer(base){
   try{
     var idx = lbMatServerIdx();
-    var _b0 = lbMatCanon(base);                                              // v3380：查询键同样规范化
-    var _al = LB_MAT_OR_ALIAS[base] || LB_MAT_OR_ALIAS[_b0] || [];           // v3380：别名表按原键/短键都能命中
-    var bases = [_b0].concat(_al.map(lbMatCanon));                           // v1345：或关系各 base 存量合并；v3380：全部规范化后再查
+    var bases = [base];
+    if(LB_MAT_OR_ALIAS[base]) bases = bases.concat(LB_MAT_OR_ALIAS[base]);   // v1345：把或关系的各 base 存量合并后再取最多的一服
     var m = {};
     for(var _bi = 0; _bi < bases.length; _bi++){
       var mm = idx[bases[_bi]]; if(!mm) continue;
@@ -9042,100 +9026,13 @@ function lbItemIsPick(it, pick){
   if(!it || !pick) return false;
   var k2 = (['armor','weapon','tek'].indexOf(String(it.kind || '')) >= 0 ? String(it.kind) : 'other');
   if(k2 !== pick.kind) return false;
-  try{ return lbCanonBase(lbBaseOfItem(it)) === lbCanonBase(pick.base); }catch(e){ return false; }   // v3381：两侧规范化（兼容 localStorage 里存的旧 base）
+  try{ return lbBaseOfItem(it) === pick.base; }catch(e){ return false; }
 }
 // v3376：容器/设施是否含当前选中物品（基于该容器已聚合的 items 数组）
 function lbFacHasItem(f, pick){
   var its = (f && f.items) || [];
   for(var i=0;i<its.length;i++){ if(lbItemIsPick(its[i], pick)) return true; }
   return false;
-}
-// v3378（用户要求：全层级对齐物种）物品索引——服务器级 / 容器级 / 聚落级（复用 _settlements.byContainer 反查）
-function lbPickIdx(){
-  var pick = LB.pickItem;
-  if(!pick) return null;
-  var ts = (LB._cache && LB._cache.ts) || 0;
-  var ck = String(pick.kind) + '|' + String(pick.base) + '|' + ts;
-  if(LB._pickIdx && LB._pickIdxKey === ck) return LB._pickIdx;
-  var out = { srv:{}, cids:{}, setts:{}, playerCids:{}, posHit:{}, total:0 };
-  var D = LB._cache && LB._cache.data;
-  var stl = (D && D._settlements) || {};
-  function settleKeyOf(sv, cid, px, py){
-    try{
-      var s = cid ? ((stl.byContainer || {})[sv + '_' + cid]) : null;
-      if(!s && px !== null) s = (stl.byCtnPos || {})[sv + '|' + px + '|' + py];
-      if(!s) return 'nosettle';
-      return s.scattered ? 'scattered' : (s.setId || 'nosettle');
-    }catch(e){ return 'nosettle'; }
-  }
-  Object.keys((D && D.itemsByServer) || {}).forEach(function(sv){
-    var ix = D.itemsByServer[sv] || {};
-    Object.keys(ix.byCid || {}).forEach(function(cid){
-      var list = ix.byCid[cid] || [], n = 0;
-      for(var i=0;i<list.length;i++){ if(lbItemIsPick(list[i], pick)) n++; }
-      if(!n) return;
-      out.cids[sv] = out.cids[sv] || {}; out.cids[sv][cid] = n;
-      out.srv[sv] = (out.srv[sv] || 0) + n;
-      var r0 = list[0] || {};
-      var px = null, py = null;
-      try{ px = Math.round(Number(r0.containerX != null ? r0.containerX : r0.x) || 0); py = Math.round(Number(r0.containerY != null ? r0.containerY : r0.y) || 0); }catch(e){ px = null; }
-      var sk = settleKeyOf(sv, cid, px, py);
-      out.setts[sv] = out.setts[sv] || {}; out.setts[sv][sk] = (out.setts[sv][sk] || 0) + n;
-      if(px !== null){ out.posHit[sv + '|' + px + '|' + py] = (out.posHit[sv + '|' + px + '|' + py] || 0) + n; }
-      if(String(r0.containerType || '') === 'player'){ out.playerCids[sv] = out.playerCids[sv] || {}; out.playerCids[sv][cid] = n; }
-      out.total += n;
-    });
-    Object.keys(ix.byPos || {}).forEach(function(pk){
-      var list = ix.byPos[pk] || [], n = 0;
-      for(var i=0;i<list.length;i++){ if(lbItemIsPick(list[i], pick)) n++; }
-      if(!n) return;
-      var parts = String(pk).split(/[,|]/);
-      var px = Math.round(Number(parts[0]) || 0), py = Math.round(Number(parts[1]) || 0);
-      out.srv[sv] = (out.srv[sv] || 0) + n;
-      out.posHit[sv + '|' + px + '|' + py] = (out.posHit[sv + '|' + px + '|' + py] || 0) + n;
-      var sk2 = settleKeyOf(sv, '', px, py);
-      out.setts[sv] = out.setts[sv] || {}; out.setts[sv][sk2] = (out.setts[sv][sk2] || 0) + n;
-      out.total += n;
-    });
-  });
-  LB._pickIdx = out; LB._pickIdxKey = ck;
-  return out;
-}
-function lbPickSrvCnt(sv){ var ix = lbPickIdx(); return (ix && ix.srv[sv]) || 0; }
-function lbPickSrvHas(sv){ return lbPickSrvCnt(sv) > 0; }
-function lbPickSettleCnt(sv, sk){ var ix = lbPickIdx(); return (ix && ix.setts[sv] && ix.setts[sv][sk]) || 0; }
-function lbPickSettleHas(sv, sk){ return lbPickSettleCnt(sv, sk) > 0; }
-// v3378：该 rec（含 facility rec）所在容器是否含所选物品——对齐物种的 lbSpeciesMatch
-function lbRecHasPick(r){
-  if(!r) return false;
-  var ix = lbPickIdx(); if(!ix) return false;
-  var sv = String(r.server || ''), cid = String(r.containerId || '');
-  if(cid && ix.cids[sv] && ix.cids[sv][cid]) return true;
-  var px = Math.round(Number(r.containerX != null ? r.containerX : r.x) || 0);
-  var py = Math.round(Number(r.containerY != null ? r.containerY : r.y) || 0);
-  return !!ix.posHit[sv + '|' + px + '|' + py];
-}
-// v3378：玩家背包中该物品的实例（按服分组，供「玩家携带」tab 渲染实例卡）
-function lbPickPlayerItems(){
-  var ix = lbPickIdx(); if(!ix) return [];
-  var pick = LB.pickItem, out = [];
-  var D = LB._cache && LB._cache.data;
-  Object.keys(ix.playerCids).forEach(function(sv){
-    var ix2 = ((D && D.itemsByServer) || {})[sv] || {};
-    Object.keys(ix.playerCids[sv]).forEach(function(cid){
-      (ix2.byCid[cid] || []).forEach(function(x){ if(lbItemIsPick(x, pick)) out.push({ sv: sv, it: x }); });
-    });
-  });
-  return out;
-}
-// v3378：物品模式聚落角标（图标 + 件数，与物种侧 lbSpBpBadge 同位）
-function lbPickBadge(it){
-  if(!LB.pickItem || !it || !it.key) return '';
-  var p = String(it.key).split('|'), sv = p[0], sk = p.slice(1).join('|');
-  var n = lbPickSettleCnt(sv, sk);
-  if(!n) return '';
-  var u = ''; try{ u = lbItemIconUrl(LB.pickItem.base) || ''; }catch(e){ u = ''; }
-  return (u ? '<img src="' + u + '" style="width:11px;height:11px;object-fit:contain;vertical-align:-1px" onerror="this.style.display=\'none\'">' : '') + lbFmtQty(n);
 }
 // 列表分支：显示「持有该物品的容器/聚落」（按服分组）—— v3376：已退出主渲染链（旧扁平列表会覆盖 #lbList 破坏聚落结构），保留仅供排障
 function lbViewItemPick(){
@@ -9567,7 +9464,7 @@ function lbRenderView(data, player, classFilter){
       var _iu = '', _iz = String(LB.pickItem.base || '');
       try{ _iu = lbItemIconUrl(LB.pickItem.base) || ''; }catch(e){ _iu = ''; }
       try{ var _mm9 = lbItemMeta(LB.pickItem.base); _iz = (_mm9 && _mm9.zh) || _iz; }catch(e){}
-      clsBtn.innerHTML = (_iu ? '<img class="lb-class-ic" src="' + lbAttr(_iu) + '">' : '') + '<span class="lb-class-label">' + lbAttr(_iz) + '</span>';
+      clsBtn.innerHTML = (_iu ? '<img class="lb-class-ic" src="' + lbAttr(_iu) + '">' : '') + '<span class="lb-class-label">物品：' + lbAttr(_iz) + '</span>';
     } else if(LB.curClass){
       var nm2=lbSpName(LB.curClass);
       clsBtn.innerHTML = icHtml + '<span class="lb-class-label">'+(nm2.zh || nm2.eng)+'</span>';
@@ -9595,8 +9492,6 @@ function lbRenderView(data, player, classFilter){
     (byServerAll[r.server]=byServerAll[r.server]||[]).push(r); // v177：聚落按钮结构用全部生物（按钮结构不变）
     // v577：lbSpeciesMatch 同时匹配该物种的蛋/胚胎（角标/主列表含蛋）
     if(classFilter && !lbSpeciesMatch(r, classFilter)) return;
-    // v3378（用户要求：全层级对齐物种）：物品模式按「该 rec 所在容器是否含所选物品」过滤（位置/口径同 lbSpeciesMatch）
-    if(LB.pickItem && !lbRecHasPick(r)) return;
     (byServer[r.server]=byServer[r.server]||[]).push(r);
   });
   // 排序：有世界秒按世界秒降序；无世界秒排最后，内部按墙钟降序
@@ -9634,7 +9529,7 @@ function lbRenderView(data, player, classFilter){
     });
   }
   // v1189：+「该服有该物种蓝图命中」——与生物/基因同级（纯过滤；仅在选中物种时执行）
-  var hasContent = function(t){ return t==='player' ? (playerCarried.length>0 || _myScannerCount>0 || (LB.pickItem ? lbPickPlayerItems().length>0 : false)) : ((byServer[t]||[]).length>0 || lbServerHasGene(t, classFilter) || (classFilter ? lbSpServerHas(t, classFilter) : false) || (LB.pickItem ? lbPickSrvHas(t) : false)); }; // v176：服务器 tab 按基因过滤；v3378：物品模式按「该服该物品件数」判定
+  var hasContent = function(t){ return t==='player' ? (playerCarried.length>0 || _myScannerCount>0) : ((byServer[t]||[]).length>0 || lbServerHasGene(t, classFilter) || (classFilter ? lbSpServerHas(t, classFilter) : false)); }; // v176：服务器 tab 按基因过滤
   if(!LB.tab) LB.tab='player';
   if(!hasContent(LB.tab)){
     if(hasContent('player')) LB.tab='player';
@@ -9651,7 +9546,7 @@ function lbRenderView(data, player, classFilter){
   LB.SERVERS.forEach(function(s){
     var arr=byServer[s.abbr]||[];
     if(!hasContent(s.abbr)) return; // v176：无生物但有该物种基因也显示 tab
-    var cnt=LB.pickItem ? lbPickSrvCnt(s.abbr) : arr.filter(function(r){return !r.isEmpty;}).length; // v3378：物品模式角标=该服该物品件数（对齐物种角标口径）
+    var cnt=arr.filter(function(r){return !r.isEmpty;}).length;
     var gCnt=lbServerHasGene(s.abbr, classFilter) ? lbGeneDevCount(s.abbr, classFilter) : 0;
     var mdi=LB_SERVER_MDI[s.abbr]||'';
     // v187：角标=生物数量+✦四角星（基因存在标记；不带数量）
@@ -9686,9 +9581,8 @@ function lbRenderView(data, player, classFilter){
         if(lbContainerTypeOf(d)==='player' && String(d.containerOwnerPid)===String(curPid2)) myScanners.push(d);
       });
     });
-    // v149：选中物种时只显示含该物种基因的背包基因枪（不含的隐藏）；v3378：物品模式不显示基因枪
-    if(LB.pickItem) myScanners = [];
-    else if(LB.curClass) myScanners = myScanners.filter(function(d){ return (d.slots||[]).some(geneSlotShow); });
+    // v149：选中物种时只显示含该物种基因的背包基因枪（不含的隐藏）
+    if(LB.curClass) myScanners = myScanners.filter(function(d){ return (d.slots||[]).some(geneSlotShow); });
     var scnHtml = myScanners.length ? myScanners.map(function(d){
         var sl=(d.slots||[]).filter(geneSlotShow); // v142：按当前物种过滤
         var genes = sl.length ? sl.map(function(s){ return lbGeneTagHtml(s.trait,s.level,s.species,undefined,s.dinoClass); }).join('') : '<span style="color:#666">无基因</span>';
@@ -9702,21 +9596,6 @@ function lbRenderView(data, player, classFilter){
     } else if(scnHtml){
       plan.push({t:'raw', html:scnHtml}); // 无生物组时基因枪独立段（渲染层自动包瀑布流）
     }
-    // v3378（用户要求 A）：物品模式——玩家背包里该物品的实例卡（对齐物种 tab 显示该物种生物卡）
-    if(LB.pickItem){
-      var _pit = lbPickPlayerItems();
-      if(_pit.length){
-        var _pby = {};
-        _pit.forEach(function(z){ (_pby[z.sv] = _pby[z.sv] || []).push(z.it); });
-        Object.keys(_pby).forEach(function(_sv3){
-          var _nm3 = _sv3; try{ _nm3 = (LB.servName && LB.servName(_sv3)) || _sv3; }catch(e){}
-          plan.push({t:'raw', html:'<div style="font-size:11px;color:#a78bfa;font-weight:600;padding:6px 2px 2px">' + lbAttr(_nm3) + ' ×' + _pby[_sv3].length + '</div>'});
-          plan.push({t:'raw', html:lbItemCardsHtml(_pby[_sv3], _sv3)});
-        });
-      } else {
-        plan.push({t:'raw', html:'<div style="color:#888;font-size:12px;padding:14px 2px">玩家背包中没有该物品</div>'});
-      }
-    }
     tabLabel='🎒 玩家携带';
   } else {
     var arr2=byServer[LB.tab]||[];
@@ -9726,15 +9605,11 @@ function lbRenderView(data, player, classFilter){
     var settleGroups={}, geneGroups={};
     function gsk(m){ var s=m.settle; return !s ? 'nosettle' : (s.scattered ? 'scattered' : s.setId); }
     mems.bios.forEach(function(m){
-      var _sk9 = gsk(m);
-      if(LB.pickItem && !lbPickSettleHas(LB.tab, _sk9)) return;   // v3378（用户要求）：不含该物品的聚落不进分组 ⇒ 聚落卡随之隐藏
-      var key = LB.tab+'|'+_sk9;
+      var key = LB.tab+'|'+gsk(m);
       (settleGroups[key]=settleGroups[key]||[]).push(m.item);
     });
     mems.genes.forEach(function(m){
-      var _sk10 = gsk(m);
-      if(LB.pickItem && !lbPickSettleHas(LB.tab, _sk10)) return;  // v3378：物品模式不保留纯基因聚落占位
-      var key = LB.tab+'|'+_sk10;
+      var key = LB.tab+'|'+gsk(m);
       (geneGroups[key]=geneGroups[key]||[]).push(m);
       if(!settleGroups[key]) settleGroups[key]=[]; // v183：纯基因聚落生物空数组占位
     });
@@ -9970,7 +9845,7 @@ function lbSettleClusterHtml(clu){
     h += '<div class="settle-btn side-btn" data-k="'+it.key+'" onclick="lbOpenSettle(this)">'
       + '<span class="settle-info">'+lbMdiSvg('mdi-tent', 12)
       + '<span class="settle-name">'+lbSettleName(it.settle)+'</span>' // v183：统一归属名称
-      + '<span class="settle-cnt">'+c2h+(c2h&&e2h?_sepS2:'')+e2h+((c2h||e2h)&&g2h?_sepS2:'')+g2h+lbSpBpBadge(it)+lbSpSaddleBadge(it)+lbSpGeneBadge(it)+lbPickBadge(it)+'</span></span></div>'; // v1226：+该物种实体鞍角标；v1251：+该物种基因角标；v1270：+蛋·胚胎计数（| 分隔）；v3378：+物品角标
+      + '<span class="settle-cnt">'+c2h+(c2h&&e2h?_sepS2:'')+e2h+((c2h||e2h)&&g2h?_sepS2:'')+g2h+lbSpBpBadge(it)+lbSpSaddleBadge(it)+lbSpGeneBadge(it)+'</span></span></div>'; // v1226：+该物种实体鞍角标；v1251：+该物种基因角标；v1270：+蛋·胚胎计数（| 分隔）
   });
   h += '</div></div>';
   return h;
@@ -10107,7 +9982,7 @@ function lbSettleBtnHtml(it){
   var gcntH = gcnt>0 ? sic.egg+gcnt : '';
   var _sepS = ' '; // v1272：改回空格（用户要求聚落按钮无需 |；仅位置分隔不改结构）
   // v1236：去掉聚落按钮上的基因小图标 ✦（用户要求，两种布局统一）
-  var cntStr = cntH+(cntH&&ecntH?_sepS:'')+ecntH+((cntH||ecntH)&&gcntH?_sepS:'')+gcntH+lbSpBpBadge(it)+lbSpSaddleBadge(it)+lbSpGeneBadge(it)+lbPickBadge(it); // v1226：+该物种实体鞍角标（图标同生物卡片鞍图标，11px）；v1251：+该物种基因角标；v3378：+物品角标
+  var cntStr = cntH+(cntH&&ecntH?_sepS:'')+ecntH+((cntH||ecntH)&&gcntH?_sepS:'')+gcntH+lbSpBpBadge(it)+lbSpSaddleBadge(it)+lbSpGeneBadge(it); // v1226：+该物种实体鞍角标（图标同生物卡片鞍图标，11px）；v1251：+该物种基因角标
   var isScat = s && s.scattered; // v830：离散卡标识（数据并入标题行，地图下方不再单列数据行）
   // v828/v830：卡内结构——普通单卡三段式（标题→地图→数据行）；离散卡两段式（标题行含右对齐数据→完整大地图）
   if(isScat){
@@ -11399,10 +11274,9 @@ function lbBuildSettleContainerHtml(grp, settleKey){
       });
     }
     // v3376（用户要求 A）：物品模式——容器块只保留「含该物品」的（不含则整块筛掉）；块内清单也只留该物品（结构/卡片样式完全复用）
-    // v3377（紧急修复）：此处位于 renderSeg 函数体（非循环体）——`continue` 非法，解析期 SyntaxError 会令整页 1.09MB 主脚本全废；改用 return（与函数内既有跳过写法一致）
     if(LB.pickItem){
       invItems = (invItems || []).filter(function(_it4){ return lbItemIsPick(_it4, LB.pickItem); });
-      if(!invItems.length) return;
+      if(!invItems.length) continue;
     }
     var invMark = _dedMerge ? '' : lbInvCountMark(invItems, !!(fullH||v6H||scnMark), LB.curClass); // v991：前面无内容则不加分隔线（消除孤立 |）；v1013：合并组不聚合物品徽章；v1192：选中物种时蓝图只计该物种
     var sepH = (fullH||eggH||v6H||scnMark||invMark) && emptyH ? ' ' : ''; // v1270：+eggH
@@ -11808,16 +11682,6 @@ function lbBuildSettleContainerHtml(grp, settleKey){
                   if(_bi5 >= 0 && _bd5 <= LB_FAC_AREA_EPS * LB_FAC_AREA_EPS){ _spAreaSet[_bi5] = 1; }
                 });
               }catch(e){ _spAreaSet = null; }
-            } else if(LB.pickItem){
-              // v3378（用户要求）：物品模式——同样只渲染「含该物品」的区域（与物种 v1195 同机制：不命中则整块区域隐藏）
-              try{
-                _spAreaSet = {};
-                grp.forEach(function(_r){
-                  if(!_r || !lbRecHasPick(_r)) return;
-                  var _aiP = _areaIdxOf(Number(_r.containerX)||0, Number(_r.containerY)||0, Number(_r.containerZ)||0);
-                  if(_aiP >= 0) _spAreaSet[_aiP] = 1;
-                });
-              }catch(e){ _spAreaSet = null; }
             }
             var _lastL = null; // v1045：层首检测（每层第一个可见区域用紫色双实线，层内区域之间仍虚线）
             var _firstVis = true; // v1063：第一个可见区域不画分隔线（用户：页面最上方那条紫虚线不需要）
@@ -11980,46 +11844,13 @@ function lbItemBaseCands(cls){
   }
   return out;
 }
-// v3381（治本）：base 名全局规范化——词表同物可能既有长键（PrimalItemResource_Chitin）又有短键（Chitin，实测 223 对），
-//   以及仅长键（实测 269 条）；统一：base 一律返回规范短名（跨源 join 口径唯一），词条通过反查表解析（名字/图标不丢）
-function lbCanonBase(b){
-  var s = String(b || '');
-  var m = s.match(/^PrimalItem[A-Za-z]+_(.+)$/);
-  return (m && m[1]) ? m[1] : s.replace(/^PrimalItem_/, '');
-}
-function lbItemZhCanonMap(){
-  if(!LB_ITEM_ZH || !Object.keys(LB_ITEM_ZH).length) return null;
-  var sig = 'n' + Object.keys(LB_ITEM_ZH).length;
-  if(LB._zhCanon && LB._zhCanonSig === sig) return LB._zhCanon;
-  var m = {};
-  Object.keys(LB_ITEM_ZH).forEach(function(k){
-    var c = lbCanonBase(k); if(!c) return;
-    var nt = LB_ITEM_ZH[k] || {};
-    var cur = m[c];
-    if(!cur){ m[c] = { key:k, t:nt }; return; }
-    var better = false;
-    if(k === c && cur.key !== c) better = true;                          // 短键词条优先
-    else if(!(cur.t && cur.t.icon) && nt.icon) better = true;             // 否则取字段更全的（有图标优先）
-    if(better) m[c] = { key:k, t:nt };
-  });
-  LB._zhCanon = m; LB._zhCanonSig = sig;
-  return m;
-}
 function lbItemMeta(cls){
   var cands = lbItemBaseCands(cls), t = null, base = '';
   if(LB_ITEM_ZH && Object.keys(LB_ITEM_ZH).length){
     for(var i=0;i<cands.length;i++){ if(LB_ITEM_ZH[cands[i]]){ t=LB_ITEM_ZH[cands[i]]; base=cands[i]; break; } }
-    if(!t){
-      // v3381：直接命中失败 → 走规范短名反查表（覆盖「词表只有长键」的 269 条，名字/图标不丢）
-      var cm = lbItemZhCanonMap();
-      if(cm){ for(var j=0;j<cands.length;j++){ var cv = cm[lbCanonBase(cands[j])]; if(cv){ t = cv.t; base = cv.key; break; } } }
-    }
   }
-  if(t){
-    var cbase = lbCanonBase(base) || base;   // v3381：base 一律规范短名
-    return { key:'i_'+cbase, base:cbase, zh:t.zh||cbase, en:t.en||'', icon:t.icon||'', kind:t.kind||'', hit:true };
-  }
-  var b = lbCanonBase(cands.length ? cands[cands.length-1] : String(cls||''));
+  if(t) return { key:'i_'+base, base:base, zh:t.zh||base, en:t.en||'', icon:t.icon||'', kind:t.kind||'', hit:true };
+  var b = cands.length ? cands[cands.length-1] : String(cls||'');
   return { key:'i_'+b, base:b, zh:'', en:b.replace(/([a-z0-9])([A-Z])/g,'$1 $2').replace(/_+/g,' ').trim(), icon:'', kind:'', hit:false };
 }
 function lbItemZh(cls){ var m=lbItemMeta(cls); return m.zh || ''; }
