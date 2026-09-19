@@ -211,8 +211,8 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 /* 生物卡片：PC 手型 + hover 紫色描边（可选中）；移动端禁选字 */
 .lb-card{cursor:pointer}
 .lb-card:hover{border-color:#7c3aed!important}
-/* v3385（用户要求）：蓝图卡改「1px 虚线描边」——原 v1219 的 hover 实心内描边（inset 2px #a78bfa）随之废弃；
-   hover 变紫仍由 .lb-card:hover{border-color:#7c3aed!important} 负责（虚线样式保持不变） */
+/* v1219：蓝图卡 hover 内描边同步调亮（内联 inset 蓝框 → 亮紫，与外框紫呼应；!important 覆盖内联样式） */
+.lb-card[data-bpcard]:hover{box-shadow:inset 0 0 0 2px #a78bfa!important}
 /* v519：自动命名模板说明折叠——三角形箭头（展开旋转90°）+ 表格化可读排版 */
 .lb-tpl-details > summary{list-style:none;cursor:pointer;user-select:none;font-size:12px;color:#a78bfa;font-weight:600}
 .lb-tpl-details > summary::-webkit-details-marker{display:none}
@@ -301,10 +301,6 @@ html.ios .lb-sex{transform:translateY(-0.08em)}
 /* v1221：放出组标题栏「命名本组」按钮——白色线性镂空；仅该组展开时显示 */
 .lb-rel-rename{display:none;background:transparent;border:1px solid rgba(255,255,255,.55);color:#fff;border-radius:6px;height:26px;padding:0 12px;font-size:12px;line-height:1;cursor:pointer;transition:all .15s;white-space:nowrap;flex-shrink:0;font-weight:normal}   /* v1231：固定高 22px（=行内图标高） */   /* v1229：加高（原 2px 8px / 11px 太矮） */
 .lb-rel-rename:hover{background:rgba(255,255,255,.12);border-color:#fff}
-/* v3387（用户口径）：设施 chip **不放任何按钮**——悬停有反馈，**点击 chip 直接弹「改名 / 一键改名」浮窗** */
-/* v3389（用户口径）：**只有「可改名」的 chip 才有悬停效果**——不可改名的（含仅能开地图的）不加任何悬停样式
-   可改名 chip 额外挂类 `lb-fchip-rn`；仍须 !important（chip 边框/底色是内联样式，会压过样式表） */
-span.lb-fchip-rn:hover{border-color:#a78bfa!important;background:#22222f!important;box-shadow:0 0 0 1px rgba(167,139,250,.35)}
 .acc[open] > summary .lb-rel-rename{display:inline-flex;align-items:center;justify-content:center;gap:3px;margin:-5px -6px -5px 0}   /* v1232：负外边距抵消 10px，不撑高标题栏；上/下/右间距均 6px */   /* v1229：行高同步（原 1 把按钮压扁） */
 .acc[open] > summary .acc-cnt-rel{display:none}   /* v1225：放出组展开时数量位被按钮替换 */
 .acc[open]::after{content:'';display:block;height:0;border-top:1px dashed #7c3aed;margin:8px 0 2px}   /* v1226：容器组展开时底部自动虚线（颜色与容器组选中色一致） */
@@ -345,14 +341,6 @@ span.lb-fchip-rn:hover{border-color:#a78bfa!important;background:#22222f!importa
 .lb-dot-svg.lb-picked .lb-sel-ring{opacity:1 !important}
 /* 物种选择浮窗（ASA 后台选图同款 dark 样式） */
 .lb-picker-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.9);z-index:1000001;display:flex;align-items:center;justify-content:center}
-/* v3395（用户实测：移动端有按钮被挤出屏幕）：设施批量改名弹窗响应式 —— 控件行可换行 + 表格可横滚 + 按钮可压缩 */
-@media (max-width:560px){
-  .lb-fb-modal{padding:14px!important}
-  .lb-fb-row{flex-wrap:wrap!important}
-  .lb-fb-row #lbFbBase{flex:1 1 100%!important}
-  .lb-fb-in{min-width:64px!important}
-  .lb-fb-col-id{display:none!important}   /* v3396（用户要求）：移动端隐藏「实例号」列（表头+单元格），宽度让给「新名」输入框 */
-}
 .lb-picker-panel{background:#1a1a24;border:1px solid #333;border-radius:8px;width:90%;max-width:640px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden}
 .lb-picker-header{display:flex;gap:8px;padding:10px 12px;align-items:center;flex-shrink:0;border-bottom:1px solid #2a2a3a}
 .lb-picker-header input{flex:1;margin:0;background:#15151f;border:1px solid #333;border-radius:6px;color:#ccc;font-size:12px;padding:0 10px;height:28px}
@@ -490,7 +478,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260920-3425';
+var LB_VERSION = 'v20260918-3384';
 var LB_SCHEMA_VER = 16;  // v1323：15→16 强制缓存重建——recs 新增 colorRegions（建筑涂装）字段，旧缓存无此字段 ⇒ 着色不显示
 // 历史：v1069 14→15——根因：recs 构建结果随 IndexedDB 持久化（v931）、
                          //   命中后跳过重建；仅改 _decorRe 等**构建期过滤**时，旧 rec 会长期残留（实测南瓜 rec 改过滤后仍显示）。
@@ -4716,9 +4704,6 @@ function lbBuildSettlements(data){
         for(var i=0;i<tSettles.length;i++){
           var s0=tSettles[i];
           var dd = Math.sqrt(Math.pow(Number(st.x)-s0.center.x,2)+Math.pow(Number(st.y)-s0.center.y,2));
-          // v3424（用户口径）：**必须在本聚落范围内**才算归属（距中心 ≤ radius+800）
-          //   ⇒ 实测 Sco：15211 外的其它基地大广告牌（本聚落半径仅 1307）被分派进来 ⇒ 与命名弹窗不一致
-          if(dd > (Number(s0.radius) || 0) + 800) continue;
           if(dd<bd){ bd=dd; best=s0; }
         }
         if(best) nameOwner[(st.class||'')+'|'+Math.round(Number(st.x))+'|'+Math.round(Number(st.y))] = { id:best.id, st:st }; // v20260912：同时存设施引用供逆映射
@@ -4735,10 +4720,34 @@ function lbBuildSettlements(data){
     var sNameOf = function(s){
       var own = _ownBySet[s.id] || [];
       if(!own.length) return null;
-      // v3424（用户口径）：聚落名**单一实现** lbSettleNamePick（优先级 ①大广告牌 ②床/棺/睡舱 ③镙碑 ④其它）
-      //   入参已按本聚落范围过滤（见上方 nameOwner 的 _srr 门槛）⇒ 与命名弹窗同一函数、同一口径
-      var _hit0 = lbSettleNamePick(own, s.center.x, s.center.y);
-      return _hit0 ? _hit0.name : null;
+      function nearest(t){
+        var best=null, bd=Infinity;
+        t.forEach(function(st){
+          var dd = Math.sqrt(Math.pow(Number(st.x)-s.center.x,2)+Math.pow(Number(st.y)-s.center.y,2));
+          if(dd<bd){ bd=dd; best=st; }
+        });
+        return best;
+      }
+      // v1035：统一为「四档优先级」，与 lbSettlementBuildingName 保持一致。
+      //   原为旧三档「① 墓碑+广告牌【混合】→ ② 名字以 M 结尾(僵尸条件) → ③ 其余」⇒ 墓碑混在第①档、抢在床之前 ⇒ 聚落名被墓碑占据（用户实测 "My DOG"）。
+      //   而 v1027 修好的 lbSettlementBuildingName（四档）只被 lbFinalizeSettlement 调用，全量重建走的是本函数 ⇒ v1027 在此路径完全不生效（"改了没用"的真因）。
+      //   候选范围仍保留 own（归属本聚落的设施），比「全部落」更精确，语义不变。
+      function _pick(re){
+        var t = own.filter(function(st){ return st && st.name && re.test(String(st.class||'')); });
+        return t.length ? nearest(t) : null;
+      }
+      var g1 = _pick(/Sign_Large_Metal|Sign_Large_Wood|MetalSign_Large|WoodSign_Large/i); // ① 大型广告牌
+      if(g1) return g1.name;
+      var g2 = _pick(LB_BED_RE);                                                           // ② 床/棺/睡眠舱
+      if(g2) return g2.name;
+      var g3 = _pick(/Gravestone/i);                                                       // ③ 墓碑（降级至广告牌与床之后）
+      if(g3) return g3.name;
+      // v1320（用户要求）：④ 兜底同样**剔除全部小牌 / 壁挂牌**（两处聚落命名路径口径必须一致）
+      var _g4ex = /Sign_|MetalSign|WoodSign|HangingSign|Billboard/i;
+      var _g4t = own.filter(function(st){ return st && st.name && !_g4ex.test(String(st.class||'')); });
+      var g4 = _g4t.length ? nearest(_g4t) : null;                                        // ④ 其余带名字者（不含小牌）
+      if(g4) return g4.name;
+      return null;
     };
     settlements.forEach(function(s){
       var nbName = sNameOf(s);
@@ -4961,40 +4970,7 @@ function lbNearestStructure(arr, cx, cy){
   return best ? best.name : null;
 }
 // 聚落建筑命名优先级（v1027 修订）：①大型广告牌(Sign_Large_Metal/Wood，含旧词序)自定义名(同组取距center最近) → ②床/棺材/睡眠舱(按类名 LB_BED_RE 判定，v1027 起不再要求名字以 M 结尾) → ③墓碑(Gravestone，v1027 起降级到广告牌与床之后) → ④其余带自定义名者；无则 null
-// v3424（用户口径）：聚落命名的**单一实现**——按钮/列表名 与 命名弹窗★ 必须同源同口径
-//   ① 优先级：大型广告牌 → 床/棺材/睡眠舱 → 墓碑 → 其它带名设施（剔除小牌/壁挂牌）；同类取距聚落中心最近
-//   ② 候选**必须已限定在本聚落范围内**（lbSettleInScope），否则会选到同部落其它基地的设施
-function lbSettleNamePick(cands, cx, cy){
-  var _cls = function(s){ return String((s && (s.class !== undefined ? s.class : s.cls)) || ''); };
-  var _near = function(arr){
-    var b = null, bd = Infinity;
-    for(var i = 0; i < arr.length; i++){
-      var dx = (Number(arr[i].x) || 0) - (Number(cx) || 0), dy = (Number(arr[i].y) || 0) - (Number(cy) || 0);
-      var v = dx*dx + dy*dy;
-      if(v < bd){ bd = v; b = arr[i]; }
-    }
-    return b;
-  };
-  var L = (cands || []).filter(function(s){ return s && String(s.name || '').trim(); });
-  if(!L.length) return null;
-  var tiers = [
-    function(s){ return /Sign_Large_Metal|Sign_Large_Wood|MetalSign_Large|WoodSign_Large/i.test(_cls(s)); },   // ① 大型广告牌
-    function(s){ return LB_BED_RE.test(_cls(s)) || /Coffin|SleepingPod/i.test(_cls(s)); },                     // ② 床 / 棺材 / 睡眠舱
-    function(s){ return /Gravestone/i.test(_cls(s)); },                                                       // ③ 墓碑
-    function(s){ return !/Sign_|MetalSign|WoodSign|HangingSign|Billboard/i.test(_cls(s)); }                   // ④ 其它带名（剔除小牌/壁挂牌）
-  ];
-  for(var t = 0; t < tiers.length; t++){
-    var arr = L.filter(tiers[t]);
-    if(arr.length){ var hit = _near(arr); return { name: String(hit.name).trim(), src: hit, tier: t }; }
-  }
-  return null;
-}
-// v3424：本聚落范围判定（与详情页 _inSettlePt 同口径）：距聚落中心 ≤ radius+800
-function lbSettleInScope(s, cx, cy, radius){
-  var dx = (Number(s && s.x) || 0) - (Number(cx) || 0), dy = (Number(s && s.y) || 0) - (Number(cy) || 0);
-  return Math.sqrt(dx*dx + dy*dy) <= (Number(radius) || 0) + 800;
-}
-function lbSettlementBuildingName(data, abbr, tid, cx, cy, radius){
+function lbSettlementBuildingName(data, abbr, tid, cx, cy){
   // v20260912：走 structsByTribe 索引（原每聚落全量扫 52 万条 → O(聚落数×52万)）
   var pool = (LB_STRUCTS_BY_TRIBE && LB_STRUCTS_BY_TRIBE[String(tid)]) || null;
   if(!pool){
@@ -5002,11 +4978,19 @@ function lbSettlementBuildingName(data, abbr, tid, cx, cy, radius){
     if(!sts.length) return null;
     pool = sts.filter(function(s){ return Number(s.tribeId) === Number(tid); });
   }
-  // v3424（用户口径）：候选**必须在本聚落范围内**（距中心 ≤ radius+800）——原实现取「同部落全部带名设施」
-  //   ⇒ 实测 Sco 选到 15211 外（半径 1307，阈值 2107）其它基地的大广告牌 ⇒ 与命名弹窗不一致
-  var cands = pool.filter(function(s){ return !!s.name && lbSettleInScope(s, cx, cy, radius); });
-  var hit = lbSettleNamePick(cands, cx, cy);
-  return hit ? hit.src : null;
+  var cands = pool.filter(function(s){ return !!s.name; });
+  if(!cands.length) return null;
+  var billboard = cands.filter(function(s){ return /Sign_Large_Metal|Sign_Large_Wood|MetalSign_Large|WoodSign_Large/i.test(s.class||''); });
+  if(billboard.length) return lbNearestStructure(billboard, cx, cy);
+  var beds = cands.filter(function(s){ return LB_BED_RE.test(s.class||''); });
+  if(beds.length) return lbNearestStructure(beds, cx, cy);
+  var tomb = cands.filter(function(s){ return /Gravestone/i.test(s.class||''); });
+  if(tomb.length) return lbNearestStructure(tomb, cx, cy);
+  // v1320（用户要求）：④ 兜底**剔除全部小牌 / 壁挂牌**（Sign_Small_* / Sign_Wall_* / MetalSign / WoodSign / HangingSign）
+  //   原因：小牌专用于「区域命名」（LB_AREA_SIGN_RE 通道），不该抢聚落名；大广告牌已在 ① 处理，不受影响
+  var _rest = cands.filter(function(s){ return !/Sign_|MetalSign|WoodSign|HangingSign|Billboard/i.test(String(s.class||'')); });
+  if(!_rest.length) return null;
+  return lbNearestStructure(_rest, cx, cy);
 }
 // 聚落收尾：计算 center/radius/容器数/球数 + 冠名（§8）
 function lbFinalizeSettlement(data, abbr, tid, sid, containers){
@@ -5051,7 +5035,7 @@ function lbFinalizeSettlement(data, abbr, tid, sid, containers){
   });
   // 无成员回退 S 编号
   // 聚落命名（2026-08-12）：优先聚落内建筑名（床/棺材/睡眠舱，M 结尾→最近带名字）；无则回退冠名/S编号
-  var bName = lbSettlementBuildingName(data, abbr, Number(tid), cx, cy, maxR);   // v3424：传 radius（候选限本聚落范围）
+  var bName = lbSettlementBuildingName(data, abbr, Number(tid), cx, cy);
   var name = bName || (members.length ? members.map(function(m){ return m.name; }).join('、') : ('S'+String(sid).split('_').pop()));
   return { id:sid, tribeId:Number(tid), tribeName:(tribe&&tribe.name)||'', center:{x:cx,y:cy,z:cz}, radius:maxR,
     containers:containers, pods:pods, owners:members, name:name };
@@ -7653,9 +7637,7 @@ function lbInvCountMark(items, withSep, cls){
   }
   if(_bpN) o += lbWebpIc('IconMiscNoteType', 11)+lbFmtQty(_bpN);                        // v1238：原 ▤
   if(g.weapon)    o += lbWebpIc('RW_WT', 11)+lbFmtQty(g.weapon);                         // v1239：武器新图（原 RW_Declare_Tribe_War）
-  // v3390（用户实测：物品卡换了、容器摘要没换）：护甲角标有**两处**渲染路径，必须**同源**改：
-  //   ① 物品卡/类型角标 `LB_TYPE_BADGE.armor.ic` ② 本函数（容器组摘要，图标+数量）
-  if(g.armor)     o += lbWebpIc('HUDTEKShirt_Icon_white', 11)+lbFmtQty(g.armor);         // v3390：护甲新图（原 Fortitude_Icon_white／更早 🛡）
+  if(g.armor)     o += lbWebpIc('Fortitude_Icon_white', 11)+lbFmtQty(g.armor);           // v1238：原 🛡
   if(g.saddle)    o += lbWebpIc('RW_equip_saddle', 11)+lbFmtQty(g.saddle);               // v1238：原 🐴
   if(g.trait)     o += lbWebpIc('trait_icon', 11)+lbFmtQty(g.trait);                     // v1241：物品特性（PrimalItem_ItemTrait_*）
   // v1358（用户指定）：新增类别角标（纯图标，与其他类型同风——**不带底色**）
@@ -7671,9 +7653,9 @@ function lbInvCountMark(items, withSep, cls){
 var LB_BP_STAGE_COL = ['#b8b8b8', '#1eff00', '#0070dd', '#a335ee', '#ff8000', '#00bfff'];
 function lbBpStageCol(q){ var n = Math.round(Number(q)); if(!(n >= 0 && n <= 5)) n = 0; return LB_BP_STAGE_COL[n]; }
 // v1220：物品类型徽章（图标 + 底色按类型）——蓝图卡与实物卡共用；图标已压图（webp96 齐备）
-//   武器 RW_WT（v1239 新图） · 护甲 HUDTEKShirt_Icon_white（v3390，与 lbInvCountMark 同源） · 鞍 RW_equip_saddle / 平台 RW_Garage_roof_show / 泰克 TEK_Icon · 其他 IconMiscNoteType
+//   武器 RW_WT（v1239 新图） · 护甲 Fortitude_Icon_white · 鞍 RW_equip_saddle / 平台 RW_Garage_roof_show / 泰克 TEK_Icon · 其他 IconMiscNoteType
 var LB_TYPE_BADGE = {
-  weapon:{ic:'RW_WT', col:'#f59e0b'}, armor:{ic:'HUDTEKShirt_Icon_white', col:'#34d399'},   // v3388（用户点名）：护甲角标全局换图（原 Fortitude_Icon_white）
+  weapon:{ic:'RW_WT', col:'#f59e0b'}, armor:{ic:'Fortitude_Icon_white', col:'#34d399'},
   saddle:{ic:'RW_equip_saddle', col:'#38bdf8'}, platform:{ic:'RW_Garage_roof_show', col:'#fb923c'},
   tek:{ic:'TEK_Icon', col:'#7c3aed'}, trait:{ic:'trait_icon', col:'#14b8a6'}, other:{ic:'RW_Train_drive', col:'#64748b'}, // v1222：other → RW_Train_drive；v1241：trait → trait_icon（物品特性 PrimalItem_ItemTrait_*）
   recipe:{ic:'Food_Icon_white', col:'#e11d48'}, // v3377（用户要求）：自定义食谱专用徽章——暖色玟红（现有 7 种底色无红系 ⇒ 不撞色）
@@ -8093,10 +8075,7 @@ function lbBpCardHtml(r, sv, opt){
   var inst = String((r && r.inst) || lbBpInstOf(it));
   var key = lbBpKey(sv, base, inst), ckey = lbBpCostKey(sv, rcls), on = lbBpFollowHas(sv, base, inst);
   var snap = JSON.stringify({ 'class':it['class'] || '', key:it.key || '', qidx:it.qidx, rating:it.rating, stats:it.stats, kind:it.kind, customName:it.customName || '', craftingSkill:(it.craftingSkill == null ? null : it.craftingSkill) });   // v3375：食谱效果需 customName/craftingSkill（待制作刷新后重渲染）
-  // v3385（用户要求）：蓝图卡描边**统一虚线**（细线 1px，不加粗）——
-  //   原为 `border:1px solid #2a2a3a` + `box-shadow:inset 0 0 0 2px #3b82f6`（2px 实心蓝内框），
-  //   与速查列表小蓝图卡（lbRankRow：kindKey==='bp' → dashed）口径不一致；现统一为 1px 虚线蓝框。
-  var o = '<div class="lb-card" data-bpcard="' + lbAttr(key) + '" data-bpsnap="' + lbAttr(snap) + '" style="position:relative;overflow:hidden;background:#1a1a24;border:1px dashed #3b82f6;border-radius:10px;padding:10px 12px;margin-bottom:' + (opt.inTodo ? '12px' : '8px') + ';box-sizing:border-box">'
+  var o = '<div class="lb-card" data-bpcard="' + lbAttr(key) + '" data-bpsnap="' + lbAttr(snap) + '" style="position:relative;overflow:hidden;background:#1a1a24;border:1px solid #2a2a3a;border-radius:10px;padding:10px 12px;margin-bottom:' + (opt.inTodo ? '12px' : '8px') + ';box-sizing:border-box;box-shadow:inset 0 0 0 2px #3b82f6">'
     + '<div style="display:flex;height:6px;margin:-10px -12px 8px;border-radius:10px 10px 0 0;overflow:hidden"><i style="flex:1;background:' + lbBpStageCol(it.qidx) + '"></i></div>';
   if(url) o += '<img class="lb-card-ic" src="' + lbAttr(url) + '" onerror="lbImgRetry(this)">';
   if(bpId) o += '<span class="lb-id-btn" onclick="lbToggleId(event,this,\'' + lbAttr(bpId) + '\')" title="查看ID"><i class="mdi mdi-identifier"></i></span>';
@@ -8484,9 +8463,6 @@ var LB_MDI_SVG = {
   ,'mdi-heart': 'M12,21.35L10.55,20.03C5.4,15.36 2,12.27 2,8.5C2,5.41 4.42,3 7.5,3C9.24,3 10.91,3.81 12,5.08C13.09,3.81 14.76,3 16.5,3C19.58,3 22,5.41 22,8.5C22,12.27 18.6,15.36 13.45,20.03L12,21.35Z'
   ,'mdi-close': 'M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z'
   ,'mdi-map-marker-multiple': 'M14,11.5A2.5,2.5 0 0,0 16.5,9A2.5,2.5 0 0,0 14,6.5A2.5,2.5 0 0,0 11.5,9A2.5,2.5 0 0,0 14,11.5M14,2C17.86,2 21,5.13 21,9C21,14.25 14,22 14,22C14,22 7,14.25 7,9C7,5.13 10.14,2 14,2M5,9C5,13.5 10.08,19.66 11,20.81L10,22C10,22 3,14.25 3,9C3,5.83 5.11,3.15 8,2.29C6.16,3.94 5,6.33 5,9Z'
-  // v3408（用户实测：返回/聚落命名按钮图标不显示）：lbMdiSvg 查表未命中会返回**空串**——原表无箭头/铅笔，补两条官方路径
-  ,'mdi-arrow-left': 'M20,11V13H8L13.5,18.5L12.08,19.92L4.16,12L12.08,4.08L13.5,5.5L8,11H20Z'
-  ,'mdi-pencil': 'M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z'
 };
 function lbMdiSvg(name, size){
   var d = LB_MDI_SVG[name] || '';
@@ -8613,15 +8589,8 @@ function lbContainerDisp(type, cls){
 var LB_FAC_RENAMEABLE = {
   'CryoFridge':1, 'StorageBox_Huge':1, 'StorageBox_Large':1, 'IceBox':1, 'StructureBP_LibraryStorage':1,
   'Refridgerator':1, 'Refrigerator':1,   // v1334（用户要求）：冰箱（游戏内原始拼写 Refridgerator，库存数据 491 条）
-  'BP_DisplayCase':1, /* v1348（用户要求）：展示柜属「可合并组」⇒ **不允许改名**（置 0，保留历史记录便于追溯） */
+  'BP_DisplayCase':0, /* v1348（用户要求）：展示柜属「可合并组」⇒ **不允许改名**（置 0，保留历史记录便于追溯） */
   'TekTeleporterMini':1, 'StorageBox_Small':1, 'TekTeleporterSmall':1,
-  'TekTeleporter':1,   // v3388（用户点名）：全尺寸传送器——全服审计实测 10 服 2/2 被改过名，原名单漏收
-  // v3397（后端插件 0.4.0）：床/棺材/睡眠舱（SetBedName）与牌子/墓碑（SetSignText）全线放开；
-  //   名单依据：全服审计「玩家实际改过名」的类别（SimpleBed 68 / ModernBed 60 / Coffin_Upright 49 / HangingSign 29 / Sign_* 15+15+13 …）
-  'CompanionBed':1, 'SleepingPod':1, 'TekSleepingPod':1,
-  'Gravestone_2':1, 'Gravestone_3':1, 'Gravestone_4':1, 'Gravestone_5':1, 'Gravestone_6':1,
-  'Sign_Large_Wood':1, 'MetalSign_Large':1, 'WoodSign_Large':1,
-  'Sign_Small_Metal':1, 'Sign_Small_Wood':1, 'Sign_Wall_Metal':1, 'Sign_Wall_Wood':1, 'Sign_Wall_Stocking':1,
   'StructureBP_DecorBox_Small':1, 'Structure_TrainingDummy':1, 'StructureBP_LinkedStorage':1, 'StorageBox_Barrel':1,
   'SimpleBed':1, 'StructureBP_Gravestone':1, 'ModernBed':1, 'StructureBP_Coffin_Upright':1, 'TekBed_Standing':1,
   'StructureBP_Coffin':1, 'StructureBP_HangingSign':1, 'TekBed':1, 'Sign_Large_Metal':1
@@ -8702,12 +8671,11 @@ function lbCanRenameContainer(r){
   var sub = lbContainerTypeOf(r);
   // v1348（用户要求）：可合并组（display 展示柜 / stand 展台）与 released/player 一律不给改名按钮
   //   —— 与同族「显示 #ID」处的守卫口径对齐（原先只排 released/player，导致展示柜出现改名按钮）
-  // v3391（用户要求）：**展示柜放行**——仅保留 stand（宠物展示台）/放出/玩家携带的排除
-  if(sub === 'released' || sub === 'player' || sub === 'stand') return false;
+  if(sub === 'released' || sub === 'player' || sub === 'display' || sub === 'stand') return false;
   var cls = String(r.containerClass || '');
   if(!cls || !lbObjSuffix(cls)) return false;
-  // v3397（后端插件 0.4.0）：**床/棺材/牌/碑已可改名**（分别走 SetBedName / SetSignText）
-  //   ⇒ 不再按类型排除；仍由白名单（v3391 起含展示柜）+ 实例子号 + 归属三道门控制
+  if(LB_BED_RE.test(cls) || LB_SIGN_RE.test(cls) || /Gravestone/i.test(cls)) return false;
+  // v1328（用户要求）：**仅「能显示 #ID」的设施类型**才允许改名 —— 复用 v1314 的 LB_FAC_RENAMEABLE 白名单
   if(typeof lbFacRenameable === 'function' && !lbFacRenameable(cls)) return false;
   if(!lbIsMyContainer(r)) return false;
   return true;
@@ -8757,10 +8725,8 @@ function lbFacBatchRenameBtn(list){
     if(!list || list.length < 2) return '';
     var d = []; for(var i = 0; i < list.length; i++){ var _d = lbRenameDatum(list[i]); if(_d.obj) d.push(_d); }
     if(d.length < 2) return '';
-    var _allSign = d.every(function(x){ return lbRenameApiOf(x.cls) === 'sign'; });   // v3398：全为牌子/墓碑 ⇒ 批量改文字
-    var _lbl2 = _allSign ? '批量改文字' : '一键改名';
     return '<button class="lb-rel-rename" data-frn="' + lbAttr(JSON.stringify(d)) + '"'
-         + ' onclick="event.stopPropagation();lbOpenFacBatchRename(event,this)" title="' + _lbl2 + '（' + d.length + ' 个）">' + _lbl2 + '</button>';
+         + ' onclick="event.stopPropagation();lbOpenFacBatchRename(event,this)" title="批量改名（' + d.length + ' 台）">批量改名</button>';
   }catch(e){ return ''; }
 }
 // v3384：顺序大写字母（0→A 1→B … 26→AA 27→AB，Excel 口径）
@@ -8777,7 +8743,6 @@ function lbFacZhOf(cls){
   return z || lbFacBaseKey(cls);
 }
 // v3384：设施批量改名弹窗（结构/执行方式照搬 lbSettleBatchRename：表格 + 确认执行 + 串行 600ms）
-// v3386（用户口径）：入口文案统一为「一键改名」（合并组标题栏 + 设施 chip）
 function lbOpenFacBatchRename(ev, btn){
   if(ev && ev.stopPropagation) ev.stopPropagation();
   var list = []; try{ list = JSON.parse(btn.getAttribute('data-frn') || '[]'); }catch(e){}
@@ -8786,73 +8751,48 @@ function lbOpenFacBatchRename(ev, btn){
   var oldEl = document.querySelector('.lb-picker-overlay'); if(oldEl) oldEl.remove();
   var overlay = document.createElement('div'); overlay.className = 'lb-picker-overlay';
   overlay.onclick = function(e){ if(e.target === overlay) overlay.remove(); };
-  var _inpS = 'width:100%;min-width:0;box-sizing:border-box;padding:3px 6px;border-radius:4px;border:1px solid #333;background:#12121a;color:#ddd;font-size:12px';   // v3395：宽度自适应（原固定 130px 在移动端撑破表格）
+  var _inpS = 'width:130px;padding:3px 6px;border-radius:4px;border:1px solid #333;background:#12121a;color:#ddd;font-size:12px';
   var rows = list.map(function(d, i){
     return '<tr>'
       + '<td style="padding:3px 8px;color:#777">' + (i + 1) + '</td>'
       + '<td style="padding:3px 8px;color:#e0e0e0" title="' + lbAttr(d.cls) + '">' + escapeHtml(lbFacZhOf(d.cls)) + '</td>'
-      + '<td class="lb-fb-col-id" style="padding:3px 8px;color:#888">#' + escapeHtml(String(d.obj)) + '</td>'
+      + '<td style="padding:3px 8px;color:#888">#' + escapeHtml(String(d.obj)) + '</td>'
       + '<td style="padding:3px 8px;color:#ccc">' + (d.cn ? escapeHtml(d.cn) : '<span style="color:#666">（空名）</span>') + '</td>'
       + '<td style="padding:3px 8px"><input class="lb-fb-in" value="' + lbAttr(d.cn || '') + '" placeholder="新名字" oninput="this.setAttribute(&#39;data-edit&#39;,&#39;1&#39;)" style="' + _inpS + '"></td>'
       + '</tr>';
   }).join('');
-  overlay.innerHTML = '<div class="lb-fb-modal" style="background:#1a1a24;border:1px solid #7c3aed55;border-radius:12px;padding:20px;width:660px;max-width:96vw;box-shadow:0 10px 40px rgba(0,0,0,.6);max-height:86vh;display:flex;flex-direction:column">'
+  overlay.innerHTML = '<div style="background:#1a1a24;border:1px solid #7c3aed55;border-radius:12px;padding:20px;width:660px;max-width:96vw;box-shadow:0 10px 40px rgba(0,0,0,.6);max-height:86vh;display:flex;flex-direction:column">'
     + '<div style="font-size:15px;font-weight:bold;color:#a78bfa;margin-bottom:4px">⚡ 设施批量改名</div>'
-    + '<div style="font-size:12px;color:#888;margin-bottom:8px">共 <b style="color:#e0e0e0">' + list.length + '</b> 台 · 填「基础名」自动生成（字母可选），也可逐行手改：</div>'
-    + '<div class="lb-fb-row" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;align-items:center">'
-      + '<input id="lbFbBase" placeholder="基础名（如：天台）" oninput="lbFacBatchFill(0)" style="flex:1 1 140px;min-width:0;padding:8px 10px;border-radius:6px;border:1px solid #333;background:#12121a;color:#ddd;font-size:13px">'
-      + '<button id="lbFbSuffix" data-on="1" onclick="lbFacSuffixToggle()" title="切换：加/不加字母后缀" style="flex:0 0 auto;padding:8px 12px;border-radius:6px;border:1px solid #7c3aed;background:rgba(124,58,237,.28);color:#c4b5fd;cursor:pointer;font-size:12px;white-space:nowrap">加字母后缀 A/B/C…</button>'
-      + '<button onclick="lbFacBatchClearAll()" style="flex:0 0 auto;padding:8px 12px;border-radius:6px;border:1px solid #7c3aed;background:transparent;color:#a78bfa;cursor:pointer;font-size:12px;white-space:nowrap">清空全部</button>'
-      + '<button onclick="lbFacBatchFill(1)" style="flex:0 0 auto;padding:8px 12px;border-radius:6px;border:1px solid #7c3aed;background:transparent;color:#a78bfa;cursor:pointer;font-size:12px;white-space:nowrap">按顺序生成</button>'
+    + '<div style="font-size:12px;color:#888;margin-bottom:8px">共 <b style="color:#e0e0e0">' + list.length + '</b> 台 · 填「基础名」自动按顺序加大写字母（A、B、C…），也可逐行手改：</div>'
+    + '<div style="display:flex;gap:8px;margin-bottom:8px">'
+      + '<input id="lbFbBase" placeholder="基础名（如：天台）" oninput="lbFacBatchFill(0)" style="flex:1;padding:8px 10px;border-radius:6px;border:1px solid #333;background:#12121a;color:#ddd;font-size:13px">'
+      + '<button onclick="lbFacBatchFill(1)" style="padding:8px 12px;border-radius:6px;border:1px solid #7c3aed;background:transparent;color:#a78bfa;cursor:pointer;font-size:12px;white-space:nowrap">按顺序生成</button>'
     + '</div>'
-    + '<div class="lb-fb-tablewrap" style="flex:1;min-height:0;overflow:auto;border:1px solid #2a2a3a;border-radius:6px;padding:4px 8px">'
+    + '<div style="flex:1;min-height:0;overflow-y:auto;border:1px solid #2a2a3a;border-radius:6px;padding:4px 8px">'
       + '<table style="width:100%;font-size:12px;border-collapse:collapse"><tr>'
       + '<th style="text-align:left;color:#a78bfa;padding:3px 8px">#</th>'
       + '<th style="text-align:left;color:#a78bfa;padding:3px 8px">类型</th>'
-      + '<th class="lb-fb-col-id" style="text-align:left;color:#a78bfa;padding:3px 8px">实例号</th>'
+      + '<th style="text-align:left;color:#a78bfa;padding:3px 8px">实例号</th>'
       + '<th style="text-align:left;color:#a78bfa;padding:3px 8px">当前名</th>'
       + '<th style="text-align:left;color:#a78bfa;padding:3px 8px">新名</th></tr>' + rows + '</table>'
     + '</div>'
     + '<div id="lbFacBatchMsg" style="font-size:12px;min-height:14px;margin-top:8px"></div>'
     + '<div style="display:flex;gap:8px;margin-top:10px">'
-      + '<button onclick="lbFacBatchGo()" style="flex:1;min-width:0;padding:8px 14px;border-radius:6px;border:none;background:#7c3aed;color:#fff;cursor:pointer;font-size:13px;font-weight:bold">确认执行（' + list.length + ' 台）</button>'
-      + '<button onclick="this.closest(\'.lb-picker-overlay\').remove()" style="flex:1;min-width:0;padding:8px 14px;border-radius:6px;border:1px solid #333;background:transparent;color:#888;cursor:pointer;font-size:13px">取消</button>'
+      + '<button onclick="lbFacBatchGo()" style="flex:1;padding:8px 14px;border-radius:6px;border:none;background:#7c3aed;color:#fff;cursor:pointer;font-size:13px;font-weight:bold">确认执行（' + list.length + ' 台）</button>'
+      + '<button onclick="this.closest(\'.lb-picker-overlay\').remove()" style="flex:1;padding:8px 14px;border-radius:6px;border:1px solid #333;background:transparent;color:#888;cursor:pointer;font-size:13px">取消</button>'
     + '</div>'
     + '</div>';
   document.body.appendChild(overlay);
   LB._facBatchItems = list;
 }
-// v3397（后端插件 0.4.0）：批量「清空全部」——把所有行新名填成 '-'（RCON 清空约定），确认执行即逐台清空
-function lbFacBatchClearAll(){
-  var ins = document.querySelectorAll('.lb-fb-in');
-  for(var i = 0; i < ins.length; i++){ ins[i].value = '-'; ins[i].setAttribute('data-edit', '1'); }
-  var m = document.getElementById('lbFacBatchMsg');
-  if(m){ m.textContent = '已填入「-」：确认执行后将逐台清空名字'; m.style.color = '#fbbf24'; }
-}
-// v3393（用户要求）：字母后缀开关改为**切换按钮**（原生 checkbox 与深色/紫色主题不搭）
-function lbFacSuffixToggle(){
-  var b = document.getElementById('lbFbSuffix');
-  if(!b) return;
-  var on = b.getAttribute('data-on') !== '0';
-  on = !on;
-  b.setAttribute('data-on', on ? '1' : '0');
-  b.textContent = on ? '加字母后缀 A/B/C…' : '不加字母（同名）';
-  b.title = on ? '当前：加字母后缀（点切换为不加）' : '当前：不加字母（点切换为加）';
-  b.style.background = on ? 'rgba(124,58,237,.28)' : 'transparent';
-  b.style.color = on ? '#c4b5fd' : '#888';
-  b.style.borderColor = on ? '#7c3aed' : '#333';
-  lbFacBatchFill(1);
-}
-// v3384：按「基础名（+ 可选字母）」填充新名（已手动改过的行不覆盖；force=1 全量覆盖）
-// v3391（用户要求）：字母**可选**；v3393：开关状态改读切换按钮的 data-on
+// v3384：按「基础名 + 顺序大写字母」填充新名（已手动改过的行不覆盖；force=1 全量覆盖）
 function lbFacBatchFill(force){
   var base = ''; try{ base = String((document.getElementById('lbFbBase') || {}).value || '').trim(); }catch(e){ base = ''; }
   if(!base) return;
-  var withL = true; try{ var _tb = document.getElementById('lbFbSuffix'); withL = !_tb || _tb.getAttribute('data-on') !== '0'; }catch(e){ withL = true; }
   var ins = document.querySelectorAll('.lb-fb-in');
   for(var i = 0; i < ins.length; i++){
     if(!force && ins[i].getAttribute('data-edit') === '1') continue;
-    ins[i].value = withL ? (base + lbFacLetter(i)) : base;
+    ins[i].value = base + lbFacLetter(i);
     ins[i].removeAttribute('data-edit');
   }
 }
@@ -8882,77 +8822,26 @@ function lbFacBatchGo(){
     }
     var j = jobs[done];
     if(msg){ msg.innerHTML = '⏳ 正在改名 ' + (done + 1) + '/' + jobs.length + '：' + escapeHtml(j.d.cn || '（空名）') + ' → <b>' + escapeHtml(j.name) + '</b>'; msg.style.color = '#999'; }
-    lbFacRenameSend(lbRenameApiOf(j.d.cls), j.d, j.name, function(res){
+    fetch(LB_API + '/api/rename_container', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ username: auth ? auth.user : '', server: j.d.srv, obj: j.d.obj, cls: j.d.cls, name: j.name }) })
+    .then(function(r){ return r.json(); })
+    .then(function(res){
       done++;
       if(res && res.ok){ okN++; if(typeof lbLocalApplyContainerRename === 'function') lbLocalApplyContainerRename(j.d.srv, j.d.obj, j.name); }
       else { failN++; fails.push(String(j.d.obj || '')); }
       setTimeout(step, 600);
-    });
-    return;
+    })
+    .catch(function(){ done++; failN++; fails.push(String(j.d.obj || '')); setTimeout(step, 600); });
   }
   step();
-}
-// ⭐ v3397（后端插件 0.4.0 交接单）：三类设施各走**不同 RCON 命令**，前端按**类名分派** ——
-//   容器箱 → RenameContainer（写 BoxName，客户端**即时**刷新）
-//   牌子/墓碑 → SetSignText（写 SignText）｜床/棺材/睡眠舱 → SetBedName（写 BedName）——后两者**需重进视野/重连**
-//   三条命令统一传单个 '-' = 清空；失败返回的 hint 会回带实际类名 ⇒ 用于**自愈重试一次**
-var LB_FAC_TEXT_MAXCP = 160;   // SetSignText 的 maxChars（Unicode 码点，实测 160）
-function lbUtf8Bytes(s){ try{ return new TextEncoder().encode(String(s)).length; }catch(e){ return String(s).length; } }
-function lbRenameApiOf(cls){
-  var c = String(cls || '');
-  if(/Sign|Gravestone|GraveStone/i.test(c)) return 'sign';
-  if(/SimpleBed|ModernBed|TekBed|Coffin|SleepingPod|BunkBed|CompanionBed/i.test(c)) return 'bed';
-  return 'box';
-}
-function lbRenameApiPath(kind){
-  return kind === 'sign' ? '/api/set_sign_text' : (kind === 'bed' ? '/api/set_bed_name' : '/api/rename_container');
-}
-function lbRenameKindName(kind){ return kind === 'sign' ? '牌子文字' : (kind === 'bed' ? '床/棺改名' : '容器改名'); }
-function lbRenameNeedRefresh(kind){ return kind === 'sign' || kind === 'bed'; }   // SignText/BedName 无官方 net RPC
-// 牌子文字：按 maxChars 与「整条命令 ≤300 字节」双条件截断（>300B 时 RCON 完全无响应）
-function lbSignTextTrim(obj, text){
-  var head = 'TransferIdentityFix.SetSignText ' + String(obj || '') + ' ';
-  var arr; try{ arr = Array.from(String(text || '')); }catch(e){ arr = String(text || '').split(''); }
-  if(arr.length > LB_FAC_TEXT_MAXCP) arr = arr.slice(0, LB_FAC_TEXT_MAXCP);
-  var out = '';
-  for(var i = 0; i < arr.length; i++){
-    if(lbUtf8Bytes(head + out + arr[i]) > 300) break;
-    out += arr[i];
-  }
-  return { text: out, trimmed: (out !== String(text || '')), cp: arr.length };
-}
-// 统一改名下发（单个/批量共用）：分派命令 + hint 自愈重试一次 + 回调
-function lbFacRenameSend(kind, d, name, cb){
-  var auth = null; try{ auth = JSON.parse(localStorage.getItem('dinoAuth') || 'null'); }catch(e){}
-  var body;
-  if(kind === 'sign') body = { username: auth ? auth.user : '', server:d.srv, obj:d.obj, cls:d.cls, text:name };
-  else body = { username: auth ? auth.user : '', server:d.srv, obj:d.obj, cls:d.cls, name:name };
-  fetch(LB_API + lbRenameApiPath(kind), { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) })
-  .then(function(r){ return r.json(); })
-  .then(function(j){
-    if(j && !j.ok && !d._retried){
-      var m = String((j.hint || j.detail) || '').match(/\(([A-Za-z0-9_]+_C)\)/);
-      var k2 = m ? lbRenameApiOf(m[1]) : '';
-      if(k2 && k2 !== kind){
-        var d2 = {}; for(var kk in d){ if(d.hasOwnProperty(kk)) d2[kk] = d[kk]; }
-        d2.cls = m[1]; d2._retried = 1;
-        lbFacRenameSend(k2, d2, name, cb);
-        return;
-      }
-    }
-    cb(j, kind);
-  })
-  .catch(function(e){ cb({ ok:false, error:String(e) }, kind); });
 }
 // 「改名」按钮（位置/样式基准 = .lb-rel-rename，与「一键起名」同款）
 function lbContainerRenameBtn(r){
   try{
     if(!lbCanRenameContainer(r)) return '';
     var d = { srv:r.server, obj:lbObjSuffix(r.containerClass), cls:String(r.containerClass||''), cn:String(r.containerName||''), tribe:Number(r.containerTribe || 0) };
-    var _k = lbRenameApiOf(d.cls);   // v3398：牌子/墓碑 = 改文字；容器/床/棺/睡眠舱 = 改名
-    var _lbl = (_k === 'sign') ? '改文字' : '改名';
     return '<button class="lb-rel-rename" data-cn="' + lbAttr(JSON.stringify(d)) + '"'
-         + ' onclick="event.stopPropagation();lbOpenContainerRename(event,this)" title="' + _lbl + '">' + _lbl + '</button>';
+         + ' onclick="event.stopPropagation();lbOpenContainerRename(event,this)" title="改名">改名</button>';
   }catch(e){ return ''; }
 }
 // 改名弹窗（结构/尺寸/配色照搬 lbOpenRename，仅去掉「🎲 自动命名」）
@@ -8965,21 +8854,11 @@ function lbOpenContainerRename(ev, btn){
   overlay.onclick = function(e){ if(e.target === overlay) overlay.remove(); };
   var inp = 'width:100%;box-sizing:border-box;padding:8px 10px;border-radius:6px;border:1px solid #333;background:#12121a;color:#ddd;margin-bottom:8px;font-size:13px';
   var btnS = 'padding:7px 14px;border-radius:6px;border:none;background:#7c3aed;color:#fff;cursor:pointer;font-size:13px';
-  // v3398（用户口径）：牌子/墓碑 = 「改文字」（多行输入）；容器/床/棺/睡眠舱 = 「改名」
-  var _kind0 = lbRenameApiOf(d.cls);
-  var _isSign0 = (_kind0 === 'sign');
-  var _title0 = _isSign0 ? '\u270f\ufe0f \u724c\u5b50 / \u5893\u7891 \u6587\u5b57' : (_kind0 === 'bed' ? '\u270f\ufe0f \u5e8a / \u68fa\u6750 / \u7761\u7720\u8231 \u6539\u540d' : '\u270f\ufe0f \u5bb9\u5668\u6539\u540d');
-  var _inpHtml0 = _isSign0
-    ? ('<textarea id="lbRenameInput" rows="3" placeholder="\u8f93\u5165\u724c\u5b50\u6587\u5b57\uff08\u2264160 \u5b57\uff09" style="' + inp + '">' + lbAttr(d.cn || '') + '</textarea>')
-    : ('<input id="lbRenameInput" value="' + lbAttr(d.cn || '') + '" placeholder="\u8f93\u5165\u65b0\u540d\u5b57" style="' + inp + '">');
   overlay.innerHTML = '<div style="background:#1a1a24;border:1px solid #7c3aed55;border-radius:12px;padding:24px;width:360px;max-width:92vw;box-shadow:0 10px 40px rgba(0,0,0,.6)" class="lb-modal-scroll">'
-    + '<div style="font-size:16px;font-weight:bold;color:#a78bfa;margin-bottom:4px">' + _title0 + '</div>'
-    + '<div style="font-size:12px;color:#888;margin-bottom:14px">' + LB.servName(d.srv || '') + (d.cn ? ' \u00b7 \u5f53\u524d\uff1a<b style="color:#bbb">' + escapeHtml(d.cn) + '</b>' : '') + '</div>'
-    + _inpHtml0
-    + '<div style="display:flex;gap:8px;margin-bottom:8px">'
-    + '<button onclick="lbDoContainerRename(' + lbAttr(JSON.stringify(d)) + ')" style="' + btnS + ';flex:1">\u63d0\u4ea4\u6539\u540d</button>'
-    + '<button onclick="lbDoContainerRename(' + lbAttr(JSON.stringify(d)) + ',&#39;-&#39;)" style="flex:1;padding:7px 14px;border-radius:6px;border:1px solid #7c3aed;background:transparent;color:#a78bfa;cursor:pointer;font-size:13px">\u6e05\u7a7a\u540d\u5b57</button>'
-    + '</div>'
+    + '<div style="font-size:16px;font-weight:bold;color:#a78bfa;margin-bottom:4px">\u270f\ufe0f \u5bb9\u5668\u6539\u540d</div>'
+    + '<div style="font-size:12px;color:#888;margin-bottom:14px">' + LB.servName(d.srv || '') + ' \u00b7 \u5b9e\u4f8b ' + lbAttr(d.obj) + (d.cn ? ' \u00b7 \u5f53\u524d\u540d\uff1a<b style="color:#bbb">' + escapeHtml(d.cn) + '</b>' : '') + '</div>'
+    + '<input id="lbRenameInput" value="' + lbAttr(d.cn || '') + '" placeholder="\u8f93\u5165\u65b0\u540d\u5b57" style="' + inp + '">'
+    + '<button onclick="lbDoContainerRename(' + lbAttr(JSON.stringify(d)) + ')" style="' + btnS + ';width:100%;margin-bottom:8px">\u63d0\u4ea4\u6539\u540d</button>'
     + '<div id="lbRenameMsg" style="font-size:12px;min-height:14px;margin-top:4px"></div>'
     + '<div style="margin-top:14px;text-align:right"><button onclick="this.closest(\'.lb-picker-overlay\').remove()" style="padding:7px 16px;border-radius:6px;border:1px solid #333;background:transparent;color:#888;cursor:pointer;font-size:13px">\u5173\u95ed</button></div>'
     + '</div>';
@@ -8987,47 +8866,41 @@ function lbOpenContainerRename(ev, btn){
   LB._renameData = d;
   var input = document.getElementById('lbRenameInput'); if(input) input.focus();
 }
-function lbDoContainerRename(d, preset){
+// 提交改名（本地校验 + POST /api/rename_container + 回执/错误映射 + 本地写回）
+function lbDoContainerRename(d){
   var input = document.getElementById('lbRenameInput'), msg = document.getElementById('lbRenameMsg');
   if(!input || !msg) return;
-  var raw = (preset !== undefined && preset !== null) ? String(preset) : (input.value || '');
-  var name = raw.trim();
-  var kind = lbRenameApiOf(d.cls);
+  var name = (input.value || '').trim();
+  var bytes = 0; try{ bytes = new TextEncoder().encode(name).length; }catch(e){ bytes = name.length; }
   if(!name){ msg.textContent = '\u8bf7\u8f93\u5165\u65b0\u540d\u5b57'; msg.style.color = '#f87171'; return; }
-  if(name !== '-'){
-    if(kind === 'sign'){
-      var _t = lbSignTextTrim(d.obj, name);
-      if(_t.trimmed){ name = _t.text; input.value = name; }
-      if(!name){ msg.textContent = '\u6587\u5b57\u592a\u957f\uff08\u5df2\u8d85 RCON \u5355\u5305\u4e0a\u9650\uff09'; msg.style.color = '#f87171'; return; }
-    } else if(lbUtf8Bytes(name) > 60){ msg.textContent = '\u540d\u5b57\u592a\u957f\uff08' + lbUtf8Bytes(name) + '/60 \u5b57\u8282\uff09'; msg.style.color = '#f87171'; return; }
-    if(/[\x00-\x1f\x7f]/.test(name)){ msg.textContent = '\u540d\u5b57\u542b\u975e\u6cd5\u5b57\u7b26'; msg.style.color = '#f87171'; return; }
-    if(d.cn && name === String(d.cn).trim()){ msg.textContent = '\u26a0 \u65b0\u540d\u4e0e\u5f53\u524d\u540d\u76f8\u540c\uff0c\u672a\u6539\u52a8'; msg.style.color = '#fbbf24'; return; }
-  }
-  msg.textContent = '\u6b63\u5728\u4fdd\u5b58\u2026'; msg.style.color = '#999';
-  lbFacRenameSend(kind, d, name, function(j, k){
+  if(bytes > 60){ msg.textContent = '\u540d\u5b57\u592a\u957f\uff08' + bytes + '/60 \u5b57\u8282\uff09'; msg.style.color = '#f87171'; return; }
+  if(/[\x00-\x1f\x7f]/.test(name)){ msg.textContent = '\u540d\u5b57\u542b\u975e\u6cd5\u5b57\u7b26'; msg.style.color = '#f87171'; return; }
+  if(d.cn && name === String(d.cn).trim()){ msg.textContent = '\u26a0 \u65b0\u540d\u4e0e\u5f53\u524d\u540d\u76f8\u540c\uff0c\u672a\u6539\u52a8'; msg.style.color = '#fbbf24'; return; }
+  msg.textContent = '\u6267\u884c\u4e2d\u2026'; msg.style.color = '#999';
+  var auth = null; try{ auth = JSON.parse(localStorage.getItem('dinoAuth') || 'null'); }catch(e){}
+  fetch(LB_API + '/api/rename_container', { method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ username: auth ? auth.user : '', server: d.srv, obj: d.obj, cls: d.cls, name: name }) })
+  .then(function(r){ return r.json(); }).then(function(j){
     if(j && j.ok){
       var lines = [];
-      if(j.old !== undefined && j.new !== undefined) lines.push('\u539f\u6765\uff1a' + escapeHtml(String(j.old || '\uff08\u7a7a\uff09')) + ' \u2192 \u73b0\u5728\uff1a' + escapeHtml(String(j.new || '\uff08\u7a7a\uff09')));
-      if(j.verified !== undefined) lines.push('\u670d\u52a1\u5668\uff1a' + (j.verified ? '\u2705 \u5df2\u4fdd\u5b58' : '\u274c \u6ca1\u4fdd\u5b58\u4e0a'));
-      if(j.dup) lines.push('\u8fd8\u6709 ' + j.dup + ' \u4e2a\u8bbe\u65bd\u4e5f\u53eb\u8fd9\u4e2a\u540d\u5b57');
-      if(lbRenameNeedRefresh(k)) lines.push('<span style="color:#fbbf24">\u26a0 \u6e38\u620f\u91cc\u8981\u91cd\u8fdb\u89c6\u91ce\u6216\u91cd\u8fde\u624d\u80fd\u770b\u5230\u65b0\u540d\u5b57</span>');
-      msg.innerHTML = '\u2705 ' + lbRenameKindName(k) + '\u6210\u529f' + (lines.length ? '<br>' + lines.join('<br>') : '');
+      if(j.old !== undefined && j.new !== undefined) lines.push('\u65e7\u540d\uff1a' + escapeHtml(String(j.old)) + ' \u2192 \u65b0\u540d\uff1a' + escapeHtml(String(j.new)));
+      if(j.verified !== undefined) lines.push('\u6e38\u620f\u5185\u5df2\u540c\u6b65\uff1a' + (j.verified ? '\u2705 \u662f' : '\u274c \u5426'));
+      if(j.readback) lines.push('\u8bfb\u56de\u786e\u8ba4\uff1a' + escapeHtml(String(j.readback)));
+      if(j.dup) lines.push('\u540c\u540d\u5bb9\u5668\uff1a' + j.dup + ' \u4e2a\uff08\u542b\u81ea\u8eab\uff09');
+      msg.innerHTML = '\u2705 \u6539\u540d\u6210\u529f' + (lines.length ? '<br>' + lines.join('<br>') : '');
       msg.style.color = '#22c55e';
       lbLocalApplyContainerRename(d.srv, d.obj, name);
       if(typeof lbRenderKeepView === 'function') lbRenderKeepView();
     } else {
-      var map = { 'name empty':'\u8bf7\u8f93\u5165\u65b0\u540d\u5b57', 'text empty':'\u8bf7\u8f93\u5165\u6587\u5b57', 'name contains control char':'\u542b\u975e\u6cd5\u5b57\u7b26', 'text contains control char':'\u542b\u975e\u6cd5\u5b57\u7b26', 'world/level not ready':'\u4e16\u754c\u672a\u5c31\u7eea\uff0c\u7a0d\u540e\u91cd\u8bd5' };
+      var map = { 'name empty':'\u8bf7\u8f93\u5165\u540d\u5b57', 'name contains control char':'\u540d\u5b57\u542b\u975e\u6cd5\u5b57\u7b26', 'world/level not ready':'\u4e16\u754c\u672a\u5c31\u7eea\uff0c\u7a0d\u540e\u91cd\u8bd5' };
       var err = String((j && j.error) || '\u672a\u77e5\u9519\u8bef');
       var txt = map[err] || (/^name too long/.test(err) ? '\u540d\u5b57\u592a\u957f'
-              : (/^text too long/.test(err) ? '\u6587\u5b57\u592a\u957f'
-              : (/^command too long/.test(err) ? '\u6587\u5b57\u592a\u957f\uff08\u8d85 RCON \u5355\u5305\u4e0a\u9650\uff09'
-              : (/(not found)/.test(err) ? '\u7c7b\u578b\u4e0d\u5339\u914d\uff08\u540e\u7aef\u5df2\u5c1d\u8bd5\u81ea\u6108\uff09: ' + err
-              : (/^ambiguous id/.test(err) ? '\u5b9e\u4f8b\u53f7\u547d\u4e2d\u591a\u4e2a\u5bf9\u8c61\uff0c\u8bf7\u5237\u65b0\u540e\u91cd\u8bd5' : err)))));
-      msg.innerHTML = '\u274c ' + lbRenameKindName(k) + '\u5931\u8d25\uff1a' + escapeHtml(txt) + (j && j.hint ? '<br><span style="color:#888">' + escapeHtml(String(j.hint)) + '</span>' : '');
+              : (/^container not found/.test(err) ? '\u8be5\u8bbe\u65bd\u4e0d\u652f\u6301\u6539\u540d\uff08\u4ec5\u5bb9\u5668\u7bb1\u53ef\u6539\u540d\uff09'
+              : (/^ambiguous id/.test(err) ? '\u5b9e\u4f8b\u53f7\u547d\u4e2d\u591a\u4e2a\u5bf9\u8c61\uff0c\u8bf7\u5237\u65b0\u540e\u91cd\u8bd5' : err)));
+      msg.innerHTML = '\u274c \u6539\u540d\u5931\u8d25\uff1a' + escapeHtml(txt) + (j && j.hint ? '<br><span style="color:#888">' + escapeHtml(String(j.hint)) + '</span>' : '');
       msg.style.color = '#f87171';
     }
-    void input;
-  });
+  }).catch(function(e){ msg.textContent = '\u8bf7\u6c42\u5931\u8d25\uff1a' + e; msg.style.color = '#f87171'; });
 }
 // 本地写回（v1335 重写：整台设备的所有记录一起改，不再只改带实例号那一条）
 //   ⭐ 根因（页面实测 v3306）：同一台冰箱在 recs 里有多种记录——
@@ -9040,7 +8913,6 @@ function lbDoContainerRename(d, preset){
 //     （设施本体 + 低温仓球 + 内胆）⇒ 立刻显示新名、按钮不再消失；坐标约束保证不波及同区域其它柜子。
 function lbLocalApplyContainerRename(srv, obj, newName){
   try{
-    if(String(newName) === '-') newName = '';   // v3397：'-' = 清空（与后端 RCON 约定一致）
     var d = LB._cache && LB._cache.data; if(!d) return;
     var recs = d.recs || [];
     var _hit = '_C_' + String(obj);
@@ -9210,8 +9082,7 @@ function lbContainerLabel(r, opts){
   var _idTxt = ''; // v908：ID 拆出（放在英文之后）——顺序：中文名 + 灰小英文 + #ID
   // v973：合并的泰克专储不显示 #ID（该条目代表 N 个柜子，单个 ID 无意义且误导）；opts.hideId 仅由合并组传入
   // v1314（用户要求）：仅「会改名」的类别展示 #ID（未命名时的替代标识）；其余设施不显示，避免噪音
-  // v3391：展示柜放行 ⇒ 不再排 display（stand/released/player 仍排）
-  if(!(opts && opts.hideId) && lbFacRenameable(r.containerClass) && sub!=='stand' && sub!=='released' && sub!=='player'){
+  if(!(opts && opts.hideId) && lbFacRenameable(r.containerClass) && sub!=='display' && sub!=='stand' && sub!=='released' && sub!=='player'){
     var id = r.containerId || '';
     _idTxt = ' #' + (id.length>6 ? id.slice(-6) : id);
   }
@@ -10061,7 +9932,7 @@ function lbRenderView(data, player, classFilter){
       }
     }
     // 聚落详情子页面（点击聚落进入，返回按钮恢复列表）
-    plan.push({t:'settle', html:'<div class="settle-detail" id="lbSettleDetail" style="display:none"><button class="settle-back" onclick="lbBackSettle()" style="height:32px;padding:0 12px;font-size:12px;display:inline-flex;align-items:center;gap:5px">' + lbMdiSvg("mdi-arrow-left", 14) + '返回</button><div id="lbSettleBody"></div></div>'}); // v3408：文字改「返回」（用户要求）；v3407：本模板仅保留返回按钮（打开聚落时会被搬进 #lbSettleRenameBar）；「聚落命名」按钮改由 lbOpenSettle 动态注入同一容器
+    plan.push({t:'settle', html:'<div class="settle-detail" id="lbSettleDetail" style="display:none"><button class="settle-back" onclick="lbBackSettle()">← 返回聚落列表</button><div id="lbSettleBody"></div></div>'});
     var ts=LB.SERVERS.find(function(x){return x.abbr===LB.tab;});
     tabLabel=(ts ? ((ts.icon||'')+' '+ts.name).trim() : LB.tab);
   }
@@ -10536,21 +10407,6 @@ function lbOpenSettle(btn){
     _bar.innerHTML = ''; // v1221：一键命名按钮移至各「放出组」标题栏（仅该组展开时显示；白色线性镂空）
     if(_backBtn){ _backBtn.parentNode.removeChild(_backBtn); _backBtn.style.marginBottom = '0'; _bar.insertBefore(_backBtn, _bar.firstChild); } // 返回按钮移入左侧（v1174：margin-bottom 归零 ⇒ 与条 padding 配合做到上下对称）
     detail.insertBefore(_bar, body);
-  }
-  // ⭐ v3407（用户反复反馈「聚落命名按钮一直不在同一行」的**真正根因**）：
-  //   返回按钮在 lbOpenSettle 里被**搬进** #lbSettleRenameBar，而「聚落命名」按钮原先写在模板 div 上
-  //   （无 settle-back 类、不会被搬）⇒ 两个按钮分属不同容器、相隔 32px，**结构上就不可能同行**。
-  //   现改为：在打开聚落时把按钮**动态注入到同一容器**（该栏 justify-content:space-between ⇒ 左=返回 / 右=聚落命名）；
-  //   放在 if 块外 ⇒ 每次打开都确保存在（即使 _bar 被重建也不会丢）。
-  if(_bar && !_bar.querySelector('.lb-settle-name-btn')){
-    var _nb = document.createElement('button');
-    _nb.type = 'button';
-    _nb.className = 'lb-settle-name-btn';
-    _nb.title = '本聚落用于命名的设施：改名/改文字';
-    _nb.style.cssText = 'flex:0 0 auto;height:32px;padding:0 12px;border-radius:8px;border:1px solid #7c3aed;background:transparent;color:#a78bfa;cursor:pointer;font-size:12px;display:inline-flex;align-items:center;gap:5px';
-    _nb.innerHTML = lbMdiSvg('mdi-pencil', 13) + '聚落命名';
-    _nb.onclick = function(){ lbOpenSettleNameSigns(LB._settleOpenKey); };
-    _bar.appendChild(_nb);
   }
   // v827：隐藏所有 settle-wrap（聚合框集合 + 单聚落集合），避免只藏一个导致另一瀑布流残留
   var allWraps = document.querySelectorAll('.settle-wrap');
@@ -11699,11 +11555,7 @@ function lbBuildSettleContainerHtml(grp, settleKey){
     var invMark = _dedMerge ? '' : lbInvCountMark(invItems, !!(fullH||v6H||scnMark), LB.curClass); // v991：前面无内容则不加分隔线（消除孤立 |）；v1013：合并组不聚合物品徽章；v1192：选中物种时蓝图只计该物种
     var sepH = (fullH||eggH||v6H||scnMark||invMark) && emptyH ? ' ' : ''; // v1270：+eggH
     var sumHtml='<details class="acc"'+autoOpen+' onclick="lbAccOnly(this)"><summary>'
-      // v3392（用户实测：合并的展示柜 ×91 冒出了 #88ee66）：**凡「多台」行一律隐藏 #ID/涂装色点**——
-      //   原条件只判 `_dedMerge`（= lbIsMergeableFacility：泰克专储/炮台/火把/特斯拉电塔），
-      //   而展示柜走的是 lbContainerKey 的 display 分支（同服同类型区域合并，_dedMerge=false）
-      //   ⇒ v3391 放行 display 的 #ID 后，仅代表 1 台的实例号被显示在 91 台的标题上（与 v973 口径冲突）
-      +'<span class="acc-sum-name">'+lbContainerLabel(cg[0], ((_dedMerge || _unitN > 1) ? {hideId:true, hideColor:true} : null))+_dedN+'</span>'
+      +'<span class="acc-sum-name">'+lbContainerLabel(cg[0], (_dedMerge ? {hideId:true, hideColor:true} : null))+_dedN+'</span>'
       // v1225：放出组——数量角标加 acc-cnt-rel（展开时被「一键起名」按钮替换）；按钮回到最右（右对齐）
       +'<span class="acc-cnt'+((lbContainerTypeOf(cg[0])==='released' || (_rTgt && lbContainerTypeOf(_rTgt)!=='released')) ? ' acc-cnt-rel' : '')+'">'+fullH+eggSepH+eggH+v6H+scnMark+invMark+sepH+emptyH+'</span>' // v1334：角标替换改用组内可改名成员 _rTgt（原 cg[0]）
       +((lbContainerTypeOf(cg[0])==='released') ? '<button class="lb-rel-rename" data-gk="'+lbAttr(k)+'" onclick="event.stopPropagation();lbSettleBatchRename(this)" title="一键命名本组未命名放出生物">一键起名</button>' : '')
@@ -11843,7 +11695,6 @@ function lbBuildSettleContainerHtml(grp, settleKey){
         //   仅按坐标归入已有区域，再由 _mkAreaChips 在区域内按类型聚合（同区域 ×N / 跨区域各自一条）
         var _efList = [];
         var _signList = []; // v1064：区域命名小牌（**不参与**区域划分，仅用于命名）
-        var _signAll = [];  // v3398：本聚落全部「可写文字设施」（含实例号）——供「改文字」弹窗
         // v1363（用户实测「区域命名又变回孵蛋房」）：与 lbFacAreasOf 同口径去重
         //   _sgD2 牌子键（类名|坐标|名字）——数据源存在重复（实测 Isl 牌子 41→23 唯一）⇒ 一块牌抢多区域、同名成对
         //   _flD2 设施键（类名|坐标）——避免重复条目把成员数撑高、影响分层/聚类与 MIN_ITEMS 门槛
@@ -11859,7 +11710,6 @@ function lbBuildSettleContainerHtml(grp, settleKey){
           // 2) 构建时归属设施（facilityList 已唯一归属；排除与容器手风琴有内容容器同坐标的重复项）
           (_sObj.facilityList||[]).forEach(function(_st){
             var _cl = String(_st.class||'');
-            if(LB_AREA_SIGN_RE.test(_cl)) return;   // v3393（用户口径）：**标牌类只用于区域命名**，不作为设施 chip 渲染（实测 Sign_Wall_Stocking「卧室」漏显）
             var _bcl = _cl.replace(/_\d+$/,'').replace(/_C$/,'');
             var _px = Math.round(Number(_st.x)||0), _py = Math.round(Number(_st.y)||0);
             if(_contentPos[_bcl+'|'+_px+'|'+_py]) return; // 该设施有球/基因已在容器区，不重复
@@ -11874,7 +11724,6 @@ function lbBuildSettleContainerHtml(grp, settleKey){
           //   导致其余区域看不到该设施（用户实测：遥控板等集中显示在一个区域）
           //   现改为每条独立入列表，由 _mkAreaChips 在**区域内**按类型聚合（同区域 → ×N；跨区域 → 各自一条）
           emptyFacArr.forEach(function(_e){
-            if(LB_AREA_SIGN_RE.test(String(_e.cls||''))) return;   // v3393：标牌类（下沉空设施通道）同样不渲染 chip
             var _ek2 = String(_e.cls||'') + '|' + Math.round(Number(_e.x)||0) + '|' + Math.round(Number(_e.y)||0) + '|' + Math.round(Number(_e.z)||0);
             if(_flD2[_ek2]) return; _flD2[_ek2] = 1;
             _efList.push({cls:_e.cls, name:(_e.name || ''), emptyN:1, emptyName:(_e.dispName || _e.cls || '其他'),
@@ -11898,15 +11747,6 @@ function lbBuildSettleContainerHtml(grp, settleKey){
             if(_sgD2[_sk3]) continue; _sgD2[_sk3] = 1;
             _signList.push({ cls:String(_st.class||''), name:String(_st.name||'').trim(),
               x:Number(_st.x)||0, y:Number(_st.y)||0, z:Number(_st.z)||0, _sign:true }); // v1064：不进 _fList（否则小牌位置会影响分层与聚类）
-          }
-          // v3398（用户要求）：**另收一份**「所有可写文字的设施」（牌子/木牌/吊牌/广告牌/墓碑）——
-          //   与 _signList 职责不同：_signList 只收 3 类命名牌（且必须带文字），这份供「改文字」弹窗使用
-          for(var _sti2 = 0; _sti2 < _allSt.length; _sti2++){
-            var _st2 = _allSt[_sti2];
-            if(!_st2 || !LB_SIGN_TEXT_RE.test(String(_st2.class||''))) continue;
-            if(_tid2 && Number(_st2.tribeId||0) !== _tid2) continue;   // 同部落
-            _signAll.push({ cls:String(_st2.class||''), name:String(_st2.name||'').trim(),
-              x:Number(_st2.x)||0, y:Number(_st2.y)||0, z:Number(_st2.z)||0 });
           }
         }
         // v1060：**有内容容器的位置**也参与分层/区域定义（标记 _silent，不渲染 chip）
@@ -11951,15 +11791,7 @@ function lbBuildSettleContainerHtml(grp, settleKey){
                 var _ek = _f.emptyName || _f.cls || '其他';
                 var _meta0 = lbSettleFacMeta(_f.cls || '');
                 if(!_meta0) _meta0 = { key:'empty_'+_ek, zh:_f.emptyName || _ek, icon:'' };
-                if(_f.name && _f.name !== '?'){
-                  // v3391（用户要求）：空设施**同名同类型允许合并**——不再「具名必单独成条」；
-                  //   键 = N|<类型key>|<名> ⇒ 同名不同型仍分开（图标/类型不乱）；计数由 n 累加
-                  var _nk = 'N|' + String(_meta0.key || _ek) + '|' + _f.name;
-                  (_grp[_nk] = _grp[_nk] || { meta:_meta0, n:0, items:[], name:_f.name });
-                  _grp[_nk].n += (_f.emptyN || 1);
-                  if(_f.items) _grp[_nk].items = _grp[_nk].items.concat(_f.items);
-                  return;
-                }
+                if(_f.name && _f.name !== '?'){ _named.push({meta:_meta0, name:_f.name, items:_f.items||[]}); return; } // v1052：自定义名空容器 → 独立 chip
                 (_grp[_ek]=_grp[_ek]||{meta:_meta0, n:0, items:[]});
                 _grp[_ek].n += (_f.emptyN||1);
                 if(_f.items) _grp[_ek].items = _grp[_ek].items.concat(_f.items); // v959
@@ -11998,7 +11830,7 @@ function lbBuildSettleContainerHtml(grp, settleKey){
               var _g = _grp[_k];
               var _fi2 = -1;
               if(scattered){ LB._settleFacMap.push({ label:_g.meta.zh, en:_g.meta.en || '', items:(_g.items||[]).slice() }); _fi2 = LB._settleFacMap.length - 1; }
-              _chips.push(lbSettleFacChip(_g.meta, (_g.name || null), _g.n, { fi:_fi2, frn:_frnOf(_g.items) }));   // v3384：×N 空设施 → 批量改名；v3391：具名合并组带名字
+              _chips.push(lbSettleFacChip(_g.meta, null, _g.n, { fi:_fi2, frn:_frnOf(_g.items) }));   // v3384：×N 空设施 → 批量改名
             });
             return _chips;
           };
@@ -12019,56 +11851,13 @@ function lbBuildSettleContainerHtml(grp, settleKey){
             //   实测工作間层数掉到 6、区域掉到 7（v1050 为 17 层 / 21 区）；空容器所在楼层本身就是设施层
             // v1344（用户要求「详情页结果直接复用」）：区域构建整段抽到 lbFacAreasBuild()（唯一实现），
             //   此处只调用 + 把结果**存一份**到 LB._facAreas[settleKey] —— 详情页与右侧信息共用同一份结果，不重复计算
-            var _built = lbFacAreasBuild(_fList, _efList, _signList, _signAll);   // v3423（用户口径）：牌子作为**几何点**参与分层/分区（但不渲染 chip）
+            var _built = lbFacAreasBuild(_fList, _efList, _signList);
             var _lyr = _built.lyr;
             _areasAll = _built.areas;
             // v1363：带数据版本戳写入（与 lbFacAreasOf 同口径）——数据一变自动重算，不再回退到旧结果
             LB._facAreas[settleKey] = { areas: _areasAll, lyr: _lyr, at: Date.now(), srcTs: (LB._cache && LB._cache.ts) || 0 };
-            LB._settleCtx[settleKey] = { srv: String((_sObj && _sObj.server) || LB.tab || ''), tid: Number((_sObj && _sObj.tribeId) || 0),
-              cx: Number((_sObj && _sObj.center && _sObj.center.x) || 0), cy: Number((_sObj && _sObj.center && _sObj.center.y) || 0),
-              nm: String((_sObj && _sObj.name) || '') }; // v3402：聚落当前实际名（供序列外兑底提示「将自动使用 XXX 命名」）
             // v1053：区域归属函数（实现抽到 lbFacAreaIdxOf，与「缺时补算」共用同一逻辑）
             var _areaIdxOf = function(px, py, pz){ return lbFacAreaIdxOf(_areasAll, _lyr, px, py, pz); };
-            // v3398/v3399（用户要求）：牌子清单 + 聚落命名候选（两个弹窗直读，不重算）
-            //   v3399 修正（用户口径「不要重算聚落」）：
-            //     ① 牌子只保留**本聚落**——_signAll 原按同部落收集 ⇒ 同部落多基地时会把其它基地的牌子也列出来
-            //        判定 = 落在本聚落任一区域内（_areaIdxOf ≥ 0）或 距聚落中心 ≤ radius+800（覆盖未归区的顶层设施）
-            //     ② 聚落命名候选**全部取详情页已列出的本聚落设施**：牌子/墓碑/广告牌 = 过滤后的 _signIn；
-            //        床/棺材/睡眠舱/其它带名设施 = _fList（= _sObj.beds + facilityList，本就是本聚落）
-            //     ③ 牌子去重（数据源存在重复，实测 41→23）——原 v3398 未去重，弹窗会重复列
-            // v3423（用户口径）：牌子已作为几何点参与分区 ⇒ 「落在任一区域内」恒真，故本聚落判定**只用聚落中心半径**
-            //   （restore「必须在本聚落内」；半径外 = 同部落其它基地的牌子，不进入本聚落牌子清单）
-            var _inSettlePt = function(px, py, pz){
-              var _ox = Number((_sObj && _sObj.center && _sObj.center.x) || 0), _oy = Number((_sObj && _sObj.center && _sObj.center.y) || 0);
-              var _rr = Number((_sObj && _sObj.radius) || 0) + 800;
-              var _dx = (Number(px) || 0) - _ox, _dy = (Number(py) || 0) - _oy;
-              return Math.sqrt(_dx * _dx + _dy * _dy) <= _rr;
-            };
-            var _signIn = [], _sgD4 = {};
-            (_signAll || []).forEach(function(_sg){
-              if(!_inSettlePt(_sg.x, _sg.y, _sg.z)) return;
-              var _k4 = String(_sg.cls) + '|' + Math.round(Number(_sg.x) || 0) + '|' + Math.round(Number(_sg.y) || 0) + '|' + Math.round(Number(_sg.z) || 0) + '|' + String(_sg.name || '');
-              if(_sgD4[_k4]) return; _sgD4[_k4] = 1;
-              _signIn.push(_sg);
-            });
-            LB._facSigns[settleKey] = { list: _signIn, at: Date.now(), srcTs: (LB._cache && LB._cache.ts) || 0 };
-            // v3411（用户实测：聚落命名里「墓碑」每块都出现 2 行）：
-            //   根因 = `_nameCands` 由**两条通道拼接**——牌子通道(_signIn) + 设施通道(_fList/_efList)；
-            //   而墓碑同时命中两条（LB_SIGN_TEXT_RE 含 Gravestone，且它也是聚落归属设施）⇒ 同一块墓碑被 push 两次。
-            //   （床不在牌子通道里，所以床不重复——与用户截图完全吻合；原始 structures 里每块墓碑只有 1 条，数据源无重复）
-            //   修法：**跨通道去重**，键 = 坐标(取整)+名字（不含类名——两条通道的类名写法可能不同）
-            var _nameCands = [], _nmD = {};
-            var _pushCand = function(_cls, _nm, _x, _y, _z){
-              _nm = String(_nm || '').trim(); if(!_nm) return;
-              var _k5 = Math.round(Number(_x) || 0) + '|' + Math.round(Number(_y) || 0) + '|' + Math.round(Number(_z) || 0) + '|' + _nm;
-              if(_nmD[_k5]) return; _nmD[_k5] = 1;
-              _nameCands.push({ cls:String(_cls || ''), name:_nm, x:_x, y:_y, z:_z });
-            };
-            _signIn.forEach(function(_sg){ _pushCand(_sg.cls, _sg.name, _sg.x, _sg.y, _sg.z); });
-            (_fList || []).forEach(function(_ft){ _pushCand(_ft.cls, _ft.name, _ft.x, _ft.y, _ft.z); });
-            // v3399：纯空设施（emptyFacArr → _efList，含工作台/提灯/空容器）中**带自定义名**的同样参与聚落命名（算法④口径）
-            (_efList || []).forEach(function(_et){ _pushCand(_et.cls, _et.name, _et.x, _et.y, _et.z); });
-            LB._settleName[settleKey] = { list: _nameCands, at: Date.now(), srcTs: (LB._cache && LB._cache.ts) || 0 };
             // v1054：空容器已在区域 items 中（参与分层定义）→ 此处不再 push（避免重复显示）
             var _efLeft = [];
             var _inArea = {};
@@ -12197,20 +11986,12 @@ function lbBuildSettleContainerHtml(grp, settleKey){
               if(_spAreaSet && !_spAreaSet[_aiA]) return; // v1195：选中物种时跳过不含该物种内容的区域
               // v1055：区域内容器段与 chips 同序（x 降序、同 x 按 y 降序）
               var _ccH = ''; (a.cont || []).slice().sort(function(_p,_q){ return ((Number(_q.x)||0) - (Number(_p.x)||0)) || ((Number(_q.y)||0) - (Number(_p.y)||0)); }).forEach(function(s){ _ccH += s.html; });
-              // v3423：牌子点（_signPt）**不渲染为设施 chip、不计入 N 项**
-              var _facItems = [];
-              for(var _fi4 = 0; _fi4 < a.items.length; _fi4++){ if(!a.items[_fi4]._signPt) _facItems.push(a.items[_fi4]); }
-              var _fc = _mkAreaChips(_facItems);
+              var _fc = _mkAreaChips(a.items);
               var _fcH = _fc.length ? '<div style="display:flex;flex-wrap:wrap;gap:6px">'+_fc.join('')+'</div>' : '';
               var _vN = 0; // v1042：可见项数（排除仅用于命名的标识牌）
-              for(var _vi = 0; _vi < _facItems.length; _vi++){ if(!_facItems[_vi]._sign) _vN++; }
+              for(var _vi = 0; _vi < a.items.length; _vi++){ if(!a.items[_vi]._sign) _vN++; }
               _vN += (a.cont || []).length;
-              // v3398（用户要求）：区域牌子入口——本区若有「可写文字设施」则区域标题右侧出 ✎（点了弹窗编辑）
-              var _areaSigns = [];
-              try{ _areaSigns = lbAreaSignsOf(settleKey, _aiA); }catch(e){ _areaSigns = []; }
-              // v3423（用户口径 D-1）：**纯牌子区（无任何设施/容器）只在有名字时显示**，无名字则整块隐藏
-              if(_facItems.length === 0 && !(a.cont || []).length && !a.name) return;
-              if(!_ccH && !_fcH && !a.name && !_areaSigns.length) return; // v1042：有区域名（小牌）即显示标题；v3398：+本区有牌子也显示
+              if(!_ccH && !_fcH && !a.name) return; // v1042：有区域名（小牌）即显示标题
               var _isLyrHead = (a._L !== _lastL); // v1045：本区域是否为所在层的首个可见区域
               _lastL = a._L;
               var _bt2 = _firstVis ? 'none' : (_isLyrHead ? '1px dashed #7c3aed66' : '1px dashed #2a2a3a'); // v1063：首个区域不画线
@@ -12221,20 +12002,7 @@ function lbBuildSettleContainerHtml(grp, settleKey){
               _firstVis = false;
               // v1076：区域标题改为**低可视化**——去掉 📍 图标与「N 项」计数，颜色由醒目紫 #a78bfa 降为低调灰 #6b7280，字号 12→11
               //   （用户要求：这种标题只需低可视化，无需图标和数量；区域名仅作方位提示，不应抢设施内容的视觉）
-              // v3399（用户实测「区域命名按钮点了没反应」）：根因 = onclick 里聚落 key **未加引号**——lbAttr 只转义不加引号，
-              //   拼出 lbOpenAreaSigns(Isl|1621369181,0) ⇒ 浏览器按表达式解析 ⇒ 抛 `Isl is not defined` ⇒ 静默无反应。
-              //   改用 &#39; 包裹（HTML 属性内解码为单引号，安全）。
-              // v3399（用户口径）：区域**无小牌名但本区有牌子**时也要出标题+入口（原实现整体 gated by a.name ⇒ 这类区域连按钮都看不到）
-              // v3422（用户口径）：标题行**只要该区块渲染出来就显示**——「（未命名区域）+ 铅笔」也要有，不再整行消失
-              //   （用户实测：只放了一个「战利品底座」的区块连铅笔都没有 ⇒ 无法点开看/起名）
-              //   完全空白的区域仍由上面的 early-return 过滤（不产生空标题）
-              var _nmHtml = a.name ? _escNm(a.name) : '<span style="opacity:.7">（未命名区域）</span>';
-              var _head = '<div style="font-size:11px;color:#6b7280;margin:2px 0 4px;letter-spacing:.3px">'
-                + '<span onclick="event.stopPropagation();lbOpenAreaSigns(&#39;' + lbAttr(settleKey) + '&#39;,' + _aiA + ')" title="' + (_areaSigns.length ? '点击编辑本区牌子文字' : '点击查看本区命名来源') + '" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;vertical-align:1px;max-width:100%">'
-                  + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _nmHtml + '</span>'
-                  + '<span style="flex:0 0 auto;color:#8b8b9e;opacity:.85">' + (lbMdiSvg('mdi-pencil', 11) || '✎') + '</span>'
-                  + '</span>'
-                + '</div>';
+              var _head = a.name ? ('<div style="font-size:11px;color:#6b7280;margin:2px 0 4px;letter-spacing:.3px">' + _escNm(a.name) + '</div>') : ''; // v1041-①：无小牌名 ⇒ 不显示标题
               // v1251（用户实测：卡片到下方紫虚线 8px、到上方紫虚线 12px，不对称）→ 下外边距 2px → 12px
               //   卡底→下虚线 = max(卡片 6px, 本区域 12px, 下一区域 8px) = 12px；卡顶→上虚线 = padding-top 6 + 卡片 6 = 12px ⇒ 上下对称
               _areaHtml += '<div style="margin:' + _mg2 + ' 0 12px;padding-top:' + _pt2 + ';border-top:' + _bt2 + '">' + _head + _ccH + _fcH + '</div>'; // v1048：层首=紫色单虚线、层内=原色虚线；v1063：首个区域无上分隔线；v1075：首个区域 padding/margin 同步归零；v1251：上下间距对称
@@ -12557,71 +12325,7 @@ function lbFacSplitAreas(layerItems, epsXY, minPts){
 // v1347（用户要求）：**墙上挂的圣诞袜 Sign_Wall_Stocking 也参与命名**，但**优先级低于铁牌**（见 lbAreaSignRank）
 //   ⚠ 后端依赖：袜子当前不在牌子白名单（cryo.signDiag 里 inWhitelist=0）⇒ 未写进 structures ⇒
 //   需后端把 Sign_Wall_Stocking 加入牌子白名单后前端才能拿到（用户选择「方案A：等后端改」）
-// v3403（用户口径：区域命名优先级扩展）：候选**6 档**——小铁牌 → 挂墙金属牌 → 挂墙圣诞袜 → 木牌（立式+挂墙）→ 吊牌 → 牌类之外的带名设施（rank 5，由竞标池另赋）
-var LB_AREA_SIGN_RE = /Sign_Small_Metal|Sign_Wall_Metal|Sign_Wall_Stocking|Sign_Small_Wood|Sign_Wall_Wood|HangingSign/i;
-// ⭐ v3398（用户要求）：**可写文字的设施**（牌子/木牌/吊牌/广告牌/墓碑）——用于「改文字」入口
-//   与 LB_AREA_SIGN_RE（只认 3 类「参与区域命名」的牌子）**职责分开**：本表只管「能不能写文字」
-var LB_SIGN_TEXT_RE = /Sign_|MetalSign|WoodSign|HangingSign|Gravestone|Billboard/i;
-// v3398：详情页上下文/牌子缓存（与 LB._facAreas 同款版本戳）
-LB._facSigns = LB._facSigns || {};
-LB._settleCtx = LB._settleCtx || {};
-// v3399（用户口径）：聚落命名候选缓存——**直接复用详情页已列出的本聚落设施**（不重扫全量 structures）
-LB._settleName = LB._settleName || {};
-// v3398：本聚落「可写文字设施」列表（含实例号，供弹窗编辑）
-function lbSignsOfSettle(key){
-  var c = LB._facSigns && LB._facSigns[key];
-  if(!c) return [];
-  return c.list || [];
-}
-// v3398：某区域内的牌子（归区口径 = lbFacAreaIdxOf，与容器/放出完全一致）
-function lbAreaSignsOf(key, ai){
-  var fa = (LB._facAreas[key] || {});
-  var areas = fa.areas || [], lyr = fa.lyr || [];
-  if(!areas.length || ai < 0) return [];
-  var _a0 = areas[ai]; if(!_a0) return [];
-  // v3423（用户口径）：恢复「**必须真在该区域内**」——原实现只用 lbFacAreaIdxOf（层内最近区，无距离上限）
-  //   ⇒ 实测 Sco 聚落 35 万单位外的牌子也被算进同一区（28 块牌子挤成 5+23）
-  //   现判据：① 最近区必须是本区 ② 到本区任一成员点的平面距离 ≤ LB_FAC_AREA_EPS ③ 区域 z 范围外 ≤ LB_AREA_SIGN_DZ_MAX
-  // v3425（用户口径「归属必须唯一」）：**只列建区分簇归属 = 本区**的牌子（与设施/容器同机制）
-  //   ① `sg._areaAi`（建区时回写的簇归属）=== 本区 ⇒ 收录；② 有归属但不是本区 ⇒ 直接跳过（彻底消除"同一牌子出现在两个弹窗"）
-  //   ③ 仅在牌子**没有任何归属**（未参与建区，如坐标缺失/未采集）时，才退回旧的几何判定（层内最近区 + dz≤1500 + d2≤EPS）
-  var out = [];
-  lbSignsOfSettle(key).forEach(function(sg){
-    if(sg && sg._areaAi !== undefined && sg._areaAi !== null){
-      if(Number(sg._areaAi) === ai) out.push(sg);
-      return;
-    }
-    var x = Number(sg.x)||0, y = Number(sg.y)||0, z = Number(sg.z)||0;
-    var idx = -1;
-    try{ idx = lbFacAreaIdxOf(areas, lyr, x, y, z); }catch(e){ idx = -1; }
-    if(idx !== ai) return;
-    var dz = 0;
-    if(z < _a0.zMin) dz = _a0.zMin - z; else if(z > _a0.zMax) dz = z - _a0.zMax;
-    if(dz > LB_AREA_SIGN_DZ_MAX) return;
-    var d2 = Infinity, its = _a0.items || [];
-    for(var i = 0; i < its.length; i++){
-      var dx = (Number(its[i].x)||0) - x, dy = (Number(its[i].y)||0) - y;
-      var v = dx*dx + dy*dy; if(v < d2) d2 = v;
-    }
-    if(d2 > LB_FAC_AREA_EPS * LB_FAC_AREA_EPS) return;
-    out.push(sg);
-  });
-  // v3417（用户实测「屋顶果园没有按钮」根因）：命名竞标带 z 容差 + 品牌优先级，与展示用的严格几何归区（lbFacAreaIdxOf）**口径不同**
-  //   ⇒ 区域名来源那块牌子可能被归到**另一个**区域（实测 Isl 聚落：Sign_Small_Metal_C_2146961770 = 屋顶果园，
-  //     归区算出 13/15/16/20 而非 0）⇒ 该区域一个牌子都匹配不上 ⇒ 入口按钮看不到。
-  //   兜底：把「本区域命名实际用的那块牌子」（a._sign，按实例类名唯一匹配）并入候选，保证有名字的区域一定有入口。
-  var _a = areas[ai] || {};
-  if(_a._sign && _a._sign.cls){
-    var _hitSign = false;
-    for(var i = 0; i < out.length; i++){ if(String(out[i].cls) === String(_a._sign.cls)){ _hitSign = true; break; } }
-    if(!_hitSign){
-      var _cand = null;
-      lbSignsOfSettle(key).forEach(function(sg){ if(!_cand && String(sg.cls) === String(_a._sign.cls)) _cand = sg; });
-      if(_cand) out.push(_cand);
-    }
-  }
-  return out;
-}
+var LB_AREA_SIGN_RE = /Sign_Small_Metal|Sign_Wall_Metal|Sign_Wall_Stocking/i;
 // v1350：牌子→区域 的 z 容差（超过则不算该区域候选）；v1350 实测：挂墙牌 z 会与所属楼层错开 250~600
 var LB_AREA_SIGN_DZ_MAX = 1500;
 // v1350：区域命名资格门槛——成员数 < 3 的“层”多为散落设施/单件家具层，不具备房间语义，不得抢牌
@@ -12634,8 +12338,6 @@ function lbAreaSignRank(cls){
   if(/Sign_Small_Metal/i.test(c)) return 0;
   if(/Sign_Wall_Metal/i.test(c)) return 1;
   if(/Sign_Wall_Stocking/i.test(c)) return 2;
-  if(/Sign_Small_Wood|Sign_Wall_Wood/i.test(c)) return 3; // v3403（用户口径）：木牌（立式 + 挂墙）加入命名候选
-  if(/HangingSign/i.test(c)) return 4;                     // v3403（用户口径）：吊牌加入命名候选
   return 99;
 }
 function lbFacAreaName(items){
@@ -12653,20 +12355,9 @@ function lbFacAreaName(items){
 //     · 右侧信息只读这份缓存；聚落未渲染过时用**同一函数**补算一次并写入同一缓存
 //   ⇒ 算法只有一份、结果只有一份，不会重复计算。
 LB._facAreas = LB._facAreas || {};
-// v3425（用户口径）：点→区域唯一归属的**键**（类名|取整坐标|名字）——建区后用它把簇归属回写到命名设施
-function lbPtKey(o){
-  return String((o && o.cls) || '') + '|' + Math.round(Number(o && o.x) || 0) + '|' + Math.round(Number(o && o.y) || 0) + '|' + Math.round(Number(o && o.z) || 0) + '|' + String((o && o.name) || '').trim();
-}
-function lbFacAreasBuild(fList, efList, signList, signPts){
+function lbFacAreasBuild(fList, efList, signList){
   var out = [];
-  // v3423（用户口径 D-1）：**正规命名设施（牌子/木牌/吊牌/广告牌/墓碑）也参与分层/分区计算**，但不渲染为设施 chip
-  //   背景：v1064 特意把牌子排除在点集外 ⇒ 远处牌子只能被 lbFacAreaIdxOf「层内最近区」吞并（实测 Sco 聚落最远 35 万单位挤进同一区）
-  //   做法：牌子打 `_signPt` 标记拼进点集；命名认领分两轮（第一轮只认领「有设施的区域」，第二轮纯牌子区）
-  var _signPts = (signPts || []).map(function(sg){
-    return { cls: sg.cls, name: sg.name, x: Number(sg.x)||0, y: Number(sg.y)||0, z: Number(sg.z)||0,
-             _signPt: 1, _key: lbPtKey(sg), _src: sg };   // v3425：保留源对象引用 ⇒ 建区后回写 _areaAi（展示侧直读）
-  });
-  var sorted = (fList || []).concat(efList || []).concat(_signPts).sort(function(a, b){ return Number(a.z) - Number(b.z); });
+  var sorted = (fList || []).concat(efList || []).sort(function(a, b){ return Number(a.z) - Number(b.z); });
   if(!sorted.length) return { areas: [], lyr: [] };
   var lyr = lbFacLayerize(sorted, LB_FAC_LAYER_TOL);
   lyr.forEach(function(L){
@@ -12678,30 +12369,7 @@ function lbFacAreasBuild(fList, efList, signList, signPts){
     if(p.zMin !== q.zMin) return q.zMin - p.zMin;
     return q.items.length - p.items.length;
   });
-  // v3425（用户口径「归属必须唯一」）：**命名设施的区域归属 = 建区分簇归属**——与设施/容器完全同机制（建区时一次性分配）
-  //   DBSCAN 每点恰好入一簇 + 噪声点并入同层最近簇 ⇒ 每点**唯一所属区**；此处落成 key→ai 映射，并回写源牌子对象的 `_areaAi`
-  //   （回写的对象与 LB._facSigns[key].list 里的是**同一批引用** ⇒ 展示侧可直接按 _areaAi 过滤，不再各算一套）
-  var _aiOfAll = {};
-  out.forEach(function(a, ai){
-    (a.items || []).forEach(function(it){
-      if(!it) return;
-      var _k = it._key || lbPtKey(it);
-      _aiOfAll[_k] = ai;
-      if(it._signPt && it._src){ try{ it._src._areaAi = ai; }catch(e){} }
-    });
-  });
-  // v3403/v3404（用户口径）：候选池分两类——① 牌子类（rank 0-4）② 带名设施（rank5）
-  //   push 的是**新对象**（不带 _sign 标记）⇒ 不影响它们作为设施 chip 的正常渲染
-  var sl = (signList || []).slice();
-  var _addNamed = function(_arr){
-    (_arr || []).forEach(function(_ft){
-      var _nm3 = String(_ft.name || '').trim(); if(!_nm3) return;
-      if(LB_AREA_SIGN_RE.test(String(_ft.cls || ''))) return;   // 牌类已由 signList 收集，避免重复
-      sl.push({ cls:String(_ft.cls || ''), name:_nm3, x:_ft.x, y:_ft.y, z:_ft.z, _rank5:true });
-    });
-  };
-  _addNamed(fList);   // 床 / 所属设施（带自定义名）
-  _addNamed(efList);  // v3404（用户口径「统一」）：空设施组（箱子/冰箱/工作台等带自定义名）
+  var sl = signList || [];
   if(sl.length && out.length){
     // v1349（用户口径：区域先形成，再去找对应的牌子；分层不动）
     // v1350（用户实测 v1349「更离谱」：原本正确的"卧室"变成了隔两层的"屋顶果园"、最上层成了"孵蛋房"、该叫孵蛋房的却无名）：
@@ -12720,25 +12388,27 @@ function lbFacAreasBuild(fList, efList, signList, signPts){
     //   ⚠ v1350 的教训：离线复现用的是 cryo.json 的 facilities 全量，而前端 _fList = 床 + 非装饰 structures + 有内容容器
     //     ⇒ 两者分区不同（实测前端 #0=19/#1=38 设施，离线是 20/21）⇒ **区域类改动必须用页面内真数据 evaluate 验证，不能用离线近似集**
     var sC = [];
-    var _rkOf = function(o){ return (o && o._rank5) ? 5 : lbAreaSignRank(o.cls); };   // v3403：牌类之外的带名设施 = 第 6 档（rank 5）
-    // v3425（用户口径「归属唯一」）：候选表**只含自己所属的那一个区**（建区分簇结果），不再列 EPS 内的所有区
-    //   原实现（dz≤1500 且 d2≤EPS 的所有区都进候选）实测：16 块牌子中 15 块有 ≥2 候选（最多 6 个）
-    //   ⇒ 牌子会认领「不是它几何所在的区」⇒ 与展示侧归属冲突 ⇒ 同一块牌子出现在两个弹窗（用户报「大量重叠命名设施」）
     sl.forEach(function(sg, si){
-      if(_rkOf(sg) >= 99) return;                              // 非牌类且无自定义名 ⇒ 不参与命名
-      var ai = _aiOfAll[lbPtKey(sg)];
-      if(ai === undefined) return;                             // 未参与建区（无坐标/未采集）⇒ 不参与命名
-      var a = out[ai]; if(!a) return;
+      if(lbAreaSignRank(sg.cls) >= 99) return;                 // 木牌/悬挂牌不参与命名
       var sx = Number(sg.x) || 0, sy = Number(sg.y) || 0, sz = Number(sg.z) || 0;
-      var dz = 0;
-      if(sz < a.zMin) dz = a.zMin - sz; else if(sz > a.zMax) dz = sz - a.zMax;
-      var d2 = Infinity, its = a.items || [];
-      for(var ii = 0; ii < its.length; ii++){
-        var dx = (Number(its[ii].x) || 0) - sx, dy = (Number(its[ii].y) || 0) - sy;
-        var v = Math.sqrt(dx * dx + dy * dy);
-        if(v < d2) d2 = v;
-      }
-      sC[si] = [{ ai: ai, dz: dz, d2: d2 }];
+      var cs = [];
+      out.forEach(function(a, ai){
+        if((a.items || []).length < LB_AREA_SIGN_MIN_ITEMS) return;
+        var dz = 0;
+        if(sz < a.zMin) dz = a.zMin - sz; else if(sz > a.zMax) dz = sz - a.zMax;
+        if(dz > LB_AREA_SIGN_DZ_MAX) return;
+        var d2 = Infinity, its = a.items || [];
+        for(var ii = 0; ii < its.length; ii++){
+          var dx = (Number(its[ii].x) || 0) - sx, dy = (Number(its[ii].y) || 0) - sy;
+          var v = Math.sqrt(dx * dx + dy * dy);
+          if(v < d2) d2 = v;
+        }
+        if(d2 > LB_FAC_AREA_EPS) return;
+        cs.push({ ai: ai, dz: dz, d2: d2 });
+      });
+      if(!cs.length) return;
+      cs.sort(function(p, q){ return (p.dz - q.dz) || (p.d2 - q.d2); });
+      sC[si] = cs;
     });
     var _ord = [];
     sl.forEach(function(sg, si){ if(sC[si]) _ord.push(si); });
@@ -12752,41 +12422,20 @@ function lbFacAreasBuild(fList, efList, signList, signPts){
       var cp = sC[p][0], cq = sC[q][0];
       if(Math.abs(cp.dz - cq.dz) > 1e-6) return cp.dz - cq.dz;      // 主键：首候选“同层度”（dz 越小越确定）
       if(Math.abs(cp.d2 - cq.d2) > 1e-6) return cp.d2 - cq.d2;      // 次键：首候选平面距离（谁更贴近谁先认领）
-      return _rkOf(sl[p]) - _rkOf(sl[q]); // 末键：品牌优先级（v3403：6 档——铁牌/挂墙金属/圣诞袜/木牌/吊牌/带名设施；仅完全平手时生效）
+      return lbAreaSignRank(sl[p].cls) - lbAreaSignRank(sl[q].cls); // 末键：品牌优先级（仅完全平手时生效）
     });
-    // v3404（用户口径选 A「两轮制」）：牌子类先按（同层度 dz → 平面距离 d2 → 品牌优先级）竞争；
-    //   带名设施（rank5）**只填牌子类没认领的剩余区域** ⇒ 既落实「优先级序列」，又不会重现 v1351 的取反
-    //   （取反根因：远处的铁牌抢走近处金属牌的区域；两轮制下牌子类仍按距离竞争，故此风险消除）
     var _taken = {};
-    // v3423：判断某区是否为「有设施的区域」（含至少一个非牌子点）
-    var _isFacArea = function(ai){
-      var _its = (out[ai] && out[ai].items) || [];
-      for(var i = 0; i < _its.length; i++){ if(!_its[i]._signPt) return true; }
-      return false;
-    };
-    // _onlyFac=true 时只认领「有设施的区域」——避免牌子先抢走自己所在的小区（否则挂着它的房间反而丢名字）
-    var _claim = function(_lst, _onlyFac){
-      _lst.forEach(function(si){
-        var nm = String(sl[si].name || '').trim();
-        if(!nm) return;                                          // 无名牌不占位
-        var cs = sC[si] || [];
-        var ai = cs[0] ? cs[0].ai : undefined;
-        if(ai === undefined) return;                             // v3425：只能认领**自己所属的那个区**（归属唯一）
-        if(_taken[ai]) return;                                   // 该区已被命名 ⇒ 同区其它牌子不再参与
-        if(_onlyFac && !_isFacArea(ai)) return;                  // v3423：第一轮跳过纯牌子区
-        _taken[ai] = 1;
-        out[ai].name = nm;
-        out[ai]._sign = sl[si];   // v3398（用户要求）：回写**命中的那块牌**——区域弹窗据此标「当前命名此区域」
-      });
-    };
-    // v3405（用户口径，回归原话「优先现有的规则，然后依次是 小木牌 → 吊牌 → 其他带名字设施」）：拆成 **4 轮**认领
-    //   轮 1 仍是原 3 类**同轮按距离竞争** ⇒ 结果与 v3402 完全一致（不会取反；取反只发生在把铁牌单独一轮的情形）
-    _claim(_ord.filter(function(si){ return !sl[si]._rank5 && lbAreaSignRank(sl[si].cls) <= 2; }), true);  // 轮 1：原规则（立式小铁牌 / 挂墙金属牌 / 挂墙圣诞袜）
-    _claim(_ord.filter(function(si){ return !sl[si]._rank5 && lbAreaSignRank(sl[si].cls) === 3; }), true); // 轮 2：小木牌（立式 + 挂墙）
-    _claim(_ord.filter(function(si){ return !sl[si]._rank5 && lbAreaSignRank(sl[si].cls) === 4; }), true); // 轮 3：吊牌
-    _claim(_ord.filter(function(si){ return !!sl[si]._rank5; }), true);                                     // 轮 4：带名设施（床 / 箱子 / 冰箱 / 工作台等）
-    // v3423（用户口径 D-1）：轮 5——前四轮没认领到的牌子，才认领**自己所在的纯牌子区**（车皮/站台等远离设施的牌子）
-    _claim(_ord.filter(function(si){ return !sl[si]._rank5; }), false);
+    _ord.forEach(function(si){
+      var nm = String(sl[si].name || '').trim();
+      if(!nm) return;                                          // 无名牌不占位
+      var cs = sC[si];
+      for(var k = 0; k < cs.length; k++){
+        if(_taken[cs[k].ai]) continue;
+        _taken[cs[k].ai] = 1;
+        out[cs[k].ai].name = nm;
+        return;
+      }
+    });
   }
   return { areas: out, lyr: lyr };
 }
@@ -12833,7 +12482,7 @@ function lbFacAreasOf(server, setId){
     //   根因①：数据源存在重复（实测 d.structures 1200 条仅 631 唯一，牌子 41 条仅 23 唯一）
     //          ⇒ 重复牌子各自竞标 ⇒ 一块牌抢多个区域 ⇒ 同名区域成对出现、把「屋顶果园」挤掉
     //   _sgD：牌子键（类名|坐标|名字）；_flD：设施键（类名|坐标[/containerId]）——避免成员数虚高影响 MIN_ITEMS 门槛
-    var fList = [], signList = [], _sgD = {}, _flD = {}, _signPts = [], _sgP = {};
+    var fList = [], signList = [], _sgD = {}, _flD = {};
     var st = d.structures || [];
     for(var i = 0; i < st.length; i++){
       var s0 = st[i]; if(!s0) continue;
@@ -12841,11 +12490,6 @@ function lbFacAreasOf(server, setId){
       var x0 = Number(s0.x) || 0, y0 = Number(s0.y) || 0, z0 = Number(s0.z) || 0;
       if(!Math.round(x0) && !Math.round(y0)) continue;
       var cls0 = String(s0.class || ''), nm0 = String(s0.name || '').trim();
-      // v3423（用户口径 D-1）：**全部可写文字设施**另收一份作为**几何点**参与分层/分区（与详情页路径口径一致）
-      if(LB_SIGN_TEXT_RE.test(cls0)){
-        var _kp = cls0 + '|' + Math.round(x0) + '|' + Math.round(y0) + '|' + Math.round(z0) + '|' + nm0;
-        if(!_sgP[_kp]){ _sgP[_kp] = 1; _signPts.push({ cls: cls0, name: nm0, x: x0, y: y0, z: z0 }); }
-      }
       if(LB_AREA_SIGN_RE.test(cls0)){
         if(nm0){
           var _k1 = cls0 + '|' + Math.round(x0) + '|' + Math.round(y0) + '|' + Math.round(z0) + '|' + nm0;
@@ -12868,7 +12512,7 @@ function lbFacAreasOf(server, setId){
       _flD[_k3] = 1;
       fList.push({ cls: String(r0.containerClass || ''), name: '', x: x1, y: y1, z: z1, _silent: true });
     });
-    var built = lbFacAreasBuild(fList, [], signList, _signPts);   // v3423：牌子作为几何点参与分层/分区
+    var built = lbFacAreasBuild(fList, [], signList);
     res = { areas: built.areas, lyr: built.lyr, at: Date.now(), srcTs: _ts };
   }catch(e){}
   LB._facAreas[key] = res;
@@ -12951,267 +12595,29 @@ function lbSettleFacChip(meta, name, cnt, opts){
   // v903+v904：灰小英文类型标注——系统名与自定义名都显示（对齐物种浮窗）；×计数仅系统无名项
   var extra = '';
   if(meta.en) extra += '<span style="opacity:.55;font-size:9px;margin-left:4px">'+meta.en+'</span>';
-  if(cnt > 1) extra += ' ×'+cnt;   // v3391：改名了的合并组（同名空设施）同样要显示 ×N（原仅无名才显示）
+  if(!name && cnt > 1) extra += ' ×'+cnt;
   var _fi = (opts && opts.fi !== undefined && opts.fi >= 0) ? opts.fi : -1;
   var _attr = _fi >= 0 ? ' onclick="lbOpenFacMap('+_fi+')"' : '';
   var _cur = _fi >= 0 ? 'pointer' : 'default';
   var _colS = (opts && opts.colorHtml) ? opts.colorHtml : '';   // v1328：涂装色点（只画已着色区域）
-  // v3387（用户口径）：**chip 上不放任何按钮**——**点击 chip 直接弹浮窗**：
-  //   1 台可改 → 原「改名」浮窗；≥2 台 → 「一键改名」浮窗；无可改目标 → 沿用原行为（离散聚落地图浮窗）
-  // v3389（用户口径）：悬停效果**只给可改名的 chip**（类 `lb-fchip-rn`）——其余 chip 不加任何悬停样式
-  var _frn = (opts && opts.frn) ? opts.frn : null;
-  var _rd = null, _rl = null;
+  // v3384（用户要求）：下沉空设施 chip 也能改名——1 个目标 → 原改名弹窗；≥2 个 → 批量改名弹窗
+  //   注：.lb-rel-rename 默认 display:none（仅手风琴展开时显示）⇒ chip 内按钮必须显式 display:inline-flex
+  var _rn = '';
   try{
-    if(_frn && _frn.length === 1){ _rd = lbRenameDatum(_frn[0]); if(!_rd.obj) _rd = null; }
-    else if(_frn && _frn.length > 1){
+    var _frn = (opts && opts.frn) ? opts.frn : null;
+    var _stMini = 'display:inline-flex;align-items:center;height:18px;padding:0 6px;font-size:11px';
+    if(_frn && _frn.length === 1){
+      _rn = '<button class="lb-rel-rename" style="' + _stMini + '" data-cn="' + lbAttr(JSON.stringify(lbRenameDatum(_frn[0]))) + '"'
+          + ' onclick="event.stopPropagation();lbOpenContainerRename(event,this)" title="改名">改名</button>';
+    } else if(_frn && _frn.length > 1){
       var _dN = []; for(var _qi = 0; _qi < _frn.length; _qi++){ var _dq = lbRenameDatum(_frn[_qi]); if(_dq.obj) _dN.push(_dq); }
-      if(_dN.length > 1) _rl = _dN; else if(_dN.length === 1) _rd = _dN[0];
-    }
-  }catch(e){ _rd = null; _rl = null; }
-  if(_rd){ _attr = ' data-cn="' + lbAttr(JSON.stringify(_rd)) + '" onclick="event.stopPropagation();lbOpenContainerRename(event,this)"'; }
-  else if(_rl){ _attr = ' data-frn="' + lbAttr(JSON.stringify(_rl)) + '" onclick="event.stopPropagation();lbOpenFacBatchRename(event,this)"'; }
-  _cur = (_rd || _rl || _fi >= 0) ? 'pointer' : 'default';
-  var _chipCls = 'lb-fchip' + ((_rd || _rl) ? ' lb-fchip-rn' : '');   // v3389：仅可改名 chip 才挂悬停类
-  return '<span class="' + _chipCls + '"'+_attr+' style="display:inline-flex;align-items:center;gap:4px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:6px;padding:3px 8px;font-size:12px;color:#ccc;white-space:nowrap;cursor:'+_cur+'">'+ic+label+_colS+extra+'</span>';   // v1330：色点移到灰英文之前
-}
-// v3410/v3416：牌子类型的**权威汉化口径**——运行时读表（icon_zh_map 走 zhName / facility_zh），表未加载时用官方原文兜底
-//   来源：汉化/ShooterGame.csv(英) ↔ ShooterGame.json(官方中文) 联表 + facility_zh.json
-//   官方对照：Metal Sign=小型金属标识板 / Metal Wall Sign=金属标识板 / Wooden Sign=木制标识板 / Wooden Wall Sign=木制标识板
-//            Holiday Stocking=节日长袜 / Hanging Sign=悬挂标识 / Large Metal Signpost=大型金属标志牌 / Large Wood Signpost=大型木制标志牌
-function lbSignKindZh(cls){
-  var c = String(cls || '');
-  var _t = function(k){ try{ return zhName(k) || ''; }catch(e){ return ''; } };
-  var _f = function(k){ try{ return (LB_FACILITY_ZH && LB_FACILITY_ZH[k] && LB_FACILITY_ZH[k].zh) || ''; }catch(e){ return ''; } };
-  if(/Sign_Small_Metal/i.test(c)) return _t('metal_sign') || '小型金属标识板';
-  if(/Sign_Wall_Metal/i.test(c)) return _t('metal_wall_sign') || '金属标识板';
-  if(/Sign_Wall_Stocking/i.test(c)) return _f('Stocking') || '节日长袜';
-  if(/Sign_Small_Wood/i.test(c)) return '木制标识板';                    // 官方 Wooden Sign（woodsign_icon 是「木头路标」，不可借）
-  if(/Sign_Wall_Wood/i.test(c)) return _t('woodwallsign_icon') || '木制标识板';
-  if(/HangingSign/i.test(c)) return _t('hud_frontier_hangingsign_icon') || '悬挂标识';
-  if(/Sign_Large_Metal|MetalSign_Large/i.test(c)) return _t('largemetalsign_icon') || '大型金属标志牌';
-  if(/Sign_Large_Wood|WoodSign_Large/i.test(c)) return _t('woodsign_icon_large') || '大型木制标志牌';
-  if(/Gravestone/i.test(c)) return _f('Furniture_Gravestone') || _f('HW_Grave') || '墓碑';
-  if(/SimpleBed/i.test(c)) return (LB_FACILITY_ZH && LB_FACILITY_ZH['Bed_Simple'] && LB_FACILITY_ZH['Bed_Simple'].zh) || '简易床';
-  if(/ModernBed/i.test(c)) return (LB_FACILITY_ZH && LB_FACILITY_ZH['Bed_Modern'] && LB_FACILITY_ZH['Bed_Modern'].zh) || '现代床';
-  if(/TekBed|SleepingPod/i.test(c)) return (LB_FACILITY_ZH && LB_FACILITY_ZH['Bed_Tek'] && LB_FACILITY_ZH['Bed_Tek'].zh) || '泰克睡眠舱';
-  if(/Coffin/i.test(c)) return (LB_FACILITY_ZH && LB_FACILITY_ZH['Coffin'] && LB_FACILITY_ZH['Coffin'].zh) || '棺材';
-  return '设施';
-}
-// ⭐ v3398/v3406/v3410（用户要求）：牌子/木牌/吊牌/广告牌「改文字」共用组件（区域弹窗 + 聚落命名弹窗共用）
-//    v3410：默认**只显示一行信息 + 铅笔按钮**（不再常驻输入框，移动端更清爽）；点铅笔才展开**单行**输入框，保存/清空同一行
-LB._signEditList = [];
-function lbSignEditRowHtml(sg, idx){
-  if(sg && sg._hdr) return '<div style="font-size:11px;color:#a78bfa;margin:8px 0 4px">' + sg._hdr + '</div>';
-  var kind = lbRenameApiOf(sg.cls);
-  var isBed = (kind === 'bed');
-  var lim = isBed ? '60 个字符' : '160 个字';
-  // v3415（用户口径）：类型/名字样式**对齐生物卡**（lbDinoHTML 头部行口径）——类型 紫 #a78bfa + 12px；名字 白 #fff + 14px + 加粗
-  //    （字号**显式写死**，不再靠父级继承）；★ 文案「★ 当前生效」且**放到名字左侧**（原在类型右侧）
-  var cur = sg.name ? ('<span style="color:#fff;font-size:14px;font-weight:bold">' + escapeHtml(sg.name) + '</span>') : '<span style="color:#666;font-size:14px">（还没名字）</span>';
-  return '<div style="padding:8px 0;border-top:1px solid #22222e">'
-    + '<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#8b8b9e">'
-    + '<span style="color:#a78bfa;font-size:12px">' + escapeHtml(lbSignKindZh(sg.cls)) + '</span>'
-    + '<span style="margin-left:auto;display:flex;align-items:center;gap:6px;min-width:0;max-width:66%">'
-    + (sg._cur ? '<span style="flex:0 0 auto;color:#a78bfa">★ 当前生效</span>' : '')
-    + '<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#9a9aae" title="' + lbAttr(sg.name || '') + '">' + cur + '</span>'
-    + '</span>'
-    + '<button onclick="lbSignEditOpen(this)" title="点击修改" style="flex:0 0 auto;width:30px;height:30px;border-radius:6px;border:1px solid #2a2a3a;background:transparent;color:#a78bfa;cursor:pointer;font-size:13px;display:inline-flex;align-items:center;justify-content:center">' + (lbMdiSvg('mdi-pencil', 14) || '✏') + '</button>'
-    + '</div>'
-    + '<div class="lb-se-edit" style="display:none;gap:6px;margin-top:6px;align-items:stretch">'
-    + '<input class="lb-se-in" value="' + lbAttr(sg.name || '') + '" maxlength="' + (isBed ? 60 : 160) + '" placeholder="输入新名字（最多 ' + lim + '）" style="flex:1;min-width:0;box-sizing:border-box;height:32px;padding:0 8px;border-radius:6px;border:1px solid #333;background:#12121a;color:#ddd;font-size:13px">'
-    + '<button onclick="lbSignEditSave(this,' + idx + ')" style="flex:0 0 auto;height:32px;min-width:52px;border-radius:6px;border:none;background:#7c3aed;color:#fff;cursor:pointer;font-size:13px">保存</button>'
-    + '<button onclick="lbSignEditSave(this,' + idx + ',-)" style="flex:0 0 auto;height:32px;min-width:52px;border-radius:6px;border:1px solid #7c3aed;background:transparent;color:#a78bfa;cursor:pointer;font-size:13px">清空</button>'
-    + '</div>'
-    + '<div class="lb-se-msg" style="font-size:11px;color:#888"></div>'
-    + '</div>';
-}
-// v3410：点铅笔 → 展开/收起该行的输入框（默认隐藏）
-function lbSignEditOpen(btn){
-  var row = btn && btn.parentNode && btn.parentNode.parentNode;
-  var box = row ? row.querySelector('.lb-se-edit') : null;
-  if(!box) return;
-  var willShow = (box.style.display === 'none');
-  box.style.display = willShow ? 'flex' : 'none';
-  if(willShow){
-    var i = box.querySelector('.lb-se-in');
-    if(i){ try{ i.focus(); i.select(); }catch(e){} }
-  }
-}
-function lbOpenSignEdit(title, sub, items){
-  LB._signEditList = items || [];
-  LB._signEditTitle = title; LB._signEditSub = sub;   // v3416：一键命名后重开弹窗用（刷新已写入的新名字）
-  var old = document.querySelector('.lb-picker-overlay'); if(old) old.remove();
-  var overlay = document.createElement('div'); overlay.className = 'lb-picker-overlay';
-  overlay.onclick = function(e){ if(e.target === overlay) overlay.remove(); };
-  var body = LB._signEditList.length ? LB._signEditList.map(lbSignEditRowHtml).join('') : '<div style="color:#666;font-size:12px">（本处没有可写文字的设施）</div>';
-  // v3416（用户口径）：顶部标题右侧「⚡ 一键命名」——只给没名字的设施按「权威类型名 + 同类序号」批量命名并直接写入游戏
-  var _hasUnnamed = (LB._signEditList || []).some(function(sg){ return sg && !sg._hdr && !(sg.name && String(sg.name).trim()); });
-  var _auto = _hasUnnamed
-    ? '<button onclick="lbSignAutoName(this)" title="给列表里没名字的设施按「类型+序号」自动命名并写入游戏（进游戏对照用）" style="flex:0 0 auto;height:30px;padding:0 10px;border-radius:6px;border:1px solid #7c3aed;background:rgba(124,58,237,.15);color:#c4b5fd;cursor:pointer;font-size:12px;white-space:nowrap">一键命名</button>'
-    : '';
-  overlay.innerHTML = '<div class="lb-fb-modal" style="background:#1a1a24;border:1px solid #7c3aed55;border-radius:12px;padding:14px;width:560px;max-width:96vw;box-shadow:0 10px 40px rgba(0,0,0,.6);max-height:88vh;display:flex;flex-direction:column">'
-    + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px"><div style="flex:1;min-width:0;font-size:14px;font-weight:bold;color:#a78bfa">' + title + '</div>' + _auto + '</div>'
-    + '<div style="font-size:11.5px;color:#888;margin-bottom:8px;line-height:1.5">' + sub + '</div>'
-    + '<div style="flex:1;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch">' + body + '</div>'
-    + '<div style="display:flex;gap:8px;margin-top:10px"><button onclick="this.closest(\'.lb-picker-overlay\').remove()" style="flex:1;height:36px;border-radius:6px;border:1px solid #333;background:transparent;color:#888;cursor:pointer;font-size:13px">关闭</button></div>'
-    + '</div>';
-  document.body.appendChild(overlay);
-}
-// v3416（用户口径）：⚡ 一键命名——弹窗列表里**没有名字**的设施，按「权威类型名 + 同类序号」批量命名并**直接写入游戏**
-//   规则：同类从 1 开始编号（金属标识板1/2…、木制标识板1…、节日长袜1…、简易床1…）；已有名字的不动；逐个下发（牌子 SetSignText / 床 SetBedName）
-function lbSignAutoName(btn){
-  var all = (LB._signEditList || []).filter(function(sg){ return sg && !sg._hdr; });
-  var todo = all.filter(function(sg){ return !(sg.name && String(sg.name).trim()); });
-  if(!todo.length){ lbToast('列表里没有未命名的设施'); return; }
-  var seq = {}, plan = [];
-  todo.forEach(function(sg){
-    var nm = lbSignKindZh(sg.cls);
-    seq[nm] = (seq[nm] || 0) + 1;
-    plan.push({ sg: sg, name: nm + seq[nm] });
-  });
-  var _lbl = '一键命名';   // v3418（用户口径）：按钮**不带图标**（纯文字）
-  if(btn){ btn.disabled = true; btn.style.opacity = '.6'; }
-  var okN = 0, failN = 0, i = 0;
-  var tick = function(){
-    if(i >= plan.length){
-      if(btn){ btn.disabled = false; btn.style.opacity = '1'; btn.innerHTML = _lbl; }
-      lbToast('✅ 已命名 ' + okN + ' 个' + (failN ? ('，失败 ' + failN + ' 个') : '') + ' · 游戏里需重进视野 / 重连才能看到');
-      try{ if(typeof lbRenderKeepView === 'function') lbRenderKeepView(); }catch(e){}
-      if(LB._signEditTitle){ try{ lbOpenSignEdit(LB._signEditTitle, LB._signEditSub, LB._signEditList); }catch(e){} }
-      return;
-    }
-    var it = plan[i++], sg = it.sg, kind = lbRenameApiOf(sg.cls);
-    if(btn) btn.innerHTML = '命名中 ' + i + '/' + plan.length;
-    var d = { srv: sg._srv || '', obj: lbObjSuffix(sg.cls), cls: sg.cls, cn: sg.name || '' };
-    lbFacRenameSend(kind, d, it.name, function(j){
-      if(j && j.ok){ sg.name = it.name; okN++; } else { failN++; }
-      tick();
-    });
-  };
-  tick();
-}
-function lbSignEditSave(btn, idx, preset){
-  var sg = (LB._signEditList || [])[idx]; if(!sg) return;
-  var box = btn.parentNode.parentNode;
-  var ta = box ? box.querySelector('.lb-se-in') : null;
-  var msg = box ? box.querySelector('.lb-se-msg') : null;   // v3406：结构简化后 msg 与按钮不在同一父节点
-  var txt = (preset !== undefined) ? String(preset) : (ta ? String(ta.value || '').trim() : '');
-  if(!txt){ if(msg){ msg.textContent = '不能为空（清空请点「清空」）'; msg.style.color = '#f87171'; } return; }
-  var kind = lbRenameApiOf(sg.cls);
-  if(kind === 'sign' && txt !== '-'){
-    var _t = lbSignTextTrim(lbObjSuffix(sg.cls), txt);
-    if(_t.trimmed){ txt = _t.text; if(ta) ta.value = txt; }
-  }
-  if(msg){ msg.textContent = '执行中…'; msg.style.color = '#999'; }
-  var d = { srv: sg._srv || '', obj: lbObjSuffix(sg.cls), cls: sg.cls, cn: sg.name || '' };
-  lbFacRenameSend(kind, d, txt, function(j, k){
-    if(j && j.ok){
-      sg.name = (txt === '-' ? '' : txt);
-      if(msg){ msg.innerHTML = '✅ 已写入' + (j.verified === false ? '（回读不一致）' : '') + ' · 需重进视野/重连查看'; msg.style.color = '#22c55e'; }
-      if(typeof lbRenderKeepView === 'function') lbRenderKeepView();
-    } else {
-      if(msg){ msg.innerHTML = '❌ ' + escapeHtml(String((j && j.error) || '失败')) + (j && j.hint ? '<br><span style="color:#888">' + escapeHtml(String(j.hint)) + '</span>' : ''); msg.style.color = '#f87171'; }
-    }
-  });
-}
-// ① 区域入口：列出「参与命名 3 类牌（标记★）+ 本区其它木牌/吊牌」
-function lbOpenAreaSigns(key, ai){
-  var areas = (LB._facAreas[key] && LB._facAreas[key].areas) || [];
-  var a = areas[ai]; if(!a){ lbToast('区域数据未就绪'); return; }
-  var srv = (LB._settleCtx[key] && LB._settleCtx[key].srv) || LB.tab || '';
-  var list = lbAreaSignsOf(key, ai).map(function(sg){
-    return { cls:sg.cls, name:sg.name, _srv:srv, _cur:(!!a._sign && String(sg.cls) === String(a._sign.cls) && String(sg.name||'') === String(a._sign.name||'')) };
-  });
-  list.sort(function(p, q){ return (q._cur ? 1 : 0) - (p._cur ? 1 : 0); });
-  // v3413：副标题只保留优先顺序说明（删来源句/条数句）；v3416（用户口径）：改用**权威汉化表口径** + 同类合并 + 删「→ 其它设施名」
-  //   金属两档（立式 Sign_Small_Metal / 挂墙 Sign_Wall_Metal）合一条「金属标识板」；木制两档（Sign_Small_Wood / Sign_Wall_Wood）合一条「木制标识板」
-  var _zline = [lbSignKindZh('Sign_Wall_Metal_C'), lbSignKindZh('Sign_Wall_Stocking_C'), lbSignKindZh('Sign_Wall_Wood_C'), lbSignKindZh('StructureBP_HangingSign_C')].join(' → ');
-  // v3420（用户口径）：本区没牌子时也要能点——说清楚区域名借用了哪个设施（**本浮窗不提供该设施改名**）+ 提示放正规命名牌
-  var _sub;
-  if(list.length){
-    _sub = '区域名字取自区域里的牌子。优先顺序：<b style="color:#c9c9d6">' + _zline + '</b>（排在前面的先用；同一级看谁离得近）。';
-  } else {
-    var _sg = a._sign || null, _fz = '', _isPai = false;
-    if(_sg && _sg.cls){
-      try{ _isPai = LB_AREA_SIGN_RE.test(String(_sg.cls)); }catch(e){}
-      try{ var _m = lbSettleFacMeta(String(_sg.cls)); _fz = (_m && _m.zh) || ''; }catch(e){}
-      if(!_fz) _fz = String(_sg.cls).replace(/_\d{6,}$/, '');
-      _sub = _isPai
-        ? ('本区域名取自牌子：<b style="color:#c9c9d6">' + escapeHtml(_fz) + '</b>（服务器未采集到这块牌子 ⇒ 本浮窗暂无可改文字）。<br>')
-        : ('本区域名借用了其它设施：<b style="color:#fbbf24">' + escapeHtml(_fz) + '</b>——本浮窗只改牌子文字，该设施的改名**不在这里**。<br>');
-      _sub += '想自定义区域名，请在区域内放一块命名牌：<b style="color:#c9c9d6">' + _zline + '</b>（排在前面的先用）。';
-    } else {
-      _sub = '这个区域还没有名字，也没采集到牌子。放一块命名牌即可给区域起名：<b style="color:#c9c9d6">' + _zline + '</b>。';
-    }
-  }
-  lbOpenSignEdit('🪧 区域命名', _sub, list);
-}
-// ② 聚落入口：列出「用于聚落命名的设施」（优先级同 lbSettlementBuildingName：大广告牌 → 床/棺材/睡眠舱 → 墓碑 → 其它）
-// v3399（用户口径「不要重算聚落」）：候选**直接复用详情页已列出的本聚落设施**（LB._settleName[key]），
-//   原实现按 tribeId 扫全量 structures ⇒ 同部落多个基地时会把其它基地的设施也列出来（用户实测）
-function lbOpenSettleNameSigns(key){
-  var ctx = LB._settleCtx[key] || {};
-  var srv = ctx.srv || LB.tab || '';
-  var _cc = (LB._settleName && LB._settleName[key]) || null;
-  var cands = (_cc && _cc.list) || [];
-  var bb = [], beds = [], tomb = [], rest = [];
-  cands.forEach(function(s){
-    var cls = String(s.cls || '');
-    var it = { cls:cls, name:String(s.name || '').trim(), _srv:srv, _x:Number(s.x)||0, _y:Number(s.y)||0 };
-    if(!it.name) return;
-    if(/Sign_Large_Metal|Sign_Large_Wood|MetalSign_Large|WoodSign_Large/i.test(cls)) bb.push(it);
-    else if(LB_BED_RE.test(cls) || /Coffin|SleepingPod/i.test(cls)) beds.push(it);
-    else if(/Gravestone/i.test(cls)) tomb.push(it);
-    else if(!/Sign_|MetalSign|WoodSign|HangingSign|Billboard/i.test(cls)) rest.push(it);
-  });
-  // v3400（用户口径「按当前命中的实际优先级排序」）：
-  //   原实现组顺序固定 ①→②→③→④、组内按候选数据顺序 ⇒ ★ 虽标在「第一个非空类的最近者」，
-  //   却可能排在该类第 2/3 条 ⇒ 用户看到「星号不在最前面」。
-  //   现改为：① 先算命中项 ② 命中类**置顶**（其余类按 ①→②→③→④）③ 类内 ★ 第一、其余按距聚落中心由近到远
-  var _d2of = function(it){
-    var dx = (Number(it._x) || 0) - Number(ctx.cx || 0), dy = (Number(it._y) || 0) - Number(ctx.cy || 0);
-    return dx*dx + dy*dy;
-  };
-  // v3401（用户口径：「这个是聚落命名功能，你为什么要混入非命名优先级序列内的设施？」）：
-  //   本弹窗**只列命名优先级序列内的设施**（①大广告牌 ②床/棺/睡眠舱 ③墓碑）；
-  //   ④「其它带名设施」（冰箱/炮台/工作台/发电机等序列外设施）**不列入列表**，仅在 ①②③ 全空时于顶部标注它兜底用了哪个
-  var groups = [['① 大广告牌（改文字）', bb], ['② 床 / 棺材 / 睡眠舱（改名）', beds]];   // v3423（用户口径）：**墓碑不再参与聚落命名**（从正规命名设施序列中移除）
-  // 命中判定：与 lbSettlementBuildingName 同口径——「第一个非空类」里距聚落中心最近者
-  // v3424（用户口径）：命中判定**同源**——直接调用 lbSettleNamePick（与聚落列表/按钮同一函数、同一优先级）
-  var _win = null;
-  try{ _win = lbSettleNamePick(cands, ctx.cx, ctx.cy); }catch(e){ _win = null; }
-  var found = false, _hitGi = -1;
-  if(_win){
-    for(var gi = 0; gi < groups.length && !found; gi++){
-      var arr2 = groups[gi][1];
-      for(var qi = 0; qi < arr2.length; qi++){
-        if(String(arr2[qi].name) === String(_win.name)){ arr2[qi]._cur = true; found = true; _hitGi = gi; break; }
+      if(_dN.length > 1){
+        _rn = '<button class="lb-rel-rename" style="' + _stMini + '" data-frn="' + lbAttr(JSON.stringify(_dN)) + '"'
+            + ' onclick="event.stopPropagation();lbOpenFacBatchRename(event,this)" title="批量改名（' + _dN.length + ' 台）">批量改名</button>';
       }
     }
-  }
-  // v3401：序列外兑底标注——命中落在④（其它带名设施）时标注它兜底用了哪个，**不入列表**
-  var _outHit = '';
-  if(_win && _win.tier === 3) _outHit = _win.name;
-  // 类顺序：命中类置顶，其余保持 ①→②→③→④
-  var _ord = [];
-  groups.forEach(function(gv, i){ if(gv[1].length) _ord.push(i); });
-  if(_hitGi >= 0) _ord.sort(function(p, q){ return ((p === _hitGi ? 0 : 1) - (q === _hitGi ? 0 : 1)) || (p - q); });
-  var list = [];
-  _ord.forEach(function(i){
-    var arr = groups[i][1].slice();
-    arr.sort(function(p, q){
-      var cp = p._cur ? 0 : 1, cq = q._cur ? 0 : 1;
-      if(cp !== cq) return cp - cq;   // ★ 命中条排第一
-      return _d2of(p) - _d2of(q);     // 其余：距聚落中心由近到远
-    });
-    list.push({ _hdr: groups[i][0] });   // v3415：删「· N（当前生效）」；v3416（用户口径）：**去掉组标题 ★ 前缀**——生效标记只留行内「★ 当前生效」
-    arr.forEach(function(it){ list.push(it); });
-  });
-  // v3413（用户口径）：副标题**只保留优先顺序说明**——删掉「现在这个名字来自上面 ★ 那一项。」「共 N 条」「这三样都没有…」三句
-  var _sub9 = cands.length
-    ? ('聚落名字取自聚落里的建筑。优先顺序：<b style="color:#c9c9d6">' + lbSignKindZh('Sign_Large_Metal_C') + ' / ' + lbSignKindZh('Sign_Large_Wood_C') + ' → ' + lbSignKindZh('SimpleBed_C') + ' / ' + lbSignKindZh('ModernBed_C') + ' / ' + lbSignKindZh('TekBed_C') + ' / ' + lbSignKindZh('Coffin_C') + '</b>（排在前面的先用）。')
-    : '没读到这个聚落的设施，请先重新进入一次聚落。';
-  lbOpenSignEdit('🏠 聚落命名', _sub9, list);
+  }catch(e){ _rn = ''; }
+  return '<span'+_attr+' style="display:inline-flex;align-items:center;gap:4px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:6px;padding:3px 8px;font-size:12px;color:#ccc;white-space:nowrap;cursor:'+_cur+'">'+ic+label+_colS+extra+_rn+'</span>';   // v1330：色点移到灰英文之前
 }
 // 手风琴互斥：展开当前容器时收起同组其他容器（同时只能展开一个）
 function lbAccOnly(el){
@@ -21413,5 +20819,6 @@ function lbRouteHelpClose(){
   }catch(e){}
 })();
 </script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"be0f255986e44431950ea191119f868b","r":1,"spa":2}' crossorigin="anonymous"></script>
 </body>
 </html>

@@ -130,8 +130,6 @@ CMD_MOVE_DEATH_BAG = 'TransferIdentityFix.MoveDeathBag'
 CMD_MOVE_ALL_PENDINGS = 'TransferIdentityFix.MoveAllPendings'
 CMD_RENAME_DINO = 'TransferIdentityFix.RenameDino'
 CMD_RENAME_CONTAINER = 'TransferIdentityFix.RenameContainer'   # v1326：容器箱改名（仅容器，床/棺/牌/碑后端会拒绝并给 hint）
-CMD_SET_SIGN_TEXT = 'TransferIdentityFix.SetSignText'   # 2026-09-19（插件 0.4.0）：牌子/墓碑写文字（SignText；客户端需重进视野/重连）
-CMD_SET_BED_NAME = 'TransferIdentityFix.SetBedName'     # 2026-09-19（插件 0.4.0）：床/棺材/睡眠舱改名（BedName；客户端需重进视野/重连）
 CMD_EGG_PROBE = 'TransferIdentityFix.EggProbe'
 CMD_INV_PROBE = 'TransferIdentityFix.InvProbe'  # 2026-09-04：库存扫描（饲料槽/风行蜥/未成年背包物品）
 CMD_CRAFTING_COST = 'TransferIdentityFix.CraftingCost'  # 2026-09-13：单蓝图制作材料（只读、无副作用）
@@ -787,103 +785,6 @@ def rename_container(server, obj, new_name):
         return {'ok': False, 'server': server, 'error': 'name contains control char'}
     try:
         success, result = _rcon_str(port, '%s %s %s' % (CMD_RENAME_CONTAINER, obj_s, name))
-    except Exception as e:
-        return {'ok': False, 'server': server, 'obj': obj_s, 'error': str(e)}
-    detail = {}
-    if result:
-        try:
-            j = json.loads(result)
-            if isinstance(j, dict):
-                detail = j
-        except Exception:
-            pass
-    if detail:
-        out = dict(detail)
-        out.setdefault('server', server)
-        out.setdefault('obj', obj_s)
-        out.setdefault('name', name)
-        out.setdefault('ts', str(datetime.now()))
-        return out
-    return {'ok': bool(success), 'server': server, 'obj': obj_s, 'name': name,
-            'result': str(result)[:800], 'ts': str(datetime.now())}
-
-
-def set_sign_text(server, obj, text):
-    """牌子/墓碑写文字（2026-09-19 插件 v0.4.0）：RCON TransferIdentityFix.SetSignText <objName|实例尾号> <文字>。
-
-    - 覆盖 Sign_*/HangingSign*/Gravestone_*；**床/棺材不在本命令**（走 set_bed_name）。
-    - 文字限制：DLL 按 maxChars（Unicode 码点，实测 160）校验；且 **RCON 单包上限**：
-      整条命令 >300 字节时客户端会**完全无响应**（实测 543 字节无响应）⇒ 这里先行拦截并返回 JSON 错误，
-      避免前端空等（前端也应按 maxChars 与 300B 双条件自行截断）。
-    - 传单个 '-' 表示清空（RCON 无法传空参）。
-    - 客户端刷新：SignText **无官方 net RPC** ⇒ 需重进视野/重连（返回 clientRefresh 字段）。
-    """
-    port = SERVERS.get(server)
-    if not port:
-        return {'ok': False, 'server': server, 'error': 'unknown server'}
-    obj_s = str(obj or '').strip()
-    txt = (text or '').strip()
-    if not obj_s:
-        return {'ok': False, 'server': server, 'error': 'usage: SetSignText <objName|instanceSuffix> <text>'}
-    if not txt:
-        return {'ok': False, 'server': server, 'error': 'text empty'}
-    if any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in txt):
-        return {'ok': False, 'server': server, 'error': 'text contains control char'}
-    full = '%s %s %s' % (CMD_SET_SIGN_TEXT, obj_s, txt)
-    _nm = len(full.encode('utf-8'))
-    if _nm > 300:
-        return {'ok': False, 'server': server, 'obj': obj_s, 'error': 'command too long (RCON single packet)', 'bytes': _nm, 'max_bytes': 300}
-    try:
-        success, result = _rcon_str(port, full)
-    except Exception as e:
-        return {'ok': False, 'server': server, 'obj': obj_s, 'error': str(e)}
-    detail = {}
-    if result:
-        try:
-            j = json.loads(result)
-            if isinstance(j, dict):
-                detail = j
-        except Exception:
-            pass
-    if detail:
-        out = dict(detail)
-        out.setdefault('server', server)
-        out.setdefault('obj', obj_s)
-        out.setdefault('text', txt)
-        out.setdefault('ts', str(datetime.now()))
-        return out
-    return {'ok': bool(success), 'server': server, 'obj': obj_s, 'text': txt,
-            'result': str(result)[:800], 'ts': str(datetime.now())}
-
-
-def set_bed_name(server, obj, new_name):
-    """床/棺材/睡眠舱改名（2026-09-19 插件 v0.4.0）：RCON TransferIdentityFix.SetBedName <objName|实例尾号> <名字>。
-
-    - 覆盖 SimpleBed/ModernBed…、StructureBP_Coffin_*、SleepingPod*；**显式排除乐器台**（SeatingMusic，与床共享基类）。
-    - ⚠️ 旧版用 RenameContainer 改床/棺写的是 **BoxName**，该族游戏不读 ⇒ 返回 ok 但游戏内不变；本命令写 **BedName**。
-    - 名字限制：非空、≤ **60 UTF-8 字节**、不含控制字符；传单个 '-' 表示清空。
-    - 客户端刷新：BedName **无官方 net RPC** ⇒ 需重进视野/重连（返回 clientRefresh 字段）。
-    """
-    port = SERVERS.get(server)
-    if not port:
-        return {'ok': False, 'server': server, 'error': 'unknown server'}
-    obj_s = str(obj or '').strip()
-    name = (new_name or '').strip()
-    if not obj_s:
-        return {'ok': False, 'server': server, 'error': 'usage: SetBedName <objName|instanceSuffix> <name> (- to clear)'}
-    if not name:
-        return {'ok': False, 'server': server, 'error': 'name empty'}
-    nbytes = len(name.encode('utf-8'))
-    if nbytes > 60:
-        return {'ok': False, 'server': server, 'error': 'name too long (%d bytes, max 60)' % nbytes}
-    if any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in name):
-        return {'ok': False, 'server': server, 'error': 'name contains control char'}
-    full = '%s %s %s' % (CMD_SET_BED_NAME, obj_s, name)
-    _nm = len(full.encode('utf-8'))
-    if _nm > 300:
-        return {'ok': False, 'server': server, 'obj': obj_s, 'error': 'command too long (RCON single packet)', 'bytes': _nm, 'max_bytes': 300}
-    try:
-        success, result = _rcon_str(port, full)
     except Exception as e:
         return {'ok': False, 'server': server, 'obj': obj_s, 'error': str(e)}
     detail = {}
@@ -1697,32 +1598,6 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(400, {'ok': False, 'error': 'missing args'})
                 return
             self._send(200, rename_container(server, obj, name))
-        # 牌子/墓碑写文字（2026-09-19 插件 0.4.0）：/api/set_sign_text（登录用户）
-        elif path.endswith('set_sign_text'):
-            username = g('username')
-            if not username:
-                self._send(401, {'ok': False, 'error': 'login required'})
-                return
-            server = g('server')
-            obj = g('obj') or g('objName') or g('objname')
-            text = g('text') if g('text') else g('name')
-            if not (server and obj and text):
-                self._send(400, {'ok': False, 'error': 'missing args'})
-                return
-            self._send(200, set_sign_text(server, obj, text))
-        # 床/棺材/睡眠舱改名（2026-09-19 插件 0.4.0）：/api/set_bed_name（登录用户）
-        elif path.endswith('set_bed_name'):
-            username = g('username')
-            if not username:
-                self._send(401, {'ok': False, 'error': 'login required'})
-                return
-            server = g('server')
-            obj = g('obj') or g('objName') or g('objname')
-            name = g('name')
-            if not (server and obj and name):
-                self._send(400, {'ok': False, 'error': 'missing args'})
-                return
-            self._send(200, set_bed_name(server, obj, name))
         else:
             self._send(404, {'ok': False, 'error': 'not found'})
 

@@ -490,7 +490,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260920-3425';
+var LB_VERSION = 'v20260920-3422';
 var LB_SCHEMA_VER = 16;  // v1323：15→16 强制缓存重建——recs 新增 colorRegions（建筑涂装）字段，旧缓存无此字段 ⇒ 着色不显示
 // 历史：v1069 14→15——根因：recs 构建结果随 IndexedDB 持久化（v931）、
                          //   命中后跳过重建；仅改 _decorRe 等**构建期过滤**时，旧 rec 会长期残留（实测南瓜 rec 改过滤后仍显示）。
@@ -4716,9 +4716,6 @@ function lbBuildSettlements(data){
         for(var i=0;i<tSettles.length;i++){
           var s0=tSettles[i];
           var dd = Math.sqrt(Math.pow(Number(st.x)-s0.center.x,2)+Math.pow(Number(st.y)-s0.center.y,2));
-          // v3424（用户口径）：**必须在本聚落范围内**才算归属（距中心 ≤ radius+800）
-          //   ⇒ 实测 Sco：15211 外的其它基地大广告牌（本聚落半径仅 1307）被分派进来 ⇒ 与命名弹窗不一致
-          if(dd > (Number(s0.radius) || 0) + 800) continue;
           if(dd<bd){ bd=dd; best=s0; }
         }
         if(best) nameOwner[(st.class||'')+'|'+Math.round(Number(st.x))+'|'+Math.round(Number(st.y))] = { id:best.id, st:st }; // v20260912：同时存设施引用供逆映射
@@ -4735,10 +4732,34 @@ function lbBuildSettlements(data){
     var sNameOf = function(s){
       var own = _ownBySet[s.id] || [];
       if(!own.length) return null;
-      // v3424（用户口径）：聚落名**单一实现** lbSettleNamePick（优先级 ①大广告牌 ②床/棺/睡舱 ③镙碑 ④其它）
-      //   入参已按本聚落范围过滤（见上方 nameOwner 的 _srr 门槛）⇒ 与命名弹窗同一函数、同一口径
-      var _hit0 = lbSettleNamePick(own, s.center.x, s.center.y);
-      return _hit0 ? _hit0.name : null;
+      function nearest(t){
+        var best=null, bd=Infinity;
+        t.forEach(function(st){
+          var dd = Math.sqrt(Math.pow(Number(st.x)-s.center.x,2)+Math.pow(Number(st.y)-s.center.y,2));
+          if(dd<bd){ bd=dd; best=st; }
+        });
+        return best;
+      }
+      // v1035：统一为「四档优先级」，与 lbSettlementBuildingName 保持一致。
+      //   原为旧三档「① 墓碑+广告牌【混合】→ ② 名字以 M 结尾(僵尸条件) → ③ 其余」⇒ 墓碑混在第①档、抢在床之前 ⇒ 聚落名被墓碑占据（用户实测 "My DOG"）。
+      //   而 v1027 修好的 lbSettlementBuildingName（四档）只被 lbFinalizeSettlement 调用，全量重建走的是本函数 ⇒ v1027 在此路径完全不生效（"改了没用"的真因）。
+      //   候选范围仍保留 own（归属本聚落的设施），比「全部落」更精确，语义不变。
+      function _pick(re){
+        var t = own.filter(function(st){ return st && st.name && re.test(String(st.class||'')); });
+        return t.length ? nearest(t) : null;
+      }
+      var g1 = _pick(/Sign_Large_Metal|Sign_Large_Wood|MetalSign_Large|WoodSign_Large/i); // ① 大型广告牌
+      if(g1) return g1.name;
+      var g2 = _pick(LB_BED_RE);                                                           // ② 床/棺/睡眠舱
+      if(g2) return g2.name;
+      var g3 = _pick(/Gravestone/i);                                                       // ③ 墓碑（降级至广告牌与床之后）
+      if(g3) return g3.name;
+      // v1320（用户要求）：④ 兜底同样**剔除全部小牌 / 壁挂牌**（两处聚落命名路径口径必须一致）
+      var _g4ex = /Sign_|MetalSign|WoodSign|HangingSign|Billboard/i;
+      var _g4t = own.filter(function(st){ return st && st.name && !_g4ex.test(String(st.class||'')); });
+      var g4 = _g4t.length ? nearest(_g4t) : null;                                        // ④ 其余带名字者（不含小牌）
+      if(g4) return g4.name;
+      return null;
     };
     settlements.forEach(function(s){
       var nbName = sNameOf(s);
@@ -4961,40 +4982,7 @@ function lbNearestStructure(arr, cx, cy){
   return best ? best.name : null;
 }
 // 聚落建筑命名优先级（v1027 修订）：①大型广告牌(Sign_Large_Metal/Wood，含旧词序)自定义名(同组取距center最近) → ②床/棺材/睡眠舱(按类名 LB_BED_RE 判定，v1027 起不再要求名字以 M 结尾) → ③墓碑(Gravestone，v1027 起降级到广告牌与床之后) → ④其余带自定义名者；无则 null
-// v3424（用户口径）：聚落命名的**单一实现**——按钮/列表名 与 命名弹窗★ 必须同源同口径
-//   ① 优先级：大型广告牌 → 床/棺材/睡眠舱 → 墓碑 → 其它带名设施（剔除小牌/壁挂牌）；同类取距聚落中心最近
-//   ② 候选**必须已限定在本聚落范围内**（lbSettleInScope），否则会选到同部落其它基地的设施
-function lbSettleNamePick(cands, cx, cy){
-  var _cls = function(s){ return String((s && (s.class !== undefined ? s.class : s.cls)) || ''); };
-  var _near = function(arr){
-    var b = null, bd = Infinity;
-    for(var i = 0; i < arr.length; i++){
-      var dx = (Number(arr[i].x) || 0) - (Number(cx) || 0), dy = (Number(arr[i].y) || 0) - (Number(cy) || 0);
-      var v = dx*dx + dy*dy;
-      if(v < bd){ bd = v; b = arr[i]; }
-    }
-    return b;
-  };
-  var L = (cands || []).filter(function(s){ return s && String(s.name || '').trim(); });
-  if(!L.length) return null;
-  var tiers = [
-    function(s){ return /Sign_Large_Metal|Sign_Large_Wood|MetalSign_Large|WoodSign_Large/i.test(_cls(s)); },   // ① 大型广告牌
-    function(s){ return LB_BED_RE.test(_cls(s)) || /Coffin|SleepingPod/i.test(_cls(s)); },                     // ② 床 / 棺材 / 睡眠舱
-    function(s){ return /Gravestone/i.test(_cls(s)); },                                                       // ③ 墓碑
-    function(s){ return !/Sign_|MetalSign|WoodSign|HangingSign|Billboard/i.test(_cls(s)); }                   // ④ 其它带名（剔除小牌/壁挂牌）
-  ];
-  for(var t = 0; t < tiers.length; t++){
-    var arr = L.filter(tiers[t]);
-    if(arr.length){ var hit = _near(arr); return { name: String(hit.name).trim(), src: hit, tier: t }; }
-  }
-  return null;
-}
-// v3424：本聚落范围判定（与详情页 _inSettlePt 同口径）：距聚落中心 ≤ radius+800
-function lbSettleInScope(s, cx, cy, radius){
-  var dx = (Number(s && s.x) || 0) - (Number(cx) || 0), dy = (Number(s && s.y) || 0) - (Number(cy) || 0);
-  return Math.sqrt(dx*dx + dy*dy) <= (Number(radius) || 0) + 800;
-}
-function lbSettlementBuildingName(data, abbr, tid, cx, cy, radius){
+function lbSettlementBuildingName(data, abbr, tid, cx, cy){
   // v20260912：走 structsByTribe 索引（原每聚落全量扫 52 万条 → O(聚落数×52万)）
   var pool = (LB_STRUCTS_BY_TRIBE && LB_STRUCTS_BY_TRIBE[String(tid)]) || null;
   if(!pool){
@@ -5002,11 +4990,19 @@ function lbSettlementBuildingName(data, abbr, tid, cx, cy, radius){
     if(!sts.length) return null;
     pool = sts.filter(function(s){ return Number(s.tribeId) === Number(tid); });
   }
-  // v3424（用户口径）：候选**必须在本聚落范围内**（距中心 ≤ radius+800）——原实现取「同部落全部带名设施」
-  //   ⇒ 实测 Sco 选到 15211 外（半径 1307，阈值 2107）其它基地的大广告牌 ⇒ 与命名弹窗不一致
-  var cands = pool.filter(function(s){ return !!s.name && lbSettleInScope(s, cx, cy, radius); });
-  var hit = lbSettleNamePick(cands, cx, cy);
-  return hit ? hit.src : null;
+  var cands = pool.filter(function(s){ return !!s.name; });
+  if(!cands.length) return null;
+  var billboard = cands.filter(function(s){ return /Sign_Large_Metal|Sign_Large_Wood|MetalSign_Large|WoodSign_Large/i.test(s.class||''); });
+  if(billboard.length) return lbNearestStructure(billboard, cx, cy);
+  var beds = cands.filter(function(s){ return LB_BED_RE.test(s.class||''); });
+  if(beds.length) return lbNearestStructure(beds, cx, cy);
+  var tomb = cands.filter(function(s){ return /Gravestone/i.test(s.class||''); });
+  if(tomb.length) return lbNearestStructure(tomb, cx, cy);
+  // v1320（用户要求）：④ 兜底**剔除全部小牌 / 壁挂牌**（Sign_Small_* / Sign_Wall_* / MetalSign / WoodSign / HangingSign）
+  //   原因：小牌专用于「区域命名」（LB_AREA_SIGN_RE 通道），不该抢聚落名；大广告牌已在 ① 处理，不受影响
+  var _rest = cands.filter(function(s){ return !/Sign_|MetalSign|WoodSign|HangingSign|Billboard/i.test(String(s.class||'')); });
+  if(!_rest.length) return null;
+  return lbNearestStructure(_rest, cx, cy);
 }
 // 聚落收尾：计算 center/radius/容器数/球数 + 冠名（§8）
 function lbFinalizeSettlement(data, abbr, tid, sid, containers){
@@ -5051,7 +5047,7 @@ function lbFinalizeSettlement(data, abbr, tid, sid, containers){
   });
   // 无成员回退 S 编号
   // 聚落命名（2026-08-12）：优先聚落内建筑名（床/棺材/睡眠舱，M 结尾→最近带名字）；无则回退冠名/S编号
-  var bName = lbSettlementBuildingName(data, abbr, Number(tid), cx, cy, maxR);   // v3424：传 radius（候选限本聚落范围）
+  var bName = lbSettlementBuildingName(data, abbr, Number(tid), cx, cy);
   var name = bName || (members.length ? members.map(function(m){ return m.name; }).join('、') : ('S'+String(sid).split('_').pop()));
   return { id:sid, tribeId:Number(tid), tribeName:(tribe&&tribe.name)||'', center:{x:cx,y:cy,z:cz}, radius:maxR,
     containers:containers, pods:pods, owners:members, name:name };
@@ -12582,15 +12578,8 @@ function lbAreaSignsOf(key, ai){
   // v3423（用户口径）：恢复「**必须真在该区域内**」——原实现只用 lbFacAreaIdxOf（层内最近区，无距离上限）
   //   ⇒ 实测 Sco 聚落 35 万单位外的牌子也被算进同一区（28 块牌子挤成 5+23）
   //   现判据：① 最近区必须是本区 ② 到本区任一成员点的平面距离 ≤ LB_FAC_AREA_EPS ③ 区域 z 范围外 ≤ LB_AREA_SIGN_DZ_MAX
-  // v3425（用户口径「归属必须唯一」）：**只列建区分簇归属 = 本区**的牌子（与设施/容器同机制）
-  //   ① `sg._areaAi`（建区时回写的簇归属）=== 本区 ⇒ 收录；② 有归属但不是本区 ⇒ 直接跳过（彻底消除"同一牌子出现在两个弹窗"）
-  //   ③ 仅在牌子**没有任何归属**（未参与建区，如坐标缺失/未采集）时，才退回旧的几何判定（层内最近区 + dz≤1500 + d2≤EPS）
   var out = [];
   lbSignsOfSettle(key).forEach(function(sg){
-    if(sg && sg._areaAi !== undefined && sg._areaAi !== null){
-      if(Number(sg._areaAi) === ai) out.push(sg);
-      return;
-    }
     var x = Number(sg.x)||0, y = Number(sg.y)||0, z = Number(sg.z)||0;
     var idx = -1;
     try{ idx = lbFacAreaIdxOf(areas, lyr, x, y, z); }catch(e){ idx = -1; }
@@ -12653,18 +12642,13 @@ function lbFacAreaName(items){
 //     · 右侧信息只读这份缓存；聚落未渲染过时用**同一函数**补算一次并写入同一缓存
 //   ⇒ 算法只有一份、结果只有一份，不会重复计算。
 LB._facAreas = LB._facAreas || {};
-// v3425（用户口径）：点→区域唯一归属的**键**（类名|取整坐标|名字）——建区后用它把簇归属回写到命名设施
-function lbPtKey(o){
-  return String((o && o.cls) || '') + '|' + Math.round(Number(o && o.x) || 0) + '|' + Math.round(Number(o && o.y) || 0) + '|' + Math.round(Number(o && o.z) || 0) + '|' + String((o && o.name) || '').trim();
-}
 function lbFacAreasBuild(fList, efList, signList, signPts){
   var out = [];
   // v3423（用户口径 D-1）：**正规命名设施（牌子/木牌/吊牌/广告牌/墓碑）也参与分层/分区计算**，但不渲染为设施 chip
   //   背景：v1064 特意把牌子排除在点集外 ⇒ 远处牌子只能被 lbFacAreaIdxOf「层内最近区」吞并（实测 Sco 聚落最远 35 万单位挤进同一区）
   //   做法：牌子打 `_signPt` 标记拼进点集；命名认领分两轮（第一轮只认领「有设施的区域」，第二轮纯牌子区）
   var _signPts = (signPts || []).map(function(sg){
-    return { cls: sg.cls, name: sg.name, x: Number(sg.x)||0, y: Number(sg.y)||0, z: Number(sg.z)||0,
-             _signPt: 1, _key: lbPtKey(sg), _src: sg };   // v3425：保留源对象引用 ⇒ 建区后回写 _areaAi（展示侧直读）
+    return { cls: sg.cls, name: sg.name, x: Number(sg.x)||0, y: Number(sg.y)||0, z: Number(sg.z)||0, _signPt: 1 };
   });
   var sorted = (fList || []).concat(efList || []).concat(_signPts).sort(function(a, b){ return Number(a.z) - Number(b.z); });
   if(!sorted.length) return { areas: [], lyr: [] };
@@ -12677,18 +12661,6 @@ function lbFacAreasBuild(fList, efList, signList, signPts){
   out.sort(function(p, q){
     if(p.zMin !== q.zMin) return q.zMin - p.zMin;
     return q.items.length - p.items.length;
-  });
-  // v3425（用户口径「归属必须唯一」）：**命名设施的区域归属 = 建区分簇归属**——与设施/容器完全同机制（建区时一次性分配）
-  //   DBSCAN 每点恰好入一簇 + 噪声点并入同层最近簇 ⇒ 每点**唯一所属区**；此处落成 key→ai 映射，并回写源牌子对象的 `_areaAi`
-  //   （回写的对象与 LB._facSigns[key].list 里的是**同一批引用** ⇒ 展示侧可直接按 _areaAi 过滤，不再各算一套）
-  var _aiOfAll = {};
-  out.forEach(function(a, ai){
-    (a.items || []).forEach(function(it){
-      if(!it) return;
-      var _k = it._key || lbPtKey(it);
-      _aiOfAll[_k] = ai;
-      if(it._signPt && it._src){ try{ it._src._areaAi = ai; }catch(e){} }
-    });
   });
   // v3403/v3404（用户口径）：候选池分两类——① 牌子类（rank 0-4）② 带名设施（rank5）
   //   push 的是**新对象**（不带 _sign 标记）⇒ 不影响它们作为设施 chip 的正常渲染
@@ -12721,24 +12693,31 @@ function lbFacAreasBuild(fList, efList, signList, signPts){
     //     ⇒ 两者分区不同（实测前端 #0=19/#1=38 设施，离线是 20/21）⇒ **区域类改动必须用页面内真数据 evaluate 验证，不能用离线近似集**
     var sC = [];
     var _rkOf = function(o){ return (o && o._rank5) ? 5 : lbAreaSignRank(o.cls); };   // v3403：牌类之外的带名设施 = 第 6 档（rank 5）
-    // v3425（用户口径「归属唯一」）：候选表**只含自己所属的那一个区**（建区分簇结果），不再列 EPS 内的所有区
-    //   原实现（dz≤1500 且 d2≤EPS 的所有区都进候选）实测：16 块牌子中 15 块有 ≥2 候选（最多 6 个）
-    //   ⇒ 牌子会认领「不是它几何所在的区」⇒ 与展示侧归属冲突 ⇒ 同一块牌子出现在两个弹窗（用户报「大量重叠命名设施」）
     sl.forEach(function(sg, si){
       if(_rkOf(sg) >= 99) return;                              // 非牌类且无自定义名 ⇒ 不参与命名
-      var ai = _aiOfAll[lbPtKey(sg)];
-      if(ai === undefined) return;                             // 未参与建区（无坐标/未采集）⇒ 不参与命名
-      var a = out[ai]; if(!a) return;
       var sx = Number(sg.x) || 0, sy = Number(sg.y) || 0, sz = Number(sg.z) || 0;
-      var dz = 0;
-      if(sz < a.zMin) dz = a.zMin - sz; else if(sz > a.zMax) dz = sz - a.zMax;
-      var d2 = Infinity, its = a.items || [];
-      for(var ii = 0; ii < its.length; ii++){
-        var dx = (Number(its[ii].x) || 0) - sx, dy = (Number(its[ii].y) || 0) - sy;
-        var v = Math.sqrt(dx * dx + dy * dy);
-        if(v < d2) d2 = v;
-      }
-      sC[si] = [{ ai: ai, dz: dz, d2: d2 }];
+      var cs = [];
+      out.forEach(function(a, ai){
+        // v3423：设施区保留原门槛（成员数 ≥ LB_AREA_SIGN_MIN_ITEMS）；**纯牌子区不受此限**（车皮/站台区常只有 1~2 个牌子点）
+        var _its0 = a.items || [], _facN0 = 0;
+        for(var _i0 = 0; _i0 < _its0.length; _i0++){ if(!_its0[_i0]._signPt){ _facN0++; } }
+        if(_facN0 > 0 && _its0.length < LB_AREA_SIGN_MIN_ITEMS) return;
+        if(_facN0 === 0 && !_its0.length) return;
+        var dz = 0;
+        if(sz < a.zMin) dz = a.zMin - sz; else if(sz > a.zMax) dz = sz - a.zMax;
+        if(dz > LB_AREA_SIGN_DZ_MAX) return;
+        var d2 = Infinity, its = a.items || [];
+        for(var ii = 0; ii < its.length; ii++){
+          var dx = (Number(its[ii].x) || 0) - sx, dy = (Number(its[ii].y) || 0) - sy;
+          var v = Math.sqrt(dx * dx + dy * dy);
+          if(v < d2) d2 = v;
+        }
+        if(d2 > LB_FAC_AREA_EPS) return;
+        cs.push({ ai: ai, dz: dz, d2: d2 });
+      });
+      if(!cs.length) return;
+      cs.sort(function(p, q){ return (p.dz - q.dz) || (p.d2 - q.d2); });
+      sC[si] = cs;
     });
     var _ord = [];
     sl.forEach(function(sg, si){ if(sC[si]) _ord.push(si); });
@@ -12770,13 +12749,14 @@ function lbFacAreasBuild(fList, efList, signList, signPts){
         var nm = String(sl[si].name || '').trim();
         if(!nm) return;                                          // 无名牌不占位
         var cs = sC[si] || [];
-        var ai = cs[0] ? cs[0].ai : undefined;
-        if(ai === undefined) return;                             // v3425：只能认领**自己所属的那个区**（归属唯一）
-        if(_taken[ai]) return;                                   // 该区已被命名 ⇒ 同区其它牌子不再参与
-        if(_onlyFac && !_isFacArea(ai)) return;                  // v3423：第一轮跳过纯牌子区
-        _taken[ai] = 1;
-        out[ai].name = nm;
-        out[ai]._sign = sl[si];   // v3398（用户要求）：回写**命中的那块牌**——区域弹窗据此标「当前命名此区域」
+        for(var k = 0; k < cs.length; k++){
+          if(_taken[cs[k].ai]) continue;
+          if(_onlyFac && !_isFacArea(cs[k].ai)) continue;        // v3423：第一轮跳过纯牌子区
+          _taken[cs[k].ai] = 1;
+          out[cs[k].ai].name = nm;
+          out[cs[k].ai]._sign = sl[si];   // v3398（用户要求）：回写**命中的那块牌**——区域弹窗据此标「当前命名此区域」
+          return;
+        }
       });
     };
     // v3405（用户口径，回归原话「优先现有的规则，然后依次是 小木牌 → 吊牌 → 其他带名字设施」）：拆成 **4 轮**认领
@@ -13177,21 +13157,22 @@ function lbOpenSettleNameSigns(key){
   //   ④「其它带名设施」（冰箱/炮台/工作台/发电机等序列外设施）**不列入列表**，仅在 ①②③ 全空时于顶部标注它兜底用了哪个
   var groups = [['① 大广告牌（改文字）', bb], ['② 床 / 棺材 / 睡眠舱（改名）', beds]];   // v3423（用户口径）：**墓碑不再参与聚落命名**（从正规命名设施序列中移除）
   // 命中判定：与 lbSettlementBuildingName 同口径——「第一个非空类」里距聚落中心最近者
-  // v3424（用户口径）：命中判定**同源**——直接调用 lbSettleNamePick（与聚落列表/按钮同一函数、同一优先级）
-  var _win = null;
-  try{ _win = lbSettleNamePick(cands, ctx.cx, ctx.cy); }catch(e){ _win = null; }
   var found = false, _hitGi = -1;
-  if(_win){
-    for(var gi = 0; gi < groups.length && !found; gi++){
-      var arr2 = groups[gi][1];
-      for(var qi = 0; qi < arr2.length; qi++){
-        if(String(arr2[qi].name) === String(_win.name)){ arr2[qi]._cur = true; found = true; _hitGi = gi; break; }
-      }
-    }
+  for(var gi = 0; gi < groups.length; gi++){
+    var arr2 = groups[gi][1];
+    if(!arr2.length) continue;
+    var best = null, bd = Infinity;
+    arr2.forEach(function(it){ var v = _d2of(it); if(v < bd){ bd = v; best = it; } });
+    if(best){ best._cur = true; found = true; _hitGi = gi; }
+    break;
   }
-  // v3401：序列外兑底标注——命中落在④（其它带名设施）时标注它兜底用了哪个，**不入列表**
+  // v3401：序列外兑底标注——①②③全空时，算法会落到④「其它带名设施」；此处按同口径（最近者）算出它的名字仅供标注，**不入列表**
   var _outHit = '';
-  if(_win && _win.tier === 3) _outHit = _win.name;
+  if(!found && rest.length){
+    var _bo = null, _bdo = Infinity;
+    rest.forEach(function(it){ var v = _d2of(it); if(v < _bdo){ _bdo = v; _bo = it; } });
+    if(_bo) _outHit = _bo.name;
+  }
   // 类顺序：命中类置顶，其余保持 ①→②→③→④
   var _ord = [];
   groups.forEach(function(gv, i){ if(gv[1].length) _ord.push(i); });
