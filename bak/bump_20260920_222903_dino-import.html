@@ -494,7 +494,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260920-3472';
+var LB_VERSION = 'v20260920-3470';
 var LB_SCHEMA_VER = 17;  // v3428：16→17 —— facilities 新增 isPublic（后端 2026-09-20 上线）+ 补采家族（耕地/船体/神器箱等 2454 条）、rec 新增 isPublic/isPlayerStruct；不升版 ⇒ 旧 IndexedDB 缓存继续命中，新设施与新字段永不出现
 // 历史：v1069 14→15——根因：recs 构建结果随 IndexedDB 持久化（v931）、
                          //   命中后跳过重建；仅改 _decorRe 等**构建期过滤**时，旧 rec 会长期残留（实测南瓜 rec 改过滤后仍显示）。
@@ -4491,11 +4491,7 @@ function lbKindAuthoritative(list){
         var _rsc = (_pf.indexOf('Consumable') === 0 || _pf.indexOf('Resource') === 0);
         // v3471（用户口径「降落伞还是改回……武器吧」）：允许白名单类目**跨前缀覆盖**
         //   （降落伞族：后端 kind=consumable，但用户口径按装备类处理 ⇒ 不受 quantity=0 过滤、归入武器组走 chip）
-        // v3472（用户实测「武器类型里还是没显示降落伞」根因）：白名单键是**归一基名**（`…Buff_Parachute`），
-        //   而物品 class 带实例后缀 `…_C_2145678` ⇒ 直接查表永远 false ⇒ 兜底把覆盖挡回去 ⇒ kind 仍为 consumable。
-        //   改走 lbKeyHit（内部先剔 `_C_\d+` 再取多候选）⇒ 两种写法都能命中。
-        var _allow = false;
-        try{ _allow = lbKeyHit(LB_KIND_EQ_OK, it['class'] || it.containerClass || ''); }catch(e3){ _allow = false; }
+        var _allow = !!LB_KIND_EQ_OK[String(it['class'] || it.containerClass || '')];
         if(!(_rsc && _eqk) || _allow) it.kind = m.kind;
       }
     }catch(e){}
@@ -8468,14 +8464,11 @@ function lbPlayerBagAccHtml(items, sv){
       } else inner += lbInvListHtml(rest);
     }
     if(!inner) continue;
-    // v3472（用户口径「类型组名称左边要有图标」+「角标也保留图标」）：左侧一枚 + 角标一枚（同源名）
-    var _gic = (LB_TYPE_BADGE[G.k] && LB_TYPE_BADGE[G.k].ic) || G.ic || '';
-    var _icL = (typeof lbWebpIc === 'function' && _gic) ? lbWebpIc(_gic, 12) : '';
     out += '<details class="acc" onclick="lbAccOnly(this)"><summary>'
-        + '<span class="acc-sum-name">' + _icL + G.zh + '</span>'
+        + '<span class="acc-sum-name">' + G.zh + '</span>'
         // v3470（用户口径「应该显示角标的类型图标」）：图标 + 数量，与容器组摘要同风；
         //   图标优先复用权威表 LB_TYPE_BADGE（物品卡同源：武器/护甲/鞍/泰克/特性/其它），其余用本表 ic
-        + '<span class="acc-cnt">' + ((typeof lbWebpIc === 'function') ? lbWebpIc(_gic, 11) : '') + arr.length + '</span>'
+        + '<span class="acc-cnt">' + ((typeof lbWebpIc === 'function') ? lbWebpIc((LB_TYPE_BADGE[G.k] && LB_TYPE_BADGE[G.k].ic) || G.ic || '', 11) : '') + arr.length + '</span>'
         + '</summary>' + inner + '</details>';
   }
   return out;
@@ -11889,12 +11882,7 @@ function lbDinoBagSettle(b){
       var ks = Object.keys(LB._dinoPosIdx), _uniq = null, _n = 0;
       for(var j = 0; j < ks.length; j++){
         var seg = ks[j].split('|');
-        // v3472（用户点名 #359771306_160662414「屎壳郎背包还是不显示」根因，v3451 起就存在的老 bug）：
-        //   索引键是**4 段**：`服务器|物种|X|Y`；而本行原按 **5 段**取值（seg[3] 当 X、seg[4] 当 Y）
-        //   ⇒ seg[3] 实际是 Y、seg[4] 恒为 undefined ⇒ **条件永远不成立** ⇒ 精确命中失败后兜底也永不生效
-        //   ⇒ 龙背包定不到归属 ⇒ 整组不显示（实测：索引里确实有 `Isl|DungBeetle|-275482|-260534`，
-        //   但 candsAtCoord=[] 、lbDinoBagSettle(bag)=null）。修正为 seg[2]/seg[3]。
-        if(seg[0] !== sv || seg[2] !== String(bx) || seg[3] !== String(by)) continue;
+        if(seg[0] !== sv || seg[3] !== String(bx) || seg[4] !== String(by)) continue;
         _n++; if(_n === 1) _uniq = LB._dinoPosIdx[ks[j]];
         if(seg[1].indexOf(sp) >= 0 || sp.indexOf(seg[1]) >= 0){ rec = LB._dinoPosIdx[ks[j]]; break; }
       }
@@ -12336,17 +12324,9 @@ function lbBuildSettleContainerHtml(grp, settleKey){
       if(_inner){
         var _hasBall = (neArr.length > 0) || (ecnt > 0);
         if(_hasBall){
-          // v3472（用户口径「你怎么把空球隐藏了」）：拆回**两枚**角标——球内 `RW_cryopod`+数、空球 `RW_cryopod_empty`+数
-          //   （与容器组摘要的 fullH / emptyH 同源；v3471 曾缩成一枚「球图标+总数」⇒ 空球信息丢失）
-          var _balHtml = '';
-          if(typeof lbWebpIc === 'function'){
-            if(neArr.length > 0) _balHtml += lbWebpIc('RW_cryopod', 11) + neArr.length;
-            if(ecnt > 0) _balHtml += (neArr.length > 0 ? ' ' : '') + lbWebpIc('RW_cryopod_empty', 11) + ecnt;
-          }
-          if(!_balHtml) _balHtml = String(neArr.length + ecnt);
           h += '<details class="acc"'+autoOpen+' onclick="lbAccOnly(this)"><summary>'
              + '<span class="acc-sum-name">低温舱</span>'
-             + '<span class="acc-cnt">' + _balHtml + '</span>'
+             + '<span class="acc-cnt">' + ((typeof lbWebpIc === 'function') ? lbWebpIc('RW_cryopod', 11) : '') + (neArr.length + ecnt) + '</span>'
              + '</summary>';
         } else {
           h += sumHtml;

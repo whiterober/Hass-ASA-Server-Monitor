@@ -341,10 +341,6 @@ span.lb-fchip-rn:hover{border-color:#a78bfa!important;background:#22222f!importa
 /* v771：PC 生物卡流瀑布流（CSS columns，卡片高度不强制对齐；卡内不跨列截断） */
 .lb-cards-masonry > *{break-inside:avoid;page-break-inside:avoid;-webkit-column-break-inside:avoid}
 .lb-cards-masonry{margin-bottom:6px} /* v773：组容器后保留原始段间距 */
-/* v3468（用户口径）：玩家背包「按物品类型分组」——每组小标题 + 组内卡片流/chip */
-.lb-inv-grp{margin:2px 0 8px}
-.lb-inv-grp-h{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#a78bfa;margin:6px 0 4px;padding-bottom:3px;border-bottom:1px solid #2a2a3a}
-.lb-inv-grp-h em{font-style:normal;font-size:11px;font-weight:400;color:#666}
 /* v789：分布地图未成年点（SVG 月牙）选中 ring——.lb-picked 时显示沿月牙描边组（SVG stroke 套 mask，缺口处自然断开，不用 box-shadow 方形） */
 .lb-dot-svg.lb-picked .lb-sel-ring{opacity:1 !important}
 /* 物种选择浮窗（ASA 后台选图同款 dark 样式） */
@@ -494,7 +490,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260920-3472';
+var LB_VERSION = 'v20260920-3453';
 var LB_SCHEMA_VER = 17;  // v3428：16→17 —— facilities 新增 isPublic（后端 2026-09-20 上线）+ 补采家族（耕地/船体/神器箱等 2454 条）、rec 新增 isPublic/isPlayerStruct；不升版 ⇒ 旧 IndexedDB 缓存继续命中，新设施与新字段永不出现
 // 历史：v1069 14→15——根因：recs 构建结果随 IndexedDB 持久化（v931）、
                          //   命中后跳过重建；仅改 _decorRe 等**构建期过滤**时，旧 rec 会长期残留（实测南瓜 rec 改过滤后仍显示）。
@@ -4465,12 +4461,6 @@ function lbItemsOfContainer(server, containerId, cls, x, y){
 //   修法：在库存出口把 kind 统一权威化——item_zh.json（可人工校正，见 汉化/_build_item_zh.py 的 KIND_FIX）命中时优先采用，
 //   使过滤 / 徽章 / 聚合徽章全链路同源。trait 特性实物保持原样（v1241 语义）。
 //   安全：仅在 LB_ITEM_ZH 已加载且命中条目时才覆盖与打标记（否则下次仍可修正）；列表对象打 _kf 防重复处理。
-// v3471（用户口径）：允许「消耗/资源类前缀 → 装备类 kind」覆盖的**白名单类目**（默认空则一律按 v3470 前缀失信度兜底）
-//   降落伞族：用户明确要求按武器类型处理（⇒ 不受 quantity=0 过滤、归入武器组、因无品质走 chip）
-var LB_KIND_EQ_OK = {
-  PrimalItemConsumableBuff_Parachute: 1,
-  PrimalItemConsumableBuff_Parachute_Valentines_Balloon: 1
-};
 function lbKindAuthoritative(list){
   if(!list || !list.length || list._kf) return list;
   var ready = false;
@@ -4480,24 +4470,7 @@ function lbKindAuthoritative(list){
     if(!it || String(it.kind||'') === 'trait') continue;
     try{
       var m = lbItemMeta(it['class'] || it.containerClass || '');
-      if(m && m.hit && m.kind && m.kind !== it.kind){
-        // v3470（用户口径「降落伞还是没显示成chip」根因）：**词表 kind 优先不是无条件的**。
-        //   实测 item_zh 里有历史误标：PrimalItemConsumableBuff_Parachute 被标成 weapon（src=fix24），
-        //   覆盖后端 kind（consumable）后 ⇒ 降落伞被当武器走卡片流。
-        //   前缀-置信度兜底：类名前缀明示 Consumable*/Resource* 时，不接受被标成装备类的 kind。
-        var _pf = '';
-        try{ var _mm = String(it['class'] || it.containerClass || '').match(/^PrimalItem([A-Za-z]+?)_/); _pf = _mm ? _mm[1] : ''; }catch(e2){ _pf = ''; }
-        var _eqk = (m.kind === 'saddle' || m.kind === 'armor' || m.kind === 'weapon' || m.kind === 'tek' || m.kind === 'attachment');
-        var _rsc = (_pf.indexOf('Consumable') === 0 || _pf.indexOf('Resource') === 0);
-        // v3471（用户口径「降落伞还是改回……武器吧」）：允许白名单类目**跨前缀覆盖**
-        //   （降落伞族：后端 kind=consumable，但用户口径按装备类处理 ⇒ 不受 quantity=0 过滤、归入武器组走 chip）
-        // v3472（用户实测「武器类型里还是没显示降落伞」根因）：白名单键是**归一基名**（`…Buff_Parachute`），
-        //   而物品 class 带实例后缀 `…_C_2145678` ⇒ 直接查表永远 false ⇒ 兜底把覆盖挡回去 ⇒ kind 仍为 consumable。
-        //   改走 lbKeyHit（内部先剔 `_C_\d+` 再取多候选）⇒ 两种写法都能命中。
-        var _allow = false;
-        try{ _allow = lbKeyHit(LB_KIND_EQ_OK, it['class'] || it.containerClass || ''); }catch(e3){ _allow = false; }
-        if(!(_rsc && _eqk) || _allow) it.kind = m.kind;
-      }
+      if(m && m.hit && m.kind && m.kind !== it.kind) it.kind = m.kind;
     }catch(e){}
   }
   if(ready){ try{ list._kf = 1; }catch(e){} }
@@ -7523,14 +7496,7 @@ function lbGroupItems(cg){
   if(!cg || !cg.length) return [];
   // v996：放出 = 野外放养生物的虚拟容器（containerId 为空，坐标仅代表生物位置）——无真实库存。
   //   若照常按坐标查库存，会误取到生物附近的真实容器（冰箱/箱子）的物品 —— 用户实测「放出组里出现资源/弹药」
-  // v3454（用户口径「同一只龙只显示一个容器组」）：放出组里若含「恐龙背包」合并成员（src='dinoBag'，带 _bagCid）
-  //   ⇒ 按其 _bagCid **精确**取物品；x/y 传 0 ⇒ 绝不走 byPos 坐标兜底（不会误取附近容器，v996 风险不变）。
-  if(String((cg[0] || {}).containerType || '') === 'released'){
-    var _db = null;
-    for(var _qi = 0; _qi < cg.length; _qi++){ var _qr = cg[_qi]; if(_qr && _qr.src === 'dinoBag' && _qr._bagCid){ _db = _qr; break; } }
-    if(!_db) return [];
-    try{ return lbItemsOfContainer(String(_db.server || (LB.tab || '')), _db._bagCid, '', 0, 0) || []; }catch(e){ return []; }
-  }
+  if(String((cg[0] || {}).containerType || '') === 'released') return [];
   if(cg.length === 1){
     var r0 = cg[0], l0 = null;
     try{ l0 = lbItemsOfContainer(String(r0.server || (LB.tab||'')), r0.containerId, r0.containerClass, r0.containerX, r0.containerY); }catch(e){ l0 = null; }
@@ -7610,38 +7576,12 @@ function lbIsFixedRecipeBp(it){
 }
 // v1197：后端 item 新增类别——鞍/护甲/武器/泰克 的**实物**在数据里 quantity 恒 0（唯一性装备无数量语义），
 //   但 rated>0 表示确有品质 ⇒ 视为「有内容」；资源/弹药等消耗品维持原判，避免误伤
-// v3459（根因修复·用户实测「铠护犬的附件为啥不显示」）：白名单补 `attachment`；并**取消 rated>0 前置**（见下）
-var LB_SP_EQUIP_KINDS = { saddle:1, armor:1, weapon:1, tek:1, attachment:1 };
+var LB_SP_EQUIP_KINDS = { saddle:1, armor:1, weapon:1, tek:1 };
 function lbIsEmptyItem(it){
   if(!it) return true;
-  // v3469：整条隐藏名单（蒸汽朋克岩龙鞍皮肤等）⇒ 视作空（不渲染、不计数、不参与容器“有内容”判定）
-  if(lbIsHiddenItem(it)) return true;
-  // v3467（用户口径「肥料还是没有显示」→ 白名单放宽）：**实测 100% quantity=0 但确实存在**的消耗品。
-  //   根因：化肥 3681 实例全为 qty=0（而同为消耗品的生肉 2748/2751、腐肉 1146/1161、浆果 946/948 均有数量）
-  //   ⇒ 高度怀疑后端对这类未采数量（化肥 2294 条在恐龙背包、397 条在农田里，不可能全为空）
-  //   ⇒ 先在前端白名单放行显示，同时保留后端修数空间（其余消耗品仍按 qty<=0 判空，避免空槽噪声）。
-  if(lbZeroQtyAllowed(it)) return false;   // v3469：改多候选查表（原按 lbNoqWeaponBase 单值 ⇒ 口径不一致）
-  // v3460（可见性自查根因修复①·判定顺序）：`trait` 必须在**蓝图分支之前**判定。
-  //   实测（Isl/Ext/Sco/Abe 四服，_vis_audit）：trait 有 isBlueprint=1 的记录 ⇒ 被 lbIsBp 分支当"固定配方"（rated=0）判空
-  //   ⇒ 每服 160~200 条物品特性被误杀（Isl 160/415、Ext 160/241、Sco 40/40、Abe 200/200 全不可见）。
-  // v3460（②）：`trophy`（战利品/神器/首领奖杯）与装备同属"唯一物品、数量无意义" —— 实测 Isl 218 条 **100% 不可见**、
-  //   Ext 102/102、Sco 20/20、Abe 99/102，形态均为 quantity=0 ⇒ 按数量判空必然全灭。
-  //   ⚠️ 刻意**不**把 trophy 并入 LB_SP_EQUIP_KINDS：v1358 用户口径「卡片只服务装备类，消耗品/战利品/祭品属容器内容类别」
-  //   ⇒ trophy 仍走徽章渲染（lbInvListHtml），只是不再被判空丢弃。
-  if(String(it.kind||'') === 'trait') return false;   // v1241：物品特性实物 quantity 恒 0（同装备类语义，防被当空槽丢弃）
-  if(String(it.kind||'') === 'trophy') return false;  // v3460：战利品/神器唯一物品，数量恒 0
-  // v3463（用户口径）：基因枪（geneGun）同为唯一物品（quantity 恒 0）——放宽判空；
-  //   是否真正渲染由 lbItemCardsHtml 决定（仅当能拼到基因条目时显示，保持 v203「空基因枪不显示」口径）。
-  if(String(it.kind||'') === 'geneGun') return false;
   if(lbIsBp(it)) return lbIsFixedRecipeBp(it);   // v20260912-1020：补全 rating===-1
-  // v3459（根因修复）：装备类实物**一律非空**——去掉 v1197 的 `rated>0` 前置条件。
-  //   实测（全服 62687 条唯一物品）：铠护犬装备 kind=saddle（鞍）/armor（Gear_* 装备槽件），
-  //   无品质时的数据形态是 `rated=0 + rating=-1 + quantity=0`，全服被判空共 1473 条（weapon 826 / armor 359 / saddle 288）
-  //   ⇒ 铠护犬的「附件」在容器组里成片不显示（用户实测）。
-  //   依据：装备唯一、不堆叠 ⇒ quantity 恒 0 属正常形态；rated=0 仅代表"无品质"，
-  //   而 `rating=-1` 那条"固定配方"判据只适用于蓝图（上面 lbIsBp 分支已处理），不应外溢到装备实物。
-  //   未放宽 consumable：实测 qty=0 的消耗品 5823 条（箱子 2372 / 生物背包 3451）多为存档空槽残留，维持原判。
-  if(LB_SP_EQUIP_KINDS[String(it.kind||'')]) return false;
+  if(String(it.kind||'') === 'trait') return false;   // v1241：物品特性实物 quantity 恒 0（同装备类语义，防被当空槽丢弃）
+  if(LB_SP_EQUIP_KINDS[String(it.kind||'')] && Number(it.rated) > 0) return false;  // v1197：装备类实物（数量无意义）
   return (Number(it.quantity) || 0) <= 0;
 }
 // v975：物品归一基名（跨容器比对同一蓝图用；与 lbInvListHtml 聚合键同源）
@@ -7755,9 +7695,6 @@ function lbTypeBadgeHtml(kind, rcls){
     if(/PrimalItemCustom(Food|Drink)Recipe/i.test(s)) k = 'recipe';
     else if(/platform/i.test(s)) k = 'platform';
     else if(t === 'trait') k = 'trait';   // v1241：物品特性（PrimalItem_ItemTrait_*）
-    // v3465（用户口径「基因扫描仪算武器」）：基因枪徽章改走武器徽章（图标/底色与武器一致）；
-    //   它仍走 _eq 卡片流（v3463），只是不再落 other 兑底徽章。
-    else if(t === 'geneGun') k = 'weapon';
     else if(t === 'weapon') k = 'weapon';
     else if(t === 'armor') k = 'armor';
     else if(t === 'saddle') k = /tek/i.test(s) ? 'tek' : 'saddle';
@@ -8218,32 +8155,8 @@ function lbItemCardHtml(a){
   var rating = Number(best.rating) || 0;
   var st = Array.isArray(best.stats) ? best.stats : [];
   var kind = String(best.kind || a.kind || '');
-  // v3463（用户口径「普通物品渲染基因枪 + 拼接原基因条目信息」）：基因枪卡 = 物品卡骨架 + 下方基因胶囊
-  var _gslots = (a && a.slots) ? a.slots : ((best && best._slots) ? best._slots : []);
-  var _geneHtml = '';
-  if(_gslots && _gslots.length){
-    var _gtags = [];
-    for(var _gi=0;_gi<_gslots.length;_gi++){ var _gs = _gslots[_gi];
-      try{ _gtags.push(lbGeneTagHtml(_gs.trait, _gs.level, _gs.species, undefined, _gs.dinoClass)); }catch(e){} }
-    if(_gtags.length) _geneHtml = '<div style="position:relative;z-index:1;font-size:12px;margin-top:6px;border-top:1px dashed #2a2a3a;padding-top:6px">'+_gtags.join('')+'</div>';
-  }
   var attrs = '';
-  // v3464（根因修复·用户实测「护甲/耐久显示反了」）：**实物卡补上 v1364 的鞍处理**。
-  //   根因：lbStatRows 的模板匹配按**槽位号**（鞍模板槽 1=护甲 / 2=耐久），而鞍 stats 是**紧凑数组** [护甲, 耐久]（下标 0/1）
-  //   ⇒ 槽号匹配失败 ⇒ 落入「模板槽位降序回退」⇒ 第 1 行取到槽 2（label=耐久）却用 stats[0]（护甲）换算、第 2 行反之
-  //   ⇒ 标签与数值**整对错位**。v1364 已在蓝图卡（lbBpCardHtml）修过，但**实物卡（lbItemCardHtml）漏改** ⇒ 只有实物鞍复发。
-  //   实测（Isl 阿根廷鹫鞍 stats=[24129,36735]）：修复前「耐久 703 / 护甲 208.7%」→ 修复后「护甲 145.6% / 耐久 1018」。
-  //   条件与蓝图卡同口径：saddle 且紧凑（≤3 项）⇒ 补占位槽 0 并把输出限定为 [1,2]（缺失时 lbStatRows 返回空，不误导）。
-  var _onlySlots = null;
-  if(kind === 'saddle' && st.length > 0 && st.length <= 3){
-    // 兼容「调用方已补槽」的入口（详情浮窗 / 列表小卡会先 [0].concat 再传入 ⇒ 首项为占位 0）：
-    //   已补过则**不再补**，仅限定输出槽位；否则把紧凑数组补上占位槽 0。
-    if(Number(st[0]) === 0){ _onlySlots = (a.onlySlots && a.onlySlots.length) ? a.onlySlots : [1, 2]; }
-    else { st = [0].concat(st); _onlySlots = [1, 2]; }
-  } else {
-    _onlySlots = (a.onlySlots && a.onlySlots.length) ? a.onlySlots : null;   // v3464：尊重调用方传入（非鞍类）
-  }
-  var _rows = lbStatRows(String(best['class']||''), st, kind, _onlySlots); // v1217：模板参数 → 游戏内数值；v1306：透传 onlySlots；v3464：实物鞍补槽（幂等）
+  var _rows = lbStatRows(String(best['class']||''), st, kind, a.onlySlots); // v1217：模板参数 → 游戏内数值；v1306：透传 onlySlots
   for(var _ri=0;_ri<_rows.length;_ri++){   // v1306：按返回行遍历（原按 st.length 取 _rows[i]，裁剪后会越界）
     attrs += '<span style="color:'+(_rows[_ri].first?'#38bdf8':'#999')+'">'+_rows[_ri].label+' '+_rows[_ri].txt+'</span>';
   }
@@ -8264,222 +8177,9 @@ function lbItemCardHtml(a){
     + '</div>'
     + (attrs ? '<div style="position:relative;z-index:1;font-size:11px;color:#999;margin-top:6px;display:flex;flex-wrap:wrap;gap:4px 12px">'+attrs+'</div>' : '')
     + (qtyTxt ? '<div style="position:relative;z-index:1;font-size:10px;color:#64748b;margin-top:6px;border-top:1px dashed #2a2a3a;padding-top:6px">'+qtyTxt+'</div>' : '')
-    + _geneHtml   // v3463：基因枪的基因条目（由 lbItemCardsHtml 按 class 从 geneDevices 精确匹配挂入）
     + '</div>';
 }
-// v3463（用户口径）：基因枪基因条目查询——items 通道 ← geneDevices 通道，按 class 实例号**精确**匹配
-//   （实测两通道 class 完全一致，如 PrimalItem_WeaponGeneScanner_C_2146337372，不会错配）
-function lbGeneSlotsOf(sv, cls){
-  var s = String(sv || ''), c = String(cls || '');
-  if(!s || !c) return [];
-  var gd = (LB._geneDevices || {})[s]; if(!gd) return [];
-  var arr = gd.scanners || [];
-  for(var i=0;i<arr.length;i++){ var d = arr[i]; if(d && String(d.class || '') === c) return d.slots || []; }
-  return [];
-}
 // 实物 → 卡片网格（按归一基名聚合，同基名一张卡：取评分最高实例展示属性）
-// v3465（用户口径：「不存在品质概念的武器（手雷/长矛/降落伞…）应该不显示卡片，只显示合并 chip」）：
-//   实测依据（全服 Isl/Ext/Abe/Sco/Cen/Val，武器实物 2631 条 / 74 个基名）：与「**全部实例都无品质且无属性**」
-//   （`qidx<0` 且 `stats` 为空）的基名共 27 个，取实例数 ≥5（判据可靠）的 **21 个**经用户确认改走 chip；
-//   低样本 6 个（钓鱼网/泰克巡航导弹/泰克榴弹发射器/回旋镖/泰克光刃/龙爪）保留卡片待观察。
-//   对照：十字弩 134 实例中有 119 条带品质、金属镐/斧/镰刀/火把等同类均带品质 ⇒ 不可一并放开。
-var LB_NOQ_WEAPON = {
-  WeaponC4:1, WeaponSpear:1, WeaponRocketLauncher:1, WeaponBola:1, WeaponSpyglass:1, WeaponOilJar:1,
-  WeaponMagnifyingGlass:1, WeaponGrenade:1, WeaponScissors:1, WeaponHandcuffs:1, WeaponPaintbrush:1,
-  WeaponTripwireC4:1, WeaponPoisonTrap:1, WeaponAlarmTrap:1, WeaponFlareGun:1, WeaponSprayPaint:1,
-  WeaponElectronicBinoculars:1, WeaponClusterGrenade:1, WeaponBaseClipboardAndHammer:1,
-  WeaponTaxidermyTool:1, WeaponSpear_Explosive:1,
-  // v3466（用户求证「降落伞、滑索马达附件也没品质吧」）：
-  //   实测 8 服：ZiplineMotor（kind=armor）14 实例 **全为 qidx=-1 / stats=[]** ⇒ 并入本表（改走 chip）；
-  //   而 Parachute / Parachute_Valentines_Balloon（kind=consumable）、Zipline（kind=ammo）本就不在卡片流，无需列入。
-  ZiplineMotor:1,
-  // v3467（用户实测追加）：
-  //   Shovel（铲子）31 实例全无品质；Parachute / Parachute_Valentines_Balloon（降落伞族，含 kind=weapon 的那条记录）；
-  //   RockDrakeSaddle_Steampunk —— 用户质疑“该不会是个皮肤吧”：**属实**（图标名 Steampunk_Rock_Drake_Saddle_Skin，
-  //   官方中文「蒸汽朋克岩龙鞍皮肤」）⇒ 无品质 ⇒ 同归 chip。
-  Shovel:1, Parachute:1, Parachute_Valentines_Balloon:1,
-  // v3469（用户口径「铲子 和 铠护犬系列装备 还是没显示成chip」）——根因 = 键名口径不一致：
-  //   本表原按 lbNoqWeaponBase **单值**归一，而页面查汉化走 lbItemBaseCands **多候选**。实测类名
-  //   PrimalItem_WeaponShovel_C → 单值 = WeaponShovel（v3467 却写了 Shovel）⇒ 永不命中 ⇒ 铲子一直是卡片。
-  //   修法：判定改为「多候选任一命中」（见 lbIsNoQualityItem）+ 两种写法都列上；
-  //   并按 8 服 6.3 万条真实数据的「全无品质」审计（qidx / stats / rated 全空）补齐下列基名。
-  WeaponShovel:1,
-  // v3470（用户口径「降落伞还是没显示成chip」）：多候选口径下该族基名是 **Buff_Parachute***（不是 Parachute）——两套写法都列上
-  Buff_Parachute:1, Buff_Parachute_Valentines_Balloon:1,
-  WeaponFishingNet:1, SaddleCart:1, CavewolfPromoSaddle:1, ShoulderCannon:1,
-  WeaponTekGrenadeLauncher:1, WeaponBoomerang:1, WeaponTekCruiseMissile:1, Glider_Thrall:1,
-  // 铠护犬（DinoCompanion）装备全系 —— 用户口径「没有品质概念」；实测 13 件中 12 件 stats/rated 恒空
-  //   （仅 Gear_AmmoBox 有 1/2 条带 stats），按用户口径统一走 chip
-  DinoCompanion_Gear:1, DinoCompanion_Gear_AmmoBox:1, DinoCompanion_Gear_Bag:1, DinoCompanion_Gear_ChibiBasket:1,
-  DinoCompanion_Gear_ExtraArmor:1, DinoCompanion_Gear_FoodBasket:1, DinoCompanion_Gear_MeatSack:1,
-  DinoCompanion_Gear_Medkit:1, DinoCompanion_Gear_Movespeed:1, DinoCompanion_Gear_OxygenTank:1,
-  DinoCompanion_Gear_RolledUpSleepingBag:1, DinoCompanion_Gear_Spikes:1, DinoCompanion_Gear_Spyglass:1,
-  // 蒸汽朋克岩龙鞍皮肤：已由 LB_HIDE_ITEMS 整条隐藏（保留在表内仅为语义完整：它确实无品质）
-  RockDrakeSaddle_Steampunk:1
-};
-// v3467（用户口径）：**实测 100% quantity=0** 的消耗品白名单（首于化肥）——详见 lbIsEmptyItem 内注释。
-//   依据（8 服实测）：Fertilizer_Compost 3681/3681 = 0；GachaPod 597/597 = 0；
-//   水壶类（Canteen* / WaterJar* / Waterskin* / Iced*）全为 0；蛋糕片系列全为 0。
-var LB_ALLOW_ZERO_QTY = {
-  Fertilizer_Compost: 1, GachaPod: 1,
-  CanteenRefill: 1, CanteenCraftable: 1, WaterJarRefill: 1, WaterJarCraftable: 1, WaterskinRefill: 1,
-  IcedCanteen: 1, IcedCanteenRefill: 1, IcedWaterJarRefill: 1,
-  CakeSlice_Experience: 1, CakeSlice_Harvest: 1, CakeSlice_Imprint: 1, CakeSlice_Breeding: 1, CakeSlice_Taming: 1
-};
-// 归一基名（与 lbItemBaseCands 同口径：去 _C / _C_数字 与 PrimalItem*_ 前缀）
-function lbNoqWeaponBase(cls){
-  var s = String(cls||'').replace(/_C_\d+$/,'').replace(/_C\d*$/,'');
-  var m = s.match(/^PrimalItem[A-Za-z]*_(.+)$/);
-  return m ? m[1] : s;
-}
-// v3469：多候选查表（口径与 lbItemMeta 用的 lbItemBaseCands 完全一致）——
-//   根因见上方 LB_NOQ_WEAPON 注释：单值归一（lbNoqWeaponBase）与多候选（lbItemBaseCands）口径不一致 ⇒ 漏命中。
-function lbBaseCandsSafe(cls){
-  try{ var c = lbItemBaseCands(cls); return (c && c.length) ? c : [lbNoqWeaponBase(cls)]; }
-  catch(e){ return [lbNoqWeaponBase(cls)]; }
-}
-function lbTableHit(tbl, it){
-  if(!it || !tbl) return false;
-  var cs = lbBaseCandsSafe(it['class']);
-  for(var i = 0; i < cs.length; i++){ if(tbl[cs[i]]) return true; }
-  // v3470：**两套归一都要查**——lbItemBaseCands 与 lbNoqWeaponBase 口径不同，
-  //   例：PrimalItemConsumableBuff_Parachute 的多候选 = [.., 'Buff_Parachute']、单值 = 'Parachute'，
-  //   只查一套必漏；这里把单值结果也纳入。
-  var one = lbNoqWeaponBase(it['class']);
-  return !!(one && tbl[one]);
-}
-function lbKeyHit(tbl, name){
-  var s = String(name || ''); if(!s || !tbl) return false;
-  if(tbl[s]) return true;
-  var cs = lbBaseCandsSafe(s);
-  for(var i = 0; i < cs.length; i++){ if(tbl[cs[i]]) return true; }
-  var one = lbNoqWeaponBase(s);
-  return !!(one && tbl[one]);
-}
-function lbIsNoQualityItem(it){
-  if(!it) return false;   // v3466：不再限定 kind（滑索马达附件为 armor）——表内条目本身就是“实测无品质”白名单
-  return lbTableHit(LB_NOQ_WEAPON, it);
-}
-// v3469：零数量白名单查询（多候选，口径同上）
-function lbZeroQtyAllowed(it){ return lbTableHit(LB_ALLOW_ZERO_QTY, it); }
-function lbZeroQtyKeyHit(name){ return lbKeyHit(LB_ALLOW_ZERO_QTY, name); }
-// v3469（用户口径「皮肤不显示的规则」）：**整条隐藏名单**——视作空 ⇒ 不渲染、不计数。
-//   RockDrakeSaddle_Steampunk：真实类名 PrimalItemArmor_RockDrakeSaddle_Steampunk_C —— 实为「蒸汽朋克岩龙鞍皮肤」，
-//   是 kind=saddle 的皮肤类实物（后端不导出 PrimalItemSkin* 类 ⇒ 既有皮肤口径没挡住它）。
-var LB_HIDE_ITEMS = { RockDrakeSaddle_Steampunk: 1 };
-function lbIsHiddenItem(it){ return lbTableHit(LB_HIDE_ITEMS, it); }
-// v3468（用户口径「玩家背包里的容器组改成按物品类型分组显示」）：
-//   固定展示序（装备优先 → 蓝图 → 消耗物 → 其余）；eq=1 表示该类走“实物卡片”样式，否则走紧凑 chip。
-var LB_INV_GRP = [
-  { k:'weapon',     zh:'武器',   eq:1, ic:'RW_WT' },
-  { k:'armor',      zh:'护甲',   eq:1, ic:'HUDTEKShirt_Icon_white' },
-  { k:'saddle',     zh:'鞍',     eq:1, ic:'RW_equip_saddle' },
-  { k:'attachment', zh:'附件',   eq:1, ic:'Scope_Attachment' },
-  { k:'tek',        zh:'泰克',   eq:1, ic:'HUDTEKHat_Icon_white' },
-  { k:'bp',         zh:'蓝图',   eq:0, ic:'IconMiscNoteType' },
-  { k:'ammo',       zh:'弹药',   eq:0, ic:'RW_ammo' },
-  { k:'resource',   zh:'资源',   eq:0, ic:'RW_Disguise__As_Rock_on' },
-  { k:'consumable', zh:'消耗品', eq:0, ic:'RW_Deposit_Fertilizer_on' },
-  { k:'trophy',     zh:'战利品', eq:0, ic:'RW_Unide_Bone_Name' },
-  { k:'trait',      zh:'特质',   eq:0, ic:'trait_icon' },
-  { k:'other',      zh:'其它',   eq:0, ic:'IconMiscNoteType' }
-];   // v3470：ic = 角标图标（沿用容器组角标同款 webp 图标；lbWebpIc 渲染）；基因枪已归入「武器」组（用户口径）
-// 分组键：蓝图优先（isBlueprint 是独立字段，kind 仍为 saddle/weapon 等）→ 无品质装备不改类（仍归本类，只是渲染成 chip）
-function lbInvGrpKey(it){
-  if(!it) return 'other';
-  if(lbIsBp(it)) return 'bp';
-  var k = String(it.kind || '');
-  if(k === 'geneGun') return 'weapon';   // v3470（用户口径）：基因枪并入「武器」组
-  if(LB_SP_EQUIP_KINDS[k]) return k;
-  if(k === 'ammo' || k === 'resource' || k === 'consumable' || k === 'trophy' || k === 'trait') return k;
-  return 'other';
-}
-function lbPlayerInvGroupedHtml(items, sv){
-  if(!items || !items.length) return '';
-  var map = {}, ord = [];
-  for(var i = 0; i < items.length; i++){
-    var it = items[i]; if(!it) continue;
-    var g = lbInvGrpKey(it);
-    if(!map[g]) map[g] = [];
-    map[g].push(it);
-  }
-  var out = '', colN = lbColCount();
-  for(var gi = 0; gi < LB_INV_GRP.length; gi++){
-    var G = LB_INV_GRP[gi], arr = map[G.k];
-    if(!arr || !arr.length) continue;
-    var eqs = [], rest = [];
-    for(var j = 0; j < arr.length; j++){
-      var jt = arr[j];
-      if(!jt) continue;
-      if(G.eq && !lbIsNoQualityItem(jt)) eqs.push(jt); else rest.push(jt);
-    }
-    out += '<div class="lb-inv-grp"><div class="lb-inv-grp-h">' + G.zh + '<em>×' + arr.length + '</em></div>';
-    if(eqs.length){
-      var ch = lbItemCardsHtml(eqs, sv);
-      if(ch) out += (colN > 1 ? '<div class="lb-cards-masonry" style="column-count:' + colN + ';column-gap:6px">' + ch + '</div>' : ch);
-    }
-    if(rest.length) out += lbInvListHtml(rest);
-    out += '</div>';
-  }
-  return out;
-}
-// v3469（用户口径修正）：「复用**容器组样式的手风琴结构**，只是改成按类型分组」——
-//   与 lbPlayerInvGroupedHtml（v3468，小标题+卡片流）的区别：每个类型是一个独立手风琴
-//   （同 <details class="acc" onclick="lbAccOnly"> + summary + .acc-sum-name + .acc-cnt），与容器组完全同源。
-function lbPlayerBagAccHtml(items, sv){
-  if(!items || !items.length) return '';
-  var map = {};
-  for(var i = 0; i < items.length; i++){
-    var it = items[i]; if(!it) continue;
-    var g = lbInvGrpKey(it);
-    if(!map[g]) map[g] = [];
-    map[g].push(it);
-  }
-  var out = '', colN = lbColCount();
-  for(var gi = 0; gi < LB_INV_GRP.length; gi++){
-    var G = LB_INV_GRP[gi], arr0 = map[G.k];
-    if(!arr0 || !arr0.length) continue;
-    // v3471（用户实测「角标写着鞍 ×1、蓝图 ×4，点开却是空的」根因）：**计数必须与渲染口径同源**——
-    //   原实现拿未过滤清单计数、渲染时又被 lbIsEmptyItem / 祭品过滤 ⇒ 角标虚高 + 空手风琴。
-    //   现改为「先按渲染层同款过滤，再用过滤后的清单分组、渲染、计数」。
-    var arr = [];
-    for(var k0 = 0; k0 < arr0.length; k0++){
-      var a0 = arr0[k0]; if(!a0) continue;
-      if(lbIsEmptyItem(a0)) continue;
-      if(String(a0.kind || '') === 'tribute') continue;
-      arr.push(a0);
-    }
-    if(!arr.length) continue;
-    var eqs = [], rest = [];
-    for(var j = 0; j < arr.length; j++){
-      var jt = arr[j]; if(!jt) continue;
-      if(G.eq && !lbIsNoQualityItem(jt)) eqs.push(jt); else rest.push(jt);
-    }
-    var inner = '';
-    if(eqs.length){
-      var ch = lbItemCardsHtml(eqs, sv);
-      if(ch) inner += (colN > 1 ? '<div class="lb-cards-masonry" style="column-count:' + colN + ';column-gap:6px">' + ch + '</div>' : ch);
-    }
-    if(rest.length){
-      // v3471：蓝图组走**蓝图卡**（lbInvListHtml 内部会 `if(lbIsBp(it)) continue` ⇒ 蓝图进 chip 会永远空白）
-      if(G.k === 'bp'){
-        var bph = lbBpCardsHtml(rest, sv);
-        if(bph) inner += (colN > 1 ? '<div class="lb-cards-masonry" style="column-count:' + colN + ';column-gap:6px">' + bph + '</div>' : bph);
-      } else inner += lbInvListHtml(rest);
-    }
-    if(!inner) continue;
-    // v3472（用户口径「类型组名称左边要有图标」+「角标也保留图标」）：左侧一枚 + 角标一枚（同源名）
-    var _gic = (LB_TYPE_BADGE[G.k] && LB_TYPE_BADGE[G.k].ic) || G.ic || '';
-    var _icL = (typeof lbWebpIc === 'function' && _gic) ? lbWebpIc(_gic, 12) : '';
-    out += '<details class="acc" onclick="lbAccOnly(this)"><summary>'
-        + '<span class="acc-sum-name">' + _icL + G.zh + '</span>'
-        // v3470（用户口径「应该显示角标的类型图标」）：图标 + 数量，与容器组摘要同风；
-        //   图标优先复用权威表 LB_TYPE_BADGE（物品卡同源：武器/护甲/鞍/泰克/特性/其它），其余用本表 ic
-        + '<span class="acc-cnt">' + ((typeof lbWebpIc === 'function') ? lbWebpIc(_gic, 11) : '') + arr.length + '</span>'
-        + '</summary>' + inner + '</details>';
-  }
-  return out;
-}
 function lbItemCardsHtml(items, sv){
   if(!items || !items.length) return '';
   var agg = {}, order = [], mc = {};
@@ -8514,16 +8214,8 @@ function lbItemCardsHtml(items, sv){
     if(lbIsEmptyItem(_it)) continue;
     if(lbIsBp(_it)) continue;
     var _raw = String(_it['class']||''), _m = metaOf(_raw);
-    // v3463：基因枪——挂基因条目；无（当前物种过滤后）基因条目的枪不渲染（保持 v203 口径，避免噪声）
-    var _knd = String(_it.kind || _m.kind || ''), _slots = null;
-    if(_knd === 'geneGun'){
-      var _sl = lbGeneSlotsOf(sv, _raw);
-      _sl = (_sl || []).filter(function(x){ try{ return geneSlotShow(x); }catch(e){ return true; } });
-      if(!_sl.length) continue;
-      _slots = _sl;
-    }
     cards.push({ cls:(_m.base||_raw.replace(/_C_\d+$/,'')), zh:_m.zh||'', en:_m.en||'', icon:_m.icon||'',
-                 kind:(_it.kind||_m.kind||''), qty:(Number(_it.quantity)||0), n:1, best:_it, slots:_slots });
+                 kind:(_it.kind||_m.kind||''), qty:(Number(_it.quantity)||0), n:1, best:_it });
   }
   cards.sort(function(a,b){
     var ra = Number((a.best||{}).rating)||0, rb = Number((b.best||{}).rating)||0;
@@ -8627,8 +8319,7 @@ function lbInvListHtml(items, opts){
       + '<span style="color:#cbd5e1">'+label+'</span>'
       + (r.qty > 0 ? ('<span style="color:#475569;font-size:10px">·</span>'
           + (r.n > 1 ? '<span style="color:#94a3b8;font-size:11px">'+r.n+'组</span><span style="color:#475569;font-size:10px">·</span>' : '')   // v1000：仅 >1 时显示「N组 ·」
-          + '<span style="color:#64748b">'+lbFmtQty(r.qty)+'</span>')   // v1197：数量 0（装备类实物）不显示任何数量，避免「· 0」
-         : (r.n > 1 && lbZeroQtyKeyHit(r.cls) ? ('<span style="color:#475569;font-size:10px">·</span><span style="color:#94a3b8;font-size:11px">'+r.n+'组</span>') : ''))   // v3470（用户口径）：后端未采数量的物品（化肥等不可堆叠）沿用既有「N组」写法（v3469 曾新造「N条」，与其它 chip 不一致 ⇒ 作废）
+          + '<span style="color:#64748b">'+lbFmtQty(r.qty)+'</span>') : '')   // v1197：数量 0（装备类实物）不显示任何数量，避免「· 0」
       + (r.isBp ? '<span style="color:#93c5fd;font-size:10px">蓝图</span>' : '')
       + '</span>';
   }
@@ -9524,12 +9215,8 @@ function lbContainerLabel(r, opts){
       return '<span class="acc-title">'+icon+' '+nameTxt+_fcolH+enTag+'</span>';   // v1333：+hideColor 支持
     }
   }
-  // 恐龙背包容器：**优先显示该龙的自定义名**（_dinoName，来自恐龙 rec.name —— 用户 2026-09-20 口径：「生物容器组，优先显示自定义名，回退物种名」）；
-  //   无自定义名时回退「对应生物中文种名」（复用选物种 lbSpName）。
-  //   注：自定义名走 _dinoName 字段而**不写 containerName** —— 后者会影响 lbContainerKey 的具名分支（v1057）导致与放出组拆组、破坏 v3455 合并。
+  // 恐龙背包容器：显示对应生物中文种名（复用选物种 lbSpName）
   if(dtcCls){
-    var _dn0 = String((r && r._dinoName) || '').trim();
-    if(_dn0 && _dn0 !== '?') return '<span class="acc-title">'+icon+' '+lbAttr(_dn0)+_fcolH+'</span>';   // v1333：+hideColor 支持
     var dnm = lbSpName(dtcCls);
     var dzh = (dnm && (dnm.zh || dnm.eng)) || '';
     if(dzh) return '<span class="acc-title">'+icon+' '+dzh+_fcolH+'</span>';   // v1333：+hideColor 支持
@@ -11841,9 +11528,9 @@ function lbDinoBagCids(){
         // v3451：物种词（去掉 _Character_BP_* 风格尾缀的类名片段）——用于按「物种词+坐标」定位所属恐龙
         var _m = cc.match(/^DinoTamedInventoryComponent_([A-Za-z0-9]+?)(?:_C_\d+)?$/);
         (out[k] = out[k] || { sv:sv, cid:cid, cls:cc, sp:(_m ? _m[1] : ''),
-                              x:(function(){ var _a=Number(r0.containerX), _b=Number(r0.x); return (isFinite(_a)&&_a!==0)?_a:((isFinite(_b)?_b:0)); })(),
-                              y:(function(){ var _a=Number(r0.containerY), _b=Number(r0.y); return (isFinite(_a)&&_a!==0)?_a:((isFinite(_b)?_b:0)); })(),
-                              z:(function(){ var _a=Number(r0.containerZ), _b=Number(r0.z); return (isFinite(_a)&&_a!==0)?_a:((isFinite(_b)?_b:0)); })(),
+                              x:(r0.containerX !== undefined ? Number(r0.containerX) || 0 : Number(r0.x) || 0),
+                              y:(r0.containerY !== undefined ? Number(r0.containerY) || 0 : Number(r0.y) || 0),
+                              z:(r0.containerZ !== undefined ? Number(r0.containerZ) || 0 : Number(r0.z) || 0),
                               tribe:Number(r0.containerTribe || 0), items:[] }).items = list;
       });
     });
@@ -11879,30 +11566,16 @@ function lbDinoBagSettle(b){
     }
     var bx = Math.round(Number(b.x) || 0), by = Math.round(Number(b.y) || 0);
     var rec = LB._dinoPosIdx[sv + '|' + sp + '|' + bx + '|' + by];
-    if(!rec){
-      // v3469（用户口径「龙舍聚落的屎壳郎背包也没显示」根因）：龙背包物种词取自容器类名
-      //   （DinoTamedInventoryComponent_**Beetle**_C_<id>），而恐龙类名是 **DungBeetle**_Character_BP_C
-      //   —— 既非精确也非前缀（v3451 只做前缀匹配）⇒ 定位不到 ⇒ 该背包不并入容器组 ⇒ 整组消失。
-      //   实测同类：Dodo↔ZombieDodo、HoverSkiff↔TekHoverSkiff。修法：
-      //   ① 匹配放宽到「互为子串」（同坐标约束不变）；
-      //   ② 仍失败但同服同坐标**唯一**命中一只恐龙 ⇒ 直接采用（坐标完全相同不构成“就近误挂”，与装备榜 v1340 同款口径）。
-      var ks = Object.keys(LB._dinoPosIdx), _uniq = null, _n = 0;
+    if(!rec){   // 物种词与恐龙类名不完全同名时（缩写/变体）→ 前缀模糊匹配（仅同坐标；与装备榜同款）
+      var ks = Object.keys(LB._dinoPosIdx);
       for(var j = 0; j < ks.length; j++){
         var seg = ks[j].split('|');
-        // v3472（用户点名 #359771306_160662414「屎壳郎背包还是不显示」根因，v3451 起就存在的老 bug）：
-        //   索引键是**4 段**：`服务器|物种|X|Y`；而本行原按 **5 段**取值（seg[3] 当 X、seg[4] 当 Y）
-        //   ⇒ seg[3] 实际是 Y、seg[4] 恒为 undefined ⇒ **条件永远不成立** ⇒ 精确命中失败后兜底也永不生效
-        //   ⇒ 龙背包定不到归属 ⇒ 整组不显示（实测：索引里确实有 `Isl|DungBeetle|-275482|-260534`，
-        //   但 candsAtCoord=[] 、lbDinoBagSettle(bag)=null）。修正为 seg[2]/seg[3]。
-        if(seg[0] !== sv || seg[2] !== String(bx) || seg[3] !== String(by)) continue;
-        _n++; if(_n === 1) _uniq = LB._dinoPosIdx[ks[j]];
-        if(seg[1].indexOf(sp) >= 0 || sp.indexOf(seg[1]) >= 0){ rec = LB._dinoPosIdx[ks[j]]; break; }
+        if(seg[0] !== sv || seg[3] !== String(bx) || seg[4] !== String(by)) continue;
+        if(seg[1].indexOf(sp) === 0 || sp.indexOf(seg[1]) === 0){ rec = LB._dinoPosIdx[ks[j]]; break; }
       }
-      if(!rec && _n === 1) rec = _uniq;
     }
     if(!rec) return null;
-    // v3454：一并返回定位到的恐龙 rec —— 调用方需要它的 containerType/containerId 做「双 ID 通道合并」
-    return { settle: lbSettlementOf(rec) || null, rec: rec };
+    return lbSettlementOf(rec) || null;
   }catch(e){ return null; }
 }
 function lbBuildSettleContainerHtml(grp, settleKey){
@@ -11926,21 +11599,12 @@ function lbBuildSettleContainerHtml(grp, settleKey){
     var _sv0 = _bar > 0 ? _k0.substring(0, _bar) : String(LB.tab || '');
     var _setId = _bar > 0 ? _k0.substring(_bar + 1) : '';
     if(_sv0 && _setId){
+      var _has = {}; grp.forEach(function(r){ if(r && r.containerId) _has[String(r.containerId)] = 1; });
       Object.keys(_dbi).forEach(function(k){
         var b = _dbi[k];
-        if(!b || b.sv !== _sv0) return;
-        // v3456（用户实测「不少生物容器组 展开是空的」根因修复）：**无可见内容**的龙背包不并入容器组。
-        //   实测（Isl 聚落）：阿根廷鹫背包 items=15 但可见=0、巨盗龙 items=1 可见=0 —— 全部 quantity=0
-        //   （鞍 rated=0 未评级；其余是 rating=-1 的弹药蓝图）⇒ 按 v989/v1197 口径判为存档空槽残留，
-        //   渲染时被 lbIsEmptyItem 过滤 ⇒ 组占一行却展开空白。
-        //   判据与渲染同源（直接复用 lbIsEmptyItem）；其它容器无内容时不进容器组列表（下沉设施 chip / 🧊 提示），此处对齐。
-        var _vis = 0;
-        try{ _vis = (b.items || []).filter(function(it){ try{ return !lbIsEmptyItem(it); }catch(e){ return true; } }).length; }
-        catch(e){ _vis = (b.items || []).length; }
-        if(!_vis) return;
-        var _so = lbDinoBagSettle(b);
-        var _settle = _so ? _so.settle : null;
-        var _kx = !_settle ? 'nosettle' : (_settle.scattered ? 'scattered' : _settle.setId);
+        if(!b || b.sv !== _sv0 || _has[String(b.cid)]) return;
+        var _s = lbDinoBagSettle(b);
+        var _kx = !_s ? 'nosettle' : (_s.scattered ? 'scattered' : _s.setId);
         if(String(_kx) !== String(_setId)) return;   // 只属于本聚落的龙背包才并入
         // v3452（用户实测「点了聚落直接进不去」根因修复）：伪 rec 必须呈「容器本体」形态 isEmpty:true ——
         //   根因：原 isEmpty:false ⇒ renderSeg 把它当「球内生物」送进 lbDinoHTML() ⇒ lbSpName(undefined) 抛 TypeError
@@ -11948,45 +11612,10 @@ function lbBuildSettleContainerHtml(grp, settleKey){
         //   内容判定不受影响：LB_CONTENT_KINDS 空容器判据 = isEmpty && src==='facility'（我们 src='dinoBag' ⇒ 非空），
         //   且物品 kind（consumable/resource/…）经 lbGroupItems→lbItemsOfContainer(byCid) 命中，容器组不会下沉。
         // v3453：补 tribeId（容器部落）——避免下游把 undefined 当部落基准
-        // v3454（用户口径「这两个窃蛋龙是同一只，理论上应该只显示一个容器组」）：
-        //   同一只「放出」的龙会被两条 ID 通道各建一组（放出组 containerClass=恐龙本体类名 + containerType='released'；
-        //   龙背包 containerClass=DinoTamedInventoryComponent_*），坐标完全相同 ⇒ 基名不同 ⇒ 两行。
-        //   修法：定位到的恐龙 rec 若是放出形态 ⇒ 伪 rec 直接采用它的类名/容器 id/类型 ⇒ lbContainerKey 同键 ⇒ 合并为一组。
-        //   （该龙未放出、或在低温仓/球内时维持自有 cid 独立成组，不与其它容器混淆。）
-        // v3455（合并判据修正）：v3454 用 containerType==='released' 判定 —— 实测放出组的容器键走的是
-        //   `Ext|phys|Oviraptor_Character_BP@x,y,z`（phys 分支）⇒ 该判据恒 false，未合并。
-        //   改用本项目既有「同一物理容器」口径：**坐标(round)完全相等 + 恐龙本体 rec（类名含 _Character_BP）** 双条件
-        //   （坐标同容器判据见 lbSameContainer v957 / v1069；此处再加类名约束，避免把同坐标其它容器误当孪生）。
-        //   命中孪生后，伪 rec 采用孪生的 containerClass / containerId ⇒ lbFacBase 归一 + 坐标相同 ⇒ 同一个容器键 ⇒ 并为一组。
-        var _twin = null;
-        for(var _gi = 0; _gi < grp.length; _gi++){
-          var _r2 = grp[_gi]; if(!_r2 || !_r2.containerId) continue;
-          var _cc2 = String(_r2.containerClass || '');
-          if(_cc2.indexOf('DinoTamedInventoryComponent') === 0) continue;   // 跳过背包类自身
-          if(_cc2.indexOf('_Character_BP') < 0) continue;                   // 只要恐龙本体 rec
-          if(Math.round(Number(_r2.containerX) || 0) !== Math.round(Number(b.x) || 0)) continue;
-          if(Math.round(Number(_r2.containerY) || 0) !== Math.round(Number(b.y) || 0)) continue;
-          if(Math.round(Number(_r2.containerZ) || 0) !== Math.round(Number(b.z) || 0)) continue;
-          _twin = _r2; break;
-        }
-        var _rec = _so ? _so.rec : null;
-        var _src = _twin || _rec;   // 孪生优先（同坐标的恐龙本体 rec），否则用定位到的恐龙 rec
-        var _merged = !!(_twin && _twin.containerId);
-        // v3457（用户口径「优先显示自定义名，回退物种名」）：把该龙的自定义名挂上 ——
-        //   同时写孪生 rec（保证组代表无论取到孪生还是伪 rec，标题都能显示自定义名），幂等重写，不改 containerName ⇒ 容器键不变。
-        var _nm0 = '';
-        try{ if(_src && _src.name && String(_src.name) !== '?') _nm0 = String(_src.name); }catch(e){ _nm0 = ''; }
-        if(_nm0 && _twin){ try{ _twin._dinoName = _nm0; }catch(e){} }
-        grp.push({ src:'dinoBag', server:b.sv,
-                   containerClass: _merged ? String(_twin.containerClass || b.cls) : b.cls,
-                   containerType: _merged ? String(_twin.containerType || '') : 'dino',
-                   containerId: _merged ? String(_twin.containerId) : b.cid,
-                   _bagCid: b.cid,
-                   _dinoName: _nm0,
-                   containerName:'',
+        grp.push({ src:'dinoBag', server:b.sv, containerClass:b.cls, containerId:b.cid, containerName:'',
                    containerTribe:b.tribe, tribeId:b.tribe, ownerTribeId:b.tribe,
                    containerX:b.x, containerY:b.y, containerZ:b.z,
-                   isEmpty:true, items:b.items });
+                   containerType:'other', isEmpty:true, items:b.items });
       });
     }
   }catch(e){}
@@ -12177,15 +11806,26 @@ function lbBuildSettleContainerHtml(grp, settleKey){
     var emptyH = ecnt>0 ? emptyIc+ecnt : '';
     var eggSepH = (fullH && eggH) ? ' ' : ''; // v1272：恢复空格分隔（原风格，用户澄清容器组本就用空格）
     var v6H = v6cnt>0 ? (((fullH||eggH)?' ':'')+'<span style="color:#ef4444">'+v6cnt+'</span>') : ''; // v3444（用户）：容器计数分隔符一律用空格，不用 |（与 v1272 口径一致）
-    // v3463（用户口径「普通物品还是要渲染基因枪，然后拼接原先的基因条目信息」）：
-    //   基因枪卡片**下线**——改由物品通道承担：容器组内基因枪走 _eq 卡片流 → lbItemCardsHtml → lbItemCardHtml，
-    //   并在卡片底部拼接基因条目（lbGeneSlotsOf 按 class 实例号从 geneDevices 精确取 slots）。
-    //   实测（Isl/Ext/Ast/Abe/Cen/Val）geneDevices 的枪 100% 都在 items 通道内 ⇒ 不会丢卡。
-    //   摘要行的基因计数 scnMark 保留不变。
-    var scnHtml = '';   // v3463：容器组基因枪卡已下线（改由物品卡承载渲染并拼接基因条目）
-    //   ↳ 旧实现（v205/v3445 的 lb-card 骨架 + 品质色条 + 基因条目）整块移除 —— 依据 v3447 实测其数据源 geneDevices
-    //     不带 qidx/rating（色条只能恒用主题紫），而 items 通道现已由后端补齐 durability/rated/rating/qidx/stats/craftingSkill，
-    //     由 lbItemCardHtml 渲染可获得完整信息；基因条目则用 lbGeneSlotsOf 按 class 实例号从 geneDevices 取回并拼接。
+    // v205：容器内基因枪显示统一为背包卡片样式（与玩家 tab 一致，不维护两套）
+    // v3445（用户口径）：**改用其它物品卡（lbItemCardHtml）同款结构/样式** —— 品质色条 + 标题行 + 虚线分隔 + 下方抗原基因条目；
+    //   方法上不碰 lbItemCardHtml 本体（避免影响物品卡），只沿用其骨架与工具（lbBpStageCol / lbAttr / lbGeneTagHtml）。
+    var scnHtml = cScanners.map(function(d){
+      var sl=(d.slots||[]).filter(geneSlotShow); // v142：按当前物种过滤
+      sl = lbSortGeneSlots(sl); // v171：物种>稀有度>后主体词拼音 排序
+      // v3447（用户实测：传说品质基因枪卡片什么都不显示）：后端 geneDevices 未采集 qidx/rating ⇒
+      //   ① 品质色条：有 qidx 才用品质色，**无数据时用主题紫**（不再落到默认灰 #b8b8b8）
+      //   ② 类型徽章：复用物品卡的 lbTypeBadgeHtml（无图标返回空串，不影响布局）
+      var _gcol = (d.qidx !== undefined && d.qidx !== null && typeof lbBpStageCol === 'function') ? lbBpStageCol(d.qidx) : '#7c3aed';
+      var _gbadge = ''; try{ _gbadge = lbTypeBadgeHtml(String(d.type||''), String(d.class||'')); }catch(e){ _gbadge = ''; }
+      var _genes = sl.length ? sl.map(function(s){ return lbGeneTagHtml(s.trait,s.level,s.species,undefined,s.dinoClass); }).join('') : '<span style="color:#666">无基因</span>';
+      return '<div class="lb-card" style="position:relative;overflow:hidden;background:#1a1a24;border:1px solid #2a2a3a;border-radius:10px;padding:10px 12px;box-sizing:border-box;margin-bottom:8px">'
+        + '<div style="display:flex;height:6px;margin:-10px -12px 8px;border-radius:10px 10px 0 0;overflow:hidden"><i style="flex:1;background:'+_gcol+'"></i></div>'
+        + '<div style="position:relative;z-index:1;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+        + '<b style="color:#fff;font-size:14px">'+lbAttr(lbGeneDevZh('基因枪', d.class))+'</b>'+_gbadge
+        + '</div>'
+        + '<div style="position:relative;z-index:1;font-size:12px;margin-top:6px;border-top:1px dashed #2a2a3a;padding-top:6px">'+_genes+'</div>'
+        + '</div>';
+    }).join('');
     // v1238：容器组摘要基因标记 = RW_Gene 图标 + 基因条数（Σ 各枪按当前物种过滤后的条目；原为「基因枪个数」）
     var _geneN = 0;
     for(var _gni = 0; _gni < cScanners.length; _gni++){ try{ _geneN += ((cScanners[_gni].slots || []).filter(geneSlotShow)).length; }catch(e){} }
@@ -12270,12 +11910,8 @@ function lbBuildSettleContainerHtml(grp, settleKey){
       +((lbContainerTypeOf(cg[0])==='released') ? '<button class="lb-rel-rename" data-gk="'+lbAttr(k)+'" onclick="event.stopPropagation();lbSettleBatchRename(this)" title="一键命名本组未命名放出生物">一键起名</button>' : '')
       +(_rTgts.length > 1 ? lbFacBatchRenameBtn(_rTgts) : (_rTgt ? lbContainerRenameBtn(_rTgt) : ''))   // v3384：合并组也出按钮（1→原弹窗，≥2→批量弹窗）；v1334：目标取组内「带钥匙」成员
       +'</summary>';
-    // v3469（用户口径「复用容器组样式的手风琴结构，只是改成按类型分组」）：玩家背包**取消外层容器手风琴**，
-    //   顶层直接按物品类型出多个手风琴（lbPlayerBagAccHtml）；sumHtml 仅在「仍有非物品内容」时兜底使用（见段尾）。
-    var _isPBag = (String(lbContainerTypeOf(cg[0])) === 'player');
-    if(!_isPBag) h += sumHtml;
+    h+=sumHtml;
     var _eqHtml = ''; // v1216：实物卡延迟并入瀑布流（此前直接 h+= 在 masonry 之外 → 失去自动分列）
-    var _bpSrcSkip = _isPBag;   // v3468/v3469：玩家背包按类型分组 ⇒ 蓝图已在类型手风琴内
     if(_dedMerge){
       // v1016：合并组——所有个体的徽章拼进**同一个 flex 容器**（v1014 逐个体一个 div → 每个个体强制换行）；
       //   个体边界靠“有名字的徽章内带名字”区分，不再套块也不逐行
@@ -12288,28 +11924,16 @@ function lbBuildSettleContainerHtml(grp, settleKey){
         if(_mgInner) h += '<div style="display:flex;flex-wrap:wrap;gap:6px;padding:6px 0">'+_mgInner+'</div>'; // v1226：去掉左右缩进
       }
     } else if(invItems.length){
-      // v3469（用户口径修正）：**玩家背包** ⇒ 顶层按「物品类型」输出**多个手风琴**（复用容器组手风琴样式）
-      if(_isPBag){
-        h += lbPlayerBagAccHtml(invItems, String((cg[0] && cg[0].server) || LB.tab || ''));
-      } else {
       // v1210：仅 4 类装备（saddle/armor/weapon/tek）卡片化；其余（资源/弹药等）仍走紧凑徽章
       var _eq = [], _rest = [];
       for(var _ii=0;_ii<invItems.length;_ii++){ var _it2 = invItems[_ii]; if(!_it2) continue;
-        // v3465（用户口径）：无品质概念的武器（手雷/长矛/望远镜…）→ **只出合并 chip**，不出卡片
-        // v3466：同样适用于无品质的其它装备（滑索马达附件）
-        if(lbIsNoQualityItem(_it2)){ _rest.push(_it2); continue; }
-        // v3463（用户口径）：基因枪并入卡片流——由物品卡渲染并拼接基因条目（不再单开一套基因枪卡）
-        var _k2 = String(_it2.kind||'');
-        if(LB_SP_EQUIP_KINDS[_k2] || _k2 === 'geneGun') _eq.push(_it2); else _rest.push(_it2); }
+        if(LB_SP_EQUIP_KINDS[String(_it2.kind||'')]) _eq.push(_it2); else _rest.push(_it2); }
       if(_eq.length) _eqHtml = lbItemCardsHtml(_eq, String((cg[0] && cg[0].server) || LB.tab || ''));
       if(_rest.length) h += lbInvListHtml(_rest);
-      }
     }
     // v1082：蓝图卡并入同一套卡片体系（与生物/蛋卡同瀑布流 → 自动分列，不另维护一套）
-    // v3468：玩家背包的蓝图已归入「蓝图」类型组（lbPlayerInvGroupedHtml）⇒ 此处不再重复输出
     var _bpSrc = [];
-    if(_bpSrcSkip){ /* v3468：玩家背包已分组渲染 */ }
-    else if(_dedMerge){ if(_dedParts){ for(var _bi=0;_bi<_dedParts.length;_bi++) _bpSrc = _bpSrc.concat(_dedParts[_bi].list || []); } }
+    if(_dedMerge){ if(_dedParts){ for(var _bi=0;_bi<_dedParts.length;_bi++) _bpSrc = _bpSrc.concat(_dedParts[_bi].list || []); } }
     else _bpSrc = invItems;
     // v1180：选中物种时，容器组里的蓝图按「该物种」过滤（原位显示，不做集中汇总）
     // v1188：判定统一走 lbSpItemIsBp（与「聚落/容器是否显示」同一函数，口径完全一致）
@@ -12330,37 +11954,10 @@ function lbBuildSettleContainerHtml(grp, settleKey){
       if(scattered){ LB._settleBioMap.push(r); idx = LB._settleBioMap.length - 1; }
       return lbDinoHTML(r, {mapIdx: idx});
     }).join('') + (ecnt>0 ? lbEmptyRowHtml(ecnt) : ''); // v1226：空球行并入瀑布流 → 参与自动分列（不再通栏）
-    if(_isPBag){
-      // v3471（用户口径）：玩家背包里「有生物球 / 空球就显示这个组」，组名 = **低温舱** + 低温舱图标（RW_cryopod）；
-      //   组内同时容纳生物卡（球内生物）与空球行——两者本就都在 _inner 里。
-      if(_inner){
-        var _hasBall = (neArr.length > 0) || (ecnt > 0);
-        if(_hasBall){
-          // v3472（用户口径「你怎么把空球隐藏了」）：拆回**两枚**角标——球内 `RW_cryopod`+数、空球 `RW_cryopod_empty`+数
-          //   （与容器组摘要的 fullH / emptyH 同源；v3471 曾缩成一枚「球图标+总数」⇒ 空球信息丢失）
-          var _balHtml = '';
-          if(typeof lbWebpIc === 'function'){
-            if(neArr.length > 0) _balHtml += lbWebpIc('RW_cryopod', 11) + neArr.length;
-            if(ecnt > 0) _balHtml += (neArr.length > 0 ? ' ' : '') + lbWebpIc('RW_cryopod_empty', 11) + ecnt;
-          }
-          if(!_balHtml) _balHtml = String(neArr.length + ecnt);
-          h += '<details class="acc"'+autoOpen+' onclick="lbAccOnly(this)"><summary>'
-             + '<span class="acc-sum-name">低温舱</span>'
-             + '<span class="acc-cnt">' + _balHtml + '</span>'
-             + '</summary>';
-        } else {
-          h += sumHtml;
-        }
-        if(_colN2 > 1) h += '<div class="lb-cards-masonry" style="column-count:'+_colN2+';column-gap:6px">'+_inner+'</div>';
-        else h += _inner;
-        h+='</details>';
-      }
-    } else {
-      if(_colN2 > 1 && _inner) h += '<div class="lb-cards-masonry" style="column-count:'+_colN2+';column-gap:6px">'+_inner+'</div>';
-      else h += _inner;
-      if(!(ecnt>0) && isEmptyFacility) h+='<div style="display:flex;align-items:center;background:#15151f;border:1px dashed #333;border-radius:8px;padding:8px 12px;margin:8px 0;font-size:12px;color:#888">🧊 空容器（无低温仓球）</div>';
-      h+='</details>';
-    }
+    if(_colN2 > 1 && _inner) h += '<div class="lb-cards-masonry" style="column-count:'+_colN2+';column-gap:6px">'+_inner+'</div>';
+    else h += _inner;
+    if(!(ecnt>0) && isEmptyFacility) h+='<div style="display:flex;align-items:center;background:#15151f;border:1px dashed #333;border-radius:8px;padding:8px 12px;margin:8px 0;font-size:12px;color:#888">🧊 空容器（无低温仓球）</div>';
+    h+='</details>';
     if(h.length > _segStart){ // v1041：切片收集（附坐标，供区域归类），并从主串回滚
       var _cr0 = cg[0];
       _contSegs.push({ x:Number(_cr0.containerX)||0, y:Number(_cr0.containerY)||0, z:Number(_cr0.containerZ)||0,
