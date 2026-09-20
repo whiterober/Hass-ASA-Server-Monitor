@@ -505,7 +505,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260920-3491';
+var LB_VERSION = 'v20260920-3489';
 var LB_SCHEMA_VER = 17;  // v3428：16→17 —— facilities 新增 isPublic（后端 2026-09-20 上线）+ 补采家族（耕地/船体/神器箱等 2454 条）、rec 新增 isPublic/isPlayerStruct；不升版 ⇒ 旧 IndexedDB 缓存继续命中，新设施与新字段永不出现
 // 历史：v1069 14→15——根因：recs 构建结果随 IndexedDB 持久化（v931）、
                          //   命中后跳过重建；仅改 _decorRe 等**构建期过滤**时，旧 rec 会长期残留（实测南瓜 rec 改过滤后仍显示）。
@@ -8408,22 +8408,14 @@ function lbItemHasQuality(it){
 //   **仅收录可确证的官方数值**（2026-09-21 核对 ark.wiki.gg 各容器页 Item slots 字段）：
 //     · Cryofridge（低温冰箱）：SE 旧值 72 ⇒ **ASA 33.11 提升为 120**（changelog 明载）⇒ 取 120
 //     · Refrigerator（冰箱）：80（303.1 由 48 提升）
-//     · 待补（官方值未核对，故**刻意留空**）：StorageBox_Large（大储物箱，实测 60 条容器）· Vault · Dedicated Storage
 //     · StorageBox（储物箱）：15
 //   ⚠️ 后端 `item.gz` / rec **均无 capacity 字段**（实测候选字段 0 命中，见 tmp/_v3490_probe）⇒ 未收录类型
 //      **不显示分母**（只显示已用数），不凭空造数据。补充只需在本表加一行（键 = 容器归一基名，口径同 lbFacBase）。
-//   ⚠️ v3491 修正（PW 实测发现）：游戏真实类名是 **`CryoFridge`（大写 F）** ——
-//      实测 `PrimalInventoryBP_CryoFridge_C1` **12,054 条**（Isl 主力容器）+ `CryoFridge_C_2147239441`
-//      ⇒ 键必须与 `lbFacBase()` 结果一致；同时 `lbContCapOf` 改为**大小写不敏感**查找（双保险，防再踩该坑）。
-var LB_CONT_CAP = { CryoFridge:120, Refrigerator:80, StorageBox:15 };
+var LB_CONT_CAP = { Cryofridge:120, Refrigerator:80, StorageBox:15 };
 function lbContCapOf(cls){
   var k = ''; try{ k = lbFacBase(cls); }catch(e){ k = String(cls || ''); }
-  if(!k) return 0;
   var v = LB_CONT_CAP[k];
-  if(Number(v) > 0) return Number(v);
-  var lk = k.toLowerCase();                       // v3491：大小写不敏感兜底
-  for(var kk in LB_CONT_CAP){ if(String(kk).toLowerCase() === lk) return Number(LB_CONT_CAP[kk]) || 0; }
-  return 0;
+  return (Number(v) > 0) ? Number(v) : 0;
 }
 // 容量角标：已用 = 球数(非空) + 空球数 + 物品条目数；容量 = 查表（无 ⇒ 只显示已用）
 function lbContCapHtml(cls, used){

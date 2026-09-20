@@ -245,12 +245,6 @@ html.ios .lb-sex{transform:translateY(-0.08em)}
 .acc[open] summary{color:#fff;margin-bottom:6px;border-radius:8px;background:#7c3aed}
 .acc-cnt{color:#666;font-size:11px}
 .acc[open] summary .acc-cnt{color:#fff}
-/* v3490（用户口径「展开某容器组后自动半透明遮罩其它容器组（只列表区域）」）：只让容器组自身半透明 */
-details.acc.lb-dim{opacity:.45;transition:opacity .15s}
-details.acc.lb-dim summary{color:#888}
-details.acc.lb-dim summary:hover{opacity:1}
-/* v3490：容量角标（xx/xx）——等宽数字，避免宽度跳动 */
-.lb-capmark{font-size:11px;font-variant-numeric:tabular-nums}
 /* v3473（用户口径）：类型组/低温舱组**名称左侧图标**——16px 且**不撑高标题行**：
    锁定这两个组摘要的 line-height=16px（与图标等高）⇒ 行高恒定，不随图标变大而变高 */
 .acc.ic-sum summary{line-height:16px}
@@ -505,7 +499,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260920-3491';
+var LB_VERSION = 'v20260920-3489';
 var LB_SCHEMA_VER = 17;  // v3428：16→17 —— facilities 新增 isPublic（后端 2026-09-20 上线）+ 补采家族（耕地/船体/神器箱等 2454 条）、rec 新增 isPublic/isPlayerStruct；不升版 ⇒ 旧 IndexedDB 缓存继续命中，新设施与新字段永不出现
 // 历史：v1069 14→15——根因：recs 构建结果随 IndexedDB 持久化（v931）、
                          //   命中后跳过重建；仅改 _decorRe 等**构建期过滤**时，旧 rec 会长期残留（实测南瓜 rec 改过滤后仍显示）。
@@ -8389,52 +8383,6 @@ function lbIsNoQualityItem(it){
   if(!it) return false;   // v3466：不再限定 kind（滑索马达附件为 armor）——表内条目本身就是“实测无品质”白名单
   return lbTableHit(LB_NOQ_WEAPON, it);
 }
-// ⭐ v3490（用户口径「无品质的物品卡片直接 chip 合并显示吧」）：**品质判定单一入口** ——
-//   有品质 = rated>0（后端评分）**或** qidx>=0（品质档位）**或** stats 内有非 0 属性值；
-//   三者皆无 ⇒ 无品质 ⇒ 一律走 chip 合并（不再出空白品质卡片）。
-//   ⚠️ 与后端文档 §4 一致：**原始（Primitive）品质在存档中不落盘** —— rated=0 / qidx=-1 / stats 空，
-//      故「原始品质」在本口径下等同「无品质」走 chip（视觉上确实无品质加成，符合预期）。
-//   注：`LB_NOQ_WEAPON` 白名单**保留**为强制 chip 覆盖层（即使带了品质数据也走 chip，双保险）。
-function lbItemHasQuality(it){
-  if(!it) return false;
-  if((Number(it.rated) || 0) > 0) return true;
-  var q = Number(it.qidx);
-  if(q >= 0) return true;
-  var st = (it.stats && it.stats.length) ? it.stats : null;
-  if(st){ for(var i = 0; i < st.length; i++){ if(Number(st[i])) return true; } }
-  return false;
-}
-// ⭐ v3490（用户口径「容器设施组右侧的角标要有 xx/xx 的容量显示」）：容器槽位容量表
-//   **仅收录可确证的官方数值**（2026-09-21 核对 ark.wiki.gg 各容器页 Item slots 字段）：
-//     · Cryofridge（低温冰箱）：SE 旧值 72 ⇒ **ASA 33.11 提升为 120**（changelog 明载）⇒ 取 120
-//     · Refrigerator（冰箱）：80（303.1 由 48 提升）
-//     · 待补（官方值未核对，故**刻意留空**）：StorageBox_Large（大储物箱，实测 60 条容器）· Vault · Dedicated Storage
-//     · StorageBox（储物箱）：15
-//   ⚠️ 后端 `item.gz` / rec **均无 capacity 字段**（实测候选字段 0 命中，见 tmp/_v3490_probe）⇒ 未收录类型
-//      **不显示分母**（只显示已用数），不凭空造数据。补充只需在本表加一行（键 = 容器归一基名，口径同 lbFacBase）。
-//   ⚠️ v3491 修正（PW 实测发现）：游戏真实类名是 **`CryoFridge`（大写 F）** ——
-//      实测 `PrimalInventoryBP_CryoFridge_C1` **12,054 条**（Isl 主力容器）+ `CryoFridge_C_2147239441`
-//      ⇒ 键必须与 `lbFacBase()` 结果一致；同时 `lbContCapOf` 改为**大小写不敏感**查找（双保险，防再踩该坑）。
-var LB_CONT_CAP = { CryoFridge:120, Refrigerator:80, StorageBox:15 };
-function lbContCapOf(cls){
-  var k = ''; try{ k = lbFacBase(cls); }catch(e){ k = String(cls || ''); }
-  if(!k) return 0;
-  var v = LB_CONT_CAP[k];
-  if(Number(v) > 0) return Number(v);
-  var lk = k.toLowerCase();                       // v3491：大小写不敏感兜底
-  for(var kk in LB_CONT_CAP){ if(String(kk).toLowerCase() === lk) return Number(LB_CONT_CAP[kk]) || 0; }
-  return 0;
-}
-// 容量角标：已用 = 球数(非空) + 空球数 + 物品条目数；容量 = 查表（无 ⇒ 只显示已用）
-function lbContCapHtml(cls, used){
-  used = Number(used) || 0;
-  var cap = lbContCapOf(cls);
-  if(!used && !cap) return '';
-  var _full = !!(cap && used >= cap);
-  var txt = cap ? (used + '/' + cap) : String(used);
-  var tip = cap ? ('占用 ' + used + ' / 容量 ' + cap) : ('占用 ' + used + '（该容器容量暂无官方数据）');
-  return '<span class="lb-capmark" title="' + lbAttr(tip) + '" style="color:' + (_full ? '#ef4444' : '#94a3b8') + '">' + txt + '</span>';
-}
 // v3469：零数量白名单查询（多候选，口径同上）
 function lbZeroQtyAllowed(it){ return lbTableHit(LB_ALLOW_ZERO_QTY, it); }
 function lbZeroQtyKeyHit(name){ return lbKeyHit(LB_ALLOW_ZERO_QTY, name); }
@@ -8528,8 +8476,7 @@ function lbPlayerInvGroupedHtml(items, sv){
     for(var j = 0; j < arr.length; j++){
       var jt = arr[j];
       if(!jt) continue;
-      // v3490：无品质 ⇒ 一律 chip（原判定只挡白名单，漏登记的出空白卡片）
-      if(G.eq && !lbIsNoQualityItem(jt) && lbItemHasQuality(jt)) eqs.push(jt); else rest.push(jt);
+      if(G.eq && !lbIsNoQualityItem(jt)) eqs.push(jt); else rest.push(jt);
     }
     out += '<div class="lb-inv-grp"><div class="lb-inv-grp-h">' + G.zh + '<em>×' + arr.length + '</em></div>';
     if(eqs.length){
@@ -8571,7 +8518,7 @@ function lbPlayerBagAccHtml(items, sv){
     var eqs = [], rest = [];
     for(var j = 0; j < arr.length; j++){
       var jt = arr[j]; if(!jt) continue;
-      if(G.eq && !lbIsNoQualityItem(jt) && lbItemHasQuality(jt)) eqs.push(jt); else rest.push(jt);   // v3490：无品质 ⇒ chip
+      if(G.eq && !lbIsNoQualityItem(jt)) eqs.push(jt); else rest.push(jt);
     }
     var inner = '';
     if(eqs.length){
@@ -12378,13 +12325,6 @@ function lbBuildSettleContainerHtml(grp, settleKey){
     }
     var invMark = _dedMerge ? '' : lbInvCountMark(invItems, !!(fullH||v6H||scnMark), LB.curClass); // v991：前面无内容则不加分隔线（消除孤立 |）；v1013：合并组不聚合物品徽章；v1192：选中物种时蓝图只计该物种
     var sepH = (fullH||eggH||v6H||scnMark||invMark) && emptyH ? ' ' : ''; // v1270：+eggH
-    // v3490（用户口径）：角标尾部追加「已用/容量」——已用 = 非空球 + 空球 + 物品条目数；
-    //   合并组（多台容器并一行）不显示（单台容量作分母语义混乱）；容量未知的类型只显示已用数
-    var _capH = '';
-    if(!_dedMerge && _unitN <= 1){
-      var _capUsed = ((neArr && neArr.length) || 0) + (Number(ecnt) || 0) + ((invItems && invItems.length) || 0);
-      if(_capUsed > 0) _capH = lbContCapHtml(String((cg[0] && cg[0].containerClass) || ''), _capUsed);
-    }
     var sumHtml='<details class="acc"'+autoOpen+' onclick="lbAccOnly(this)"><summary>'
       // v3392（用户实测：合并的展示柜 ×91 冒出了 #88ee66）：**凡「多台」行一律隐藏 #ID/涂装色点**——
       //   原条件只判 `_dedMerge`（= lbIsMergeableFacility：泰克专储/炮台/火把/特斯拉电塔），
@@ -12392,7 +12332,7 @@ function lbBuildSettleContainerHtml(grp, settleKey){
       //   ⇒ v3391 放行 display 的 #ID 后，仅代表 1 台的实例号被显示在 91 台的标题上（与 v973 口径冲突）
       +'<span class="acc-sum-name">'+lbContainerLabel(cg[0], ((_dedMerge || _unitN > 1) ? {hideId:true, hideColor:true} : null))+_dedN+'</span>'
       // v1225：放出组——数量角标加 acc-cnt-rel（展开时被「一键起名」按钮替换）；按钮回到最右（右对齐）
-      +'<span class="acc-cnt'+((lbContainerTypeOf(cg[0])==='released' || (_rTgt && lbContainerTypeOf(_rTgt)!=='released')) ? ' acc-cnt-rel' : '')+'">'+fullH+eggSepH+eggH+v6H+scnMark+invMark+sepH+emptyH+(_capH?(' '+_capH):'')+'</span>' // v1334：角标替换改用组内可改名成员 _rTgt（原 cg[0]）；v3490：+容量
+      +'<span class="acc-cnt'+((lbContainerTypeOf(cg[0])==='released' || (_rTgt && lbContainerTypeOf(_rTgt)!=='released')) ? ' acc-cnt-rel' : '')+'">'+fullH+eggSepH+eggH+v6H+scnMark+invMark+sepH+emptyH+'</span>' // v1334：角标替换改用组内可改名成员 _rTgt（原 cg[0]）
       +((lbContainerTypeOf(cg[0])==='released') ? '<button class="lb-rel-rename" data-gk="'+lbAttr(k)+'" onclick="event.stopPropagation();lbSettleBatchRename(this)" title="一键命名本组未命名放出生物">一键起名</button>' : '')
       +(_rTgts.length > 1 ? lbFacBatchRenameBtn(_rTgts) : (_rTgt ? lbContainerRenameBtn(_rTgt) : ''))   // v3384：合并组也出按钮（1→原弹窗，≥2→批量弹窗）；v1334：目标取组内「带钥匙」成员
       +'</summary>';
@@ -12423,7 +12363,7 @@ function lbBuildSettleContainerHtml(grp, settleKey){
       for(var _ii=0;_ii<invItems.length;_ii++){ var _it2 = invItems[_ii]; if(!_it2) continue;
         // v3465（用户口径）：无品质概念的武器（手雷/长矛/望远镜…）→ **只出合并 chip**，不出卡片
         // v3466：同样适用于无品质的其它装备（滑索马达附件）
-        if(lbIsNoQualityItem(_it2) || !lbItemHasQuality(_it2)){ _rest.push(_it2); continue; }   // v3490：无品质 ⇒ 只出合并 chip
+        if(lbIsNoQualityItem(_it2)){ _rest.push(_it2); continue; }
         // v3463（用户口径）：基因枪并入卡片流——由物品卡渲染并拼接基因条目（不再单开一套基因枪卡）
         var _k2 = String(_it2.kind||'');
         if(LB_SP_EQUIP_KINDS[_k2] || _k2 === 'geneGun') _eq.push(_it2); else _rest.push(_it2); }
@@ -14235,15 +14175,7 @@ function lbAccOnly(el){
   var root = null;
   try{ root = (el.closest && el.closest('#lbSettleBody')) || el.parentNode; }catch(e){ root = el.parentNode; }
   var all = (root && root.querySelectorAll) ? root.querySelectorAll('details.acc') : [];
-  // v3490（用户口径「展开某容器组后自动半透明遮罩其它容器组（只列表区域）」）：
-  //   其它组加 `.lb-dim`（CSS 半透明，**仅作用于容器组自身** —— 顶栏/返回栏/页面其它区域不受影响）；
-  //   再点同一组收起（open=false）⇒ 其余组同时恢复，不残留遮罩。
-  var _open = !!el.open;
-  for(var i=0;i<all.length;i++){
-    if(all[i] !== el){ all[i].removeAttribute('open'); if(_open) all[i].classList.add('lb-dim'); else all[i].classList.remove('lb-dim'); }
-    else all[i].classList.remove('lb-dim');
-  }
-  if(!_open){ for(var j=0;j<all.length;j++){ all[j].classList.remove('lb-dim'); } }   // 收起点：兜底清残留
+  for(var i=0;i<all.length;i++){ if(all[i] !== el) all[i].removeAttribute('open'); }
 }
 // 切换一级标签（玩家携带/服务器），默认玩家携带
 function lbSetTab(tab){
