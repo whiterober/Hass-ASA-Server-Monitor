@@ -246,7 +246,7 @@ html.ios .lb-sex{transform:translateY(-0.08em)}
 .acc-cnt{color:#666;font-size:11px}
 .acc[open] summary .acc-cnt{color:#fff}
 /* v3490（用户口径「展开某容器组后自动半透明遮罩其它容器组（只列表区域）」）：只让容器组自身半透明 */
-details.acc.lb-dim, .lb-areafac.lb-dim{opacity:.45;transition:opacity .15s}   /* v3493：设施段同款遮罩 */
+details.acc.lb-dim{opacity:.45;transition:opacity .15s}
 details.acc.lb-dim summary{color:#888}
 details.acc.lb-dim summary:hover{opacity:1}
 /* v3490：容量角标（xx/xx）——等宽数字，避免宽度跳动 */
@@ -505,7 +505,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260920-3493';
+var LB_VERSION = 'v20260920-3492';
 var LB_SCHEMA_VER = 17;  // v3428：16→17 —— facilities 新增 isPublic（后端 2026-09-20 上线）+ 补采家族（耕地/船体/神器箱等 2454 条）、rec 新增 isPublic/isPlayerStruct；不升版 ⇒ 旧 IndexedDB 缓存继续命中，新设施与新字段永不出现
 // 历史：v1069 14→15——根因：recs 构建结果随 IndexedDB 持久化（v931）、
                          //   命中后跳过重建；仅改 _decorRe 等**构建期过滤**时，旧 rec 会长期残留（实测南瓜 rec 改过滤后仍显示）。
@@ -13029,7 +13029,7 @@ function lbBuildSettleContainerHtml(grp, settleKey){
               var _facItems = [];
               for(var _fi4 = 0; _fi4 < a.items.length; _fi4++){ if(!a.items[_fi4]._signPt) _facItems.push(a.items[_fi4]); }
               var _fc = _mkAreaChips(_facItems);
-              var _fcH = _fc.length ? '<div class="lb-areafac" style="display:flex;flex-wrap:wrap;gap:6px">'+_fc.join('')+'</div>' : '';   // v3493：+lb-areafac（展开容器组时随其它内容一起遮罩）
+              var _fcH = _fc.length ? '<div style="display:flex;flex-wrap:wrap;gap:6px">'+_fc.join('')+'</div>' : '';
               var _vN = 0; // v1042：可见项数（排除仅用于命名的标识牌）
               for(var _vi = 0; _vi < _facItems.length; _vi++){ if(!_facItems[_vi]._sign) _vN++; }
               _vN += (a.cont || []).length;
@@ -13065,14 +13065,14 @@ function lbBuildSettleContainerHtml(grp, settleKey){
                 + '</div>';
               // v1251（用户实测：卡片到下方紫虚线 8px、到上方紫虚线 12px，不对称）→ 下外边距 2px → 12px
               //   卡底→下虚线 = max(卡片 6px, 本区域 12px, 下一区域 8px) = 12px；卡顶→上虚线 = padding-top 6 + 卡片 6 = 12px ⇒ 上下对称
-              _areaHtml += '<div class="lb-areablk" style="margin:' + _mg2 + ' 0 12px;padding-top:' + _pt2 + ';border-top:' + _bt2 + '">' + _head + _ccH + _fcH + '</div>';   // v3493：+lb-areablk // v1048：层首=紫色单虚线、层内=原色虚线；v1063：首个区域无上分隔线；v1075：首个区域 padding/margin 同步归零；v1251：上下间距对称
+              _areaHtml += '<div style="margin:' + _mg2 + ' 0 12px;padding-top:' + _pt2 + ';border-top:' + _bt2 + '">' + _head + _ccH + _fcH + '</div>'; // v1048：层首=紫色单虚线、层内=原色虚线；v1063：首个区域无上分隔线；v1075：首个区域 padding/margin 同步归零；v1251：上下间距对称
             });
           }
           if(!_areaReady){
             // 退化（无坐标 / 散落聚落 / 无区域）：原平铺——容器段 + 全部设施 chips，行为与改动前一致
             if(_contSegs.length){ _contConsumed = true; _contSegs.forEach(function(s){ _areaHtml += s.html; }); }
             var _c0 = LB.curClass ? [] : _mkAreaChips(_fList.concat(_efList)); // v1054：退化路径也带上空容器设施；v1195：选中物种时整体隐藏设施 chips
-            if(_c0.length) _areaHtml += '<div class="lb-areafac" style="display:flex;flex-wrap:wrap;gap:6px">'+_c0.join('')+'</div>';   // v3493：+lb-areafac
+            if(_c0.length) _areaHtml += '<div style="display:flex;flex-wrap:wrap;gap:6px">'+_c0.join('')+'</div>';
           }
           if(_areaHtml){
             h += '<div style="margin-top:10px;padding-top:8px">'; // v1046：去掉最上方重复虚线（区域块自带分隔线）
@@ -14314,11 +14314,6 @@ function lbAccOnly(el){
   for(var i=0;i<all.length;i++){
     if(all[i] !== el){ all[i].removeAttribute('open'); if(_willOpen) all[i].classList.add('lb-dim'); else all[i].classList.remove('lb-dim'); }
     else all[i].classList.remove('lb-dim');
-  }
-  // v3493（用户反馈「展开后其它容器组的下层设施没遮罩」）：区域设施段（.lb-areafac）同样纳入遮罩范围
-  var _facs = (root && root.querySelectorAll) ? root.querySelectorAll('.lb-areafac') : [];
-  for(var f2 = 0; f2 < _facs.length; f2++){
-    if(_willOpen) _facs[f2].classList.add('lb-dim'); else _facs[f2].classList.remove('lb-dim');
   }
   if(!_willOpen){ for(var j=0;j<all.length;j++){ all[j].classList.remove('lb-dim'); } }   // 收起点：兜底清残留
 }

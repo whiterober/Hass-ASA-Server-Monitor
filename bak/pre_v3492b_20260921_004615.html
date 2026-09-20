@@ -246,7 +246,7 @@ html.ios .lb-sex{transform:translateY(-0.08em)}
 .acc-cnt{color:#666;font-size:11px}
 .acc[open] summary .acc-cnt{color:#fff}
 /* v3490（用户口径「展开某容器组后自动半透明遮罩其它容器组（只列表区域）」）：只让容器组自身半透明 */
-details.acc.lb-dim, .lb-areafac.lb-dim{opacity:.45;transition:opacity .15s}   /* v3493：设施段同款遮罩 */
+details.acc.lb-dim{opacity:.45;transition:opacity .15s}
 details.acc.lb-dim summary{color:#888}
 details.acc.lb-dim summary:hover{opacity:1}
 /* v3490：容量角标（xx/xx）——等宽数字，避免宽度跳动 */
@@ -505,7 +505,7 @@ var LB_STATUS = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc/asa-data' :
 var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
-var LB_VERSION = 'v20260920-3493';
+var LB_VERSION = 'v20260920-3491';
 var LB_SCHEMA_VER = 17;  // v3428：16→17 —— facilities 新增 isPublic（后端 2026-09-20 上线）+ 补采家族（耕地/船体/神器箱等 2454 条）、rec 新增 isPublic/isPlayerStruct；不升版 ⇒ 旧 IndexedDB 缓存继续命中，新设施与新字段永不出现
 // 历史：v1069 14→15——根因：recs 构建结果随 IndexedDB 持久化（v931）、
                          //   命中后跳过重建；仅改 _decorRe 等**构建期过滤**时，旧 rec 会长期残留（实测南瓜 rec 改过滤后仍显示）。
@@ -8415,70 +8415,7 @@ function lbItemHasQuality(it){
 //   ⚠️ v3491 修正（PW 实测发现）：游戏真实类名是 **`CryoFridge`（大写 F）** ——
 //      实测 `PrimalInventoryBP_CryoFridge_C1` **12,054 条**（Isl 主力容器）+ `CryoFridge_C_2147239441`
 //      ⇒ 键必须与 `lbFacBase()` 结果一致；同时 `lbContCapOf` 改为**大小写不敏感**查找（双保险，防再踩该坑）。
-var LB_CONT_CAP = {
-  // —— 储物/冷藏 ——
-  StorageBox_Small:15, StorageBox:15,                       // Storage Box（wiki 15）
-  StorageBox_Large:45,                                       // Large Storage Box（wiki 45）
-  StorageBox_Huge:350, Vault:350,                            // Vault（wiki 350）
-  StorageBox_Barrel:40, BarrelStorage:40,                    // Barrel Storage（wiki 40）
-  Bookshelf:100,                                             // Bookshelf（wiki 100）
-  LibraryStorage:100,                                        // Library Storage（wiki 100）
-  IceBox:80, Refrigerator:80,                                // Refrigerator / Ice Box（wiki 80）
-  CryoFridge:120, Cryofridge:120,                            // 低温冰箱：wiki 信息框 72，**ASA 33.11 changelog 明载提升为 120** ⇒ 取 ASA 值
-  DedicatedStorage:1800,                                     // Tek Dedicated Storage（wiki 1800）
-  PreservingBin:48,                                          // Preserving Bin（wiki 48）
-  IndustrialPreservinBin:70, IndustrialPreservingBin:70,     // Industrial Preserving Bin（wiki 类名拼写缺 g ⇒ 两种都收）
-  CompostBin:8,                                              // Compost Bin（wiki 8）
-  BeeHive:45,                                                // Bee Hive（wiki 45）
-  LinkedStorage:0,                                           // 无官方槽位数（保留占位，0 ⇒ 不显示分母）
-  // —— 工作台/制造 ——
-  AnvilBench:75, StorageBox_AnvilBench:75, Smithy:75,        // Smithy（wiki 75）
-  Fabricator:70, StorageBox_Fabricator:70,                   // Fabricator（wiki 70）
-  ChemBench:100, StorageBox_ChemBench:100, ChemistryBench:100,   // Chemistry Bench（wiki 100）
-  Forge:24, RefiningForge:24,                                // Refining Forge（wiki 24）
-  Industrialforge:100, IndustrialForge:100,                  // Industrial Forge（wiki 100）
-  Grill:50, StorageBox_IndustrialGrill:50,                   // Industrial Grill（wiki 50）
-  Grinder:120, StorageBox_IndustrialGrinder:120, IndustrialGrinder:120,   // Industrial Grinder（wiki 120）
-  IndustrialCookingPot:80, IndustrialCooker:80,              // Industrial Cooker（wiki 80）
-  CookingPot:12,                                             // Cooking Pot（wiki 12）
-  MortarAndPestle:24,                                        // Mortar and Pestle（wiki 24）
-  TreeTap:1, TreeSapTap_SM:1,                                // Tree Sap Tap（wiki 1）
-  CraftingPot:0,                                             // 占位（无数据）
-  TinkeringDesk:3,                                           // Tinkering Desk（wiki 3）
-  SteamForge:300,                                            // Steam Forge（wiki 300）
-  BioGrinder:0,                                              // 无官方槽位数
-  // —— 泰克 ——
-  TekReplicator:600, StorageBox_TekReplicator:600,           // Tek Replicator（wiki 600）
-  TekCloningChamber:48, CloningChamber:48,                   // Cloning Chamber（wiki 48）
-  TekGenerator:100, StorageBox_TekGenerator:100,             // Tek Generator（wiki 100）
-  TekTransmitter:100, StorageBox_TekTransmitter:100,         // Tek Transmitter（wiki 100）
-  TekTeleporter:100, TekTeleporterSmall:100, TekTeleporterMini:100,   // Tek Teleporter（wiki 100）
-  TekTrough:100,                                             // Tek Trough（wiki 100）
-  // —— 农牧/食物/水 ——
-  FeedingTrough:60,                                          // Feeding Trough（wiki 60）
-  CropPlot_Small:10, CropPlotSmall_SM:10,                    // Small Crop Plot（wiki 10）
-  CropPlot_Medium:10, CropPlotMedium_SM:10,                  // Medium Crop Plot（wiki 10）
-  CropPlot_Large:10, CropPlotLarge_SM:10,                    // Large Crop Plot（wiki 10）
-  WaterTankMetal:10, WaterTank_Metal:10,                     // Metal Water Reservoir（wiki 10）
-  WaterWell:10,                                              // Water Well（wiki 10）
-  MetalPipeTap:4, WaterTap_Metal:4,                          // Metal Irrigation Pipe - Tap（wiki 4）
-  FishBasket:0,                                              // 无官方槽位数
-  // —— 其它 ——
-  Campfire:3,                                                // Campfire（wiki 3）
-  EmbryoIncubator:10,                                        // Embryo Incubator（wiki 10）
-  EggIncubator:0,                                            // 无官方槽位数（烘焙/孵化另有语义）
-  PowerGenerator:8, ElectricGenerator:8,                     // Electrical Generator（wiki 8）
-  WindTurbine:0, WindTrubine:0,                              // 无官方槽位数
-  TrophyBase:1, TrophyBaseBP:1,                              // Artifact Pedestal（wiki 1）
-  Vessel:4,                                                  // Vessel（wiki 4）
-  DecorBox:1,                                                // Decor Box（wiki 1）
-  DinoLeash:0,                                               // 无官方槽位数
-  AirConditioner:0,                                          // 无官方槽位数
-  Coffin:0,                                                  // 无官方槽位数
-  WoodenCage:0,                                              // 无官方槽位数
-  GeneInfuser:15, Gene_Storage:15,                           // Gene Storage（wiki 15）
-  MakeshiftMegalab:600, ChemBench_Tek:600                    // Makeshift Megalab（wiki 600）
-};
+var LB_CONT_CAP = { CryoFridge:120, Refrigerator:80, StorageBox:15 };
 function lbContCapOf(cls){
   var k = ''; try{ k = lbFacBase(cls); }catch(e){ k = String(cls || ''); }
   if(!k) return 0;
@@ -13029,7 +12966,7 @@ function lbBuildSettleContainerHtml(grp, settleKey){
               var _facItems = [];
               for(var _fi4 = 0; _fi4 < a.items.length; _fi4++){ if(!a.items[_fi4]._signPt) _facItems.push(a.items[_fi4]); }
               var _fc = _mkAreaChips(_facItems);
-              var _fcH = _fc.length ? '<div class="lb-areafac" style="display:flex;flex-wrap:wrap;gap:6px">'+_fc.join('')+'</div>' : '';   // v3493：+lb-areafac（展开容器组时随其它内容一起遮罩）
+              var _fcH = _fc.length ? '<div style="display:flex;flex-wrap:wrap;gap:6px">'+_fc.join('')+'</div>' : '';
               var _vN = 0; // v1042：可见项数（排除仅用于命名的标识牌）
               for(var _vi = 0; _vi < _facItems.length; _vi++){ if(!_facItems[_vi]._sign) _vN++; }
               _vN += (a.cont || []).length;
@@ -13065,14 +13002,14 @@ function lbBuildSettleContainerHtml(grp, settleKey){
                 + '</div>';
               // v1251（用户实测：卡片到下方紫虚线 8px、到上方紫虚线 12px，不对称）→ 下外边距 2px → 12px
               //   卡底→下虚线 = max(卡片 6px, 本区域 12px, 下一区域 8px) = 12px；卡顶→上虚线 = padding-top 6 + 卡片 6 = 12px ⇒ 上下对称
-              _areaHtml += '<div class="lb-areablk" style="margin:' + _mg2 + ' 0 12px;padding-top:' + _pt2 + ';border-top:' + _bt2 + '">' + _head + _ccH + _fcH + '</div>';   // v3493：+lb-areablk // v1048：层首=紫色单虚线、层内=原色虚线；v1063：首个区域无上分隔线；v1075：首个区域 padding/margin 同步归零；v1251：上下间距对称
+              _areaHtml += '<div style="margin:' + _mg2 + ' 0 12px;padding-top:' + _pt2 + ';border-top:' + _bt2 + '">' + _head + _ccH + _fcH + '</div>'; // v1048：层首=紫色单虚线、层内=原色虚线；v1063：首个区域无上分隔线；v1075：首个区域 padding/margin 同步归零；v1251：上下间距对称
             });
           }
           if(!_areaReady){
             // 退化（无坐标 / 散落聚落 / 无区域）：原平铺——容器段 + 全部设施 chips，行为与改动前一致
             if(_contSegs.length){ _contConsumed = true; _contSegs.forEach(function(s){ _areaHtml += s.html; }); }
             var _c0 = LB.curClass ? [] : _mkAreaChips(_fList.concat(_efList)); // v1054：退化路径也带上空容器设施；v1195：选中物种时整体隐藏设施 chips
-            if(_c0.length) _areaHtml += '<div class="lb-areafac" style="display:flex;flex-wrap:wrap;gap:6px">'+_c0.join('')+'</div>';   // v3493：+lb-areafac
+            if(_c0.length) _areaHtml += '<div style="display:flex;flex-wrap:wrap;gap:6px">'+_c0.join('')+'</div>';
           }
           if(_areaHtml){
             h += '<div style="margin-top:10px;padding-top:8px">'; // v1046：去掉最上方重复虚线（区域块自带分隔线）
@@ -14314,11 +14251,6 @@ function lbAccOnly(el){
   for(var i=0;i<all.length;i++){
     if(all[i] !== el){ all[i].removeAttribute('open'); if(_willOpen) all[i].classList.add('lb-dim'); else all[i].classList.remove('lb-dim'); }
     else all[i].classList.remove('lb-dim');
-  }
-  // v3493（用户反馈「展开后其它容器组的下层设施没遮罩」）：区域设施段（.lb-areafac）同样纳入遮罩范围
-  var _facs = (root && root.querySelectorAll) ? root.querySelectorAll('.lb-areafac') : [];
-  for(var f2 = 0; f2 < _facs.length; f2++){
-    if(_willOpen) _facs[f2].classList.add('lb-dim'); else _facs[f2].classList.remove('lb-dim');
   }
   if(!_willOpen){ for(var j=0;j<all.length;j++){ all[j].classList.remove('lb-dim'); } }   // 收起点：兜底清残留
 }
