@@ -413,8 +413,6 @@ span.lb-fchip-rn:hover{border-color:#a78bfa!important;background:#22222f!importa
 .lb-picker-ic-none{font-size:20px;color:#555}
 .lb-picker-item span{display:block;text-align:center;line-height:1.25;word-break:break-all;overflow:hidden;max-width:100%}
 .lb-picker-name{font-size:12px;color:#ccc}
-.lb-pk-nb{display:inline-block;white-space:nowrap} /* v3606（用户要求）：中文名里的「括号+内容」作为一个整体换行（非强制）—— 放不下时整组移到下一行，不从括号中间断开 */
-.lb-picker-item span.lb-pk-nb{display:inline-block;white-space:nowrap;overflow:visible} /* v3606：提级特异性 (0,2,1) > `.lb-picker-item span`(0,1,1) —— 否则被基规则的 display:block 覆盖，括号组会独占整行（变成强制换行，与「非强制」口径不符） */
 .lb-picker-cnt{font-style:normal;font-size:10px;color:#888;display:inline-block;white-space:nowrap} /* v3597（用户要求）：数量在结构上作为整体 —— 数字不被 word-break:break-all 从中间拆断；一行放不下时**整个数量**换行 */
 .lb-egg-lv{font-style:normal;font-size:9px;font-weight:600;display:inline-block;white-space:nowrap;vertical-align:1px} /* v3598（用户要求）：蛋的饲料等级标签（颜色=通用品质色，内联写入）；v3602：去掉 margin-left（改由父行 gap 控制） */
 .lb-picker-sub{display:block;text-align:center;line-height:1.25;font-size:10px;color:#888;margin-top:1px} /* v3602（用户要求）：**数量 + 品质标注** 固定单独成行，插在「中文名」与「英文名」之间 */
@@ -578,16 +576,8 @@ var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // ✅ **已部署并线上验证**（Version ID e20f2673-1b20-4ea8-9c1d-d5ddc8509ded，线上 v20260922-3602；清 SW + Cache 实测（物品侧）：标签顺序 `ic → name → sub → cnt → en`；中文名行 = `<span class="lb-picker-name">霸王龙蛋</span>`（不含数量/标注）；新增行 = `<span class="lb-picker-sub"><em class="lb-picker-cnt">3</em> <em class="lb-egg-lv" style="color:#ff8000">卓越</em></span>`（文本「3 卓越」，**数量在前**）；物种侧（模拟）=「30」；该行 computed `display: block`）v3602（用户要求）：**「数量 + 品质标注」单独成行** —— 从 `lb-picker-name`（中文名行）移出，新增 `.lb-picker-sub` 块级行（居中、10px）插在「中文名」与「英文名」之间；顺序按用户口径 = **数量在前、品质在后**（无数量且无标注则整行不输出）；物种/物品两页共用 `lbPickerItemHtml` 一处生效
 // ✅ **已部署并线上验证**（Version ID 89aa61c2-e762-4ab6-ba1a-8bfaf8a987ea，线上 v20260922-3603；清 SW + Cache 实测：物种主网格 109 格，「阿根廷鹫 / 8 / Argentavis」三行分离（行 top 219 < 235 < 248），`.lb-picker-sub` computed `display:block`；物品侧同款结构（`lbPickerItemHtml`）顺序 `name → sub(3 上等) → en` 不变）v3603（用户要求，v3602 补漏）：**物种侧数量也单独成行** —— 物种**最近栏**（`#lbPickerRecent` 手写模板）与**主网格**（`lbOpenSpeciesPicker` 内局部 `pickerItemHtml`）各一处由「名称 + 数量同行」改为「名称 → `.lb-picker-sub`（数量）→ 英文名」；未驯服/特殊/收容三个折叠区列表本就**不显示数量**，无需改
 // ✅ **已部署并线上验证**（Version ID 55b5202e-de40-4b57-a275-926657628ede → **重部署** f5ad6eca-ceaf-404b-8ee0-66b6aada8073，线上 v20260922-3604；清 SW + Cache 实测：`.lb-picker-item .lb-picker-en` computed `word-break:normal` / `overflow-wrap:normal`；同结构超长词「CarcharodontosaurusUltraLong」新规则 **1 行不断词**（旧 `break-all` 对照 = 2 行「Carcharodontosauru / sUltraLong」）；ASB 1352 物种实测最长单词 `Carcharodontosaurus`（19 字符）宽 **85px = 格子内容宽、不溢出**，最长多词名「Succumbed Revenant Therizinosaur」3 行亦不溢出）v3604（用户要求）：**英文名不允许从单词中间截断换行** —— CSS 追加 `.lb-picker-item .lb-picker-en{word-break:normal;overflow-wrap:normal;hyphens:none}`，覆盖基规则 `.lb-picker-item span{word-break:break-all}`（同属性需提级特异性）；物种页 5 处 + 物品页 1 处共用该类，一处生效；中文名行 / 数量+品质行不变
-// ✅ **已部署并线上验证**（Version ID d2b67761-961f-4462-acc0-7b6ce0beb29f → **重部署** b7dd6b88-982d-4040-bc0f-ba1991dd6bb5，线上 v20260922-3605；打包 `icons2 urls=5155`（+9）、`thumbs files=5053`（+9）；清 SW + Cache 实测：9 个物品 `icon` 字段全部指向各自新图、`lbItemIconUrl()` 9/9 解析到各自的 `thumbs/webp96/*_w96.webp`、9 张 webp HTTP **200 / image/webp**）v3605（用户要求）：**9 张新 Boss 战利品图按难度独立** —— 9 个物品 `PrimalItemTrophy_{Broodmother,Gorilla,Dragon}_{Gamma,Beta,Alpha}` 的 icon 由共用旧图（`TrophyApexBroodmother_Icon` / `TrophyApexDragon_Icon` / `Megapithecus_Trophy`）改为各自的`{Gamma,Beta,Alpha}_{Broodmother,Megapithecus,Dragon}_Trophy`（Megapithecus = 物品键 `..._Gorilla_*`）；走**单图压图 ×9**（`ASA/drops/<图标名>.png` → 96px WebP q70 入 `tmp/webp96/`，登记 `icons2.json` + `webp_map.json`）；旧图标键保留不动
-// ✅ **已部署并线上验证**（Version ID f6ad6c80-a036-4e61-b056-71b99d1eba0b → **修复后重部署** 46a53713-dd6f-47f6-9b38-eb9f26d44a6f → **标记重部署** 58fdc4c5-7823-4936-a653-17269869a563，线上 v20260922-3606；清 SW + Cache 实测：① 括号组「大猩猩（普通）」「喷火龙（精英）」「精灵龙 (春)」均 **1 行、与名字同行**（`nbOnOwnLine=false`），超长名「超长名字测试名称甲乙丙丁（精英）」3 行时括号组 **整组下移且组内 1 行未拆**（`nbOnOwnLine=true`）；⚠️ 首版 `.lb-pk-nb` 被基规则 `.lb-picker-item span{display:block}` 覆盖（实测 computed=block ⇒ 括号组独占整行=强制换行），**追加提级选择器 `.lb-picker-item span.lb-pk-nb`**（(0,2,1)>(0,1,1)）后修正；② 浮窗自定义条目 = **2 条**「自定义食物」/「自定义饮料」；选 Food（base=Type1）时 `lbItemIsPick` 对 Type1/Type2/Type3 实例全 **true**、对 Drink 实例 **false**（不再撞车），食谱（isBlueprint=1）与成品（isBlueprint=0）同属一类 ⇒ 一次选中两部分都筛出）v3606（用户要求，两项）：① **中文名里的「括号+内容」作为整体换行**（非强制）—— 新增 `lbNbZh()` + `.lb-pk-nb{display:inline-block;white-space:nowrap}`，物种侧 5 处 + 物品侧 1 处中文名渲染点接入（放不下时整组换行，不从括号中间断开）；② **自定义食物 / 自定义饮料 改为 2 项且选中后筛出全部** —— 词典 5 条 `PrimalItemCustom{Food,Drink}Recipe_Type1/2` 的 zh 改为「自定义食物」/「自定义饮料」，`lbCanonBase()` 加特例把 3 个 Type 规范成 `CustomFoodRecipe` / `CustomDrinkRecipe`（原正则规范成 `Type1/2/3` ⇒ 食饮同类 Type 撞车且漏 Type2/3）；修好后选中任一项即以 `lbItemIsPick` 筛出该类**全部实例**（`isBlueprint=1` 配方 + `isBlueprint=0` 成品本体）
-// ✅ **已部署并线上验证**（Version ID c2508277-cc3d-41e2-9b29-ffb194db8775 → **标记重部署** 9b169f8f-cb83-4b3e-8108-c95d80eac2a2，线上 v20260922-3607；清 SW + Cache 实测 `.lb-pk-nb` computed **`overflow:visible`**、括号与中文名**基线偏移 0px**（修复前 -3px，基线取底边））：**括号组视觉错位修复** —— `.lb-pk-nb` 继承了基规则 `.lb-picker-item span{overflow:hidden}`，而 **overflow 非 visible 的 inline-block 其基线 = margin-box 底边** ⇒ 括号组按底边对齐、与中文名不齐（「海德拉（精英）」肉眼可见错位）；提级规则加 `overflow:visible` 恢复文字基线对齐
-// ✅ **已部署并线上验证**（Version ID 27f64dd4-6fd4-4859-bf1d-9d918dc58066 → **标记重部署** 9b169f8f-cb83-4b3e-8108-c95d80eac2a2，线上 v20260922-3608；线上直查 `item_zh.json`：`"StartingNote".zh = 初始笔记` ✅、`AlphaWyvern` / `PrimalItemTrophy_AlphaWyvern` = `精英飞龙战利品 / Alpha Wyvern Trophy` ✅（名称取自权威表 `汉化/icon_zh_map.json` 的 `alpha_wyvern_trophy`））：① `StartingNote` 中文名「起始纸条」→「**初始笔记**」；② `AlphaWyvern` / `PrimalItemTrophy_AlphaWyvern` 名称修正 —— 原 `zh=困难` / `en=Alpha`（`src: cal_v3496` 批量推算把难度标签当名字），按**权威来源** `汉化/icon_zh_map.json` 的 `"alpha_wyvern_trophy": "精英飞龙战利品[Alpha Wyvern Trophy]"` 改为 `zh=精英飞龙战利品` / `en=Alpha Wyvern Trophy`
-// ✅ **已部署并线上验证**（Version ID 922d5b00-0c8c-469a-90d9-da89fac06d75 → **标记重部署** f6942c81-60a0-403a-aa23-2f7d3c104dfe，线上 v20260922-3609；清 SW + Cache 实测（`lbItemNoHaveByKind()` 排序单调性 **违规 0**）：资源 111 条「阿马加龙尖刺→鮟鱇鱼油→…→蚕丝」、消耗品 89 条「暗影牛排→白色浆果(种子)→便签→藏宝图→次级解药→…」、附件 51 条「底盘→冻存器→滑索马达附件→滑翔翼→火炮→…」、战利品 100 条「阿根廷鹫(爪)→霸王龙(精英霸王龙/战利品)→便签(初始笔记)→冰霜蠕虫女王→冰泰坦→…」、染料 65 条「白色→冰色→藏蓝→草绿色→…」——排序键 = 主词中文（如「精英霸王龙战利品」主词取 **霸王龙**，与物种表位置对应））：**物品「其它」栏排序 → 英文主体词的主词中文拼音（完全对齐物种排序）** —— 新增 `lbItemSortKey()`：英文名 → `lbStripPrefix()` 剥前缀 → 主体词（末词）→ **主词中文**（优先 `lbZhDeep()` 深查，与物种同一词表；查不到退化用中文名去类别后缀蛋/种子/战利品/旗帜/染料/饲料/肉/汤/鞍/皮肤/蓝图/笔记/骨架…）；`lbItemNoHaveByKind()` 各组内排序由「中文名拼音」改为该键，主词相同再按完整中文；**蛋组例外保留**（v3598 饲料等级排序在 `lbPickerBuildItemOther()` 内覆盖）
-// ✅ **已部署并线上验证**（Version ID d9e58686-5427-4058-b18a-39d8dd839ba6 → **修复后重部署** 9566175c-a9a6-4f67-ab74-6dc4ce392c5d，线上 v20260922-3611；清 SW + Cache 实测 `lbItemNoHaveByKind().trophy` 100 条：BOSS **31 条全部前置**（`firstNonBoss=31` —— 与 BOSS 条数完全对齐）、同 BOSS **全部相邻**（`adjOk=true`）、同 BOSS 内难度 **升序 0→1→2**（`diffOk=true`）、**寒冰飞龙女王三条相邻**（第 10/11/12 位：简单 d0 → 中等 d1 → 困难 d2）；组首 = 大猩猩（普通/困难/精英）→ 困难电鳗战利品 → 独眼巨人×3 → 海德拉×3 → …；非 BOSS 首条 = 阿根廷鹫爪）v3610（用户要求）：**战利品组加更高级排序** —— ① **BOSS 战利品前置**（名单 = 用户确认的 11 个竞技场 Boss：育母蜘蛛/大猩猩/喷火龙/蛇发女妖/狮身蝎尾兽/独眼巨人/海德拉/君王泰坦/寒冰飞龙女王/罗克韦尔/电鳗首领）② BOSS 之间按 **BOSS 名中文拼音** ③ **同 BOSS 按难度 普通/简单(Gamma) → 困难/中等(Beta) → 精英(Alpha)** ④ 其余非 BOSS 战利品维持 `lbItemSortKey`；新增 `LB_BOSS_TROPHY` / `lbTrophyBossOf()` / `lbTrophyDiffRank()`（难度以**英文/键名的 Gamma/Beta/Alpha** 为准 —— 中文难度词各 Boss 不统一：「困难」在育母蜘蛛系=Alpha、在喷火龙系=Beta）。**修复**「寒冰飞龙女王三条被拆散」（原排序键带难度前缀 ⇒ 散落第 23/45/98 位）
-// ✅ **已部署并线上验证**（Version ID 9566175c-a9a6-4f67-ab74-6dc4ce392c5d，线上 v20260922-3611；修复前线上诊断 `cmp(Alpha,Beta)=-1` / `cmp(Beta,Gamma)=-1`（按主词拼音，应 +1）；修复后线上实测 `lbItemNoHaveByKind().trophy`：BOSS 31 条全前置（`firstNonBoss=31`）、同 BOSS 相邻（`adjOk=true`）、同 BOSS 内难度升序（`diffOk=true`）、寒冰飞龙女王 10/11/12 相邻）v3611（修复 v3610）：`bossOn` 语义为 `BOSS?0:1`，但非 BOSS 分支误写成 `if(!x.bossOn)` ⇒ **BOSS 条目反被当作非 BOSS** 走主词拼音排序 （症状：同 BOSS 内 精英→困难→普通、寒冰飞龙女王三条散落 9/14/30）⇒ 改为 `if(x.bossOn)`；实测修复前 `cmp(Alpha,Beta)=-1`（按拼音）应为 `+1`（按难度）
-// ✅ **已部署并线上验证**（Version ID 542fecaa-ef54-40f1-b41b-e2b43f93fc05，线上 v20260922-3612；清 SW + Cache 实测 `lbItemNoHaveByKind().dye` **65 条**：家族顺序 = `Red(9) → Orange(9) → Yellow(10) → Green(4) → Spring(1) → Cyan(2) → Azure(3) → Blue(10) → Violet(2) → Magenta(3) → Greyscale(10) → Brown(2)`（`famOk=true`）；同家族内 **序号升序**（`numOk=true`，如 Red 1→8、Greyscale 1→10）；**散色落位实测** = 砖红→Red 末、桔色→Orange 末、金黄/黄芥末→Yellow 末、草绿→Green 末、溪水蓝/雾蓝→Blue 末、蓟紫→Violet 末、泡泡糖粉→Magenta 末）v3612（用户要求）：**染料组排序 → 色系（游戏染色板颜色 ID 序）+ 序号** —— 排序键 = ① **色系**（`Red → Orange → Yellow → Green → Spring → Cyan → Azure → Blue → Violet → Magenta → Greyscale → Brown`，实测各家族对应 colorId 段单调递增：128/136/144/162/171/176/185/192/203/211/224/234）② 同色系内 **序号升序**（Red 1-8 / Orange 1-8 / Yellow 1-8 / Greyscale 1-10 / Blue 1-8 …）③ **9 条无序号散色按颜色插到所属色系编号条目之后**（Brick→红系、Tangerine→橙系、Gold/Mustard→黄系、Grass→绿系、Stream/Haze→蓝系、Thistle→紫系、Bubblegum→品红系；散色之间按词典 `Misc_N` 编号）；新增 `LB_DYE_FAM_ORDER` / `LB_DYE_MISC_FAM` / `lbDyeOrderOf()` + `lbItemNoHaveByKind()` 内 dye 分支（dye 组 65 条）
-// ✅ **已部署并线上验证**（Version ID 3650e602-6fbf-4179-84a9-7b0398a80360 → **修复后重部署** 15e5944e-eb42-4fd9-b335-cd9ffcebba18，线上 v20260922-3613；清 SW + Cache 实测 `lbItemNoHaveByKind().dye` = **129 条**（65 → 129）、`famOk=true` / `numOk=true`，家族分布 Red 9 / Orange 10 / Yellow 9 / Chartreuse 9 / Green 9 / Spring 8 / Cyan 10 / Azure 8 / Blue 9 / Violet 9 / Magenta 9 / Fuschia 9 / Greyscale 10 / Brown 10 / 末尾未定位 1（Sky）；词典键 1726 → **1790**、"其它"栏 524 条。**修复 2 处**：① `Dye_Crystal` 剥 `Dye_` 后 base 命中另一物品「水晶(Crystal)」⇒ en 归一撞车、被跨组去重丢弃（修法 = `lbItemAggKey` **原始键优先取 en** + **en 归一前剥 `Dye ` 前缀**，既保住 `Dye X`/`X` 双份合并、又不再误吞同名染料）② `Dye_Celeste` 官方中文「蔚蓝色」不含「染料」二字 ⇒ 落进消耗品组（染料判定加 **键前缀 `^Dye_`**）。注：「海蓝色染料」出现两条 = Aquamarine 与 Ocean 的**官方同名**（非重复条目））v3613（用户要求）：**物品栏不再受存档限制（先落地染料）** —— 词典由 11 服存档扫描（`_build_item_zh.py` → `dino-data/{服}_item.json.gz`）生成 ⇒ 存档没出现过的物品不显示；本次按游戏中文语言包补全 ASA **全量 127 色染料**：① `汉化/item_zh.json` 新增 **64 条**（键 `Dye_<色名>`、`en=<色名> Coloring`、`zh=` PO 官方中文、`kind=consumable`、`src=po_dye_full`；1726→**1790** 键）② 前端排序改为**按游戏染色板颜色 ID 归入 14 个色系**、色系内按 colorId 升序：`Red(128)→Orange(136)→Yellow(144)→Chartreuse(152)→Green(160)→Spring(168)→Cyan(176)→Azure(185)→Blue(192)→Violet(200)→Magenta(208)→Fuschia(216)→Greyscale(224)→Brown(234)`（242-254 段跨家族补充色走 `LB_DYE_FAM_FIX` 显式映射；`Sky` 无 colorId ⇒ 排末尾）③ 新增 `LB_DYE_FAM_RANGE` / `LB_DYE_FAM_FIX` / `lbDyeColorId()` / `lbDyeFamOf()`，`lbDyeOrderOf()` 重写（色系内序优先取 colorId，缺则退化用编号）
-var LB_VERSION = 'v20260922-3613';
+// ⏳ **未部署** v3605（用户要求）：**9 张新 Boss 战利品图按难度独立** —— 9 个物品 `PrimalItemTrophy_{Broodmother,Gorilla,Dragon}_{Gamma,Beta,Alpha}` 的 icon 由共用旧图（`TrophyApexBroodmother_Icon` / `TrophyApexDragon_Icon` / `Megapithecus_Trophy`）改为各自的`{Gamma,Beta,Alpha}_{Broodmother,Megapithecus,Dragon}_Trophy`（Megapithecus = 物品键 `..._Gorilla_*`）；走**单图压图 ×9**（`ASA/drops/<图标名>.png` → 96px WebP q70 入 `tmp/webp96/`，登记 `icons2.json` + `webp_map.json`）；旧图标键保留不动
+var LB_VERSION = 'v20260922-3605';
 var LB_SCHEMA_VER = 17;  // v3428：16→17 —— facilities 新增 isPublic（后端 2026-09-20 上线）+ 补采家族（耕地/船体/神器箱等 2454 条）、rec 新增 isPublic/isPlayerStruct；不升版 ⇒ 旧 IndexedDB 缓存继续命中，新设施与新字段永不出现
 // 历史：v1069 14→15——根因：recs 构建结果随 IndexedDB 持久化（v931）、
                          //   命中后跳过重建；仅改 _decorRe 等**构建期过滤**时，旧 rec 会长期残留（实测南瓜 rec 改过滤后仍显示）。
@@ -9179,18 +9169,13 @@ function lbItemAggKey(raw){
   //   ⇒ 以词典 `en` 为归一身份（容器组 + 物品「其它」栏两处共用）；en 不同则视为不同物品（如 Horn / The Horn）
   var _en = '';
   try{
-    var _zh = LB_ITEM_ZH || {}, _cs = [], _rawS = String(raw || '');
-    // v3613 修复：**原始键在词典中存在时优先用它取 en** —— 否则 `Dye_Crystal`（水晶蓝染料）剥 `Dye_` 后 base='Crystal'
-    //   会命中另一个物品「水晶(Crystal)」⇒ en 归一成同一键 ⇒ 被跨组去重丢弃（线上实测染料少 1 条）
-    if(_zh[_rawS]) _cs.push(_rawS);
-    if(k && k !== _rawS) _cs.push(k);
+    var _zh = LB_ITEM_ZH || {}, _cs = [];
+    if(k) _cs.push(k);
     try{ if(typeof lbItemBaseCands === 'function') _cs = _cs.concat(lbItemBaseCands(raw) || []); }catch(e1){}
-    if(!_zh[_rawS]) _cs.push(_rawS);
+    _cs.push(String(raw || ''));
     for(var _i = 0; _i < _cs.length; _i++){ var _t = _zh[_cs[_i]]; if(_t && _t.en){ _en = String(_t.en).trim(); break; } }
   }catch(e2){}
-  // v3613：en 归一前剥 `Dye ` 前缀 —— `Dye Red 1 Burn` 与 `Red 1 Burn` 是同一物品的两种写法（仍合并）；
-  //   `Crystal Coloring` 无 Dye 前缀 ⇒ 与「水晶 Crystal」保持区分
-  if(_en) k = 'en:' + _en.replace(/^Dye[\s_]+/i, '').trim().toLowerCase();
+  if(_en) k = 'en:' + _en.toLowerCase();
   return k;
 }
 // v3586（用户要求）：物品 TAB 显示「全服拥有数量」—— 聚合键与容器组 / 物品栏同源（lbItemAggKey，含骨架归并 / en 归一）
@@ -13842,10 +13827,6 @@ function lbItemBaseCands(cls){
 //   以及仅长键（实测 269 条）；统一：base 一律返回规范短名（跨源 join 口径唯一），词条通过反查表解析（名字/图标不丢）
 function lbCanonBase(b){
   var s = String(b || '');
-  // v3606（用户要求）：自定义食物/饮料 —— 3 个 Type 归一到同一规范名；Food 与 Drink 不得互相撞车
-  //   （原正则会把 PrimalItemCustomFoodRecipe_Type1 规范成 `Type1`，导致食/饮同类 Type 撞车且漏 Type2/3）
-  var mc = s.match(/^PrimalItem(CustomFoodRecipe|CustomDrinkRecipe)(?:_Type\d+)?$/);
-  if(mc) return mc[1];
   var m = s.match(/^PrimalItem[A-Za-z]+_(.+)$/);
   return (m && m[1]) ? m[1] : s.replace(/^PrimalItem_/, '');
 }
@@ -15810,7 +15791,7 @@ function lbOpenSpeciesPicker(){
         html+='<div class="lb-picker-item'+sel+'" data-cls="'+k+'" onclick="lbPickerSelect(this)" title="'+lbSpLabel(k)+'">';
         html+=(icon?'<div class="lb-picker-ic"><img src="'+icon+'" loading="lazy"'+lbIconFilterStyle(icon,'biology')+' onerror="lbImgRetry(this)"></div>':'<div class="lb-picker-ic lb-picker-ic-none">?</div>');
         var _rc = classMap[k] || 0;   // v3589（用户要求）：最近选择栏也显示拥有数量（与主网格/折叠区同款 .lb-picker-cnt）
-        html+='<span class="lb-picker-name">'+lbNbZh(nm.zh)+'</span>';
+        html+='<span class="lb-picker-name">'+nm.zh+'</span>';
         if(_rc) html+='<span class="lb-picker-sub"><em class="lb-picker-cnt">'+_rc+'</em></span>';   // v3603（用户要求）：数量单独成行（夹在中文与英文之间）
         if(nm.eng) html+='<span class="lb-picker-en">'+nm.eng+'</span>';
         html+='</div>';
@@ -15841,7 +15822,7 @@ function lbOpenSpeciesPicker(){
       var nm=lbSpName(k);
       var s='<div class="lb-picker-item'+sel+'" data-cls="'+k+'" onclick="lbPickerSelect(this)" title="'+lbSpLabel(k)+'">';
       s+=(icon?'<div class="lb-picker-ic"><img src="'+icon+'" loading="lazy"'+lbIconFilterStyle(icon,'biology')+' onerror="lbImgRetry(this)"></div>':'<div class="lb-picker-ic lb-picker-ic-none">?</div>');
-      s+='<span class="lb-picker-name">'+lbNbZh(nm.zh)+'</span>';
+      s+='<span class="lb-picker-name">'+nm.zh+'</span>';
       if(withCnt && cnt) s+='<span class="lb-picker-sub"><em class="lb-picker-cnt">'+cnt+'</em></span>';   // v3603（用户要求）：数量单独成行（夹在中文与英文之间）
       if(nm.eng) s+='<span class="lb-picker-en">'+nm.eng+'</span>';
       s+='</div>';
@@ -16407,7 +16388,7 @@ function lbPickerBuildNoHave(){
     var nm=lbSpName(k);
     h+='<div class="lb-picker-item'+sel+'" data-cls="'+k+'" onclick="lbPickerSelect(this)" title="'+lbSpLabel(k)+'">';
     h+=(icon?'<div class="lb-picker-ic"><img src="'+icon+'" loading="lazy"'+lbIconFilterStyle(icon,'biology')+' onerror="lbImgRetry(this)"></div>':'<div class="lb-picker-ic lb-picker-ic-none">?</div>');
-    h+='<span class="lb-picker-name">'+lbNbZh(nm.zh)+'</span>';
+    h+='<span class="lb-picker-name">'+nm.zh+'</span>';
     if(nm.eng) h+='<span class="lb-picker-en">'+nm.eng+'</span>';
     h+='</div>';
   });
@@ -16460,7 +16441,7 @@ function lbPickerBuildSpecial(){
     var nm=lbSpName(k);
     h+='<div class="lb-picker-item'+sel+'" data-cls="'+k+'" onclick="lbPickerSelect(this)" title="'+lbSpLabel(k)+'">';
     h+=(icon?'<div class="lb-picker-ic"><img src="'+icon+'" loading="lazy"'+lbIconFilterStyle(icon,'biology')+' onerror="lbImgRetry(this)"></div>':'<div class="lb-picker-ic lb-picker-ic-none">?</div>');
-    h+='<span class="lb-picker-name">'+lbNbZh(nm.zh)+'</span>';
+    h+='<span class="lb-picker-name">'+nm.zh+'</span>';
     if(nm.eng) h+='<span class="lb-picker-en">'+nm.eng+'</span>';
     h+='</div>';
   });
@@ -16515,7 +16496,7 @@ function lbPickerBuildExtra(){
     var nm=lbSpName(k);
     var s='<div class="lb-picker-item'+sel+'" data-cls="'+k+'" onclick="lbPickerSelect(this)" title="'+lbSpLabel(k)+'">';
     s+=(icon?'<div class="lb-picker-ic"><img src="'+icon+'" loading="lazy"'+lbIconFilterStyle(icon,'biology')+' onerror="lbImgRetry(this)"></div>':'<div class="lb-picker-ic lb-picker-ic-none">?</div>');
-    s+='<span class="lb-picker-name">'+lbNbZh(nm.zh)+'</span>';
+    s+='<span class="lb-picker-name">'+nm.zh+'</span>';
     if(nm.eng) s+='<span class="lb-picker-en">'+nm.eng+'</span>';
     s+='</div>';
     return s;
@@ -16663,10 +16644,6 @@ function lbDyeDotHtml(base, sz){
   return '<span class="lb-fcol" style="display:inline-flex;align-items:center;justify-content:center">' + lbColorDotHtml(d.hex, d.name, sz || 12) + '</span>';
 }
 // v1373：单个物品格（对齐物种页 lb-picker-item 结构；图标不反色）
-// v3606（用户要求）：中文名里的「括号+内容」包成不可拆整体（配套 CSS .lb-pk-nb）
-function lbNbZh(s){
-  return String(s == null ? '' : s).replace(/([（(][^（()）]{1,40}[）)])/g, '<span class="lb-pk-nb">$1</span>');
-}
 function lbPickerItemHtml(kind, base, cls, cnt){
   var mm = null; try{ mm = lbItemMeta(cls || base); }catch(e){}
   var zh = (mm && mm.zh) || base;
@@ -16685,7 +16662,7 @@ function lbPickerItemHtml(kind, base, cls, cnt){
   var _sel = (LB.pickItem && LB.pickItem.kind === kind && LB.pickItem.base === base) ? ' selected' : '';
   return '<div class="lb-picker-item' + _sel + '" data-cls="item:' + lbAttr(kind) + ':' + lbAttr(base) + '" onclick="lbPickerSelect(this)" title="' + lbAttr(zh) + '">'
     + (_dyeDot ? '<div class="lb-picker-ic">' + _dyeDot + '</div>' : (url ? '<div class="lb-picker-ic"><img src="' + url + '" loading="lazy" onerror="lbImgRetry(this)"></div>' : '<div class="lb-picker-ic lb-picker-ic-none">?</div>'))
-    + '<span class="lb-picker-name">' + lbNbZh(lbAttr(zh)) + '</span>'
+    + '<span class="lb-picker-name">' + lbAttr(zh) + '</span>'
     + _sub
     + (en ? '<span class="lb-picker-en">' + lbAttr(en) + '</span>' : '')
     + '</div>';
@@ -16731,102 +16708,6 @@ function lbEggLvHtml(base){
   if(!lv || !LB_EGG_LV[lv]) return '';
   return '<em class="lb-egg-lv" style="color:' + LB_EGG_LV[lv].c + '">' + LB_EGG_LV[lv].n + '</em>';
 }
-// v3609（用户要求）：物品排序键 —— 与物种 `lbSortKey()` **同口径**：英文剥前缀 → 主体词（末词）→ 主词中文
-//   主词中文优先走 lbZhDeep()（与物种同一张词表，故蛋「Egg Argent」→ Argent → 阿根廷鹫，与物种表位置对应）；
-//   查不到则退化用中文名去掉类别后缀（蛋/种子/战利品/旗帜/染料/饲料/肉/汤/鞍/皮肤/蓝图/笔记/骨架…）
-function lbItemSortKey(base){
-  var t = (LB_ITEM_ZH || {})[base] || {};
-  var en = String(t.en || ''), zh = String(t.zh || '');
-  var e2 = en;
-  try{ var st = lbStripPrefix(en); if(st && st.base) e2 = st.base; }catch(e){}
-  var parts = e2.split(/[\s_]+/).filter(function(x){ return !!x; });
-  var mwEn = parts.length ? parts[parts.length - 1] : e2;
-  var mwZh = '';
-  try{ mwZh = lbZhDeep(mwEn) || ''; }catch(e){}
-  if(!mwZh && zh){
-    mwZh = zh.replace(/(受精卵|蛋|种子|幼苗|战利品|旗帜|染料|饲料|肉|汤|鞍|皮肤|外观|蓝图|笔记|纸条|配方|头骨|骨架|工具|武器)$/, '');
-  }
-  return mwZh || mwEn || zh || base;
-}
-// v3610（用户要求）：战利品组排序 —— **BOSS 战利品前置**；同 BOSS 按难度 **普通/简单 → 困难/中等 → 精英**；BOSS 之间按 BOSS 名中文拼音
-//   BOSS 名单（用户确认的 11 个竞技场 Boss）
-var LB_BOSS_TROPHY = [
-  { n:'育母蜘蛛', re:/Broodmother|育母蜘蛛/i },
-  { n:'大猩猩', re:/Gorilla|Megapithecus|大猩猩/i },
-  { n:'喷火龙', re:/\bDragon\b|喷火龙/i },
-  { n:'蛇发女妖', re:/Gorgon|蛇发女妖/i },
-  { n:'狮身蝎尾兽', re:/Manticore|狮身蝎尾兽/i },
-  { n:'独眼巨人', re:/Cyclops|独眼巨人/i },
-  { n:'海德拉', re:/Hydra|海德拉/i },
-  { n:'君王泰坦', re:/King\s*Titan|Kaiju_King|君王泰坦/i },
-  { n:'寒冰飞龙女王', re:/IceWyvern|Nunatak|寒冰飞龙/i },
-  { n:'罗克韦尔', re:/Rockwell|罗克韦尔/i },
-  { n:'电鳗首领', re:/EelBoss|电鳗/i }
-];
-function lbTrophyBossOf(base){
-  var t = (LB_ITEM_ZH || {})[base] || {};
-  var hay = String(base) + ' ' + String(t.en || '') + ' ' + String(t.zh || '');
-  for(var i = 0; i < LB_BOSS_TROPHY.length; i++){ if(LB_BOSS_TROPHY[i].re.test(hay)) return LB_BOSS_TROPHY[i]; }
-  return null;
-}
-// 难度序：普通/简单(Gamma)=0 → 困难/中等(Beta)=1 → 精英(Alpha)=2 → 无标记=3
-//   以**英文/键名**的 Gamma/Beta/Alpha 为准（中文难度词各 Boss 用词不统一：「困难」在育母蜘蛛系=Alpha、在喷火龙系=Beta）
-function lbTrophyDiffRank(base){
-  var t = (LB_ITEM_ZH || {})[base] || {};
-  var hay = String(base) + ' ' + String(t.en || '');
-  var zn = String(t.zh || '');
-  if(/\bAlpha\b|_Alpha/i.test(hay)) return 2;
-  if(/\bBeta\b|_Beta/i.test(hay)) return 1;
-  if(/\bGamma\b|_Gamma/i.test(hay)) return 0;
-  if(/精英/.test(zn)) return 2;
-  if(/困难|中等/.test(zn)) return 1;
-  if(/简单|普通/.test(zn)) return 0;
-  return 3;
-}
-// v3613（用户要求）：染料**补全到游戏全量**（ASA 共 127 色；词典原 65 条来自 11 服存档扫描 ⇒ 缺 64 条）
-//   + 排序：按「游戏颜色 ID（染色板色号）」归入所属色系，色系内按 colorId 升序
-var LB_DYE_FAM_ORDER = ['Red','Orange','Yellow','Chartreuse','Green','Spring','Cyan','Azure','Blue','Violet','Magenta','Fuschia','Greyscale','Brown'];
-// colorId 段 → 家族索引（实测色段：Red 128-135 / Orange 136-143 / Yellow 144-151 / Chartreuse 152-159 / Green 160-167 /
-//   Spring 168-175 / Cyan 176-184 / Azure 185-191 / Blue 192-199 / Violet 200-207 / Magenta 208-215 / Fuschia 216-223 /
-//   Greyscale 224-233 / Brown 234-241）
-var LB_DYE_FAM_RANGE = [[128,135,0],[136,143,1],[144,151,2],[152,159,3],[160,167,4],[168,175,5],[176,184,6],[185,191,7],[192,199,8],[200,207,9],[208,215,10],[216,223,11],[224,233,12],[234,241,13]];
-// 242-254 段（活动/补充色）：跨色段，按色名显式归位（依据官方染料表家族列）
-var LB_DYE_FAM_FIX = { 'Cream':13, 'Brick':0, 'Tangerine':1, 'Gold':1, 'Mustard':2, 'Craggy-Dew':3, 'Grass':4,
-                       'Stream':6, 'Marine':7, 'Haze':8, 'Dusk':9, 'Thistle':10, 'Bubblegum':11, 'Parchement':13 };
-function lbDyeColorId(nm){
-  if(!LB_COLORS) return 0;
-  if(!LB._dyeNameIdx){
-    var ix = {};
-    Object.keys(LB_COLORS).forEach(function(k){
-      var v = LB_COLORS[k] || {}, n = String(v.name || '').toLowerCase();
-      if(!n) return;
-      var id = Number(k) || 0, pre = ix[n];
-      if(pre === undefined){ ix[n] = id; return; }
-      var preCol = (pre >= 128 && pre <= 254), idCol = (id >= 128 && id <= 254);
-      if(idCol && !preCol) ix[n] = id; else if(idCol === preCol && id < pre) ix[n] = id;
-    });
-    LB._dyeNameIdx = ix;
-  }
-  return LB._dyeNameIdx[String(nm || '').toLowerCase()] || 0;
-}
-function lbDyeFamOf(nm){
-  if(LB_DYE_FAM_FIX[nm] !== undefined) return LB_DYE_FAM_FIX[nm];
-  var id = lbDyeColorId(nm);
-  for(var i = 0; i < LB_DYE_FAM_RANGE.length; i++){ var r = LB_DYE_FAM_RANGE[i]; if(id >= r[0] && id <= r[1]) return r[2]; }
-  return -1;
-}
-function lbDyeOrderOf(base){
-  var t = (LB_ITEM_ZH || {})[base] || {};
-  var s = String(t.en || base).replace(/^Dye[\s_]+/i, '').replace(/[\s_]+Coloring$/i, '').trim();
-  var m = s.match(/^([A-Za-z]+)[\s_]+(\d+)[\s_]+(.+)$/);      // 「Red 1 Burn」形态
-  var colorName = m ? m[3] : s;                                  // 色名（Burn / Aquamarine / Brick …）
-  var f = m ? LB_DYE_FAM_ORDER.indexOf(m[1]) : -1;               // 带编号者：首词即家族
-  if(f < 0) f = lbDyeFamOf(colorName);                           // 无编号者：按 colorId 段 / 例外表归位
-  var cid = lbDyeColorId(colorName);
-  var n = cid || (m ? Number(m[2]) : 9000);                      // 色系内序：优先 colorId，缺则退化
-  if(f < 0){ f = 999; n = 9999; }                                // 未识别（如 Sky / Dyes）排最后
-  return { f:f, n:n, zn:colorName };
-}
 function lbItemNoHaveByKind(){
   // v3575（用户要求）：物品页不再区分已拥有/未拥有 ⇒ 不再剔除已拥有（全量按 kind 分组）
   // v3578（用户要求）：「其它」栏 4 类（resource/consumable/attachment/trophy）**不过滤物种绑定**（全量 742 条）；护甲/武器/泰克仍排物种绑定
@@ -16851,52 +16732,15 @@ function lbItemNoHaveByKind(){
     // v3581（用户要求）：染料独立分组（与消耗品同级）——中文名含「染料」者从 consumable 移出（词典里染料键名无规律：Misc_*/Yellow_*/Orange_*/Blue_*/Greyscale_* 等）
     // v3594（用户要求）：「染料」**本体**是特例 —— 词典键 `Dye`（zh 恰为「染料」/ en `Dyes`，kind=consumable）不是某种颜色，应留在消耗品组；
     //   故此处加例外（键名 + en 双判据，防前缀双份变体），其余 126 条单色染料仍进 dye 组
-    // v3613：染料判定加「键以 `Dye_` 开头」—— 官方中文里个别染料名不含「染料」二字（如「蔚蓝色」= Celeste），
-    //   仅按中文判定会漏进消耗品组（线上实测缺 1 条）
-    if((String(t.zh || '').indexOf('染料') >= 0 || /^Dye_/.test(String(base))) && base !== 'Dye' && String(t.en || '') !== 'Dyes'){ k = 'dye'; }
+    if(String(t.zh || '').indexOf('染料') >= 0 && base !== 'Dye' && String(t.en || '') !== 'Dyes'){ k = 'dye'; }
     var kb = _aggKey(base);
     if(_seen[kb]) return;   // v3583：**跨分组**去重（同一物品因词典 kind 不一致分落两组时只保留先出现的，如 有机聚合物）
     _seen[kb] = 1;
     byKind[k].push(base);
   });
-  // v3609（用户要求）：排序 = **英文主体词的主词中文拼音**（完全对齐物种 `lbSortKey` 口径），主词相同再按完整中文
-  // v3610（用户要求）：**trophy 组专用**——① BOSS 战利品前置 ② BOSS 间按 BOSS 名中文拼音 ③ 同 BOSS 按难度 普通/简单→困难/中等→精英 ④ 再按主词中文
   var coll = new Intl.Collator('zh-Hans-CN');
   Object.keys(byKind).forEach(function(k){
-    if(k === 'trophy'){
-      var rows = byKind[k].map(function(b){
-        var bo = null; try{ bo = lbTrophyBossOf(b); }catch(e){}
-        return { b:b, boss: bo ? bo.n : '', bossOn: bo ? 0 : 1, diff: lbTrophyDiffRank(b),
-                 sk: lbItemSortKey(b), zn: String((zh[b] || {}).zh || b) };
-      });
-      rows.sort(function(x, y){
-        if(x.bossOn !== y.bossOn) return x.bossOn - y.bossOn;
-        // v3611 修复：bossOn = BOSS?0:1 ⇒ 非 BOSS 分支应为 `if(x.bossOn)`（原 `!x.bossOn` 取反，导致 BOSS 条目误走主词拼音排序）
-        if(x.bossOn){ var r0 = coll.compare(x.sk, y.sk); return r0 || coll.compare(x.zn, y.zn); }
-        if(x.boss !== y.boss) return coll.compare(x.boss, y.boss);
-        if(x.diff !== y.diff) return x.diff - y.diff;
-        var r1 = coll.compare(x.sk, y.sk); return r1 || coll.compare(x.zn, y.zn);
-      });
-      byKind[k] = rows.map(function(r){ return r.b; });
-      return;
-    }
-    if(k === 'dye'){
-      // v3612（用户要求）：染料 —— 色系（游戏染色板颜色 ID 序）→ 同色系内序号升序 → 无序号散色排在本色系编号条目之后
-      var drows = byKind[k].map(function(b){
-        var o = lbDyeOrderOf(b);
-        return { b:b, f:o.f, n:o.n, zn:String((zh[b] || {}).zh || b) };
-      });
-      drows.sort(function(x, y){
-        if(x.f !== y.f) return x.f - y.f;          // 色系（游戏颜色 ID 序：Red→…→Brown）
-        if(x.n !== y.n) return x.n - y.n;          // 色系内按 colorId 升序
-        return coll.compare(x.zn, y.zn);
-      });
-      byKind[k] = drows.map(function(r){ return r.b; });
-      return;
-    }
     byKind[k].sort(function(a, b){
-      var r = coll.compare(lbItemSortKey(a), lbItemSortKey(b));
-      if(r) return r;
       return coll.compare(String((zh[a]||{}).zh || a), String((zh[b]||{}).zh || b));
     });
   });
