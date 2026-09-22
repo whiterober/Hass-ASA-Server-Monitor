@@ -1250,8 +1250,15 @@ def safe_join(base, rel):
 # v988：并发上限 —— 防「线程爆炸」：ThreadingHTTPServer 每请求一线程，前端刷新轮询风暴时
 #       会瞬间起上千线程 → 内存/句柄耗尽 → 进程退出 → cloudflared 报 actively refused（502）
 # v996：32 → 64（实测页面一轮数据下载就要 33 个 HEAD，32 上限必然打满后静默断连）
+# ⭐ 2026-09-22（方案A·根因修复）：`_CONC` 语义变更 = **「同时处理的请求数」**（不再是同时存在的连接数）；
+#   另设 `_CONN` 仅做「防线程爆炸」的连接级上限（keep-alive 空闲连接吃 `_CONN`，**不吃请求令牌**）。
+#   起因实测：令牌原先包在 finish_request 外层 ⇒ 生命周期 = 整条 TCP 连接（含 keep-alive 空闲期）
+#   ⇒ 浏览器/cloudflared 连接池里的空闲连接持续吃令牌 ⇒ 有效并发从 64 跌到 ~22–24
+#   ⇒ 页面一轮突发（30–44 个 HEAD + 多文件）必然 503 或排队 ⇒ 「下载卡/慢」、HEAD 8–10s 超时、单文件偶发 36.7s。
 _CONC_LIMIT = 64
-_CONC = __import__('threading').Semaphore(_CONC_LIMIT)
+_CONC = __import__('threading').Semaphore(_CONC_LIMIT)          # 请求级（真正在处理的请求）
+_CONN_LIMIT = 192
+_CONN = __import__('threading').Semaphore(_CONN_LIMIT)          # 连接级（含 keep-alive 空闲连接）
 
 
 class _GuardedServer(ThreadingHTTPServer):
@@ -1270,7 +1277,9 @@ class _GuardedServer(ThreadingHTTPServer):
         # v996 根因修复：v995 的「快速失败」= 直接 shutdown_request → **不回任何 HTTP 响应**，
         #   cloudflared 侧表现为 "Unable to reach the origin service: EOF"（13:23:58 实测成批出现）。
         #   改为回 **503 + Retry-After:1**（正常 HTTP 响应，隧道不再报 EOF，前端可据此退避重试）。
-        if not _CONC.acquire(blocking=False):
+        # ⭐ 2026-09-22（方案A）：此处只做**连接级**限流（防线程爆炸）；
+        #   请求级令牌（_CONC）已下沉到 Handler._guarded，避免空闲连接占住请求并发。
+        if not _CONN.acquire(blocking=False):
             try:
                 _busy = b'{"ok":false,"busy":true,"error":"server busy, retry"}'
                 request.sendall(
@@ -1297,7 +1306,7 @@ class _GuardedServer(ThreadingHTTPServer):
                 self._threads.append(t)
             t.start()
         except Exception:
-            _CONC.release()
+            _CONN.release()
             raise
 
     def _lb_guarded_run(self, request, client_address):
@@ -1310,7 +1319,7 @@ class _GuardedServer(ThreadingHTTPServer):
                 self.shutdown_request(request)
             except Exception:
                 pass
-            _CONC.release()
+            _CONN.release()
 
     def handle_error(self, request, client_address):
         # v988：简洁错误日志（避免 traceback 刷屏淹没关键信息）
@@ -1329,6 +1338,36 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, HEAD')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
         self.send_header('Access-Control-Max-Age', '86400')
+
+    # ⭐ 2026-09-22（方案A）：并发令牌改为**按请求粒度**持有 —— 只包住「一次请求的处理（含响应写入）」，
+    #   连接空闲等待下一请求时不占令牌（原先包在 finish_request 外层 = 占整条连接生命周期）。
+    def _busy_503(self):
+        body = b'{"ok":false,"busy":true,"error":"server busy, retry"}'
+        self.close_connection = True   # 关连接：防未读尽的 POST body 被当成下一个请求
+        try:
+            self.send_response(503)
+            self._cors()
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.send_header('Retry-After', '1')
+            self.send_header('Cache-Control', 'no-cache')
+            self.send_header('Content-Length', str(len(body)))
+            self.send_header('Connection', 'close')
+            self.end_headers()
+            try:
+                self.wfile.write(body)
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+    def _guarded(self, fn):
+        if not _CONC.acquire(blocking=False):
+            self._busy_503()
+            return
+        try:
+            return fn()
+        finally:
+            _CONC.release()
 
     def _send(self, code, obj, ctype='application/json; charset=utf-8'):
         body = json.dumps(obj, ensure_ascii=False).encode('utf-8') if ctype.startswith('application/json') else obj
@@ -1371,11 +1410,15 @@ class Handler(BaseHTTPRequestHandler):
         """HEAD 请求：与 GET 同逻辑但只发响应头（前端增量缓存探测 Last-Modified 依赖）。"""
         self._head_only = True
         try:
-            self.do_GET()
+            self._guarded(self._do_GET_body)   # v2026-09-22（方案A）：请求级令牌
         finally:
             self._head_only = False
 
     def do_GET(self):
+        """v2026-09-22（方案A）：令牌只包住「一次请求的处理」。"""
+        self._guarded(self._do_GET_body)
+
+    def _do_GET_body(self):
         parsed = urlparse(self.path)
         path = parsed.path
         if path == '/healthz':
@@ -1445,6 +1488,9 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, {'ok': False, 'error': 'not found'})
 
     def do_POST(self):
+        self._guarded(self._do_POST_body)   # v2026-09-22（方案A）：同上（请求级令牌）
+
+    def _do_POST_body(self):
         parsed = urlparse(self.path)
         qs = parse_qs(parsed.query)
         path = parsed.path

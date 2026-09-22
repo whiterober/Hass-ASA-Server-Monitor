@@ -385,17 +385,20 @@ span.lb-fchip-rn:hover{border-color:#a78bfa!important;background:#22222f!importa
 .lb-picker-panel.lb-picker-search .lb-picker-extra{flex:1 1 auto;min-height:0;max-height:none}
 #lbPickerRecent{flex:0 0 auto} /* v863：最近选择固定不压缩 */
 /* v1373（BUG 修复）：物品页与物种页同构——v1372 物品容器没接 flex 高度体系，面板 overflow:hidden 把超出内容直接裁掉 ⇒ 完全无法滚动 */
-#lbItemPickGrid{flex:1 1 auto;min-height:0}
-#lbItemPickGrid.lb-picker-grid-shrink{flex:0 1 auto;max-height:30vh;min-height:0}
-#lbPickerRecentItem{flex:0 0 auto}
-.lb-picker-panel.lb-picker-search #lbItemPickGrid{flex:0 0 auto;max-height:calc(80vh - 230px);min-height:0}
+#lbPickerRecentItem{flex:0 0 auto} /* v3575：物品「已拥有」主网格 CSS 全部移除 */
+#lbPickerRecent,#lbPickerRecentItem{padding:12px 12px 0} /* v3577（用户口径）：最近栏底部不留空白，紧贴下方折叠栏 */
 #lbItemColGrid_armor,#lbItemColGrid_weapon,#lbItemColGrid_tek{overflow-y:visible} /* 滚动交给 #lbItemExtra 容器 */
-#lbItemPickGrid,#lbPickerRecentItem{scrollbar-width:thin;scrollbar-color:#3a3a4a transparent}
-#lbItemPickGrid::-webkit-scrollbar,#lbPickerRecentItem::-webkit-scrollbar{width:3px;height:3px}
-#lbItemPickGrid::-webkit-scrollbar-thumb,#lbPickerRecentItem::-webkit-scrollbar-thumb{background:#444;border-radius:2px}
-#lbItemPickGrid::-webkit-scrollbar-track,#lbPickerRecentItem::-webkit-scrollbar-track{background:transparent}
+#lbPickerRecentItem{scrollbar-width:thin;scrollbar-color:#3a3a4a transparent}
+#lbPickerRecentItem::-webkit-scrollbar{width:3px;height:3px}
+#lbPickerRecentItem::-webkit-scrollbar-thumb{background:#444;border-radius:2px}
+#lbPickerRecentItem::-webkit-scrollbar-track{background:transparent}
 .lb-picker-extra{flex:0 0 auto;overflow-y:auto;display:flex;flex-direction:column;max-height:30vh} /* v863：收起时仅标题行；展开时切换 lb-extra-open */
 .lb-picker-extra.lb-extra-open{flex:1 1 auto;max-height:none;min-height:0} /* v864：任一折叠展开 → 非已驯自适应占满剩余页面高度 */
+/* v3574（用户口径：滚动框再长也不能遮挡任何折叠条标题）：滚动下移到展开的那一个网格（限高由 lbPickerFoldLayout() 动态写内联值），容器不再触发滚动 ⇒ 三条折叠条标题恒可见 */
+.lb-picker-collapse[open]>.lb-picker-grid{overflow-y:auto;scrollbar-width:thin;scrollbar-color:#5a5a6e transparent}
+.lb-picker-collapse[open]>.lb-picker-grid::-webkit-scrollbar{width:6px;height:6px}
+.lb-picker-collapse[open]>.lb-picker-grid::-webkit-scrollbar-thumb{background:#5a5a6e;border-radius:3px}
+.lb-picker-collapse[open]>.lb-picker-grid::-webkit-scrollbar-track{background:transparent}
 #lbPickerNoHaveGrid,#lbSpecialGrid,#lbExtraGrid{overflow-y:visible} /* v863：滚动交给 .lb-picker-extra 容器 */
 /* v864：物种浮窗极细滚动条（3px） */
 .lb-picker-extra,.lb-picker-extra .lb-picker-grid,#lbPickerGrid,#lbPickerRecent{scrollbar-width:thin;scrollbar-color:#3a3a4a transparent}
@@ -508,7 +511,61 @@ var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // 2026-09-21 v3546：落地对照表手填/手选 9 项图标（石像鬼标本/空的低温舱/主宰者奖杯/死亡精华/甜蜜的玫瑰花束/受精的钉状龙蛋/泰坦蚺蛋/悬赏契约/莱尼颚虫费洛蒙）+ icons2 登记 Titanoboa_Egg
 // 2026-09-22 v3547：落地对照表 4 项图标（非凡风行蜥蛋→Maeguana_Egg/模板图→HUD_StructureTemplate_Icon/受精的美西螈卵→Tidepup_Egg/狮鹫蛋→Griffin_Egg）+ icons2 登记 Tidepup_Egg、Griffin_Egg
 // 2026-09-22 v3548：DrakeClaw 归类武器（kind=weapon）+ 图标 HUD_ClawGrappler_Icon
-var LB_VERSION = 'v20260922-3548';
+// 2026-09-22 v3549：三项 UI 修复——生物背包不显示容量角标 / 玩家背包不注入「聚落命名」按钮 / 生物背包清单剔除装备槽同实例鞍（其他鞍保留）
+// 2026-09-22 v3550：三项跟进——无品质（原始）装备槽鞍也过滤 / 生物背包滤空后整组隐藏 / 角标图标占位 span + 索引就绪回填（修「刷新后图标不出现」）
+// 2026-09-22 v3551：空组隐藏判据改通用（无任何可见内容即隐藏）——修放出/合并背包组「空手风琴」漏判（实测 Argntvs·F·NO9 / 嚶嚶 / Argntvs·F·NO3 / a1）
+// 2026-09-22 v3552：聚落按钮角标图标修复——lbSettleCntIcons 不再缓存空图标（原实现把「索引未就绪时的空串」永久缓存 ⇒ 刷新后整页按钮只剩数字）+ 索引就绪后清缓存/回填/安全重渲染
+// 2026-09-22 v3553：放出组/恐龙本体组也不再显示容量角标（v3549 判据只认恐龙背包类名 ⇒ 放出组仍冒出裸已用数）
+// 2026-09-22 v3554（根治）：容量表加别名层 LB_CONT_CAP_ALIAS（Refridgerator→Refrigerator 等）+ lbContCapOf 查找链扩为「精确→小写→别名→归一化」+ lbFacBase 补剥 `_C1_0` + 补录 11 项 wiki 已核实容量（Turret/HeavyTurret/TurretTek/PowerNode/CropPlot_Tek/CityTerminal/StandingTorch/Light_Base/BeerBarrel/TeslaCoil/Campfire_Fireplace）
+// 2026-09-22 v3555（根治·命名链）：抽出**四链共用**设施键解析器（lbFacKeyStem 声明式前后缀 + lbFacKeyCands 候选序列 + lbFacKeyFind 精确/大小写/归一化查表），命名链 lbSettleFacMeta、图标链 lbFacIconLookup、物品链 lbItemMeta、容量链 lbContCapOf 全部接入；9 条别名按 wiki itemslots + 设施本体类名双重实证落地（冰箱 Refridgerator→Refrigerator 等）+ 容器类型正则补错拼变体
+// 2026-09-22 v3556（官中溯源落地）：新增**容器自带官中名**权威表 `facility_official.json`（ShooterGame.po 的 `..InventoryNameOverride`/`..DescriptiveName` + 官中，1222 条；已剔除 19 个模板泛化名）并在 lbSettleFacMeta 最高优先命中；清核 13 项真缺词条（部落塔/血铸熔炉/燃油灯/吊式燃油灯/探照灯/电灯/帽架/补给箱/燃料槽/绿洲龙植被栏）+ 别名 InventoryComponent_Bloodforge→Bloodforge + 容量补录 TribeTower 32 / Bloodforge 50
+// 2026-09-22 v3557（优先级修正）：实测定标 —— 官方 `..InventoryNameOverride` 是**容器自称**（HeavyTurret 自称「自动炮塔」、TrophyWall 自称「战利品底座」），会盖掉更准的人工表名 ⇒ 解析顺序定为 **facility_zh（人工表）→ facility_official（补缺）→ def[] 正则 → 友好英文**（原 def[] 最先、表其后 → 现四层按精确度降序）
+// ✅ **已部署**（v3562 批次上线，线上实测通过）v3558（A 区容量深挖）：补录 11 个已双校验容量（Garage/GarageCrafting 100 · Toilet 100 · ShipyardLarge 300 · oilPump 50 · GasCollector 24 · Catapult 10 · OilLamp 8 · Tap 4 · TrophyWall 1 · Cannon 1）；取值规则固化为「只认 itemslots 类字段 + 实服观测下界校验」（剔除 ArtifactCrate / WaterTank / BaseFuelBurning 三个错值）
+//     ↳ 差异实测：线上容量表 109 键 vs 本地 120 键（差=上述 11 键）；已随 v3562 一并上线（现线上 127 键 = 本地）
+// ✅ **已部署**（v3562 批次）v3559：① 用户手填 8 项容量入表（TaxidermyBase 10 / BioGrinder 200 / TreasureCache_Small 15 / WaterTank 10 / RadioActiveLanternGround 50 / Ballista 24 / EggIncubator 10 / MedicalStand 50）；② 新增**无上限容器**白名单 `LB_CONT_CAP_NOLIMIT`（弹药容器 ⇒ 角标显示 `已用/∞`，不再计入缺容量）
+// ✅ **已部署**（v3562 批次）v3560：① 新增 **部落共享容器**语义（`LB_CONT_CAP_SHARED`）——角标按方案 B 逐台显示 `已用/50` + 「共享」标记，tooltip 提示不可相加；② **待制作材料存量排重**（`lbMatServerIdx` 内同 (服,部落) 的 LinkedStorage 只统计首台，防止共享空间被算 N 次）；③ 防空炮台 `AntiFlyerTurret:30` 入表
+// ✅ **已部署**（v3562 批次）v3561：新增 **装备栏容器**语义（`LB_CONT_CAP_EQUIP`）—— 用户点名「小型标本底座 / 战利品壁挂 / 战利品底座 / 装饰箱」皆有 1 个装备栏，表值已直接**+1**（TaxidermyBase 10→11、TrophyWall 1→2、TrophyBase/TrophyBaseBP 1→2、DecorBox 1→2），角标加「装备栏」标记
+// ✅ **已部署**（v3562 批次，线上实测通过）v3562：装备栏 +1 扩展 —— `HatRack`（帽架）0→**2**（观测下界 1 + 1，官方基数待复核）、`InventoryComponent_MedicalStand`（医疗支架）50→**51**；两者均加入 `LB_CONT_CAP_EQUIP` 白名单（角标/页面均加「装备栏」标记）
+// ✅ **已部署并线上验证**（Version ID 95cd8de7，线上 v20260922-3563）v3563（**用户手填落地**）：用户在容量表 A 区逐项填写 ⇒ ① 容量表 +3 数值（BeaverDam 12 / Oasisaur_FoliageInventory 30 / OilLamp_Chandelier 8）；② 无上限 +2（`ArtifactCrate` 神器箱 / `SupplyCrate` 补给箱 ⇒ 并入 `LB_CONT_CAP_NOLIMIT`，角标 `已用/∞`）；③ 新增 **不显示容量** 白名单 `LB_CONT_CAP_HIDE`（`BaseFuelBurning` 燃料槽 ⇒ 角标整条不渲染，A 区不再计入缺容量）
+// ✅ **已部署并线上验证**（v20260922-3564；实测落盘 46s 被正确接住并真加载）v3564（🔴 **Isl 刷新静默失败根因修复**）：`lbWaitCryoUpdated` 硬上限 40s→**120s**（`LB_CRYO_WAIT_MS`，Isl 实测落盘 46–65s）+ 等待期间**秒级可视化**「已用 Xs / 上限 Ys」+ 返回 `{done,lm,secs}` + **超时仍兜底加载**（原先超时=整段跳过加载却报「✅ 全部完成」）+ 新增**持久警示行** `lbProgWarn()`（不被成功文案覆盖）
+// ✅ **已部署并线上验证**（线上 v20260922-3565）v3565：等待文案**统一由心跳渲染**（心跳与 onTick 同文案）——消除「等待存档导出落盘…」与「等待 孤岛 存档导出落盘…」因两路写入而交替跳变
+// ✅ **已部署并线上验证**（Version ID f9be4d49，线上 v20260922-3566）v3566（配合后端方案A的**前端硬化**）：① `lbFetchDataJson()` 对 5xx/503 与网络错误做**退避重试**（0.8s→1.6s→3.2s+抖动，最多 3 次，计 `LB._dlRetry`）；② 重试中与最终失败都用 `lbToast` **可见提示**（不再静默吞掉、不再悄悄复用旧数据），并记 `LB._dlLastFail={file,st,ts}`；③ `lbFetchRetry()` 重试 1 次 → **2 次**（退避 500/1000ms）
+// ✅ **已部署并线上验证**（Version ID 43463663，线上 v20260922-3567）v3567：物品权威表修正（`汉化/item_zh.json`）——`PrimalItemArtifact_11` 神秘笔记#11 → **上古神器之狡诈**（Artifact of the Cunning，icon `Artifact11_Icon`）、`PrimalItemArtifact_12` 神秘笔记#12 → **上古神器之残暴**（Artifact of the Brute，icon `Artifact12_Icon`）；同步递增 `pwa/sw.js` 的 VER（静态表 URL 带 `?v=LB_VERSION` ⇒ 版本变了才能击穿 PWA assets 缓存）
+//     ↳ 浏览器实测（v3567 页面直调真函数）：`lbItemMeta('PrimalItemArtifact_11')` = 上古神器之狡诈 / Artifact of the Cunning / `Artifact11_Icon`；`_12` = 上古神器之残暴 / Artifact of the Brute / `Artifact12_Icon`；`lbItemIconUrl()` 两图均 HTTP 200 `image/webp`（`thumbs/webp96/33803ef284f8_w96.webp` / `c2acd018a3eb_w96.webp`）；`lbBpMatChip()` 渲染 HTML 内名与图正确
+// ✅ **已部署并线上验证**（Version ID 71dab28e-86f4-4171-bfd6-591a7eef7cf5，线上 v20260922-3568；浏览器实测：`#lbProgBar` 宽 375px == 容器宽 375px（独占一行）、`#lbProgText` top 624 ≥ bar bottom 618（另起一行）、`display:block` + `white-space:normal`；`lbItemMeta` → 狡诈 `Artifact25_Icon` / 残暴 `Artifact24_Icon`，两图 `thumbs/webp96/72e967cc65ad_w96.webp`・`5d0f179c751f_w96.webp` 均 200 `image/webp`）v3568（本批次）：① **刷新浮窗进度文案另起一行**——`#lbProgBar` 独占一行（`width:100%` 取代 `flex:1`）、`#lbProgText` 由行内 `<span>` 改 `<div style="display:block">`（`margin-top:6px` + `line-height:1.45` + 允许换行）⇒ 长文案（「等待存档导出落盘…（孤岛）已用 46s / 上限 120s（可点 ✕ 关闭）」）不再挤占进度条；**DOM 层级不变**（`#lbProgBar.parentElement.parentElement` 仍是进度外层容器，刷新逻辑定位不受影响）；② **神器图标修正**（用户 2026-09-22 实证：图标序号 ≠ `PrimalItem` 类名序号）——`PrimalItemArtifact_11`（狡诈）→ `Artifact25_Icon`、`PrimalItemArtifact_12`（残暴）→ `Artifact24_Icon`（同时改 `汉化/item_zh.json`）
+// ✅ **已部署并线上验证**（Version ID 70b45dd4-df1e-4649-aad3-09261012702a，线上 v20260922-3569；浏览器实测：`LB_PROG_AUTOCLOSE_SECS=5`、文案「✅ 全部完成：存档 → 已放出 → 蛋（1/1 台）　⏳ 5s 后自动关闭」→ 2s 后变「3s 后自动关闭」→ 到期浮窗消失 + `_progAutoTimer` 已清 + toast「浮窗已自动关闭」；带 ⚠ 降级路径不调用 `lbProgAutoClose`（源码 `if(!_hasWarn)` 保证））v3569：① **成功终态倒计时自动关浮窗**——「✅ 全部完成：存档 → 已放出 → 蛋（N/N 台）」这类干净成功追加「　⏳ 5s 后自动关闭」并每秒递减，归零后自动关浮窗（`lbProgAutoClose()` / `LB_PROG_AUTOCLOSE_SECS=5`）；**带 ⚠ 降级（存档未等到落盘 / 蛋刷新异常）时不自动关**，保留浮窗供查看；② **长按单服轻量刷新统一**为倒计时 + 5s 关（原为 1.2s 秒关），非成功仍走原「4s 隐藏进度区 + 1.2s 关窗」；③ 取消点三处：开浮窗 / 手动关窗 / 新一轮刷新开始 → `lbProgAutoCancel()`（避免旧定时器关掉新窗口）
+
+// ✅ **已部署并线上验证**（Version ID 087e6496-ae65-4514-8e19-49c4814d86ee，线上 v20260922-3570；浏览器实测：`lbContCapOf(StructureTurretBaseBP_C_*)`=24、`(StructureTurretBaseBP_Heavy_C_*)`=58、`(StorageBox_ChemBench_Tek_C_*)`=600；`lbContCapHide` 对 `DinoWildInventoryComponent_*`/`SimpleBed_C_*`/`Gravestone_C_*`/`Coffin_Upright_C_*`/`Keypad2_C_*`/`HangingSign_C_*` 全为 true 而 `StorageBox_Huge_C_*` 仍 false（无过度隐藏）；角标渲染串变 `4/24`、`63/600`（训练假人按口径保持 “4”）；容量总表已重新生成：`rows=179 have=76 miss_struct=7 hide=9`，非 dino 非隐藏缺口仅剩 `PrimalInventory1/BaseInventory/theInventory`）v3570（容量角标补齐，用户口径）：① **容量链专用别名** `LB_CONT_CAP_ALIAS`（`TurretBaseBP→Turret=24`、`TurretBaseBP_Heavy→HeavyTurret=58`、`StorageBox_ChemBench_Tek→ChemBench_Tek=600`）+ `lbContCapAlias()` 在 `lbContCapOf` 里兜底；② **角标取值跟物品源对齐**：组内若有能解析出容量的成员类名，优先用它做分母（`_capClsUse`）；③ **HIDE 扩充**：床（SimpleBed/ModernBed/TekBed_Standing）、Gravestone、Coffin/Coffin_Upright、Keypad2、HangingSign 入表，野生物背包 `DinoWildInventoryComponent_*` 走前缀判定（与 DinoTamed* 同口径）；④ `tmp/_cont_cap_data.py` 同步并入该别名表（容量总表与角标同源）
+
+// ✅ **已部署并线上验证**（Version ID f9da19fe-652b-43cd-828d-ef9523468b6f，线上 v20260922-3571；浏览器实测：合成与**真实**印痕蓝图 `lbIsEmptyItem()` 均 **true**（隐藏）、特性实物（含 StorageBox 内实物）均 **false**（保留）；页面 `[data-bpcard*="ItemTrait"]` 卡片数 = **0**）v3571（用户实测「附件这种蓝图明显是固定印痕」）：`lbIsEmptyItem` 中 `kind==='trait'` 拆**两类**处置 —— ① **印痕蓝图**（`isBlueprint=1` + rated=0/rating=-1；实测 **920 条 100% 落在 `PrimalInventoryBP_ChemBench_Tek`** （实验桌自带固定配方清单））⇒ 按固定配方判空（不再渲染成蓝图卡）；② **特性实物**（`isBlueprint=0`；实测 375 条：StorageBox_Huge 205 / 恐龙背包 123 / 实验桌 46 / 机床 1）保留显示；⚠ 与 v3538（基因扫描仪印痕）同一错误模式：放行早退排在 `lbIsBp` 分支之前
+
+// ✅ **已部署并线上验证**（Version ID 7066a3ba-be23-4d27-a830-a02bb5d259f9，线上 v20260922-3572；浏览器实测：`lbContCapOf('Structure_TrainingDummy_C_2146654888')` = **18**、角标渲染 `4/18`、`lbContCapEquip()` = **false**（按用户口径不加装备栏徽标））v3572（用户手填）：**训练假人容量入表** —— `TrainingDummy:18`（用户口径：装备栏 8 格 + 存储容量 10 格 = **总 18 格**）；角标**只显示「已用/18」不区分两类**（按用户口径未加 `LB_CONT_CAP_EQUIP` 徽标）；类名实测 `Structure_TrainingDummy_C_*` 归一后命中 `TrainingDummy`
+
+// ✅ **已部署并线上验证**（Version ID d014bb7a-5b1b-4927-958b-053fe2ffe6e6，线上 v20260922-3573；浏览器实测：同一小型耕地 `Ext/930307c9` raw=3 / vis=2 ⇒ **旧公式 `lbContCapHtml(cls,3)`=`3/10`（复现你的截图）**、**新公式 `lbContCapHtml(cls,2)`=`2/10`**（tooltip「占用 2 / 容量 10（20%）」），与摘要角标 2、展开 chip 组数一致）v3573（用户口径：种子种下去后不占格子）：**容量角标「已用」与渲染同源** —— `_capUsed` 的物品项由 `invItems.length`（未过滤的原始条目）改为**有效条目数**（过 `lbIsEmptyItem`）；实测源：小型耕地 `Ext/930307c9` 内 3 条 = 浆果 q100 + 浆果 q82 + **浆果种子 q0**（已种下，判空）⇒ 旧：角标 3/10 但展开只有 2 组；新：角标 2/10（与摘要角标、chip 列表一致）
+// ✅ **已部署并线上验证**（Version ID e82eb361-f197-41ec-8659-b100fcc8bcce，线上 v20260922-3574；清 SW + 清 Cache 实测：①物种页展开「变体」→ 容器 **778/778 零滚动**、面板 828、三条折叠条 **全 inEx**（0-34/34-67/744-778）、网格 inline 677px（内容 2424 内部滚动）；②搜索 `a` 三栏全开 → 容器 **605/605 零滚动**、面板 811、主网格自动让位 **15vh**、三网格各 168px（内容 2626/1894/1825 内滚）、三标题 **全 inEx**；③物品页展开「护甲未拥有」→ 容器 708/708 零滚动、两标题全 inEx；④收起后 inline 全清除、主网格 display 还原、让位撤销）v3574（用户口径：滚动框再长也不能遮挡任何折叠条标题）① **滚动下移到展开的网格**：新增 `lbPickerFoldLayout()` —— 剩余高 = `0.8vh − above(折叠区上方可见兄弟) − sumH(所有 summary)`，在「已展开且有内容」的栏之间**均分**，逐网格写 `maxHeight/overflowY`；② 空间不足时 `#lbPickerGrid`/`#lbItemPickGrid` 自动让位（30vh→15vh）；③ 展开项网格滚动条 3px→6px 提亮（#5a5a6e）；④ 触发点：`lbPickerExtraSync()`/`lbPickerExtraSyncItem()`/`lbPickerFilter()`(×2) + `resize`；实测（线上试验）：非搜索 n=1 → H=677、容器 778/778 **零滚动**、三标题全可见、面板 828；搜索 n=3（主网格 15vh）→ H=168、容器 605/605 **零滚动**、三标题全可见、面板 811
+// ✅ **已部署并线上验证**（Version ID 9b6fc5f7-b19c-4f28-83f6-67853fed2f6b，线上 v20260922-3575；清 SW + 清 Cache 实测：`#lbItemPickGrid` **不存在**（已拥有主网格移除）、折叠栏标题 **「护甲 (112) / 武器 (77)」**（原 未拥有 34 / 28 ⇒ 已拥有不再剔除）、长管步枪图标 `thumbs/webp96/489cfd0d4cfb_w96.webp`（旧 `6f9ba3a63ed8`，**hash 已变**）加载 OK naturalWidth=96、物品折叠区 777/777 零滚动；HTTP 复核：线上 `item_zh.json` 的 `OneShotRifle.icon` / `OneShotRifle_Cursed.icon` 均 = `SSR_Icon`，`id="lbItemPickGrid"`/`lbPickerBuildItems` 均已消失）v3575（用户要求）：① **物品页移除「已拥有」主网格**（`#lbItemPickGrid` 元素/构建 `lbPickerBuildItems()`/CSS/滚动条/收缩让位/过滤/最近区联动 全部清理），折叠区标题 `护甲未拥有→护甲`、列表**不再剔除已拥有**（`lbItemNoHaveByKind` 去掉 owned 过滤）；② **长管步枪图标修正**：`item_zh.json` 的 `OneShotRifle` / `OneShotRifle_Cursed` 图标 `HUD_ThrallSniperRifle_Icon → SSR_Icon`
+// ✅ **已部署并线上验证**（Version ID c1062414-0581-4ecb-8927-c7515c74f9ba，线上 v20260922-3576；清 SW + 清 Cache 实测：`lbPickerHideBlankZones` 就位、牌面 `blanks=0` —— 面板子项 header 49 / 最近栏 134(6 项) / 折叠区 67(2 项)，**无任何空白区块**，`#lbItemPickGrid` 元素不存在）v3576（GO，用户口径：物品最近栏底下还有一个空白的已拥有栏）：新增 `lbPickerHideBlankZones()` —— 打开浮窗/切 TAB/过滤后统一执行：① 移除任何 `#lbItemPickGrid` 残留；② 面板内 `#lbPickerRecent / #lbPickerGrid / #lbPickerRecentItem` 若**无可见子项**则 `display:none`（`data-blank-hide` 标记，有内容自动恢复）
+// ✅ **已部署并线上验证**（Version ID c3150349-c191-4fb6-b432-62fed2287182，线上 v20260922-3577；清 SW + 清 Cache 实测：`#lbPickerRecentItem` 与 `#lbItemExtra` **gap = 0**（recent bottom 573 == summary top 573），`padding-bottom / margin-bottom / border-bottom` 均 = 0px）v3577（GO，用户口径：最近栏底下那条空白带）：`#lbPickerRecentItem` / `#lbPickerRecent` 去掉 `border-bottom` + `margin-bottom:6px`，并 `padding:12px 12px 0` ⇒ 底部 12px 内边距 + 6px 外边距（合计 18px 空白带）清零
+// ✅ **已部署并线上验证**（Version ID 2e120be4-acd7-41c2-8209-8b2324fc2d3a，线上 v20260922-3578；清 SW + 清 Cache 实测：物品页三栏 **「护甲 (112) / 武器 (77) / 其它 (742)」**；「其它」展开后二级分组标题 **资源 / 消耗品 / 附件 / 战利品**、条目数 **742**；**与护甲栏 summary 样式 diff = []**（fontSize/color/padding/border/height/display 全同，details class 同 `lb-picker-collapse`）；分组标题行 style 与物种「特殊」栏**逐字同款**；容器 `#lbItemExtra` **零滚动**（ch=778）、三条折叠条 **全 inEx=true**）v3578（用户要求）：物品 TAB 新增第 3 栏 **「其它」** —— ① 结构样式**完全复用**物种「特殊」栏 `#lbExtra`（同款 `details.lb-picker-collapse` + `summary` + `.lb-picker-grid` + 二级分组标题行）；② 内含 **资源 / 消耗品 / 附件 / 战利品** 四组（kind = resource / consumable / attachment / trophy，用户口径：**不过滤物种绑定**，全量 742 条）；③ 新增 `lbPickerBuildItemOther()`（照抄 `lbPickerBuildExtra()` 二级分组写法，色值 #f59e0b/#fb923c/#22d3ee/#4ade80）+ `lbPickerLazyItemOther()`；④ `lbPickerLazyItemCol()` 加 kind==='other' 分支（搜索全展开兜底）
+// ✅ **已部署并线上验证**（Version ID 6e4c2271-3fcc-4bd3-a818-7dea6750365e，线上 v20260922-3579；清 SW + 清 Cache 实测：「其它」栏 **742 → 628 条**（−114），重名条目 **173 → 81**；抽检 **金属锭 4→2、煤炭 4→2、汽油 4→2**（前缀双键合并），恐龙骨架 **保留 78**（真实变体，符合"只去前缀双键"口径）；容器 **零滚动**、三条折叠条 **全 inEx=true**）v3579（用户要求：**完全复用容器组的去重方式**）：`lbItemNoHaveByKind()` 收集键改 `lbItemMeta(base).base`（与 `lbInvListHtml()` L9136-9140 逐字同款） ⇒ 前缀双份（`X` / `PrimalItemResource_X`）合并，真实变体保留
+// ✅ **已部署并线上验证**（Version ID 901d1a61-502c-40b8-bbf8-7ab6fcdc6112，线上 v20260922-3580；① 容器组实测：喂 `Skeleton_Raptor_01` + `Skeleton_Trike_08` + `MetalIngot` ⇒ 输出 **2 个 chip**，骨架合一为「恐龙骨架 · 2组 · 2」；② 物品「其它」栏：**628 → 551**、恐龙骨架 **78 → 1**、标题「其它 (551)」；两处共用 `lbItemAggKey()`）v3580（用户口径：只合并 `Skeleton_` 前缀，**两个地方都要合并**）：新增公共键 `lbItemAggKey(raw)` = `lbItemMeta(raw).base` + **`/^Skeleton/i` 归并为同一件**；① 容器组 `lbInvListHtml()` 的 key 改用它 ② 物品「其它」栏 `lbItemNoHaveByKind()._aggKey()` 委托给它 ⇒ 骨架 78 → 1
+// ✅ **已部署并线上验证**（Version ID c00f1ba1-0508-4b61-a980-49270d0bd87c，线上 v20260922-3581；清 SW + 清 Cache 实测：「其它」栏分组标题 **资源 / 消耗品 / 染料 / 附件 / 战利品**（染料与消耗品同级）、总数 551 不变；染料中文名修正生效：泥褐色 / 蜜瓜色 / 深海蓝 / 江户茶红 / 牛仔蓝 各 1 条）v3581（用户要求）：**染料独立分组**（与消耗品同级）—— `lbItemNoHaveByKind()` 里中文名含「染料」者从 consumable 移入新组 `dye`（词典键名无规律，故按中文名识别）；`lbPickerBuildItemOther()` 分组数组插 `['dye','染料','#c084fc']`（消耗品之后）；`item_zh.json` 顺修 6 组染料中文名（泥褐色/蜜瓜色/深海蓝/江户茶红/牛仔蓝/血痂色）
+// ✅ **已部署并线上验证**（Version ID eed6632d-dfc0-4b36-8747-a6e956b00e09，线上 v20260922-3582；`Dye_` 前缀归并后：「其它」**551 → 491**（−60）、抽检 泥褐色/咖啡色/蜜瓜色/深海蓝 **各 1 条**（原各 2 条）、剩余重名组 **80 → 21**；容器零滚动 + 三条折叠条全可见）v3582：`lbItemAggKey()` 追加 `k.replace(/^Dye_/,'')` —— `Dye_X` 与 `X` 是同一染料的前缀双份（实测「泥褐色染料」等各 2 条），按 v3579 口径归并（容器组 + 物品「其它」栏两处同步生效）
+// ✅ **已部署并线上验证**（Version ID 4df57a24-8905-4615-9469-480a21c00fdb，线上 v20260922-3583；清 SW + 清 Cache 实测：「其它」分组顺序 **资源(111) → 消耗品(134) → 附件(51) → 战利品(177) → 染料(66)**（染料已在最后），共 **539** 条；金属锭 / 汽油 / 煤炭 / 元素粉尘 / 不稳定的腥红能量元素 / 蚀相狐晶 / 有机聚合物 **各 1 条**，且全部落在**资源**组；`lbItemAggKey` 实测 MetalIngot 与 MetalIngot_FromMegaForge → `en:metal ingot`、Gasoline 与 Gasoline_Super → `en:gasoline`、OrganicPolymer 与 Polymer_Organic → `en:organic polymer`）v3583（用户要求）：① **染料分组移到最后**（资源→消耗品→附件→战利品→染料）；② `lbItemAggKey()` 追加 **按词典 en 归一**（同一物品多键写法 en 相同 ⇒ 金属锭/汽油/煤炭/元素粉尘/不稳定腥红/蚀相狐晶 各合成 1 条；en 不同则不合并，如 Horn/The Horn）；③ 去重改**跨分组**（`_seen[kb]`，有机聚合物只保留先出现组）；④ `item_zh.json` 有机聚合物 `OrganicPolymer.kind` consumable → **resource**
+// ✅ **已部署并线上验证**（Version ID f24a0faf-f175-4c11-b816-1e48573c8183，线上 v20260922-3584；清 SW + Cache 实测：「其它」**539 → 462**（−77）、**恐龙骨架 78 → 1**、分组顺序 **资源(111) → 消耗品(134) → 附件(51) → 战利品(100) → 染料(66)**、金属锭 / 汽油 / 煤炭 / 元素粉尘 / 不稳定腥红 / 蚀相狐晶 / 有机聚合物 **各 1 条**、剩余重名组 **9**（全部为词典 en 不同的既有遗留）；容器组直测（两地同源）：4 项 → **2 行**「金属锭·2组·150」「汽油·2组·50」、3 骨架 → 1 行「恐龙骨架·3组·3」、有机聚合物 2 → 1 行）v3584（v3583 回归修复）：`lbItemAggKey()` 的 `^Skeleton` 归并改为**短路 return** —— v3583 的 en 归一在其后执行并覆盖了归并结果（78 个骨架词典 en 各不相同 ⇒ 线上实测「恐龙骨架×78」），短路后恢复 v3580 口径的 **1 条**；容器组与物品「其它」栏两处共用同一函数，同步生效。遗留（未改）：`MetalIngot_FromMetalForge` 词典**缺键** ⇒ en 取不到，无法与「金属锭」合并
+// ✅ **已部署并线上验证**（Version ID a85c222f-2469-4b6c-9a77-7bd84027f707，线上 v20260922-3585；清 SW + Cache 实测：13 行全部回退问号 —— 阿马加龙尖刺 / 冰霜蠕虫女王 / 独眼巨人（普通·困难·精英）/ 海德拉（普通·困难·精英）/ 焰鬃獠猪獠牙 / 焰鬃獠猪燃焰獠牙 均 `lb-picker-ic-none`（无 img）；罗克韦尔（简单）/（中等）/（困难）三条图标 **互不相同且可加载**（blob 各一）；「其它」总数 462 无回归）v3585（用户要求）：① **11 条 trophy/resource 去图标**（回退问号）——`AmargaSpike`（icon=Amargasaurus 生物图）、`IceWorm` / `PrimalItemTrophy_IceWorm`（icon=Iceworm）、`PrimalItemTrophy_Cyclops_{Gamma,Beta,Alpha}` 与 `PrimalItemTrophy_Hydra_{Gamma,Beta,Alpha}` 与 `ApexDrop_Boaratos` / `ApexDrop_Boaratos_Flaming`（icon=CubeArtifact_Icon 方块神器，错借）⇒ 删除 `item_zh.icon` 字段；② **罗克韦尔图标修正**：`PrimalItemTrophy_Rockwell` / `Rockwell` 的 icon `Rockwell`（biology 立绘）→ **`RockwellTrophy_Icon`**（正确战利品图标）；③ **罗克韦尔难度译名**：`罗克韦尔`→**罗克韦尔（简单）**、`罗克韦尔（困难）`→**罗克韦尔（中等）**、`罗克韦尔（精英）`→**罗克韦尔（困难）**
+// ✅ **已部署并线上验证**（Version ID fb320998-ee05-44dd-ac48-ba15ba70d746，线上 v20260922-3586；清 SW + Cache 实测：物品「其它」栏 462 条中 **296 条带数量**（鮟鱇鱼油 64301 / 蚕丝 35018 / 电路元件 338394 / 废金属 25510 等）；计数索引 **999 个聚合键**（MetalIngot 1244025 / Thatch 837788 / Wood 544067 / Hide 2184130）；容器组 chip 无图标时补问号占位生效（喂 3 条 ⇒ 1 img + **2 个问号**））v3586（用户要求）：① **物品 TAB 补「全服拥有数量」**——新增 `lbItemOwnIndex()` / `lbItemOwnCnt()`（聚合键与容器组同源 `lbItemAggKey`，`n` = quantity 累加、`svc` = 覆盖服数），三处调用（护甲·武器栏 / 「其它」栏 / 最近栏）由硬编码 `0` 改为传真实件数；随数据版本 `LB._cache.ts` 失效重建（`lbItemPickAgg()` 里一并清 `_itemOwnIdx`）；② **容器组 chip 无图标补问号占位**（`lbInvListHtml` 两处 chip：普通 + ItemTrait，与浮窗 `.lb-picker-ic-none` 视觉一致）
+// ✅ **已部署并线上验证**（Version ID 5c271bf6-ef65-4a55-9824-4aa2d93ebdc2，线上 v20260922-3587；清 SW + Cache 实测：计数索引 **999 → 2100 键**（别名登记生效）；`RawMeat` 0 → **82458**、`SpoiledMeat` 0 → **108671**、`Stone` 0 → **497832**；但 `Fiber` 仍 0 —— 别名键取的是 `lbCanonBase(meta.base)`（实测 = `Resource_Fiber`），而词典短键是 `Fiber`，`lbCanonBase` 不剥 `Resource_` 前缀 ⇒ 未命中，v3588 改用 canonBase 反向索引）v3587（v3586 边缘修复）：计数表加**别名登记** —— 词典键无 `en` 字段时 `lbItemAggKey` 停在短名（`Fiber`），而存档实例经 en 归一会得 `en:fiber`，两侧口径对不上 ⇒ 实测「纤维 / 生肉」数量恒 0。修法：`lbItemOwnIndex()` 除主键外**同时登记规范化短名**（`lbCanonBase(lbItemMeta(cls).base)`），`lbItemOwnCnt()` 按「aggKey → 短名」顺序查（`asObj` 兼容不变）
+// ✅ **已部署并线上验证**（Version ID 631fdddc-e38d-4792-ad1b-e4ca8a42fd67，线上 v20260922-3588；清 SW + Cache 实测：**493/601 条带数量**（v3587 时约 304）；分组 护甲 **70/70** · 武器 56/69 · 资源 80/111 · 消耗品 117/134 · 附件 24/51 · 战利品 84/100 · 染料 62/66；装备件数实测 `ClothPants 57 / MetalShirt 143 / GhilliePants 113 / RiotHelmet 105 / MinersHelmet 17 / HazardSuitPants 88`；抽样 `Fiber` = 0 属**词典无该键**（`lbZhKeysByCanon()['Fiber']` 为空数组，非本函数缺陷），实例侧 `en:fiber` = 940056 正常）v3588（数量口径修复）：① **装备类 quantity 恒 0**（实测 `PrimalItemArmor_*` 364/364 全 0）⇒ 计数累加改 `_q <= 0 ? 1`（每实例按 1 件计），护甲/武器栏才有数字；② `lbItemOwnCnt()` 取值加 **canonBase 反向索引兜底**（`lbZhKeysByCanon()`，词表变更自动重建）——词典短键无 `en` 时把同 canonBase 的所有词典键的 aggKey 都作为候选（修 `Fiber` 类两侧口径不一致）
+// ✅ **已部署并线上验证**（Version ID e5a38505-441d-4caa-a798-cb35009d8698，线上 v20260922-3589；清 SW + Cache 实测：幽影仔鳞片 `LB_ITEM_ZH['UmbraScale'].icon` = **无字段**、`lbItemMeta().icon` = **空** ⇒ 回退问号；物种最近栏实测 3 条全部带数量 —— 「霸王龙 30」「迅猛龙 2」「渡渡鸟 5」（`.lb-picker-cnt` 与主网格同口径 `classMap`））v3589（用户要求）：① **幽影仔鳞片去图标** —— `UmbraScale`（icon `Ark_Condition_Icons_LuminaScale` 借的是发光鳞片**状态图标**）删除 `item_zh.icon` ⇒ 回退问号；② **物种 TAB 最近选择栏补拥有数量** —— `#lbPickerRecent` 原为手写模板（无数量），现插入 `<em class="lb-picker-cnt">N</em>`（N = `classMap[k]`，0 不显示；`classMap` 在 `lbOpenSpeciesPicker()` 开头已构建）
+// ✅ **已部署并线上验证**（Version ID c866be19-8ad1-4b10-b26e-3d7c4efba6f2，线上 v20260922-3590；清 SW + Cache 实测：蛇发女妖 3 条 `item_zh.icon` 均 **无字段**、`lbItemMeta().icon` **空**；浮窗「其它 → 战利品」渲染实测 **蛇发女妖（普通/困难/精英）三条 img=无 + `.lb-picker-ic-none`（问号）**；同组对照 独眼巨人 ×3 / 海德拉 ×3 亦全为问号）v3590（用户要求）：**蛇发女妖去图标** —— `PrimalItemTrophy_Gorgon_Gamma` / `_Beta` / `_Alpha`（蛇发女妖 普通/困难/精英）的 `item_zh.icon` 删除。三者 icon 均为 `CubeArtifact_Icon`（`src=miss_fill` 补表错借的**方块神器**图标），与 v3585 已清的独眼巨人 / 海德拉同款 —— 当时只点名那两个 Boss，蛇发女妖被漏掉
+// ✅ **已部署并线上验证**（Version ID b42cb80e-5bae-475c-9180-7140fec6a8e2，线上 v20260922-3591；清 SW + Cache 实测：`PrimalItemConsumable_Egg_Carcha` 的 `item_zh.icon` = **无字段**、`lbItemMeta().icon` = **空**；浮窗「其它 → 消耗品」实测 **「鲨齿龙蛋 5926 | img=无 | `.lb-picker-ic-none`=YES**（`data-cls=item:consumable:PrimalItemConsumable_Egg_Carcha`）⇒ 问号回退生效，且顺带验证数量角标正常）v3591（用户要求）：**鲨齿龙蛋去图标** —— `PrimalItemConsumable_Egg_Carcha`（鲨齿龙蛋，`icon=Carcharodontosaurus_Egg`，`src=rule_egg` / `esrc=derive`）删除 `item_zh.icon` ⇒ 回退问号
+// ✅ **已部署并线上验证**（Version ID a22bb0c1-adef-4a51-8236-af6d4b19206d，线上 v20260922-3592；清 SW + Cache 实测：`DeathEssence_BP.icon` = **`Item_InfinityEssence`**、`lbItemIconUrl()` = `thumbs/webp96/ff0b69b8c154_w96.webp`；浮窗「其它 → 资源」精确实测 **「死亡精华 | img=有 | src=blob:…」** ⇒ 新图已加载；打包侧计数：`icons2 urls 5143 → 5144`、`thumbs files 5041 → 5042`、上传含 `/thumbs/webp96/ff0b69b8c154_w96.webp` + `/webp_map.json` + `/packs/thumbs.3.bin`。注：部署脚本自检报「版本一致: False」为**边缘缓存假警报**（浏览器 no-store 实测 `LB_VERSION = v20260922-3592`））v3592（用户要求）：**死亡精华换图标** —— `DeathEssence_BP.icon` `RW_Death_lines_on`（v3546 手填占位）→ **`Item_InfinityEssence`**（用户指定图 `ASA/consumables/Item_InfinityEssence.png`）。走**单图压图流程**（复用 `_webp_icon1b.py`）：① `汉化/icons2.json` 追加登记该图标键/URL；② 本地下载 → 96px WebP（quality 70）→ `tmp/webp96/<md5前12>_w96.webp` → 写 `tmp/webp_map.json`；③ 打包脚本按 `icons2 URL ∩ webp_map` 自动带上缩略图
+// ✅ **已部署并线上验证**（Version ID 15237df7-91c9-4bb4-b626-ee404a28361c）v3593（用户要求）：**染料图标位 → 色点** —— ① 抽 `lbColorDotHtml(hex, tip, sz)` 作**色点统一样式**（容器涂装色点 `lbFacColorHtml` 同步改用它，行为不变）；② 新增 `lbDyeDotOf()` / `lbDyeDotHtml()`：判据同 dye 分组（`zh` 含「染料」），色名取 `en` 去 `Dye`/数字后的**末词**（去 `Coloring`）→ 归一化查 `dino_colors.json`（211 色名）取 hex；③ `lbPickerItemHtml()` 图标位对染料**优先渲染色点（12px，用户指定尺寸）**，回退链不变（色点 → 图标 → 问号）；④ `lbOpenSpeciesPicker()` 的 Promise.all 追加 `lbLoadColors()`
+// ✅ **已部署并线上验证**（Version ID 581124a8-e58d-4e38-9b45-a52e48ede77b，线上 v20260922-3594；清 SW + Cache 实测：`lbItemNoHaveByKind().dye` **66 → 65** 且 `Dye` 已不在其中（`indexOf = -1`）、`consumable` **134 → 135** 且 `Dye` 落在其内（`indexOf = 69`）—— 正好 +1/−1，其余分组不受影响）v3594（用户要求）：**「染料」本体移入消耗品组** —— 词典键 `Dye`（`zh`「染料」/ `en` `Dyes` / `kind: consumable`）因 v3581 的强制归类（`zh` 含「染料」⇒ `k='dye'`）被拉进染料组；本版在 `lbItemNoHaveByKind()` 该行加例外（`base !== 'Dye' && en !== 'Dyes'`）⇒ 保留原 kind，归入「消耗品」二级分组；126 条单色染料仍留染料组（色点 / 图标链不受影响）
+// ⏳ **未部署** v3595（用户要求）：**恐龙骨架统一换图** —— 78 条骨架词典键（`PrimalItemTrophy_Skeleton_*`，原 `icon = ARKBone_Icon` 通用骨架图）**全部**改为 **`DinoSkull_Icon`**（用户指定图 `ASA/resources/skull.png`）。走**单图压图流程**：① `汉化/icons2.json` 登记新键/URL；② 下载 → 96px WebP（quality 70）→ `tmp/webp96/<md5前12>_w96.webp` → 写 `tmp/webp_map.json`；③ `item_zh.json` 78 条 `icon` 批量指向该键（打包脚本按 `icons2 URL ∩ webp_map` 自动带上缩略图）
+// ✅ **已部署并线上验证**（Version ID f5c7e692-1059-4ea8-991b-ed0ad6727624，线上 v20260922-3596；清 SW + Cache 浏览器实测：`PrimalItemConsumable_Egg_Carcha.icon` = **`Carcha_Egg`**、`lbItemIconUrl()` = `thumbs/webp96/cee3e761cf5f_w96.webp`、`LB_ITEM_ICON_URL['Carcha_Egg']` 存在。注：部署脚本自检报「版本一致: False」为**边缘缓存假警报**，浏览器实测版本正确）v3596（用户要求）：**鲨齿龙蛋补图标** —— `PrimalItemConsumable_Egg_Carcha`（v3591 去图标后为问号）**新增** `icon = Carcha_Egg`（用户指定图 `ASA/eggs/Carcha_Egg.png`）。走**单图压图流程**：① `汉化/icons2.json` 登记新键/URL；② 下载 → 96px WebP（quality 70）→ `tmp/webp96/<md5前12>_w96.webp` → 写 `tmp/webp_map.json`；③ `item_zh.json` 补 `icon` 字段（打包脚本按 `icons2 URL ∩ webp_map` 自动带上缩略图）
+var LB_VERSION = 'v20260922-3596';
 var LB_SCHEMA_VER = 17;  // v3428：16→17 —— facilities 新增 isPublic（后端 2026-09-20 上线）+ 补采家族（耕地/船体/神器箱等 2454 条）、rec 新增 isPublic/isPlayerStruct；不升版 ⇒ 旧 IndexedDB 缓存继续命中，新设施与新字段永不出现
 // 历史：v1069 14→15——根因：recs 构建结果随 IndexedDB 持久化（v931）、
                          //   命中后跳过重建；仅改 _decorRe 等**构建期过滤**时，旧 rec 会长期残留（实测南瓜 rec 改过滤后仍显示）。
@@ -1331,13 +1388,17 @@ function lbFetchRetry(url, opts){
   opts = opts || {};
   if(opts._noRetry || !lbRetryable(opts.method)) return fetch(url, opts);
   var extSignal = opts.signal || null;
-  return lbFetchOnce(url, opts, extSignal, opts._retryMs).catch(function(e){
-    if(extSignal && extSignal.aborted) throw e;
-    if(e && (e.name === 'AbortError' || e.message === 'aborted')) throw e;
-    return new Promise(function(res){ setTimeout(res, 500); }).then(function(){
-      return lbFetchOnce(url, opts, extSignal, opts._retryMs);
+  var _n = 0;   // ⭐ v3566：重试 1 次 → 2 次（退避 500ms / 1000ms），配合后端 503+Retry-After
+  function _go(){
+    return lbFetchOnce(url, opts, extSignal, opts._retryMs).catch(function(e){
+      if(extSignal && extSignal.aborted) throw e;
+      if(e && (e.name === 'AbortError' || e.message === 'aborted')) throw e;
+      _n++;
+      if(_n > 2) throw e;
+      return new Promise(function(res){ setTimeout(res, 500 * _n); }).then(_go);
     });
-  });
+  }
+  return _go();
 }
 function authFetch(url, opts) {
   opts = opts || {};
@@ -2370,6 +2431,7 @@ function lbPackageSwapImgs(){
       var b = lbPackURL(s);
       if(b) img.src = b;
     });
+    try{ if(typeof lbIconPatch === 'function') lbIconPatch(); }catch(e){}   // v3550：同时回填占位角标图标（索引已就绪但渲染更早的情况）
   }catch(e){}finally{ LB._packNoDemand = false; }
 }
 // v1121：资源是否**已进内存**（分片已拉下来）——用于预取过滤；仅「索引进包」不算（按需资源要照常走 CDN/预取）
@@ -3763,6 +3825,7 @@ async function lbRefreshTamedEggs(abbr){
   if(LB._tamedRefreshing){ lbToast('已有刷新进行中，请稍候'); return; }
   LB._tamedRefreshing = true;
   LB._tamedRefreshingAt = Date.now();
+  lbProgAutoCancel(); // v3569：新一轮刷新开始 → 清掉上一轮的「自动关窗」倒计时
   var ov = document.querySelector('.lb-confirm-overlay');
   var progEl = null;
   if(ov){ var all=ov.querySelectorAll('div'); for(var i=0;i<all.length;i++){ if(all[i].id==='lbProgBar'){ progEl=all[i].parentElement.parentElement; break; } } }
@@ -3803,8 +3866,14 @@ async function lbRefreshTamedEggs(abbr){
         if(txt) txt.textContent = '✅ '+LB.servName(abbr)+' 已放出+蛋 已更新';
       }catch(e){}
     }
-    setTimeout(function(){ if(progEl) progEl.style.display='none'; }, 4000);
-    setTimeout(function(){ var o=document.querySelector('.lb-confirm-overlay'); if(o) o.remove(); }, 1200); // 完成后自动关浮窗
+    // v3569：长按单服刷新也统一为「倒计时 + 5s 关浮窗」；非成功（超时/异常）保持原「4s 隐藏进度区 + 1.2s 关窗」
+    var _done2 = (txt && txt.textContent) || '';
+    if(done && _done2.indexOf('✅') === 0){
+      lbProgAutoClose(_done2);
+    } else {
+      setTimeout(function(){ if(progEl) progEl.style.display='none'; }, 4000);
+      setTimeout(function(){ var o=document.querySelector('.lb-confirm-overlay'); if(o) o.remove(); }, 1200); // 完成后自动关浮窗
+    }
   } finally {
     LB._tamedRefreshing = false;
     if(LB._srvPressAbbr){ var el2=document.querySelector('#lbServers .server-tab[data-abbr="'+LB._srvPressAbbr+'"]'); if(el2) el2.style.boxShadow=''; }
@@ -3996,12 +4065,16 @@ function lbHeadLm(url){
 // v208：数据下载——优先静态 .json.gz（预压缩，nginx 从 WebDAV 拉小文件），404 回退 .json
 // 自动解压：gzip magic 检测 → DecompressionStream('gzip')；nginx 动态 gzip 由浏览器自动解压
 // v951：全链 25s 超时（AbortController）——后端 CORS/重建偶发挂起不再让 lbLoad 永久停在「检查数据更新/资源加载中」
+// ⭐ v3566（配合后端方案A）：下载 5xx/503 退避重试上限 —— 后端 busy 会回 503 + Retry-After:1；
+//   原实现直接 return null ⇒ 上层记「cryo 下载失败」并**静默复用旧数据**（用户看不到）
+var LB_DL_RETRY_MAX = 3;
 function lbFetchDataJson(base, gzUrl){
   var _ac = new AbortController();
   // v985：90s —— 必须大于 lbFetchOnce 的 60s，否则外层先 abort、内层超时白设
   var _tm = setTimeout(function(){ try{ _ac.abort(); }catch(e){} }, 90000);
   var _opts = function(){ return { signal: _ac.signal }; };
   function _clr(){ try{ clearTimeout(_tm); }catch(e){} }
+  function _go(_try){
   return authFetch(gzUrl, _opts()).then(function(res){
     if(res.ok){
       return res.arrayBuffer().then(function(buf){
@@ -4028,9 +4101,32 @@ function lbFetchDataJson(base, gzUrl){
         return r2.arrayBuffer().then(function(b2){ return JSON.parse(new TextDecoder().decode(b2)); });
       });
     }
+    // ⭐ v3566：5xx/503 退避重试（后端 busy 快速失败）——拿不到就明示，不再静默吞掉
+    if(res.status >= 500 && _try < LB_DL_RETRY_MAX){
+      var _n = _try + 1;
+      var _w = Math.round(400 * Math.pow(2, _n) + Math.random() * 200);   // ≈800ms → 1.6s → 3.2s（+抖动）
+      try{ LB._dlRetry = (LB._dlRetry || 0) + 1; }catch(e0){}
+      var _f = String(base).split('/').pop();
+      try{ lbToast('⚠ ' + _f + ' HTTP ' + res.status + '，' + Math.round(_w/1000*10)/10 + 's 后重试（' + _n + '/' + LB_DL_RETRY_MAX + '）'); }catch(e1){}
+      return new Promise(function(r){ setTimeout(r, _w); }).then(function(){ return _go(_n); });
+    }
+    _clr();
+    try{ var _f2 = String(base).split('/').pop();
+         LB._dlLastFail = { file: _f2, st: res.status, ts: Date.now() };
+         lbToast('⚠ ' + _f2 + ' 下载失败（HTTP ' + res.status + '，已保留旧数据）'); }catch(e2){}
+    return null;
+  }).catch(function(e){
+    // 网络层错误（含超时 abort）：同样退避重试，耗尽后再明示
+    if(_try < LB_DL_RETRY_MAX && !(e && e.name === 'AbortError')){
+      var _w2 = Math.round(500 * Math.pow(2, _try) + Math.random() * 200);
+      try{ LB._dlRetry = (LB._dlRetry || 0) + 1; }catch(e3){}
+      return new Promise(function(r){ setTimeout(r, _w2); }).then(function(){ return _go(_try + 1); });
+    }
     _clr();
     return null;
-  }).catch(function(){ try{ _clr(); }catch(e){} return null; });
+  });
+  }
+  return _go(0);
 }
 
 // v211：HEAD 探测 .gz 优先（后端 zlib 改造后可能只输出 .json.gz 不保留明文 .json），404 回退 .json；返回 {lm, ext}
@@ -7567,6 +7663,59 @@ function lbGroupItems(cg){
   }
   return out;
 }
+// v3549（用户口径「生物装备槽里的鞍不应重复显示在背包」）：
+//   判定 = 该组含「恐龙背包容器成员」（containerClass 含 DinoTamedInventoryComponent）→ 用该成员的物种+坐标
+//   找到对应恐龙 rec（同 v1340 索引口径：同物种同坐标零歧义）→ 剔除「与 rec.saddle 同基名 **且同实例**」的鞍。
+//   保底（不动其他鞍）：
+//     ① 有 saddleInfo.stats 且 stats 逐位相同 ⇒ 剔除（精确）；
+//     ② 无 stats 时，仅当该基名候选**只有一件** ⇒ 剔除（无歧义）；同基名多件且无法判实例 ⇒ 一律保留（宁多不误删）。
+function lbDropEquippedSaddle(cg, items){
+  try{
+    if(!items || !items.length || !cg || !cg.length) return items;
+    var bag = null;
+    for(var bi=0; bi<cg.length; bi++){ var bc = cg[bi]; if(bc && String(bc.containerClass||'').indexOf('DinoTamedInventoryComponent') >= 0){ bag = bc; break; } }
+    if(!bag) return items;
+    var D = (LB._cache && LB._cache.data) || null; if(!D || !D.recs) return items;
+    var sv = String(bag.server || (LB.tab || ''));
+    var px = Math.round(Number(bag.containerX) || 0), py = Math.round(Number(bag.containerY) || 0);
+    var rec = null, recPos = null;
+    for(var i=0;i<D.recs.length;i++){
+      var r = D.recs[i]; if(!r || !r.saddle) continue;
+      if(String(r.server) !== sv) continue;
+      var rx = Math.round(Number(r.containerX !== undefined ? r.containerX : r.x) || 0);
+      var ry = Math.round(Number(r.containerY !== undefined ? r.containerY : r.y) || 0);
+      if(rx === px && ry === py){ rec = r; recPos = 1; break; }
+    }
+    if(!rec) return items;
+    var sk = (typeof lbFacBaseKey === 'function') ? lbFacBaseKey(rec.saddle) : String(rec.saddle);
+    if(!sk) return items;
+    var si = rec.saddleInfo || {};
+    var ss = Array.isArray(si.stats) ? si.stats : [];
+    var cand = [];
+    for(var j=0;j<items.length;j++){
+      var it = items[j]; if(!it) continue;
+      if(String(it.kind || '') !== 'saddle') continue;
+      var ik = (typeof lbFacBaseKey === 'function') ? lbFacBaseKey(it['class'] || '') : String(it['class'] || '');
+      if(ik === sk) cand.push(it);
+    }
+    if(!cand.length) return items;
+    // v3550（用户实测：**无品质/原始品质鞍**护甲与耐久为 0 ⇒ 原「a>0 && d>0」门槛永不成立 ⇒ 漏滤）：
+    //   改为 stats 数组**逐位相等**（含全 0 / 等长即可）→ 命中即剔；未命中且同基名候选**唯一** ⇒ 也剔（装备槽必占那一个）；
+    //   多件且判不出实例 ⇒ 全保留（守住「不影响背包内其他鞍」）
+    function _st9(a){ var o = Array.isArray(a) ? a : [], r = []; for(var q=0;q<o.length;q++) r.push(Number(o[q]) || 0); return r; }
+    var drop = null, ssN = _st9(ss);
+    for(var ci=0; ci<cand.length; ci++){
+      var stN = _st9(cand[ci].stats);
+      if(stN.length !== ssN.length || !stN.length) continue;
+      var _eq9 = true;
+      for(var qi=0; qi<stN.length; qi++){ if(stN[qi] !== ssN[qi]){ _eq9 = false; break; } }
+      if(_eq9){ drop = cand[ci]; break; }
+    }
+    if(!drop && cand.length === 1) drop = cand[0];
+    if(!drop) return items;                        // 多件且无法判实例 ⇒ 全保留（不误伤其他鞍）
+    return items.filter(function(x){ return x !== drop; });
+  }catch(e){ return items; }
+}
 // v972：泰克专储判定（containerType='dedicated' 或类名含 DedicatedStorage）
 function lbIsDedicatedStorage(r){
   if(!r) return false;
@@ -7648,7 +7797,16 @@ function lbIsEmptyItem(it){
   //   Ext 102/102、Sco 20/20、Abe 99/102，形态均为 quantity=0 ⇒ 按数量判空必然全灭。
   //   ⚠️ 刻意**不**把 trophy 并入 LB_SP_EQUIP_KINDS：v1358 用户口径「卡片只服务装备类，消耗品/战利品/祭品属容器内容类别」
   //   ⇒ trophy 仍走徽章渲染（lbInvListHtml），只是不再被判空丢弃。
-  if(String(it.kind||'') === 'trait') return false;   // v1241：物品特性实物 quantity 恒 0（同装备类语义，防被当空槽丢弃）
+  // v3571（用户实测「附件这种蓝图明显是固定印痕」，全服扫描证实）：trait 必须**分两类**处置 ——
+  //   ① **印痕蓝图**（`isBlueprint=1` + rated=0/rating=-1；实测 **920 条 100% 落在 `PrimalInventoryBP_ChemBench_Tek`**，
+  //      即实验桌自带的固定配方清单、每台同一套）⇒ 按固定配方判空（隐藏，不再渲染成蓝图卡）
+  //   ② **特性实物**（`isBlueprint=0`；实测 375 条：StorageBox_Huge 205 / 恐龙背包 123 / 实验桌 46 / 机床 1）
+  //      —— quantity 恒 0 属唯一物品形态 ⇒ 保留显示（v1241 / v3460 口径不变）
+  //   ⚠️ 与 v3538（基因扫描仪印痕被显示在所有制造设备里）**同一错误模式**：放行早退排在 `lbIsBp` 分支之前 ⇒ 蓝图绕过固定配方判空
+  if(String(it.kind||'') === 'trait'){
+    if(!lbIsBp(it)) return false;
+    return lbIsFixedRecipeBp(it);
+  }
   if(String(it.kind||'') === 'trophy') return false;  // v3460：战利品/神器唯一物品，数量恒 0
   if(lbIsBp(it)) return lbIsFixedRecipeBp(it);   // v20260912-1020：补全 rating===-1
   // v3538（根因修复·用户实测「基因扫描仪的印痕被错误显示在所有制造设备里」）：geneGun 的放宽判空必须排在**蓝图分支之后**——
@@ -8074,10 +8232,20 @@ function lbMatServerIdx(){
   if(LB._matIdx && LB._matIdxSig === sig) return LB._matIdx;
   LB._matTribes = null;
   var idx = {};
+  LB._lsDedup = {};   // ⭐ v3560：互联式储物箱共享空间排重表（key = 服:部落）
   Object.keys(ibs).forEach(function(ab){
     var s = ibs[ab]; if(!s || !s.byCid) return;
     Object.keys(s.byCid).forEach(function(cid){
       var arr = s.byCid[cid] || [];
+      // ⭐ v3560（用户口径）：互联式储物箱共享空间是同部落多台共用的 ⇒ 同 (服,部落) 只统计首台，否则存量虚高 N 倍
+      for(var _q = 0; _q < arr.length; _q++){
+        var _c = String((arr[_q] || {}).containerClass || '');
+        if(_c.indexOf('LinkedStorage') < 0 && _c.indexOf('Linked_Storage') < 0) continue;
+        var _k = ab + ':' + String((arr[_q] || {}).containerTribe || 0);
+        if(LB._lsDedup[_k]) return;      // 该 (服,部落) 共享空间已计过 ⇒ 整组跳过
+        LB._lsDedup[_k] = 1;
+        break;
+      }
       for(var i=0;i<arr.length;i++){
         var it = arr[i]; if(!it || lbIsBp(it)) continue;
         var q0 = Number(it.quantity) || 0; if(q0 <= 0) continue;
@@ -8440,7 +8608,7 @@ var LB_CONT_CAP = {
   IndustrialPreservinBin:70, IndustrialPreservingBin:70,     // Industrial Preserving Bin（wiki 类名拼写缺 g ⇒ 两种都收）
   CompostBin:8,                                              // Compost Bin（wiki 8）
   BeeHive:45,                                                // Bee Hive（wiki 45）
-  LinkedStorage:0,                                           // 无官方槽位数（保留占位，0 ⇒ 不显示分母）
+  LinkedStorage:50,                                          // v3559b（用户澄清）：**同一设施含 2 个空间** —— 电池栏 2 格 + **共享空间 50 格**；共享为主库存 ⇒ 容量取 50（数据类名不区分两个空间；观测最大占用 7 ≤ 50）
   // —— 工作台/制造 ——
   AnvilBench:75, StorageBox_AnvilBench:75, Smithy:75,        // Smithy（wiki 75）
   Fabricator:70, StorageBox_Fabricator:70,                   // Fabricator（wiki 70）
@@ -8479,29 +8647,250 @@ var LB_CONT_CAP = {
   EggIncubator:0,                                            // 无官方槽位数（烘焙/孵化另有语义）
   PowerGenerator:8, ElectricGenerator:8,                     // Electrical Generator（wiki 8）
   WindTurbine:0, WindTrubine:0,                              // 无官方槽位数
-  TrophyBase:1, TrophyBaseBP:1,                              // Artifact Pedestal（wiki 1）
+  TrophyBase:2, TrophyBaseBP:2,                              // Artifact Pedestal / 战利品底座（wiki itemslots=1 **+1 装备栏 = 2**；v3561 用户口径）
   Vessel:4,                                                  // Vessel（wiki 4）
-  DecorBox:1,                                                // Decor Box（wiki 1）
+  DecorBox:2,                                                // Decor Box / 装饰箱（wiki itemslots=1 **+1 装备栏 = 2**；v3561 用户口径）
   DinoLeash:0,                                               // 无官方槽位数
   AirConditioner:0,                                          // 无官方槽位数
   Coffin:0,                                                  // 无官方槽位数
   WoodenCage:0,                                              // 无官方槽位数
   GeneInfuser:15, Gene_Storage:15,                           // Gene Storage（wiki 15）
-  MakeshiftMegalab:600, ChemBench_Tek:600                    // Makeshift Megalab（wiki 600）
+  MakeshiftMegalab:600, ChemBench_Tek:600,                   // Makeshift Megalab（wiki 600）
+  // —— v3554 补录（数据实证缺容量；数值核对 ark.wiki.gg 页面 `itemslots` 字段原文，2026-09-22）——
+  Turret:24,                                                 // Auto Turret（itemslots=24）
+  HeavyTurret:58,                                            // Heavy Auto Turret（58）
+  TurretTek:5,                                               // Tek Turret（5）
+  PowerNode:20,                                              // Charge Node（20）
+  CropPlot_Tek:20,                                           // Tek Crop Plot（20）
+  CityTerminal:60,                                           // City Terminal（60）
+  StandingTorch:8,                                           // Standing Torch（8；数据基名曾带 _C1_0 尾巴，见 lbFacBase v3554）
+  Light_Base:2,                                              // Lamppost（2）
+  BeerBarrel:10,                                             // Beer Barrel（10）
+  TeslaCoil:14,                                              // Tesla Coil（14）
+  Campfire_Fireplace:3,                                     // Fireplace（3）
+  // —— v3556 补录（官中溯源＋wiki 核实，2026-09-22）——
+  TribeTower:32,                                             // Tribe Tower（wiki itemslots=32；官中「部落塔」）
+  Bloodforge:50, InventoryComponent_Bloodforge:50,           // Bloodforge（wiki itemslots=50；官中「血铸熔炉」；数据基名带组件前缀 ⇒ 双键）
+  HatRack:2,                                                 // 帽架（v3562 用户口径：带装备栏；官方槽位数未知 ⇒ 取实服观测下界 1 + 1 装备栏 = 2；⚠ 待复核）
+  Oasisaur_FoliageInventory:30,                              // 绿洲龙植被栏（**v3563 用户手填 30**；原占位 0 ⇒ 已替换）
+  // ⚠ v3563：原 `SupplyCrate:0` ⇒ 移入 `LB_CONT_CAP_NOLIMIT`（用户手填「无上限」）；
+  //         原 `BaseFuelBurning:0` ⇒ 移入 `LB_CONT_CAP_HIDE`（用户手填「不显示容量」）
+  // —— ✅ **已部署**（v3562 批次上线）· v3558 补录（A 区深挖：wiki `itemslots` 字段原文 + 实服观测下界**双校验**，2026-09-22）
+  //   ⚠ 取值规则：只认 `item slots|itemslots|slots|inventory slots|storage slots` 字段；stacksize/weight 一律不算
+  //   ⚠ 剔除实录：ArtifactCrate（匹配到的是战利品底座页）/ WaterTank（类名不分石、金属款 ⇒ 4与10 冲突）/ BaseFuelBurning（3 属篝火）
+  Garage:100, GarageCrafting:100,                            // Battlerig Garage（itemslots=100；观测 2 / 86）
+  Toilet:100,                                                // Toilet（itemslots=100；看似离谱但原文确凿）
+  ShipyardLarge:300,                                         // Large Shipyard（itemslots=300；观测 17）
+  oilPump:50,                                                // Oil Pump（itemslots=50；观测 36）
+  GasCollector:24,                                           // Gas Collector（itemslots=24；观测 24 完全吻合）
+  Catapult:10,                                               // Catapult Turret（itemslots=10；观测 6）
+  OilLamp:8,                                                 // Frontier Lamp（itemslots=8；蓝图 PrimalItemStructure_OilLamp）
+  Tap:4,                                                     // Stone Irrigation Pipe - Tap（itemslots=4；观测 4）
+  TrophyWall:2,                                              // Trophy Wall-Mount / 战利品壁挂（wiki itemslots=1 **+1 装备栏 = 2**；v3561 用户口径）
+  Cannon:1,                                                  // Cannon（itemslots=1）
+  // —— ✅ **已部署**（v3562 批次上线）· v3559：**用户手填确认**（用户在容量表页逐项填写，2026-09-22）
+  TaxidermyBase:11,                                          // 小型标本底座（用户手填 10 **+1 装备栏 = 11**；v3561 用户口径）
+  BioGrinder:200,                                            // 生物研磨机（用户确认 200）
+  TreasureCache_Small:15,                                    // 藏宝箱（用户确认 15）
+  WaterTank:10,                                              // 蓄水池（用户确认 10；数据类名不分石/金属）
+  RadioActiveLanternGround:50,                               // 探照灯（用户确认 50）
+  Ballista:24,                                               // 弩炮台（用户确认 24）
+  EggIncubator:10,                                           // 孵化器（用户确认 10）
+  InventoryComponent_MedicalStand:51,                        // 医疗支架（用户确认 50 **+1 装备栏 = 51**；v3562 用户口径）
+  // —— ✅ **已部署**（v3562 批次上线）· v3560：用户补充确认
+  AntiFlyerTurret:30,                                        // 防空炮台（用户确认 30；wiki 无 itemslots，观测下界 7 ≤ 30）
+  LinkedStorage:50,                                          // 见上行（同一设施 2 空间：电池栏 2 + 共享空间 50）
+  // ⚠ LinkedStorage 共享空间是**同部落所有互联式储物箱共用**（用户 2026-09-22 口径）
+  //   ⇒ 若同一部落放多台，前端应对「服+部落」排重，只显示一次 `已用/50`（否则 N 台重复计数）
+  //   · 实测（v3560 已修正）：Abe **单部落就有 4 台**（用户实况），facilities 源全服 24 台 ⇒ **计数一律以 facilities 源为准**
+  //     （item 源只见「有物品的容器」= 3 台，严重低估 ⇒ 勿再用 tmp/_probe_linked.txt 的台数）
+  // —— ✅ v3563：**用户手填落地**（用户在容量表 A 区逐项填写，2026-09-22）——
+  BeaverDam:12,                                              // 河狸坝（用户手填 12；数据 108 容器/2 服）
+  OilLamp_Chandelier:8,                                      // 吊式燃油灯（用户手填 8；与 OilLamp 同值）
+  // —— ✅ v3572：**用户手填**（2026-09-22）——
+  TrainingDummy:18,                                          // 训练假人（**用户口径：装备栏 8 格 + 存储容量 10 格 = 总 18 格**；角标只显示「已用/18」，不区分两类）
 };
+// ⭐ v3559：**无上限容器**（用户口径「弹药容器没有容量上限」）——白名单标记，不显示分母
+//   语义：表内不登记数值；页面/角标按「已用（无上限）」展示；A 区缺容量清单排除它们
+var LB_CONT_CAP_NOLIMIT = {
+  AmmoContainer: 1,                                          // 弹药容器（用户确认：无容量上限）
+  AmmoBox: 1,                                                // 弹药箱（同物异名兼容）
+  ArtifactCrate: 1,                                          // v3563 用户手填「无上限」：神器箱
+  SupplyCrate: 1                                             // v3563 用户手填「无上限」：补给箱（原在容量表占位 0）
+};
+// ⭐ v3563：**不显示容量**容器（用户手填口径「不显示容量」）——角标**整条不渲染**
+//   语义：该类容器在游戏内不算「有上限的储物空间」（燃料槽＝通用燃烧库存）⇒ 既不显示分母也不显示占用；
+//   A 区「缺容量」清单同样排除它们（不留无解待办）
+var LB_CONT_CAP_HIDE = {
+  BaseFuelBurning: 1,                                        // 燃料槽（通用燃烧库存；用户 2026-09-22 口径：不显示容量）
+  // —— v3570（用户口径「一并 HIDE」）：**无容量概念**设施 ⇒ 角标整条不渲染（容量总表同步排除）——
+  SimpleBed: 1, ModernBed: 1, TekBed_Standing: 1,            // 床 / 现代床 / 立式泰克睡眠舱（无储物槽语义）
+  Gravestone: 1,                                             // 墓碑
+  Coffin: 1, Coffin_Upright: 1,                              // 棺材 / 立式棺材
+  Keypad2: 1,                                                // 遥控板（Keypad）
+  HangingSign: 1                                             // 悬挂标识
+};
+// ⭐ v3570（用户口径「角标取值跟物品源对齐」）：**容量链专用别名**（记录源类名 → 容量表口径类名）
+//   背景：**容量总表**按「物品容器类」统计（`PrimalInventoryBP_Turret_C1` → 去前缀 → `Turret` ⇒ 24），
+//   而角标取的是**记录里的容器类**（`_capCls = cg[0].containerClass`）——同一容器两种写法时角标会漏分母：
+//     `StructureTurretBaseBP_C_*`（自动炮台底座，实服 57 容器）/ `StructureTurretBaseBP_Heavy_C_*`（71）/
+//     `StorageBox_ChemBench_Tek_C_*`（UI 名就是「简易大型实验桌」，实服 1 台 × 63 件）
+//   ⚠ 本表**只作用于容量链**（不动命名/图标链，避免标签/图标被改）；新增条目须逐条取证
+var LB_CONT_CAP_ALIAS = {
+  TurretBaseBP: 'Turret',                    // 自动炮台底座 → 炮台（wiki itemslots=24）
+  TurretBaseBP_Heavy: 'HeavyTurret',         // 重型自动炮台底座 → 重型炮台（58）
+  StorageBox_ChemBench_Tek: 'ChemBench_Tek'  // Tek 实验桌储物箱（UI「简易大型实验桌」）→ 600
+};
+function lbContCapAlias(cls){
+  try{
+    var cs = lbFacKeyCands(cls);
+    for(var i = 0; i < cs.length; i++){
+      var a = LB_CONT_CAP_ALIAS[cs[i]];
+      if(a) return a;
+      var lk = String(cs[i]).toLowerCase();
+      for(var k in LB_CONT_CAP_ALIAS){ if(String(k).toLowerCase() === lk) return LB_CONT_CAP_ALIAS[k]; }
+    }
+  }catch(e){}
+  return null;
+}
+// ⭐ v3554（用户实测「Refridgerator 修了无数次还是不知道它是冰箱」的 **根治**）
+//   根因：本表键取自 wiki/人工物品名（正确拼写），而查找键是**游戏内部类名**经 lbFacBase 归一的结果；
+//     游戏内部大量错拼/词序不同 —— 数据实证 `PrimalInventoryBP_Refridgerator_C1` ×2440（**少一个 e**，
+//     且数据里**不存在**正确拼写 Refrigerator 的类）⇒ v3491 的 toLowerCase() 兑底对「拼写差异」无效 ⇒ 永久命中 0。
+//   机制修复：① 本表键以**数据真实基名**为准（别名指向）；② 新增别名表承接 wiki 名/历史拼写；
+//     ③ 查找链扩为：精确 → 小写全等 → 别名 → 归一化(去 _/-/空格/大小写) 兑底。
+//   ⚠️ 今后加容量**一律以数据基名为键**（跑 tmp/_cont_cap_check.py 对账；禁止再写“死键”）。
+//   ⭐ v3555：别名表已升级为全链共用的 `LB_FAC_KEY_ALIAS`（命名/图标/物品/容量四链），见下方定义处。
+// ⭐ v3555：设施键解析器（**命名链 / 图标链 / 物品链 / 容量链 共用**）
+//   元根因（v3554 冰箱事件复盘）：四处表的键来源不同 ——
+//     ① facility_zh 键 = **设施本体类名基名**（Refrigerator / Fireplace / WaterTap / TurretCatapult …）
+//     ② 容量表键 = wiki 物品名 / 数据基名（IceBox:80 / StorageBox_IndustrialGrinder:120 …）
+//     ③ 查找键 = **库存类名**（PrimalInventoryBP_* / PrimalInventoryComponent_* / InventoryComponent_*）剥离后的基名
+//   三者拼写（Refridgerator↔Refrigerator）、词序（CookingPot_Industrial↔IndustrialCookingPot）、
+//   前后缀（Component_ShipyardLarge↔Shipyard_Large、StandingTorch_C1_0）**经常对不上** ⇒ 各链只做精确匹配必漏。
+//   ⇒ 统一产出**候选键序列**：原键 → 大小写 → 别名目标 → 归一化 → 表内归一化兜底；各表按序命中即用。
+//   ⚠ 新增别名必须**逐条取证**（wiki itemslots / 设施本体类名实测）：跑 tmp/_fac_cls_check.py + tmp/_wiki_cls_probe.py
+var LB_FAC_KEY_ALIAS = {
+  // 键 = 数据真实基名（lbFacBase/lbFacKeyStem 结果）｜值 = 表内键（行尾为取证依据）
+  Refridgerator: 'Refrigerator',                       // 错拼少 e（×2440 容器）；wiki Refrigerator itemslots=80
+  CookingPot_Industrial: 'IndustrialCookingPot',       // 词序不同（×479）；设施实测 IndustrialCookingPot_C_*
+  IndustrialGrinder: 'StorageBox_IndustrialGrinder',   // 设施实测 StorageBox_IndustrialGrinder_C_*（容量表 120）
+  TaxidermyBase: 'TaxidermyBase_Small',                // 设施实测 Structure_TaxidermyBase_Small_C_*（数据内唯一标本底座）
+  GarageCrafting: 'Garage',                            // 设施实测 StructureBP_Garage_C_*（战车库）
+  Campfire_Fireplace: 'Fireplace',                     // 设施实测 Fireplace_C_*；wiki Stone Fireplace itemslots=3
+  Tap: 'WaterTap',                                     // 设施实测 WaterTap_C_*；内容物 CanteenRefill ⇒ 石制水龙头
+  Catapult: 'TurretCatapult',                          // 设施实测 StructureTurretCatapult_C_*
+  Ballista: 'TurretBallista',                          // wiki PrimalItemStructure_TurretBallista
+  IndustrialPreservinBin: 'IndustrialPreservingBin',   // 错拼少 g（v3554 容量别名并入）
+  TrophyBaseBP: 'TrophyBase',                          // 基名带 BP 后缀（v3554 容量别名并入）
+  InventoryComponent_Bloodforge: 'Bloodforge'           // v3556：类名带组件前缀（PO 实证设施类 PrimalItemStructure_LostColony_Bloodforge）
+};
+// v3555：库存/组件类前缀（**声明式**，多轮剥至稳定）
+var LB_FAC_KEY_PREFIX = /^(?:PrimalItemStructure_|PrimalItem_|PrimalInventoryComponent_|PrimalInventoryBP_|PrimalInventory_|PrimalInventory|PrimalStructure_|InventoryComponent_|Inventory_|Component_|StructureBP_|Structure_|Structure|BP_)+/;
+// v3555：基名——`PrimalInventoryBP_StandingTorch_C1_0` → `StandingTorch`；`InventoryComponent_MedicalStand` → `MedicalStand`
+function lbFacKeyStem(cls){
+  var s = String(cls || ''), prev = null, n = 0;
+  while(s && s !== prev && n < 6){ prev = s; n++;
+    s = s.replace(LB_FAC_KEY_PREFIX, '').replace(/_C_\d+$/, '').replace(/_C\d*$/, '').replace(/_\d+$/, '');
+  }
+  return s.replace(/^_+/, '');
+}
+// v3555：归一化比较键（去 _ - 空格 + 小写）
+function lbFacKeyNorm(s){ return String(s || '').replace(/[_\-\s]/g, '').toLowerCase(); }
+// v3555：候选键序列（去重；顺序 = 精确优先、联想殿后）
+function lbFacKeyCands(cls){
+  var out = [], seen = {};
+  var push = function(x){ x = String(x || ''); if(!x || seen[x]) return; seen[x] = 1; out.push(x); };
+  var k0 = ''; try{ k0 = lbFacBase(cls); }catch(e){ k0 = String(cls || ''); }
+  var stem = lbFacKeyStem(cls);
+  push(k0); push(stem);
+  var seeds = [k0, stem];
+  for(var i = 0; i < seeds.length; i++){ if(seeds[i]) push(String(seeds[i]).toLowerCase()); }
+  for(var j = 0; j < seeds.length; j++){
+    var k = seeds[j];
+    if(!k) continue;
+    var a = LB_FAC_KEY_ALIAS[k];
+    if(a === undefined){ var lk = String(k).toLowerCase(); for(var ka in LB_FAC_KEY_ALIAS){ if(String(ka).toLowerCase() === lk){ a = LB_FAC_KEY_ALIAS[ka]; break; } } }
+    if(a){ push(a); push(String(a).toLowerCase()); }
+  }
+  return out;
+}
+// v3555：在任意表里按候选序列查找（精确 → 大小写全等 → 表键归一化全等）——okFn 可要求值可用（如容量 >0）
+function lbFacKeyFind(tbl, cls, okFn){
+  if(!tbl) return null;
+  var cs = [], kk;
+  try{ cs = lbFacKeyCands(cls); }catch(e){ cs = [String(cls || '')]; }
+  for(var i = 0; i < cs.length; i++){
+    var v = tbl[cs[i]];
+    if(v !== undefined && (!okFn || okFn(v))) return { k: cs[i], v: v };
+  }
+  for(var i2 = 0; i2 < cs.length; i2++){
+    var lk = cs[i2].toLowerCase();
+    for(kk in tbl){ if(String(kk).toLowerCase() === lk && (!okFn || okFn(tbl[kk]))) return { k: kk, v: tbl[kk] }; }
+  }
+  for(var i3 = 0; i3 < cs.length; i3++){
+    var nk = lbFacKeyNorm(cs[i3]);
+    if(!nk) continue;
+    for(kk in tbl){ if(lbFacKeyNorm(kk) === nk && (!okFn || okFn(tbl[kk]))) return { k: kk, v: tbl[kk] }; }
+  }
+  return null;
+}
 function lbContCapOf(cls){
-  var k = ''; try{ k = lbFacBase(cls); }catch(e){ k = String(cls || ''); }
-  if(!k) return 0;
-  var v = LB_CONT_CAP[k];
-  if(Number(v) > 0) return Number(v);
-  var lk = k.toLowerCase();                       // v3491：大小写不敏感兜底
-  for(var kk in LB_CONT_CAP){ if(String(kk).toLowerCase() === lk) return Number(LB_CONT_CAP[kk]) || 0; }
+  try{
+    var h = lbFacKeyFind(LB_CONT_CAP, cls, function(v){ return Number(v) > 0; });   // v3555：四链共用解析器（别名+前后缀+归一化）
+    if(h) return Number(h.v) || 0;
+    // v3570：容量专用别名兜底（记录源类名 → 容量表键，如 StructureTurretBaseBP_C_* → Turret=24）
+    var _c2 = lbContCapAlias(cls);
+    if(_c2){ h = lbFacKeyFind(LB_CONT_CAP, _c2, function(v){ return Number(v) > 0; }); if(h) return Number(h.v) || 0; }
+  }catch(e){}
   return 0;
+}
+// ⭐ v3560：**部落共享容器**（其容量为同部落多台共用）——角标按方案 B 逐台显示 + 加「共享」标记；
+//   而**资源计数（待制作材料存量）必须排重**，见 lbMatServerIdx 内的 LinkedStorage 去重
+var LB_CONT_CAP_SHARED = {
+  LinkedStorage: 1,                                          // 互联式储物箱：共享空间 50 格（同部落所有台共用）
+  Linked_Storage: 1
+};
+// ⭐ v3561：**带装备栏（装备槽）的结构类容器** —— 用户点名 4 类「小型标本底座 / 战利品壁挂 / 战利品底座 / 装饰箱」
+//   语义：该类设施除官方 itemslots 外另有 **1 个装备栏** ⇒ 表内已直接登记 **+1 后的值**；本表仅用于页面/角标**标注**与排重说明
+var LB_CONT_CAP_EQUIP = {
+  TaxidermyBase: 1, TaxidermyBase_Small: 1,     // 小型标本底座（itemslots 10 + 1 = 11）
+  TrophyWall: 1,                                // 战利品壁挂（1 + 1 = 2）
+  TrophyBase: 1, TrophyBaseBP: 1,               // 战利品底座 / Artifact Pedestal（1 + 1 = 2）
+  DecorBox: 1,                                  // 装饰箱（1 + 1 = 2）
+  HatRack: 1,                                   // 帽架（v3562：1 + 1 = 2，官方基数待复核）
+  InventoryComponent_MedicalStand: 1            // 医疗支架（v3562：50 + 1 = 51）
+};
+// v3560：该容器是否「无容量上限」（弹药容器等）——供页面/角标展示「∞」口径
+function lbContCapNoLimit(cls){
+  try{
+    var h = lbFacKeyFind(LB_CONT_CAP_NOLIMIT, cls, function(v){ return Number(v) > 0; });
+    return !!h;
+  }catch(e){ return false; }
+}
+// v3560：是否部落共享容器（角标加标记用）
+function lbContCapShared(cls){
+  try{ return !!lbFacKeyFind(LB_CONT_CAP_SHARED, cls, function(v){ return Number(v) > 0; }); }catch(e){ return false; }
+}
+// v3561：是否带装备栏的结构类容器（已含 +1；角标加「装备栏」标记用）
+function lbContCapEquip(cls){
+  try{ return !!lbFacKeyFind(LB_CONT_CAP_EQUIP, cls, function(v){ return Number(v) > 0; }); }catch(e){ return false; }
+}
+// v3563：是否「不显示容量」容器（角标整条不渲染用）
+function lbContCapHide(cls){
+  // v3570：野外生物背包（DinoWildInventoryComponent_*）无容量概念 —— 与已驯服背包（DinoTamed*）同口径，直接不出角标
+  try{ if(/^DinoWildInventoryComponent/i.test(String(cls || ''))) return true; }catch(e){}
+  try{ return !!lbFacKeyFind(LB_CONT_CAP_HIDE, cls, function(v){ return Number(v) > 0; }); }catch(e){ return false; }
 }
 // 容量角标：已用 = 球数(非空) + 空球数 + 物品条目数；容量 = 查表（无 ⇒ 只显示已用）
 function lbContCapHtml(cls, used){
   used = Number(used) || 0;
+  if(lbContCapHide(cls)) return '';                        // v3563：不显示容量容器 —— 角标整条不渲染
   var cap = lbContCapOf(cls);
+  if(!cap && lbContCapNoLimit(cls)){                       // v3559：无上限容器
+    if(!used) return '';
+    return '<span class="lb-capmark" title="该容器无容量上限" style="color:#94a3b8">' + used + '/∞</span>';
+  }
   if(!used && !cap) return '';
   var txt = cap ? (used + '/' + cap) : String(used);
   var tip = cap ? ('占用 ' + used + ' / 容量 ' + cap + '（' + Math.round(100 * used / cap) + '%）')
@@ -8510,6 +8899,18 @@ function lbContCapHtml(cls, used){
   //   0% = 绿(120°) → 50% = 黄(60°) → 100% = 红(0°)；容量未知的类型保持灰（无比例可算）
   var _col = '#94a3b8';
   if(cap){ var _rr = Math.max(0, Math.min(1, used / cap)); _col = 'hsl(' + Math.round(120 * (1 - _rr)) + ',72%,55%)'; }
+  // ⭐ v3561：带装备栏容器 —— 表值已含 +1，角标加「装备栏」标记说明
+  if(cap && lbContCapEquip(cls)){
+    tip += '；含 1 个装备栏（官方槽位 +1）';
+    return '<span class="lb-capmark" title="' + lbAttr(tip) + '" style="color:' + _col + '">' + txt
+         + '<span style="font-size:9px;opacity:.75;margin-left:3px">装备栏</span></span>';
+  }
+  // ⭐ v3560（用户口径·方案 B）：部落共享容器 —— 逐台显示但加「共享」标记（同部落多台共用同一空间，勿相加）
+  if(cap && lbContCapShared(cls)){
+    tip += '；❗部落共享：同部落所有互联式储物箱共用这一个空间（多台相加会重复计数）';
+    return '<span class="lb-capmark" title="' + lbAttr(tip) + '" style="color:' + _col + '">' + txt
+         + '<span style="font-size:9px;opacity:.75;margin-left:3px">共享</span></span>';
+  }
   return '<span class="lb-capmark" title="' + lbAttr(tip) + '" style="color:' + _col + '">' + txt + '</span>';
 }
 // v3469：零数量白名单查询（多候选，口径同上）
@@ -8743,6 +9144,91 @@ function lbTraitEn(en){
 }
 // v1255（用户要求）：chip 描边用的档位色
 function lbTraitTierColor(cls){ return LB_TRAIT_TIER_COLOR[lbTraitTier(cls)] || LB_TRAIT_TIER_COLOR['']; }
+// v3580（用户口径：骨架只合并 Skeleton 前缀的；**两个地方都要合并**）：聚合键统一函数
+//   = lbItemMeta(raw).base（容器组原口径）；`Skeleton` 前缀（Skeleton_Raptor_01 / Skeleton_Trike_08 / Skeleton_Arm01 …）归并为同一件
+function lbItemAggKey(raw){
+  var m = null; try{ m = lbItemMeta(raw); }catch(e){ m = null; }
+  var k = (m && m.base) || String(raw || '').replace(/_C_\d+$/, '');
+  // v3584（v3583 回归修复）：骨架**必须短路 return** —— 78 个骨架词典 en 各不相同（Rex Skeleton / Trike Skeleton…），
+  //   若继续往下走 v3583 的 en 归一，「恐龙骨架」会被拆回 78 条（实测线上 恐龙骨架×78）
+  if(/^Skeleton/i.test(k)) return 'Skeleton';
+  k = k.replace(/^Dye_/, '');   // v3582：染料前缀双份（`Dye_X` 与 `X`）归并 —— 与 v3579「去前缀双键」同口径（两处共用）
+  // v3583（用户实测「金属锭/汽油还是重复」）：同一物品在词典里有多种键写法但 **en 完全相同**（MetalIngot/_FromMegaForge/PrimalItemResource_*…）
+  //   ⇒ 以词典 `en` 为归一身份（容器组 + 物品「其它」栏两处共用）；en 不同则视为不同物品（如 Horn / The Horn）
+  var _en = '';
+  try{
+    var _zh = LB_ITEM_ZH || {}, _cs = [];
+    if(k) _cs.push(k);
+    try{ if(typeof lbItemBaseCands === 'function') _cs = _cs.concat(lbItemBaseCands(raw) || []); }catch(e1){}
+    _cs.push(String(raw || ''));
+    for(var _i = 0; _i < _cs.length; _i++){ var _t = _zh[_cs[_i]]; if(_t && _t.en){ _en = String(_t.en).trim(); break; } }
+  }catch(e2){}
+  if(_en) k = 'en:' + _en.toLowerCase();
+  return k;
+}
+// v3586（用户要求）：物品 TAB 显示「全服拥有数量」—— 聚合键与容器组 / 物品栏同源（lbItemAggKey，含骨架归并 / en 归一）
+//   n = 件数（quantity 累加，与容器组 chip 的「·N」同口径）；svc = 覆盖服务器数（备用）
+function lbItemOwnIndex(){
+  var ts = (LB._cache && LB._cache.ts) || 0;
+  if(LB._itemOwnIdx && LB._itemOwnIdxTs === ts) return LB._itemOwnIdx;
+  var map = {};
+  var D = LB._cache && LB._cache.data;
+  if(D && D.itemsByServer){
+    Object.keys(D.itemsByServer).forEach(function(sv){
+      var ix = D.itemsByServer[sv] || {};
+      Object.keys(ix.byCid || {}).forEach(function(cid){
+        (ix.byCid[cid] || []).forEach(function(x){
+          if(!x) return;
+          try{ if(lbIsEmptyItem(x)) return; }catch(e){}
+          var cls = String(x['class'] || '');
+          if(!cls) return;
+          var k = ''; try{ k = lbItemAggKey(cls); }catch(e2){ k = cls; }
+          if(!k) return;
+          var _q = (Number(x.quantity) || 0);
+          if(_q <= 0) _q = 1;   // v3588：装备/建筑类 quantity 恒 0（实测 364/364 全 0）⇒ 每实例按 **1 件** 计
+          var g = map[k] || (map[k] = { n:0, sv:{} });
+          g.n += _q;
+          g.sv[sv] = 1;
+          // v3587：**别名登记**（词典短键口径）—— 词典键无 `en` 时 aggKey 停在短名（如 `Fiber`），
+          //   而存档实例（PrimalItemResource_Fiber）经 en 归一会得 `en:fiber` ⇒ 两侧对不上（实测 纤维/生肉 数量恒 0）
+          var _b = ''; try{ _b = lbCanonBase((lbItemMeta(cls) || {}).base || ''); }catch(e3){}
+          if(_b && _b !== k){ var _a = map[_b] || (map[_b] = { n:0, sv:{} }); _a.n += _q; _a.sv[sv] = 1; }
+        });
+      });
+    });
+  }
+  Object.keys(map).forEach(function(k){ map[k].svc = Object.keys(map[k].sv).length; });
+  LB._itemOwnIdx = map; LB._itemOwnIdxTs = ts;
+  return map;
+}
+// v3588：canonBase → 词典键列表（反向索引，词表变更时重建）——
+//   词典短键常常没有 `en` 字段（如 `Fiber`），而实例侧能借到长键的 en ⇒ aggKey 停在短名 vs en:fiber，两侧对不上
+function lbZhKeysByCanon(){
+  var zh = LB_ITEM_ZH || {}, n = Object.keys(zh).length;
+  if(LB._zhCanonRev && LB._zhCanonRevN === n) return LB._zhCanonRev;
+  var m = {};
+  Object.keys(zh).forEach(function(k){
+    var cb = ''; try{ cb = lbCanonBase(k); }catch(e){ cb = ''; }
+    if(!cb) return;
+    (m[cb] || (m[cb] = [])).push(k);
+  });
+  LB._zhCanonRev = m; LB._zhCanonRevN = n;
+  return m;
+}
+function lbItemOwnCnt(cls, asObj){
+  var n = 0, svc = 0;
+  try{
+    var m = lbItemOwnIndex(), ks = [];
+    try{ ks.push(lbItemAggKey(cls)); }catch(e){}
+    try{
+      var cb = lbCanonBase((lbItemMeta(cls) || {}).base || String(cls || ''));
+      var rev = lbZhKeysByCanon();
+      (rev[cb] || []).forEach(function(k){ var a = ''; try{ a = lbItemAggKey(k); }catch(e4){} if(a && ks.indexOf(a) < 0) ks.push(a); });   // v3588：同 canonBase 的词典键全部作为候选 aggKey
+    }catch(e2){}
+    for(var i=0;i<ks.length;i++){ var g = m[ks[i]]; if(g && g.n){ n = g.n; svc = g.svc; break; } }
+  }catch(e3){}
+  return asObj ? { n:n, svc:svc } : n;
+}
 function lbInvListHtml(items, opts){
   if(!items || !items.length) return '';
   // v1014：个体自定义名——低可视化写在每个物品徽章**内部**（不另套外层块）
@@ -8765,7 +9251,7 @@ function lbInvListHtml(items, opts){
     if(String(it.kind || '') === 'tribute') continue;               // v1358（用户要求）：Boss 祭品直接过滤不显示
     var raw = String(it['class']||'');
     var m0 = metaOf(raw);
-    var key = m0.base || raw.replace(/_C_\d+$/,'');
+    var key = lbItemAggKey(raw);   // v3580：与物品「其它」栏共用同一聚合键（含 Skeleton 归并）；原写法 = m0.base || raw.replace(/_C_\d+$/,'')
     // v1352（后端交接 §2.2）：自定义料理——同基名不同菜名不得合并（key 加菜名）
     var _cn = String(it.customName || '').trim();
     if(_cn) key = key + '|' + _cn;
@@ -8784,6 +9270,8 @@ function lbInvListHtml(items, opts){
   // v1016：inline 模式——不返回外层 flex div，由调用方把所有个体的徽章拼进**同一个**容器
   //   （v1014 每个个体各调一次 → 各返回一个块级 div → 实测每个个体/徒章强制换行）
   var _inline = !!(opts && opts.inline);
+  // v3586（用户要求）：无图标时补「问号」占位（与物品浮窗 .lb-picker-ic-none 视觉一致）
+  var _icNone = '<span style="width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;color:#64748b;font-size:11px;flex-shrink:0">?</span>';
   var o = _inline ? '' : '<div style="display:flex;flex-wrap:wrap;gap:6px;padding:6px 0">'; // v1226：去掉左右缩进（与下方卡片左对齐）
   for(var j=0;j<rows.length;j++){
     var r = rows[j];
@@ -8794,7 +9282,7 @@ function lbInvListHtml(items, opts){
       // v1255（用户要求）：档位徽章移到中文名前；chip 描边用档位色
       o += '<span style="display:inline-flex;align-items:center;gap:4px;background:#1a1a24;border:1px solid '+lbTraitTierColor(r.cls)+';border-radius:8px;padding:3px 7px;font-size:12px" title="'+r.cls+'">'
         + (_nm ? '<span style="color:#64748b;font-size:10px">'+_nm+'</span>' : '')
-        + (url ? '<img src="'+url+'" style="width:16px;height:16px;object-fit:contain"'+lbIconFilterStyle(url)+'>' : '')
+        + (url ? '<img src="'+url+'" style="width:16px;height:16px;object-fit:contain"'+lbIconFilterStyle(url)+'>' : _icNone)
         + lbTraitTierBadge(lbTraitTier(r.cls))
         + '<span style="color:#cbd5e1">'+lbTraitBaseZh(label)+'</span>'
         + (lbTraitEn(r.en) ? '<span style="color:#64748b;font-size:11px">'+lbTraitEn(r.en)+'</span>' : '')
@@ -8804,7 +9292,7 @@ function lbInvListHtml(items, opts){
     }
     o += '<span style="display:inline-flex;align-items:center;gap:4px;background:#1a1a24;border:1px solid '+(r.isBp?'#3b4a6b':'#2a2a3a')+';border-radius:8px;padding:3px 7px;font-size:12px" title="'+r.cls+'">'
       + (_nm ? '<span style="color:#64748b;font-size:10px">'+_nm+'</span>' : '')
-      + (url ? '<img src="'+url+'" style="width:16px;height:16px;object-fit:contain"'+lbIconFilterStyle(url)+'>' : '')
+      + (url ? '<img src="'+url+'" style="width:16px;height:16px;object-fit:contain"'+lbIconFilterStyle(url)+'>' : _icNone)
       + '<span style="color:#cbd5e1">'+label+'</span>'
       + (r.qty > 0 ? ('<span style="color:#475569;font-size:10px">·</span>'
           + (r.n > 1 ? '<span style="color:#94a3b8;font-size:11px">'+r.n+'组</span><span style="color:#475569;font-size:10px">·</span>' : '')   // v1000：仅 >1 时显示「N组 ·」
@@ -8839,7 +9327,7 @@ function lbGroupHasContent(cg, ctx){
 function lbFacBase(c){
   var s = String(c||'');
   s = s.replace(/^PrimalItemStructure_/,'').replace(/^PrimalInventoryBP_/,'').replace(/^PrimalInventory_/,'').replace(/^StructureBP_/,'').replace(/^Structure_/,'').replace(/^BP_/,'');
-  s = s.replace(/_C\d*$/,'').replace(/_C_\d+$/,'');
+  s = s.replace(/_C\d*$/,'').replace(/_C_\d+$/,'').replace(/_C\d+_\d+$/,'');   // v3554：补剥 `_C1_0` 这类「类后缀_序号」组合（数据实测 `PrimalInventoryBP_StandingTorch_C1_0` ×43）
   return s;
 }
 // v1050：容器合并「区域粒度」公共键——楼层桶(z/50) + 平面粗格(x,y/3000)
@@ -9044,7 +9532,7 @@ var LB_CONTAINER_DISP = {
     { re:/WeaponGeneScanner/i, type:'geneScanner', key:'gene_scanner', iconKey:'Gene_Scanner', mdi:'mdi-dna' }, // v909：基因枪（PrimalItem_WeaponGeneScanner）
     { re:/EggIncubator/i, type:'other', key:'egg_incubator', iconKey:'Egg_Incubator', mdi:'mdi-cog' },
     { re:/EmbryoIncubator/i, type:'other', key:'embryo_incubator', iconKey:'Embryo_Incubator', mdi:'mdi-cog' },
-    { re:/PreservingBin/i, type:'other', key:'industrial_preserving_bin', iconKey:'Industrial_Preserving_Bin', mdi:'mdi-fridge-outline' },
+    { re:/PreservingBin|PreservinBin/i, type:'other', key:'industrial_preserving_bin', iconKey:'Industrial_Preserving_Bin', mdi:'mdi-fridge-outline' },
     { re:/Linked_Storage/i, type:'other', key:'linked_storage_box', iconKey:'Linked_Storage_Box', mdi:'mdi-package-variant-closed' },
     { re:/LibraryStorage|Library_Storage/i, type:'other', key:'library_storage', iconKey:'Library_Storage', mdi:'mdi-package-variant-closed' },
     { re:/WoodFridge/i, type:'other', key:'woodfridge_icon', iconKey:'WoodFridge_Icon', mdi:'mdi-fridge-outline' },
@@ -9058,7 +9546,7 @@ var LB_CONTAINER_DISP = {
     { re:/TekTransmitter/i, type:'other', key:'tek_transmitter', iconKey:'TEKPortal_Icon', mdi:'mdi-cog' },
     { re:/CompanionBed/i, type:'other', key:'hud_companionbed_icon', iconKey:'HUD_CompanionBed_Icon', mdi:'mdi-cog' },
     { re:/TekSleepingPod/i, type:'other', key:'tek_sleeping_pod', iconKey:'Tek_Sleeping_Pod', mdi:'mdi-cog' },
-    { re:/Refrigerator/i, type:'other', key:'refrigerator', iconKey:'Refrigerator', mdi:'mdi-fridge-outline' }   // v996：冰箱（原先无正则命中 → 回退 storage → 误用储物箱图标）
+    { re:/Refrigerator|Refridgerator/i, type:'other', key:'refrigerator', iconKey:'Refrigerator', mdi:'mdi-fridge-outline' }   // v996：冰箱（原先无正则命中 → 回退 storage → 误用储物箱图标）；v3555：补游戏内错拼变体 Refridgerator
   ]
 };
 // v190 容器识别统一派生：位置态（released/player）原样；容器由 containerClass 正则派生子类型
@@ -9159,6 +9647,12 @@ function lbFacRecOf(cls, name, tribeId, srv, x, y, z){
            containerTribe:Number(tribeId || 0), ownerTribeId:Number(tribeId || 0),
            server:String(srv || ''), x:Number(x) || 0, y:Number(y) || 0, z:Number(z) || 0 };
 }
+// v3593（用户口径「完全复用容器色点样式」）：**色点统一样式** —— 容器涂装色点 / 染料色点共用同一实现（唯一来源，避免双份维护）
+function lbColorDotHtml(hex, tip, sz){
+  var s = Number(sz) || 8;
+  return '<i style="width:' + s + 'px;height:' + s + 'px;border-radius:50%;background:' + hex + ';border:1px solid #ffffff33;margin:0 2px 0 0"'
+       + (tip ? ' title="' + lbAttr(tip) + '"' : '') + '></i>';
+}
 // 着色圆点（只画「已着色」区域；未设置 / 从未染色一律不画；只读）
 var _lbFColMemo = {};
 // v1330：⭐ 结构涂装色号是「ASA 染料色板索引（1-based，1..127）」，不是恐龙/官方色号！
@@ -9188,7 +9682,7 @@ function lbFacColorHtml(cr){
     if(!_hex) continue;
     var _nm = lbStructColorName(v);
     tips.push('区域' + (i + 1) + ' 色号' + v + (_nm ? '（' + _nm + '）' : ''));
-    dots += '<i style="width:8px;height:8px;border-radius:50%;background:' + _hex + ';border:1px solid #ffffff33;margin:0 2px 0 0"></i>';   // v1331：去掉 vertical-align（改由容器 inline-flex 居中，高度严格=8px）
+    dots += lbColorDotHtml(_hex, '', 8);   // v3593：样式统一到 lbColorDotHtml（与染料色点同源）
   }
   if(!dots){ _lbFColMemo[key] = ''; return ''; }               // 全部未着色 ⇒ 整段不输出
   var out = '<span class="lb-fcol" title="' + lbAttr(tips.join(' | ')) + '" style="display:inline-flex;align-items:center;margin-left:6px;vertical-align:2px;white-space:nowrap">' + dots + '</span>';   // v1333：非空设施行再上移 1px（middle→1px→2px）
@@ -9790,6 +10284,7 @@ function lbItemPickAgg(){
   var _ts = (LB._cache && LB._cache.ts) || 0;   // v1373：绑定数据版本，避免刷新后沿用旧聚合
   if(LB._itemPickAgg && LB._itemPickAggTs === _ts) return LB._itemPickAgg;
   LB._itemNoHaveKeys = null;
+  LB._itemOwnIdx = null;   // v3586：拥有数量索引随数据版本失效
   var map = {};
   var D = LB._cache && LB._cache.data;
   if(D && D.itemsByServer){
@@ -10181,15 +10676,34 @@ function lbWebpIc(key, size){
   try{
     size = size || 11;
     var u = (window.LB_ITEM_ICON_URL && LB_ITEM_ICON_URL[key]) || (window.LB_ICON_BY_NAME && LB_ICON_BY_NAME[key]) || LB_ICON_FALLBACK[key] || '';
-    if(!u) return '';
+    // v3550（用户实测「刷新后角标图标经常不出现」根因）：图标索引**异步**加载，渲染可能更早 ⇒ 原实现返回空串 ⇒ DOM 里永久没有 img。
+    //   现改为输出**占位 span**，由 lbIconPatch()（索引到位 / 包分片换图时各调一次）回填真实 img。
+    if(!u) return '<span class="lb-icph" data-ick="'+lbAttr(key)+'" data-sz="'+size+'" style="display:inline-block;width:'+size+'px;height:'+size+'px;vertical-align:-1px;margin:0 2px 0 3px"></span>';
     return '<img src="'+u+'" style="width:'+size+'px;height:'+size+'px;object-fit:contain;vertical-align:-1px;margin:0 2px 0 3px" onerror="this.style.display=\'none\'">';
   }catch(e){ return ''; }
+}
+// v3550：占位图标回填（.lb-icph[data-ick]）——图标索引就绪后把占位换成真实 <img>，无需重渲染整页
+function lbIconPatch(){
+  try{
+    var arr = document.querySelectorAll('.lb-icph[data-ick]');
+    for(var i=0;i<arr.length;i++){
+      var el = arr[i], key = el.getAttribute('data-ick'), sz = Number(el.getAttribute('data-sz')) || 11;
+      var u = (window.LB_ITEM_ICON_URL && LB_ITEM_ICON_URL[key]) || (window.LB_ICON_BY_NAME && LB_ICON_BY_NAME[key]) || LB_ICON_FALLBACK[key] || '';
+      if(!u) continue;
+      var img = document.createElement('img');
+      img.setAttribute('src', u);
+      img.style.cssText = 'width:'+sz+'px;height:'+sz+'px;object-fit:contain;vertical-align:-1px;margin:0 2px 0 3px';
+      img.onerror = function(){ this.style.display = 'none'; };
+      if(el.parentNode) el.parentNode.replaceChild(img, el);
+    }
+  }catch(e){}
 }
 function lbSpItemIc(){
   try{
     // v1220：图标 RW_Creature_list → IconMiscNoteType（聚落大/小按钮的蓝图角标）
     var u = (window.LB_ITEM_ICON_URL && LB_ITEM_ICON_URL['IconMiscNoteType']) || (window.LB_ICON_BY_NAME && LB_ICON_BY_NAME['IconMiscNoteType']) || '';
-    if(!u) return '';
+    // v3550：同 lbWebpIc —— 未就绪输出占位（待 lbIconPatch 回填）
+    if(!u) return '<span class="lb-icph" data-ick="IconMiscNoteType" data-sz="11" style="display:inline-block;width:11px;height:11px;vertical-align:-1px;margin:0 2px 0 3px"></span>';
     return '<img src="'+u+'" style="width:11px;height:11px;object-fit:contain;vertical-align:-1px;margin:0 2px 0 3px" onerror="this.style.display=\'none\'">';
   }catch(e){ return ''; }
 }
@@ -10792,8 +11306,14 @@ function lbSettleCntIcons(){
     var f = lbIconFilterStyle(url);
     return '<img src="'+url+'" style="width:11px;height:11px;object-fit:contain;vertical-align:-1px;margin-right:2px"'+f+'>';
   }
-  LB_SETTLE_CNT_ICONS = { rel:ic('RW_Tracking_dino'), pod:ic('RW_cryopod'), egg:ic('RW_egg_fertilized') };  // v1270：+蛋·胚胎
-  return LB_SETTLE_CNT_ICONS;
+  var o = { rel:ic('RW_Tracking_dino'), pod:ic('RW_cryopod'), egg:ic('RW_egg_fertilized') };  // v1270：+蛋·胚胎
+  // v3552（用户实测「刷新后角标图标还是被吞」根因）：图标索引 `LB_ICON_BY_NAME` 由 lbLoadIconList **异步**填充，
+  //   而聚落列表在数据缓存命中时几乎立刻渲染 ⇒ 首次调用时 ic() 全返回空串；原实现把**空串永久缓存**
+  //   ⇒ 本页所有聚落按钮此后只剩数字。现改为「三个图标全部解析成功才写缓存」，否则不缓存 + 置标记，
+  //   待索引抵达后由 lbLoadIconList 清缓存/回填/必要时安全重渲染补上。
+  if(o.rel && o.pod && o.egg){ LB_SETTLE_CNT_ICONS = o; }
+  else { LB._settleIcMiss = 1; }
+  return o;
 }
 // 聚落大按钮 HTML（圆角矩形，min/max-width）：名称+坐标+数量；scattered/无聚落特殊样式
 // v774：聚落海拔带（该服全部带有效 z 坐标的 rec min~max，容器/离散通用；缓存）——v769 依赖 settle.center.z 常缺失导致无色
@@ -11113,7 +11633,11 @@ function lbOpenSettle(btn){
   //   （无 settle-back 类、不会被搬）⇒ 两个按钮分属不同容器、相隔 32px，**结构上就不可能同行**。
   //   现改为：在打开聚落时把按钮**动态注入到同一容器**（该栏 justify-content:space-between ⇒ 左=返回 / 右=聚落命名）；
   //   放在 if 块外 ⇒ 每次打开都确保存在（即使 _bar 被重建也不会丢）。
-  if(_bar && !_bar.querySelector('.lb-settle-name-btn')){
+  var _isPlayerSettle = (String(key || '').indexOf('player|') === 0);   // v3549（用户口径）：玩家背包不是聚落
+  if(_bar){
+    var _existNb = _bar.querySelector('.lb-settle-name-btn');
+    if(_isPlayerSettle){ if(_existNb && _existNb.parentNode) _existNb.parentNode.removeChild(_existNb); }   // v3549：玩家背包不注入「聚落命名」
+    else if(!_existNb){
     var _nb = document.createElement('button');
     _nb.type = 'button';
     _nb.className = 'lb-settle-name-btn';
@@ -11122,6 +11646,7 @@ function lbOpenSettle(btn){
     _nb.innerHTML = lbMdiSvg('mdi-pencil', 13) + '聚落命名';
     _nb.onclick = function(){ lbOpenSettleNameSigns(LB._settleOpenKey); };
     _bar.appendChild(_nb);
+    }
   }
   // v827：隐藏所有 settle-wrap（聚合框集合 + 单聚落集合），避免只藏一个导致另一瀑布流残留
   var allWraps = document.querySelectorAll('.settle-wrap');
@@ -12398,6 +12923,7 @@ function lbBuildSettleContainerHtml(grp, settleKey){
     var _rTgt = _rTgts.length ? _rTgts[0] : null;
     var _dedN = (_dedMerge || (_unitN > 1 && (!_cnm0 || _cnm0 === '?'))) ? ('<span style="opacity:.7;font-size:11px;margin-left:4px">×'+_unitN+'</span>') : '';
     var invItems = lbGroupItems(cg);
+    invItems = lbDropEquippedSaddle(cg, invItems);   // v3549（用户口径）：生物装备槽里那件鞍不重复进背包清单（其他鞍保留）
     // v1013：合并组（炮台/火把/特斯拉电塔/泰克专储）——按**个体**分别渲染物品徽章，
     //   不再把 N 个个体的物品合并成一个徽章（用户实测：3 个炮台的弹药被并成 ◎12）。
     //   有自定义名的个体在徽章块内先显示名称；无名字的只显示正常徽章。
@@ -12444,10 +12970,50 @@ function lbBuildSettleContainerHtml(grp, settleKey){
     // v3490（用户口径）：角标尾部追加「已用/容量」——已用 = 非空球 + 空球 + 物品条目数；
     //   合并组（多台容器并一行）不显示（单台容量作分母语义混乱）；容量未知的类型只显示已用数
     var _capH = '';
-    if(!_dedMerge && _unitN <= 1){
-      var _capUsed = ((neArr && neArr.length) || 0) + (Number(ecnt) || 0) + ((invItems && invItems.length) || 0);
-      if(_capUsed > 0) _capH = lbContCapHtml(String((cg[0] && cg[0].containerClass) || ''), _capUsed);
+    var _capCls = String((cg[0] && cg[0].containerClass) || '');
+    // v3570（用户口径「角标取值跟物品源对齐」）：组内若存在**能解析出容量**的成员类名（如物品容器类
+    //   `PrimalInventoryBP_Turret_C1`），优先用它做分母 —— 记录源常是结构/底座变体（`StructureTurretBaseBP_C_*`），
+    //   与容量总表的「物品容器类」口径不一致（实测：自动炮台/重型炮台/简易大型实验桌 三角标曾只剩已用数）
+    var _capClsUse = _capCls;
+    try{
+      if(_capCls && !lbContCapOf(_capCls)){
+        for(var _ci = 0; _ci < cg.length; _ci++){
+          var _cc = String((cg[_ci] && cg[_ci].containerClass) || '');
+          if(!_cc || _cc === _capCls) continue;
+          if(lbContCapOf(_cc)){ _capClsUse = _cc; break; }
+        }
+      }
+    }catch(e){}
+    // v3549（用户口径）：生物背包（DinoTamedInventoryComponent_*）无官方容量概念 ⇒ 不出容量角标（原实现会退化成裸已用数）
+    // v3553（用户实测「放出组的容量为啥还在」）：判据扩到**一切生物类组** —— 放出组/恐龙本体组（_Character_BP）同样无容量概念；
+    //   同时兼容与恐龙本体合并的背包假成员（src='dinoBag'）
+    var _isDinoBag = _capCls.indexOf('DinoTamedInventoryComponent') >= 0 || _capCls.indexOf('_Character_BP') >= 0;
+    if(!_isDinoBag && String((cg[0] && cg[0].containerType) || '') === 'released') _isDinoBag = true;
+    if(!_isDinoBag){ for(var _cb=0; _cb<cg.length; _cb++){ if(cg[_cb] && cg[_cb].src === 'dinoBag'){ _isDinoBag = true; break; } } }
+    if(!_dedMerge && _unitN <= 1 && !_isDinoBag){
+      // v3573（用户口径「种子种下去后就不占格子了」·角标与渲染同源）：
+      //   原实现用 `invItems.length`（**未过滤**的原始条目）⇒ 把「qty=0 的空槽残留」也算成一格，
+      //   而摘要物品角标（lbInvCountMark→lbInvAgg）与展开后的 chip 列表都过 `lbIsEmptyItem` ⇒ 角标 3 / 内容 2。
+      //   实测源：小型耕地 Ext/930307c9 内 3 条记录 = 浆果 q100 + 浆果 q82 + **浆果种子 q0（已种下，判空）**
+      //   ⇒ 现改为只数**有效条目**（与渲染同源）；空球/非空球照旧计入（它们是真实占格）
+      var _visItemN = 0;
+      try{
+        for(var _cv = 0; _cv < (invItems || []).length; _cv++){
+          var _cvi = invItems[_cv];
+          if(_cvi && !lbIsEmptyItem(_cvi)) _visItemN++;
+        }
+      }catch(e){ _visItemN = (invItems || []).length; }
+      var _capUsed = ((neArr && neArr.length) || 0) + (Number(ecnt) || 0) + _visItemN;
+      if(_capUsed > 0) _capH = lbContCapHtml(_capClsUse, _capUsed);
     }
+    // v3551（用户实测：装备槽鞍滤掉后「背包全空」的组仍占一行 —— 空手风琴；实测 4 例：Argntvs·F·NO9 / 嚶嚶 / Argntvs·F·NO3 / a1）：
+    //   判据改为**通用**：本组无任何可见内容（无生物/无蛋/无空球/无 v6/无基因/无可见物品）⇒ 整组隐藏。
+    //   物品口径与渲染同源（先剔 lbIsEmptyItem：quantity=0 / rated=0 等存档空槽残留）；
+    //   v3550 的 _isDinoBag 窄判据只覆盖「类名=恐龙背包」的组，会漏掉与恐龙本体合并（放出）的背包组（类名被换成 _Character_BP）。
+    var _visItems = 0;
+    try{ for(var _vq=0; _vq<(invItems||[]).length; _vq++){ if(invItems[_vq] && !lbIsEmptyItem(invItems[_vq])) _visItems++; } }
+    catch(e){ _visItems = (invItems||[]).length; }
+    if(!fullH && !eggH && !v6H && !scnMark && !emptyH && !_visItems) return;
     var sumHtml='<details class="acc"'+autoOpen+' onclick="lbAccOnly(this,event)"><summary>'
       // v3392（用户实测：合并的展示柜 ×91 冒出了 #88ee66）：**凡「多台」行一律隐藏 #ID/涂装色点**——
       //   原条件只判 `_dedMerge`（= lbIsMergeableFacility：泰克专储/炮台/火把/特斯拉电塔），
@@ -13095,6 +13661,21 @@ function lbFacilityZhLoad(){
   }).catch(function(){ return LB_FACILITY_ZH || {}; });
   return LB_FACILITY_ZH_P;
 }
+// ⭐ v3556：**容器自带官中名**权威表（`facility_official.json`，1222 条）
+//   来源：ShooterGame.po 的 `..InventoryNameOverride` / `..DescriptiveName`（游戏自己给容器/设施的名字）
+//        ＋ ShooterGame.json 官中（生成：tmp/_v3556_prep.py，P 前缀剥离 + 泛化名剔除 19 个）
+//   为何最优先：OilLamp→「燃油灯」、AmmoContainer→「弹药容器」、ArtifactCrate→「上古神器」——比 wiki 名/人工表更权威
+//   ⚠ 已剔除「模板泛化名」（基础储物箱 等跨类共用名，共 19 个）；仅按类基名精确/别名/归一化命中
+var LB_FACILITY_OFFICIAL = null, LB_FACILITY_OFFICIAL_P = null;
+function lbFacilityOfficialLoad(){
+  if(LB_FACILITY_OFFICIAL && Object.keys(LB_FACILITY_OFFICIAL).length) return Promise.resolve(LB_FACILITY_OFFICIAL);
+  if(LB_FACILITY_OFFICIAL_P) return LB_FACILITY_OFFICIAL_P;
+  LB_FACILITY_OFFICIAL_P = authFetch(LB_ASA + '/facility_official.json?v='+LB_VERSION, {}).then(function(r){return r.json();}).then(function(d){
+    if(d && typeof d==='object' && Object.keys(d).length){ LB_FACILITY_OFFICIAL = d; }
+    return LB_FACILITY_OFFICIAL || {};
+  }).catch(function(){ return LB_FACILITY_OFFICIAL || {}; });
+  return LB_FACILITY_OFFICIAL_P;
+}
 // v967：物品权威表 {基名: {icon, en, zh, kind}}（item_zh.json，510 条；生成见 汉化/_build_item_zh.py 系列；表在服务器维护免发版）
 // 基名归一采用「多级剥离 + 多候选」，已用 34270 个真实存档类名验证 100% 命中（含 PrimalItem_Weapon* 去 Weapon、PrimalItemC4Ammo 保留全名两类特例）
 var LB_ITEM_ZH = null, LB_ITEM_ZH_P = null; // v1030：+in-flight Promise（并发去重）
@@ -13250,6 +13831,8 @@ function lbFacIconLookup(cands){
         var fe = fz && fz[ks[k]];
         if(fe && fe.icon){ hit = { icon:fe.icon, zh:fe.zh || '', en:fe.en || '', key:ks[k] }; break; }
       }
+      // v3555：共用解析器兜底（别名/前后缀/归一化）——原 ks 精确列表跨不过错拼与前缀差异
+      if(!hit){ try{ var h5 = lbFacKeyFind(fz, cands[i], function(v){ return !!(v && v.icon); }); if(h5) hit = { icon:h5.v.icon, zh:h5.v.zh || '', en:h5.v.en || '', key:h5.k }; }catch(e5){} }
       if(!hit && LB_FACILITY_ICON_SPECIAL){
         var sp = LB_FACILITY_ICON_SPECIAL[cb] || LB_FACILITY_ICON_SPECIAL[cb.replace(/^Furniture_/, '')] || '';
         if(sp) hit = { icon:sp, zh:'', en:'', key:cb };
@@ -13287,6 +13870,8 @@ function lbItemMeta(cls){
           var _fe = _fz[_ks[_ki]];
           if(_fe && _fe.zh){ t = { zh:_fe.zh, en:_fe.en || '', icon:_fe.icon || '', kind:'' }; base = _ks[_ki]; break; }
         }
+        // v3555：共用解析器兜底（别名/前后缀/归一化）——错拼/词序类建筑道具原先借不到词条
+        if(!t){ try{ var _h5 = lbFacKeyFind(_fz, cands[_ci], function(v){ return !!(v && v.zh); }); if(_h5){ t = { zh:_h5.v.zh, en:_h5.v.en || '', icon:_h5.v.icon || '', kind:'' }; base = _h5.k; } }catch(e5){} }
         if(!t && LB_FACILITY_ICON_SPECIAL){
           var _sp = LB_FACILITY_ICON_SPECIAL[_cb] || LB_FACILITY_ICON_SPECIAL[_cb.replace(/^Furniture_/, '')] || '';
           if(_sp){ t = { zh:'', en:'', icon:_sp, kind:'' }; base = _cb; }   // 仅图标命中（中文名留给 3b 补表）
@@ -13995,6 +14580,26 @@ function lbAreaTagOf(r){
 // v820：设施元信息（中文名+图标）——已知 8 类精确词条；其余从 class 提取英文名 → zhName 中文/友好化，图标用 icons2 模糊匹配
 function lbSettleFacMeta(cls){
   cls = String(cls||'');
+  // ⭐ v3557（口径）：解析优先级 = **① facility_zh 人工表 → ② facility_official 官中表（补缺）→ ③ def[] 正则 → ④ 友好英文**
+  //   为何人工表在前：官方 `..InventoryNameOverride` 是**容器自称**，可能比设施名更泛/不准
+  //   （实测反例：HeavyTurret 容器自称「自动炮塔」，而人工表是「重型自动炮台」；TrophyWall 容器自称「战利品底座」）。
+  //   故 official 只**补表空缺**（如 AmmoContainer「弹药容器」、ArtifactCrate「上古神器」）。
+  if(LB_FACILITY_ZH && Object.keys(LB_FACILITY_ZH).length){
+    var _fhit = lbFacKeyFind(LB_FACILITY_ZH, cls, function(v){ return !!(v && (v.zh || v.en || v.icon)); });
+    var _b = _fhit ? _fhit.k : lbFacKeyStem(cls);
+    var _fe = _fhit ? _fhit.v : null;
+    if(_fe){
+      var _feIcon = (_fe.icon && LB_ICON_BY_NAME[_fe.icon]) ? _fe.icon : (lbFacilityIconFind(_b) || '');
+      return {key:'f_'+_b, zh:_fe.zh || _b, en:_fe.en || '', icon:_feIcon, base:_b};
+    }
+  }
+  if(LB_FACILITY_OFFICIAL && Object.keys(LB_FACILITY_OFFICIAL).length){
+    var _oh = lbFacKeyFind(LB_FACILITY_OFFICIAL, cls, function(v){ return !!(v && v.zh); });
+    if(_oh){
+      var _ok = _oh.k;
+      return { key:'o_'+_ok, zh:_oh.v.zh, en:_oh.v.en || '', icon:(lbFacilityIconFind(_ok) || ''), base:_ok, official:1 };
+    }
+  }
   var def = [
     // v1362（用户要求）：死亡物品缓存（Death Item Cache，玩家死亡掉落包）→ 中文「掉落包」+ 背包图标 HubInventoryIcon
     //   根因：通用分支把 DeathItemCache 拆词成 "Death Item Cache"（无汉字）⇒ lbContainerDisp 的 _fmZh 判定为空
@@ -14035,21 +14640,10 @@ function lbSettleFacMeta(cls){
     {re:/OilPump/i, key:'oil_pump', zh:'油泵', icon:'OilPump_Icon', en:'Oil Pump'}
   ];
   for(var i=0;i<def.length;i++){ if(def[i].re.test(cls)) return def[i]; }
-  // v903：facility_zh 权威表（已加载时）——真实在用设施三字段同对（图/英/中），优先于正则猜名
-  if(LB_FACILITY_ZH && Object.keys(LB_FACILITY_ZH).length){
-    var _b = String(cls).replace(/^PrimalItemStructure_/,'').replace(/^StructureBP_/,'').replace(/^Structure_/,'').replace(/^Structure/,'').replace(/^BP_/,'').replace(/^PrimalInventory(?:BP)?_?/,'').replace(/^PrimalItem_/,'').replace(/^PrimalStructure_/,'').replace(/_C_\d+$/,'').replace(/_C\d*$/,'').replace(/_\d+$/,'').replace(/^_+/,''); // v3428：补剥「纯数字后缀」——PrimalStructurePowerNode_2951 → PowerNode（表驱动路径必需；正则兜底不受影响）// v1047：PrimalInventory(BP)_? 合并 + 去前导下划线 // v905：尾缀兼容 _C / _C1 / _C_123（容器类名 PrimalInventoryBP_CryoFridge_C1）；v907：PrimalItem_ 前缀（基因枪手持物）
-    var _fe = LB_FACILITY_ZH[_b];
-    if(_fe){
-      // v936：表内 icon 若在 icons2 不存在（历史空格显示名如 'Heavy Auto Turret'）→ 回退 lbFacilityIconFind 强查找（特例表已改下划线真实键）
-      var _feIcon = (_fe.icon && LB_ICON_BY_NAME[_fe.icon]) ? _fe.icon : (lbFacilityIconFind(_b) || '');
-      return {key:'f_'+_b, zh:_fe.zh || _b, en:_fe.en || '', icon:_feIcon, base:_b}; // v912：表内 icon 缺失时自动查找兑底（对齐物种强度）；v936：表 icon 无效也兑底
-    }
-  }
-  // 通用：提取英文基名（去前缀/尾缀；v905：尾缀兼容 _C / _C1 / _C_123——容器类名常为 PrimalInventoryBP_X_C1；v907：PrimalItem_ 前缀）
-  var en = String(cls).replace(/^PrimalItemStructure_/,'').replace(/^StructureBP_/,'').replace(/^Structure_/,'').replace(/^Structure/,'').replace(/^BP_/,'').replace(/^PrimalInventory(?:BP)?_?/,'').replace(/^PrimalItem_/,'').replace(/_C_\d+$/,'').replace(/_C\d*$/,'').replace(/^_+/,''); // v1047：同上前缀合并 + 去前导下划线
-  en = en.replace(/_C_\d+$/,'');
-  // v3445（用户实测「背包 1」）：纯数字残留不算英文名——`PrimalInventory1` 剥前缀后只剩 `1` ⇒
-  //   会被当 en 输出到标题（灰小字「背包 1」），也会污染 key/zh 兑底 ⇒ 一律置空。
+  // v3557：facility_zh / facility_official 两层已上移至函数开头（人工表优先于正则猜名）
+  // 通用：提取英文基名 —— v3555：改走共用解析器 lbFacKeyStem（前缀/尾缀**声明式**、多轮剥至稳定）
+  //   原内联链漏 PrimalInventoryComponent_ / InventoryComponent_ / Component_ / 末尾 _数字 ⇒ 内胆类名剥不净
+  var en = lbFacKeyStem(cls);
   if(/^\d+$/.test(en)) en = '';
   var key = en || cls;
   // 中文：zhName 精确 → 规范化 → 兜底友好英文（camel 拆词）
@@ -14377,6 +14971,7 @@ function lbSetTab(tab){
 // 速查页刷新按钮：二次确认（ASA 后台同款浮窗样式）→ 确认后清缓存强制重新加载
 // 多功能刷新浮窗：刷新球（低温仓数据，全部服务器）+ 刷新tamed（多选服务器 RCON）
 function lbOpenRefreshModal(){
+  lbProgAutoCancel(); // v3569：新开浮窗 → 清掉上一轮倒计时
   var old = document.querySelector('.lb-confirm-overlay');
   if (old) old.remove();
   var overlay = document.createElement('div');
@@ -14418,7 +15013,7 @@ function lbOpenRefreshModal(){
   // 进度区（tamed 刷新用）
   var prog = document.createElement('div');
   prog.style.cssText = 'display:none;margin-top:10px';
-  prog.innerHTML = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><div id="lbProgBar" style="flex:1;height:8px;border-radius:4px;background:#22223a;overflow:hidden;display:flex;gap:2px;padding:0 1px"></div><span id="lbProgText" style="font-size:12px;color:#999;white-space:nowrap"></span></div>'
+  prog.innerHTML = '<div style="margin-bottom:4px"><div id="lbProgBar" style="width:100%;height:8px;border-radius:4px;background:#22223a;overflow:hidden;display:flex;gap:2px;padding:0 1px"></div><div id="lbProgText" style="display:block;margin-top:6px;font-size:12px;color:#999;line-height:1.45;white-space:normal;word-break:break-word"></div></div>'
     + '<div id="lbProgLegend" style="display:flex;gap:12px;font-size:10px;color:#666;margin-top:2px"></div>';
   box.appendChild(prog);
   overlay.appendChild(box);
@@ -14462,6 +15057,7 @@ function lbAsk(msg, onOk, okText){
 // v1073：原 v602 的「15s 后直接放行」极易误关（完整刷新常 1~5 分钟）⇒ 改为无论多久都需明确确认；
 // v1074：确认框由原生 confirm 改为站内 lbAsk（样式统一、移动端不失焦）。
 function lbCloseRefreshModal(){
+  lbProgAutoCancel(); // v3569：手动关窗 → 清掉倒计时
   if(LB._tamedRefreshing){
     var _el = Math.round((Date.now() - (LB._tamedRefreshingAt || Date.now())) / 1000);
     var _msg = '刷新进行中（已用 ' + _el + 's）：\n关闭浮窗不会中断服务器端刷新，但你会看不到后续进度。\n\n确定要关闭吗？';
@@ -14496,15 +15092,70 @@ async function lbTriggerSaveWorld(abbr){
     return !!(r && r.ok);
   }catch(e){ return false; }
 }
-// 等 cryo.json.gz Last-Modified 变化（相对触发前基线）；超时 40s（最慢 Isl ≤30s）
-async function lbWaitCryoUpdated(abbr, oldLm){
-  var deadline = Date.now() + 40000;
-  var wait = LB.POLL_MS || 400, step = 0, fails = 0;
+// v3564：进度区**持久**警示行（不被后续「✅ …」文案覆盖）——用于「存档未等到落盘但已按现有文件加载」这类必须让用户看见的降级
+function lbProgWarn(msg){
+  try{
+    var ov = document.querySelector('.lb-confirm-overlay'); if(!ov) return;
+    var w = document.getElementById('lbProgWarn');
+    if(!w){
+      var lg = document.getElementById('lbProgLegend');
+      w = document.createElement('div'); w.id = 'lbProgWarn';
+      w.style.cssText = 'font-size:11px;color:#f59e0b;margin-top:4px;line-height:1.35;white-space:pre-wrap';
+      if(lg && lg.parentNode) lg.parentNode.insertBefore(w, lg.nextSibling); else ov.appendChild(w);
+    }
+    w.textContent = w.textContent ? (w.textContent + '\n' + msg) : msg;
+  }catch(e){}
+}
+// v3569：成功终态**倒计时自动关浮窗**（默认 5s）——带 ⚠ 降级时不调用（保留浮窗让用户看完）
+//   取消点：① 打开浮窗 ② 手动关浮窗 ③ 新一轮刷新开始（避免旧定时器关掉新窗口）
+var LB_PROG_AUTOCLOSE_SECS = 5;
+function lbProgAutoCancel(){
+  try{ if(LB._progAutoTimer){ clearInterval(LB._progAutoTimer); LB._progAutoTimer = null; } }catch(e){}
+}
+function lbProgAutoClose(baseText){
+  try{
+    lbProgAutoCancel();
+    var n = LB_PROG_AUTOCLOSE_SECS;
+    var paint = function(){
+      var el = document.getElementById('lbProgText');
+      if(!el) return false;                     // 浮窗已关：停表（由 tick 清理）
+      el.textContent = baseText + '　⏳ ' + n + 's 后自动关闭';
+      return true;
+    };
+    if(!paint()) return;
+    LB._progAutoTimer = setInterval(function(){
+      var el = document.getElementById('lbProgText');
+      if(!el){ lbProgAutoCancel(); return; }    // 浮窗已被关：停表
+      n--;
+      if(n <= 0){
+        lbProgAutoCancel();
+        if(LB._tamedRefreshing) return;         // 仍在刷新中 → 不误关（下轮终态会重新起倒计时）
+        el.textContent = baseText + '　⏳ 正在关闭…';
+        var o = document.querySelector('.lb-confirm-overlay');
+        if(o) o.remove();
+        try{ lbToast('✅ 刷新完成，浮窗已自动关闭'); }catch(e){}
+        return;
+      }
+      paint();
+    }, 1000);
+  }catch(e){}
+}
+// v3564 根因修复（Isl 刷新静默失败）：Isl 存档导出落盘实测 **52–65s**，而原硬编码 40s 超时 ⇒
+//   超时后 `_loadPend` 为空 ⇒ **整段跳过数据加载**，UI 却报「✅ 已刷新 1 台 / 全部完成」⇒ 页面里球/设施/物品仍旧。
+//   ① 硬上限 40s → **120s**（`LB_CRYO_WAIT_MS` 可调）；② 轮询期间 `onTick(secs)` 回报，UI 显示「已用 Xs / 上限 Ys」；
+//   ③ 返回 {done, lm, secs} —— **超时不再等于不加载**（由调用方按现有文件兜底加载 + 持久警示）
+var LB_CRYO_WAIT_MS = 120000;
+async function lbWaitCryoUpdated(abbr, oldLm, onTick){
+  var t0 = Date.now(), deadline = t0 + LB_CRYO_WAIT_MS;
+  var wait = LB.POLL_MS || 400, step = 0, fails = 0, last = null, _lastTick = 0;
   while(Date.now() < deadline){
     await new Promise(function(r){ setTimeout(r, wait); });
     var now = await lbCryoLM(abbr);
-    if(now && now !== LB_LM_404 && now !== oldLm) return true;
-    if(oldLm === LB_LM_404 && now && now !== LB_LM_404) return true; // 之前文件缺失→现在出现
+    last = now;
+    var _secs = Math.round((Date.now() - t0) / 1000);
+    if(onTick && (Date.now() - _lastTick) >= 1000){ _lastTick = Date.now(); try{ onTick(_secs); }catch(e){} }
+    if(now && now !== LB_LM_404 && now !== oldLm) return { done:true, lm:now, secs:_secs };
+    if(oldLm === LB_LM_404 && now && now !== LB_LM_404) return { done:true, lm:now, secs:_secs }; // 之前文件缺失→现在出现
     // v988：指数退避（400→800→1600→3000 封顶），探测失败再额外加倍
     //      原 400ms 固定轮询：10 台并发 × 40 秒 ≈ 1000~2000 个 HEAD/次刷新 → 后端线程爆炸退出
     step++;
@@ -14512,7 +15163,7 @@ async function lbWaitCryoUpdated(abbr, oldLm){
     wait = Math.min(3000, (LB.POLL_MS || 400) * Math.pow(2, Math.min(step, 3)));
     if(fails) wait = Math.min(3000, wait * Math.pow(2, Math.min(fails, 2)));
   }
-  return false;
+  return { done:false, lm:last, secs: Math.round((Date.now() - t0) / 1000) };
 }
 // v985：已移除 lbWithTimeout —— 它与「lbFetchOnce 内部超时 60s」冲突（单台 3 个文件 × 60s 会超过 90s 而被误杀）；
 //       单台耗时由 lbFetchDataJson(90s) 与各文件自身超时兜底。
@@ -14592,6 +15243,7 @@ async function lbRefreshTamed(btn){
   if(!sel.length){ alert('请至少选择一个服务器（tamed 刷新需要指定范围）'); return; }
   LB._tamedRefreshing = true; // 刷新进行中：锁定浮窗禁止关闭
   LB._tamedRefreshingAt = Date.now(); // v602：记录开始时间（蛋刷新卡住超 15s 允许手动关闭）
+  lbProgAutoCancel(); // v3569：新一轮刷新开始 → 清掉上一轮的「自动关窗」倒计时
   try{
     // 定位浮窗内进度区（lbProgBar 的父容器的父容器 = 进度外层 div）
     var all=btn.closest('.lb-confirm-overlay').querySelectorAll('div');
@@ -14602,6 +15254,8 @@ async function lbRefreshTamed(btn){
     var noToken = (LB_ARCH !== 'new') && !(await lbHaTokenRefresh()); // 新架构直连后端，无需 webhook 标记
     btn.disabled=true;
     // 分段进度条：每台一格（进行中紫 / 成功绿 / 失败红 / 跳过橙）
+    LB._cryoStale = [];   // v3564：本次刷新的「存档未等到落盘」服务器列表
+    var _pw0 = document.getElementById('lbProgWarn'); if(_pw0) _pw0.textContent = '';
     bar.innerHTML = sel.map(function(){ return '<div style="flex:1;border-radius:2px;background:#333;transition:background .3s"></div>'; }).join('');
     var segs = bar.children;
     if(legend) legend.innerHTML = '<span><span style="color:#7c3aed">■</span> 进行中</span><span><span style="color:#38bdf8">■</span> 存档落盘</span><span><span style="color:#22c55e">■</span> 成功</span><span><span style="color:#ef4444">■</span> 失败</span><span><span style="color:#f59e0b">■</span> 跳过/冷却</span>'; // v629：蓝=SaveWorld 存档已落盘
@@ -14627,28 +15281,42 @@ async function lbRefreshTamed(btn){
       // 0c. 并行等 cryo 更新（40s 超时）。① v1071：**落盘判定全部结束后一次性合并加载**
       //     （原实现为"哪台先落盘就先加载哪台"的串行链：每台各触发一次 lbLoad ⇒ 多次渲染/重复重建；
       //     合并后只 1 次 lbLoad——内部 HEAD 全并发、下载仍 BATCH=3 分批，网页侧并发度不变）
-      var _svDone = 0, _loadPend = [];
-      // v979：阶段 0 心跳计时——让「慢」与「死」可区分（文案 2s 内未变则附上已用时）
+      var _svDone = 0, _loadPend = [], _cryoStale = [];
+      // v979：阶段 0 心跳计时——让「慢」与「死」可区分
+      // v3564：改为 1s 一次**实时秒级**，且直接显示「已用 Xs / 上限 Ys」（原先只带 2s 心跳且仅限特定文案）
       var _hbStart = Date.now();
+      var LB_CRYO_WAIT_WHO = [];   // v3565：正在等待落盘的服名（心跳与 onTick **同文案**，消除两者互相覆盖造成的文字跳变）
       var _hb = setInterval(function(){
         var el = document.getElementById('lbProgText');
         if(!el){ clearInterval(_hb); return; }
-        var t = (el.textContent || '').replace(/（已用 \d+s[^）]*）/, '');
-        if(t.indexOf('存档已落盘') >= 0 || t.indexOf('加载 ') === 0){
-          el.textContent = t + '（已用 ' + Math.round((Date.now() - _hbStart) / 1000) + 's，可点 ✕ 关闭）';
-        }
-      }, 2000);
+        if((el.textContent || '').indexOf('等待') !== 0) return;   // 已进入后续阶段：不再改写
+        el.textContent = '等待存档导出落盘…' + (LB_CRYO_WAIT_WHO.length ? ('（' + LB_CRYO_WAIT_WHO.join('、') + '）') : '')
+          + ' 已用 ' + Math.round((Date.now() - _hbStart) / 1000) + 's / 上限 ' + Math.round(LB_CRYO_WAIT_MS / 1000) + 's（可点 ✕ 关闭）';
+      }, 1000);
       try{
         await Promise.all(sel.map(function(abbr, i){
-          return lbWaitCryoUpdated(abbr, cryoLm[abbr] || null).then(function(done){
-            if(done){
+          return lbWaitCryoUpdated(abbr, cryoLm[abbr] || null, function(secs){
+            var _nm2 = LB.servName(abbr);
+            if(LB_CRYO_WAIT_WHO.indexOf(_nm2) < 0) LB_CRYO_WAIT_WHO.push(_nm2);
+            try{ segs[i].style.background = '#7c3aed'; }catch(e0){}   // v3564：等待中=进行中紫（落盘后才转蓝）
+            var _el2 = document.getElementById('lbProgText');
+            if(_el2) _el2.textContent = '等待存档导出落盘…（' + LB_CRYO_WAIT_WHO.join('、') + '） 已用 '
+              + Math.round((Date.now() - _hbStart) / 1000) + 's / 上限 ' + Math.round(LB_CRYO_WAIT_MS / 1000) + 's（可点 ✕ 关闭）';
+          }).then(function(w){
+            var nm = LB.servName(abbr);
+            LB_CRYO_WAIT_WHO = LB_CRYO_WAIT_WHO.filter(function(x){ return x !== nm; });
+            if(w && w.done){
               segs[i].style.background = '#38bdf8'; // 存档已落盘
               _svDone++;
               _loadPend.push(abbr);
-              txt.textContent = LB.servName(abbr)+' 存档已落盘';
+              txt.textContent = nm+' 存档已落盘（'+w.secs+'s）';
             } else {
-              segs[i].style.background = '#f59e0b'; // cryo 超时未更新：标记跳过，继续原流程
-              txt.textContent = LB.servName(abbr)+' cryo 超时未更新，继续刷新…';
+              // ⭐ v3564 根因修复：超时**仍加载**（拿到现有文件总比什么都不做好）——只降级标注，不再静默跳过
+              segs[i].style.background = '#f59e0b'; // 超时：标记橙色
+              _cryoStale.push(abbr); LB._cryoStale = _cryoStale.slice();
+              lbProgWarn('⚠ '+nm+'：等待存档落盘超时（上限 '+Math.round(LB_CRYO_WAIT_MS/1000)+'s），已按服务器现有文件加载 —— 球/设施/物品可能不是本次存档');
+              txt.textContent = nm+' 存档等待超时（'+((w&&w.secs)||0)+'s），按现有文件加载…';
+              _loadPend.push(abbr);
             }
           });
         }));
@@ -14697,7 +15365,8 @@ async function lbRefreshTamed(btn){
       else { fail++; segs[w.idx].style.background='#ef4444'; }
       txt.textContent=(w.done?'✅ ':(w.skipped?'⏭ ':'❌ '))+LB.servName(w.abbr)+'（'+(w.idx+1)+'/'+sel.length+'）';
     }
-    txt.textContent='✅ 已刷新 '+ok+' 台，失败/跳过 '+fail+' 台'+(noToken?'（webhook 模式）':'')+'（蛋刷新进行中…）';
+    txt.textContent='✅ 已刷新 '+ok+' 台，失败/跳过 '+fail+' 台'+(noToken?'（webhook 模式）':'')+'（蛋刷新进行中…）'
+      + (((LB._cryoStale||[]).length) ? '　⚠ '+LB._cryoStale.length+' 台存档未等到落盘（已按现有文件加载）' : '');
     btn.disabled=false;
     // v1072③：**不再 1s 后自动关窗**——原实现关得太快，用户看不到/无法确认后续蛋阶段（lbEggProbe 在关窗后才跑）。
     //   改为保留浮窗，蛋阶段结束后在下方给出终态摘要（用户可随时点 ✕ 手动关闭）。
@@ -14712,7 +15381,12 @@ async function lbRefreshTamed(btn){
       await new Promise(function(res){ setTimeout(res, 5000); }); // 等 tamed 导出/重载稳定
       if(txt) txt.textContent = '正在刷新蛋信息…（EggProbe '+sel.length+' 台）'; // v1072③：让后续步骤可见，不再"莫名其妙关窗"
       await lbEggProbe(sel);
-      if(txt) txt.textContent = '✅ 全部完成：存档 → 已放出 → 蛋（'+ok+'/'+sel.length+' 台）';
+      // v3569：干净成功（无 ⚠ 降级）→ 追加倒计时，5s 后自动关浮窗；带 ⚠ 时保留浮窗（不自动关）
+      var _doneTxt = '✅ 全部完成：存档 → 已放出 → 蛋（'+ok+'/'+sel.length+' 台）';
+      var _hasWarn = !!((LB._cryoStale||[]).length);
+      if(_hasWarn) _doneTxt += '　⚠ '+(LB._cryoStale||[]).length+' 台存档未等到落盘（已按现有文件加载，见上方橙字）';
+      if(txt) txt.textContent = _doneTxt;
+      if(!_hasWarn) lbProgAutoClose(_doneTxt);
     }catch(e){ if(txt) txt.textContent = '⚠️ 蛋刷新异常（存档与已放出已完成，可点 ✕ 关闭）'; }
     setTimeout(function(){ if(progEl && txt && txt.textContent.indexOf('✅ 全部完成') < 0) progEl.style.display='none'; }, 4000);
   }finally{
@@ -14941,6 +15615,14 @@ function lbLoadIconList(){
     });
     LB_ICON_BY_NAME=by;
     LB_ICON_CAT=cats;
+    try{
+      LB_SETTLE_CNT_ICONS = null;                                    // v3552：清掉可能被缓存的空图标
+      if(typeof lbIconPatch === 'function') lbIconPatch();            // v3550：回填占位角标图标
+      if(LB._settleIcMiss && LB._cache && LB._cache.data){            // v3552：已渲染过的按钮补图标（数据已在才重渲染，避免空渲染）
+        LB._settleIcMiss = 0;
+        if(typeof lbRenderKeepView === 'function') lbRenderKeepView(); // 保留「已打开聚落详情 + 已展开手风琴」
+      }
+    }catch(e){}
     return by;
   }).catch(function(){ LB_ICON_BY_NAME={}; LB_ICON_CAT={}; return LB_ICON_BY_NAME; });
 }
@@ -15022,7 +15704,7 @@ function lbSortKey(dinoClass){
 }
 function lbOpenSpeciesPicker(){
   var old=document.querySelector('.lb-picker-overlay'); if(old) old.remove();
-  Promise.all([lbLoadIconList(), lbLoadAntiColors(), lbLoadPrefixZh()]).then(function(){
+  Promise.all([lbLoadIconList(), lbLoadAntiColors(), lbLoadPrefixZh(), lbLoadColors()]).then(function(){   // v3593：+颜色表（染料色点需要 LB_COLORS）
     if(document.querySelector('.lb-picker-overlay')) return; // 期间已关闭则跳过
     var classMap=lbBuildClassMap();
     // 全物种 dinoClass（ASB 提取，统一带 _C）；可驯服+去重仅在折叠区应用，库存区保留全部有库存物种
@@ -15070,14 +15752,15 @@ function lbOpenSpeciesPicker(){
     // 最近选择（2026-08-13 v104）：顶部显示最多 6 个最近选过的物种，点击直选；v107 去标题+底部低可视化分隔线
     var recents = lbRecentClasses();
     if(recents.length){
-      html+='<div class="lb-picker-grid" id="lbPickerRecent" style="overflow-y:visible;border-bottom:1px solid rgba(255,255,255,0.06);margin-bottom:6px">';
+      html+='<div class="lb-picker-grid" id="lbPickerRecent" style="overflow-y:visible">'; // v3577：去掉底边线与下边距（消除空白带）
       recents.forEach(function(k){
         var icon=lbIconForDinoClass(k);
         var nm=lbSpName(k);
         var sel=(LB.curClass===k)?' selected':'';
         html+='<div class="lb-picker-item'+sel+'" data-cls="'+k+'" onclick="lbPickerSelect(this)" title="'+lbSpLabel(k)+'">';
         html+=(icon?'<div class="lb-picker-ic"><img src="'+icon+'" loading="lazy"'+lbIconFilterStyle(icon,'biology')+' onerror="lbImgRetry(this)"></div>':'<div class="lb-picker-ic lb-picker-ic-none">?</div>');
-        html+='<span class="lb-picker-name">'+nm.zh+'</span>';
+        var _rc = classMap[k] || 0;   // v3589（用户要求）：最近选择栏也显示拥有数量（与主网格/折叠区同款 .lb-picker-cnt）
+        html+='<span class="lb-picker-name">'+nm.zh+(_rc?' <em class="lb-picker-cnt">'+_rc+'</em>':'')+'</span>';
         if(nm.eng) html+='<span class="lb-picker-en">'+nm.eng+'</span>';
         html+='</div>';
       });
@@ -15185,13 +15868,12 @@ function lbOpenSpeciesPicker(){
     html+='<details class="lb-picker-collapse" id="lbExtra" ontoggle="lbPickerLazyExtra(this);lbPickerExtraSync()"><summary>特殊 (<span id="lbExtraCnt">'+(extraCnt+extraOwnedCnt+extraCatchCnt+extraStealCnt)+'</span>)</summary>';
     html+='<div class="lb-picker-grid" id="lbExtraGrid"></div></details>';
     html+='</div>'; // v863：关闭 .lb-picker-extra
-    html+='<div class="lb-picker-grid" id="lbPickerRecentItem" style="display:none;overflow-y:visible;border-bottom:1px solid rgba(255,255,255,0.06);margin-bottom:6px"></div>'; // v1372：物品页「最近选择」区；v1373：容器本身即网格（对齐 #lbPickerRecent）
-    html+='<div class="lb-picker-grid" id="lbItemPickGrid" style="display:none" data-itemgrid="1"></div>'; // v1370/v1373：物品页「已拥有」主网格（对齐 #lbPickerGrid，可滚动）
-    html+='<div class="lb-picker-extra" id="lbItemExtra" style="display:none"></div>'; // v1373：物品页折叠区（未拥有：护甲/武器/泰克）
+    html+='<div class="lb-picker-grid" id="lbPickerRecentItem" style="display:none;overflow-y:visible"></div>'; // v1372：物品页「最近选择」区；v1373：容器本身即网格；v3577：去掉底边线与下边距
+    html+='<div class="lb-picker-extra" id="lbItemExtra" style="display:none"></div>'; // v1373：物品页折叠区（护甲/武器/泰克）；v3575：不再区分已拥有
     html+='</div>';
     overlay.innerHTML=html;
     document.body.appendChild(overlay);
-    setTimeout(lbPickerFitScroll, 120); // v865：初始布局后按内容收紧高度
+    setTimeout(function(){ lbPickerFitScroll(); try{ lbPickerHideBlankZones(); }catch(e){} }, 120); // v865：初始布局后按内容收紧高度；v3576：空白网格不留白
   });
 }
 // v864：任一折叠展开 → 已驯收缩 30vh、非已驯折叠区占满剩余高度；全收起恢复已驯占满
@@ -15204,12 +15886,13 @@ function lbPickerExtraSync(){
   if(ex) ex.classList.toggle('lb-extra-open', any);
   if(g) g.classList.toggle('lb-picker-grid-shrink', any);
   lbPickerFitScroll();
+  try{ lbPickerFoldLayout(); }catch(e){} // v3574：收紧后再按均分限高（顺序不可颠倒，否则被 fitScroll 清空）
 }
 // v865：内容不满的滚动容器收紧到「内容恰好高度」——刚好无滚动条、不留大空白；内容超限才保持滚动
 // v1373：覆盖物品页容器（#lbItemPickGrid / #lbItemExtra），并跳过隐藏容器
 function lbPickerFitScroll(){
   var els=[];
-  ['lbPickerGrid','lbSpExtra','lbItemPickGrid','lbItemExtra'].forEach(function(id){ var e=document.getElementById(id); if(e) els.push(e); });
+  ['lbPickerGrid','lbSpExtra','lbItemExtra'].forEach(function(id){ var e=document.getElementById(id); if(e) els.push(e); }); // v3575：去 lbItemPickGrid
   els.forEach(function(el){
     if(el.style.display === 'none') return;
     var prev=el.style.maxHeight;
@@ -15217,6 +15900,69 @@ function lbPickerFitScroll(){
     var sh=el.scrollHeight, ch=el.clientHeight;
     if(sh>0 && sh < ch - 1){ el.style.maxHeight = sh+'px'; }  // 内容不满 → 高度=内容（不撑出空白/滚动条）
     else el.style.maxHeight = prev;
+  });
+}
+// v3574（用户口径：滚动框再长也不能遮挡任何折叠条标题）
+//   剩余高 = 0.8*vh − 折叠区上方所有可见兄弟高度 − 所有折叠条(summary)高度 − 8
+//   在「已展开且有网格」的栏之间**均分**，逐网格写内联 maxHeight/overflowY；容器不再触发滚动 ⇒ 所有标题条恒可见
+function lbPickerFoldLayout(){
+  var panel = document.querySelector('.lb-picker-panel');
+  if(!panel) return;
+  var cap = Math.round((window.innerHeight || 800) * 0.8);
+  var exs = [document.getElementById('lbSpExtra'), document.getElementById('lbItemExtra')];
+  // ① 先清掉上一轮写入的内联值，避免污染测量
+  exs.forEach(function(ex){
+    if(!ex) return;
+    var gs = ex.querySelectorAll('.lb-picker-collapse .lb-picker-grid');
+    for(var i=0;i<gs.length;i++){ if(gs[i].style.maxHeight){ gs[i].style.maxHeight=''; gs[i].style.overflowY=''; } }
+  });
+  ['lbPickerGrid'].forEach(function(id){ var mg=document.getElementById(id); if(mg && mg.getAttribute('data-fold-shrink') === '1'){ mg.style.maxHeight=''; mg.removeAttribute('data-fold-shrink'); } }); // v3574：撤销上一轮让位，避免永久 15vh（v3575：物品页已无主网格）
+  exs.forEach(function(ex){
+    if(!ex || ex.style.display === 'none') return;
+    function measure(){
+      var above = 0;
+      for(var i=0;i<panel.children.length;i++){
+        var c = panel.children[i];
+        if(c === ex) continue;
+        if(getComputedStyle(c).display === 'none') continue;
+        above += c.getBoundingClientRect().height;
+      }
+      var sumH = 0, opens = [];
+      var ds = ex.querySelectorAll(':scope > details');
+      for(var j=0;j<ds.length;j++){
+        var d = ds[j];
+        if(d.style.display === 'none') continue;
+        var sm = d.querySelector('summary');
+        if(sm) sumH += sm.getBoundingClientRect().height;
+        if(d.open){ var g = d.querySelector('.lb-picker-grid'); if(g) opens.push(g); }
+      }
+      return { above:above, sumH:sumH, opens:opens, allow: cap - above - sumH };
+    }
+    var m = measure();
+    if(!m.opens.length) return;                      // 全收起 → 走原有 30vh 逻辑
+    var per = m.allow / m.opens.length;
+    var main = (ex.id === 'lbItemExtra') ? null : document.getElementById('lbPickerGrid'); // v3575：物品页已无「已拥有」主网格 ⇒ 不参与让位
+    if(per < 150 && main && getComputedStyle(main).display !== 'none'){
+      main.style.maxHeight = '15vh';                 // ② 空间不足 → 主网格自动让位（30vh → 15vh）
+      main.setAttribute('data-fold-shrink', '1');
+      m = measure(); per = m.allow / m.opens.length;
+    }
+    per = Math.max(60, Math.floor(per - 8));         // ③ 均分（留 8px 舍入余量，下限 60px 保内容可辨）
+    m.opens.forEach(function(g){ g.style.maxHeight = per + 'px'; g.style.overflowY = 'auto'; });
+  });
+}
+window.addEventListener('resize', function(){ try{ lbPickerFitScroll(); lbPickerFoldLayout(); }catch(e){} }); // v3574：窗口尺寸变化重算
+// v3576（用户口径：不留空白的「已拥有」栏）：面板内任何**空白**网格区块一律不占空间；并清理历史残留元素
+function lbPickerHideBlankZones(){
+  var ov = document.querySelector('.lb-picker-overlay'); if(!ov) return;
+  var stale = ov.querySelector('#lbItemPickGrid'); if(stale) stale.remove();   // v3575 已删元素，防旧缓存/注入残留
+  ['lbPickerRecent','lbPickerGrid','lbPickerRecentItem'].forEach(function(id){
+    var e = document.getElementById(id); if(!e) return;
+    if(e.style.display === 'none') return;                       // 已隐藏的不动（TAB 负责）
+    var has = false, ks = e.children;
+    for(var i=0;i<ks.length;i++){ if(ks[i].style.display !== 'none'){ has = true; break; } }
+    if(!has){ e.setAttribute('data-blank-hide','1'); e.style.display = 'none'; }
+    else if(e.getAttribute('data-blank-hide') === '1'){ e.removeAttribute('data-blank-hide'); e.style.display = ''; }
   });
 }
 // v230+v231：精英/特殊生物识别关键词表（可随时添加节日物种——加一个词即可，识别 dinoClass/ASB name/blueprint 含任一关键词）
@@ -15785,7 +16531,6 @@ function lbPickerTab(t){
   var rc = document.getElementById('lbPickerRecent');
   var sp = document.getElementById('lbPickerGrid');
   var ex = document.getElementById('lbSpExtra');
-  var it = document.getElementById('lbItemPickGrid');
   var rci = document.getElementById('lbPickerRecentItem');
   var iec = document.getElementById('lbItemExtra');
   if(rc) rc.style.display = isItem ? 'none' : '';
@@ -15803,10 +16548,6 @@ function lbPickerTab(t){
       if(!rci.innerHTML) rci.innerHTML = lbPickerBuildRecentItems();
       rci.style.display = rci.innerHTML ? '' : 'none';
     } else rci.style.display = 'none';
-  }
-  if(it){
-    if(isItem && !it.innerHTML) it.innerHTML = lbPickerBuildItems();
-    it.style.display = isItem ? '' : 'none';
   }
   // v1373：物品页折叠区（未拥有：护甲/武器/泰克）
   if(iec){
@@ -15828,21 +16569,46 @@ function lbPickerTab(t){
     try{ lbPickerFilter(); }catch(e){}
   }
   try{ if(isItem) lbPickerExtraSyncItem(); else lbPickerExtraSync(); }catch(e){}
+  try{ lbPickerHideBlankZones(); }catch(e){} // v3576：切 TAB 后清理空白区块
 }
-// v1373（用户要求）：物品页 = ① 最近选择 ②「已拥有」主网格（**平铺、无任何分类标题**，对齐物种页「已驯」）③ 折叠区「未拥有」按 护甲/武器/泰克 折叠
-//   物品图标**不做反色**（用户明确要求）
-function lbPickerBuildItems(){
-  var arr = [];
-  try{ arr = lbItemPickAgg(); }catch(e){ arr = []; }
-  if(!arr.length) return '<div style="color:#888;font-size:12px;padding:10px 12px">没有符合条件的物品（仅收录有品质、且与物种无关的装备）</div>';
-  var h = '';
-  // v3376（用户要求）：主网格首位「全部」格（与物种页同款图标/选中态；点击清空物品筛选）
-  var _allIc = (LB_ICON_BY_NAME && LB_ICON_BY_NAME['RW_Change_to_Cube']) || 'thumbs/webp96/2dbf96da195c_w96.webp';
-  h += '<div class="lb-picker-item' + (LB.pickItem ? '' : ' selected') + '" data-cls="itemall" onclick="lbPickerSelect(this)" title="全部物品（清空筛选）">'
-    + '<div class="lb-picker-ic">' + (_allIc ? '<img src="' + _allIc + '">' : '📦') + '</div>'
-    + '<span class="lb-picker-name">全部</span></div>';
-  arr.slice(0, 600).forEach(function(g){ h += lbPickerItemHtml(g.kind, g.base, g.cls, g.n); });
-  return h;
+// v3575（用户要求）：物品页移除「已拥有」主网格 —— 只保留 ① 最近选择 ② 折叠区（护甲/武器/泰克；全量、不再按已拥有过滤）
+//   原 lbPickerBuildItems() 已删除；物品图标不做反色为既定要求
+// v3593（用户要求）：**染料色点** —— 完全复用容器色点样式（`lbColorDotHtml`，12px，用户指定尺寸）
+//   判据与「其它」栏 dye 分组同源：词条 `zh` 含「染料」；色名取 `en` 去掉 `Dye` 前缀与数字后的**末词**（并去 `Coloring` 后缀），
+//   再按归一化（小写 + 去空格/下划线/连字符）在 `dino_colors.json`（LB_COLORS，228 条 / 211 色名）里查表取 hex。
+//   实测映射样例：Blue 5 Denim→Denim、Brown 1 Mud→Mud、Cyan 1 Mariana→Mariana、Mustard Coloring→Mustard
+var _lbDyeDotMap = null;
+function _lbNormColorName(s){ return String(s || '').toLowerCase().replace(/[\s_\-]+/g, ''); }
+function lbDyeDotMap(){
+  if(_lbDyeDotMap) return _lbDyeDotMap;
+  var m = {}, C = LB_COLORS || {};
+  Object.keys(C).forEach(function(id){
+    var e = C[id] || {}, nm = String(e.name || '');
+    if(!nm || nm === 'Unset') return;
+    var k = _lbNormColorName(nm);
+    if(k && !m[k]) m[k] = { hex: e.hex || '#3a3a4a', name: nm, id: Number(id) };
+  });
+  _lbDyeDotMap = m;
+  return m;
+}
+function lbDyeDotOf(base){
+  var t = (LB_ITEM_ZH || {})[base]; if(!t) return null;
+  if(String(t.zh || '').indexOf('染料') < 0) return null;                          // 与 lbItemNoHaveByKind 的 dye 分组同判据
+  if(!LB_COLORS){ try{ lbLoadColors(); }catch(e){} return null; }                  // 颜色表异步；就绪后重渲自动补上
+  var en = String(t.en || '')
+        .replace(/^Dye\s+/i, '')
+        .replace(/\s*Coloring\s*$/i, '')
+        .replace(/\s+/g, ' ').trim();
+  var toks = en.split(' ').filter(function(w){ return !/^\d+$/.test(w); });
+  for(var i = toks.length - 1; i >= 0; i--){
+    var hit = lbDyeDotMap()[_lbNormColorName(toks[i])];
+    if(hit) return hit;
+  }
+  return null;
+}
+function lbDyeDotHtml(base, sz){
+  var d = lbDyeDotOf(base); if(!d) return '';
+  return '<span class="lb-fcol" style="display:inline-flex;align-items:center;justify-content:center">' + lbColorDotHtml(d.hex, d.name, sz || 12) + '</span>';
 }
 // v1373：单个物品格（对齐物种页 lb-picker-item 结构；图标不反色）
 function lbPickerItemHtml(kind, base, cls, cnt){
@@ -15850,9 +16616,10 @@ function lbPickerItemHtml(kind, base, cls, cnt){
   var zh = (mm && mm.zh) || base;
   var en = (mm && mm.en) || '';
   var url = ''; try{ url = lbItemIconUrl(cls || base) || ''; }catch(e){}
+  var _dyeDot = ''; try{ _dyeDot = lbDyeDotHtml(base, 12); }catch(e){}   // v3593：染料 → 色点（12px，用户指定）
   var _sel = (LB.pickItem && LB.pickItem.kind === kind && LB.pickItem.base === base) ? ' selected' : '';
   return '<div class="lb-picker-item' + _sel + '" data-cls="item:' + lbAttr(kind) + ':' + lbAttr(base) + '" onclick="lbPickerSelect(this)" title="' + lbAttr(zh) + '">'
-    + (url ? '<div class="lb-picker-ic"><img src="' + url + '" loading="lazy" onerror="lbImgRetry(this)"></div>' : '<div class="lb-picker-ic lb-picker-ic-none">?</div>')
+    + (_dyeDot ? '<div class="lb-picker-ic">' + _dyeDot + '</div>' : (url ? '<div class="lb-picker-ic"><img src="' + url + '" loading="lazy" onerror="lbImgRetry(this)"></div>' : '<div class="lb-picker-ic lb-picker-ic-none">?</div>'))
     + '<span class="lb-picker-name">' + lbAttr(zh) + (cnt ? ' <em class="lb-picker-cnt">' + cnt + '</em>' : '') + '</span>'
     + (en ? '<span class="lb-picker-en">' + lbAttr(en) + '</span>' : '')
     + '</div>';
@@ -15860,17 +16627,28 @@ function lbPickerItemHtml(kind, base, cls, cnt){
 // v1373（方案 A）：折叠区「未拥有」= 字典 item_zh.json 中 kind=armor/weapon/tek、但所有服务器都没记录的装备
 //   排除：已拥有（在主网格）/ 物种绑定（鞍·机甲·执行者·侦察机…）
 function lbItemNoHaveByKind(){
+  // v3575（用户要求）：物品页不再区分已拥有/未拥有 ⇒ 不再剔除已拥有（全量按 kind 分组）
+  // v3578（用户要求）：「其它」栏 4 类（resource/consumable/attachment/trophy）**不过滤物种绑定**（全量 742 条）；护甲/武器/泰克仍排物种绑定
   if(LB._itemNoHaveKeys) return LB._itemNoHaveKeys;
-  var owned = {};
-  try{ lbItemPickAgg().forEach(function(g){ owned[String(g.base)] = 1; }); }catch(e){}
   var zh = LB_ITEM_ZH || {};
-  var byKind = { armor:[], weapon:[], tek:[] };
+  var byKind = { armor:[], weapon:[], tek:[], resource:[], consumable:[], attachment:[], trophy:[], dye:[] };
+  var OTHER = { resource:1, consumable:1, attachment:1, trophy:1, dye:1 };
+  // v3579（用户要求：**完全复用容器组的去重方式**）：键 = `lbItemMeta(cls).base`，与 lbInvListHtml() 逐字同款（L9136-9140）
+  //   ⇒ `X` 与 `PrimalItemResource_X` 等前缀双份收敛为同一 base（金属锭/煤炭 4→2），真实变体（_Super/_FromMegaForge/_01…_06）保留
+  var _seen = {};
+  function _aggKey(raw){ return lbItemAggKey(raw); }   // v3580：与容器组 lbInvListHtml 共用同一键（含 Skeleton 归并）
   Object.keys(zh).forEach(function(base){
     var t = zh[base] || {};
     var k = String(t.kind || '');
     if(!byKind[k]) return;
-    if(owned[base]) return;
-    if(lbIsSpeciesBound(base)) return;
+    if(!OTHER[k] && lbIsSpeciesBound(base)) return;
+    // v3581（用户要求）：染料独立分组（与消耗品同级）——中文名含「染料」者从 consumable 移出（词典里染料键名无规律：Misc_*/Yellow_*/Orange_*/Blue_*/Greyscale_* 等）
+    // v3594（用户要求）：「染料」**本体**是特例 —— 词典键 `Dye`（zh 恰为「染料」/ en `Dyes`，kind=consumable）不是某种颜色，应留在消耗品组；
+    //   故此处加例外（键名 + en 双判据，防前缀双份变体），其余 126 条单色染料仍进 dye 组
+    if(String(t.zh || '').indexOf('染料') >= 0 && base !== 'Dye' && String(t.en || '') !== 'Dyes'){ k = 'dye'; }
+    var kb = _aggKey(base);
+    if(_seen[kb]) return;   // v3583：**跨分组**去重（同一物品因词典 kind 不一致分落两组时只保留先出现的，如 有机聚合物）
+    _seen[kb] = 1;
     byKind[k].push(base);
   });
   var coll = new Intl.Collator('zh-Hans-CN');
@@ -15884,6 +16662,7 @@ function lbItemNoHaveByKind(){
 }
 function lbPickerBuildItemNoHave(){
   ['armor','weapon'].forEach(function(k){ LB['_itemColHtml_' + k] = null; });   // v1374：重建时失效懒构建缓存
+  LB._itemOtherHtml = null;                                                     // v3578：同样失效「其它」栏缓存
   var by = {};
   try{ by = lbItemNoHaveByKind(); }catch(e){ by = {}; }
   var labels = { armor:'护甲', weapon:'武器', tek:'泰克' };
@@ -15891,10 +16670,16 @@ function lbPickerBuildItemNoHave(){
   ['armor','weapon'].forEach(function(k){
     var list = by[k] || [];
     h += '<details class="lb-picker-collapse" id="lbItemCol_' + k + '" ontoggle="lbPickerLazyItemCol(this);lbPickerExtraSyncItem()">'
-      + '<summary>' + labels[k] + '未拥有 (<span id="lbItemColCnt_' + k + '">' + list.length + '</span>)</summary>'
+      + '<summary>' + labels[k] + ' (<span id="lbItemColCnt_' + k + '">' + list.length + '</span>)</summary>' // v3575：标题去掉「未拥有」
       + '<div class="lb-picker-grid" id="lbItemColGrid_' + k + '" data-kind="' + k + '"></div></details>';
   });
-  return h || '<div style="color:#888;font-size:12px;padding:10px 12px">没有未拥有的装备</div>';
+  // v3578（用户要求）：第 3 栏「其它」——结构/样式完全复用物种「特殊」栏（#lbExtra 同款 details+summary+grid+二级分组标题行）
+  var _othN = 0;
+  ['resource','consumable','attachment','trophy','dye'].forEach(function(k){ _othN += ((by[k] || []).length); });
+  h += '<details class="lb-picker-collapse" id="lbItemCol_other" ontoggle="lbPickerLazyItemOther(this);lbPickerExtraSyncItem()">'
+    + '<summary>其它 (<span id="lbItemColCnt_other">' + _othN + '</span>)</summary>'
+    + '<div class="lb-picker-grid" id="lbItemColGrid_other" data-kind="other"></div></details>';
+  return h || '<div style="color:#888;font-size:12px;padding:10px 12px">没有装备</div>';
 }
 // v1373：折叠区懒构建（点开才生成；搜索时全展开也会调用）
 // v1374（用户要求：完全复刻物种折叠规则）：补齐物种侧全部交互——
@@ -15903,15 +16688,13 @@ function lbPickerBuildItemNoHave(){
 function lbPickerLazyItemCol(det){
   if(!det) return;
   var grid = det.querySelector('.lb-picker-grid');
-  var g = document.getElementById('lbItemPickGrid');
   var r = document.getElementById('lbPickerRecentItem');
   if(!det.open){
     var anyOpen = false;
     var ds = document.querySelectorAll('#lbItemExtra details');
     for(var i0=0;i0<ds.length;i0++){ if(ds[i0].open){ anyOpen = true; break; } }
     if(!anyOpen){
-      if(g) g.style.display='';
-      if(r && r.innerHTML) r.style.display='';
+      if(r && r.innerHTML) r.style.display='';   // v3575：仅恢复最近区（已拥有主网格已移除）
     }
     return;
   }
@@ -15919,21 +16702,52 @@ function lbPickerLazyItemCol(det){
     var ds2 = document.querySelectorAll('#lbItemExtra details');
     for(var i1=0;i1<ds2.length;i1++){ if(ds2[i1] !== det && ds2[i1].open) ds2[i1].open = false; }
   }
-  if(LB._pickerSearchMode){
-    if(r) r.style.display='none';
-    if(g) g.style.display='';
-  } else {
-    if(g) g.style.display='none';
-    if(r) r.style.display='none';
-  }
+  if(r) r.style.display='none';   // v3575：展开折叠区一律隐藏最近区（已拥有主网格已移除）
   var kind = grid ? String(grid.getAttribute('data-kind') || '') : '';
+  if(kind === 'other'){ if(grid && !grid.innerHTML) grid.innerHTML = lbPickerBuildItemOther(); return; } // v3578：搜索全展开时会走这里构建「其它」栏
   if(grid && !grid.innerHTML){
     var list = [];
     try{ list = lbItemNoHaveByKind()[kind] || []; }catch(e){}
     var h = '';
-    list.slice(0, 400).forEach(function(base){ h += lbPickerItemHtml(kind, base, base, 0); });
+    list.slice(0, 400).forEach(function(base){ h += lbPickerItemHtml(kind, base, base, lbItemOwnCnt(base)); });   // v3586：补全服拥有数量
     grid.innerHTML = h;
   }
+}
+// v3578（用户要求）：物品页「其它」栏内容 —— **完全照抄物种「特殊」栏 lbPickerBuildExtra() 的二级分组写法**
+//   分组色值同源（#f59e0b / #fb923c / #22d3ee / #4ade80）；条目沿用物品页 lbPickerItemHtml（物品图标既定不反色）
+function lbPickerBuildItemOther(){
+  if(LB._itemOtherHtml) return LB._itemOtherHtml;
+  var by = {};
+  try{ by = lbItemNoHaveByKind(); }catch(e){ by = {}; }
+  var h = '';
+  // v3583（用户要求）：染料**移到最后** ⇒ 资源 → 消耗品 → 附件 → 战利品 → 染料
+  [['resource','资源','#f59e0b'],['consumable','消耗品','#fb923c'],['attachment','附件','#22d3ee'],['trophy','战利品','#4ade80'],['dye','染料','#c084fc']].forEach(function(g){
+    var list = by[g[0]] || [];
+    if(!list.length) return;
+    h += '<div style="grid-column:1/-1;font-size:11px;color:' + g[2] + ';font-weight:600;padding:6px 0 2px;border-top:1px solid #2a2a3a;margin-top:2px">' + g[1] + '</div>';
+    list.forEach(function(base){ h += lbPickerItemHtml(g[0], base, base, lbItemOwnCnt(base)); });   // v3586：补全服拥有数量
+  });
+  LB._itemOtherHtml = h;
+  return h;
+}
+// v3578：物品页「其它」栏懒构建（照抄物种 lbPickerLazyExtra()：手风琴互斥 + 展开时隐藏最近区；物品页已无「已拥有」主网格）
+function lbPickerLazyItemOther(det){
+  if(!det) return;
+  var grid = det.querySelector('.lb-picker-grid');
+  var r = document.getElementById('lbPickerRecentItem');
+  if(!det.open){
+    var anyOpen = false;
+    var ds = document.querySelectorAll('#lbItemExtra details');
+    for(var i0=0;i0<ds.length;i0++){ if(ds[i0].open){ anyOpen = true; break; } }
+    if(!anyOpen){ if(r && r.innerHTML) r.style.display=''; }
+    return;
+  }
+  if(!LB._pickerSearchMode){
+    var ds2 = document.querySelectorAll('#lbItemExtra details');
+    for(var i1=0;i1<ds2.length;i1++){ if(ds2[i1] !== det && ds2[i1].open) ds2[i1].open = false; }
+  }
+  if(r) r.style.display='none';
+  if(grid && !grid.innerHTML) grid.innerHTML = lbPickerBuildItemOther();
 }
 // v1373：物品页折叠同步（物种页 lbPickerExtraSync 的同构版：展开任一折叠 → 主网格收缩 30vh）
 function lbPickerExtraSyncItem(){
@@ -15941,10 +16755,9 @@ function lbPickerExtraSyncItem(){
   var any = false;
   for(var i=0;i<dets.length;i++){ if(dets[i].open){ any = true; break; } }
   var ex = document.getElementById('lbItemExtra');
-  var g = document.getElementById('lbItemPickGrid');
-  if(ex) ex.classList.toggle('lb-extra-open', any);
-  if(g) g.classList.toggle('lb-picker-grid-shrink', any);
+  if(ex) ex.classList.toggle('lb-extra-open', any);   // v3575：物品页无「已拥有」主网格，不再收缩它
   lbPickerFitScroll();
+  try{ lbPickerFoldLayout(); }catch(e){} // v3574：收紧后再按均分限高（顺序不可颠倒）
 }
 // v1372（用户要求）：物品「最近选择」（与物种页 lbRecentClasses 同构：localStorage 最多 6 条、最新在前）
 var LB_RECENT_ITEM_KEY = 'lbRecentItems';
@@ -15964,7 +16777,7 @@ function lbRecordRecentItem(kind, base){
 // v1373：容器 #lbPickerRecentItem 本身即网格 ⇒ 只返回物品格
 function lbPickerBuildRecentItems(){
   var h = '';
-  lbRecentItems().forEach(function(x){ h += lbPickerItemHtml(String(x.kind||''), String(x.base||''), String(x.base||''), 0); });
+  lbRecentItems().forEach(function(x){ h += lbPickerItemHtml(String(x.kind||''), String(x.base||''), String(x.base||''), lbItemOwnCnt(String(x.base||''))); });   // v3586：补全服拥有数量
   return h;
 }
 function lbPickerFilter(){
@@ -15973,17 +16786,10 @@ function lbPickerFilter(){
   // v1370（用户要求）：物品 TAB 下**只处理物品页**，物种侧一律保持隐藏（否则底部折叠区会被重新显形）
   var _isItem = (LB._pickerTab === 'item');
   if(_isItem){
-    var _ig = document.getElementById('lbItemPickGrid');
     var _iec = document.getElementById('lbItemExtra');
     var _rci = document.getElementById('lbPickerRecentItem');
     if(_rci) _rci.style.display = q ? 'none' : '';   // 物品最近区（搜索时隐藏，与物种页一致）
-    if(_ig){
-      _ig.style.display = '';
-      _ig.querySelectorAll('.lb-picker-item').forEach(function(it){
-        if(!q){ it.style.display=''; return; }
-        it.style.display=((it.textContent||'').toLowerCase().indexOf(q)>=0)?'':'none';
-      });
-    }
+    // v3575（用户要求）：物品「已拥有」主网格已移除 ⇒ 此处不再过滤主网格
     if(_iec){
       _iec.style.display = '';
       if(!_iec.innerHTML) _iec.innerHTML = lbPickerBuildItemNoHave();
@@ -16011,7 +16817,7 @@ function lbPickerFilter(){
     var _pnl = document.querySelector('.lb-picker-panel');
     if(_pnl) _pnl.classList.toggle('lb-picker-search', !!q);
     try{ lbPickerExtraSyncItem(); }catch(e){}
-    setTimeout(lbPickerFitScroll, 60);
+    setTimeout(function(){ lbPickerFitScroll(); try{ lbPickerFoldLayout(); }catch(e){} try{ lbPickerHideBlankZones(); }catch(e){} }, 60); // v3574：搜索全展开后先收紧再重算均分限高；v3576：清空白
     return;
   }
   var panel=document.querySelector('.lb-picker-panel');
@@ -16087,7 +16893,7 @@ function lbPickerFilter(){
     return false;
   }
   [noHave,special,extra].forEach(function(det){ if(det) det.style.display = (!q || _zoneVisible(det)) ? '' : 'none'; });
-  setTimeout(lbPickerFitScroll, 60); // v865：过滤后内容不满容器收紧高度
+  setTimeout(function(){ lbPickerFitScroll(); try{ lbPickerFoldLayout(); }catch(e){} try{ lbPickerHideBlankZones(); }catch(e){} }, 60); // v865：过滤后内容不满容器收紧高度；v3574/v3576
 }
 // v867：隐藏无可见结果的二级分组标题（跨列 head/分隔，其后到下一 head 之间无可见 item 则隐藏）
 function lbPickerHideEmptySections(gridEl){
@@ -16454,7 +17260,7 @@ function lbBootHide(){
 // 启动：预取服务器主题 + 图标/反色/前缀（确保按钮图标与反色首帧正确）；lbInitServers 已用兜底初始化（解耦：无 HA 环境也有数据）
 // v3484：设施汉化表（facility_zh）一并**预加载** —— v3483 的「通式回退」依赖它，
 //   而它原先只在聚落浮窗里懒加载 ⇒ 物品列表渲染时表未就绪 ⇒ 回退静默失效（PW 实测 facReady=false，中文名全空）。
-LB._themesPromise = Promise.all([lbLoadThemes(), lbLoadIconList(), lbLoadAntiColors(), lbLoadPrefixZh(), lbLoadColors(), lbItemZhLoad(), lbItemStatsLoad(), lbFacilityZhLoad()]).then(function(r){ return r[0]; });
+LB._themesPromise = Promise.all([lbLoadThemes(), lbLoadIconList(), lbLoadAntiColors(), lbLoadPrefixZh(), lbLoadColors(), lbItemZhLoad(), lbItemStatsLoad(), lbFacilityZhLoad(), lbFacilityOfficialLoad()]).then(function(r){ return r[0]; }); // v3556：+容器自带官中名表（facility_official）
 // 启动：立即显示初始化提示（不等任何 await，消除「页面空白无提示」空窗）；
 // 数据加载（lbInit）与玩家识别（lbInitPlayer）并行——玩家识别完成后如有变化再刷新视图
 (async function(){
