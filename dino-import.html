@@ -546,7 +546,8 @@ var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 
 // ✅ **已部署并线上验证**（Version ID 7066a3ba-be23-4d27-a830-a02bb5d259f9，线上 v20260922-3572；浏览器实测：`lbContCapOf('Structure_TrainingDummy_C_2146654888')` = **18**、角标渲染 `4/18`、`lbContCapEquip()` = **false**（按用户口径不加装备栏徽标））v3572（用户手填）：**训练假人容量入表** —— `TrainingDummy:18`（用户口径：装备栏 8 格 + 存储容量 10 格 = **总 18 格**）；角标**只显示「已用/18」不区分两类**（按用户口径未加 `LB_CONT_CAP_EQUIP` 徽标）；类名实测 `Structure_TrainingDummy_C_*` 归一后命中 `TrainingDummy`
 
-// ✅ **已部署并线上验证**（Version ID d014bb7a-5b1b-4927-958b-053fe2ffe6e6，线上 v20260922-3573；浏览器实测：同一小型耕地 `Ext/930307c9` raw=3 / vis=2 ⇒ **旧公式 `lbContCapHtml(cls,3)`=`3/10`（复现你的截图）**、**新公式 `lbContCapHtml(cls,2)`=`2/10`**（tooltip「占用 2 / 容量 10（20%）」），与摘要角标 2、展开 chip 组数一致）v3573（用户口径：种子种下去后不占格子）：**容量角标「已用」与渲染同源** —— `_capUsed` 的物品项由 `invItems.length`（未过滤的原始条目）改为**有效条目数**（过 `lbIsEmptyItem`）；实测源：小型耕地 `Ext/930307c9` 内 3 条 = 浆果 q100 + 浆果 q82 + **浆果种子 q0**（已种下，判空）⇒ 旧：角标 3/10 但展开只有 2 组；新：角标 2/10（与摘要角标、chip 列表一致）
+// ✅ **已部署并线上验证**（Version ID d014bb7a-5b1b-4927-958b-053fe2ffe6e6，线上 v20260922-3573；浏览器实测：同一小型耕地 `Ext/930307c9` raw=3 / vis=2 ⇒ **旧公式 `lbContCapHtml(cls,3)`=`3/10`（复现你的截图）**、**新公式 `lbContCapHtml(cls,2)`=`2/10`**（tooltip「占用 2 / 容量 10（20%）」），与摘要角标 2、展开 chip 组数一致）v3573（用户口径：种子种下去后不占格子）：**容量角标「已用」与渲染同源** —— `_capUsed` 的物品项由 `invItems.length`（未过滤的原始条目）改为**有效条目数**（过 `lbIsEmptyItem`）；实测源：小型耕地 `Ext/930307c9` 内 3 条 = 浆果 q100 + 浆果 q82 + **浆果种子 q0**（已种下，判空）⇒ 旧：角标 3/10 但展开只有 2 组；新：角标 2/10（与摘要角标、chip 列表一致）
+
 // ✅ **已部署并线上验证**（Version ID e82eb361-f197-41ec-8659-b100fcc8bcce，线上 v20260922-3574；清 SW + 清 Cache 实测：①物种页展开「变体」→ 容器 **778/778 零滚动**、面板 828、三条折叠条 **全 inEx**（0-34/34-67/744-778）、网格 inline 677px（内容 2424 内部滚动）；②搜索 `a` 三栏全开 → 容器 **605/605 零滚动**、面板 811、主网格自动让位 **15vh**、三网格各 168px（内容 2626/1894/1825 内滚）、三标题 **全 inEx**；③物品页展开「护甲未拥有」→ 容器 708/708 零滚动、两标题全 inEx；④收起后 inline 全清除、主网格 display 还原、让位撤销）v3574（用户口径：滚动框再长也不能遮挡任何折叠条标题）① **滚动下移到展开的网格**：新增 `lbPickerFoldLayout()` —— 剩余高 = `0.8vh − above(折叠区上方可见兄弟) − sumH(所有 summary)`，在「已展开且有内容」的栏之间**均分**，逐网格写 `maxHeight/overflowY`；② 空间不足时 `#lbPickerGrid`/`#lbItemPickGrid` 自动让位（30vh→15vh）；③ 展开项网格滚动条 3px→6px 提亮（#5a5a6e）；④ 触发点：`lbPickerExtraSync()`/`lbPickerExtraSyncItem()`/`lbPickerFilter()`(×2) + `resize`；实测（线上试验）：非搜索 n=1 → H=677、容器 778/778 **零滚动**、三标题全可见、面板 828；搜索 n=3（主网格 15vh）→ H=168、容器 605/605 **零滚动**、三标题全可见、面板 811
 // ✅ **已部署并线上验证**（Version ID 9b6fc5f7-b19c-4f28-83f6-67853fed2f6b，线上 v20260922-3575；清 SW + 清 Cache 实测：`#lbItemPickGrid` **不存在**（已拥有主网格移除）、折叠栏标题 **「护甲 (112) / 武器 (77)」**（原 未拥有 34 / 28 ⇒ 已拥有不再剔除）、长管步枪图标 `thumbs/webp96/489cfd0d4cfb_w96.webp`（旧 `6f9ba3a63ed8`，**hash 已变**）加载 OK naturalWidth=96、物品折叠区 777/777 零滚动；HTTP 复核：线上 `item_zh.json` 的 `OneShotRifle.icon` / `OneShotRifle_Cursed.icon` 均 = `SSR_Icon`，`id="lbItemPickGrid"`/`lbPickerBuildItems` 均已消失）v3575（用户要求）：① **物品页移除「已拥有」主网格**（`#lbItemPickGrid` 元素/构建 `lbPickerBuildItems()`/CSS/滚动条/收缩让位/过滤/最近区联动 全部清理），折叠区标题 `护甲未拥有→护甲`、列表**不再剔除已拥有**（`lbItemNoHaveByKind` 去掉 owned 过滤）；② **长管步枪图标修正**：`item_zh.json` 的 `OneShotRifle` / `OneShotRifle_Cursed` 图标 `HUD_ThrallSniperRifle_Icon → SSR_Icon`
 // ✅ **已部署并线上验证**（Version ID c1062414-0581-4ecb-8927-c7515c74f9ba，线上 v20260922-3576；清 SW + 清 Cache 实测：`lbPickerHideBlankZones` 就位、牌面 `blanks=0` —— 面板子项 header 49 / 最近栏 134(6 项) / 折叠区 67(2 项)，**无任何空白区块**，`#lbItemPickGrid` 元素不存在）v3576（GO，用户口径：物品最近栏底下还有一个空白的已拥有栏）：新增 `lbPickerHideBlankZones()` —— 打开浮窗/切 TAB/过滤后统一执行：① 移除任何 `#lbItemPickGrid` 残留；② 面板内 `#lbPickerRecent / #lbPickerGrid / #lbPickerRecentItem` 若**无可见子项**则 `display:none`（`data-blank-hide` 标记，有内容自动恢复）
@@ -587,7 +588,19 @@ var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // ✅ **已部署并线上验证**（Version ID 9566175c-a9a6-4f67-ab74-6dc4ce392c5d，线上 v20260922-3611；修复前线上诊断 `cmp(Alpha,Beta)=-1` / `cmp(Beta,Gamma)=-1`（按主词拼音，应 +1）；修复后线上实测 `lbItemNoHaveByKind().trophy`：BOSS 31 条全前置（`firstNonBoss=31`）、同 BOSS 相邻（`adjOk=true`）、同 BOSS 内难度升序（`diffOk=true`）、寒冰飞龙女王 10/11/12 相邻）v3611（修复 v3610）：`bossOn` 语义为 `BOSS?0:1`，但非 BOSS 分支误写成 `if(!x.bossOn)` ⇒ **BOSS 条目反被当作非 BOSS** 走主词拼音排序 （症状：同 BOSS 内 精英→困难→普通、寒冰飞龙女王三条散落 9/14/30）⇒ 改为 `if(x.bossOn)`；实测修复前 `cmp(Alpha,Beta)=-1`（按拼音）应为 `+1`（按难度）
 // ✅ **已部署并线上验证**（Version ID 542fecaa-ef54-40f1-b41b-e2b43f93fc05，线上 v20260922-3612；清 SW + Cache 实测 `lbItemNoHaveByKind().dye` **65 条**：家族顺序 = `Red(9) → Orange(9) → Yellow(10) → Green(4) → Spring(1) → Cyan(2) → Azure(3) → Blue(10) → Violet(2) → Magenta(3) → Greyscale(10) → Brown(2)`（`famOk=true`）；同家族内 **序号升序**（`numOk=true`，如 Red 1→8、Greyscale 1→10）；**散色落位实测** = 砖红→Red 末、桔色→Orange 末、金黄/黄芥末→Yellow 末、草绿→Green 末、溪水蓝/雾蓝→Blue 末、蓟紫→Violet 末、泡泡糖粉→Magenta 末）v3612（用户要求）：**染料组排序 → 色系（游戏染色板颜色 ID 序）+ 序号** —— 排序键 = ① **色系**（`Red → Orange → Yellow → Green → Spring → Cyan → Azure → Blue → Violet → Magenta → Greyscale → Brown`，实测各家族对应 colorId 段单调递增：128/136/144/162/171/176/185/192/203/211/224/234）② 同色系内 **序号升序**（Red 1-8 / Orange 1-8 / Yellow 1-8 / Greyscale 1-10 / Blue 1-8 …）③ **9 条无序号散色按颜色插到所属色系编号条目之后**（Brick→红系、Tangerine→橙系、Gold/Mustard→黄系、Grass→绿系、Stream/Haze→蓝系、Thistle→紫系、Bubblegum→品红系；散色之间按词典 `Misc_N` 编号）；新增 `LB_DYE_FAM_ORDER` / `LB_DYE_MISC_FAM` / `lbDyeOrderOf()` + `lbItemNoHaveByKind()` 内 dye 分支（dye 组 65 条）
 // ✅ **已部署并线上验证**（Version ID 3650e602-6fbf-4179-84a9-7b0398a80360 → **修复后重部署** 15e5944e-eb42-4fd9-b335-cd9ffcebba18，线上 v20260922-3613；清 SW + Cache 实测 `lbItemNoHaveByKind().dye` = **129 条**（65 → 129）、`famOk=true` / `numOk=true`，家族分布 Red 9 / Orange 10 / Yellow 9 / Chartreuse 9 / Green 9 / Spring 8 / Cyan 10 / Azure 8 / Blue 9 / Violet 9 / Magenta 9 / Fuschia 9 / Greyscale 10 / Brown 10 / 末尾未定位 1（Sky）；词典键 1726 → **1790**、"其它"栏 524 条。**修复 2 处**：① `Dye_Crystal` 剥 `Dye_` 后 base 命中另一物品「水晶(Crystal)」⇒ en 归一撞车、被跨组去重丢弃（修法 = `lbItemAggKey` **原始键优先取 en** + **en 归一前剥 `Dye ` 前缀**，既保住 `Dye X`/`X` 双份合并、又不再误吞同名染料）② `Dye_Celeste` 官方中文「蔚蓝色」不含「染料」二字 ⇒ 落进消耗品组（染料判定加 **键前缀 `^Dye_`**）。注：「海蓝色染料」出现两条 = Aquamarine 与 Ocean 的**官方同名**（非重复条目））v3613（用户要求）：**物品栏不再受存档限制（先落地染料）** —— 词典由 11 服存档扫描（`_build_item_zh.py` → `dino-data/{服}_item.json.gz`）生成 ⇒ 存档没出现过的物品不显示；本次按游戏中文语言包补全 ASA **全量 127 色染料**：① `汉化/item_zh.json` 新增 **64 条**（键 `Dye_<色名>`、`en=<色名> Coloring`、`zh=` PO 官方中文、`kind=consumable`、`src=po_dye_full`；1726→**1790** 键）② 前端排序改为**按游戏染色板颜色 ID 归入 14 个色系**、色系内按 colorId 升序：`Red(128)→Orange(136)→Yellow(144)→Chartreuse(152)→Green(160)→Spring(168)→Cyan(176)→Azure(185)→Blue(192)→Violet(200)→Magenta(208)→Fuschia(216)→Greyscale(224)→Brown(234)`（242-254 段跨家族补充色走 `LB_DYE_FAM_FIX` 显式映射；`Sky` 无 colorId ⇒ 排末尾）③ 新增 `LB_DYE_FAM_RANGE` / `LB_DYE_FAM_FIX` / `lbDyeColorId()` / `lbDyeFamOf()`，`lbDyeOrderOf()` 重写（色系内序优先取 colorId，缺则退化用编号）
-var LB_VERSION = 'v20260922-3613';
+// ✅ **已部署并线上验证**（Version ID 1f7eb0ab-dc10-48d1-a0a9-fbb56591bbb7，线上 v20260922-3616；清 SW + Cache 实测：`lbItemNoHaveByKind().structure` = **289 条**；物品页折叠区变为 **护甲 (70) / 武器 (69) / 建筑 (289) / 其它 (525)**；展开「建筑」实测渲染 **289** 格（首条 保险柜 Vault / 壁炉 Fireplace / 便携梯子 Portable Ladder / 冰箱 Refrigerator，含拥有数量）；`#lbItemCol_structure` 存在、懒构建走通用分支（`list.slice(0,400)`）、搜索全展开与均分限高均复用 `#lbItemExtra details` 遍历 ⇒ 未新增任何方法）v3616（用户要求）：**把词典里已有的「建筑类」作为独立折叠栏加到物品页**（沿用现有机制，零自创方法）—— 词典 `kind=structure` 共 **344 条**（此前因 `byKind` 白名单不含 structure ⇒ **整条被丢弃**，物品栏完全看不到）① `lbItemNoHaveByKind()`：`byKind` 加 `structure:[]`、`OTHER` 加 `structure:1`（与「其它」栏各组同口径：不过滤物种绑定）② `lbPickerBuildItemNoHave()`：`labels` 加 `建筑`、折叠栏数组 `['armor','weapon']` → `['armor','weapon','structure']`（新建 `#lbItemCol_structure`，ontoggle 沿用 `lbPickerLazyItemCol` + `lbPickerExtraSyncItem`）③ 懒构建 / 搜索全展开 / 均分限高 / 折叠同步四条路径全部复用现有遍历（`lbPickerFilter` 按 `#lbItemExtra details` 遍历、`lbPickerFoldLayout` 按展开栏数自适应）⇒ 无需新增任何方法
+// ✅ **已部署并线上验证**（Version ID d8edd2b7-4b4f-4e0a-b2b1-abc8c8df06d3，线上 v20260922-3617；清 SW + Cache 实测：`lbItemNoHaveByKind().structure` = **263 条**（289 − 26 ✅）、组内 `Skin_` 前缀残留 **0**、`Tileset_*` 按口径保留 **6** 条（建筑外观: 边境 / 财富之潮 / 弹跳狂欢 …）；其它组计数不变（armor 70 / weapon 69 / resource 111 / consumable 88 / attachment 51 / trophy 100 / dye 129 / egg 46））v3617（用户要求）：**建筑组过滤「皮肤（Skin）」条目** —— v3616 加入建筑栏后混入 32 条皮肤/建筑外观，按用户口径**只筛键以 `Skin_` 开头的 26 条**（`Tileset_*` 6 条按用户选择保留）：在 `lbItemNoHaveByKind()` 的 `if(!byKind[k]) return;` 之后加 `if(k === 'structure' && /^Skin_/i.test(String(base))) return;`（**仅建筑组生效**，与 v3600 受精卵隐藏同款做法，未新增任何方法）；建筑组预期 289 → 263
+// ✅ **已部署并线上验证**（Version ID b2c260ad-41ec-4ade-8470-7e829bc450a3，线上 v20260922-3618；清 SW + Cache 实测：`lbItemNoHaveByKind().structure` = **257 条**（263 − 6 ✅，其余 6 条同名本体已按完整类名口径过滤）、组内 `Skin_` 残留 **0**、`Tileset_*` + `ToF_Tileset` 残留 **0**；`lbPickerBuildItemNoHave()` 标题栏实测 **建筑 (257) / 其它 (525) / 护甲 (70) / 武器 (69)**；线上 `item_zh.json` = **1835 键** / `skin:1` **77 条**（`Tileset_Frontier`、`Skin_Tileset_Frontier`、`ToF_Tileset` 均带标记；`ApexDrop_Sarco` / `WaterskinCraftable` / `Cooler` / `FlowerVase` 无误伤））v3618（用户要求）：**建筑组皮肤过滤判据修正 → 按「完整类名」判定** —— v3617 按词典键 `^Skin_` 判定，漏掉了 6 条同名本体（`Tileset_Frontier` 等，其真实完整类名 `PrimalItemStructureSkin_Tileset_Frontier_C` 同属 Skin 家族，用户实证驳回原判据）① 判据源头 = **完整类名**：本地 `汉化/item_kind_all.json`（键即完整类名）筛 `PrimalItemStructureSkin_*` 共 **71 条**，命中词典者逐条打 `skin:1`（**32 条**：26 条 `Skin_*` + 6 条同名本体 `Tileset_*`/`ToF_Tileset`）② **补录 45 条**词典缺失皮肤（`Skin_Gingerbread_*` / `Skin_Love*` / `Skin_Garden_*` / `Skin_Tileset_Gingerbread*` / `Skin_TurkeyFryer` / `Skin_VaseRoses` 等；`kind=structure`、`en=Skin <段>`、`zh=建筑外观: <段>`、`src=po_skin_full`）⇒ 词典 1790 → **1835** 键、全表 `skin:1` 共 **77 条** ③ 前端 `lbItemNoHaveByKind()` 过滤改为 **`if(k === 'structure' && (t.skin || /^Skin_/i.test(String(base)))) return;`**（`t.skin` 主判据读词典标记，键前缀为旧缓存兜底，仅建筑组生效）；预期建筑组 263 → **257**
+// ⏳ **未部署** v3619（用户要求）：**浮窗「建筑」分类按对照表重做** —— 用户指出浮窗建筑未取用他已完整校对的对照表（`tmp/_zh_audit.html` = **类族汉化对照表 v3494**，列：类族 / 次数 / **归类** / **最终中文名** / **图标键**；数据源 Isl 存档 24276 条，仅列 kind=structure/other 类族）。处理：① **清掉**词典 `汉化/item_zh.json` 中全部 `kind=structure`（**389 条**，含 v3618 打的 77 条 skin 标记）② **以对照表「归类=建筑」234 条为唯一清单重建**（`zh` = 最终中文名、`icon` = 图标键、`kind` = structure、`n` = 次数、`src=zh_audit_v3494`、`zev` = 表行号溯源；表2 的 92 条为材质分组视图，已验证 ⊂ 表1 建筑）③ en **不复用原词典残缺值**（原为 `Stone`/`Metal`/`Turret`/`Tree` 等截断名）⇒ 改为 **icon_zh_map 权威英文名（99 条）→ 类族拆词（135 条）**，并对 en 撞车组回退拆词（保证 en 唯一，防前端 en 归一跨组去重吞条；实测重复组 **0**）⇒ 词典 1835 → **1680** 键、structure = **234 条**（161 条表外建筑删除、30 条表内条目新补）；皮肤判据保留（清单无 Skin 条目，作兜底）
+// ✅ **已部署并线上验证**（Version ID a6f8bc6f-bfb2-4f37-9071-f40364ba8c39，线上 v20260922-3620；清 SW + Cache 实测：`lbItemNoHaveByKind().ammo` = **36 条**（样例 滑索 Zipline / 毒气手雷 / 腐蚀炮弹 / 高级步枪子弹 / 高级子弹 / 火焰箭 / 火箭吊舱 / 火箭 / 火炮弹丸 / 强化火炮弹丸 …）；`lbPickerBuildItemOther()` 分组标题实测顺序 = **资源(#f59e0b) → 弹药(#f87171) → 消耗品(#fb923c) → 蛋（未受精）(#facc15) → 附件(#22d3ee) → 战利品(#4ade80) → 染料(#c084fc)**；其它组计数 armor 70 / weapon 68 / resource 111 / consumable 89 / attachment 51 / trophy 100 / dye 129 / egg 46 / structure 232）v3620（用户要求）：**物品「其它」栏新增二级分组「弹药」** —— 词典 `kind=ammo` 共 **59 条原始键**（前缀双份，按 en 归一去重后约 **23 条**）此前因**不在 `byKind` 白名单被整条丢弃**（浮窗完全看不到：石箭 / 麻醉箭 / 火箭 / 金属箭 / 弩箭 / 火炮弹丸 / 加农炮弹 / 霰弹炮弹 / 高级子弹 / 制式狙击步枪子弹 / 麻醉镖 / 信息素镖 /灭火手榴弹 / 毒气手雷 / 烟雾弹 / 荧光棒 / 爪钩 / 流星锁链 / 巨石 / 沥青罐 / 全息诱饵 / 火焰喷射器 等）。改动 4 处：① `lbItemNoHaveByKind()` 的 `byKind` 加 `ammo:[]`；② `OTHER` 加 `ammo:1`（与「其它」栏同口径：**不过滤物种绑定**）；③ `lbPickerBuildItemOther()` 分组数组插入 `['ammo','弹药','#f87171']`（用户指定：位置 = **资源之后**、颜色 `#f87171` 红）；④ `lbPickerBuildItemNoHave()` 的 `_othN` 统计数组同步加 `'ammo'`；组内排序沿用 `lbItemSortKey`（主词中文拼音）
+// ⏳ **未部署** v3621（用户要求）：**词典 4 条 kind 修正**（让它们落进对应浮窗分组）—— `FishingNet`（渔网）空→`weapon` 落「武器」栏；`SaddleCart`（板车）空→`attachment` 落「附件」组；`Eatable_RhynioPheromone`（莱尼颚虫费洛蒙）空→`resource` 落「资源」组；`WeaponSpear_Explosive`（爆炸物）空→`ammo` 落「弹药」组（与 `PrimalItem_WeaponSpear_Explosive` 同 en，按 en 归一合并为 1 条）；`汉化/item_zh.json` 同时写入 `kev` 溯源字段（如「v3634 用户指定：kind None → weapon」）；版本递增目的 = 击穿 PWA 静态表缓存（`item_zh.json?v=LB_VERSION`，URL 随版本变化）
+// ✅ **已部署并线上验证**（Version ID 8183e7f7-c1d8-4a19-84a5-43455048404f，线上 v20260922-3622；复核：线上 HTTP 200 / `LB_VERSION` 一致；词典**未分类清零** —— `kind` 空 **0 条**、`other` **0 条**；重分类落位 weapon 26 / consumable 12 / resource 7 / egg 6 / ammo 5 / armor 3 / saddle 3 / structure 1 / trait 1 / blueprint 1；kind 分布 consumable 369 / structure 235 / resource 201 / trophy 192 / saddle 180 / armor 115 / trait 115 / weapon 110 / ammo 65 / attachment 65 / blueprint 24 / egg 6）v3622（用户要求）：**词典大规模重分类（65 条）** —— 用户口径：① **不允许 `other`**（原 6 条 other 全部重归类，`other` 清零）② **鞍 → `saddle`（不进浮窗）**（蒸汽朋克岩龙鞍 / 火狮鞍 / 星辰鲸泰克鞍；`SaddleCart` 板车按用户上轮指定仍为 `attachment`）③ **工具类一律算 `weapon`**（含军用水壶 / 水瓶 / 水袋等 9 条水具 + 望远镜 / 放大镜 / 剪刀 / 手铐 / 涂料刷 / 喷枪 / 标本工具 / 建筑剪贴板与锤子 / 绊线报警陷阱 / 基因扫描仪 / 信号枪 / 流星锤 / 回旋镖 / 火箭发射器 / 泰克望远镜 …）④ **受精蛋不进浮窗**（标 `egg`，靠既有 `en` 前缀 `Fertilized ` 规则隐藏）⑤ **未组装的 SIR 5RM8 与同系列一致 → `weapon`**（`Spawner_Enforcer` / `Spawner_Mek` 同为 weapon）⑥ 不展示类：`HotbarSkill_Base` → `trait`、`BountyPage` → `blueprint`。落位 = weapon **26** / consumable 12 / resource 7 / egg 6 / ammo 5 / armor 3 / saddle 3 / structure 1 / trait 1 / blueprint 1；词典 kind 分布（1680 键）：consumable 369 / structure 235 / resource 201 / trophy 192 / saddle 180 / armor 115 / trait 115 / weapon 110 / ammo 65 / attachment 65 / blueprint 24 / egg 6
+// ⏳ **未部署** v3623（用户要求）：**设施表并入词典（“item_zh 唯一源”第一步）** —— 根因：容器组走 `facility_zh.json`（`lbSettleFacMeta`）而物品浮窗枚举只遍历 `LB_ITEM_ZH` 的键（`lbItemNoHaveByKind`）⇒ 只在设施表的 108 个设施（含泰克克隆室）永远不进浮窗。处理：`汉化/item_zh.json` **新增 108 条**（键 = **设施基名** 如 `Grill`/`TekCloningChamber`，不编造 `PrimalItemStructure_` 前缀；`kind=structure`、`src=facility_zh`），**既有 1680 条一字未改**（备份 `bak/item_zh_pre3663_*.json`）；`facility_zh.json` / `facility_official.json` 与设施侧 13 处调用点**零改动** ⇒ 容器组零回归。验证：设施侧 225 条中 **170** 条与词典完全一致（其余多为 en 写法差异）、撞车项双通道可达（`Fridge`/`IceBox` 均=冰箱；`AutoTurret`=自动炮台 / `Turret`=炮塔）；31 条同 en 不覆盖（27 条本就同中文，4 条误撞车照常新增）。递增版本目的 = 击穿 PWA 静态表缓存（`item_zh.json?v=LB_VERSION`）
+// ⏳ **未部署** v3624（用户要求）：**设施侧主源切至 item_zh（“唯一源”第三步）** —— `lbSettleFacMeta` 新增开关 `LB_FAC_SRC = 'item'`：优先查 `LB_ITEM_ZH`，miss 时逐级回退 `facility_zh` → `facility_official` → `def[]` → 友好英文（**双保险可回滚**：改回 `'facility'` 即恢复 v3623 行为）。前置条件已离线验证：设施侧 224 条有效键在词典 **224/224 可达**、en 未对齐 **0**、icon 未对齐 **0**（脚本 `tmp/_v3668_fin.py`）；词典侧 v3623 已镜像 110 条设施（`src=facility_zh`），并对齐了 50 条 en / 5 条 icon，12 条 zh 冲突按用户裁决**全用词典侧**。
+// ⏳ **未部署** v3625（用户要求）：**Ramp_ 楼梯权威校正（3 条）** —— 背景：用户发现「Ramp_ 前缀实际是楼梯」（此前被我误作斜坡）。`汉化/item_zh.json`：`Ramp_Metal` 金属斜坡→**金属楼梯**（en `Ramp Metal`→`Metal Stairs`、icon `Metal_Ramp`→`Metal_Stairs`）｜ `Ramp_Stone` 石制斜坡→**石制楼梯**（`Stone Stairs` / `Stone_Stairs`）｜ `Ramp_Tek` 泰克斜坡→**泰克楼梯**（`Tek Stairs` / `Tek_Stairs`）；依据 = **官方 PO×JSON 逐条核实**（`PrimalItemStructure_Ramp_*` 官方 en = `X Stairs`）。⚠️ 设施表 `facility_official` 的 `Ramp_*`（官方 en = `X Ramp`）**按用户确认保持「斜坡 / 小斜坡 / 斜直角三角」不改**（同键名在两表语义不同）。另：生成器新增 `ICON_MANUAL` 人工图标映射（缺口表 `…_Ramp_Wood` → `Wood_Stairs_Icon`，因其官方名「Wooden Stairs」与图标键归一后不等）
+// ⏳ **未部署** v3626（用户要求）：**对照表缺·建筑类 20 条落地** —— 将 t1「中文+图标已定稿」的 20 条并入 `汉化/item_zh.json`（键=短名、kind=structure、src=gap_table_t1）：`SpotLight` 聚光灯 ｜ `Ramp_Wood` 木制楼梯 ｜ `Ramp_Adobe` 黏土楼梯 ｜ `TriCeiling_Wood` 木制三角天花板 ｜ `WoodCage` 木制笼子 ｜ `WoodSpikeWall` 木制拒马 ｜ `Metal_OceanPlatform` / `Wood_OceanPlatform` 海洋平台 ｜ `Furniture_Rug` 粗毛地毯 ｜ `TekFenceFoundation` 泰克栅栏地基 ｜ `AdobePillar` 黏土柱子 ｜ `RopeLadder` 绳梯 ｜ `TriRoof_Adobe` / `TriRoof_Tek` 三角屋顶 ｜ `WoodElevatorPlatform_Small` / `_Medium` / `WoodElevatorTrack` 木制电梯 ｜ `AdobeGateDoor_Large` 黏土巨兽恐龙门 ｜ `Flag_KingKaiju` 君王泰坦旗帜 ｜ `LargeWall_Wood` 大型木制墙；词典 1790 → **1810 键**；缺口表 t1 **33 → 13 条**、总表 320 → **300 行**
+// ⏳ **未部署** v3627（用户要求）：**缺口表其余部分（t2/t3/t4）双就绪条目落地 105 条** —— 质控分档（`tmp/_v3689_qc.py`）后落地：A 档 91 + B 档中经用户确认/属关键词误判者（「新联邦靴子」「那里!」经用户确认正确）；**排除 2 条**：`PrimalItemConsumable_Egg`（中文为 `Egg!` 英文原文）、`PrimalItemArmor_PearlShirt`（t4，中文仅「珍珠」）；跳过 2 条 kind 无法确定（`PrimalItem_FishBasketFilled` / `PrimalItem_Spawner_HoverSail_Main`）与 1 条生物类（`Exosuit_Character_BP`）；t2 的 `PrimalItemRadio`/`PrimalItemRaft` 词典已有键（`Radio`/`Raft`）故仅调 kind：`Raft` weapon → **structure**（`Radio` 本已 weapon）；落地内容以蛋类 37、结构件 29、鞍具 5、弹药 2 为主；词典 **1810 → 1915 键**（kind 空 **0** / other **0**）｜ 缺口表 **300 → 196 行**（t3 215 → 111）
+var LB_VERSION = 'v20260924-3880';
 var LB_SCHEMA_VER = 17;  // v3428：16→17 —— facilities 新增 isPublic（后端 2026-09-20 上线）+ 补采家族（耕地/船体/神器箱等 2454 条）、rec 新增 isPublic/isPlayerStruct；不升版 ⇒ 旧 IndexedDB 缓存继续命中，新设施与新字段永不出现
 // 历史：v1069 14→15——根因：recs 构建结果随 IndexedDB 持久化（v931）、
                          //   命中后跳过重建；仅改 _decorRe 等**构建期过滤**时，旧 rec 会长期残留（实测南瓜 rec 改过滤后仍显示）。
@@ -9169,28 +9182,49 @@ function lbTraitTierColor(cls){ return LB_TRAIT_TIER_COLOR[lbTraitTier(cls)] || 
 // v3580（用户口径：骨架只合并 Skeleton 前缀的；**两个地方都要合并**）：聚合键统一函数
 //   = lbItemMeta(raw).base（容器组原口径）；`Skeleton` 前缀（Skeleton_Raptor_01 / Skeleton_Trike_08 / Skeleton_Arm01 …）归并为同一件
 function lbItemAggKey(raw){
-  var m = null; try{ m = lbItemMeta(raw); }catch(e){ m = null; }
-  var k = (m && m.base) || String(raw || '').replace(/_C_\d+$/, '');
-  // v3584（v3583 回归修复）：骨架**必须短路 return** —— 78 个骨架词典 en 各不相同（Rex Skeleton / Trike Skeleton…），
-  //   若继续往下走 v3583 的 en 归一，「恐龙骨架」会被拆回 78 条（实测线上 恐龙骨架×78）
-  if(/^Skeleton/i.test(k)) return 'Skeleton';
-  k = k.replace(/^Dye_/, '');   // v3582：染料前缀双份（`Dye_X` 与 `X`）归并 —— 与 v3579「去前缀双键」同口径（两处共用）
-  // v3583（用户实测「金属锭/汽油还是重复」）：同一物品在词典里有多种键写法但 **en 完全相同**（MetalIngot/_FromMegaForge/PrimalItemResource_*…）
-  //   ⇒ 以词典 `en` 为归一身份（容器组 + 物品「其它」栏两处共用）；en 不同则视为不同物品（如 Horn / The Horn）
-  var _en = '';
+  // v3871（用户实测「浮窗重复更多了」根因修复）：
+  //   词典 2782 键里 1026 条带 alias，其中大量是**「自指完整类名」**形态（ArtifactCrate → PrimalItemStructure_ArtifactCrate、
+  //   Lamppost → PrimalItemStructure_Lamppost …），这类 alias 的用途是「完整类名 ↔ 短键」映射（存档类名反查），**不是同物双录归并**。
+  //   但 v3638 的实现把**任何** alias 一律当聚合键直接返回 ⇒ 每条各得一个**彼此不同**的键 ⇒ 同中文同英文完全无法合并
+  //   （实测：神器箱×10、城市终端×4、冰箱×3…共 117 组同名重复 / 69 组同英文重复）；
+  //   且无 alias 的键走 en 归一（`en:xxx`）与「有 alias 键」的键永不互通（Lamppost vs Light_Base 本该一条）。
+  // 修法：① alias **链解析到最终目标**（不中途返回）→ ② 统一用「en + zh」**内容键**归并（同 en 且同 zh 才合并，
+  //   避免把「电锯 / 咒缚电锯」这类中文不同的物品误合）。
+  // 保留：v3584 骨架短路（78 骨架 en 各异，走 en 归一会拆回 78 条）、v3582/v3613 染料前缀口径。
+  var _zh = LB_ITEM_ZH || {}, _r0 = String(raw || '');
+  function _resolveAct(x){
+    var cur = String(x || ''), g = 0;
+    while(g++ < 8){
+      var t = _zh[cur];
+      if(!(t && t.alias)) break;
+      var nx = String(t.alias);
+      if(!nx || nx === cur) break;
+      cur = nx;
+    }
+    return cur;
+  }
+  var _r = _r0;
   try{
-    var _zh = LB_ITEM_ZH || {}, _cs = [], _rawS = String(raw || '');
-    // v3613 修复：**原始键在词典中存在时优先用它取 en** —— 否则 `Dye_Crystal`（水晶蓝染料）剥 `Dye_` 后 base='Crystal'
-    //   会命中另一个物品「水晶(Crystal)」⇒ en 归一成同一键 ⇒ 被跨组去重丢弃（线上实测染料少 1 条）
-    if(_zh[_rawS]) _cs.push(_rawS);
-    if(k && k !== _rawS) _cs.push(k);
-    try{ if(typeof lbItemBaseCands === 'function') _cs = _cs.concat(lbItemBaseCands(raw) || []); }catch(e1){}
-    if(!_zh[_rawS]) _cs.push(_rawS);
-    for(var _i = 0; _i < _cs.length; _i++){ var _t = _zh[_cs[_i]]; if(_t && _t.en){ _en = String(_t.en).trim(); break; } }
-  }catch(e2){}
-  // v3613：en 归一前剥 `Dye ` 前缀 —— `Dye Red 1 Burn` 与 `Red 1 Burn` 是同一物品的两种写法（仍合并）；
-  //   `Crystal Coloring` 无 Dye 前缀 ⇒ 与「水晶 Crystal」保持区分
-  if(_en) k = 'en:' + _en.replace(/^Dye[\s_]+/i, '').trim().toLowerCase();
+    _r = _resolveAct(_r0);
+    var _mm = null; try{ _mm = lbItemMeta(_r); }catch(e2){}
+    var _bs = (_mm && _mm.base) || '';
+    if(_bs && _bs !== _r) _r = _resolveAct(_bs);
+  }catch(e0){}
+  var m = null; try{ m = lbItemMeta(_r); }catch(e){ m = null; }
+  var k = (m && m.base) || String(_r || '').replace(/_C_\d+$/, '');
+  if(/^Skeleton/i.test(k)) return 'Skeleton';
+  k = k.replace(/^Dye_/, '');
+  var _t0 = _zh[_r] || {};
+  var _en = String(_t0.en || '').trim(), _zn = String(_t0.zh || '').trim();
+  if(!_en && k && k !== _r){ var _tk = _zh[k] || {}; _en = String(_tk.en || '').trim(); if(!_zn) _zn = String(_tk.zh || '').trim(); }
+  if(!_en){
+    var _cs = [];
+    if(k) _cs.push(k);
+    try{ if(typeof lbItemBaseCands === 'function') _cs = _cs.concat(lbItemBaseCands(_r) || []); }catch(e1){}
+    _cs.push(_r); _cs.push(_r0);
+    for(var _i = 0; _i < _cs.length; _i++){ var _t = _zh[_cs[_i]]; if(_t && _t.en){ _en = String(_t.en).trim(); if(!_zn) _zn = String(_t.zh || '').trim(); break; } }
+  }
+  if(_en) return 'en:' + _en.replace(/^Dye[\s_]+/i, '').trim().toLowerCase() + '|zh:' + _zn;
   return k;
 }
 // v3586（用户要求）：物品 TAB 显示「全服拥有数量」—— 聚合键与容器组 / 物品栏同源（lbItemAggKey，含骨架归并 / en 归一）
@@ -14634,6 +14668,25 @@ function lbSettleFacMeta(cls){
   //   为何人工表在前：官方 `..InventoryNameOverride` 是**容器自称**，可能比设施名更泛/不准
   //   （实测反例：HeavyTurret 容器自称「自动炮塔」，而人工表是「重型自动炮台」；TrophyWall 容器自称「战利品底座」）。
   //   故 official 只**补表空缺**（如 AmmoContainer「弹药容器」、ArtifactCrate「上古神器」）。
+  // ⭐ v3624（用户要求「item_zh 唯一源」）：**主源切换开关**
+  //   'item'     = 先查 `LB_ITEM_ZH`（词典，已镜像 110 条设施 ⇒ en/icon 与设施侧 100% 对齐、zh 按用户裁决用词典侧）
+  //                miss 时**逐级回退**：facility_zh → facility_official → def[] → 友好英文（双保险，可随时回滚）
+  //   'facility' = 完全恢复 v3623 及之前的行为（设施侧只读 facility_*）
+  //   为何 item 可作主源：设施侧 224 条有效键在词典中 **224/224 可达**、en 未对齐 0、icon 未对齐 0（离线验证脚本 ` tmp/_v3668_fin.py`）
+  var LB_FAC_SRC = 'item';
+  if(LB_FAC_SRC === 'item'){
+    try{
+      if(!LB_ITEM_ZH || !Object.keys(LB_ITEM_ZH).length){ if(typeof lbItemZhLoad === 'function') lbItemZhLoad(); }
+      if(LB_ITEM_ZH && Object.keys(LB_ITEM_ZH).length){
+        var _ih = lbFacKeyFind(LB_ITEM_ZH, cls, function(v){ return !!(v && (v.zh || v.en || v.icon)); });
+        if(_ih && _ih.v && _ih.v.zh){
+          var _ib = _ih.k;
+          var _ieIcon = (_ih.v.icon && LB_ICON_BY_NAME[_ih.v.icon]) ? _ih.v.icon : (lbFacilityIconFind(_ib) || '');
+          return {key:'i_'+_ib, zh:_ih.v.zh, en:_ih.v.en || '', icon:_ieIcon, base:_ib};
+        }
+      }
+    }catch(eI){}
+  }
   if(LB_FACILITY_ZH && Object.keys(LB_FACILITY_ZH).length){
     var _fhit = lbFacKeyFind(LB_FACILITY_ZH, cls, function(v){ return !!(v && (v.zh || v.en || v.icon)); });
     var _b = _fhit ? _fhit.k : lbFacKeyStem(cls);
@@ -16832,8 +16885,8 @@ function lbItemNoHaveByKind(){
   // v3578（用户要求）：「其它」栏 4 类（resource/consumable/attachment/trophy）**不过滤物种绑定**（全量 742 条）；护甲/武器/泰克仍排物种绑定
   if(LB._itemNoHaveKeys) return LB._itemNoHaveKeys;
   var zh = LB_ITEM_ZH || {};
-  var byKind = { armor:[], weapon:[], tek:[], resource:[], consumable:[], attachment:[], trophy:[], dye:[], egg:[] };   // v3598：+egg（未受精蛋）
-  var OTHER = { resource:1, consumable:1, attachment:1, trophy:1, dye:1, egg:1 };
+  var byKind = { armor:[], weapon:[], tek:[], structure:[], facility:[], resource:[], ammo:[], consumable:[], attachment:[], trophy:[], dye:[], egg:[] };   // v3629：+facility（建筑栏二级分组）   // v3620：+ammo（弹药）   // v3598：+egg（未受精蛋）；v3616：+structure（建筑，独立折叠栏）
+  var OTHER = { resource:1, ammo:1, consumable:1, attachment:1, trophy:1, dye:1, egg:1, structure:1, facility:1 };   // v3629：+facility   // v3616：建筑与「其它」栏同口径（不过滤物种绑定）
   // v3579（用户要求：**完全复用容器组的去重方式**）：键 = `lbItemMeta(cls).base`，与 lbInvListHtml() 逐字同款（L9136-9140）
   //   ⇒ `X` 与 `PrimalItemResource_X` 等前缀双份收敛为同一 base（金属锭/煤炭 4→2），真实变体（_Super/_FromMegaForge/_01…_06）保留
   var _seen = {};
@@ -16847,6 +16900,15 @@ function lbItemNoHaveByKind(){
     // v3598（用户要求）：未受精蛋独立分组 —— **须在 kind 白名单检查之前**判定（Egg_Boa / Egg_Griffin 的 kind 为空，否则会被丢弃）
     if(lbEggIs(base, t)) k = 'egg';
     if(!byKind[k]) return;
+    // v3618（用户要求）：**建筑组过滤「皮肤」按「完整类名」判定** —— 判据源头 = 游戏完整类名 `PrimalItemStructureSkin_*`
+    //   （本地 `汉化/item_kind_all.json` 键即完整类名，共 71 条：命中词典者打 `skin:1`、缺失者补录 ⇒ 全表 77 条带标记）
+    //   ⇒ 覆盖 26 条 `Skin_*` + 6 条同名本体（`Tileset_*` / `ToF_Tileset`，完整类名为 `PrimalItemStructureSkin_Tileset_*`）
+    //   兜底：键以 `Skin_` 开头（PWA 旧缓存词典无 `skin` 字段时仍生效）
+    if(k === 'structure' && (t.skin || /^Skin_/i.test(String(base)))) return;
+    // v3679（用户要求）：**切换构件不列出** —— 斜坡/Spiral Stairs/CeilingWith*/WallWith* 等属构件切形（词典已打 switch:1）
+    if(t.switch) return;
+    // v3630（用户要求）：建筑栏二级分组 —— 设施（词典 src=facility_zh，来自设施表 110 键）与 构件（其余）
+    if(k === 'structure' && String(t.src || '') === 'facility_zh') k = 'facility';
     if(!OTHER[k] && lbIsSpeciesBound(base)) return;
     // v3581（用户要求）：染料独立分组（与消耗品同级）——中文名含「染料」者从 consumable 移出（词典里染料键名无规律：Misc_*/Yellow_*/Orange_*/Blue_*/Greyscale_* 等）
     // v3594（用户要求）：「染料」**本体**是特例 —— 词典键 `Dye`（zh 恰为「染料」/ en `Dyes`，kind=consumable）不是某种颜色，应留在消耗品组；
@@ -16904,21 +16966,23 @@ function lbItemNoHaveByKind(){
   return byKind;
 }
 function lbPickerBuildItemNoHave(){
-  ['armor','weapon'].forEach(function(k){ LB['_itemColHtml_' + k] = null; });   // v1374：重建时失效懒构建缓存
+  ['armor','weapon','structure'].forEach(function(k){ LB['_itemColHtml_' + k] = null; });   // v1374：重建时失效懒构建缓存；v3616：+structure
+  LB._itemStructHtml = null;                                                    // v3629：建筑栏二级分组缓存失效
   LB._itemOtherHtml = null;                                                     // v3578：同样失效「其它」栏缓存
   var by = {};
   try{ by = lbItemNoHaveByKind(); }catch(e){ by = {}; }
-  var labels = { armor:'护甲', weapon:'武器', tek:'泰克' };
+  var labels = { armor:'护甲', weapon:'武器', structure:'建筑', tek:'泰克' };   // v3616：+建筑
   var h = '';
-  ['armor','weapon'].forEach(function(k){
+  ['armor','weapon','structure'].forEach(function(k){   // v3616：建筑独立折叠栏（与护甲/武器并列，置于「其它」之前）
     var list = by[k] || [];
+    var cnt = (k === 'structure') ? (list.length + ((by['facility'] || []).length)) : list.length;   // v3629：建筑 = 设施 + 构件
     h += '<details class="lb-picker-collapse" id="lbItemCol_' + k + '" ontoggle="lbPickerLazyItemCol(this);lbPickerExtraSyncItem()">'
-      + '<summary>' + labels[k] + ' (<span id="lbItemColCnt_' + k + '">' + list.length + '</span>)</summary>' // v3575：标题去掉「未拥有」
+      + '<summary>' + labels[k] + ' (<span id="lbItemColCnt_' + k + '">' + cnt + '</span>)</summary>' // v3575：标题去掉「未拥有」
       + '<div class="lb-picker-grid" id="lbItemColGrid_' + k + '" data-kind="' + k + '"></div></details>';
   });
   // v3578（用户要求）：第 3 栏「其它」——结构/样式完全复用物种「特殊」栏（#lbExtra 同款 details+summary+grid+二级分组标题行）
   var _othN = 0;
-  ['resource','consumable','egg','attachment','trophy','dye'].forEach(function(k){ _othN += ((by[k] || []).length); });   // v3599：顺序对齐渲染（蛋在消耗品后）
+  ['resource','ammo','consumable','egg','attachment','trophy','dye'].forEach(function(k){ _othN += ((by[k] || []).length); });   // v3599：顺序对齐渲染（蛋在消耗品后）
   h += '<details class="lb-picker-collapse" id="lbItemCol_other" ontoggle="lbPickerLazyItemOther(this);lbPickerExtraSyncItem()">'
     + '<summary>其它 (<span id="lbItemColCnt_other">' + _othN + '</span>)</summary>'
     + '<div class="lb-picker-grid" id="lbItemColGrid_other" data-kind="other"></div></details>';
@@ -16948,6 +17012,7 @@ function lbPickerLazyItemCol(det){
   if(r) r.style.display='none';   // v3575：展开折叠区一律隐藏最近区（已拥有主网格已移除）
   var kind = grid ? String(grid.getAttribute('data-kind') || '') : '';
   if(kind === 'other'){ if(grid && !grid.innerHTML) grid.innerHTML = lbPickerBuildItemOther(); return; } // v3578：搜索全展开时会走这里构建「其它」栏
+  if(kind === 'structure'){ if(grid && !grid.innerHTML) grid.innerHTML = lbPickerBuildItemStruct(); return; }   // v3629：建筑栏二级分组（设施/构件）
   if(grid && !grid.innerHTML){
     var list = [];
     try{ list = lbItemNoHaveByKind()[kind] || []; }catch(e){}
@@ -16958,6 +17023,21 @@ function lbPickerLazyItemCol(det){
 }
 // v3578（用户要求）：物品页「其它」栏内容 —— **完全照抄物种「特殊」栏 lbPickerBuildExtra() 的二级分组写法**
 //   分组色值同源（#f59e0b / #fb923c / #22d3ee / #4ade80）；条目沿用物品页 lbPickerItemHtml（物品图标既定不反色）
+// v3629（用户要求）：物品页「建筑」栏 —— 二级分组 **设施 / 构件**（样式完全复用「其它」栏 lbPickerBuildItemOther 的标题行写法）
+function lbPickerBuildItemStruct(){
+  if(LB._itemStructHtml) return LB._itemStructHtml;
+  var by = {};
+  try{ by = lbItemNoHaveByKind(); }catch(e){ by = {}; }
+  var h = '';
+  [['facility','设施','#38bdf8'],['structure','构件','#a78bfa']].forEach(function(g){
+    var list = (by[g[0]] || []).slice();
+    if(!list.length) return;
+    h += '<div style="grid-column:1/-1;font-size:11px;color:' + g[2] + ';font-weight:600;padding:6px 0 2px;border-top:1px solid #2a2a3a;margin-top:2px">' + g[1] + '</div>';
+    list.forEach(function(base){ h += lbPickerItemHtml(g[0], base, base, lbItemOwnCnt(base)); });
+  });
+  LB._itemStructHtml = h;
+  return h;
+}
 function lbPickerBuildItemOther(){
   if(LB._itemOtherHtml) return LB._itemOtherHtml;
   var by = {};
@@ -16965,7 +17045,7 @@ function lbPickerBuildItemOther(){
   var h = '';
   // v3583（用户要求）：染料**移到最后** ⇒ 资源 → 消耗品 → 附件 → 战利品 → 染料
   // v3599（用户要求）：蛋分组移到「消耗品」与「附件」之间
-  [['resource','资源','#f59e0b'],['consumable','消耗品','#fb923c'],['egg','蛋（未受精）','#facc15'],['attachment','附件','#22d3ee'],['trophy','战利品','#4ade80'],['dye','染料','#c084fc']].forEach(function(g){
+  [['resource','资源','#f59e0b'],['ammo','弹药','#f87171'],['consumable','消耗品','#fb923c'],['egg','蛋（未受精）','#facc15'],['attachment','附件','#22d3ee'],['trophy','战利品','#4ade80'],['dye','染料','#c084fc']].forEach(function(g){
     var list = (by[g[0]] || []).slice();
     if(!list.length) return;
     if(g[0] === 'egg'){   // v3598（用户要求）：按饲料等级**依次排序**（用户口径：非凡 → 基础，高到低；同级按中文名）
