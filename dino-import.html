@@ -386,6 +386,12 @@ span.lb-fchip-rn:hover{border-color:#a78bfa!important;background:#22222f!importa
 #lbPickerRecent{flex:0 0 auto} /* v863：最近选择固定不压缩 */
 /* v1373（BUG 修复）：物品页与物种页同构——v1372 物品容器没接 flex 高度体系，面板 overflow:hidden 把超出内容直接裁掉 ⇒ 完全无法滚动 */
 #lbPickerRecentItem{flex:0 0 auto} /* v3575：物品「已拥有」主网格 CSS 全部移除 */
+.lb-picker-subhead{flex:0 0 auto;padding:12px 12px 6px 23px;margin:0;cursor:pointer;font-size:12px;color:#9ca3af} /* v3940：左内边距 23px = 折叠 summary 的 12px padding + 5px 三角 + 6px gap，实现文字左对齐 */ /* v3939（用户要求）：物品「公共设施」与物种「已拥有」共用小标题（样式完全一致） */
+#lbPubFacGrid{flex:1 1 auto;min-height:0}
+#lbPubFacGrid.lb-picker-grid-shrink{flex:0 1 auto;max-height:30vh;min-height:0}
+.lb-picker-panel[data-tab="item"] #lbPubFacHead[data-empty="0"]{display:block!important} /* v3943（用户要求）：小标题显隐只由「物品 TAB + 有数据」决定，折叠展开/任何第三方隐藏都不得遮住它 */
+.lb-picker-panel[data-tab="item"] #lbPubFacHead[data-empty="1"]{display:none!important}
+.lb-picker-panel[data-tab="sp"] #lbPubFacHead{display:none!important} /* v3941：与 #lbPickerGrid.lb-picker-grid-shrink 同款（折叠展开时主网格让位） */ /* v3939（用户要求）：公共设施网格结构/自适应完全照抄 #lbPickerGrid */
 #lbPickerRecent,#lbPickerRecentItem{padding:12px 12px 0} /* v3577（用户口径）：最近栏底部不留空白，紧贴下方折叠栏 */
 #lbItemColGrid_armor,#lbItemColGrid_weapon,#lbItemColGrid_tek{overflow-y:visible} /* 滚动交给 #lbItemExtra 容器 */
 #lbPickerRecentItem{scrollbar-width:thin;scrollbar-color:#3a3a4a transparent}
@@ -401,10 +407,10 @@ span.lb-fchip-rn:hover{border-color:#a78bfa!important;background:#22222f!importa
 .lb-picker-collapse[open]>.lb-picker-grid::-webkit-scrollbar-track{background:transparent}
 #lbPickerNoHaveGrid,#lbSpecialGrid,#lbExtraGrid{overflow-y:visible} /* v863：滚动交给 .lb-picker-extra 容器 */
 /* v864：物种浮窗极细滚动条（3px） */
-.lb-picker-extra,.lb-picker-extra .lb-picker-grid,#lbPickerGrid,#lbPickerRecent{scrollbar-width:thin;scrollbar-color:#3a3a4a transparent}
-.lb-picker-extra::-webkit-scrollbar,.lb-picker-extra .lb-picker-grid::-webkit-scrollbar,#lbPickerGrid::-webkit-scrollbar,#lbPickerRecent::-webkit-scrollbar{width:3px;height:3px}
-.lb-picker-extra::-webkit-scrollbar-thumb,.lb-picker-extra .lb-picker-grid::-webkit-scrollbar-thumb,#lbPickerGrid::-webkit-scrollbar-thumb,#lbPickerRecent::-webkit-scrollbar-thumb{background:#444;border-radius:2px}
-.lb-picker-extra::-webkit-scrollbar-track,.lb-picker-extra .lb-picker-grid::-webkit-scrollbar-track,#lbPickerGrid::-webkit-scrollbar-track,#lbPickerRecent::-webkit-scrollbar-track{background:transparent}
+.lb-picker-extra,.lb-picker-extra .lb-picker-grid,#lbPickerGrid,#lbPickerRecent,#lbPubFacGrid{scrollbar-width:thin;scrollbar-color:#3a3a4a transparent}
+.lb-picker-extra::-webkit-scrollbar,.lb-picker-extra .lb-picker-grid::-webkit-scrollbar,#lbPickerGrid::-webkit-scrollbar,#lbPickerRecent::-webkit-scrollbar,#lbPubFacGrid::-webkit-scrollbar{width:3px;height:3px}
+.lb-picker-extra::-webkit-scrollbar-thumb,.lb-picker-extra .lb-picker-grid::-webkit-scrollbar-thumb,#lbPickerGrid::-webkit-scrollbar-thumb,#lbPickerRecent::-webkit-scrollbar-thumb,#lbPubFacGrid::-webkit-scrollbar-thumb{background:#444;border-radius:2px}
+.lb-picker-extra::-webkit-scrollbar-track,.lb-picker-extra .lb-picker-grid::-webkit-scrollbar-track,#lbPickerGrid::-webkit-scrollbar-track,#lbPickerRecent::-webkit-scrollbar-track,#lbPubFacGrid::-webkit-scrollbar-track{background:transparent}
 .lb-picker-item{display:flex;flex-direction:column;align-items:center;padding:8px 4px;border:2px solid transparent;border-radius:6px;cursor:pointer;transition:border .15s;text-align:center}
 .lb-picker-item:hover{border-color:#333;background:#15151f}
 .lb-picker-item.selected{border-color:#7c3aed;background:rgba(124,58,237,.12)}
@@ -600,7 +606,8 @@ var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // ⏳ **未部署** v3625（用户要求）：**Ramp_ 楼梯权威校正（3 条）** —— 背景：用户发现「Ramp_ 前缀实际是楼梯」（此前被我误作斜坡）。`汉化/item_zh.json`：`Ramp_Metal` 金属斜坡→**金属楼梯**（en `Ramp Metal`→`Metal Stairs`、icon `Metal_Ramp`→`Metal_Stairs`）｜ `Ramp_Stone` 石制斜坡→**石制楼梯**（`Stone Stairs` / `Stone_Stairs`）｜ `Ramp_Tek` 泰克斜坡→**泰克楼梯**（`Tek Stairs` / `Tek_Stairs`）；依据 = **官方 PO×JSON 逐条核实**（`PrimalItemStructure_Ramp_*` 官方 en = `X Stairs`）。⚠️ 设施表 `facility_official` 的 `Ramp_*`（官方 en = `X Ramp`）**按用户确认保持「斜坡 / 小斜坡 / 斜直角三角」不改**（同键名在两表语义不同）。另：生成器新增 `ICON_MANUAL` 人工图标映射（缺口表 `…_Ramp_Wood` → `Wood_Stairs_Icon`，因其官方名「Wooden Stairs」与图标键归一后不等）
 // ⏳ **未部署** v3626（用户要求）：**对照表缺·建筑类 20 条落地** —— 将 t1「中文+图标已定稿」的 20 条并入 `汉化/item_zh.json`（键=短名、kind=structure、src=gap_table_t1）：`SpotLight` 聚光灯 ｜ `Ramp_Wood` 木制楼梯 ｜ `Ramp_Adobe` 黏土楼梯 ｜ `TriCeiling_Wood` 木制三角天花板 ｜ `WoodCage` 木制笼子 ｜ `WoodSpikeWall` 木制拒马 ｜ `Metal_OceanPlatform` / `Wood_OceanPlatform` 海洋平台 ｜ `Furniture_Rug` 粗毛地毯 ｜ `TekFenceFoundation` 泰克栅栏地基 ｜ `AdobePillar` 黏土柱子 ｜ `RopeLadder` 绳梯 ｜ `TriRoof_Adobe` / `TriRoof_Tek` 三角屋顶 ｜ `WoodElevatorPlatform_Small` / `_Medium` / `WoodElevatorTrack` 木制电梯 ｜ `AdobeGateDoor_Large` 黏土巨兽恐龙门 ｜ `Flag_KingKaiju` 君王泰坦旗帜 ｜ `LargeWall_Wood` 大型木制墙；词典 1790 → **1810 键**；缺口表 t1 **33 → 13 条**、总表 320 → **300 行**
 // ⏳ **未部署** v3627（用户要求）：**缺口表其余部分（t2/t3/t4）双就绪条目落地 105 条** —— 质控分档（`tmp/_v3689_qc.py`）后落地：A 档 91 + B 档中经用户确认/属关键词误判者（「新联邦靴子」「那里!」经用户确认正确）；**排除 2 条**：`PrimalItemConsumable_Egg`（中文为 `Egg!` 英文原文）、`PrimalItemArmor_PearlShirt`（t4，中文仅「珍珠」）；跳过 2 条 kind 无法确定（`PrimalItem_FishBasketFilled` / `PrimalItem_Spawner_HoverSail_Main`）与 1 条生物类（`Exosuit_Character_BP`）；t2 的 `PrimalItemRadio`/`PrimalItemRaft` 词典已有键（`Radio`/`Raft`）故仅调 kind：`Raft` weapon → **structure**（`Radio` 本已 weapon）；落地内容以蛋类 37、结构件 29、鞍具 5、弹药 2 为主；词典 **1810 → 1915 键**（kind 空 **0** / other **0**）｜ 缺口表 **300 → 196 行**（t3 215 → 111）
-var LB_VERSION = 'v20260924-3880';
+var LB_VERSION = 'v20260924-3988';
+try{ if(document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', function(){ try{ lbMatLoad(); }catch(e){} }); } else { lbMatLoad(); } }catch(e){}
 var LB_SCHEMA_VER = 17;  // v3428：16→17 —— facilities 新增 isPublic（后端 2026-09-20 上线）+ 补采家族（耕地/船体/神器箱等 2454 条）、rec 新增 isPublic/isPlayerStruct；不升版 ⇒ 旧 IndexedDB 缓存继续命中，新设施与新字段永不出现
 // 历史：v1069 14→15——根因：recs 构建结果随 IndexedDB 持久化（v931）、
                          //   命中后跳过重建；仅改 _decorRe 等**构建期过滤**时，旧 rec 会长期残留（实测南瓜 rec 改过滤后仍显示）。
@@ -4440,7 +4447,8 @@ async function lbLoad(servers, oldData, onProgress){ // v207：onProgress({phase
             //   ⇒ 前端**显式排除**，代替原先隐式的 `!f.tribeId`（语义明确，不再依赖“恰好 tribeId=0”）。
             //   ⚠ 禁止用 `isPlayerStructure===0` 反推公共：它同时盖住自然物以外的其它情况，口径不唯一。
             var _pub = (f.isPublic === 1) ? 1 : 0;
-            if(_pub) return;                                          // 公共设施 / 自然生成物：不进聚落设施清单（口径待定，见报告第五节）
+            if(!_pub){ try{ _pub = lbIsPubFacKey(_cc) ? 1 : 0; }catch(e){} }  // v3939（用户要求）：对照表口径兜底（C 段宝箱/补给箱后端标 isPublic=0 也要显示）
+            if(_pub){ try{ lbPubFacAdd(abbr, f); }catch(e){} return; }  // v3933（用户要求）：公共设施/自然生成物 → 并入物品浮窗「公共设施」列表（仍不进聚落设施清单）
             if(_decorRe.test(_cc) && !_decorKeepRe.test(_cc)) return; // 装饰类：不生成 rec（纯显示排除）；生产设施豁免
             if(!(Number(f.x)||Number(f.y))) return; // 无坐标跳过（蓝图/未放置）
             if(!f.tribeId) return; // 无部落跳过（兜底：数据异常 / 存档未写归属，如实测 13 条 *ShipPlayerFollowingBP）
@@ -9295,7 +9303,10 @@ function lbZhKeysByCanon(){
   LB._zhCanonRev = m; LB._zhCanonRevN = n;
   return m;
 }
+var LB_OWN_CNT_MEMO = {};   // v3955（用户要求）：数量查询记忆化（同 cls 直返，消除首屏 400 次重复计算）
 function lbItemOwnCnt(cls, asObj){
+  var _mk = String(cls || '') + (asObj ? '|o' : '');
+  if(LB_OWN_CNT_MEMO[_mk] !== undefined) return LB_OWN_CNT_MEMO[_mk];
   var n = 0, svc = 0;
   try{
     var m = lbItemOwnIndex(), ks = [];
@@ -9307,7 +9318,9 @@ function lbItemOwnCnt(cls, asObj){
     }catch(e2){}
     for(var i=0;i<ks.length;i++){ var g = m[ks[i]]; if(g && g.n){ n = g.n; svc = g.svc; break; } }
   }catch(e3){}
-  return asObj ? { n:n, svc:svc } : n;
+  var _r = asObj ? { n:n, svc:svc } : n;
+  LB_OWN_CNT_MEMO[_mk] = _r;
+  return _r;
 }
 function lbInvListHtml(items, opts){
   if(!items || !items.length) return '';
@@ -15655,6 +15668,16 @@ function lbAntiPreset(url, cat){
   return null;
 }
 // dark 主题下 preset==='dark' 的图标需要反色（本页固定 dark，theme='dark'；按图标实际分类查预设）
+// v3948（用户要求）：物品/建筑栏图标反色 —— 按**图标名**判定（物品图标常走缩略图 URL，与原图 URL 不可比），
+//   其次回退到 URL 精确匹配（files）；未命中即不反色（不按 biology 类别误反色）
+function lbIconFilterStyleByName(iconName, url){
+  try{
+    var p = LB_ANTI || {};
+    if(p.names && iconName && p.names[iconName]) return (p.names[iconName].original === 'dark') ? ' style="filter:invert(1)"' : '';
+    if(p.files && url && p.files[url]) return (p.files[url].original === 'dark') ? ' style="filter:invert(1)"' : '';
+  }catch(e){}
+  return '';
+}
 function lbIconFilterStyle(url, cat){
   var c = (LB_ICON_CAT && LB_ICON_CAT[url]) || cat || 'biology';
   return (lbAntiPreset(url,c)==='dark') ? ' style="filter:invert(1)"' : '';
@@ -15870,6 +15893,7 @@ function lbOpenSpeciesPicker(){
       });
       html+='</div>';
     }
+    html+='<div class="lb-picker-subhead" id="lbPickOwnedHead" onclick="lbPickerFoldAll()" title="点击折叠全部">已拥有 (<span id="lbPickOwnedCnt">0</span>)</div>'; // v3939（用户要求）：已拥有补小标题+数量（与公共设施同款）
     html+='<div class="lb-picker-grid" id="lbPickerGrid">';
     // v1269：图标换 RW_Change_to_Cube（GUI/RW_Change_to_Cube.png → thumbs/webp96/2dbf96da195c_w96.webp）
     //   注：该键当前不在 LB_ICON_BY_NAME（706 项映射表）中，故保留映射查询 + thumb 直连兜底
@@ -15974,6 +15998,7 @@ function lbOpenSpeciesPicker(){
     html+='<div class="lb-picker-grid" id="lbExtraGrid"></div></details>';
     html+='</div>'; // v863：关闭 .lb-picker-extra
     html+='<div class="lb-picker-grid" id="lbPickerRecentItem" style="display:none;overflow-y:visible"></div>'; // v1372：物品页「最近选择」区；v1373：容器本身即网格；v3577：去掉底边线与下边距
+    html+='<div class="lb-picker-subhead" id="lbPubFacHead" style="display:none" onclick="lbPickerFoldAll()" title="点击折叠全部">公共设施 (<span id="lbPubFacCnt">0</span>)</div><div class="lb-picker-grid" id="lbPubFacGrid" style="display:none"></div>'; // v3933（用户要求）：恢复被 v3575 移除的区块位，内容改为「公共设施」（后端 isPublic=1；不进聚落设施清单）
     html+='<div class="lb-picker-extra" id="lbItemExtra" style="display:none"></div>'; // v1373：物品页折叠区（护甲/武器/泰克）；v3575：不再区分已拥有
     html+='</div>';
     overlay.innerHTML=html;
@@ -15982,6 +16007,17 @@ function lbOpenSpeciesPicker(){
   });
 }
 // v864：任一折叠展开 → 已驯收缩 30vh、非已驯折叠区占满剩余高度；全收起恢复已驯占满
+// v3941（用户要求）：点「已拥有 / 公共设施」小标题 → 折叠所有已展开的折叠区（各 details 的 ontoggle 会自行复原主区）
+function lbPickerFoldAll(){
+  var n = 0;
+  document.querySelectorAll('.lb-picker-overlay details.lb-picker-collapse').forEach(function(d){ if(d.open){ d.open = false; n++; } });
+  setTimeout(function(){
+    try{ lbPickerExtraSync(); }catch(e){}
+    try{ lbPickerExtraSyncItem(); }catch(e){}
+    try{ lbPickerFoldLayout(); }catch(e){}
+  }, 30);
+  return n;
+}
 function lbPickerExtraSync(){
   var ex = document.getElementById('lbSpExtra');
   var dets = ex ? ex.querySelectorAll('details') : document.querySelectorAll('.lb-picker-extra details');
@@ -15997,7 +16033,7 @@ function lbPickerExtraSync(){
 // v1373：覆盖物品页容器（#lbItemPickGrid / #lbItemExtra），并跳过隐藏容器
 function lbPickerFitScroll(){
   var els=[];
-  ['lbPickerGrid','lbSpExtra','lbItemExtra'].forEach(function(id){ var e=document.getElementById(id); if(e) els.push(e); }); // v3575：去 lbItemPickGrid
+  ['lbPickerGrid','lbSpExtra','lbItemExtra','lbPubFacGrid'].forEach(function(id){ var e=document.getElementById(id); if(e) els.push(e); }); // v3575：去 lbItemPickGrid
   els.forEach(function(el){
     if(el.style.display === 'none') return;
     var prev=el.style.maxHeight;
@@ -16021,7 +16057,7 @@ function lbPickerFoldLayout(){
     var gs = ex.querySelectorAll('.lb-picker-collapse .lb-picker-grid');
     for(var i=0;i<gs.length;i++){ if(gs[i].style.maxHeight){ gs[i].style.maxHeight=''; gs[i].style.overflowY=''; } }
   });
-  ['lbPickerGrid'].forEach(function(id){ var mg=document.getElementById(id); if(mg && mg.getAttribute('data-fold-shrink') === '1'){ mg.style.maxHeight=''; mg.removeAttribute('data-fold-shrink'); } }); // v3574：撤销上一轮让位，避免永久 15vh（v3575：物品页已无主网格）
+  ['lbPickerGrid','lbPubFacGrid'].forEach(function(id){ var mg=document.getElementById(id); if(mg && mg.getAttribute('data-fold-shrink') === '1'){ mg.style.maxHeight=''; mg.removeAttribute('data-fold-shrink'); } });   // v3940：公共设施网格同步撤销 // v3574：撤销上一轮让位，避免永久 15vh（v3575：物品页已无主网格）
   exs.forEach(function(ex){
     if(!ex || ex.style.display === 'none') return;
     function measure(){
@@ -16046,10 +16082,11 @@ function lbPickerFoldLayout(){
     var m = measure();
     if(!m.opens.length) return;                      // 全收起 → 走原有 30vh 逻辑
     var per = m.allow / m.opens.length;
-    var main = (ex.id === 'lbItemExtra') ? null : document.getElementById('lbPickerGrid'); // v3575：物品页已无「已拥有」主网格 ⇒ 不参与让位
-    if(per < 150 && main && getComputedStyle(main).display !== 'none'){
-      main.style.maxHeight = '15vh';                 // ② 空间不足 → 主网格自动让位（30vh → 15vh）
-      main.setAttribute('data-fold-shrink', '1');
+    // v3940（用户要求）：让位覆盖两个主网格（「已拥有」与「公共设施」，各自小标题固定不压缩）
+    var mains = [];
+    ['lbPickerGrid','lbPubFacGrid'].forEach(function(id){ var mg = document.getElementById(id); if(mg && getComputedStyle(mg).display !== 'none') mains.push(mg); });
+    if(per < 150 && mains.length){
+      mains.forEach(function(mg){ mg.style.maxHeight = '15vh'; mg.setAttribute('data-fold-shrink', '1'); });   // ② 空间不足 → 主网格自动让位（30vh → 15vh）
       m = measure(); per = m.allow / m.opens.length;
     }
     per = Math.max(60, Math.floor(per - 8));         // ③ 均分（留 8px 舍入余量，下限 60px 保内容可辨）
@@ -16061,8 +16098,9 @@ window.addEventListener('resize', function(){ try{ lbPickerFitScroll(); lbPicker
 function lbPickerHideBlankZones(){
   var ov = document.querySelector('.lb-picker-overlay'); if(!ov) return;
   var stale = ov.querySelector('#lbItemPickGrid'); if(stale) stale.remove();   // v3575 已删元素，防旧缓存/注入残留
-  ['lbPickerRecent','lbPickerGrid','lbPickerRecentItem'].forEach(function(id){
+  ['lbPickerRecent','lbPickerGrid','lbPickerRecentItem','lbPubFacGrid'].forEach(function(id){
     var e = document.getElementById(id); if(!e) return;
+    if(id === 'lbPickerGrid'){ var _oc = document.getElementById('lbPickOwnedCnt'); if(_oc) _oc.textContent = String(e.querySelectorAll('.lb-picker-item').length); }   // v3939：已拥有数量同步
     if(e.style.display === 'none') return;                       // 已隐藏的不动（TAB 负责）
     var has = false, ks = e.children;
     for(var i=0;i<ks.length;i++){ if(ks[i].style.display !== 'none'){ has = true; break; } }
@@ -16633,13 +16671,16 @@ function lbPickerLazyExtra(el){
 function lbPickerTab(t){
   LB._pickerTab = t;
   var isItem = (t === 'item');
+  var _pnl = document.querySelector('.lb-picker-panel'); if(_pnl) _pnl.setAttribute('data-tab', t);   // v3943：CSS 侧据此锁定「公共设施」小标题显隐
   var rc = document.getElementById('lbPickerRecent');
   var sp = document.getElementById('lbPickerGrid');
+  var ohd = document.getElementById('lbPickOwnedHead');   // v3940：物品 TAB 时「已拥有」小标题不得占位（BUG 修复）
   var ex = document.getElementById('lbSpExtra');
   var rci = document.getElementById('lbPickerRecentItem');
   var iec = document.getElementById('lbItemExtra');
   if(rc) rc.style.display = isItem ? 'none' : '';
   if(sp) sp.style.display = isItem ? 'none' : '';
+  if(ohd) ohd.style.display = isItem ? 'none' : '';
   if(ex) ex.style.display = isItem ? 'none' : '';
   // v1372（BUG 修复）：切回物种时必须**恢复三个折叠区**——v1370 物品分支把它们设为 display:none，
   //   而 lbPickerTab 只恢复了最近区/主网格/折叠容器 ⇒ 切回后「未驯/变体/特殊」永久消失（用户实测缺陷）
@@ -16661,6 +16702,12 @@ function lbPickerTab(t){
       iec.style.display = '';
     } else iec.style.display = 'none';
   }
+  // v3933/v3939（用户要求）：物品页「公共设施」块（仅物品 TAB 显示；无数据自隐；结构与已拥有一致）
+  var _pfh = document.getElementById('lbPubFacHead');
+  var _pfg = document.getElementById('lbPubFacGrid');
+  if(_pfh) _pfh.style.display = 'none';
+  if(_pfg) _pfg.style.display = 'none';
+  if(isItem){ var _pok = false; try{ _pok = lbPubFacRender(); }catch(e){ _pok = false; } if(_pfh) _pfh.style.display = _pok ? '' : 'none'; }
   document.querySelectorAll('.lb-pickertab').forEach(function(e){
     var on = (e.getAttribute('data-t') === t);
     e.style.background = on ? '#7c3aed' : '#22222c';
@@ -16721,6 +16768,7 @@ function lbNbZh(s){
   return String(s == null ? '' : s).replace(/([（(][^（()）]{1,40}[）)])/g, '<span class="lb-pk-nb">$1</span>');
 }
 function lbPickerItemHtml(kind, base, cls, cnt){
+  if(!lbRuleVisible(base)) return '';   // v3979（用户要求）：**渲染即拦** —— 列表/搜索/最近区/待制作 任何入口都拦得住，DOM 缓存无从绕过
   var mm = null; try{ mm = lbItemMeta(cls || base); }catch(e){}
   var zh = (mm && mm.zh) || base;
   var en = (mm && mm.en) || '';
@@ -16737,7 +16785,7 @@ function lbPickerItemHtml(kind, base, cls, cnt){
   }catch(e0){}
   var _sel = (LB.pickItem && LB.pickItem.kind === kind && LB.pickItem.base === base) ? ' selected' : '';
   return '<div class="lb-picker-item' + _sel + '" data-cls="item:' + lbAttr(kind) + ':' + lbAttr(base) + '" onclick="lbPickerSelect(this)" title="' + lbAttr(zh) + '">'
-    + (_dyeDot ? '<div class="lb-picker-ic">' + _dyeDot + '</div>' : (url ? '<div class="lb-picker-ic"><img src="' + url + '" loading="lazy" onerror="lbImgRetry(this)"></div>' : '<div class="lb-picker-ic lb-picker-ic-none">?</div>'))
+    + (_dyeDot ? '<div class="lb-picker-ic">' + _dyeDot + '</div>' : (url ? '<div class="lb-picker-ic"><img src="' + url + '" loading="lazy"' + lbIconFilterStyleByName(String((mm && mm.icon) || ''), url) + ' onerror="lbImgRetry(this)"></div>' : '<div class="lb-picker-ic lb-picker-ic-none">?</div>'))
     + '<span class="lb-picker-name">' + lbNbZh(lbAttr(zh)) + '</span>'
     + _sub
     + (en ? '<span class="lb-picker-en">' + lbAttr(en) + '</span>' : '')
@@ -16783,6 +16831,101 @@ function lbEggLvHtml(base){
   var lv = null; try{ lv = lbEggLvOf(base); }catch(e){ lv = null; }
   if(!lv || !LB_EGG_LV[lv]) return '';
   return '<em class="lb-egg-lv" style="color:' + LB_EGG_LV[lv].c + '">' + LB_EGG_LV[lv].n + '</em>';
+}
+// v3968（用户口径）：建筑材质排序 —— **唯一数据源** = 部署的 lb_material.json（类型排序只用该文件，不允许其它来源）
+var LB_MAT_DOC = null;   // v3969：改用独立全局（原挂 LB 对象，页面早期 LB 未就绪会导致启动加载失效）
+function lbMatLoad(cb){
+  if(LB_MAT_DOC){ if(cb) cb(); return; }
+  try{
+    var _v = (typeof LB_VERSION !== 'undefined' ? LB_VERSION : '');
+    fetch('lb_material.json?v=' + encodeURIComponent(_v), { cache: 'no-cache' }).then(function(r){ return r.json(); }).then(function(j){
+      LB_MAT_DOC = j;
+      try{ LB._itemNoHaveKeys = null; LB._itemStructHtml = null; LB._itemOtherHtml = null; }catch(e){}
+      try{ lbMatRefreshPicker(); }catch(e){}   // v3977（用户要求）：名单到达后**自动重建**已渲染的浮窗列表
+      if(cb) cb();
+    }).catch(function(){ if(cb) cb(); });
+  }catch(e){ if(cb) cb(); }
+}
+// v3977（用户要求）：ASE 旧物品 / ASE 专属 过滤名单由 lb_material.json **异步**提供，而浮窗「建筑 / 其它」栏会先被构建并缓存
+//   ⇒ 名单到达后若只清缓存、不重建 DOM，名单里的物品仍会显示（须手动刷新/整段重建才消失）=「每次都像没过滤」
+//   本函数在名单就绪后重建 #lbItemExtra（列头计数 + 展开中的分组网格），使过滤**自动生效**
+function lbMatRefreshPicker(){
+  var ie = document.getElementById('lbItemExtra');
+  if(!ie || !ie.innerHTML) return;
+  ie.innerHTML = lbPickerBuildItemNoHave();
+  var dets = ie.querySelectorAll('details');
+  for(var i=0;i<dets.length;i++){
+    var det = dets[i];
+    if(!det.open) continue;                       // 只重绘展开中的分组（收起分组保持懒构建）
+    var g = det.querySelector('.lb-picker-grid');
+    if(!g) continue;
+    var kind = String(g.getAttribute('data-kind') || '');
+    if(kind === 'other'){ g.innerHTML = lbPickerBuildItemOther(); continue; }
+    if(kind === 'structure'){ g.innerHTML = lbPickerBuildItemStruct(); continue; }
+    var h = '';
+    try{ (lbItemNoHaveByKind()[kind] || []).forEach(function(b){ h += lbPickerItemHtml(kind, b, b, lbItemOwnCnt(b)); }); }catch(e){}
+    g.innerHTML = h;
+  }
+  try{ lbPickerExtraSyncItem(); }catch(e){}
+}
+// 返回 [材质优先级索引, -关键材料用量]；未收录者排最后（97），数据未就绪返回 98
+// v3971（用户口径）：ASE 旧物品 / ASE 专属 —— 早期过滤（名单来自 lb_material.json.asePurge，唯一数据源）
+function lbIsAsePurged(base){
+  var M = LB_MAT_DOC;
+  if(!M || !M.asePurge) return false;
+  return M.asePurge.indexOf(base) >= 0;
+}
+// v3981（用户口径）：**规则唯一源 = 词典 item_zh.json**（switch / ase 标记；表格与浮窗同源，不再读材质表）
+//   穹生键（同 lbItemAggKey 的短键与前缀键 = 同一件物品）**成组判定** —— 组内任一键带标记即整组隐藏
+var LB_RULE_HIDE = null, LB_RULE_HIDE_SRC = null;
+function lbRuleHideIdx(){
+  var zh = LB_ITEM_ZH || {};
+  if(LB_RULE_HIDE && LB_RULE_HIDE_SRC === zh) return LB_RULE_HIDE;
+  var idx = {};
+  // v3986（用户口径·方案A）：索引键由 lbItemAggKey 改为 lbCanonBase ——
+  //   根因：lbItemAggKey 用 en|zh 内容键归并，而「切换变体」(WithDoor/WithWindow/WithTrapdoor/Sloped/Double/Ramp/Stairs…)
+  //   与「本体」的游戏内显示名**完全相同** ⇒ 归成同键 ⇒ 变体带 switch 时把本体一起连坐隐藏（实测构件栏 128→104）。
+  //   改为规范短名后：MetalWallWithDoor(→同名) ≠ MetalWall ⇒ 本体保留；
+  //   而 PrimalItemStructure_MetalWall(→MetalWall) 仍与本体重合 ⇒ v3981「无标记前缀键补位」拦截能力不丢。
+  try{ for(var k in zh){ var t = zh[k] || {}; if(t.switch || t.ase){ idx[lbCanonBase(k)] = 1; } } }catch(e){}
+  LB_RULE_HIDE = idx; LB_RULE_HIDE_SRC = zh;
+  return idx;
+}
+function lbRuleOf(base){
+  var t = (LB_ITEM_ZH || {})[base] || {};
+  if(t.ase) return 'ase';
+  if(t.switch) return 'switch';
+  try{ if(lbRuleHideIdx()[lbCanonBase(base)]) return 'aseOrSwitch'; }catch(e){}   // v3986（方案A）：查索引键与建索引键一致（同用 lbCanonBase）
+  return 'show';
+}
+function lbRuleVisible(base){ return lbRuleOf(base) === 'show'; }
+function lbMatRank(base){
+  // v3983（用户口径）：返回 [材质档, 材料聚合键, -关键材料用量]
+  //   ① 「未收录」（detail 为空）单独一档 99 ⇒ **排在所有材质之后**
+  //   ② 材料聚合键 = detail 首段（用量最大）的材料名小写 ⇒ **同材料必然相邻**（如三条标本挂壁同为 Popsicle）
+  //   ③ 空聚合键（判不出材料名）在同档内排最后；数据未就绪返回 98 档
+  var M = LB_MAT_DOC;
+  if(!M || !M.items) return [98, '', 0];
+  var it = M.items[base] || {};
+  var det = String(it.detail || '');
+  var mat = it.mat || '其它';
+  if(!det && mat === '其它') return [99, '', 0];   // 未收录 = 判不出材料且无配方（权威表条目有材料，不归此档）
+  var oi = (M.order || []).indexOf(mat);
+  // v3988（用户口径）：聚合键判据改为「**该档的关键材料**优先」（keyMat）——
+  //   电子元件（Electronics）等**不算主材**；原按配方首段取值，使 Tek 监控控制台首段 500 Electronics 被当作“主材”排在泰克档最前。
+  //   做法：在配方分段中**精确匹配**该档关键材料名（泰克=Element｜铁=Metal Ingot｜温室=Crystal｜石头=Stone｜黏土=Clay｜木头=Wood｜茅草=Thatch），命中即用它；未命中才回退首段材料名。
+  var gk = '';
+  try{
+    var kmv = (M.keyMat || {})[mat] || '';
+    if(kmv && det){
+      var segs = det.split('+');
+      for(var si = 0; si < segs.length; si++){
+        if(segs[si].replace(/^[\s\d.]+/, '').trim().toLowerCase() === kmv){ gk = kmv; break; }
+      }
+    }
+    if(!gk) gk = det.split('+')[0].replace(/^[\s\d.]+/, '').trim().toLowerCase();
+  }catch(e){}
+  return [oi < 0 ? 97 : oi, gk, -(Number(it.qty) || 0)];
 }
 // v3609（用户要求）：物品排序键 —— 与物种 `lbSortKey()` **同口径**：英文剥前缀 → 主体词（末词）→ 主词中文
 //   主词中文优先走 lbZhDeep()（与物种同一张词表，故蛋「Egg Argent」→ Argent → 阿根廷鹫，与物种表位置对应）；
@@ -16880,6 +17023,166 @@ function lbDyeOrderOf(base){
   if(f < 0){ f = 999; n = 9999; }                                // 未识别（如 Sky / Dyes）排最后
   return { f:f, n:n, zn:colorName };
 }
+// v3933（用户要求）：物品浮窗「公共设施」—— 数据源 = 后端 `isPublic===1`（公共设施 ∪ 自然生成物）
+//   口径与对照表「十一、公共设施」一致；**不进聚落设施清单/区域算法**（仅此块展示）
+//   用户口径：不分类、不带数量 ⇒ 每类一行（图标+中文+英文），悬停 tooltip 列出现过的服务器与类名
+// v3939（用户要求）：公共设施口径 = 对照表第十一章**全量**（A 后端口径 6 前缀 + B 自然生成物 + C 宝箱类）
+var LB_PUBFAC_PREFIX = ['ArtifactCrate','CityTerminal','PowerNode','SupplyCrate','PrimalStructure_CityTerminal','PrimalStructurePowerNode',
+  'TreasureCache_Small',
+  'BeaverDam','BeeHive'];   // v3952（用户要求）：移除 TekSecurityConsole（玩家设施）、Lootcrate_lvl1~3 与 TreasureMap_WildSupplyDrop（非公共设施）、LC_Outpost_*（任务物品）
+var LB_AUTH_EXTRA = ['TriRoof_Thatch','Ladder_Thatch','TriFoundation_Thatch','FenceFoundation_Thatch','AdobeGateDoor','AdobeFrameGate','AdobeLader','AdobeLadder','TrainTrack_Auto_Wood','RopeLadder','ElevatorTrackBase','ElevatorPlatformSmall','ElevatorPlatformMedium','ElevatorPlatformLarge','WoodElevatorTrack','WoodElevatorPlatform_Small','WoodElevatorPlatform_Medium','WoodElevatorPlatform_Large','WoodElevatorTopSwitch','AdobeRamp','MetalRamp','TekRamp','WoodRamp','Ramp_Stone_Stairs','Ramp_Tek_Stairs','TreePlatform_Wood','TreePlatform_Metal','Wood_CliffPlatform','Metal_CliffPlatform','Stone_CliffPlatform','Wood_OceanPlatform','Metal_OceanPlatform'];   // v3951（用户要求）：权威表漏掉的构件（茅草/黏土梯门、火车轨道、绳梯、电梯部件、Ramp、平台类 33 项）
+var LB_PUBFAC_SUFFIX = [];   // v3954（用户要求）：护航船改归「任务物品」，不再计入公共设施
+var LB_AUTH_STRUCT_BASE = ['AdobeCeiling','AdobeCeilingDoorGiant','AdobeCeilingWithTrapdoor','AdobeDoor','AdobeFenceFoundation','AdobeFloor','AdobeGateDoor_Large','AdobeGateframe_Large','AdobePillar','AdobeRailing','AdobeRoof','AdobeStaircase','AdobeWall','AdobeWallWithDoor','AdobeWallWithWindow','AdobeWall_Sloped_Left','AdobeWall_Sloped_Right','Ceiling_Door_XL_Metal','Ceiling_Door_XL_Tek','DoubleDoor_Adobe','DoubleDoor_Greenhouse','DoubleDoor_Metal','DoubleDoor_Stone','DoubleDoor_Tek','DoubleDoor_Wood','DoubleDoorframe_Adobe','DoubleDoorframe_Greenhouse','DoubleDoorframe_Metal','DoubleDoorframe_Stone','DoubleDoorframe_Tek','DoubleDoorframe_Wood','GreenhouseCeiling','GreenhouseDoor','GreenhouseRoof','GreenhouseWall','GreenhouseWallWithDoor','GreenhouseWall_Sloped_Left','GreenhouseWall_Sloped_Right','LargeWall_Adobe','LargeWall_Metal','LargeWall_Stone','LargeWall_Tek','LargeWall_Wood','MetalCeiling','MetalCeilingWithTrapdoor','MetalDoor','MetalFenceFoundation','MetalFloor','MetalGate','MetalGate_Large','MetalGateframe','MetalGateframe_Large','MetalLadder','MetalPillar','MetalRailing','MetalRoof','MetalStairs','MetalTrapdoorGiant','MetalWall','MetalWallWithDoor','MetalWallWithWindow','MetalWall_Sloped_Left','MetalWall_Sloped_Right','Railing_Thatch','Ramp_Adobe','Ramp_Metal','Ramp_Stone','Ramp_Tek','Ramp_Wood','StoneCeiling','StoneCeilingDoorGiant','StoneCeilingWithTrapdoor','StoneDoor','StoneFenceFoundation','StoneFloor','StoneGate','StoneGateLarge','StoneGateframe','StoneGateframe_Large','StoneLadder','StonePillar','StoneRailing','StoneRoof','StoneStairs','StoneWall','StoneWallWithDoor','StoneWallWithWindow','StoneWall_Sloped_Left','StoneWall_Sloped_Right','TekCeiling','TekCeilingDoor_Giant','TekCeilingWithTrapdoor','TekDoor','TekFenceFoundation','TekFloor','TekGate','TekGate_Large','TekGateframe','TekGateframe_Large','TekLadder','TekPillar','TekRailing','TekRoof','TekStairs','TekWall','TekWallWithDoor','TekWallWithWindow','TekWall_Sloped_Left','TekWall_Sloped_Right','ThatchCeiling','ThatchDoor','ThatchFloor','ThatchPillar','ThatchRoof','ThatchWall','ThatchWallWithDoor','ThatchWall_Sloped_Left','ThatchWall_Sloped_Right','TriCeiling_Adobe','TriCeiling_Greenhouse','TriCeiling_Metal','TriCeiling_Stone','TriCeiling_Tek','TriCeiling_Thatch','TriCeiling_Wood','TriFoundation_Adobe','TriFoundation_Metal','TriFoundation_Stone','TriFoundation_Tek','TriFoundation_Wood','TriRoof_Adobe','TriRoof_Greenhouse','TriRoof_Metal','TriRoof_Stone','TriRoof_Tek','TriRoof_Wood','Wall_Scaffolding','WoodCeiling','WoodCeilingDoorGiant','WoodCeilingWithTrapdoor','WoodDoor','WoodFenceFoundation','WoodFloor','WoodGate','WoodGate_Large','WoodGateframe','WoodGateframe_Large','WoodLadder','WoodPillar','WoodRailing','WoodRoof','WoodStairs','WoodWall','WoodWallWithDoor','WoodWallWithWindow','WoodWall_Sloped_Left','WoodWall_Sloped_Right'];   // v3948：来自 _ASA8类权威对照表.html（v3749）—— 「构件」只允许放这些建筑
+function lbIsAuthStruct(base){   // v3948（用户要求）：是否属 ASA 权威对照表内的建筑（构件）
+  try{
+    var k = String(base || '').split('.').pop();
+    k = k.replace(/^PrimalInventoryBP_/, '').replace(/^PrimalItem(Structure|Armor|Weapon|Resource|Trophy)?_/, '').replace(/_C(\d+)?$/, '');
+    return LB_AUTH_STRUCT_BASE.indexOf(k) >= 0 || LB_AUTH_EXTRA.indexOf(k) >= 0;   // v3951：并入 EXTRA
+  }catch(e){ return false; }
+}
+var LB_QUEST_KEYS = ['PrimalStructurePowerNode_Damaged','PowerNode_Damaged','LC_Outpost_LootStructureKey','LC_Outpost_RepairMaterials','BrigShipPlayerFollowingBP','SloopShipPlayerFollowingBP','TriremeShipPlayerFollowingBP'];   // v3954（用户要求）：任务物品（含护航船 ×3）
+function lbIsQuestKey(cls){
+  var c = String(cls || '').split('.').pop();
+  c = c.replace(/^PrimalInventoryBP_/, '').replace(/^PrimalItem(Structure|Armor|Weapon|Resource|Trophy)?_/, '').replace(/^PrimalStructure_/, '').replace(/_C(\d+)?$/, '');
+  return LB_QUEST_KEYS.indexOf(c) >= 0;
+}
+function lbIsPubFacKey(cls){
+  var c = String(cls || '').split('.').pop();
+  c = c.replace(/^PrimalInventoryBP_/, '').replace(/^PrimalItem(Structure|Armor|Weapon|Resource|Trophy)?_/, '');   // v3940：补 PrimalItem* 剥离（否则词典键取不全：39 → 74 键）
+  c = c.replace(/_C(\d+)?$/, '');
+  if(/_PlayerOwned/i.test(c)) return false;        // 玩家蜂巢 BeeHive_PlayerOwned 不算公共
+  if(LB_QUEST_KEYS.indexOf(c) >= 0) return false;  // v3952（用户要求）：任务物品不算公共设施
+  for(var i = 0; i < LB_PUBFAC_PREFIX.length; i++){ if(c.indexOf(LB_PUBFAC_PREFIX[i]) === 0) return true; }
+  for(var j = 0; j < LB_PUBFAC_SUFFIX.length; j++){ var _sf = LB_PUBFAC_SUFFIX[j]; if(c.length > _sf.length && c.slice(-_sf.length) === _sf) return true; }   // v3946：后缀匹配（护航系列）
+  return false;
+}
+function lbPubFacAdd(abbr, f){
+  var cls = String((f && f.class) || ''); if(!cls) return;
+  var base = cls;
+  if(/_C(_\d+)?$/.test(base)) base = base.replace(/_C(_\d+)?$/, '');      // v3935：带 _C / _C_123（实例号）
+  else if(/_C\d+$/.test(base)) base = base.replace(/_C\d+$/, '');          // v3935：形如 …_C1 的蓝图实例
+  else base = base.replace(/_\d+$/, '');                                   // v3935：无 _C ⇒ 末尾纯数字 = 实例号（…_Damaged_22 → …_Damaged）
+  var norm = base.replace(/^PrimalInventoryBP_/, '');
+  // v3982（用户口径）：**实例路径同样受规则约束** —— 任务物品（LB_QUEST_KEYS）与词典标记（switch/ase）一律不进公共设施
+  //   此前这里无判定 ⇒ 后端 isPublic=1 的任务物品实例（如 PrimalStructurePowerNode_Damaged）漏进公共设施块
+  try{ if(lbIsQuestKey(base) || lbIsQuestKey(norm) || !lbRuleVisible(base) || !lbRuleVisible(norm)) return; }catch(e0){}
+  var _key = norm;   // v3936：命中词典时改用词典键（供图标解析）
+  var m = LB._pubFac || (LB._pubFac = {});
+  if(m[norm]){ m[norm].sv[abbr] = (m[norm].sv[abbr] || 0) + 1; m[norm].cls[base] = 1; return; }   // v3951（用户要求）：累加数量
+  var zh = '', en = '', icon = '';
+  try{
+    var mt = lbItemMeta(norm) || {};
+    zh = mt.zh || ''; en = mt.en || ''; icon = mt.icon || '';
+    if(!zh && !en){ var m2 = lbItemMeta(base) || {}; zh = m2.zh || ''; en = m2.en || ''; icon = icon || m2.icon || ''; }
+    if(!zh){   // v3935/v3937：词典前缀兜底（英文已有但缺中文时也要找）（PowerNode → PrimalStructurePowerNode / CityTerminal → CityTerminal_BP）
+      var _K = Object.keys(LB_ITEM_ZH || {}), _hit = '';
+      for(var _i = 0; _i < _K.length; _i++){
+        var _k = _K[_i], _t = LB_ITEM_ZH[_k] || {};
+        if(!_t.zh && !_t.en) continue;
+        var _cb = (typeof lbCanonBase === 'function') ? String(lbCanonBase(_k) || '') : '';
+        if(_cb === norm || _cb === base || _k === norm || _k.indexOf(norm) === 0){
+          if(!_hit || _k.length < _hit.length) _hit = _k;
+        }
+      }
+      if(_hit){
+        var _te = LB_ITEM_ZH[_hit] || {};      // v3936：直接取词典条目（lbItemMeta 对短键可能只回 en）
+        zh = zh || _te.zh || ''; en = en || _te.en || ''; icon = icon || _te.icon || '';
+        _key = _hit;      // v3937：名称/图标统一走命中的词典键
+      }
+    }
+  }catch(e){}
+  if(!zh && !en) en = base.replace(/_/g, ' ');        // 兜底：如实显示类名（拆下划线，不脑补）
+  var e = { key:_key, zh:zh, en:en, icon:icon, sv:{}, cls:{} };
+  e.sv[abbr] = 1; e.cls[base] = 1;   // v3951：首个实例 = 1
+  m[norm] = e;
+}
+var LB_PUBFAC_LS = 'lbPubFacCache';   // v3955（用户要求）：公共设施数量本地记忆（打开即显示上次扫描结果）
+function lbPubFacLoad(){
+  if(LB._pubFacLoaded) return; LB._pubFacLoaded = 1;
+  try{
+    var j = JSON.parse(localStorage.getItem(LB_PUBFAC_LS) || '{}');
+    if(!j || !j.data || !j.ts || (Date.now() - j.ts) > 3 * 86400000) return;   // 超 3 天过期
+    var m = LB._pubFac || (LB._pubFac = {});
+    for(var k in j.data){ if(!m[k]) m[k] = j.data[k]; }
+  }catch(e){}
+}
+function lbPubFacSave(){
+  try{ localStorage.setItem(LB_PUBFAC_LS, JSON.stringify({ ts: Date.now(), n: Object.keys(LB._pubFac || {}).length, data: LB._pubFac || {} })); }catch(e){}
+}
+function lbPubFacRender(){
+  try{ lbPubFacLoad(); }catch(e0){}
+  var g = document.getElementById('lbPubFacGrid'); if(!g) return false;
+  var inst = LB._pubFac || {}, zh = LB_ITEM_ZH || {};
+  var cEl = document.getElementById('lbPubFacCnt');
+  // v3940（用户要求）：**词典全量**（对照表第十一章 A 后端口径 + B 自然物 + C 宝箱类）为主 —— **无论存档里有没有实例都要显示**；
+  //   同族键（X 与 PrimalItemStructure_X）按 _canon 归并；存档实例只用于附加「出现服务器」标注（未出现则标「存档中未出现」）
+  function _canon(p){
+    var c = String(p || '').split('.').pop();
+    c = c.replace(/^PrimalInventoryBP_/, '').replace(/^PrimalItem(Structure|Armor|Weapon|Resource|Trophy)?_/, '');
+    c = c.replace(/^PrimalStructure_/, '').replace(/_C(\d+)?$/, '');
+    return c;
+  }
+  var repo = {};
+  Object.keys(zh).forEach(function(k){
+    if(!lbIsPubFacKey(k)) return;
+    var v = zh[k] || {}; if(!v.zh && !v.en) return;
+    var cn = _canon(k);
+    if(!repo[cn]) repo[cn] = { key:k, zh:v.zh || '', en:v.en || '', icon:v.icon || '', sv:{} };
+    else if(!repo[cn].zh && v.zh){ repo[cn].zh = v.zh; repo[cn].en = repo[cn].en || v.en || ''; repo[cn].icon = repo[cn].icon || v.icon || ''; }
+  });
+  Object.keys(inst).forEach(function(nk){
+    var e = inst[nk] || {}, cn = _canon(nk);
+    // v3982（用户口径）：实例并入也要过同一道闸（与词典路径同口径）；并回查词典补 zh/en/icon（防中文变 slug、图标变 emoji）
+    try{ if(lbIsQuestKey(nk) || lbIsQuestKey(cn) || !lbRuleVisible(nk) || !lbRuleVisible(cn)) return; }catch(e1){}
+    if(!repo[cn]){
+      var _mt = null; try{ _mt = lbItemMeta(e.key || nk) || lbItemMeta(cn) || null; }catch(e2){}
+      repo[cn] = { key:e.key || nk, zh:e.zh || (_mt && _mt.zh) || '', en:e.en || (_mt && _mt.en) || '', icon:e.icon || (_mt && _mt.icon) || '', sv:{} };
+    }
+    var svs = Object.keys(e.sv || {});
+    for(var i = 0; i < svs.length; i++) repo[cn].sv[svs[i]] = (repo[cn].sv[svs[i]] || 0) + (e.sv[svs[i]] || 1);   // v3951（用户要求）：并入实例数量
+  });
+  var ks = Object.keys(repo);
+  var fhH = document.getElementById('lbPubFacHead');
+  if(!ks.length){ g.innerHTML = ''; g.style.display = 'none'; if(fhH) fhH.setAttribute('data-empty', '1'); if(cEl) cEl.textContent = '0'; return false; }   // v3943
+  if(fhH) fhH.setAttribute('data-empty', '0');   // v3943：有数据 ⇒ CSS 强制显示小标题
+  // v3955（用户要求）：按类型排序，神器放最后（城市终端 → 电力节点 → 货舱/补给 → 自然物 → 宝箱 → 其它 → 神器）
+  var _ORD = [['CityTerminal', 1], ['PowerNode', 2], ['SupplyCrate', 3], ['BeaverDam', 4], ['BeeHive', 4], ['TreasureCache', 5], ['ArtifactCrate', 9]];
+  function _pk(n){
+    n = String(n);
+    if(n === 'ArtifactCrate') return 8;   // v3956（用户要求）：神器箱排在「上古神器之X台座」之前
+    for(var _i = 0; _i < _ORD.length; _i++){ if(n.indexOf(_ORD[_i][0]) === 0) return _ORD[_i][1]; }
+    return 6;
+  }
+  ks.sort(function(a, b){
+    var pa = _pk(a), pb = _pk(b);
+    if(pa !== pb) return pa - pb;
+    var A = repo[a], B = repo[b];
+    return String(A.zh || A.en || a).localeCompare(String(B.zh || B.en || b), 'zh-Hans-CN');
+  });
+  var h = '';
+  ks.forEach(function(cn){
+    var e = repo[cn];
+    var label = (e.zh || e.en || cn);
+    var svs = Object.keys(e.sv).sort();
+    var _tot = 0; for(var _ti = 0; _ti < svs.length; _ti++){ _tot += (e.sv[svs[_ti]] || 0); }   // v3951（用户要求）：物件数量
+    var _cntH = _tot ? ('<span class="lb-picker-sub"><em class="lb-picker-cnt">' + _tot + '</em></span>') : '';
+    var _tipS = svs.length ? svs.map(function(kk){ return e.sv[kk] > 1 ? (kk + '×' + e.sv[kk]) : kk; }).join('/') : '存档中未出现';
+    var tip = label + (e.en ? (' | ' + e.en) : '') + ' | ' + cn + ' | ' + _tipS;
+    var u = '';
+    try{ if(e.icon) u = lbItemIconUrl(e.key) || ''; }catch(err){ u = ''; }
+    h += '<div class="lb-picker-item" title="' + tip.replace(/"/g, '&quot;') + '">'
+       + '<div class="lb-picker-ic">' + (u ? '<img src="' + u + '" loading="lazy" onerror="lbImgRetry(this)">' : '<span style="font-size:20px">🏛️</span>') + '</div>'
+       + '<span class="lb-picker-name">' + label + '</span>'
+       + _cntH
+       + (e.en ? '<span class="lb-picker-en">' + e.en + '</span>' : '')
+       + '</div>';
+  });
+  g.innerHTML = h;
+  g.style.display = ''; g.removeAttribute('data-blank-hide');   // v3938：渲染成功须自行复原显示
+  if(cEl) cEl.textContent = String(ks.length);
+  try{ lbPubFacSave(); }catch(e1){}   // v3955：落盘数量，供下次打开立即显示
+  return true;
+}
 function lbItemNoHaveByKind(){
   // v3575（用户要求）：物品页不再区分已拥有/未拥有 ⇒ 不再剔除已拥有（全量按 kind 分组）
   // v3578（用户要求）：「其它」栏 4 类（resource/consumable/attachment/trophy）**不过滤物种绑定**（全量 742 条）；护甲/武器/泰克仍排物种绑定
@@ -16904,11 +17207,36 @@ function lbItemNoHaveByKind(){
     //   （本地 `汉化/item_kind_all.json` 键即完整类名，共 71 条：命中词典者打 `skin:1`、缺失者补录 ⇒ 全表 77 条带标记）
     //   ⇒ 覆盖 26 条 `Skin_*` + 6 条同名本体（`Tileset_*` / `ToF_Tileset`，完整类名为 `PrimalItemStructureSkin_Tileset_*`）
     //   兜底：键以 `Skin_` 开头（PWA 旧缓存词典无 `skin` 字段时仍生效）
-    if(k === 'structure' && (t.skin || /^Skin_/i.test(String(base)))) return;
+    // v3890（用户要求）：皮肤类不参与物品浮窗（类名 Skin_ / PrimalItemStructureSkin_ 前缀，或 alias 指向皮肤键）
+    if(k === 'structure' && (t.skin || /^(Skin_|PrimalItemStructureSkin_)/i.test(String(base))
+                             || /^PrimalItemStructureSkin_/i.test(String(t.alias || '')))) return;
     // v3679（用户要求）：**切换构件不列出** —— 斜坡/Spiral Stairs/CeilingWith*/WallWith* 等属构件切形（词典已打 switch:1）
-    if(t.switch) return;
+    // v3892b（用户口径「只排本体键，但是要根据重名规则自动排除或不排除」）：
+    //   BaseBP 世界本体键（非 PrimalItem 前缀）——**仅当存在同 zh/en 的物品形式对偶键时才排除**
+    //   （对偶 = alias 指向的 PrimalItem* 键，或词典内任意同 zh/en 的 PrimalItem* 键；无对偶则保留为独立条目）
+    if(/BaseBP/.test(String(base)) && !/^PrimalItem/i.test(String(base))){
+      var _bal = String(t.alias || ''), _bav = zh[_bal] || {}, _bdup = false;
+      if(_bal && _bav && String(_bav.zh || '') === String(t.zh || '') && String(_bav.en || '') === String(t.en || '')) _bdup = true;
+      if(!_bdup){
+        for(var _bk in zh){
+          if(_bk !== base && /^PrimalItem/.test(_bk)
+             && String((zh[_bk] || {}).zh || '') === String(t.zh || '')
+             && String((zh[_bk] || {}).en || '') === String(t.en || '')){ _bdup = true; break; }
+        }
+      }
+      if(_bdup) return;
+    }
+    // v3981（用户口径）：隐藏项**必须占住去重位**，否则同物穹生键（PrimalItem*_ 前缀键）会补位渲染
+    // v3987（方案A 第 2 步）：占位键由 lbItemAggKey 改为 lbCanonBase ——
+    //   原用 aggKey（en|zh 内容键）占位时，同显示名的**切换变体**（如 Ramp_Metal: en=Metal Roof / zh=金属屋顶，
+    //   且词典位置更靠前）会先占位，把本体 MetalRoof 挤掉（实测 Roof 家族 Metal/Wood/Stone/Tek/Adobe 共 5 条整体消失）。
+    //   改后：隐藏项只占「规范短名」位 ⇒ 本体可正常入列；而 PrimalItemStructure_X 与本体重名 ⇒ v3981 拦截力不丢。
+    if(!lbRuleVisible(base)){ _seen[lbCanonBase(base)] = 1; return; }
+    if(lbIsQuestKey(base)) return;   // v3952（用户要求）：任务物品过滤（损坏的能量节点 / Loot-Key / 维修材料）
     // v3630（用户要求）：建筑栏二级分组 —— 设施（词典 src=facility_zh，来自设施表 110 键）与 构件（其余）
-    if(k === 'structure' && String(t.src || '') === 'facility_zh') k = 'facility';
+    // v3947（用户要求）：**构件只放 ASA 权威对照表中的建筑**（词典 zev 含「归类=建筑」，用户校对来源），其余 kind=structure 全部归「设施」
+    if(k === 'structure' && lbIsPubFacKey(base)) return;   // v3952（用户要求）：建筑栏剔除公共设施（源头加固，兼搜索/其它路径）
+    if(k === 'structure' && !lbIsAuthStruct(base)) k = 'facility';   // v3948（用户要求）：构件只放 ASA 权威对照表（_ASA8类权威对照表.html）内的建筑
     if(!OTHER[k] && lbIsSpeciesBound(base)) return;
     // v3581（用户要求）：染料独立分组（与消耗品同级）——中文名含「染料」者从 consumable 移出（词典里染料键名无规律：Misc_*/Yellow_*/Orange_*/Blue_*/Greyscale_* 等）
     // v3594（用户要求）：「染料」**本体**是特例 —— 词典键 `Dye`（zh 恰为「染料」/ en `Dyes`，kind=consumable）不是某种颜色，应留在消耗品组；
@@ -16916,9 +17244,10 @@ function lbItemNoHaveByKind(){
     // v3613：染料判定加「键以 `Dye_` 开头」—— 官方中文里个别染料名不含「染料」二字（如「蔚蓝色」= Celeste），
     //   仅按中文判定会漏进消耗品组（线上实测缺 1 条）
     if((String(t.zh || '').indexOf('染料') >= 0 || /^Dye_/.test(String(base))) && base !== 'Dye' && String(t.en || '') !== 'Dyes'){ k = 'dye'; }
-    var kb = _aggKey(base);
-    if(_seen[kb]) return;   // v3583：**跨分组**去重（同一物品因词典 kind 不一致分落两组时只保留先出现的，如 有机聚合物）
-    _seen[kb] = 1;
+    var kb = _aggKey(base), nb = lbCanonBase(base);
+    if(_seen[kb] || _seen[nb]) return;   // v3583：**跨分组**去重（同一物品因词典 kind 不一致分落两组时只保留先出现的，如 有机聚合物）
+                                         // v3987：同时按「规范短名」判重（让已隐藏项的短名占位能拦住同名前缀长键，而不同物品不再互相挤占）
+    _seen[kb] = 1; _seen[nb] = 1;
     byKind[k].push(base);
   });
   // v3609（用户要求）：排序 = **英文主体词的主词中文拼音**（完全对齐物种 `lbSortKey` 口径），主词相同再按完整中文
@@ -16957,6 +17286,20 @@ function lbItemNoHaveByKind(){
       return;
     }
     byKind[k].sort(function(a, b){
+      // v3968（用户口径）：建筑（设施/构件）按 lb_material.json 排序 —— 材质优先级 → 关键材料用量降序 → 中文名
+      // v3983（用户口径）：中间插一层**材料聚合键**（同材料相邻）＋「未收录」垫底；无材料名者在同档内排后
+      if(k === 'facility' || k === 'structure'){
+        var ra = lbMatRank(a), rb = lbMatRank(b);
+        if(ra[0] !== rb[0]) return ra[0] - rb[0];
+        var ga = String(ra[1] || ''), gb = String(rb[1] || '');
+        if(ga !== gb){
+          if(!ga) return 1;
+          if(!gb) return -1;
+          return ga < gb ? -1 : 1;
+        }
+        if(ra[2] !== rb[2]) return ra[2] - rb[2];
+        return coll.compare(String((zh[a]||{}).zh || a), String((zh[b]||{}).zh || b));
+      }
       var r = coll.compare(lbItemSortKey(a), lbItemSortKey(b));
       if(r) return r;
       return coll.compare(String((zh[a]||{}).zh || a), String((zh[b]||{}).zh || b));
@@ -16996,12 +17339,14 @@ function lbPickerLazyItemCol(det){
   if(!det) return;
   var grid = det.querySelector('.lb-picker-grid');
   var r = document.getElementById('lbPickerRecentItem');
+  var fh = document.getElementById('lbPubFacHead');   // v3941（用户要求）：物品页「主区」= 公共设施块（对齐物种页 #lbPickerGrid 的隐藏/恢复）
   if(!det.open){
     var anyOpen = false;
     var ds = document.querySelectorAll('#lbItemExtra details');
     for(var i0=0;i0<ds.length;i0++){ if(ds[i0].open){ anyOpen = true; break; } }
     if(!anyOpen){
-      if(r && r.innerHTML) r.style.display='';   // v3575：仅恢复最近区（已拥有主网格已移除）
+      if(r && r.innerHTML) r.style.display='';
+      if(fh){ var _ok1 = false; try{ _ok1 = lbPubFacRender(); }catch(e){ _ok1 = false; } fh.style.display = _ok1 ? '' : 'none'; }   // v3941：恢复主区
     }
     return;
   }
@@ -17009,7 +17354,13 @@ function lbPickerLazyItemCol(det){
     var ds2 = document.querySelectorAll('#lbItemExtra details');
     for(var i1=0;i1<ds2.length;i1++){ if(ds2[i1] !== det && ds2[i1].open) ds2[i1].open = false; }
   }
-  if(r) r.style.display='none';   // v3575：展开折叠区一律隐藏最近区（已拥有主网格已移除）
+  if(LB._pickerSearchMode){
+    if(r) r.style.display='none';                 // v3941：搜索时最近区隐藏、主区保持显示（对齐物种页）
+  } else {
+    if(r) r.style.display='none';
+    // v3942（用户要求）：展开折叠时**只让网格让位**，小标题必须保留可见（不得被遮住）
+    var fg2 = document.getElementById('lbPubFacGrid'); if(fg2) fg2.style.display='none';
+  }
   var kind = grid ? String(grid.getAttribute('data-kind') || '') : '';
   if(kind === 'other'){ if(grid && !grid.innerHTML) grid.innerHTML = lbPickerBuildItemOther(); return; } // v3578：搜索全展开时会走这里构建「其它」栏
   if(kind === 'structure'){ if(grid && !grid.innerHTML) grid.innerHTML = lbPickerBuildItemStruct(); return; }   // v3629：建筑栏二级分组（设施/构件）
@@ -17031,6 +17382,7 @@ function lbPickerBuildItemStruct(){
   var h = '';
   [['facility','设施','#38bdf8'],['structure','构件','#a78bfa']].forEach(function(g){
     var list = (by[g[0]] || []).slice();
+    try{ list = list.filter(function(base){ return !(lbIsPubFacKey(base) || ((LB._pubFac || {})[base])); }); }catch(e){}   // v3939（用户要求）：建筑栏剔除公共设施（已单独列出）
     if(!list.length) return;
     h += '<div style="grid-column:1/-1;font-size:11px;color:' + g[2] + ';font-weight:600;padding:6px 0 2px;border-top:1px solid #2a2a3a;margin-top:2px">' + g[1] + '</div>';
     list.forEach(function(base){ h += lbPickerItemHtml(g[0], base, base, lbItemOwnCnt(base)); });
@@ -17068,18 +17420,28 @@ function lbPickerLazyItemOther(det){
   if(!det) return;
   var grid = det.querySelector('.lb-picker-grid');
   var r = document.getElementById('lbPickerRecentItem');
+  var fh = document.getElementById('lbPubFacHead');   // v3941（用户要求）：对齐物种页主区处理
   if(!det.open){
     var anyOpen = false;
     var ds = document.querySelectorAll('#lbItemExtra details');
     for(var i0=0;i0<ds.length;i0++){ if(ds[i0].open){ anyOpen = true; break; } }
-    if(!anyOpen){ if(r && r.innerHTML) r.style.display=''; }
+    if(!anyOpen){
+      if(r && r.innerHTML) r.style.display='';
+      if(fh){ var _ok2 = false; try{ _ok2 = lbPubFacRender(); }catch(e){ _ok2 = false; } fh.style.display = _ok2 ? '' : 'none'; }
+    }
     return;
   }
   if(!LB._pickerSearchMode){
     var ds2 = document.querySelectorAll('#lbItemExtra details');
     for(var i1=0;i1<ds2.length;i1++){ if(ds2[i1] !== det && ds2[i1].open) ds2[i1].open = false; }
   }
-  if(r) r.style.display='none';
+  if(LB._pickerSearchMode){
+    if(r) r.style.display='none';
+  } else {
+    if(r) r.style.display='none';
+    // v3942（用户要求）：同上 —— 仅隐藏网格，保留小标题
+    var fg3 = document.getElementById('lbPubFacGrid'); if(fg3) fg3.style.display='none';
+  }
   if(grid && !grid.innerHTML) grid.innerHTML = lbPickerBuildItemOther();
 }
 // v1373：物品页折叠同步（物种页 lbPickerExtraSync 的同构版：展开任一折叠 → 主网格收缩 30vh）
@@ -17088,7 +17450,9 @@ function lbPickerExtraSyncItem(){
   var any = false;
   for(var i=0;i<dets.length;i++){ if(dets[i].open){ any = true; break; } }
   var ex = document.getElementById('lbItemExtra');
-  if(ex) ex.classList.toggle('lb-extra-open', any);   // v3575：物品页无「已拥有」主网格，不再收缩它
+  if(ex) ex.classList.toggle('lb-extra-open', any);
+  var fgc = document.getElementById('lbPubFacGrid');   // v3941（用户要求）：与物种页 #lbPickerGrid.lb-picker-grid-shrink 完全对齐
+  if(fgc) fgc.classList.toggle('lb-picker-grid-shrink', any);
   lbPickerFitScroll();
   try{ lbPickerFoldLayout(); }catch(e){} // v3574：收紧后再按均分限高（顺序不可颠倒）
 }

@@ -1,0 +1,399 @@
+# -*- coding: utf-8 -*-
+"""v3685：修缩略图绝对 URL（webp 优先 + 原图兜底）+ 实测可访问性"""
+import io, os, re, json, glob, html, urllib.request
+BASE = r'b:\项目\Hass ASA Server Monitor'
+ROOT = r'c:\Users\white\AppData\Roaming\Code\User\workspaceStorage\43242a1596343d780ce41c7fadeee32c\GitHub.copilot-chat\chat-session-resources'
+OUT = os.path.join(BASE, u'_浮窗重复项对照表_v3680.html')
+CF = 'https://dino.whiterober.ccwu.cc/'
+res = []
+def head(u):
+    try:
+        r = urllib.request.Request(u, method='HEAD', headers={'User-Agent': 'Mozilla/5.0'})
+        return urllib.request.urlopen(r, timeout=12).status
+    except Exception as e:
+        return str(e)[:40]
+# 实测两类 URL 可用性
+zh0 = json.load(io.open(BASE + u'\\汉化\\item_zh.json', encoding='utf-8'))
+wm0 = json.load(io.open(BASE + u'\\tmp\\webp_map.json', encoding='utf-8'))
+sample_wm = list(wm0.values())[0]
+res.append('【webp 直链】%s → %s' % (sample_wm, head(CF + sample_wm)))
+orig = [k for k in wm0 if k.startswith('http')][0]
+res.append('【原图直链】%s → %s' % (orig[-40:], head(orig)))
+# v3752（B方案）：本地重建浮窗清单 —— 复刻 lbItemNoHaveByKind() 的分组/过滤/去重逻辑
+#   起因：原先依赖 VS Code 会话快照 content.txt，该文件会被系统清理 ⇒ 表长期用过期数据
+_KINDS = ('armor', 'weapon', 'tek', 'structure', 'facility', 'resource', 'ammo',
+          'consumable', 'attachment', 'trophy', 'dye', 'egg')
+groups = dict((k, []) for k in _KINDS)
+_seen = {}
+for _b, _v in zh0.items():
+    if not isinstance(_v, dict):
+        continue
+    _k = str(_v.get('kind') or '')
+    if _k not in groups:
+        continue
+    if re.match(r'^Fertilized\s', str(_v.get('en') or ''), re.I):
+        continue
+    # v3890（用户要求）：皮肤类（Skin_ / PrimalItemStructureSkin_ 前缀，或 alias 指向皮肤键）不参与对照
+    if _k == 'structure' and (_v.get('skin') or re.match(r'^(Skin_|PrimalItemStructureSkin_)', _b)
+                              or re.match(r'^PrimalItemStructureSkin_', str(_v.get('alias') or ''))):
+        continue
+    # v3892b（用户口径「只排本体键，但是要根据重名规则自动排除或不排除」）：
+    #   BaseBP 世界本体键（非 PrimalItem 前缀）——**仅当存在同 zh/en 的物品形式对偶键时才排除**
+    #   （对偶 = alias 指向的 PrimalItem* 键，或词典内任意同 zh/en 的 PrimalItem* 键；无对偶则保留为独立条目）
+    if 'BaseBP' in _b and not _b.startswith('PrimalItem'):
+        _al = str(_v.get('alias') or '')
+        _av = zh0.get(_al) or {}
+        _dup = bool(_al) and bool(_av) \
+            and str(_av.get('zh') or '') == str(_v.get('zh') or '') \
+            and str(_av.get('en') or '') == str(_v.get('en') or '')
+        if not _dup:
+            for _k2, _v2 in zh0.items():
+                _v2 = _v2 or {}
+                if _k2 != _b and str(_k2).startswith('PrimalItem') \
+                   and str(_v2.get('zh') or '') == str(_v.get('zh') or '') \
+                   and str(_v2.get('en') or '') == str(_v.get('en') or ''):
+                    _dup = True
+                    break
+        if _dup:
+            continue
+    if _v.get('switch'):
+        continue
+    if _k == 'structure' and str(_v.get('src') or '') == 'facility_zh':
+        _k = 'facility'
+    if (u'染料' in str(_v.get('zh') or '') or re.match(r'^Dye_', _b)) and _b != 'Dye' and str(_v.get('en') or '') != 'Dyes':
+        _k = 'dye'
+    _agg = re.sub(r'^PrimalItem[A-Za-z]*_', '', _b)
+    if _seen.get(_agg):
+        continue
+    _seen[_agg] = 1
+    groups[_k].append(_b)
+ver = u'本地重建'
+res.append(u'【清单】本地重建 %d 条：%s' % (sum(len(v) for v in groups.values()),
+       ' '.join('%s=%d' % (k, len(groups[k])) for k in _KINDS)))
+zh = zh0
+icons = json.load(io.open(BASE + u'\\汉化\\icons2.json', encoding='utf-8'))
+iurl = {x.get('name'): x.get('url') for x in icons if isinstance(x, dict) and x.get('name')}
+iurl_l = {k.lower(): v for k, v in iurl.items() if k}
+wm = wm0
+cnt = {}
+cnset = set()
+for fn in glob.glob(os.path.join(BASE, 'tmp', '_itemcache', '*.json')):
+    d = json.load(io.open(fn, encoding='utf-8'))
+    for it in (d.get('items') or []):
+        c = re.sub(r'_C_\d+$', '', str(it.get('class') or ''))
+        cnt[c] = cnt.get(c, 0) + 1
+        if c:
+            cnset.add(c)
+P = re.compile(r'^PrimalItem[A-Za-z]*_')
+def stat(k):
+    b = P.sub('', k)
+    return cnt.get(k, 0) + cnt.get(b, 0) + cnt.get('PrimalItemStructure_' + b, 0)
+# v3721：完整类名（标准补全 + 存档实际）
+_PRE = ['PrimalItemConsumable_', 'PrimalItemStructure_', 'PrimalItemAmmo_', 'PrimalItemWeapon_',
+        'PrimalItemArmor_', 'PrimalItemResource_', 'PrimalItemTrophy_', 'PrimalItemSkin_',
+        'PrimalItem_', 'PrimalItemStructureGeneric_']
+# v3894（用户要求「完整类名列必须带前缀」，口径 = 只做可确证项、不推断）：
+#   三级确证来源 ① 存档实际类名（cnset）→ ② 词典内同 stem 的带前缀键 → ③ 词典键自身 alias（PrimalItem*）；
+#   三级均无法确证 ⇒ 保留原名（不猜前缀）
+_PREKEY = None   # v3894c：惰性构建（_stem 定义在本函数之后，模块级立即调用会 NameError）
+def cnames(k):
+    """返回 (完整类名, 存档实际类名)；v3894 起尽量给出带 PrimalItem 前缀的完整类名（仅可确证来源）"""
+    global _PREKEY
+    if _PREKEY is None:
+        _PREKEY = {}
+        for _kk in zh:
+            if re.match(r'^PrimalItem', str(_kk)):
+                _PREKEY.setdefault(_stem(_kk), _kk)
+    ks = _stem(k)
+    allc = sorted(c for c in cnset if _stem(c) == ks)
+    full = ''
+    if allc:
+        for p in _PRE:
+            if p + ks in allc:
+                full = p + ks
+                break
+        if not full:
+            full = k if k in allc else allc[0]
+    if not re.match(r'^PrimalItem', str(full or '')):
+        full = _PREKEY.get(ks) or full
+    if not re.match(r'^PrimalItem', str(full or '')):
+        _al = str((zh.get(k) or {}).get('alias') or '')
+        if re.match(r'^PrimalItem', _al):
+            full = _al
+    if not full:
+        full = k
+    return full, [c for c in allc if c != full]
+def resolve(ic):
+    if not ic:
+        return ''
+    if ic.startswith('http'):
+        return ic
+    if ic in iurl:
+        return iurl[ic] or ''
+    lk = ic.lower()
+    if lk in iurl_l:
+        return iurl_l[lk] or ''
+    for nm, u in iurl.items():
+        if nm and u and lk in nm.lower():
+            return u
+    return ''
+def absu(u):
+    if not u:
+        return ''
+    return u if u.startswith('http') else CF + u.lstrip('/')
+def thumb(k):
+    ic = str((zh.get(k) or {}).get('icon') or '')
+    orig_u = resolve(ic)
+    w = wm.get(orig_u, '')
+    return absu(w) if w else absu(orig_u), absu(orig_u), ic
+# v3905（用户口径「固定印痕在更早期就排除，不走 switch 标记」）：
+#   判据与容器组 lbGroupInvHas() 完全一致 —— lbIsBp(it) && lbIsFixedRecipeBp(it)
+#   =（isBlueprint==1 || type=='blueprint'）且（rated 为 0/空 || rating==-1）
+#   "纯固定印痕" = 该 class 在存档缓存 tmp/_itemcache/*.json 的全部实例都满足该判据（无实物实例）
+#   ⇒ 这类键在**分组判重之前**剔除（与 skin/switch/Fertilized 同级过滤）
+_FIX = set()
+_PX = ['PrimalItemConsumable_', 'PrimalItemStructure_', 'PrimalItemAmmo_', 'PrimalItemWeapon_',
+       'PrimalItemArmor_', 'PrimalItemResource_', 'PrimalItemSkin_', 'PrimalItem_']
+try:
+    _stat = {}
+    for _fp in glob.glob(os.path.join(BASE, 'tmp', '_itemcache', '*.json')):
+        _d = json.load(io.open(_fp, 'r', encoding='utf-8'))
+        for _it in _d.get('items', []):
+            _b = str(_it.get('class') or '').split('_C_')[0]
+            _e = _stat.setdefault(_b, [0, 0])   # [fix, real]
+            _bp = (int(_it.get('isBlueprint') or 0) == 1) or (_it.get('type') == 'blueprint')
+            _fx = _bp and (not _it.get('rated') or _it.get('rating') == -1)
+            _e[0 if _fx else 1] += 1
+    _FIX = set(b for b, (f, r) in _stat.items() if f and not r)
+    print('[fixrecipe] 纯固定印痕 class: %d' % len(_FIX))
+except Exception as _e:
+    print('[fixrecipe] 扫描失败:', _e)
+
+def _is_fix_key(k):
+    if not _FIX:
+        return False
+    cand = set([str(k)])
+    _al = (zh.get(k) or {}).get('alias')
+    if _al:
+        cand.add(str(_al))
+    for _p in _PX:
+        cand.add(_p + str(k))
+    try:
+        for _cn in cnames(k):
+            cand.add(str(_cn))
+    except Exception:
+        pass
+    return bool(cand & _FIX)
+
+allk = [(g, k) for g, ks in groups.items() for k in ks
+        if not (zh.get(k) or {}).get('skin') and not (zh.get(k) or {}).get('switch')
+        and not re.match(r'^Fertilized\s', str((zh.get(k) or {}).get('en') or ''), re.I)
+        and not _is_fix_key(k)]
+FIX_SKIPPED = sorted(k for g, ks in groups.items() for k in ks if _is_fix_key(k))
+miss = sum(1 for _, k in allk if not thumb(k)[0])
+res.append('【缩略图】可解析 %d / %d（缺 %d）' % (len(allk) - miss, len(allk), miss))
+def _stem(k):
+    return re.sub(r'^PrimalItem[A-Za-z]*_', '', str(k))
+def dupby(f):
+    d = {}
+    for g, k in allk:
+        # v3755（回滚 v3754）：已被 alias 归并的键不参与判重（用户确认此逻辑正确）
+        # v3880（用户实测「藏宝箱 / 发电机」漏报根因）：**仅跳过「真归并」alias**。
+        #   词典 2782 键里 1026 条带 alias，其中大量是**「自指完整类名映射」**
+        #   （TreasureCache_ASA → PrimalItemStructure_TreasureCache_ASA、PowerGenerator → PrimalItemStructure_PowerGenerator…），
+        #   这类 alias **不表示已归并**（两条不同物品各指向自己的完整类名），必须照常参与判重，
+        #   否则「浮窗里看得见的重复、表里全看不见」。判据：alias == 某前缀 + 自身 ⇒ 视为自指（不跳过）。
+        _al = (zh.get(k) or {}).get('alias')
+        if _al:
+            _self = False
+            for _p in _PRE:
+                if str(_al) == _p + str(k):
+                    _self = True
+                    break
+            if not _self:
+                continue
+        val = str((zh.get(k) or {}).get(f) or '').strip()
+        if not val:
+            continue
+        if f == 'en':
+            val = re.sub(r'^Dye[\s_]+', '', val).lower()
+        d.setdefault(val, []).append((g, k))
+    out = {}
+    for v, L in d.items():
+        if len(L) <= 1:
+            continue
+        if len(set(_stem(k) for _, k in L)) <= 1:
+            continue
+        out[v] = L
+    return out
+D_IC, D_ZH, D_EN = dupby('icon'), dupby('zh'), dupby('en')
+D_IC.pop('Dye_Icon', None)
+# v3688（用户要求）：「一、图标重复」只保留用户点名的组，其余从表中去掉
+# v3903（用户选甲）：**删除全部「按组序号」硬编码集合** ——
+#   历史遗留 KEEP/KEEPOUT(v3690)/_EXCLN(v3699) 记的是**当次运行的候选组序号**；
+#   经多轮归并后组数从 48→20、序号整体漂移 ⇒ 误伤（如 HUD_TOF_Brig_Icon / HUD_TOF_Sloop_Icon 被顺带隐藏）。
+#   现统一为**图标键名式**：仅 _EXCLS「」+ 汉化/_table_exclude.json + _confirmed(Cursed/Trophy) 语义判据。
+ORIG = {}
+# v3919（用户要求「将归一排除项重新显示到表里，我最后确认一下」）：
+#   SHOW_EXCLUDED=True ⇒ 排除清单（_table_exclude.json）与历史硬编码（v3692 确认组）**全部不生效**，
+#   表内重新显示全部已排除组，供用户终审；确认完毕后置回 False 即恢复排除。
+SHOW_EXCLUDED = True
+_HARD_EXCLS = set('Compound_Bow|Metal_Pick|StonePipeFaucet_Icon|White_Crate|PowerGeneratorIcon|TEKElementShard_Icon|ASA_Icons_Red_Element_Dust|Woolly_Rhino_Horn|Gasoline|ASA_Icons_Unstable_Red_Element|Cannon_Ball|ASA_Icons_PlantProtoSpeciesR_Seed'.split('|'))   # v3692（用户确认）：这些重复组已确认完毕，从表内清除
+# v3715：排除清单（必须在 _EXCLS 定义之后追加，否则被覆盖）
+_SOFT = []
+try:
+    _excj = json.load(io.open(r'b:\项目\Hass ASA Server Monitor\汉化\\_table_exclude.json', encoding='utf-8'))
+    _SOFT = list(_excj.get('icons', []))
+except Exception as _e:
+    print('[exclude] 读取失败:', _e)
+if SHOW_EXCLUDED:
+    _EXCLS = set()
+    print('[exclude] 终审模式：排除清单暂不生效（清单 %d 项 + 硬编码 %d 项 ⇒ 全部重新显示）' % (len(_SOFT), len(_HARD_EXCLS)))
+else:
+    _EXCLS = set(_HARD_EXCLS) | set(_SOFT)
+    print('[exclude] 已加载 %d 个排除图标组' % len(_EXCLS))
+_ALWAYS_SKIP = set([u'掉落骨架'])   # v3937（用户要求）：该中文重复组直接隐藏
+def _skipv(v):
+    return (str(v) in _EXCLS) or str(v).startswith('http') or str(v) == 'Custom' \
+        or str(v) in _ALWAYS_SKIP \
+        or re.search(r'Cursed', str(v), re.I) or re.search(r'Trophy', str(v), re.I)
+D_ZH = {v: L for v, L in D_ZH.items() if not _skipv(v)}
+D_EN = {v: L for v, L in D_EN.items() if not _skipv(v)}
+_items = sorted(D_IC.items(), key=lambda x: -len(x[1]))
+for i, (v, L) in enumerate(_items, 1):
+    # v3696（用户要求）：咒缚组（含 _Cursed）与 Trophy 组一律不显示在表内
+    _confirmed = (v in _EXCLS) or str(v).startswith('http') or v == 'Custom' \
+        or re.search(r'Cursed', str(v), re.I) or re.search(r'Trophy', str(v), re.I) \
+        or any(re.search(r'Cursed', str(k), re.I) for _, k in L) \
+        or any(g == 'trophy' for g, _ in L)
+    if not _confirmed:
+        ORIG[v] = i
+        res.append('【组%d】%s ×%d：%s' % (i, v[:30], len(L), ' | '.join('%s(%s)' % (k, (zh.get(k) or {}).get('zh')) for _, k in L[:4])))
+D_IC = {v: L for v, L in _items if v in ORIG}
+SUS = {ic: L for ic, L in D_IC.items()
+       if len(set(str((zh.get(k) or {}).get('zh') or '') for _, k in L)) > 1
+       and len(set(str((zh.get(k) or {}).get('en') or '').lower() for _, k in L)) > 1}
+# v3764（用户要求）：恢复"通用图标组"显示 —— Egg_Icon 共用组（图标库无专属图，长期待办）
+for _gv in ('Egg_Icon',):
+    _gl = [(g, k) for g, k in allk
+           if str((zh.get(k) or {}).get('icon') or '') == _gv and not (zh.get(k) or {}).get('alias')]
+    if len(_gl) > 1:
+        SUS[_gv] = _gl
+res.append('【重复】图标 %d · 中文 %d · 英文 %d · 图标嫌疑 %d' % (len(D_IC), len(D_ZH), len(D_EN), len(SUS)))
+LAB = {'armor': u'护甲', 'weapon': u'武器', 'structure': u'构件', 'facility': u'设施', 'resource': u'资源',
+       'ammo': u'弹药', 'consumable': u'消耗品', 'attachment': u'附件', 'trophy': u'战利品', 'dye': u'染料', 'egg': u'蛋'}
+GC = {'armor': '#60a5fa', 'weapon': '#f87171', 'structure': '#a78bfa', 'facility': '#38bdf8', 'resource': '#fbbf24',
+      'ammo': '#fb923c', 'consumable': '#34d399', 'attachment': '#22d3ee', 'trophy': '#4ade80', 'dye': '#c084fc', 'egg': '#facc15'}
+def rows(L):
+    o = []
+    for g, k in sorted(L, key=lambda x: x[1]):
+        v = zh.get(k) or {}
+        w, o2, icn = thumb(k)
+        if w:
+            img = '<img src="%s" data-f="%s" loading="lazy" onerror="if(this.dataset.f&&this.src!==this.dataset.f){this.src=this.dataset.f}else{this.outerHTML=\'<b class=x>✗</b>\'}">' % (html.escape(w), html.escape(o2))
+        else:
+            img = '<b class="x">无</b>'
+        _cf, _crs = cnames(k)
+        _cn = html.escape(_cf[:60])
+        if k != _cf:
+            _cn += '<i>键: %s</i>' % html.escape(k[:60])
+        for _o in _crs[:2]:
+            _cn += '<i>另存: %s</i>' % html.escape(_o[:60])
+        o.append('<tr><td class="g" style="color:%s">%s</td><td class="i">%s</td><td>%s</td><td class="en">%s</td>'
+                 '<td class="k">%s</td><td class="cn">%s</td><td class="k ic">%s</td><td class="n">%d</td></tr>' % (
+                     GC.get(g, '#999'), LAB.get(g, g), img, html.escape(str(v.get('zh') or '')),
+                     html.escape(str(v.get('en') or '')[:32]), html.escape(k), _cn,
+                     html.escape(('URL:' + icn.split('/')[-1][:20]) if str(icn).startswith('http') else icn[:24]), stat(k)))
+    return '\n'.join(o)
+def noiconsect():
+    """v3919：新增「无图标物品」表；v3927（用户要求）：套用皮肤判据（skin 字段 / Skin_ 前缀 / 完整类名 / alias），皮肤键不列出。"""
+    _nk = []
+    for _k0, _v0 in zh.items():
+        _v0 = _v0 or {}
+        if _v0.get('icon'):
+            continue
+        _cf0, _ = cnames(_k0)
+        if _v0.get('skin') or re.match(r'^(Skin_|PrimalItemSkin_|PrimalItemStructureSkin_|PrimalItemCostume_)', _k0) \
+           or re.match(r'^PrimalItem(Structure)?Skin_', str(_cf0 or '')) \
+           or re.match(r'^PrimalItem(Structure)?Skin_', str(_v0.get('alias') or '')):
+            continue
+        _nk.append((_k0, _v0))
+    o = ['<details><summary style="cursor:pointer"><h2 style="border-left:4px solid #fbbf24;display:inline-block;margin:0">%s <small>%d 条</small></h2></summary>' % (u'六、无图标物品', len(_nk))]
+    o.append('<p class="note">词典中 icon 为空的键（含刚清理图标的键）；排序 = 存档实例数降序；"存" = 10 服存档出现次数。（点击标题展开/收起）</p>')
+    o.append('<table><thead><tr><th>组</th><th>中文</th><th>英文</th><th>词典键</th><th>完整类名</th><th>存</th></tr></thead><tbody>')
+    for k, v in sorted(_nk, key=lambda x: -stat(x[0])):
+        g = v.get('kind') or ''
+        _cf, _crs = cnames(k)
+        _cn = html.escape(_cf[:60])
+        if k != _cf:
+            _cn += '<i>键: %s</i>' % html.escape(k[:60])
+        for _o2 in _crs[:1]:
+            _cn += '<i>另存: %s</i>' % html.escape(_o2[:60])
+        o.append('<tr><td class="g" style="color:%s">%s</td><td>%s</td><td class="en">%s</td>'
+                 '<td class="k">%s</td><td class="cn">%s</td><td class="n">%d</td></tr>' % (
+                     GC.get(g, '#999'), LAB.get(g, g or '-'), html.escape(str(v.get('zh') or '')),
+                     html.escape(str(v.get('en') or '')[:32]), html.escape(k), _cn, stat(k)))
+    o.append('</tbody></table>')
+    o.append('</details>')
+    return '\n'.join(o)
+def candsect():
+    _C = []   # v3764（用户确认）：耕地已定案用 CropPlot_Icon，候选条目移除
+    o = ['<h2 style="border-left:4px solid #34d399">%s <small>%d 组</small></h2>' % (u'五、候选图标（待确认）', len(_C))]
+    o.append('<p class="note">%s</p>' % u'下列组已找到语义正确的现成图标（图标库已有、webp 已压好，替换零成本）。确认后即可执行。')
+    o.append('<table><thead><tr><th>组</th><th>词典键</th><th>当前图标</th><th>候选图标</th><th>说明</th></tr></thead><tbody>')
+    for tag, k, cand, note in _C:
+        cur = str((zh.get(k) or {}).get('icon') or '')
+        cu, cnu = resolve(cur), resolve(cand)
+        cw, cw2 = wm.get(cu, ''), wm.get(cnu, '')
+        im1 = absu(cw) if cw else absu(cu)
+        im2 = absu(cw2) if cw2 else absu(cnu)
+        o.append('<tr><td>%s</td><td class="k">%s</td>'
+                 '<td class="i"><img src="%s" loading="lazy" onerror="this.outerHTML=\'<b class=x>X</b>\'"><br><span class="k">%s</span></td>'
+                 '<td class="i" style="background:#132a1e"><img src="%s" loading="lazy" onerror="this.outerHTML=\'<b class=x>X</b>\'"><br><span class="k" style="color:#6ee7b7">%s</span></td>'
+                 '<td class="note">%s</td></tr>' % (
+                     tag, html.escape(k), html.escape(im1), html.escape(cur[:34]),
+                     html.escape(im2), html.escape(cand[:34]), html.escape(note)))
+    o.append('</tbody></table>')
+    return '\n'.join(o)
+def sect(t, D, c, note=''):
+    o = ['<h2 style="border-left:4px solid %s">%s <small>%d 组</small></h2>' % (c, t, len(D))]
+    if note:
+        o.append('<p class="note">%s</p>' % note)
+    for i, (val, L) in enumerate(sorted(D.items(), key=lambda x: -len(x[1])), 1):
+        o.append('<h3><b>%s.</b> <code>%s</code> <small>%d 条</small></h3>' % (ORIG.get(val, i), html.escape(str(val)[:54]), len(L)))
+        o.append('<table><thead><tr><th>组</th><th>图</th><th>中文</th><th>英文</th><th>词典键</th><th>完整类名</th><th>图标键</th><th>存</th></tr></thead><tbody>')
+        o.append(rows(L)); o.append('</tbody></table>')
+    return '\n'.join(o)
+parts = [
+    u'<!DOCTYPE html><html lang="zh-CN"><meta charset="utf-8"><title>浮窗重复项对照表</title>',
+    u'<style>',
+    u'body{background:#0e0e14;color:#d1d5db;font:12px/1.45 "Microsoft YaHei",-apple-system,sans-serif;margin:0;padding:14px 18px}',
+    u'h1{font-size:17px;margin:0 0 4px;color:#f3f4f6}',
+    u'h2{font-size:14px;margin:20px 0 6px;padding-left:7px;color:#e5e7eb}',
+    u'h3{font-size:12.5px;margin:11px 0 4px;color:#c4b5fd;font-weight:500}h3 code{color:#7dd3fc}',
+    u'table{border-collapse:collapse;width:100%;margin:2px 0 8px;font-size:11.5px}',
+    u'th,td{border:1px solid #232332;padding:2px 6px;vertical-align:middle;white-space:nowrap}',
+    u'thead th{background:#181824;color:#93c5fd;font-weight:600;position:sticky;top:0;z-index:2;font-size:11px}',
+    u'tbody tr:nth-child(even){background:#14141c}tbody tr:hover{background:#1e1e2e}',
+    u'td.i{width:30px;text-align:center}td.i img{width:22px;height:22px;display:block;margin:0 auto;background:#1c1c28;border-radius:3px}',
+    u'td.k{color:#7dd3fc;font-family:Consolas,monospace;font-size:11px}td.ic{color:#94a3b8}',
+    u'td.en{color:#9ca3af;max-width:210px;overflow:hidden;text-overflow:ellipsis}',
+    u'td.n{text-align:right;color:#fbbf24;font-variant-numeric:tabular-nums}td.g{font-size:11px;text-align:center}',
+    u'td.cn{color:#93c5fd;font-family:Consolas,monospace;font-size:9.5px;line-height:1.3;white-space:normal;max-width:215px;word-break:break-all}',
+    u'td.cn i{display:block;font-style:normal;color:#64748b;font-size:9px}',
+    u'.note{color:#6b7280;font-size:11.5px;margin:1px 0 8px}small{color:#6b7280;font-weight:400}b.x{color:#f87171}',
+    u'</style>',
+    u'<h1>浮窗重复项对照表</h1>',
+    u'<p class="note">数据源：线上浮窗实际清单 %s（%d 条 / %d 组）｜ 判定：图标键相同 / 中文完全相同 / 英文归一后相同 ｜ 存 = 10 服存档出现次数</p>' % (ver, len(allk), len(groups)),
+    sect(u'一、图标重复', D_IC, '#38bdf8', u'多条物品共用同一图标（同一物的不同写法属正常；不同物品共用则需改图标）。'),
+    sect(u'二、中文重复', D_ZH, '#a78bfa', u'多个物品中文名完全相同 —— 浮窗会看到同名两条。'),
+    # v3701（用户确认）：英文重复的组都是同一物品（en 相同）⇒ 前端已按 en 聚合为一条，表中无需再列
+sect(u'三、英文重复', {}, '#f472b6', u'英文归一后相同即**同一物品**，前端已聚合为一条，无需人工核对（原有 %d 组已撤下）。'),
+    sect(u'四、图标嫌疑：同图标但中英文均不同', SUS, '#f87171', u'最可能是误用图标，请重点核对。'),
+    candsect(),
+    noiconsect(),
+    u'</body></html>']
+io.open(OUT, 'w', encoding='utf-8', newline='').write('\n'.join(parts))
+res.append(u'【输出】%s（%d B）' % (os.path.basename(OUT), os.path.getsize(OUT)))
+io.open(BASE + u'\\tmp\\_v3685_out.txt', 'w', encoding='utf-8').write('\n'.join(res))
+print(' | '.join(res))

@@ -1,0 +1,38 @@
+# -*- coding: utf-8 -*-
+"""压图 v2：从 icons2.json 取 Explosive_Arrow.png 的 URL（不再全库列举）"""
+import io, os, sys, json, time, hashlib, shutil, urllib.request
+BASE = r'b:\项目\Hass ASA Server Monitor'
+OUT = os.path.join(BASE, 'tmp', '_webp_icon1b.txt')
+H = os.path.join(BASE, '汉化')
+res = []
+icons = json.load(io.open(os.path.join(H, 'icons2.json'), encoding='utf-8'))
+hit = [x for x in icons if x.get('name') == 'Explosive_Arrow.png']
+res.append('icons2 命中 = %s' % json.dumps(hit, ensure_ascii=False))
+if not hit or not hit[0].get('url'):
+    res.append('无 URL ⇒ 中止'); io.open(OUT, 'w', encoding='utf-8').write('\n'.join(res)); print('OK'); raise SystemExit
+URL = hit[0]['url']
+KEY = URL.replace('https://img.whiterober.ccwu.cc/', '')
+res.append('KEY = %s' % KEY)
+rq = urllib.request.Request(URL, headers={'User-Agent': 'Mozilla/5.0'})
+data = urllib.request.urlopen(rq, timeout=40).read()
+res.append('下载 %dB' % len(data))
+from PIL import Image
+im = Image.open(io.BytesIO(data))
+res.append('原图 %dx%d %s' % (im.width, im.height, im.format))
+if im.mode not in ('RGBA', 'RGB'): im = im.convert('RGBA')
+im.thumbnail((96, 96))
+buf = io.BytesIO(); im.save(buf, 'WEBP', quality=70)
+fn = hashlib.md5(KEY.encode('utf-8')).hexdigest()[:12] + '_w96.webp'
+D96 = os.path.join(BASE, 'tmp', 'webp96'); os.makedirs(D96, exist_ok=True)
+open(os.path.join(D96, fn), 'wb').write(buf.getvalue())
+MAP = os.path.join(BASE, 'tmp', 'webp_map.json')
+ts = time.strftime('%Y%m%d_%H%M%S')
+shutil.copy2(MAP, os.path.join(BASE, 'bak', 'webp_map_backup_%s_icon1.json' % ts))
+mp = json.load(io.open(MAP, encoding='utf-8'))
+mp[URL] = 'thumbs/webp96/' + fn
+json.dump(mp, io.open(MAP, 'w', encoding='utf-8'), ensure_ascii=False)
+res.append('生成 %s = %dB（%dx%d）' % (fn, len(buf.getvalue()), im.width, im.height))
+res.append('映射 %s → %s' % (URL, mp[URL]))
+res.append('webp_map 条目 %d' % len(mp))
+io.open(OUT, 'w', encoding='utf-8').write('\n'.join(res))
+print('OK')
