@@ -612,7 +612,7 @@ var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // ⏳ **未部署** v3625（用户要求）：**Ramp_ 楼梯权威校正（3 条）** —— 背景：用户发现「Ramp_ 前缀实际是楼梯」（此前被我误作斜坡）。`汉化/item_zh.json`：`Ramp_Metal` 金属斜坡→**金属楼梯**（en `Ramp Metal`→`Metal Stairs`、icon `Metal_Ramp`→`Metal_Stairs`）｜ `Ramp_Stone` 石制斜坡→**石制楼梯**（`Stone Stairs` / `Stone_Stairs`）｜ `Ramp_Tek` 泰克斜坡→**泰克楼梯**（`Tek Stairs` / `Tek_Stairs`）；依据 = **官方 PO×JSON 逐条核实**（`PrimalItemStructure_Ramp_*` 官方 en = `X Stairs`）。⚠️ 设施表 `facility_official` 的 `Ramp_*`（官方 en = `X Ramp`）**按用户确认保持「斜坡 / 小斜坡 / 斜直角三角」不改**（同键名在两表语义不同）。另：生成器新增 `ICON_MANUAL` 人工图标映射（缺口表 `…_Ramp_Wood` → `Wood_Stairs_Icon`，因其官方名「Wooden Stairs」与图标键归一后不等）
 // ⏳ **未部署** v3626（用户要求）：**对照表缺·建筑类 20 条落地** —— 将 t1「中文+图标已定稿」的 20 条并入 `汉化/item_zh.json`（键=短名、kind=structure、src=gap_table_t1）：`SpotLight` 聚光灯 ｜ `Ramp_Wood` 木制楼梯 ｜ `Ramp_Adobe` 黏土楼梯 ｜ `TriCeiling_Wood` 木制三角天花板 ｜ `WoodCage` 木制笼子 ｜ `WoodSpikeWall` 木制拒马 ｜ `Metal_OceanPlatform` / `Wood_OceanPlatform` 海洋平台 ｜ `Furniture_Rug` 粗毛地毯 ｜ `TekFenceFoundation` 泰克栅栏地基 ｜ `AdobePillar` 黏土柱子 ｜ `RopeLadder` 绳梯 ｜ `TriRoof_Adobe` / `TriRoof_Tek` 三角屋顶 ｜ `WoodElevatorPlatform_Small` / `_Medium` / `WoodElevatorTrack` 木制电梯 ｜ `AdobeGateDoor_Large` 黏土巨兽恐龙门 ｜ `Flag_KingKaiju` 君王泰坦旗帜 ｜ `LargeWall_Wood` 大型木制墙；词典 1790 → **1810 键**；缺口表 t1 **33 → 13 条**、总表 320 → **300 行**
 // ⏳ **未部署** v3627（用户要求）：**缺口表其余部分（t2/t3/t4）双就绪条目落地 105 条** —— 质控分档（`tmp/_v3689_qc.py`）后落地：A 档 91 + B 档中经用户确认/属关键词误判者（「新联邦靴子」「那里!」经用户确认正确）；**排除 2 条**：`PrimalItemConsumable_Egg`（中文为 `Egg!` 英文原文）、`PrimalItemArmor_PearlShirt`（t4，中文仅「珍珠」）；跳过 2 条 kind 无法确定（`PrimalItem_FishBasketFilled` / `PrimalItem_Spawner_HoverSail_Main`）与 1 条生物类（`Exosuit_Character_BP`）；t2 的 `PrimalItemRadio`/`PrimalItemRaft` 词典已有键（`Radio`/`Raft`）故仅调 kind：`Raft` weapon → **structure**（`Radio` 本已 weapon）；落地内容以蛋类 37、结构件 29、鞍具 5、弹药 2 为主；词典 **1810 → 1915 键**（kind 空 **0** / other **0**）｜ 缺口表 **300 → 196 行**（t3 215 → 111）
-var LB_VERSION = 'v20260926-4058';   // v4044：手持三栏按类型聚块（武装 矛/盾/枪/弓弩；工具 镐/斧/枪；弹药 箭/子弹/投掷物）
+var LB_VERSION = 'v20260926-4125';   // v4125：毛球(Furball)→毛皮族（族内最后）；v4124：染料判定全面类名化
 try{ if(document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', function(){ try{ lbMatLoad(); }catch(e){} try{ lbRulesLoad(); }catch(e){} }); } else { lbMatLoad(); try{ lbRulesLoad(); }catch(e){} } }catch(e){}
 var LB_SCHEMA_VER = 17;  // v3428：16→17 —— facilities 新增 isPublic（后端 2026-09-20 上线）+ 补采家族（耕地/船体/神器箱等 2454 条）、rec 新增 isPublic/isPlayerStruct；不升版 ⇒ 旧 IndexedDB 缓存继续命中，新设施与新字段永不出现
 // 历史：v1069 14→15——根因：recs 构建结果随 IndexedDB 持久化（v931）、
@@ -14044,7 +14044,14 @@ function lbCanonBase(b){
   var mc = s.match(/^PrimalItem(CustomFoodRecipe|CustomDrinkRecipe)(?:_Type\d+)?$/);
   if(mc) return mc[1];
   var m = s.match(/^PrimalItem[A-Za-z]+_(.+)$/);
-  return (m && m[1]) ? m[1] : s.replace(/^PrimalItem_/, '');
+  if(m && m[1]){
+    // v4087（缺陷修复）：**纯数字尾段**（Artifact_01 / ArtifactSE_01 / …）**保留系列词** —— 原剥离后只剩 "01"/"02"
+    //   导致跨系列同号撞键（PrimalItemArtifact_01 与 PrimalItemArtifactSE_01 的 canon 均 = "01"），
+    //   去重时先到者占位、后来者被丢弃（线上实测：神器「猎手/稳重」被 SE「卫士/灭世」挤掉、「岩壁」被「团结」挤掉，战利品列表缺 3 条）
+    if(/^\d+$/.test(m[1])) return s.replace(/^PrimalItem/, '');
+    return m[1];
+  }
+  return s.replace(/^PrimalItem_/, '');
 }
 function lbItemZhCanonMap(){
   if(!LB_ITEM_ZH || !Object.keys(LB_ITEM_ZH).length) return null;
@@ -16939,9 +16946,20 @@ function lbDyeDotMap(){
   _lbDyeDotMap = m;
   return m;
 }
+// v4124（用户口径）：染料判定**纯类名**（零中文）—— 全键核对：379 条现集合零遗漏 + 仅补 PrimalItemStructure_Dye_Celeste（蔚蓝色长键）
+function lbIsDyeKey(base){
+  var k = String(base || '');
+  if(k === 'Dye') return false;                                     // 染料本体（配方耗材，非颜色）
+  if(/^(PrimalItemStructure_)?Dye_/.test(k)) return true;
+  if(/^PrimalItemDye_/.test(k)) return true;
+  if(/^Misc_\d+$/.test(k)) return true;                             // 散色（砖红/蓟紫/泡泡糖粉等）
+  if(/^(Blue|Brown|Cyan|Green|Greyscale|Magenta|Orange|Red|Yellow)_\d+_/.test(k)) return true;   // 色系短键
+  if(k.indexOf('RecipeNote_Dye') >= 0) return true;                 // 染料配方笔记
+  return false;
+}
 function lbDyeDotOf(base){
   var t = (LB_ITEM_ZH || {})[base]; if(!t) return null;
-  if(String(t.zh || '').indexOf('染料') < 0) return null;                          // 与 lbItemNoHaveByKind 的 dye 分组同判据
+  if(!lbIsDyeKey(base)) return null;                                               // v4124：纯类名判据（原 zh 含「染料」已移除）
   if(!LB_COLORS){ try{ lbLoadColors(); }catch(e){} return null; }                  // 颜色表异步；就绪后重渲自动补上
   var en = String(t.en || '')
         .replace(/^Dye\s+/i, '')
@@ -16992,29 +17010,45 @@ function lbPickerItemHtml(kind, base, cls, cnt){
 // v3598（用户要求）：**未受精蛋**独立分组 + 「饲料等级」标签（wiki 权威：Homestead 293.100 起饲料等级 = **蛋的尺寸**）
 //   尺寸 → 饲料：ExtraSmall=基础 / Small=简易 / Medium=普通 / Large=上等 / ExtraLarge=卓越 / Special=非凡
 //   颜色用通用品质色（白/绿/蓝/紫/橙/红）；46 条蛋 100% 映射（脚本 tmp/_v3598_map.py 核对）
+var LB_FAM_SUB = {};   // v4059（用户要求）：族内子序表（元素/肉类等：words 定档、last 降权；由 dino_rules.famSubOrder 填充）
+var LB_FAM_BLK = {};   // v4072（用户要求）：族块间锚定（浆果1→蔬菜2 紧跟；由 dino_rules.famBlockRank 填充）
+var LB_FAM_LAST = {};   // v4073（用户要求）：节日族块垫底（消耗品列表末尾；由 dino_rules.famBlockLast 填充）
 var LB_EGG_LV = {
-  XS:{ n:'基础', c:'#d7d7d7' }, S:{ n:'简易', c:'#1eff00' }, M:{ n:'普通', c:'#0070dd' },
-  L:{ n:'上等', c:'#a335ee' }, XL:{ n:'卓越', c:'#ff8000' }, SP:{ n:'非凡', c:'#e6194b' }
+  XS:{ n:'基础', c:'#b8b8b8' }, S:{ n:'简易', c:'#1eff00' }, M:{ n:'普通', c:'#0070dd' },
+  L:{ n:'上等', c:'#a335ee' }, XL:{ n:'卓越', c:'#ff8000' }, SP:{ n:'非凡', c:'#00bfff' }
 };
 var LB_EGG_LV_ORDER = ['XS','S','M','L','XL','SP'];   // 低 → 高（渲染时按用户口径倒序：非凡在前）
-var LB_EGG_MAP = {
-  Dodo:'XS', Kairuku:'XS', Lystro:'XS', ShoulderDragon:'XS', LanternBird:'XS', LostChargePet:'XS',
-  Raptor:'S', Ptero:'S', Oviraptor:'S', Pegomastax:'S', LanternLizard:'S', Hesperonis:'S',
-  Ankylo:'M', Archelon:'M', Deino:'M', Deinonychus:'M', Iguanodon:'M', Pela:'M', Stego:'M',
-  Argent:'L', Boa:'L', Fasola:'L', Gigantoraptor:'L', Megalania:'L', Megalosaurus:'L', Moschops:'L', Owl:'L', Tapejara:'L', YiLing:'L', Griffin:'L',
-  Acro:'XL', Basilisk:'XL', Bronto:'XL', Carcha:'XL', Gigant:'XL', Rex:'XL', Therizino:'XL',
-  Yuty:'SP', Hesperonis_Golden:'SP'
+var LB_EGG_MAP = {   // v4078（用户要求）：按 dododex 全面校正（19 项）+ 水晶飞龙=SP（用户裁决）+ 沙蛾/节胸虫撤标（wiki 无档）
+  Dodo:'XS', Kairuku:'XS', Lystro:'XS', LanternBird:'XS', LostChargePet:'XS',
+  ShoulderDragon:'S', Raptor:'S', Ptero:'S', Oviraptor:'S', Pegomastax:'S', LanternLizard:'S', Hesperonis:'S',
+  Ankylo:'M', Archelon:'M', Deinonychus:'M', Iguanodon:'M', Pela:'M', Stego:'M',
+  Argent:'L', Boa:'L', Fasola:'L', Gigantoraptor:'L', Megalania:'L', Megalosaurus:'L', Moschops:'L', Owl:'L', Tapejara:'L', YiLing:'L', Griffin:'L', Deino:'L',
+  Acro:'XL', Basilisk:'XL', Bronto:'XL', Carcha:'XL', Gigant:'XL', Rex:'XL', Therizino:'XL', GiantTurtle:'XL',
+  Yuty:'SP', Hesperonis_Golden:'SP', CrystalWyvern:'SP', Cherufe:'SP',
+  // v4059（用户要求）：蛋品质标补全；v4078（用户要求）：按 dododex 校正 —— Dilo/秃鹫/泰克副栉龙→XS；Archa/Compy/似鸡龙/肿头龙/驼峰龙/泰克三角龙→S；棘蜥/伤齿龙/鱼鸟→M；恐鳄→L；岛龟→XL；Moth/Arthro 撤标（wiki 无档）
+  Archa:'S', Compy:'S',
+  Dilo:'XS', Dimorph:'S', Vulture:'XS', SpineyLizard:'M', Troodon:'M', Ichthyornis:'M',
+  Baryonyx:'M', Carno:'M', Dimetrodon:'M', Galli:'S', Camelsaurus:'S',
+  Kaprosuchus:'M', Mantis:'M', Pachy:'S', Pachyrhino:'M', Para:'XS', Spindles:'M', TerrorBird:'M', Trike:'S', Turtle:'M',
+  Tropeognathus:'L', Moth:'L',   // v4079（用户要求）：沙蛾蛋 = 优质饲料（Superior/上等）
+  Quetz:'XL',
+  Sarco:'M', Spino:'L', Diplo:'M', Allo:'L'
 };
 var _LB_EGG_KEYS = Object.keys(LB_EGG_MAP).sort(function(a,b){ return b.length - a.length; });   // 长键优先（Hesperonis_Golden 先于 Hesperonis）
 function lbEggIs(base, t){
   var k = String(base || ''), zh = String((t || {}).zh || '');
   if(k.indexOf('Egg') < 0 || zh.indexOf('蛋') < 0 || zh.indexOf('受精') >= 0) return false;
   if(k.indexOf('CakeSlice') >= 0) return false;
+  // v4082（用户要求）：蛋!/复活节彩蛋 移出食用卵 → 普通归类（消耗品）
+  if(k === 'Egg' || k === 'PrimalItemConsumable_Egg' || k.indexOf('EasterEgg') >= 0) return false;
   return true;
 }
 function lbEggLvOf(base){
   var k = String(base || '');
-  if(k.indexOf('Egg') < 0) return null;
+  if(k.indexOf('Egg') < 0){
+    // v4072（用户要求）：短键蛋（词典键不含 Egg，如 Spindles/Quetz/Carno）也参与标级——用 kind='egg' 补判
+    try{ if(String(((LB_ITEM_ZH || {})[k] || {}).kind || '') !== 'egg') return null; }catch(e){ return null; }
+  }
   if(k.indexOf('Maelizard') >= 0){
     var m = { XSmall:'XS', Small:'S', Medium:'M', Large:'L', XLarge:'XL', Special:'SP' }, s;
     for(s in m){ if(k.slice(-(s.length + 1)) === '_' + s) return m[s]; }
@@ -17026,7 +17060,11 @@ function lbEggLvOf(base){
 function lbEggLvHtml(base){
   var lv = null; try{ lv = lbEggLvOf(base); }catch(e){ lv = null; }
   if(!lv || !LB_EGG_LV[lv]) return '';
-  return '<em class="lb-egg-lv" style="color:' + LB_EGG_LV[lv].c + '">' + LB_EGG_LV[lv].n + '</em>';
+  // v4077（用户要求·色参数唯一化）：品质色一律取**唯一源** lbBpStageCol（LB_BP_STAGE_COL 定稿 6 档）；旧实现直取 LB_EGG_LV.c（老版本 #d7d7d7/#e6194b）已废弃
+  var _qi = LB_EGG_LV_ORDER.indexOf(lv); if(_qi < 0) _qi = 0;
+  var _c = null; try{ _c = lbBpStageCol(_qi); }catch(e0){ _c = null; }
+  if(!_c) _c = LB_EGG_LV[lv].c;
+  return '<em class="lb-egg-lv" style="color:' + _c + '">' + LB_EGG_LV[lv].n + '</em>';
 }
 // v3968（用户口径）：建筑材质排序 —— **唯一数据源** = 部署的 lb_material.json（类型排序只用该文件，不允许其它来源）
 var LB_MAT_DOC = null;   // v3969：改用独立全局（原挂 LB 对象，页面早期 LB 未就绪会导致启动加载失效）
@@ -17100,6 +17138,9 @@ function lbRulesMerge(){
   }catch(e){}
   _union(LB_FULL_BREED_EXTRA, 'fullBreedExtra');          // 完整繁育栏特例
   _obj(LB_EGG_LV, 'eggLv');                               // 蛋等级
+  _obj(LB_FAM_SUB, 'famSubOrder');                        // v4059：族内子序（元素/肉类）
+  _obj(LB_FAM_BLK, 'famBlockRank');                        // v4072：块间锚定（浆果→蔬菜）
+  _obj(LB_FAM_LAST, 'famBlockLast');                      // v4073：节日族垫底
   _obj(LB_EGG_MAP, 'eggMap');                             // 蛋图鉴映射
   try{ _LB_EGG_KEYS = Object.keys(LB_EGG_MAP).sort(function(a,b){ return b.length - a.length; }); }catch(e){}   // 长键优先缓存重建
   _obj(LB_DYE_FAM_FIX, 'dyeFamFix');                      // 染料族修正
@@ -17142,6 +17183,7 @@ function lbRulesMerge(){
   _obj(LB_CONT_CAP_SHARED, 'contCapShared');              // 部落共享容器
   _obj(LB_CONT_CAP_EQUIP, 'contCapEquip');                // 装备栏容器
   try{ if(j.itemFamilyWords && j.itemFamilyWords.length) LB_ITEM_FAM = j.itemFamilyWords; }catch(e){}   // v4011：族关键词表（整体替换＝顺序敏感；空=保持现状）
+  try{ if(j.itemFamilyCls) LB_ITEM_FAM_CLS = j.itemFamilyCls; }catch(e){}   // v4115（用户口径）：类名族表（独立单元四族）
   try{ if(j.weaponTypeWords && j.weaponTypeWords.length) LB_WEAPON_TYPE = j.weaponTypeWords; }catch(e){}   // v4044：武装类型词（矛/盾/枪/弓弩）
   try{ if(j.toolTypeWords && j.toolTypeWords.length) LB_TOOL_TYPE = j.toolTypeWords; }catch(e){}           // v4044：工具类型词（镐/斧/枪）
   try{ if(j.ammoTypeWords && j.ammoTypeWords.length) LB_AMMO_TYPE = j.ammoTypeWords; }catch(e){}           // v4044：弹药类型词（箭/子弹/投掷物）
@@ -17255,11 +17297,12 @@ function lbItemSortKey(base){
 //   名字（剥修饰后）只要**包含**任一族词即归该族（元素* / *箭 / *镖 / *子弹 / *炮弹…全族聚块）。
 //   ⚠️ 族表 = **数据驱动**（dino_rules.json.itemFamilyWords，唯一数据源；HTML 内零硬编码）；
 //      数组顺序 = 匹配优先级（先命中先归族）；条目 ["匹配词","族键"]，族键缺省 = 匹配词（用于别名归并：手榴弹→手雷、镖→箭）
-var LB_ITEM_MOD_WORDS = ['不稳定的','稳定的','磨制的','粗糙的','精制的','精美的','强化的','咒缚','腥红','黑色','白色','红色','蓝色','黄色','绿色','紫色','橙色','灰色','金色','银色','大型','中型','小型','巨型','迷你','优质','简易','工业','军用','医疗','精英','传说','原始','上古','探索者','熟','烤','干','焦','生'];
+var LB_ITEM_MOD_WORDS = ['不稳定的','稳定的','磨制的','粗糙的','精制的','精美的','强化的','咒缚','腥红','黑色','白色','红色','蓝色','黄色','绿色','紫色','橙色','灰色','金色','银色','大型','中型','小型','巨型','迷你','优质','简易','工业','军用','医疗','传说','原始','上古','探索者','熟','烤','干','焦','生'];
 // v4032（用户口径）：“咒缚”当修饰词剥离 —— 咒缚防弹靴→「防弹」族、咒缚泰克靴→「泰克」族（不单独成族）
 // v4026（用户口径）：移除「泰克」——原先把泰克当面"修饰词"剥掉首缀，导致泰克护甲 5 件套（头盔/胸甲/手套/护腿/靴）
 //   各自按「头盔/胸甲/手套/护腿/靴」散落到其它套装中间（实测位次 22/53/59/60/66）；移除后按「泰克*」整块聚拢
 var LB_ITEM_FAM = [];    // v4011：族关键词表（由 dino_rules.json 异步填充；空表 ⇒ 安全降级为纯修饰剥离口径）
+var LB_ITEM_FAM_CLS = null;   // v4115（用户口径）：类名族表（独立单元四族；由 dino_rules.json 填充；null ⇒ 降级为纯原链）
 // v4044（用户口径）：手持三栏**类型词表**（数据驱动，来自 dino_rules.json）—— 用于「武装/工具/弹药」按物件类型聚块
 var LB_WEAPON_TYPE = [], LB_TOOL_TYPE = [], LB_AMMO_TYPE = [];
 function lbItemFamOf(s){
@@ -17273,6 +17316,39 @@ function lbItemFamOf(s){
     }
   }catch(e){}
   return '';
+}
+// v4115（用户口径）：类名判定 —— 独立单元四族（炮台/人工炮塔/载具/未组装）族归属**唯一由类名决定**；
+//   ex=排除表（命中即交回原链）；rules=按序子串规则（先具体后泛化）；（数据源 dino_rules.itemFamilyCls）
+function lbItemFamByCls(k){
+  try{
+    var C = LB_ITEM_FAM_CLS; if(!C) return '';
+    var s = String(k || '');
+    var ex = C.ex || [];
+    for(var i = 0; i < ex.length; i++){
+      var _x = String(ex[i] || ''); if(!_x) continue;
+      if(_x.charAt(0) === '^'){ if(s.indexOf(_x.slice(1)) === 0) return ''; }   // v4118：^ 前缀匹配（^Skin_ 只拦前缀键）
+      else if(s.indexOf(_x) >= 0) return '';
+    }
+    var rs = C.rules || [];
+    for(var j = 0; j < rs.length; j++){
+      var e = rs[j]; if(!e || !e[0]) continue;
+      var _p = String(e[0]);   // v4116：支持 re: 前缀（精确/正则规则，防同名误伤）；v4120：支持 = 精确（含空值保护）
+      var _v = (e[1] === undefined || e[1] === null) ? _p : String(e[1]);
+      if(_p.slice(0, 3) === 're:'){
+        var _re = null; try{ _re = new RegExp(_p.slice(3)); }catch(e1){ continue; }
+        if(_re.test(s)) return _v;
+      } else if(_p.charAt(0) === '='){
+        if(s === _p.slice(1)) return _v;
+      } else if(s.indexOf(_p) >= 0) return _v;
+    }
+  }catch(e0){}
+  return '';
+}
+// v4115：排序核心词按 base 取 —— 类名族键优先补位（保删词后全键排序核心词不变），其余走原核心词
+function lbItemCoreByBase(b){
+  try{ var f = lbItemFamByCls(b); if(f) return f; }catch(e0){}
+  var zn = ''; try{ zn = String(((LB_ITEM_ZH || {})[b] || {}).zh || b); }catch(e1){ zn = String(b || ''); }
+  return lbItemCoreZh(zn);
 }
 // v4027（提速）：核心词计算记忆化 —— 排序比较器内原先每条比较重算 2 次（2,827 键 ≈ 3.3 万次比较 ⇒ 1,375ms）
 var LB_COREZH_MEMO = {}, LB_COREZH_SIG = null;
@@ -17304,18 +17380,24 @@ function lbItemCoreZhCalc(zh){
 // v3610（用户要求）：战利品组排序 —— **BOSS 战利品前置**；同 BOSS 按难度 **普通/简单 → 困难/中等 → 精英**；BOSS 之间按 BOSS 名中文拼音
 //   BOSS 名单（用户确认的 11 个竞技场 Boss）
 var LB_BOSS_TROPHY = [
-  { n:'育母蜘蛛', re:/Broodmother|育母蜘蛛/i },
-  { n:'大猩猩', re:/Gorilla|Megapithecus|大猩猩/i },
-  { n:'喷火龙', re:/\bDragon\b|喷火龙/i },
-  { n:'蛇发女妖', re:/Gorgon|蛇发女妖/i },
-  { n:'狮身蝎尾兽', re:/Manticore|狮身蝎尾兽/i },
-  { n:'独眼巨人', re:/Cyclops|独眼巨人/i },
-  { n:'海德拉', re:/Hydra|海德拉/i },
-  { n:'君王泰坦', re:/King\s*Titan|Kaiju_King|君王泰坦/i },
-  { n:'寒冰飞龙女王', re:/IceWyvern|Nunatak|寒冰飞龙/i },
-  { n:'罗克韦尔', re:/Rockwell|罗克韦尔/i },
-  { n:'电鳗首领', re:/EelBoss|电鳗/i }
+  { n:'育母蜘蛛', re:/Broodmother|育母蜘蛛/i, map:'孤岛' },
+  { n:'大猩猩', re:/Gorilla|Megapithecus|大猩猩/i, map:'孤岛' },
+  { n:'喷火龙', re:/\bDragon\b|喷火龙/i, map:'孤岛' },
+  { n:'蛇发女妖', re:/Gorgon|蛇发女妖/i, map:'仙境' },
+  { n:'狮身蝎尾兽', re:/Manticore|狮身蝎尾兽/i, map:'焦土' },
+  { n:'独眼巨人', re:/Cyclops|独眼巨人/i, map:'' },
+  { n:'海德拉', re:/Hydra|海德拉/i, map:'' },
+  { n:'君王泰坦', re:/King\s*Titan|Kaiju_King|君王泰坦/i, map:'灭绝' },
+  { n:'寒冰飞龙女王', re:/IceWyvern|Nunatak|寒冰飞龙/i, map:'' },
+  { n:'罗克韦尔', re:/Rockwell|罗克韦尔/i, map:'畸变' },
+  { n:'电鳗首领', re:/EelBoss|电鳗/i, map:'创世纪' }
 ];
+// v4059（用户要求）：战利品 BOSS 按**地图序**排序（孤岛→焦土→畸变→灭绝→仙境→瓦尔盖罗→创世纪→其它）
+var LB_TROPHY_MAP_ORDER = ['孤岛','焦土','畸变','灭绝','仙境','瓦尔盖罗','创世纪'];
+function lbTrophyMapRank(bo){
+  var i = LB_TROPHY_MAP_ORDER.indexOf(String((bo && bo.map) || ''));
+  return i < 0 ? 99 : i;
+}
 function lbTrophyBossOf(base){
   var t = (LB_ITEM_ZH || {})[base] || {};
   var hay = String(base) + ' ' + String(t.en || '') + ' ' + String(t.zh || '');
@@ -17401,6 +17483,7 @@ function lbIsAuthStruct(base){   // v3948（用户要求）：是否属 ASA 权�
   }catch(e){ return false; }
 }
 var LB_QUEST_KEYS = ['PrimalStructurePowerNode_Damaged','PowerNode_Damaged','LC_Outpost_LootStructureKey','LC_Outpost_RepairMaterials','BrigShipPlayerFollowingBP','SloopShipPlayerFollowingBP','TriremeShipPlayerFollowingBP'];   // v3993（方案A）：**历史兜底名单**（主源已迁至词典 `quest:1` 标记；保留作防御）
+// v4110（用户口径）：**恢复 3 个护航船键**（回退 v4109；护航船=任务物品，词典 quest 标记与名单双通道过滤）
 // v3993（用户口径·方案A 第 2 步）：任务物品标记**唯一源 = 词典 item_zh.json 的 `quest:1`**（与 switch/ase 同口径）
 //   机制：词典标记（数据驱动）→ 前端 O(1) 索引（登记原键 + 归一化键，长短键互通）→ lbIsQuestKey 双查（词典为主，名单兜底）
 //   ⇒ 今后新增任务物品只需在词典打 quest 标记，**无需改前端代码**（杜绝硬编码名单漏网）
@@ -17585,6 +17668,16 @@ function lbItemNoHaveByKind(){
     // v3600（用户要求）：**受精卵隐藏改为纯技术判据** —— 词典 `en` 以 `Fertilized ` 开头即整条跳过（**不再依赖中文名**；
     //   注：存档类名无法区分受精/未受精 —— 二者同一个 item 类，实测 Isl+Cen 类名含 `Fertilized` 者 0 条，故采用 en 前缀）
     if(/^Fertilized\s/i.test(String(t.en || ''))) return;
+    // v4071（用户要求）：**远古之爪种子隐藏**（未来按「远古之爪胚胎」显示；当前不显示）
+    if(String(t.zh || '').indexOf('远古之爪种子') >= 0) return;
+    // v4081（用户要求）：**虫卵/鱼卵样式的蛋无「未受精」版**（做不了饲料、不属于食用卵）→ 浮窗过滤
+    //   （词典层保留：存档反查/容器显示不受影响；名单=节胸虫/沙蛾/螳螂/蜘蛛/肺蝎/血蛛/咕隆/鱼卵/鮟鱇鱼/托斯特巨鱿）
+    var _noUnfert = { Spider:1, Arthro:1, Moth:1, Mantis:1, Scorpion:1, BloodStalker:1, BogSpider:1, LostChargePet:1, UnderwaterEgg:1, Angler:1, Tusoteuthis:1 };
+    var _b0 = String(base).split('_'), _lt0 = _b0[_b0.length - 1];
+    if(_lt0 === 'C'){ _b0.pop(); _lt0 = _b0[_b0.length - 1]; }
+    if(_noUnfert[_lt0]) return;
+    // v4083（用户要求）：初始笔记浮窗过滤
+    if(base === 'StartingNote') return;
     // v3598（用户要求）：未受精蛋独立分组 —— **须在 kind 白名单检查之前**判定（Egg_Boa / Egg_Griffin 的 kind 为空，否则会被丢弃）
     if(lbEggIs(base, t)) k = 'egg';
     if(!byKind[k]) return;
@@ -17622,15 +17715,14 @@ function lbItemNoHaveByKind(){
     // v3947（用户要求）：**构件只放 ASA 权威对照表中的建筑**（词典 zev 含「归类=建筑」，用户校对来源），其余 kind=structure 全部归「设施」
     if(k === 'structure' && lbIsPubFacKey(base)) return;   // v3952（用户要求）：建筑栏剔除公共设施（源头加固，兼搜索/其它路径）
     if(k === 'structure' && !lbIsAuthStruct(base)) k = 'facility';   // v3948（用户要求）：构件只放 ASA 权威对照表（_ASA8类权威对照表.html）内的建筑
-    if(!OTHER[k] && lbIsSpeciesBound(base)) return;
+    if(!OTHER[k] && lbIsSpeciesBound(base) && !(t.tool === 1)) return;   // v4122（用户口径）：显式「工具」标记（tool:1）豁免物种绑定过滤 —— 侦察机遥控器归手持·工具组
     // v4016（用户要求）：盾 **并入武器**（护甲桶中键名含 Shield 或中文含「盾」者；实测：金属盾牌 / 泰克盾 / 防暴盾 / 木制盾牌 4 条）
     if(k === 'armor' && (/Shield/i.test(String(base)) || String(t.zh || '').indexOf('盾') >= 0)) k = 'weapon';
     // v3581（用户要求）：染料独立分组（与消耗品同级）——中文名含「染料」者从 consumable 移出（词典里染料键名无规律：Misc_*/Yellow_*/Orange_*/Blue_*/Greyscale_* 等）
     // v3594（用户要求）：「染料」**本体**是特例 —— 词典键 `Dye`（zh 恰为「染料」/ en `Dyes`，kind=consumable）不是某种颜色，应留在消耗品组；
     //   故此处加例外（键名 + en 双判据，防前缀双份变体），其余 126 条单色染料仍进 dye 组
-    // v3613：染料判定加「键以 `Dye_` 开头」—— 官方中文里个别染料名不含「染料」二字（如「蔚蓝色」= Celeste），
-    //   仅按中文判定会漏进消耗品组（线上实测缺 1 条）
-    if((String(t.zh || '').indexOf('染料') >= 0 || /^Dye_/.test(String(base))) && base !== 'Dye' && String(t.en || '') !== 'Dyes'){ k = 'dye'; }
+    // v4124（用户口径）：染料判定**纯类名**（lbIsDyeKey）—— 原「zh 含『染料』」中文判据已移除（蔚蓝色等官方名不含「染料」二字）
+    if(lbIsDyeKey(base)){ k = 'dye'; }
     var kb = _aggKey(base), nb = lbCanonBase(base);
     if(_seen[kb] || _seen[nb]) return;   // v3583：**跨分组**去重（同一物品因词典 kind 不一致分落两组时只保留先出现的，如 有机聚合物）
                                          // v3987：同时按「规范短名」判重（让已隐藏项的短名占位能拦住同名前缀长键，而不同物品不再互相挤占）
@@ -17647,20 +17739,84 @@ function lbItemNoHaveByKind(){
   var _QK = { resource:1, ammo:1, consumable:1, attachment:1, armor:1, weapon:1 };
   var _fOwnC = {}, _fFamC = {};
   function _fOwn(b){ if(_fOwnC[b] === undefined){ var v = 0; try{ v = Number(lbItemOwnCnt(b)) || 0; }catch(e0){ v = 0; } _fOwnC[b] = v; } return _fOwnC[b]; }
-  function _fFam(b){ if(_fFamC[b] === undefined){ var f = ''; try{ f = lbItemFamOf(lbItemCoreZh(String((zh[b]||{}).zh || b))); }catch(e0){ f = ''; } _fFamC[b] = f; } return _fFamC[b]; }
+  function _fFam(b){ if(_fFamC[b] === undefined){ var f = ''; try{ f = lbItemFamByCls(b); }catch(e0){ f = ''; } if(!f){ try{ f = lbItemFamOf(lbItemCoreZh(String((zh[b]||{}).zh || b))); }catch(e0){ f = ''; } } _fFamC[b] = f; } return _fFamC[b]; }
   Object.keys(byKind).forEach(function(k){
     var _fSum = {};   // v4012：本组内「族总量」（仅 _QK 组需要；v4031：+armor/weapon）
     if(_QK[k]){ byKind[k].forEach(function(b){ var f = _fFam(b); if(f){ _fSum[f] = (_fSum[f] || 0) + _fOwn(b); } }); }
     if(k === 'trophy'){
+      // v4086（用户要求）：族块层 —— 普通战利品(0) → 奖杯族(1，BOSS头) → 神器族(2，全列表最后)；神器族内按**地图发布序**
+      // v4093（用户口径）：名字含 "Trophy"（英文）的也算奖杯族（族词未命中时的补充判定）
+      function _tf(b){
+        try{
+          if(/^ApexDrop_/.test(String(b))) return '掉落物';                 // v4100(用户要求)：ApexDrop 全系列归「掉落物」族
+          if(/^(Onchopristis_Blade|Monodon_Horn|Water_Talon)$/.test(String(b))) return '掉落物';   // v4100：帆锯鳐刃/一角鲸角/水龙爪并入
+          var f = lbItemFamByCls(b) || '';
+          if(!f) f = lbItemFamOf(lbItemCoreZh(String((zh[b] || {}).zh || b))) || '';
+          if(f === '精英') f = '掉落物';                                    // v4100(用户要求)：精英族并入「掉落物」族
+          if(f) return f;
+          var _en = String(((zh[b] || {}).en) || '');
+          if(/\btrophy\b/i.test(_en)) return '奖杯';
+          return '';
+        }catch(e){ return ''; }
+      }
+      function _aRankFn(b){
+        var so = LB_FAM_SUB['神器']; if(!so || !so.words) return 50;
+        var zn0 = String((zh[b] || {}).zh || b);
+        for(var i = 0; i < so.words.length; i++){ if(so.words[i] && zn0.indexOf(String(so.words[i][0])) >= 0) return Number(so.words[i][1]) || 0; }
+        return 50;
+      }
+      function _jRankFn(b){                                              // v4094（用户要求）：奖杯族内 = 地图发布序（words 由 dino_rules.famSubOrder['奖杯'] 填充）
+        var so = LB_FAM_SUB['奖杯']; if(!so || !so.words) return 50;
+        var zn0 = String((zh[b] || {}).zh || b);
+        for(var i = 0; i < so.words.length; i++){ if(so.words[i] && zn0.indexOf(String(so.words[i][0])) >= 0) return Number(so.words[i][1]) || 0; }
+        return 50;
+      }
       var rows = byKind[k].map(function(b){
         var bo = null; try{ bo = lbTrophyBossOf(b); }catch(e){}
-        return { b:b, boss: bo ? bo.n : '', bossOn: bo ? 0 : 1, diff: lbTrophyDiffRank(b),
-                 sk: lbItemSortKey(b), zn: String((zh[b] || {}).zh || b) };
+        var f = _tf(b);
+        var _zn0 = String((zh[b] || {}).zh || b);
+        return { b:b, fam:f, aRank:(f === '神器' ? _aRankFn(b) : 0), jRank:(f === '奖杯' ? _jRankFn(b) : 0),
+                 jcore: _zn0.replace(/^(简单|中等|困难|普通)/, ''), boss: bo ? bo.n : '', bossOn: bo ? 0 : 1, diff: lbTrophyDiffRank(b),
+                 mrank: (bo ? lbTrophyMapRank(bo) : 0),
+                 sk: lbItemSortKey(b), zn: _zn0 };
       });
+      // v4101（用户要求）：掉落物族 = 两段（普通→精英）＋同类块（勾爪/焰鬃獠猪）＋按当前角色拥有数量降序（块间=块内总量、块内=单项数量）
+      var _dfSum = {};
+      rows.forEach(function(r){
+        if(r.fam !== '掉落物') return;
+        r.dseg = (/^精英/.test(r.zn)) ? 1 : 0;
+        r.dblk = r.zn;
+        if(/勾爪$/.test(r.zn) || r.zn === '水龙爪') r.dblk = '勾爪';
+        else if(r.zn.indexOf('焰鬃獠猪') === 0) r.dblk = '焰鬃獠猪';
+        r.down = 0; try{ r.down = Number(lbItemOwnCnt(r.b)) || 0; }catch(e5){ r.down = 0; }
+        var _dkey = r.dseg + '|' + r.dblk;   // v4102（修复）：块总量**按段分桶**（精英水晶飞龙勾爪不得借用普通勾爪块总量）
+        _dfSum[_dkey] = (_dfSum[_dkey] || 0) + r.down;
+      });
+      rows.forEach(function(r){ if(r.fam === '掉落物') r.dsum = _dfSum[r.dseg + '|' + r.dblk] || 0; });
       rows.sort(function(x, y){
-        if(x.bossOn !== y.bossOn) return x.bossOn - y.bossOn;
+        var fa = LB_FAM_LAST[x.fam] || 0, fb = LB_FAM_LAST[y.fam] || 0;   // v4086：0 普通 → 1 奖杯 → 2 神器
+        if(fa !== fb) return fa - fb;
+        if(x.fam === '神器'){                                             // v4086：神器族内 = 地图发布序（孤岛11→焦土3→畸变4→灭绝3→探索）
+          if(x.aRank !== y.aRank) return x.aRank - y.aRank;
+          return coll.compare(x.zn, y.zn);
+        }
+        if(x.fam === '奖杯'){                                             // v4094（用户要求）：奖杯族内 = 地图发布序（孤岛→焦土→畸变→灭绝→仙境→创世纪→繁星→其他）；档内：核心名 → 难度 → 全名
+          if(x.jRank !== y.jRank) return x.jRank - y.jRank;
+          var rjc = coll.compare(x.jcore, y.jcore); if(rjc) return rjc;
+          if(x.diff !== y.diff) return x.diff - y.diff;
+          return coll.compare(x.zn, y.zn);
+        }
+        if(x.fam === '掉落物' && y.fam === '掉落物'){                     // v4101（用户要求）：掉落物：普通整体在前、精英整体在后 → 同类块聚（勾爪/焰鬃獠猪）→ 块间·块内按当前角色拥有数量降序
+          if(x.dseg !== y.dseg) return x.dseg - y.dseg;
+          if(x.dsum !== y.dsum) return y.dsum - x.dsum;
+          var rdb = coll.compare(x.dblk, y.dblk); if(rdb) return rdb;
+          if(x.down !== y.down) return y.down - x.down;
+          var rdd = coll.compare(x.sk, y.sk); return rdd || coll.compare(x.zn, y.zn);
+        }
+        if(x.bossOn !== y.bossOn) return y.bossOn - x.bossOn;   // v4059（用户要求）：普通掉落先行、BOSS 战利品置后
         // v3611 修复：bossOn = BOSS?0:1 ⇒ 非 BOSS 分支应为 `if(x.bossOn)`（原 `!x.bossOn` 取反，导致 BOSS 条目误走主词拼音排序）
         if(x.bossOn){ var r0 = coll.compare(x.sk, y.sk); return r0 || coll.compare(x.zn, y.zn); }
+        if(x.mrank !== y.mrank) return x.mrank - y.mrank;       // v4059（用户要求）：BOSS 按地图序（孤岛→…→创世纪→其它）
         if(x.boss !== y.boss) return coll.compare(x.boss, y.boss);
         if(x.diff !== y.diff) return x.diff - y.diff;
         var r1 = coll.compare(x.sk, y.sk); return r1 || coll.compare(x.zn, y.zn);
@@ -17716,7 +17872,7 @@ function lbItemNoHaveByKind(){
       }
       // v3999（用户口径·方案2）：核心词聚类（去修饰词缀 → 核心词拼音 → 全名拼音），替代 v3609 英文末词口径
       var _za = String((zh[a]||{}).zh || a), _zb = String((zh[b]||{}).zh || b);
-      var r = coll.compare(lbItemCoreZh(_za), lbItemCoreZh(_zb));
+      var r = coll.compare(lbItemCoreByBase(a), lbItemCoreByBase(b));
       if(r) return r;
       return coll.compare(_za, _zb);
     });
@@ -17737,6 +17893,8 @@ function lbFamBlockSort(list, priWords){
   function _fam(b){
     if(_famC[b] === undefined){
       var f = '';
+      try{ f = lbItemFamByCls(b); }catch(e0){ f = ''; }   // v4115（用户口径）：类名判定先行（独立单元四族）
+      if(!f){
       var _zn = String((zh[b]||{}).zh || b), _cv = '';
       try{ _cv = lbItemCoreZh(_zn); }catch(e0){ _cv = _zn; }
       // v4044（用户口径）：**类型词优先** —— 手持三栏按「矛/盾/枪/弓弩、镐/斧/枪、箭/子弹/投掷物」粒度聚块；
@@ -17749,6 +17907,7 @@ function lbFamBlockSort(list, priWords){
         }
       }
       if(!f){ try{ f = lbItemFamOf(_cv); }catch(e0){ f = ''; } }
+      }
       _famC[b] = f;
     }
     return _famC[b];
@@ -17759,23 +17918,42 @@ function lbFamBlockSort(list, priWords){
   list.forEach(function(b){
     var f = _fam(b), key = f ? ('F:' + f) : ('S:' + b);
     var blk = _blkMap[key];
-    if(!blk){ blk = _blkMap[key] = { q: f ? (_sum[f] || 0) : _own(b), items: [] }; _blkArr.push(blk); }
+    if(!blk){ blk = _blkMap[key] = { q: f ? (_sum[f] || 0) : _own(b), f: f, items: [] }; _blkArr.push(blk); }
     blk.items.push(b);
   });
   _blkArr.forEach(function(blk){
+    var _so = (blk.f && LB_FAM_SUB[blk.f]) || null;   // v4059/v4061（用户要求）：族内子序（元素→碎片→粉尘、生肉→熟肉→肉干）；v4061：last 词改为档内垫底（腥红/腐肉每组内最后）+ 毛皮/油脂族内定序
+    function _subRank(x){
+      if(!_so) return [0, 0, 0];
+      var zn = String((zh[x] || {}).zh || x), w = _so.words || [], r = 50, sub = 0, un = 0;
+      for(var i = 0; i < w.length; i++){ if(w[i] && zn.indexOf(String(w[i][0])) >= 0){ r = Number(w[i][1]) || 0; break; } }
+      var ls = _so.last || [];
+      for(var j = 0; j < ls.length; j++){ if(ls[j] && zn.indexOf(String(ls[j])) >= 0){ sub = 1; break; } }
+      var us = _so.unst || [];
+      for(var k2 = 0; k2 < us.length; k2++){ if(us[k2] && zn.indexOf(String(us[k2])) >= 0){ un = 1; break; } }
+      return [r, sub, un];
+    }
     blk.items.sort(function(a, b){
+      var ra = _subRank(a), rb = _subRank(b);
+      if(ra[0] !== rb[0]) return ra[0] - rb[0];
+      if(ra[1] !== rb[1]) return ra[1] - rb[1];
+      if(ra[2] !== rb[2]) return ra[2] - rb[2];
       var qa = _own(a), qb = _own(b);
       if(qa !== qb) return qb - qa;
       var za = String((zh[a]||{}).zh || a), zb = String((zh[b]||{}).zh || b);
-      var r = coll.compare(lbItemCoreZh(za), lbItemCoreZh(zb));
+      var r = coll.compare(lbItemCoreByBase(a), lbItemCoreByBase(b));
       if(r) return r;
       return coll.compare(za, zb);
     });
   });
   _blkArr.sort(function(A, B){
+    var _ba = LB_FAM_BLK[A.f] || 0, _bb = LB_FAM_BLK[B.f] || 0;   // v4072（用户要求）：块间锚定（浆果→蔬菜 紧跟；其余按数量序）
+    if(_ba || _bb){ if(_ba && _bb) return _ba - _bb; return _ba ? -1 : 1; }
+    var _la = LB_FAM_LAST[A.f] || 0, _ln = LB_FAM_LAST[B.f] || 0;   // v4073（用户要求）：节日族块垫底（最后）
+    if(_la !== _ln) return _la - _ln;
     if(A.q !== B.q) return B.q - A.q;
     var za = String((zh[A.items[0]]||{}).zh || ''), zb = String((zh[B.items[0]]||{}).zh || '');
-    var r = coll.compare(lbItemCoreZh(za), lbItemCoreZh(zb));
+    var r = coll.compare(lbItemCoreByBase(A.items[0]), lbItemCoreByBase(B.items[0]));
     if(r) return r;
     return coll.compare(za, zb);
   });
@@ -17918,7 +18096,10 @@ function lbPickerBuildItemStruct(){
   return h;
 }
 function lbPickerBuildItemOther(){
-  if(LB._itemOtherHtml) return LB._itemOtherHtml;
+  var _oHasSig = '';   // v4101（用户要求）：含数量排序 ⇒ 缓存并入拥有索引签名（数据刷新/切角色后自动重建）
+  try{ lbItemOwnIndex(); _oHasSig = String(LB._itemOwnIdxKey || ''); }catch(e8){ _oHasSig = ''; }
+  if(LB._itemOtherHtml && LB._itemOtherSig === _oHasSig) return LB._itemOtherHtml;
+  LB._itemOtherSig = _oHasSig;
   var by = {};
   try{ by = lbItemNoHaveByKind(); }catch(e){ by = {}; }
   var h = '';
@@ -17928,11 +18109,28 @@ function lbPickerBuildItemOther(){
     var list = (by[g[0]] || []).slice();
     if(!list.length) return;
     if(g[0] === 'egg'){   // v3598（用户要求）：按饲料等级**依次排序**（用户口径：非凡 → 基础，高到低；同级按中文名）
+      // v4080（用户要求）：虫卵样式的蛋（蜘蛛/节胸虫/沙蛾/螳螂）统一列到「鱼卵」后面：普通蛋 → 鱼卵 → 虫卵组
       var _ec2 = new Intl.Collator('zh-Hans-CN');
+      var _bugSeg = { Spider:1, Arthro:1, Moth:1, Mantis:1 };
+      var _eggRank = function(x){
+        var b = String(x || '');
+        if(b === 'UnderwaterEgg' || b === 'PrimalItemConsumable_UnderwaterEgg') return 1;   // 鱼卵（锚点）
+        var s = b.split('_'), lt = s[s.length - 1];
+        if(lt === 'C'){ s.pop(); lt = s[s.length - 1]; }   // 防御：剥 _C 后缀
+        if(_bugSeg[lt]) return 2;   // 虫卵样式（垫底组）
+        return 0;
+      };
       list.sort(function(a, b){
+        var ga = _eggRank(a), gb = _eggRank(b);
+        if(ga !== gb) return ga - gb;
+        var za = String((LB_ITEM_ZH[a] || {}).zh || a), zb = String((LB_ITEM_ZH[b] || {}).zh || b);
+        if(ga !== 0) return _ec2.compare(za, zb);   // 鱼卵/虫卵组内按中文名
         var ra = LB_EGG_LV_ORDER.indexOf(lbEggLvOf(a)), rb = LB_EGG_LV_ORDER.indexOf(lbEggLvOf(b));
         if(ra !== rb) return rb - ra;
-        var za = String((LB_ITEM_ZH[a] || {}).zh || a), zb = String((LB_ITEM_ZH[b] || {}).zh || b);
+        var oa = 0, ob = 0;   // v4101（用户要求）：同品质内按当前角色拥有数量降序（多→少）
+        try{ oa = Number(lbItemOwnCnt(a)) || 0; }catch(e6){ oa = 0; }
+        try{ ob = Number(lbItemOwnCnt(b)) || 0; }catch(e7){ ob = 0; }
+        if(oa !== ob) return ob - oa;
         return _ec2.compare(za, zb);
       });
     }
