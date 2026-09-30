@@ -61,6 +61,25 @@ VOLCANO_SERVERS = {'Gen'}  # 阶段一：仅创世有火山计时
 VOLC_STATE_TTL_MS = 3000   # 2026-09-14：火山状态内存缓存 TTL——后端单点轮询 ⇒ N 个客户端也只 3s 一次 RCON（插件文档 §4 强约束）
 VOLC_LOG_TTL_MS = 2000     # v1146（用户定稿）：火山**事件台账**独立缓存槽——仅当 hooks.events 变化 / 30s 兜底时才被前端请求
 _VOLC_STATE_CACHE = {}     # server -> {'ts': epoch_ms, 'data': {...}}
+
+# ---- WorldProbe 公共设施实时查询（2026-09-30，插件 v9；用户口径：短时缓存共用 + 前端 CD）----
+WP_TYPES_TTL_MS = 600000   # 类别字典（极稳定，10min）
+WP_QUERY_TTL_MS = 5000     # 单服单类查询：短时缓存共用——N 个客户端 TTL 窗口内只发 1 次 RCON
+WP_WEATHER_TTL_MS = 10000  # 天气（本期仅预置路由，UI 不接）
+WP_SCAN_TTL_MS = 10000     # 聚合路由（子查询另有各自 5s 缓存）
+WP_CLASS_TTL_MS = 10000    # 类级计数（scan filter）；类计数变化慢
+WP_LIMIT_DEFAULT = 20      # RCON 响应 ~8KB 上限（插件 truncated 透传）
+WP_LIMIT_MAX = 100
+WP_SERVER_MAX = 11         # scan 聚合最多图数（= SERVERS 全量）
+_WP_TYPES_CACHE = {}       # server -> {'ts': ms, 'data': {...}}
+_WP_QUERY_CACHE = {}       # (server,type,limit) -> {'ts': ms, 'data': {...}}
+_WP_WEATHER_CACHE = {}     # server -> {'ts': ms, 'data': {...}}
+_WP_SCAN_CACHE = {}        # (type,(servers),limit) -> {'ts': ms, 'data': {...}}
+_WP_CLASS_CACHE = {}       # (cls,(servers)) -> {'ts': ms, 'data': {...}}
+_WP_LOCKS = {}             # 查询键 -> Lock（同键并发合并：后到者等锁→双检缓存，只发 1 条 RCON）
+_WP_LOCKS_GUARD = threading.Lock()
+_WP_CACHE_MAX = 2000       # 宽松上限；超限按 ts 清掉一半最旧（防 key 泄漏）
+_WP_SCAN_EXECUTOR = __import__('concurrent.futures', fromlist=['ThreadPoolExecutor']).ThreadPoolExecutor(max_workers=4)
 WEBP_DIR = os.path.join(os.path.dirname(ACCOUNTS_FILE), 'webp96')
 
 # 服务器 RCON 端口表（与 apps.yaml 对齐）
@@ -136,6 +155,7 @@ CMD_EGG_PROBE = 'TransferIdentityFix.EggProbe'
 CMD_INV_PROBE = 'TransferIdentityFix.InvProbe'  # 2026-09-04：库存扫描（饲料槽/风行蜥/未成年背包物品）
 CMD_CRAFTING_COST = 'TransferIdentityFix.CraftingCost'  # 2026-09-13：单蓝图制作材料（只读、无副作用）
 CMD_VOLCANO = 'TransferIdentityFix.Volcano'  # 2026-09-14：火山喷发权威状态（插件 v0.5.0；只读、无副作用）
+CMD_WORLDPROBE = 'TransferIdentityFix.WorldProbe'  # 2026-09-30：公共设施实时查询（插件 v9；只读、无副作用）
 CRAFTING_COST_SERVERS = set(SERVERS.keys())  # 2026-09-15：全服放开（用户确认所有地图均已部署 CraftingCost 命令；原阶段一白名单 {'Abe'}）
 CMD_LIST_PLAYERS = 'ListPlayers'  # v532：原生 RCON 在线玩家列表（联盟位置只查在线成员）
 CMD_SAVE_WORLD = 'SaveWorld'  # v17：原生 RCON 保存世界（强制存档，cryo.json.gz 落地后前端拉最新球数据）
@@ -1075,6 +1095,265 @@ def volcano_log(server):
     return out
 
 
+# ---- WorldProbe 公共设施实时查询（2026-09-30，插件 v9；只读、无副作用）----
+def _wp_trim(cache, now_ms):
+    """宽松上限：超 _WP_CACHE_MAX 时按 ts 清掉最旧一半（防 key 泄漏）。"""
+    if len(cache) <= _WP_CACHE_MAX:
+        return
+    try:
+        items = sorted(cache.items(), key=lambda kv: kv[1].get('ts', 0))
+        for k, _ in items[:len(items) // 2]:
+            cache.pop(k, None)
+    except Exception:
+        pass
+
+
+def _wp_lock(key):
+    """同键并发合并锁（锁自身泄漏防线：>2000 清空重建，最坏多跑一次 RCON）。"""
+    with _WP_LOCKS_GUARD:
+        lk = _WP_LOCKS.get(key)
+        if lk is None:
+            if len(_WP_LOCKS) > 2000:
+                _WP_LOCKS.clear()
+            lk = _WP_LOCKS[key] = threading.Lock()
+        return lk
+
+
+def _wp_rcon_json(port, cmd, server, type_s, now_ms, timeout=8):
+    """执行 WorldProbe 命令并解析 JSON；失败返回 (None, err_dict)。"""
+    try:
+        success, result = _rcon_str(port, cmd, timeout=timeout)
+    except Exception as e:
+        return None, {'ok': False, 'server': server, 'type': type_s, 'error': 'rcon: ' + str(e), 'serverNowMs': now_ms}
+    if not success or not result:
+        return None, {'ok': False, 'server': server, 'type': type_s, 'error': 'rcon empty', 'serverNowMs': now_ms}
+    try:
+        j = json.loads(result)
+    except Exception:
+        return None, {'ok': False, 'server': server, 'type': type_s, 'error': 'bad json', 'raw': str(result)[:200], 'serverNowMs': now_ms}
+    if not isinstance(j, dict):
+        return None, {'ok': False, 'server': server, 'type': type_s, 'error': 'bad payload', 'serverNowMs': now_ms}
+    return j, None
+
+
+def worldprobe_types(server):
+    """类别字典。TTL 600s（极稳定）。"""
+    port = SERVERS.get(server)
+    if not port:
+        return {'ok': False, 'server': server, 'error': 'unknown server'}
+    now_ms = int(time.time() * 1000)
+    c = _WP_TYPES_CACHE.get(server)
+    if c and (now_ms - c['ts'] < WP_TYPES_TTL_MS):
+        d = dict(c['data'])
+        d['cacheAgeMs'] = now_ms - c['ts']
+        d['serverNowMs'] = now_ms
+        return d
+    j, err = _wp_rcon_json(port, CMD_WORLDPROBE + ' types', server, None, now_ms)
+    if err:
+        return err
+    j['server'] = server
+    _WP_TYPES_CACHE[server] = {'ts': now_ms, 'data': j}
+    out = dict(j)
+    out['cacheAgeMs'] = 0
+    out['serverNowMs'] = now_ms
+    return out
+
+
+def worldprobe_query(server, type_s, limit, fresh=False):
+    """单服单类实时查询。短时缓存共用（5s）+ 同键并发合并：
+    N 个客户端在 TTL 窗口内也只产生 1 条 RCON（插件文档 §4：RCON 在游戏线程执行）。"""
+    port = SERVERS.get(server)
+    if not port:
+        return {'ok': False, 'server': server, 'error': 'unknown server'}
+    if not re.match(r'^[a-z_]{1,32}$', str(type_s or '')):
+        return {'ok': False, 'server': server, 'type': str(type_s or ''), 'error': 'bad type'}
+    try:
+        limit_n = int(limit)
+    except Exception:
+        limit_n = WP_LIMIT_DEFAULT
+    limit_n = max(1, min(WP_LIMIT_MAX, limit_n))
+    key = (server, str(type_s), limit_n)
+    now_ms = int(time.time() * 1000)
+    if not fresh:
+        c = _WP_QUERY_CACHE.get(key)
+        if c and (now_ms - c['ts'] < WP_QUERY_TTL_MS):
+            d = dict(c['data'])
+            d['cacheAgeMs'] = now_ms - c['ts']
+            d['serverNowMs'] = now_ms
+            return d
+    with _wp_lock(key):
+        now_ms = int(time.time() * 1000)
+        if not fresh:
+            c = _WP_QUERY_CACHE.get(key)
+            if c and (now_ms - c['ts'] < WP_QUERY_TTL_MS):
+                d = dict(c['data'])
+                d['cacheAgeMs'] = now_ms - c['ts']
+                d['serverNowMs'] = now_ms
+                return d
+        cmd = '%s query %s limit=%d' % (CMD_WORLDPROBE, str(type_s), limit_n)
+        j, err = _wp_rcon_json(port, cmd, server, str(type_s), now_ms)
+        if err:
+            return err
+        j['server'] = server
+        _WP_QUERY_CACHE[key] = {'ts': now_ms, 'data': j}
+        _wp_trim(_WP_QUERY_CACHE, now_ms)
+        out = dict(j)
+        out['cacheAgeMs'] = 0
+        out['serverNowMs'] = now_ms
+        return out
+
+
+def worldprobe_weather(server):
+    """天气（本期仅预置路由，UI 不接；TTL 10s）。"""
+    port = SERVERS.get(server)
+    if not port:
+        return {'ok': False, 'server': server, 'error': 'unknown server'}
+    now_ms = int(time.time() * 1000)
+    c = _WP_WEATHER_CACHE.get(server)
+    if c and (now_ms - c['ts'] < WP_WEATHER_TTL_MS):
+        d = dict(c['data'])
+        d['cacheAgeMs'] = now_ms - c['ts']
+        d['serverNowMs'] = now_ms
+        return d
+    j, err = _wp_rcon_json(port, CMD_WORLDPROBE + ' weather', server, None, now_ms)
+    if err:
+        return err
+    j['server'] = server
+    _WP_WEATHER_CACHE[server] = {'ts': now_ms, 'data': j}
+    out = dict(j)
+    out['cacheAgeMs'] = 0
+    out['serverNowMs'] = now_ms
+    return out
+
+
+def worldprobe_scan(type_s, servers, limit, fresh=False):
+    """聚合路由：逐图并行 query（复用单图 5s 缓存/同键合并），按图分组返回。
+    并发 ≤4（_WP_SCAN_EXECUTOR）；聚合结果 TTL 10s。"""
+    if not re.match(r'^[a-z_]{1,32}$', str(type_s or '')):
+        return {'ok': False, 'type': str(type_s or ''), 'error': 'bad type'}
+    if isinstance(servers, str):
+        servers = [s.strip() for s in servers.split(',') if s.strip()]
+    if not isinstance(servers, (list, tuple)) or not servers:
+        servers = list(SERVERS.keys())
+    seen = set()
+    clean = []
+    for s in servers:
+        if s in SERVERS and s not in seen:
+            seen.add(s)
+            clean.append(s)
+    if not clean:
+        return {'ok': False, 'type': str(type_s), 'error': 'no valid servers'}
+    clean = clean[:WP_SERVER_MAX]
+    try:
+        limit_n = int(limit)
+    except Exception:
+        limit_n = WP_LIMIT_DEFAULT
+    limit_n = max(1, min(WP_LIMIT_MAX, limit_n))
+    key = (str(type_s), tuple(clean), limit_n)
+    now_ms = int(time.time() * 1000)
+    if not fresh:
+        c = _WP_SCAN_CACHE.get(key)
+        if c and (now_ms - c['ts'] < WP_SCAN_TTL_MS):
+            d = dict(c['data'])
+            d['cacheAgeMs'] = now_ms - c['ts']
+            d['serverNowMs'] = now_ms
+            return d
+    futures = {}
+    for s in clean:
+        futures[s] = _WP_SCAN_EXECUTOR.submit(worldprobe_query, s, str(type_s), limit_n, fresh)
+    by_server = {}
+    total_matched = 0
+    for s in clean:
+        try:
+            r = futures[s].result(timeout=12)
+        except Exception as e:
+            r = {'ok': False, 'server': s, 'error': 'agg timeout: %r' % (e,), 'serverNowMs': now_ms}
+        by_server[s] = r
+        if r.get('ok') and isinstance(r.get('matched'), int):
+            total_matched += r.get('matched') or 0
+    out = {'ok': True, 'type': str(type_s), 'servers': clean, 'byServer': by_server,
+           'totalMatched': total_matched, 'serverNowMs': now_ms, 'cacheAgeMs': 0}
+    _WP_SCAN_CACHE[key] = {'ts': int(time.time() * 1000), 'data': out}
+    _wp_trim(_WP_SCAN_CACHE, now_ms)
+    return out
+
+
+def worldprobe_class(cls_s, servers, fresh=False):
+    """类级计数（scan filter=<全类名> top=1，classes 精确匹配求和）。
+    cls_s 支持 'A|B' 多类（如 Santiago 的两段箱类）；TTL 10s + 同键并发合并。
+    适用：探险者笔记箱 19 类 / 河狸坝 3 实体——跨图统一类名者。"""
+    cls_list = [c.strip() for c in str(cls_s or '').split('|') if c.strip()]
+    if not cls_list or len(cls_list) > 4 or any(not re.match(r'^[A-Za-z0-9_]{1,64}$', c) for c in cls_list):
+        return {'ok': False, 'cls': str(cls_s or ''), 'error': 'bad cls'}
+    if isinstance(servers, str):
+        servers = [s.strip() for s in servers.split(',') if s.strip()]
+    if not isinstance(servers, (list, tuple)) or not servers:
+        servers = list(SERVERS.keys())
+    seen = set()
+    clean = []
+    for s in servers:
+        if s in SERVERS and s not in seen:
+            seen.add(s)
+            clean.append(s)
+    if not clean:
+        return {'ok': False, 'cls': cls_list, 'error': 'no valid servers'}
+    clean = clean[:WP_SERVER_MAX]
+    key = ('cls', tuple(cls_list), tuple(clean))
+    now_ms = int(time.time() * 1000)
+    if not fresh:
+        c = _WP_CLASS_CACHE.get(key)
+        if c and (now_ms - c['ts'] < WP_CLASS_TTL_MS):
+            d = dict(c['data'])
+            d['cacheAgeMs'] = now_ms - c['ts']
+            d['serverNowMs'] = now_ms
+            return d
+    with _wp_lock(key):
+        now_ms = int(time.time() * 1000)
+        if not fresh:
+            c = _WP_CLASS_CACHE.get(key)
+            if c and (now_ms - c['ts'] < WP_CLASS_TTL_MS):
+                d = dict(c['data'])
+                d['cacheAgeMs'] = now_ms - c['ts']
+                d['serverNowMs'] = now_ms
+                return d
+
+        def _one(server):
+            port = SERVERS.get(server)
+            total = 0
+            counts = {}
+            for cl in cls_list:
+                cmd = '%s scan filter=%s top=1' % (CMD_WORLDPROBE, cl)
+                j, err = _wp_rcon_json(port, cmd, server, None, now_ms)
+                if err:
+                    return err
+                got = 0
+                for item in (j.get('classes') or []):
+                    if item.get('class') == cl:
+                        got += int(item.get('count') or 0)
+                counts[cl] = got
+                total += got
+            return {'ok': True, 'server': server, 'cls': cls_list, 'counts': counts, 'total': total, 'serverNowMs': now_ms}
+
+        futures = {}
+        for s in clean:
+            futures[s] = _WP_SCAN_EXECUTOR.submit(_one, s)
+        by_server = {}
+        tot = 0
+        for s in clean:
+            try:
+                r = futures[s].result(timeout=14)
+            except Exception as e:
+                r = {'ok': False, 'server': s, 'error': 'agg timeout: %r' % (e,), 'serverNowMs': now_ms}
+            by_server[s] = r
+            if r.get('ok'):
+                tot += r.get('total') or 0
+        out = {'ok': True, 'cls': cls_list, 'servers': clean, 'byServer': by_server,
+               'total': tot, 'serverNowMs': now_ms, 'cacheAgeMs': 0}
+        _WP_CLASS_CACHE[key] = {'ts': int(time.time() * 1000), 'data': out}
+        _wp_trim(_WP_CLASS_CACHE, now_ms)
+        return out
+
+
 def get_dino(server, dino1, dino2):
     """单龙实时查询：RCON ArkGetDino。返回 {found, tribeId, babyAge, ...}。
     v14（2026-09-02）：扩展返回完整实时字段（babyAge/isBaby/level/name/坐标等）——
@@ -1665,6 +1944,41 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(400, {'ok': False, 'error': 'missing server'})
                 return
             self._send(200, volcano_log(server))
+        # 2026-09-30：WorldProbe 公共设施实时查询（types / query / weather / scan；短时缓存共用 + 同键并发合并）
+        elif path.endswith('worldprobe_types'):
+            server = g('server')
+            if not server:
+                self._send(400, {'ok': False, 'error': 'missing server'})
+                return
+            self._send(200, worldprobe_types(server))
+        elif path.endswith('worldprobe_weather'):
+            server = g('server')
+            if not server:
+                self._send(400, {'ok': False, 'error': 'missing server'})
+                return
+            self._send(200, worldprobe_weather(server))
+        elif path.endswith('worldprobe_query'):
+            server = g('server')
+            type_s = g('type')
+            if not (server and type_s):
+                self._send(400, {'ok': False, 'error': 'missing server/type'})
+                return
+            fresh = g('fresh').lower() in ('1', 'true', 'yes')
+            self._send(200, worldprobe_query(server, type_s, g('limit', str(WP_LIMIT_DEFAULT)), fresh))
+        elif path.endswith('worldprobe_scan'):
+            type_s = g('type')
+            if not type_s:
+                self._send(400, {'ok': False, 'error': 'missing type'})
+                return
+            fresh = g('fresh').lower() in ('1', 'true', 'yes')
+            self._send(200, worldprobe_scan(type_s, g('servers'), g('limit', str(WP_LIMIT_DEFAULT)), fresh))
+        elif path.endswith('worldprobe_class'):
+            cls_s = g('cls')
+            if not cls_s:
+                self._send(400, {'ok': False, 'error': 'missing cls'})
+                return
+            fresh = g('fresh').lower() in ('1', 'true', 'yes')
+            self._send(200, worldprobe_class(cls_s, g('servers'), fresh))
         elif path.endswith('volcano_anchor'):  # v1096 旧接口（人工校准锚点）——已弃用，保留兼容；v1107 起前端不再调用
             server = g('server')
             if not server:

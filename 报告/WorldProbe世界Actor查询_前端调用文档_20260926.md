@@ -1,9 +1,10 @@
-<!-- 来源：ASA Transfer Identity Fix 项目  |  生成 2026-09-26  |  对应插件 dll v9 (1,594,368 B / mtime 2026-09-26 17:25:35)  |  项目内权威版：ASA Transfer Identity Fix\docs\WorldProbe_前端交接单.md -->
+<!-- 来源：ASA Transfer Identity Fix 项目  |  生成 2026-09-26  |  更新 2026-09-30  |  对应插件 dll v10 (1,594,880 B / mtime 2026-09-30 16:33:08)  |  项目内权威版：ASA Transfer Identity Fix\docs\WorldProbe_前端交接单.md -->
 
 # WorldProbe 前端交接单
 
-> 版本：v9（dll = 1,594,368 B / mtime 2026-09-26 17:25:35）
+> 版本：v10（dll = 1,594,880 B / mtime 2026-09-30 16:33:08）
 > 状态：**已全量部署到 10 张图**（Abe / Ast / Cen / Ext / Gen / Isl / Los / Rag / Sco / Val）
+> 文档更新：2026-09-30（新增 `explorerchest` **代号 → 人名**映射表，见 §三 末）
 > RCON 命令前缀：`TransferIdentityFix.WorldProbe <子命令>`
 
 ---
@@ -19,24 +20,44 @@
 
 ---
 
-## 二、类别字典（**共 11 类**）
+## 二、类别字典（**共 13 类**）
 
 | # | key | label | 匹配规则 | 排除 |
 |---|---|---|---|---|
 | 1 | `osd` | Orbital Supply Drop | `SupplyCrate_Base_Horde` | — |
-| 2 | `cavecrate` | Cave Supply Crate | `SupplyCrate_Cave` | — |
+| 2 | `cavecrate` | Cave Supply Crate | **`SupplyCrate_Cave` / `IceCaveTier` / `SwampCaveTier` / `UnderwaterCaveTier`** | — |
 | 3 | `horde` | OSD Horde Infrastructure | `HordeCrateManager` / `Horde_Spline_Path` / `HordeSpawnNetwork` | `ElementNode`, `SupplyCrate` |
 | 4 | `artifactcrate` | Artifact Crate | `ArtifactCrate` | — |
 | 5 | `elementnode` | Element Node | `ElementNode` / `ElementVein` | — |
-| 6 | `beacon` | Supply Crate (Beacon) | `SupplyCrate` | `SpawningVolume`, `Horde`, `Cave`, **`DamLogs`**, **`DenLogs`** |
+| 6 | `beacon` | Supply Crate (Beacon) | `SupplyCrate` | `SpawningVolume`, `Horde`, `Cave`, `DamLogs`, `DenLogs` |
 | 7 | `beehive` | Wild Bee Hive | `BeeHive` | `PlayerOwned` |
 | 8 | `obelisk` | Obelisk | `BP_Obelisk` | — |
-| 9 | `beaverdam` | Beaver Dam | **`BeaverDam` / `DamLogs` / `DenLogs`** | — |
+| 9 | `beaverdam` | Beaver Dam | `BeaverDam` / `DamLogs` / `DenLogs` | — |
 | 10 | `beaver` | Wild Beaver | `Beaver_Character_BP` | — |
-| 11 | `weather` | Weather | （专用逻辑，`patterns` 为空属正常） | — |
+| 11 | **`explorerchest`** 🆕 | **Explorer Note Chest** | `ExplorerChest` | — |
+| 12 | **`treasurecache`** 🆕 | **Treasure Cache** | `TreasureCache` | — |
+| 13 | `weather` | Weather | （专用逻辑，`patterns` 为空属正常） | — |
 
+> ⚠️ **2026-09-30 变更**：
+> - `cavecrate` 的匹配规则从 `SupplyCrate_Cave` **扩为 4 种前缀** —— 之前只写了第一种，导致**冰窟 / 沼泽窟 / 海底窟共 16 个**实例两头落空（`beacon` 因名字含 `Cave` 又把它排除了）。
+> - **新增 `explorerchest`（探险家笔记箱）** —— 孤岛一地就有 **246 个**（图鉴 133 + 各作者笔记 113），此前完全未收录。
+>   ⚠️ 该类的 `class` 是**开发者内部代号**（`Leddica` = Nerva、`Dmika` = Imamu），**必须**查 §三 末映射表换算人名。
+> - **新增 `treasurecache`（宝藏箱）** —— 孤岛 **4 个**。
+> - **`typeCount` 由 11 改为 13**（前端请**读取数组长度**，勿硬编码）。
+>
 > ⚠️ **`resource` 类别已于 2026-09-26 删除**（双图 18 万 actor 普查零命中，资源点不是独立 actor）。
 > `query resource` 会返回 `unknown type`。
+
+### ⚠️ 三个**命名陷阱**（不要按字面理解）
+
+| key | 字面意思 | **实际是什么** | 对前端的建议 |
+|---|---|---|---|
+| `horde` | “部落设施”❌ | **敌潮 / 兽群**（= OSD 玩法的后台机制）| 这些是**隐形、不可交互**的机制物件（服务器算刷怪点/行进路线用），**不是玩家设施**。若列表是给玩家看的，**建议不展示该类**，否则玩家按坐标跑过去只会看到空地 |
+| `artifactcrate` | “神器箱”❌ | **神器本体**（发光遗物，放洞穴石台上可拾取）| ✅ **可以展示**，这是玩家真正要收集的东西；注意坐标多在**洞穴内**（z 值极低） |
+| **`explorerchest`** | 箱子上应该写人名 ❌ | **类名是开发者内部代号**（`Leddica` = Nerva、`Dmika` = Imamu、`Dianna` = Diana Altaras）| 必须查 §三 末的**代号映射表**换成人名；**禁止**用 `scan filter=<人名>` 探测（资产名不含人名，**必然 0 命中**）|
+
+> `horde` 的正确译名是 **“OSD 敌潮基础设施”**（不是“部落设施”）。
+> `artifactcrate` 的正式 label 就是 `Artifact Crate`，但**它就是神器**（不是装神器的箱子）。
 
 ---
 
@@ -98,6 +119,42 @@
 > ⚠️ **不要用 `difficulty` 判断类型** —— 河狸窝该字段**恒为空字符串**（`difficulty` 只对 `osd` / `cavecrate` / `elementnode` 的档位、以及 `beacon` 的 `L<NN>` 有意义）。
 > ⚠️ **`sampleClasses` 只能判断"这张图存在哪些形态"**（它是整体去重列表、**不带坐标**）；要定位到具体某一个是哪种，必须用 `actors[].class`。
 > 💡 因为 `beaverdam` 类别用的是**子串匹配**（`BeaverDam` / `DamLogs` / `DenLogs`），未来若出现新变体（如 `XXX_BeaverDam_C`）会被**自动收录**，前端按 `class` 原样展示即可，无需改码。
+
+---
+
+### `explorerchest` 的「代号 → 笔记作者」映射表（**必读**）
+
+⚠️ **游戏资产里探险家笔记箱的类名用的是开发者内部代号，不含 Wiki 上的人名。**
+例：`ExplorerChest_Leddica_C` 就是 **Nerva** 的笔记箱。**前端要按人名检索/分组，必须走这张表。**
+
+**实测证据（2026-09-30，Isl 32320 / Abe 32323 全类名普查）**：
+
+- `scan filter=Nerva` / `Gellia` / `Helena` / `Elimisha` / `Imamu` / `Skye` → **全部 `distinctClasses = 0`**（两图皆然）
+- 而 `ExplorerChest_Leddica_C` 在孤岛恰好 **30 个**，与 Wiki「Nerva 在 The Island 有 30 条笔记」**指纹级吻合**；`ExplorerChest_Dmika_C` 在畸变 **5 个**，与「Imamu 有 5 条 Aberration journals」吻合
+- `ExplorerChest_` 是该图笔记箱的**唯一**命名族。已排除同类噪声：`Note` ×11（玩家自写笔记）、`Bookshelf_C`（书架）、`ServerSidePoint_Chest_C`（服务端点箱）
+
+| `actors[].class` | = 谁（Wiki 名） | 系列 | 实测数量 |
+|---|---|---|---|
+| `ExplorerChest_DinoDossiers_C` | **Helena Walker** | 恐龙图鉴 Dossiers（图鉴作者） | Isl 133 / Abe 46 |
+| `ExplorerChest_Li_C` | **Mei-Yin Li（李美盈）** | notes | Isl 31 / Abe 30 |
+| **`ExplorerChest_Leddica_C`** | **Gaius Marcellus Nerva** ✅用户确认 | The Island notes | **Isl 30** |
+| `ExplorerChest_Rockwell_C` | **Sir Edmund Rockwell** | notes | Isl 29 / Abe 30 |
+| `ExplorerChest_Glitch_C` | **HLN-A** | Discoveries | Isl 11 / Abe 11 |
+| `ExplorerChest_DearJane_C` | **Bob** | Dear Jane letters | Isl 7 |
+| `ExplorerChest_SheWhoWaits_C` | **The One Who Waits / ???** | logs | Isl 5 / Abe 5 |
+| `ExplorerChest_Dianna_C` | **Diana Altaras**（Wiki 拼 `Diana`，资产拼 `Dianna`）| Aberration notes | Abe 20 |
+| `ExplorerChest_BobsTallTales_C` | **Bob** | Bob's Tall Tales | Abe 10 |
+| `ExplorerChest_Rusty_C` | **Rusty Stafford**（⚠️ 含 Skye 的 1 条） | Aberration journals | Abe 6 |
+| `ExplorerChest_Boris_C` | **Boris** | Aberration journals | Abe 5 |
+| **`ExplorerChest_Dmika_C`** | **Imamu** ✅用户确认 | Aberration journals | **Abe 5** |
+| `ExplorerChest_Emilia_C` | **Emilia Müller** | Aberration journals | Abe 5 |
+| `ExplorerChest_Trent_C` | **Trent** | Aberration journals | Abe 5 |
+| `ExplorerChest_Santiago_Gen2Chronicles_C` | **Santiago** | Genesis 2 Chronicles | Abe 1 |
+
+> 📌 **Skye**（Aberration journals，只有 1 条）**没有独立类名**；据用户判断它**复用 `ExplorerChest_Rusty_C`**（该图该类共 6 个 = Rusty 5 + Skye 1）。
+> 📌 **Nerva 与 Imamu 并非漏采** —— 它们一直在 13 类结果里（`Leddica` / `Dmika`），前端“查不到”纯粹是因为拿人名去比对了类名。
+> 💡 后续若 dll 增加 `note` / `author` 字段（v11 候选）→ 前端可直接用人名字段；**在那之前请在前端侧维护这张映射表**。
+> ⚠️ 未知代号**不要猜**：先 `scan filter=ExplorerChest top=100` 列出该图全部代号，再对照 Wiki 作者列表 + 笔记条数（数量吻合是最强指纹）。
 
 ---
 
@@ -231,3 +288,8 @@
 1. 是否需要「全图总数」？→ 需要则要设计**多点采样**策略（受坑 1 限制）
 2. 光柱 `L<NN>` 的**等级→颜色**映射表由前端按图维护（Wiki 已知：Isl 蓝=25 / Sco 蓝=30 / Abe 蓝=35）
 3. `weatherState` 的 `family` 分支 UI 是否需要区分展示
+4. **`horde` 是否需要在玩家界面隐藏**（它是隐形机制物件，玩家找不到）
+5. **`cavecrate` 的展示措辞** —— 它**不等于“在洞穴里”**（焦土实测有 z 为正的沙漠地表箱），建议按 `z < 0` 或按地图细分
+6. **`artifactcrate` 的编号→神器名映射不宜写死**：同一个 `ArtifactCrate_1_C` 在孤岛与中心岛可能是**不同神器**，建议先只显示“神器 #N”
+7. **`explorerchest` 必须按「代号 → 人名」映射表翻译**（见 §三 末）：`Leddica` = Nerva、`Dmika` = Imamu、`Dianna` = Diana Altaras；类名**不含**人名，禁止用人名做 `scan filter`
+8. **`Rusty` 类是否需要拆出 Skye 的 1 条**？（该图 6 个共用同一类名，插件侧无法区分，如需拆分只能靠坐标人工标注）
