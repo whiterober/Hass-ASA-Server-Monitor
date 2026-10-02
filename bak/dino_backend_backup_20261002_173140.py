@@ -68,8 +68,8 @@ WP_QUERY_TTL_MS = 5000     # 单服单类查询：短时缓存共用——N 个�
 WP_WEATHER_TTL_MS = 10000  # 天气（本期仅预置路由，UI 不接）
 WP_SCAN_TTL_MS = 10000     # 聚合路由（子查询另有各自 5s 缓存）
 WP_CLASS_TTL_MS = 10000    # 类级计数（scan filter）；类计数变化慢
-WP_LIMIT_DEFAULT = 500     # v4243（用户口径）：默认 500（插件上限 2000；旧值 20/100 系误设）
-WP_LIMIT_MAX = 2000        # v4243（用户口径）：与插件上限 2000 对齐（旧值 100 误设）
+WP_LIMIT_DEFAULT = 20      # RCON 响应 ~8KB 上限（插件 truncated 透传）
+WP_LIMIT_MAX = 100
 WP_SERVER_MAX = 11         # scan 聚合最多图数（= SERVERS 全量）
 _WP_TYPES_CACHE = {}       # server -> {'ts': ms, 'data': {...}}
 _WP_QUERY_CACHE = {}       # (server,type,limit) -> {'ts': ms, 'data': {...}}

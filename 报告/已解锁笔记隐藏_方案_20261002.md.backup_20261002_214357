@@ -1,0 +1,96 @@
+# 探险者笔记「隐藏已解锁」前端方案（v1，2026-10-02）
+
+> **需求**：后台已生成 `<Abbr>_notes.json.gz`（10 服，记录玩家已解锁笔记）。前端**默认隐藏当前玩家已解锁的探险者笔记点位**。
+> **决策项（已确认）**：① 玩家认定=复用登录玩家（`LB.playerEos`/`LB.curPid`）自动识别；② 范围=地图点位；③ **提供按钮可临时显示已解锁**。
+> **原则**：尽量复用（非复制）现有函数/机制。
+
+---
+
+## 一、数据实测结论（本方案的事实基础，2026-10-02 实测）
+
+| 项 | 实测结果 |
+|---|---|
+| URL | `https://data.whiterober.ccwu.cc/dino-data/<Abbr>_notes.json.gz`（页面内 authFetch 200 ✓；直连 403 为 CF 拦无 UA，非权限问题） |
+| 结构 | `{serverId, generatedMs, count, notePlayers, players:[{pid, name, charname, eos, noteCount, notes[], bitmapWords, unlockedCount, unlockedIds[]}]}` |
+| `notes[]` | **字符串**笔记名（实测 `DEARJANE_EXP_NOTE_1` / `_2`） |
+| `unlockedIds[]` | 数字位图索引（实测 2,11,13,14,61,…,1214,1244；`bitmapWords` 38–39 → 位图 ≈1248 位，ID=位号） |
+| 玩家匹配键 | **`eos`**（前端 `LB.playerEos` 直接匹配，零转换） |
+| 覆盖 | Isl: 46 玩家 / 19 有数据；Abe: 13 玩家——**未在文件内的玩家不隐藏** |
+| 点位数据源 | `POST /api/worldprobe_query {server, type:'explorerchest', limit:500}` → `actors[]` **仅 6 字段**：`class/difficulty/hasLoc/x/y/z` |
+| 点位粒度 | **人物组级**：`class` 形如 `ExplorerChest_<Person>_C`——孤岛实测 246 点 7 组（DinoDossiers 133 / Li 31 / Leddica 30 / Rockwell 29 / Glitch 11 / DearJane 7 / SheWhoWaits 5） |
+| 前端现链 | `lbFacPosOpen('wp','t:explorerchest')` 逐服查询 → `dots[ab][]=[x,y,z,diff,class]` → `lbFacPosRender` → `lbFacPosPage`（19 色+图例）；缓存键 `wp\|t:explorerchest` |
+
+## 二、可行性边界（关键，先说清）
+
+- **精准逐点隐藏**（"已收 2/7 → 隐藏那 2 个点"）：**当前数据不可行**——点位无笔记 ID；`notes[]` 字符串无坐标。**需一次后台对接**（Phase 2）。
+- **人物组级隐藏**（"整组收齐 → 隐藏整组"）：**立即可做**（Phase 1）。判据：该人物在**该图**的已解锁计数 **==** 点位组计数。
+  - 映射：`DEARJANE_EXP_NOTE_*` 计数 ↔ `ExplorerChest_DearJane_C` 点数（**大小写不敏感**前缀匹配；已实测 DearJane 成立，其余 18 组上线前一次性校验）
+  - 部分解锁组（如 2/7）**不隐藏**（宁多显不误隐）
+
+## 三、Phase 1 设计（前端单侧，立即可实施）
+
+### 1. 数据加载（新函数 `lbNotesLoad`）
+- **复用 `lbFetchDataJson(base, gzUrl)`**（gz 解压/25s 超时/5xx 重试全套免费）
+- URL：`DINO_JSON + abbr + '_notes.json.gz'`，10 服 `Promise.all` 并行
+- **懒加载**：首次打开 `t:explorerchest` 浮窗时触发；**会话缓存** `LB._notes = { abbr: { eos: {notes:[], uc} } }`
+- 容错：单服失败→该服不隐藏；全失败→全显示（console 记因，不弹错）
+
+### 2. 玩家识别（纯复用）
+- `LB.playerEos` 已登录 → 直接匹配 `players[].eos`
+- 未登录（`LB._needLogin`）/ eos 缺失 / 文件内无此人 → **不隐藏**（全显示）
+
+### 3. 组级判据（新函数 `lbNotesHiddenSet(abbr)`）
+- 每图计算：
+  - 点位侧：从**缓存全量** `dots[abbr]` 统计每 class 点数 `pn[class]`
+  - 解锁侧：`LB._notes[abbr][myEos].notes[]` 按前缀计数 `un[person]`（映射表 `LB_NOTE_EOSMAP`：19 人物 + 图鉴，新增；与 `LB_NOTE_MAP` 互补）
+  - `un[person] >= pn[class]` → 该 class 进**隐藏集** `LB._noteHideSet[abbr]`
+- 返回 `Set`
+
+### 4. 渲染过滤（**唯一侵入点，3 行**）
+- **落点**：`lbFacPosPage()` 开头——`arr` 进 `dots` 循环前：
+  ```js
+  if(kind === 'explorerchest' && LB._noteHideSet && LB._noteHideSet[abbr] && LB._noteHideSet[abbr].has(cls)) skip
+  ```
+- **关键设计**：过滤在**渲染层**、`LB._facPosC` 缓存**保持全量** → **切换按钮零网络重渲染** ✓
+
+### 5. 切换按钮（用户明确要求）
+- 位置：`lbMapPagerRender` 的 **headBtns**（与关闭按钮同排，复用同款样式/交互）
+- 文案：`🙈 仅未收` ↔ `👁 显示全部`（默认前者=隐藏已收齐组）
+- 点击：翻转 `LB._noteHide`（全局与会话级）→ **复用 `lbFacPosRender(name, cache.dots, …)` 从缓存重渲染**（零网络）
+
+### 6. 标题/图例联动（自动，无需改动）
+- 点位数、图例 19 色计数均基于过滤后 `arr` → **自动联动** ✓
+- 可选增强：标题后缀「（已隐藏 N 点）」
+
+### 7. 复用清单（**非复制**，逐项交代）
+| 复用对象 | 用途 | 改动量 |
+|---|---|---|
+| `lbFetchDataJson` | 下载+解压 | 0（直接调用） |
+| `DINO_JSON` | URL 前缀 | 0 |
+| `LB.playerEos` | 玩家匹配 | 0 |
+| `lbNoteInfo`/`LB_NOTE_MAP` | 人物识别 | 0（新增互补映射 `LB_NOTE_EOSMAP`） |
+| `lbFacPosPage` | 渲染过滤 | **+3 行** |
+| `lbMapPagerRender` | 浮窗+按钮位 | 传参加 1 按钮（同 closeBtn 模式） |
+| `LB._facPosC` | 会话缓存 | 0（键不变，存量数据兼容） |
+| `lbToast` | 降级提示 | 0 |
+
+### 8. 验收步骤（Phase 1）
+1. 板板账号打开「探险者笔记」→ 默认只见**未收齐组**；收齐组不显示
+2. 点 `👁 显示全部` → 246 点全显示；再点恢复
+3. 未登录 / 断网 / 文件 404 → 全显示、无报错
+4. 切换前后 `LB._facPosC['wp|t:explorerchest']` **内容不变**（确认零网络）
+
+## 四、Phase 2（精准逐点隐藏——需一次对接，二选一）
+
+- **A（推荐）worldprobe 侧**：`actors[]` 补 `noteId`（或笔记名）→ 前端改动：解析时存第 6 位 + 过滤按 ID 命中（≈2 行）
+- **B notes 侧**：`_notes.json.gz` 补「noteId→坐标」表 → 前端按坐标容差匹配（多写一点：匹配+容差）
+
+**后台对接需求原文**（可直接转发）：
+> 需求：希望给「探险者笔记」点位提供**逐箱的笔记 ID/名称**（用于前端精准隐藏玩家已解锁的笔记）。
+> 方式任选：① `worldprobe_query`（type=explorerchest）的 `actors[]` 补 `noteId`（或 `DEARJANE_EXP_NOTE_2` 式名称）；或 ② `_notes.json.gz` 补「笔记 ID/名称 → 坐标」对照。
+> 背景：当前 `actors` 仅 `class/difficulty/x/y/z`；`notes[]` 为名称、`unlockedIds[]` 为位图数字，均无法与具体点位对应。
+
+## 五、风险与兜底
+- 前缀映射误配 → 上线前**一次性实测校验**：拉全服 `_notes` 字符串全集 ↔ 全服 class 全集自动对表
+- `notePlayers`（19/46）低于玩家总数 → 不在文件的玩家**一律不隐藏** ✓
+- 将来字段变更 → 解析层缺字段容错（缺=不隐藏）

@@ -68,8 +68,8 @@ WP_QUERY_TTL_MS = 5000     # 单服单类查询：短时缓存共用——N 个�
 WP_WEATHER_TTL_MS = 10000  # 天气（本期仅预置路由，UI 不接）
 WP_SCAN_TTL_MS = 10000     # 聚合路由（子查询另有各自 5s 缓存）
 WP_CLASS_TTL_MS = 10000    # 类级计数（scan filter）；类计数变化慢
-WP_LIMIT_DEFAULT = 500     # v4243（用户口径）：默认 500（插件上限 2000；旧值 20/100 系误设）
-WP_LIMIT_MAX = 2000        # v4243（用户口径）：与插件上限 2000 对齐（旧值 100 误设）
+WP_LIMIT_DEFAULT = 20      # RCON 响应 ~8KB 上限（插件 truncated 透传）
+WP_LIMIT_MAX = 100
 WP_SERVER_MAX = 11         # scan 聚合最多图数（= SERVERS 全量）
 _WP_TYPES_CACHE = {}       # server -> {'ts': ms, 'data': {...}}
 _WP_QUERY_CACHE = {}       # (server,type,limit) -> {'ts': ms, 'data': {...}}
@@ -1729,22 +1729,6 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(404, {'ok': False, 'error': 'not found'})
                 return
             self._send_file(full, 'application/json; charset=utf-8' if full.endswith('.json') else 'application/octet-stream')
-        elif path == '/dino-data/_lm.json':
-            # 2026-10-02（方案B2）：批量 Last-Modified 清单——前端一次请求替代 11 服 × 3~4 文件 ≈ 40 次 HEAD 探测。
-            #   返回 {文件名: HTTP-date}；不存在的文件不在表内（前端按「无键 = 404」处理）。
-            #   LM 格式与 _send_file / gz 分支的 Last-Modified 同源（date_time_string(mtime)）⇒ 前端字符串对比兼容。
-            _files = {}
-            try:
-                for _fn in os.listdir(DINO_DATA):
-                    if not (_fn.endswith('.json') or _fn.endswith('.json.gz')):
-                        continue
-                    try:
-                        _files[_fn] = self.date_time_string(os.path.getmtime(os.path.join(DINO_DATA, _fn)))
-                    except OSError:
-                        continue
-            except Exception:
-                _files = {}
-            self._send(200, {'ok': True, 'files': _files})
         elif path.startswith('/dino-data/'):
             rel = path[len('/dino-data/'):]
             full = safe_join(DINO_DATA, rel)

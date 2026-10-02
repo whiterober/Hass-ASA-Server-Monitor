@@ -1,11 +1,10 @@
-<!-- 来源：ASA Transfer Identity Fix 项目  |  生成 2026-09-26  |  更新 2026-10-02  |  对应插件 dll v13 (1,597,952 B / mtime 2026-10-02 15:29:18)  |  项目内权威版：ASA Transfer Identity Fix\docs\WorldProbe_前端交接单.md -->
+<!-- 来源：ASA Transfer Identity Fix 项目  |  生成 2026-09-26  |  更新 2026-10-02  |  对应插件 dll v11 (1,595,904 B / mtime 2026-10-02 14:47:11)  |  项目内权威版：ASA Transfer Identity Fix\docs\WorldProbe_前端交接单.md -->
 
 # WorldProbe 前端交接单
 
-> 版本：v13（dll = 1,597,952 B / mtime 2026-10-02 15:29:18）
+> 版本：v11（dll = 1,595,904 B / mtime 2026-10-02 14:47:11）
 > 状态：**已全量部署到 10 张图**（Abe / Ast / Cen / Ext / Gen / Isl / Los / Rag / Sco / Val）
-> 说明：若某图行为与本文档不符（`seacrate` 无数据 / `cavecrate` 出现 `unknown` / `/tif ping` 无 `build` 字段），说明该图仍是旧 dll，需重新部署。
-> 文档更新：2026-10-02（v13：`DinoMutPing` 新增 **`build`** 编译指纹字段；v12：新增 **`seacrate`** 类别与 **`deepsea`** 档位、`CaveTier<N>` 族 65 个箱补档位、修 `cavecrate` 模式计数 bug）
+> 文档更新：2026-10-02（`beacon` 档位新增 **`T<N>`** 口径 → 创世 / 失落地两图上色恢复；修 `LostLootChest_Cave` 漏采）
 > RCON 命令前缀：`TransferIdentityFix.WorldProbe <子命令>`
 
 ---
@@ -14,58 +13,31 @@
 
 | 子命令 | 用途 | 权限 |
 |---|---|---|
-| `types` | 列出全部**类别字典**（14 类）及匹配规则 | `tif.viewer` |
+| `types` | 列出全部**类别字典**（11 类）及匹配规则 | `tif.viewer` |
 | `query <type> [limit=N]` | 按类别查实例，**返回坐标** | `tif.viewer` |
 | `scan [filter=X] [top=N]` | 类名普查（诊断用，前端一般不需要） | `tif.viewer` |
 | `weather` | 天气状态（含 `weatherState`） | `tif.viewer` |
 
 ---
 
-## 二、类别字典（**共 14 类**）
+## 二、类别字典（**共 13 类**）
 
 | # | key | label | 匹配规则 | 排除 |
 |---|---|---|---|---|
 | 1 | `osd` | Orbital Supply Drop | `SupplyCrate_Base_Horde` | — |
 | 2 | `cavecrate` | Cave Supply Crate | **`SupplyCrate_Cave` / `IceCaveTier` / `SwampCaveTier` / `UnderwaterCaveTier` / `LootChest_Cave`** | — |
-| 3 | **`seacrate`** 🆕 | **Deep Sea / Desert Loot Crate** | **`SupplyCrate_OceanInstant` / `SupplyCrate_Chest_Treasure`** | — |
-| 4 | `horde` | OSD Horde Infrastructure | `HordeCrateManager` / `Horde_Spline_Path` / `HordeSpawnNetwork` | `ElementNode`, `SupplyCrate` |
-| 5 | `artifactcrate` | Artifact Crate | `ArtifactCrate` | — |
-| 6 | `elementnode` | Element Node | `ElementNode` / `ElementVein` | — |
-| 7 | `beacon` | Supply Crate (Beacon) | `SupplyCrate` | `SpawningVolume`, `Horde`, `Cave`, `DamLogs`, `DenLogs`, **`OceanInstant`, `Chest_Treasure`** |
-| 8 | `beehive` | Wild Bee Hive | `BeeHive` | `PlayerOwned` |
-| 9 | `obelisk` | Obelisk | `BP_Obelisk` | — |
-| 10 | `beaverdam` | Beaver Dam | `BeaverDam` / `DamLogs` / `DenLogs` | — |
-| 11 | `beaver` | Wild Beaver | `Beaver_Character_BP` | — |
-| 12 | **`explorerchest`** | **Explorer Note Chest** | `ExplorerChest` | — |
-| 13 | **`treasurecache`** | **Treasure Cache** | `TreasureCache` | — |
-| 14 | `weather` | Weather | （专用逻辑，`patterns` 为空属正常） | — |
+| 3 | `horde` | OSD Horde Infrastructure | `HordeCrateManager` / `Horde_Spline_Path` / `HordeSpawnNetwork` | `ElementNode`, `SupplyCrate` |
+| 4 | `artifactcrate` | Artifact Crate | `ArtifactCrate` | — |
+| 5 | `elementnode` | Element Node | `ElementNode` / `ElementVein` | — |
+| 6 | `beacon` | Supply Crate (Beacon) | `SupplyCrate` | `SpawningVolume`, `Horde`, `Cave`, `DamLogs`, `DenLogs` |
+| 7 | `beehive` | Wild Bee Hive | `BeeHive` | `PlayerOwned` |
+| 8 | `obelisk` | Obelisk | `BP_Obelisk` | — |
+| 9 | `beaverdam` | Beaver Dam | `BeaverDam` / `DamLogs` / `DenLogs` | — |
+| 10 | `beaver` | Wild Beaver | `Beaver_Character_BP` | — |
+| 11 | **`explorerchest`** 🆕 | **Explorer Note Chest** | `ExplorerChest` | — |
+| 12 | **`treasurecache`** 🆕 | **Treasure Cache** | `TreasureCache` | — |
+| 13 | `weather` | Weather | （专用逻辑，`patterns` 为空属正常） | — |
 
-> ⚠️ **2026-10-02 变更（v13）—— 仅可观测性，不影响任何查询输出**：
-> - **`TransferIdentityFix.DinoMutPing` 响应新增 `build` 字段**，值为**编译时间指纹**（形如 `"Oct  2 2026 15:29:18"`）。
->   - **为什么加**：`version` 字段读的是**实服 `config.json`**，而多台实服的 config 仍是旧文件 → 无论实际部署哪一版 dll，都恒报 `0.3.0`，**无法据此判断实服到底在跑哪一版**。
->   - `build` 在**编译期**烤进 dll，**不受 config 影响** → 部署后用它与 `/tif ping` 核对「重启后新 dll 是否真的生效」。
-> - 响应示例：`{"ok":true,"plugin":"TransferIdentityFixAPI","version":"0.5.0","build":"Oct  2 2026 15:29:18"}`
-> - ✅ **`query` / `types` / `weather` 的输出与 v12 完全一致** —— 若前端根本不调用 `DinoMutPing`，则**无需任何改动**。
->
-> ⚠️ **2026-10-02 变更（v12）**：
-> - **新增 `seacrate`（Deep Sea / Desert Loot Crate）类别** —— 收两类此前被 `beacon` 吞掉的**固定点位**战利品箱（它们**不从天上掉**，因此不是光柱）：
->   - **深海箱 `SupplyCrate_OceanInstant_C`** —— 10 图实测 **32 个**（孤岛 2 / 中心岛 6 / Astraeos 4 / **Ragnarok 17** / Valguero 3）。Wiki 明确它是「洞穴战利品箱的水下对应物」，在地图上**固定生成**。
->   - **Ragnarok 宝藏箱 `SupplyCrate_Chest_Treasure_JacksonL_C`** —— **全图仅 1 个**，位于 Viking Bay 入海口的**沉没海盗船内（约 22.1 / 33.2）**，被约 30 只广翅鲎看守；Wiki 载明**开启需 80 级**。
->   - ⚠️ Wiki 把 Ragnarok 的同类箱记作 **`SupplyCrate_OceanInstant_High_C`（Desert Loot Crate）**，但实服实测报的都是 `SupplyCrate_OceanInstant_C` —— 该族**类名混用**，故 label 同时覆盖两种叫法。
-> - **`seacrate` 的 `difficulty` 恒为 `deepsea`**（**新标识，不是 `L<NN>`**）—— 这批箱的类名里**既无档位词也无等级数字**，游戏数据统一是 80 级门槛，但门槛**不体现在类名上**，因此不臆造 `L80`。前端对该类别**用一种颜色**即可。
-> - **`beacon` 排除表新增 `OceanInstant` / `Chest_Treasure`** —— 三个类名都含 `SupplyCrate`，不排除会被 `beacon` 与 `seacrate` **双重计数**。
-> - **`cavecrate` 的 65 个「`CaveTier<N>` 族」箱补上档位** —— `SupplyCrate_IceCaveTier<1..3>_C` / `SwampCaveTier<1..3>_C` / `UnderwaterCaveTier<1..3>_C`（孤岛 16 / 中心岛 3 / Astraeos 20 / Ragnarok 17 / Valguero 9）此前**全部返回空串**，因为解析只认 `QualityTier<N>`。现按**同一套编号**映射（1=蓝/easy、2=黄/medium、3=红/hard）。
-> - **修 `cavecrate` 的匹配计数 bug** —— 旧代码把模式数**硬编码为 `4`**，导致 v11 新加的 `LootChest_Cave` **从未生效**（失落地 8 个洞穴箱其实仍是「无类别」）。现改为按数组长度自动推导，杜绝同类问题。
-> - **`cavecrate` 的档位口径补充** —— 畸变（Abe）与 Valguero 的洞穴箱用 `SupplyCrate_Cave_Aberration_Level<NN>_C`，返回 **`L<NN>`**（与光柱同表）。**因此 `cavecrate` 会同时出现两种口径。**
-> - **⚠️ `seacrate` 内部含「两类不同的箱子」，且档位完全相同** —— `SupplyCrate_OceanInstant_C`（深海 / 沙漠箱）与 `SupplyCrate_Chest_Treasure_JacksonL_C`（**Ragnarok 宝藏箱**，全图仅 1 个）**同为 `seacrate` + `deepsea`**。
->   ⇒ **两者 `type` / `difficulty` 完全一样**：若要分开展示（不同图标或文案），**必须用 `class` 字符串区分**（`a.class.includes('Chest_Treasure')` vs `includes('OceanInstant')`）。
->   （顺带）Rag 还有专属洞穴箱 `SupplyCrate_Cave_QualityTier4_Ragnarok_C`，它归 **`cavecrate`**、档位 `legendary`，**不是** `seacrate`，无需特殊处理。
-> - **🔴 v14 修正（dll = 1,598,464 B / mtime 2026-10-02 16:42:52）：沙漠箱此前 `seacrate` 收不到** —— 游戏里「沙漠战利品箱」的类名是 **`SupplyCreate_OceanInstant_High_C`**（**`Create` 而非 `Crate`**；这是**游戏自身的拼写**，Wiki 原样照抄，**不是笔误**，不可“改正”）。
->   原 `seacrate` 模式只写了 `SupplyCrate_OceanInstant`，差一个字母 → **匹配失败**；而 `beacon` 的排除词是宽子串 `OceanInstant` 又能匹配到它 → **这 5 个箱（Rag 2 + Astraeos 3）此前不属于任何类别**。
->   ⇒ v14 起 `seacrate` 模式补上 `SupplyCreate_OceanInstant`。部署后：**Rag 的 `seacrate` 由 16 → 18，Astraeos 由 3 → 6**。
->   📌 **Sco（焦土）的沙漠箱类名为 `SupplyCreate_OceanInstant_High_SE_C`**（同样 `Create` 拼写，末尾多 `_SE_`）—— v14 的 `SupplyCreate_OceanInstant` 模式**同样覆盖它**；Sco 有 **18 个点位、同时只激活 4 个**，故 `seacrate` 数量会在 **0~4** 之间浮动，均属正常。
-> - **`typeCount` 由 13 改为 14**（前端请**读取数组长度**，勿硬编码）。
->
 > ⚠️ **2026-10-02 变更（v11）**：
 > - **`beacon` 的 `difficulty` 新增 `T<N>` 口径** —— 创世（Gen）/ 失落地（Los）两图的补给箱**没有「玩家等级门槛」**，类名里不含 `Level<NN>`（Gen = `TOF_SupplyCrate_AbandonedCargo_Tier<1|2|3>_C`、Los = `SupplyCrate_LostLootChest[_Cave]_T<1|2>_C`），此前 `difficulty` 恒为空 → 前端 unknown（热力色）。现在返回 **`T1`/`T2`/`T3`**（原始档位号，**由前端按图查颜色表**）。
 > - **`cavecrate` 的匹配规则再扩 1 种前缀 → 共 5 种**：新增 **`LootChest_Cave`**。失落地有 **8 个** `SupplyCrate_LostLootChest_Cave_T1/T2_C`（6 + 2）**先前不属于任何类别**（`beacon` 因含 `Cave` 被排除、`cavecrate` 的 4 个旧模式也都不匹配）。
@@ -114,7 +86,7 @@
 | `matched` | 该类别在**当前已加载世界**中的实例总数 |
 | `returned` | 本次实际返回条数（受 `limit` 限制） |
 | `truncated` | `1` = 还有更多未返回，需增大 `limit` 或分页 |
-| `difficulty` | 档位（仅部分类别有：`osd`/`cavecrate`/`elementnode` 走 `easy/medium/hard/legendary/corrupt`；`cavecrate` 还可能是 **`L<NN>`**；`beacon` 走 **`L<NN>`** 玩家等级**或 `T<N>` 档位号**；`seacrate` 恒为 **`deepsea`**） |
+| `difficulty` | 档位（仅部分类别有：`osd`/`cavecrate`/`elementnode` 走 `easy/medium/hard/legendary/corrupt`；`beacon` 走 **`L<NN>`** 玩家等级**或 `T<N>` 档位号**） |
 | `hasLoc` | `1` = 坐标有效 |
 | `class` | **完整类名** ✅ |
 
@@ -123,9 +95,7 @@
 | 类别 | 格式 | 示例 |
 |---|---|---|
 | `osd` / `cavecrate` / `elementnode` | 单词 | `easy` / `medium` / `hard` / `legendary` / `corrupt` |
-| **`cavecrate`（畸变 / Valguero）** 🆕 | **`L<NN>`** 玩家等级 | `L10` / `L25` / `L35` / `L50` / `L65` / `L80` |
-| **`beacon`（传统光柱）** | **`L<NN>`** 玩家等级 | `L03` / `L15` / `L25` / `L35` / `L45` / `L60` / `L70` / `L80` |
-| **`seacrate`** 🆕 | 固定单词 | **`deepsea`**（全类别统一，前端一种颜色） |
+| **`beacon`（传统光柱）** | **`L<NN>`** 玩家等级 | `L03` / `L15` / `L25` / `L35` / `L45` |
 | **`beacon`（创世 / 失落地）** | **`T<N>`** 档位号 | `T1` / `T2` / `T3` |
 | `beaverdam` / `beaver` / `beehive` / `obelisk` / `artifactcrate` / `horde` / `explorerchest` / `treasurecache` | 空字符串 | `""` |
 
@@ -136,8 +106,6 @@
 > ⚠️ **光柱（beacon）的等级→颜色映射因图而异**（Wiki：孤岛 3/15/25/35/45/60、焦土 3/15/30/45/55/70、畸变 10/25/35/50/65/80），前端需**按地图**套表。
 > ⚠️ **创世 / 失落地没有等级口径**（Wiki `Supply Crate` 页的 `Level Requirements` **只列 3 组表，不含这两图**）—— 不要用 `L<NN>` 的思维去解析 `T<N>`。
 > ⚠️ **OSD 档位会浮动**（同一点位先后出现过 `_Hard_C` / `_Easy_C` / `_Legendary_C` / `_Medium_C`）—— 不要假设固定。
->
-> 🔴 **`seacrate` 是独立类别，不属于 `beacon`**：`SupplyCrate_OceanInstant_C` 与 `SupplyCrate_Chest_Treasure_JacksonL_C` 名字里都含 `SupplyCrate`，**旧版 dll 会把它们算进 `beacon`**。**若前端看到「海底箱 / 沙漠箱」仍落在 `beacon`（且 `difficulty` 为空），说明实服还是旧 dll。**
 
 ---
 
