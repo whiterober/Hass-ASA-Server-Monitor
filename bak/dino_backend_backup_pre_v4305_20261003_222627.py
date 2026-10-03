@@ -67,7 +67,6 @@ _VOLC_STATE_CACHE = {}     # server -> {'ts': epoch_ms, 'data': {...}}
 WP_TYPES_TTL_MS = 600000   # 类别字典（极稳定，10min）
 WP_QUERY_TTL_MS = 5000     # 单服单类查询：短时缓存共用——N 个客户端 TTL 窗口内只发 1 次 RCON
 WP_WEATHER_TTL_MS = 10000  # 天气（本期仅预置路由，UI 不接）
-WP_ZONES_TTL_MS = 60000    # 2026-10-03：天气区域（WorldProbe zones）——插件侧名单长缓存，本层 60s 与前端复用对齐
 WP_SCAN_TTL_MS = 10000     # 聚合路由（子查询另有各自 5s 缓存）
 WP_CLASS_TTL_MS = 10000    # 类级计数（scan filter）；类计数变化慢
 WP_LIMIT_DEFAULT = 500     # v4243（用户口径）：默认 500（插件上限 2000；旧值 20/100 系误设）
@@ -76,7 +75,6 @@ WP_SERVER_MAX = 11         # scan 聚合最多图数（= SERVERS 全量）
 _WP_TYPES_CACHE = {}       # server -> {'ts': ms, 'data': {...}}
 _WP_QUERY_CACHE = {}       # (server,type,limit) -> {'ts': ms, 'data': {...}}
 _WP_WEATHER_CACHE = {}     # server -> {'ts': ms, 'data': {...}}
-_WP_ZONES_CACHE = {}       # server -> {'ts': ms, 'data': {...}}   # 2026-10-03：天气区域（zones）
 _WP_SCAN_CACHE = {}        # (type,(servers),limit) -> {'ts': ms, 'data': {...}}
 _WP_CLASS_CACHE = {}       # (cls,(servers)) -> {'ts': ms, 'data': {...}}
 _WP_LOCKS = {}             # 查询键 -> Lock（同键并发合并：后到者等锁→双检缓存，只发 1 条 RCON）
@@ -1236,44 +1234,6 @@ def worldprobe_weather(server):
     return out
 
 
-def worldprobe_zones(server, fresh=False):
-    """天气区域（WorldProbe zones，2026-10-03 新增）。
-    分层：插件侧「区域名单」长缓存（切图 / 15min / 指针复验自动失效；fresh=1 强制重扫）；
-    天气 / 温度 / state / settings 每次调用实时重读 ⇒ 不存在旧天气。本层 TTL 60s + 同键并发合并
-    （N 客户端在窗口内只产生 1 条 RCON；zones 冷调用约 1.2s）。只有 Isl(4 区)/Cen(6 区) 有区域。"""
-    port = SERVERS.get(server)
-    if not port:
-        return {'ok': False, 'server': server, 'error': 'unknown server'}
-    key = (server, 'zones')
-    now_ms = int(time.time() * 1000)
-    if not fresh:
-        c0 = _WP_ZONES_CACHE.get(server)
-        if c0 and (now_ms - c0['ts'] < WP_ZONES_TTL_MS):
-            d0 = dict(c0['data'])
-            d0['cacheAgeMs'] = now_ms - c0['ts']
-            d0['serverNowMs'] = now_ms
-            return d0
-    with _wp_lock(key):
-        now_ms = int(time.time() * 1000)
-        if not fresh:
-            c0 = _WP_ZONES_CACHE.get(server)
-            if c0 and (now_ms - c0['ts'] < WP_ZONES_TTL_MS):
-                d0 = dict(c0['data'])
-                d0['cacheAgeMs'] = now_ms - c0['ts']
-                d0['serverNowMs'] = now_ms
-                return d0
-        cmd = CMD_WORLDPROBE + ' zones' + (' fresh=1' if fresh else '')
-        j, err = _wp_rcon_json(port, cmd, server, None, now_ms)
-        if err:
-            return err
-        j['server'] = server
-        _WP_ZONES_CACHE[server] = {'ts': now_ms, 'data': j}
-        out = dict(j)
-        out['cacheAgeMs'] = 0
-        out['serverNowMs'] = now_ms
-        return out
-
-
 def _ingame_lock(server):
     """同键并发合并锁（与 _wp_lock 同范式）。"""
     with _INGAME_LOCKS_GUARD:
@@ -2075,13 +2035,6 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(400, {'ok': False, 'error': 'missing server'})
                 return
             self._send(200, worldprobe_weather(server))
-        elif path.endswith('worldprobe_zones'):  # 2026-10-03：天气区域（WorldProbe zones；TTL 60s + 同键并发合并）
-            server = g('server')
-            if not server:
-                self._send(400, {'ok': False, 'error': 'missing server'})
-                return
-            fresh = g('fresh').lower() in ('1', 'true', 'yes')
-            self._send(200, worldprobe_zones(server, fresh))
         elif path.endswith('worldprobe_query'):
             server = g('server')
             type_s = g('type')

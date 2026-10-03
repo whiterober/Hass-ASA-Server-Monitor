@@ -1,0 +1,207 @@
+# 「追踪 / 追踪最近」全场景推广 — 详细计划（v3）
+
+> 日期：2026-10-03 · 状态：**计划 v3 + 安全保证（交互：点选→追踪按钮；§9 硬约束：完全不影响现有追踪功能；待确认后分期实施）**（本文件为唯一实施依据）
+> 目标：把「地图分布」里的 **追踪**（追这一只/这一个）与 **追踪最近** 推广到**所有存在地图点位的场景**；尽量复用（非复制）。
+
+---
+
+## 0. 用户口径（原话纪要）
+
+1. 要将「地图分布」中的**追踪**以及**追踪最近**功能，推广到**所有存在地图点位的地方**；
+2. **尽量复用（非复制）**方法；
+3. 先在工作区生成**详细计划**（本文件）。
+
+**2026-10-03 范围修订（v2，用户口径）**：
+4. **限制范围：只推广到「公共设施」**（T2 公共设施面板）+ **离散聚落设备（非生物）**（T4b 聚落卡设施图）；
+5. **「追踪最近」仅限于 T2 的 3 类**：**探险者笔记、深海/沙漠宝箱、河狸坝**（其余格子仅做选点追踪）；
+6. **不做**：T3 联盟成员分布、T4a 生物地图（`lbOpenBioMap`）、T2 其它类的"追踪最近"。
+
+**2026-10-03 交互口径修订（v3，用户口径）**：
+7. **「追踪」= 与地图分布完全同构的交互**：**点选地图上的一个点位 → 高亮选中 + 出现 [▶ 追踪] 按钮 → 点击即开始追踪**（对齐物种地图 `lbWildPick→[▶追踪]` 的选点追踪流）；
+8. 追踪开始后：进统一 `LB._trackState`、出现**悬浮控制组 [停止]**（与追龙一致）；底层因设施非生物，使用**坐标追踪**（`TrackLocation`，v809 蛋已同款验证）；
+9. **术语作废**：v1 使用的"打点"一词不再使用，全文档统一称「追踪」。
+
+---
+
+## 1. 技术底牌（已就绪，无需新增后端）
+
+### 1.1 后端 API（`独立后端\dino_backend.py` 已上线）
+
+| API | RCON 命令 | 用途 | 参数 |
+|---|---|---|---|
+| `POST /api/track_dino` | `TransferIdentityFix.TrackDino` | **实体追踪**（按 dinoId，目标会动） | server, player, dino1, dino2 |
+| `POST /api/track_location` | **`TransferIdentityFix.TrackLocation`** | **坐标追踪**（任意 x/y/z，静态/准静态目标） | server, player, x, y, z |
+| `POST /api/stop_track_dino` | `StopTrackDino` | 停止追踪/**清除坐标追踪**（同一命令） | server, player |
+| `GET /api/player_pos` | `PlayerPos` | 查玩家所在服/坐标（"最近"计算的位置源） | abbr |
+
+> 关键：**TrackLocation 让"任意点位"都可以在游戏内标记导航**——这是本次全场景推广的技术基础（v809 已在"蛋"上验证，蛋非龙无法 TrackDino → 走坐标追踪，链路上线稳定）。
+
+### 1.2 前端现成组件（`dino-import.html`，全部已实测）
+
+| 组件 | 位置（约） | 职责 |
+|---|---|---|
+| `lbTrackLoc(server,x,y,z)` | L21660 | **坐标追踪**（20s 超时 + 状态文件轮询校验） |
+| `lbTrackDino(server,dino,found)` | L21690± | 实体追踪（野生龙） |
+| `lbTrackWildFrom(server,idx,ev,data)` | L21597 | 卡片/地图"追这只"（含**玩家在服校验**） |
+| `lbTrackClick()` / `lbNearestWild(pos)` | L21245 / L21460 | "追踪最近"主流程（含顺路 route 构建） |
+| `lbTrackStop` / `lbTrackNext` | L21545 / L21922 | 停止 / 切换（悬浮控制组） |
+| `LB._trackState` + 持久化 | L3041 / L24310± | 追踪状态（tracking/server/dinoId/from:nearest|card） |
+| `lbFindPlayerPos()` | L21361 | **逐服查玩家位置**（新架构直连免认证，串行去并发） |
+| `lbOpenDistSel(server,id1,id2)` | L23403 | **打开地图并定位选中**（翻到目标服页 + 高亮） |
+| `lbWildPick(abbr,idx,ev,wid)` | L23348 | **点选 → 顶卡 + 按钮组 + 点高亮（本次交互的复用基准）**（`lb-picked`/白圈） |
+| `lbNearestStructure(arr,cx,cy)` | L5215 | **已有通用的"最近点"选择函数**（待核适用性，见 §3） |
+| `lbMapPagerRender(cfg)` | L23832 | 通用多页翻页地图容器（设施/成员已共用） |
+
+---
+
+## 2. 场景盘点（v2 范围：T2 + T4b）
+
+| # | 场景 | 现有点位交互 | 缺口 |
+|---|---|---|---|
+| **T1** | **物种分布地图**（`lbWildDistMap` L23148） | 点选→顶卡→[追踪]/[切换+停止]、route 连线、定位 —— **完整** | 无（作为源头与复用基准） |
+| **T2** | **设施位置浮窗**（`lbFacPosRender` L18625 / `lbFacPosPage`）23 类点位（宝箱/笔记/传送点/哨站/台座/城市终端/电力节点/河狸坝/蜂巢/方尖碑/空投/洞穴箱…） | 点选→**仅展开坐标徽章**（`lbFacDotTap` L23673） | 无追踪、无"最近" |
+| ~~**T3**~~ | 联盟成员分布 —— **v2 移除，不做** | — | — |
+| **T4a** | 聚落卡生物地图 `lbOpenBioMap`（L23555） | 单点无交互 | **v2 不做（口径：非生物才做）** |
+| **T4b** | **聚落卡设施图** `lbOpenFacMap`（L23582，多点+徽章）——**离散聚落设备（非生物）** | 仅地图+点位（+坐标徽章） | 无追踪入口（**v3 目标**） |
+
+> 另：**野生列表卡**已有 [▶追踪]（`lbTrackWildFrom`）——不在本次地图场景范围（已具备，不重复改）。
+
+---
+
+## 3. 复用设计（非复制）— 新增 3 个通用件 + 抽取 2 处现有逻辑
+
+> 原则：**一切追踪/停止/持久化统一走现有 `LB._trackState` 状态机与 `lbTrackLoc/lbTrackStop` 链路**；新场景只做"入口壳"，不重写链路。
+
+### R1 `lbFacDotPick(...)` + `lbFacDotTrack(...)` —— 「点选 → 追踪按钮」流（新增，~45 行；**对齐地图分布交互**）
+- **R1a `lbFacDotPick(abbr, dot, el)`**（点选设施点位）：
+  1. 高亮该点（复用 R4 `lbDotHl`；同时清除同页其它点选中态）；
+  2. 在该页**顶部固定区**渲染「选中条」：`名称 · 档名 · 坐标` + **[▶ 追踪] 按钮**（形态对齐物种地图顶卡按钮区 `lbWildTopBtnHtml`）；
+  3. 再点同一点/其它点=切换选中；关闭浮窗清除。
+- **R1b `lbFacDotTrack(abbr, x, y, z)`**（点 [▶ 追踪] 后，async）：
+  1. `lbFindPlayerPos()`（或复用 `LB._trackState.pos`）→ **校验玩家在目标服**（范式同 `lbTrackWildFrom` L21620 的 toast 拒绝）；
+  2. 互斥：`if(LB._trackState.tracking) await lbTrackStop(true)`（静默停止旧的）；
+  3. **`lbTrackLoc(server,x,y,z)`（坐标追踪——设施非生物，等效于蛋的追踪通道）** → 成功 `LB._trackState={tracking:true, server, from:'facdot'}` + `lbStartTrackPoll()` + `lbRenderBreedBar()`（**悬浮控制组 [停止] 出现，与追龙一致**）；
+  4. toast 结果（成功/失败原因）。
+- `from:'facdot'` 为新增来源标记：悬浮组=**仅停止**（同 card 语义，无"切换"）。
+
+### R2 `lbFacTrackNearest(cfg)` —— 通用「追踪最近」（新增，~40 行）
+- 入参：`{server, pts:[{x,y,z,name?}], container}`；
+- 步骤：`lbFindPlayerPos()`（须在该服）→ **算最近点**（复用/参照 `lbNearestStructure(arr,cx,cy)` L5215，平面距离）→ `lbFacDotTrack`（坐标追踪）→ **就地 UI 定位高亮**（翻页居中用 `lbOpenDistSel` 的滚动段，高亮用 R4）；
+- 与 T1 的"追踪最近"（追野生实体链）**并列存在**：T1 追"会动的龙"（TrackDino），T2/T4b 追踪"静态目标"（坐标通道）——**同一悬浮控制组/同一停止命令**，用户感知一致。
+
+### R3 `lbPlayerSrvPos()` —— 玩家位置缓存包装（抽取，~10 行）
+- 包 `lbFindPlayerPos()` + `LB._playerPosCache`（30s TTL），供 R1/R2 共用，避免按住按钮反复全服查询。
+
+### R4 抽取：`lbDotHl(el)` 点高亮（从 `lbWildPick` 内提取样式段，两处复用）
+### R5 抽取：`lbPageScrollTo(container, abbr)` 翻到目标服页（从 `lbOpenDistSel` 提取滚动段）
+
+---
+
+## 4. 逐场景改造清单（可执行级）
+
+- **P2-a（选点追踪，全类别）**：`lbFacPosPage` 点位点击由"仅徽章"升级为 **R1a 点选流**——点选点位 → 高亮 + 页顶「选中条 + [▶ 追踪]」；点 [▶ 追踪] → `lbFacDotTrack`（坐标追踪）。**与物种地图"选了一个点、点追踪按钮"完全同构**；多点页=点哪个追哪个（数据点在 `arr`/`dots` 内，含 server=该页 abbr）。
+- **P2-b（页头"追踪最近"，仅 3 类）**：[🎯追踪最近] 按钮**仅当格子为 `t:explorerchest`（探险者笔记）/`t:seacrate`（深海·沙漠宝箱）/`t:beaverdam`（河狸坝）时显示**；点击 → `lbFacTrackNearest({server, pts})`（仅当**当前页服=玩家所在服**，否则置灰+提示）。
+- 判定语义：**该类别全部点位都是静态目标 → 一律坐标追踪（TrackLocation）**（无 TrackDino 分支）。
+
+### T3 联盟成员分布 —— **v2 移除，不做**
+（原设想：成员点选点追踪/最近成员；用户口径限定"只推广到公共设施"，本场景整体移出。）
+
+### T4 聚落卡内嵌地图 —— **v2 拆分：仅做设施图（非生物）**
+- **T4b（做）**：`lbOpenFacMap` 地图内点位同样接入 **R1a 点选流**（点选 → 高亮 + [▶ 追踪]）；单设施地图=点位旁/下方直接显示 [▶ 追踪]；多设施=点哪个追哪个（`lbFacDotPick`/`lbFacDotTrack`，**不含"追踪最近"按钮**）。
+- **T4a（不做）**：`lbOpenBioMap`（生物地图）——用户口径"非生物"。
+
+### 共享
+- 所有入口共用：**玩家在服校验**、**互斥 stop**、**LB._trackBusy 防并发**、**悬浮控制组（切换隐藏：from!=='nearest' 只显示停止）**、**持久化**。
+
+---
+
+## 5. 关键边界与待验证项
+
+| # | 边界 | 现状/对策 | 验证方式 |
+|---|---|---|---|
+| B1 | **玩家不在目标服** | 范式已有：`lbTrackWildFrom` 拒绝并提示"您当前在X，该龙在Y" | 直接复用；PW 模拟验证 |
+| B2 | **跨服追踪生效性** | **待实测**：玩家在 A 服时对 B 服点位发起坐标追踪——后端 RCON 可发往 B 服，但 HUD 是否落到玩家？ | 计划实施前先用现有 API 手测一次（curl/PW） |
+| B3 | **玩家离线** | `lbFindPlayerPos` null → 提示"玩家离线，无法追踪"；降级=仅地图定位（高亮） | 断网/离线 PW 模拟 |
+| B4 | **多点（合并格）** | 点哪个追哪个；"追踪最近"默认选最近一点；不批量（避免 RCON 刷屏） | code review |
+| B5 | **与现有蛋追踪通道互斥** | 同走 `TrackLocation` + `stop_track_dino` 清除——天然互斥（先 stop 再追） | PW 链测 |
+| B6 | **lbNearestStructure 适用性** | L5215 为"离散聚落"语义（可能带过滤）——**实施时先读实参**，不符则新写 10 行纯距离排序 | code review |
+
+---
+
+## 6. 分期实施建议（每期独立可上线/可验收）
+
+| 期 | 范围 | 交付 | 风险 |
+|---|---|---|---|
+| **P1** | 通用件 `lbFacDotPick`/`lbFacDotTrack` + `lbPlayerSrvPos` + R4 高亮 + **§9.2 一行加固**；**T2 全格选点追踪**（点选→[▶追踪]）+ **T4b 选点追踪**（聚落设施图）；**§9.3 回归矩阵全绿才上线** | 1 版上线 | 低（链路已有） |
+| **P2** | **T2 三类"追踪最近"**（探险者笔记 / 深海·沙漠宝箱 / 河狸坝：页头 🎯 + `lbFacTrackNearest`）+ 抽取 R5 | 1 版上线 | 中（点位渲染段多，需逐类回归） |
+
+> 每期完成即部署（`_deploy_cf.py`）+ PW 全链验证 + 用户游戏内确认。
+
+---
+
+## 7. 验证计划（每期）
+
+1. **PW 功能链**：点按钮 → 状态文件 `track_dino_status` ts 变化 + `ok:true` → toast 文案正确；
+2. **游戏内**（用户侧）：HUD 出现目标标记/箭头；`StopTrackDino` 后清除；
+3. **回归**：T1 物种分布（点选/追踪/切换/停止/route）零回归；设施浮窗既有徽章交互（`lbFacDotTap`）不破坏；聚落卡（T4b）打开/关闭不影响既有卡片交互；
+4. **边界**：B1 跨服拒绝、B3 离线提示、（B2 手测结论回填本文件）。
+
+## 8. 风险与依赖
+
+- **依赖**：后端三 API 已上线（无新增依赖）；`track_dino_status` 轮询机制已稳定；
+- **风险**：RCON 追踪频次（每追一次=1 条 RCON）——UI 做防抖（追踪中禁用按钮）；多点场景不批量；
+- **不做**：不新增"坐标追踪跟随移动"（超范围）；不改 T1 既有逻辑（仅抽公共段，需保持行为一致）；**不做 T3 成员分布 / T4a 生物地图 / T2 其它类"追踪最近"**（v2 范围口径）。
+
+---
+
+## 9. 安全保证：完全不影响现有追踪功能（硬约束，用户口径）
+
+> **安全第一**——新功能上线不得改变现有追踪（追龙 card / 追踪最近 nearest / 追蛋）的任何行为。
+
+### 9.1 隔离设计（只加不改）
+- **现有追踪链函数一律不改内部逻辑**（`lbTrackWildFrom`/`lbTrackClick`/`lbNearestWild`/`lbTrackDino`/`lbTrackLoc`/`lbTrackStop`/`lbTrackNext`/持久化/轮询），新功能只做"入口壳 + 调用"。
+- **新增来源 `from:'facdot'`**，与既有来源完全隔离；已审计全部 4 处 `from` 分支（L20717 切换显隐 / L21795 丢失处理 / L23226 z 渐变 / L23433 顶卡按钮组），facdot 均自动落"无切换/不自动切"的安全分支，或根本不可达（丢失处理仅在轮询内调用）。
+- **facdot 状态字段**：`{tracking:true, server, player:LB.playerEos, pos, from:'facdot'}` —— **不设 `dinoId`/`dino`**：轮询死亡检测首行 `if(!st.server||!st.dinoId) return;`（L21718）**天然跳过**（与蛋的跳过同构），永不误入 `lbHandleTrackLost`。
+
+### 9.2 唯一一处既有代码接触（一行加固，附零影响论证）
+| 位置 | 现状 | 改法 | 零影响论证 |
+|---|---|---|---|
+| `lbRenderTrackFloat` L20710 | `if(!st…\|\|!st.dinoId){ 悬浮条隐藏 }` | 条件中去掉 `!st.dinoId`（仅保留 `!st.tracking\|\|!st.server`） | 对 nearest/card：两者必有 dinoId ⇒ 去掉的条件永假 ⇒ **行为零变化**；目的=让 facdot 也能显示悬浮条（**仅停止**，与 card 同款） |
+- 额外确认：`lbTrackStop` 只依赖 `st.server`+`st.player`（不依赖 dinoId）⇒ 停止坐标追踪走同一命令 `stop_track_dino`（清点与清龙同源）。
+
+### 9.3 回归测试矩阵（P1 上线前后各跑一轮，全绿才可上线）
+| # | 场景 | 操作 | 期望（与改前一字不差） |
+|---|---|---|---|
+| 1 | 追龙（card） | 野生卡 [追踪] → [停止] | 行为不变 |
+| 2 | 追踪最近（nearest） | [追踪最近] → [切换] → [停止] | 行为不变 |
+| 3 | 追蛋（坐标通道） | 蛋 [追踪] → [停止] | 行为不变 |
+| 4 | 持久化 | 追踪中刷新页面（nearest/card 各一次） | 恢复不变 |
+| 5 | 新功能 | T2 点选 → [▶追踪] → 悬浮 [停止] | 新增，且 #1-4 不受影响 |
+
+### 9.4 上线纪律
+- P1 提交含：① 一行加固（§9.2） ② 新函数（R1/R3） ③ 本矩阵 PW 实测记录；**任一项不达 → 不上线**。
+- 新入口异常只停在新函数（入口独立），不触碰旧链；发现任何旧功能回归 → 立即回滚（备份已留）。
+
+---
+
+## 附：本计划涉及的关键代码锚点（供实施时定位）
+
+- 坐标追踪：`lbTrackLoc`（L21660）、蛋追踪入口（L21630-21640）、后端 `track_location`（dino_backend.py L689/L1927）
+- 追踪链：`lbTrackWildFrom`（L21597）、`lbTrackClick`（L21245）、`lbNearestWild`（L21460）、`lbTrackStop`（L21545）、`lbTrackNext`（L21922）
+- UI 复用：`lbWildPick`（L23348）、`lbWildTopBtnHtml`（L23426）、`lbOpenDistSel`（L23403）、`lbRouteOverlaySvg`（L23444）、`lbMapPagerRender`（L23832）
+- 场景：`lbFacPosRender`（L18625）/`lbFacPosPage`（L18680±）/`lbFacDotTap`（L23673）、`lbAlliancePosRender`（L23880±）、`lbOpenBioMap`（L23555）/`lbOpenFacMap`（L23582）
+- 状态：`LB._trackState`（L3041）、持久化（L24310±）、悬浮控制组（L20707-20760，门控 L20710=§9.2 一行加固点）
+
+
+---
+
+## v4 修订（2026-10-03，用户口径「完全对齐」）——P2 补全：追踪最近 = 顺路 route + 绘制路径 + [切换]
+
+> 背景：用户指出设施版「追踪最近」漏了「绘制路径」；核查属实——原版「追踪最近」完整语义含：**顺路 route（最近邻+2-opt、≤20 个/轮）→ 分布地图上绘制路径（起点绿点→连线+白底/海拔色+当前目标白圈，v755-P4b）→ [切换] 沿路线切换 → 走到最后自动停止（v784）**；本计划 P2 原设计仅“找最近点→坐标追踪”，漏接绘制/切换段。
+
+10. **P2 补全（v4271）**：
+    - 通用件新增：`lbFacBuildRoute`（设施顺路构建，与野生 `lbBuildTrackRoute` 同构）、`lbRouteSvgCore`（**绘制段抽取共用**——野生 `lbRouteOverlaySvg` 等价重构，两处共用同一份绘制）、`lbFacRouteOverlaySvg` / `lbFacRouteDraw` / `lbFacRouteClear` / `lbFacTrackNext`（设施切换）；
+    - `lbFacTrackNearest` 升级：建 route → 选首个（最近）→ 坐标追踪 → 就地绘制；`lbFacDotTrack(btn, src)` 来源标记扩展（'facnear'）；
+    - 悬浮组 [切换] 显示条件 +`facnear`；`lbTrackStop` 清设施 route/overlay；`lbTrackNext` 头部按 `facnear` 分流到设施切换；
+    - 已完成 v4272 修复：互斥停旧（stop）会清 route → 切换/重追完成后**回写恢复**（否则切换一次即丢路线）。
+11. **验证口径**：野生侧逐字等价（搬移块断言）+ 5 分支悬浮条回归 + 设施 route/绘制/切换/走完自动停 mock 实测全绿；真实在线链路（游戏内路径显示）待玩家在线终验。

@@ -19,7 +19,6 @@ dino_backend.py — ASA 生物数据独立后端（dino-import.html 脱离 HA �
   POST /api/track_dino                 RCON TrackDino（原 script.track_dino）
   POST /api/stop_track_dino            RCON StopTrackDino（原 script.stop_track_dino）
   POST /api/player_pos                 RCON PlayerPos（原 script.player_pos）
-  POST /api/ingame_time?server=X       游戏内时间（原生 RCON GetInGameTime；60s TTL + 同键并发合并）
   GET  /asa-data/*                     静态资源（汉化/图标/颜色 8 个 JSON）
   GET  /dino-data/*                    数据 JSON（<缩写>_cryo/tamed/wild_*.json 直读）
 
@@ -67,7 +66,6 @@ _VOLC_STATE_CACHE = {}     # server -> {'ts': epoch_ms, 'data': {...}}
 WP_TYPES_TTL_MS = 600000   # 类别字典（极稳定，10min）
 WP_QUERY_TTL_MS = 5000     # 单服单类查询：短时缓存共用——N 个客户端 TTL 窗口内只发 1 次 RCON
 WP_WEATHER_TTL_MS = 10000  # 天气（本期仅预置路由，UI 不接）
-WP_ZONES_TTL_MS = 60000    # 2026-10-03：天气区域（WorldProbe zones）——插件侧名单长缓存，本层 60s 与前端复用对齐
 WP_SCAN_TTL_MS = 10000     # 聚合路由（子查询另有各自 5s 缓存）
 WP_CLASS_TTL_MS = 10000    # 类级计数（scan filter）；类计数变化慢
 WP_LIMIT_DEFAULT = 500     # v4243（用户口径）：默认 500（插件上限 2000；旧值 20/100 系误设）
@@ -76,20 +74,12 @@ WP_SERVER_MAX = 11         # scan 聚合最多图数（= SERVERS 全量）
 _WP_TYPES_CACHE = {}       # server -> {'ts': ms, 'data': {...}}
 _WP_QUERY_CACHE = {}       # (server,type,limit) -> {'ts': ms, 'data': {...}}
 _WP_WEATHER_CACHE = {}     # server -> {'ts': ms, 'data': {...}}
-_WP_ZONES_CACHE = {}       # server -> {'ts': ms, 'data': {...}}   # 2026-10-03：天气区域（zones）
 _WP_SCAN_CACHE = {}        # (type,(servers),limit) -> {'ts': ms, 'data': {...}}
 _WP_CLASS_CACHE = {}       # (cls,(servers)) -> {'ts': ms, 'data': {...}}
 _WP_LOCKS = {}             # 查询键 -> Lock（同键并发合并：后到者等锁→双检缓存，只发 1 条 RCON）
 _WP_LOCKS_GUARD = threading.Lock()
 _WP_CACHE_MAX = 2000       # 宽松上限；超限按 ts 清掉一半最旧（防 key 泄漏）
 _WP_SCAN_EXECUTOR = __import__('concurrent.futures', fromlist=['ThreadPoolExecutor']).ThreadPoolExecutor(max_workers=4)
-
-# ---- 游戏内时间（2026-10-03：原生 RCON GetInGameTime；对标 HA sensor.ingame_time_cache）----
-INGAME_TTL_MS = 60000     # 60s：N 客户端合计每图 ≤1 次 RCON/分钟
-_INGAME_CACHE = {}        # server -> {'ts': ms, 'data': {...}}
-_INGAME_LOCKS = {}        # server -> Lock（同键并发合并：后到者等锁 → 双检缓存）
-_INGAME_LOCKS_GUARD = threading.Lock()
-_INGAME_RE = re.compile(r'Day\s+(\d+),\s+(\d{1,2}):(\d{2}):(\d{2})')
 WEBP_DIR = os.path.join(os.path.dirname(ACCOUNTS_FILE), 'webp96')
 
 # 服务器 RCON 端口表（与 apps.yaml 对齐）
@@ -1236,98 +1226,6 @@ def worldprobe_weather(server):
     return out
 
 
-def worldprobe_zones(server, fresh=False):
-    """天气区域（WorldProbe zones，2026-10-03 新增）。
-    分层：插件侧「区域名单」长缓存（切图 / 15min / 指针复验自动失效；fresh=1 强制重扫）；
-    天气 / 温度 / state / settings 每次调用实时重读 ⇒ 不存在旧天气。本层 TTL 60s + 同键并发合并
-    （N 客户端在窗口内只产生 1 条 RCON；zones 冷调用约 1.2s）。只有 Isl(4 区)/Cen(6 区) 有区域。"""
-    port = SERVERS.get(server)
-    if not port:
-        return {'ok': False, 'server': server, 'error': 'unknown server'}
-    key = (server, 'zones')
-    now_ms = int(time.time() * 1000)
-    if not fresh:
-        c0 = _WP_ZONES_CACHE.get(server)
-        if c0 and (now_ms - c0['ts'] < WP_ZONES_TTL_MS):
-            d0 = dict(c0['data'])
-            d0['cacheAgeMs'] = now_ms - c0['ts']
-            d0['serverNowMs'] = now_ms
-            return d0
-    with _wp_lock(key):
-        now_ms = int(time.time() * 1000)
-        if not fresh:
-            c0 = _WP_ZONES_CACHE.get(server)
-            if c0 and (now_ms - c0['ts'] < WP_ZONES_TTL_MS):
-                d0 = dict(c0['data'])
-                d0['cacheAgeMs'] = now_ms - c0['ts']
-                d0['serverNowMs'] = now_ms
-                return d0
-        cmd = CMD_WORLDPROBE + ' zones' + (' fresh=1' if fresh else '')
-        j, err = _wp_rcon_json(port, cmd, server, None, now_ms)
-        if err:
-            return err
-        j['server'] = server
-        _WP_ZONES_CACHE[server] = {'ts': now_ms, 'data': j}
-        out = dict(j)
-        out['cacheAgeMs'] = 0
-        out['serverNowMs'] = now_ms
-        return out
-
-
-def _ingame_lock(server):
-    """同键并发合并锁（与 _wp_lock 同范式）。"""
-    with _INGAME_LOCKS_GUARD:
-        lk = _INGAME_LOCKS.get(server)
-        if lk is None:
-            if len(_INGAME_LOCKS) > 64:
-                _INGAME_LOCKS.clear()
-            lk = _INGAME_LOCKS[server] = threading.Lock()
-        return lk
-
-
-def ingame_time(server, fresh=False):
-    """游戏内时间（原生 RCON GetInGameTime → 'Day N, HH:MM:SS'）。
-    60s TTL + 同键并发合并 ⇒ N 客户端合计每图 ≤1 次 RCON/分钟。
-    注：Bob（俱乐部）实服对该命令无响应（'Server received, But no response!!'）⇒ ok=false + raw。
-    解析前必须剥离控制字符（list_players 实测：响应带 b':\\x00 垃圾前缀）。"""
-    port = SERVERS.get(server)
-    if not port:
-        return {'ok': False, 'server': server, 'error': 'unknown server'}
-    now_ms = int(time.time() * 1000)
-    c = _INGAME_CACHE.get(server)
-    if (not fresh) and c and (now_ms - c['ts'] < INGAME_TTL_MS):
-        d = dict(c['data'])
-        d['cacheAgeMs'] = now_ms - c['ts']
-        d['serverNowMs'] = now_ms
-        return d
-    with _ingame_lock(server):
-        now_ms = int(time.time() * 1000)
-        c = _INGAME_CACHE.get(server)
-        if (not fresh) and c and (now_ms - c['ts'] < INGAME_TTL_MS):
-            d = dict(c['data'])
-            d['cacheAgeMs'] = now_ms - c['ts']
-            d['serverNowMs'] = now_ms
-            return d
-        try:
-            raw = rcon_command(RCON_HOST, port, RCON_PASSWORD, 'GetInGameTime')
-        except Exception as e:
-            return {'ok': False, 'server': server, 'error': 'rcon: ' + str(e), 'serverNowMs': now_ms}
-        text = (raw or b'').decode('utf-8', errors='ignore')
-        clean = re.sub(r'[\x00-\x1f]', '', text).strip()
-        m = _INGAME_RE.search(clean)
-        if not m:
-            err = 'no response' if not clean else 'unparsable'
-            return {'ok': False, 'server': server, 'error': err, 'raw': clean[:200], 'serverNowMs': now_ms}
-        day = int(m.group(1)); hh = int(m.group(2)); mm = int(m.group(3)); ss = int(m.group(4))
-        r = {'ok': True, 'server': server,
-             'raw': 'Day %d, %02d:%02d:%02d' % (day, hh, mm, ss),
-             'day': day, 'clock': '%02d:%02d:%02d' % (hh, mm, ss),
-             'secOfDay': hh * 3600 + mm * 60 + ss,
-             'ttlMs': INGAME_TTL_MS, 'cacheAgeMs': 0, 'serverNowMs': now_ms}
-        _INGAME_CACHE[server] = {'ts': now_ms, 'data': r}
-        return r
-
-
 def worldprobe_scan(type_s, servers, limit, fresh=False):
     """聚合路由：逐图并行 query（复用单图 5s 缓存/同键合并），按图分组返回。
     并发 ≤4（_WP_SCAN_EXECUTOR）；聚合结果 TTL 10s。"""
@@ -2075,13 +1973,6 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(400, {'ok': False, 'error': 'missing server'})
                 return
             self._send(200, worldprobe_weather(server))
-        elif path.endswith('worldprobe_zones'):  # 2026-10-03：天气区域（WorldProbe zones；TTL 60s + 同键并发合并）
-            server = g('server')
-            if not server:
-                self._send(400, {'ok': False, 'error': 'missing server'})
-                return
-            fresh = g('fresh').lower() in ('1', 'true', 'yes')
-            self._send(200, worldprobe_zones(server, fresh))
         elif path.endswith('worldprobe_query'):
             server = g('server')
             type_s = g('type')
@@ -2104,13 +1995,6 @@ class Handler(BaseHTTPRequestHandler):
                 return
             fresh = g('fresh').lower() in ('1', 'true', 'yes')
             self._send(200, worldprobe_class(cls_s, g('servers'), fresh))
-        elif path.endswith('ingame_time'):  # 2026-10-03：游戏内时间（原生 RCON GetInGameTime；60s TTL + 同键合并）
-            server = g('server')
-            if not server:
-                self._send(400, {'ok': False, 'error': 'missing server'})
-                return
-            fresh = g('fresh').lower() in ('1', 'true', 'yes')
-            self._send(200, ingame_time(server, fresh))
         elif path.endswith('volcano_anchor'):  # v1096 旧接口（人工校准锚点）——已弃用，保留兼容；v1107 起前端不再调用
             server = g('server')
             if not server:
