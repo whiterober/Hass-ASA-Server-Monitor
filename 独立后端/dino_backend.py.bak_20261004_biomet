@@ -20,7 +20,6 @@ dino_backend.py — ASA 生物数据独立后端（dino-import.html 脱离 HA �
   POST /api/stop_track_dino            RCON StopTrackDino（原 script.stop_track_dino）
   POST /api/player_pos                 RCON PlayerPos（原 script.player_pos）
   POST /api/ingame_time?server=X       游戏内时间（原生 RCON GetInGameTime；60s TTL + 同键并发合并）
-  POST /api/worldprobe_biometemps?server=X&skip=&count=&brief=&filter=  区域温度（ABiomeZoneVolume 绝对温度 ℃；TTL 60s + 同键合并）
   GET  /asa-data/*                     静态资源（汉化/图标/颜色 8 个 JSON）
   GET  /dino-data/*                    数据 JSON（<缩写>_cryo/tamed/wild_*.json 直读）
 
@@ -69,7 +68,6 @@ WP_TYPES_TTL_MS = 600000   # 类别字典（极稳定，10min）
 WP_QUERY_TTL_MS = 5000     # 单服单类查询：短时缓存共用——N 个客户端 TTL 窗口内只发 1 次 RCON
 WP_WEATHER_TTL_MS = 10000  # 天气（本期仅预置路由，UI 不接）
 WP_ZONES_TTL_MS = 60000    # 2026-10-03：天气区域（WorldProbe zones）——插件侧名单长缓存，本层 60s 与前端复用对齐
-WP_BIOMET_TTL_MS = 60000   # 2026-10-04：区域温度（biometemps）——插件每调用实时重读；本层 60s + 同键并发合并
 WP_SCAN_TTL_MS = 10000     # 聚合路由（子查询另有各自 5s 缓存）
 WP_CLASS_TTL_MS = 10000    # 类级计数（scan filter）；类计数变化慢
 WP_LIMIT_DEFAULT = 500     # v4243（用户口径）：默认 500（插件上限 2000；旧值 20/100 系误设）
@@ -79,7 +77,6 @@ _WP_TYPES_CACHE = {}       # server -> {'ts': ms, 'data': {...}}
 _WP_QUERY_CACHE = {}       # (server,type,limit) -> {'ts': ms, 'data': {...}}
 _WP_WEATHER_CACHE = {}     # server -> {'ts': ms, 'data': {...}}
 _WP_ZONES_CACHE = {}       # server -> {'ts': ms, 'data': {...}}   # 2026-10-03：天气区域（zones）
-_WP_BIOMET_CACHE = {}      # (server,skip,count,brief,filter) -> {'ts': ms, 'data': {...}}   # 2026-10-04：biometemps
 _WP_SCAN_CACHE = {}        # (type,(servers),limit) -> {'ts': ms, 'data': {...}}
 _WP_CLASS_CACHE = {}       # (cls,(servers)) -> {'ts': ms, 'data': {...}}
 _WP_LOCKS = {}             # 查询键 -> Lock（同键并发合并：后到者等锁→双检缓存，只发 1 条 RCON）
@@ -1277,58 +1274,6 @@ def worldprobe_zones(server, fresh=False):
         return out
 
 
-def worldprobe_biometemps(server, skip=0, count=64, brief=False, filt=''):
-    """区域温度（WorldProbe biometemps，v86/v87；ABiomeZoneVolume 绝对温度 ℃）。2026-10-04 新增。
-    与 zones（Weather_Override_Volume）是两套对象；覆盖 Cen 130 区 / Gen 530 区；
-    顶层 globalBase=全图基准温度 / globalWind=全图风力（区级 wind 恒 0 请用 globalWind）；
-    参数透传 skip / count / brief(1=精简 约-70%体积) / filter(区名子串，ASCII，推荐替代翻页)。
-    本层 TTL 60s + 同键并发合并（缓存键含查询参数）。"""
-    port = SERVERS.get(server)
-    if not port:
-        return {'ok': False, 'server': server, 'error': 'unknown server'}
-    try:
-        skip_n = max(0, min(int(skip), 100000))
-    except Exception:
-        skip_n = 0
-    try:
-        count_n = max(1, min(int(count), 512))
-    except Exception:
-        count_n = 64
-    filt_s = re.sub(r'[^0-9A-Za-z_\-]', '', str(filt or ''))[:40]   # 区名子串：仅 ASCII（RCON 参数以空格分隔）
-    brief_b = bool(brief)
-    key = (server, 'biometemps', skip_n, count_n, brief_b, filt_s)
-    now_ms = int(time.time() * 1000)
-    c0 = _WP_BIOMET_CACHE.get(key)
-    if c0 and (now_ms - c0['ts'] < WP_BIOMET_TTL_MS):
-        d0 = dict(c0['data'])
-        d0['cacheAgeMs'] = now_ms - c0['ts']
-        d0['serverNowMs'] = now_ms
-        return d0
-    with _wp_lock(key):
-        now_ms = int(time.time() * 1000)
-        c0 = _WP_BIOMET_CACHE.get(key)
-        if c0 and (now_ms - c0['ts'] < WP_BIOMET_TTL_MS):
-            d0 = dict(c0['data'])
-            d0['cacheAgeMs'] = now_ms - c0['ts']
-            d0['serverNowMs'] = now_ms
-            return d0
-        cmd = CMD_WORLDPROBE + ' biometemps count=%d skip=%d' % (count_n, skip_n)
-        if brief_b:
-            cmd += ' brief=1'
-        if filt_s:
-            cmd += ' filter=' + filt_s
-        j, err = _wp_rcon_json(port, cmd, server, None, now_ms)
-        if err:
-            return err
-        j['server'] = server
-        _wp_trim(_WP_BIOMET_CACHE, now_ms)
-        _WP_BIOMET_CACHE[key] = {'ts': now_ms, 'data': j}
-        out = dict(j)
-        out['cacheAgeMs'] = 0
-        out['serverNowMs'] = now_ms
-        return out
-
-
 def _ingame_lock(server):
     """同键并发合并锁（与 _wp_lock 同范式）。"""
     with _INGAME_LOCKS_GUARD:
@@ -2137,13 +2082,6 @@ class Handler(BaseHTTPRequestHandler):
                 return
             fresh = g('fresh').lower() in ('1', 'true', 'yes')
             self._send(200, worldprobe_zones(server, fresh))
-        elif path.endswith('worldprobe_biometemps'):  # 2026-10-04：区域温度（WorldProbe biometemps；TTL 60s + 同键并发合并）
-            server = g('server')
-            if not server:
-                self._send(400, {'ok': False, 'error': 'missing server'})
-                return
-            self._send(200, worldprobe_biometemps(server, g('skip', '0'), g('count', '64'),
-                                                  g('brief').lower() in ('1', 'true', 'yes'), g('filter')))
         elif path.endswith('worldprobe_query'):
             server = g('server')
             type_s = g('type')
