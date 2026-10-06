@@ -67,7 +67,7 @@ _VOLC_STATE_CACHE = {}     # server -> {'ts': epoch_ms, 'data': {...}}
 # ---- WorldProbe 公共设施实时查询（2026-09-30，插件 v9；用户口径：短时缓存共用 + 前端 CD）----
 WP_TYPES_TTL_MS = 600000   # 类别字典（极稳定，10min）
 WP_QUERY_TTL_MS = 5000     # 单服单类查询：短时缓存共用——N 个客户端 TTL 窗口内只发 1 次 RCON
-WP_WEATHER_TTL_MS = 60000  # v4367（2026-10-06）：10s→60s（weather 升级 full=1+slim 后与 zones 对齐）
+WP_WEATHER_TTL_MS = 10000  # 天气（本期仅预置路由，UI 不接）
 WP_ZONES_TTL_MS = 60000    # 2026-10-03：天气区域（WorldProbe zones）——插件侧名单长缓存，本层 60s 与前端复用对齐
 WP_BIOMET_TTL_MS = 60000   # 2026-10-04：区域温度（biometemps）——插件每调用实时重读；本层 60s + 同键并发合并
 WP_SCAN_TTL_MS = 10000     # 聚合路由（子查询另有各自 5s 缓存）
@@ -82,19 +82,6 @@ _WP_ZONES_CACHE = {}       # server -> {'ts': ms, 'data': {...}}   # 2026-10-03�
 _WP_BIOMET_CACHE = {}      # (server,skip,count,brief,filter) -> {'ts': ms, 'data': {...}}   # 2026-10-04：biometemps
 _WP_SCAN_CACHE = {}        # (type,(servers),limit) -> {'ts': ms, 'data': {...}}
 _WP_CLASS_CACHE = {}       # (cls,(servers)) -> {'ts': ms, 'data': {...}}
-# ---- v4367（2026-10-06）：WorldProbe 事件扩展路由（wave/sandstorm/meteor/actor/badwx/wprobs）----
-WP_WAVE_TTL_MS = 60000     # Gen 巨浪（worldprobe wave）
-WP_SAND_TTL_MS = 60000     # Rag 沙尘暴（worldprobe sandstorm，插件 v122b3+）
-WP_METEOR_TTL_MS = 2000    # Ext 陨石雨（worldprobe meteor，实时性要求高）
-WP_ACTOR_TTL_MS = 30000    # 通用 actor（Rag 火山 / Gen 流星雨 / 人工观测）
-WP_BADWX_TTL_MS = 300000   # 坏天气权重（worldprobe badwx，变化极慢）
-WP_WPROBS_TTL_MS = 300000  # 全服概率聚合（权重数组长驻）
-_WP_WAVE_CACHE = {}        # (server, cmd) -> {'ts': ms, 'data': {...}}
-_WP_SAND_CACHE = {}        # (server, cmd) -> {'ts': ms, 'data': {...}}
-_WP_METEOR_CACHE = {}      # (server, cmd) -> {'ts': ms, 'data': {...}}
-_WP_ACTOR_CACHE = {}       # (server, cmd) -> {'ts': ms, 'data': {...}}
-_WP_BADWX_CACHE = {}       # (server, cmd) -> {'ts': ms, 'data': {...}}
-_WP_WPROBS_CACHE = {}      # server -> {'ts': ms, 'data': {...}}
 _WP_LOCKS = {}             # 查询键 -> Lock（同键并发合并：后到者等锁→双检缓存，只发 1 条 RCON）
 _WP_LOCKS_GUARD = threading.Lock()
 _WP_CACHE_MAX = 2000       # 宽松上限；超限按 ts 清掉一半最旧（防 key 泄漏）
@@ -1229,45 +1216,27 @@ def worldprobe_query(server, type_s, limit, fresh=False):
         return out
 
 
-def worldprobe_weather(server, limit=1, slim=True):
-    """天气（v4367 升级：full=1 limit=N [slim=1]；TTL 60s + 同键并发合并）。
-
-    slim 默认开（仅保留前端契约键 current/last/next/prev/remaining 等）；
-    slim=False 返回插件全量字段。历史参考块前端自 v4299 起零引用。"""
+def worldprobe_weather(server):
+    """天气（本期仅预置路由，UI 不接；TTL 10s）。"""
     port = SERVERS.get(server)
     if not port:
         return {'ok': False, 'server': server, 'error': 'unknown server'}
-    try:
-        limit_n = max(1, min(8, int(limit)))
-    except Exception:
-        limit_n = 1
-    cmd = CMD_WORLDPROBE + ' weather full=1 limit=%d' % limit_n + (' slim=1' if slim else '')
-    key = (server, cmd)
     now_ms = int(time.time() * 1000)
-    c = _WP_WEATHER_CACHE.get(key)
+    c = _WP_WEATHER_CACHE.get(server)
     if c and (now_ms - c['ts'] < WP_WEATHER_TTL_MS):
         d = dict(c['data'])
         d['cacheAgeMs'] = now_ms - c['ts']
         d['serverNowMs'] = now_ms
         return d
-    with _wp_lock(key):
-        now_ms = int(time.time() * 1000)
-        c = _WP_WEATHER_CACHE.get(key)
-        if c and (now_ms - c['ts'] < WP_WEATHER_TTL_MS):
-            d = dict(c['data'])
-            d['cacheAgeMs'] = now_ms - c['ts']
-            d['serverNowMs'] = now_ms
-            return d
-        j, err = _wp_rcon_json(port, cmd, server, None, now_ms)
-        if err:
-            return err
-        j['server'] = server
-        _WP_WEATHER_CACHE[key] = {'ts': now_ms, 'data': j}
-        _wp_trim(_WP_WEATHER_CACHE, now_ms)
-        out = dict(j)
-        out['cacheAgeMs'] = 0
-        out['serverNowMs'] = now_ms
-        return out
+    j, err = _wp_rcon_json(port, CMD_WORLDPROBE + ' weather', server, None, now_ms)
+    if err:
+        return err
+    j['server'] = server
+    _WP_WEATHER_CACHE[server] = {'ts': now_ms, 'data': j}
+    out = dict(j)
+    out['cacheAgeMs'] = 0
+    out['serverNowMs'] = now_ms
+    return out
 
 
 def worldprobe_zones(server, fresh=False):
@@ -1539,260 +1508,6 @@ def worldprobe_class(cls_s, servers, fresh=False):
                'total': tot, 'serverNowMs': now_ms, 'cacheAgeMs': 0}
         _WP_CLASS_CACHE[key] = {'ts': int(time.time() * 1000), 'data': out}
         _wp_trim(_WP_CLASS_CACHE, now_ms)
-        return out
-
-
-# ---- v4367（2026-10-06）：WorldProbe 事件扩展路由 ----
-def _wp_arg(s, maxlen=64):
-    """WorldProbe 命令参数净化：仅保留字母/数字/下划线/逗号/点/短横。"""
-    return re.sub(r'[^A-Za-z0-9_,\.\-]', '', str(s or ''))[:maxlen]
-
-
-def _wp_simple(server, sub, cache, ttl_ms):
-    """无参子命令通用包装（wave/sandstorm/meteor 共用）：TTL + 同键并发合并。"""
-    port = SERVERS.get(server)
-    if not port:
-        return {'ok': False, 'server': server, 'error': 'unknown server'}
-    key = (server, sub)
-    now_ms = int(time.time() * 1000)
-    c = cache.get(key)
-    if c and (now_ms - c['ts'] < ttl_ms):
-        d = dict(c['data'])
-        d['cacheAgeMs'] = now_ms - c['ts']
-        d['serverNowMs'] = now_ms
-        return d
-    with _wp_lock(key):
-        now_ms = int(time.time() * 1000)
-        c = cache.get(key)
-        if c and (now_ms - c['ts'] < ttl_ms):
-            d = dict(c['data'])
-            d['cacheAgeMs'] = now_ms - c['ts']
-            d['serverNowMs'] = now_ms
-            return d
-        j, err = _wp_rcon_json(port, CMD_WORLDPROBE + ' ' + sub, server, None, now_ms)
-        if err:
-            return err
-        j['server'] = server
-        cache[key] = {'ts': now_ms, 'data': j}
-        _wp_trim(cache, now_ms)
-        out = dict(j)
-        out['cacheAgeMs'] = 0
-        out['serverNowMs'] = now_ms
-        return out
-
-
-def worldprobe_wave(server):
-    """Gen 巨浪（WorldProbe wave）。TTL 60s + 同键并发合并。"""
-    return _wp_simple(server, 'wave', _WP_WAVE_CACHE, WP_WAVE_TTL_MS)
-
-
-def worldprobe_sandstorm(server):
-    """Rag 沙尘暴（WorldProbe sandstorm，插件 v122b3+）。TTL 60s + 同键并发合并。"""
-    return _wp_simple(server, 'sandstorm', _WP_SAND_CACHE, WP_SAND_TTL_MS)
-
-
-def worldprobe_meteor(server):
-    """Ext 陨石雨（WorldProbe meteor）。TTL 2s + 同键并发合并。"""
-    return _wp_simple(server, 'meteor', _WP_METEOR_CACHE, WP_METEOR_TTL_MS)
-
-
-def worldprobe_actor(server, filt, propsidx='0', probe='', top='1', slim='1', fields=''):
-    """通用 actor 读取（Rag 火山 / Gen 流星雨 / 人工观测）。TTL 30s + 同键并发合并。"""
-    port = SERVERS.get(server)
-    if not port:
-        return {'ok': False, 'server': server, 'error': 'unknown server'}
-    f = _wp_arg(filt)
-    if not f:
-        return {'ok': False, 'server': server, 'error': 'missing filter'}
-    parts = ['actor', 'filter=' + f]
-    pr = _wp_arg(probe, 200)
-    if pr:
-        parts.append('probe=' + pr)
-    parts.append('props=1')
-    parts.append('propsIdx=' + (_wp_arg(propsidx, 4) or '0'))
-    parts.append('top=' + (_wp_arg(top, 4) or '1'))
-    if str(slim) in ('0', '1'):
-        parts.append('slim=' + str(slim))
-    fl = _wp_arg(fields, 200)
-    if fl:
-        parts.append('fields=' + fl)
-    cmd = CMD_WORLDPROBE + ' ' + ' '.join(parts)
-    key = (server, cmd)
-    now_ms = int(time.time() * 1000)
-    c = _WP_ACTOR_CACHE.get(key)
-    if c and (now_ms - c['ts'] < WP_ACTOR_TTL_MS):
-        d = dict(c['data'])
-        d['cacheAgeMs'] = now_ms - c['ts']
-        d['serverNowMs'] = now_ms
-        return d
-    with _wp_lock(key):
-        now_ms = int(time.time() * 1000)
-        c = _WP_ACTOR_CACHE.get(key)
-        if c and (now_ms - c['ts'] < WP_ACTOR_TTL_MS):
-            d = dict(c['data'])
-            d['cacheAgeMs'] = now_ms - c['ts']
-            d['serverNowMs'] = now_ms
-            return d
-        j, err = _wp_rcon_json(port, cmd, server, None, now_ms)
-        if err:
-            return err
-        j['server'] = server
-        _WP_ACTOR_CACHE[key] = {'ts': now_ms, 'data': j}
-        _wp_trim(_WP_ACTOR_CACHE, now_ms)
-        out = dict(j)
-        out['cacheAgeMs'] = 0
-        out['serverNowMs'] = now_ms
-        return out
-
-
-def worldprobe_badwx(server, filt='WeatherSystem'):
-    """坏天气权重因子（WorldProbe badwx [filter=]）。TTL 300s + 同键并发合并。"""
-    port = SERVERS.get(server)
-    if not port:
-        return {'ok': False, 'server': server, 'error': 'unknown server'}
-    f = _wp_arg(filt, 80)
-    cmd = CMD_WORLDPROBE + ' badwx' + ((' filter=' + f) if f else '')
-    key = (server, cmd)
-    now_ms = int(time.time() * 1000)
-    c = _WP_BADWX_CACHE.get(key)
-    if c and (now_ms - c['ts'] < WP_BADWX_TTL_MS):
-        d = dict(c['data'])
-        d['cacheAgeMs'] = now_ms - c['ts']
-        d['serverNowMs'] = now_ms
-        return d
-    with _wp_lock(key):
-        now_ms = int(time.time() * 1000)
-        c = _WP_BADWX_CACHE.get(key)
-        if c and (now_ms - c['ts'] < WP_BADWX_TTL_MS):
-            d = dict(c['data'])
-            d['cacheAgeMs'] = now_ms - c['ts']
-            d['serverNowMs'] = now_ms
-            return d
-        j, err = _wp_rcon_json(port, cmd, server, None, now_ms)
-        if err:
-            return err
-        j['server'] = server
-        _WP_BADWX_CACHE[key] = {'ts': now_ms, 'data': j}
-        _wp_trim(_WP_BADWX_CACHE, now_ms)
-        out = dict(j)
-        out['cacheAgeMs'] = 0
-        out['serverNowMs'] = now_ms
-        return out
-
-
-# uds 图的天气 actor 类名（Isl/Cen 由 2026-09-26/10-05 实测文档 & tmp 实测 JSON 固化）
-_WP_UDS_FILTERS = {
-    'Isl': 'UDS_Island_Weather',
-    'Sco': 'UDS_SE_Weather',
-    'Cen': 'UDS_TheCenter_Weather',
-}
-# ext_gen 图主天气系统（Ext/Rag/Val/Los 2026-10-05 实测；Ast 待验证）
-_WP_EXTGEN_FILTERS = {
-    'Ext': 'EXT_WeatherSystem',
-    'Ast': 'AST_DayWeather_WeatherSystem',
-    'Rag': 'RAG_DayWeather_WeatherSystem',
-    'Val': 'RAG_DayWeather_WeatherSystem',
-    'Los': 'LC_DayWeather_WeatherSystem',
-}
-
-
-def _wp_hex_vals(probes, name):
-    """探针 dataHex -> float 列表。兼容 probes.<name>.asArray.dataHex 与 <name>.dataHex。"""
-    import struct as _struct
-    p = probes.get(name) if isinstance(probes, dict) else None
-    if not isinstance(p, dict):
-        return [], 0
-    a = p.get('asArray')
-    hx = ''
-    num = 0
-    if isinstance(a, dict):
-        hx = a.get('dataHex') or ''
-        num = int(a.get('num') or 0)
-    if not hx:
-        hx = p.get('dataHex') or ''
-        num = num or int(p.get('num') or 0)
-    if not hx:
-        return [], num
-    try:
-        b = bytes.fromhex(hx)
-        vals = list(_struct.unpack('<%dd' % (len(b) // 8), b)) if (b and len(b) % 8 == 0) else []
-    except Exception:
-        vals = []
-    if num and len(vals) > num:
-        vals = vals[:num]
-    return vals, (num or len(vals))
-
-
-def _wp_norm(vals):
-    """权重数组 -> [{i, weight, pct}]（pct = 正权重占比 %，一位小数）。"""
-    pos = sum(v for v in vals if v > 0)
-    out = []
-    for i, v in enumerate(vals):
-        out.append({'i': i, 'weight': round(v, 4),
-                    'pct': round(v / pos * 100.0, 1) if (pos > 0 and v > 0) else 0.0})
-    return out
-
-
-def _wp_wprobs_cmd(server, idx='0'):
-    """按图族返回 (rcon命令, family)；不支持返回 (None, None)。"""
-    if server in _WP_UDS_FILTERS:
-        f = _WP_UDS_FILTERS[server]
-        return (CMD_WORLDPROBE + ' actor filter=%s props=1 probe=WeatherWeights_Day,WeatherWeights_Night,'
-                'WeatherEventLengths top=1' % f), 'uds'
-    f2 = _WP_EXTGEN_FILTERS.get(server)
-    if f2:
-        return (CMD_WORLDPROBE + ' actor filter=%s props=1 propsIdx=%s probe=WeatherChances,'
-                'PossibleWeatherChances,WeatherPresetList top=1' % (f2, _wp_arg(idx, 4) or '0')), 'ext_gen'
-    return None, None
-
-
-def worldprobe_wprobs(server, idx='0'):
-    """全服天气概率聚合（读天气 actor 权重数组 -> dataHex 解析 -> 归一化）。TTL 300s。"""
-    port = SERVERS.get(server)
-    if not port:
-        return {'ok': False, 'server': server, 'error': 'unknown server'}
-    now_ms = int(time.time() * 1000)
-    c = _WP_WPROBS_CACHE.get(server)
-    if c and (now_ms - c['ts'] < WP_WPROBS_TTL_MS):
-        d = dict(c['data'])
-        d['cacheAgeMs'] = now_ms - c['ts']
-        d['serverNowMs'] = now_ms
-        return d
-    with _wp_lock((server, 'wprobs', idx)):
-        now_ms = int(time.time() * 1000)
-        c = _WP_WPROBS_CACHE.get(server)
-        if c and (now_ms - c['ts'] < WP_WPROBS_TTL_MS):
-            d = dict(c['data'])
-            d['cacheAgeMs'] = now_ms - c['ts']
-            d['serverNowMs'] = now_ms
-            return d
-        cmd, fam = _wp_wprobs_cmd(server, idx)
-        if not cmd:
-            return {'ok': False, 'server': server, 'reason': 'unsupported', 'serverNowMs': now_ms}
-        j, err = _wp_rcon_json(port, cmd, server, None, now_ms)
-        if err:
-            return err
-        out = {'ok': True, 'server': server, 'family': fam, 'cacheAgeMs': 0, 'serverNowMs': now_ms}
-        try:
-            probes = j.get('probes') or {}
-            out['probeKeys'] = list(probes.keys()) if isinstance(probes, dict) else None
-            if fam == 'uds':
-                dv, dn = _wp_hex_vals(probes, 'WeatherWeights_Day')
-                nv, nn = _wp_hex_vals(probes, 'WeatherWeights_Night')
-                lv, _ = _wp_hex_vals(probes, 'WeatherEventLengths')
-                out['day'] = _wp_norm(dv)
-                out['night'] = _wp_norm(nv)
-                out['lengths'] = [round(v, 2) for v in lv]
-                out['num'] = max(dn, nn)
-            else:
-                cv, cn = _wp_hex_vals(probes, 'WeatherChances')
-                out['slots'] = _wp_norm(cv)
-                out['num'] = cn
-            out['worldTime'] = j.get('worldTime')
-        except Exception as e:
-            return {'ok': False, 'server': server, 'reason': 'parse: %r' % (e,), 'serverNowMs': now_ms}
-        _WP_WPROBS_CACHE[server] = {'ts': int(time.time() * 1000), 'data': out}
-        _wp_trim(_WP_WPROBS_CACHE, now_ms)
         return out
 
 
@@ -2414,43 +2129,7 @@ class Handler(BaseHTTPRequestHandler):
             if not server:
                 self._send(400, {'ok': False, 'error': 'missing server'})
                 return
-            self._send(200, worldprobe_weather(server, g('limit', '1'), g('slim', '1') != '0'))
-        elif path.endswith('worldprobe_wave'):  # v4367：Gen 巨浪
-            server = g('server')
-            if not server:
-                self._send(400, {'ok': False, 'error': 'missing server'})
-                return
-            self._send(200, worldprobe_wave(server))
-        elif path.endswith('worldprobe_sandstorm'):  # v4367：Rag 沙尘暴
-            server = g('server')
-            if not server:
-                self._send(400, {'ok': False, 'error': 'missing server'})
-                return
-            self._send(200, worldprobe_sandstorm(server))
-        elif path.endswith('worldprobe_meteor'):  # v4367：Ext 陨石雨
-            server = g('server')
-            if not server:
-                self._send(400, {'ok': False, 'error': 'missing server'})
-                return
-            self._send(200, worldprobe_meteor(server))
-        elif path.endswith('worldprobe_actor'):  # v4367：通用 actor（Rag 火山 / Gen 流星雨）
-            server = g('server')
-            if not server:
-                self._send(400, {'ok': False, 'error': 'missing server'})
-                return
-            self._send(200, worldprobe_actor(server, g('filter'), g('propsIdx', '0'), g('probe'), g('top', '1'), g('slim', '1'), g('fields')))
-        elif path.endswith('worldprobe_badwx'):  # v4367：坏天气权重
-            server = g('server')
-            if not server:
-                self._send(400, {'ok': False, 'error': 'missing server'})
-                return
-            self._send(200, worldprobe_badwx(server, g('filter', 'WeatherSystem')))
-        elif path.endswith('worldprobe_wprobs'):  # v4367：全服概率聚合
-            server = g('server')
-            if not server:
-                self._send(400, {'ok': False, 'error': 'missing server'})
-                return
-            self._send(200, worldprobe_wprobs(server, g('propsIdx', '0')))
+            self._send(200, worldprobe_weather(server))
         elif path.endswith('worldprobe_zones'):  # 2026-10-03：天气区域（WorldProbe zones；TTL 60s + 同键并发合并）
             server = g('server')
             if not server:
