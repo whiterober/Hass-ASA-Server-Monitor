@@ -67,9 +67,10 @@ _VOLC_STATE_CACHE = {}     # server -> {'ts': epoch_ms, 'data': {...}}
 # ---- WorldProbe 公共设施实时查询（2026-09-30，插件 v9；用户口径：短时缓存共用 + 前端 CD）----
 WP_TYPES_TTL_MS = 600000   # 类别字典（极稳定，10min）
 WP_QUERY_TTL_MS = 5000     # 单服单类查询：短时缓存共用——N 个客户端 TTL 窗口内只发 1 次 RCON
-WP_WEATHER_TTL_MS = 3000  # v4411b（2026-10-07·全图 dll 已推送）：60s→3s 全局秒级（插件内 3.6ms / RCON 往返 1.1~1.5s）
-# 分档机制保留：如需为个别图单独降速（如旧 dll），把 {'图':60000} 填进下表即可
-WP_WX_TTL_FAST = {}
+WP_WEATHER_TTL_MS = 60000  # v4367（2026-10-06）：10s→60s（weather 升级 full=1+slim 后与 zones 对齐）
+# v4409（2026-10-07·插件 v122b16 大修后）：weather TTL 分档——已推送新 dll 的图 3s（插件内 3.6ms / RCON 往返 1.1~1.5s）；
+#   未推送图保持 60s（旧 dll 单次采集约 6s，高频采集会堆积）。全图推送完成后：把图加入本表或整体降 3s。
+WP_WX_TTL_FAST = {'Sco': 3000}
 WP_ZONES_TTL_MS = 60000    # 2026-10-03：天气区域（WorldProbe zones）——插件侧名单长缓存，本层 60s 与前端复用对齐
 WP_BIOMET_TTL_MS = 60000   # 2026-10-04：区域温度（biometemps）——插件每调用实时重读；本层 60s + 同键并发合并
 WP_SCAN_TTL_MS = 10000     # 聚合路由（子查询另有各自 5s 缓存）
@@ -103,7 +104,7 @@ _WP_CACHE_MAX = 2000       # 宽松上限；超限按 ts 清掉一半最旧（�
 _WP_SCAN_EXECUTOR = __import__('concurrent.futures', fromlist=['ThreadPoolExecutor']).ThreadPoolExecutor(max_workers=4)
 
 # ---- 游戏内时间（2026-10-03：原生 RCON GetInGameTime；对标 HA sensor.ingame_time_cache）----
-INGAME_TTL_MS = 3000      # v4460（用户口径·对齐火山 3s）：后端单点采集 + 同键并发合并，N 客户端合计每图 ≤1 次 RCON/3s（原生 RCON 成本低）
+INGAME_TTL_MS = 60000     # 60s：N 客户端合计每图 ≤1 次 RCON/分钟
 _INGAME_CACHE = {}        # server -> {'ts': ms, 'data': {...}}
 _INGAME_LOCKS = {}        # server -> Lock（同键并发合并：后到者等锁 → 双检缓存）
 _INGAME_LOCKS_GUARD = threading.Lock()

@@ -68,11 +68,11 @@ TransferIdentityFix.WorldProbe actor filter=UDS_SE_Weather props=1 propsIdx=0
 | 0 | `Clear_Skies_SE` |
 | 2 | `Rain_SE` |
 | 3 | `Foggy_SE` |
-| 4 | `HeatWave_SE` |
+| 4 | `HeatWave_SE`（热浪） |
 | 5 | `ColdFront_SE` |
 | 6 | `Sand_Dust_Storm` |
 | **7** | **`ElectricalStorm`** ← 雷暴 |
-| 8 | `Superheat` |
+| 8 | `Superheat`（焚风） |
 
 - 🔴 **`i`（数组下标）≠ `id`**：`presetTable[]` 是按 `i` 顺序存的，必须用 `id` 字段做映射（例：`i=1` 的 `id=7`）
 - id **1** 未出现在表内（表内 8 条 / 枚举 0..8 共 9 值）⇒ id 1 名称未知，前端遇到请显示 `id=1 (未知)`
@@ -231,12 +231,15 @@ TransferIdentityFix.WorldProbe callfunc fn=MC_ChangeWeather p.New+Weather+Type=7
 - ✅ **沙尘暴不是独立 Actor**：`scan filter=Sand` / `Dust` / `Storm` ⇒ **0 命中**；全世界只有 **1 个 `UDS_SE_Weather_C`**（400 个属性）。
 - **展示建议**：`沙尘暴：进行中（进度 xx%）` + `方向：north-south`；（直接用上方 `direction` 字符串上屏即可）。
 
-### 1.13 🔥 热浪（焚风）—— 现状与判据（2026-10-05 23:31 受控实测）
+### 1.13 🔥 热浪（`HeatWave_SE`，id=4）／焚风（`Superheat`，id=8）—— 现状与判据（2026-10-05 23:31 受控实测）
 
+- 🟥 **术语更正（2026-10-07）**：**热浪 = `HeatWave_SE`（id 4）**、**焚风 = `Superheat`（id 8）**，
+  二者是**两个不同天气**；本节受控实测的对象是**热浪（id 4）**，焚风机制相同、判据同为 `weatherState.currentWeatherId`，
+  强制命令把 `Type=4` 换成 `Type=8` 即可。译名口径与前端一致（`HeatWave`=热浪 / `Superheat`=焚风，前端 v4364 已改）。
 - 🔴 **热浪没有专门语义槽**：`wxSemantics` 里只有 **`electricalStorm` / `sandstorm`** 两个事件槽，
   **不存在** `heatWave` / `foehn` / `superheat` 键；`scan filter=Heat` / `Heatwave` / `Foehn` / `Superheat` ⇒ **全部 0 命中**
   ⇒ **既不是独立 Actor，也没有专属状态字段**。
-- ✅ **唯一判据 = `weatherState.currentWeatherId == 4`**（`HeatWave_SE`，见 §1.2 表 id=4）；**秒级生效**
+- ✅ **唯一判据 = `weatherState.currentWeatherId == 4`**（`HeatWave_SE`＝热浪；**焚风则为 `== 8`**，见 §1.2 表）；**秒级生效**
   （受控测试中发出 `callfunc` 后首次采样即为 `4.0`）。
 - **受控测试**（空服，`MC_ChangeWeather(4)` → 约 60 s → 复位 `0`；命令见 §1.9）：
 
@@ -260,7 +263,7 @@ TransferIdentityFix.WorldProbe callfunc fn=MC_ChangeWeather p.New+Weather+Type=4
 | 复位后 | `0.0` | `3.0` | `90.0` | `22.2` | `false` |
 
 - ⇒ **结论：热浪期间 `windStrength` / `windDirection` / `interiorTemperature` 读数与晴天完全一致（不变）**
-  ⇒ 前端**只能靠 `currentWeatherId == 4` 判定**；所谓"焚风"的风/热效果由**客户端表现层**驱动，**服务端无字段可读**。
+  ⇒ 前端**只能靠 `currentWeatherId` 判定**（热浪 `4` / 焚风 `8`）；热浪与焚风的风、热效果均由**客户端表现层**驱动，**服务端无字段可读**。
 - **背景可读量**（仅供参考，不是判据）：`baseSummerTemperature=23` / `baseAutumnTemperature=21` / `baseWinterTemperature=11`、
   `maxValidTemperature=60` / `minValidTemperature=-30`、`HotTemperatureFactor=55`、`ColdTemperatureFactor=-56`。
 - **概率参考**（见「🎯 Sco（UDS_SE_Weather）日/夜权重表」）：白天 **31.8%**（8 种天气中最高）/ 夜晚 **0%**
@@ -592,12 +595,12 @@ TransferIdentityFix.WorldProbe actor filter=EXT_WeatherSystem props=1 probe=Weat
 | 4 | `HeatWave_SE` 热浪 | 0.7（**31.8%**） | 0（**0%**） | 700 s |
 | 5 | `Clear_Skies_SE` 晴 | 0.5（**22.7%**） | 0.5（**29.4%**） | 1200 s |
 | 6 | **`Sand_Dust_Storm` 沙尘暴** | 0.25（**11.4%**） | 0.2（**11.8%**） | 425 s |
-| 7 | `Superheat` 极热 | 0.15（**6.8%**） | 0（**0%**） | 750 s |
+| 7 | `Superheat` 焚风 | 0.15（**6.8%**） | 0（**0%**） | 750 s |
 
 - 原始值：`WeatherWeights_Day = [0, 0.1, 0.35, 0.15, 0.7, 0.5, 0.25, 0.15]`；
   `WeatherWeights_Night = [0.5, 0.2, 0.1, 0.2, 0, 0.5, 0.2, 0]`；
   `WeatherEventLengths = [800, 425, 750, 650, 700, 1200, 425, 750]`（秒）
-- ✅ **结果自洽**：白天热浪最高（31.8%）/ 夜晚 0；夜晚寒潮最高（29.4%）/ 白天 0；夜晚无热浪与极热
+- ✅ **结果自洽**：白天热浪最高（31.8%）/ 夜晚 0；夜晚寒潮最高（29.4%）/ 白天 0；夜晚无热浪与焚风
 - 🔴 前端展示要点：**必须按白天/夜晚分别取权重**；`WeatherSettings` 是 80 B 原始块（byte 视图，非数值表，可忽略）
 - 对齐来源：`wxSemantics.arrayProbe.presetTable`（`presetTable` 本身为 `null`，**必须读 `arrayProbe` 里的那份**）
 
@@ -1308,7 +1311,7 @@ TransferIdentityFix.WorldProbe zones              # 缓存读取（天气字段�
 |---|---:|---|---|:---:|---|---|
 | **Bob** | 32319 | — | ❌ **端口无响应** | — | — | — |
 | **Isl** | 32320 | UDS | ✅ 5 槽日/夜 | ❌ 只能给概率 | 区域天气 `Weather_Override_Volume_C` | ⚠️ 走 `WorldProbe zones`（区域名+天气） |
-| **Sco** | 32321 | UDS | ✅ 8 槽日/夜 | ❌ 只能给概率 | 雷暴/沙尘暴/热浪/极热 | ✅ **秒级判据**（无预兆） |
+| **Sco** | 32321 | UDS | ✅ 8 槽日/夜 | ❌ 只能给概率 | 雷暴/沙尘暴/热浪/焚风 | ✅ **秒级判据**（无预兆） |
 | **Cen** | 32322 | UDS | ✅ 5 槽日/夜 | ❌ 只能给概率 | 区域天气 ×6 | ⚠️ 走 `WorldProbe zones` |
 | **Abe** | 32323 | ab | ❌ **无权重表** | ❌ 不可 | **地震** | ❌ **不可预测**（无计时/概率字段） |
 | **Ext** | 32324 | ext_gen | ✅ 7 槽（5 种有效） | ❌ `nextWeather` 占位 | **陨石雨** | ✅ **提前 40~80 s** |
@@ -1348,7 +1351,7 @@ TransferIdentityFix.WorldProbe zones              # 缓存读取（天气字段�
 | 4 | HeatWave_SE（id 4） | `0.7` → **31.8%** | `0` → **0.0%** | 700 s |
 | 5 | Clear_Skies_SE（id 0） | `0.5` → **22.7%** | `0.5` → **29.4%** | 1200 s |
 | 6 | Sand_Dust_Storm（id 6） | `0.25` → **11.4%** | `0.2` → **11.8%** | 425 s |
-| 7 | Superheat（id 8） | `0.15` → **6.8%** | `0` → **0.0%** | 750 s |
+| 7 | Superheat（id 8，焚风） | `0.15` → **6.8%** | `0` → **0.0%** | 750 s |
 
 - 原始权重：`Day = [0.0, 0.1, 0.35, 0.15, 0.7, 0.5, 0.25, 0.15]`；`Night = [0.5, 0.2, 0.1, 0.2, 0.0, 0.5, 0.2, 0.0]`；`Lengths = [800.0, 425.0, 750.0, 650.0, 700.0, 1200.0, 425.0, 750.0]`
 - 🔴 **必须分昼夜**；`i` = 预设表顺序下标（非天气 id）
@@ -2316,7 +2319,7 @@ TransferIdentityFix.WorldProbe wxset prop=CloudNewWeather num=0 apply=1
 | 4 | 4 | `HeatWave_SE`（热浪） |
 | 5 | 0 | `Clear_Skies_SE`（晴） |
 | **6** | **6** | **`Sand_Dust_Storm`（沙尘暴 / 沙墙）** |
-| 7 | 8 | `Superheat`（超热） |
+| 7 | 8 | `Superheat`（焚风） |
 
 ### 23.4 ⚠️ 实测边界（务必转达前端，别当成"一定成功"）
 
@@ -2865,3 +2868,405 @@ TransferIdentityFix.WorldProbe callfunc fn=MC_ChangeWeather p.New+Weather+Type=<
 ```
 `id`：`0` 晴 · `2` 雨 · `3` 雾 · `4` 热浪 · `6` 沙尘暴 · `7` 雷暴（目视标定过的是 0/2/7/6）。省略 `apply=1` 为预演。
 > ⚠️ 会**直接改变实服天气**（对在线玩家可见），联调用完请切回 `0`。
+
+---
+
+## 30. ⚡ v122b11 —— WorldProbe 只读子命令「响应 TTL 缓存」（照抄火山插件机制）
+
+> **一句话**：八个只读子命令现在带**短 TTL 缓存**，引擎重复查询不再每次都重扫世界；后端 TTL 可以安全降到 **3 s**，前端秒级轮询由此成立。
+
+### 30.1 覆盖范围
+
+| 命令 | 缓存 |
+|---|---|
+| `weather` · `sandstorm` · `badwx` · `meteor` · `biometemps` · `wave` · `actor` · `zones` | ✅ 响应 TTL |
+| `wxset` · `exec` · `callfunc` · `funcs` | ❌ **写入/调试类，永不缓存** |
+| `volcano`（独立命令） | ✅ 早已有（本次即照抄它） |
+
+### 30.2 机制（与火山一致）
+
+- **键**：**完整命令行参数字符串**（`weather` 与 `weather slim=1` 是两条独立缓存，绝不串数据）；表上限 32 条，超出淘汰最早项。
+- **TTL 命中** ⇒ 直接把上次的响应体回给调用方，**不扫描 actor、不读任何字段**（毫秒级）；响应里 `cache.cached=1`、`cache.ageMs` 给出陈旧毫秒数。
+- **TTL 未命中** ⇒ 正常执行一次并把响应体存入缓存（`cache.cached=0`、`misses+1`）。
+- **绕过**：命令行里出现 `fresh` 或 `rescan` 即完全绕过缓存（`zones` 的 `rescan=1` 也会重建它自带的静态列表）。
+- **配置**：`probe_cache_seconds`（默认 **1**，v122b13 起由 3 降到 1；`0` = 关闭整个机制，上限 60）、`probe_rescan_seconds`（默认 **30**，10~600；v122b13 起同时作为「指针级缓存」的重扫节流）。
+- **部署判据**：任意上述命令的响应里出现 **`cache`** 块即 v122b11 已生效。
+
+### 30.3 响应新增字段
+
+```json
+"cache": { "cached": 1, "ageMs": 1234, "workUs": 18, "bypass": 0,
+           "lastMissUs": 41250, "savedEstUs": 1237500,
+           "cacheSeconds": 3, "rescanSeconds": 30, "sub": "weather",
+           "key": "weather", "hits": 42, "misses": 15, "bypasses": 2, "bodies": 6 }
+```
+
+> v122b12 起多了 5 个字段（`workUs` / `bypass` / `lastMissUs` / `savedEstUs` / `key`）
+> 和 `bypasses` 计数，含义见 §30.7。
+
+### 30.4 前端约定（重要）
+
+1. **常规轮询不要传 `fresh=1`** —— 吃到缓存是设计预期（最多陈旧 `cacheSeconds` 秒）。
+2. **需要"绝对实时"时**（例如要捕捉变天瞬间、故障排查）才传 `fresh=1`。
+3. 用 `cache.cached` 判断本次是否命中；用 `cache.ageMs` 判断数据新旧，**不要**因为 `cached=1` 就以为坏了。
+4. 判据字段（`currentWeatherId` / `weatherName` / `active` / `regionName` / `regionPoints` …）语义**完全不变**，只是可能落后 ≤ `cacheSeconds` 秒。
+
+### 30.5 后端可以做什么
+
+- 本插件侧已能承受秒级轮询：`WP_ZONES_TTL_MS`（当前 60 s）**可以降到 3 s**（后端侧改动属独立任务）。
+- 若后端仍想"每次都要最新"，可在后端请求里加 `fresh=1`，但那样会放弃插件的缓存收益。
+
+### 30.6 待补（下一步）
+
+- **指针级缓存**：TTL 到期时当前版本仍会重新枚举 actor；下一步把「已定位的 actor 指针集 + 属性偏移表」按 `rescan_seconds` 节流复用（火山 `VolcanoEnsure` 的完整做法），使 TTL 到期也只需毫秒级字段读取。
+- 验证脚本已就绪：`tmp\_vfy122b11.py`（八命令连发三次对比耗时与 `cache.cached`、`fresh=1` 绕过检查、关键字段回归），**部署后运行**。
+
+
+### 30.7 v122b12 补充：计时口径 + `fresh` 也回报 + meteor 修复
+
+#### 为什么要有 `workUs`（重要，前端/后端都别再按耗时判断缓存）
+- 实测：**同进程复用连接**连发 8 个命令，命中与未命中的耗时**几乎一样**，都在 **1.1~1.5 s**。
+- 结论：这段耗时是 **RCON 往返地板**（建连 + 认证 + 服务端按回合处理），**与插件做了多少活无关**；
+  调用侧（不管 python 还是后端 HTTP）**不可能**用耗时看出缓存有没有生效。
+- 因此 v122b12 让**插件自己计时**并回报进 `cache{}`：
+
+| 字段 | 含义 |
+|------|------|
+| `workUs` | **本次插件内部实际耗时（µs）**。未命中=完整世界扫描成本（通常几万 µs），命中=拷贝已存响应体（几百 µs） |
+| `lastMissUs` | 最近一次完整扫描的耗时（µs），可当作「省下了多少」的参照 |
+| `savedEstUs` | 命中累计估算节省（每次命中按 `lastMissUs` 计），仅供观感参考 |
+| `bypass` | 本次是否是 `fresh=1`/`rescan=1` 强制重扫（1=是） |
+| `bypasses` | 累计强制重扫次数（不计入 `misses`） |
+| `key` | 归一化后的缓存键（`fresh`/`rescan`/`rescan=1` 已从键里剥掉） |
+
+#### `fresh=1` / `rescan=1` 现在的行为（v122b12 变更）
+1. 以前：**完全透传**内部响应，**不带 `cache` 块** → 调用方看不出状态。
+2. 现在：照常返回 `cache{...}`，标 `bypass:1` + 该次全扫描的 `workUs`。
+3. **刷新会写进归一化键**：`weather fresh=1` 之后紧接着的普通 `weather` 调用**直接命中刚刷新的数据**
+   （键里剥掉 `fresh`/`rescan` 家族；其余参数 `slim=1`/`brief=1`/`fields=...` 仍保留在键里，不同参数不会串数据）。
+   > ⚠️ 该条在 v122b12 首版**有缺陷**：只剥了裸写 `fresh`/`rescan`，**`fresh=1` 这种带值写法漏剥**，
+   > 实测（2026-10-07 Sco）`weather fresh=1` 之后紧跟的 `weather` 仍 `cached=0`。
+   > **v122b12d 已修正**（改成前缀匹配，`fresh*` / `rescan*` 全部剥离）。
+
+#### meteor 修复（v122b12）
+- **旧行为**：在**非 Extinction 图**（如 Sco）调 `meteor`，返回的 JSON **没有闭合的 `}`**（长度 169），
+  调用方任何严格 `JSON.parse` 都会失败。自 v117 就存在——因为该命令只在灭绝图用，一直没暴露。
+- **新行为**：非 Ext 图返回**完整 JSON**：`{"ok":true,"sub":"meteor","supported":0,
+  "error":"no WeatherSystem actor exposes bMeteorFXActive (Ext-only field)", ...}`。
+- 前端若之前对 meteor 做过容错/跳过，可改为按 `supported` 字段正常判断。
+
+#### 部署判据
+- 响应 `cache{}` 里出现 **`workUs`** ⇒ v122b12 已生效。
+- 非 Ext 图 `meteor` 能被 `JSON.parse` 解析 ⇒ 修复已生效。
+- 调 `weather fresh=1` 时 `cache.key` 回报为 **`"weather"`**（不带 `fresh=1`）⇒ v122b12d 已生效。
+
+#### 实测收益（2026-10-07 Sco，插件自报 `workUs`）
+| 命令 | 未命中（全扫描） | 命中（走缓存） |
+|------|-----------------|---------------|
+| `weather` | 255,534 µs（255 ms） | 6 µs |
+| `sandstorm` | 92,456 µs | 2 µs |
+| `wave` | 78,522 µs | 2 µs |
+| `zones` | 43,919 µs | 1 µs |
+| `meteor` | 42,574 µs | 2 µs |
+| `badwx` | 41,259 µs | 1 µs |
+| `biometemps` | 32,873 µs | 8 µs |
+
+> 调用侧看到的 1.1~1.5 s 与上表无关（那是 RCON 往返地板）。一次 `weather` 全扫描省下约 **255 ms 的游戏线程时间**。
+
+
+### 30.8 v122b13 指针级缓存（TTL 到期不再遍历全图）
+
+#### 为什么
+实测各只读命令的**插件内部耗时**（`cache.workUs`）与应答大小无关：
+
+| 命令 | 应答字节 | v122b12 未命中耗时 |
+|------|---------|-------------------|
+| `wave` | 277 B | 78 ms |
+| `zones` | 404 B | 44 ms |
+| `meteor` | 169 B | 42 ms |
+| `badwx` | 279 B | 41 ms |
+| `biometemps` | 7.8 KB | 33 ms |
+| `weather`（full） | 28.9 KB | 255 ms |
+
+几百字节的应答也要 40~80 ms ⇒ 成本几乎全在**「遍历全图找目标对象」**，而不是拼 JSON。
+
+#### 改了什么（只缓存地址，不缓存数值）
+1. **类属性表缓存**：属性「名字 → 偏移/大小」只取决于 UClass（同类实例完全一致），
+   现在按类建表一次并共用（UDS_*_Weather_C 有 737 项属性）。换图（世界指针变化）即整表清空。
+2. **actor 索引缓存**：全图遍历改为一次性建「actor 指针 + 类名」索引，
+   重建条件＝换图 / 表空 / 超过 `probe_rescan_seconds`（默认 30 s）。8 个只读命令共用它。
+3. **`biometemps` 生物群系体积列表缓存**：`idx` 语义保持不变（仍是原 level 数组下标）。
+4. **默认响应 TTL 3 s → 1 s**：TTL 到期不再触发全图遍历，所以「更实时」和「更省」同时成立。
+
+#### 时效性说明（重要）
+- 这两层缓存**只保存"对象在哪、字段在第几字节"**，每次应答的数值都是**当场从内存读取**。
+- 因此**指针级缓存不会让数据变旧**；唯一可能看旧值的仍是第 ① 层响应 TTL（现在默认 1 s）。
+- 「目标对象换人」（换图、实例重建）由三处兜底：世界指针变化即失效；用前按类名比对，
+  不符立即重扫（不受 30 s 节流限制）；`fresh=1` / `rescan=1` 仍强制重扫。
+
+#### `cache{}` 新增字段
+
+| 字段 | 含义 |
+|------|------|
+| `ptrActors` | actor 索引里的对象数（该图全量 actor 规模） |
+| `ptrBuilds` | 索引重建次数（正常应长期停在 1~2；每 `rescanSeconds` 才 +1） |
+| `ptrHits` | 索引复用次数（每次调用 +1） |
+| `ptrAgeSec` | 索引年龄（秒），≥ `rescanSeconds` 时下次调用会重建 |
+| `clsBuilds` | 类属性表构建次数（远小于调用次数即正常） |
+| `clsHits` | 类属性表复用次数 |
+
+#### 部署判据
+- `cache{}` 里出现 `ptrActors` / `ptrBuilds` / `clsBuilds` ⇒ v122b13 已生效。
+- 连续调用同一个命令时 `workUs` 从「几万 µs」降到「几百~几千 µs」，且 `ptrBuilds` 仍为 1。
+
+
+### 30.9 v122b14 / v122b15 三项优化（含两处**接口行为变化**，前端需知）
+
+#### 背景：实测证明瓶颈是「全量遍历」，不是拼 JSON
+| 时段 | 发现 |
+|------|------|
+| v122b13 后 | `weather` 仍 205 ms、`sandstorm` 仍 48 ms，而 `badwx/wave/meteor` 已降到 µs 级 |
+| 定位 | 3 处**漏网的全量遍历**：`sandstorm.matinee[]`、`weather.ElectricalStormPoint`、`weather.electricalStorm.matinee[]` |
+
+其中 `ElectricalStormPoint` 那处最贵：它对**全部 93,690 个 actor** 逐个调 `TifObjName`（FName→UTF8，≈1.8 µs/次）≈ **170 ms**，
+而它其实只认类名为 `Note` 的注释对象（用 `actor ... byname=1` 实测确认）。
+
+#### 做了什么
+1. **候选列表记忆化**：新增 `TifWpSelect`，把「按类名筛出的候选指针」按 scope 缓存，
+   随 actor 索引代次失效 ⇒ 同一过滤条件只在索引重建时扫一次。
+   （v122b15 又把上面 3 处遍历也改成用它，雷暴锚点用类名 `Note` 预筛、马蒂尼用 `Matinee` 预筛，
+   **名字判定逻辑保留，结果不变**。）
+2. **`slim=1` 直接跳过 `dump_props`**：`fields[]` 在 slim 下本来就不发，
+   所以那 738 项属性遍历/193 项深解码纯属白做。代价：slim 下 `probedProperties` / `matched` **恒为 0**（不再是真实计数）。
+3. **`actor` 的对象名兜底改为 `byname=1` 显式开启**（默认关闭）：
+   旧版对每个类名不匹配的 actor 都做一次 `TifObjName`（93,690 次 ≈ 172 ms）。
+
+> ⚠️ **接口行为变化（两条，请前端确认）**
+> - **`actor`**：若原来依赖「用对象名（如 `UAID_...` 后缀）当 filter」来选实例，
+>   现在必须显式加 **`byname=1`**（不加则只按类名匹配）。仅按类名过滤的调用**不受影响**。
+> - **`weather slim=1`**：`probedProperties` / `matched` 两个**诊断计数**恒为 0；
+>   判据字段（`weatherState` / `wxSemantics` / `electricalStorm.regionPoints` / `matinee[]` …）**完全不变**。
+
+#### 最终实测（Sco，插件自报 `workUs`，单位 µs）
+| 命令 | v122b12 | v122b13 | v122b14 | **v122b15** | 总降幅 |
+|------|--------:|--------:|--------:|------------:|------:|
+| `weather slim=1` | 255,534 | 220,000 | 205,929 | **3,561 ~ 3,923** | **98.6%** |
+| `weather full count=1` | — | — | 209,000 | **8,256 ~ 8,993** | 96% |
+| `sandstorm` | 92,456 | 55,400 | 47,792 | **2,157 ~ 2,316** | **97.7%** |
+| `wave` | 78,522 | 8,000 | 869 | **780 ~ 874** | 98.9% |
+| `badwx` | 41,259 | 2,865 | 69 | **101 ~ 140** | 99.7% |
+| `meteor` | 42,574 | 4,300 | 573 | **584 ~ 717** | 98.7% |
+| `biometemps` | 32,873 | 2,100 | 1,987 | **1,867 ~ 2,339** | 94% |
+| `zones` | 43,919 | 900 | 858 | **427 ~ 777** | 99% |
+| `actor`（类名） | 172,000 | 172,000 | 1,997 | **1,968 ~ 2,088** | 98.8% |
+| `actor ... byname=1` | — | — | 207,070 | 170,990 | （显式开启，仍慢，符合预期） |
+
+- 说明：每次索引重建（世界变化 / 每 `probe_rescan_seconds`＝30 s）后的**第一次**调用会多花约 60 ms 建索引，
+  之后 30 s 内全是上面表里的快值。默认响应 TTL 1 s，所以正常轮询几乎不会踩到重建点。
+- **内容回归**：与优化前样本逐键对比 —— `weather slim=1` / `sandstorm` 键集**新增 0、丢失 0**；
+  雷暴锚点 5 个（同名同序）、`matinee` 2 个（`Matinee_SandStorm` / `Matinee_ElectricStorm`）、
+  `scopeProbe` 20 项、`dust` 11 键 / `weather` 9 键 —— **全部一致**。
+
+
+### 30.10 陈旧性实证（2026-10-07，Sco，v122b15）
+
+#### 一、逐字段对拍：缓存路径 vs 无缓存路径
+方法：同一命令先按常规调（各层缓存全生效），紧接着加 `fresh=1`（绕过响应 TTL + 强制重新定位对象），
+两边 JSON 去掉 `cache` / `worldTime` 后**逐字段比对**（脚本 `tmp\_staleness_check.py`）。
+
+| 命令 | 结果 |
+|------|------|
+| `weather slim=1` / `sandstorm` / `badwx` / `meteor` / `wave` / `actor` | **完全一致 ✓** |
+| `biometemps` | 仅温度差 ≈0.006 ℃（两次相隔 1.1 s，**世界真的在变**；两次都未命中 TTL，说明是现读值） |
+| `zones` | 仅差它自己的诊断字段（`cached` / `scanAge`）；`zones[]` 数据一致 |
+
+#### 二、TTL 命中体 vs 现场重建体（更硬的证据）
+1 s 的响应 TTL 在"每次新建连接"的调用方式下永远命中不了（建连+认证约 1.2 s），
+因此给项目客户端加了**同连接连发**（`rcon_client.send_rcon_burst_sync`，原单发路径未改动），
+在一条连接上连发 `命令 → 命令 → 命令 fresh=1`（脚本 `tmp\_ttl_hit_test.py`）：
+
+| 命令 | #1 重建 | #2 TTL 命中 | #3 fresh 重建 | #2 vs #3 逐字段 |
+|------|--------:|------------:|--------------:|-----------------|
+| `weather slim=1` | 53,691 µs | cached=1 ageMs=**627** workUs=**8** | 13,629 µs | **完全一致 ✓** |
+| `sandstorm` | 11,924 µs | cached=1 ageMs=**567** workUs=**2** | 11,553 µs | **完全一致 ✓** |
+| `zones` | 588 µs | cached=1 ageMs=**539** workUs=**2** | 48,690 µs | **完全一致 ✓** |
+| `biometemps` | 31,907 µs | cached=1 ageMs=**695** workUs=**4** | 1,947 µs | 仅温度差 0.005~0.009 ℃（昼夜曲线真实变化） |
+
+⇒ TTL 命中返回的就是"几百 ms 前那个真值"，**不是被冻结的旧值**；而各层指针缓存（类属性表 /
+actor 索引 / 候选列表 / 体积表）**不参与数值**，只决定"去哪里读"，所以数值永远现读。
+
+#### 三、唯一需要说明的理论窗口：**对象身份**，不是数值
+所有缓存都不含数值，唯一的滞后是"**选中哪个对象**"这个决定，窗口 = `probe_rescan_seconds`（默认 30 s）。
+触发条件很窄：地图里**同类的另一个实例**变成了"应该被选中的那个"，而旧实例仍存活且类名相同。
+
+- 现实中最可能命中的只有 **GEN**：它有 5 套迷你地图天气对象，`weather` 会挑"正在计时的那一个"。
+- Sco / Isl / Cen / Ext / Abe 等图**只有一个天气对象**，不存在"选哪个"的歧义（Sco 实测 `weatherActorCount=1`）。
+- 三层兜底：
+  1. **换图**（世界指针变化）→ 缓存立即整体失效；
+  2. 对象销毁/内存被回收复用 → 类名比对失配 → **立即重扫**（不受 30 s 节流限制）；
+  3. `fresh=1` / `rescan=1` → 立即重新定位 + 重建应答体。
+- 若想更严：把 `probe_rescan_seconds` 从 30 调到 **10**（下限 10；代价＝每 10 s 一次约 60 ms 的索引重建）。
+
+#### 四、结论
+- **数值陈旧：不存在**（除响应 TTL 本身，且默认已从 3 s 降到 **1 s**，比优化前更实时）。
+- **身份陈旧：存在理论窗口 ≤ `probe_rescan_seconds`（30 s）**，仅"同图多实例且选中条件随运行状态变化"时可能发生；
+  当前只有 GEN 属于这种情况，且可用 `fresh=1` 立即消除。
+
+
+### 30.11 v122b16 全服安全兜底 + 全服部署注意
+
+#### 一、为什么要加兜底（避免"某张图悄悄少数据"）
+v122b15 把雷暴锚点（`ElectricalStormPoint*`）的扫描从"对全部 actor 逐个比对象名"改成
+"先按类名 `Note` 预筛、再比对象名" —— 这个 `Note` 是在 **Sco 实测**的。
+若某张图的锚点类名不是 `Note`，那它 `wxSemantics.electricalStorm.regionPoints` 会**变空**（静默回归）。
+
+#### 二、v122b16 做法：预筛 + 兜底（结果集按索引代次记忆化）
+1. 先用类名 `Note` 预筛 → 比对象名含 `ElectricalStormPoint`；
+2. **若一个都没找到** ⇒ 回退为"全量比对象名"（即原行为）；
+3. 解析出的锚点列表按 actor 索引代次缓存 ⇒ 兜底全扫**每 `probe_rescan_seconds` 最多一次**，
+   且只在真正需要它的图上发生（Sco 走快路径）。
+
+⇒ 无论各图锚点类名是什么，`regionPoints` 都不会丢；已无需逐图核对类名。
+
+> 同批另一处（`matinee[]`）**本来就带类名条件**（原代码即 `class 含 "Matinee"` + `对象名含 "Storm"`），
+> v122b15 只是把"遍历方式"换成读缓存，**条件未变**，无回归风险。
+
+#### 三、🔴 全服部署注意（实测发现）
+1. **只推 dll，不要推 `package` 里的 `config.json`**。
+   实测各图 `config.json` 都是**各自维护**的（`borrowable_classes` 项数与内容都不同，
+   例如 Sco 有 `Beam`＝小天花板 / `Shipyard` / `Garage` 的本地命名，打包里是 12 项另一套类名）。
+   覆盖会导致各图"可借结构清单"被换掉。
+2. **`probe_cache_seconds` / `probe_rescan_seconds` 当前所有图都未写** ⇒ 走代码默认
+   （响应 TTL **1 s**、重扫节流 **30 s**）。若想把"对象身份窗口"压到 10 s，
+   需在**各图 config.json 手动加** `"probe_rescan_seconds": 10`（下限 10；代价＝每 10 s 一次约 60 ms 索引重建）。
+3. **必须重启服务器**才会加载新 dll（AsaApi 不支持热重载）；
+   验证方法＝看 `ArkApi_<PID>_<日期>.log` 的**最新文件名时间戳晚于 dll 构建时间**。
+4. Bob 服务器**未安装该插件**（无插件目录，RCON 返回 `Server received, But no response!!`）；
+   其余图在本次普查时**服务器未运行**（RCON 连接超时），因此除 Sco 外无法远程验证 —— 
+   但 §30.11 一/二的兜底已把"逐图类名差异"这一唯一风险消除。
+
+
+### 30.12 本轮改动通告（给前端的单独文件）
+
+本轮（v122b12 → v122b16）的**面向使用方**说明已单独成文，便于直接转发：
+
+- 插件项目：`接口文档\前端事件对接文档_全服_20261006.md`（本文件，§30.9 ~ §30.11 为技术细节）
+- 前端项目：`报告\WorldProbe_本轮改动通告_20261007_v122b16.md`（**唯一通告来源**，含 2 处必须配合的行为变化、
+  新增可选字段、已修 bug、建议后端优化项、性能/回归数据、部署状态与判据、需要前端回复确认的 3 个问题）
+
+> 本文件与通告文件内容若出现冲突，以通告文件为准（通告面向使用方、更新更及时）。
+
+
+### 30.13 v122b14 的 `slim` 回归与 v122b17 修复（含排查教训）
+
+#### 一、问题（v122b14 ~ v122b16 期间存在）
+- **`weather slim=1` 下 `weatherState` 变空**：
+  - Sco：`weatherState = null`（整个语义块丢失，实测 `slim=1` 为空、不带 slim 为 38 键 / `semFieldsFound=31`）
+  - Ext：仅 7 键、`semFieldsFound=1`、`family` 被误判为 `uds`（不带 slim 为 30 键 / 22 / `ext_gen`）
+- 前端因此看到"插件未给全局天气名 / 条件不满足跳卡"。
+
+#### 二、根因
+`weatherState` 的全部数据（`sem_val` / `sem_sz` / `sem_bad` / `sem_wxname`）
+是在 **`dump_props` 这个 738 项属性遍历函数内部顺带填充**的（源码注释原文：*"Semantically interesting
+ones are always recorded (regardless of the filter) so weatherState stays populated"*）。
+v122b14 为省下那次遍历的 200 ms，在 `slim=1` 下**整个跳过**了 `dump_props`
+⇒ 语义数据失去来源。Ext 之所以还剩 1 个字段：`sem_val` 为空时会触发"换一个候选对象再 dump 一次"的兜底，
+在 DayWeatherAgent 上捡到 1 个语义键，并把 `family` 判成 `uds`。
+
+#### 三、v122b17 修复
+`slim=1` 时改由新增的 `TifFillWeatherSem()` **从已缓存的类属性表**直接收集这些键
+（`TifWeatherSemInteresting` 精确名单 + `CurrSequenceSettings` → 天气名），
+按宽度取值规则与 `dump_props` **逐条一致**（8 字节非次正规 double / 4 字节 float（`DayNumber` 按 int）/
+1 字节 byte），只是不再遍历全部属性 ⇒ `weatherState` 恢复且仍为**亚毫秒级**。
+
+#### 四、排查教训（本项目的检查纪律）
+1. **基线必须取在"改动之前"**：本次 v122b16 的"内容零回归"结论之所以漏掉这个回归，
+   是因为对照样本 `_regress_weather.json` 采集于 **b14 之后**（两边都同样为空，diff 自然一致）。
+   ⇒ 以后对拍一律使用 **改动前** 的存档（例：Sco 的 `tmp\_test_sco_raw\weather-slim_1_130039.json` 是 v122b11 时代样本）。
+2. **改"跳过计算"前必须查副作用**：`dump_props` 表面只产出 `fields[]`，实际还填 `sem_val` 四个容器；
+   凡是要跳过某段计算，先 grep 该函数体内对**外部变量**的写入。
+3. 只读诊断字段（`probedProperties`/`matched`）与判据字段（`weatherState`）必须分开评估影响面。
+
+
+### 30.14 v122b17 上线结果与前端确认事项（单独简报）
+
+- 前端项目：`报告\WorldProbe_v122b17_上线结果与确认事项_20261007.md`（**本次上线结果 + 前端需确认的 3 件事**）
+- 要点：v122b17 除 Val 外已全图生效；`weatherState` 恢复（Sco 38 键且与 v122b11 老样本键集一致）；
+  前端 v4410 兜底保留、v4411 规则 b17 后除 Val 外不再触发；
+  诊断计数 `semFieldsFound/semUnreadable` 各差 1（因 `CurrSequenceSettings` 计入 `sem_val`），下次构建对齐。
+- 版本判据：dll `1,870,336 B / 2026-10-07 14:59:47`，md5 `b8252d25274e4940af22fc324cfd2b97`。
+
+
+### 30.15 天气触发间隔：实测 + 权重推算（Sco，2026-10-06/07 长时守护）
+
+> 问题：Sco 的「沙尘暴 / 雷暴 / 焚风」大概多久来一次？UDS 家族**没有** `TimerNextWeather`
+> （读不到"下次变天时刻"字段），所以只能给**统计口径的"大概间隔"**，不能做倒计时。
+
+**一、实测（60 s 采样；两轮守护 21:24~22:51 与 21:24~23:27，夜间接力至次日）**
+
+| 观测项 | 实测值 |
+|---|---|
+| 任意天气切换间隔 | **14 / 22 / 14 / 22 / 14 分钟**（5 个间隔，均值 ≈ 17 分钟） |
+| 窗口内抽到的天气 | 只有 `ClearSkies ↔ Heatwave`（晴 ↔ 热浪）；沙尘暴 0 次、雷暴 0 次、焚风 0 次 |
+| 沙尘暴（自然发生） | 21:24 之前刚结束一次（守护起点 `CloudPreviousWeather=6`）→ **次日 01:09:41** 再起（`CloudNewWeather` / `CurrWeatherType 0→6`）⇒ **实测间隔 ≈ 3 小时 45 分**（自然样本仅 1 次） |
+| 雷暴 / 焚风（自然发生） | 两个窗口内**均未抽到** ⇒ 无自然样本，只能推算 |
+
+**二、权重推算（口径：每次变天独立抽签）**
+
+- 平均单次天气时长 = Σ(概率 × 时长)：**白天 ≈ 13.0 分钟 / 夜晚 ≈ 13.5 分钟**（由 §1.x 权重表 + `WeatherEventLengths` 算得）
+- 预计间隔 = 平均单次时长 ÷ 该天气概率：
+
+| 天气 | 白天概率 | 夜晚概率 | 预计间隔（白天） | 预计间隔（夜晚） |
+|---|---:|---:|---:|---:|
+| 沙尘暴 `Sand_Dust_Storm`(6) | 11.4% | 11.8% | ≈ **1.9 小时** | ≈ **1.9 小时** |
+| 雷暴 `ElectricalStorm`(7) | 4.5% | 11.8% | ≈ **4.8 小时** | ≈ **1.9 小时**（夜里明显更容易） |
+| 焚风 `Superheat`(8) | 6.8% | **0%** | ≈ **3.2 小时** | **不出**（夜间权重 0） |
+| （参考）热浪 `HeatWave_SE`(4) | 31.8% | **0%** | ≈ **41 分钟** | 不出 |
+| （参考）三者任一出现 | 22.7% | 23.6% | ≈ **1 小时**就有一次 | ≈ 1 小时就有一次 |
+
+**三、给前端的口径提醒**
+
+1. 只适合显示「大概多久一次 / 概率量级」，**不要做倒计时**（UDS 家族无"下次变天"字段）。
+2. 实测 3h45m 与推算 1.9h 的差距属正常：抽签服从几何分布、**方差很大**，且沙尘暴自然样本仅 1~2 次。
+3. 概率**必须分昼夜**取表（见 §30.16）；热浪 / 焚风夜间权重为 0 ⇒ 夜里不会出现。
+
+
+### 30.16 昼夜判定（选 Day / Night 权重表用）—— 全服字段对照
+
+**一、全服实测（2026-10-07，`weather slim=1` × 10 图）**
+
+| 图 | 天气家族 | 天气回复顶层 `worldTime` | `weatherState` 里的昼夜字段 |
+|---|---|---|---|
+| Isl / **Sco** / Cen | uds | ✅ 有 | ❌ **无**（`timeOfDay` / `dayNumber` 都缺） |
+| Val | **实际 ext_gen**（当前**误报 `uds`**） | ✅ 有 | ✅ `timeOfDay`（⚠️ 其 `weatherState` 仅 7 键 = 尚未部署 v122b17；且 `family` 是**启发式推断** —— 缺 `CurrentWeather` / `TimerNextWeather` / `WindStrengthMPC` 时会**回落成 `uds`**（源码 `TransferIdentityFixAPI.cpp` L9052）⇒ 部署 v122b17 后应自动修正） |
+| Abe | ab | ✅ 有 | ✅ `dayNumber` + `timeOfDay` + `timeOfDaySolsticeRemapped` |
+| Ext / Ast / Rag / Los / Gen | ext_gen | ✅ 有 | ✅ `timeOfDay` |
+
+**二、通用昼夜源（全服 10 图实测均可用，与天气家族无关）**
+
+命令：`TransferIdentityFix.WorldProbe biometemps brief=1`
+返回顶层：`day`（`DayNumber`）/ `dayTime`（`DayTime`）/ `worldSec`（`ReplicatedWorldTimeSecondsDouble`）/ `worldTime`。
+
+⇒ **前端沿用现有昼夜状态选表即可**；UDS 三图 `weatherState` 缺 `timeOfDay` **不构成阻塞**（昼夜另有通用源）。
+（补充实测：Sco 天气 actor 上直接 `probe=TimeOfDay,DayNumber` 均为 `null`；`Nighttime Factor = -5.6` 是恒定曲线倍率，
+**不可当昼夜值用**；光照系 `SunlightBlendWeightNormalized` / `Seq_SunLightWeight` 等在天气 actor 上同为 `null`。）
+
+**三、选表口径（与 §1.x 一致）**
+
+- `WeatherWeights_Day` / `WeatherWeights_Night` 各 **8 槽**，**下标 `i` = `arrayProbe.presetTable` 顺序，不是天气 id**；
+- 概率 = 该槽权重 ÷ **同组正权重之和**；ext_gen 家族改用其动态 `WeatherChances`；
+- 取数命令：`TransferIdentityFix.WorldProbe actor filter=UDS_<图>_Weather props=1 probe=WeatherWeights_Day,WeatherWeights_Night,WeatherEventLengths top=1`。
+
+**四、概率「套数」分家族（回答「非 UDS 是不是只有一套概率」）**
+
+| 家族 | 图 | 概率来源 | 套数 | 是否要选昼夜 |
+|---|---|---|---|---|
+| **uds** | Isl / Sco / Cen（Val 修复前误报此族） | `WeatherWeights_Day` / `WeatherWeights_Night` | **2 套（静态配置）** | ✅ 必须按昼夜选表 |
+| **ext_gen** | Ext / Ast / Rag / Los / Gen（Val 实测后应归此族） | `WeatherChances` | **1 套（游戏实时算好的当前值，已含昼夜影响）** | ❌ 不用 —— 它没有昼夜维度 |
+| **ab** | Abe | `WeatherWeights_Day/Night` 与 `WeatherChances` 均 `null` | **0 套（不可读）** | —（需另挖槽名） |
+
+⇒ 一句话口径：**UDS = 静态两套（要选昼夜）；ext_gen = 单套实时值（不用选）；Abe = 无**。
+
+> ⚠️ 上述「ext_gen 单套实时值」与「Abe 零可读」沿用此前实测口径（§1.12 / §12）。
+> 2026-10-07 当日复核未完成（终端两次不可用，绝对路径与子进程包装均无法识别解释器），
+> `WeatherChances` 的**当前取值**与 Abe 的槽名均**待补一次现场复测**。

@@ -1,0 +1,117 @@
+# WorldProbe 本轮改动通告（v122b12 → v122b16）
+
+- 日期：2026-10-07
+- 范围：`TransferIdentityFixAPI` 的 WorldProbe **只读**命令
+- 状态：**Sco 已部署验证通过**；其余图待推 dll + 重启
+- 配套文档：同目录 `WorldProbe_全服事件对接文档_20261006.md`（§30.9 ~ §30.11 为本轮细节）
+
+## 0. 一句话
+本轮是**性能优化 + 修掉 1 个老 bug**：判据数据的**语义与数值完全不变**（已逐字段对拍证明），
+但有 **2 处需要前端配合的行为变化**（见第 1 节）。
+
+## 1. 必须配合的两处行为变化
+
+### 1.1 `actor`：对象名兜底改为 `byname=1` 显式开启
+- 之前：`filter=` 先比类名，不中再比**对象名**（对每个 actor 逐个取名字，单次约 172 ms）
+- 现在：默认只比类名；要按对象名/实例名选实例，必须显式加 `byname=1`（单次约 2 ms）
+
+```diff
+- TransferIdentityFix.WorldProbe actor filter=ElectricalStormPointNorthWest
++ TransferIdentityFix.WorldProbe actor filter=ElectricalStormPointNorthWest byname=1
+```
+
+- 影响范围：仅"用对象名（含 `UAID_...` 后缀）当 filter"的调用；**只按类名过滤的调用不受影响**
+- 示例：`actor filter=UDS_SE_Weather props=1 fields=CurrWeatherType` 这类写法**无需改动**
+
+### 1.2 `weather slim=1` 的两个诊断计数恒为 0
+- `probedProperties` / `matched` 在 `slim=1` 下**恒为 0**（该次 738 项属性遍历已不再执行）
+- 判据字段（`weatherState` / `wxSemantics` / `electricalStorm.regionPoints` / `matinee[]` …）**完全不变**
+- 需要真实计数时：用 `weather`（不带 `slim`）
+
+## 2. 已修的老 bug：非 Extinction 图的 `meteor`
+- 之前：`meteor` 在非灭绝图返回的 JSON **没有闭合的 `}`**（自 v117 起就存在），任何严格 `JSON.parse` 都会抛错
+- 现在：返回完整 JSON，例如 `{"ok":true,"sub":"meteor",...,"supported":0,"error":"no WeatherSystem actor exposes bMeteorFXActive (Ext-only field)",...}`
+- 前端若为此写过 try/catch 或整条跳过，可以改为按 `supported` 字段正常判断
+
+## 3. 新增可选字段（想用才用，不读不影响）
+
+### 3.1 `cache{}` 缓存自诊断
+| 字段 | 含义 |
+|------|------|
+| `cached` / `ageMs` | 本次是否走响应缓存、缓存体年龄（ms）。默认 TTL 已由 3 s 降到 **1 s**（更实时） |
+| `bypass` / `bypasses` | 本次是否 `fresh=1`/`rescan=1` 强制重扫、累计强制次数 |
+| `workUs` / `lastMissUs` / `savedEstUs` | 插件内部实际耗时（µs）/ 最近一次全扫描成本 / 累计估算节省 |
+| `ptrActors` / `ptrBuilds` / `ptrHits` / `ptrAgeSec` | actor 索引规模 / 重建次数 / 复用次数 / 索引年龄（秒） |
+| `clsBuilds` / `clsHits` | 类属性表构建 / 复用次数 |
+| `key` | 归一化缓存键（`fresh`/`rescan` 已剥离） |
+
+> 注：`fresh=1` 现在**也会返回 `cache{}`**（`bypass:1`），并且刷新结果写进**归一化键**——
+> 紧随其后的普通调用会直接命中刚刷新的数据。
+
+### 3.2 不要用"墙钟耗时"判断缓存是否生效
+RCON 往返本身固定约 1.1~1.5 s，与插件做了多少活无关；要看收益请读 `cache.workUs`。
+
+## 4. 建议后端顺手做的优化
+- `WP_ZONES_TTL_MS`（当前 60 s）可以降到 **3 s**：插件侧单次只需 0.5~3 ms，秒级轮询完全承受得住。
+
+## 5. 性能与回归结论（Sco 实测，插件自报 workUs）
+
+| 命令 | 优化前 | 现在 | 降幅 |
+|------|-------:|-----:|-----:|
+| `weather slim=1` | 255,534 µs | 3,561 ~ 3,923 µs | 98.6% |
+| `sandstorm` | 92,456 µs | 2,157 ~ 2,316 µs | 97.7% |
+| `wave` | 78,522 µs | 780 ~ 874 µs | 98.9% |
+| `badwx` | 41,259 µs | 101 ~ 140 µs | 99.7% |
+| `meteor` | 42,574 µs | 584 ~ 717 µs | 98.7% |
+| `biometemps` | 32,873 µs | 1,867 ~ 2,339 µs | 94% |
+| `zones` | 43,919 µs | 427 ~ 777 µs | 99% |
+| `actor`（类名） | 172,000 µs | 1,968 ~ 2,088 µs | 98.8% |
+
+- **内容零回归**：优化前后 `weather slim=1` / `sandstorm` 逐键对比 **新增 0 / 丢失 0**；
+  雷暴锚点 5 个（同名同序）、`matinee` 2 个（`Matinee_SandStorm` / `Matinee_ElectricStorm`）、
+  `scopeProbe` 20 项、`dust` 11 键 / `weather` 9 键——全部一致。
+- **不存在数值陈旧**：所有缓存只存"对象在哪、字段在第几字节"，数值每次现场读取；
+  唯一能返回旧应答体的是响应 TTL（默认 1 s，`fresh=1` 可绕过），与 `fresh=1` 对拍结果**逐字段一致**（详见对接文档 §30.10）。
+- **唯一理论窗口**：*选中哪个对象*最多滞后 `probe_rescan_seconds`（默认 30 s）。
+  现实中只有 **GEN** 存在多实例天气对象（5 套迷你地图）；Sco/Isl/Cen/Ext/Abe 等图只有一个天气对象，无歧义；
+  `fresh=1` / `rescan=1` 可立即重新定位。
+
+## 6. 部署状态与验证判据
+- 已完成：**Sco**（v122b16 验证通过；`regionPoints=5`、`matinee=2`、`schema=wx-122b9` 与上一版一致）
+- 待推送：其余 10 张图（**Bob 未安装该插件，可跳过**）
+- 部署要点：**只替换 dll**——各服 `config.json` 是各自维护的（`borrowable_classes` 各不相同），**不要覆盖**
+- 生效方式：重启服务器（AsaApi 不支持热重载）
+- 判据：重启后 `ArkApi_<PID>_<日期>.log` 的**文件名时间戳晚于 dll 构建时间**（本次 dll 构建于 **2026-10-07 14:18:22**）
+- dll 校验：`1,869,312 B`，MD5 `93eb0a2cb6ec6b5049601bce0b605dee`
+
+## 7. 前端需要回复确认的点
+1. `actor` 的 `byname=1` 变化是否影响现有调用（若前端有按对象名选实例的逻辑，请补参数）；
+2. `weather slim=1` 的 `probedProperties`/`matched` 是否被前端使用（若使用请改用不带 slim 的调用）；
+3. 是否要顺手把后端 `WP_ZONES_TTL_MS` 降到 3 s。
+
+
+---
+
+## ⚠️ 重要补记：v122b17 修复「`slim=1` 下 `weatherState` 变空」
+
+### 问题（v122b14 ~ v122b16 期间存在，已确认并修复）
+- 现象：用 **`weather slim=1`**（前端轮询用的模式）时，`weatherState` 会**变空**：
+  - Sco：`weatherState = null`（整个语义块丢失）
+  - Ext：只剩 1 个字段、`semFieldsFound=1`，且 `family` 被误标为 `uds`（应为 `ext_gen`）
+  - 不带 `slim` 的 `weather` 调用不受影响（Sco 38 键、Ext 30 键，均正常）
+- 根因：`weatherState` 的数据（`sem_val` / `sem_sz` / `sem_bad` / `weatherName`）
+  原本是「属性全量 dump」过程的**副产品**；v122b14 为省 200 ms 在 `slim=1` 下跳过了那次 dump，
+  于是语义数据没有来源。
+- **v122b17 修法**：`slim=1` 时改为从**已缓存的类属性表**直接读取这些语义键
+  （同样的名字、同样的按宽度取值规则：8 字节 double、4 字节 float（`DayNumber` 例外按 int）、
+  1 字节 byte、`CurrSequenceSettings` 取字符串天气名）⇒ `weatherState` 恢复，且仍是**亚毫秒级**。
+
+### 请注意
+1. **以 v122b17 为准**：v122b14~b16 期间前端若发现 `weatherState` 为空/不全，那不是数据源问题，
+   是这版回归，v122b17 已修。
+2. `wxSystems[].currentWeather` 在 **Ext 上仍为 `null`**，这与本回归**无关**（历史行为）：
+   Ext 的 `CurrentWeather` 是**整数枚举**（不是 FName），FName 读取必然失败。
+   **Ext/灭绝系请改用**：`wxSemantics.extWeather.currentName`（实测 `WeatherPreset_EXT_Cloudy`）
+   ＋ `wxSemantics.extWeather.currentId`，或用 `wxSemantics.presetTable.entries[].{id,name}` 自行映射；
+   UDS 图（Sco/Isl/Cen…）继续用 `weatherState.weatherName`。
+3. 本文档第 1.2 节「`slim=1` 下 `probedProperties`/`matched` 恒为 0」仍然成立（只影响这两个诊断计数）。
