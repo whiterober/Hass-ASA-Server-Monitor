@@ -250,6 +250,7 @@ TransferIdentityFix.WorldProbe callfunc fn=MC_ChangeWeather p.New+Weather+Type=4
 - ✅ **`callfunc` 回包自带 `verify[]` 自检块**（可直接用于确认切换是否生效）：
   `CurrWeatherType before 0 → after 4`；另 `candidates` 唯一 ⇒ `MC_ChangeWeather` 的 **`fnIdx=18`**
   （`flags=3a18f040` / `numParms=0` / `parmsSize=1`；参数表：`New Weather Type`@0 int8、`Transition Length`@8 double、`Reset Particle Emitters`@16 int8）
+  ⚠️ **`verify[]` 只对 UDS 家族（Sco 等）有效**；**Ext 的 `verify[]` 实测全为 `null`**（见 §3.7.2）
 
 | 采样点 | `currentWeatherId` | `windStrength` | `windDirection` | `interiorTemperature` | `sandstorm.active` |
 |---|---:|---:|---:|---:|---|

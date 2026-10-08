@@ -179,7 +179,6 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 <style>
 @keyframes lbdBounce{0%,80%,100%{transform:translateY(0);opacity:.35}40%{transform:translateY(-7px);opacity:1}}
 @keyframes lbBootGone{to{opacity:0;visibility:hidden}}
-@keyframes lbBreathe{0%,100%{transform:translate(-50%,-50%) scale(1);opacity:.92}50%{transform:translate(-50%,-50%) scale(1.18);opacity:1}}
 #lbBoot{position:fixed;inset:0;z-index:99999;background:#0f0f13;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;animation:lbBootGone 0s 20s forwards}
 #lbBoot .lbd-wrap{display:flex;gap:9px}
 #lbBoot .lbd{display:inline-block;width:10px;height:10px;border-radius:50%;background:#7c3aed;animation:lbdBounce 1.1s infinite ease-in-out}
@@ -635,7 +634,7 @@ var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // ⏳ **未部署** v3626（用户要求）：**对照表缺·建筑类 20 条落地** —— 将 t1「中文+图标已定稿」的 20 条并入 `汉化/item_zh.json`（键=短名、kind=structure、src=gap_table_t1）：`SpotLight` 聚光灯 ｜ `Ramp_Wood` 木制楼梯 ｜ `Ramp_Adobe` 黏土楼梯 ｜ `TriCeiling_Wood` 木制三角天花板 ｜ `WoodCage` 木制笼子 ｜ `WoodSpikeWall` 木制拒马 ｜ `Metal_OceanPlatform` / `Wood_OceanPlatform` 海洋平台 ｜ `Furniture_Rug` 粗毛地毯 ｜ `TekFenceFoundation` 泰克栅栏地基 ｜ `AdobePillar` 黏土柱子 ｜ `RopeLadder` 绳梯 ｜ `TriRoof_Adobe` / `TriRoof_Tek` 三角屋顶 ｜ `WoodElevatorPlatform_Small` / `_Medium` / `WoodElevatorTrack` 木制电梯 ｜ `AdobeGateDoor_Large` 黏土巨兽恐龙门 ｜ `Flag_KingKaiju` 君王泰坦旗帜 ｜ `LargeWall_Wood` 大型木制墙；词典 1790 → **1810 键**；缺口表 t1 **33 → 13 条**、总表 320 → **300 行**
 // ⏳ **未部署** v3627（用户要求）：**缺口表其余部分（t2/t3/t4）双就绪条目落地 105 条** —— 质控分档（`tmp/_v3689_qc.py`）后落地：A 档 91 + B 档中经用户确认/属关键词误判者（「新联邦靴子」「那里!」经用户确认正确）；**排除 2 条**：`PrimalItemConsumable_Egg`（中文为 `Egg!` 英文原文）、`PrimalItemArmor_PearlShirt`（t4，中文仅「珍珠」）；跳过 2 条 kind 无法确定（`PrimalItem_FishBasketFilled` / `PrimalItem_Spawner_HoverSail_Main`）与 1 条生物类（`Exosuit_Character_BP`）；t2 的 `PrimalItemRadio`/`PrimalItemRaft` 词典已有键（`Radio`/`Raft`）故仅调 kind：`Raft` weapon → **structure**（`Radio` 本已 weapon）；落地内容以蛋类 37、结构件 29、鞍具 5、弹药 2 为主；词典 **1810 → 1915 键**（kind 空 **0** / other **0**）｜ 缺口表 **300 → 196 行**（t3 215 → 111）
 // v4333（用户口径①）：区域行「前 X」改名「上一段：X」+ 与当前/基础名重复时隐藏（v4347 用户口径②：整条移除，不再显示）
-var LB_VERSION = 'v20261008-4511';   // v4280（根因修复）：① 退出物品模式恢复「选种」按钮（v1368 隐藏无恢复） ② 生物背包容器标题唯一源解析（BP_/_ASA 组件 token → 真实 dinoClass）   // v4231（用户实测「繁育栏把功能栏挡住」）：① 两栏同显繁育栏叠功能栏上方 ② 空繁育栏不显示 ③ 结果浮层/追踪钮偏移联动   // v4230（用户裁定）：皮肤类全链隐藏（词典 skin:1 标记并入判空链——Tileset 外观/Bounce 系列/节日建筑等 54 键）   // v4229（用户确认）：初始笔记全链隐藏（v4083 只滤浮窗，容器漏同步 ⇒ hideItems+硬编码双写入升级）   // v4228（用户口径）：容器 chip 染料补色点（v3593 只改了浮窗，容器漏同步）   // v4227（用户口径）：HotbarSkill_Base（快捷技能芯片，非真实物品）加入隐藏名单（hideItems+硬编码双写入）   // v4226（用户实测「黑曜石仙境没内容却显示tab」根因修复）：lbPickIdx 统计对齐渲染口径（+lbIsEmptyItem 判空）——q=0 空槽残留不再计入 tab/角标/聚落/总数   // v4225（v4224 实测补丁）：预热已走完但缓存被清（材质表到达等）→ 立即兜底冷建，不再干等 6s   // v4224（用户口径「空档期点击卡」）：① 物品栏未预热点击→占位+等预热填充（不再冻结 440ms 无反馈）② 预加载交互让路（600ms 窗口）③ 静默刷新收尾即触发预热（消 3s 空窗）   // v4223（性能优化·用户确认A+B2）：① 预加载热点——字典键数引用缓存（拥有索引 11,531ms 预计降至 1~2s）② 后台检查更新——批量 LM 接口（40+ 次 HEAD → 1 次请求）   // v4222（用户口径）：所有可点击徽章补 hover——① 设施芯片挂载条件扩为「可点即 hover」② 装备榜/选种行卡新增 hover   // v4221（用户实测「角标还显示了2」）：玩家背包同口径排除出服务器 tab 角标/聚落角标/总数（srv/setts/total），修角标与列表不一致   // v4220（用户实测）：「无聚落/离散」容器登记排除玩家背包（消除与「玩家携带」tab 重复的纯背包卡）   // v4219（实测根因）：伪容器 rec 补 server 字段（修「无聚落/离散」卡点进去详情空——lbRecHasPick 键查空导致）   // v4218（用户口径）：物品筛选类别扩至「物品浮窗全部类别」（lbItemIsPick 按浮窗归属类别对齐，修 建筑/资源等非装备类筛选全灭）   // v4217（用户要求）：① 别名表数据化（dino_rank_alias.json + 恐龙recs类名映射，零硬编码）② 物品模式玩家tab恢复位置卡/去平铺卡流 ③ 恐龙侧 mine 与恐龙列表同源（跨服龙鞍显示）   // v4216（实测根因修复）：ASB_DB 懒加载未就绪时缓存空表 ⇒ 词干表 0 条永久失效；改为「就绪才缓存」（lbRankStemMap + lbAsbNameMap）   // v4215（用户口径）：① 装备榜鞍键↔恐龙键同物异名归一（勘误+ASB词干表）② 选物种玩家背包只留该物种鞍/蓝图 ③ 选物品隐藏低温舱+去位置卡 ④ 非鞍剔除   // v4214（用户口径）：装备榜 TAB 角标只计「我的」——外部更高不参与计数   // v4213（用户口径·S7）：物种按钮显隐与物品侧同步——只看桶内容（有效条目）   // v4212：物种榜 qidx<=0 全排除 + 去重 >0 + 角标=实际显示数 + 恐龙背包显示具体龙名   // v4211（用户要求·单一代码源）：装备榜物种/物品渲染统一为 lbRankRenderPanel + 外部更高条目不显示区域名   // v4210（用户口径·位置唯一化）：容器显示接入「坐标→设施真身」统一解析（人台上的矛显示回「人台E」真名）   // v4209：物品模式装备榜=物种榜完整翻版（两 TAB 实物/蓝图 + qidx<=0 过滤 + 类别图标）   // v4208（用户需求）：物品模式装备榜——按钮按「存档有原始以上品质」动态显隐 + 面板细节对齐物种（分组/行卡/弹卡/过滤同源）   // v4207：离散「位置」组展开时数量位同样被按钮替换（对齐改名）   // v4206：离散卡容器组加「位置」按钮（复刻改名按钮 + 弹地图浮窗）   // v4205：物品模式 tab 显隐排除基因条件（Gen(0) 过滤根因）   // v4204：离散 chip 不响应重命名 + 物品模式隐藏基因设备段（基因存储器根因）   // v4203：修详情内部过滤缺口（物品模式详情逐成员对齐主列表 lbRecHasPick）   // v4202：对照表 11 项权威容量落地（容量表 +10 项数据键 + DisplayCase 归 HIDE）   // v4201（用户方案）：生物背包参与聚合——背包容器注入 ctn（byContainer 直接命中）+ 判定剔除背包点 + 容器组归属统一 + 删近邻兜底   // v4200：龙背包归属加「近邻唯一」兜底（帝蟒背包与龙坐标差 1749 也能归位）   // v4199：放出容器坐标键放开 + 物品索引接「生物背包→龙」关联链   // v4198：修 5 处容量别名反向空指（Fireplace/WaterTap/TurretCatapult/TurretBallista/TaxidermyBase_Small）   // v4197：龙背包并入归属过滤（离散/无聚落详情不再混入别人部落的生物背包）   // v4196：离散卡容器化（scatteredList 暴露 + 物品索引兜底 + 卡内容器注入）   // v4195：散置伪 rec 补 isEmpty 容器本体形态（v3452 同口径，防详情渲染崩溃）   // v4194：散置卡修复——伪容器 rec 直取（物品容器哈希与 rec 哈希两套，cid 不可跨查）   // v4193（用户口径）：物品模式隐藏「聚落命名/区域命名」入口 + 「散置容器」卡（无聚落卡，完全对齐物种）   // v4192（用户口径）：物品角标/数量对齐物种——只统计「当前角色拥有」（v3597 归属过滤接入 lbPickIdx）+ 物品模式聚落卡隐藏放出/低温仓/蛋段 + 角标图标按物品类型取 LB_INV_GRP;   // v4191：玩家 tab 自动切换补修（物品模式无该物品 ⇒ 内容区不再驻留空态）;   // v4190（用户要求）：单一物品主体页优化（玩家tab物品口径 / 物品索引双计修复 / 聚落角标武器类别图标 / 详情行隐藏容量角标）   // v4189（用户要求）：水雷迁入「器械>弹药」（Underwater Mine）;   // v4188（用户要求）：陷阱族迁入「器械>弹药」段（Y异种植物陷阱改名入族 + 大型捕兽夹/捕兽夹入族垫底；v4187 设施段位代码撤回）;   // v4186：泰克水壶补录（工具>水容器族末位）+ 巨石核实 + 对照表 5 项去重、恐龙外观表折叠;   // v4185：恐龙装备栏外观全组过滤（用户实锤鞍皮肤；hideItems 18 项）;   // v4184：译名（沙斯塔鱼龙）+ Cute Dino Helmet 过滤（玩家帽）+ lbEggIs 帽子豁免（Easter_Egg_Hat 归位模块栏）;   // v4183：物品浮窗接入 hideItems 过滤（Pepper Mask 修复）+ 恐龙外观 12 款落地（模块>生物外观）;   // v4182：恐龙装备栏外观 12 款图标全配（8 款本地实锤 + 4 款 wiki 补录；icons2 5204 / webp_map 5107）;   // v4181：B1 节日糖果全量入库（8 新键+圣诞糖果合并为节日恐龙糖+玉米糖换 HUD_Event_Halloween_BC）+ PepperMask 浮窗过滤 + 节日族词/类名规则;   // v4177：Air_Jar/Air_Bladder kind 修正（consumable→weapon，正式入器械>工具>水容器）+ 情人节/感恩节糖果补图（Valentines_Dino_Candy/Thanksgiving_Candy）;   // v4175：料理子序微调（鲨鲨小零食!紧挨吉利盛宴3.4后；虫胶19→5.3 紧挨饭团5.2后）;   // v4174：达科寿司/饭团（原稻米球改名）入料理族并紧挨海藻寿司（子序 5.1/5.2）;   // v4173：情人节巧克力正名+配图（Box o' Chocolates/盒装巧克力/VDay_icon）+ WormGum 补录（虫胶）+ Air_Jar/Air_Bladder 移工具·水容器族（族内最后）+ 食肉植物种子排植物种子R后 + 亚特兰汤/虫胶接料理子序18-19;   // v4170：消耗品补录 18 键（胡椒面具/空气罐/气囊/海龙汤/风干鱼肉×2/稻米球/感染系列×6/干海带/达科寿司/亚特兰汤/蓝莓汁 P+/情人节巧克力 ase）+ 新族「感染」（含感染藤壶 7 项）+ 泰克三叉戟归「矛」族;   // v4169：咒缚贴合全局兜底（跨块场景：咒缚火焰喷射器与本体被手炮块隔开 → 最终序列再贴一次）；v4168：咒缚武器贴合本体（16 对：本体在前、咒缚紧跟 — 武装 11 + 工具 3 + 键名兜底 1 +【火焰喷射器 v4169 修复】）+ 制导火箭弹图标→HomingMissileAmmo_Icon + 巡航导弹图标→Cruise_Missile（v4163 交接回调）;   // v4165：立式南瓜哨兵根因修复（facilityIconSpecial 置空 + 合并尊重空串哨兵）+ 圣诞糖果补录（consumable/节日）+ 鲍勃外观改名 + 蛋糕×3 归节日族;   // v4164：设施根因修正（标识归位/旗帜族+节日族垫底链）+ 节日补族（圣诞彩灯/万圣节墓碑）+ 新族「玩家外观」（TOF 卡尔配件，排生物外观前）;   // v4163：C4遥控起爆器→工具段（tool:1）+ 巡航导弹换图 HomingMissileAmmo_Icon + 塔拉萨麻醉弹药归「箭」族;   // v4162：生化皮肤/独木舟皮肤新族（骨架后/生物外观后）+ 设施栏标识族垫底（旗帜后）+ 咒缚电锯/喷火器图标对齐原版 + 弹药段「异种植物」词（W果实/Z手雷相邻）+ Netgun 归弹药;   // v4161：Radar_Rig 补录（雷达配件→跨步者配件族）+ 未组装的泰克跨步者改归「未组装」族;   // v4160：泰克悬停帆与塔拉萨悬停帆族内相邻（载具子序50.2/50.3）+ 6 条泰克跨步者配件补录（官方类名+官方中文，族=跨步者配件）;   // v4159：13 条骨架/幽灵/兔耳套装以**官方类名+官方中文**落地（长键=PrimalItemCostume_*、短键=图标名）+ 失落精灵龙套装补录 + 3 条旧骨骼条目同步官方名 + 全部归骨架皮肤/幽灵皮肤/生物外观族（排模块段最后）;   // v4158：外观族（骨架皮肤/幽灵皮肤/生物外观/尾巴/披风）整体移至模块段最后 + 独木舟3皮肤归生物外观 + 鱼竿族生效（两条相邻） + M.O.M.I.入模块段·机甲族 + 服装类豁免物种绑定过滤 + 跨步者配件族预留;   // v4157：Cryo医院/水下耕地/宠物展示台/绊线照明弹配方补录（材质档排序）+ 蛋糕ASE过滤 + 4服装隐藏 + 骨架皮肤族（3骨骼+生化，附件后） + 幽灵皮肤族（14条，骨骼后） + 战车族提前（附件前） + 立式南瓜清图标 + Plant W果实/Z手雷族内相邻;   // v4154：泰克光刃（TekClaws）换图 → HUD_TEKHandBlades_Icon_BC + 对照表"非皮肤·疑似"补齐后缀过滤;   // v4151：换图 2（巡航导弹→HUD_TEKCruiseMissile_Icon、泰克榴弹发射器→HUD_TEKGrenadeLauncher_Icon）+ 补录 4（绊线照明弹陷阱/泰克三叉戟/泰克长矛/C4遥控起爆器）+ 对照表区①移除 48 项;   // v4150：鱼竿族（FishingRod+Lovely_Fishing）+ 载具族补员（潜艇→木筏后、塔拉萨悬停帆→泰克悬停帆后）+ 生物外观族 26 项落地（模块段最末）+ 对照表无特征项全参数表;   // v4149：换图 3 组（GrapplingHook→GrappleHook_Icon、TribeTower→Tribe_Tower、TranqArrow→TranqArrow_Icon）+ 补录 11 键（Snowball/Carnivorous_Plant_Seed/Thalassian 系×4/ARK_Anniversary_Surprise_Cake/Birthday_Candle/CryoHospital×2/Netgun）;   // v4148：实时补全区无图标补「?」占位（lbWpRtHtml 与主浮窗一致）+ 图标替换 14 组（储物箱/镜子/油罐/电锯/登山镐/矿枪/鞭子/沙漠套×5/吉利面具/防护套×3/喷火器/潜水服）+ 英文补全（Ghillie Mask / Hazard Suit Hat / SCUBA×4）+ 补录 11 键（MachinedBow/宠物展示台/生日蛋糕/水下耕地/潜艇/塔拉萨悬停帆/收割渔线/周年蛋糕×2）+ TransGPS 打 ASE 过滤标记;   // v4147：Lovely_Fishing_Rod 补录（工具 tool:1）+ 次级解药/扎啤/血之灵药 归料理族（words 3.1/3.2/3.3 排在医疗药酒·能量药酒之后）；图标未录对照表 v4147（六分类 66+53 / skins 甄别 689）;   // v4146：RecipeCurry_Icon 挂菲拉咖喱配方（RecipeNote_FriaCurry / PrimalItem_RecipeNote_FriaCurry 两键 icon→RecipeCurry_Icon）+ HoneyLure 补录（蜂蜜诱饵，图标 HoneyLure_Icon）；对照表 v6 重生（待核 4 / 已处理 12 / 染色剂 22 移出主表入脚注）;   // v4145：W 果短名补规则（Plant_Species_W→手雷，浮窗枚举键带下划线）;   // v4144：族修正（Cucumis/Oryraise→蔬菜；Gilly/Oceans/Worm 短名 re: 规则→料理——修 v4143 短名下划线不命中问题）;   // v4143：Aquatica 消耗品补录 9 项（作物×2/料理×3/弹药×1/其它×3）+ 非凡饲料换图 + 族规则 4 条;   // v4142：Ecto Lantern 两键打 tool:1（进器械栏·工具段）;   // v4141：花粉图标换 High_Quality_Pollen（2 条）+ Ecto Lantern 补录（灵质提灯，工具类，2 键 + 节日族 2 规则）;   // v4140：刷新热区修复（仅标记触发）+ 节日族扩展 + 补录 5 项 + 强效麻醉镖图;   // v4139：item_zh 图标修正（麻醉镖→Tranquilizer_Dart；硅酸盐→SilicateCrystal）;   // v4138：公共设施实时区 39 格（WorldProbe 接线 + 刷新 CD 10s + 后端短时缓存共用）;   // v4137：巨齿鲨颚/生存者战利品移至 Cymathoa 之后（61/62 档）+ Dragon Horn 补录（龙之号角）;   // v4136：Aquatica 三战利品移至奖杯族最末（60 档）;   // v4135：焰鬃獠猪两种獠牙图标（Boaratos_Tusk / Flaming_Boaratos_Tusk）;   // v4134：Hydra/Kraken 归一 + 本体过滤 + AstralSoul/HexCoins 图标 + 克拉肯/莫德尔旗帜正名 + 格伦德尔档位修复;   // v4133（修复）：奖杯族修饰词截胡修正（水晶飞龙女王战利品回归奖杯族 9.5）；v4132：旗帜族录入+排序垫底
+var LB_VERSION = 'v20261008-4465';   // v4280（根因修复）：① 退出物品模式恢复「选种」按钮（v1368 隐藏无恢复） ② 生物背包容器标题唯一源解析（BP_/_ASA 组件 token → 真实 dinoClass）   // v4231（用户实测「繁育栏把功能栏挡住」）：① 两栏同显繁育栏叠功能栏上方 ② 空繁育栏不显示 ③ 结果浮层/追踪钮偏移联动   // v4230（用户裁定）：皮肤类全链隐藏（词典 skin:1 标记并入判空链——Tileset 外观/Bounce 系列/节日建筑等 54 键）   // v4229（用户确认）：初始笔记全链隐藏（v4083 只滤浮窗，容器漏同步 ⇒ hideItems+硬编码双写入升级）   // v4228（用户口径）：容器 chip 染料补色点（v3593 只改了浮窗，容器漏同步）   // v4227（用户口径）：HotbarSkill_Base（快捷技能芯片，非真实物品）加入隐藏名单（hideItems+硬编码双写入）   // v4226（用户实测「黑曜石仙境没内容却显示tab」根因修复）：lbPickIdx 统计对齐渲染口径（+lbIsEmptyItem 判空）——q=0 空槽残留不再计入 tab/角标/聚落/总数   // v4225（v4224 实测补丁）：预热已走完但缓存被清（材质表到达等）→ 立即兜底冷建，不再干等 6s   // v4224（用户口径「空档期点击卡」）：① 物品栏未预热点击→占位+等预热填充（不再冻结 440ms 无反馈）② 预加载交互让路（600ms 窗口）③ 静默刷新收尾即触发预热（消 3s 空窗）   // v4223（性能优化·用户确认A+B2）：① 预加载热点——字典键数引用缓存（拥有索引 11,531ms 预计降至 1~2s）② 后台检查更新——批量 LM 接口（40+ 次 HEAD → 1 次请求）   // v4222（用户口径）：所有可点击徽章补 hover——① 设施芯片挂载条件扩为「可点即 hover」② 装备榜/选种行卡新增 hover   // v4221（用户实测「角标还显示了2」）：玩家背包同口径排除出服务器 tab 角标/聚落角标/总数（srv/setts/total），修角标与列表不一致   // v4220（用户实测）：「无聚落/离散」容器登记排除玩家背包（消除与「玩家携带」tab 重复的纯背包卡）   // v4219（实测根因）：伪容器 rec 补 server 字段（修「无聚落/离散」卡点进去详情空——lbRecHasPick 键查空导致）   // v4218（用户口径）：物品筛选类别扩至「物品浮窗全部类别」（lbItemIsPick 按浮窗归属类别对齐，修 建筑/资源等非装备类筛选全灭）   // v4217（用户要求）：① 别名表数据化（dino_rank_alias.json + 恐龙recs类名映射，零硬编码）② 物品模式玩家tab恢复位置卡/去平铺卡流 ③ 恐龙侧 mine 与恐龙列表同源（跨服龙鞍显示）   // v4216（实测根因修复）：ASB_DB 懒加载未就绪时缓存空表 ⇒ 词干表 0 条永久失效；改为「就绪才缓存」（lbRankStemMap + lbAsbNameMap）   // v4215（用户口径）：① 装备榜鞍键↔恐龙键同物异名归一（勘误+ASB词干表）② 选物种玩家背包只留该物种鞍/蓝图 ③ 选物品隐藏低温舱+去位置卡 ④ 非鞍剔除   // v4214（用户口径）：装备榜 TAB 角标只计「我的」——外部更高不参与计数   // v4213（用户口径·S7）：物种按钮显隐与物品侧同步——只看桶内容（有效条目）   // v4212：物种榜 qidx<=0 全排除 + 去重 >0 + 角标=实际显示数 + 恐龙背包显示具体龙名   // v4211（用户要求·单一代码源）：装备榜物种/物品渲染统一为 lbRankRenderPanel + 外部更高条目不显示区域名   // v4210（用户口径·位置唯一化）：容器显示接入「坐标→设施真身」统一解析（人台上的矛显示回「人台E」真名）   // v4209：物品模式装备榜=物种榜完整翻版（两 TAB 实物/蓝图 + qidx<=0 过滤 + 类别图标）   // v4208（用户需求）：物品模式装备榜——按钮按「存档有原始以上品质」动态显隐 + 面板细节对齐物种（分组/行卡/弹卡/过滤同源）   // v4207：离散「位置」组展开时数量位同样被按钮替换（对齐改名）   // v4206：离散卡容器组加「位置」按钮（复刻改名按钮 + 弹地图浮窗）   // v4205：物品模式 tab 显隐排除基因条件（Gen(0) 过滤根因）   // v4204：离散 chip 不响应重命名 + 物品模式隐藏基因设备段（基因存储器根因）   // v4203：修详情内部过滤缺口（物品模式详情逐成员对齐主列表 lbRecHasPick）   // v4202：对照表 11 项权威容量落地（容量表 +10 项数据键 + DisplayCase 归 HIDE）   // v4201（用户方案）：生物背包参与聚合——背包容器注入 ctn（byContainer 直接命中）+ 判定剔除背包点 + 容器组归属统一 + 删近邻兜底   // v4200：龙背包归属加「近邻唯一」兜底（帝蟒背包与龙坐标差 1749 也能归位）   // v4199：放出容器坐标键放开 + 物品索引接「生物背包→龙」关联链   // v4198：修 5 处容量别名反向空指（Fireplace/WaterTap/TurretCatapult/TurretBallista/TaxidermyBase_Small）   // v4197：龙背包并入归属过滤（离散/无聚落详情不再混入别人部落的生物背包）   // v4196：离散卡容器化（scatteredList 暴露 + 物品索引兜底 + 卡内容器注入）   // v4195：散置伪 rec 补 isEmpty 容器本体形态（v3452 同口径，防详情渲染崩溃）   // v4194：散置卡修复——伪容器 rec 直取（物品容器哈希与 rec 哈希两套，cid 不可跨查）   // v4193（用户口径）：物品模式隐藏「聚落命名/区域命名」入口 + 「散置容器」卡（无聚落卡，完全对齐物种）   // v4192（用户口径）：物品角标/数量对齐物种——只统计「当前角色拥有」（v3597 归属过滤接入 lbPickIdx）+ 物品模式聚落卡隐藏放出/低温仓/蛋段 + 角标图标按物品类型取 LB_INV_GRP;   // v4191：玩家 tab 自动切换补修（物品模式无该物品 ⇒ 内容区不再驻留空态）;   // v4190（用户要求）：单一物品主体页优化（玩家tab物品口径 / 物品索引双计修复 / 聚落角标武器类别图标 / 详情行隐藏容量角标）   // v4189（用户要求）：水雷迁入「器械>弹药」（Underwater Mine）;   // v4188（用户要求）：陷阱族迁入「器械>弹药」段（Y异种植物陷阱改名入族 + 大型捕兽夹/捕兽夹入族垫底；v4187 设施段位代码撤回）;   // v4186：泰克水壶补录（工具>水容器族末位）+ 巨石核实 + 对照表 5 项去重、恐龙外观表折叠;   // v4185：恐龙装备栏外观全组过滤（用户实锤鞍皮肤；hideItems 18 项）;   // v4184：译名（沙斯塔鱼龙）+ Cute Dino Helmet 过滤（玩家帽）+ lbEggIs 帽子豁免（Easter_Egg_Hat 归位模块栏）;   // v4183：物品浮窗接入 hideItems 过滤（Pepper Mask 修复）+ 恐龙外观 12 款落地（模块>生物外观）;   // v4182：恐龙装备栏外观 12 款图标全配（8 款本地实锤 + 4 款 wiki 补录；icons2 5204 / webp_map 5107）;   // v4181：B1 节日糖果全量入库（8 新键+圣诞糖果合并为节日恐龙糖+玉米糖换 HUD_Event_Halloween_BC）+ PepperMask 浮窗过滤 + 节日族词/类名规则;   // v4177：Air_Jar/Air_Bladder kind 修正（consumable→weapon，正式入器械>工具>水容器）+ 情人节/感恩节糖果补图（Valentines_Dino_Candy/Thanksgiving_Candy）;   // v4175：料理子序微调（鲨鲨小零食!紧挨吉利盛宴3.4后；虫胶19→5.3 紧挨饭团5.2后）;   // v4174：达科寿司/饭团（原稻米球改名）入料理族并紧挨海藻寿司（子序 5.1/5.2）;   // v4173：情人节巧克力正名+配图（Box o' Chocolates/盒装巧克力/VDay_icon）+ WormGum 补录（虫胶）+ Air_Jar/Air_Bladder 移工具·水容器族（族内最后）+ 食肉植物种子排植物种子R后 + 亚特兰汤/虫胶接料理子序18-19;   // v4170：消耗品补录 18 键（胡椒面具/空气罐/气囊/海龙汤/风干鱼肉×2/稻米球/感染系列×6/干海带/达科寿司/亚特兰汤/蓝莓汁 P+/情人节巧克力 ase）+ 新族「感染」（含感染藤壶 7 项）+ 泰克三叉戟归「矛」族;   // v4169：咒缚贴合全局兜底（跨块场景：咒缚火焰喷射器与本体被手炮块隔开 → 最终序列再贴一次）；v4168：咒缚武器贴合本体（16 对：本体在前、咒缚紧跟 — 武装 11 + 工具 3 + 键名兜底 1 +【火焰喷射器 v4169 修复】）+ 制导火箭弹图标→HomingMissileAmmo_Icon + 巡航导弹图标→Cruise_Missile（v4163 交接回调）;   // v4165：立式南瓜哨兵根因修复（facilityIconSpecial 置空 + 合并尊重空串哨兵）+ 圣诞糖果补录（consumable/节日）+ 鲍勃外观改名 + 蛋糕×3 归节日族;   // v4164：设施根因修正（标识归位/旗帜族+节日族垫底链）+ 节日补族（圣诞彩灯/万圣节墓碑）+ 新族「玩家外观」（TOF 卡尔配件，排生物外观前）;   // v4163：C4遥控起爆器→工具段（tool:1）+ 巡航导弹换图 HomingMissileAmmo_Icon + 塔拉萨麻醉弹药归「箭」族;   // v4162：生化皮肤/独木舟皮肤新族（骨架后/生物外观后）+ 设施栏标识族垫底（旗帜后）+ 咒缚电锯/喷火器图标对齐原版 + 弹药段「异种植物」词（W果实/Z手雷相邻）+ Netgun 归弹药;   // v4161：Radar_Rig 补录（雷达配件→跨步者配件族）+ 未组装的泰克跨步者改归「未组装」族;   // v4160：泰克悬停帆与塔拉萨悬停帆族内相邻（载具子序50.2/50.3）+ 6 条泰克跨步者配件补录（官方类名+官方中文，族=跨步者配件）;   // v4159：13 条骨架/幽灵/兔耳套装以**官方类名+官方中文**落地（长键=PrimalItemCostume_*、短键=图标名）+ 失落精灵龙套装补录 + 3 条旧骨骼条目同步官方名 + 全部归骨架皮肤/幽灵皮肤/生物外观族（排模块段最后）;   // v4158：外观族（骨架皮肤/幽灵皮肤/生物外观/尾巴/披风）整体移至模块段最后 + 独木舟3皮肤归生物外观 + 鱼竿族生效（两条相邻） + M.O.M.I.入模块段·机甲族 + 服装类豁免物种绑定过滤 + 跨步者配件族预留;   // v4157：Cryo医院/水下耕地/宠物展示台/绊线照明弹配方补录（材质档排序）+ 蛋糕ASE过滤 + 4服装隐藏 + 骨架皮肤族（3骨骼+生化，附件后） + 幽灵皮肤族（14条，骨骼后） + 战车族提前（附件前） + 立式南瓜清图标 + Plant W果实/Z手雷族内相邻;   // v4154：泰克光刃（TekClaws）换图 → HUD_TEKHandBlades_Icon_BC + 对照表"非皮肤·疑似"补齐后缀过滤;   // v4151：换图 2（巡航导弹→HUD_TEKCruiseMissile_Icon、泰克榴弹发射器→HUD_TEKGrenadeLauncher_Icon）+ 补录 4（绊线照明弹陷阱/泰克三叉戟/泰克长矛/C4遥控起爆器）+ 对照表区①移除 48 项;   // v4150：鱼竿族（FishingRod+Lovely_Fishing）+ 载具族补员（潜艇→木筏后、塔拉萨悬停帆→泰克悬停帆后）+ 生物外观族 26 项落地（模块段最末）+ 对照表无特征项全参数表;   // v4149：换图 3 组（GrapplingHook→GrappleHook_Icon、TribeTower→Tribe_Tower、TranqArrow→TranqArrow_Icon）+ 补录 11 键（Snowball/Carnivorous_Plant_Seed/Thalassian 系×4/ARK_Anniversary_Surprise_Cake/Birthday_Candle/CryoHospital×2/Netgun）;   // v4148：实时补全区无图标补「?」占位（lbWpRtHtml 与主浮窗一致）+ 图标替换 14 组（储物箱/镜子/油罐/电锯/登山镐/矿枪/鞭子/沙漠套×5/吉利面具/防护套×3/喷火器/潜水服）+ 英文补全（Ghillie Mask / Hazard Suit Hat / SCUBA×4）+ 补录 11 键（MachinedBow/宠物展示台/生日蛋糕/水下耕地/潜艇/塔拉萨悬停帆/收割渔线/周年蛋糕×2）+ TransGPS 打 ASE 过滤标记;   // v4147：Lovely_Fishing_Rod 补录（工具 tool:1）+ 次级解药/扎啤/血之灵药 归料理族（words 3.1/3.2/3.3 排在医疗药酒·能量药酒之后）；图标未录对照表 v4147（六分类 66+53 / skins 甄别 689）;   // v4146：RecipeCurry_Icon 挂菲拉咖喱配方（RecipeNote_FriaCurry / PrimalItem_RecipeNote_FriaCurry 两键 icon→RecipeCurry_Icon）+ HoneyLure 补录（蜂蜜诱饵，图标 HoneyLure_Icon）；对照表 v6 重生（待核 4 / 已处理 12 / 染色剂 22 移出主表入脚注）;   // v4145：W 果短名补规则（Plant_Species_W→手雷，浮窗枚举键带下划线）;   // v4144：族修正（Cucumis/Oryraise→蔬菜；Gilly/Oceans/Worm 短名 re: 规则→料理——修 v4143 短名下划线不命中问题）;   // v4143：Aquatica 消耗品补录 9 项（作物×2/料理×3/弹药×1/其它×3）+ 非凡饲料换图 + 族规则 4 条;   // v4142：Ecto Lantern 两键打 tool:1（进器械栏·工具段）;   // v4141：花粉图标换 High_Quality_Pollen（2 条）+ Ecto Lantern 补录（灵质提灯，工具类，2 键 + 节日族 2 规则）;   // v4140：刷新热区修复（仅标记触发）+ 节日族扩展 + 补录 5 项 + 强效麻醉镖图;   // v4139：item_zh 图标修正（麻醉镖→Tranquilizer_Dart；硅酸盐→SilicateCrystal）;   // v4138：公共设施实时区 39 格（WorldProbe 接线 + 刷新 CD 10s + 后端短时缓存共用）;   // v4137：巨齿鲨颚/生存者战利品移至 Cymathoa 之后（61/62 档）+ Dragon Horn 补录（龙之号角）;   // v4136：Aquatica 三战利品移至奖杯族最末（60 档）;   // v4135：焰鬃獠猪两种獠牙图标（Boaratos_Tusk / Flaming_Boaratos_Tusk）;   // v4134：Hydra/Kraken 归一 + 本体过滤 + AstralSoul/HexCoins 图标 + 克拉肯/莫德尔旗帜正名 + 格伦德尔档位修复;   // v4133（修复）：奖杯族修饰词截胡修正（水晶飞龙女王战利品回归奖杯族 9.5）；v4132：旗帜族录入+排序垫底
 try{ if(document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', function(){ try{ lbMatLoad(); }catch(e){} try{ lbRulesLoad(); }catch(e){} try{ if(typeof lbRankAliasLoad === 'function') lbRankAliasLoad(); }catch(e){} }); } else { lbMatLoad(); try{ lbRulesLoad(); }catch(e){} try{ if(typeof lbRankAliasLoad === 'function') lbRankAliasLoad(); }catch(e){} } }catch(e){}
 try{ if(!window.LB_PERF) window.LB_PERF = {}; window.LB_PERF.t_main0 = Date.now(); }catch(ePerf0){}   // v4465（用户口径·D1）：启动分段计时——主脚本执行开始
 function lbPerfMark(k){ try{ if(!window.LB_PERF[k]) window.LB_PERF[k] = Date.now(); }catch(e){} }
@@ -667,31 +666,6 @@ function lbPerfText(){
     out.push('预加载②物品聚合: ' + (w[1] != null ? w[1] + ' ms' : '--'));
     out.push('预加载③拥有索引: ' + (w[2] != null ? w[2] + ' ms' : '--'));
     out.push('预加载④分组排序: ' + (w[3] != null ? w[3] + ' ms' : '--'));
-    try{   // v4489（用户口径）：后台更新拆解（最近一轮；全量 vs 缓存 + 依次耗时）
-      var sd = LB._silentDiag;
-      if(sd && sd.t0){
-        var _fsec2 = function(a, b){ return (a && b && b >= a) ? (((b - a) / 1000).toFixed(1) + 's') : '--'; };
-        var _tend = sd.endAt || Date.now();
-        var _dlStart = sd.headDoneAt || sd.thenAt || _tend;
-        var _dlEnd = sd.dlAt || _dlStart;
-        out.push('--- 后台更新拆解（最近一轮）---');
-        out.push('触发: ' + new Date(sd.t0).toLocaleTimeString() + ' · 总耗时 ' + ((_tend - sd.t0) / 1000).toFixed(1) + 's' + (sd.endAt ? '' : '（进行中…）'));
-        out.push('HEAD 检查: ' + _fsec2(sd.t0, _dlStart) + ' · 需下载 ' + (sd.needN || 0) + ' 文件' + ((sd.needN === 0) ? '（全部命中缓存，0 下载）' : '（其余服复用缓存）'));
-        var _dls = (LB._dlLog || []).filter(function(x){ return x.ts >= sd.t0; });
-        var _sz2 = 0; for(var _i2 = 0; _i2 < _dls.length; _i2++) _sz2 += (_dls[_i2].sz || 0);
-        out.push('下载: ' + _dls.length + ' 文件 · Σ' + (_sz2 / 1048576).toFixed(2) + ' MB · ' + _fsec2(_dlStart, _dlEnd));
-        out.push('  未完成下载: ' + Math.max(0, (sd.needN || 0) - _dls.length) + ' 个（失败/中断）· 页面隐藏累计: ' + (((lbHidNow() - (sd.hidAtStart || 0)) / 1000).toFixed(1)) + 's');   // v4491（用户口径）：真机诊断——后台冻结与失败识别
-        var _sorted = _dls.slice().sort(function(a, b){ return (b.ms || 0) - (a.ms || 0); }).slice(0, 8);
-        for(var _i3 = 0; _i3 < _sorted.length; _i3++){
-          var _x = _sorted[_i3];
-          out.push('  · ' + _x.f + '  ' + ((_x.sz || 0) / 1048576).toFixed(2) + 'MB  ' + ((_x.ms || 0) / 1000).toFixed(1) + 's');
-        }
-        out.push('构建收尾: ' + _fsec2(_dlEnd, sd.thenAt) + ' · 写缓存: ' + ((sd.cacheMs >= 0) ? ((sd.cacheMs / 1000).toFixed(1) + 's') : '--') + ' · 重渲染: ' + ((sd.renderMs >= 0) ? ((sd.renderMs / 1000).toFixed(1) + 's') : '--'));
-      }else{
-        out.push('--- 后台更新拆解 ---');
-        out.push('（本次会话尚未触发后台更新）');
-      }
-    }catch(eSd){ out.push('后台更新拆解: 生成失败 ' + eSd); }
     try{
       var nav = performance.getEntriesByType('navigation')[0];
       if(nav) out.push('导航: TTFB ' + Math.round(nav.responseStart) + ' ms · 下载完 ' + Math.round(nav.responseEnd) + ' ms · 总计 ' + Math.round(nav.duration) + ' ms');
@@ -3297,14 +3271,6 @@ function lbOpenServerAdminModal(){
     + '<div style="font-size:11px;color:#666;margin-bottom:6px">把未恢复的低温仓，发到<b style="color:#f59e0b">在线成员背包</b>里；如果当时没人在线，仓会先留着，不会丢。</div>'
     + '<button onclick="lbSrvAdminMovePendings()" style="'+btn+'">恢复低温仓</button>'
     + '<div id="lbSrvAdminCryoMsg" style="font-size:12px;min-height:14px;margin-top:6px"></div>'
-    + '<div style="margin-top:18px;padding-top:14px;border-top:1px solid #2a2a3a">'
-    + '<div style="font-size:13px;font-weight:bold;color:#ddd;margin-bottom:6px">⏱ 启动耗时</div>'
-    + '<pre style="margin:0;font-size:11px;color:#9aa0b5;white-space:pre-wrap;word-break:break-all;line-height:1.6;background:#12121a;border:1px solid #2a2a3a;border-radius:6px;padding:8px 10px;max-height:240px;overflow-y:auto">' + (typeof lbAttr === 'function' ? lbAttr(lbPerfText()) : lbPerfText()) + '</pre>'
-    + '<div style="display:flex;gap:8px;margin-top:6px;align-items:center">'
-    + '<button onclick="lbPerfCopy()" style="padding:5px 12px;border-radius:6px;border:none;background:#7c3aed;color:#fff;cursor:pointer;font-size:12px">📋 复制</button>'
-    + '<span id="lbPerfCopyMsg" style="font-size:11px;color:#888"></span>'
-    + '</div>'
-    + '</div>'
     + '<div style="margin-top:14px;text-align:right"><button onclick="this.closest(\'.lb-picker-overlay\').remove()" style="padding:7px 16px;border-radius:6px;border:1px solid #333;background:transparent;color:#888;cursor:pointer;font-size:13px">关闭</button></div>'
     + '</div>';
   overlay.innerHTML = html;
@@ -3867,6 +3833,11 @@ function lbOpenConfigModal(){
     + '<div id="lbSettleCfgMsg" style="font-size:12px;min-height:14px;margin-top:6px;color:#888"></div>'
     + '</div>'
     + '<div style="margin-top:18px;padding-top:14px;border-top:1px solid #2a2a3a">'
+    + '<div style="font-size:13px;font-weight:bold;color:#ddd;margin-bottom:4px">⏱ 启动耗时诊断</div>'
+    + '<div style="font-size:11px;color:#666;margin-bottom:10px">查看本次启动各阶段耗时（手机卡顿排查用）；点复制后粘贴发送即可</div>'
+    + '<button onclick="lbPerfDiagOpen()" style="padding:7px 14px;border-radius:6px;border:none;background:#7c3aed;color:#fff;cursor:pointer;font-size:13px;font-weight:bold">查看启动耗时</button>'
+    + '</div>'
+    + '<div style="margin-top:18px;padding-top:14px;border-top:1px solid #2a2a3a">'
     + '<div style="font-size:13px;font-weight:bold;color:#ddd;margin-bottom:4px">🗑️ 清空本地生物数据</div>'
     + '<div style="font-size:11px;color:#666;margin-bottom:10px">清除本地生物缓存（保留登录/筛选），下次加载自动重新下载</div>'
     + '<button id="lbClearCacheBtn" onclick="lbClearLocalData()" style="padding:7px 14px;border-radius:6px;border:none;background:#ef4444;color:#fff;cursor:pointer;font-size:13px;font-weight:bold">清空缓存</button>'
@@ -4266,7 +4237,6 @@ function lbHeadLm(url){
 //   原实现直接 return null ⇒ 上层记「cryo 下载失败」并**静默复用旧数据**（用户看不到）
 var LB_DL_RETRY_MAX = 3;
 function lbFetchDataJson(base, gzUrl){
-  var _dt0 = Date.now();   // v4489（用户口径）：下载拆解——每文件耗时/字节采集
   var _ac = new AbortController();
   // v985：90s —— 必须大于 lbFetchOnce 的 60s，否则外层先 abort、内层超时白设
   var _tm = setTimeout(function(){ try{ _ac.abort(); }catch(e){} }, 90000);
@@ -4276,7 +4246,6 @@ function lbFetchDataJson(base, gzUrl){
   return authFetch(gzUrl, _opts()).then(function(res){
     if(res.ok){
       return res.arrayBuffer().then(function(buf){
-        try{ (LB._dlLog = LB._dlLog || []).push({ f: String(gzUrl).split('?')[0].split('/').pop(), ms: Date.now() - _dt0, sz: buf.byteLength, ts: Date.now(), ok: 1 }); if(LB._dlLog.length > 40) LB._dlLog.splice(0, LB._dlLog.length - 40); }catch(eD){}
         var u8 = new Uint8Array(buf);
         if(u8.length>2 && u8[0]===0x1f && u8[1]===0x8b){ // gzip magic
           if(typeof DecompressionStream !== 'undefined'){
@@ -4361,19 +4330,6 @@ async function lbFetchLmMap(){
 
 // 加载 + 归一化（cryo∪tamed，跨服去重：同一 dinoId 只保留一条，优先 sortWorldSec 大的）
 // 两阶段：①全部并发 HEAD 收集 Last-Modified + 变化清单（HEAD 不与下载抢连接）②分批只下载变化的文件，未变化的复用旧 recs
-function lbDlBatch(){   // v4492（用户口径）：下载批大小——明确有线 ⇒ 3；明确无线 ⇒ 1；无联网信息 ⇒ 非 PC（UA/触摸判定，含伪装成 Mac 的 iPad）⇒ 1、PC ⇒ 3（防 QUIC 单连接并发拥塞长尾）
-  try{
-    var cc0 = navigator.connection || navigator.mozConnection || navigator.webkitConnection || {};
-    var t0 = String(cc0.type || '');
-    if(t0 === 'ethernet') return 3;
-    if(t0 === 'wifi' || t0 === 'cellular' || t0 === 'bluetooth' || t0 === 'wimax') return 1;
-  }catch(e0){}
-  try{
-    var mobile = /Android|iPad|iPhone|iPod|Mobile|Tablet/i.test(navigator.userAgent || '') || ((navigator.maxTouchPoints || 0) > 1);
-    return mobile ? 1 : 3;
-  }catch(e1){}
-  return 3;
-}
 async function lbLoad(servers, oldData, onProgress){ // v207：onProgress({phase:'head'|'dl', done, total, msg}) 下载进度回调
   LB._dataLoading = true; LB._dataLoadingAt = Date.now(); // v986：数据优先——期间资源预取让路（防争抢连接导致数据请求超时）
   try { // v991：全函数 try/finally —— 防异常/提前返回路径泄漏 _dataLoading（预取永久停摆 → 页面死卡「0% 资源加载中」）
@@ -4571,9 +4527,9 @@ async function lbLoad(servers, oldData, onProgress){ // v207：onProgress({phase
       if(_sdR[_sk2]) continue; _sdR[_sk2] = 1; structures.push(_so);
     }
   }
-  // 阶段②：只下载变化的文件（分批，每批内 cryo+tamed+item 并行）
+  // 阶段②：只下载变化的文件（分批 3 台，每台内 cryo+tamed 并行）
   var needList = headResults.filter(function(r){ return r && (r.needCryo || r.needTamed || r.needItem); }); // v966：+item
-  var BATCH = lbDlBatch();   // v4492（用户口径）：智能批大小——有线/PC ⇒ 3；无线/移动 ⇒ 1（并发 9→3，防 QUIC 拥塞长尾）
+  var BATCH = 3;
   // v207：下载进度统计（总文件数 = 需下载的 cryo+tamed）
   var _dlTotal = 0, _dlDone = 0;
   // v214：在途下载服务器计数（abbr→文件数，>0 即正在下载中，用于进度条文本显示）
@@ -16717,22 +16673,16 @@ function lbUpdateDataTime(){
 function lbSilentRefresh(){
   if(LB._silentBusy) return;
   LB._silentBusy = true;
-  var _sd = LB._silentDiag = { t0: Date.now(), headAt: 0, headDoneAt: 0, dlAt: 0, needN: 0, dlN: 0, thenAt: 0, cacheMs: -1, renderMs: -1, endAt: 0, hidAtStart: lbHidNow() };   // v4489（用户口径）：后台更新拆解采集；v4491：+hidAtStart（页面隐藏累计起点）
   // v1262（方案A，用户要求）：静默刷新可见化——右上角小条（dl 阶段带 N/M）；收尾在下方 finally-then 里隐藏
   try{ lbSilentProgShow('后台检查更新…'); }catch(e){}
   var oldData = (LB._cache && LB._cache.data) ? LB._cache.data : null;
   var sel = LB.SERVERS.map(function(s){ return s.abbr; });
   lbLoad(sel, oldData, function(p){
-    try{   // v4489：拆解采集（复用进度回调）
-      if(p && p.phase === 'head') _sd.headAt = Date.now();
-      if(p && p.phase === 'dl'){ if(!_sd.headDoneAt) _sd.headDoneAt = Date.now(); _sd.dlAt = Date.now(); _sd.needN = p.total || 0; _sd.dlN = p.done || 0; }
-    }catch(eD2){}
     try{
       if(p && p.phase === 'dl' && p.total) lbSilentProgShow('后台更新中… ' + p.done + '/' + p.total);
       else lbSilentProgShow('后台检查更新…');
     }catch(e){}
   }).then(function(data){
-    _sd.thenAt = Date.now();   // v4489：构建段收尾时刻
     if(!data) return;
     // v549：静默刷新同样并入已有蛋缓存（聚落构建含蛋容器，避免蛋后到触发重建卡顿）
     if(LB._eggCache){
@@ -16751,13 +16701,13 @@ function lbSilentRefresh(){
       LB._prevSettles = (oldData && oldData._settlements) ? oldData._settlements : null; // v935：暂存旧聚落供 ensure 指纹对比（结构同则增量刷统计）
       if(data._settlements) delete data._settlements; // v932：设施数据变化（_lm 变）→ 删聚落强制重建（持久化后不残留旧聚落）
       LB._cache = { data: data, ts: Date.now() };
-      var _tc0 = Date.now(); lbCacheSet(data); _sd.cacheMs = Date.now() - _tc0;   // v4489：写缓存计时
+      lbCacheSet(data);
       lbResolveIdentity();
-      var _tr0 = Date.now(); lbRenderView(data, lbPlayer(), LB.curClass||''); _sd.renderMs = Date.now() - _tr0;   // v4489：重渲染计时
+      lbRenderView(data, lbPlayer(), LB.curClass||'');
       // v500：后台加载蛋数据（阶段一：仅缓存，展示 tab 后续接入）
       lbLoadEggs(LB.SERVERS.map(function(s){ return s.abbr; })).catch(function(){});
     }
-  }).catch(function(){}).then(function(){ try{ _sd.endAt = Date.now(); }catch(eSD){} LB._silentBusy = false; try{ lbSilentProgHide(); }catch(e){} try{ lbItemWarmSchedule(); }catch(e){} });   // v1262：结束 → 收静默提示；v4224（方案C）：收尾即触发预热调度——消除最多 3s 轮询空窗（数据更新后"未预热窗口"大幅缩短）；v4489：记录结束时刻
+  }).catch(function(){}).then(function(){ LB._silentBusy = false; try{ lbSilentProgHide(); }catch(e){} try{ lbItemWarmSchedule(); }catch(e){} });   // v1262：结束 → 收静默提示；v4224（方案C）：收尾即触发预热调度——消除最多 3s 轮询空窗（数据更新后"未预热窗口"大幅缩短）
 }
 // 增量重载：读 IndexedDB 旧缓存 → lbLoad 并行+Last-Modified 判断（未变化文件复用旧数据）→ 更新缓存渲染
 function lbReloadIncremental(){
@@ -20533,15 +20483,14 @@ LB.filter = LB.filter || { attrs: LB.breedSel, genes: LB.breedGene };
 LB.breedResult = LB.breedResult || false;
 // ===== v1096：底部功能条（能力表驱动）+ 火山计时（Gen）=====
 // v4293（用户口径）：天气按钮 10 图（Bob 不加——插件未部署该图）；Gen = 火山 + 天气 双按钮
-var LB_SRV_FUNCS = { Isl:['weather'], Sco:['scoev','weather'], Cen:['weather'], Abe:['surface','weather'], Ext:['meteor','weather'], Ast:['astwx','weather'], Rag:['rvolc','weather'], Val:['weather'], Los:['weather'], Gen:['volcano','weather'] };   // v4353：Abe 增「地表计时」
+var LB_SRV_FUNCS = { Isl:['weather'], Sco:['scoev','weather'], Cen:['weather'], Abe:['surface','weather'], Ext:['meteor','weather'], Ast:['weather'], Rag:['rvolc','weather'], Val:['weather'], Los:['weather'], Gen:['volcano','weather'] };   // v4353：Abe 增「地表计时」
 var LB_FUNC_DEF = {
   volcano: { label:'🧬 生态事件', color:'#f97316', open:'lbVolcanoOpen', title:'创世·生态事件' },   // v4370/v4373：火山计时 → 生态事件
   surface: { label:'\u{1F313} 特殊事件', color:'#a78bfa', open:'lbSurfaceOpen', title:'畸变·特殊事件（本地推算 + 文案）' },   // v4370（§10）：地表计时 → 特殊事件
   weather: { label:'🌦️ 天气查询', color:'#0ea5e9', open:'lbWeatherOpen', title:'实时天气', noBar:true },   // v4304（用户口径）：功能条按钮取消，改由点「时间位」弹窗
   rvolc: { label:'🌋 环境事件', color:'#f97316', open:'lbRvolcOpen', title:'仙境·环境事件' },   // v4370/v4374：火山计时 → 环境事件
   scoev: { label:'⚡ 极端天气', color:'#8b5cf6', open:'lbScoevOpen', title:'焦土·极端天气' },   // v4372/v4373（用户口径）：Sco 极端天气（雷暴/沙尘暴/焚风）
-  meteor: { label:'\u2604\uFE0F 陨石监控', color:'#f97316', open:'lbExtmetOpen', title:'灭绝·陨石监控' },   // v4375（用户口径）：Ext 陨石监控浮窗；v4481（用户口径）：改名（原名易误解）
-  astwx: { label:'\u26A1 极端天气', color:'#8b5cf6', open:'lbAstwxOpen', title:'繁星·极端天气' }   // v4490（用户口径）：Ast 极端天气浮窗（仅沙尘暴）
+  meteor: { label:'\u2604\uFE0F 陨石来袭', color:'#f97316', open:'lbExtmetOpen', title:'灭绝·陨石来袭' }   // v4375（用户口径）：Ext 陨石来袭浮窗
 };
 // v1107：数据源换成插件权威查询（TransferIdentityFix.Volcano v0.5.0）——phase / worldTimeSeconds / nextEventInSec 全用返回字段，不硬编码周期
 // speed 仅用于「游戏 +XhYm」显示换算（游戏秒:现实秒），与事件周期无关
@@ -20962,7 +20911,6 @@ function lbFuncPanelOpen(key, title, closeFn, bodyId){
     + '<div class="lb-picker-header"><span style="flex:1;font-weight:bold;color:#a78bfa;font-size:13px">' + title + '</span><button class="lb-picker-close" onclick="' + closeFn + '()" title="关闭">✕</button></div>'
     + '<div id="' + bid + '" class="lb-func-body" style="padding:12px;overflow-y:auto;min-height:0;flex:1 1 auto"></div></div>';   // v4436（用户口径）：四边统一 12px（原 10px 12px）；v4463：加 .lb-func-body——滚动条 thin/color 必须挂到实际滚动者（该 body），挂 panel 无效
   document.body.appendChild(overlay);
-  try{ var _pnl = overlay.querySelector('.lb-picker-panel'); if(_pnl){ _pnl.addEventListener('click', lbWxNotePanelClick, false); } }catch(eN){}   // v4488（用户口径）：浮窗内非卡片点击 → 收遮罩（panel 冒泡位；stopPropagation 不阻断同元素 listener）
   LB._funcPanels[key] = { bodyId: bid, closeFn: closeFn, poll: null, tick: null };
   return document.getElementById(bid);
 }
@@ -20985,25 +20933,6 @@ function lbFuncPanelTick(key, fn){
   var p = LB._funcPanels[key]; if(!p) return;
   if(p.tick) clearInterval(p.tick);
   p.tick = setInterval(function(){ try{ if(document.hidden) return; fn(); }catch(e){} }, 1000);   // v4393：页面隐藏时暂停
-}
-function lbPanelAgeInit(key){   // v4501（用户口径）：浮窗标题行「更新于 N 秒前」（与天气浮窗同款；非复制公共件）
-  try{
-    var hp = document.querySelector('.lb-picker-panel .lb-picker-header');
-    var id = 'lbAge_' + key;
-    if(hp && !document.getElementById(id)){
-      var hsp = document.createElement('span');
-      hsp.id = id;
-      hsp.style.cssText = 'margin-right:8px;font-size:11px;color:#8c93a5;white-space:nowrap;flex-shrink:0';
-      hp.insertBefore(hsp, hp.querySelector('.lb-picker-close'));
-    }
-  }catch(e){}
-}
-function lbPanelAgeSet(key, recvMs, cacheAgeMs){   // v4501：每秒由各浮窗 tick 调用（数据年龄=缓存年龄+接收后经过）
-  try{
-    var sp = document.getElementById('lbAge_' + key); if(!sp) return;
-    var age = Math.max(0, Math.round((((Number(cacheAgeMs) || 0)) + (Date.now() - ((Number(recvMs)) || Date.now()))) / 1000));
-    sp.textContent = '更新于 ' + age + ' 秒前';
-  }catch(e){}
 }
 function lbVolcanoOpen(){
   lbFuncPanelOpen('volcano', '🧬 生态事件 · 创世', 'lbVolcClose', 'lbVolcBody');   // v4370/v4373：标题改生态事件
@@ -21031,7 +20960,7 @@ var LB_SURF = {
   off:   [18*3600+51*60, 23*3600+8*60, 14*3600+16*60],  // 熄火（两列同）
   mOff:  5*3600+30*60, mOn: 17*3600+30*60,              // 死神退场 05:30 / 死神活跃 17:30
   seas: ['平衡季', '长昼季', '长夜季'],
-  seasIcon: ['\u{1F317}', '\u{1F315}', '\u{1F311}'],   // v4357（用户口径）：季节图标（平衡/长昼/长夜）——标题与天气面板共用；v4467（用户口径）：长昼/长夜改 🔆/🌑（与昼夜 ☀️/🌙 区分）；v4468：长昼改 🌕；v4469（用户口径）：平衡季 ⚖️→🌗（半月，与 🌕/🌑 全月相一套）
+  seasIcon: ['\u2696\uFE0F', '\u2600\uFE0F', '\u{1F319}'],   // v4357（用户口径）：季节图标（平衡/长昼/长夜）——标题与天气面板共用
   seasCol: ['#a78bfa', '#f59e0b', '#818cf8'],   // v4357：季节着色
   col: { red:'#ef4444', blue:'#60a5fa', green:'#22c55e' }
 };
@@ -21144,7 +21073,6 @@ function lbSurfaceOpen(){
   }catch(eHA){}
   lbFuncPanelPoll('surface', lbSurfSync, 3000);   // v4460（用户口径）：对齐火山 3s（前端 3s 轮询 + TTL 3s；后端单点采集、多客户端共享）
   lbFuncPanelTick('surface', lbSurfTick);   // v4452（用户口径）：tick 分流（结构不变只刷倒计时；地图不每秒重建）
-  try{ clearTimeout(LB_WX_NOTE_TMR['surface']); LB._surfaceNote = null; }catch(eN3){}   // v4484（用户口径）：开窗重置说明遮罩状态（对齐 scoev/extmet）
 }
 function lbSurfaceClose(){ lbFuncPanelClose('surface'); }
 function lbSurfZoneData(c, day, t, spd){
@@ -21200,17 +21128,15 @@ function lbSurfMapHtml(){
     + '<div style="position:relative;border-radius:8px;border:1px solid #2a2a3a">'
     + '<img src="' + LB_MAP_BASE + mm.img + LB_MAP_EXT + '" alt="特殊事件地图" style="width:100%;display:block;opacity:.92;border-radius:7px">'
     + mk
-    + lbWxNoteOverlay('surface')   // v4484（用户口径）：点地震卡 → 地图说明遮罩（60s 自动收起）
     + '</div>'
     + '</div>';
 }
-function lbSurfCardHtml(segs, nowAbs, spd, titleHtml, noteKey){   // v4458（用户口径）：卡片重构（右上徽章 + 倒计时前图标 + 比例进度条 + 上下分流标注）；v4485（用户口径）：noteKey → 点卡显示地图说明遮罩
+function lbSurfCardHtml(segs, nowAbs, spd, titleHtml){   // v4458（用户口径）：卡片重构（右上徽章 + 倒计时前图标 + 比例进度条 + 上下分流标注）
   if(!segs || !segs.length) return '';
   var cur = segs[0], st = cur.state;
   var col = LB_SURF.col[st];
   var cdSec = (cur.toAbs - nowAbs) / spd;
-  var _nz = noteKey ? (' onclick="lbWxNoteTgl(\'' + String(noteKey) + '\')" title="点击卡片：地图上显示说明（60 秒后自动收起；再点收起）"') : '';
-  var h = '<div' + _nz + ' style="background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:7px 9px' + (noteKey ? ';cursor:pointer' : '') + '">'
+  var h = '<div style="background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:7px 9px">'
     + '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px">'
     + '<div style="font-size:12px;font-weight:bold;white-space:nowrap">' + titleHtml + '</div>'
     + '<span style="display:inline-flex;align-items:center;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:bold;white-space:nowrap;flex-shrink:0;color:' + col + ';border:1px solid ' + col + '66;background:' + col + '1a">' + LB_SURF_TXT[st] + '</span>'
@@ -21325,12 +21251,12 @@ function lbSurfRender(){
   var age = Math.max(0, Math.round(nw.ageMs / 1000));
   var h = '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start">'
     + '<div id="lbSurfCards" style="flex:1 1 240px;min-width:210px;display:flex;flex-direction:column;gap:8px">'
-    + lbSurfCardHtml(segsA, t, spd, LB_SURF_TITLE_A, 'surface|surfA')   // v4485（用户口径）：点卡 → 地图说明
-    + lbSurfCardHtml(segsB, t, spd, LB_SURF_TITLE_B, 'surface|surfB')
-    + lbSveQuakeCard()   // v4484（用户口径）：地震卡片（原块；说明改地图遮罩）
+    + lbSurfCardHtml(segsA, t, spd, LB_SURF_TITLE_A)
+    + lbSurfCardHtml(segsB, t, spd, LB_SURF_TITLE_B)
     + '</div>'
     + lbSurfMapHtml()
     + '</div>';
+  h += lbSveBlockSurf();
   lbInnerHtmlSet(el, h);
   try{
     var wrap = document.getElementById('lbSurfCards');
@@ -21358,9 +21284,8 @@ function lbSurfTick(){
       var segsA = lbSurfSegsFull(nw.day, nw.t, 'A', 3);
       var segsB = lbSurfSegsFull(nw.day, nw.t, 'B', 3);
       var _sb0 = lbFuncPanelBody('surface');
-      var _doRb = lbScrollIdle(_sb0, 1200);   // v4473（用户口径）：滚动窗口内不重建、也不重排
-      if(_doRb) lbScrollGuard(_sb0, function(){ wrap.innerHTML = lbSurfCardHtml(segsA, nw.t, spd, LB_SURF_TITLE_A, 'surface|surfA') + lbSurfCardHtml(segsB, nw.t, spd, LB_SURF_TITLE_B, 'surface|surfB') + lbSveQuakeCard(); });   // v4464：纳入滚动保护；v4465：滚动窗口内跳过重建；v4484：+地震卡（重建保持）；v4485：地表卡 noteKey
-      if(_doRb && wrap.children.length >= 2){   // v4473（用户口径）：重排仅随重建执行——原先每秒裸跑，对「上轮已分流」的残余 DOM 用错 cxs 索引，把标注块误搬进进度条下方层（「滚动时灼烧条目标注跳层」BUG 根因）
+      if(lbScrollIdle(_sb0, 1200)) lbScrollGuard(_sb0, function(){ wrap.innerHTML = lbSurfCardHtml(segsA, nw.t, spd, LB_SURF_TITLE_A) + lbSurfCardHtml(segsB, nw.t, spd, LB_SURF_TITLE_B); });   // v4464：纳入滚动保护；v4465：滚动窗口内跳过重建
+      if(wrap.children.length >= 2){
         var c0 = wrap.children[0], c1 = wrap.children[1];
         lbSurfLayoutBars(c0.querySelector('[data-cxs]'), c0.querySelector('[data-blbot]'));
         lbSurfLayoutBars(c1.querySelector('[data-cxs]'), c1.querySelector('[data-blbot]'));
@@ -21729,45 +21654,23 @@ function lbScrollIdle(el, wait){   // v4465（用户口径）：最近 wait ms �
   try{ if(!el) return true; return (Date.now() - (el._lbScTs || 0)) > (wait || 1200); }catch(e){ return true; }
 }
 document.addEventListener('scroll', function(ev){ var t = ev.target; if(t && t.nodeType === 1){ try{ t._lbScTs = Date.now(); }catch(e){} } }, true);   // v4465（用户口径）：任意滚动容器打时间戳（capture 拦截；scroll 事件不冒泡）
-setInterval(function(){   // v4470（用户口径）：常驻守护兜底扫描（700ms）——scroll 事件未触发/延迟时也能恢复被系统清零的位置
-  try{
-    var els = document.querySelectorAll('.lb-func-body');
-    for(var _i = 0; _i < els.length; _i++){
-      var _el = els[_i];
-      if((_el.scrollTop || 0) === 0 && (_el._lbWant || 0) > 8 && (Date.now() - (_el._lbTouchTs || 0)) > 2500){
-        try{ _el.scrollTop = _el._lbWant; }catch(eG3){}
-      }
-    }
-  }catch(eG4){}
-}, 700);
 function lbScrollGuard(el, fn){   // v4464（用户口径）：移动端滚动保护包装——重建前后记录/恢复滚动位置；含下一帧补设（安卓触摸滚动/iOS-iPad 的同步设值会被后续布局或合成器帧覆盖，PC 不复现）
   if(!el){ try{ return fn(); }catch(e0){ return; } }
   var _st = el.scrollTop || 0;
-  try{ fn(); }catch(e1){}   // v4472（用户口径）：不能 return（原 `return fn()` 在 fn 正常返回时直接退出整个函数 ⇒ 后续恢复/rAF/常驻守护永不执行——v4464 起潜伏的致命缺陷；此前 PC 测「保持」实为滚动锚定自然结果）
+  try{ return fn(); }catch(e1){}
   if(_st > 0){
     try{ el.scrollTop = _st; }catch(e2){}
     try{ requestAnimationFrame(function(){ try{ if(Math.abs((el.scrollTop || 0) - _st) > 1) el.scrollTop = _st; }catch(e3){} }); }catch(e4){}
+    try{   // v4465（用户口径）：归零守卫——重建后 800ms 内被外部（iOS/WKWebView 的 DOM 变更清理）置 0 则立即恢复；用户触摸/滚轮即放弃守卫
+      var _gc = function(){ try{ el.removeEventListener('scroll', _gon); }catch(e5){} };
+      var _gon = function(){ if(el.scrollTop === 0){ try{ el.scrollTop = _st; }catch(e6){} } };
+      el.addEventListener('scroll', _gon, {passive:true});
+      try{ el.addEventListener('touchstart', _gc, {passive:true, once:true}); }catch(e7){}
+      try{ el.addEventListener('mousedown', _gc, {passive:true, once:true}); }catch(e8){}
+      try{ el.addEventListener('wheel', _gc, {passive:true, once:true}); }catch(e9){}
+      setTimeout(_gc, 800);
+    }catch(eG2){}
   }
-  try{   // v4470/v4471（用户口径）：常驻滚动位置守护——记住「用户最后停留的合法位置」（_lbWant）；非触摸期（触摸后 2.5s 外）任何时刻被系统/DOM 变更清零 → 即时恢复；用户触摸期内的一切滚动=用户意图（含滑到顶，want 随之更新）；v4471：无条件挂载（修复首帧 _st=0 时不挂导致守护失效）
-    if(el._lbWant === undefined || ((_st || 0) > 0 && (Date.now() - (el._lbTouchTs || 0)) > 2500)) el._lbWant = _st || 0;   // v4471：want 初始化 / 重建时更新（仅非触摸期且 _st>0，绝不用 0 覆盖有效位置）
-    if(!el._lbWatch){
-      el._lbWatch = true;
-      var _mark = function(){ el._lbTouchTs = Date.now(); };
-      el.addEventListener('touchstart', _mark, {passive:true});
-      el.addEventListener('touchmove',  _mark, {passive:true});
-      el.addEventListener('touchend',   _mark, {passive:true});
-      el.addEventListener('mousedown',  _mark, {passive:true});
-      el.addEventListener('wheel',      _mark, {passive:true});
-      el.addEventListener('scroll', function(){
-        try{
-          if(Date.now() - (el._lbTouchTs || 0) < 2500){ el._lbWant = el.scrollTop || 0; }   // 用户期：合法位置（含滚到顶=0）
-          else if((el.scrollTop || 0) === 0 && (el._lbWant || 0) > 8){                       // 非用户期归零：系统重置 → 恢复
-            try{ el.scrollTop = el._lbWant; if((el.scrollTop || 0) !== el._lbWant) el._lbWant = el.scrollTop || 0; }catch(eR){}
-          }
-        }catch(eS2){}
-      }, {passive:true});
-    }
-  }catch(eG2){}
 }
 function lbInnerHtmlSet(el, h){   // v4434（用户口径）：内容未变（归一化比较）不重建——防每秒/每3s 伪重建在 mousedown 后替换节点（click 目标丢失 ⇒ 点徽章偶尔不切换）；v4462：重建时保持滚动位置（防刷新复位）；v4464（用户口径）：改走 lbScrollGuard（+移动端下一帧补设）
   if(!el) return;
@@ -21777,7 +21680,7 @@ function lbInnerHtmlSet(el, h){   // v4434（用户口径）：内容未变（�
   try{ el._lbHtmlKey = key; }catch(eS){}
   lbScrollGuard(el, function(){ el.innerHTML = h; });
 }
-function lbProbBadge(m, txt, tip){   // v4424（用户口径）：概率徽章（胶囊：淡底+细边框+10px 灰；整块可点=单项切换，10s 自动切回，再点立即切回）；v4504：+tip 悬停显示公式与参数
+function lbProbBadge(m, txt){   // v4424（用户口径）：概率徽章（胶囊：淡底+细边框+10px 灰；整块可点=单项切换，10s 自动切回，再点立即切回）
   try{
     var i0 = (m && m.i0 !== undefined && m.i0 !== null) ? m.i0 : null;
     var ic = '';
@@ -21785,87 +21688,9 @@ function lbProbBadge(m, txt, tip){   // v4424（用户口径）：概率徽章�
       var isDay1 = lbWxIsDayNow(lbVolcServer());
       ic = (m.alt ? (isDay1 ? '\u{1F319}' : '\u2600\uFE0F') : (isDay1 ? '\u2600\uFE0F' : '\u{1F319}')) + ' ';
     }
-    var _sw = (i0 !== null) && !!(m && m.diff);   // v4475（用户口径）：仅「昼夜确有差异」项可切换——ext_gen 图无两套数据，原先点不动却挂切换 tip（误导）
-    var _tt = [];
-    if(_sw) _tt.push('切换该项昼夜概率（10 秒后自动切回；再点可立即切回）');
-    if(tip) _tt.push(String(tip));
-    var oc = _sw ? (' onclick="lbProbOneToggle(' + i0 + ');event.stopPropagation()"') : '';   // v4482（用户口径）：stopPropagation——防点徽章误触卡片的地图说明
-    var tc = _tt.length ? (' title="' + lbAttr(_tt.join('\n')) + '"') : '';   // v4504：title 合并（切换说明 + 计算说明）
-    return '<span' + oc + tc + ' style="display:inline-flex;align-items:center;padding:1px 7px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);font-size:10px;color:#999;' + (_sw ? 'cursor:pointer;' : '') + 'user-select:none;white-space:nowrap">' + ic + lbAttr(txt) + '</span>';   // v4430（用户口径）：解除锁宽（行冻结已保障成员不变；变宽变窄均自然）
+    var oc = (i0 !== null) ? (' onclick="lbProbOneToggle(' + i0 + ')" title="切换该项昼夜概率（10 秒后自动切回；再点可立即切回）"') : '';
+    return '<span' + oc + ' style="display:inline-flex;align-items:center;padding:1px 7px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);font-size:10px;color:#999;cursor:pointer;user-select:none;white-space:nowrap">' + ic + lbAttr(txt) + '</span>';   // v4430（用户口径）：解除锁宽（行冻结已保障成员不变；变宽变窄均自然）
   }catch(e){ return ''; }
-}
-function lbProbAvgOnce(name){   // v4508（用户口径）：「平均每X一次」文本（ext_gen：T0=常态间隔；供"正在发生"时徽章用；无数据 ''）
-  try{
-    var sv = lbVolcServer(); if(!sv) return '';
-    var d = LB._prob && LB._prob.data;
-    if(!d || !d.ok || String(d.server || '') !== String(sv)) return '';
-    if(String(d.family || '') !== 'ext_gen') return '';
-    var names = LB_WX_PROB_NAMES[sv] || [];
-    var iT = -1;
-    for(var i = 0; i < names.length; i++){ if(String(names[i]) === String(name)){ iT = i; break; } }
-    if(iT < 0) return '';
-    var slots0 = Array.isArray(d.slots) ? d.slots : null;
-    if(!slots0 || !slots0.length) return '';
-    var wT2 = 0, sumW2 = 0;
-    for(var j2 = 0; j2 < slots0.length; j2++){
-      var w2 = Number(slots0[j2].weight) || 0; sumW2 += w2;
-      if(Number(slots0[j2].i) === iT) wT2 = w2;
-    }
-    if(!(sumW2 > 0) || !(wT2 > 0)) return '';
-    var seg2 = lbWxSegAvg(sv);
-    if(!(seg2 > 0)) return '';
-    var T0 = (seg2 * (sumW2 / wT2)) / ((typeof lbIgSpeed === 'function' ? lbIgSpeed(sv) : 0) || 5.23);
-    var t = lbProbCycleTxt(T0);
-    return t ? ('平均每' + t + '一次') : '';
-  }catch(e){ return ''; }
-}
-function lbProbTipText(name){   // v4504（用户口径）：徽章悬停 tips——公式 + 公式参数当前值（数据由 lbProbCycleSuffix 计算时写入 LB._probTip）
-  try{
-    var t = LB._probTip && LB._probTip[name];
-    if(!t || !t.mode) return '';
-    var L = [];
-    if(t.mode === 'uds'){
-      L.push('【触发周期 · 计算说明】');
-      L.push('公式：平均每X一次 = Σ(权重×段长) ÷ 该天气权重 ÷ 走针速度');
-      L.push('Σ(权重×段长) = ' + Math.round(t.lwSum) + ' 游戏秒');
-      L.push('该天气权重 = ' + t.wT);
-      L.push('当前使用套 = ' + (t.isDay ? '白天' : '晚上'));
-      L.push('走针速度 = ' + (Math.round(t.spd * 100) / 100) + ' 游戏秒/现实秒');
-      return L.join('\n');
-    }
-    if(t.mode === 'ok'){
-      L.push('【平均触发周期 · 计算说明】');
-      L.push('公式：平均每X一次 = T0（常态间隔；该天气已完全恢复、无冷却）');
-      L.push('r（恢复进度）= base ÷ current = ' + t.base + ' ÷ ' + t.current + ' = ' + Math.round(t.r * 100) + '%（已完全恢复）');
-      L.push('T0（常态间隔）= ' + Math.round(t.T0) + ' 秒');
-      L.push('注：完全恢复时"从现在起"的期望恒等于 T0（无记忆性）——不是倒计时');
-      return L.join('\n');
-    }
-    if(t.mode === 'rec' || t.mode === 'cold'){
-      L.push('【预计发生 · 计算说明】');
-      L.push('公式：预计 = h(已等待)——条件剩余等待期望（按涨速 v 线性恢复 + 每段按权重抽取，求平均剩余时间）');
-      L.push('r（恢复进度）= base ÷ current = ' + t.base + ' ÷ ' + t.current + ' = ' + (Math.round(t.r * 1000) / 10) + '%' + (t.mode === 'cold' ? '（冷却刚触发）' : ''));
-      if(t.mode === 'rec') L.push('v（恢复涨速）= r ÷ 已等待 = ' + (Math.round(t.v * 1e8) / 1e8) + ' /秒');
-      else L.push('v（恢复涨速）= 沿用上次实测 ' + (Math.round(t.v * 1e8) / 1e8) + ' /秒');
-      L.push('已等待 = ' + (lbProbCycleTxt(t.since || 0) || (Math.round(t.since || 0) + ' 秒')));
-      L.push('T0（常态间隔）= ' + Math.round(t.T0) + ' 秒');
-      L.push('h = ' + (lbProbCycleTxt(t.h) || (Math.round(t.h) + ' 秒')));   // v4505：分钟粒度（防秒级重建丢点击态）
-      return L.join('\n');
-    }
-    if(t.mode === 'norate'){
-      L.push('【预计发生 · 计算说明】');
-      L.push('公式：预计 = h(已等待)——条件剩余等待期望');
-      L.push('r（恢复进度）= 0%（冷却刚触发）');
-      L.push('v（恢复涨速）= 数据积累中（暂不可算，下次数据更新后给出）');
-      return L.join('\n');
-    }
-    if(t.mode === 'long'){
-      L.push('【预计发生 · 计算说明】');
-      L.push('预计 = 48小时以上（恢复极慢，超出计算范围）');
-      return L.join('\n');
-    }
-  }catch(e){}
-  return '';
 }
 function lbProbOneToggle(i0){   // v4423：单项切换 + 10s 自动切回；v4428（用户C方案）：切换期间锁全徽章宽（位置绝对不动），全部切回后恢复自然宽
   try{
@@ -21904,164 +21729,18 @@ function lbProbCycleTxt(sec){   // v4432（用户口径）：秒 → 人话（�
     return ((h >= 10 ? Math.round(h) : Math.round(h * 10) / 10)) + '小时';
   }catch(e){ return ''; }
 }
-function lbBadwxSync(force){   // v4491（用户口径）：坏天气权重（冷却态判定用）——60s 复用 + 单在途 + 失败静默
-  try{
-    var sv = lbVolcServer(); if(!sv) return;
-    LB._badwx = LB._badwx || { sv: '', recvMs: 0, data: null, err: '', abort: null };
-    if(!force && LB._badwx.sv === sv && LB._badwx.recvMs && (Date.now() - LB._badwx.recvMs < 60000)) return;   // 60s 复用
-    if(LB._badwx.abort){ try{ LB._badwx.abort.abort(); }catch(e){} }
-    var ac = null; try{ ac = new AbortController(); }catch(e){}
-    LB._badwx.abort = ac;
-    var opt = { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ server: sv, filter: 'WeatherSystem' }) };
-    if(ac) opt.signal = ac.signal;
-    fetch(LB_API + '/api/worldprobe_badwx', opt)
-      .then(function(r){ return r.json(); })
-      .then(function(j){
-        if(ac && ac.signal && ac.signal.aborted) return;
-        if(LB._badwx.abort === ac) LB._badwx.abort = null;
-        LB._badwx.recvMs = Date.now(); LB._badwx.sv = sv;
-        if(j && j.ok){ LB._badwx.data = j; LB._badwx.err = ''; } else { LB._badwx.data = null; LB._badwx.err = String((j && (j.error || j.reason)) || '查询失败'); }
-      })
-      .catch(function(e){
-        if(ac && ac.signal && ac.signal.aborted) return;
-        if(LB._badwx.abort === ac) LB._badwx.abort = null;
-        LB._badwx.recvMs = Date.now(); LB._badwx.sv = sv; LB._badwx.data = null; LB._badwx.err = '网络错误';
-      });
-  }catch(e){}
-}
-function lbBadwxSlot(sv, idx){   // v4491：坏天气槽位数据 {current, base, ratio}（数据属当前图才返回；否则 null）
-  try{
-    var d = LB._badwx && LB._badwx.data;
-    if(!d || !d.ok || String(d.server || '') !== String(sv)) return null;
-    var slots = d.slots; if(!Array.isArray(slots)) return null;
-    for(var i = 0; i < slots.length; i++){ if(Number(slots[i].i) === Number(idx)) return slots[i]; }
-  }catch(e){}
-  return null;
-}
-function lbBadwxSinceBadSec(sv){   // v4492（用户口径）：距上次坏天气事件的现实秒（learned 样本 lastAt 恒为「上次事件时刻」；无数据 null）
-  try{
-    var d = LB._badwx && LB._badwx.data;
-    if(!d || !d.ok || String(d.server || '') !== String(sv)) return null;
-    var wt = Number(d.worldTime); if(!isFinite(wt) || wt <= 0) return null;
-    var ln = d.learned; if(!Array.isArray(ln) || !ln.length) return null;
-    var la = Number(ln[ln.length - 1] && ln[ln.length - 1].lastAt);
-    if(!isFinite(la) || la <= 0 || wt < la) return null;
-    var spd = (typeof lbIgSpeed === 'function' ? lbIgSpeed(sv) : 0) || 5.23;
-    var base = (wt - la) / spd;   // 现实秒（数据快照时点）
-    var _st = LB._badwx.wtStamp;   // v4506（用户口径）：补时基准绑定 worldTime——同 wt 连续外推；wt 更新才重置（防 recvMs 每 60s 刷新导致"60→0"锯齿）
-    if(!_st || _st.wt !== wt){ _st = LB._badwx.wtStamp = { wt: wt, at: Date.now() }; }
-    var age = (Date.now() - _st.at) / 1000;
-    if(!(age > 0)) age = 0;
-    if(age > 3600) age = 3600;   // 异常保护（最多补 1 小时）
-    return base + age;
-  }catch(e){ return null; }
-}
-function lbWxSegAvg(sv){   // v4490：天气段长均值（游戏秒）——ext_gen 周期估算用（changeIntervalMin/Max 区间均值；Ext 陨石接口兜底）
-  try{
-    var wx = LB._wx && LB._wx.data;
-    if(wx && String(wx.server || '') === String(sv)){
-      var ws = wx.weatherState || {};
-      var mn = Number(ws.changeIntervalMin), mx = Number(ws.changeIntervalMax);
-      if(isFinite(mn) && isFinite(mx) && mn > 0 && mx > 0) return (mn + mx) / 2;
-    }
-    if(String(sv) === 'Ext'){
-      var mt = LB._meteor && LB._meteor.data;
-      var mn2 = Number(mt && mt.changeMin), mx2 = Number(mt && mt.changeMax);
-      if(isFinite(mn2) && isFinite(mx2) && mn2 > 0 && mx2 > 0) return (mn2 + mx2) / 2;
-    }
-  }catch(e){}
-  return 0;
-}
-function lbWxRemainSec(T0, v, w, sum, tNow){   // v4503（用户口径）：条件剩余期望 h(t)=∫_t^∞S(s)ds/S(t)——从压制起点(b=0)、固定涨速 v 模拟；tNow=已等待秒；null=无解；超长等待⇒尾部≈T0 平台
-  try{
-    if(!(T0 > 0) || !(w > 0) || !(sum > 0) || !(v > 0)) return null;
-    var t0 = (tNow > 0) ? tNow : 0;
-    var other = sum - w;
-    var dt = 60, s = 1, t = 0, cap = t0 + 172800;   // 步长 60s；模拟到 已等待+48h
-    var S0 = (t0 <= 0) ? 1 : -1, tail = 0;
-    while(t < cap && s > 0.001){
-      var b = v * t; if(b > 1) b = 1;
-      var rate = b * sum / ((other + w * b) * T0);   // 每秒发生概率（b=1 ⇒ 1/T0 常态）
-      var ps = rate * dt; if(ps > 1) ps = 1;
-      s *= (1 - ps);
-      t += dt;
-      if(t > t0){
-        if(S0 < 0) S0 = s;
-        tail += s * dt;
-      }
-    }
-    if(t < t0) return T0;   // 已等待远超分布主体 ⇒ 尾部指数 MRL≈T0（平台）
-    if(!(S0 > 0) || !(tail > 0)) return null;
-    return tail / S0;
-  }catch(e){ return null; }
-}
-function lbProbCycleSuffix(name){   // v4433（用户口径）：触发周期后缀（" · 约X"）——与概率同套（昼夜切换联动）；按配置权重/时长估算（非实测）·现实时间；v4490：+ext_gen；v4496：ext_gen 改「当前概率…·期望…」新句式 + 永不消失兜底
+function lbProbCycleSuffix(name){   // v4433（用户口径）：触发周期后缀（" · 约X"）——与概率同套（昼夜切换联动）；按配置权重/时长估算（非实测）·现实时间；仅 UDS
   try{
     var sv = lbVolcServer(); if(!sv) return '';
     var d = LB._prob && LB._prob.data;
-    if(!d || !d.ok || String(d.server || '') !== String(sv)) return '读取中…';   // v4496（用户口径）：徽章永不消失——数据未载 ⇒ 「读取中…」
-    var fam = String(d.family || '');   // v4490：uds/ext_gen 双族分流
+    if(!d || !d.ok || String(d.server || '') !== String(sv)) return '';
+    if(String(d.family) !== 'uds') return '';
+    var lengths = Array.isArray(d.lengths) ? d.lengths : null;
+    if(!lengths || !lengths.length) return '';
     var names = LB_WX_PROB_NAMES[sv] || [];
     var iT = -1;
     for(var i = 0; i < names.length; i++){ if(String(names[i]) === String(name)){ iT = i; break; } }
-    if(iT < 0) return '—';
-    if(fam === 'ext_gen'){   // v4504（用户口径）：句式「预计 Y后发生」——r=base/current 归一化（base 上限=current，各天气不同）；r<1 条件剩余期望 h(t)；r≥1 满恢复⇒T0；tips 记公式+参数
-      var slots0 = Array.isArray(d.slots) ? d.slots : null;
-      if(!slots0 || !slots0.length) return '读取中…';
-      var wT2 = 0, sumW2 = 0;
-      for(var j2 = 0; j2 < slots0.length; j2++){
-        var w2 = Number(slots0[j2].weight) || 0; sumW2 += w2;
-        if(Number(slots0[j2].i) === iT) wT2 = w2;
-      }
-      if(!(sumW2 > 0)) return '—';
-      if(!(wT2 > 0)) return '该时段不出现';
-      var _bs0 = lbBadwxSlot(sv, iT);
-      if(!_bs0) return '读取中…';
-      var _bb0 = Number(_bs0.base);
-      var _cc0 = Number(_bs0.current);   // v4504：current=该天气权重上限（base 的上限；各天气不同）
-      var _r0 = (_cc0 > 0 && isFinite(_bb0) && _bb0 > 0) ? Math.min(1, _bb0 / _cc0) : 0;   // v4504：归一化恢复进度 r（0~1）
-      var seg2 = lbWxSegAvg(sv);
-      if(!(seg2 > 0)) return '—';
-      var _T0 = (seg2 * (sumW2 / wT2)) / ((typeof lbIgSpeed === 'function' ? lbIgSpeed(sv) : 0) || 5.23);   // 常态间隔（现实秒）
-      var _vKey2 = sv + '|' + iT;   // 固定涨速缓存键
-      var _since2 = lbBadwxSinceBadSec(sv);
-      var _tip2 = { sv: sv, name: name, mode: '', r: _r0, base: _bb0, current: _cc0, since: _since2, T0: _T0, v: 0, h: 0 };
-      var _v2 = 0, _H0 = null;
-      var _vc2 = LB._wxV && LB._wxV[_vKey2];
-      var _vcv = (typeof _vc2 === 'number') ? _vc2 : ((_vc2 && _vc2.v > 0) ? _vc2.v : 0);   // v4505：兼容旧格式（数字=已冻结值）
-      var _vcr = (_vc2 && typeof _vc2 === 'object') ? _vc2.r : -1;
-      if(_r0 >= 1){
-        _H0 = _T0; _tip2.mode = 'ok';   // v4504：已完全恢复 ⇒ 纯等待抽中 ⇒ h≈T0（指数无记忆）
-      } else if(_r0 > 0){
-        if(_vcv > 0 && _vcr === _r0){
-          _v2 = _vcv;   // v4505（用户口径）：r 未变 ⇒ 涨速冻结（不随 t 漂移，预计平滑递减）
-        } else {
-          var _gg2 = (_since2 !== null && _since2 > 0) ? _since2 : 600;
-          _v2 = _r0 / Math.max(60, _gg2);   // v4505：r 变化（或首次）⇒ 重估涨速
-          LB._wxV = LB._wxV || {}; LB._wxV[_vKey2] = { v: _v2, r: _r0 };   // r 绑定缓存
-        }
-        _H0 = lbWxRemainSec(_T0, _v2, wT2, sumW2, _since2);
-        _tip2.mode = 'rec'; _tip2.v = _v2;
-      } else {
-        _v2 = _vcv;   // r=0（刚压制）⇒ 用冻结的涨速
-        if(_v2 > 0){ _H0 = lbWxRemainSec(_T0, _v2, wT2, sumW2, _since2); _tip2.mode = 'cold'; _tip2.v = _v2; }
-        else { _tip2.mode = 'norate'; }
-      }
-      LB._probTip = LB._probTip || {};
-      LB._probTip[name] = _tip2;   // v4504：供徽章悬停 tips 读取
-      if(_tip2.mode === 'norate') return '冷却恢复中';
-      if(_H0 === null || !(_H0 > 0)){ _tip2.mode = 'long'; return '预计 48小时以上后发生'; }
-      var _et0 = lbProbCycleTxt(_H0);
-      if(!_et0){ _tip2.mode = 'long'; return '预计 48小时以上后发生'; }
-      _tip2.h = _H0;
-      if(_tip2.mode === 'ok'){ _tip2.avg = _et0; return '平均每' + _et0 + '一次'; }   // v4507（用户口径）：完全恢复 ⇒ 「平均每X一次」（对齐 uds；"预计"会误读为倒计时）
-      return '预计 ' + _et0 + '后发生';
-    }
-    if(fam !== 'uds') return '—';
-    var lengths = Array.isArray(d.lengths) ? d.lengths : null;
-    if(!lengths || !lengths.length) return '读取中…';
-    var _spd0 = (typeof lbIgSpeed === 'function' ? lbIgSpeed(sv) : 0) || 5.23;   // v4495（用户口径）：持续时长移出徽章——改卡底「持续X」+进度条（见 lbProbDurSec/lbWxProgOf）
-    // v4494（用户口径·方案C）：概率口径「平均每X一次」（期望周期；事件按权重轮换假设）
+    if(iT < 0) return '';
     var day = Array.isArray(d.day) ? d.day : [], night = Array.isArray(d.night) ? d.night : [];
     var wOf = function(arr, idx){ for(var k = 0; k < arr.length; k++){ if(Number(arr[k].i) === idx) return Number(arr[k].weight) || 0; } return 0; };
     var pOf = function(arr, idx){ for(var k = 0; k < arr.length; k++){ if(Number(arr[k].i) === idx) return Number(arr[k].pct) || 0; } return 0; };
@@ -22072,41 +21751,14 @@ function lbProbCycleSuffix(name){   // v4433（用户口径）：触发周期后
     var useDay = altOn ? !isDay0 : isDay0;
     var slots = useDay ? day : night;
     var wT = wOf(slots, iT);
-    if(!(wT > 0)) return '该时段不出现';   // v4496（用户口径）：切换后该时段无此天气 ⇒ 显示而非消失
+    if(!(wT > 0)) return '';
     var lwSum = 0;
     for(var j = 0; j < names.length; j++){ lwSum += wOf(slots, j) * (Number(lengths[j]) || 0); }
     var cycGame = lwSum / wT;   // Σ(该套权重×段长) ÷ 该套目标权重（游戏秒）
-    var _tcyc = lbProbCycleTxt(cycGame / _spd0);
-    LB._probTip = LB._probTip || {};
-    LB._probTip[name] = { sv: sv, name: name, mode: 'uds', cycGame: cycGame, spd: _spd0, wT: wT, lwSum: lwSum, isDay: !!useDay };   // v4504：uds tips 数据
-    return _tcyc ? ('平均每' + _tcyc + '一次') : '—';   // v4495（用户口径）：徽章只留触发周期（持续移卡底）；v4496：兜底不空
-  }catch(e){ return '—'; }   // v4496（用户口径）：异常兜底（徽章永不消失）
-}
-function lbProbDurSec(name){   // v4495（用户口径）：天气事件持续时长（现实秒；uds=WeatherEventLengths 真值÷实测走针速度；无数据 null）
-  try{
-    var sv = lbVolcServer(); if(!sv) return null;
-    var d = LB._prob && LB._prob.data;
-    if(!d || !d.ok || String(d.server || '') !== String(sv)) return null;
-    if(String(d.family || '') !== 'uds') return null;
-    var names = LB_WX_PROB_NAMES[sv] || [];
-    var iT = -1;
-    for(var i = 0; i < names.length; i++){ if(String(names[i]) === String(name)){ iT = i; break; } }
-    if(iT < 0) return null;
-    var lengths = Array.isArray(d.lengths) ? d.lengths : null;
-    if(!lengths || !lengths.length) return null;
-    var L0 = Number(lengths[iT]);
-    if(!(isFinite(L0) && L0 > 0)) return null;
-    var spd = (typeof lbIgSpeed === 'function' ? lbIgSpeed(sv) : 0) || 5.23;
-    return L0 / spd;
-  }catch(e){ return null; }
-}
-function lbWxProgOf(durSec, totSec){   // v4495（用户口径）：卡底进度对象 {txt, pct}——未发生 ⇒ 「持续X」+空轨道；发生中 ⇒ 「距结束 剩余/总 秒」+进度
-  try{
-    if(!(totSec > 0)) return null;
-    if(durSec === null || durSec === undefined){ var t0 = lbProbCycleTxt(totSec); return t0 ? { txt: '持续' + t0, pct: 0 } : null; }
-    var rem = Math.max(0, totSec - durSec);
-    return { txt: '距结束 ' + lbWxFmtSec(rem) + '/' + lbWxFmtSec(totSec), pct: Math.max(0, Math.min(1, durSec / totSec)) };   // v4500（用户口径）：动态时间格式（分:秒冒号制，所有浮窗共用）
-  }catch(e){ return null; }
+    var cycReal = cycGame / ((typeof lbIgSpeed === 'function' ? lbIgSpeed(sv) : 0) || 5.23);
+    var t = lbProbCycleTxt(cycReal);
+    return t ? (' · 约' + t) : '';
+  }catch(e){ return ''; }
 }
 function lbProbHasAlt(){   // v4421（用户口径）：是否有副套（昼夜两套；非 UDS 暂单套 ⇒ 隐藏切换图标）
   try{
@@ -22178,7 +21830,7 @@ LB._lunar = { data:null, err:'', recvMs:0, sv:'', abort:null };
 LB._rvolc = { data:null, err:'', recvMs:0, sv:'', abort:null };
 var LB_WAVE_ZH = { calm:'平静', moderate:'中浪', rough:'大浪', high:'巨浪', storm:'风暴浪' };   // verdict 中文化（未知回退原文）
 var LB_SVE_SNOW = '雪崩是雪山区域的地形随机事件：走进积雪坡面 / 谷地时约 25% 触发；同一处反复经过概率逐次 +5%（最多 15 次必触发），两次之间至少间隔 3 分钟。触发前有约 10~15 秒预警，听到预警请立刻离开坡面——滑体速度约 750 单位/秒，直线跑离通常可躲开。';
-var LB_SVE_QUAKE = '畸变地震大约每 10~20 分钟发生一次（多数约 15 分钟），每次持续约 20~30 秒：大地震动、上方落下碎屑。震动不造成伤害，但会让幸存者随机小幅位移（越往深处越明显、游泳时放大），靠近悬崖或结构边缘可能被晃落；使用攀爬镐时在震动中移动会脱手坠落（可在震动间隙移动）。落下的碎屑可拾取，每个随机获得 1\u20135 份资源，极低概率掉出好品质装备。';   // v4457（用户口径）：按 wiki Earthquake 页修订
+var LB_SVE_QUAKE = '畸变特有环境现象：大地每隔片刻震动、上方落下碎屑。震动不造成伤害，但会让幸存者随机小幅位移（越往深处越明显、游泳时放大），靠近悬崖或结构边缘可能被晃落；使用攀爬镐时在震动中移动会脱手坠落（可在震动间隙移动）。落下的碎屑可拾取，每个随机获得 1\u20135 份资源，极低概率掉出好品质装备。';   // v4457（用户口径）：按 wiki Earthquake 页修订
 function lbSveSub(t){
   return '<div style="margin-top:10px;border-top:1px dashed #2a2a3a;padding-top:8px">' + t + '</div>';
 }
@@ -22308,8 +21960,9 @@ function lbSveBlockGen(){   // Gen：巨浪 + 雪崩（文案）+ 流星雨
   }
   return out;
 }
-function lbSveQuakeCard(){   // v4484（用户口径）：地震块 → 卡片（点卡 → 地图遮罩）；v4485（用户口径）：无主行、副行=间隔
-  return lbWxCard('\u{1F30E}', '地震', '', '间隔 10~20 分钟发生一次', null, null, null, 20, null, '0 0 auto', '', 16, 'surface|quake');
+function lbSveBlockSurf(){   // Abe：地震（文案）
+  return lbSveSub(lbSveTitle('\u{1F30E}', '地震')
+    + '<div style="font-size:12px;color:#a8b0c0;line-height:1.9">' + lbAttr(LB_SVE_QUAKE) + '</div>');
 }
 function lbSveBlockRag(){   // Rag：火山喷发（actor）+ 沙尘暴（区域性质天气也归特殊事件——用户口径）
   var out = '';
@@ -22352,7 +22005,6 @@ function lbSveBlockRag(){   // Rag：火山喷发（actor）+ 沙尘暴（区域
 }
 function lbRvolcOpen(){
   lbFuncPanelOpen('rvolc', '\u{1F30B} 环境事件 · 仙境', 'lbRvolcClose');
-  lbPanelAgeInit('rvolc');   // v4501（用户口径）：标题行「更新于 N 秒前」
   lbFuncPanelPoll('rvolc', function(){ try{ lbRvolcSync(); }catch(e1){} try{ lbSandSync(true); }catch(e2){} }, 30000);
   lbFuncPanelTick('rvolc', lbRvolcRender);
 }
@@ -22363,7 +22015,6 @@ function lbRvolcClose(){
 }
 function lbRvolcRender(){
   var el = lbFuncPanelBody('rvolc'); if(!el) return;
-  lbPanelAgeSet('rvolc', LB._rvolc && LB._rvolc.recvMs, LB._rvolc && LB._rvolc.data && LB._rvolc.data.cacheAgeMs);   // v4501：标题行更新于
   var sv = lbVolcServer();
   if(sv !== 'Rag'){
     lbInnerHtmlSet(el, '<div style="font-size:12px;color:#888;padding:4px 0 8px">当前地图非仙境——该浮窗仅适用于仙境（切回后自动恢复）</div>');
@@ -22377,9 +22028,7 @@ function lbRvolcRender(){
 // ===== v4372（用户口径）：Sco「⚡ 特殊事件」浮窗 —— 雷暴 / 沙尘暴 / 焚风（区域性质天气）=====
 function lbScoevOpen(){
   lbFuncPanelOpen('scoev', '\u26A1 极端天气 · 焦土', 'lbScoevClose');
-  lbPanelAgeInit('scoev');   // v4501（用户口径）：标题行「更新于 N 秒前」
   LB._scoevSig = '';   // v4407：结构信号（tick 分流用）
-  try{ clearTimeout(LB_WX_NOTE_TMR['scoev']); LB._scoevNote = null; }catch(eN1){}   // v4482（用户口径）：开窗重置说明遮罩状态（防旧计时器误关新开）
   try{ lbLoadWeatherZh().then(function(){ try{ LB._scoevSig = ''; lbScoevRender(); }catch(e0){} }); }catch(eW){}   // v4417（用户口径）：载入天气词典后重建（配色/过渡扫描依赖）
   lbFuncPanelPoll('scoev', function(){ try{ lbWeatherSync(); }catch(e1){} try{ lbProbSync(); }catch(e2){} }, 3000);   // v4409（用户口径）：10s→3s（复用面板 sync）
   lbFuncPanelTick('scoev', lbScoevTick);   // v4407（用户口径）：tick 分流——结构不变仅更新文字（地图不每秒重建）
@@ -22392,9 +22041,9 @@ function lbScoevCardsHtml(L){   // v4415：三张事件卡；v4416（用户口�
   var j0 = LB._wx && LB._wx.data;
   var wei0 = (j0 && j0.wxSemantics && j0.wxSemantics.enumIndices) ? j0.wxSemantics.enumIndices : {};
   var prevN = wei0.prevWeatherName ? String(wei0.prevWeatherName) : '';
-  c += lbWxCard('\u{1F32A}\uFE0F', '沙尘暴', L.m2, L.s2, L.o2 ? '#ffc44f' : null, L.o2 ? lbWxCardBg('Sand_Dust_Storm', prevN) : null, null, 20, null, '0 0 auto', L.b2, 16, 'scoev|sand', L.p2);   // v4424（用户口径）：概率徽章→右栏；v4438：标题 16px；v4482：点卡 → 地图说明遮罩
-  c += lbWxCard('\u{1F525}', '焚风', L.m3, L.s3, L.o3 ? '#ff8a4c' : null, L.o3 ? lbWxCardBg('Superheat', prevN) : null, null, 20, null, '0 0 auto', L.b3, 16, 'scoev|foehn', L.p3);   // v4438：标题 16px；v4482：点卡 → 地图说明遮罩
-  c += lbWxCard('\u26A1', '雷暴', L.m1, L.s1, L.o1 ? '#a78bfa' : null, L.o1 ? lbWxCardBg('ElectricalStorm', prevN) : null, null, 20, null, '0 0 auto', L.b1, 16, 'scoev|es', L.p1);   // v4418（用户口径）：雷暴概率最低排到最后（沙尘暴/焚风/雷暴）；v4438：标题 16px；v4482：点卡 → 地图说明遮罩
+  c += lbWxCard('\u{1F32A}\uFE0F', '沙尘暴', L.m2, L.s2, L.o2 ? '#ffc44f' : null, L.o2 ? lbWxCardBg('Sand_Dust_Storm', prevN) : null, null, 20, null, '0 0 auto', L.b2, 16);   // v4424（用户口径）：概率徽章→右栏；v4438：标题 16px
+  c += lbWxCard('\u{1F525}', '焚风', L.m3, L.s3, L.o3 ? '#ff8a4c' : null, L.o3 ? lbWxCardBg('Superheat', prevN) : null, null, 20, null, '0 0 auto', L.b3, 16);   // v4438：标题 16px
+  c += lbWxCard('\u26A1', '雷暴', L.m1, L.s1, L.o1 ? '#a78bfa' : null, L.o1 ? lbWxCardBg('ElectricalStorm', prevN) : null, null, 20, null, '0 0 auto', L.b1, 16);   // v4418（用户口径）：雷暴概率最低排到最后（沙尘暴/焚风/雷暴）；v4438：标题 16px
   return c;
 }
 function lbScoevRender(){
@@ -22457,35 +22106,28 @@ function lbScoevLines(){
   var has = C.has, curBase = C.curBase, probItem = C.probItem;   // v4423：单项元信息（含昼夜图标所需）
   var m1 = '', s1 = '', m2 = '', s2 = '', m3 = '', s3 = '', b1 = '', b2 = '', b3 = '';   // v4424：b=概率徽章
   var o1 = false, o2 = false, o3 = false;   // v4415：拆“主行+副行+活跃态”供卡片
-  var p1 = null, p2 = null, p3 = null;   // v4495（用户口径）：卡底进度 {txt,pct}
   if(!has){ m1 = m2 = m3 = '等待天气数据…'; }
   else {
     var esOn = (curBase === 'ElectricalStorm') || lbWxStormIs('es');   // v4397：判定升级（含 id/active）
     var pes = probItem('ElectricalStorm');
     o1 = !!esOn; m1 = esOn ? '正在发生' : '';   // v4437（用户口径）：未发生不显示
-    s1 = '';
-    var _tot1 = lbProbDurSec('ElectricalStorm');   // v4495（用户口径）：持续总长（秒）
-    p1 = esOn ? lbWxProgOf(lbWxStormSince('es', true), _tot1) : lbWxProgOf(null, _tot1);   // v4495：发生时补计时（供卡底进度条）
-    b1 = lbProbBadge(pes, lbProbCycleSuffix('ElectricalStorm'), lbProbTipText('ElectricalStorm'));   // v4504：+tips（公式+参数）
+    s1 = ''; b1 = (pes && pes.pct !== null) ? lbProbBadge(pes, '概率 ≈' + pes.pct.toFixed(1) + '%' + lbProbCycleSuffix('ElectricalStorm')) : '';   // v4424：概率徽章；v4432：附触发周期
     var sOn = lbWxStormIs('sand');
     var pss = probItem('Sand_Dust_Storm');
     o2 = !!sOn;
-    var _tot2 = lbProbDurSec('Sand_Dust_Storm');   // v4495（用户口径）：持续总长（秒）
     if(sOn){
       var sdur2 = lbWxStormSince('sand', true);
       m2 = '正在发生'; s2 = lbWxDurZh(sdur2);
-      p2 = lbWxProgOf(sdur2, _tot2);   // v4495：距结束 剩余/总 秒 + 进度
-    } else { lbWxStormSince('sand', false); m2 = ''; s2 = ''; p2 = lbWxProgOf(null, _tot2); }   // v4437（用户口径）：未发生不显示；v4495：持续X + 空轨道
-    b2 = lbProbBadge(pss, lbProbCycleSuffix('Sand_Dust_Storm'), lbProbTipText('Sand_Dust_Storm'));   // v4504：+tips（公式+参数）
+    } else { lbWxStormSince('sand', false); m2 = ''; s2 = ''; }   // v4437（用户口径）：未发生不显示
+    b2 = (pss && pss.pct !== null) ? lbProbBadge(pss, '概率 ≈' + pss.pct.toFixed(1) + '%' + lbProbCycleSuffix('Sand_Dust_Storm')) : '';   // v4432：附触发周期
     var fOn = (curBase === 'Superheat') || lbWxStormIs('foehn');   // v4415：焚风判定升级（含 active 兼容）
     var pfh = probItem('Superheat');
     o3 = !!fOn; m3 = fOn ? '正在发生' : '';   // v4437（用户口径）：未发生不显示
-    b3 = lbProbBadge(pfh, lbProbCycleSuffix('Superheat'), lbProbTipText('Superheat'));   // v4504：+tips（公式+参数）
-    var _tot3 = lbProbDurSec('Superheat');   // v4495（用户口径）：持续总长（秒）
-    if(fOn){ var fdur = lbWxStormSince('foehn', true); s3 = lbWxDurZh(fdur); p3 = lbWxProgOf(fdur, _tot3); }
-    else { lbWxStormSince('foehn', false); s3 = ''; p3 = lbWxProgOf(null, _tot3); }
+    b3 = (pfh && pfh.pct !== null) ? lbProbBadge(pfh, '概率 ≈' + pfh.pct.toFixed(1) + '%' + lbProbCycleSuffix('Superheat')) : '';   // v4432：附触发周期
+    if(fOn){ var fdur = lbWxStormSince('foehn', true); s3 = lbWxDurZh(fdur); }
+    else { lbWxStormSince('foehn', false); s3 = ''; }
   }
-  return { m1: m1, s1: s1, m2: m2, s2: s2, m3: m3, s3: s3, o1: o1, o2: o2, o3: o3, b1: b1, b2: b2, b3: b3, p1: p1, p2: p2, p3: p3 };   // v4424：b=概率徽章；v4495：p=卡底进度
+  return { m1: m1, s1: s1, m2: m2, s2: s2, m3: m3, s3: s3, o1: o1, o2: o2, o3: o3, b1: b1, b2: b2, b3: b3 };   // v4424：b=概率徽章
 }
 function lbScoevMapHtml(){
   var C = lbScoevCtx(); if(!C.has) return '';
@@ -22504,7 +22146,7 @@ function lbScoevMapHtml(){
         var pc = lbWorldToPx(Number(pp.x), Number(pp.y), mm); if(!pc) continue;
         var isCur = _esOn && !!(rp0 && String(rp0.objectName || '') === String(pp.objectName || ''));
         if(isCur){
-          layers += '<div style="position:absolute;left:' + pc.x.toFixed(2) + '%;top:' + pc.y.toFixed(2) + '%;transform:translate(-50%,-50%);animation:lbBreathe 2.2s ease-in-out infinite;pointer-events:none;display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:radial-gradient(circle,rgba(139,92,246,.55),rgba(139,92,246,.12) 70%,transparent);border:1.5px solid rgba(180,150,255,.95);box-shadow:0 0 14px rgba(149,110,255,.9);font-size:16px;line-height:1">\u26A1</div>';
+          layers += '<div style="position:absolute;left:' + pc.x.toFixed(2) + '%;top:' + pc.y.toFixed(2) + '%;transform:translate(-50%,-50%);pointer-events:none;display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:radial-gradient(circle,rgba(139,92,246,.55),rgba(139,92,246,.12) 70%,transparent);border:1.5px solid rgba(180,150,255,.95);box-shadow:0 0 14px rgba(149,110,255,.9);font-size:16px;line-height:1">\u26A1</div>';
         } else {
           layers += '<div style="position:absolute;left:' + pc.x.toFixed(2) + '%;top:' + pc.y.toFixed(2) + '%;transform:translate(-50%,-50%);pointer-events:none;width:6px;height:6px;border-radius:50%;background:rgba(160,120,255,.55);box-shadow:0 0 0 1px rgba(140,100,230,.5)"></div>';
         }
@@ -22516,12 +22158,10 @@ function lbScoevMapHtml(){
     + '<img src="' + LB_MAP_BASE + mm.img + LB_MAP_EXT + '" alt="极端天气地图" style="width:100%;display:block;opacity:.92;border-radius:7px">'
     + layers
     + lbWxStormOverlay('Sco', true)   // v4415（用户口径）：极端天气出现时把效果同步渲染到极端天气图上（色罩+角标；锚点由本图 5 点自画）
-    + lbWxNoteOverlay('scoev')   // v4482（用户口径）：点卡片 → 地图说明遮罩（60s 自动收起）
     + '</div></div>';
 }
 function lbScoevTick(){
   var el = lbFuncPanelBody('scoev'); if(!el) return;
-  lbPanelAgeSet('scoev', LB._wx && LB._wx.recvMs, LB._wx && LB._wx.data && LB._wx.data.cacheAgeMs);   // v4501：标题行更新于
   var sv = lbVolcServer();
   var sig = sv + '|' + ((LB._wx && LB._wx.recvMs) || 0) + '|' + ((LB._prob && LB._prob.recvMs) || 0) + '|' + (lbWxStormIs('es') ? 1 : 0) + '|' + (lbWxStormIs('sand') ? 1 : 0) + '|' + (lbWxStormIs('foehn') ? 1 : 0);   // v4407：结构信号；v4416：加 foehn
   if(sig !== LB._scoevSig || !el.firstChild){ LB._scoevSig = sig; lbScoevRender(); return; }
@@ -22531,198 +22171,42 @@ function lbScoevTick(){
   }catch(e){}
   try{ lbWxSweepTick(); }catch(eS2){}   // v4416（用户口径）：同款过渡扫描平滑推进
 }
-// ===== v4375（用户口径）：Ext「陨石监控」浮窗 —— 陨石雨 phase 四态；v4481：改名 =====
+// ===== v4375（用户口径）：Ext「陨石来袭」浮窗 —— 陨石雨 phase 四态 =====
 function lbExtmetOpen(){
-  lbFuncPanelOpen('meteor', '\u2604\uFE0F 陨石监控 · 灭绝', 'lbExtmetClose');
-  lbPanelAgeInit('meteor');   // v4501（用户口径）：标题行「更新于 N 秒前」
-  lbFuncPanelPoll('meteor', function(){ try{ lbMeteorSync(); }catch(e1){} try{ lbWeatherSync(); }catch(e2){} try{ lbProbSync(); }catch(e3){} try{ lbBadwxSync(); }catch(e4){} }, 2000);   // v4480（用户口径）：补 wx/prob sync（完全复用现有缓存链路；概率徽章依赖 LB._prob）；v4491：+badwx sync（冷却态）
-  lbFuncPanelTick('meteor', lbExtmetTick);   // v4480（用户口径）：tick 改结构信号分流（对齐 scoev）
-  LB._extmetSig = '';
-  try{ clearTimeout(LB_WX_NOTE_TMR['meteor']); LB._extmetNote = null; }catch(eN2){}   // v4482（用户口径）：开窗重置说明遮罩状态（对齐 scoev）
-  try{ lbLoadWeatherZh().then(function(){ try{ LB._extmetSig = ''; lbExtmetRender(); }catch(e0){} }); }catch(eW){}   // v4481（用户口径）：载入天气词典后重建（卡片底色/过渡依赖色表；完全复用，对齐 scoev）
+  lbFuncPanelOpen('meteor', '\u2604\uFE0F 陨石来袭 · 灭绝', 'lbExtmetClose');
+  lbFuncPanelPoll('meteor', function(){ try{ lbMeteorSync(); }catch(e1){} }, 2000);
+  lbFuncPanelTick('meteor', lbExtmetRender);
 }
 function lbExtmetClose(){
   lbFuncPanelClose('meteor');   // 共享壳统一关窗（在途请求自然完成，与主面板共用 LB._meteor）
 }
-function lbExtmetCardsHtml(){   // v4480（用户口径）：陨石雨事件卡（完全复用公共件：lbScoevCtx.probItem / lbWxCard / lbProbBadge / lbWxCardBg / lbWxStormSince / lbWxDurZh；结构对齐 scoev 卡）
-  var C = lbScoevCtx();
-  var d = LB._meteor && LB._meteor.data;
-  var ph = (d && d.ok) ? String(d.phase || '') : '';
-  var act = (ph === 'active'), inc = (ph === 'incoming');
-  var main = '', sub = '', mprog = null;   // v4497（用户口径）：mprog=卡底进度（active 时「距结束 剩余/总 秒」）
-  if(!(d && d.ok)){ main = '等待事件数据…'; }
-  else if(act){
-    var mv = Number(d.volume);
-    main = '正在发生';   // v4499（用户口径）：强度移入副行
-    var _mfall = lbWxStormSince('meteor', true);   // 前端计时维护（回退用）
-    // v4499（用户口径）：已持续=服务器口径（段已过 tel − 过渡 tdur）——刷新免疫、全程精确；缺数据回退前端计时
-    var _mtel = Number(d.transElapsed), _mtd = Number(d.transitionDuration);
-    var _mdur = (isFinite(_mtel) && _mtel > 0) ? Math.max(0, _mtel - ((isFinite(_mtd) && _mtd > 0) ? _mtd : 40)) : _mfall;
-    sub = '';   // v4501（用户口径）：强度恒 100%（MeteorVolume 0→1）且进度条已含时长 ⇒ 副行不再显示
-    // v4498（用户口径·实锤修正）：剩余=suc 原值当秒（实测 1:1 现实秒流逝，不除走针速度）；总长=已持续+剩余（分母恒定）
-    try{
-      var _mremG = Number(d.secondsUntilChange);
-      var _mrem = (isFinite(_mremG) && _mremG > 0) ? _mremG : null;
-      if(_mrem !== null && (_mdur + _mrem) > 0) mprog = lbWxProgOf(_mdur, _mdur + _mrem);   // 复用公共进度件（非复制）
-    }catch(eP0){}
-  } else if(inc){
-    main = '即将到来';
-    // v4498（用户口径·实锤修正）：transElapsed=本段已过秒数（实测≈过渡40+活跃累计，非绝对时刻）；预警剩余=过渡总时长(tdur)−已过
-    var tdur2 = Number(d.transitionDuration);
-    if(!(isFinite(tdur2) && tdur2 > 0)) tdur2 = Number(d.transMax || 80);
-    var tel0 = Number(d.transElapsed);
-    var lead = (isFinite(tel0) && tel0 >= 0) ? (tdur2 - tel0) : tdur2;
-    if(!(lead >= 0)) lead = 0;
-    else if(lead > tdur2) lead = tdur2;
-    sub = '\u23F1\uFE0F 约 ' + Math.round(lead) + ' 秒后到达';   // v4508（用户口径）：去「预警窗口 40~80 秒」后缀（与实际时长矛盾）
-    lbWxStormSince('meteor', false);
-  } else if(ph === 'leaving'){
-    main = '正在结束';
-    lbWxStormSince('meteor', false);
-  } else {
-    lbWxStormSince('meteor', false);   // none：未发生不显示主/副行（对齐 scoev v4437 口径）
-    // v4500（用户口径）：平时显示段长范围（持续 n~n 分钟随机——配置 changeMin/Max，单位现实秒）
-    try{
-      var _cmn = Number(d.changeMin), _cmx = Number(d.changeMax);
-      if(isFinite(_cmn) && isFinite(_cmx) && _cmn > 0 && _cmx > _cmn){
-        mprog = { txt: '持续 ' + Math.round(_cmn / 60) + '~' + Math.round(_cmx / 60) + ' 分钟随机', pct: 0 };
-      }
-    }catch(eP1){}
-  }
-  var p = C.probItem('MeteorRain');   // 复用概率元信息（含昼夜切换）
-  var b;   // v4508（用户口径）：正在发生 ⇒ 徽章改「平均每X一次」
-  if(act){
-    var _avgB = lbProbAvgOnce('MeteorRain');
-    b = _avgB ? lbProbBadge(p, _avgB, '') : lbProbBadge(p, lbProbCycleSuffix('MeteorRain'), lbProbTipText('MeteorRain'));
-  } else {
-    b = lbProbBadge(p, lbProbCycleSuffix('MeteorRain'), lbProbTipText('MeteorRain'));   // v4504：+tips（公式+参数）
-  }
-  var bg = null;
-  if(act || inc){
-    try{
-      if(inc){
-        var _pt2 = (isFinite(tel0) && tel0 > 0 && tdur2 > 0) ? (tel0 / tdur2) : null;   // v4498（用户口径）：过渡进度=已过÷过渡总时长（复用扫描件，非复制）
-        bg = (_pt2 !== null && _pt2 > 0 && _pt2 < 1) ? lbWxCardBg('WeatherPreset_EXT_MeteorRain', '', true, _pt2) : lbWxCardBg('WeatherPreset_EXT_MeteorRain', '');
-      } else bg = lbWxCardBg('WeatherPreset_EXT_MeteorRain', '');
-    }catch(eBg){}
-  }
-  return lbWxCard('\u2604\uFE0F', '陨石雨', main, sub, (act || inc) ? '#f97316' : null, bg, null, 20, null, '0 0 auto', b, 16, 'meteor|meteor', mprog);   // v4482（用户口径）：点卡 → 地图说明遮罩；v4497：+卡底进度（非复制复用 lbWxProgOf）
-}
-function lbExtmetMapHtml(){   // v4480（用户口径）：陨石雨地图（复用 lbMapForServer / lbWxStormOverlay；结构对齐 scoev 地图块）
-  var mm = (typeof lbMapForServer === 'function') ? lbMapForServer('Ext') : null;
-  if(!mm || !mm.img) return '';
-  return '<div class="lbwxfig" style="position:relative;width:273px;max-width:100%;flex:0 0 auto;margin-top:0">'
-    + '<div style="position:relative;border-radius:8px;border:1px solid #2a2a3a">'
-    + '<img src="' + LB_MAP_BASE + mm.img + LB_MAP_EXT + '" alt="陨石雨地图" style="width:100%;display:block;opacity:.92;border-radius:7px">'
-    + lbWxStormOverlay('Ext', true)   // 复用：色罩+角标（陨石雨 v4479 已接入 overlay）
-    + lbWxNoteOverlay('meteor')   // v4482（用户口径）：点卡片 → 地图说明遮罩（60s 自动收起）
-    + '</div></div>';
-}
-function lbExtmetTick(){   // v4480（用户口径）：结构信号分流——结构不变仅刷新卡片区（对齐 lbScoevTick）
-  var el = lbFuncPanelBody('meteor'); if(!el) return;
-  lbPanelAgeSet('meteor', LB._meteor && LB._meteor.recvMs, LB._meteor && LB._meteor.data && LB._meteor.data.cacheAgeMs);   // v4501：标题行更新于
-  var d = LB._meteor && LB._meteor.data;
-  var sig = lbVolcServer() + '|' + ((LB._meteor && LB._meteor.recvMs) || 0) + '|' + String((d && d.phase) || '') + '|' + ((LB._prob && LB._prob.recvMs) || 0) + '|' + ((LB._badwx && LB._badwx.recvMs) || 0);   // v4491：+badwx（冷却态刷新）
-  if(sig !== LB._extmetSig || !el.firstChild){ LB._extmetSig = sig; lbExtmetRender(); return; }
-  try{
-    var cc = document.getElementById('lbExtmetCards');
-    if(cc) lbInnerHtmlSet(cc, lbExtmetCardsHtml());
-  }catch(e){}
-  try{ lbWxSweepTick(); }catch(eS2){}
-}
 function lbExtmetRender(){
   var el = lbFuncPanelBody('meteor'); if(!el) return;
-  try{ el.style.containerType = 'inline-size'; }catch(eC){}   // v4480：容器查询基准（对齐 scoev）
   var sv = lbVolcServer();
   if(sv !== 'Ext'){
     lbInnerHtmlSet(el, '<div style="font-size:12px;color:#888;padding:4px 0 8px">当前地图非灭绝——该浮窗仅适用于灭绝（切回后自动恢复）</div>');
     return;
   }
-  var _cards = lbExtmetCardsHtml();   // v4480：卡 HTML 变量化（写入后预存比较键，防 tick 白重建）
-  var h = '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start">'
-    + '<div id="lbExtmetCards" style="flex:1 1 240px;min-width:210px;display:flex;flex-direction:column;gap:8px">' + _cards + '</div>'
-    + lbExtmetMapHtml()
-    + '</div>';
-  h += '<div style="margin-top:8px;font-size:10px;color:#555">数据来自游戏内实时事件</div>';   // v4482（用户口径）：常显说明移除（迁入卡片点击 → 地图遮罩 LB_WX_NOTE['meteor|meteor']）
-  lbInnerHtmlSet(el, h);
-  try{ var _cc0 = document.getElementById('lbExtmetCards'); if(_cc0) _cc0._lbHtmlKey = lbHtmlKeyOf(_cards); }catch(eK2){}   // v4480：预存卡片比较键（对齐 scoev）
-}
-// ===== v4490（用户口径）：Ast 极端天气浮窗——仅沙尘暴（结构/缓存/调用规则完整对齐 scoev）=====
-function lbAstwxOpen(){
-  lbFuncPanelOpen('astwx', '\u26A1 极端天气 · 繁星', 'lbAstwxClose');
-  lbPanelAgeInit('astwx');   // v4501（用户口径）：标题行「更新于 N 秒前」
-  LB._astwxSig = '';   // 结构信号（tick 分流用）
-  try{ clearTimeout(LB_WX_NOTE_TMR['astwx']); LB._astwxNote = null; }catch(eN1){}   // 开窗重置说明遮罩状态（防旧计时器误关新开）
-  try{ lbLoadWeatherZh().then(function(){ try{ LB._astwxSig = ''; lbAstwxRender(); }catch(e0){} }); }catch(eW){}   // 载入天气词典后重建（配色/过渡扫描依赖）
-  lbFuncPanelPoll('astwx', function(){ try{ lbWeatherSync(); }catch(e1){} try{ lbProbSync(); }catch(e2){} try{ lbBadwxSync(); }catch(e3){} }, 3000);   // 复用面板 sync（对齐 scoev 3s）；v4491：+badwx sync（冷却态）
-  lbFuncPanelTick('astwx', lbAstwxTick);   // tick 分流——结构不变仅更新文字（地图不每秒重建）
-}
-function lbAstwxClose(){
-  lbFuncPanelClose('astwx');   // 共享壳统一关窗（对齐 scoev）
-}
-function lbAstwxCardsHtml(){   // 沙尘暴事件卡（完全复用公共件：lbScoevCtx.probItem / lbWxCard / lbProbBadge / lbWxCardBg / lbWxStormSince / lbWxDurZh；结构对齐 scoev 卡）
-  var C = lbScoevCtx();
-  var j0 = LB._wx && LB._wx.data;
-  var wei0 = (j0 && j0.wxSemantics && j0.wxSemantics.enumIndices) ? j0.wxSemantics.enumIndices : {};
-  var prevN = wei0.prevWeatherName ? String(wei0.prevWeatherName) : '';
-  var sOn = lbWxStormIs('sand');
-  var m = '', s = '', aprog = null;   // v4500（用户口径）：aprog=平时段长范围卡底
-  if(!C.has){ m = '等待天气数据…'; }
-  else if(sOn){ lbWxStormSince('sand', true); var _frm11 = (typeof lbWxForming === 'function') && lbWxForming(); m = '\u6674'; s = '\u{1F32A}\uFE0F \u6c99\u5c18\u66b4' + (_frm11 ? '\u5f62\u6210\u4e2d' : '\u671f\u95f4'); }   // v4511（用户口径）：沙尘暴期间大字固定「晴」、副行=「🌪️ 沙尘暴期间/形成中」（学 scoev 副标题法）
-  else {
-    lbWxStormSince('sand', false);   // v4437（对齐 scoev 口径）：未发生不显示主/副行
-    // v4500（用户口径）：平时显示段长范围（持续 n~n 分钟随机——weatherState.changeIntervalMin/Max，按 Ext 实锤口径=现实秒）
-    try{
-      var ws0 = j0 && j0.weatherState;
-      var _c1 = Number(ws0 && ws0.changeIntervalMin), _c2 = Number(ws0 && ws0.changeIntervalMax);
-      if(isFinite(_c1) && isFinite(_c2) && _c1 > 0 && _c2 > _c1){
-        aprog = { txt: '持续 ' + Math.round(_c1 / 60) + '~' + Math.round(_c2 / 60) + ' 分钟随机', pct: 0 };
-      }
-    }catch(eP3){}
+  var d = LB._meteor && LB._meteor.data;
+  var ph = (d && d.ok) ? String(d.phase || '') : '';
+  var line = '';
+  if(!(d && d.ok)) line = '等待事件数据…';
+  else if(ph === 'active'){
+    var mv = Number(d.volume);
+    line = '正在发生' + ((mv > 0) ? (' · 强度 ' + Math.round(mv * 100) + '%') : '');
+  } else if(ph === 'incoming'){
+    var tmax = Number(d.transMax || 80), tel = Number(d.transElapsed || 0);
+    var lead = tmax - tel; if(!(lead >= 0)) lead = 0;
+    line = '即将到来 · 约 ' + Math.round(lead) + ' 秒后到达';
+  } else if(ph === 'leaving'){
+    line = '正在结束';
+  } else {
+    line = '暂无预警 · 天空平静';
   }
-  var pss = C.probItem('Sandstorm');
-  var b = lbProbBadge(pss, lbProbCycleSuffix('Sandstorm'), lbProbTipText('Sandstorm'));   // v4504：+tips（公式+参数）
-  return lbWxCard('\u{1F32A}\uFE0F', '沙尘暴', m, s, sOn ? '#ffc44f' : null, sOn ? lbWxCardBg('Sandstorm', prevN) : null, null, 20, null, '0 0 auto', b, 16, 'astwx|sand', aprog);   // 点卡 → 地图说明遮罩；v4500：+平时段长范围卡底
-}
-function lbAstwxMapHtml(){   // 繁星地图（复用 lbMapForServer / lbWxStormOverlay；结构对齐 scoev 地图块）
-  var mm = (typeof lbMapForServer === 'function') ? lbMapForServer('Ast') : null;
-  if(!mm || !mm.img) return '';
-  return '<div class="lbwxfig" style="position:relative;width:273px;max-width:100%;flex:0 0 auto;margin-top:0">'
-    + '<div style="position:relative;border-radius:8px;border:1px solid #2a2a3a">'
-    + '<img src="' + LB_MAP_BASE + mm.img + LB_MAP_EXT + '" alt="极端天气地图" style="width:100%;display:block;opacity:.92;border-radius:7px">'
-    + lbWxStormOverlay('Ast', true)   // 复用：色罩+角标（沙尘暴激活时全图叠加）
-    + (lbWxStormIs('sand') ? '<div style="position:absolute;left:80%;top:75%;transform:translate(-50%,-50%);animation:lbBreathe 2.2s ease-in-out infinite;pointer-events:none;display:flex;align-items:center;justify-content:center;width:46px;height:46px;border-radius:50%;background:radial-gradient(circle,rgba(214,158,46,.5),rgba(214,158,46,.10) 70%,transparent);border:1.5px solid rgba(255,196,80,.9);box-shadow:0 0 14px rgba(230,170,60,.85);font-size:22px;line-height:1">\u{1F32A}\uFE0F</div>' : '')   // v4511（用户口径）：沙尘暴激活/形成中 ⇒ Pyranthos 区域呼吸图标
-    + lbWxNoteOverlay('astwx')   // 点卡片 → 地图说明遮罩（60s 自动收起）
-    + '</div></div>';
-}
-function lbAstwxRender(){
-  var el = lbFuncPanelBody('astwx'); if(!el) return;
-  try{ el.style.containerType = 'inline-size'; }catch(eC){}   // 容器查询基准（对齐 scoev/热力图）
-  var sv = lbVolcServer();
-  if(sv !== 'Ast'){
-    lbInnerHtmlSet(el, '<div style="font-size:12px;color:#888;padding:4px 0 8px">当前地图非繁星——该浮窗仅适用于繁星（切回后自动恢复）</div>');
-    return;
-  }
-  var _cards = lbAstwxCardsHtml();   // 卡 HTML 变量化（写入后预存比较键，防 tick 白重建）
-  var h = '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start">'
-    + '<div id="lbAstwxCards" style="flex:1 1 240px;min-width:210px;display:flex;flex-direction:column;gap:8px">' + _cards + '</div>'
-    + lbAstwxMapHtml()
-    + '</div>';
-  h += '<div style="margin-top:8px;font-size:10px;color:#555">数据来自游戏内实时天气</div>';
-  lbInnerHtmlSet(el, h);
-  try{ var _cc0 = document.getElementById('lbAstwxCards'); if(_cc0) _cc0._lbHtmlKey = lbHtmlKeyOf(_cards); }catch(eK2){}   // 预存卡片比较键（防下次 tick 白重建）
-}
-function lbAstwxTick(){   // 结构信号分流——结构不变仅刷新卡片区（对齐 lbScoevTick）
-  var el = lbFuncPanelBody('astwx'); if(!el) return;
-  lbPanelAgeSet('astwx', LB._wx && LB._wx.recvMs, LB._wx && LB._wx.data && LB._wx.data.cacheAgeMs);   // v4501：标题行更新于
-  var sv = lbVolcServer();
-  var sig = sv + '|' + ((LB._wx && LB._wx.recvMs) || 0) + '|' + ((LB._prob && LB._prob.recvMs) || 0) + '|' + (lbWxStormIs('sand') ? 1 : 0) + '|' + ((LB._badwx && LB._badwx.recvMs) || 0);   // v4491：+badwx（冷却态刷新）
-  if(sig !== LB._astwxSig || !el.firstChild){ LB._astwxSig = sig; lbAstwxRender(); return; }
-  try{
-    var cc = document.getElementById('lbAstwxCards');
-    if(cc) lbInnerHtmlSet(cc, lbAstwxCardsHtml());
-  }catch(e){}
-  try{ lbWxSweepTick(); }catch(eS2){}   // 同款过渡扫描平滑推进
+  var h = lbSveSub(lbSveTitle('\u2604\uFE0F', '陨石雨') + '<div style="font-size:12px;color:#cbd5e1;line-height:1.9">' + lbAttr(line) + '</div>');
+  h += '<div style="margin-top:6px;font-size:11px;color:#888;line-height:1.8">陨石雨为灭绝地图随机事件：随机降临、成片坠落。预警窗口约 40~80 秒——出现预警请尽快躲入室内或掩体后。</div>';
+  h += '<div style="margin-top:8px;font-size:10px;color:#555">数据来自游戏内实时事件</div>';
+  lbInnerHtmlSet(el, h);   // v4462（用户口径）：改走统一入口（保持滚动位置 + 内容未变不重建）
 }
 // v4314：全图基准温度/风力（WorldProbe biometemps 顶层 globalBase/globalWind；60s 复用 + 单在途 + 失败静默）
 // v4316：升级为**全量拉取**（count=512 + brief=1；seen>512 自动补第二页）——供热力图使用
@@ -22997,7 +22481,7 @@ function lbBioNameZh(n){
   }
   return n;
 }
-var LB_WX_ZH = { 'ClearSky':'晴', 'Storm':'暴风雨', 'Rain':'雨', 'Fog':'雾', 'Dust':'沙尘', 'Snow':'雪', 'Snow_Light':'小雪', 'Snow_Heavy':'大雪', 'Snow_Blizzard':'暴风雪', 'Snow_Blizzard_Coldfront':'暴风雪（寒潮）', 'Snow_TC':'雪', 'Snow_Light_TC':'小雪', 'Snow_Heavy_TC':'大雪', 'SnowFluery':'小雪', 'SnowFlurry':'小雪', 'ClearSkyV2':'晴²', 'ClearSky_V2':'晴²', 'ElectricalStorm':'雷暴', 'Eruption':'火山喷发', 'MeteorShower':'流星雨', 'MeteorRain':'陨石雨', 'Overcast':'阴', 'Spooky':'晦', 'ClearSkyV3':'晴³', 'Sandstorm':'沙尘暴', 'Partly_Cloudy':'晴转多云', 'Clear_Skies':'晴', 'Foggy':'雾', 'HeatWave':'热浪', 'Heatwave':'热浪', 'ColdFront':'冷锋', 'Superheat':'焚风', 'Sand_Dust_Storm':'沙尘暴', 'Rain_Thunderstorm':'雷雨', 'ClearSky_Fog':'晴雾', 'Rain_Fog':'雨雾', 'Snow_Rain':'雪→雨', 'Snow_Light_Rain':'小雪→雨', 'Snow_Heavy_Rain':'大雪→雨', 'Snow_Blizzard_Rain':'暴风雪→雨', 'Snow_Blizzard_Heatwave':'暴风雪→热浪', 'Snow_Heatwave':'雪→热浪' };   // v4324：UDS 实测名（HeatWave/Superheat/沙尘暴/过渡名）
+var LB_WX_ZH = { 'ClearSky':'晴', 'Storm':'暴风雨', 'Rain':'雨', 'Fog':'雾', 'Dust':'沙尘', 'Snow':'雪', 'Snow_Light':'小雪', 'Snow_Heavy':'大雪', 'Snow_Blizzard':'暴风雪', 'Snow_Blizzard_Coldfront':'暴风雪（寒潮）', 'Snow_TC':'雪', 'Snow_Light_TC':'小雪', 'Snow_Heavy_TC':'大雪', 'SnowFluery':'小雪', 'SnowFlurry':'小雪', 'ClearSkyV2':'晴²', 'ClearSky_V2':'晴²', 'ElectricalStorm':'雷暴', 'Eruption':'火山喷发', 'MeteorShower':'流星雨', 'MeteorRain':'陨石雨', 'Overcast':'阴', 'Spooky':'晦', 'ClearSkyV3':'晴³', 'Sandstorm':'沙尘暴', 'Partly_Cloudy':'晴转多云', 'Clear_Skies':'晴', 'Foggy':'雾', 'HeatWave':'热浪', 'Heatwave':'热浪', 'ColdFront':'冷锋', 'Superheat':'焚风', 'Sand_Dust_Storm':'沙尘暴', 'Rain_Thunderstorm':'雷雨', 'Snow_Rain':'雪→雨', 'Snow_Light_Rain':'小雪→雨', 'Snow_Heavy_Rain':'大雪→雨', 'Snow_Blizzard_Rain':'暴风雪→雨', 'Snow_Blizzard_Heatwave':'暴风雪→热浪', 'Snow_Heatwave':'雪→热浪' };   // v4324：UDS 实测名（HeatWave/Superheat/沙尘暴/过渡名）
 var LB_WX_SUF = ['_TheCenter', '_SE', '_TC'];   // v4324：地图后缀（内置兜底；数据文件可覆盖）
 // ===== v4336（用户口径·数据化）：天气词典/后缀/高危名单/各图不生效名单 → 汉化/weather_zh.json（唯一数据源；HTML 仅兜底）=====
 var LB_WX2 = null, LB_WX2_P = null;
@@ -23114,34 +22598,13 @@ function lbWxStormIs(which){   // v4397：风暴在刮判定（多重兼容：id
     var j = LB._wx && LB._wx.data; if(!j || !j.ok) return false;
     var sem = j.wxSemantics || {}, ws = j.weatherState || {}, ei = sem.enumIndices || {};
     var nm = String(ws.weatherName || ei.currWeatherName || '');
-    var _cw9 = '';   // v4510（用户口径）：wxSystems[0].currentWeather=游戏对象直读真值（切换实测校准：prev 更新值与之吻合；presetTable/activeWxIdx 实测不可信——idx 不随段更新）——有值即权威，不再走任何猜测渠道
-    try{ var _ws9 = j.wxSystems; if(Array.isArray(_ws9) && _ws9[0] && _ws9[0].currentWeather) _cw9 = String(_ws9[0].currentWeather); }catch(e0){}
-    if(_cw9){
-      if(which === 'sand') return /sandstorm|sand_?dust/i.test(_cw9);
-      if(which === 'foehn') return /superheat/i.test(_cw9);
-      if(which === 'blizzard') return /blizzard/i.test(_cw9);
-      return /electricalstorm|electrical_storm/i.test(_cw9);
-    }
     if(which === 'sand'){
-      var _sv = (typeof lbVolcServer === 'function') ? lbVolcServer() : '';
-      var _n6 = (((typeof LB_WX_PROB_NAMES !== 'undefined' ? LB_WX_PROB_NAMES : {})[_sv] || [])[6] || '');
-      var _idSand = (Number(ws.currentWeatherId) === 6) && (!_n6 || /sand/i.test(_n6));   // v4478（用户口径）：id 判据按图校验——Ext 的 id6=陨石雨（MeteorRain）会被跨图误判成沙尘暴；该图名字表明确非沙尘 ⇒ 不采信
-      if(_idSand || /sandstorm|sand_?dust/i.test(nm) || (sem.sandstorm && Number(sem.sandstorm.active) === 1)) return true;
-      var _pt = sem.presetTable;   // v4490（用户口径）：presetTable 名字渠道（Ast 等 ext_gen 图——名字键为空时按活动索引查预设名）
-      var _ai = (j.activeWxIdx !== undefined && j.activeWxIdx !== null) ? Number(j.activeWxIdx) : null;
-      if(_pt && Array.isArray(_pt.entries) && _ai !== null && _pt.entries[_ai]) return /sandstorm|sand_?dust/i.test(String((_pt.entries[_ai] || {}).name || ''));
-      return false;
+      return (Number(ws.currentWeatherId) === 6) || /sandstorm|sand_?dust/i.test(nm) || (sem.sandstorm && Number(sem.sandstorm.active) === 1);
     }
-    var _pt9 = sem.presetTable;   // v4509（用户口径）：presetTable 名字渠道（ext_gen 图名字键为空——按活动索引查预设名；原仅沙尘暴已接，今 es/foehn 同接）
-    var _ai9 = (j.activeWxIdx !== undefined && j.activeWxIdx !== null) ? Number(j.activeWxIdx) : null;
-    var _ptN9 = (_pt9 && Array.isArray(_pt9.entries) && _ai9 !== null && _pt9.entries[_ai9]) ? String((_pt9.entries[_ai9] || {}).name || '') : '';
-    if(which === 'foehn'){   // v4414（用户口径）：焚风（Superheat）判定——名匹配 + sem 兼容（与 scoev 既有口径一致）；v4509：+presetTable（Rag 焚风）
-      return /superheat/i.test(nm) || (sem.superheat && Number(sem.superheat.active) === 1) || /superheat/i.test(_ptN9);
+    if(which === 'foehn'){   // v4414（用户口径）：焚风（Superheat）判定——名匹配 + sem 兼容（与 scoev 既有口径一致）
+      return /superheat/i.test(nm) || (sem.superheat && Number(sem.superheat.active) === 1);
     }
-    if(which === 'blizzard'){   // v4509（用户口径）：暴风雪（Los）——名匹配 + presetTable
-      return /blizzard/i.test(nm) || /blizzard/i.test(_ptN9);
-    }
-    return (Number(ws.currentWeatherId) === 7) || /electricalstorm|electrical_storm/i.test(nm) || /electricalstorm|electrical_storm/i.test(_ptN9);   // v4461（用户口径）：移除 es.active 判据——该字段由「区域锚点残留」推导（regionName 风暴结束后仍保留）会恒真误报；对齐插件 activeJudge（CurrWeatherType==7 为主判据）；v4509：+presetTable
+    return (Number(ws.currentWeatherId) === 7) || /electricalstorm|electrical_storm/i.test(nm);   // v4461（用户口径）：移除 es.active 判据——该字段由「区域锚点残留」推导（regionName 风暴结束后仍保留）会恒真误报；对齐插件 activeJudge（CurrWeatherType==7 为主判据）
   }catch(e){ return false; }
 }
 function lbWxStormSince(kind, on){   // v4397：风暴自计时（进入记时、结束清零；返回已持续秒）
@@ -23173,33 +22636,6 @@ function lbWxFmtSec(s){
   var m = Math.floor(s / 60), ss = s % 60;
   return m + ':' + (ss < 10 ? '0' : '') + ss;
 }
-function lbWxExtRemainSec(kind){   // v4509（用户口径）：极端天气「距结束」秒——ext_gen=suc×tf 真值（实测 Rag 1:1）；Sco 沙尘暴优先 finishTime 事件态值；兜底=总长−前端计时（与卡底进度条同口径）
-  try{
-    var j = LB._wx && LB._wx.data; if(!j || !j.ok) return null;
-    var sv = String(j.server || '');
-    var d = LB._prob && LB._prob.data;
-    var fam = (d && d.ok && String(d.server || '') === sv) ? String(d.family || '') : '';
-    var ws = j.weatherState || {};
-    var hasSuc = (ws.secondsUntilChange !== undefined && ws.secondsUntilChange !== null);
-    var suc = Number(ws.secondsUntilChange);
-    if(fam !== 'uds' && hasSuc && isFinite(suc) && suc >= 0){   // ext_gen：变天=本段结束 ⇒ suc 即本段剩余（实测 1:1 现实秒；tf 走既有单位自适应）
-      var tf = (typeof lbWxUnitFactor === 'function') ? lbWxUnitFactor(sv, suc) : 1;
-      return Math.max(0, Math.round(suc * tf));
-    }
-    if(kind === 'sand'){   // Sco 沙尘暴：优先事件态值（finishTime−worldTime 同世界刻度；lbWxFixSandstorm 直读）——⚠️ 刻度待沙尘暴实机采样确认，无效即回退
-      var sd = (j.wxSemantics || {}).sandstorm || null;
-      var ft = sd ? Number(sd.finishTime) : 0, wt = Number(j.worldTime) || 0;
-      if(ft > 0 && wt > 0 && ft > wt && (ft - wt) < 1e7) return Math.round(ft - wt);
-    }
-    var nameMap = { sand: 'Sand_Dust_Storm', es: 'ElectricalStorm', foehn: 'Superheat', blizzard: '' };   // v4509：uds 兜底（总长真值−计时；blizzard 仅 ext_gen）
-    var tot = nameMap[kind] ? ((typeof lbProbDurSec === 'function') ? lbProbDurSec(nameMap[kind]) : null) : null;
-    if(tot > 0){
-      var dur = lbWxStormSince(kind, true);
-      return Math.max(0, Math.round(tot - dur));
-    }
-    return null;
-  }catch(e){ return null; }
-}
 function lbWxStormOverlay(sv, noPins){
   var st = lbWxStormOn(sv); if(!st) return '';
   var sem = st.sem, layers = '', badges = '';
@@ -23208,8 +22644,7 @@ function lbWxStormOverlay(sv, noPins){
   if(lbWxStormIs('sand')){
     var sDur = lbWxStormSince('sand', true);
     layers += '<div style="position:absolute;left:0;top:0;right:0;bottom:0;background:linear-gradient(180deg,rgba(214,158,46,.20),rgba(190,140,50,.10));border:2px solid rgba(255,196,80,.7);border-radius:8px;box-shadow:inset 0 0 18px rgba(230,170,60,.45);pointer-events:none"></div>';
-    var _remS9 = lbWxExtRemainSec('sand');   // v4509（用户口径）：距结束（ext_gen 真值；Sco=态值优先/兜底与卡底同口径）
-    badges += '<div style="background:rgba(120,80,10,.92);border:1px solid rgba(255,196,80,.7);color:#ffe9b8;font-size:10px;line-height:1.6;padding:1px 6px;border-radius:8px;white-space:nowrap">\u{1F32A}\uFE0F 沙尘暴' + (_wxForming ? '\u5f62\u6210\u4e2d' : (_remS9 !== null ? (' \u00B7 \u8ddd\u7ed3\u675f ' + lbWxFmtSec(_remS9)) : (' \u00B7 ' + lbWxDurZh(sDur)))) + '</div>';   // v4399（用户口径）：过渡期 ⇒ 「沙尘暴形成中」；v4509：+距结束
+    badges += '<div style="background:rgba(120,80,10,.92);border:1px solid rgba(255,196,80,.7);color:#ffe9b8;font-size:10px;line-height:1.6;padding:1px 6px;border-radius:8px;white-space:nowrap">\u{1F32A}\uFE0F 沙尘暴' + (_wxForming ? '\u5f62\u6210\u4e2d' : (' \u00B7 ' + lbWxDurZh(sDur))) + '</div>';   // v4399（用户口径）：过渡期 ⇒ 「沙尘暴形成中」
   } else { lbWxStormSince('sand', false); }
   // ② 雷暴（v4397：判定升级 + 区域锚点标记；regionPoints 缺失时不画）
   if(lbWxStormIs('es')){
@@ -23226,48 +22661,18 @@ function lbWxStormOverlay(sv, noPins){
           var isCur = !!(rp0 && String(rp0.objectName || '') === String(pp.objectName || ''));
           if(!isCur) continue;   // v4405（用户口径）：只画当前锚点（其余候选点与连线均不显示）
           var pc = lbWorldToPx(Number(pp.x), Number(pp.y), mm); if(!pc) continue;
-          layers += '<div style="position:absolute;left:' + pc.x.toFixed(2) + '%;top:' + pc.y.toFixed(2) + '%;transform:translate(-50%,-50%);animation:lbBreathe 2.2s ease-in-out infinite;pointer-events:none;display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:radial-gradient(circle,rgba(139,92,246,.55),rgba(139,92,246,.12) 70%,transparent);border:1.5px solid rgba(180,150,255,.95);box-shadow:0 0 14px rgba(149,110,255,.9);font-size:16px;line-height:1">\u26A1</div>';
+          layers += '<div style="position:absolute;left:' + pc.x.toFixed(2) + '%;top:' + pc.y.toFixed(2) + '%;transform:translate(-50%,-50%);pointer-events:none;display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:radial-gradient(circle,rgba(139,92,246,.55),rgba(139,92,246,.12) 70%,transparent);border:1.5px solid rgba(180,150,255,.95);box-shadow:0 0 14px rgba(149,110,255,.9);font-size:16px;line-height:1">\u26A1</div>';
         }
       }
     }catch(eP){}
-    var _remE9 = lbWxExtRemainSec('es');   // v4509（用户口径）：距结束（ext_gen 真值；Sco=总长−计时，同卡底）
-    badges += '<div style="background:rgba(58,36,120,.92);border:1px solid rgba(160,120,255,.8);color:#e4dcff;font-size:10px;line-height:1.6;padding:1px 6px;border-radius:8px;white-space:nowrap">\u26A1 雷暴 \u00b7 ' + (_wxForming ? '\u5f62\u6210\u4e2d' : (_remE9 !== null ? ('\u8ddd\u7ed3\u675f ' + lbWxFmtSec(_remE9)) : lbWxDurZh(eDur))) + '</div>';   // v4399（用户口径）：过渡期 ⇒ 「雷暴形成中」；v4406：不再显示区域名
+    badges += '<div style="background:rgba(58,36,120,.92);border:1px solid rgba(160,120,255,.8);color:#e4dcff;font-size:10px;line-height:1.6;padding:1px 6px;border-radius:8px;white-space:nowrap">\u26A1 雷暴 \u00b7 ' + (_wxForming ? '\u5f62\u6210\u4e2d' : lbWxDurZh(eDur)) + '</div>';   // v4399（用户口径）：过渡期 ⇒ 「雷暴形成中」；v4406：不再显示区域名
   } else { lbWxStormSince('es', false); }
   // ③ 焚风（v4414 用户口径：对齐雷暴/沙尘暴——全图热浪氛围叠加 + 角标 + 自计时）
   if(lbWxStormIs('foehn')){
     var fDur = lbWxStormSince('foehn', true);
     layers += '<div style="position:absolute;left:0;top:0;right:0;bottom:0;background:linear-gradient(180deg,rgba(255,94,58,.20),rgba(255,150,60,.10));border:2px solid rgba(255,132,72,.8);border-radius:8px;box-shadow:inset 0 0 18px rgba(255,110,60,.5);pointer-events:none"></div>';
-    var _remF9 = lbWxExtRemainSec('foehn');   // v4509（用户口径）：距结束（ext_gen=suc 真值，Rag 焚风）
-    badges += '<div style="background:rgba(122,40,14,.92);border:1px solid rgba(255,132,72,.8);color:#ffe2d0;font-size:10px;line-height:1.6;padding:1px 6px;border-radius:8px;white-space:nowrap">\u{1F525} 焚风' + (_wxForming ? '\u5f62\u6210\u4e2d' : (_remF9 !== null ? (' \u00B7 \u8ddd\u7ed3\u675f ' + lbWxFmtSec(_remF9)) : (' \u00b7 ' + lbWxDurZh(fDur)))) + '</div>';
+    badges += '<div style="background:rgba(122,40,14,.92);border:1px solid rgba(255,132,72,.8);color:#ffe2d0;font-size:10px;line-height:1.6;padding:1px 6px;border-radius:8px;white-space:nowrap">\u{1F525} 焚风' + (_wxForming ? '\u5f62\u6210\u4e2d' : (' \u00b7 ' + lbWxDurZh(fDur))) + '</div>';
   } else { lbWxStormSince('foehn', false); }
-  // v4509（用户口径）：暴风雪（Los 新增）——全图雪色叠加 + 角标倒计时（数据同 ext_gen）
-  if(lbWxStormIs('blizzard')){
-    var bDur9 = lbWxStormSince('blizzard', true);
-    layers += '<div style="position:absolute;left:0;top:0;right:0;bottom:0;background:linear-gradient(180deg,rgba(170,215,255,.22),rgba(230,245,255,.10));border:2px solid rgba(180,220,255,.85);border-radius:8px;box-shadow:inset 0 0 18px rgba(160,205,255,.5);pointer-events:none"></div>';
-    var _remB9 = lbWxExtRemainSec('blizzard');
-    badges += '<div style="background:rgba(30,58,95,.92);border:1px solid rgba(170,214,255,.8);color:#dbeafe;font-size:10px;line-height:1.6;padding:1px 6px;border-radius:8px;white-space:nowrap">\u2744\uFE0F \u66b4\u98ce\u96ea' + (_wxForming ? '\u5f62\u6210\u4e2d' : (_remB9 !== null ? (' \u00B7 \u8ddd\u7ed3\u675f ' + lbWxFmtSec(_remB9)) : (' \u00B7 ' + lbWxDurZh(bDur9)))) + '</div>';
-  } else { lbWxStormSince('blizzard', false); }
-  // \u2463 \u9668\u77f3\u96e8\uff08v4479 用户口径：热力图徽章 + 全图效果——对齐其它风暴；数据源 worldprobe_meteor 仅 Ext）
-  if(sv === 'Ext' && LB._meteor && LB._meteor.data && LB._meteor.data.ok){
-    var _mtO = LB._meteor.data, _mphO = String(_mtO.phase || '');
-    if(_mphO === 'incoming' || _mphO === 'active'){
-      layers += '<div style="position:absolute;left:0;top:0;right:0;bottom:0;background:linear-gradient(180deg,rgba(249,115,22,.22),rgba(190,60,30,.10));border:2px solid rgba(249,140,60,.85);border-radius:8px;box-shadow:inset 0 0 18px rgba(249,115,22,.5);pointer-events:none"></div>';
-      var _msubO = '';
-      if(_mphO === 'active'){
-        var _sucO = Number(_mtO.secondsUntilChange);   // v4508（用户口径）：active 改倒计时（去强度）——距结束
-        _msubO = (isFinite(_sucO) && _sucO > 0) ? ('距结束 ' + lbWxFmtSec(_sucO)) : '活动中';
-      } else {
-        var _tmaxO = Number(_mtO.transitionDuration);   // v4508：对齐卡片（v4498 实锤=过渡总时长；原误用 transMax=80 致与卡片不一致）
-        if(!(isFinite(_tmaxO) && _tmaxO > 0)) _tmaxO = Number(_mtO.transMax || 80);
-        var _telO = Number(_mtO.transElapsed || 0);
-        var _leadO = _tmaxO - _telO;
-        if(!(_leadO >= 0)) _leadO = 0;
-        if(_leadO > _tmaxO) _leadO = _tmaxO;
-        _msubO = '约 ' + Math.round(_leadO) + ' 秒后到达';
-      }
-      badges += '<div style="background:rgba(122,50,10,.92);border:1px solid rgba(249,150,60,.8);color:#ffe4cc;font-size:10px;line-height:1.6;padding:1px 6px;border-radius:8px;white-space:nowrap">\u{1F320} 陨石雨 \u00b7 ' + _msubO + '</div>';
-    }
-  }
   if(!layers && !badges) return '';
   return layers + (badges ? ('<div style="position:absolute;right:4px;top:4px;display:flex;flex-direction:column;align-items:flex-end;gap:2px;pointer-events:none">' + badges + '</div>') : '');
 }
@@ -23334,7 +22739,7 @@ function lbWxzZoneParts(zo){
       }
     }
     if(zo.wind && zo.wind.direction !== undefined && Number(zo.wind.apply)) pre.push(lbAttr(lbWxWindZh(zo.wind.direction)));   // v4383（用户口径）：风向入预设块（玩家文案）
-    if(zo.temperature && Number(zo.temperature.offset)){ var _tof = Math.round(Number(zo.temperature.offset) * 10) / 10; if(_tof) parts.push(lbAttr('温差 ' + (_tof > 0 ? '+' : '') + lbWxNum(_tof) + '\u00B0')); }   // v4385（用户口径）：温度偏移 → 温差；v4477：舍入 1 位小数（舍入后为 0 不显示）
+    if(zo.temperature && Number(zo.temperature.offset)){ var _tof = Number(zo.temperature.offset); parts.push(lbAttr('温差 ' + (_tof > 0 ? '+' : '') + lbWxNum(_tof) + '\u00B0')); }   // v4385（用户口径）：温度偏移 → 温差
     var wname = '', wcurr = '';
     if(Array.isArray(zo.ptrTrace)){
       for(var q = 0; q < zo.ptrTrace.length; q++){
@@ -23488,9 +22893,9 @@ var LB_WX_REGIONS = {
        ['💠 太空/裂隙','失重 · 环境恶劣']]
 };
 // ===== v4296（用户口径·玩家化）：天气面板 —— 玩家层（看得懂的）=====
-var LB_WX_LVL = [[0,'无','#64748b'],[0.08,'无感','#22c55e'],[0.2,'轻微','#4ade80'],[0.4,'轻度','#a3e635'],[0.8,'中等','#facc15'],[1.5,'较强','#f59e0b'],[3,'强烈','#ef4444'],[1e9,'极强','#dc2626']];   // v4476（用户口径）：4 档 → 8 档细分（≤0.08=无感，词按用户指定；颜色按档位递进）
-function lbWxLvl(v){ var n = Number(v); if(!isFinite(n)) n = 0; for(var i = 0; i < LB_WX_LVL.length; i++){ if(n <= LB_WX_LVL[i][0]) return LB_WX_LVL[i]; } return LB_WX_LVL[LB_WX_LVL.length - 1]; }   // v4476：兜底改末档（原写死 index 3，档位扩容后语义错位）
-function lbWxLvlIdx(v){ var n = Number(v); if(!isFinite(n)) n = 0; for(var i = 0; i < LB_WX_LVL.length; i++){ if(n <= LB_WX_LVL[i][0]) return i; } return LB_WX_LVL.length - 1; }   // v4297：档位序号；v4476：兜底改末档（档位已扩 8 档）
+var LB_WX_LVL = [[0,'无','#64748b'],[2,'轻微','#22c55e'],[5,'中等','#facc15'],[1e9,'强烈','#ef4444']];
+function lbWxLvl(v){ var n = Number(v); if(!isFinite(n)) n = 0; for(var i = 0; i < LB_WX_LVL.length; i++){ if(n <= LB_WX_LVL[i][0]) return LB_WX_LVL[i]; } return LB_WX_LVL[3]; }
+function lbWxLvlIdx(v){ var n = Number(v); if(!isFinite(n)) n = 0; for(var i = 0; i < LB_WX_LVL.length; i++){ if(n <= LB_WX_LVL[i][0]) return i; } return 3; }   // v4297：档位序号（0无 / 1轻微 / 2中等 / 3强烈）
 // v4351：当前季节 —— actor 字段「Season」枚举值（名称映射游戏内不可读；用户口径暂按 0春/1夏/2秋/3冬 显示）
 function lbWxSeasonNo(j){
   try{
@@ -23541,8 +22946,7 @@ function lbWxSolid(c, base){   // v4416（用户口径）：半透明色与底�
     return 'rgb(' + r + ',' + g + ',' + bl + ')';
   }catch(e){ return c; }
 }
-function lbWxCard(icon, label, main, sub, col, bg, extra, mainPx, sweep, fstyle, badge, labelPx, note, prog){   // v4396：bg 支持 {bg,sweep} 对象解包；v4424：badge=右列概率徽章组（与左列行共享卡内空间）；v4482（用户口径）：note='which|key'——点击卡片切换地图说明遮罩；v4495（用户口径）：prog={txt,pct}——卡底「持续/距结束」文字+细进度条（非复制；所有浮窗复用）
-  var _nz = note ? (' onclick="lbWxNoteTgl(\'' + String(note) + '\')" title="点击卡片：地图上显示说明（60 秒后自动收起；再点收起）"') : '';
+function lbWxCard(icon, label, main, sub, col, bg, extra, mainPx, sweep, fstyle, badge, labelPx){   // v4396：bg 支持 {bg,sweep} 对象解包；v4424：badge=右列概率徽章组（与左列行共享卡内空间）
   if(bg && typeof bg === 'object'){ sweep = bg.sweep || null; bg = bg.bg || null; }
   var _flx = fstyle || '1 1 44%';   // v4403（用户口径）：行内卡 flex 可覆盖（默认均分）
   var _cls = (fstyle === '0 1 273px') ? ' class="lbwxf256"' : '';   // v4404（用户口径）：单列自适应类（左列卡）；v4407：列宽 256→273
@@ -23556,96 +22960,14 @@ function lbWxCard(icon, label, main, sub, col, bg, extra, mainPx, sweep, fstyle,
       + '<div style="flex:0 1 auto;max-width:72%;display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end;align-content:flex-start">' + badge + '</div>'   // v4428（用户口径）：恢复自然流式（一个挨一个）；位置稳定由切换期间锁宽保障
       + '</div>';
   }
-  var _pg = '';   // v4495（用户口径）：卡底进度区（「持续/距结束」文字行 + 3px 细条；公共实现复用非复制）
-  if(prog){
-    var _pc = Math.max(0, Math.min(100, (prog.pct !== null && prog.pct !== undefined ? prog.pct : 0) * 100));
-    _pg = '<div style="margin-top:5px">'
-      + (prog.txt ? ('<div style="font-size:10px;color:#777;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + lbAttr(prog.txt) + '</div>') : '')
-      + '<div style="margin-top:2px;height:3px;border-radius:2px;background:rgba(255,255,255,.10);overflow:hidden">'
-      + '<div style="height:100%;width:' + _pc.toFixed(1) + '%;background:' + (col || '#8b8ba0') + ';border-radius:2px;transition:width 1s linear"></div>'
-      + '</div></div>';
-  }
   if(sweep){
     var _p = Math.max(0, Math.min(100, Number(sweep.pct || 0) * 100));
     var _so = lbWxSolid(sweep.old), _sn = lbWxSolid(sweep.new);   // v4416（用户口径）：预混实色——推进层不再透底叠色
-    return '<div' + _cls + _nz + ' style="flex:' + _flx + ';min-width:0;background:' + _so + ';border:1px solid #2a2a3a;border-radius:8px;padding:7px 9px;position:relative;overflow:hidden' + (note ? ';cursor:pointer' : '') + '">'
+    return '<div' + _cls + ' style="flex:' + _flx + ';min-width:0;background:' + _so + ';border:1px solid #2a2a3a;border-radius:8px;padding:7px 9px;position:relative;overflow:hidden">'
       + '<div class="lbwxsv" style="position:absolute;left:0;top:0;bottom:0;width:' + _p.toFixed(1) + '%;background:' + _sn + ';transition:width 1s linear;pointer-events:none"></div>'
-      + '<div style="position:relative">' + inner + '</div>' + _pg + '</div>';
+      + '<div style="position:relative">' + inner + '</div></div>';
   }
-  return '<div' + _cls + _nz + ' style="flex:' + _flx + ';min-width:0;background:' + (lbWxSolid(bg) || '#1a1a24') + ';border:1px solid #2a2a3a;border-radius:8px;padding:7px 9px' + (note ? ';cursor:pointer' : '') + '">' + inner + _pg + '</div>';   // v4419（用户口径）：静态底也预混实色（不透底）；v4482：+note 点击；v4495：+_pg
-}
-// ===== v4482（用户口径）：天气说明遮罩公共件 —— 点卡片 → 地图上叠加半透明黑圆角遮罩；60s 自动收起 =====
-var LB_WX_NOTE = {
-  'scoev|sand': '沙尘暴是焦土特有的天气：能见度急剧下降，持续消耗体力，风沙还会灌进背包（物品栏进沙）。视线受阻下，野生生物的感知范围也大幅缩减。佩戴沙漠护目镜可改善视野。',
-  'scoev|foehn': '焚风（超级高温）是焦土特有的极端热浪：全图气温飙破 55\u00b0C（最高约 77\u00b0C），野外暴露几乎必然中暑并持续掉血。期间云层完全消失、天空泛红、地面飞溅火星。方尖碑（Obelisk）范围不受影响；靠近绿洲可迅速缓解。事件期间凤凰（Phoenix）会现身。',
-  'scoev|es': '雷暴是焦土特有的区域性灾害：无雨，乌云、狂风与沙尘伴随闪电连续轰击某一随机区域（范围较大，并非全图）。期间电子设备停摆（如低温仓），部分高级武器禁用（Tek 武器/炮塔/鞍具/护盾发生器），Tek 发电机不受影响。单次约持续 8 分钟。',
-  'meteor|meteor': '陨石雨是灭绝地图的随机灾害：天空骤然变红，燃烧的陨石高速砸向全图——撞击足以瞬间击杀最强生物（王泰坦战期间例外）。整张图仅【圣所、雪原穹顶、沙漠穹顶、沉没森林】四块保护区不受影响——预警出现后请立即撤入保护区躲避，切勿停留在野外。',
-  'surface|quake': LB_SVE_QUAKE,   // v4484（用户口径）：畸变地震说明（引用既有文案；点卡 → 地图遮罩）
-  'surface|surfA': '【腐蚀地表区 / 绿地表区】畸变地表没有大气，白天太阳会把地面烧起火焰：日出即起火（平衡季 06:51 / 长昼季 02:27 / 长夜季 11:08），日落熄火。火焰对幸存者、生物、建筑造成大量伤害——骑乘不能豁免，防化服也无效。夜里（17:30 后）改为死神（Reaper）出没。与红区相比：这两个区每天更早起火、危险时段更长。',
-  'surface|surfB': '【红地表区】与另外两区不同，本区灼烧晚于日出约 1~9 分钟（现实时间）才开始（平衡季 08:01 / 长昼季 04:19 / 长夜季 11:23），熄火时刻与其他区相同——每天比另外两区多出一段清晨安全窗口。火焰对幸存者、生物、建筑造成大量伤害——骑乘不能豁免，防化服也无效。夜里（17:30 后）死神（Reaper）出没。',   // v4485（用户口径）：地表卡说明（含红区差异）
-  'astwx|sand': '沙尘暴是繁星（Astraeos）的极端天气：能见度急剧下降，持续消耗体力，风沙还会灌进背包（物品栏进沙）。视线受阻下，野生生物的感知范围也大幅缩减。佩戴沙漠护目镜可改善视野。'   // v4490（用户口径）：Ast 沙尘暴说明（点卡 → 地图遮罩）
-};
-var LB_WX_NOTE_TMR = {};
-// v4491（用户口径）：页面隐藏累计（诊断——识别 iOS 后台冻结计入下载耗时；拆解面板显示）
-LB._hidMs = 0; LB._hidSince = 0;
-function lbHidNow(){ try{ return (LB._hidMs || 0) + (LB._hidSince ? (Date.now() - LB._hidSince) : 0); }catch(e){ return 0; } }
-try{ document.addEventListener('visibilitychange', function(){ try{ if(document.hidden){ if(!LB._hidSince) LB._hidSince = Date.now(); } else if(LB._hidSince){ LB._hidMs = (LB._hidMs || 0) + (Date.now() - LB._hidSince); LB._hidSince = 0; } }catch(e){} }); }catch(eV){}
-function lbWxNoteCur(which){ return (which === 'scoev') ? (LB._scoevNote || null) : ((which === 'meteor') ? (LB._extmetNote || null) : ((which === 'surface') ? (LB._surfaceNote || null) : ((which === 'astwx') ? (LB._astwxNote || null) : null))); }   // v4484：+surface（畸变地震）；v4490：+astwx
-function lbWxNoteSet(which, key){
-  if(which === 'scoev') LB._scoevNote = key;
-  else if(which === 'meteor') LB._extmetNote = key;
-  else if(which === 'surface') LB._surfaceNote = key;   // v4484：+surface
-  else if(which === 'astwx') LB._astwxNote = key;   // v4490：+astwx
-}
-function lbWxNoteRerender(which){
-  try{ if(which === 'scoev') lbScoevRender(); else if(which === 'meteor') lbExtmetRender(); else if(which === 'surface') lbSurfRender(); else if(which === 'astwx') lbAstwxRender(); }catch(e){}   // v4484：+surface；v4490：+astwx
-}
-function lbWxNoteTgl(tag){   // 'which|key'（卡片点击：开/关切换 + 60s 自动收起）
-  try{
-    LB._noteClickT = Date.now();   // v4487（用户口径）：标记刚由卡片处理（浮窗非卡片点击委托据此跳过）
-    var p = String(tag || '').split('|'), which = p[0], key = p[1];
-    if(!which || !key) return;
-    var cur = lbWxNoteCur(which);
-    var nk = (cur === key) ? null : key;
-    lbWxNoteSet(which, nk);
-    try{ clearTimeout(LB_WX_NOTE_TMR[which]); }catch(eT){}
-    if(nk){
-      LB_WX_NOTE_TMR[which] = setTimeout(function(){
-        try{ if(lbWxNoteCur(which) === nk){ lbWxNoteSet(which, null); lbWxNoteRerender(which); } }catch(e2){}
-      }, 60000);
-    }
-    lbWxNoteRerender(which);
-  }catch(e){}
-}
-function lbWxNoteClose(which){   // 点遮罩空白关闭（清除计时器）
-  try{
-    LB._noteClickT = Date.now();   // v4487（用户口径）：标记刚由遮罩处理（委托据此跳过）
-    lbWxNoteSet(which, null);
-    try{ clearTimeout(LB_WX_NOTE_TMR[which]); }catch(eT){}
-    lbWxNoteRerender(which);
-  }catch(e){}
-}
-function lbWxNoteOverlay(which){   // 地图层遮罩 HTML（无状态返回 ''）
-  var key = lbWxNoteCur(which);
-  if(!key) return '';
-  var txt = LB_WX_NOTE[which + '|' + key];
-  if(!txt) return '';
-  // v4483（用户口径）：遮罩圆角 7px——与地图图片 border-radius:7px 完全一致（四角精确贴合，不再错位）
-  return '<div onclick="lbWxNoteClose(\'' + which + '\')" style="position:absolute;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,.68);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:10px;cursor:pointer;z-index:3">'
-    + '<div onclick="event.stopPropagation()" style="font-size:10.5px;color:#d5d5d5;line-height:1.85;max-height:100%;overflow:auto;cursor:auto">' + txt + '</div>'
-    + '</div>';
-}
-function lbWxNotePanelClick(ev){   // v4488（用户口径）：浮窗内非卡片区域点击 → 收起已开的地图遮罩（panel 自身 stopPropagation 使 document 委托不可达 ⇒ 挂 panel 冒泡；同元素 stopPropagation 不阻断本 listener）
-  try{
-    var t = ev && ev.target;
-    if(!t || !t.closest) return;
-    if(t.closest('[onclick*="lbWxNoteTgl"]') || t.closest('[onclick*="lbWxNoteClose"]')) return;   // 卡片/遮罩自有处理
-    if(Date.now() - (LB._noteClickT || 0) < 120) return;   // 双保险：刚由卡片/遮罩处理过
-    if(LB._scoevNote) lbWxNoteClose('scoev');
-    if(LB._extmetNote) lbWxNoteClose('meteor');
-    if(LB._surfaceNote) lbWxNoteClose('surface');
-    if(LB._astwxNote) lbWxNoteClose('astwx');   // v4490：+astwx
-  }catch(e){}
+  return '<div' + _cls + ' style="flex:' + _flx + ';min-width:0;background:' + (lbWxSolid(bg) || '#1a1a24') + ';border:1px solid #2a2a3a;border-radius:8px;padding:7px 9px">' + inner + '</div>';   // v4419（用户口径）：静态底也预混实色（不透底）
 }
 function lbWxTurnState(){   // v4395：变天过渡状态双通道——UDS（changeStartTime 推算）/ DayWeather（inTransition + transitionElapsed/transitionTimeMax 保守近似）；异常一律 null ⇒ 退化静态色
   try{
@@ -23845,9 +23167,9 @@ function lbWeatherRender(){
       line = '该图不提供变天倒计时';
     }
     // v4312：ext_gen 可读的全局天气卡（雾/风/温度偏移；按字段存在性显示，零值温度偏移不显示）
-    if(ws.fogStrength !== undefined) cards += lbWxCard('\u{1F32B}\uFE0F', '雾', lbWxLvl(ws.fogStrength)[1], '', null);   // v4476（用户口径）：删原始强度数值（只留层级词）
-    if(ws.windStrength !== undefined) cards += lbWxCard('\u{1F4A8}', '风', lbWxLvl(ws.windStrength)[1], '', null);   // v4476（用户口径）：删原始强度数值（只留层级词）
-    // v4474（用户口径）：温度偏移卡删除 → 数值并入「全图基准温度」卡副信息（见 cardBase 构建处）
+    if(ws.fogStrength !== undefined) cards += lbWxCard('\u{1F32B}\uFE0F', '雾', lbWxLvl(ws.fogStrength)[1], '强度 ' + lbWxNum(ws.fogStrength), null);
+    if(ws.windStrength !== undefined) cards += lbWxCard('\u{1F4A8}', '风', lbWxLvl(ws.windStrength)[1], '强度 ' + lbWxNum(ws.windStrength), null);
+    if(Number(ws.temperatureOffset)) cards += lbWxCard('\u{1F321}\uFE0F', '温度偏移', (Number(ws.temperatureOffset) > 0 ? '+' : '') + lbWxNum(ws.temperatureOffset) + '\u00B0', '', null);
     // v4313：Gen 五生态区卡片化（同款 lbWxCard；仅 Gen；miniMapType null=月球）
     if(lbVolcServer() === 'Gen' && Array.isArray(j.wxSystems) && j.wxSystems.length){
       var gmap = { arctic:['\u2744\ufe0f','雪山'], bog:['\u{1F438}','沼泽'], ocean:['\u{1F30A}','海洋'], volcanic:['\u{1F30B}','火山'] };
@@ -23882,8 +23204,7 @@ function lbWeatherRender(){
       var w0 = j.wxSystems[0];
       var w0n = _w0nx || '';
       var w0x = lbWxIsExtreme(_w0cw);   // v4328
-      var w0sub = (w0n && w0n !== _w0cw) ? ('下一个：' + lbWxNameZh(w0n)) : (Number(w0.inTransition) ? '\u{1F504} 天气正在变化中' : '');
-      if(hasSuc && isFinite(suc) && suc >= 0 && !tr){ w0sub = '\u23F1\uFE0F 距下次变天 \u2248 ' + lbWxSec(suc * tf) + (w0sub ? ' \u00B7 ' + w0sub : ''); }   // v4474（用户口径）：倒计时降为副信息（头卡已删）
+      var w0sub = (w0n && w0n !== _w0cw) ? ('下一个：' + lbWxNameZh(w0n)) : (Number(w0.inTransition) ? '正在变化' : '');
       if(w0x && !w0sub) w0sub = '';   // v4330：不再显示「特殊天气」字样（用户口径）
       var _pt0 = lbProbText();   // v4387（用户口径）：概率行进卡
       var _pex0 = _pt0 || '';   // v4389→v4424（用户口径）：去"下一个："字样；徽章组进卡右栏（共享空间）
@@ -23894,9 +23215,7 @@ function lbWeatherRender(){
   // v4314：全图基准温度/风力（biometemps 顶层；数据属当前图且可读时才显示；失败静默）
   if(LB._bio && LB._bio.sv === lbVolcServer() && LB._bio.data && isFinite(Number(LB._bio.data.globalBase))){
     var gb1 = Math.round(Number(LB._bio.data.globalBase) * 10) / 10;   // v4315：1 位小数（原始读值小数位过多）
-    var _tof2 = Math.round(((ws && Number(ws.temperatureOffset)) || 0) * 10) / 10;   // v4474（用户口径）：温度偏移改本卡副信息（原独立卡已删）；v4477：舍入 1 位小数（原始读数 -0.404156 太长）
-    var _tofSub = _tof2 ? ('温度偏移 ' + (_tof2 > 0 ? '+' : '') + lbWxNum(_tof2) + '\u00B0') : '';
-    cardBase = lbWxCard('\u{1F30D}', '全图基准温度', lbWxNum(gb1) + '\u00B0', _tofSub, null, null, null, 28, null, '0 1 273px');   // v4403（用户口径）：左列定宽 256（与热力图对齐）；v4407：273；v4474：副信息=温度偏移
+    cardBase = lbWxCard('\u{1F30D}', '全图基准温度', lbWxNum(gb1) + '\u00B0', '', null, null, null, 28, null, '0 1 273px');   // v4403（用户口径）：左列定宽 256（与热力图对齐）；v4407：273
   }
   // v4325：UDS 图（Isl/Sco/Cen）无 wxSystems ⇒ 当前天气名改读 wxSemantics.enumIndices.currWeatherName（实测 Isl=Partly_Cloudy / Sco=Superheat）
   //   注：v4324 曾误插进 ext_gen 分支内（uds 族不执行）导致卡片不出现 —— 必须放在族链之外
@@ -23927,7 +23246,6 @@ function lbWeatherRender(){
         topCards += lbWxCard('\u2601\ufe0f', '', _mSzZh, '\u{1F32A}\uFE0F \u6c99\u5c18\u66b4' + (_wxForm ? '\u5f62\u6210\u4e2d' : '\u671f\u95f4') + ((!_szSlot && wPrevSz) ? ('<span class="lbwx-sep"> \u00b7 \u4e0a\u4e00\u4e2a\uff1a' + wPrevSz + '</span>') : ''), _mSzX ? '#f97316' : null, lbWxCardBg(wcn, wei.prevWeatherName), null, 28, null, '1 1 220px', _pex);   // v4403；v4424：徽章→右栏；v4435（用户口径）：大字=当前真实天气（槽内非沙尘暴时）
       } else {
         var wsub = wei.prevWeatherName ? ('上一个：' + lbWxNameZh(wei.prevWeatherName)) : '';   // v4330：去掉「特殊天气」字样（用户口径）
-        if(hasSuc && isFinite(suc) && suc >= 0 && !tr){ wsub = '\u23F1\uFE0F 距下次变天 \u2248 ' + lbWxSec(suc * tf) + (wsub ? ' \u00B7 ' + wsub : ''); }   // v4474（用户口径）：倒计时降为副信息（头卡已删）
         topCards += lbWxCard('\u2601\ufe0f', '', lbWxNameZh(wcn), wsub, wex ? '#f97316' : null, lbWxCardBg(wcn, wei.prevWeatherName), null, 28, null, '1 1 220px', _pex);   // v4403；v4424：徽章→右栏
       }
     }
@@ -23937,11 +23255,27 @@ function lbWeatherRender(){
     var _srem = lbSandRemain(LB._sand.data);
     topCards += lbWxCard('\u{1F32A}\uFE0F', '沙尘暴', '正在发生', _srem ? ('剩余 ' + lbWxFmtSec(_srem)) : '区域事件', '#d97706', null, null, null, null, '1 1 220px');
   }
-  // v4478（用户口径）：陨石雨独立卡删除（功能条「☄️ 陨石监控」按钮已承载该入口）
+  // v4369（§5.2）：Ext 陨石雨独立卡（phase 属于 {incoming,active} 才弹；不占主序列）
+  if(lbVolcServer() === 'Ext' && LB._meteor && LB._meteor.data && LB._meteor.data.ok){
+    var _mtD = LB._meteor.data, _mph = String(_mtD.phase || '');
+    if(_mph === 'incoming' || _mph === 'active'){
+      var _msub = '';
+      if(_mph === 'active'){
+        var _mv = Number(_mtD.volume);
+        _msub = (_mv > 0) ? ('强度 ' + Math.round(_mv * 100) + '%') : '过渡预警';
+      } else {
+        var _tmax = Number(_mtD.transMax || 80), _tel = Number(_mtD.transElapsed || 0);
+        var _lead = _tmax - _tel;
+        if(!(_lead >= 0)) _lead = 0;
+        if(_lead > _tmax) _lead = _tmax;
+        _msub = '约 ' + Math.round(_lead) + ' 秒后到达';
+      }
+      topCards += lbWxCard('\u{1F320}', '陨石雨', (_mph === 'active' ? '正在发生' : '即将到来'), _msub, '#f97316', null, null, null, null, '1 1 220px');
+    }
+  }
   // v4363（用户口径）：原头部裸文字区块 → 标准小卡（同 lbWxCard 外观），并入卡片行首
   var headCard = '';
-  var _noHead = (lbVolcServer() !== 'Abe' && lbVolcServer() !== 'Gen');   // v4474（用户口径）：单系统图删头卡——倒计时/变化中改由「当前天气」卡副信息承载（Abe 季节大字 / Gen 多生态区保持）
-  if(!_noHead && (big || bigRaw || line || lineRaw)){
+  if(big || bigRaw || line || lineRaw){
     var _hcSub = line ? lbAttr(line) : lineRaw;
     headCard = '<div style="flex:1 1 220px;min-width:0;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:7px 9px">'
       + '<div style="font-size:18px;font-weight:bold;color:#e2e8f0;margin-top:1px">' + (big ? lbAttr(big) : bigRaw) + '</div>'
@@ -24062,10 +23396,7 @@ function lbIgText(o){
   if(svI === 'Abe'){   // v4447（用户口径）：畸变昼夜联动「地表计时」体系（十日三季 + 红/蓝/绿状态），不再用 05:30–20:30 判定
     var si = lbSurfSeason(day);
     // v4450（用户口径）：去掉季节名与红/蓝/绿状态图标，改用季节图标（与其它地图同款「天数」样式）
-    // v4467（用户口径）：+ 真实昼夜图标——按地表灼烧期判定（A 列：灼烧中=☀️昼 / 熄火=🌙夜）；季节图标 🔆/🌑 与昼夜 ☀️/🌙 区分
-    var _stA = lbSurfState(day, s, 'A');
-    var _dIc = (_stA === 'red') ? '\u2600\uFE0F' : '\u{1F319}';
-    return LB_SURF.seasIcon[si] + ' ' + _dIc + ' ' + day + ' \u00B7 ' + (narrow ? (p2(hh) + ':' + p2(mm)) : (p2(hh) + ':' + p2(mm) + ':' + p2(ss)));
+    return LB_SURF.seasIcon[si] + ' ' + day + ' \u00B7 ' + (narrow ? (p2(hh) + ':' + p2(mm)) : (p2(hh) + ':' + p2(mm) + ':' + p2(ss)));
   }
   var isDay = (s >= LB_IG_DAYSEC[0] && s < LB_IG_DAYSEC[1]);   // v4300（用户口径）：白天判定（05:30–20:30）
   return (isDay ? '\u2600\uFE0F' : '\u{1F319}') + ' ' + day + ' \u00B7 ' + (narrow ? (p2(hh) + ':' + p2(mm)) : (p2(hh) + ':' + p2(mm) + ':' + p2(ss)));
