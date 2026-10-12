@@ -1704,17 +1704,24 @@ _WP_EXTGEN_FILTERS = {
 
 
 def _wp_hex_vals(probes, name):
-    """探针 dataHex -> float 列表。兼容 probes.<name>.asArray.dataHex 与 <name>.dataHex。"""
+    """探针值数组。v125i+（2026-10-13）：优先 asDouble（TArray<double> 正确口径；asFloat 半读已删）；
+    回退 asArray.dataHex / dataHex（8 字节 double 解码，兼容旧版）。"""
     import struct as _struct
     p = probes.get(name) if isinstance(probes, dict) else None
     if not isinstance(p, dict):
         return [], 0
+    num = int(p.get('num') or 0)
+    _ad = p.get('asDouble')
+    if isinstance(_ad, list) and _ad:
+        vals = [(float(v) if isinstance(v, (int, float)) else 0.0) for v in _ad]
+        if num and len(vals) > num:
+            vals = vals[:num]
+        return vals, (num or len(vals))
     a = p.get('asArray')
     hx = ''
-    num = 0
     if isinstance(a, dict):
         hx = a.get('dataHex') or ''
-        num = int(a.get('num') or 0)
+        num = int(a.get('num') or 0) or num
     if not hx:
         hx = p.get('dataHex') or ''
         num = num or int(p.get('num') or 0)
