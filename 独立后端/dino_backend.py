@@ -21,6 +21,7 @@ dino_backend.py — ASA 生物数据独立后端（dino-import.html 脱离 HA �
   POST /api/player_pos                 RCON PlayerPos（原 script.player_pos）
   POST /api/ingame_time?server=X       游戏内时间（原生 RCON GetInGameTime；60s TTL + 同键并发合并）
   POST /api/worldprobe_biometemps?server=X&skip=&count=&brief=&filter=  区域温度（ABiomeZoneVolume 绝对温度 ℃；TTL 60s + 同键合并）
+  POST /api/wind_status?server=X&fresh=     风力发电机耐久（风机清单+逐台 5 字段；TTL 60s + 同键合并；v4670）
   GET  /asa-data/*                     静态资源（汉化/图标/颜色 8 个 JSON）
   GET  /dino-data/*                    数据 JSON（<缩写>_cryo/tamed/wild_*.json 直读）
 
@@ -97,6 +98,11 @@ _WP_METEOR_CACHE = {}      # (server, cmd) -> {'ts': ms, 'data': {...}}
 _WP_ACTOR_CACHE = {}       # (server, cmd) -> {'ts': ms, 'data': {...}}
 _WP_BADWX_CACHE = {}       # (server, cmd) -> {'ts': ms, 'data': {...}}
 _WP_WPROBS_CACHE = {}      # server -> {'ts': ms, 'data': {...}}
+# ---- v4670（2026-10-16）：风力发电机耐久（wind_status；风机耐久变化极慢 ~0.0139/s，60s 缓存）----
+WIND_TTL_MS = 600000       # v4687：60s→10 分钟（前端同 TTL + 预热；风机耐久变化极慢）+ 同键并发合并
+WIND_FIELDS = 'Health,MaxHealth,PoweredBatteryDurabilityToDecreasePerSecond,DecayDestructionPeriod,CurrentWind'
+WIND_DECAY_MULT = 0.35   # v4686（2026-10-16 实测标定）：实际消耗 = PoweredBatteryDurabilityToDecreasePerSecond × 0.35（25min 差分实测 0.0049/s，prop 值 0.0141/s；满耐久由此吻合 14 天）
+_WIND_CACHE = {}           # (server, 'wind') -> {'ts': ms, 'data': {...}}
 _WP_LOCKS = {}             # 查询键 -> Lock（同键并发合并：后到者等锁→双检缓存，只发 1 条 RCON）
 _WP_LOCKS_GUARD = threading.Lock()
 _WP_CACHE_MAX = 2000       # 宽松上限；超限按 ts 清掉一半最旧（防 key 泄漏）
@@ -1652,6 +1658,112 @@ def worldprobe_actor(server, filt, propsidx='0', probe='', top='1', slim='1', fi
         return out
 
 
+def _wind_prop(ap, name):
+    """从 actorProps.props 柔性取字段（实测形=[{name,value}]；兼容直接键形/数字键形）。"""
+    try:
+        p = ap.get('props') if isinstance(ap, dict) else None
+        if p is None:
+            return None
+        if isinstance(p, list):
+            for it in p:
+                if isinstance(it, dict) and it.get('name') == name:
+                    return it.get('value')
+            return None
+        if isinstance(p, dict):
+            v = p.get(name)
+            if v is not None:
+                return v
+            for k in p:
+                it = p[k]
+                if isinstance(it, dict) and it.get('name') == name:
+                    return it.get('value')
+        return None
+    except Exception:
+        return None
+
+
+def _wind_f(v):
+    try:
+        return float(v) if v is not None else None
+    except Exception:
+        return None
+
+
+def wind_status(server, fresh=False):
+    """风力发电机耐久（v4670·2026-10-16）。1 条清单 + N 条逐台（4-token），60s 缓存 + 同键并发合并。
+    ⚠️ 类名官方错拼 WindTrubine（写 WindTurbine 会 matched=0）；fields= 必须与 props=1 同给且总参数 ≤4
+    （actor 子命令只解析 a1..a4，第 5 起静默丢弃）⇒ byname 形式恰好 4 token，勿再追加其它参数。"""
+    port = SERVERS.get(server)
+    if not port:
+        return {'ok': False, 'server': server, 'error': 'unknown server'}
+    key = (server, 'wind')
+    now_ms = int(time.time() * 1000)
+    if not fresh:
+        c = _WIND_CACHE.get(key)
+        if c and (now_ms - c['ts'] < WIND_TTL_MS):
+            d = dict(c['data'])
+            d['cacheAgeMs'] = now_ms - c['ts']
+            d['serverNowMs'] = now_ms
+            return d
+    with _wp_lock(key):
+        now_ms = int(time.time() * 1000)
+        if not fresh:
+            c = _WIND_CACHE.get(key)
+            if c and (now_ms - c['ts'] < WIND_TTL_MS):
+                d = dict(c['data'])
+                d['cacheAgeMs'] = now_ms - c['ts']
+                d['serverNowMs'] = now_ms
+                return d
+        j1, err = _wp_rcon_json(port, CMD_WORLDPROBE + ' actor filter=WindTrubine top=60', server, None, now_ms)
+        if err:
+            return err
+        acts = j1.get('actors') or []
+        world_time = j1.get('worldTime')
+        turbines = []
+        for a in acts:
+            obj = a.get('objectName')
+            if not obj:
+                continue
+            t = {'objectName': obj, 'x': a.get('x'), 'y': a.get('y'), 'z': a.get('z')}
+            fo = _wp_arg(obj, 96)
+            if not fo:
+                t['error'] = 'bad name'
+                turbines.append(t)
+                continue
+            cmd2 = CMD_WORLDPROBE + ' actor byname=1 filter=' + fo + ' props=1 fields=' + WIND_FIELDS
+            j2, err2 = _wp_rcon_json(port, cmd2, server, None, now_ms)
+            if err2:
+                t['error'] = str(err2.get('error', 'rcon fail'))
+                turbines.append(t)
+                continue
+            wt = j2.get('worldTime')
+            if wt is not None:
+                world_time = wt
+            ap = j2.get('actorProps') or {}
+            h = _wind_f(_wind_prop(ap, 'Health'))
+            mh = _wind_f(_wind_prop(ap, 'MaxHealth'))
+            ps = _wind_f(_wind_prop(ap, 'PoweredBatteryDurabilityToDecreasePerSecond'))
+            dp = _wind_f(_wind_prop(ap, 'DecayDestructionPeriod'))
+            t['health'] = h
+            t['maxHealth'] = mh
+            t['perSecond'] = ps
+            t['pct'] = round(h / mh * 100.0, 2) if (h is not None and mh) else None
+            t['depleteHours'] = round(h / (ps * WIND_DECAY_MULT) / 3600.0, 2) if (h is not None and ps and ps > 0) else None
+            t['decayHours'] = round(dp / 3600.0, 2) if (dp and dp > 0) else None
+            t['wind'] = _wind_prop(ap, 'CurrentWind')
+            turbines.append(t)
+        turbines.sort(key=lambda x: (x.get('depleteHours') is None, x.get('depleteHours') or 0.0))
+        matched = j1.get('matched') or 0
+        returned = j1.get('returned') or len(acts)
+        out = {'ok': True, 'server': server, 'worldTime': world_time, 'count': len(turbines),
+               'truncated': matched > returned,
+               'generatedAt': time.strftime('%Y-%m-%dT%H:%M:%S') + '+08:00',
+               'turbines': turbines, 'serverNowMs': now_ms, 'cacheAgeMs': 0}
+        _WIND_CACHE[key] = {'ts': now_ms, 'data': out}
+        _wp_trim(_WIND_CACHE, now_ms)
+        return dict(out)
+
+
 def worldprobe_badwx(server, filt='WeatherSystem'):
     """坏天气权重因子（WorldProbe badwx [filter=]）。TTL 300s + 同键并发合并。"""
     port = SERVERS.get(server)
@@ -2465,6 +2577,13 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(400, {'ok': False, 'error': 'missing server'})
                 return
             self._send(200, worldprobe_wprobs(server, g('propsIdx', '0')))
+        elif path.endswith('wind_status'):  # v4670：风力发电机耐久（风机清单 + 逐台 5 字段；TTL 60s + 同键合并）
+            server = g('server')
+            if not server:
+                self._send(400, {'ok': False, 'error': 'missing server'})
+                return
+            fresh = g('fresh').lower() in ('1', 'true', 'yes')
+            self._send(200, wind_status(server, fresh))
         elif path.endswith('worldprobe_zones'):  # 2026-10-03：天气区域（WorldProbe zones；TTL 60s + 同键并发合并）
             server = g('server')
             if not server:

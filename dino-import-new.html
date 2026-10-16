@@ -335,6 +335,11 @@ details.acc.lb-dim summary:hover{opacity:1}
 span.lb-fchip-rn:hover{border-color:#a78bfa!important;background:#22222f!important;box-shadow:0 0 0 1px rgba(167,139,250,.35)}
 .acc[open] > summary .lb-rel-rename{display:inline-flex;align-items:center;justify-content:center;gap:3px;margin:-5px -6px -5px 0}   /* v1232：负外边距抵消 10px，不撑高标题栏；上/下/右间距均 6px */   /* v1229：行高同步（原 1 把按钮压扁） */
 .acc[open] > summary .acc-cnt-rel{display:none}   /* v1225：放出组展开时数量位被按钮替换 */
+summary .lb-id-btn[data-facwatch]{display:none;border:none;background:transparent;color:#fff;opacity:1}   /* v4679：收起隐藏/展开显示；v4680：平时态白；v4681（用户口径）：无边框（同 chip 纯图标） */
+summary .lb-id-btn[data-facwatch]:hover{color:#a78bfa}   /* v4681（用户口径）：hover=图标变紫即可（无底色/无描边） */
+summary .lb-id-btn[data-facwatch].lb-watch-on{color:#f59e0b;background:rgba(245,158,11,.14)}   /* v4681：已关注=金（无边框） */
+summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：已关注+hover 亮金 */
+.acc[open] > summary .lb-id-btn[data-facwatch]{display:inline-flex}
 .acc[open]::after{content:'';display:block;height:0;border-top:1px dashed #7c3aed;margin:8px 0 2px}   /* v1226：容器组展开时底部自动虚线（颜色与容器组选中色一致） */
 /* 移动端响应式（置于聚落 CSS 之后确保覆盖）：v830 下 <640；聚合框单列、离散卡占满整行、单聚落固定 3 列 */
 @media (max-width:640px){
@@ -517,8 +522,8 @@ span.lb-fchip-rn:hover{border-color:#a78bfa!important;background:#22222f!importa
 <!-- Tab② 最新生物 -->
 <div id="latestUI" style="display:flex;flex:1;flex-direction:column;min-height:0;gap:12px;overflow:hidden">
   <div class="card" style="position:relative;margin-bottom:0">
-    <button id="lbRefreshBtn2" onclick="lbConfirmRefresh()" title="刷新低温仓数据" style="position:absolute;top:10px;right:10px;background:none;border:none;color:#999;padding:2px 4px;border-radius:6px;cursor:pointer;font-size:12px;line-height:1;opacity:.65"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg></button>
-    <button id="lbIdSearchBtn" onclick="lbSearchFromClipboard()" title="搜ID：自动读取剪贴板中的生物ID并显示卡片" style="position:absolute;top:8px;right:34px;width:22px;height:22px;background:none;border:none;color:#999;padding:0;border-radius:4px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;opacity:.8;z-index:30"><svg viewBox="0 0 24 24" width="15" height="15" style="fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round"><circle cx="10" cy="10" r="6.5"/><path d="M15.2 15.2 19 19"/></svg></button>
+    <button id="lbRefreshBtn2" onclick="lbConfirmRefresh()" title="刷新低温仓数据" style="position:absolute;bottom:10px;right:10px;background:none;border:none;color:#999;padding:2px 4px;border-radius:6px;cursor:pointer;font-size:12px;line-height:1;opacity:.65"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg></button>
+    <button id="lbIdSearchBtn" onclick="lbSearchFromClipboard()" title="搜ID：自动读取剪贴板中的生物ID并显示卡片" style="position:absolute;bottom:8px;right:34px;width:22px;height:22px;background:none;border:none;color:#999;padding:0;border-radius:4px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;opacity:.8;z-index:30"><svg viewBox="0 0 24 24" width="15" height="15" style="fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round"><circle cx="10" cy="10" r="6.5"/><path d="M15.2 15.2 19 19"/></svg></button>
     <div class="lb-filter-bar" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
       <button id="lbRoleBtn" class="lb-class-btn" onclick="lbOpenRolePicker()" title="选择生存者" style="display:none;margin-right:0;min-width:80px;padding:5px 10px;max-width:140px"><span class="lb-class-label">角色</span></button>
       <button id="lbClassBtn" class="lb-class-btn" onclick="if(LB._classPressed){LB._classPressed=false;return;}lbOpenSpeciesPicker()" title="选择物种、物品（长按=切到全部）"
@@ -526,6 +531,7 @@ span.lb-fchip-rn:hover{border-color:#a78bfa!important;background:#22222f!importa
         ontouchstart="lbClassPressStart(event)" ontouchend="lbClassPressEnd()" ontouchmove="lbClassPressEnd()"><span class="lb-class-label">全部</span></button>
       <button id="lbWatchBtn" class="lb-class-btn" onclick="lbWatchOpen()" title="关注未成年（自动刷成长）" style="min-width:auto;width:auto;padding:5px 8px;margin-left:-12px;margin-right:8px;justify-content:center;text-align:center;color:#a78bfa"><svg viewBox="0 0 24 24" width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><path d="M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5Z"/></svg><span id="lbWatchCnt" style="font-size:10px;background:#f59e0b22;border-radius:8px;padding:0 5px;color:#f59e0b;margin-left:2px;line-height:14px"></span></button>
       <button id="lbTodoBtn" class="lb-class-btn" onclick="lbTodoOpen()" title="待制作（蓝图材料汇总）" style="min-width:auto;width:auto;padding:5px 8px;margin-left:-12px;margin-right:8px;justify-content:center;text-align:center;color:#38bdf8"><svg viewBox="0 0 24 24" width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><path d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.67 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/></svg><span id="lbTodoCnt" style="font-size:10px;background:#38bdf822;border-radius:8px;padding:0 5px;color:#38bdf8;margin-left:2px;line-height:14px;display:none"></span></button>
+      <button id="lbMaintBtn" class="lb-class-btn" onclick="lbMaintOpen()" title="维护列表（血/食不满生物 + 关注设施）" style="min-width:auto;width:auto;padding:5px 8px;margin-left:-12px;margin-right:8px;justify-content:center;text-align:center;color:#f59e0b"><svg viewBox="0 0 24 24" width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><path d="M22.7,19L13.6,9.9C14.5,7.6 14,4.9 12.1,3C10.1,1 7.1,0.6 4.7,1.7L9,6L6,9L1.6,4.7C0.4,7.1 0.9,10.1 2.9,12.1C4.8,14 7.5,14.5 9.8,13.6L18.9,22.7C19.3,23.1 19.9,23.1 20.3,22.7L22.6,20.4C23.1,20 23.1,19.4 22.7,19Z"/></svg><span id="lbMaintCnt" style="font-size:10px;background:#f59e0b22;border-radius:8px;padding:0 5px;color:#f59e0b;margin-left:2px;line-height:14px;display:none"></span></button>
       <div id="lbTabs" style="display:flex;flex-wrap:wrap;gap:6px;flex:1 0 auto;min-width:0"></div>
     </div>
   </div>
@@ -643,7 +649,7 @@ var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // ⏳ **未部署** v3626（用户要求）：**对照表缺·建筑类 20 条落地** —— 将 t1「中文+图标已定稿」的 20 条并入 `汉化/item_zh.json`（键=短名、kind=structure、src=gap_table_t1）：`SpotLight` 聚光灯 ｜ `Ramp_Wood` 木制楼梯 ｜ `Ramp_Adobe` 黏土楼梯 ｜ `TriCeiling_Wood` 木制三角天花板 ｜ `WoodCage` 木制笼子 ｜ `WoodSpikeWall` 木制拒马 ｜ `Metal_OceanPlatform` / `Wood_OceanPlatform` 海洋平台 ｜ `Furniture_Rug` 粗毛地毯 ｜ `TekFenceFoundation` 泰克栅栏地基 ｜ `AdobePillar` 黏土柱子 ｜ `RopeLadder` 绳梯 ｜ `TriRoof_Adobe` / `TriRoof_Tek` 三角屋顶 ｜ `WoodElevatorPlatform_Small` / `_Medium` / `WoodElevatorTrack` 木制电梯 ｜ `AdobeGateDoor_Large` 黏土巨兽恐龙门 ｜ `Flag_KingKaiju` 君王泰坦旗帜 ｜ `LargeWall_Wood` 大型木制墙；词典 1790 → **1810 键**；缺口表 t1 **33 → 13 条**、总表 320 → **300 行**
 // ⏳ **未部署** v3627（用户要求）：**缺口表其余部分（t2/t3/t4）双就绪条目落地 105 条** —— 质控分档（`tmp/_v3689_qc.py`）后落地：A 档 91 + B 档中经用户确认/属关键词误判者（「新联邦靴子」「那里!」经用户确认正确）；**排除 2 条**：`PrimalItemConsumable_Egg`（中文为 `Egg!` 英文原文）、`PrimalItemArmor_PearlShirt`（t4，中文仅「珍珠」）；跳过 2 条 kind 无法确定（`PrimalItem_FishBasketFilled` / `PrimalItem_Spawner_HoverSail_Main`）与 1 条生物类（`Exosuit_Character_BP`）；t2 的 `PrimalItemRadio`/`PrimalItemRaft` 词典已有键（`Radio`/`Raft`）故仅调 kind：`Raft` weapon → **structure**（`Radio` 本已 weapon）；落地内容以蛋类 37、结构件 29、鞍具 5、弹药 2 为主；词典 **1810 → 1915 键**（kind 空 **0** / other **0**）｜ 缺口表 **300 → 196 行**（t3 215 → 111）
 // v4333（用户口径①）：区域行「前 X」改名「上一段：X」+ 与当前/基础名重复时隐藏（v4347 用户口径②：整条移除，不再显示）
-var LB_VERSION = 'v20261015-4729';   // v4280（根因修复）：① 退出物品模式恢复「选种」按钮（v1368 隐藏无恢复） ② 生物背包容器标题唯一源解析（BP_/_ASA 组件 token → 真实 dinoClass）   // v4231（用户实测「繁育栏把功能栏挡住」）：① 两栏同显繁育栏叠功能栏上方 ② 空繁育栏不显示 ③ 结果浮层/追踪钮偏移联动   // v4230（用户裁定）：皮肤类全链隐藏（词典 skin:1 标记并入判空链——Tileset 外观/Bounce 系列/节日建筑等 54 键）   // v4229（用户确认）：初始笔记全链隐藏（v4083 只滤浮窗，容器漏同步 ⇒ hideItems+硬编码双写入升级）   // v4228（用户口径）：容器 chip 染料补色点（v3593 只改了浮窗，容器漏同步）   // v4227（用户口径）：HotbarSkill_Base（快捷技能芯片，非真实物品）加入隐藏名单（hideItems+硬编码双写入）   // v4226（用户实测「黑曜石仙境没内容却显示tab」根因修复）：lbPickIdx 统计对齐渲染口径（+lbIsEmptyItem 判空）——q=0 空槽残留不再计入 tab/角标/聚落/总数   // v4225（v4224 实测补丁）：预热已走完但缓存被清（材质表到达等）→ 立即兜底冷建，不再干等 6s   // v4224（用户口径「空档期点击卡」）：① 物品栏未预热点击→占位+等预热填充（不再冻结 440ms 无反馈）② 预加载交互让路（600ms 窗口）③ 静默刷新收尾即触发预热（消 3s 空窗）   // v4223（性能优化·用户确认A+B2）：① 预加载热点——字典键数引用缓存（拥有索引 11,531ms 预计降至 1~2s）② 后台检查更新——批量 LM 接口（40+ 次 HEAD → 1 次请求）   // v4222（用户口径）：所有可点击徽章补 hover——① 设施芯片挂载条件扩为「可点即 hover」② 装备榜/选种行卡新增 hover   // v4221（用户实测「角标还显示了2」）：玩家背包同口径排除出服务器 tab 角标/聚落角标/总数（srv/setts/total），修角标与列表不一致   // v4220（用户实测）：「无聚落/离散」容器登记排除玩家背包（消除与「玩家携带」tab 重复的纯背包卡）   // v4219（实测根因）：伪容器 rec 补 server 字段（修「无聚落/离散」卡点进去详情空——lbRecHasPick 键查空导致）   // v4218（用户口径）：物品筛选类别扩至「物品浮窗全部类别」（lbItemIsPick 按浮窗归属类别对齐，修 建筑/资源等非装备类筛选全灭）   // v4217（用户要求）：① 别名表数据化（dino_rank_alias.json + 恐龙recs类名映射，零硬编码）② 物品模式玩家tab恢复位置卡/去平铺卡流 ③ 恐龙侧 mine 与恐龙列表同源（跨服龙鞍显示）   // v4216（实测根因修复）：ASB_DB 懒加载未就绪时缓存空表 ⇒ 词干表 0 条永久失效；改为「就绪才缓存」（lbRankStemMap + lbAsbNameMap）   // v4215（用户口径）：① 装备榜鞍键↔恐龙键同物异名归一（勘误+ASB词干表）② 选物种玩家背包只留该物种鞍/蓝图 ③ 选物品隐藏低温舱+去位置卡 ④ 非鞍剔除   // v4214（用户口径）：装备榜 TAB 角标只计「我的」——外部更高不参与计数   // v4213（用户口径·S7）：物种按钮显隐与物品侧同步——只看桶内容（有效条目）   // v4212：物种榜 qidx<=0 全排除 + 去重 >0 + 角标=实际显示数 + 恐龙背包显示具体龙名   // v4211（用户要求·单一代码源）：装备榜物种/物品渲染统一为 lbRankRenderPanel + 外部更高条目不显示区域名   // v4210（用户口径·位置唯一化）：容器显示接入「坐标→设施真身」统一解析（人台上的矛显示回「人台E」真名）   // v4209：物品模式装备榜=物种榜完整翻版（两 TAB 实物/蓝图 + qidx<=0 过滤 + 类别图标）   // v4208（用户需求）：物品模式装备榜——按钮按「存档有原始以上品质」动态显隐 + 面板细节对齐物种（分组/行卡/弹卡/过滤同源）   // v4207：离散「位置」组展开时数量位同样被按钮替换（对齐改名）   // v4206：离散卡容器组加「位置」按钮（复刻改名按钮 + 弹地图浮窗）   // v4205：物品模式 tab 显隐排除基因条件（Gen(0) 过滤根因）   // v4204：离散 chip 不响应重命名 + 物品模式隐藏基因设备段（基因存储器根因）   // v4203：修详情内部过滤缺口（物品模式详情逐成员对齐主列表 lbRecHasPick）   // v4202：对照表 11 项权威容量落地（容量表 +10 项数据键 + DisplayCase 归 HIDE）   // v4201（用户方案）：生物背包参与聚合——背包容器注入 ctn（byContainer 直接命中）+ 判定剔除背包点 + 容器组归属统一 + 删近邻兜底   // v4200：龙背包归属加「近邻唯一」兜底（帝蟒背包与龙坐标差 1749 也能归位）   // v4199：放出容器坐标键放开 + 物品索引接「生物背包→龙」关联链   // v4198：修 5 处容量别名反向空指（Fireplace/WaterTap/TurretCatapult/TurretBallista/TaxidermyBase_Small）   // v4197：龙背包并入归属过滤（离散/无聚落详情不再混入别人部落的生物背包）   // v4196：离散卡容器化（scatteredList 暴露 + 物品索引兜底 + 卡内容器注入）   // v4195：散置伪 rec 补 isEmpty 容器本体形态（v3452 同口径，防详情渲染崩溃）   // v4194：散置卡修复——伪容器 rec 直取（物品容器哈希与 rec 哈希两套，cid 不可跨查）   // v4193（用户口径）：物品模式隐藏「聚落命名/区域命名」入口 + 「散置容器」卡（无聚落卡，完全对齐物种）   // v4192（用户口径）：物品角标/数量对齐物种——只统计「当前角色拥有」（v3597 归属过滤接入 lbPickIdx）+ 物品模式聚落卡隐藏放出/低温仓/蛋段 + 角标图标按物品类型取 LB_INV_GRP;   // v4191：玩家 tab 自动切换补修（物品模式无该物品 ⇒ 内容区不再驻留空态）;   // v4190（用户要求）：单一物品主体页优化（玩家tab物品口径 / 物品索引双计修复 / 聚落角标武器类别图标 / 详情行隐藏容量角标）   // v4189（用户要求）：水雷迁入「器械>弹药」（Underwater Mine）;   // v4188（用户要求）：陷阱族迁入「器械>弹药」段（Y异种植物陷阱改名入族 + 大型捕兽夹/捕兽夹入族垫底；v4187 设施段位代码撤回）;   // v4186：泰克水壶补录（工具>水容器族末位）+ 巨石核实 + 对照表 5 项去重、恐龙外观表折叠;   // v4185：恐龙装备栏外观全组过滤（用户实锤鞍皮肤；hideItems 18 项）;   // v4184：译名（沙斯塔鱼龙）+ Cute Dino Helmet 过滤（玩家帽）+ lbEggIs 帽子豁免（Easter_Egg_Hat 归位模块栏）;   // v4183：物品浮窗接入 hideItems 过滤（Pepper Mask 修复）+ 恐龙外观 12 款落地（模块>生物外观）;   // v4182：恐龙装备栏外观 12 款图标全配（8 款本地实锤 + 4 款 wiki 补录；icons2 5204 / webp_map 5107）;   // v4181：B1 节日糖果全量入库（8 新键+圣诞糖果合并为节日恐龙糖+玉米糖换 HUD_Event_Halloween_BC）+ PepperMask 浮窗过滤 + 节日族词/类名规则;   // v4177：Air_Jar/Air_Bladder kind 修正（consumable→weapon，正式入器械>工具>水容器）+ 情人节/感恩节糖果补图（Valentines_Dino_Candy/Thanksgiving_Candy）;   // v4175：料理子序微调（鲨鲨小零食!紧挨吉利盛宴3.4后；虫胶19→5.3 紧挨饭团5.2后）;   // v4174：达科寿司/饭团（原稻米球改名）入料理族并紧挨海藻寿司（子序 5.1/5.2）;   // v4173：情人节巧克力正名+配图（Box o' Chocolates/盒装巧克力/VDay_icon）+ WormGum 补录（虫胶）+ Air_Jar/Air_Bladder 移工具·水容器族（族内最后）+ 食肉植物种子排植物种子R后 + 亚特兰汤/虫胶接料理子序18-19;   // v4170：消耗品补录 18 键（胡椒面具/空气罐/气囊/海龙汤/风干鱼肉×2/稻米球/感染系列×6/干海带/达科寿司/亚特兰汤/蓝莓汁 P+/情人节巧克力 ase）+ 新族「感染」（含感染藤壶 7 项）+ 泰克三叉戟归「矛」族;   // v4169：咒缚贴合全局兜底（跨块场景：咒缚火焰喷射器与本体被手炮块隔开 → 最终序列再贴一次）；v4168：咒缚武器贴合本体（16 对：本体在前、咒缚紧跟 — 武装 11 + 工具 3 + 键名兜底 1 +【火焰喷射器 v4169 修复】）+ 制导火箭弹图标→HomingMissileAmmo_Icon + 巡航导弹图标→Cruise_Missile（v4163 交接回调）;   // v4165：立式南瓜哨兵根因修复（facilityIconSpecial 置空 + 合并尊重空串哨兵）+ 圣诞糖果补录（consumable/节日）+ 鲍勃外观改名 + 蛋糕×3 归节日族;   // v4164：设施根因修正（标识归位/旗帜族+节日族垫底链）+ 节日补族（圣诞彩灯/万圣节墓碑）+ 新族「玩家外观」（TOF 卡尔配件，排生物外观前）;   // v4163：C4遥控起爆器→工具段（tool:1）+ 巡航导弹换图 HomingMissileAmmo_Icon + 塔拉萨麻醉弹药归「箭」族;   // v4162：生化皮肤/独木舟皮肤新族（骨架后/生物外观后）+ 设施栏标识族垫底（旗帜后）+ 咒缚电锯/喷火器图标对齐原版 + 弹药段「异种植物」词（W果实/Z手雷相邻）+ Netgun 归弹药;   // v4161：Radar_Rig 补录（雷达配件→跨步者配件族）+ 未组装的泰克跨步者改归「未组装」族;   // v4160：泰克悬停帆与塔拉萨悬停帆族内相邻（载具子序50.2/50.3）+ 6 条泰克跨步者配件补录（官方类名+官方中文，族=跨步者配件）;   // v4159：13 条骨架/幽灵/兔耳套装以**官方类名+官方中文**落地（长键=PrimalItemCostume_*、短键=图标名）+ 失落精灵龙套装补录 + 3 条旧骨骼条目同步官方名 + 全部归骨架皮肤/幽灵皮肤/生物外观族（排模块段最后）;   // v4158：外观族（骨架皮肤/幽灵皮肤/生物外观/尾巴/披风）整体移至模块段最后 + 独木舟3皮肤归生物外观 + 鱼竿族生效（两条相邻） + M.O.M.I.入模块段·机甲族 + 服装类豁免物种绑定过滤 + 跨步者配件族预留;   // v4157：Cryo医院/水下耕地/宠物展示台/绊线照明弹配方补录（材质档排序）+ 蛋糕ASE过滤 + 4服装隐藏 + 骨架皮肤族（3骨骼+生化，附件后） + 幽灵皮肤族（14条，骨骼后） + 战车族提前（附件前） + 立式南瓜清图标 + Plant W果实/Z手雷族内相邻;   // v4154：泰克光刃（TekClaws）换图 → HUD_TEKHandBlades_Icon_BC + 对照表"非皮肤·疑似"补齐后缀过滤;   // v4151：换图 2（巡航导弹→HUD_TEKCruiseMissile_Icon、泰克榴弹发射器→HUD_TEKGrenadeLauncher_Icon）+ 补录 4（绊线照明弹陷阱/泰克三叉戟/泰克长矛/C4遥控起爆器）+ 对照表区①移除 48 项;   // v4150：鱼竿族（FishingRod+Lovely_Fishing）+ 载具族补员（潜艇→木筏后、塔拉萨悬停帆→泰克悬停帆后）+ 生物外观族 26 项落地（模块段最末）+ 对照表无特征项全参数表;   // v4149：换图 3 组（GrapplingHook→GrappleHook_Icon、TribeTower→Tribe_Tower、TranqArrow→TranqArrow_Icon）+ 补录 11 键（Snowball/Carnivorous_Plant_Seed/Thalassian 系×4/ARK_Anniversary_Surprise_Cake/Birthday_Candle/CryoHospital×2/Netgun）;   // v4148：实时补全区无图标补「?」占位（lbWpRtHtml 与主浮窗一致）+ 图标替换 14 组（储物箱/镜子/油罐/电锯/登山镐/矿枪/鞭子/沙漠套×5/吉利面具/防护套×3/喷火器/潜水服）+ 英文补全（Ghillie Mask / Hazard Suit Hat / SCUBA×4）+ 补录 11 键（MachinedBow/宠物展示台/生日蛋糕/水下耕地/潜艇/塔拉萨悬停帆/收割渔线/周年蛋糕×2）+ TransGPS 打 ASE 过滤标记;   // v4147：Lovely_Fishing_Rod 补录（工具 tool:1）+ 次级解药/扎啤/血之灵药 归料理族（words 3.1/3.2/3.3 排在医疗药酒·能量药酒之后）；图标未录对照表 v4147（六分类 66+53 / skins 甄别 689）;   // v4146：RecipeCurry_Icon 挂菲拉咖喱配方（RecipeNote_FriaCurry / PrimalItem_RecipeNote_FriaCurry 两键 icon→RecipeCurry_Icon）+ HoneyLure 补录（蜂蜜诱饵，图标 HoneyLure_Icon）；对照表 v6 重生（待核 4 / 已处理 12 / 染色剂 22 移出主表入脚注）;   // v4145：W 果短名补规则（Plant_Species_W→手雷，浮窗枚举键带下划线）;   // v4144：族修正（Cucumis/Oryraise→蔬菜；Gilly/Oceans/Worm 短名 re: 规则→料理——修 v4143 短名下划线不命中问题）;   // v4143：Aquatica 消耗品补录 9 项（作物×2/料理×3/弹药×1/其它×3）+ 非凡饲料换图 + 族规则 4 条;   // v4142：Ecto Lantern 两键打 tool:1（进器械栏·工具段）;   // v4141：花粉图标换 High_Quality_Pollen（2 条）+ Ecto Lantern 补录（灵质提灯，工具类，2 键 + 节日族 2 规则）;   // v4140：刷新热区修复（仅标记触发）+ 节日族扩展 + 补录 5 项 + 强效麻醉镖图;   // v4139：item_zh 图标修正（麻醉镖→Tranquilizer_Dart；硅酸盐→SilicateCrystal）;   // v4138：公共设施实时区 39 格（WorldProbe 接线 + 刷新 CD 10s + 后端短时缓存共用）;   // v4137：巨齿鲨颚/生存者战利品移至 Cymathoa 之后（61/62 档）+ Dragon Horn 补录（龙之号角）;   // v4136：Aquatica 三战利品移至奖杯族最末（60 档）;   // v4135：焰鬃獠猪两种獠牙图标（Boaratos_Tusk / Flaming_Boaratos_Tusk）;   // v4134：Hydra/Kraken 归一 + 本体过滤 + AstralSoul/HexCoins 图标 + 克拉肯/莫德尔旗帜正名 + 格伦德尔档位修复;   // v4133（修复）：奖杯族修饰词截胡修正（水晶飞龙女王战利品回归奖杯族 9.5）；v4132：旗帜族录入+排序垫底
+var LB_VERSION = 'v20261016-4762';   // v4280（根因修复）：① 退出物品模式恢复「选种」按钮（v1368 隐藏无恢复） ② 生物背包容器标题唯一源解析（BP_/_ASA 组件 token → 真实 dinoClass）   // v4231（用户实测「繁育栏把功能栏挡住」）：① 两栏同显繁育栏叠功能栏上方 ② 空繁育栏不显示 ③ 结果浮层/追踪钮偏移联动   // v4230（用户裁定）：皮肤类全链隐藏（词典 skin:1 标记并入判空链——Tileset 外观/Bounce 系列/节日建筑等 54 键）   // v4229（用户确认）：初始笔记全链隐藏（v4083 只滤浮窗，容器漏同步 ⇒ hideItems+硬编码双写入升级）   // v4228（用户口径）：容器 chip 染料补色点（v3593 只改了浮窗，容器漏同步）   // v4227（用户口径）：HotbarSkill_Base（快捷技能芯片，非真实物品）加入隐藏名单（hideItems+硬编码双写入）   // v4226（用户实测「黑曜石仙境没内容却显示tab」根因修复）：lbPickIdx 统计对齐渲染口径（+lbIsEmptyItem 判空）——q=0 空槽残留不再计入 tab/角标/聚落/总数   // v4225（v4224 实测补丁）：预热已走完但缓存被清（材质表到达等）→ 立即兜底冷建，不再干等 6s   // v4224（用户口径「空档期点击卡」）：① 物品栏未预热点击→占位+等预热填充（不再冻结 440ms 无反馈）② 预加载交互让路（600ms 窗口）③ 静默刷新收尾即触发预热（消 3s 空窗）   // v4223（性能优化·用户确认A+B2）：① 预加载热点——字典键数引用缓存（拥有索引 11,531ms 预计降至 1~2s）② 后台检查更新——批量 LM 接口（40+ 次 HEAD → 1 次请求）   // v4222（用户口径）：所有可点击徽章补 hover——① 设施芯片挂载条件扩为「可点即 hover」② 装备榜/选种行卡新增 hover   // v4221（用户实测「角标还显示了2」）：玩家背包同口径排除出服务器 tab 角标/聚落角标/总数（srv/setts/total），修角标与列表不一致   // v4220（用户实测）：「无聚落/离散」容器登记排除玩家背包（消除与「玩家携带」tab 重复的纯背包卡）   // v4219（实测根因）：伪容器 rec 补 server 字段（修「无聚落/离散」卡点进去详情空——lbRecHasPick 键查空导致）   // v4218（用户口径）：物品筛选类别扩至「物品浮窗全部类别」（lbItemIsPick 按浮窗归属类别对齐，修 建筑/资源等非装备类筛选全灭）   // v4217（用户要求）：① 别名表数据化（dino_rank_alias.json + 恐龙recs类名映射，零硬编码）② 物品模式玩家tab恢复位置卡/去平铺卡流 ③ 恐龙侧 mine 与恐龙列表同源（跨服龙鞍显示）   // v4216（实测根因修复）：ASB_DB 懒加载未就绪时缓存空表 ⇒ 词干表 0 条永久失效；改为「就绪才缓存」（lbRankStemMap + lbAsbNameMap）   // v4215（用户口径）：① 装备榜鞍键↔恐龙键同物异名归一（勘误+ASB词干表）② 选物种玩家背包只留该物种鞍/蓝图 ③ 选物品隐藏低温舱+去位置卡 ④ 非鞍剔除   // v4214（用户口径）：装备榜 TAB 角标只计「我的」——外部更高不参与计数   // v4213（用户口径·S7）：物种按钮显隐与物品侧同步——只看桶内容（有效条目）   // v4212：物种榜 qidx<=0 全排除 + 去重 >0 + 角标=实际显示数 + 恐龙背包显示具体龙名   // v4211（用户要求·单一代码源）：装备榜物种/物品渲染统一为 lbRankRenderPanel + 外部更高条目不显示区域名   // v4210（用户口径·位置唯一化）：容器显示接入「坐标→设施真身」统一解析（人台上的矛显示回「人台E」真名）   // v4209：物品模式装备榜=物种榜完整翻版（两 TAB 实物/蓝图 + qidx<=0 过滤 + 类别图标）   // v4208（用户需求）：物品模式装备榜——按钮按「存档有原始以上品质」动态显隐 + 面板细节对齐物种（分组/行卡/弹卡/过滤同源）   // v4207：离散「位置」组展开时数量位同样被按钮替换（对齐改名）   // v4206：离散卡容器组加「位置」按钮（复刻改名按钮 + 弹地图浮窗）   // v4205：物品模式 tab 显隐排除基因条件（Gen(0) 过滤根因）   // v4204：离散 chip 不响应重命名 + 物品模式隐藏基因设备段（基因存储器根因）   // v4203：修详情内部过滤缺口（物品模式详情逐成员对齐主列表 lbRecHasPick）   // v4202：对照表 11 项权威容量落地（容量表 +10 项数据键 + DisplayCase 归 HIDE）   // v4201（用户方案）：生物背包参与聚合——背包容器注入 ctn（byContainer 直接命中）+ 判定剔除背包点 + 容器组归属统一 + 删近邻兜底   // v4200：龙背包归属加「近邻唯一」兜底（帝蟒背包与龙坐标差 1749 也能归位）   // v4199：放出容器坐标键放开 + 物品索引接「生物背包→龙」关联链   // v4198：修 5 处容量别名反向空指（Fireplace/WaterTap/TurretCatapult/TurretBallista/TaxidermyBase_Small）   // v4197：龙背包并入归属过滤（离散/无聚落详情不再混入别人部落的生物背包）   // v4196：离散卡容器化（scatteredList 暴露 + 物品索引兜底 + 卡内容器注入）   // v4195：散置伪 rec 补 isEmpty 容器本体形态（v3452 同口径，防详情渲染崩溃）   // v4194：散置卡修复——伪容器 rec 直取（物品容器哈希与 rec 哈希两套，cid 不可跨查）   // v4193（用户口径）：物品模式隐藏「聚落命名/区域命名」入口 + 「散置容器」卡（无聚落卡，完全对齐物种）   // v4192（用户口径）：物品角标/数量对齐物种——只统计「当前角色拥有」（v3597 归属过滤接入 lbPickIdx）+ 物品模式聚落卡隐藏放出/低温仓/蛋段 + 角标图标按物品类型取 LB_INV_GRP;   // v4191：玩家 tab 自动切换补修（物品模式无该物品 ⇒ 内容区不再驻留空态）;   // v4190（用户要求）：单一物品主体页优化（玩家tab物品口径 / 物品索引双计修复 / 聚落角标武器类别图标 / 详情行隐藏容量角标）   // v4189（用户要求）：水雷迁入「器械>弹药」（Underwater Mine）;   // v4188（用户要求）：陷阱族迁入「器械>弹药」段（Y异种植物陷阱改名入族 + 大型捕兽夹/捕兽夹入族垫底；v4187 设施段位代码撤回）;   // v4186：泰克水壶补录（工具>水容器族末位）+ 巨石核实 + 对照表 5 项去重、恐龙外观表折叠;   // v4185：恐龙装备栏外观全组过滤（用户实锤鞍皮肤；hideItems 18 项）;   // v4184：译名（沙斯塔鱼龙）+ Cute Dino Helmet 过滤（玩家帽）+ lbEggIs 帽子豁免（Easter_Egg_Hat 归位模块栏）;   // v4183：物品浮窗接入 hideItems 过滤（Pepper Mask 修复）+ 恐龙外观 12 款落地（模块>生物外观）;   // v4182：恐龙装备栏外观 12 款图标全配（8 款本地实锤 + 4 款 wiki 补录；icons2 5204 / webp_map 5107）;   // v4181：B1 节日糖果全量入库（8 新键+圣诞糖果合并为节日恐龙糖+玉米糖换 HUD_Event_Halloween_BC）+ PepperMask 浮窗过滤 + 节日族词/类名规则;   // v4177：Air_Jar/Air_Bladder kind 修正（consumable→weapon，正式入器械>工具>水容器）+ 情人节/感恩节糖果补图（Valentines_Dino_Candy/Thanksgiving_Candy）;   // v4175：料理子序微调（鲨鲨小零食!紧挨吉利盛宴3.4后；虫胶19→5.3 紧挨饭团5.2后）;   // v4174：达科寿司/饭团（原稻米球改名）入料理族并紧挨海藻寿司（子序 5.1/5.2）;   // v4173：情人节巧克力正名+配图（Box o' Chocolates/盒装巧克力/VDay_icon）+ WormGum 补录（虫胶）+ Air_Jar/Air_Bladder 移工具·水容器族（族内最后）+ 食肉植物种子排植物种子R后 + 亚特兰汤/虫胶接料理子序18-19;   // v4170：消耗品补录 18 键（胡椒面具/空气罐/气囊/海龙汤/风干鱼肉×2/稻米球/感染系列×6/干海带/达科寿司/亚特兰汤/蓝莓汁 P+/情人节巧克力 ase）+ 新族「感染」（含感染藤壶 7 项）+ 泰克三叉戟归「矛」族;   // v4169：咒缚贴合全局兜底（跨块场景：咒缚火焰喷射器与本体被手炮块隔开 → 最终序列再贴一次）；v4168：咒缚武器贴合本体（16 对：本体在前、咒缚紧跟 — 武装 11 + 工具 3 + 键名兜底 1 +【火焰喷射器 v4169 修复】）+ 制导火箭弹图标→HomingMissileAmmo_Icon + 巡航导弹图标→Cruise_Missile（v4163 交接回调）;   // v4165：立式南瓜哨兵根因修复（facilityIconSpecial 置空 + 合并尊重空串哨兵）+ 圣诞糖果补录（consumable/节日）+ 鲍勃外观改名 + 蛋糕×3 归节日族;   // v4164：设施根因修正（标识归位/旗帜族+节日族垫底链）+ 节日补族（圣诞彩灯/万圣节墓碑）+ 新族「玩家外观」（TOF 卡尔配件，排生物外观前）;   // v4163：C4遥控起爆器→工具段（tool:1）+ 巡航导弹换图 HomingMissileAmmo_Icon + 塔拉萨麻醉弹药归「箭」族;   // v4162：生化皮肤/独木舟皮肤新族（骨架后/生物外观后）+ 设施栏标识族垫底（旗帜后）+ 咒缚电锯/喷火器图标对齐原版 + 弹药段「异种植物」词（W果实/Z手雷相邻）+ Netgun 归弹药;   // v4161：Radar_Rig 补录（雷达配件→跨步者配件族）+ 未组装的泰克跨步者改归「未组装」族;   // v4160：泰克悬停帆与塔拉萨悬停帆族内相邻（载具子序50.2/50.3）+ 6 条泰克跨步者配件补录（官方类名+官方中文，族=跨步者配件）;   // v4159：13 条骨架/幽灵/兔耳套装以**官方类名+官方中文**落地（长键=PrimalItemCostume_*、短键=图标名）+ 失落精灵龙套装补录 + 3 条旧骨骼条目同步官方名 + 全部归骨架皮肤/幽灵皮肤/生物外观族（排模块段最后）;   // v4158：外观族（骨架皮肤/幽灵皮肤/生物外观/尾巴/披风）整体移至模块段最后 + 独木舟3皮肤归生物外观 + 鱼竿族生效（两条相邻） + M.O.M.I.入模块段·机甲族 + 服装类豁免物种绑定过滤 + 跨步者配件族预留;   // v4157：Cryo医院/水下耕地/宠物展示台/绊线照明弹配方补录（材质档排序）+ 蛋糕ASE过滤 + 4服装隐藏 + 骨架皮肤族（3骨骼+生化，附件后） + 幽灵皮肤族（14条，骨骼后） + 战车族提前（附件前） + 立式南瓜清图标 + Plant W果实/Z手雷族内相邻;   // v4154：泰克光刃（TekClaws）换图 → HUD_TEKHandBlades_Icon_BC + 对照表"非皮肤·疑似"补齐后缀过滤;   // v4151：换图 2（巡航导弹→HUD_TEKCruiseMissile_Icon、泰克榴弹发射器→HUD_TEKGrenadeLauncher_Icon）+ 补录 4（绊线照明弹陷阱/泰克三叉戟/泰克长矛/C4遥控起爆器）+ 对照表区①移除 48 项;   // v4150：鱼竿族（FishingRod+Lovely_Fishing）+ 载具族补员（潜艇→木筏后、塔拉萨悬停帆→泰克悬停帆后）+ 生物外观族 26 项落地（模块段最末）+ 对照表无特征项全参数表;   // v4149：换图 3 组（GrapplingHook→GrappleHook_Icon、TribeTower→Tribe_Tower、TranqArrow→TranqArrow_Icon）+ 补录 11 键（Snowball/Carnivorous_Plant_Seed/Thalassian 系×4/ARK_Anniversary_Surprise_Cake/Birthday_Candle/CryoHospital×2/Netgun）;   // v4148：实时补全区无图标补「?」占位（lbWpRtHtml 与主浮窗一致）+ 图标替换 14 组（储物箱/镜子/油罐/电锯/登山镐/矿枪/鞭子/沙漠套×5/吉利面具/防护套×3/喷火器/潜水服）+ 英文补全（Ghillie Mask / Hazard Suit Hat / SCUBA×4）+ 补录 11 键（MachinedBow/宠物展示台/生日蛋糕/水下耕地/潜艇/塔拉萨悬停帆/收割渔线/周年蛋糕×2）+ TransGPS 打 ASE 过滤标记;   // v4147：Lovely_Fishing_Rod 补录（工具 tool:1）+ 次级解药/扎啤/血之灵药 归料理族（words 3.1/3.2/3.3 排在医疗药酒·能量药酒之后）；图标未录对照表 v4147（六分类 66+53 / skins 甄别 689）;   // v4146：RecipeCurry_Icon 挂菲拉咖喱配方（RecipeNote_FriaCurry / PrimalItem_RecipeNote_FriaCurry 两键 icon→RecipeCurry_Icon）+ HoneyLure 补录（蜂蜜诱饵，图标 HoneyLure_Icon）；对照表 v6 重生（待核 4 / 已处理 12 / 染色剂 22 移出主表入脚注）;   // v4145：W 果短名补规则（Plant_Species_W→手雷，浮窗枚举键带下划线）;   // v4144：族修正（Cucumis/Oryraise→蔬菜；Gilly/Oceans/Worm 短名 re: 规则→料理——修 v4143 短名下划线不命中问题）;   // v4143：Aquatica 消耗品补录 9 项（作物×2/料理×3/弹药×1/其它×3）+ 非凡饲料换图 + 族规则 4 条;   // v4142：Ecto Lantern 两键打 tool:1（进器械栏·工具段）;   // v4141：花粉图标换 High_Quality_Pollen（2 条）+ Ecto Lantern 补录（灵质提灯，工具类，2 键 + 节日族 2 规则）;   // v4140：刷新热区修复（仅标记触发）+ 节日族扩展 + 补录 5 项 + 强效麻醉镖图;   // v4139：item_zh 图标修正（麻醉镖→Tranquilizer_Dart；硅酸盐→SilicateCrystal）;   // v4138：公共设施实时区 39 格（WorldProbe 接线 + 刷新 CD 10s + 后端短时缓存共用）;   // v4137：巨齿鲨颚/生存者战利品移至 Cymathoa 之后（61/62 档）+ Dragon Horn 补录（龙之号角）;   // v4136：Aquatica 三战利品移至奖杯族最末（60 档）;   // v4135：焰鬃獠猪两种獠牙图标（Boaratos_Tusk / Flaming_Boaratos_Tusk）;   // v4134：Hydra/Kraken 归一 + 本体过滤 + AstralSoul/HexCoins 图标 + 克拉肯/莫德尔旗帜正名 + 格伦德尔档位修复;   // v4133（修复）：奖杯族修饰词截胡修正（水晶飞龙女王战利品回归奖杯族 9.5）；v4132：旗帜族录入+排序垫底
 try{ if(document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', function(){ try{ lbMatLoad(); }catch(e){} try{ lbRulesLoad(); }catch(e){} try{ if(typeof lbRankAliasLoad === 'function') lbRankAliasLoad(); }catch(e){} }); } else { lbMatLoad(); try{ lbRulesLoad(); }catch(e){} try{ if(typeof lbRankAliasLoad === 'function') lbRankAliasLoad(); }catch(e){} } }catch(e){}
 try{ if(!window.LB_PERF) window.LB_PERF = {}; window.LB_PERF.t_main0 = Date.now(); }catch(ePerf0){}   // v4465（用户口径·D1）：启动分段计时——主脚本执行开始
 function lbPerfMark(k){ try{ if(!window.LB_PERF[k]) window.LB_PERF[k] = Date.now(); }catch(e){} }
@@ -907,7 +913,7 @@ var LB_SPECIAL_NAMES = {
   'Thrall_Character_BP_SoldierWithPistol_C': '血仆·手枪士兵 (Thrall)',
   'Thrall_Character_BP_WithCrossbow_C': '血仆·十字弩 (Thrall)',
   'Parrot_Character_BP_C': '鹦鹉 (Parrot)',                           // TidesOfFortune 鹦鹉（ZH_MAP 无）
-  'SpiritBear_Character_BP_C': '长者之爪 (Elderclaw)',     // Fantastic Tames（ASB 无数据，2026-09-15）
+  'SpiritBear_Character_BP_C': '远古之爪 (Elderclaw)',     // v4667：官方中文（ShooterGame.json「远古之爪(Elderclaw)」）；归可拥有（种子养育）
   'Palaeoctopus_Character_BP_C': '古章鱼 (Palaeoctopus)',             // ToF 古章鱼（ZH_MAP 无）
   'MegaPalaeoctopus_Character_BP_C': '精英古章鱼 (Alpha Palaeoctopus)', // ToF 精英古章鱼（v235：alpha 统一为精英）
   'IceGolem_Char_BP_Gargoyle_C': '冰元素 (Ice Elemental)',            // Lost Colony 冰元素
@@ -1003,22 +1009,22 @@ var LB_SPECIAL_NAMES = {
   'Rex_Character_BP_Lightning_C': '闪电霸王龙 (Lightning Infused Rex)',
   'Summoner_Character_BP_CorruptedMaze_C': '腐化召唤师 (Macro-Summoner)'
   // v450：无 ASB 数据新生物（Ast/Astraeos + Lost Colony 丧尸）手动显示名（用户 2026-08-29，见 LB_TEST_EXTRA；ASB 未收录故走 LB_SPECIAL_NAMES 注入浮窗）
-  ,'Boaratos_Character_BP_C': '焰鬃野猪 (Boaratos)'
+  ,'Boaratos_Character_BP_C': '焰鬃獠猪 (Boaratos)'
   ,'Concavenator_Character_BP_C': '昆卡猎龙 (Concavenator)'
-  ,'Volcano_Concavenator_Character_BP_C': '火山昆卡猎龙 (Volcano Concavenator)'
+  ,'Volcano_Concavenator_Character_BP_C': 'X-昆卡猎龙 (X-Concavenator)'
   ,'Concavenator_Character_BP_Aberrant_C': '畸变昆卡猎龙 (Aberrant Concavenator)'
   ,'Zombie_Character_BP_Skinny_C': '复生者 (Revenant)'
   ,'Zombie_Character_BP_Bloated_C': '肿胀复生者 (Bloated Revenant)'
   ,'Zombie_Character_BP_Hulking_C': '巨兽复生者 (Hulking Revenant)'
   ,'MegaZombie_Character_BP_Hulking_C': '阿尔法巨兽复生者 (Alpha Hulking Revenant)'
   // v452：Lost Colony 恐龙丧尸（Revenant 系，ASB 有记录但收容排除 Revenant，统一进测试分隔）
-  ,'Raptor_Character_BP_Corrupted_Zombie_C': '复生迅猛龙 (Revenant Raptor)'
-  ,'Rex_Character_BP_Corrupt_Zombie_C': '复生霸王龙 (Revenant Rex)'
-  ,'Sauropod_Character_BP_Corrupt_Zombie_C': '复生雷龙 (Revenant Brontosaurus)'
-  ,'Carno_Character_BP_Child_Corrupt_Zombie_C': '复生食肉牛龙 (Revenant Carnotaurus)'
-  ,'Iguanodon_Character_BP_Corrupted_Zombie_C': '复生禽龙 (Revenant Iguanodon)'
-  ,'Therizino_Character_BP_Corrupted_Zombie_C': '复生镰刀龙 (Revenant Therizinosaur)'
-  ,'Therizino_Character_BP_Corrupted_Zombie_Boss_C': '屈服复生镰刀龙 (Succumbed Revenant Therizinosaur)'
+  ,'Raptor_Character_BP_Corrupted_Zombie_C': '怨灵迅猛龙 (Revenant Raptor)'
+  ,'Rex_Character_BP_Corrupt_Zombie_C': '怨灵霸王龙 (Revenant Rex)'
+  ,'Sauropod_Character_BP_Corrupt_Zombie_C': '怨灵雷龙 (Revenant Brontosaurus)'
+  ,'Carno_Character_BP_Child_Corrupt_Zombie_C': '怨灵食肉牛龙 (Revenant Carnotaurus)'
+  ,'Iguanodon_Character_BP_Corrupted_Zombie_C': '怨灵禽龙 (Revenant Iguanodon)'
+  ,'Therizino_Character_BP_Corrupted_Zombie_C': '怨灵镰刀龙 (Revenant Therizinosaur)'
+  ,'Therizino_Character_BP_Corrupted_Zombie_Boss_C': '屈服怨灵镰刀龙 (Succumbed Revenant Therizinosaur)'
 };
 // 中文同义词（显示名查不到时映射到已知 ZH_MAP 条目；Rubble Bear 是 Dire Bear 变体 → 恐熊；Woolly Rhino → woolly rhinoceros 披毛犀）
 var LB_ZH_SYNONYM = {
@@ -3489,6 +3495,13 @@ function lbInit(){
   if(!LB._watchList) LB._watchList = lbWatchLoad(); // v616：恢复关注未成年列表
   lbWatchCnt();
   lbBpCnt(); // v1082：恢复蓝图关注数（待制作按钮徽章）
+  try{ lbMaintCnt(); }catch(e){} // v4674：维护列表角标
+  // v4687（用户口径）：风机数据预热——页面加载 20s 后若有关注风机则后台拉一次（打开维护浮窗即秒开；10 分钟内复用）
+  setTimeout(function(){ try{
+    if(typeof lbFacWatchLoad !== 'function' || typeof lbMaintWindLoad !== 'function') return;
+    var _wl = (lbFacWatchLoad() || []).filter(function(w){ return /WindTrubine/i.test(String(w.cls || '')); });
+    if(_wl.length) lbMaintWindLoad(_wl, function(){});
+  }catch(e){} }, 20000);
   LB._themesPromise = LB._themesPromise || lbLoadThemes();
   LB._themesPromise.then(function(){
     if(!LB._inited){ LB._inited=true; lbRenderServers(); }
@@ -8715,6 +8728,332 @@ function lbBpFollowLoad(){ if(!LB._bpFollow) LB._bpFollow = lbBpLS(LB_BP_FOLLOW_
 function lbBpFollowSave(){ try{ localStorage.setItem(LB_BP_FOLLOW_KEY, JSON.stringify(LB._bpFollow || [])); }catch(e){} }
 function lbBpFollowHas(sv, base, inst){ var k = lbBpKey(sv, base, inst); return (lbBpFollowLoad() || []).some(function(x){ return lbBpKey(x.sv, x.base, x.inst) === k; }); }
 function lbBpCnt(){ var n = (lbBpFollowLoad() || []).length, el = document.getElementById('lbTodoCnt'); if(el){ if(n){ el.textContent = String(n); el.style.display = ''; } else { el.textContent = ''; el.style.display = 'none'; } } return n; }
+
+// ===== 维护列表（v4674·用户口径 2026-10-16）=====
+//   Part① 血/食不满的放出生物+载具（显示"距开始掉血"——公式近似：满食物按 T 小时耗尽计）
+//   Part② 关注设施（风机=耐久/停机时间；其余 9 类二期做库存内容）
+//   关注钮：聚落设施区（summary 改名钮左边 + chip 纯图标）——仅下列 10 类可关注
+var LB_MAINT_FAC_RE = [
+  { re:/WindTrubine/i,          tag:'风机',      kind:'wind', dura:true  },
+  { re:/StorageBox_TekGenerator/i, tag:'泰克发电机', kind:'box',  dura:false },
+  { re:/ElectricGenerator/i,    tag:'发电机',    kind:'box',  dura:false },
+  { re:/TekTrough/i,            tag:'泰克饲料槽', kind:'box',  dura:false },
+  { re:/FeedingTrough/i,        tag:'饲料槽',    kind:'box',  dura:false },
+  { re:/CropPlotSmall_SM/i,     tag:'小型耕地',  kind:'box',  dura:false },
+  { re:/CropPlotMedium_SM/i,    tag:'中型耕地',  kind:'box',  dura:false },
+  { re:/CropPlotLarge_SM/i,     tag:'大型耕地',  kind:'box',  dura:false },
+  { re:/StorageBox_Small/i,     tag:'小存储箱',  kind:'box',  dura:false },
+  { re:/Treasure/i,             tag:'宝藏箱',    kind:'box',  dura:false }
+];
+function lbMaintFacMeta(cls){ var c = String(cls || ''); for(var i=0;i<LB_MAINT_FAC_RE.length;i++){ if(LB_MAINT_FAC_RE[i].re.test(c)) return LB_MAINT_FAC_RE[i]; } return null; }
+// —— 关注存储（localStorage）——
+var LB_MAINT_WATCH_KEY = 'lbMaintWatch_v1';
+LB._facWatch = null;
+function lbFacWatchLoad(){
+  if(LB._facWatch) return LB._facWatch;
+  try{ LB._facWatch = JSON.parse(localStorage.getItem(LB_MAINT_WATCH_KEY) || '[]'); }catch(e){ LB._facWatch = []; }
+  if(!Array.isArray(LB._facWatch)) LB._facWatch = [];
+  return LB._facWatch;
+}
+function lbFacWatchSave(){ try{ localStorage.setItem(LB_MAINT_WATCH_KEY, JSON.stringify(LB._facWatch || [])); }catch(e){} }
+function lbFacWatchKey(sv, cls, x, y){ return String(sv) + '|' + String(cls) + '|' + Math.round(Number(x) || 0) + '|' + Math.round(Number(y) || 0); }
+function lbFacWatchOn(sv, cls, x, y){
+  var k = lbFacWatchKey(sv, cls, x, y), list = lbFacWatchLoad();
+  for(var i=0;i<list.length;i++){ if(lbFacWatchKey(list[i].sv, list[i].cls, list[i].x, list[i].y) === k) return true; }
+  return false;
+}
+function lbFacWatchToggle(ev, sv, cls, x, y, name){
+  if(ev) try{ ev.stopPropagation(); }catch(e){}
+  var list = lbFacWatchLoad(), k = lbFacWatchKey(sv, cls, x, y), hit = -1;
+  for(var i=0;i<list.length;i++){ if(lbFacWatchKey(list[i].sv, list[i].cls, list[i].x, list[i].y) === k){ hit = i; break; } }
+  if(hit >= 0){ list.splice(hit, 1); }
+  else { list.push({ sv:String(sv||''), cls:String(cls||''), x:Number(x)||0, y:Number(y)||0, name:String(name||''), ts:Date.now() }); }
+  lbFacWatchSave();
+  try{ lbMaintRefreshIcons(); }catch(e){}
+  try{ lbMaintCnt(); }catch(e){}
+  try{ if(LB._maintOpen) lbMaintRender(); }catch(e){}
+  return false;
+}
+// 刷新页面内所有关注图标（summary 按钮 + chip 图标）——data-facwatch 元素
+function lbMaintRefreshIcons(){
+  var els = document.querySelectorAll('[data-facwatch]');
+  for(var i=0;i<els.length;i++){
+    var el = els[i];
+    try{
+      var k = String(el.getAttribute('data-facwatch') || ''), on = false;
+      var parts = k.split('|');   // sv|cls|x|y
+      if(parts.length === 4) on = lbFacWatchOn(parts[0], parts[1], parts[2], parts[3]);
+      el.innerHTML = (typeof lbMdiSvg === 'function') ? lbMdiSvg(on ? 'mdi-eye-off-outline' : 'mdi-eye', 12) : (on ? '👁' : '👁');
+      el.style.color = on ? '#f59e0b' : '#777';
+      try{ el.classList.toggle('lb-watch-on', on); }catch(e){}
+    }catch(e){}
+  }
+}
+// —— Part① 数据：血/食不满的放出生物/载具 ——
+// v4686（用户口径·实测校准）：食物消耗改用官方每物种参数（ASB_DB.taming.foodConsumptionBase = 食物点/秒）；
+//   幼年（消耗随成熟度插值）/载具/查无物种 → null（卡片显示"—"）；服务器食物消耗倍率恒 1.0（用户未调）
+var LB_MAINT_FOOD_MULT = 1.0;
+var LB_MAINT_BASE_CACHE = {};
+function lbMaintDrainPerHour(r){
+  try{
+    if(!r) return null;
+    if(typeof lbGrowthStage === 'function' && lbGrowthStage(r)) return null;
+    if(typeof ASB_DB === 'undefined' || !ASB_DB || !ASB_DB._byBp) return null;   // 数据库未就绪：不缓存
+    var cls = String(r.dinoClass || '');
+    if(!cls) return null;
+    var base = LB_MAINT_BASE_CACHE[cls];
+    if(base === undefined){
+      var sp = null;
+      try{ sp = (typeof findSpeciesByClass === 'function') ? findSpeciesByClass(cls) : null; }catch(e){ sp = null; }
+      base = (sp && sp.taming && Number(sp.taming.foodConsumptionBase) > 0) ? Number(sp.taming.foodConsumptionBase) : 0;
+      LB_MAINT_BASE_CACHE[cls] = base;
+    }
+    if(!(base > 0)) return null;
+    return base * 3600 * LB_MAINT_FOOD_MULT;
+  }catch(e){ return null; }
+}
+function lbMaintBioRows(){
+  var d = LB._cache && LB._cache.data; if(!d || !Array.isArray(d.recs)) return [];
+  var curPid = (typeof lbCurPid === 'function') ? lbCurPid() : null;
+  var playerSet = (curPid && typeof lbPlayerTribes === 'function') ? lbPlayerTribes(d.tribesByServer || {}, curPid) : null;
+  var out = [];
+  for(var i=0;i<d.recs.length;i++){
+    var r = d.recs[i];
+    if(!r || r.src !== 'tamed') continue;
+    if(playerSet && typeof lbIsPlayerRec === 'function' && !lbIsPlayerRec(r, playerSet, curPid)) continue;   // v4676（用户口径）：只显示当前角色的生物
+    try{ if(lbContainerTypeOf(r) !== 'released') continue; }catch(e){ continue; }
+    var sv = r.statValues || [], cv = r.currentStatValues || [];
+    if(!sv.length || !cv.length) continue;
+    var maxH = Number(sv[0]) || 0, curH = Number(cv[0]);
+    var maxF = Number(sv[4]) || 0, curF = Number(cv[4]);
+    // v4684（用户口径）：生命=不满即显示（不变）；食物=低于 80% 才算
+    var hBad = (maxH > 0 && isFinite(curH) && curH < maxH * 0.999);
+    var fBad = (maxF > 0 && isFinite(curF) && curF < maxF * 0.8);
+    if(!hBad && !fBad) continue;
+    var hours = null;
+    if(curF > 0){ var rate = lbMaintDrainPerHour(r); if(rate > 0) hours = curF / rate; }   // v4686：按物种官方速率
+    out.push({ r:r, hPct:(maxH ? curH / maxH * 100 : null), fPct:(maxF ? curF / maxF * 100 : null),
+               hBad:hBad, fBad:fBad, curH:curH, maxH:maxH, curF:curF, maxF:maxF, hours:hours });
+  }
+  out.sort(function(a,b){ var ah = (a.hours == null) ? 1e9 : a.hours, bh = (b.hours == null) ? 1e9 : b.hours; return ah - bh; });
+  return out;
+}
+// —— 角标计数 ——
+function lbMaintCnt(){
+  var n = 0;
+  try{ n += lbMaintBioRows().length; }catch(e){}
+  try{ n += (lbFacWatchLoad() || []).length; }catch(e){}
+  var el = document.getElementById('lbMaintCnt');
+  if(el){ if(n){ el.textContent = String(n); el.style.display = ''; } else { el.textContent = ''; el.style.display = 'none'; } }
+  return n;
+}
+
+// —— 维护列表浮窗（照 lbTodoOpen 模式）——
+function lbMaintOpen(){
+  var old = document.querySelector('.lb-maint-overlay'); if(old) old.remove();
+  var ov = document.createElement('div');
+  ov.className = 'lb-maint-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center';
+  ov.onclick = function(e){ if(e.target === ov) lbMaintClose(); };
+  ov.innerHTML = '<div onclick="event.stopPropagation()" style="background:#17171f;border:1px solid #f59e0b55;border-radius:12px;width:640px;max-width:94vw;max-height:86vh;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,.6)">'
+    + '<div style="display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid #2a2a3a"><b style="color:#f59e0b;font-size:15px;display:inline-flex;align-items:center;gap:5px">' + lbMdiSvg('mdi-wrench', 15) + ' 维护列表</b>'
+    + '<span style="font-size:11px;color:#888">血/食不满生物 · 关注设施</span>'
+    + '<span style="flex:1"></span><button onclick="lbMaintClose()" style="background:none;border:none;color:#999;font-size:18px;cursor:pointer">✕</button></div>'
+    + '<div class="lb-modal-scroll" style="flex:1;min-height:0;overflow-y:auto;padding:10px 12px 12px">'
+    + '<div id="lbMaintBioSec"></div>'
+    + '<div id="lbMaintFacSec" style="margin-top:14px"></div>'
+    + '</div>';
+  document.body.appendChild(ov);
+  LB._maintOpen = true;
+  lbMaintRender();
+}
+function lbMaintClose(){ LB._maintOpen = false; var o = document.querySelector('.lb-maint-overlay'); if(o) o.remove(); }
+function lbMaintBar(label, pct, cur, max){
+  if(pct == null || !(max > 0)) return '';
+  var p = Math.max(0, Math.min(100, pct));
+  var col = p < 20 ? '#ef4444' : (label === '血' ? '#4ade80' : '#facc15');   // v4685（用户口径）：血=绿、食=黄；低于 20% 一律红
+  return '<div style="display:flex;align-items:center;gap:6px;margin-top:4px;font-size:11px;color:#9ca3af">'
+    + '<span style="width:14px">' + label + '</span>'
+    + '<span style="flex:1;height:4px;background:#2a2a3a;border-radius:2px;overflow:hidden"><span style="display:block;height:100%;width:' + p.toFixed(1) + '%;background:' + col + '"></span></span>'
+    + '<span style="width:66px;text-align:right;color:' + (p < 20 ? col : '#9ca3af') + '">' + Math.round(cur) + '/' + Math.round(max) + '</span></div>';
+}
+function lbMaintHrsText(h){
+  if(h == null) return '距掉血 —';
+  var s = (h < 1) ? Math.round(h * 60) + ' 分钟' : (h < 48 ? (h < 10 ? h.toFixed(1) : Math.round(h)) + ' 小时' : (h / 24).toFixed(1) + ' 天');
+  return '距掉血 ~' + s;
+}
+function lbMaintHrsColor(h){ if(h == null) return '#666'; if(h < 2) return '#ef4444'; if(h < 6) return '#f59e0b'; return '#9ca3af'; }
+LB._maintWindData = LB._maintWindData || {};
+function lbMaintWindLoad(winds, done){
+  var svs = {}; winds.forEach(function(w){ if(w.sv) svs[w.sv] = 1; });
+  var arr = Object.keys(svs), idx = 0;
+  (function next(){
+    if(idx >= arr.length){ done && done(); return; }
+    var sv = arr[idx++];
+    var cache = LB._maintWindData[sv];
+    if(cache && (Date.now() - cache.ts < 600000)){ next(); return; }   // v4687：TTL 60s→10 分钟（风机耐久变化极慢；打开浮窗即秒开）
+    try{
+      fetch(LB_API + '/api/wind_status?server=' + encodeURIComponent(sv), { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ server: sv }) })
+        .then(function(r){ return r.json(); })
+        .then(function(j){ if(j && j.ok) LB._maintWindData[sv] = { ts: Date.now(), data: j }; next(); })   // v4688：仅成功缓存——失败不缓存，下次打开自动重试（不卡 10 分钟）
+        .catch(function(){ next(); })   // v4688：失败不缓存（瞬时网络/CORS 故障不落盘）
+    }catch(e){ next(); }
+  })();
+}
+function lbMaintWindRow(w){
+  var cache = LB._maintWindData[w.sv];
+  if(!cache) return '<div style="color:#888;font-size:12px;padding:3px 0">加载中…</div>';
+  var j = cache.data || {};
+  if(!j.ok) return '<div style="color:#f87171;font-size:12px;padding:3px 0">' + lbAttr(j.error || '查询失败') + '</div>';
+  var t = null;
+  // v4682（用户口径·实锤）：实例号优先匹配——风机可被拾取后重新放置：实例号不变、坐标变（cryo 快照旧坐标 vs WorldProbe 现坐标可差 1 万+）；坐标 ±300 仅作兜底
+  (j.turbines || []).forEach(function(x){ if(!t && String(x.objectName || '') && String(x.objectName || '') === String(w.cls || '')) t = x; });
+  if(!t) (j.turbines || []).forEach(function(x){ if(!t && Math.abs(Number(x.x) - Number(w.x)) < 300 && Math.abs(Number(x.y) - Number(w.y)) < 300) t = x; });
+  if(!t) return '<div style="color:#888;font-size:12px;padding:3px 0">本次扫描未发现（可能未加载或已拆除）</div>';
+  var p = Number(t.pct) || 0;
+  var col = p < 20 ? '#ef4444' : '#38bdf8';   // v4685（用户口径）：耐久=蓝；低于 20% 红
+  var dh = Number(t.depleteHours);
+  var dhTxt = isFinite(dh) ? ('停机 ~' + (dh < 48 ? (dh < 10 ? dh.toFixed(1) : Math.round(dh)) + ' 小时' : (dh / 24).toFixed(1) + ' 天')) : '停机 —';
+  return '<div style="background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:8px 10px;margin-bottom:6px">'
+    + '<div style="display:flex;align-items:center;gap:6px;font-size:13px;color:#e5e7eb"><b>风机</b><span style="color:#888;font-size:11px">' + lbAttr(w.name || '') + '</span><span style="flex:1"></span>'
+    + '<span style="font-size:11px;color:' + (dh < 6 ? '#ef4444' : (dh < 24 ? '#f59e0b' : '#9ca3af')) + '">' + dhTxt + '</span>'
+    + '<button onclick="event.stopPropagation();lbFacWatchToggle(event,\'' + lbBpJsq(w.sv) + '\',\'' + lbBpJsq(w.cls) + '\',' + (Number(w.x) || 0) + ',' + (Number(w.y) || 0) + ')" style="background:none;border:none;color:#f59e0b;cursor:pointer;padding:0 2px" title="取消关注">✕</button></div>'
+    + '<div style="display:flex;align-items:center;gap:6px;margin-top:4px;font-size:11px;color:#9ca3af"><span>耐久</span>'
+    + '<span style="flex:1;height:4px;background:#2a2a3a;border-radius:2px;overflow:hidden"><span style="display:block;height:100%;width:' + Math.max(0, Math.min(100, p)).toFixed(1) + '%;background:' + col + '"></span></span>'
+    + '<span style="width:88px;text-align:right">' + p.toFixed(1) + '% · ' + Math.round(Number(t.health) || 0) + '/' + Math.round(Number(t.maxHealth) || 0) + '</span></div>'
+    + '<div style="font-size:10px;color:#666;margin-top:3px">' + lbAttr(t.objectName || '') + ' · decay ' + (t.decayHours || '') + 'h · wind ' + (t.wind != null ? t.wind : '-') + '</div>'
+    + '</div>';
+}
+// v4675：设施库存内容（直接用现有设施列表数据——lbItemsOfContainer，无需探针）
+function lbMaintFacInvFind(w){
+  try{
+    var d = LB._cache && LB._cache.data; if(!d || !Array.isArray(d.recs)) return null;
+    var best = null, bx = 1e18;
+    for(var i=0;i<d.recs.length;i++){
+      var r = d.recs[i];
+      if(!r) continue;
+      if(String(r.containerClass || '') !== String(w.cls || '')) continue;
+      if(String(r.server || '') !== String(w.sv || '')) continue;
+      var dx = Math.abs(Number(r.containerX != null ? r.containerX : r.x) - Number(w.x || 0));
+      var dy = Math.abs(Number(r.containerY != null ? r.containerY : r.y) - Number(w.y || 0));
+      var dd = dx + dy;
+      if(dd < bx){ bx = dd; best = r; }
+    }
+    if(best && bx <= 600) return best;
+  }catch(e){}
+  return null;
+}
+function lbMaintFacRow(w){
+  var m = null; try{ m = lbMaintFacMeta(w.cls); }catch(e){}
+  var tag = (m && m.tag) || '设施';
+  var r = lbMaintFacInvFind(w);
+  var items = null, cnt = 0;
+  if(r){
+    try{ items = lbItemsOfContainer(String(r.server || w.sv || ''), r.containerId, r.containerClass, r.containerX, r.containerY); }catch(e){ items = null; }
+    if(items){ try{ items = items.filter(function(x){ return x && !lbIsEmptyItem(x); }); }catch(e2){} cnt = items ? items.length : 0; }
+  }
+  var js2 = "event.stopPropagation();lbFacWatchToggle(event,'" + String(w.sv || '').replace(/'/g, '') + "','" + String(w.cls || '').replace(/'/g, '') + "'," + (Number(w.x) || 0) + "," + (Number(w.y) || 0) + ",'');return false;";
+  var hh = '<div style="background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:8px 10px;margin-bottom:6px">'
+    + '<div style="display:flex;align-items:center;gap:6px;font-size:13px;color:#e5e7eb"><b>' + lbAttr(tag) + '</b><span style="color:#888;font-size:11px">' + lbAttr(w.name || '') + '</span><span style="flex:1"></span>'
+    + '<span style="font-size:11px;color:' + (cnt ? '#9ca3af' : '#666') + '">' + (r ? ('库存 ' + cnt + ' 项') : '未找到记录') + '</span>'
+    + '<button onclick="' + js2 + '" style="background:none;border:none;color:#f59e0b;cursor:pointer;padding:0 2px" title="取消关注">✕</button></div>';
+  if(!r){
+    hh += '<div style="font-size:11px;color:#666;padding:3px 0 1px">未在设施列表中找到该设施（可能已拆除）</div>';
+  } else if(!cnt){
+    hh += '<div style="font-size:11px;color:#666;padding:3px 0 1px">（空）</div>';
+  } else {
+    hh += '<div style="display:flex;flex-wrap:wrap;gap:6px;padding:6px 0 2px">' + lbInvListHtml(items, {inline:true}) + '</div>';   // v4683（用户口径）：库存内容不折叠直接显示
+  }
+  hh += '</div>';
+  return hh;
+}
+function lbMaintRender(){
+  if(!LB._maintOpen) return;
+  var bio = [], err1 = '';
+  try{ bio = lbMaintBioRows(); }catch(e){ err1 = String(e); }
+  var _mCurPid = (typeof lbCurPid === 'function') ? lbCurPid() : null;
+  var watch = [];
+  try{ watch = lbFacWatchLoad() || []; }catch(e){}
+  var winds = [], boxes = [];
+  watch.forEach(function(w){ try{ var m = lbMaintFacMeta(w.cls); if(m && m.kind === 'wind') winds.push(w); else boxes.push(w); }catch(e){ boxes.push(w); } });
+  // v4683（用户口径·A 方案）：一级按地图（服务器）分组——每服一块（生物 + 设施都在块内）；行内不再重复服务器名
+  var svs = {};
+  function _mk(sv){ sv = String(sv || '?'); if(!svs[sv]) svs[sv] = { bio: [], winds: [], boxes: [] }; return svs[sv]; }
+  bio.forEach(function(x){ _mk(x.r && x.r.server).bio.push(x); });
+  winds.forEach(function(w){ _mk(w.sv).winds.push(w); });
+  boxes.forEach(function(w){ _mk(w.sv).boxes.push(w); });
+  var order = Object.keys(svs).sort();
+  var h = '';
+  if(err1) h += '<div style="color:#f87171;font-size:12px">扫描失败: ' + lbAttr(err1) + '</div>';
+  if(_mCurPid) h += '<div style="font-size:11px;color:#8b8b9e;margin:2px 0 4px">只显示当前角色的放出生物</div>';
+  if(!order.length) h += '<div style="color:#666;font-size:12px;padding:6px 0">暂无维护项（血/食不满的放出生物 + 关注设施）</div>';
+  order.forEach(function(sv){
+    var g = svs[sv];
+    var nm = sv;
+    try{ if(typeof LB.servName === 'function') nm = LB.servName(sv) || sv; }catch(e){}
+    h += '<div style="font-size:13px;color:#e2e8f0;font-weight:bold;margin:12px 0 8px;padding-bottom:4px;border-bottom:1px solid #2a2a3a">🗺 ' + lbAttr(nm)
+      + '<span style="color:#f59e0b;margin-left:8px;font-size:11px;font-weight:normal">生物 ' + g.bio.length + ' · 设施 ' + (g.winds.length + g.boxes.length) + '</span></div>';
+    g.bio.forEach(function(x){
+      var r = x.r;
+      var cls = String(r.dinoClass || '');
+      var zh = ''; try{ zh = lbZhDeep(cls) || ''; }catch(e){}
+      zh = zh || cls.replace(/_Character_BP.*$/, '').replace(/_/g, ' ');
+      var sname = r.name ? (' “' + lbAttr(r.name) + '”') : '';
+      h += '<div style="background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:8px 10px;margin-bottom:6px">'
+        + '<div style="display:flex;align-items:center;gap:6px;font-size:13px;color:#e5e7eb"><b>' + lbAttr(zh) + '</b><span style="color:#888;font-size:11px">Lv.' + (r.level || 0) + sname + '</span>'
+        + '<span style="flex:1"></span>'
+        + '<span style="font-size:11px;color:' + lbMaintHrsColor(x.hours) + '">' + lbMaintHrsText(x.hours) + '</span></div>'
+        + lbMaintBar('血', x.hPct, x.curH, x.maxH)
+        + lbMaintBar('食', x.fPct, x.curF, x.maxF)
+        + '</div>';
+    });
+    g.winds.forEach(function(w){
+      if(LB._maintWindData[w.sv]) h += lbMaintWindRow(w);
+      else h += '<div style="color:#888;font-size:12px;padding:3px 0">风机数据加载中…</div>';
+    });
+    g.boxes.forEach(function(w){ h += lbMaintFacRow(w); });
+  });
+  var b1 = document.getElementById('lbMaintBioSec'); if(b1) b1.innerHTML = h;
+  var b2 = document.getElementById('lbMaintFacSec'); if(b2) b2.innerHTML = '';
+  // 异步拉风机（缓存之外的图）
+  if(winds.length && !LB._maintWindBusy){
+    LB._maintWindBusy = true;
+    try{ lbMaintWindLoad(winds, function(){ LB._maintWindBusy = false; try{ if(LB._maintOpen) lbMaintRender(); }catch(e){} }); }catch(e){ LB._maintWindBusy = false; }
+  }
+}
+
+// v4674：组内首个"可关注设施"（10 类）的原始 rec——供关注钮/图标使用
+function lbMaintWatchTargetOfGroup(items){
+  try{
+    if(!items || !items.length) return null;
+    for(var i=0;i<items.length;i++){
+      var c = String((items[i] && (items[i].containerClass || items[i].cls)) || '');
+      if(c && lbMaintFacMeta(c)) return items[i];
+    }
+  }catch(e){}
+  return null;
+}
+// v4674：关注钮（summary 带边框 lb-id-btn；chip 纯图标——用户口径：无需边框只要图标）
+function lbMaintFacWatchBtn(rec, chip){
+  try{
+    if(!rec) return '';
+    var cls = String(rec.containerClass || rec.cls || '');
+    if(!lbMaintFacMeta(cls)) return '';
+    var sv = String(rec.server || LB.tab || '');
+    var x = Number(rec.containerX != null ? rec.containerX : rec.x) || 0;
+    var y = Number(rec.containerY != null ? rec.containerY : rec.y) || 0;
+    var nm = String(rec.containerName || rec.name || '').replace(/'/g, '');
+    var on = lbFacWatchOn(sv, cls, x, y);
+    var key = lbFacWatchKey(sv, cls, x, y);
+    var js = "event.stopPropagation();lbFacWatchToggle(event,'" + sv.replace(/'/g, '') + "','" + cls.replace(/'/g, '') + "'," + x + "," + y + ",'" + nm + "');return false;";
+    var icon = (typeof lbMdiSvg === 'function') ? lbMdiSvg(on ? 'mdi-eye-off-outline' : 'mdi-eye', 12) : '';
+    if(chip){
+      return '<span data-facwatch="' + lbAttr(key) + '" onclick="' + js + '" title="' + (on ? '取消关注' : '关注（加入维护列表）') + '" style="display:inline-flex;align-items:center;cursor:pointer;color:' + (on ? '#f59e0b' : '#777') + ';margin-left:2px">' + icon + '</span>';
+    }
+    return '<span class="lb-id-btn' + (on ? ' lb-watch-on' : '') + '" data-facwatch="' + lbAttr(key) + '" style="margin-right:6px;vertical-align:middle;position:static;top:auto;right:auto" onclick="' + js + '" title="' + (on ? '取消关注' : '关注（加入维护列表）') + '">' + icon + '</span>';
+  }catch(e){ return ''; }
+}
+
 function lbBpSnapOf(btn){ try{ var c = (btn && btn.closest) ? btn.closest('.lb-card') : null; return c ? JSON.parse(c.getAttribute('data-bpsnap') || '{}') : {}; }catch(e){ return {}; } }
 function lbBpFollowToggle(sv, base, inst, cls, zh, btn){
   var l = lbBpFollowLoad(), k = lbBpKey(sv, base, inst), i = -1;
@@ -10362,8 +10701,13 @@ function lbSaddleIcon(sc, sz){
   return '<img src="" class="lb-img-bad" style="width:'+_s+'px;height:'+_s+'px;object-fit:contain;display:block">';
 }
 // 鞍图标（PNG 优先，取自 asa-data 图标库；未收录回退 MDI SVG）：普通 RW_equip_saddle、平台 RW_Garage_roof_show、Tek TEK_Icon
+// v4665（用户要求）：优先「对应鞍的专属图」——先查词典（lbItemIconUrl：PrimalItemArmor_XxxSaddle → 词典 icon → icons2 URL，如 Cerberax_Saddle / Gargantar_Saddle）；未命中回退三通用图
 function lbSaddleImg(sc){
   if(!sc) return '';
+  try{
+    var _u = (typeof lbItemIconUrl === 'function') ? lbItemIconUrl(sc) : '';
+    if(_u){ var _f0 = lbIconFilterStyle(_u); return '<img src="'+_u+'" style="width:14px;height:14px;object-fit:contain;display:block"'+(_f0?_f0:'')+'>'; }
+  }catch(e0){}
   var key = 'RW_equip_saddle';
   if(/platform/i.test(sc)) key = 'RW_Garage_roof_show';
   else if(/tek/i.test(sc)) key = 'TEK_Icon';
@@ -14096,6 +14440,7 @@ function lbBuildSettleContainerHtml(grp, settleKey){
     //   现改为收集整组全部可改成员：1 个 → 原改名弹窗；≥2 个 → 批量改名弹窗（带内容/空设施均适用）
     var _rTgts = lbRenameTargetsOfGroup(cg);
     var _rTgt = _rTgts.length ? _rTgts[0] : null;
+    var _mwt = (typeof lbMaintWatchTargetOfGroup === 'function') ? lbMaintWatchTargetOfGroup(cg) : null;   // v4674：维护列表可关注设施（10 类）
     var _dedN = (_dedMerge || (_unitN > 1 && (!_cnm0 || _cnm0 === '?'))) ? ('<span style="opacity:.7;font-size:11px;margin-left:4px">×'+_unitN+'</span>') : '';
     var invItems = lbGroupItems(cg);
     invItems = lbDropEquippedSaddle(cg, invItems);   // v3549（用户口径）：生物装备槽里那件鞍不重复进背包清单（其他鞍保留）
@@ -14217,8 +14562,9 @@ function lbBuildSettleContainerHtml(grp, settleKey){
       //   ⇒ v3391 放行 display 的 #ID 后，仅代表 1 台的实例号被显示在 91 台的标题上（与 v973 口径冲突）
       +'<span class="acc-sum-name">'+lbContainerLabel(cg[0], ((_dedMerge || _unitN > 1) ? {hideId:true, hideColor:true} : null))+_dedN+'</span>'
       // v1225：放出组——数量角标加 acc-cnt-rel（展开时被「一键起名」按钮替换）；按钮回到最右（右对齐）
-      +'<span class="acc-cnt'+((lbContainerTypeOf(cg[0])==='released' || (_rTgt && lbContainerTypeOf(_rTgt)!=='released') || _fiP9 >= 0) ? ' acc-cnt-rel' : '')+'">'+fullH+eggSepH+eggH+v6H+scnMark+invMark+sepH+emptyH+(_capH?(' '+_capH):'')+'</span>' // v1334：角标替换改用组内可改名成员 _rTgt（原 cg[0]）；v3490：+容量；v4207：+_fiP9（离散「位置」组展开时数量位同样被按钮替换，对齐改名）
+      +'<span class="acc-cnt'+((lbContainerTypeOf(cg[0])==='released' || (_rTgt && lbContainerTypeOf(_rTgt)!=='released') || _fiP9 >= 0 || _mwt) ? ' acc-cnt-rel' : '')+'">'+fullH+eggSepH+eggH+v6H+scnMark+invMark+sepH+emptyH+(_capH?(' '+_capH):'')+'</span>' // v1334：角标替换改用组内可改名成员 _rTgt（原 cg[0]）；v3490：+容量；v4207：+_fiP9（离散「位置」组展开时数量位同样被按钮替换，对齐改名）；v4679：+_mwt（关注钮同款：展开时数量位被按钮替换）
       +((lbContainerTypeOf(cg[0])==='released') ? '<button class="lb-rel-rename" data-gk="'+lbAttr(k)+'" onclick="event.stopPropagation();lbSettleBatchRename(this)" title="一键命名本组未命名放出生物">一键起名</button>' : '')
+      +((_mwt && typeof lbMaintFacWatchBtn === 'function') ? lbMaintFacWatchBtn(_mwt) : '')   // v4674：关注钮（10 类设施；改名按钮左边）
       +(_rTgts.length > 1 ? lbFacBatchRenameBtn(_rTgts) : (_rTgt ? lbContainerRenameBtn(_rTgt) : ''))   // v3384：合并组也出按钮（1→原弹窗，≥2→批量弹窗）；v1334：目标取组内「带钥匙」成员
       +((_fiP9 >= 0) ? '<button class="lb-rel-rename" onclick="event.stopPropagation();lbOpenFacMap('+_fiP9+')" title="位置">位置</button>' : '')   // v4206：离散容器组「位置」按钮（与改名按钮同款：展开时显示 + stopPropagation + 弹地图浮窗）
       +'</summary>';
@@ -14581,13 +14927,13 @@ function lbBuildSettleContainerHtml(grp, settleKey){
             var _chips = _named.map(function(_x){
               var _fi = -1;
               if(scattered){ LB._settleFacMap.push({ label:(_x.name || _x.meta.zh), en:_x.meta.en || '', items:(_x.items||[]).slice() }); _fi = LB._settleFacMap.length - 1; }
-              return lbSettleFacChip(_x.meta, _x.name, null, { fi:_fi, colorHtml:_x.colorHtml, frn:_frnOf(_x.items), scattered:scattered });   // v1328：+涂装色点；v3384：+改名目标；v4204：+离散标志（离散 chip 不响应重命名）
+              return lbSettleFacChip(_x.meta, _x.name, null, { fi:_fi, colorHtml:_x.colorHtml, frn:_frnOf(_x.items), scattered:scattered, wf:lbMaintWatchTargetOfGroup(_x.items) });   // v1328：+涂装色点；v3384：+改名目标；v4204：+离散标志（离散 chip 不响应重命名）；v4674：+设施关注
             });
             Object.keys(_grp).forEach(function(_k){
               var _g = _grp[_k];
               var _fi2 = -1;
               if(scattered){ LB._settleFacMap.push({ label:_g.meta.zh, en:_g.meta.en || '', items:(_g.items||[]).slice() }); _fi2 = LB._settleFacMap.length - 1; }
-              _chips.push(lbSettleFacChip(_g.meta, (_g.name || null), _g.n, { fi:_fi2, frn:_frnOf(_g.items), scattered:scattered }));   // v3384：×N 空设施 → 批量改名；v3391：具名合并组带名字；v4204：+离散标志
+              _chips.push(lbSettleFacChip(_g.meta, (_g.name || null), _g.n, { fi:_fi2, frn:_frnOf(_g.items), scattered:scattered, wf:lbMaintWatchTargetOfGroup(_g.items) }));   // v3384：×N 空设施 → 批量改名；v3391：具名合并组带名字；v4204：+离散标志；v4674：+设施关注
             });
             return _chips;
           };
@@ -15943,6 +16289,7 @@ function lbSettleFacChip(meta, name, cnt, opts){
   if(meta.en) extra += '<span style="opacity:.55;font-size:9px;margin-left:4px">'+meta.en+'</span>';
   if(cnt > 1) extra += ' ×'+cnt;   // v3391：改名了的合并组（同名空设施）同样要显示 ×N（原仅无名才显示）
   var _fi = (opts && opts.fi !== undefined && opts.fi >= 0) ? opts.fi : -1;
+  var _wfIco = (opts && opts.wf && typeof lbMaintFacWatchBtn === 'function') ? lbMaintFacWatchBtn(opts.wf, true) : '';   // v4674：维护列表关注图标（10 类，纯图标无边框）
   var _attr = _fi >= 0 ? ' onclick="lbOpenFacMap('+_fi+')"' : '';
   var _cur = _fi >= 0 ? 'pointer' : 'default';
   var _colS = (opts && opts.colorHtml) ? opts.colorHtml : '';   // v1328：涂装色点（只画已着色区域）
@@ -15967,7 +16314,7 @@ function lbSettleFacChip(meta, name, cnt, opts){
   // v4222（用户口径「能触发任何动作的徽章都要有 hover 效果」）：悬停类挂载条件扩为「所有可点击 chip」——
   //   弹地图（_fi>=0）/ 单改名（_rd）/ 批量改名（_rl）均可达 ⇒ 均挂；不可点（cursor:default）不挂。
   var _chipCls = 'lb-fchip' + ((_rd || _rl || _fi >= 0) ? ' lb-fchip-rn' : '');
-  return '<span class="' + _chipCls + '"'+_attr+' style="display:inline-flex;align-items:center;gap:4px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:6px;padding:3px 8px;font-size:12px;color:#ccc;white-space:nowrap;cursor:'+_cur+'">'+ic+label+_colS+extra+'</span>';   // v1330：色点移到灰英文之前
+  return '<span class="' + _chipCls + '"'+_attr+' style="display:inline-flex;align-items:center;gap:4px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:6px;padding:3px 8px;font-size:12px;color:#ccc;white-space:nowrap;cursor:'+_cur+'">'+ic+label+_colS+extra+_wfIco+'</span>';   // v1330：色点移到灰英文之前；v4679（用户口径）：关注图标移到最右侧
 }
 // v3410/v3416：牌子类型的**权威汉化口径**——运行时读表（icon_zh_map 走 zhName / facility_zh），表未加载时用官方原文兜底
 //   来源：汉化/ShooterGame.csv(英) ↔ ShooterGame.json(官方中文) 联表 + facility_zh.json
@@ -17423,6 +17770,8 @@ var LB_OWNED_UNITS = [
   'Fenrir_Character_BP_C',
   // v400：巨翼魔蝠归可拥有（用户 2026-08-29）
   'BossBat_Character_BP_C',
+  // v4667（用户口径 2026-10-16）：远古之爪（Elderclaw，种子养育）归可拥有（自预览组移出）
+  'SpiritBear_Character_BP_C',
   // v608：焦土飞龙×3/岩龙/熔岩龙 移出→「可偷蛋」组（见 LB_STEAL_EGG，原 v406 归可拥有已移除）
   // v407：死神王后移出可拥有（用户 2026-08-29：不可拥有但完整繁育栏，见 LB_FULL_BREED_EXTRA）
 ];
@@ -17484,6 +17833,8 @@ var LB_HIDDEN_SPECIAL = [
   ,'Kirayli_Character_BP_C','Turkey_Character_BP_C'
   // v266：闪电飞龙（繁星 Lightning Infused 系列）归不可训变体（用户 2026-08-24——同物种已驯服过滤误伤，显式放行）
   ,'Wyvern_Character_BP_Fire_Lightning_C'
+  // v4667（用户口径 2026-10-16）：怨灵系×6 移出预览 → 归变体区（ASB 已收录；恒显示供选种/查分布）
+  ,'Raptor_Character_BP_Corrupted_Zombie_C','Rex_Character_BP_Corrupt_Zombie_C','Sauropod_Character_BP_Corrupt_Zombie_C','Carno_Character_BP_Child_Corrupt_Zombie_C','Iguanodon_Character_BP_Corrupted_Zombie_C','Therizino_Character_BP_Corrupted_Zombie_C'
   // v450：人形丧尸移出→「测试」分隔（用户 2026-08-29，见 LB_TEST_EXTRA）
 ];
 // v267：强制归「特殊生物」折叠区（用户 2026-08-24）：畸变/兔耳/派对/病态系列 7 个
@@ -17530,23 +17881,15 @@ var LB_EXTRA_FORCE = [
 ];
 // v454：无 ASB 数据新生物「预览」分隔组（原「测试」，用户 2026-08-29 改名）——ASB 物种库未收录（GitHub master/dev 均无），手动维护类名+显示名（LB_SPECIAL_NAMES 注入浮窗），收进特殊区「预览」分隔线组；待 ASB 收录后移出正式归类
 var LB_TEST_EXTRA = [
-  'SpiritBear_Character_BP_C',                 // 长者之爪 Elderclaw（Fantastic Tames，ASB 无数据）
-  'Boaratos_Character_BP_C',                   // 焰鬃野猪（Ast/Astraeos 新生物）
-  'Concavenator_Character_BP_C',               // 昆卡（Ast/Astraeos 新生物）
-  'Volcano_Concavenator_Character_BP_C',       // 火山昆卡
-  'Concavenator_Character_BP_Aberrant_C',      // 畸变昆卡
   'Zombie_Character_BP_Skinny_C',              // 复生者（Lost Colony 人形丧尸）
   'Zombie_Character_BP_Bloated_C',             // 肿胀复生者
   'Zombie_Character_BP_Hulking_C',             // 巨兽复生者
   'MegaZombie_Character_BP_Hulking_C',         // 阿尔法巨兽复生者
+  // v4667（用户口径 2026-10-16）：ASB 已收录 11 项移出预览 —— 远古之爪→可拥有（LB_OWNED_UNITS）；
+  //   Boaratos/Concavenator 系×4→未驯区（自动：可驯 / X- 规则）；怨灵系×6→变体区（LB_HIDDEN_SPECIAL）；
+  //   人形丧尸×4 因 ASB 仍无数据保留预览
   // v453：圣羊移出（测试分隔标准=ASB 无数据；圣羊 ASB 有记录 Kirayli，恢复 LB_HIDDEN_SPECIAL/LB_EXTRA_FORCE 原处理）
-  // v452：Lost Colony 恐龙丧尸（Revenant 系 7 个，用户 2026-08-29）
-  'Raptor_Character_BP_Corrupted_Zombie_C',
-  'Rex_Character_BP_Corrupt_Zombie_C',
-  'Sauropod_Character_BP_Corrupt_Zombie_C',
-  'Carno_Character_BP_Child_Corrupt_Zombie_C',
-  'Iguanodon_Character_BP_Corrupted_Zombie_C',
-  'Therizino_Character_BP_Corrupted_Zombie_C'
+  // v452：Lost Colony 恐龙丧尸（Revenant 系，2026-08-29 收容；v4667 移出至变体区）
   // v492：屈服复生镰刀龙移出预览组（用户 2026-08-30）
 ];
 // v239：强制隐藏（BOSS 不显示，用户确认）：冰原/沙漠/森林泰坦、贝拉；v240 加君王泰坦、恐熊LL
@@ -18055,7 +18398,8 @@ var LB_EGG_MAP = {   // v4078（用户要求）：按 dododex 全面校正（19 
   Kaprosuchus:'M', Mantis:'M', Pachy:'S', Pachyrhino:'M', Para:'XS', Spindles:'M', TerrorBird:'M', Trike:'S', Turtle:'M',
   Tropeognathus:'L', Moth:'L',   // v4079（用户要求）：沙蛾蛋 = 优质饲料（Superior/上等）
   Quetz:'XL',
-  Sarco:'M', Spino:'L', Diplo:'M', Allo:'L'
+  Sarco:'M', Spino:'L', Diplo:'M', Allo:'L',
+  Gargantar:'SP'   // v4666（用户要求）：伽甘塔尔蛋（Dragontopia，eggsize=Special → 非凡；wiki）
 };
 var _LB_EGG_KEYS = Object.keys(LB_EGG_MAP).sort(function(a,b){ return b.length - a.length; });   // 长键优先（Hesperonis_Golden 先于 Hesperonis）
 function lbEggIs(base, t){
@@ -21487,7 +21831,7 @@ function lbSurfMapHtml(){
     var glow = 'filter:drop-shadow(0 0 3px ' + z.col + ') drop-shadow(0 0 8px ' + z.col + ') drop-shadow(0 0 18px ' + z.col + ') drop-shadow(0 0 36px ' + z.col + ') drop-shadow(0 0 60px ' + z.col + ');';   // v4458（用户口径）：外发光加深（3→60px 五层；描边方案已弃用）
     var ic9 = (st && LB_SURF_ICON[st]) ? lbSurfIcon(st) : '';
     mk += '<div style="position:absolute;left:' + z.cx + '%;top:' + z.cy + '%;width:0;height:0;pointer-events:none">'   // v4457：零尺寸锚点
-      + '<img src="' + iconU + '" alt="方舟" style="position:absolute;left:-16px;top:-16px;width:32px;' + glow + '">'   // v4458：24→32px
+      + '<img src="' + iconU + '" alt="方舟" data-arkgrp="' + z.grp + '" style="position:absolute;left:-16px;top:-16px;width:32px;' + glow + '">'   // v4458：24→32px；v4733（用户口径）：+data-arkgrp（遮罩对应组时主图标浮到遮罩之上）
       + '<div style="position:absolute;left:0;top:18px;transform:translateX(-50%);font-size:10px;font-weight:bold;color:#fff;background:rgba(15,15,22,.78);border:1px solid ' + col + ';border-radius:9px;padding:1px 5px;white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,.7)">'
       + (ic9 ? '<img src="' + ic9 + '" alt="" style="width:11px;height:11px;object-fit:contain;vertical-align:-2px;margin-right:2px">' : '')
       + '<span style="color:' + col + '">' + (LB_SURF_NM[st] || '—') + '</span> <span id="lbSurfBadgeCd_' + z.lab + '">' + cd + '</span></div>'   // v4458：徽章 id 按点位唯一（修腐蚀方舟倒计时不刷新根因）
@@ -21500,6 +21844,17 @@ function lbSurfMapHtml(){
     + lbWxNoteHost('surface')   // v4484（用户口径）：点地震卡 → 地图说明遮罩（60s 自动收起）
     + '</div>'
     + '</div>';
+}
+function lbSurfArkRaise(){   // v4733（用户口径）：地表说明遮罩打开时，对应地表区方舟主图标（含外发光）浮到遮罩之上——仅主图标，徽章仍被盖；A 卡=紫+绿 / B 卡=红；无遮罩/关闭复位
+  try{
+    var key = String(lbWxNoteCur('surface') || '');
+    var want = (key === 'surfA') ? 'A' : ((key === 'surfB') ? 'B' : '');
+    var els = document.querySelectorAll('[data-arkgrp]');
+    for(var i = 0; i < els.length; i++){
+      var g = String(els[i].getAttribute('data-arkgrp') || '');
+      els[i].style.zIndex = (want && g === want) ? '13' : '';
+    }
+  }catch(e){}
 }
 function lbSurfCardHtml(segs, nowAbs, spd, titleHtml, noteKey, wmIcon){   // v4458（用户口径）：卡片重构（右上徽章 + 倒计时前图标 + 比例进度条 + 上下分流标注）；v4485：noteKey → 点卡显示地图说明遮罩；v4724（用户口径）：+wmIcon 背景水印图标参数（默认 LB_IC_BURNING）
   if(!segs || !segs.length) return '';
@@ -22594,7 +22949,7 @@ function lbBadwxSinceBadSec(sv, iT){   // v4492（用户口径）：距上次坏
   }catch(e){ return null; }
 }
 // ===== v4539（插件 v122b24 weatherHistory）：天气历史工具 =====
-var LB_WH_BADPATS = { MeteorRain: ['meteor'], Sandstorm: ['sand', 'dust'], Sand_Dust_Storm: ['sand', 'dust'], Blizzard: ['blizzard'], ElectricalStorm: ['electr', 'lightning', 'thunder'], ElectricalStorm_Fog: ['storm_fog', 'stormfog'], Superheat: ['superheat'] };   // v4539：目标天气匹配词——避跨类（storm 与电风暴/沙尘暴双撞，禁用）；v4567（用户口径）：+Superheat（Sco/Rag 焚风）；v4691（用户口径）：+ElectricalStorm_Fog（Gen 雷雾历史按名过滤）
+var LB_WH_BADPATS = { MeteorRain: ['meteor'], Sandstorm: ['sand', 'dust'], Sand_Dust_Storm: ['sand', 'dust'], Blizzard: ['blizzard'], ElectricalStorm: ['electr', 'lightning', 'thunder'], ElectricalStorm_Fog: ['storm_fog', 'stormfog'], Superheat: ['superheat'], Rain: ['rain'] };   // v4539：目标天气匹配词——避跨类（storm 与电风暴/沙尘暴双撞，禁用）；v4567（用户口径）：+Superheat（Sco/Rag 焚风）；v4691（用户口径）：+ElectricalStorm_Fog（Gen 雷雾历史按名过滤）；v4740（用户口径）：+Rain（Gen 沼泽绿雨——「上次绿雨」历史/记录匹配；recent 内 id='Rain'）
 function lbWxHist(){   // v4539：当前图 weatherHistory（无数据/不属当前图 ⇒ null）
   try{
     var wx = LB._wx && LB._wx.data;
@@ -23145,19 +23500,42 @@ function lbWxShareCardHtml(sv){   // v4583（用户口径）：非 UDS 图共享
     return lbWxCard('\u23F3', '', main, '', col2, null, null, 10, null, '0 0 auto', _bdgS, 16, '', prog, col2);   // v4585：倒计时字号 10px；v4586：badge=右上角纯文字
   }catch(e){ return ''; }
 }
-function lbWxHistTipSuffix(name){   // v4539（方案 B）：tips 尾部「天气历史」节；v4569（用户口径）：name=当前 tip 的天气 ⇒ 「上次坏天气」只按该天气过滤
+function lbWxHistTipSuffix(name, zone){   // v4539（方案 B）：tips 尾部「天气历史」节；v4569（用户口径）：name=当前 tip 的天气 ⇒ 「上次坏天气」只按该天气过滤；v4740/v4742（用户口径）：+zone（绿雨卡 'bog' / 雷暴卡 'ocean'）——「上次变天」等只考虑对应生态圈（含区专属进行中判定）
   try{
     var wh = lbWxHist();
     if(!wh) return '';
     if(String(wh.source || '') === 'none') return '\n【天气历史】\n该图无天气身份，暂不支持';
     var seg = [];
+    var _zh = function(x){   // v4740（用户口径）：Gen 图语义显示——沼泽 Rain 统一「绿雨」；v4742（用户口径·B）：仅沼泽上下文映射（海洋的雨保持「雨」）
+      var s = lbWxNameZh(x);
+      try{ if(String(lbVolcServer()) === 'Gen' && zone === 'bog' && s === '雨') s = '绿雨'; }catch(eZ){}
+      return s;
+    };
     var chg = Number(wh.changes);
-    if(isFinite(chg) && chg >= 1 && wh.lastChange && wh.lastChange.agoSec !== null && isFinite(Number(wh.lastChange.agoSec))){
-      var a1 = lbWxHistAgo(wh.lastChange.agoSec);
-      var apx = (Number(wh.lastChange.atEarliest) > 0) ? '约' : '';   // v4579：按观测窗口口径（>0=窗口标"约"；0/null=精确不标）——覆盖 autoScan/observedWindow/gameStamp
-      var to1 = lbWxNameZh(lbWxHistName(wh.lastChange.to || wh.current || ''));   // v4568（用户口径）：tips 天气名中文化
-      if(a1 !== null) seg.push('上次变天 ' + apx + (lbProbCycleTxt(a1) || (Math.round(a1) + ' 秒')) + '前' + (to1 ? ' → ' + to1 : ''));
-    } else { seg.push('变天记录：暂无（重载后尚未观测到变天）'); }
+    var _bz1 = null;   // v4740（用户口径）：绿雨卡「上次变天」只考虑沼泽；v4742（用户口径）：泛化为区专属（zone='bog'→沼泽 / zone='ocean'→海洋·雷暴卡；beginAt=最近一次该区变天 / currentWeather=变到的天气）
+    if(zone === 'bog' || zone === 'ocean'){
+      try{
+        var _jx0 = LB._wx && LB._wx.data;
+        if(_jx0 && Array.isArray(_jx0.wxSystems)){ for(var _ix0 = 0; _ix0 < _jx0.wxSystems.length; _ix0++){ var _sx0 = _jx0.wxSystems[_ix0] || {}; if(String(_sx0.miniMapType || '') === zone){ _bz1 = _sx0; break; } } }
+      }catch(eBz00){}
+      if(_bz1) try{
+        var _wn0 = Number((LB._wx && LB._wx.data || {}).worldTime), _ba0 = Number(_bz1.beginAt);
+        if(isFinite(_wn0) && isFinite(_ba0) && _ba0 > 0 && _wn0 >= _ba0){
+          var _ag0 = lbWxHistAgo(_wn0 - _ba0);
+          var _to0 = lbGenZoneWxLabel(_bz1, _bz1.currentWeather);   // 区语义（沼泽 Rain→绿雨；海洋 Rain→「雨」——B 口径；海洋 ES/ESF→雷暴/雷雾）
+          if(_ag0 !== null) seg.push('上次变天 ' + (lbProbCycleTxt(_ag0) || (Math.round(_ag0) + ' 秒')) + '前' + (_to0 ? ' → ' + _to0 : ''));
+          else seg.push('变天记录：暂无（重载后尚未观测到变天）');
+        } else { _bz1 = null; }   // 数据不足 ⇒ 回退旧口径
+      }catch(eBz01){ _bz1 = null; }
+    }
+    if(!_bz1){
+      if(isFinite(chg) && chg >= 1 && wh.lastChange && wh.lastChange.agoSec !== null && isFinite(Number(wh.lastChange.agoSec))){
+        var a1 = lbWxHistAgo(wh.lastChange.agoSec);
+        var apx = (Number(wh.lastChange.atEarliest) > 0) ? '约' : '';   // v4579：按观测窗口口径（>0=窗口标"约"；0/null=精确不标）——覆盖 autoScan/observedWindow/gameStamp
+        var to1 = _zh(lbWxHistName(wh.lastChange.to || wh.current || ''));   // v4568（用户口径）：tips 天气名中文化；v4740：_zh（Gen 雨→绿雨）
+        if(a1 !== null) seg.push('上次变天 ' + apx + (lbProbCycleTxt(a1) || (Math.round(a1) + ' 秒')) + '前' + (to1 ? ' → ' + to1 : ''));
+      } else { seg.push('变天记录：暂无（重载后尚未观测到变天）'); }
+    }
     try{   // v4573/v4576（用户口径）：无倒计时图（UDS：Sco/Isl/Cen）⇒ 「下次变天」估算行（剩余 = 本图中位间隔 − 已过；不足则不显示）
       var _wsE = (LB._wx && LB._wx.data && String(LB._wx.data.server || '') === String(lbVolcServer())) ? LB._wx.data.weatherState : null;
       var _noSucE = !(_wsE && _wsE.secondsUntilChange !== undefined && _wsE.secondsUntilChange !== null);
@@ -23170,9 +23548,42 @@ function lbWxHistTipSuffix(name){   // v4539（方案 B）：tips 尾部「天�
     var lb1 = wh.lastBad;
     if(name && lb1 && !lbWxHistBadIs(name)) lb1 = null;   // v4569（用户口径）：lastBad 非当前 tip 天气 ⇒ 弃用（改用按名渠道）
     var _rb1 = name ? lbWxRecentBadEnd(name) : lbWxRecentBadEnd(null);   // v4561/v4569：按名过滤（未传 name ⇒ 任意，保持兼容）
-    if(lb1 && lb1.name && (lb1.running === 1 || lb1.running === true)){ seg.push('坏天气进行中：' + lbWxNameZh(lbWxHistName(lb1.name))); }
-    else if(_rb1 && _rb1.running){ seg.push('坏天气进行中：' + lbWxNameZh(_rb1.name)); }
-    else {
+    var _handledB = false;   // v4741/v4742（用户口径）：区专属「进行中/上次」权威判定（bog=绿雨 / ocean=雷暴·雷雾；防 recent 多区混流误判「已结束」）
+    if((zone === 'bog' || zone === 'ocean') && _bz1) try{
+      var _bzr1 = String(_bz1.currentWeather || '');
+      var _bzW1 = Number((LB._wx && LB._wx.data || {}).worldTime), _bzB1 = Number(_bz1.beginAt);
+      var _wetA = (zone === 'ocean') ? ['ElectricalStorm', 'ElectricalStorm_Fog'] : ['Rain'];   // 该区坏天气集合
+      var _patA = (zone === 'ocean') ? 'electricalstorm' : 'rain';   // recent 匹配词（小写子串）
+      var _nmA = function(x){   // 集合内→展示名（海洋 ES→雷暴 / ESF→雷雾；沼泽 Rain→绿雨；其余走 _zh）
+        x = String(x || '');
+        if(x === 'ElectricalStorm') return '雷暴';
+        if(x === 'ElectricalStorm_Fog') return '雷雾';
+        return _zh(x);
+      };
+      if(_wetA.indexOf(_bzr1) >= 0){   // 该区坏天气进行中（权威）：已持续 = 本段开始至今
+        var _stB1 = (isFinite(_bzW1) && isFinite(_bzB1) && _bzB1 > 0 && _bzW1 >= _bzB1) ? lbWxHistAgo(_bzW1 - _bzB1) : null;
+        seg.push('坏天气进行中：' + _nmA(_bzr1) + ((_stB1 !== null) ? ('（已持续 ' + (lbProbCycleTxt(_stB1) || (Math.round(_stB1) + ' 秒')) + '）') : ''));
+        _handledB = true;
+      } else if(_wetA.indexOf(String(_bz1.prevWeather || '')) >= 0 && isFinite(_bzW1) && isFinite(_bzB1) && _bzB1 > 0 && _bzW1 >= _bzB1){   // 刚过：结束时刻=该区变走时刻（权威）
+        var _pnN1 = String(_bz1.prevWeather || '');
+        var _ezB1 = lbWxHistAgo(_bzW1 - _bzB1);
+        var _durB1 = null;   // best-effort：从 recent 找「≤变走时刻最近同段」开始点（多区混流下仅供参考）
+        try{
+          var _rec1 = (wh.recent || []);
+          for(var _ib1 = _rec1.length - 1; _ib1 >= 0; _ib1--){
+            var _it1 = _rec1[_ib1]; if(!_it1 || Number(_it1.seed) === 1) continue;
+            if(String(lbWxHistName(_it1.id) || '').toLowerCase().indexOf(_patA) < 0) continue;
+            var _at1 = Number(_it1.at);
+            if(isFinite(_at1) && _at1 > 0 && _at1 <= _bzB1){ var _dd1 = _bzB1 - _at1; if(_dd1 > 0 && _dd1 < 86400) _durB1 = _dd1; break; }
+          }
+        }catch(eDb1){}
+        seg.push('上次 ' + _nmA(_pnN1) + '（结束于 ' + (lbProbCycleTxt(_ezB1) || (Math.round(_ezB1) + ' 秒')) + '前' + ((_durB1 !== null) ? (' · 持续 ' + (lbProbCycleTxt(_durB1) || (Math.round(_durB1) + ' 秒'))) : '') + '）');
+        _handledB = true;
+      }
+    }catch(eBz9){ _handledB = false; }   // 异常 ⇒ 回退原口径
+    if(!_handledB && lb1 && lb1.name && (lb1.running === 1 || lb1.running === true)){ seg.push('坏天气进行中：' + _zh(lbWxHistName(lb1.name))); }
+    else if(!_handledB && _rb1 && _rb1.running){ seg.push('坏天气进行中：' + _zh(_rb1.name)); }
+    else if(!_handledB){
       var _lAgo = null, _lName = '', _lDur = null;
       if(lb1 && lb1.name){
         var _ea0 = lbWxHistBadEndAgo(lb1);   // v4544（用户口径）：结束口径（原 agoSec=开始口径，会误读成“X 前刚结束”）
@@ -23186,9 +23597,9 @@ function lbWxHistTipSuffix(name){   // v4539（方案 B）：tips 尾部「天�
       else if(_rAgo !== null && _rAgo < _lAgo) _pickR = true;
       if(_pickR){
         var _dur1 = (_rb1.durSec !== null && isFinite(Number(_rb1.durSec))) ? _rb1.durSec : null;
-        seg.push('上次 ' + lbWxNameZh(_rb1.name) + '（结束于 ' + (lbProbCycleTxt(_rAgo) || (Math.round(_rAgo) + ' 秒')) + '前' + (_dur1 !== null ? ' · 持续 ' + (lbProbCycleTxt(_dur1) || (Math.round(_dur1) + ' 秒')) : '') + '）');
+        seg.push('上次 ' + _zh(_rb1.name) + '（结束于 ' + (lbProbCycleTxt(_rAgo) || (Math.round(_rAgo) + ' 秒')) + '前' + (_dur1 !== null ? ' · 持续 ' + (lbProbCycleTxt(_dur1) || (Math.round(_dur1) + ' 秒')) : '') + '）');
       } else if(_lAgo !== null && _lAgo !== undefined){
-        seg.push('上次 ' + lbWxNameZh(_lName) + '（结束于 ' + (lbProbCycleTxt(_lAgo) || (Math.round(_lAgo) + ' 秒')) + '前' + (_lDur !== null ? ' · 持续 ' + (lbProbCycleTxt(_lDur) || (Math.round(_lDur) + ' 秒')) : '') + '）');
+        seg.push('上次 ' + _zh(_lName) + '（结束于 ' + (lbProbCycleTxt(_lAgo) || (Math.round(_lAgo) + ' 秒')) + '前' + (_lDur !== null ? ' · 持续 ' + (lbProbCycleTxt(_lDur) || (Math.round(_lDur) + ' 秒')) : '') + '）');
       } else { seg.push('坏天气记录：暂无'); }
     }
     return '\n【天气历史】\n' + seg.join('\n');   // v4573（用户口径）：标题独立一行（v4571 各段换行之上）
@@ -23817,6 +24228,20 @@ function lbSveEvMapHtml(vBig, vCol){   // v4613（用户口径）：生态事件
         }
       }catch(eAW0){}
     }
+    if(!_sea){   // v4735（用户口径）：沼泽绿雨呼吸图标（样式对齐暴风雪——径向渐变圆+呼吸动画；平时小点）
+      try{
+        var _bwx0 = null;
+        var _wxd10 = LB._wx && LB._wx.data;
+        if(_wxd10 && _wxd10.ok && Array.isArray(_wxd10.wxSystems)){
+          for(var _wi10 = 0; _wi10 < _wxd10.wxSystems.length; _wi10++){ if(String((_wxd10.wxSystems[_wi10] || {}).miniMapType || '') === 'bog'){ _bwx0 = _wxd10.wxSystems[_wi10]; break; } }
+        }
+        if(_bwx0 && String(_bwx0.currentWeather || '') === 'Rain'){
+          mk += '<div style="position:absolute;left:78%;top:74%;transform:translate(-50%,-50%);animation:lbBreathe 2.2s ease-in-out infinite;pointer-events:none;display:flex;align-items:center;justify-content:center;width:46px;height:46px;border-radius:50%;background:radial-gradient(circle,rgba(74,222,128,.5),rgba(74,222,128,.10) 70%,transparent);border:1.5px solid rgba(134,239,172,.9);box-shadow:0 0 14px rgba(74,222,128,.85);font-size:22px;line-height:1">\u2614</div>';
+        } else if(_bwx0){
+          mk += '<div style="position:absolute;left:78%;top:74%;transform:translate(-50%,-50%);pointer-events:none;width:6px;height:6px;border-radius:50%;background:rgba(74,222,128,.55);box-shadow:0 0 0 1px rgba(134,239,172,.5)"></div>';
+        }
+      }catch(eBW0){}
+    }
     if(_sea){   // v4641（用户口径）：海洋视图海况点位（对齐火山/流星雨点位样式）
       try{
         var _wv = LB._wave && LB._wave.data;
@@ -24085,7 +24510,8 @@ function lbGenWxEventCards(sel){   // v4658（用户口径）：Gen 极端天气
     for(var i0 = 0; i0 < j.wxSystems.length; i0++){ var s0 = j.wxSystems[i0] || {}; cur[String(s0.miniMapType || 'null')] = String(s0.currentWeather || ''); zobj[String(s0.miniMapType || 'null')] = s0; }
     var DEF = [
       { ic: '\u2744\uFE0F', nm: '暴风雪', col: '#93c5fd', zn: 'arctic', wx: 'Storm', note: 'genwx|blizzard', want: 'Storm' },
-      { ic: '\u26C8\uFE0F', nm: '雷暴 / 雷雾', col: '#a78bfa', zn: 'ocean', want: 'ElectricalStorm', want2: 'ElectricalStorm_Fog', col2: '#c4b5fd', ic2: '\u{1F301}', note: 'genwx|esco' }   // v4718（用户口径）：雷暴+雷雾合并为一张卡（双徽章竖排 + 合并说明；触发态随当前种类变色变图标）
+      { ic: '\u26C8\uFE0F', nm: '雷暴 / 雷雾', col: '#a78bfa', zn: 'ocean', want: 'ElectricalStorm', want2: 'ElectricalStorm_Fog', col2: '#c4b5fd', ic2: '\u{1F301}', note: 'genwx|esco' },   // v4718（用户口径）：雷暴+雷雾合并为一张卡（双徽章竖排 + 合并说明；触发态随当前种类变色变图标）
+      { ic: '\u2614', nm: '绿雨', col: '#4ade80', zn: 'bog', wx: 'Rain', note: 'genwx|acidrain', want: 'Rain' }   // v4730（用户口径）：绿雨并入同源渲染（完全对齐雷暴卡：触发态变色/出现率徽章/计数段/点卡切陆地图）
     ];
     var out = '';
     for(var k0 = 0; k0 < DEF.length; k0++){
@@ -24152,6 +24578,41 @@ function lbGenWxShareCard(){   // v4674（用户口径）：Gen 共享卡恢复�
     return lbWxCard(_imgH, _lbl, '', '', null, null, null, null, null, '0 0 auto', (_sub ? ('<span style="font-size:10px;color:#777;white-space:nowrap;margin-top:2px">' + _sub + '</span>') : ''), 10, '', { txt: '', pct: _pct, col: '#8b8ba0' }, '#e2e8f0');
   }catch(e){ return ''; }
 }
+function lbGenBogShareCard(){   // v4730（用户口径）：沼泽共享卡（逐行对齐海洋共享卡）——「沼泽 · 距变天/持续区间」；绿雨进行中=事件名+剩余/总+进度条；总量锁定防跳动
+  try{
+    var j = LB._wx && LB._wx.data;
+    if(!(j && j.ok && Array.isArray(j.wxSystems))) return '';
+    var bz = null;
+    for(var i = 0; i < j.wxSystems.length; i++){ var s0 = j.wxSystems[i] || {}; if(String(s0.miniMapType || '') === 'bog'){ bz = s0; break; } }
+    if(!bz) return '';
+    var _bs = Number(bz.secondsUntilChange);
+    if(!(isFinite(_bs) && _bs >= 0)) return '';
+    var _brem = Math.max(0, _bs - (Date.now() - (LB._wx.recvMs || Date.now())) / 1000);
+    var _bago = NaN;
+    try{ var _w0 = Number(j.worldTime); var _b0 = Number(bz.beginAt); if(isFinite(_w0) && isFinite(_b0) && _b0 > 0 && _w0 > _b0) _bago = _w0 - _b0; }catch(eA0){}
+    var _btot = NaN;
+    try{
+      if(isFinite(_bago) && _bago >= 0){
+        LB._genWxTot = LB._genWxTot || {};
+        var _tk = 'bog|' + String(Math.round(Number(bz.beginAt) || 0));
+        if(!isFinite(LB._genWxTot[_tk])) LB._genWxTot[_tk] = Math.max(1, _bago + _bs);
+        _btot = LB._genWxTot[_tk];
+      }
+    }catch(eT1){}
+    var _pct = isFinite(_btot) ? Math.max(0, Math.min(1, (_btot - _brem) / _btot)) : 0;
+    var _cur = String(bz.currentWeather || '');
+    if(_cur === 'Rain'){   // 绿雨进行中：事件名 + 剩余/总（绿色）+ 绿色进度条
+      var _col = '#4ade80';
+      var _bdg = (_brem <= 5) ? '\u5373\u5C06\u7ED3\u675F' : (lbWxFmtSec(_brem) + (isFinite(_btot) ? (' / ' + lbWxFmtSec(_btot)) : ''));
+      return lbWxCard('\u23F3', '', '\u2614 绿雨', '', _col, null, null, 10, null, '0 0 auto', ('<span style="font-size:10px;font-weight:bold;color:' + _col + ';white-space:nowrap;margin-top:2px">' + _bdg + '</span>'), 16, '', { txt: '', pct: _pct, col: _col }, _col);
+    }
+    var _bmin = Math.round(Number(bz.changeTimerMin) / 60), _bmax = Math.round(Number(bz.changeTimerMax) / 60);
+    var _sub = (isFinite(_bmin) && isFinite(_bmax) && _bmin > 0 && _bmax > _bmin) ? ('\u5929\u6C14\u6301\u7EED ' + _bmin + '~' + _bmax + ' \u5206\u949F') : '';
+    var _imgH = '<img src="' + lbResURL(LB_IC_BIOME_BOG) + '" alt="" style="width:14px;height:14px;object-fit:contain;vertical-align:-3px;margin-right:2px">';
+    var _lbl = '\u6CBC\u6CFD \u00B7 ' + ((_brem <= 5) ? '\u5373\u5C06\u53D8\u5929' : ('\u8DDD\u53D8\u5929 ' + lbWxFmtSec(_brem)));
+    return lbWxCard(_imgH, _lbl, '', '', null, null, null, null, null, '0 0 auto', (_sub ? ('<span style="font-size:10px;color:#777;white-space:nowrap;margin-top:2px">' + _sub + '</span>') : ''), 10, '', { txt: '', pct: _pct, col: '#8b8ba0' }, '#e2e8f0');
+  }catch(e){ return ''; }
+}
 function lbGenSunCard(){   // v4680（用户口径）：月球灼烧卡（白天日光灼烧 / 夜间安全；口径 A：与主模拟昼夜同步 05:30–20:30）；v4681（用户口径）：+两段循环进度条（自日出起算）
   try{
     var o = (LB._ig && LB._ig.cache) ? LB._ig.cache['Gen'] : null;
@@ -24200,7 +24661,8 @@ function lbSveBlockGen(){   // Gen：巨浪 + 雪崩（文案）+ 流星雨—�
   out += lbGenSunCard();   // v4680（用户口径）：月球灼烧卡（流星雨卡下方；白天灼烧/夜间安全）
   out += lbGenWxEventCards('arctic');   // v4674（用户口径）：暴风雪（提前）
   out += lbWxCard('\u{1F3D4}\uFE0F', '雪崩', '', '走近雪坡随机触发', null, null, null, 20, null, '0 0 auto', null, 16, 'genwx|avalanche', null, null, null, 'lbSveMapSet(0)', true);   // v4658：去卡面大段说明；v4672：点卡切陆地图；v4686（用户口径）：补短说明 + 副信息同行右对齐
-  out += lbWxCard('\u2614', '绿雨', '', '雨期虫群频繁出没', null, null, null, 20, null, '0 0 auto', '', 16, 'genwx|acidrain', null, null, null, null, true);   // v4685（用户口径）：绿雨卡（点卡=说明遮罩）；v4687（用户口径）：酸雨改称绿雨；v4689（用户口径）：移到雪崩卡下方
+  out += lbGenBogShareCard();   // v4730（用户口径）：沼泽共享卡（绿雨卡上方；对齐海洋共享卡）
+  out += lbGenWxEventCards('bog');   // v4730（用户口径）：绿雨卡改由同源渲染（完全对齐雷暴卡；原静态卡移除）
   return out;
 }
 function lbSveBlockGenSea(){   // v4708（用户口径）：Gen 下半段卡组（海况/共享卡/雷暴+雷雾/漩涡）——并入右列地图上方；原海况前 1px 分割线（v4678）按用户要求删除
@@ -24843,7 +25305,7 @@ function lbAstwxMapHtml(){   // 繁星地图（复用 lbMapForServer / lbWxStorm
           + '<div style="position:absolute;left:0;top:16px;transform:translateX(-50%);font-size:10px;font-weight:bold;color:#fff;background:rgba(15,15,22,.78);border:1px solid ' + _wcol + ';border-radius:9px;padding:1px 5px;white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,.7)">' + (_wvd === 'calm' ? '' : ('<img src="' + lbResURL((_wvd === 'large' || _wvd === 'rough') ? LB_IC_TSUNAMI : LB_IC_MODSEA) + '" alt="" style="width:11px;height:11px;object-fit:contain;vertical-align:-2px;margin-right:2px">')) + '<span style="color:' + _wcol + '">' + _wzh + '</span> ' + _wbig + '</div>'
           + '</div>';
       }catch(eAwp){ return ''; } })()
-    + '<div style="position:absolute;left:15.5%;top:6.5%;transform:translate(-50%,-50%);pointer-events:none;display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:rgba(168,85,247,.30);border:1.5px solid rgba(216,180,254,.9);box-shadow:0 0 10px rgba(168,85,247,.8);font-size:12px;line-height:1">\u2622\uFE0F</div>'   // v4718（用户口径）：辐射洞入口点位（游戏 lat6.5/lon15.5 ⇒ 地图 15.5%/6.5%）
+    + '<div style="position:absolute;left:15.5%;top:6.5%;transform:translate(-50%,-50%);pointer-events:none;display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:rgba(168,85,247,.30);border:1.5px solid rgba(216,180,254,.9);box-shadow:0 0 10px rgba(168,85,247,.8);color:#e9d5ff;font-size:12px;line-height:1"><span style="display:inline-block;transform:translateY(-0.5px)">\u2622\uFE0F</span></div>'   // v4718（用户口径）：辐射洞入口点位（lat6.5/lon15.5 ⇒ 15.5%/6.5%）；v4737（用户口径）：回 ☢️ emoji + translateY(1.2px) 字形偏心补偿
     + lbWxNoteHost('astwx')   // 点卡片 → 地图说明遮罩（60s 自动收起）
     + '</div></div>';
 }
@@ -25072,6 +25534,7 @@ function lbValwxMapHtml(){
     + '<div style="position:relative;border-radius:8px;border:1px solid #2a2a3a">'
     + '<img src="' + LB_MAP_BASE + mm.img + LB_MAP_EXT + '" alt="极端天气地图" style="width:100%;display:block;opacity:.92;border-radius:7px">'
     + lbWxStormOverlay('Val', true)
+    + '<div style="position:absolute;left:57%;top:38%;transform:translate(-50%,-50%);pointer-events:none;display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:rgba(168,85,247,.30);border:1.5px solid rgba(216,180,254,.9);box-shadow:0 0 10px rgba(168,85,247,.8);color:#e9d5ff;font-size:12px;line-height:1"><span style="display:inline-block;transform:translateY(-0.5px)">\u2622\uFE0F</span></div>'   // v4732（用户口径）：幽暗区入口点位（参考辐射洞；lat38/lon57 ⇒ 57%/38%）；v4737（用户口径）：回 ☢️ emoji + translateY(1.2px) 字形偏心补偿（实测图形偏上 ~1.2px）
     + lbWxNoteHost('valwx')   // v4526（用户口径）：点卡片 → 地图说明遮罩
     + '</div></div>';
 }
@@ -26163,7 +26626,7 @@ function lbWxEcoTipText(gz, want){   // v4690（用户口径）：生态徽章�
       if(sc && !sc.over && sc.n > 0) L.push('距上次出现已变天 ' + sc.n + ' 次（recent 精确计数）');
       else if(sc && sc.over) L.push('距上次出现已变天 ≥' + sc.n + ' 次（超出统计窗口）');
     }catch(e1){}
-    return L.join('\n') + lbWxHistTipSuffix(want);   // v4691：+「天气历史」节；v4722（用户口径）：数组传入=只认本卡两类（上次=雷暴/雷雾）
+    return L.join('\n') + lbWxHistTipSuffix(want, String((gz && gz.miniMapType) || ''));   // v4691：+「天气历史」节；v4722（用户口径）：数组传入=只认本卡两类（上次=雷暴/雷雾）；v4740（用户口径）：+zone（bog 绿雨卡「上次变天」只考虑沼泽）
   }catch(e){ return ''; }
 }
 function lbWxBadgeEco(gz, want){   // v4668（用户口径）：Gen 生态区「出现率 x%」徽章（样式对齐 lbWxBadgeOne；无数据 ⇒ ''）；v4690（用户口径）：悬停 tips 对齐 ext 陨石雨格式（多行【计算说明】）
@@ -26208,7 +26671,7 @@ var LB_WX_NOTE = {
   'surface|rad': '辐射区是畸变红区（元素区）的持续威胁：身处辐射区域会持续感染辐射病并掉血；如果穿着全套防化服或泰克甲，则改为 1~3/秒 消耗护甲耐久。全套防化服、泰克甲，或身上附着一只七鳃鳗（附生期间辐射免疫），均可完全免疫辐射；蘑菇药酒（Mushroom Brew）喂给驯养生物可提供 300 秒辐射防护（玩家无法使用）。请在进入红区前备好防护。',   // v4683（用户口径）：新增（wiki 素材）
   'surface|nameless': '荧光区（Bioluminescent Region）是畸变蓝区的发光生态区（灯泡犬等发光生物聚居）——但真正的威胁是无名（Nameless）：在没有充能光（Charge Light）的区域它们会成群出没——包括玩家建筑内部；普通照明（火把/灯）无效，只有充能宠（灯泡犬、发光生物等）发出的充能光能驱离它们。它们受击会钻地回血，且惧怕充能光的灼烧伤害——在蓝区与红区活动请随身携带充能宠，否则请勿在黑暗中停留。',   // v4683（用户口径）：新增；v4685（用户口径）：正名荧光区
   'surface|river': '熔融元素是畸变红区（元素区）的元素液体：红区河湖中的紫色液体并非高温熔岩，而是元素浸染的毒水（水母、七鳃鳗等少数生物可在其中存活）。接触/跳入会持续受到伤害——防化服无效！只有全套泰克甲或联邦外骨骼可以免疫（穿着跳入还会给护甲充能，但续航时长明显短于用元素粉）。经过红区水域请穿泰克甲/联邦外骨骼，切勿裸装下水。',   // v4683（用户口径）：新增；v4685（用户口径）：正名熔融元素 + 防护口径修正（wiki：防化服无效）
-  'surface|mush': '<b style="color:#e2e8f0">毒蘑菇</b>（诱孢蘑菇的毒变种）——外观与食用蘑菇仅有细微差别（毒种多为红根/深色底环），靠近即喷孢子云。<br><br>' + '<b style="color:#e2e8f0">三种孢子</b>：<br>' + '· <b style="color:#f87171">致幻孢子</b>（绿区红蘑菇 · 彩虹云）：幻觉+视觉扭曲+失禁+窒息 12 秒；伤害按最大生命百分比，高低级同样致命。<br>' + '· <b style="color:#7dd3fc">冰冻孢子</b>（蓝区冷蘑菇 · 青云）：极寒+快速掉血 120 秒——无视保温、热源无效；并大量累积眩晕值。<br>' + '· <b style="color:#c4b5fd">元素孢子</b>（红区分枝蘑菇 · 棕紫云）：持续失禁、食物断崖下跌 120 秒（进食无法恢复）。<br><br>' + '<b style="color:#e2e8f0">通用机制</b>：待在孢子云内效果倒计时会持续刷新（离开才停止）；眩晕值持续上升。<br><br>' + '<b style="color:#e2e8f0">防护</b>：① 全套防化服可完全抵挡；② 事先服用对应蘑菇免疫（致幻=Aggeravic / 冰冻=Aquatic / 元素=Ascerbic）；③ 事后服用可缩短时长（致幻 1 秒/颗、冰冻 5 秒/颗）。<br><br>' + '收割毒蘑菇额外掉落：生物毒素 + 稀有花朵。',   // v4685（用户口径）：新增（wiki 素材）；v4687（用户口径）：结构化重排（信息全保留；HTML 富文本）
+  'surface|mush': '<b style="color:#e2e8f0">毒蘑菇</b>（诱孢蘑菇的毒变种）——外观与食用蘑菇仅有细微差别（毒种多为红根/深色底环），靠近即喷孢子云。<br><br>' + '<b style="color:#e2e8f0">三种孢子</b>：<br>' + '· <b style="color:#f87171">致幻孢子</b>（绿区红蘑菇 · 彩虹云）：幻觉+视觉扭曲+失禁+窒息 12 秒；伤害按最大生命百分比，高低级同样致命。<br>' + '· <b style="color:#7dd3fc">冰冻孢子</b>（蓝区冷蘑菇 · 青云）：极寒+快速掉血 120 秒——无视保温、热源无效；并大量累积眩晕值。<br>' + '· <b style="color:#c4b5fd">元素孢子</b>（红区分枝蘑菇 · 棕紫云）：持续失禁、食物断崖下跌 120 秒（进食无法恢复）。<br><br>' + '<b style="color:#e2e8f0">通用机制</b>：待在孢子云内效果倒计时会持续刷新（离开才停止）；眩晕值持续上升。<br><br>' + '<b style="color:#e2e8f0">防护</b>：<br>① 全套防化服可完全抵挡；<br>② 事先服用对应蘑菇免疫：<br>金色蘑菇<img src="https://img.whiterober.ccwu.cc/ASA/consumables/Goldmushroom.png" style="width:14px;height:14px;object-fit:contain;vertical-align:-2px;margin:0 2px"><span style="color:#f87171">致幻</span>（Mushroom Auric）<br>青色蘑菇<img src="https://img.whiterober.ccwu.cc/ASA/consumables/BlueMushroom.png" style="width:14px;height:14px;object-fit:contain;vertical-align:-2px;margin:0 2px"><span style="color:#7dd3fc">冰冻</span>（Mushroom Aquatic）<br>黑色蘑菇<img src="https://img.whiterober.ccwu.cc/ASA/consumables/BlackMushroom.png" style="width:14px;height:14px;object-fit:contain;vertical-align:-2px;margin:0 2px"><span style="color:#c4b5fd">元素</span>（Mushroom Ascerbic）；<br>③ 事后服用可缩短时长（致幻 1 秒/颗、冰冻 5 秒/颗）。<br><br>' + '收割毒蘑菇额外掉落：生物毒素 + 稀有花朵。',   // v4685（用户口径）：新增（wiki 素材）；v4687（用户口径）：结构化重排（信息全保留；HTML 富文本）
   'surface|gas': '瓦斯矿脉（Gas Vein）是畸变地表的地缝资源点：地缝中不断喷出粉色气体——气体具腐蚀性，站在正在喷气的矿脉旁、或徒手去捡散落的凝固气球而未穿全套防化服时，会立即中「瓦斯迸发（Gas Bursts）」状态：持续掉血 + 立刻窒息。应对：放置气体收集器（Gas Collector）可自动采集凝固气球（偶尔直接掉落在矿脉旁地上）；采集时请穿全套防化服、速取速离。矿脉在畸变蓝区与红区的地缝密集分布。',   // v4685（用户口径）：新增（wiki 素材）
   'surface|hidspore': '除毒蘑菇喷出的孢子云外，畸变地图上还分布着一些隐形孢子云区域：没有可见的蘑菇或云朵，肉眼几乎无法分辨，但踏入后同样会施加各类孢子负面效果（致幻/冰冻/元素孢子，机制一致：效果倒计时在云内会持续刷新，离开才停止）。应对：全套防化服可完全抵挡；在无把握的区域（绿区植被密集处、蓝区暗处、红区辐射带附近）请常穿防化服，或事先服用对应蘑菇获取免疫。',   // v4685（用户口径）：新增（wiki 素材）
   'astwx|sand': '沙尘暴是繁星（Astraeos）的极端天气：能见度急剧下降，持续消耗体力，风沙还会灌进背包（物品栏进沙）。视线受阻下，野生生物的感知范围也大幅缩减。佩戴沙漠护目镜可改善视野。',   // v4490（用户口径）：Ast 沙尘暴说明（点卡 → 地图遮罩）
@@ -26220,7 +26683,7 @@ var LB_WX_NOTE = {
   'caveenv|poison': '毒气洞（沼泽洞穴）是孤岛地下的毒性洞穴：洞内多处弥漫毒气，身处其中会持续中毒掉血——进入必须佩戴防毒面具（Gas Mask）；洞中生物强度极高（古马陆等），建议携带高级武器、充足补给与光源，无十足把握切勿深入。',   // v4718：+毒气洞说明；v4720：键名随浮窗改 caveenv
   'caveenv|blizzard': '暴风雪是区域性质的天气——只在雪原/雪山区域内刮起：区域内狂风裹挟大雪、能见度骤降、气温极寒，长时间暴露会持续失温掉血；区域外不受影响。入雪原前请穿戴毛皮保暖装备、备好热食与光源，风雪中尽快撤离或寻找掩体等待结束。',   // v4720（用户口径）：+区域暴风雪说明（专指区域点）
   'valwx|es': '雷暴是瓦尔盖罗的极端天气：无雨，乌云密布、狂风大作伴随闪电与飞沙走石，雷暴笼罩全图（非区域）。',   // v4716（用户口径）：删设备影响句（实测仅视觉）；v4527（用户口径）：Val 雷暴全图实测修订（插件确认全图）
-  'valwx|unknown': '幽暗区（The Unknown）是瓦尔盖罗地下的辐射区域：区内持续辐射、不断掉血——与畸变红区同机制：全套防化服或泰克甲可完全免疫（穿着时改为 1~3/秒 消耗护甲耐久），或附生一只七鳃鳗（附生期间辐射免疫）。前往探索前请备好防护，切勿裸装深入。',   // v4684（用户口径）：新增（wiki 素材）
+  'valwx|unknown': '幽暗区（The Unknown）是瓦尔盖罗地下的辐射区域，入口位于翠玉林（纬度 38 / 经度 57）：区内持续辐射、不断掉血——与畸变红区同机制：全套防化服或泰克甲可完全免疫（穿着时改为 1~3/秒 消耗护甲耐久），或附生一只七鳃鳗（附生期间辐射免疫）。前往探索前请备好防护，切勿裸装深入。',   // v4684（用户口径）：新增（wiki 素材）
   'rvolc|sand': '沙尘暴是仙境（Ragnarok）的随机天气：风沙肆虐、能见度急剧下降，持续消耗体力，风沙还会灌进背包（物品栏进沙）。佩戴沙漠护目镜可改善视野。注意：仙境的沙尘暴由全局天气系统抽取，真正的影响集中在沙漠地带——不在沙漠区域时受到的影响较轻。',   // v4541（用户口径）：Rag 沙尘暴说明（wiki 素材）
   'rvolc|es': '雷暴是仙境（Ragnarok）的极端天气：无雨，乌云密布、狂风大作，伴随闪电与飞沙走石；雷暴笼罩全图（非区域）。',   // v4716（用户口径）：删设备影响句（实测仅视觉）；v4541（用户口径）：Rag 雷暴说明（wiki 素材；全图非区域）
   'rvolc|foehn': '焚风（超级高温）是仙境（Ragnarok）的高温天气：气温大幅上升，野外暴晒下会迅速脱水、口渴加快，气温过高时持续掉血。期间建议减少野外活动，靠近水源、进入室内或穿戴沙漠护甲（Desert Cloth）可显著缓解；水中会大幅加速降温。',   // v4550（用户口径）：Rag 焚风说明（wiki Heatwave 素材；不写范围断言——Rag 实测未定）
@@ -26282,14 +26745,21 @@ function lbWxNoteClose(which){   // 点遮罩空白关闭（清除计时器）
     if(!lbWxNoteApply(which)) lbWxNoteRerender(which);   // v4706：就地收起（点遮罩/面板空白）
   }catch(e){}
 }
+var LB_WX_NOTE_IMG = {   // v4731（用户口径）：说明遮罩配图（右下角、完全不透明、层叠在文字容器之下）；v4742：+瓦斯矿脉/绿雨
+  'surface|nameless': 'https://img.whiterober.ccwu.cc/ASA/illustrations/nameless.png',
+  'surface|gas': 'https://img.whiterober.ccwu.cc/ASA/facility/GasVein.png',
+  'genwx|acidrain': 'https://img.whiterober.ccwu.cc/ASA/illustrations/bladewasp.png'
+};
 function lbWxNoteOverlay(which){   // 地图层遮罩 HTML（无状态返回 ''）；v4722：z-index 提到 12（盖住地图色点 5/悬停 9/tips 7）
   var key = lbWxNoteCur(which);
   if(!key) return '';
   var txt = LB_WX_NOTE[which + '|' + key];
   if(!txt) return '';
+  var _nimg = LB_WX_NOTE_IMG[which + '|' + key] || '';   // v4731（用户口径）：说明配图（右下角、不透明）；v4732（用户口径）：图确在文字之下 + 文字黑外发光
   // v4483（用户口径）：遮罩圆角 7px——与地图图片 border-radius:7px 完全一致（四角精确贴合，不再错位）
   return '<div id="lbWxNoteBox_' + which + '" data-k="' + which + '|' + key + '" onclick="lbWxNoteClose(\'' + which + '\')" style="position:absolute;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,.68);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:10px;cursor:pointer;z-index:12">'
-    + '<div class="lb-note-scroll" onclick="event.stopPropagation()" style="font-size:10.5px;color:#d5d5d5;line-height:1.85;max-height:100%;overflow:auto;cursor:auto">' + txt + '</div>'   // v4688（用户口径）：+lb-note-scroll 类（滚动条对齐浮窗 thin/#333）
+    + (_nimg ? ('<img src="' + lbAttr(_nimg) + '" alt="" style="position:absolute;right:0;bottom:0;width:46%;max-height:62%;object-fit:contain;object-position:right bottom;border-radius:0 0 7px 0;pointer-events:none">') : '')
+    + '<div class="lb-note-scroll" onclick="event.stopPropagation()" style="font-size:10.5px;color:#d5d5d5;line-height:1.85;max-height:100%;overflow:auto;cursor:auto' + (_nimg ? ';position:relative;z-index:1;text-shadow:0 1px 3px rgba(0,0,0,.95),0 0 6px rgba(0,0,0,.85)' : '') + '">' + txt + '</div>'   // v4688：+lb-note-scroll；v4732（用户口径）：配图遮罩文字上浮（z-index:1）+ 黑色外发光
     + '</div>';
 }
 function lbWxNoteHost(which){   // v4706（用户口径·根因修复）：遮罩宿主（display:contents 不产生盒子——绝对定位遮罩仍按地图框定位）；v4707（用户口径·根因修复）：改纯空壳——遮罩内容一律由 lbWxNoteResync/lbWxNoteApply 按「当前状态」补挂（防整窗重建旧快照覆盖新状态）
@@ -26301,7 +26771,7 @@ function lbWxNoteApply(which){   // v4706（用户口径·根因修复）：遮�
     if(!host) return false;
     var cur = lbWxNoteCur(which);
     var box = document.getElementById('lbWxNoteBox_' + which);
-    if(!cur){ if(box && box.parentNode) box.parentNode.removeChild(box); return true; }
+    if(!cur){ if(box && box.parentNode) box.parentNode.removeChild(box); if(which === 'surface'){ try{ lbSurfArkRaise(); }catch(eZ1){} } return true; }
     var key = which + '|' + cur;
     if(box){
       if(String(box.getAttribute('data-k') || '') === key) return true;
@@ -26312,6 +26782,7 @@ function lbWxNoteApply(which){   // v4706（用户口径·根因修复）：遮�
     var tmp = document.createElement('div'); tmp.innerHTML = html;
     var node = tmp.firstElementChild;
     if(node) host.appendChild(node);
+    if(which === 'surface'){ try{ lbSurfArkRaise(); }catch(eZ2){} }
     return true;
   }catch(e){ return false; }
 }
@@ -26335,6 +26806,7 @@ function lbWxNoteResync(){   // v4707（用户口径·根因修复）：整窗�
       var node = tmp.firstElementChild;
       if(node) host.appendChild(node);
     }
+    try{ lbSurfArkRaise(); }catch(eZ3){}   // v4733（用户口径）：整窗重建后校正地表方舟浮层
   }catch(e){}
 }
 function lbWxNotePanelClick(ev){   // v4488（用户口径）：浮窗内非卡片区域点击 → 收起已开的地图遮罩（panel 自身 stopPropagation 使 document 委托不可达 ⇒ 挂 panel 冒泡；同元素 stopPropagation 不阻断本 listener）
@@ -26581,8 +27053,44 @@ function lbWeatherRender(){
         var gex = lbWxIsExtreme(gz.currentWeather);   // v4328
         if(gex && !gsub) gsub = '';   // v4330：不再显示「特殊天气」字样（用户口径）
         var gtip = (_gmmt === 'ocean') ? lbWxEcoTip(gz) : null;   // v4617：生态卡 tips；v4656（用户口径）：仅海洋保留（其余区不挂）
-        var _gtxt = '';   // v4672（用户口径）：距变天文字并入副行（点分隔；雪山恒定不加）
-        if(_gmmt !== 'arctic'){
+        var _gtxt = '';   // v4672：距变天文字并入副行（点分隔；雪山恒定不加）；v4730（用户口径）：火山区=火山喷发倒计时、月球区=流星雨阶段倒计时
+        if(_gmmt === 'volcanic'){
+          try{
+            var _hasLog30 = !!(LB._volcHist && LB._volcHist.length);
+            var _vEr30 = _hasLog30 ? ((LB._volcErupting === true) || lbVolcEruptInferred()) : false;
+            if(_vEr30){
+              var _eOn30 = Number(LB._volcEruptOnSec);
+              if(lbVolcEruptInferred()) _eOn30 = Number(LB._volcLastWarmupOn) + Number(LB._volcEruptDelayD);
+              var _eDur30 = Number(LB._volcLastEruptDur) || 0, _wn30 = lbVolcWorldNow();
+              if(isFinite(_eOn30) && _eOn30 > 0 && _eDur30 > 0 && _wn30 !== null){
+                _gtxt = '距喷发结束 ' + lbVolcCd(Math.max(0, _eDur30 - (_wn30 - _eOn30)) * 1000);
+              }
+            } else {
+              var _toEr30 = lbVolcNextEruptMs();
+              if(isFinite(_toEr30)) _gtxt = '距喷发 ' + lbVolcCd(_toEr30);
+            }
+          }catch(eV30){}
+        } else if(_gmmt === 'lunar'){
+          try{
+            var _lv30 = LB._lunar && LB._lunar.data;
+            if(_lv30 && _lv30.ok){
+              var _tl30 = Number(lbSveProp(_lv30, ['TimeLastEvent', 'LastEvent', 'TimeLastMeteor']));
+              var _iv30 = Number(lbSveProp(_lv30, ['ActualTimeBetweenEvents', 'TimeBetweenEvents', 'Interval']));
+              var _wnL30 = Number(_lv30.worldTime); try{ var _we30 = lbLunarWnEst(); if(_we30 !== null && isFinite(_we30)) _wnL30 = _we30; }catch(eW30){}
+              var _dur30 = Number(lbSveProp(_lv30, ['DurationOfEvent'])); if(!(_dur30 > 30)) _dur30 = 240;
+              if(isFinite(_tl30) && isFinite(_iv30) && _iv30 > 0 && isFinite(_wnL30)){
+                var _eta30 = _tl30 + _iv30 - _wnL30, _since30 = _wnL30 - _tl30;
+                var _inEv30 = (_since30 >= 0 && _since30 < _dur30) || (_eta30 <= 0 && _eta30 > -_dur30);
+                if(_inEv30){
+                  var _left30 = (_since30 >= 0 && _since30 < _dur30) ? (_dur30 - _since30) : (_eta30 + _dur30);
+                  _gtxt = '距流星雨结束 ' + lbVolcCd(Math.max(0, _left30) * 1000);
+                } else if(_eta30 > 0){
+                  _gtxt = '距流星雨 ' + lbVolcCd(_eta30 * 1000);
+                }
+              }
+            }
+          }catch(eL30){}
+        } else if(_gmmt !== 'arctic'){
           try{
             var _gs = Number(gz.secondsUntilChange);
             if(isFinite(_gs) && _gs >= 0){
