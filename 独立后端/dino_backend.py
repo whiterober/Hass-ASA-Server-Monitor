@@ -55,6 +55,7 @@ PORT = int(os.environ.get('PORT', '8080'))
 RCON_TIMEOUT = int(os.environ.get('RCON_TIMEOUT', '15'))
 ALLOW_ORIGIN = os.environ.get('ALLOW_ORIGIN', 'https://dino.whiterober.ccwu.cc')
 ACCOUNTS_FILE = os.environ.get('ACCOUNTS_FILE', r'D:\dino_backend\accounts.json')
+HARVEST_DIR = os.environ.get('HARVEST_DIR', os.path.join(os.path.dirname(ACCOUNTS_FILE), 'userdata'))  # 采集流程玩家文档
 # R2 / WebP 全自动更新配置（cf_config.json：api_token/account_id/r2_bucket/r2_endpoint/r2_s3_access_key/r2_s3_secret_key）
 CF_CONFIG_FILE = os.environ.get('CF_CONFIG_FILE', os.path.join(os.path.dirname(ACCOUNTS_FILE), 'cf_config.json'))
 WEBP_MAP_FILE = os.path.join(os.path.dirname(ACCOUNTS_FILE), 'webp_map.json')
@@ -241,6 +242,102 @@ def _save_accounts(acc):
             json.dump(acc, f, ensure_ascii=False, indent=2)
         os.replace(tmp, ACCOUNTS_FILE)
         _ACCOUNTS = acc
+
+
+# ================= 采集流程（玩家级文档） =================
+# GET/POST /api/harvest_flows —— 按登录账号存储；nick 校验；512KB；baseUpdatedAt 冲突检测
+_HARVEST_LOCK = threading.Lock()
+
+
+def _harvest_auth(username, nick):
+    """校验账号与昵称（低成本鉴权）。返回 (ok, error)。"""
+    acc = _accounts().get(str(username or ''))
+    if not acc:
+        return False, 'unknown user'
+    if str(acc.get('nick') or '') != str(nick or ''):
+        return False, 'nick mismatch'
+    return True, ''
+
+
+def _harvest_path(username):
+    safe = ''.join(ch for ch in str(username or '') if ch.isalnum() or ch in '_-')[:64]
+    if not safe:
+        return None
+    return os.path.join(HARVEST_DIR, 'harvest_flows_%s.json' % safe)
+
+
+def _load_harvest_flows(username):
+    p = _harvest_path(username)
+    if not p or not os.path.isfile(p):
+        return None
+    try:
+        with open(p, 'r', encoding='utf-8') as f:
+            doc = json.load(f)
+        return doc if isinstance(doc, dict) else None
+    except Exception:
+        return None
+
+
+def _save_harvest_flows(username, doc):
+    p = _harvest_path(username)
+    if not p:
+        raise ValueError('bad username')
+    with _HARVEST_LOCK:
+        os.makedirs(HARVEST_DIR, exist_ok=True)
+        try:
+            if os.path.isfile(p):
+                import shutil as _sh
+                _sh.copy2(p, p + '.bak')
+        except Exception:
+            pass
+        tmp = p + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(doc, f, ensure_ascii=False, separators=(',', ':'))
+        os.replace(tmp, p)
+    return doc
+
+
+# ================= 玩家偏好（关注项等，跨客户端） =================
+# GET/POST /api/user_prefs —— 按登录账号存储；nick 校验；与采集流程同目录
+_PREFS_LOCK = threading.Lock()
+
+
+def _prefs_path(username):
+    safe = ''.join(ch for ch in str(username or '') if ch.isalnum() or ch in '_-')[:64]
+    if not safe:
+        return None
+    return os.path.join(HARVEST_DIR, 'user_prefs_%s.json' % safe)
+
+
+def _load_user_prefs(username):
+    p = _prefs_path(username)
+    if not p or not os.path.isfile(p):
+        return None
+    try:
+        with open(p, 'r', encoding='utf-8') as f:
+            doc = json.load(f)
+        return doc if isinstance(doc, dict) else None
+    except Exception:
+        return None
+
+
+def _save_user_prefs(username, doc):
+    p = _prefs_path(username)
+    if not p:
+        raise ValueError('bad username')
+    with _PREFS_LOCK:
+        os.makedirs(HARVEST_DIR, exist_ok=True)
+        try:
+            if os.path.isfile(p):
+                import shutil as _sh2
+                _sh2.copy2(p, p + '.bak')
+        except Exception:
+            pass
+        tmp = p + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(doc, f, ensure_ascii=False, separators=(',', ':'))
+        os.replace(tmp, p)
+    return doc
 
 
 # ================= R2 / WebP 全自动更新（一键增量） =================
@@ -2284,6 +2381,24 @@ class Handler(BaseHTTPRequestHandler):
             if not s:
                 s = {'state': 'unknown', 'attributes': {}}
             self._send(200, s)
+        elif path == '/api/harvest_flows':
+            qs = parse_qs(parsed.query)
+            username = (qs.get('username') or [''])[0].strip()
+            nick = (qs.get('nick') or [''])[0].strip()
+            ok_auth, _err = _harvest_auth(username, nick)
+            if not ok_auth:
+                self._send(401, {'ok': False, 'error': _err})
+                return
+            self._send(200, {'ok': True, 'doc': _load_harvest_flows(username)})
+        elif path == '/api/user_prefs':
+            qs = parse_qs(parsed.query)
+            username = (qs.get('username') or [''])[0].strip()
+            nick = (qs.get('nick') or [''])[0].strip()
+            ok_auth, _err = _harvest_auth(username, nick)
+            if not ok_auth:
+                self._send(401, {'ok': False, 'error': _err})
+                return
+            self._send(200, {'ok': True, 'data': _load_user_prefs(username)})
         elif path.startswith('/api/status/'):
             server = path[len('/api/status/'):].strip('/').strip()
             if server not in SERVERS:
@@ -2361,7 +2476,7 @@ class Handler(BaseHTTPRequestHandler):
         body = {}
         try:
             ln = int(self.headers.get('Content-Length') or 0)
-            if ln > 0 and ln < 65536:
+            if ln > 0 and ln < 524288:   # 2026-10-19：64KB → 512KB（采集流程文档）；超过 512KB 由前端预检拦截
                 raw = self.rfile.read(ln)
                 if raw:
                     j = json.loads(raw.decode('utf-8', 'ignore'))
@@ -2374,6 +2489,63 @@ class Handler(BaseHTTPRequestHandler):
             if v is None:
                 v = (qs.get(name) or [default])[0]
             return str(v).strip()
+        # 采集流程（玩家级）：GET/POST /api/harvest_flows
+        if path.endswith('/api/harvest_flows'):
+            username = g('username')
+            nick = g('nick')
+            ok_auth, _err = _harvest_auth(username, nick)
+            if not ok_auth:
+                self._send(401, {'ok': False, 'error': _err})
+                return
+            doc = body.get('doc')
+            if not isinstance(doc, dict):
+                self._send(400, {'ok': False, 'error': 'missing doc'})
+                return
+            try:
+                base_ts = int(body.get('baseUpdatedAt') or 0)
+            except Exception:
+                base_ts = 0
+            cur = _load_harvest_flows(username)
+            cur_ts = int((cur or {}).get('updatedAt') or 0) if isinstance(cur, dict) else 0
+            if base_ts and cur_ts and base_ts < cur_ts:
+                self._send(409, {'ok': False, 'error': 'conflict', 'doc': cur})
+                return
+            doc['owner'] = username
+            doc['updatedAt'] = int(time.time() * 1000)
+            try:
+                _save_harvest_flows(username, doc)
+            except Exception as e:
+                self._send(500, {'ok': False, 'error': 'save failed: %s' % e})
+                return
+            self._send(200, {'ok': True, 'updatedAt': doc['updatedAt']})
+            return
+        # 玩家偏好（关注项等）：GET/POST /api/user_prefs
+        if path.endswith('/api/user_prefs'):
+            username = g('username')
+            nick = g('nick')
+            ok_auth, _err = _harvest_auth(username, nick)
+            if not ok_auth:
+                self._send(401, {'ok': False, 'error': _err})
+                return
+            data = body.get('data')
+            if not isinstance(data, dict):
+                self._send(400, {'ok': False, 'error': 'missing data'})
+                return
+            keys = data.get('keys')
+            if not isinstance(keys, dict):
+                self._send(400, {'ok': False, 'error': 'missing keys'})
+                return
+            kts = data.get('kts')
+            if not isinstance(kts, dict):
+                kts = {}
+            doc = {'owner': username, 'updatedAt': int(time.time() * 1000), 'keys': keys, 'kts': kts}
+            try:
+                _save_user_prefs(username, doc)
+            except Exception as e:
+                self._send(500, {'ok': False, 'error': 'save failed: %s' % e})
+                return
+            self._send(200, {'ok': True, 'updatedAt': doc['updatedAt']})
+            return
         # 独立登录：/api/login（Phase 2 认证解耦；成功返回 nick 供前端身份解析）
         if path.endswith('/api/login') or path.endswith('/login'):
             username = g('username')

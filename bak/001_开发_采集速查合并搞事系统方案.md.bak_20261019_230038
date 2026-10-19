@@ -1,0 +1,705 @@
+# 对话进度 - 采集速查合并到搞事系统（方案制定）
+
+## 基础信息
+- 对话序号：#001
+- 创建时间：2026-10-19
+- 任务类型：开发（方案制定）
+- 用户需求：把 ASA 后台「采集速查」功能合并进搞事系统；要求玩家级独立存储、入口在物品浮窗项、有流程的项带图标标识、流程自由可配、选物品复用现有物品/物种浮窗数据与图标中英文。
+
+## 执行步骤与进度
+
+### 步骤 1：需求复述与确认
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：复述 5 条需求并弹窗确认；用户确认执行，并澄清第 4 条为「流程自由可配」。
+
+### 步骤 2：现状调研
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：
+  - 现有采集速查 = `tribe_ops.json` → `efficient_farming`（mixed_content：1× map_filter + 20× info_card）；步骤为 descriptions 行（`^` 编号、`*` 备注），引用语法 `[中文名]`。
+  - 搞事系统物品浮窗：`lbOpenSpeciesPicker()` / `lbPickerItemHtml()` / `lbPickerSelect()`；数据 `LB_ITEM_ZH` + `lbItemMeta()` + `lbItemIconUrl()`；物种 `lbSpName()` / `lbIconForDinoClass()`。
+  - 玩家身份：`dinoAuth.user`（玩家级）、`LB.playerEos`（玩家级）、`LB.playerRoles`/`lbCurPid`（角色级，本方案不用）。
+  - 后端：`独立后端/dino_backend.py`，`D:\dino_backend\accounts.json`（锁 + .bak + 原子写），暂无通用用户数据接口。
+  - 统计脚本：`tmp/_cf_scan.py` → `tmp/_cf_scan_out.json`（20 张卡片，含引用样例）。
+
+### 步骤 3：输出方案文档
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：产出 `采集速查合并方案_v1.md`，包含数据模型、玩家级存储、交互（长按/右键/角标）、编辑器、浮窗回调复用、模板迁移、改动清单、实施阶段、验收与风险。
+
+## 最终结果
+- 整体状态：✅ 方案完成（未改任何代码/部署）
+- 关键输出：`b:\项目\Hass ASA Server Monitor\采集速查合并方案_v1.md`
+- 待处理事项：
+  1. 用户确认方案第 11 节待确认项（入口手势 / 模板导入策略 / 多产出绑定 / 是否要全服共享区）
+  2. 确认后进入 P1（后端接口 + 前端加载保存）
+- 跨平台备注：无
+
+### 步骤 4：方案修订 v1.1（入口改为繁育栏按钮组）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：用户修正入口——物品浮窗选中物品后，底部繁育栏（物种同款功能条）右侧新增「采集流程」按钮组；每个流程一个按钮（标题可配、地图专属图标可配），可增加多个；物品项角标保留但仅标识不可点。方案已更新并备份到 bak/。
+- 待确认：模板导入策略 / 多产出绑定 / 是否要全服共享区 / 按钮排序方式
+
+### 步骤 5：方案修订 v1.2（「+」位置）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：按用户要求，「+」新增按钮不再放末尾，改为固定在第一个采集流程按钮之前；方案已更新并备份。
+
+### 步骤 6：方案修订 v1.3（功能条显隐规则）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：按用户澄清，功能条显隐 = 是否存在可见按钮（新建流程 / 流程按钮 / 装备榜任一），全部不可见才整条隐藏；无流程时显示「新建流程」按钮。方案已更新并备份。
+
+### 步骤 7：方案修订 v1.4（品类准入）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：仅物品浮窗「其它」分组的「资源」(resource) 与「消耗品」(consumable) 允许新建流程；其余分类一律隐藏新建/流程按钮与角标（用户确认 B）。方案已更新并备份。
+
+### 步骤 8：方案修订 v1.5（HASS 隔离）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：按用户要求，采集流程与 ASA 后台/HASS 数据源完全隔离——运行时不读不写 HASS，数据只存 dino_backend userdata + localStorage；现有 20 张卡片仅构建期一次性导出为 CF 静态模板。方案已更新并备份。
+
+### 步骤 9：方案修订 v1.6（展示结构对齐原后台）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：流程查看结构与编辑器结构均参考原后台 info_card（编号徽章 + [引用] 徽章 + 行式编辑）；样式改为搞事系统深色（#22222c 底、9px 圆角、12px 字号）。方案已更新并备份。
+
+### 步骤 10：方案修订 v1.7（不保留明暗主题切换）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：按用户要求，不实现原后台的明暗主题切换/图片反色（image_auto_color_mode、auto-dark/auto-light）；展示与编辑固定使用搞事系统深色样式。方案已更新并备份。
+
+### 步骤 11：方案全面复查（v1.7）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：通读方案全文，产出优化建议（P0 矛盾/风险 5 项：P2 验收文案过期、后端 64KB body 限制、模板导入 outputs 空导致入口不出现、多端覆盖冲突、guest 登录合并缺失；另含引用解析、按钮溢出、层级/未保存拦截、迁移校正、schema 版本与模板去重等建议）。仅复查，未修改方案。
+
+### 步骤 12：方案修订 v1.8（P0/P1 落地 + 鉴权 + 模板仅工作区任务）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：P0 5 项与 P1 7 项全部写入方案；P2 仅保留鉴权加固（nick 校验）；模板导入不做玩家功能，仅工作区一次性任务生成备用 JSON（不部署、不展示）。方案已更新并备份。
+
+### 步骤 13：全量实施（v1.8 计划落地）
+- 时间：2026-10-19
+- 状态：✅ 完成（云同步待后端重启）
+- 基线：bakaseline_20261019_171415（18/18 文件 OK：ASA 基线 10 + 搞事系统 8）
+- 后端：dino_backend.py 新增 GET/POST /api/harvest_flows（nick 校验、512KB、baseUpdatedAt 409、线程锁 + .bak + 原子写）；py_compile 通过；已部署 \SERVER\dino_backend\（MD5 22f8b8dd…一致）；**待用户重启后端进程**。
+- 前端：dino-import.html 新增采集流程模块（数据层/同步/guest 合并/多标签、功能条按钮组、角标、查看面板、行式编辑器、picker 回调、refs/text 渲染）；LB_VERSION → v20261019-4820；sw.js VER 同步；node --check 通过（内联脚本 2.5MB）。
+- CF：部署成功（Version ID bfd15f0a-6985-4b68-931f-c9fa0a398e7f）；浏览器清 SW 后实测：版本 v20261019-4820、LB_HF 就绪、Stone 显示「＋」、新建/保存/刷新持久化、详情编号+引用徽章+地图徽章、武器类无按钮、角标仅标识。
+- 迁移任务：data/harvest_flows_default.json（20 卡片 / 344 步骤）+ 未解析引用清单 91 + 产出推断清单（12 张待人工确认）；不部署、不展示。
+- 待办：重启后端后复测云同步（GET/POST 200、409、401）。
+
+### 步骤 14：后端重启后云同步验证
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：dino_backend 重启后实测：GET /api/harvest_flows 200；错误 nick 401；POST 200（updatedAt 1792401925421）；GET 回读一致（cards=0）；旧 baseUpdatedAt 提交返回 409 + 云端文档。云同步闭环通过，采集流程功能全量验收完成。
+
+### 步骤 15：采集流程浮窗样式对齐选种面板（v20261019-4821）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：按用户要求，新建/编辑/详情浮窗改用选种筛选结果底部面板（#lbBreedResult）样式：吸底 bottom 40px、max-height 60vh、背景 #16161f、border-top 1px #2a2a3a、无圆角、整体滚动；遮罩透明（点击外部关闭）。版本递增 v20261019-4821，CF 部署成功（Version ID 3f65c525-2dfb-43d5-a420-7f0e92e26640，版本一致 True）；HTTP 静态核对 4 项全部命中。
+
+### 步骤 16：采集流程提示复用页面自定义 tips（v20261019-4822）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 原因：页面自定义 tips 引擎（#lbTipBox）只识别 .lb-tipb 元素；采集流程元素此前未挂该类，退回原生 title。
+- 处理：功能条按钮/角标/关闭/编辑/复制/删除/行操作/＋物品/产出 chip 共 19 处补 lb-tipb（保留 title，引擎自动转 data-tip；桌面悬停/移动端长按 400ms）。
+- 版本：v20261019-4822（前端 + sw.js）；node --check 通过；HTTP 核对：线上含 4822、lb-tipb lb-hf- 共 19 处。
+
+### 步骤 17：底部功能条互斥（v20261019-4823）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：lbRenderFuncBar 增加互斥判断（繁育栏 #lbBreedBar 可见时隐藏 #lbFuncBar）；lbRenderBreedBar 末尾重新同步功能条。实测：选中物品 → breed=block / func=none；取消选择 → breed=none / func=block。线上 v20261019-4823（Version ID b13a73bf），版本一致 True。
+
+### 步骤 18：按钮标题与编辑浮窗标题行调整（v20261019-4824）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：功能条「＋」按钮改为文字标题「新建流程」（4 字，title 同步）；编辑浮窗移除顶部「新建采集流程/编辑采集流程」标题行（详情浮窗标题保留）。实测线上 4824：addText=新建流程、editTitles=0、底部操作栏保留。Version ID 2be46658，版本一致 True。
+
+### 步骤 19：编辑态按钮 + 地图选择改服务器网格（v20261019-4825）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：① 编辑器展开后功能条按钮切换为 [取消][保存]（取消在左、保存替换「新建流程」位置）；编辑器期间功能条 zIndex 提升至 9999 可点击；② 移除编辑器底部「取消/保存」操作栏；③ 地图选择由下拉框改为刷新数据浮窗同款服务器图标网格（.server-tab / active，单选，再点取消）；④ 保存不再读取下拉值。
+- 验证：node --check 通过；CF 部署成功（Version ID a269875d）；HTTP 核对 v20261019-4825 / lbHfEMapGrid / lbHfEditPickMap 均命中（中文串检查受 PowerShell 编码影响，已用本地 grep 确认「保存流程」存在）。
+
+### 步骤 20：产出物品限资源/消耗品 + 多产物自动显示（v20261019-4826）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：① 产出物品选择浮窗新增过滤模式（LB._pickFilter='rc'）：lbHfPickOutput 传 { filter:'rc' }，打开后自动切到物品 TAB 并隐藏物种 TAB，列表仅显示 lbItemMeta(kind) ∈ resource/consumable 的项（lbPickerItemHtml 开头过滤，lbPickerSelect 结束清空 filter）；② 多产物：lbHfBuildIdx 原本对 card.outputs 每个产出建立索引，详情/按钮/角标沿用该索引 —— 因此资源/消耗品类额外产物同样显示功能条按钮与物品角标，无需额外改动。
+- 验证：node --check 通过（blocks=4 bytes=2504182 EXIT=0）；CF 部署成功（Version ID eb95e565-9fbc-481f-a4d3-939f81cf9e8a，版本一致 True）；HTTP 核对 4826 / _pickFilter / filter: 'rc' / lbHfBuildIdx 命中；浏览器实测（v20261019-4826）：pickFilter 下 OneShotRifle 返回空、Stone 有卡片；产出选择浮窗 物种TAB display:none / 物品项 2（金属锭 resource、次级解药 consumable）/ 违规 0 / 物种项 0；多产物卡 outputs=[Stone, ARKBone]：cardsForArkBone=1、badgeArkBone=true、功能条按钮显示「多产物测试」。
+
+### 步骤 21：＋按钮 + 产出浮窗收敛为「其它 > 资源/消耗品」（v20261019-4827 → 4828）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：① 编辑器产出物品按钮「＋物品」改为「＋」（固定 30px 宽，title 仍为「添加产出物品」）；② 采集流程选择浮窗新增收敛模式 `.lb-rc-mode`：隐藏物种/物品 TAB（只剩一种分类，整行 TAB 不显示）、隐藏最近选择/已拥有小标题/公共设施块、隐藏「器械」「建筑」折叠，仅保留「其它」栏并默认展开，栏内仅「资源」「消耗品」两组（计数同步）；搜索与清空搜索后仍保持收敛，搜索时器械/建筑不展开也不构建。
+- 修复：v4827 实测「公共设施」小标题仍显示 —— 原规则 `.lb-picker-panel[data-tab="item"] #lbPubFacHead[data-empty="0"]{display:block!important}` 特异性高于新增类选择器；v4828 追加 `.lb-picker-panel.lb-rc-mode[data-tab="item"] #lbPubFacHead{display:none!important}` + `lbPickerRcApply()` 内对相关节点 setProperty('display','none','important') 兜底。
+- 验证：node --check EXIT=0；CF 部署两次（4827 Version ID 5d029705-59fc-464d-a7c1-3686e6a70175、4828 Version ID c26b2682-b6c8-4bfb-b9af-aee68a35d5ed，均版本一致 True）；浏览器实测 4828：按钮文本=`＋`、rcMode=true、TAB 均为 none、最近选择/公共设施小标题/公共设施网格/器械/建筑均 none、「其它」默认展开、分组仅「资源」「消耗品」、263 项违规 0、截图确认只剩搜索框 + 其它折叠 + 资源/消耗品。
+
+### 步骤 22：编辑浮窗宽屏两列 + 采集点紧随标题 + 步骤整行 + ＋浮窗折叠行只留右侧标签（v20261019-4829 → 4830）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：① 编辑浮窗 `.lb-hf-body` 改网格布局：窄屏单列、`@media (min-width:1200px)` 两列（标题/采集点并排）；② 字段顺序改为 标题 → 采集点 → 地图；③ 地图/产出物品/步骤/实时预览加 `.lb-hf-full{grid-column:1/-1}`，`#lbHfERows` 与每行 `.lb-hf-row` 恒 `width:100%`（任何宽度都整行）；④ ＋产物浮窗「其它」折叠行在收敛模式下只保留右侧分类标签：隐藏 `::before` 三角与 `.lb-picker-sumtxt`（「其它 (N)」文字），并禁用折叠（summary `pointer-events:none` + click capture 拦截 + toggle 兜底强制 open）。
+- 验证：node --check EXIT=0；CF 部署两次（4829 Version ID 22adc724-705a-4516-8dc8-82ce64381b76、4830 Version ID ddf8a83a-74d8-4b28-b254-b94b5df54fe0，均版本一致 True）；浏览器实测 4830：1440px 下 grid-template-columns=702px 702px、标题/采集点 top 相同且左 14 / 724（并排）；步骤 rowsW=rowW=1412（整行）；1021px 下单列（993px）且步骤同样整行；浮窗 summary 可见文本仅「资源 消耗品」、`::before` none、`txtDisp` none、点击后 open 仍 true、强制 open=false 后自动恢复 true；截图确认宽屏两列视觉。
+
+### 步骤 23：地图/产出恢复两列 + 修复分类徽章点击失效（v20261019-4831）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 背景：v4829 误把地图行与产出物品行也设为整行（用户只要求「步骤」整行）；另 v4735 的 summary capture 拦截把分类徽章点击一并吞掉，导致点「资源/消耗品」不跳转。
+- 描述：① 地图块与产出块由 `.lb-hf-full` 改为 `.lb-hf-c`（参与两列网格，新增 `.lb-hf-c{min-width:0}`），步骤与实时预览保留整行；② `summary` 的 capture 点击拦截增加例外：`ev.target.closest('.lb-cat-chip')` 直接放行，使 `lbPickerScrollToCat` 正常触发。
+- 验证：node --check EXIT=0；CF 部署成功（Version ID 5bd37f0a-bd9b-4c3b-a420-ebd40b889aed，版本一致 True）；浏览器实测 4831（1440px）：标题(t564,l14) 与 采集点(t564,l724) 同行、地图(t618,l14) 与 产出(t618,l724) 同行、步骤 rows/row 均 t702 w1412 整行；点击「消耗品」徽章 `called=1`、grid scrollTop 0→2273（跳转恢复）、open 保持 true；点击 summary 后 open 仍 true（折叠仍禁用）。
+
+### 步骤 24：两列断点 1200px → 760px（v20261019-4832）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 原因：v4734 把两列断点设为 ≥1200px，而实际使用窗口约 1021px，导致所有字段回落单列独占一行（用户反馈「怎么全部独占一行」）。
+- 描述：`@media (min-width:1200px)` 改为 `@media (min-width:760px)`，常规桌面宽度即两列（标题｜采集点、地图｜产出物品），<760px（手机）仍单列；步骤与实时预览继续整行。
+- 验证：node --check EXIT=0；CF 部署成功（Version ID 5baf85f9-6b43-4a06-ae87-d6f76cdd15b4，版本一致 True）；浏览器实测 4832（1021px 视口）：grid-template-columns=492.571px 492.571px；标题(t712,l14,w493) 与 采集点(t712,l515,w493) 同行、地图(t766,l14,w493) 与 产出(t766,l515,w493) 同行、步骤 rows/row 均 t850 w993 整行；截图确认视觉。
+
+### 步骤 25：地图「全图」按钮 + 公共设施插入交互 + 序号数字居中（v20261019-4833 → 4834）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：① 地图网格首位新增「全图」按钮（世界图标 `mdi-earth`，与其他地图按钮同款 `.server-tab`），点它清空 `card.map`（不限定地图），`card.map` 为空时该按钮呈选中态；② 「插入物品/物种」回调模式（`LB._pickHook` 非空）下，公共设施格子点击改为「插入引用」：`lbFacPosClick` 顶部新增 hook 分支（取 `.lb-picker-name` 中文名 + `data-pos-key`/`data-wp` 作 key，回调后关闭浮窗），`lbWpClick` 在 hook 模式下直接返回（不触发刷新热区、不发 worldprobe 请求）；③ 步骤序号 `.lb-hf-num` 增加 `line-height:18px`（=盒高），修复编辑区数字偏下（预览区继承行高恰好居中）。
+- 修复：v4833 实测插入文本为 `[wp:obelisk]` —— `lbHfRefMeta` 对未知键会回填 key 而非返回 null，故显示名改为显式优先 `r.zh`（v4834）。
+- 验证：node --check EXIT=0；CF 部署两次（4833 Version ID bf7e4897-9545-4a3a-bf4f-5693a414492b、4834 Version ID 20075f9c-10af-4549-91fb-a55ed06e65f0，均版本一致 True）；浏览器实测 4834：地图网格 12 按钮（首位全图 active/mdi-earth）、选 Isl 后 map=Isl 且全图取消选中、再点全图 map='' 全图选中；编辑区与预览区 `.lb-hf-num` 均 height/line-height=18px；插入模式点「方尖碑」→ 步骤文本 `[方尖碑]`、refs=`[{type:'item',key:'wp:obelisk'}]`、worldprobe 请求 0、未打开点位浮窗、picker 关闭、编辑器仍在；截图确认两列与序号居中。
+
+### 步骤 26：地图按钮改名「所有地图」+ 地图多选（v20261019-4835）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：① 地图网格首位按钮标题由「全图」改为「所有地图」（世界图标不变）；② 地图改为多选：新增 `lbHfMapList(v)` 解析逗号分隔列表，`lbHfEditPickMap(id)` 改为 toggle（点选加入/再点移除），点「所有地图」= 清空全部；未选任何地图时「所有地图」高亮；③ `card.map` 存 `Isl,Sco` 形式字符串（旧单值数据天然兼容）；④ 详情浮窗地图徽章按多地图显示（多个用「、」连接，单张沿用对应地图图标，未选显示「所有地图」+ 地球图标）。
+- 验证：node --check EXIT=0；CF 部署成功（Version ID 7fb2d4ed-43a7-4b17-a42e-8dceb2d10eaf；脚本自检显示版本一致 False 属边缘缓存，HTTP 直查 `v20261019-4835` 与 `lbHfMapList` 均命中）；浏览器实测 4835：首按钮无障碍名「所有地图」；点孤岛→map=Isl；再点焦土→map=Isl,Sco 且两按钮 active；再点孤岛→map=Sco；点所有地图→map='' 且仅它 active；详情徽章多地图显示「孤岛、焦土」、空 map 显示「所有地图」；截图确认。
+
+### 步骤 27：原生 confirm 全部改为站内确认浮窗（v20261019-4836）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 背景：原生 confirm 在移动端（PWA/Safari）样式割裂且阻塞页面；用户要求「放弃未保存的修改」改用页面自定义确认浮窗（复用页面样式）。
+- 描述：① 复用现有 `lbAsk`（卡片深底 + 描边 + `--accent` 主色按钮，取消左/主操作右）；② 新增 `lbAskMulti(msg, btns)` 支持多按钮站内确认（固定含「取消」= 不做任何操作）；③ 采集流程模块四处原生 confirm 全部替换：放弃未保存的修改（取消/放弃）、删除流程（取消/删除）、导入未登录时创建的流程（取消/导入）、云端冲突（取消/本地覆盖云端/云端覆盖本地，取消不再静默用本地覆盖云端）；④ 每处仍保留 `lbAsk`/`lbAskMulti` 创建失败时的原生 confirm 兜底。
+- 验证：node --check EXIT=0；CF 部署成功（Version ID b9f3792d-4ef9-496d-bbfe-e62e6ba03b9d，版本一致 True）；浏览器实测 4836：dirty 时调 `lbHfCancelEdit()` 出现站内浮窗（文案「放弃未保存的修改？/取消/放弃」），点取消 → 编辑器与 dirty 均保留，点放弃 → 编辑器关闭且 `LB_HF.edit=null`；`lbHfDeleteCard` 浮窗（取消/删除）；`lbHfConflict` 浮窗三按钮（取消 / 本地覆盖云端 / 云端覆盖本地）且点取消无副作用；截图确认浮窗样式与页面一致。
+
+### 步骤 28：关注项绑定玩家跨客户端存储（v20261019-4837 → 4838，后端 /api/user_prefs）
+- 时间：2026-10-19
+- 状态：✅ 完成（后端已重启，云端闭环验证通过）
+- 范围（用户确认 4 项）：关注未成年 `lb_watch_babies`、被关注设施 `lbMaintWatch_v1`、蓝图关注 `lb_bp_follow`、待制作数量 `lb_bp_todo`（`lb_bp_cost` 属可重算缓存，不同步）
+- 后端：`dino_backend.py` 新增玩家偏好存储段（`_prefs_path` / `_load_user_prefs` / `_save_user_prefs`，按账号存 `userdata/user_prefs_<user>.json`，.bak + 原子写）+ GET/POST `/api/user_prefs`（复用 `_harvest_auth` 的账号/nick 校验）；已部署到物理服务器（WROTE），**进程尚未重启（接口仍 404）**。
+- 前端：新增 `LB_PREFS` 模块（`LB_PREFS_KEYS` 四键、`lbPrefsCollect/Apply/Pull/Push/Init`）；四个 Save 函数（`lbBpFollowSave` / `lbFacWatchSave` / `lbWatchSave` / `lbTodoSetQty`）变更即 800ms 防抖推送；`lbPrefsInit` 幂等按账号拉取（云端较新则覆盖本地并刷新角标，本地较新/云端无数据则上传本地，首次登录即完成迁移）；`lbWatchCnt` 与 1.2s 定时兜底各触发一次初始化。
+- 验证（前端 4838）：`node --check` EXIT=0；CF 部署成功（Version ID 49ba57ec-d6a1-402d-aea9-173447dae062，版本一致 True）；浏览器实测 `LB_PREFS_KEYS` 四键就位、`LB_PREFS.user='whiterober'`（自动初始化生效）、页面无 JS 报错；GET `/api/user_prefs` 目前 404 属后端未重启，前端已静默降级不影响功能。
+- 待办：用户重启后端进程 → 复测 GET/POST `/api/user_prefs`（401 鉴权 / 200 正常）→ 闭环验证「改关注项 → 云端有数据 → 清本地 → 重载恢复」→ 回填验证结果。
+- 云端闭环验证（后端重启后）：GET `/api/user_prefs` 200 且 `ok=true`（重启前为 404）；手动 `lbPrefsPush(true)` → 云端 `keys=["lbMaintWatch_v1"]` 共 10 条；清空本地 `lbMaintWatch_v1` + `lbPrefsPull()` → 1.6s 内完整恢复（与原始数据逐字节一致，`restored=true`）；`lbprefs_ts_whiterober` 与服务端 `updatedAt` 同步（1792410518754）；维护角标随 apply 刷新（10 → 25）。
+
+### 步骤 29：修复关注项跨端同步「云端缺键不回填」（v20261019-4839）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 现象（用户反馈）：移动端「待制作」有 2 条，VSC 内置浏览器为 0 条，未同步。
+- 根因：当时云端 `user_prefs` 只有 `lbMaintWatch_v1`；`lbPrefsPull` 仅在「云端完全没有数据」时才上传本地 → 「云端已有部分键 + 本地有云端缺失的键」时，本地独有键永远进不了云端（移动端那 2 条 `lb_bp_follow` 也因此上不去）。
+- 修复：`lbPrefsPull` 在应用云端数据后逐键比对，凡云端缺失且本地有值的键 → 触发一次补传（`lbPrefsPush(true)`，收集的是「云端已应用值 + 本地独有键」的合集，不会覆盖云端已有键）。
+- 验证：① 用临时测试键 `lb_test_pref_x` 复现并验证补传（云端 keys 4 → 5，`lbMaintWatch_v1` 仍 10 条未丢），随后清理并 POST 恢复为原 4 键；② 真实数据：云端 `keys = lb_bp_follow(2 条) / lb_bp_todo(1 键) / lb_watch_babies(0) / lbMaintWatch_v1(10)`；内置浏览器打开「待制作」显示 2 张卡（无畏巨龙平台鞍、帝蟒鞍），角标 = 2，与移动端一致；③ `node --check` EXIT=0，CF 部署（Version ID 53e90ded-9e97-4cfb-a269-42e25e9efb99，版本一致 True）。
+- 说明：移动端需刷新到 4839（或关掉重开 PWA）才具备补传/拉取能力；跨端同时新增不同项会自动合并，跨端「删除某一项」目前以最后一次整体上传为准（两端都删除即可一致）。
+
+### 步骤 30：关注项按类时间戳双向同步（删除自动跨端生效，v20261019-4840）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 背景（用户反馈）：「若要删除某项建议两端都删一次」不合理 —— 原实现为整份覆盖 + 缺键补传，删除只能靠最后整份上传生效。
+- 后端：`/api/user_prefs` POST 增加接收 `kts`（各类关注数据的修改时间）并随文档保存（`user_prefs_<user>.json` 内 `keys/kts/updatedAt`）；GET 原样返回。
+- 前端：新增 `lbPrefsKts/lbPrefsTouch`（本地 `lbprefs_kts_<user>` 记录每类最后修改时间）；四个保存函数改为 `lbPrefsTouch(<key>)`（自身触发防抖推送）；`lbPrefsPull` 改为逐类比较 —— 云端该类较新 ⇒ 覆盖本地该类（删除随整类数据同步生效）；本地较新 ⇒ 保留并补传；云端缺该键且本地有值 ⇒ 补传；新增 `lbPrefsAfterApply()` 统一失效内存缓存并刷新角标。
+- 验证（后端重启后，浏览器实测 4840）：① 本端删除「待制作」1 条 → 云端 `lb_bp_follow` 2→1，`kts.lb_bp_follow=1792411049122`；② 模拟另一台仍是旧 2 条且 kts 调早 → `lbPrefsPull` 后本地变 1 条（删除自动跨端生效，无需两端都删）；③ 本地较新用例：本地 1 条 + kts 设为未来 → 拉取后本地仍 1 条（未被云端旧 2 条覆盖）且云端被补传为 1 条；④ 恢复原数据后两端均为 2 条、角标 2；⑤ `node --check` / `py_compile` 通过，CF 部署（Version ID 5a5b896d-7c93-48f5-ae6b-3f3d0dfe003f，版本一致 True），后端 MD5 部署一致。
+
+### 步骤 31：PWA 回前台自动补拉关注项（解决「必须重开页面才同步」，v20261019-4841）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 背景（用户反馈）：「内置浏览器取消关注了一个蓝图，但刷新移动端还是 2 条」；复查后用户重新打开移动端页面即同步 → 根因是 **PWA 从后台/bfcache 恢复时页面脚本不重新执行，不会触发 `lbPrefsInit` 的启动拉取**（移动端此前还弹过「发现新版本」，说明长期跑旧壳）。
+- 排查结论：云端数据本身正常（`lb_bp_follow` = 1 条、`kts.lb_bp_follow=1792411086314`，桌面本地同为 1 条）；线上首页 `cache-control: public, max-age=0, must-revalidate`，非强缓存问题；SW 导航请求不接管（network-first 到 CF Assets）。
+- 前端改动（`dino-import.html`）：
+  - `LB_PREFS` 增 `lastPull`；`lbPrefsPull` 开头记录发起时间（失败也参与节流，避免频繁重试）。
+  - 新增 `lbPrefsWake(force)`：仅当页面可见且已登录时生效，30 秒节流（`force=true` 绕过，用于 bfcache 恢复）。
+  - 注册 `visibilitychange` / `pageshow`（`persisted` → force）/ `focus` 三个钩子。
+  - `lbPrefsAfterApply()` 补充：`lbBpCnt()` 刷新蓝图关注角标，并按需重绘已打开的浮窗（`lbWatchRender` / `lbMaintRender` / `lbTodoRender`）。
+  - `pwa/sw.js` 的 `VER` 同步为 `v20261019-4841`（强制移动端换壳）。
+- 验证（线上 4841 实测）：
+  1. `typeof lbPrefsWake === 'function'` = true；每次页面加载 `lastPull` 有值。
+  2. 模拟另一台仍是 2 条 + 本地 kts 早于云端 → `lbPrefsWake(true)` 后本地被云端覆盖为 1 条、角标 1，云端仍 1 条（无脏写）。
+  3. 三个事件真实派发均触发拉取：`visibilitychange`=true、`pageshow`=true、`focus`=true。
+  4. 30 秒内重复触发被节流（`lastPull` 不变，无额外请求）。
+  5. `node --check` EXIT=0；CF 部署 Version ID `80879e88-ea1a-4f62-be56-ad1e3db289a8`，线上/本地版本一致 True。
+- 性能口径（用户问询后确认）：不轮询，只在回前台/恢复/聚焦时触发，30s 节流，单次轻量 GET（几 KB），失败静默。
+
+### 步骤 32：公共设施新增「洞穴入口」（Wiki 静态点位，v20261019-4843）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 需求（用户口径）：公共设施里加一项「洞穴入口」，包含地下世界 / 巨型地下世界入口；Aberration 是**地表入口**（单独图例）；Extinction **穹顶不算**（仅沉没森林算地下世界）；「地下世界 / 巨型地下世界入口」合并为一类。
+- 数据来源：`ark.wiki.gg`（Caves / Coordinates / Explorer Map 页面，MediaWiki API 批量取 wikitext 后解析）→ 生成 `cave_entrances.json`（本地源文件；打包经 `_sync_repack2.py` 的 STATIC_SRC 上传）。
+- 数据规模：**123 条**入口 —— 孤岛 22（普通 10 + 水下 12）、核心岛 37（普通 31 + 地下世界 6）、焦土 3、畸变 8（地表入口 5 + 地下世界 3）、灭绝 1（沉没森林）、仙境 48、瓦尔盖罗 3、创世 1；繁星 / 失落地 / 俱乐部：Wiki 无坐标表（显示 0，不编造）。
+- 分类（4 类图例）：普通洞穴（黄）、水下洞穴（青）、地表入口（橙）、地下世界入口（含巨型，紫）。
+- 前端实现（`dino-import.html`）：
+  - 新增 `LB_CAVES_FILE` / `lbCaveFetch` / `lbCavePreload` / `lbCaveTotal` / `lbCaveDots` / `lbCaveOpen`（全部复用「畸变毒菌」静态数据集手法）。
+  - `lbPubFacRender` 在「畸变毒菌」后加一格「洞穴入口」（图标 `mdi-map-marker-multiple`，数量=总条数；首次渲染异步预加载并回填计数）。
+  - `lbFacPosPage` 增 `kind='caveentrance'` 配色分支与专属图例；`lbFacPosClick` 增 `data-cave` 分支（引用插入模式下也屏蔽，不产生引用）。
+  - 坐标：只存 lat/lon，前端用各图校准参数反算 x/y（`x=(lon-shiftLon)*multLon`、`y=(lat-shiftLat)*multLat`），校准参数以后调整无需重生成数据。
+- 验证（线上 4843 实测）：
+  - 版本 `v20261019-4843`；`lbCaveTotal()`=123；各服分布与图例计数正确（孤岛 22=10+12、核心岛 37=31+6、畸变 8=5+3）。
+  - 格子：物品 TAB → 公共设施区出现「洞穴入口 / 123 / Cave Entrances」，图标 SVG 正常渲染（414 字符）。
+  - 点击格子 → 浮窗标题「📌 洞穴入口」，8 个服务器分页，点位节点 123 个；孤岛点位截图确认普通洞穴落陆地、水下洞穴落海洋。
+  - `node --check` EXIT=0；Version ID `1c2a29f1-90a5-47f0-804d-dc4617cc693b`，线上/本地版本一致 True。
+- 已知限制：繁星/失落地/俱乐部暂无 Wiki 坐标；WPNG 探针无 cave 类型（后续若要更精准入口，需插件新增 `caveentrance` 类型）。
+
+### 步骤 33：洞穴入口 6 类重构 + 图标 + 流程浮窗遮罩修复（v20261019-4845）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 用户 10 项口径逐条落实：
+  1. 图标改用 `IconAberration.png` —— 侦察确认 `汉化/icons2.json` 已登记、`tmp/webp_map.json` 已有 `thumbs/webp96/91aa037a1498_w96.webp`（无需重复压图），前端直接 `lbResURL(...)` 引用（实测 naturalWidth=64 正常显示）。
+  2. 流程浮窗「没有遮罩」根因：v4727 当时对齐的是**选种结果面板 `#lbBreedResult`**（吸底、无遮罩），而用户指的「选种」是**选种浮窗 `.lb-picker-overlay`**。已改为完全一致：`.lb-hf-overlay{background:rgba(0,0,0,.9);display:flex;居中;z-index:1000001}`、`.lb-hf-panel{#1a1a24;radius 8px;width 90%;max-width 640px;max-height 80vh}`、`.lb-hf-body` 承担滚动。实测 computed：bg=rgba(0,0,0,0.9)、display=flex、panel 640px/#1a1a24/8px/80vh。
+  3~9. 分类按「有神器的洞才叫神器洞」重构（第 3 条与第 9 条冲突，以第 9 条为准，用户已确认）：神器洞 / 普通洞 / 水下资源洞 / 地表 / 地下世界 / 火山核心。
+     - Isl 10 神器洞 + 12 水下资源洞；Cen 16 神器洞（含 Jungle/The Center/Cliffside）+ 15 普通洞；Sco 3 神器洞；Abe 3 神器洞 + 5 地表；Ext 3 神器洞（穹顶两条已按用户口径恢复）；Rag 11 神器洞（Monkey's Puzzle / Life's Labyrinth / Fallen Redwood / Jungle Dungeon / Frozen Dungeon / Carnivorous Caverns 的入口）+ 37 普通洞；Val 3 神器洞。
+  10. Gen 火山核心：Wiki `genesis_part1_lava_cave_entrances_table` 实为 **2 个入口**（Entrance #1 X342497/Y-177282、#2 X373135/Y-186962），按 Gen 陆地参数（shift 50 / mult 8200）换算 lat/lon 后全部标为「火山核心」，共 2 个。
+- 数据：`cave_entrances.json` 重新生成（120 条）；分布：Isl 22、Cen 31、Sco 3、Abe 8、Ext 3、Rag 48、Val 3、Gen 2；Ast/Los/Bob 仍 0（Wiki 无坐标表）。
+- 验证（线上 4845）：版本一致 True；`lbCaveTotal()`=120；图例逐服正确（孤岛 神器洞10+水下资源洞12、核心岛 神器洞16+普通洞15、畸变 神器洞3+地表5、仙境 神器洞11+普通洞37、创世 火山核心2）；图标加载成功；`node --check` EXIT=0；Version ID `6e198d8d-b625-4371-8ced-82672efa8594`。
+
+### 步骤 34：补 Cen 地下世界 / Val 地下海与地下世界 / Gen 火山核心 4 入口（v20261019-4846）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 问题与根因：
+  - **Cen 地下世界确实漏了**：v4844 重构时只合并了 Center 的 4 张表（cave/jungle/the_center/cliffside），`center_underground_world_table` 的 6 条未进入数据（我的遗漏）。
+  - **Val 地下海（The Abyss）与地下世界（The Unknown）也漏了**：此前只用了 `valguero_cave_table` 的 3 个神器洞。
+  - **Gen 火山核心不止 2 个**：此前用的是 `genesis_part1_lava_cave_entrances_table`（2 条世界坐标），真正权威是 `Volcanic Cave (Genesis: Part 1)` 页面明确写的 **four entrances**。
+- 数据补全（`cave_entrances.json`，共 133 条）：
+  - Cen +6「地下世界」：Flyer-accessible 34.9/65.8、Ruins 1 34.3/53.3、Ruins 2 53.5/53.8、Underwater River 1 32.7/64.1、Underwater River 2 44.2/58.0、Underwater Ocean 66.1/51.7。
+  - Val +4「地下海 - The Abyss」：45.4/34.0、63.9/73.3、32.0/8.3、31.8/9.3（来源 Explorer Map/Valguero 的 cave-entrance）。
+  - Val +1「地下世界 - The Unknown（经 The Lost Temple）」：46.9/87.5。
+  - Gen 火山核心改为 **4 个**（来源 Volcanic Cave 页面）：北 20.40/78.30（Lavaclaw Flow）、东南 32.3/85.5（Magma Spring）、南 33.2/82.56（Burning Arteries）、西南 29.4/78.4（Burning Arteries）。
+  - 新增两类图例：**地下海**（#06b6d4）、**水下气泡**（#38bdf8，暂无坐标数据）。
+- 其他地图地下世界核查结论：Abe 整图即地下、无独立「地下世界入口」；Ext 沉没森林按用户口径归神器洞；Ast 的巨型地下世界 / Los 地下区 Wiki 无坐标表（Explorer Map/Astraeos、Lost Colony 均为空页）→ 暂无数据，不编造。
+- 水下气泡数据缺口：Wiki 仅记载存在（The Center 东/南 Underwater Bubble、Genesis Ocean 巨型氧气泡、Astraeos Abyssanthos 深海气泡），**无权威坐标表**；分类与图例已建好，待用户提供坐标或后续游戏内实测再补点。
+- 验证（线上 4846）：`lbCaveTotal()`=133；Cen 神器洞16+地下世界6+普通洞15；Val 神器洞3+地下海4+地下世界1；Gen 火山核心4（北/东南/南/西南）；`node --check` EXIT=0；Version ID `5d87e399-f8c7-4e69-9c0e-7ad5a5741750`，版本一致 True。
+
+### 步骤 35：资源洞分类 / Val 地下世界入口修正 / Gen 漂移根因 / 流程浮窗半屏（v20261019-4847）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 1）分类调整：
+  - 「水下资源洞」去掉“水下” → **资源洞**（key 由 `water` 改 `resource`，兼容旧 `water` 值）。
+  - 「有怪才是普通洞，没怪算资源洞」：Rag 的 `Watertunnels` 判为资源洞；其余小洞 Wiki 无 creatures 独立页，暂按普通洞（可按用户点名单点调整）。
+- 2）Val 地下世界入口核实（用户质疑）：
+  - 此前我错用 `The Lost Temple 46.9/87.5` 作为地下世界入口。
+  - Wiki `The Unknown (Valguero)` 明确：`lat = 37.5, lon = 57.9`（入口），神器 Gatekeeper 在洞内 48.0/58.9；入口实为 **The Unknown 37.5/57.9**（在 Emerald Forest 内，最佳入口 38/57 附近）。
+  - 该洞与神器洞重叠 ⇒ 按用户口径**只算地下世界**，Val 神器洞减为 2（The Lair / The Lost Temple）。
+- 3）Gen 火山核心漂移根因：
+  - `genesis_part1_lava_cave_entrances_table` 的 2 条是**世界坐标**（X342497/Y-177282 等），按前端 Gen 参数（mult 8200 / shift 50）换算得 (28.4/91.8)、(27.2/95.5)；而按项目报告使用的 mult 20172.1 换算得 (41.2/67.0)，两者不一致 ⇒ 该表坐标体系与 Wiki 地图 lat/lon 不同源。
+  - 现统一采用 `Volcanic Cave (Genesis: Part 1)` 页面的**地图坐标**（北 20.40/78.30、东南 32.3/85.5、南 33.2/82.56、西南 29.4/78.4），实测 4 点均落在 Gen 底图右上「火山 biome」区块内（截图核对）。
+  - 残余观感差异来自：Gen 底图是四 biome 拼接图，坐标按全图百分比映射，Wiki 坐标精度约 ±1~2%。
+- 4）流程浮窗形态（用户澄清「选种浮窗=半屏」）：
+  - 改为**遮罩 + 吸底半屏**：`.lb-hf-overlay{background:rgba(0,0,0,.9);align-items:flex-end}`、`.lb-hf-panel{border-radius:12px 12px 0 0;width:100%;max-width:960px;max-height:60vh}`。
+  - 实测 computed：bg rgba(0,0,0,0.9)、align-items flex-end、面板 960px / 60vh / 顶部圆角 12px。
+- 数据：`cave_entrances.json` 132 条；分布 Isl 22（神器10+资源12）、Cen 37（神器16+地下世界6+普通15）、Sco 3、Abe 8（神器3+地表5）、Ext 3、Rag 48（神器11+普通36+资源1）、Val 7（神器2+地下世界1+地下海4）、Gen 4（火山核心4）。
+- 验证：线上 4847，版本一致 True；`node --check` EXIT=0；Version ID `646bc3bf-f5e6-4c69-9ecf-1ba13c5dc3bf`。
+
+### 步骤 36：流程浮窗遮罩遮挡功能栏 —— 根因定位与修复（v20261019-4848）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- **根因（用户要求必须查清）**：
+  - 代码第 28621 / 28700 行有 v4730 机制：**流程浮窗编辑器打开时把 `#lbBreedBar` z-index 临时设为 9999**（保证保存/取消可点）。
+  - v4727~v4843：`.lb-hf-overlay` z-index = **9998** < 9999 ⇒ 功能栏浮在遮罩之上，**不遮挡**。
+  - **v4844（2026-10-19 20:31:28~20:38:25 之间）** 我把 `.lb-hf-overlay` 从 `background:transparent; z-index:9998` 改为 `background:rgba(0,0,0,.9); z-index:1000001` ⇒ **越过 9999 天花板，功能栏被遮罩压住**。
+  - 备份证据：`bak/..._203128.html`（改前）为 transparent；`bak/..._203825.html`（改后）为 rgba(0,0,0,.9) + 1000001。
+  - 选种浮窗 `.lb-picker-overlay` 的 z-index 1000001 **从未被改**（6 份备份逐份比对一致），它本来就没有 v4730 那层功能栏保护。
+- 修复（用户确认方案 1+2）：
+  1. `.lb-hf-overlay` z-index 回归 **9998**（低于 v4730 的 9999，功能栏恢复可见可点）。
+  2. `.lb-hf-panel` 完全照搬 `.lb-picker-panel`：`background:#1a1a24; border:1px solid #333; border-radius:8px; width:90%; max-width:640px; max-height:80vh`。
+- 验证（线上 4848，computed 实测）：`.lb-hf-overlay` z=9998 / align center / rgba(0,0,0,0.9)；`.lb-hf-panel` 宽 640px、max-height 838.4px(80vh)、背景 rgb(26,26,36)、圆角 8px、边框 1px rgb(51,51,51) —— 与选种浮窗逐项一致。
+- 版本一致 True；Version ID `662e82fc-ec65-4212-9c2d-da2b1ed3fb1a`。
+- Gen 火山坐标：已交叉验证（Wiki Explorer Map `cave-entrance` 33.2/82.5 与「南」33.2/82.56 重合，误差 0.06%），用户确认保持不改。
+
+
+### 步骤 37：流程浮窗「选种 vs 选物种」对象搞错 —— 照抄真·选种浮窗修复（v20261019-4849）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- **用户指出的核心错误（必须记住）**：我在步骤 36 里把「选种浮窗」理解成了「**选物种**浮窗」，
+  照抄了 `.lb-picker-panel`（640px 居中 / 80vh / #1a1a24 / 四边 8px 圆角 + #333 边框 / 遮罩 1000001）
+  —— **对象完全搞错**，所以形态依旧不对，还顺带把 z-index 越级带回来了。
+- **两个浮窗的权威定义（DOM 取证）**：
+  | 用户口语 | DOM 证据 | 形态 |
+  |---|---|---|
+  | **选种**（繁育栏选种） | `#lbBreedMask`（inline，z=996）+ `#lbBreedResult`（inline，z=997） | **吸底半屏**：`bottom:40px; left:0; right:0; max-height:60vh; overflow-y:auto; background:#16161f; border-top:1px solid #2a2a3a; padding:8px 10px`；**无圆角、无四边框、非居中、非 640px** |
+  | 选物种（物品/生物选择器） | `.lb-picker-overlay`（z=1000001）+ `.lb-picker-panel` | 居中弹窗：`width:90%; max-width:640px; max-height:80vh; background:#1a1a24; border:1px solid #333; border-radius:8px` |
+  > 记忆钉死：`/memories/repo/terminology.md`（选种=`#lbBreedResult`，选物种=`.lb-picker-panel`）
+- 修复（v4849，三处 CSS 完全照抄选种）：
+  - `.lb-hf-overlay{position:fixed;inset:0;z-index:996;background:rgba(0,0,0,.9);display:block}`
+  - `.lb-hf-panel{position:fixed;bottom:40px;left:0;right:0;max-height:60vh;overflow-y:auto;background:#16161f;border-top:1px solid #2a2a3a;z-index:997;padding:8px 10px;box-sizing:border-box}`
+  - `.lb-hf-body{padding:8px 4px;overflow:visible;display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start}`（滚动交给面板，同 v4727）
+- 逐项对照（源码级，不一致项 = 0）：
+  | 属性 | 选种 `#lbBreedResult` | 流程浮窗 `.lb-hf-panel` | 判定 |
+  |---|---|---|:---:|
+  | position | fixed | fixed | ✅ |
+  | bottom / left / right | 40px / 0 / 0 | 40px / 0 / 0 | ✅ |
+  | max-height | 60vh | 60vh | ✅ |
+  | overflow-y | auto | auto | ✅ |
+  | background | #16161f | #16161f | ✅ |
+  | border | 仅 `border-top:1px solid #2a2a3a` | 仅 `border-top:1px solid #2a2a3a` | ✅ |
+  | border-radius | 无 | 无 | ✅ |
+  | padding | 8px 10px | 8px 10px | ✅ |
+  | z-index | 997 | 997 | ✅ |
+  | 遮罩 | `#lbBreedMask`：inset:0 / rgba(0,0,0,.9) / 996 | `.lb-hf-overlay`：inset:0 / rgba(0,0,0,.9) / 996 | ✅ |
+  > 唯一附加项：`.lb-hf-panel` 多一个 `box-sizing:border-box`（`left/right:0` + padding 下更稳，纯防御，不改变视觉）。
+- **不再越级**：遮罩 996 / 面板 997 均低于功能栏 `#lbBreedBar`（inline z=998；v4730 编辑期间 JS 抬到 9999），
+  保存/取消按钮恢复可见可点；`lbHfClosePanel()` 退出时把 `#lbBreedBar.style.zIndex` 还原为空（回到 998）。
+  `1000001` 全文件仅 3 处，全部属于选物种浮窗（`.lb-picker-overlay` 等），与流程浮窗无关。
+- 机制固化（防止再次"听不懂人话"）：
+  - `/memories/repo/terminology.md`：新增 dino-import UI 术语表（选种 / 选物种 / 功能栏 / 流程浮窗）。
+  - `/memories/repo/ui-align-protocol.md`（新建）：① 用户说 UI 名称先钉死术语再动手；② 动手前先 grep+实测取证，禁止按字面近义词猜；③ 改后必须"目标 vs 被改"同屏逐项对照，不一致项必须为 0；④ 对象不确定时**必须先弹窗确认**，禁止猜。
+- 验证：
+  - `node --check` → blocks=4 bytes=2525359 EXIT=0
+  - 线上 HTTP 200，`index.html` 2127966B；`LB_VERSION` 本地=线上=**v20261019-4849**，版本一致 True
+  - 线上源码三处 CSS 字符串逐字命中上述内容；`.lb-hf-edit` 无 z-index 覆盖
+  - wrangler Current Version ID：`a1a11e87-47cf-4fcb-aedc-7710667331b3`
+  - ⚠️ 浏览器同屏 computed 实测未做（用户拒绝共享已有页面，按纪律不擅自新开页）→ 交用户目视确认渲染
+
+
+### 步骤 38：水下气泡 0 条 —— 定位 + 补齐 The Center 2 处（v20261019-4850）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 用户提问：「水下气泡 为什么一个都没有？」
+- 定位结论（数据/渲染双查）：
+  - `cave_entrances.json` 132 条里 `k='bubble'` **0 条** —— 这是数据真空，不是渲染 bug。
+  - 前端 `lbFacPosRender` 的 8 类图例带 `if(!gcnt[名]) return;`，**计数为 0 的类别连图例都不绘制**，
+    所以既看不到点也看不到「水下气泡 ×N」。
+  - 根因即步骤 34 已记录的口径：v4846 按用户分类建了分类 + 配色（#38bdf8），但 Wiki 无坐标表，未编造。
+- 本轮挖掘结果（MediaWiki 批量接口）：
+  - Wiki 页面 `Underwater Dome (The Center)` 是消歧页，正文定义：**"Underwater Dome or Bubble"** —— 即「水下气泡」= The Center 独有的水下空气穹顶。
+  - 两个入口页面均带 infobox 权威坐标：
+    - `Underwater Dome (East) (The Center)` → **26.1 / 89.9**（正文亦写 "located in (26.1/89.9)"）
+    - `Underwater Dome (South) (The Center)` → **66.0 / 64.6**（正文 "roughly located in (66.0/64.6)"，Deep Ocean、Skull Island 西侧）
+  - `Coordinates` 页虽有 `center_underwater_domes_table` 章节，但**表体只有表头（Dome/Lat/Lon/X/Y/Z），无数据行**
+    ⇒ 只能以两个独立页面的 infobox 为权威。
+  - **Gen1 Ocean 巨型氧气泡 / Astraeos Abyssanthos 深海气泡**：Wiki 仅有文字描述（"underwater sanctuaries or bubbles"），
+    **无任何坐标表** → 按纪律不编造，暂不入库。
+- 数据变更（`cave_entrances.json`）：
+  - Cen +2：`水下气泡 - 东（Underwater Dome）` 26.1/89.9、`水下气泡 - 南（Underwater Dome）` 66.0/64.6，`k='bubble'`。
+  - 全库 132 → **134**；Cen 37 → **39**（artifact 16 / underworld 6 / normal 15 / **bubble 2**）；
+    分类合计 artifact 48 / normal 51 / resource 13 / underworld 7 / surface 5 / volcano 4 / sea 4 / **bubble 2**。
+- 验证：
+  - `node --check` EXIT=0；版本 `v20261019-4850`，线上 HTTP 200，版本一致 True。
+  - 线上 `/cave_entrances.json` 实测含 2 条 bubble，Cen=39，total=134。
+  - wrangler Current Version ID：`b5747900-8651-4299-a906-8369d8a3eddf`。
+- 遗留问题（用户提出）：**洞穴入口目前只有 lat/lon，没有 z 坐标**。
+  - `cave_entrances.json` 条目字段仅 `n/lat/lon/k`；前端按 lat/lon 换算成底图百分比（二维），**z 不参与渲染**。
+  - 影响：同一 lat/lon 的上下层入口（如 Cen 地下世界入口与地表洞口、多层洞穴）会**完全重叠**成一个点。
+  - Wiki `Coordinates` 表本身有 X/Y/Z 列（世界坐标单位），但本轮及此前抓取均只取了 Lat/Lon。
+  - 若需要，可增可选字段 `z` + 前端 tooltip 显示 + 同坐标点按 z 错开/合并提示。
+
+
+### 步骤 39：洞穴入口 Z 坐标入库 + 无 Z 虚线描边 + Cen 小洞穴错位数据重建（v20261019-4851）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 用户口径：**「能取到的才加 z；没取到的，入口地图上的色点描边改成虚线」**；气泡坐标改用 Coordinates 表值；Z 只入库不显示。
+- 🔴 **先纠正我上一轮的错误结论**：我曾判定「`Coordinates` 的 `center_underwater_domes_table` 表体是空的」——**错的**。
+  原因是我用 grep 只筛含 `Dome/lat` 关键词的行，把 `|-` 与数据行过滤掉了。该表**有 2 行**：
+  `Eastern 25.1 / 89.1 / X 326400 / Y -50220 / Z -43800`、`Southern 66.1 / 64.1 / X 86400 / Y 342724 / Z -33900`。
+- 🔴 **发现并修复严重数据 bug：Cen「小洞穴」15 条 lat/lon 列错位**
+  - 现象：`小洞穴 26 → lat 65.9 / lon 103680`、`小洞穴 67 → 114240 / -37761`（把 Lon/X/Y 当成了 lat/lon），
+    这些点坐标是**世界坐标量级**，实际画不到图上；且错位方式不一致（个别偏 1 列、个别偏 2 列）。
+  - 根因：此前抓 `center_small_caves_table` 时按行切分，未按 `|-` 整行合并多行单元格 → 列索引错位。
+  - 修复：改为「按 `|-` 分块 + 块内各行用 `||` 拼接」解析，**按表重建 18 条**（01、02、03-1、03-2、04…15），
+    原 15 条删除、补上此前缺失的 6 条。
+- 本轮实现：
+  1. **数据**（`cave_entrances.json`）：
+     - 每条入口新增可选字段 `z`（取自 Coordinates 表 Z 列，整数）。
+     - Cen 小洞穴重建 18 条（其中 8 条带 Z：01/02/03-1/03-2/04/05/06/07-1；其余 Wiki 写 `?` 不加）。
+     - 水下气泡坐标改为表值：东 **25.1 / 89.1（z -43800）**、南 **66.1 / 64.1（z -33900）**。
+     - 全库 137 条：**Z 有 111 / 无 26**。
+  2. **前端**（`dino-import.html`）：
+     - `lbCaveDots()` 第 7 位追加 z：`(c.z == null ? '' : c.z)`。
+     - 点位描边改为 `kind==='caveentrance' && 无 z` ⇒ `2px dashed #fff`，否则 `2px solid #fff`（其余设施不受影响）。
+- 无 Z 的 26 条分布：Cen 10（小洞穴 07-2/08/09/10/11/12/13-1/13-2/14/15）、Val 7、Gen 4、Ext 3、Rag 2。
+  - Val/Gen/Ext 这些点位来自页面正文或 Explorer Map（**Wiki 无 Z 数据**）；Rag 2 条（Oluf Jungle Cave 2 / Watertunnels）表内 Z 为空。
+- 验证：
+  - 线上 `/cave_entrances.json` 实测：total 137、Z 有 111 / 无 26、小洞穴 18 条、气泡 2 条带 Z。
+  - 线上 `index.html` 实测含 `'2px dashed '`、`d[6] === '' || d[6] == null`、`(c.z == null ? '' : c.z)`，LB_VERSION = `v20261019-4851`。
+  - `node --check` EXIT=0；版本一致 True；wrangler Current Version ID `7e7de7f7-5ef6-4afb-8621-92cac7199179`。
+- 教训（已写入记忆纪律）：**表格解析必须先按 `|-` 合并整行**；**grep 关键词过滤不能用于判断表格是否为空**（会漏掉无关键词的数据行）。
+
+
+### 步骤 40：Wiki 特殊地形盘点 + 补「洞内分区」12 条 + 方尖碑地图新增「召唤台」6 个（v20261019-4852）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 用户需求：① 查 Wiki 还有哪些特殊地形可加到洞穴入口地图（先列清单）；② 方尖碑地图补充「召唤台」点位。
+- **Wiki 盘点结论**（`Coordinates` 页共 **60 张坐标表**，508 行含 Z）：
+  - 第一档（洞穴/地下类，有缺口）：Abe 密室入口 2、Rag Jungle Dungeon 内部 3、Frozen Dungeon 内部 4、Carnivorous Caverns 内部 3 = **12 条**。
+  - 第二档（非洞穴语义，需新类别）：山峰 11、水脉 46、油矿脉 49、毒气矿脉 1、充能节点 1、Z 植物 1、
+    中心岛岛屿 6、神器本体位置 ~59、玛格玛龙巢 16、任务终端 45、Glitch 150。
+  - 第三档（已在别处覆盖，不重复加）：方尖碑、神器台座、探险者笔记、温泉、各类宝箱、Abe 地表入口、
+    Rag Minor Caves 38、Cen Small Caves 18、Isl 资源洞 12、Cen 水下穹顶 2。
+  - 用户本轮选择：**只做第一档 12 条**（第二档他轮再定）。
+- **实施 1：洞穴入口新增「洞内分区」类别（kind=`inner`，色 #e879f9）**
+  - Abe +2：`密室 - Fertile - Bio-Luminescent` 37.0/53.0 (z 32900)、`密室 - Bio-Luminescent - Molten Element` 62.2/68.2 (z 15100)。
+  - Rag +10：丛林地牢 Inner Section 1/2、Lava Elemental Arena；冰霜地牢 Inner Section、Iceworm Queen Arena、
+    Artifact Room、Exit；食肉洞窟 CotS Entrance、Watertunnels 1/2（全部带 Z）。
+  - 注意：Rag 三组的**外洞口此前已覆盖**，本次只补**洞内下一层**（按各表跳过前 2 行）。
+  - 图例数组由 8 类扩到 9 类；picker title 同步加「洞内分区」。
+- **实施 2：方尖碑地图新增「召唤台（Terminal）」静态点位 6 个**
+  - 数据源：`Coordinates` 页 Obelisks 表内的 Terminal 行（全库仅 6 个）——
+    Isl `Tek Cave Terminal` 43.1/39.1(z 33489)、Abe `Rockwell Terminal` 42.7/36.7(z -102900)、
+    Ext `Desert` 97.1/90.2、`Forest` 15.9/50.5、`Ice` 6.7/85.8、`King` 3.4/49.2。
+  - 其余 7 图（Cen/Sco/Rag/Val/Gen/Bob/Los）**无独立召唤台**（Boss 直接在方尖碑召唤）；
+    Ast（Astraeos）Wiki 仅写「西侧 boss terminal / Lemnokis terminal」**无坐标**，不编造。
+  - 技术要点：方尖碑地图点位来自**后端实时扫描 `t:obelisk`**，只识别 `Obelisk_A/B/C`+腐蚀/破损，
+    **Terminal 类不在扫描分类内** ⇒ 采用**静态叠加**（JS 常量 `LB_OBS_TERM` + `lbObsTermMerge()`，
+    在 `lbFacPosRender` 的 obelisk 分支前合并，不改原缓存数组、不重复追加）。
+  - 图例：「召唤台」独立色 #06b6d4，方尖碑图例顺序改为 红/绿/蓝/腐蚀/破损/**召唤台**；
+    点选徽章显示终端名（`_fdn = d[5]`）。
+- 验证（v4852）：
+  - 线上 `cave_entrances.json`：**149 条**（inner 12），Z 有 123 / 无 26；Abe 10（含 inner 2）、Rag 58（含 inner 10）。
+  - 线上 `index.html`：LB_OBS_TERM / lbObsTermMerge / 召唤台图例 / 洞内分区前后端串全 True；`node --check` EXIT=0。
+  - **浏览器运行时实测**（PWA 生产页）：`LB_VERSION = v20261019-4852`；`lbObsTermMerge({})` → `Isl:1, Abe:1, Ext:4`（6 个召台全部生成）。
+  - 版本一致 True；wrangler Current Version ID `330ccfcb-f2cb-4cfd-a382-7a6b5da3dc65`。
+- 待办（第二档，用户未选）：山峰/水脉/油矿脉/神器本体/玛格玛龙巢/任务终端/Glitch，需先定各自的图层归属与配色。
+
+
+### 步骤 41：洞穴入口图标改为 Cave.png（96px WebP 内置，v20261019-4853）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 用户需求：洞穴入口的图标换成 `https://img.whiterober.ccwu.cc/ASA/misc/Cave.png`；用户选择**下载压图后内置**（不用外链）。
+- 实施（标准 4 步压图流程）：
+  1. 下载源图：HTTP 200，PNG 256×256，76812 B。
+  2. PIL 转 96×96 WebP（LANCZOS，quality=70，method=6）→ `tmp/webp96/7f3871392c59_w96.webp`，**3298 B**（压缩率 4.3%）。
+     - 命名规则：`md5(源URL)[:12]_w96.webp`（已抽样 5 条 webp_map 验证该规则成立；IconAberration 那条是历史遗留异名）。
+  3. `汉化/icons2.json` 追加 `{"name":"CaveEntrance","url":".../misc/Cave.png"}`（5222 → 打包时统计 5221 urls）。
+  4. `tmp/webp_map.json` 登记 `该URL -> thumbs/webp96/7f3871392c59_w96.webp`（5126 → 5127）。
+- 前端：picker 洞穴入口图标由 `91aa037a1498_w96.webp`（IconAberration）改为 `7f3871392c59_w96.webp`。
+- 验证：
+  - 打包日志：`icons2 urls=5221`（+1）、`needed thumbs=5112 copied=5112`（+1），wrangler 上传清单含 `/thumbs/webp96/7f3871392c59_w96.webp`。
+  - 线上缩略图：HTTP 200、3298 B、RIFF(WebP)。
+  - 线上 `index.html`：引用新 hash = True、旧 hash 引用 = False；`webp_map` 已登记。
+  - **浏览器运行时实测**：`LB_VERSION = v20261019-4853`；`lbResURL('thumbs/webp96/7f3871392c59_w96.webp')` 加载成功 `96×96`。
+  - 版本一致 True；wrangler Current Version ID `761c5367-5939-4917-9d58-8c2019862119`。
+
+
+### 步骤 42：洞穴入口徽章标题=具体洞名（权威汉化 biome_zh.json，查不到回退英文，v20261019-4854）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 用户需求：洞穴入口选中色点后，坐标徽章的标题显示**具体洞穴名**；能查到权威汉化就用中文，没有就回退英文。
+- **权威汉化源定位（关键结论）**：`汉化/biome_zh.json`（v4336）是项目里**唯一含洞穴/区域名的汉化库**
+  （`names` 整名 592 条 + `tokens` 词组 371 条 + `_sourced` 指向 item_zh/icon_zh_map/facility_official 派生库）。
+  - 反证：`facility_official.json`(1222) / `facility_zh.json`(225) / `item_zh.json`(3074) / `icon_zh_map.json`(5251)
+    对洞穴名命中 **0/149**（它们只有生物/设施/物品）；`ShooterGame.json` 是分节 locres（Content/Globals…），无地名键。
+- 实现：
+  1. 新增 `lbCaveZhName()` / `lbCaveZhOne()` / `lbCaveZhIdx()`（前端零硬编码，全部读 `LB_BIOME_ZH`）。
+     匹配链：整名精确 → 忽略大小写 → 自动补/去 `Cave` → 归一化（去符号小写）→ **前缀法**（`Old Railway Cave`
+     ← 词典 `Old Railway Cave - Tunnels`，只取「·」前段）→ 全词命中 tokens → 否则回退英文。
+  2. **分段翻译**（用户选定）：按 ` - ` 切段；纯英文段查词典；含中文段只翻括号内英文；翻不出保留原段。
+  3. `lbFacPosRender` 的 caveentrance 分支：`_fdn = lbCaveZhName(d[5])`（原为类别名，如「普通洞」）。
+  4. `lbCaveOpen` 的 `fin()` 先 `lbLoadBiomeZh()` 再渲染，保证词典就绪。
+  - ⚠️ 踩坑修正：首版 `nrm()` 把中文字符全部抹掉，导致「火山核心 北（Lavaclaw Flow）」被误判命中
+    `lavaclawflow` → 标题变成「熔岩爪熔流」。已加 `hasCjk → 不参与英文词典匹配` 守卫。
+- 覆盖率实测（149 条）：词典翻译 47 / 原本中文 54 / 纯英文回退 48 → **中文显示 101 条（67.8%）**。
+- 验证：
+  - 线上 `index.html`：version/`lbCaveZhName`/`lbCaveZhOne`/`lbCaveZhIdx`/`_fdn` 钩子/`lbLoadBiomeZh` 前置 全 True。
+  - **浏览器运行时实测**（生产页已 reload 到 v4854）：
+    `Old Railway Cave→旧铁路洞穴`、`Hidden Grotto→隐秘洞窟`、`Lava Oasis→熔岩绿洲洞穴`、`South Ice→南部冰`、
+    `地表 - Northwest→地表 - 西北`、`Jungle Cave - Ocean→丛林洞穴 - 海洋`、`火山核心 东南（Magma Spring）→火山核心 东南（岩浆泉）`、
+    `小洞穴 01→小洞穴 01`、`Southeastern Trench→Southeastern Trench`（无词典，按规则回退英文）。
+  - 版本一致 True；Version ID `f5780a0f-eff7-49f2-999e-9162659e5a40`。
+- 待办（可选）：若想提高中文占比，可把 48 条纯英文名的人工/镜像译名补进 `汉化/biome_zh.json` 的 `names`。
+
+
+### 步骤 43：召唤台补 Ast/Gen 两条（非权威→虚线）+ 汉化补 "The " 前缀变体（v20261019-4855）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 用户提供（社区来源）：Astraeos 小 Boss 终端 **1.4 / 84.6**（紫球小祭坛）；Gen1 海洋 Boss 终端 **54.2 / 49.8**（The Trench，深约 823m）。
+  两个气泡（Astraeos Abyssanthos 深海气泡、Gen1 巨型氧气泡）社区**无公认坐标**，只有区域描述 ⇒ 按纪律不猜点、不入库。
+- 实施 1：`LB_OBS_TERM` 增加第 6 位「虚线标记」，新增 2 条：
+  - `['Ast', 'Astraeos Miniboss Terminal', 1.4, 84.6, 0, 1]`
+  - `['Gen', 'Moeder Terminal（The Trench）', 54.2, 49.8, 200000, 1]`
+    ⚠️ `z=200000` 是**海图选择标记**（Gen `oceanZ:200000`：z≥该值走 `gen_ocean_s` 海图），**不是真实高度**；真实 z 未知。
+    实测 `lbMapForServer('Gen', 200000).img = gen_ocean_s` ✓；目前 Gen 方尖碑图无其他点位，无共图冲突。
+- 实施 2：`lbObsTermMerge` 改为 `lbMapForServer(t[0], t[4])`（按 z 选底图），并把虚线标记写入 `d[6]`。
+- 实施 3：点位描边条件扩展——`(caveentrance 且无 z) || (obelisk 且 terminal 且 d[6]===1)` ⇒ `2px dashed`。
+  → Wiki 权威的 6 条召唤台仍实线，社区来源的 Ast/Gen 2 条为虚线，一眼区分可信度。
+- 实施 4（回答「Old Tunnels 真的没有权威翻译么」）：**有，是我们数据少写了 "The"**。
+  `汉化/biome_zh.json` 明确有 `The Old Tunnels → 旧隧道`、`Old Railway Cave - Tunnels → 旧铁路洞穴 · 隧道`、
+  `Hidden Grotto - Tunnels → 隐秘洞窟 · 隧道`、`Dampwood/Darkwood Tunnel → 湿木/暗木隧道`。
+  我们的数据存的是 `Old Tunnels`（无 The）→ 整名精确失败。已给 `lbCaveZhOne` 增加 **自动补 "The " 前缀** 变体
+  （含 `The xxx Cave` 组合），实测修复 2 条：`Old Tunnels → 旧隧道`、`Forbidden Grotto → 禁忌洞窟`。
+- 验证（v4855，生产页 reload 后运行时实测）：
+  - `LB_VERSION = v20261019-4855`
+  - `lbObsTermMerge({})` → `Isl:1, Abe:1, Ext:4, Ast:1, Gen:1`（共 8 条）
+  - Ast 点 `z=0 dash=1`；Gen 点 `z=200000 dash=1`，`lbMapForServer('Gen',200000).img = gen_ocean_s`
+  - `lbCaveZhName`：`Old Tunnels→旧隧道`、`Forbidden Grotto→禁忌洞窟`、`Old Railway Cave→旧铁路洞穴`、
+    `Southeastern Trench→Southeastern Trench`（无词典，按规则回退英文）
+  - `node --check` EXIT=0；版本一致 True；Version ID `7dfa1ddd-5f1d-4716-879f-91fe0df3b781`
+
+
+### 步骤 44：生成《未翻译洞穴清单.md》（工作区根目录）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 产出：`b:\项目\Hass ASA Server Monitor\未翻译洞穴清单.md`
+- 统计（149 条洞穴点位，判定算法与前端 `lbCaveZhName()` 完全一致）：
+  - 已全部中文 73 / **完全未翻译 46** / **部分翻译中英混排 30**
+- 文档结构：
+  - A. 完全未翻译 46 条（按地图分组；列「词典近似键」作为补译锚点，已剔除 Cave/Jungle 等泛化单字键，最多 3 条）
+  - B. 部分翻译 30 条（原名 → 当前显示，标出缺哪一段）
+  - C. 方尖碑地图「召唤台」8 个（6 Wiki 权威实线 / 2 社区虚线）
+  - D. 补译方法（`汉化/biome_zh.json` names 追加键值对；可只补单段如 `Land: 陆地`；部署与复核方法）
+  - E. 为何无中文（Wiki 与官方 locres 均无；属点位细分描述，需自译并标注来源）
+- 备注：两个无坐标气泡（Astreos Abyssanthos / Gen1 巨型氧气泡）未入库，已在 E 段注明。
+
+
+### 步骤 45：清单增强 —— 近似键附中文、B 段标出缺失段参考译名
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 用户要求：「有近似键 应该都把中文 显示在表里」。
+- 变更（`未翻译洞穴清单.md` 重新生成）：
+  - A 段列头改为「词典近似键 → 对应中文」，每条近似键后直接给出其词典中文（如 `The Great Trench` → **大海沟**）。
+    **46 条中 23 条有近似键（50%）**，表下已注明该比例。
+  - B 段新增「缺失段可参考的中文」列：对每个缺译段落给出词典中文，并标注来源
+    `（去数字后命中，可直接借用）`（如 `Entrance 1` → 入口）、`（词元拼合，建议润色）`、`无词典`。
+  - 已为两类标注加说明，避免把「建议」误当「已入库」。
+- 备注：`Ruins 1 → 遗迹`、`Entrance N → 入口`、`Northeast N → 东北` 这类目前**前端还取不到**（`lbCaveZhOne` 不做去数字），
+  若要真正生效需给前端补「去尾数字后重查」逻辑；本轮仅做清单参考。
+
+
+### 步骤 46：洞穴徽章自定义 tips 显示权威英文 + B 段 30 条补齐中文（v4856/v4857）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 需求 1（tips）：所有洞穴入口浮窗里地图上方的徽章，悬停显示权威英文原名。
+  - `lbFacPosRender` 节点新增 `data-fen`（洞穴/召唤台写入 `d[5]` 原始英文名）。
+  - `lbFacDotSelect` 生成徽章时读取 `data-fen`，加 `lb-tipb` 类 + `title = "【权威英文】\n" + 原名`
+    （项目自定义 tips 引擎会展示 `【】` 黄色小标题；title 由 sweep 自动转 `data-tip`）。
+  - 运行时实测（合成节点）：`barClass = lb-tipb`，`title = 【权威英文】\nJungle Dungeon - Inner Section 1` ✓
+- 需求 2（B 段补译）：原 30 条中英混排全部补齐。
+  - v4856：`汉化/biome_zh.json` 的 `names` 新增 29 条段级词条（Land 陆地 / Entrance 入口 / Ruins 遗迹 /
+    Underwater River 水下河流 / Underwater Dome 水下穹顶 / Northeast 东北 / Flyer-accessible 飞行可达 /
+    Inner Section 内部分区 / Lava Elemental Arena 熔岩元素竞技场 / Iceworm Queen Arena 冰虫女王竞技场 等），
+    并写入 `selfNames`（自译溯源）。
+  - v4857：补 3 条地牢名（`Jungle Dungeon` 丛林地牢 / `Frozen Dungeon` 冰霜地牢 / `Carnivorous Caverns` 食肉洞窟）。
+  - 运行时实测：`Jungle Cave - Land → 丛林洞穴 - 陆地`、`地下世界 - Ruins 1 → 地下世界 - 遗迹 1`、
+    `水下气泡 - 东（Underwater Dome） → 水下气泡 - 东（水下穹顶）`、`地表 - Northeast 1 → 地表 - 东北 1`、
+    `Frozen Dungeon - Entrance 2 → 冰霜地牢 - 入口 2` 等。
+  - 结果：**部分翻译 30 → 1**（仅 `食肉洞窟 - CotS Entrance → 食肉洞窟 - CotS 入口`，保留游戏内缩写）；
+    已全中文 73 → **108**；完全未翻译 46 → **40**。
+- 《未翻译洞穴清单.md》已重生成，B 段仅剩 1 条并注明原因。
+- 验证：`node --check` EXIT=0；版本一致 True；Version ID `189c33f8-7bd8-4a07-a056-8e203b46d21d`。
+
+### 步骤 47：A 段 40 条 + C 段 8 召唤台全部语义自译入表（零硬编码）+ 徽章 tips 移动端长按（v4858）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 需求（用户口径）：
+  1. 徽章 tips 在**移动端长按**显示（桌面悬停为原有行为）。
+  2. A、C 段**均不考虑近似键**，直接按语义翻译并写入词典。
+  3. 所有补译**必须数据化**（复用 `汉化/biome_zh.json`），**禁止**在 HTML 硬编码中文。
+  4. 考证「CotS 是不是南部的意思」。
+- CotS 考证结论：**不是南部**。ARK Wiki 坐标表原文 `[[Castle of the Swamp (Ragnarok)|CotS]] Entrance`
+  ⇒ **CotS = Castle of the Swamp（沼泽城堡）**。`Carnivorous Caverns - CotS Entrance` → 食肉洞窟 - 沼泽城堡入口；
+  词典同时补 `Castle of the Swamp` → 沼泽城堡（原占位「CotS 入口」就地更正）。
+- 数据层：`汉化/biome_zh.json` → `names` **+48 条**（A 段 40 + C 段 8），1 条更正，`_version` → v4858，
+  names 624 → **672**，新增键同步进 `selfNames` 自译溯源。前端**零中文字面量**。
+- 前端（`dino-import.html`）：
+  - `lbCaveZhName()` 新增「**整名精确优先**」：含中文的整名条目（如 `Moeder Terminal（The Trench）`）也能直接命中。
+  - 召唤台徽章名 `_fdn` 由英文直出改为 `lbCaveZhName(d[5])`；英文原名仍走 `data-fen` 供 tips。
+  - 徽章加 `user-select:none / -webkit-user-select:none / -webkit-touch-callout:none / tap-highlight:transparent`，
+    防移动端长按选中文字与系统菜单抢占长按。
+- 运行时实测（线上 v4858，浏览器 `--check` 前先 `node --check` EXIT=0）：
+  - 149 条洞穴名逐条跑 `lbCaveZhName()` → **全中文 149 / 部分 0 / 未译 0**（清零）。
+  - 抽检：`The Caverns of Lost Faith → 失落信仰洞窟`、`Southeastern Trench → 东南海沟`、
+    `The Center Cave - Top → 中心洞穴 - 上层`、`Life's Labyrinth → 生命迷宫`、`Mine Shaft → 矿道`、
+    `Wvyern Cave → 飞龙洞穴`、`Watertunnels → 水道洞`。
+  - 召唤台：`Tek Cave Terminal → 泰克洞穴终端` … `Astraeos Miniboss Terminal → 繁星小 Boss 终端`、
+    `Moeder Terminal（The Trench） → 莫德终端（海沟）`。
+  - 徽章合成节点：`barText = 📌繁星小 Boss 终端`、`barClass = lb-tipb`、`title = 【权威英文】\nAstraeos Miniboss Terminal`、
+    `userSelect = none`；模拟 `touchstart` 520ms 后 `#lbTipBox` `display=block`，渲染金色「权威英文」+ 英文原名 ✅
+- 《未翻译洞穴清单.md》重生成：标题改「已清零」，含 CotS 考证 + A/C 逐条对照表 + 实现要点。
+- 部署：版本一致 True（v20261019-4858），Version ID `5d33ea02-8d89-4c88-83cd-5cef7129c2f8`。
+
+### 步骤 48：洞穴徽章 tips 细化——对齐徽章 / 去掉「权威英文」标题与空行 / 无英文专名不显示（v4859）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 用户反馈三点：
+  1. tips 位置应**对齐徽章**（旧版偏向整行左侧）；
+  2. **不要「权威英文」4 个字**、**不要空一行**；
+  3. 「资源洞」这类**没有权威英文**的点**不显示 tips**。
+- 根因：
+  - tips 锚点挂在整行容器 `bar`（`display:flex;justify-content:center`，宽度=地图宽），
+    `getBoundingClientRect().left` 是整行左边 ⇒ tips 落在整行最左（实测 bar.left=261 / 徽章 left=383，偏 122px）。
+  - `title` 为 `'【权威英文】\n' + 原名` ⇒ `【…】` 被 tips 引擎渲染成金色小标题 + `\n` 造成空行。
+  - 数据中 `资源洞 01`、`小洞穴 01` 等点位 `data-fdn` 与 `data-fen` **完全相同**（本就无英文专名），仍挂了 tips。
+- 改法（`dino-import.html` / `lbFacDotSelect`）：
+  - 删除挂在 `bar` 上的 tips 逻辑，改为在 `bar.innerHTML` 之后取 `bar.firstElementChild`（徽章本体）挂
+    `lb-tipb` + `title`，并保留 `user-select:none` 等移动端防护。
+  - `title` 直接是**英文原名**（无标题行、无换行）。
+  - 新增条件 `_fen && _fen !== _fdn` —— 英文原名与徽章中文名相同即视为无权威英文，不挂 tips。
+- 实测（线上 v4859）：
+  - `失落信仰洞窟`：`badgeClass=lb-tipb`、`title=The Caverns of Lost Faith`、tips 文本仅一行英文、
+    `bar` 无 `lb-tipb`、**tipLeft 383 == badgeRectLeft 383**（旧版 barRectLeft=261）✅
+  - `资源洞 01`、`小洞穴 01`：`badgeClass=''`、无 `title` / `data-tip` ⇒ 不显示 tips ✅
+- 部署：`node --check` EXIT=0；版本一致 True（v20261019-4859）；Version ID `ad13a2dd-c58e-46f9-ab87-c7183bd03c5d`。
+
+### 步骤 49：Gen 补月球/雪山洞穴 + 莫德尔更正 + 方尖碑 tips 显示 -1 修复（v4860）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 用户提问：Gen 的月球、雪山应该有洞穴，找坐标；三个附加要求（无 Z 标虚线 / 莫德→莫德尔 / 方尖碑 tips 显示 -1）。
+- Wiki 考证（ark.wiki.gg 各洞穴页）：
+  - **Family Cave (Genesis: Part 1)**：月球 Biome，入口 **52.4 / 13.2**（Big Brother 区域陨石坑壁），洞内小水潭、20℃、免辐射。
+  - **The Armory (Genesis: Part 1)**：月球 Biome，南入口 **40.00 / 25.95**（宽、崖壁）+ 北入口 **35.82 / 24.00**（窄、陨石坑壁）；主厅石桥，Glitch 39.50/24.57。
+  - **The Oasis (Genesis: Part 1)**：**Snow** Biome，入口 **70.9 / 26.27**；即 Wiki 变更记录里的 "the ice cave on genesis"（193.0 PvP 禁建），找 Ferox 最方便。
+  - 对照：**Volcanic Cave** 4 入口（20.40/78.30、32.3/85.5、33.2/82.56、29.4/78.4）与库内「火山核心」4 条**完全一致** ✅
+- 数据（`cave_entrances.json`）：Gen 4 → **8** 条，新增 Family Cave、The Armory - South/North、The Oasis，类别 `normal`；
+  Wiki 未给 Z ⇒ **不写 z 字段**（前端 `d[6]` 空 ⇒ 自动虚线）。
+- 译名（`汉化/biome_zh.json`，`_version` → v4860）：`Family Cave`→家族洞穴、`The Armory`→军械库、
+  `The Armory - South`→军械库 - 南入口、`The Armory - North`→军械库 - 北入口、`The Oasis`→绿洲；
+  **Moeder**: `莫德终端（海沟）` → **莫德尔终端（海沟）**。
+- Bug 修复（“方尖碑很多徽章 tips 显示 -1”）：世界探针方尖碑点位形如
+  `[-260577,239016,850.899,"","BP_Obelisk_A_C",-1]`，**第 6 字段是 -1 占位**；旧代码对 obelisk 全类取 `d[5]` 作 `data-fen`
+  ⇒ tips 显示 `-1`。改为**仅 caveentrance 与 obelisk-terminal** 取 `d[5]`，普通方尖碑留空（不挂 tips）。
+- 部署：`node --check` EXIT=0；版本一致 True（v20261019-4860）。
+
+### 步骤 50：Gen 洞穴补全（月球 6 入口 + 沼泽 5 入口）（v4861）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 用户追问：“月球不止 2 个洞吧？”
+- Wiki 核查方式（有效路径）：`Category:Caves` 成员表（api `list=categorymembers`）+ 导航模板 `Template:Nav Locations Genesis: Part 1`
+  的 Caves 分组 + 各页面 infobox（api `prop=revisions` 取 wikitext，比抓渲染页轻得多）。
+- 结论：Genesis 共 **10 个洞穴**；其中 **月球 6 个 / 9 个入口**：
+  Family Cave(52.4/13.2)、The Armory(40.00/25.95、35.82/24.00)、Derelict Mine(26.2/36.0)、
+  Stone Scabbard(47.5/29.0)、Optic Nerve(24.0/15.1)、Vecna's Realm(24.7/26.1、23.6/24.3、21.7/25.9)。
+  **雪山 1 个**：The Oasis(70.9/26.27)。**沼泽 2 个**：Darkwood Tunnel(65.4/75.7、65.8/75.5)、
+  Dampwood Tunnel(74.15/74.85、75.75/75.40、74.35/76.50)。海洋：Underpass、Paradise Lost（Wiki 未给入口坐标，未加）。
+- 数据：`cave_entrances.json` Gen 8 → **19** 条（+11：月球 6、沼泽 5），类别 `normal`，无 z ⇒ 虚线。
+- 译名：新增 `Vecna's Realm - Entrance 1/2/3`(维克那领域 - 入口 N)、`Darkwood Tunnel`(暗木隧道) + 北/东南入口、
+  `Dampwood Tunnel`(湿木隧道) + 西/南/东入口；`Derelict Mine/Stone Scabbard/Optic Nerve` **复用既有词条**
+  （废弃矿场 / 石剑鞘 / 视神经谷，未覆盖原值）。`_version` → v4861。
+- 实测（线上 v4861）：Gen 卡片 = **19 个位置（普通洞 ×15 + 火山核心 ×4）**，19 个点**全部虚线**；
+  徽章依次为 家族洞穴 / 军械库-南入口 / 军械库-北入口 / 绿洲 / 废弃矿场 / 石剑鞘 / 视神经谷 /
+  维克那领域-入口 1~3 / 暗木隧道-北入口 / 暗木隧道-东南入口 / 湿木隧道-西入口 / 湿木隧道-南入口 / 湿木隧道-东入口 ✅
+- 部署：`node --check` EXIT=0；wrangler Version ID `86d87859-7f22-4cd5-bf93-d322c0399fc2`；
+  部署脚本报 `版本一致: False` 属 **CF 边缘缓存**（浏览器 `cache:'no-store'` 实测 `LB_VERSION=v20261019-4861` 已生效）。
+
+### 步骤 51：清理 tips 里的「静态点位 / Wiki 静态点位 / wiki：」来源标注（v4862）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 用户口径：**所有 tips 都不应显示「wiki 静态数据」这类标识**（但「数据源待插件支持」保留）。
+- 改动（`dino-import.html`，共 3 处文案）：
+  1. 洞穴入口 picker 卡：`…火山核心（Wiki 静态点位）` → `…火山核心`
+  2. 畸变毒菌 picker 卡：`…孢子云（静态点位）` → `…孢子云`
+  3. 化肥/花朵「距耗尽」tips：`【距耗尽】\nwiki：每 1 小时消耗 1 朵稀有花朵\n确定性数值，非估算`
+     → `【距耗尽】\n每 1 小时消耗 1 朵稀有花朵`
+  - 保留：x: 占位行的 `数据源待插件支持`（用户明确要求保留）。
+- 实测（线上 v4862，直取 HTML 原文）：cave tip = `洞穴入口 | Cave Entrances | 神器洞·…·火山核心 | 点击查看点位`；
+  fungi tip = `畸变毒菌 | Aberration Poison Fungi | 含全部毒蘑菇·毒植物·孢子云 | 点击查看点位`；
+  deplete tip = `【距耗尽】\n每 1 小时消耗 1 朵稀有花朵`；`（静态点位）` 计数 0，`（Wiki 静态点位）` 仅剩 **1 处代码注释**（不渲染）。
+- 海图（Ocean）核查：Wiki 上 Genesis 海洋群系的 `Underpass`、`Paradise Lost` 均**未给入口坐标**；
+  `Explorer Map/Genesis: Part 1` 的 `cave-entrance` 标记仅 1 个（33.2/82.5，火山，库内已有）⇒ 海图当前 0 个洞穴点符合数据现状。
+- 部署：`node --check` EXIT=0；版本一致 True（v20261019-4862）；Version ID `5173eb68-fc71-4055-bc26-9b29572ad123`。
+
+### 步骤 52：Gen/Ast 补 4 个「大概位置」虚线点位（Underpass / Paradise Lost / 巨型氧气泡 / Abyssanthos）（v4863）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 需求（用户口径）：Gen1 Ocean 巨型氧气泡、Astraeos Abyssanthos 深海气泡、`Underpass (Genesis: Part 1)`、`Paradise Lost (Genesis: Part 1)` —— 官方没有入口坐标，在地图上标个**虚线的大概位置**（尽量准确即可）。
+- 数据考证（ark.wiki.gg）：
+  - `Data:Regions/Genesis: Part 1`：`Underpass` = `[51.76, 26.0, 7.94, 6.72]`（lon/lat/w/h）→ 中心 29.4/55.7；`Paradise Lost` 由 7 个小矩形组成（lon 48.2–50.9 / lat 19.9–24.6）→ 中心 22.2/49.6。
+  - `Ocean (Genesis: Part 1)` 与 `Data:Maps/Exploration/Genesis: Part 1/ASA`：无「氧气泡」标记（仅 glitch / mission / magmasaur-nest / oil-vein / playerSpawns）⇒ 气泡只能估算。
+  - `Astraeos` 页 Abyssanthos 仅一句描述（fog-shrouded deep-sea expanse / enormous underwater air bubbles），无区域数据页 ⇒ 估算。
+- 改动：
+  - `cave_entrances.json`：Gen 19 → **22**（Underpass / Paradise Lost 为 normal，Giant Oxygen Bubble 为 bubble）；Ast 0 → **1**（Abyssanthos，bubble）；四条**均无 z** ⇒ 自动虚线。
+  - `汉化/biome_zh.json`：新增 `Underpass→海底通道`、`Paradise Lost→失乐园`（原已有，未重复）、`Giant Oxygen Bubble→巨型氧气泡`、`Abyssanthos→深渊花海`；`_version` v4861 → **v4863**，names 683 → **686**，selfNames 同步 686，无重复键。
+  - `dino-import.html`：`LB_VERSION` → `v20261019-4863`（无逻辑改动）。
+- 验证：`node --check` EXIT=0；打包 version 文件 v20261019-4863；wrangler 仅上传 6 个变更资源（含 cave_entrances.json / biome_zh.json / index.html）；线上 `版本一致: True`，Version ID `ce3f4788-aa28-4518-8564-a46c189223c1`。
+- 线上实测（浏览器 v20261019-4863）：`LB._caves` Gen 22 / Ast 1；`lbCaveDots()` 三条 Gen 新点与一条 Ast 新点第 7 位 = `''`（dash=true）；`lbLoadBiomeZh()` 后 `lbCaveZhName()` → 海底通道 / 失乐园 / 巨型氧气泡 / 深渊花海。
+- 《未翻译洞穴清单.md》：统计 164 → 168，新增 F 段（含坐标依据与估算说明）。
