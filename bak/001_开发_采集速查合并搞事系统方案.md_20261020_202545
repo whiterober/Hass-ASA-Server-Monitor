@@ -1,0 +1,1165 @@
+# 对话进度 - 采集速查合并到搞事系统（方案制定）
+
+## 基础信息
+- 对话序号：#001
+- 创建时间：2026-10-19
+- 任务类型：开发（方案制定）
+- 用户需求：把 ASA 后台「采集速查」功能合并进搞事系统；要求玩家级独立存储、入口在物品浮窗项、有流程的项带图标标识、流程自由可配、选物品复用现有物品/物种浮窗数据与图标中英文。
+
+## 执行步骤与进度
+
+### 步骤 1：需求复述与确认
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：复述 5 条需求并弹窗确认；用户确认执行，并澄清第 4 条为「流程自由可配」。
+
+### 步骤 2：现状调研
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：
+  - 现有采集速查 = `tribe_ops.json` → `efficient_farming`（mixed_content：1× map_filter + 20× info_card）；步骤为 descriptions 行（`^` 编号、`*` 备注），引用语法 `[中文名]`。
+  - 搞事系统物品浮窗：`lbOpenSpeciesPicker()` / `lbPickerItemHtml()` / `lbPickerSelect()`；数据 `LB_ITEM_ZH` + `lbItemMeta()` + `lbItemIconUrl()`；物种 `lbSpName()` / `lbIconForDinoClass()`。
+  - 玩家身份：`dinoAuth.user`（玩家级）、`LB.playerEos`（玩家级）、`LB.playerRoles`/`lbCurPid`（角色级，本方案不用）。
+  - 后端：`独立后端/dino_backend.py`，`D:\dino_backend\accounts.json`（锁 + .bak + 原子写），暂无通用用户数据接口。
+  - 统计脚本：`tmp/_cf_scan.py` → `tmp/_cf_scan_out.json`（20 张卡片，含引用样例）。
+
+### 步骤 3：输出方案文档
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：产出 `采集速查合并方案_v1.md`，包含数据模型、玩家级存储、交互（长按/右键/角标）、编辑器、浮窗回调复用、模板迁移、改动清单、实施阶段、验收与风险。
+
+## 最终结果
+- 整体状态：✅ 方案完成（未改任何代码/部署）
+- 关键输出：`b:\项目\Hass ASA Server Monitor\采集速查合并方案_v1.md`
+- 待处理事项：
+  1. 用户确认方案第 11 节待确认项（入口手势 / 模板导入策略 / 多产出绑定 / 是否要全服共享区）
+  2. 确认后进入 P1（后端接口 + 前端加载保存）
+- 跨平台备注：无
+
+### 步骤 4：方案修订 v1.1（入口改为繁育栏按钮组）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：用户修正入口——物品浮窗选中物品后，底部繁育栏（物种同款功能条）右侧新增「采集流程」按钮组；每个流程一个按钮（标题可配、地图专属图标可配），可增加多个；物品项角标保留但仅标识不可点。方案已更新并备份到 bak/。
+- 待确认：模板导入策略 / 多产出绑定 / 是否要全服共享区 / 按钮排序方式
+
+### 步骤 5：方案修订 v1.2（「+」位置）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：按用户要求，「+」新增按钮不再放末尾，改为固定在第一个采集流程按钮之前；方案已更新并备份。
+
+### 步骤 6：方案修订 v1.3（功能条显隐规则）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：按用户澄清，功能条显隐 = 是否存在可见按钮（新建流程 / 流程按钮 / 装备榜任一），全部不可见才整条隐藏；无流程时显示「新建流程」按钮。方案已更新并备份。
+
+### 步骤 7：方案修订 v1.4（品类准入）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：仅物品浮窗「其它」分组的「资源」(resource) 与「消耗品」(consumable) 允许新建流程；其余分类一律隐藏新建/流程按钮与角标（用户确认 B）。方案已更新并备份。
+
+### 步骤 8：方案修订 v1.5（HASS 隔离）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：按用户要求，采集流程与 ASA 后台/HASS 数据源完全隔离——运行时不读不写 HASS，数据只存 dino_backend userdata + localStorage；现有 20 张卡片仅构建期一次性导出为 CF 静态模板。方案已更新并备份。
+
+### 步骤 9：方案修订 v1.6（展示结构对齐原后台）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：流程查看结构与编辑器结构均参考原后台 info_card（编号徽章 + [引用] 徽章 + 行式编辑）；样式改为搞事系统深色（#22222c 底、9px 圆角、12px 字号）。方案已更新并备份。
+
+### 步骤 10：方案修订 v1.7（不保留明暗主题切换）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：按用户要求，不实现原后台的明暗主题切换/图片反色（image_auto_color_mode、auto-dark/auto-light）；展示与编辑固定使用搞事系统深色样式。方案已更新并备份。
+
+### 步骤 11：方案全面复查（v1.7）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：通读方案全文，产出优化建议（P0 矛盾/风险 5 项：P2 验收文案过期、后端 64KB body 限制、模板导入 outputs 空导致入口不出现、多端覆盖冲突、guest 登录合并缺失；另含引用解析、按钮溢出、层级/未保存拦截、迁移校正、schema 版本与模板去重等建议）。仅复查，未修改方案。
+
+### 步骤 12：方案修订 v1.8（P0/P1 落地 + 鉴权 + 模板仅工作区任务）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：P0 5 项与 P1 7 项全部写入方案；P2 仅保留鉴权加固（nick 校验）；模板导入不做玩家功能，仅工作区一次性任务生成备用 JSON（不部署、不展示）。方案已更新并备份。
+
+### 步骤 13：全量实施（v1.8 计划落地）
+- 时间：2026-10-19
+- 状态：✅ 完成（云同步待后端重启）
+- 基线：bakaseline_20261019_171415（18/18 文件 OK：ASA 基线 10 + 搞事系统 8）
+- 后端：dino_backend.py 新增 GET/POST /api/harvest_flows（nick 校验、512KB、baseUpdatedAt 409、线程锁 + .bak + 原子写）；py_compile 通过；已部署 \SERVER\dino_backend\（MD5 22f8b8dd…一致）；**待用户重启后端进程**。
+- 前端：dino-import.html 新增采集流程模块（数据层/同步/guest 合并/多标签、功能条按钮组、角标、查看面板、行式编辑器、picker 回调、refs/text 渲染）；LB_VERSION → v20261019-4820；sw.js VER 同步；node --check 通过（内联脚本 2.5MB）。
+- CF：部署成功（Version ID bfd15f0a-6985-4b68-931f-c9fa0a398e7f）；浏览器清 SW 后实测：版本 v20261019-4820、LB_HF 就绪、Stone 显示「＋」、新建/保存/刷新持久化、详情编号+引用徽章+地图徽章、武器类无按钮、角标仅标识。
+- 迁移任务：data/harvest_flows_default.json（20 卡片 / 344 步骤）+ 未解析引用清单 91 + 产出推断清单（12 张待人工确认）；不部署、不展示。
+- 待办：重启后端后复测云同步（GET/POST 200、409、401）。
+
+### 步骤 14：后端重启后云同步验证
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：dino_backend 重启后实测：GET /api/harvest_flows 200；错误 nick 401；POST 200（updatedAt 1792401925421）；GET 回读一致（cards=0）；旧 baseUpdatedAt 提交返回 409 + 云端文档。云同步闭环通过，采集流程功能全量验收完成。
+
+### 步骤 15：采集流程浮窗样式对齐选种面板（v20261019-4821）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：按用户要求，新建/编辑/详情浮窗改用选种筛选结果底部面板（#lbBreedResult）样式：吸底 bottom 40px、max-height 60vh、背景 #16161f、border-top 1px #2a2a3a、无圆角、整体滚动；遮罩透明（点击外部关闭）。版本递增 v20261019-4821，CF 部署成功（Version ID 3f65c525-2dfb-43d5-a420-7f0e92e26640，版本一致 True）；HTTP 静态核对 4 项全部命中。
+
+### 步骤 16：采集流程提示复用页面自定义 tips（v20261019-4822）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 原因：页面自定义 tips 引擎（#lbTipBox）只识别 .lb-tipb 元素；采集流程元素此前未挂该类，退回原生 title。
+- 处理：功能条按钮/角标/关闭/编辑/复制/删除/行操作/＋物品/产出 chip 共 19 处补 lb-tipb（保留 title，引擎自动转 data-tip；桌面悬停/移动端长按 400ms）。
+- 版本：v20261019-4822（前端 + sw.js）；node --check 通过；HTTP 核对：线上含 4822、lb-tipb lb-hf- 共 19 处。
+
+### 步骤 17：底部功能条互斥（v20261019-4823）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：lbRenderFuncBar 增加互斥判断（繁育栏 #lbBreedBar 可见时隐藏 #lbFuncBar）；lbRenderBreedBar 末尾重新同步功能条。实测：选中物品 → breed=block / func=none；取消选择 → breed=none / func=block。线上 v20261019-4823（Version ID b13a73bf），版本一致 True。
+
+### 步骤 18：按钮标题与编辑浮窗标题行调整（v20261019-4824）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：功能条「＋」按钮改为文字标题「新建流程」（4 字，title 同步）；编辑浮窗移除顶部「新建采集流程/编辑采集流程」标题行（详情浮窗标题保留）。实测线上 4824：addText=新建流程、editTitles=0、底部操作栏保留。Version ID 2be46658，版本一致 True。
+
+### 步骤 19：编辑态按钮 + 地图选择改服务器网格（v20261019-4825）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：① 编辑器展开后功能条按钮切换为 [取消][保存]（取消在左、保存替换「新建流程」位置）；编辑器期间功能条 zIndex 提升至 9999 可点击；② 移除编辑器底部「取消/保存」操作栏；③ 地图选择由下拉框改为刷新数据浮窗同款服务器图标网格（.server-tab / active，单选，再点取消）；④ 保存不再读取下拉值。
+- 验证：node --check 通过；CF 部署成功（Version ID a269875d）；HTTP 核对 v20261019-4825 / lbHfEMapGrid / lbHfEditPickMap 均命中（中文串检查受 PowerShell 编码影响，已用本地 grep 确认「保存流程」存在）。
+
+### 步骤 20：产出物品限资源/消耗品 + 多产物自动显示（v20261019-4826）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：① 产出物品选择浮窗新增过滤模式（LB._pickFilter='rc'）：lbHfPickOutput 传 { filter:'rc' }，打开后自动切到物品 TAB 并隐藏物种 TAB，列表仅显示 lbItemMeta(kind) ∈ resource/consumable 的项（lbPickerItemHtml 开头过滤，lbPickerSelect 结束清空 filter）；② 多产物：lbHfBuildIdx 原本对 card.outputs 每个产出建立索引，详情/按钮/角标沿用该索引 —— 因此资源/消耗品类额外产物同样显示功能条按钮与物品角标，无需额外改动。
+- 验证：node --check 通过（blocks=4 bytes=2504182 EXIT=0）；CF 部署成功（Version ID eb95e565-9fbc-481f-a4d3-939f81cf9e8a，版本一致 True）；HTTP 核对 4826 / _pickFilter / filter: 'rc' / lbHfBuildIdx 命中；浏览器实测（v20261019-4826）：pickFilter 下 OneShotRifle 返回空、Stone 有卡片；产出选择浮窗 物种TAB display:none / 物品项 2（金属锭 resource、次级解药 consumable）/ 违规 0 / 物种项 0；多产物卡 outputs=[Stone, ARKBone]：cardsForArkBone=1、badgeArkBone=true、功能条按钮显示「多产物测试」。
+
+### 步骤 21：＋按钮 + 产出浮窗收敛为「其它 > 资源/消耗品」（v20261019-4827 → 4828）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：① 编辑器产出物品按钮「＋物品」改为「＋」（固定 30px 宽，title 仍为「添加产出物品」）；② 采集流程选择浮窗新增收敛模式 `.lb-rc-mode`：隐藏物种/物品 TAB（只剩一种分类，整行 TAB 不显示）、隐藏最近选择/已拥有小标题/公共设施块、隐藏「器械」「建筑」折叠，仅保留「其它」栏并默认展开，栏内仅「资源」「消耗品」两组（计数同步）；搜索与清空搜索后仍保持收敛，搜索时器械/建筑不展开也不构建。
+- 修复：v4827 实测「公共设施」小标题仍显示 —— 原规则 `.lb-picker-panel[data-tab="item"] #lbPubFacHead[data-empty="0"]{display:block!important}` 特异性高于新增类选择器；v4828 追加 `.lb-picker-panel.lb-rc-mode[data-tab="item"] #lbPubFacHead{display:none!important}` + `lbPickerRcApply()` 内对相关节点 setProperty('display','none','important') 兜底。
+- 验证：node --check EXIT=0；CF 部署两次（4827 Version ID 5d029705-59fc-464d-a7c1-3686e6a70175、4828 Version ID c26b2682-b6c8-4bfb-b9af-aee68a35d5ed，均版本一致 True）；浏览器实测 4828：按钮文本=`＋`、rcMode=true、TAB 均为 none、最近选择/公共设施小标题/公共设施网格/器械/建筑均 none、「其它」默认展开、分组仅「资源」「消耗品」、263 项违规 0、截图确认只剩搜索框 + 其它折叠 + 资源/消耗品。
+
+### 步骤 22：编辑浮窗宽屏两列 + 采集点紧随标题 + 步骤整行 + ＋浮窗折叠行只留右侧标签（v20261019-4829 → 4830）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：① 编辑浮窗 `.lb-hf-body` 改网格布局：窄屏单列、`@media (min-width:1200px)` 两列（标题/采集点并排）；② 字段顺序改为 标题 → 采集点 → 地图；③ 地图/产出物品/步骤/实时预览加 `.lb-hf-full{grid-column:1/-1}`，`#lbHfERows` 与每行 `.lb-hf-row` 恒 `width:100%`（任何宽度都整行）；④ ＋产物浮窗「其它」折叠行在收敛模式下只保留右侧分类标签：隐藏 `::before` 三角与 `.lb-picker-sumtxt`（「其它 (N)」文字），并禁用折叠（summary `pointer-events:none` + click capture 拦截 + toggle 兜底强制 open）。
+- 验证：node --check EXIT=0；CF 部署两次（4829 Version ID 22adc724-705a-4516-8dc8-82ce64381b76、4830 Version ID ddf8a83a-74d8-4b28-b254-b94b5df54fe0，均版本一致 True）；浏览器实测 4830：1440px 下 grid-template-columns=702px 702px、标题/采集点 top 相同且左 14 / 724（并排）；步骤 rowsW=rowW=1412（整行）；1021px 下单列（993px）且步骤同样整行；浮窗 summary 可见文本仅「资源 消耗品」、`::before` none、`txtDisp` none、点击后 open 仍 true、强制 open=false 后自动恢复 true；截图确认宽屏两列视觉。
+
+### 步骤 23：地图/产出恢复两列 + 修复分类徽章点击失效（v20261019-4831）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 背景：v4829 误把地图行与产出物品行也设为整行（用户只要求「步骤」整行）；另 v4735 的 summary capture 拦截把分类徽章点击一并吞掉，导致点「资源/消耗品」不跳转。
+- 描述：① 地图块与产出块由 `.lb-hf-full` 改为 `.lb-hf-c`（参与两列网格，新增 `.lb-hf-c{min-width:0}`），步骤与实时预览保留整行；② `summary` 的 capture 点击拦截增加例外：`ev.target.closest('.lb-cat-chip')` 直接放行，使 `lbPickerScrollToCat` 正常触发。
+- 验证：node --check EXIT=0；CF 部署成功（Version ID 5bd37f0a-bd9b-4c3b-a420-ebd40b889aed，版本一致 True）；浏览器实测 4831（1440px）：标题(t564,l14) 与 采集点(t564,l724) 同行、地图(t618,l14) 与 产出(t618,l724) 同行、步骤 rows/row 均 t702 w1412 整行；点击「消耗品」徽章 `called=1`、grid scrollTop 0→2273（跳转恢复）、open 保持 true；点击 summary 后 open 仍 true（折叠仍禁用）。
+
+### 步骤 24：两列断点 1200px → 760px（v20261019-4832）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 原因：v4734 把两列断点设为 ≥1200px，而实际使用窗口约 1021px，导致所有字段回落单列独占一行（用户反馈「怎么全部独占一行」）。
+- 描述：`@media (min-width:1200px)` 改为 `@media (min-width:760px)`，常规桌面宽度即两列（标题｜采集点、地图｜产出物品），<760px（手机）仍单列；步骤与实时预览继续整行。
+- 验证：node --check EXIT=0；CF 部署成功（Version ID 5baf85f9-6b43-4a06-ae87-d6f76cdd15b4，版本一致 True）；浏览器实测 4832（1021px 视口）：grid-template-columns=492.571px 492.571px；标题(t712,l14,w493) 与 采集点(t712,l515,w493) 同行、地图(t766,l14,w493) 与 产出(t766,l515,w493) 同行、步骤 rows/row 均 t850 w993 整行；截图确认视觉。
+
+### 步骤 25：地图「全图」按钮 + 公共设施插入交互 + 序号数字居中（v20261019-4833 → 4834）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：① 地图网格首位新增「全图」按钮（世界图标 `mdi-earth`，与其他地图按钮同款 `.server-tab`），点它清空 `card.map`（不限定地图），`card.map` 为空时该按钮呈选中态；② 「插入物品/物种」回调模式（`LB._pickHook` 非空）下，公共设施格子点击改为「插入引用」：`lbFacPosClick` 顶部新增 hook 分支（取 `.lb-picker-name` 中文名 + `data-pos-key`/`data-wp` 作 key，回调后关闭浮窗），`lbWpClick` 在 hook 模式下直接返回（不触发刷新热区、不发 worldprobe 请求）；③ 步骤序号 `.lb-hf-num` 增加 `line-height:18px`（=盒高），修复编辑区数字偏下（预览区继承行高恰好居中）。
+- 修复：v4833 实测插入文本为 `[wp:obelisk]` —— `lbHfRefMeta` 对未知键会回填 key 而非返回 null，故显示名改为显式优先 `r.zh`（v4834）。
+- 验证：node --check EXIT=0；CF 部署两次（4833 Version ID bf7e4897-9545-4a3a-bf4f-5693a414492b、4834 Version ID 20075f9c-10af-4549-91fb-a55ed06e65f0，均版本一致 True）；浏览器实测 4834：地图网格 12 按钮（首位全图 active/mdi-earth）、选 Isl 后 map=Isl 且全图取消选中、再点全图 map='' 全图选中；编辑区与预览区 `.lb-hf-num` 均 height/line-height=18px；插入模式点「方尖碑」→ 步骤文本 `[方尖碑]`、refs=`[{type:'item',key:'wp:obelisk'}]`、worldprobe 请求 0、未打开点位浮窗、picker 关闭、编辑器仍在；截图确认两列与序号居中。
+
+### 步骤 26：地图按钮改名「所有地图」+ 地图多选（v20261019-4835）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 描述：① 地图网格首位按钮标题由「全图」改为「所有地图」（世界图标不变）；② 地图改为多选：新增 `lbHfMapList(v)` 解析逗号分隔列表，`lbHfEditPickMap(id)` 改为 toggle（点选加入/再点移除），点「所有地图」= 清空全部；未选任何地图时「所有地图」高亮；③ `card.map` 存 `Isl,Sco` 形式字符串（旧单值数据天然兼容）；④ 详情浮窗地图徽章按多地图显示（多个用「、」连接，单张沿用对应地图图标，未选显示「所有地图」+ 地球图标）。
+- 验证：node --check EXIT=0；CF 部署成功（Version ID 7fb2d4ed-43a7-4b17-a42e-8dceb2d10eaf；脚本自检显示版本一致 False 属边缘缓存，HTTP 直查 `v20261019-4835` 与 `lbHfMapList` 均命中）；浏览器实测 4835：首按钮无障碍名「所有地图」；点孤岛→map=Isl；再点焦土→map=Isl,Sco 且两按钮 active；再点孤岛→map=Sco；点所有地图→map='' 且仅它 active；详情徽章多地图显示「孤岛、焦土」、空 map 显示「所有地图」；截图确认。
+
+### 步骤 27：原生 confirm 全部改为站内确认浮窗（v20261019-4836）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 背景：原生 confirm 在移动端（PWA/Safari）样式割裂且阻塞页面；用户要求「放弃未保存的修改」改用页面自定义确认浮窗（复用页面样式）。
+- 描述：① 复用现有 `lbAsk`（卡片深底 + 描边 + `--accent` 主色按钮，取消左/主操作右）；② 新增 `lbAskMulti(msg, btns)` 支持多按钮站内确认（固定含「取消」= 不做任何操作）；③ 采集流程模块四处原生 confirm 全部替换：放弃未保存的修改（取消/放弃）、删除流程（取消/删除）、导入未登录时创建的流程（取消/导入）、云端冲突（取消/本地覆盖云端/云端覆盖本地，取消不再静默用本地覆盖云端）；④ 每处仍保留 `lbAsk`/`lbAskMulti` 创建失败时的原生 confirm 兜底。
+- 验证：node --check EXIT=0；CF 部署成功（Version ID b9f3792d-4ef9-496d-bbfe-e62e6ba03b9d，版本一致 True）；浏览器实测 4836：dirty 时调 `lbHfCancelEdit()` 出现站内浮窗（文案「放弃未保存的修改？/取消/放弃」），点取消 → 编辑器与 dirty 均保留，点放弃 → 编辑器关闭且 `LB_HF.edit=null`；`lbHfDeleteCard` 浮窗（取消/删除）；`lbHfConflict` 浮窗三按钮（取消 / 本地覆盖云端 / 云端覆盖本地）且点取消无副作用；截图确认浮窗样式与页面一致。
+
+### 步骤 28：关注项绑定玩家跨客户端存储（v20261019-4837 → 4838，后端 /api/user_prefs）
+- 时间：2026-10-19
+- 状态：✅ 完成（后端已重启，云端闭环验证通过）
+- 范围（用户确认 4 项）：关注未成年 `lb_watch_babies`、被关注设施 `lbMaintWatch_v1`、蓝图关注 `lb_bp_follow`、待制作数量 `lb_bp_todo`（`lb_bp_cost` 属可重算缓存，不同步）
+- 后端：`dino_backend.py` 新增玩家偏好存储段（`_prefs_path` / `_load_user_prefs` / `_save_user_prefs`，按账号存 `userdata/user_prefs_<user>.json`，.bak + 原子写）+ GET/POST `/api/user_prefs`（复用 `_harvest_auth` 的账号/nick 校验）；已部署到物理服务器（WROTE），**进程尚未重启（接口仍 404）**。
+- 前端：新增 `LB_PREFS` 模块（`LB_PREFS_KEYS` 四键、`lbPrefsCollect/Apply/Pull/Push/Init`）；四个 Save 函数（`lbBpFollowSave` / `lbFacWatchSave` / `lbWatchSave` / `lbTodoSetQty`）变更即 800ms 防抖推送；`lbPrefsInit` 幂等按账号拉取（云端较新则覆盖本地并刷新角标，本地较新/云端无数据则上传本地，首次登录即完成迁移）；`lbWatchCnt` 与 1.2s 定时兜底各触发一次初始化。
+- 验证（前端 4838）：`node --check` EXIT=0；CF 部署成功（Version ID 49ba57ec-d6a1-402d-aea9-173447dae062，版本一致 True）；浏览器实测 `LB_PREFS_KEYS` 四键就位、`LB_PREFS.user='whiterober'`（自动初始化生效）、页面无 JS 报错；GET `/api/user_prefs` 目前 404 属后端未重启，前端已静默降级不影响功能。
+- 待办：用户重启后端进程 → 复测 GET/POST `/api/user_prefs`（401 鉴权 / 200 正常）→ 闭环验证「改关注项 → 云端有数据 → 清本地 → 重载恢复」→ 回填验证结果。
+- 云端闭环验证（后端重启后）：GET `/api/user_prefs` 200 且 `ok=true`（重启前为 404）；手动 `lbPrefsPush(true)` → 云端 `keys=["lbMaintWatch_v1"]` 共 10 条；清空本地 `lbMaintWatch_v1` + `lbPrefsPull()` → 1.6s 内完整恢复（与原始数据逐字节一致，`restored=true`）；`lbprefs_ts_whiterober` 与服务端 `updatedAt` 同步（1792410518754）；维护角标随 apply 刷新（10 → 25）。
+
+### 步骤 29：修复关注项跨端同步「云端缺键不回填」（v20261019-4839）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 现象（用户反馈）：移动端「待制作」有 2 条，VSC 内置浏览器为 0 条，未同步。
+- 根因：当时云端 `user_prefs` 只有 `lbMaintWatch_v1`；`lbPrefsPull` 仅在「云端完全没有数据」时才上传本地 → 「云端已有部分键 + 本地有云端缺失的键」时，本地独有键永远进不了云端（移动端那 2 条 `lb_bp_follow` 也因此上不去）。
+- 修复：`lbPrefsPull` 在应用云端数据后逐键比对，凡云端缺失且本地有值的键 → 触发一次补传（`lbPrefsPush(true)`，收集的是「云端已应用值 + 本地独有键」的合集，不会覆盖云端已有键）。
+- 验证：① 用临时测试键 `lb_test_pref_x` 复现并验证补传（云端 keys 4 → 5，`lbMaintWatch_v1` 仍 10 条未丢），随后清理并 POST 恢复为原 4 键；② 真实数据：云端 `keys = lb_bp_follow(2 条) / lb_bp_todo(1 键) / lb_watch_babies(0) / lbMaintWatch_v1(10)`；内置浏览器打开「待制作」显示 2 张卡（无畏巨龙平台鞍、帝蟒鞍），角标 = 2，与移动端一致；③ `node --check` EXIT=0，CF 部署（Version ID 53e90ded-9e97-4cfb-a269-42e25e9efb99，版本一致 True）。
+- 说明：移动端需刷新到 4839（或关掉重开 PWA）才具备补传/拉取能力；跨端同时新增不同项会自动合并，跨端「删除某一项」目前以最后一次整体上传为准（两端都删除即可一致）。
+
+### 步骤 30：关注项按类时间戳双向同步（删除自动跨端生效，v20261019-4840）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 背景（用户反馈）：「若要删除某项建议两端都删一次」不合理 —— 原实现为整份覆盖 + 缺键补传，删除只能靠最后整份上传生效。
+- 后端：`/api/user_prefs` POST 增加接收 `kts`（各类关注数据的修改时间）并随文档保存（`user_prefs_<user>.json` 内 `keys/kts/updatedAt`）；GET 原样返回。
+- 前端：新增 `lbPrefsKts/lbPrefsTouch`（本地 `lbprefs_kts_<user>` 记录每类最后修改时间）；四个保存函数改为 `lbPrefsTouch(<key>)`（自身触发防抖推送）；`lbPrefsPull` 改为逐类比较 —— 云端该类较新 ⇒ 覆盖本地该类（删除随整类数据同步生效）；本地较新 ⇒ 保留并补传；云端缺该键且本地有值 ⇒ 补传；新增 `lbPrefsAfterApply()` 统一失效内存缓存并刷新角标。
+- 验证（后端重启后，浏览器实测 4840）：① 本端删除「待制作」1 条 → 云端 `lb_bp_follow` 2→1，`kts.lb_bp_follow=1792411049122`；② 模拟另一台仍是旧 2 条且 kts 调早 → `lbPrefsPull` 后本地变 1 条（删除自动跨端生效，无需两端都删）；③ 本地较新用例：本地 1 条 + kts 设为未来 → 拉取后本地仍 1 条（未被云端旧 2 条覆盖）且云端被补传为 1 条；④ 恢复原数据后两端均为 2 条、角标 2；⑤ `node --check` / `py_compile` 通过，CF 部署（Version ID 5a5b896d-7c93-48f5-ae6b-3f3d0dfe003f，版本一致 True），后端 MD5 部署一致。
+
+### 步骤 31：PWA 回前台自动补拉关注项（解决「必须重开页面才同步」，v20261019-4841）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 背景（用户反馈）：「内置浏览器取消关注了一个蓝图，但刷新移动端还是 2 条」；复查后用户重新打开移动端页面即同步 → 根因是 **PWA 从后台/bfcache 恢复时页面脚本不重新执行，不会触发 `lbPrefsInit` 的启动拉取**（移动端此前还弹过「发现新版本」，说明长期跑旧壳）。
+- 排查结论：云端数据本身正常（`lb_bp_follow` = 1 条、`kts.lb_bp_follow=1792411086314`，桌面本地同为 1 条）；线上首页 `cache-control: public, max-age=0, must-revalidate`，非强缓存问题；SW 导航请求不接管（network-first 到 CF Assets）。
+- 前端改动（`dino-import.html`）：
+  - `LB_PREFS` 增 `lastPull`；`lbPrefsPull` 开头记录发起时间（失败也参与节流，避免频繁重试）。
+  - 新增 `lbPrefsWake(force)`：仅当页面可见且已登录时生效，30 秒节流（`force=true` 绕过，用于 bfcache 恢复）。
+  - 注册 `visibilitychange` / `pageshow`（`persisted` → force）/ `focus` 三个钩子。
+  - `lbPrefsAfterApply()` 补充：`lbBpCnt()` 刷新蓝图关注角标，并按需重绘已打开的浮窗（`lbWatchRender` / `lbMaintRender` / `lbTodoRender`）。
+  - `pwa/sw.js` 的 `VER` 同步为 `v20261019-4841`（强制移动端换壳）。
+- 验证（线上 4841 实测）：
+  1. `typeof lbPrefsWake === 'function'` = true；每次页面加载 `lastPull` 有值。
+  2. 模拟另一台仍是 2 条 + 本地 kts 早于云端 → `lbPrefsWake(true)` 后本地被云端覆盖为 1 条、角标 1，云端仍 1 条（无脏写）。
+  3. 三个事件真实派发均触发拉取：`visibilitychange`=true、`pageshow`=true、`focus`=true。
+  4. 30 秒内重复触发被节流（`lastPull` 不变，无额外请求）。
+  5. `node --check` EXIT=0；CF 部署 Version ID `80879e88-ea1a-4f62-be56-ad1e3db289a8`，线上/本地版本一致 True。
+- 性能口径（用户问询后确认）：不轮询，只在回前台/恢复/聚焦时触发，30s 节流，单次轻量 GET（几 KB），失败静默。
+
+### 步骤 32：公共设施新增「洞穴入口」（Wiki 静态点位，v20261019-4843）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 需求（用户口径）：公共设施里加一项「洞穴入口」，包含地下世界 / 巨型地下世界入口；Aberration 是**地表入口**（单独图例）；Extinction **穹顶不算**（仅沉没森林算地下世界）；「地下世界 / 巨型地下世界入口」合并为一类。
+- 数据来源：`ark.wiki.gg`（Caves / Coordinates / Explorer Map 页面，MediaWiki API 批量取 wikitext 后解析）→ 生成 `cave_entrances.json`（本地源文件；打包经 `_sync_repack2.py` 的 STATIC_SRC 上传）。
+- 数据规模：**123 条**入口 —— 孤岛 22（普通 10 + 水下 12）、核心岛 37（普通 31 + 地下世界 6）、焦土 3、畸变 8（地表入口 5 + 地下世界 3）、灭绝 1（沉没森林）、仙境 48、瓦尔盖罗 3、创世 1；繁星 / 失落地 / 俱乐部：Wiki 无坐标表（显示 0，不编造）。
+- 分类（4 类图例）：普通洞穴（黄）、水下洞穴（青）、地表入口（橙）、地下世界入口（含巨型，紫）。
+- 前端实现（`dino-import.html`）：
+  - 新增 `LB_CAVES_FILE` / `lbCaveFetch` / `lbCavePreload` / `lbCaveTotal` / `lbCaveDots` / `lbCaveOpen`（全部复用「畸变毒菌」静态数据集手法）。
+  - `lbPubFacRender` 在「畸变毒菌」后加一格「洞穴入口」（图标 `mdi-map-marker-multiple`，数量=总条数；首次渲染异步预加载并回填计数）。
+  - `lbFacPosPage` 增 `kind='caveentrance'` 配色分支与专属图例；`lbFacPosClick` 增 `data-cave` 分支（引用插入模式下也屏蔽，不产生引用）。
+  - 坐标：只存 lat/lon，前端用各图校准参数反算 x/y（`x=(lon-shiftLon)*multLon`、`y=(lat-shiftLat)*multLat`），校准参数以后调整无需重生成数据。
+- 验证（线上 4843 实测）：
+  - 版本 `v20261019-4843`；`lbCaveTotal()`=123；各服分布与图例计数正确（孤岛 22=10+12、核心岛 37=31+6、畸变 8=5+3）。
+  - 格子：物品 TAB → 公共设施区出现「洞穴入口 / 123 / Cave Entrances」，图标 SVG 正常渲染（414 字符）。
+  - 点击格子 → 浮窗标题「📌 洞穴入口」，8 个服务器分页，点位节点 123 个；孤岛点位截图确认普通洞穴落陆地、水下洞穴落海洋。
+  - `node --check` EXIT=0；Version ID `1c2a29f1-90a5-47f0-804d-dc4617cc693b`，线上/本地版本一致 True。
+- 已知限制：繁星/失落地/俱乐部暂无 Wiki 坐标；WPNG 探针无 cave 类型（后续若要更精准入口，需插件新增 `caveentrance` 类型）。
+
+### 步骤 33：洞穴入口 6 类重构 + 图标 + 流程浮窗遮罩修复（v20261019-4845）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 用户 10 项口径逐条落实：
+  1. 图标改用 `IconAberration.png` —— 侦察确认 `汉化/icons2.json` 已登记、`tmp/webp_map.json` 已有 `thumbs/webp96/91aa037a1498_w96.webp`（无需重复压图），前端直接 `lbResURL(...)` 引用（实测 naturalWidth=64 正常显示）。
+  2. 流程浮窗「没有遮罩」根因：v4727 当时对齐的是**选种结果面板 `#lbBreedResult`**（吸底、无遮罩），而用户指的「选种」是**选种浮窗 `.lb-picker-overlay`**。已改为完全一致：`.lb-hf-overlay{background:rgba(0,0,0,.9);display:flex;居中;z-index:1000001}`、`.lb-hf-panel{#1a1a24;radius 8px;width 90%;max-width 640px;max-height 80vh}`、`.lb-hf-body` 承担滚动。实测 computed：bg=rgba(0,0,0,0.9)、display=flex、panel 640px/#1a1a24/8px/80vh。
+  3~9. 分类按「有神器的洞才叫神器洞」重构（第 3 条与第 9 条冲突，以第 9 条为准，用户已确认）：神器洞 / 普通洞 / 水下资源洞 / 地表 / 地下世界 / 火山核心。
+     - Isl 10 神器洞 + 12 水下资源洞；Cen 16 神器洞（含 Jungle/The Center/Cliffside）+ 15 普通洞；Sco 3 神器洞；Abe 3 神器洞 + 5 地表；Ext 3 神器洞（穹顶两条已按用户口径恢复）；Rag 11 神器洞（Monkey's Puzzle / Life's Labyrinth / Fallen Redwood / Jungle Dungeon / Frozen Dungeon / Carnivorous Caverns 的入口）+ 37 普通洞；Val 3 神器洞。
+  10. Gen 火山核心：Wiki `genesis_part1_lava_cave_entrances_table` 实为 **2 个入口**（Entrance #1 X342497/Y-177282、#2 X373135/Y-186962），按 Gen 陆地参数（shift 50 / mult 8200）换算 lat/lon 后全部标为「火山核心」，共 2 个。
+- 数据：`cave_entrances.json` 重新生成（120 条）；分布：Isl 22、Cen 31、Sco 3、Abe 8、Ext 3、Rag 48、Val 3、Gen 2；Ast/Los/Bob 仍 0（Wiki 无坐标表）。
+- 验证（线上 4845）：版本一致 True；`lbCaveTotal()`=120；图例逐服正确（孤岛 神器洞10+水下资源洞12、核心岛 神器洞16+普通洞15、畸变 神器洞3+地表5、仙境 神器洞11+普通洞37、创世 火山核心2）；图标加载成功；`node --check` EXIT=0；Version ID `6e198d8d-b625-4371-8ced-82672efa8594`。
+
+### 步骤 34：补 Cen 地下世界 / Val 地下海与地下世界 / Gen 火山核心 4 入口（v20261019-4846）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 问题与根因：
+  - **Cen 地下世界确实漏了**：v4844 重构时只合并了 Center 的 4 张表（cave/jungle/the_center/cliffside），`center_underground_world_table` 的 6 条未进入数据（我的遗漏）。
+  - **Val 地下海（The Abyss）与地下世界（The Unknown）也漏了**：此前只用了 `valguero_cave_table` 的 3 个神器洞。
+  - **Gen 火山核心不止 2 个**：此前用的是 `genesis_part1_lava_cave_entrances_table`（2 条世界坐标），真正权威是 `Volcanic Cave (Genesis: Part 1)` 页面明确写的 **four entrances**。
+- 数据补全（`cave_entrances.json`，共 133 条）：
+  - Cen +6「地下世界」：Flyer-accessible 34.9/65.8、Ruins 1 34.3/53.3、Ruins 2 53.5/53.8、Underwater River 1 32.7/64.1、Underwater River 2 44.2/58.0、Underwater Ocean 66.1/51.7。
+  - Val +4「地下海 - The Abyss」：45.4/34.0、63.9/73.3、32.0/8.3、31.8/9.3（来源 Explorer Map/Valguero 的 cave-entrance）。
+  - Val +1「地下世界 - The Unknown（经 The Lost Temple）」：46.9/87.5。
+  - Gen 火山核心改为 **4 个**（来源 Volcanic Cave 页面）：北 20.40/78.30（Lavaclaw Flow）、东南 32.3/85.5（Magma Spring）、南 33.2/82.56（Burning Arteries）、西南 29.4/78.4（Burning Arteries）。
+  - 新增两类图例：**地下海**（#06b6d4）、**水下气泡**（#38bdf8，暂无坐标数据）。
+- 其他地图地下世界核查结论：Abe 整图即地下、无独立「地下世界入口」；Ext 沉没森林按用户口径归神器洞；Ast 的巨型地下世界 / Los 地下区 Wiki 无坐标表（Explorer Map/Astraeos、Lost Colony 均为空页）→ 暂无数据，不编造。
+- 水下气泡数据缺口：Wiki 仅记载存在（The Center 东/南 Underwater Bubble、Genesis Ocean 巨型氧气泡、Astraeos Abyssanthos 深海气泡），**无权威坐标表**；分类与图例已建好，待用户提供坐标或后续游戏内实测再补点。
+- 验证（线上 4846）：`lbCaveTotal()`=133；Cen 神器洞16+地下世界6+普通洞15；Val 神器洞3+地下海4+地下世界1；Gen 火山核心4（北/东南/南/西南）；`node --check` EXIT=0；Version ID `5d87e399-f8c7-4e69-9c0e-7ad5a5741750`，版本一致 True。
+
+### 步骤 35：资源洞分类 / Val 地下世界入口修正 / Gen 漂移根因 / 流程浮窗半屏（v20261019-4847）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 1）分类调整：
+  - 「水下资源洞」去掉“水下” → **资源洞**（key 由 `water` 改 `resource`，兼容旧 `water` 值）。
+  - 「有怪才是普通洞，没怪算资源洞」：Rag 的 `Watertunnels` 判为资源洞；其余小洞 Wiki 无 creatures 独立页，暂按普通洞（可按用户点名单点调整）。
+- 2）Val 地下世界入口核实（用户质疑）：
+  - 此前我错用 `The Lost Temple 46.9/87.5` 作为地下世界入口。
+  - Wiki `The Unknown (Valguero)` 明确：`lat = 37.5, lon = 57.9`（入口），神器 Gatekeeper 在洞内 48.0/58.9；入口实为 **The Unknown 37.5/57.9**（在 Emerald Forest 内，最佳入口 38/57 附近）。
+  - 该洞与神器洞重叠 ⇒ 按用户口径**只算地下世界**，Val 神器洞减为 2（The Lair / The Lost Temple）。
+- 3）Gen 火山核心漂移根因：
+  - `genesis_part1_lava_cave_entrances_table` 的 2 条是**世界坐标**（X342497/Y-177282 等），按前端 Gen 参数（mult 8200 / shift 50）换算得 (28.4/91.8)、(27.2/95.5)；而按项目报告使用的 mult 20172.1 换算得 (41.2/67.0)，两者不一致 ⇒ 该表坐标体系与 Wiki 地图 lat/lon 不同源。
+  - 现统一采用 `Volcanic Cave (Genesis: Part 1)` 页面的**地图坐标**（北 20.40/78.30、东南 32.3/85.5、南 33.2/82.56、西南 29.4/78.4），实测 4 点均落在 Gen 底图右上「火山 biome」区块内（截图核对）。
+  - 残余观感差异来自：Gen 底图是四 biome 拼接图，坐标按全图百分比映射，Wiki 坐标精度约 ±1~2%。
+- 4）流程浮窗形态（用户澄清「选种浮窗=半屏」）：
+  - 改为**遮罩 + 吸底半屏**：`.lb-hf-overlay{background:rgba(0,0,0,.9);align-items:flex-end}`、`.lb-hf-panel{border-radius:12px 12px 0 0;width:100%;max-width:960px;max-height:60vh}`。
+  - 实测 computed：bg rgba(0,0,0,0.9)、align-items flex-end、面板 960px / 60vh / 顶部圆角 12px。
+- 数据：`cave_entrances.json` 132 条；分布 Isl 22（神器10+资源12）、Cen 37（神器16+地下世界6+普通15）、Sco 3、Abe 8（神器3+地表5）、Ext 3、Rag 48（神器11+普通36+资源1）、Val 7（神器2+地下世界1+地下海4）、Gen 4（火山核心4）。
+- 验证：线上 4847，版本一致 True；`node --check` EXIT=0；Version ID `646bc3bf-f5e6-4c69-9ecf-1ba13c5dc3bf`。
+
+### 步骤 36：流程浮窗遮罩遮挡功能栏 —— 根因定位与修复（v20261019-4848）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- **根因（用户要求必须查清）**：
+  - 代码第 28621 / 28700 行有 v4730 机制：**流程浮窗编辑器打开时把 `#lbBreedBar` z-index 临时设为 9999**（保证保存/取消可点）。
+  - v4727~v4843：`.lb-hf-overlay` z-index = **9998** < 9999 ⇒ 功能栏浮在遮罩之上，**不遮挡**。
+  - **v4844（2026-10-19 20:31:28~20:38:25 之间）** 我把 `.lb-hf-overlay` 从 `background:transparent; z-index:9998` 改为 `background:rgba(0,0,0,.9); z-index:1000001` ⇒ **越过 9999 天花板，功能栏被遮罩压住**。
+  - 备份证据：`bak/..._203128.html`（改前）为 transparent；`bak/..._203825.html`（改后）为 rgba(0,0,0,.9) + 1000001。
+  - 选种浮窗 `.lb-picker-overlay` 的 z-index 1000001 **从未被改**（6 份备份逐份比对一致），它本来就没有 v4730 那层功能栏保护。
+- 修复（用户确认方案 1+2）：
+  1. `.lb-hf-overlay` z-index 回归 **9998**（低于 v4730 的 9999，功能栏恢复可见可点）。
+  2. `.lb-hf-panel` 完全照搬 `.lb-picker-panel`：`background:#1a1a24; border:1px solid #333; border-radius:8px; width:90%; max-width:640px; max-height:80vh`。
+- 验证（线上 4848，computed 实测）：`.lb-hf-overlay` z=9998 / align center / rgba(0,0,0,0.9)；`.lb-hf-panel` 宽 640px、max-height 838.4px(80vh)、背景 rgb(26,26,36)、圆角 8px、边框 1px rgb(51,51,51) —— 与选种浮窗逐项一致。
+- 版本一致 True；Version ID `662e82fc-ec65-4212-9c2d-da2b1ed3fb1a`。
+- Gen 火山坐标：已交叉验证（Wiki Explorer Map `cave-entrance` 33.2/82.5 与「南」33.2/82.56 重合，误差 0.06%），用户确认保持不改。
+
+
+### 步骤 37：流程浮窗「选种 vs 选物种」对象搞错 —— 照抄真·选种浮窗修复（v20261019-4849）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- **用户指出的核心错误（必须记住）**：我在步骤 36 里把「选种浮窗」理解成了「**选物种**浮窗」，
+  照抄了 `.lb-picker-panel`（640px 居中 / 80vh / #1a1a24 / 四边 8px 圆角 + #333 边框 / 遮罩 1000001）
+  —— **对象完全搞错**，所以形态依旧不对，还顺带把 z-index 越级带回来了。
+- **两个浮窗的权威定义（DOM 取证）**：
+  | 用户口语 | DOM 证据 | 形态 |
+  |---|---|---|
+  | **选种**（繁育栏选种） | `#lbBreedMask`（inline，z=996）+ `#lbBreedResult`（inline，z=997） | **吸底半屏**：`bottom:40px; left:0; right:0; max-height:60vh; overflow-y:auto; background:#16161f; border-top:1px solid #2a2a3a; padding:8px 10px`；**无圆角、无四边框、非居中、非 640px** |
+  | 选物种（物品/生物选择器） | `.lb-picker-overlay`（z=1000001）+ `.lb-picker-panel` | 居中弹窗：`width:90%; max-width:640px; max-height:80vh; background:#1a1a24; border:1px solid #333; border-radius:8px` |
+  > 记忆钉死：`/memories/repo/terminology.md`（选种=`#lbBreedResult`，选物种=`.lb-picker-panel`）
+- 修复（v4849，三处 CSS 完全照抄选种）：
+  - `.lb-hf-overlay{position:fixed;inset:0;z-index:996;background:rgba(0,0,0,.9);display:block}`
+  - `.lb-hf-panel{position:fixed;bottom:40px;left:0;right:0;max-height:60vh;overflow-y:auto;background:#16161f;border-top:1px solid #2a2a3a;z-index:997;padding:8px 10px;box-sizing:border-box}`
+  - `.lb-hf-body{padding:8px 4px;overflow:visible;display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start}`（滚动交给面板，同 v4727）
+- 逐项对照（源码级，不一致项 = 0）：
+  | 属性 | 选种 `#lbBreedResult` | 流程浮窗 `.lb-hf-panel` | 判定 |
+  |---|---|---|:---:|
+  | position | fixed | fixed | ✅ |
+  | bottom / left / right | 40px / 0 / 0 | 40px / 0 / 0 | ✅ |
+  | max-height | 60vh | 60vh | ✅ |
+  | overflow-y | auto | auto | ✅ |
+  | background | #16161f | #16161f | ✅ |
+  | border | 仅 `border-top:1px solid #2a2a3a` | 仅 `border-top:1px solid #2a2a3a` | ✅ |
+  | border-radius | 无 | 无 | ✅ |
+  | padding | 8px 10px | 8px 10px | ✅ |
+  | z-index | 997 | 997 | ✅ |
+  | 遮罩 | `#lbBreedMask`：inset:0 / rgba(0,0,0,.9) / 996 | `.lb-hf-overlay`：inset:0 / rgba(0,0,0,.9) / 996 | ✅ |
+  > 唯一附加项：`.lb-hf-panel` 多一个 `box-sizing:border-box`（`left/right:0` + padding 下更稳，纯防御，不改变视觉）。
+- **不再越级**：遮罩 996 / 面板 997 均低于功能栏 `#lbBreedBar`（inline z=998；v4730 编辑期间 JS 抬到 9999），
+  保存/取消按钮恢复可见可点；`lbHfClosePanel()` 退出时把 `#lbBreedBar.style.zIndex` 还原为空（回到 998）。
+  `1000001` 全文件仅 3 处，全部属于选物种浮窗（`.lb-picker-overlay` 等），与流程浮窗无关。
+- 机制固化（防止再次"听不懂人话"）：
+  - `/memories/repo/terminology.md`：新增 dino-import UI 术语表（选种 / 选物种 / 功能栏 / 流程浮窗）。
+  - `/memories/repo/ui-align-protocol.md`（新建）：① 用户说 UI 名称先钉死术语再动手；② 动手前先 grep+实测取证，禁止按字面近义词猜；③ 改后必须"目标 vs 被改"同屏逐项对照，不一致项必须为 0；④ 对象不确定时**必须先弹窗确认**，禁止猜。
+- 验证：
+  - `node --check` → blocks=4 bytes=2525359 EXIT=0
+  - 线上 HTTP 200，`index.html` 2127966B；`LB_VERSION` 本地=线上=**v20261019-4849**，版本一致 True
+  - 线上源码三处 CSS 字符串逐字命中上述内容；`.lb-hf-edit` 无 z-index 覆盖
+  - wrangler Current Version ID：`a1a11e87-47cf-4fcb-aedc-7710667331b3`
+  - ⚠️ 浏览器同屏 computed 实测未做（用户拒绝共享已有页面，按纪律不擅自新开页）→ 交用户目视确认渲染
+
+
+### 步骤 38：水下气泡 0 条 —— 定位 + 补齐 The Center 2 处（v20261019-4850）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 用户提问：「水下气泡 为什么一个都没有？」
+- 定位结论（数据/渲染双查）：
+  - `cave_entrances.json` 132 条里 `k='bubble'` **0 条** —— 这是数据真空，不是渲染 bug。
+  - 前端 `lbFacPosRender` 的 8 类图例带 `if(!gcnt[名]) return;`，**计数为 0 的类别连图例都不绘制**，
+    所以既看不到点也看不到「水下气泡 ×N」。
+  - 根因即步骤 34 已记录的口径：v4846 按用户分类建了分类 + 配色（#38bdf8），但 Wiki 无坐标表，未编造。
+- 本轮挖掘结果（MediaWiki 批量接口）：
+  - Wiki 页面 `Underwater Dome (The Center)` 是消歧页，正文定义：**"Underwater Dome or Bubble"** —— 即「水下气泡」= The Center 独有的水下空气穹顶。
+  - 两个入口页面均带 infobox 权威坐标：
+    - `Underwater Dome (East) (The Center)` → **26.1 / 89.9**（正文亦写 "located in (26.1/89.9)"）
+    - `Underwater Dome (South) (The Center)` → **66.0 / 64.6**（正文 "roughly located in (66.0/64.6)"，Deep Ocean、Skull Island 西侧）
+  - `Coordinates` 页虽有 `center_underwater_domes_table` 章节，但**表体只有表头（Dome/Lat/Lon/X/Y/Z），无数据行**
+    ⇒ 只能以两个独立页面的 infobox 为权威。
+  - **Gen1 Ocean 巨型氧气泡 / Astraeos Abyssanthos 深海气泡**：Wiki 仅有文字描述（"underwater sanctuaries or bubbles"），
+    **无任何坐标表** → 按纪律不编造，暂不入库。
+- 数据变更（`cave_entrances.json`）：
+  - Cen +2：`水下气泡 - 东（Underwater Dome）` 26.1/89.9、`水下气泡 - 南（Underwater Dome）` 66.0/64.6，`k='bubble'`。
+  - 全库 132 → **134**；Cen 37 → **39**（artifact 16 / underworld 6 / normal 15 / **bubble 2**）；
+    分类合计 artifact 48 / normal 51 / resource 13 / underworld 7 / surface 5 / volcano 4 / sea 4 / **bubble 2**。
+- 验证：
+  - `node --check` EXIT=0；版本 `v20261019-4850`，线上 HTTP 200，版本一致 True。
+  - 线上 `/cave_entrances.json` 实测含 2 条 bubble，Cen=39，total=134。
+  - wrangler Current Version ID：`b5747900-8651-4299-a906-8369d8a3eddf`。
+- 遗留问题（用户提出）：**洞穴入口目前只有 lat/lon，没有 z 坐标**。
+  - `cave_entrances.json` 条目字段仅 `n/lat/lon/k`；前端按 lat/lon 换算成底图百分比（二维），**z 不参与渲染**。
+  - 影响：同一 lat/lon 的上下层入口（如 Cen 地下世界入口与地表洞口、多层洞穴）会**完全重叠**成一个点。
+  - Wiki `Coordinates` 表本身有 X/Y/Z 列（世界坐标单位），但本轮及此前抓取均只取了 Lat/Lon。
+  - 若需要，可增可选字段 `z` + 前端 tooltip 显示 + 同坐标点按 z 错开/合并提示。
+
+
+### 步骤 39：洞穴入口 Z 坐标入库 + 无 Z 虚线描边 + Cen 小洞穴错位数据重建（v20261019-4851）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 用户口径：**「能取到的才加 z；没取到的，入口地图上的色点描边改成虚线」**；气泡坐标改用 Coordinates 表值；Z 只入库不显示。
+- 🔴 **先纠正我上一轮的错误结论**：我曾判定「`Coordinates` 的 `center_underwater_domes_table` 表体是空的」——**错的**。
+  原因是我用 grep 只筛含 `Dome/lat` 关键词的行，把 `|-` 与数据行过滤掉了。该表**有 2 行**：
+  `Eastern 25.1 / 89.1 / X 326400 / Y -50220 / Z -43800`、`Southern 66.1 / 64.1 / X 86400 / Y 342724 / Z -33900`。
+- 🔴 **发现并修复严重数据 bug：Cen「小洞穴」15 条 lat/lon 列错位**
+  - 现象：`小洞穴 26 → lat 65.9 / lon 103680`、`小洞穴 67 → 114240 / -37761`（把 Lon/X/Y 当成了 lat/lon），
+    这些点坐标是**世界坐标量级**，实际画不到图上；且错位方式不一致（个别偏 1 列、个别偏 2 列）。
+  - 根因：此前抓 `center_small_caves_table` 时按行切分，未按 `|-` 整行合并多行单元格 → 列索引错位。
+  - 修复：改为「按 `|-` 分块 + 块内各行用 `||` 拼接」解析，**按表重建 18 条**（01、02、03-1、03-2、04…15），
+    原 15 条删除、补上此前缺失的 6 条。
+- 本轮实现：
+  1. **数据**（`cave_entrances.json`）：
+     - 每条入口新增可选字段 `z`（取自 Coordinates 表 Z 列，整数）。
+     - Cen 小洞穴重建 18 条（其中 8 条带 Z：01/02/03-1/03-2/04/05/06/07-1；其余 Wiki 写 `?` 不加）。
+     - 水下气泡坐标改为表值：东 **25.1 / 89.1（z -43800）**、南 **66.1 / 64.1（z -33900）**。
+     - 全库 137 条：**Z 有 111 / 无 26**。
+  2. **前端**（`dino-import.html`）：
+     - `lbCaveDots()` 第 7 位追加 z：`(c.z == null ? '' : c.z)`。
+     - 点位描边改为 `kind==='caveentrance' && 无 z` ⇒ `2px dashed #fff`，否则 `2px solid #fff`（其余设施不受影响）。
+- 无 Z 的 26 条分布：Cen 10（小洞穴 07-2/08/09/10/11/12/13-1/13-2/14/15）、Val 7、Gen 4、Ext 3、Rag 2。
+  - Val/Gen/Ext 这些点位来自页面正文或 Explorer Map（**Wiki 无 Z 数据**）；Rag 2 条（Oluf Jungle Cave 2 / Watertunnels）表内 Z 为空。
+- 验证：
+  - 线上 `/cave_entrances.json` 实测：total 137、Z 有 111 / 无 26、小洞穴 18 条、气泡 2 条带 Z。
+  - 线上 `index.html` 实测含 `'2px dashed '`、`d[6] === '' || d[6] == null`、`(c.z == null ? '' : c.z)`，LB_VERSION = `v20261019-4851`。
+  - `node --check` EXIT=0；版本一致 True；wrangler Current Version ID `7e7de7f7-5ef6-4afb-8621-92cac7199179`。
+- 教训（已写入记忆纪律）：**表格解析必须先按 `|-` 合并整行**；**grep 关键词过滤不能用于判断表格是否为空**（会漏掉无关键词的数据行）。
+
+
+### 步骤 40：Wiki 特殊地形盘点 + 补「洞内分区」12 条 + 方尖碑地图新增「召唤台」6 个（v20261019-4852）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 用户需求：① 查 Wiki 还有哪些特殊地形可加到洞穴入口地图（先列清单）；② 方尖碑地图补充「召唤台」点位。
+- **Wiki 盘点结论**（`Coordinates` 页共 **60 张坐标表**，508 行含 Z）：
+  - 第一档（洞穴/地下类，有缺口）：Abe 密室入口 2、Rag Jungle Dungeon 内部 3、Frozen Dungeon 内部 4、Carnivorous Caverns 内部 3 = **12 条**。
+  - 第二档（非洞穴语义，需新类别）：山峰 11、水脉 46、油矿脉 49、毒气矿脉 1、充能节点 1、Z 植物 1、
+    中心岛岛屿 6、神器本体位置 ~59、玛格玛龙巢 16、任务终端 45、Glitch 150。
+  - 第三档（已在别处覆盖，不重复加）：方尖碑、神器台座、探险者笔记、温泉、各类宝箱、Abe 地表入口、
+    Rag Minor Caves 38、Cen Small Caves 18、Isl 资源洞 12、Cen 水下穹顶 2。
+  - 用户本轮选择：**只做第一档 12 条**（第二档他轮再定）。
+- **实施 1：洞穴入口新增「洞内分区」类别（kind=`inner`，色 #e879f9）**
+  - Abe +2：`密室 - Fertile - Bio-Luminescent` 37.0/53.0 (z 32900)、`密室 - Bio-Luminescent - Molten Element` 62.2/68.2 (z 15100)。
+  - Rag +10：丛林地牢 Inner Section 1/2、Lava Elemental Arena；冰霜地牢 Inner Section、Iceworm Queen Arena、
+    Artifact Room、Exit；食肉洞窟 CotS Entrance、Watertunnels 1/2（全部带 Z）。
+  - 注意：Rag 三组的**外洞口此前已覆盖**，本次只补**洞内下一层**（按各表跳过前 2 行）。
+  - 图例数组由 8 类扩到 9 类；picker title 同步加「洞内分区」。
+- **实施 2：方尖碑地图新增「召唤台（Terminal）」静态点位 6 个**
+  - 数据源：`Coordinates` 页 Obelisks 表内的 Terminal 行（全库仅 6 个）——
+    Isl `Tek Cave Terminal` 43.1/39.1(z 33489)、Abe `Rockwell Terminal` 42.7/36.7(z -102900)、
+    Ext `Desert` 97.1/90.2、`Forest` 15.9/50.5、`Ice` 6.7/85.8、`King` 3.4/49.2。
+  - 其余 7 图（Cen/Sco/Rag/Val/Gen/Bob/Los）**无独立召唤台**（Boss 直接在方尖碑召唤）；
+    Ast（Astraeos）Wiki 仅写「西侧 boss terminal / Lemnokis terminal」**无坐标**，不编造。
+  - 技术要点：方尖碑地图点位来自**后端实时扫描 `t:obelisk`**，只识别 `Obelisk_A/B/C`+腐蚀/破损，
+    **Terminal 类不在扫描分类内** ⇒ 采用**静态叠加**（JS 常量 `LB_OBS_TERM` + `lbObsTermMerge()`，
+    在 `lbFacPosRender` 的 obelisk 分支前合并，不改原缓存数组、不重复追加）。
+  - 图例：「召唤台」独立色 #06b6d4，方尖碑图例顺序改为 红/绿/蓝/腐蚀/破损/**召唤台**；
+    点选徽章显示终端名（`_fdn = d[5]`）。
+- 验证（v4852）：
+  - 线上 `cave_entrances.json`：**149 条**（inner 12），Z 有 123 / 无 26；Abe 10（含 inner 2）、Rag 58（含 inner 10）。
+  - 线上 `index.html`：LB_OBS_TERM / lbObsTermMerge / 召唤台图例 / 洞内分区前后端串全 True；`node --check` EXIT=0。
+  - **浏览器运行时实测**（PWA 生产页）：`LB_VERSION = v20261019-4852`；`lbObsTermMerge({})` → `Isl:1, Abe:1, Ext:4`（6 个召台全部生成）。
+  - 版本一致 True；wrangler Current Version ID `330ccfcb-f2cb-4cfd-a382-7a6b5da3dc65`。
+- 待办（第二档，用户未选）：山峰/水脉/油矿脉/神器本体/玛格玛龙巢/任务终端/Glitch，需先定各自的图层归属与配色。
+
+
+### 步骤 41：洞穴入口图标改为 Cave.png（96px WebP 内置，v20261019-4853）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 用户需求：洞穴入口的图标换成 `https://img.whiterober.ccwu.cc/ASA/misc/Cave.png`；用户选择**下载压图后内置**（不用外链）。
+- 实施（标准 4 步压图流程）：
+  1. 下载源图：HTTP 200，PNG 256×256，76812 B。
+  2. PIL 转 96×96 WebP（LANCZOS，quality=70，method=6）→ `tmp/webp96/7f3871392c59_w96.webp`，**3298 B**（压缩率 4.3%）。
+     - 命名规则：`md5(源URL)[:12]_w96.webp`（已抽样 5 条 webp_map 验证该规则成立；IconAberration 那条是历史遗留异名）。
+  3. `汉化/icons2.json` 追加 `{"name":"CaveEntrance","url":".../misc/Cave.png"}`（5222 → 打包时统计 5221 urls）。
+  4. `tmp/webp_map.json` 登记 `该URL -> thumbs/webp96/7f3871392c59_w96.webp`（5126 → 5127）。
+- 前端：picker 洞穴入口图标由 `91aa037a1498_w96.webp`（IconAberration）改为 `7f3871392c59_w96.webp`。
+- 验证：
+  - 打包日志：`icons2 urls=5221`（+1）、`needed thumbs=5112 copied=5112`（+1），wrangler 上传清单含 `/thumbs/webp96/7f3871392c59_w96.webp`。
+  - 线上缩略图：HTTP 200、3298 B、RIFF(WebP)。
+  - 线上 `index.html`：引用新 hash = True、旧 hash 引用 = False；`webp_map` 已登记。
+  - **浏览器运行时实测**：`LB_VERSION = v20261019-4853`；`lbResURL('thumbs/webp96/7f3871392c59_w96.webp')` 加载成功 `96×96`。
+  - 版本一致 True；wrangler Current Version ID `761c5367-5939-4917-9d58-8c2019862119`。
+
+
+### 步骤 42：洞穴入口徽章标题=具体洞名（权威汉化 biome_zh.json，查不到回退英文，v20261019-4854）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 用户需求：洞穴入口选中色点后，坐标徽章的标题显示**具体洞穴名**；能查到权威汉化就用中文，没有就回退英文。
+- **权威汉化源定位（关键结论）**：`汉化/biome_zh.json`（v4336）是项目里**唯一含洞穴/区域名的汉化库**
+  （`names` 整名 592 条 + `tokens` 词组 371 条 + `_sourced` 指向 item_zh/icon_zh_map/facility_official 派生库）。
+  - 反证：`facility_official.json`(1222) / `facility_zh.json`(225) / `item_zh.json`(3074) / `icon_zh_map.json`(5251)
+    对洞穴名命中 **0/149**（它们只有生物/设施/物品）；`ShooterGame.json` 是分节 locres（Content/Globals…），无地名键。
+- 实现：
+  1. 新增 `lbCaveZhName()` / `lbCaveZhOne()` / `lbCaveZhIdx()`（前端零硬编码，全部读 `LB_BIOME_ZH`）。
+     匹配链：整名精确 → 忽略大小写 → 自动补/去 `Cave` → 归一化（去符号小写）→ **前缀法**（`Old Railway Cave`
+     ← 词典 `Old Railway Cave - Tunnels`，只取「·」前段）→ 全词命中 tokens → 否则回退英文。
+  2. **分段翻译**（用户选定）：按 ` - ` 切段；纯英文段查词典；含中文段只翻括号内英文；翻不出保留原段。
+  3. `lbFacPosRender` 的 caveentrance 分支：`_fdn = lbCaveZhName(d[5])`（原为类别名，如「普通洞」）。
+  4. `lbCaveOpen` 的 `fin()` 先 `lbLoadBiomeZh()` 再渲染，保证词典就绪。
+  - ⚠️ 踩坑修正：首版 `nrm()` 把中文字符全部抹掉，导致「火山核心 北（Lavaclaw Flow）」被误判命中
+    `lavaclawflow` → 标题变成「熔岩爪熔流」。已加 `hasCjk → 不参与英文词典匹配` 守卫。
+- 覆盖率实测（149 条）：词典翻译 47 / 原本中文 54 / 纯英文回退 48 → **中文显示 101 条（67.8%）**。
+- 验证：
+  - 线上 `index.html`：version/`lbCaveZhName`/`lbCaveZhOne`/`lbCaveZhIdx`/`_fdn` 钩子/`lbLoadBiomeZh` 前置 全 True。
+  - **浏览器运行时实测**（生产页已 reload 到 v4854）：
+    `Old Railway Cave→旧铁路洞穴`、`Hidden Grotto→隐秘洞窟`、`Lava Oasis→熔岩绿洲洞穴`、`South Ice→南部冰`、
+    `地表 - Northwest→地表 - 西北`、`Jungle Cave - Ocean→丛林洞穴 - 海洋`、`火山核心 东南（Magma Spring）→火山核心 东南（岩浆泉）`、
+    `小洞穴 01→小洞穴 01`、`Southeastern Trench→Southeastern Trench`（无词典，按规则回退英文）。
+  - 版本一致 True；Version ID `f5780a0f-eff7-49f2-999e-9162659e5a40`。
+- 待办（可选）：若想提高中文占比，可把 48 条纯英文名的人工/镜像译名补进 `汉化/biome_zh.json` 的 `names`。
+
+
+### 步骤 43：召唤台补 Ast/Gen 两条（非权威→虚线）+ 汉化补 "The " 前缀变体（v20261019-4855）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 用户提供（社区来源）：Astraeos 小 Boss 终端 **1.4 / 84.6**（紫球小祭坛）；Gen1 海洋 Boss 终端 **54.2 / 49.8**（The Trench，深约 823m）。
+  两个气泡（Astraeos Abyssanthos 深海气泡、Gen1 巨型氧气泡）社区**无公认坐标**，只有区域描述 ⇒ 按纪律不猜点、不入库。
+- 实施 1：`LB_OBS_TERM` 增加第 6 位「虚线标记」，新增 2 条：
+  - `['Ast', 'Astraeos Miniboss Terminal', 1.4, 84.6, 0, 1]`
+  - `['Gen', 'Moeder Terminal（The Trench）', 54.2, 49.8, 200000, 1]`
+    ⚠️ `z=200000` 是**海图选择标记**（Gen `oceanZ:200000`：z≥该值走 `gen_ocean_s` 海图），**不是真实高度**；真实 z 未知。
+    实测 `lbMapForServer('Gen', 200000).img = gen_ocean_s` ✓；目前 Gen 方尖碑图无其他点位，无共图冲突。
+- 实施 2：`lbObsTermMerge` 改为 `lbMapForServer(t[0], t[4])`（按 z 选底图），并把虚线标记写入 `d[6]`。
+- 实施 3：点位描边条件扩展——`(caveentrance 且无 z) || (obelisk 且 terminal 且 d[6]===1)` ⇒ `2px dashed`。
+  → Wiki 权威的 6 条召唤台仍实线，社区来源的 Ast/Gen 2 条为虚线，一眼区分可信度。
+- 实施 4（回答「Old Tunnels 真的没有权威翻译么」）：**有，是我们数据少写了 "The"**。
+  `汉化/biome_zh.json` 明确有 `The Old Tunnels → 旧隧道`、`Old Railway Cave - Tunnels → 旧铁路洞穴 · 隧道`、
+  `Hidden Grotto - Tunnels → 隐秘洞窟 · 隧道`、`Dampwood/Darkwood Tunnel → 湿木/暗木隧道`。
+  我们的数据存的是 `Old Tunnels`（无 The）→ 整名精确失败。已给 `lbCaveZhOne` 增加 **自动补 "The " 前缀** 变体
+  （含 `The xxx Cave` 组合），实测修复 2 条：`Old Tunnels → 旧隧道`、`Forbidden Grotto → 禁忌洞窟`。
+- 验证（v4855，生产页 reload 后运行时实测）：
+  - `LB_VERSION = v20261019-4855`
+  - `lbObsTermMerge({})` → `Isl:1, Abe:1, Ext:4, Ast:1, Gen:1`（共 8 条）
+  - Ast 点 `z=0 dash=1`；Gen 点 `z=200000 dash=1`，`lbMapForServer('Gen',200000).img = gen_ocean_s`
+  - `lbCaveZhName`：`Old Tunnels→旧隧道`、`Forbidden Grotto→禁忌洞窟`、`Old Railway Cave→旧铁路洞穴`、
+    `Southeastern Trench→Southeastern Trench`（无词典，按规则回退英文）
+  - `node --check` EXIT=0；版本一致 True；Version ID `7dfa1ddd-5f1d-4716-879f-91fe0df3b781`
+
+
+### 步骤 44：生成《未翻译洞穴清单.md》（工作区根目录）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 产出：`b:\项目\Hass ASA Server Monitor\未翻译洞穴清单.md`
+- 统计（149 条洞穴点位，判定算法与前端 `lbCaveZhName()` 完全一致）：
+  - 已全部中文 73 / **完全未翻译 46** / **部分翻译中英混排 30**
+- 文档结构：
+  - A. 完全未翻译 46 条（按地图分组；列「词典近似键」作为补译锚点，已剔除 Cave/Jungle 等泛化单字键，最多 3 条）
+  - B. 部分翻译 30 条（原名 → 当前显示，标出缺哪一段）
+  - C. 方尖碑地图「召唤台」8 个（6 Wiki 权威实线 / 2 社区虚线）
+  - D. 补译方法（`汉化/biome_zh.json` names 追加键值对；可只补单段如 `Land: 陆地`；部署与复核方法）
+  - E. 为何无中文（Wiki 与官方 locres 均无；属点位细分描述，需自译并标注来源）
+- 备注：两个无坐标气泡（Astreos Abyssanthos / Gen1 巨型氧气泡）未入库，已在 E 段注明。
+
+
+### 步骤 45：清单增强 —— 近似键附中文、B 段标出缺失段参考译名
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 用户要求：「有近似键 应该都把中文 显示在表里」。
+- 变更（`未翻译洞穴清单.md` 重新生成）：
+  - A 段列头改为「词典近似键 → 对应中文」，每条近似键后直接给出其词典中文（如 `The Great Trench` → **大海沟**）。
+    **46 条中 23 条有近似键（50%）**，表下已注明该比例。
+  - B 段新增「缺失段可参考的中文」列：对每个缺译段落给出词典中文，并标注来源
+    `（去数字后命中，可直接借用）`（如 `Entrance 1` → 入口）、`（词元拼合，建议润色）`、`无词典`。
+  - 已为两类标注加说明，避免把「建议」误当「已入库」。
+- 备注：`Ruins 1 → 遗迹`、`Entrance N → 入口`、`Northeast N → 东北` 这类目前**前端还取不到**（`lbCaveZhOne` 不做去数字），
+  若要真正生效需给前端补「去尾数字后重查」逻辑；本轮仅做清单参考。
+
+
+### 步骤 46：洞穴徽章自定义 tips 显示权威英文 + B 段 30 条补齐中文（v4856/v4857）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 需求 1（tips）：所有洞穴入口浮窗里地图上方的徽章，悬停显示权威英文原名。
+  - `lbFacPosRender` 节点新增 `data-fen`（洞穴/召唤台写入 `d[5]` 原始英文名）。
+  - `lbFacDotSelect` 生成徽章时读取 `data-fen`，加 `lb-tipb` 类 + `title = "【权威英文】\n" + 原名`
+    （项目自定义 tips 引擎会展示 `【】` 黄色小标题；title 由 sweep 自动转 `data-tip`）。
+  - 运行时实测（合成节点）：`barClass = lb-tipb`，`title = 【权威英文】\nJungle Dungeon - Inner Section 1` ✓
+- 需求 2（B 段补译）：原 30 条中英混排全部补齐。
+  - v4856：`汉化/biome_zh.json` 的 `names` 新增 29 条段级词条（Land 陆地 / Entrance 入口 / Ruins 遗迹 /
+    Underwater River 水下河流 / Underwater Dome 水下穹顶 / Northeast 东北 / Flyer-accessible 飞行可达 /
+    Inner Section 内部分区 / Lava Elemental Arena 熔岩元素竞技场 / Iceworm Queen Arena 冰虫女王竞技场 等），
+    并写入 `selfNames`（自译溯源）。
+  - v4857：补 3 条地牢名（`Jungle Dungeon` 丛林地牢 / `Frozen Dungeon` 冰霜地牢 / `Carnivorous Caverns` 食肉洞窟）。
+  - 运行时实测：`Jungle Cave - Land → 丛林洞穴 - 陆地`、`地下世界 - Ruins 1 → 地下世界 - 遗迹 1`、
+    `水下气泡 - 东（Underwater Dome） → 水下气泡 - 东（水下穹顶）`、`地表 - Northeast 1 → 地表 - 东北 1`、
+    `Frozen Dungeon - Entrance 2 → 冰霜地牢 - 入口 2` 等。
+  - 结果：**部分翻译 30 → 1**（仅 `食肉洞窟 - CotS Entrance → 食肉洞窟 - CotS 入口`，保留游戏内缩写）；
+    已全中文 73 → **108**；完全未翻译 46 → **40**。
+- 《未翻译洞穴清单.md》已重生成，B 段仅剩 1 条并注明原因。
+- 验证：`node --check` EXIT=0；版本一致 True；Version ID `189c33f8-7bd8-4a07-a056-8e203b46d21d`。
+
+### 步骤 47：A 段 40 条 + C 段 8 召唤台全部语义自译入表（零硬编码）+ 徽章 tips 移动端长按（v4858）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 需求（用户口径）：
+  1. 徽章 tips 在**移动端长按**显示（桌面悬停为原有行为）。
+  2. A、C 段**均不考虑近似键**，直接按语义翻译并写入词典。
+  3. 所有补译**必须数据化**（复用 `汉化/biome_zh.json`），**禁止**在 HTML 硬编码中文。
+  4. 考证「CotS 是不是南部的意思」。
+- CotS 考证结论：**不是南部**。ARK Wiki 坐标表原文 `[[Castle of the Swamp (Ragnarok)|CotS]] Entrance`
+  ⇒ **CotS = Castle of the Swamp（沼泽城堡）**。`Carnivorous Caverns - CotS Entrance` → 食肉洞窟 - 沼泽城堡入口；
+  词典同时补 `Castle of the Swamp` → 沼泽城堡（原占位「CotS 入口」就地更正）。
+- 数据层：`汉化/biome_zh.json` → `names` **+48 条**（A 段 40 + C 段 8），1 条更正，`_version` → v4858，
+  names 624 → **672**，新增键同步进 `selfNames` 自译溯源。前端**零中文字面量**。
+- 前端（`dino-import.html`）：
+  - `lbCaveZhName()` 新增「**整名精确优先**」：含中文的整名条目（如 `Moeder Terminal（The Trench）`）也能直接命中。
+  - 召唤台徽章名 `_fdn` 由英文直出改为 `lbCaveZhName(d[5])`；英文原名仍走 `data-fen` 供 tips。
+  - 徽章加 `user-select:none / -webkit-user-select:none / -webkit-touch-callout:none / tap-highlight:transparent`，
+    防移动端长按选中文字与系统菜单抢占长按。
+- 运行时实测（线上 v4858，浏览器 `--check` 前先 `node --check` EXIT=0）：
+  - 149 条洞穴名逐条跑 `lbCaveZhName()` → **全中文 149 / 部分 0 / 未译 0**（清零）。
+  - 抽检：`The Caverns of Lost Faith → 失落信仰洞窟`、`Southeastern Trench → 东南海沟`、
+    `The Center Cave - Top → 中心洞穴 - 上层`、`Life's Labyrinth → 生命迷宫`、`Mine Shaft → 矿道`、
+    `Wvyern Cave → 飞龙洞穴`、`Watertunnels → 水道洞`。
+  - 召唤台：`Tek Cave Terminal → 泰克洞穴终端` … `Astraeos Miniboss Terminal → 繁星小 Boss 终端`、
+    `Moeder Terminal（The Trench） → 莫德终端（海沟）`。
+  - 徽章合成节点：`barText = 📌繁星小 Boss 终端`、`barClass = lb-tipb`、`title = 【权威英文】\nAstraeos Miniboss Terminal`、
+    `userSelect = none`；模拟 `touchstart` 520ms 后 `#lbTipBox` `display=block`，渲染金色「权威英文」+ 英文原名 ✅
+- 《未翻译洞穴清单.md》重生成：标题改「已清零」，含 CotS 考证 + A/C 逐条对照表 + 实现要点。
+- 部署：版本一致 True（v20261019-4858），Version ID `5d33ea02-8d89-4c88-83cd-5cef7129c2f8`。
+
+### 步骤 48：洞穴徽章 tips 细化——对齐徽章 / 去掉「权威英文」标题与空行 / 无英文专名不显示（v4859）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 用户反馈三点：
+  1. tips 位置应**对齐徽章**（旧版偏向整行左侧）；
+  2. **不要「权威英文」4 个字**、**不要空一行**；
+  3. 「资源洞」这类**没有权威英文**的点**不显示 tips**。
+- 根因：
+  - tips 锚点挂在整行容器 `bar`（`display:flex;justify-content:center`，宽度=地图宽），
+    `getBoundingClientRect().left` 是整行左边 ⇒ tips 落在整行最左（实测 bar.left=261 / 徽章 left=383，偏 122px）。
+  - `title` 为 `'【权威英文】\n' + 原名` ⇒ `【…】` 被 tips 引擎渲染成金色小标题 + `\n` 造成空行。
+  - 数据中 `资源洞 01`、`小洞穴 01` 等点位 `data-fdn` 与 `data-fen` **完全相同**（本就无英文专名），仍挂了 tips。
+- 改法（`dino-import.html` / `lbFacDotSelect`）：
+  - 删除挂在 `bar` 上的 tips 逻辑，改为在 `bar.innerHTML` 之后取 `bar.firstElementChild`（徽章本体）挂
+    `lb-tipb` + `title`，并保留 `user-select:none` 等移动端防护。
+  - `title` 直接是**英文原名**（无标题行、无换行）。
+  - 新增条件 `_fen && _fen !== _fdn` —— 英文原名与徽章中文名相同即视为无权威英文，不挂 tips。
+- 实测（线上 v4859）：
+  - `失落信仰洞窟`：`badgeClass=lb-tipb`、`title=The Caverns of Lost Faith`、tips 文本仅一行英文、
+    `bar` 无 `lb-tipb`、**tipLeft 383 == badgeRectLeft 383**（旧版 barRectLeft=261）✅
+  - `资源洞 01`、`小洞穴 01`：`badgeClass=''`、无 `title` / `data-tip` ⇒ 不显示 tips ✅
+- 部署：`node --check` EXIT=0；版本一致 True（v20261019-4859）；Version ID `ad13a2dd-c58e-46f9-ab87-c7183bd03c5d`。
+
+### 步骤 49：Gen 补月球/雪山洞穴 + 莫德尔更正 + 方尖碑 tips 显示 -1 修复（v4860）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 用户提问：Gen 的月球、雪山应该有洞穴，找坐标；三个附加要求（无 Z 标虚线 / 莫德→莫德尔 / 方尖碑 tips 显示 -1）。
+- Wiki 考证（ark.wiki.gg 各洞穴页）：
+  - **Family Cave (Genesis: Part 1)**：月球 Biome，入口 **52.4 / 13.2**（Big Brother 区域陨石坑壁），洞内小水潭、20℃、免辐射。
+  - **The Armory (Genesis: Part 1)**：月球 Biome，南入口 **40.00 / 25.95**（宽、崖壁）+ 北入口 **35.82 / 24.00**（窄、陨石坑壁）；主厅石桥，Glitch 39.50/24.57。
+  - **The Oasis (Genesis: Part 1)**：**Snow** Biome，入口 **70.9 / 26.27**；即 Wiki 变更记录里的 "the ice cave on genesis"（193.0 PvP 禁建），找 Ferox 最方便。
+  - 对照：**Volcanic Cave** 4 入口（20.40/78.30、32.3/85.5、33.2/82.56、29.4/78.4）与库内「火山核心」4 条**完全一致** ✅
+- 数据（`cave_entrances.json`）：Gen 4 → **8** 条，新增 Family Cave、The Armory - South/North、The Oasis，类别 `normal`；
+  Wiki 未给 Z ⇒ **不写 z 字段**（前端 `d[6]` 空 ⇒ 自动虚线）。
+- 译名（`汉化/biome_zh.json`，`_version` → v4860）：`Family Cave`→家族洞穴、`The Armory`→军械库、
+  `The Armory - South`→军械库 - 南入口、`The Armory - North`→军械库 - 北入口、`The Oasis`→绿洲；
+  **Moeder**: `莫德终端（海沟）` → **莫德尔终端（海沟）**。
+- Bug 修复（“方尖碑很多徽章 tips 显示 -1”）：世界探针方尖碑点位形如
+  `[-260577,239016,850.899,"","BP_Obelisk_A_C",-1]`，**第 6 字段是 -1 占位**；旧代码对 obelisk 全类取 `d[5]` 作 `data-fen`
+  ⇒ tips 显示 `-1`。改为**仅 caveentrance 与 obelisk-terminal** 取 `d[5]`，普通方尖碑留空（不挂 tips）。
+- 部署：`node --check` EXIT=0；版本一致 True（v20261019-4860）。
+
+### 步骤 50：Gen 洞穴补全（月球 6 入口 + 沼泽 5 入口）（v4861）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 用户追问：“月球不止 2 个洞吧？”
+- Wiki 核查方式（有效路径）：`Category:Caves` 成员表（api `list=categorymembers`）+ 导航模板 `Template:Nav Locations Genesis: Part 1`
+  的 Caves 分组 + 各页面 infobox（api `prop=revisions` 取 wikitext，比抓渲染页轻得多）。
+- 结论：Genesis 共 **10 个洞穴**；其中 **月球 6 个 / 9 个入口**：
+  Family Cave(52.4/13.2)、The Armory(40.00/25.95、35.82/24.00)、Derelict Mine(26.2/36.0)、
+  Stone Scabbard(47.5/29.0)、Optic Nerve(24.0/15.1)、Vecna's Realm(24.7/26.1、23.6/24.3、21.7/25.9)。
+  **雪山 1 个**：The Oasis(70.9/26.27)。**沼泽 2 个**：Darkwood Tunnel(65.4/75.7、65.8/75.5)、
+  Dampwood Tunnel(74.15/74.85、75.75/75.40、74.35/76.50)。海洋：Underpass、Paradise Lost（Wiki 未给入口坐标，未加）。
+- 数据：`cave_entrances.json` Gen 8 → **19** 条（+11：月球 6、沼泽 5），类别 `normal`，无 z ⇒ 虚线。
+- 译名：新增 `Vecna's Realm - Entrance 1/2/3`(维克那领域 - 入口 N)、`Darkwood Tunnel`(暗木隧道) + 北/东南入口、
+  `Dampwood Tunnel`(湿木隧道) + 西/南/东入口；`Derelict Mine/Stone Scabbard/Optic Nerve` **复用既有词条**
+  （废弃矿场 / 石剑鞘 / 视神经谷，未覆盖原值）。`_version` → v4861。
+- 实测（线上 v4861）：Gen 卡片 = **19 个位置（普通洞 ×15 + 火山核心 ×4）**，19 个点**全部虚线**；
+  徽章依次为 家族洞穴 / 军械库-南入口 / 军械库-北入口 / 绿洲 / 废弃矿场 / 石剑鞘 / 视神经谷 /
+  维克那领域-入口 1~3 / 暗木隧道-北入口 / 暗木隧道-东南入口 / 湿木隧道-西入口 / 湿木隧道-南入口 / 湿木隧道-东入口 ✅
+- 部署：`node --check` EXIT=0；wrangler Version ID `86d87859-7f22-4cd5-bf93-d322c0399fc2`；
+  部署脚本报 `版本一致: False` 属 **CF 边缘缓存**（浏览器 `cache:'no-store'` 实测 `LB_VERSION=v20261019-4861` 已生效）。
+
+### 步骤 51：清理 tips 里的「静态点位 / Wiki 静态点位 / wiki：」来源标注（v4862）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 用户口径：**所有 tips 都不应显示「wiki 静态数据」这类标识**（但「数据源待插件支持」保留）。
+- 改动（`dino-import.html`，共 3 处文案）：
+  1. 洞穴入口 picker 卡：`…火山核心（Wiki 静态点位）` → `…火山核心`
+  2. 畸变毒菌 picker 卡：`…孢子云（静态点位）` → `…孢子云`
+  3. 化肥/花朵「距耗尽」tips：`【距耗尽】\nwiki：每 1 小时消耗 1 朵稀有花朵\n确定性数值，非估算`
+     → `【距耗尽】\n每 1 小时消耗 1 朵稀有花朵`
+  - 保留：x: 占位行的 `数据源待插件支持`（用户明确要求保留）。
+- 实测（线上 v4862，直取 HTML 原文）：cave tip = `洞穴入口 | Cave Entrances | 神器洞·…·火山核心 | 点击查看点位`；
+  fungi tip = `畸变毒菌 | Aberration Poison Fungi | 含全部毒蘑菇·毒植物·孢子云 | 点击查看点位`；
+  deplete tip = `【距耗尽】\n每 1 小时消耗 1 朵稀有花朵`；`（静态点位）` 计数 0，`（Wiki 静态点位）` 仅剩 **1 处代码注释**（不渲染）。
+- 海图（Ocean）核查：Wiki 上 Genesis 海洋群系的 `Underpass`、`Paradise Lost` 均**未给入口坐标**；
+  `Explorer Map/Genesis: Part 1` 的 `cave-entrance` 标记仅 1 个（33.2/82.5，火山，库内已有）⇒ 海图当前 0 个洞穴点符合数据现状。
+- 部署：`node --check` EXIT=0；版本一致 True（v20261019-4862）；Version ID `5173eb68-fc71-4055-bc26-9b29572ad123`。
+
+### 步骤 52：Gen/Ast 补 4 个「大概位置」虚线点位（Underpass / Paradise Lost / 巨型氧气泡 / Abyssanthos）（v4863）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 需求（用户口径）：Gen1 Ocean 巨型氧气泡、Astraeos Abyssanthos 深海气泡、`Underpass (Genesis: Part 1)`、`Paradise Lost (Genesis: Part 1)` —— 官方没有入口坐标，在地图上标个**虚线的大概位置**（尽量准确即可）。
+- 数据考证（ark.wiki.gg）：
+  - `Data:Regions/Genesis: Part 1`：`Underpass` = `[51.76, 26.0, 7.94, 6.72]`（lon/lat/w/h）→ 中心 29.4/55.7；`Paradise Lost` 由 7 个小矩形组成（lon 48.2–50.9 / lat 19.9–24.6）→ 中心 22.2/49.6。
+  - `Ocean (Genesis: Part 1)` 与 `Data:Maps/Exploration/Genesis: Part 1/ASA`：无「氧气泡」标记（仅 glitch / mission / magmasaur-nest / oil-vein / playerSpawns）⇒ 气泡只能估算。
+  - `Astraeos` 页 Abyssanthos 仅一句描述（fog-shrouded deep-sea expanse / enormous underwater air bubbles），无区域数据页 ⇒ 估算。
+- 改动：
+  - `cave_entrances.json`：Gen 19 → **22**（Underpass / Paradise Lost 为 normal，Giant Oxygen Bubble 为 bubble）；Ast 0 → **1**（Abyssanthos，bubble）；四条**均无 z** ⇒ 自动虚线。
+  - `汉化/biome_zh.json`：新增 `Underpass→海底通道`、`Paradise Lost→失乐园`（原已有，未重复）、`Giant Oxygen Bubble→巨型氧气泡`、`Abyssanthos→深渊花海`；`_version` v4861 → **v4863**，names 683 → **686**，selfNames 同步 686，无重复键。
+  - `dino-import.html`：`LB_VERSION` → `v20261019-4863`（无逻辑改动）。
+- 验证：`node --check` EXIT=0；打包 version 文件 v20261019-4863；wrangler 仅上传 6 个变更资源（含 cave_entrances.json / biome_zh.json / index.html）；线上 `版本一致: True`，Version ID `ce3f4788-aa28-4518-8564-a46c189223c1`。
+- 线上实测（浏览器 v20261019-4863）：`LB._caves` Gen 22 / Ast 1；`lbCaveDots()` 三条 Gen 新点与一条 Ast 新点第 7 位 = `''`（dash=true）；`lbLoadBiomeZh()` 后 `lbCaveZhName()` → 海底通道 / 失乐园 / 巨型氧气泡 / 深渊花海。
+- 《未翻译洞穴清单.md》：统计 164 → 168，新增 F 段（含坐标依据与估算说明）。
+
+### 步骤 53：ASE/ASA 口径复查 → 撤下 Gen 三条海图点位 + 海图新增示意点（v4865）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 用户口径：「你能确定肯定是ASE口径的，就直接不用显示该点位了」+ 「我可以确定 海图召唤台附近有大型水下空间」（选「删除三条 + 召唤台附近补一个示意点」）
+- 复查依据：
+  - `Data:Regions/Genesis: Part 1` 2023-07-03（ASE）；`Data:Regions/Genesis: Part 1/ASA`、`Data:Maps/Genesis: Part 1[/ASA]`、`Data:Maps/Genesis: Part 1 Ocean[/ASA]` 均 missing。
+  - `Data:Maps/Exploration/Genesis: Part 1/ASA`（2026-09-05）底图 `Genesis Part 1 Map ASA.jpg`，分组仅 glitch/mission/magmasaur-nest/oil-vein/playerSpawns；坐标 lat 1.8–97.1 ≠ ASE 11.5–88.5 → 取景不同。
+  - 原有 Gen 点位同源（如 `The Oasis` 70.9/26.27 = ASE 区域矩形角点）。
+- 改动：
+  - `cave_entrances.json`：删 `Underpass` / `Paradise Lost` / `Giant Oxygen Bubble`；Gen 22 → 20（新增示意点 `大型水下空间（待实测）` lat 64.35 / lon 52.67（陆图口径，前端换算为海图 55.0 / 51.0） / k=bubble / z=200000 / dash=true）；全库 168 → 166。
+  - `dino-import.html`：`lbCaveDots` 第 9 位透传 `dash`；洞穴点虚线判定 +`d[8]`；`lbFacPosRender` 对有 `oceanImg` 的服按 z 拆「陆地/海洋」两页；`lbFacPosPage` +tag 参数；`LB_VERSION` → `v20261019-4865`。
+  - `未翻译洞穴清单.md`：新增 G 段（复查依据 + 撤下表 + 现行处置），统计 168 → 166。
+- 待验证：线上 Gen 洞穴页应出现「陆地 / 海洋」两页，海洋页只有 1 个虚线点。
+- 修正（v4866）：海/陆分页判定误用 `d[2]`（洞穴点 z 在第 7 位 `d[6]`，`d[2]` 恒为 0）→ 改用 `d[6]`
+
+### 步骤 54：图例新增「空心虚线 = 待确认」（v4867）
+- 时间：2026-10-19
+- 状态：✅ 完成
+- 需求（用户口径）：「图例要加入 空心虚线 表示待确认数量」
+- 改动：`lbFacPosPage` 抽出 `_isDashDot(d)`（洞穴无权威 Z / 召唤台非权威），渲染边框与图例共用；图例末尾追加空心虚线圆 「待确认 ×N」
+- 验证：线上洞穴入口页图例出现「待确认 ×N」；方尖碑页（召唤台靶线）同样计数
+
+### 步骤 55：产出物品「＋」按钮对齐徽章样式（v4868）
+- 时间：2026-10-20
+- 状态：✅ 完成
+- 需求（用户口径）：「附件用圆角和前面相同的虚线性按钮」→ 澄清为「对齐前面的 金属锭徽章的样式」
+- 改动：新增 `.lb-hf-mini.lb-hf-addchip`（`padding:2px 7px` / `border-radius:9px` / `background:#22222c` / `border:1px dashed #3a3a4a` / `font-size:11px` / `height:auto`，hover 边框转 #7c3aed）；「＋」按钮加该类并删内联 `width:30px;padding:0`
+- 影响范围：仅「添加产出物品」一个按钮；`@ / ↑ / ↓ / ✕` 不变
+- 验证：部署后现场目视（徽章行末尾的＋与徽章同高同圆角）
+
+### 步骤 56：编辑浮窗控件规格统一（v4869）
+- 时间：2026-10-20
+- 状态：✅ 完成
+- 需求（用户口径）：１）「＋」高度统一成左侧地图按钮高度；２）圆角统一；３）浮窗内按钮间距统一；４）按钮/徽章规格统一（方案A）
+- 改动：新增统一规格 CSS（`#lbHfEMapGrid .server-tab{height:28px;border-radius:6px}` / `.lb-hf-mini{28×28;r6}` / `.lb-hf-mini.lb-hf-addchip{height:28px;r6;padding:0 10px;font 12}` / `.lb-hf-prod{height:28px;r6;padding:0 10px;font 12}` / `.lb-hf-btn2{height:28px;r6;padding:0 12px;flex 居中}` / `.lb-hf-badge-t,.lb-hf-mapbadge{r6}` / `.lb-hf-preview{r6;gap8}` / `.lb-hf-prods{gap8}` / `.lb-hf-row{gap8;mb8}` / `.lb-hf-addrow{gap8}`）；地图网格内联 gap 6→8
+- 影响范围：仅编辑/详情浮窗内控件；全局 `.server-tab` 未改（选择器限定 `#lbHfEMapGrid`）
+- 验证：线上 `getComputedStyle` 逐项核对高度/round/gap
+
+### 步骤 57：浮窗文案收紧（产出物品（点击移除）→产出物）（v4870）
+- 时间：2026-10-20
+- 状态：✅ 完成
+- 需求（用户口径）：１）「（点击移除）这个说法不需要」２）「产出物品 改成 产出物」
+- 改动：浮窗标签 `产出物品（点击移除）` → `产出物`；＋按钮 tooltip `添加产出物品` → `添加产出物`（保存校验 alert 不动）
+- 验证：线上浮窗标签为「产出物」
+
+### 步骤 58：采集点即标题（删标题输入框）（v4871）
+- 时间：2026-10-20
+- 状态：✅ 完成
+- 需求（用户口径）：「无需标题输入框了，只保留采集点即可，然后直接用采集点作为标题，tips 里提醒一下」
+- 改动：删 `lbHfETitle` 输入行；采集点 label/input 加 `title="采集点会直接作为采集流程标题"`；`lbHfEditField` 输入 spot 时同步 title；`lbHfEditSave` 改为 `c.title = c.spot` + 校验「请填写采集点」；列表/详情标题显示优先 `spot`；副本 `spot` 也加「（副本）」
+- 验证：线上浮窗无标题框；输入采集点→保存→列表显示该采集点
+
+### 步骤 59：采集点输入框与地图按钮对齐（v4872）
+- 时间：2026-10-20
+- 状态：✅ 完成
+- 问题（用户）：「采集点 输入框 为啥和 右侧的 地图组按钮无法对齐？」
+- 实测（v4871 线上）：输入框 top 35.57 / h 26.86；地图按钮 top 40.57 / h 28 → 差 5px（标签留白：`.lb-hf-lbl` 2+6=8 vs `.lb-hf-f` gap 3）+ 1.14px（输入框高度不足）
+- 改动：`.lb-hf-f{padding-top:2px;gap:6px}`（与 `.lb-hf-lbl` 同节奏 2+16+6）；`.lb-hf-inp{height:28px;padding:0 8px}`（与 28px 按钮同高）
+- 验证：线上仿真 DOM 测量两列 top/bottom 完全一致
+
+### 步骤 60：采集流程「编辑/预览一体化」计划出库（plan-v1）
+- 时间：2026-10-20
+- 状态：✅ 计划已写入工作区（未改代码）
+- 需求（用户口径）：「能否把编辑区和预览区一体化，需要编辑的时候才把最小需求项可编辑化？」→ 「先将计划生成到工作区」
+- 产出：`计划/采集流程_编辑预览一体化_实施计划.md`（现状盘点 / 6 个最小编辑单元 / 交互规则 R1-R10 / 技术设计 / 分批 A-B-C / 验收与测试清单 / 回滚）
+- 追加（同日）：并入「步骤 token 化（动作积木）」→ 计划升至 **v2**（新增 §3.3 / §5.6、`tokens` 数据模型、动词面板、状态徽章、批次 A11-A14 / B7-B9 / C5、验收 8-10 与测试 4 条）
+- 样张（同日）：`计划/_预览_采集流程一体化_v1.html` 静态效果预览（成品态 / 状态分支 / 编辑态＋动词面板三块，样式取自 v4872，图标用线上缩略图）
+- 样张 v3（同日）：按用户口径改为「动作+图标合并单徽章（图标无文字，title 提示）」+「键位用 `ASA/keys/` 图标（76 个，PC/XB/PS/Switch）」+「备注行可输入」；计划同步升 v3（R13/R14、A15-A17、压图流程 `_webp_incremental.py`）
+- 下一步：等评审，确认后执行批次 A（MVP 一体化）
+
+### 步骤 61：采集流程「AI 一键生成」并入计划（plan-v4，DeepSeek 玩家自备 token）
+- 时间：2026-10-20
+- 状态：✅ 方案与样张已更新（未改线上代码）
+- 需求（用户口径）：「加一个大功能，可通过每个玩家自己配置的 ds token，进行一键转换自然语言生成流程」+「token 配在统一的已有的设置浮窗内」
+- 前置实测：DeepSeek 官方接口 **CORS 预检通过**（OPTIONS 200，`access-control-allow-origin` 回显本站，允许 POST + authorization/content-type）⇒ **前端可直连，无需后端代理，token 不经过我们服务器**
+- 计划产出：新增 **§12 AI 一键生成流程**（12.1 配置 / 12.2 交互 / 12.3 Prompt 与输出契约 / 12.4 成本 / 12.5 风险 / 12.6 批次 D1-D4），变更记录补 **v4** 行
+- token 位置（用户修订后）：**不新开 AI 设置窗**，一律并入已有「⚙ 自助配置」浮窗（`lbOpenConfigModal`）内新增区块「AI 一键生成（DeepSeek）」，位置在「自动命名模板」之后、「聚落数据」之前；未配置时点「AI 生成」→ toast + 自动开该浮窗并滚动到 AI 区块
+- 存储与安全：`localStorage['lb_ai_cfg_v1']`（仅本机，不写云端/日志）、password 输入只回显后 4 位、建议限额 token、一键清除；云同步默认关闭
+- 契约要点：只输出 JSON（spot / map / outputs / steps.tokens）；动词与键位白名单；中文名 → 前端 `LB_ITEM_ZH`/`lbItemMeta` 反查 key，查不到降级纯文字徽章；输入 <=300 字、max_tokens 700、temperature 0.2、步骤 <=8；失败重试 1 次 + 正则提取 + 文本兜底
+- 样张：`计划/_预览_采集流程一体化_v1.html` 新增「AI 一键生成」演示卡（自然语言输入 → 4 步动作徽章 + 自动补备注 → 重新生成/应用），底部说明标注 token 在「⚙ 自助配置」内填
+- ⚠️ 事故与修复：修订计划时 Python `io.open(...,'w')` 先截断后写入，遇 emoji surrogate 编码报错 => 计划文档被清空（0 字节）；已从 `bak/....bak_20261020_185237`（23965 B）恢复，并改用「写临时文件 + `os.replace`」原子写入；后续改文档一律沿用该写法
+
+### 步骤 62：AI 功能玩家口径命名「大白鱼」
+- 时间：2026-10-20
+- 需求（用户原话）：「DeepSeek 叫 大白鱼 即可」
+- 改动：计划 §12 标题 / 12.1 区块名 / 未配置 toast / 变更记录 v4 行、样张卡片标题与底部说明，**界面文案统一显示「大白鱼」**；技术端点（`api.deepseek.com`、`deepseek-chat`、`deepseek-reasoner`）保持不变
+- 12.1 增加命名说明行：界面一律叫「大白鱼」（玩家口径），实际调用 DeepSeek 官方接口，文案里不出现品牌名
+- 验证：样张重载截图 —— 卡片标题 = `AI 一键生成流程（大白鱼，每位玩家用自己的 token）`，说明行含「大白鱼（DeepSeek 官方接口）已实测允许浏览器直连（CORS OK）；界面统一叫「大白鱼」」
+- 备注：截图里标题的灰底是浏览器文本选区（`window.getSelection()` 20 字符），非样式问题（`mark/.hl` 计数 0）
+
+### 步骤 63：样张 v4 规格统一（28 网格 / 图标放大可裁切 / 去标题提示）
+- 时间：2026-10-20
+- 需求（用户原话）：① 标题里「（大白鱼，每位玩家用自己的 token）」无需这种提示；② 所有元素对齐地图 TAB 高度及其它样式规范；③ 徽章内图标要大点，可被徽章遮挡部分
+- 样张改动（`计划/_预览_采集流程一体化_v1.html`）：
+  - 卡片标题 → `AI 一键生成流程`（去掉括号提示）；页头/标题升 `plan-v4`；说明瘦身为「生成前可切换追加/覆盖；结果先预览再应用；token 在「⚙ 自助配置」浮窗内填，仅存本机」
+  - 统一到 **28 / 6 / 8 / 12**：徽章 `.chip`（20→28、字号 11→12、padding 0 8、gap 6、`overflow:hidden`）、键帽 `.chip.keyb`（20→28，按键图标 16→22）、序号 `.numdot/.stepnum`（18→28、圆角 6、字号 12）、状态标签 `.tag`（18→24）、`.inline-input`（24→28）、`.note-input`（22→28、字号 12）、`.steprow/.verbpanel/.tagmenu` 间距 6→8、`.aiinput` 圆角 8→6、`.sepv` 高 20、`.arrow/.notemark` 字号 12 且宽 28
+  - 徽章内图标 16 → **26px**（比 28 徽章内空更高，靠 `overflow:hidden` 裁掉边缘，视觉更饱满）
+  - 度量说明改写为新规格
+- 计划改动：§5 渲染映射表（verb/item/key/tag 四行尺寸全部改写）+ 新增「尺寸铁律（v4）」：所有可点元素 28px 高（标签 24px）、圆角 6、间距 8、字号 12，与 `.server-tab` 同高；徽章图标 26px 允许被裁切；禁止同行 20/24/28 混排
+- 验证：样张重载截图确认三张卡元素高度一致（徽章=键帽=序号=输入=按钮=28）、AI 卡标题已无括号提示
+
+### 步骤 64：plan-v5（动作扩展 + 上下文包）
+- 时间：2026-10-20
+- 用户追问：「我要新增动作怎么办」+「AI 一键生成要尽量用到项目内所有能用的数据（json 等）文档或资料」
+- 新增 §5.7「动作（动词）扩展机制」：`LB_HF_VERBS` 表驱动（`v` / `need`(none|item|dino|key|any) / `tip` / `hidden`），面板/徽章/title/AI 白名单全部由表派生；玩家侧「＋ 自定义」写 `localStorage['lb_hf_verbs_v1']`（虚线边框区分）；批次 **A19**（内置表+自定义）、**C6**（动作管理：隐藏/排序/导入导出）
+- 新增 §12.3.1「上下文包（Context Pack）」：10 类数据源（动词表 / LB_MAP_INFO / LB_ITEM_ZH+lbItemMeta / 生物类名 / LB_QUEST_IDX / LB_NOTE_MAP / 现有采集速查库 few-shot / cave_entrances+设施 / tips+天气 / 玩家上下文），按需检索（物品 ≤20、生物 ≤8、示例 ≤2 全文），上下文 ≤6k tokens，超限按「示例→笔记→生物→物品」裁剪，IndexedDB 按数据版本缓存，输出中文名回填反查 key、失败降级文字徽章；面板显示「本次上下文」；批次 **D2**
+- 变更记录补 **v5**（尺寸铁律 / §5.7 / §12.3.1 / 样张 plan-v4）
+- 校验：grep 确认 `### 5.7`、`#### 12.3.1`、`| A19`、`| **D2`、`| C6`、`**v5**` 均已落盘
+
+### 步骤 65：样张补「新增动作」演示
+- 时间：2026-10-20
+- 用户反馈：「样张 没看到怎么新增动作啊」
+- 样张改动（`计划/_预览_采集流程一体化_v1.html`）：
+  - 动词面板末尾新增 `＋ 自定义`（虚线 plus 样式，与标签菜单同款）
+  - 面板下方新增 `.verbadd` 演示行：`新增动作演示：` + 输入框（值「扛」）+ `回车 → 面板末尾多一个` + 虚线自定义徽章「扛🦖」+ 说明「虚线框＝自定义动作（存本机，长按可删，同样进 AI 白名单）」
+  - 新增 CSS：`.chip.custom`（紫虚线边框+浅紫字）、`.verb-input`（28px 高、紫虚线边框）、`.verbadd`（虚线容器行）
+  - 交互说明与顶部「本轮调整」同步补第 ⑤ 条
+- 验证：样张重载截图确认 `＋ 自定义` 与「扛🦖」虚线徽章渲染正常，高度仍为 28 网格
+
+### 步骤 66：动词面板结构定稿（＋自定义位置 / 按键全量 / 键帽浅底）
+- 时间：2026-10-20
+- 用户口径：「自定义加在 文字类动作后面，按键那里直接列出全量即可」
+- 样张改动：`＋ 自定义` 从原「键帽之后」移到 **12 个文字动作之后、按键区之前**；按键区由 5 个示例改为 **PC 套系全量 19 个**（`IconLeftClick/Middle/Right` + 16 个 `PC_btn_*`），面板 `flex-wrap:nowrap;overflow-x:auto` + 子项 `flex-shrink:0`，一行横滚
+- 顺带修的两个真问题：
+  1. **页面横向溢出**：nowrap 行把 grid 子项撑到 1429px（clientW 1006）→ `.wrap{grid-template-columns:minmax(0,1fr)}` + `min-width:0` 根治（实测 `pageOverflow=0`）
+  2. **键帽深底不可读**：canvas 取样实测 keys 图标为**深色图形**（PC_btn_E 64×64 dark=1376 / light=708；IconLeftClick 256×256 dark=38618）→ 键帽改浅底 `#e8eaf0` + `inset 0 -2px 0 #b9c0cd`，图标 22px
+- 数据核对：从 `汉化/_upload/icons2.json` 提取键位清单 76 个（Icon 3 / PC 16 / XB 18 / PS 2 / bumper 4 / button 5 / dpad 5 / stick 4 / switch 14 / touchpad 1 / trigger 4）；浏览器实测 **`PC_btn_C.png` 404**（清单有但服务器缺图）→ 已剔除
+- 计划同步 §5.6：面板顺序（文字动作 → ＋自定义 → 分隔 → 按键全量）、按键全量 + `flex-shrink:0`、键帽浅底 22px、`PC_btn_C` 需按 200 探测过滤
+
+### 步骤 67：键帽灰底定稿
+- 时间：2026-10-20
+- 用户口径：「按键背景也要 灰色调」
+- 定稿样式：`.chip.keyb{background:#565b66;border-color:#767c88;box-shadow:inset 0 -2px 0 #43474f}` + `.keyimg{height:22px;filter:invert(1) brightness(1.15)}`（深灰键帽 + 图标反色，深浅对比足够）
+- 计划 §5.6 同步该规格（原「浅底 #e8eaf0」描述已替换）
+- 验证：元素级截图确认 12 文字动作 → ＋自定义 → 分隔 → 灰底键帽 19 个一排横滚，图标清晰可读
+
+### 步骤 68：键帽取消反色（中灰底）
+- 时间：2026-10-20
+- 用户口径：「按键里面的图标无需反色」
+- 定稿：`.chip.keyb{background:#a3a8b3;border-color:#7d828d;box-shadow:inset 0 -2px 0 #8f949f}`，`.keyimg{height:22px}` **不加 filter**（图标保持原色，中灰底保证深色图形可读）
+- 计划 §5.6 同步（深灰+反色描述已替换为「中灰底、图标不反色」）
+- 验证：面板特写截图，A/Ctrl/D/E 等深色字形在中灰键帽上清晰
+
+### 步骤 69：键帽灰阶再压一档 + 边框对齐文字动作
+- 时间：2026-10-20
+- 用户口径：「按键的背景再灰点，对齐文字动作」
+- 定稿：`.chip.keyb{background:#7a7f8a;border-color:#3a3a4a;box-shadow:inset 0 -2px 0 #666b76}`（边框色与 `.chip.verb` 完全一致，同为灰阶家族；图标不反色）
+- 实测（computed style）：keyBg=rgb(122,127,138)、keyBorder=rgb(58,58,74)、verbBg=rgb(51,51,61)、verbBorder=rgb(58,58,74)、img filter=none ⇒ 边界与文字动作一致，键帽仅底色更浅以保证深色图标可读
+- 计划 §5.6 同步该色值
+
+### 步骤 70：键帽底色 = 文字动作（同 #33333d）
+- 时间：2026-10-20
+- 用户口径：「深色键位图案会看不见 不用担心这个」⇒ 不再为图标留浅底，键帽直接与文字动作同色
+- 定稿：`.chip.keyb{background:#33333d;border-color:#3a3a4a;box-shadow:inset 0 -2px 0 #26262e}`；`.keyimg{height:22px}` 不反色
+- 效果：键帽与 `.chip.verb` 完全同色同边，视觉上"一整排同类积木"；截图确认 A/Ctrl/D/E 等图标仍可辨识
+- 计划 §5.6 同步该口径
+
+### 步骤 65：毒气洞（线上采集速查）实测规格对照 → 样张优化项
+- 时间：2026-10-20
+- 参考对象：ASA 后台 v1731 预览区 iframe（`preview_tab.html`）中含「毒气洞」的 `.info-card-block.ic-block-Isl`（共 20 张卡片）
+- 实测（computed style，非估算）：
+  - `.ic-icon` 48×48；`.ic-title` 14.7px 主题色
+  - `.ic-badge`（地点/地图徽章）h **19px**、font 11.025px、radius 10px、bg 主题色 15%
+  - `.ig-title-badge`（组标题：装备/准备/启程…）h **23px**、font 12.6px、radius 6px、bg 蓝 15% + 蓝字；旁边 `hr` 细线延伸到行尾
+  - `.ic-badge-num`（组序号）**16×16**、font 9.45px、radius 3px、bg 蓝 25%
+  - `.ic-text`（动作胶囊）h **23px**、font 12.6px、radius 6px、bg 白 10%、`overflow:hidden`
+  - `.ic-block-img`（胶囊内图标）**30×30**（比胶囊高 7px，上下溢出被裁）、radius `0 4px 4px 0`
+  - `.ig-img`（装备图标）28×28、radius 4px；`.ic-qty`（×4 角标）h **12px**、font 10.08px、radius `4px 0 0`
+  - 语义色三档：`_default` 白 10% / **`_warn` 橙 #ff9800 + 深字 #1e1f25** / **`_hint` 蓝 #2196f3 + 深字**
+- 与样张差异（待用户确认后再改）：图标小于胶囊（26 < 28，与参考 30 > 23 相反）、缺阶段分组标题、缺 ×N 数量角标、缺 warn/hint 语义色、装备被套了胶囊（参考为纯图标）、缺地图主题色徽章行
+- 状态：只读分析完成，未改任何文件（按用户选择）
+
+### 步骤 66：样张加语义色 + 阶段分组（按用户口径只改这两项）
+- 用户口径：P0 只加「语义色」和「阶段分组」，其他样式不改；P1 样式类不调；P2 不做
+- 样张改动：CSS 新增 `.chip.warn`（橙 #ff9800 + 深字 #1e1f25）、`.chip.hint`（蓝 #2196f3 + 深字）、`.grp/.grp-num/.grp-name/.grp-line`（序号 22×22 蓝 25% + 组名 23px 蓝 15% + 1px 细线）
+- 卡1 结构：`1 准备`（骑/左键/采）→ `2 办理`（橙「转移所有物品」+ 从/拿/入；蓝「用」+ 烧 → 金属锭）→ 备注走 → `3 收尾`（不可达 + 传/采）
+- 卡3 增加 `＋阶段` 入口演示；卡1 底部加颜色语义图例
+- 计划同步：渲染映射表加 `hdr` 与「语义色」两行；新增 **R15 阶段分组**、**R16 语义色**；批次 **A20**
+- 验证：样张重载截图确认三段标题、橙色「转移所有物品」、蓝色「用」渲染正常
+
+### 步骤 67：三类新增单元的「怎么编辑」落地（R17-R19 / §5.8 / 样张演示）
+- 用户追问：「新增的这些都要怎么编辑呢」→ 选择「写进计划 + 样张加演示」
+- 计划：新增 3 条规则 —— **R17 阶段编辑**（＋阶段 / 点组名改名 ≤8 字 / 拖标题整段移动 / Alt+↑↓ / 行尾 ✕ 二选一 / 点序号方块折叠 / 序号自动 1..n / 空段保存提示）、**R18 语义色编辑**（点徽章浮出 ⚪🟠🔵🗑 工具条，键盘 1/2/3，色只挂该 token）、**R19 自定义动作管理**（＋自定义 ≤6 字 / 长按改名·删除·拖动 / 紫虚线 / 存本机）
+- 计划新增 **§5.8** 数据形态与交互一览：`{type:'hdr', text:'准备', collapsed:false}`、`{t:'verb', v:'用', lv:'hint'}`、`localStorage['lb_hf_verbs_v1']`；AI 只输出 steps（可带 lv），阶段可「按语义自动分组」插入
+- 样张：编辑态卡新增三段演示 —— ① 选中徽章（紫框 `outline:2px`）② 颜色工具条 `.colbar`（22px 色点 + 文案 + 键盘提示）③ 阶段改名输入框 `.grp-in` + 折叠态「[3] 收尾 · 2 步」
+- 验证：重载截图确认三处渲染正常；`documentElement.scrollWidth - clientWidth = 0`（无横向溢出）
+
+### 步骤 68：序号规则收紧（只有阶段带序号）+ 修规则编号重复
+- 用户口径：「除了阶段 其他无需加序号」
+- 样张：删除步骤行序号 `stepnum` **12 处**、分区序号 `numdot` **3 处**（装备/地图/产出物只保留文字标签）；编辑态首行改为行尾 `⋯` 菜单入口（提示「步骤不带序号；类型切换与增删都在行尾 ⋯」）
+- 计划：新增 **R21 序号规则**（只有阶段标题带序号，圆角矩形 22×22 自动 1..n；装备/地图/产出物/步骤行一律不显示；步骤类型切换改行尾 `⋯`）；表格「步骤类型」行、`data-type` 说明、批次 A6（→`lbHfStepMenu`）、A18 表述、尺寸铁律一并更新
+- 附带修复：规则表原有**编号重复**（新加的 R15 阶段分组 / R16 语义色 与旧 R15 标签编辑 / R16 序号形状 撞号）→ 旧两条顺延为 **R20 标签编辑**、**R21 序号规则**（旧 R16 内容被新规则替换）
+- 验证：样张重载截图——装备/地图/产出物只剩文字、三段阶段仍有 1/2/3、编辑态行尾出现 `⋯`
+
+### 步骤 69：同阶段内步骤自动换行（不再需要手动分行）
+- 用户口径：「同阶段内 无需主动换行，但要自动换行」
+- 样张：三个阶段的内容全部改为 `.sflow`（`display:flex;flex-wrap:wrap;gap:8px`）容器；步骤之间用细点 `·`（`.ssep`）标识"另起一步"，不再按行分块；阶段 2 追加 3 步（开/取/E/入）以产生换行效果
+- 新增「手机宽度 390px 实测」演示框 `.phonebox`（宽 390、虚线边框），实测该 flow **高度 68px = 两行自动换行**；桌面 1440 下同内容 32px 单行
+- 图例补充：一行放不下自动换行，`·` 只表示另起一步，不需要手动换行/插分隔
+- 计划同步：**R22 阶段内自动换行**（`br` 分隔降级为可选高级手段）；渲染映射表加 `.sflow` 行（间距 8px、`·` 字号 12px）；批次 **A21**
+- 验证：`documentElement.scrollWidth - clientWidth = 0`（无横向溢出）；`.sflow` 共 4 个（卡1 三段 + 手机演示）
+
+### 步骤 70：去掉「→」箭头分隔
+- 用户口径：「→ 这种箭头不需要」
+- 样张：删除 `.arrow` 元素 2 处（卡1 阶段2「烧 → 金属锭」、手机宽度演示块），同时删除 `.arrow` CSS 规则；步骤间仅保留细点 `·`（表示另起一步）
+- 验证：`.arrow` 元素数 = 0；页面仍有 7 处 `→` 属于**说明文案里的箭头**（如「回车 → 面板末尾多一个」「点动词 → 需弹选择器」），非步骤分隔，保留
+- 横向溢出仍为 0
+
+### 步骤 71：去掉「纯图标结果物 chip」（步骤内不再重复产出物）
+- 用户追问：「附件这种怎么配置出来的？？其实这种也没必要」（附件 = `.sflow` 里只有图标、无文字的金属锭 chip）
+- 溯源结论：
+  - **线上 v4872** 的机制是：步骤行 `@`「插入物品/生物」或文本里写 `[金属锭]` → 存 `steps[].refs` → `lbHfRenderText()` 渲染成 `.lb-hf-badge-t`，内容是 **图标 + 中文名**（不是纯图标）
+  - 样张里那个 **纯图标** chip 是手写演示 HTML，**线上并不存在这种形态**（纯图标只出现在键帽与产出物组的 ✕ 项）
+- 改动：样张删除该类 chip **2 处**（卡1 阶段2「烧 🪙」、手机宽度演示块）；顶部「产出物」组保留（结果物只在此处出现）
+- 计划：新增 **R23 结果物不入步骤**（步骤里不出现纯图标物品 chip；物品只作为动词宾语合并进徽章；结果物统一放「产出物」组；旧数据 `[x]` 紧跟动词→合并、孤立→保留文字）；「兼容与同步」条目同步
+- 验证：`.sflow` 内无文字 chip 仅剩 **2 个键帽**（左键 / E，属按键图标）；横向溢出 0
+
+### 步骤 72：去掉步骤间「·」分隔符
+- 用户口径：「· 也没必要」
+- 样张：删除 `.ssep` 元素 **4 处** + `.ssep` CSS；图例改为「步骤之间不用任何分隔符（无圆点、无箭头），只靠 8px 间距」
+- 顺手修：图例里误写 Markdown（`**不用分隔符**`、反引号）在 HTML 中会原样显示 → 改为 `<b>` + 中文括号
+- 计划：R22 与渲染映射表 `.sflow` 行同步为「步骤之间不使用任何分隔符（不用 `·`、不用 `→`），仅靠 8px 间距」
+- 验证：`.ssep` = 0、`.sflow` 内 `·` 计数 = 0、横向溢出 0
+
+### 步骤 73：键帽可带图标（与文字动作同形态）
+- 用户口径：「按键后面可以跟图标（同文字动作）」
+- 样张：新增 `.chip.keyb.act`（键图 22px + 图标 24px 同框，整体仍 28px 高）
+  - 阶段1：`[左键]🪨`（原「左键」+「采🪨」合并，去重）
+  - 阶段2：`[E]🍳`（E 开熔炉，替换原「开🍳」并删除后面孤立的 `[E]`）
+- 图例补：键帽同样可以带图标（「左键+石头」＝左键采集石头、「E+熔炉」＝E 开熔炉）；顺手修掉 HTML 里误用的反引号
+- 计划：新增 **R24 键帽可带图标**（键位后可再跟一个物品/生物图标合并成一个徽章；`按` 动词插入键帽后可选图标）；§5.7 `need` 字段说明补「`key` 支持先选键位再（可选）选图标 → 合并成 `[E]🍳`」
+- 验证：`.chip.keyb.act` 实测 2 个、尺寸均为 **65×28**；横向溢出 0
+
+### 步骤 74：文案「产出物」→「产出」
+- 用户口径：「产出物 改叫 产出」
+- 样张：分区标签 `产出物` → **`产出`**；`＋` 按钮 title「添加产出物」→「添加产出」；编辑态说明里「步骤/装备/地图/产出物」→「…/产出」
+- 计划：渲染映射表新增「文案」行 —— UI 一律叫「产出」，**数据字段仍为 `outputs`**（接口/存档不改）
+- 验证：分区标签实测为 `["装备","地图","产出","不可达","可到达"]`，页面 `产出物` 字样计数 = 0
+
+### 步骤 75：新增步骤入口可视化（R25）
+- 用户追问：「怎么新增步骤呢？样张上没看到」
+- 样张：三段阶段末尾各加**虚线 `＋`**（`.chip.plus`）；编辑态卡新增一行 `＋` + 提示「每个阶段末尾都有＋：点后新增空步骤并直接进入编辑；最后一步按 Enter 也会自动续一步」；图例补「新增步骤」五种方式
+- 计划：新增 **R25 新增步骤**（① 阶段末尾虚线 `＋` ② 步骤右侧 hover/长按细 `＋` 插入到该步之后 ③ 行尾 `⋯`「在下方插入一步」④ 底部「＋ 步骤」⑤ 最后一步 Enter 自动续行）
+- 验证：`.sflow .chip.plus` = 4 个；横向溢出 0
+
+### 步骤 76：块间距统一 8px（阶段 ↔ 步骤 ↔ 备注 ↔ 下一阶段）
+- 用户口径：「步骤和阶段之间没遵照间隔惯例」
+- 实测问题（改前 computed style）：`grp → sflow` **2px**、`sflow → grp` 10px、`sflow → steprow` 0px、`.sec` 10px、`.foot` 10px、`.demo-hint`/`.aihint`/`.colbar` 6px、`.verbpanel`/`.tagmenu`/`.verbadd` `8px 0 2px`
+- 改动：`.grp{margin:8px 0}`、`.sflow{padding:0}`、`.steprow{margin:8px 0;padding:2px 6px}`、`.steps{margin-top:8px}`、`.sec/.foot{margin-top:8px}`、`.demo-hint/.aihint{margin-top:8px}`、`.verbpanel/.tagmenu/.verbadd/.colbar{margin:8px 0}`、AI 卡 inline `margin-top:6px` → 8px
+- 验证：`.steps` 子元素相邻间距实测 **全部 8px**（6 个间隙）；`.wrap` 内所有非零 `margin-top` 直方图 = **{8px: 36}**（无 2/4/6/10）；横向溢出 0
+- 计划：尺寸铁律后追加「**块间距铁律（v6）**」—— 所有块级元素 margin / padding-top 一律 8px，禁止 2/4/6/10 混用；验收需逐个量 computed style
+
+### 步骤 77：备注规则 + 漏项补齐（A 数据兼容 / B 交互）
+- 用户两个问题：「新增备注怎么操作」「全面分析还有什么漏项」→ 选择：备注写计划+样张演示；漏项补 A（数据兼容）+ B（编辑交互）
+- **重要发现（P0）**：线上 `lbHfNormDoc()` 是字段白名单（card 仅 id/title/map/spot/outputs/order/builtin/updatedAt/steps；step 仅 type/text/refs[{type,key}]）⇒ `tokens`/`lv`/`hdr`/`equip`/`tags` **读一次就被丢掉**（本地与云端都过它）
+- 计划新增 **R26 备注**（四处入口：阶段末尾 `＋` 菜单 / 行尾 `⋯` 插入·转备注 / 底部「＋ 备注」/ 快捷 `*`；Enter 提交、Shift+Enter 多行、归属阶段）、**R27 分隔渲染**（`br` = 整行换行 + 8px 空档，不画线）
+- 计划新增 **§13 数据与兼容（P0）**：13.1 NormDoc 白名单 + `version 1→2` 迁移（token 短字段 `t/v/key/lv/n`）+ 往返测试；13.2 512KB 体积对策；13.3 `outputsQty`/`equip[{key,qty}]`；13.4 冲突加「另存为副本」；13.5 复制改深拷贝 + 内置卡保护
+- 计划新增 **§14 编辑交互补齐（B1–B6）**：备注、br 渲染、键盘 `visualViewport`/滚动、保存时机（本地 500ms / 云端 2s / 隐藏 flush、撤销仅本会话）、校验（产出可空、单步 ≤200 字、空阶段提示）、空态
+- 批次：新增 **A0（必须最先做）**、A22 备注、A23 br、A24 保存时机、A25 校验空态、**B10** 冲突另存副本
+- 样张：阶段 2 末尾加「＋备注」；编辑态加「备注编辑中」行（`*` + 虚线底 + ⋯ + 说明：Enter 提交 / Shift+Enter 换行 / 归属阶段）
+- 验证：`.chip.plus`「备注」入口 1 个、`.note-input` 3 个、横向溢出 0
+
+### 步骤 78：备注改为「阶段级」（每阶段 0~1 条）
+- 用户口径：「每个阶段可以有1个备注，也可以没有备注」
+- 计划：R26 重写为**阶段级备注**（`hdr.note`，不是可任意插入的单元）：入口在**阶段标题行尾**；有备注显示 `* 备注`、无则 `＋备注`；无备注不占位置；折叠时一起收起（标题显示「· 备注」）；清空即删除
+- 计划连带：§13.1 schema 改为 `{type:'hdr', text:'办理', collapsed:false, note:'…'}`（去掉 note 单元）；§14 B1 增加旧数据迁移规则（`type:"note"` 行挂到其上方最近阶段，多条 `\n` 合并）；批次 A22 文案同步
+- 样张：
+  - 阶段标题行改为「序号 + 组名 + 细线 + **备注入口**」；入口为次要小胶囊 `.grp-note`（22px、虚线、11px 字号），有备注为橙色 `* 备注`，无为灰色 `＋备注`
+  - 备注行移入阶段 1（`* 夜间/雨天视野差，记得带照明`）；阶段 2/3 演示「无备注」状态
+  - 图例与编辑态说明改为阶段级口径
+- 验证：三个阶段备注入口文案实测 `["* 备注","＋备注","＋备注"]`，宽 47/50/50、行高 23px；横向溢出 0
+
+### 步骤 79：取消标签系统，状态一律用徽章
+- 用户口径：「标签系统不需要，都可以用徽章来顶替」
+- 样张：删除 `.tag` 元素 5 处 + `.tagmenu` 演示块 + 「＋标签」入口 + 8 条 tag 相关 CSS；改为
+  - 可达 → 普通灰徽章；**不可达 → 橙 `warn` 徽章**；**辐射 → 橙 `warn` 徽章**；编辑中 → 蓝 `hint` 徽章；示例 → 灰徽章
+  - 图例补「不设标签系统：状态一律用徽章表达」
+- 计划：新增 **R28 无标签系统**；**R20 标签编辑 → 状态切换**（点徽章在灰 ↔ 橙之间切，无标签菜单）；渲染映射 `tag` 行 → 「状态徽章」行；schema `tag:'' | '可达' | '不可达'` → `state:'ok'|'no'`；§13.1 白名单关键词改 `state`；A18/B7/验收第 10 条同步；块间距铁律移除 `.tagmenu`
+- 验证：`.tag` = 0、`.tagmenu` = 0；`.chip.warn` = ["转移所有物品","不可达","转移所有物品","辐射"]；横向溢出 0
+
+### 步骤 80：阶段元素统一 28 网格 + 阶段徽章可嵌图标
+- 用户口径：「阶段 的按钮序号等高度也要统一成规范的，并且阶段徽章内也要可以加图标」
+- 样张：`.grp-num` 22×22/radius4 → **28×28/radius6**；`.grp-name` 23 → **28px**（新增 `gap:6px`、`overflow:hidden`、`.grp-name img.ic{26px}`）；`.grp-note` 22 → **28px**；`.grp-in`（改名输入）23 → **28px**
+- 样张：三个阶段名胶囊内分别加图标（准备=金属镐、办理=精炼炉、收尾=甲龙[反色]），与动作徽章同形态
+- 计划：渲染映射 `hdr` 行改为「序号 **28×28** / 胶囊高 **28px**、可内嵌图标 26px」；尺寸铁律去掉「阶段序号 22×22 例外」改为**无例外**并注明组名胶囊可内嵌图标；R21 序号规则同步为 28×28/radius 6；新增 **R29 阶段徽章可带图标**
+- 验证：三个阶段实测 `numH/nameH/noteH` 全部 **28**，`hasIcon` 全部 true；横向溢出 0
+
+### 步骤 81：备注的 `*` 改为规范徽章
+- 用户口径：「备注 的*也放到徽章内，并且用规范样式」
+- 样张：`.notemark`（裸星号 12px）→ **`.note-badge`**：min-width **28px** / height **28px** / 圆角 **6px** / 底色 `rgba(245,158,11,.18)` / 边框 `rgba(245,158,11,.38)` / 字号 12px / 居中；共替换 **4 处**（卡1 成品态、编辑态×2、AI 卡），`.notemark` 残留 0
+- 成品态备注改为「`*` 徽章 + 静态文本」（新增 `.note-text`，12px 浅色），点文本才变输入框；编辑态仍是「`*` 徽章 + 输入框」
+- 计划：R26 样式口径同步为「`*` 徽章（28×28、圆角 6、暖橙底）+ 文本；成品态直接显示文本，点文本即变输入框」
+- 验证：4 个 `.note-badge` 实测全部 **28×28**、`border-radius:6px`、底色 `rgba(245,158,11,0.18)`、字号 12px；横向溢出 0
+
+### 步骤 82：修 `*` 徽章未对齐（左偏 6px）
+- 用户反馈：「*徽章没有对齐」
+- 实测定位：阶段序号 left=**68**、步骤首徽章 left=**68**、备注 `*` 徽章 left=**74** ⇒ 因 `.steprow{padding:2px 6px}` 多出 6px 左内边距
+- 修法：`.steprow{padding:0}`；`.steprow.editing` 高亮行改为 `padding:2px 6px; margin-left/right:-6px`（保留高亮手感且不破坏左对齐）
+- 验证：`grp-num=68 / .sflow .chip=68 / .note-badge=68 / 编辑行输入框=68`，四条左边缘完全一致；横向溢出 0
+- 附带观察（未改，供后续决定）：① keys 按键 PNG 自带深色底，在 `#33333d` 键帽上呈"黑块"，与徽章底色不统一；② 卡底蓝色图例文本过长（约 5 行）
+
+### 步骤 83：备注改为「长徽章」（把备注本体整个包进去）
+- 用户口径：「备注 直接改成 长徽章 把备注本体包进去」
+- 样张：新增 `.note-chip`（`min-height:28px`、`padding:3px 10px`、圆角 6、暖橙底 `rgba(245,158,11,.14)`、边框 `rgba(245,158,11,.38)`、字号 12、`*` 前缀在徽章内、允许换行）；编辑态 `.note-chip.editing`（紫边 + 内嵌 `.note-inline` 输入）；删除旧 `.note-badge` / `.note-text`
+- 替换 4 处：卡1 成品态（长徽章 193px）、编辑态 ×2（紫边长徽章 293/253px）、AI 卡（203px）
+- 计划：R26 样式口径改为「一条长徽章把备注本体整个包进去；成品态点徽章即整体变输入框」
+- 验证：4 个 `.note-chip` 全部 **28px 高 / 圆角 6px**；左边缘 **68** 与阶段序号（68）、步骤首徽章（68）一致
+- ⚠️ 附带实测（未改，待定）：甲龙缩略图 `996a7b1c9dea_w96.webp` 像素采样 = **avg RGB(0,0,0)、darkPct 100%**（纯黑剪影）⇒ 加 `filter:invert(1)` 后变成白色剪影，细节全失；线上毒气洞卡用的是 `ASA/biology/*.png` 彩色图，样张这套缩略图不适合反色
+
+### 步骤 84：备注补回上间距 + 全部去星号
+- 用户口径：「备注的上间距丢了」「无需*号了」
+- 间距：新增 `.sflow.note-row{margin-top:8px}`（首版写成 `.note-row`，被后面的 `.sflow{margin:0}` 同权重覆盖 → 实测 margin 0；提权后正常）
+- 星号：删除备注长徽章内 `<span class="star">*</span>` 4 处、`.note-chip .star` 样式；阶段标题行尾入口 `* 备注` → **`✎ 备注`**
+- 计划：R26 同步「不带 `*` 前缀」「备注行上方留 8px 间距」「有备注时入口显示「备注」而非 `*`」
+- 验证：备注长条与上一行间距实测 **8px**、`margin-top:8px`；`.grp-note` = `["✎ 备注","＋备注","＋备注"]`；长徽章正文无 `*`；横向溢出 0
+- ⚠️ 继续待定（截图很明显）：生物缩略图反色后成**白色剪影**（骑/从/丢/传）、键帽 PNG 自带黑底呈**黑块**、卡底图例 8 行过长
+
+### 步骤 85：分支步骤（二选一）方案落地
+- 用户问题：「分支步骤要怎么处理玩家能简单易懂？比如不可达的步骤，可达的步骤；这类二选一的情况，给个方案」
+- 方案：**同一步最多两条走法**，左侧 1px 竖线 + 每行 9px 短横连接，行首放**条件徽章**（灰=可达/默认，橙=不可达/警告，可自定义 ≤6 字）；分支行**不带序号**（序号仍只给阶段）；最多两条、不做嵌套
+- 样张：
+  - 卡1 阶段 3「收尾」改为分叉：`[可达] 收🦖 ＋` / `[不可达] 传 采 ＋`
+  - 血池卡（状态分支示例）也统一改用 `.branch`（原先是 sec-lbl 文字标签 + 两行，画法不一致）：`[不可达] 丢 还 传` / `[可到达] 丢 传`
+  - 新增 CSS `.branch / .branch-rows / .branch-row`（竖线 inset 3px、短横 9px、行距 8px）
+  - 图例与顶部说明补「分支（二选一）」条
+- 计划：新增 **R30 分支步骤**（含编辑入口：行尾 `⋯` → 加一个分支 / 删除此分支 / 设为主走法；空分支保存时清理）；渲染映射加 `.branch` 行；§13.1 schema 增加 `alt:{when,lv,tokens}`（0 或 1 条）；批次 **A26**
+- 验证：`.branch` 2 个、`.branch-row` 4 条（卡1 两条 + 血池两条）；横向溢出 0
+
+### 步骤 86：条件徽章（样式区分 + 编辑方式）
+- 用户追问：「分支条件 要怎么编辑呢？在样式上也要和普通徽章有所区分」
+- 样式区分（已落地）：`.chip.when` = **空心虚线边框 + 「若」前缀**（灰 `#64748b`＝正常、橙 `#ff9800`＝异常）；动作徽章保持**实心底** ⇒ 4 个条件徽章实测 `border-style:dashed`、`background:transparent`
+  - 踩坑：`.chip.when.warn` 未写 `background`，被 `.chip.warn` 的实心橙底覆盖 → 补 `background:transparent` 后正常
+- 编辑方式（样张演示 + 计划 R31）：点条件徽章就地改文字（≤6 字）→ 下方给**快捷候选**（若 可达 / 若 不可达 / 若有电梯 / ＋自定义）与**颜色两点**（灰/橙）；长按 → 设为主走法 / 删除此分支 / 存为常用条件（`lb_hf_whens_v1`）
+- 样张：卡1 阶段 3 与血池卡条件徽章全部改为「若 xxx」；编辑态卡新增 `.whenedit` 演示块（输入中的橙色条件 + 快捷候选 + 颜色 + 说明）
+- 计划：新增 **R31 条件徽章**；渲染映射加 `.chip.when` 行（28px/12px/圆角 6）
+- 验证：7 个 `.chip.when` 全为 `dashed` + `transparent`；横向溢出 0
+
+### 步骤 87：查清状态徽章数据源 → 直接删掉（无字段、无来源）
+- 用户问题：「附件这个标签的数据源是哪里啊？」（附件 = 卡片头「可达」灰徽章 + 血池卡「辐射」橙徽章）
+- 溯源结论：**线上 v4872 没有这个数据源** —— `lbHfNormDoc` 的 card 白名单只有 `id/title/map/spot/outputs/order/builtin/updatedAt/steps`，无 state/tag/hazard；线上卡片头只有「采集点 + 地图徽章」。样张里的两个徽章是手写演示 HTML
+- 可选来源（已向用户说明）：① 玩家手点标注 ② 旧采集速查 `tribe_ops.json` 的 `server_states` + 双套行迁移 ③ 按地图给默认建议（需确认才落库）
+- 用户决定：**删掉这两个徽章** → 已移除卡1「可达」与血池卡「辐射」；图例改为「不设标签系统，也不做卡片级状态徽章（线上无此字段、无数据源）；可达/不可达只作为分支条件徽章出现」
+- 计划同步：渲染映射「状态徽章」行 → 「状态表达（不做卡片级状态徽章）」；**R20 改名为「状态不落卡」**；schema 去掉 `state:'ok'`；§13.1 白名单关键词 `state` → `alt`；验收第 10 条同步
+- 验证：三张卡头只剩 标题 + 折叠按钮（编辑态「编辑中」/AI「示例」为演示标记，保留）；横向溢出 0
+
+### 步骤 88：取消折叠（卡片折叠按钮 + 阶段折叠）
+- 用户口径：「无需折叠」
+- 样张：删除卡片头 `<button class="ba">` **2 个**（chevron up/down）、`.ba` CSS、`.grp.collapsed` CSS、编辑态「[3] 收尾 · 2 步」折叠演示行；文案「阶段标题…可折叠整段」与「＋阶段（整段可折叠）」同步去掉
+- 计划：数据模型去掉 `card.collapsed`；`hdr` 去掉 `collapsed` 字段（渲染映射 + §13.1 schema 两处）；**R15** 改为「阶段不可折叠（内容始终展开）」；**R17** 去掉「点序号方块折叠」；**R26** 去掉「阶段折叠时备注一起收起」；§5.8 表格补「无折叠」；§13.1 白名单关键词去掉 `hdr.collapsed`；删除批次 **B9（卡片折叠）**
+- 踩坑：首次按 `
+` 锚点删 B9 行 count=0 → 该行是 CRLF 行尾；改用「按行前缀过滤」成功
+- 验证：`.ba` = 0、`.collapsed` = 0；四张卡头只剩 图标 + 标题（+ 演示标记）；横向溢出 0
+
+### 步骤 89：优化项写进计划 + AI 离线可行性测试脚本就绪
+- 用户确认要加：优化建议 **1 / 4 / 6 / 7 / 8 / 9 / 10**（不加 2 触控 32~36、3 分支主备标记、5 细线缩短）
+- 计划：新增 **§15 优化项（v7）** + 规则 **R32 首用提示 / R33 分区层级 / R34 编辑态反馈 / R35 文本上限 / R36 卡片快捷操作** + 批次 **A27–A31**
+- 样张：① 卡底图例从 8 行精简为 **2 行**（灰橙蓝语义 / 分支 / 备注）② `.sec-lbl` 加**左侧 3px 竖条 + 11px 灰字**（装备/地图/产出 形成二级层级）③ 四张卡头新增 **`⋯` 快捷菜单**按钮（复制/删除/导出）④ 编辑态卡头显示 **「编辑中 · 1 行」**
+- **AI 离线可行性测试脚本**：`tmp/_ai_feasibility.py`
+  - 15 条玩家口语用例 → 上下文包抽取（命中物品中文名 → key）→ DeepSeek 输出 tokens → 与专家标注比对
+  - 指标：动词命中率 / 物品 key 命中率 / 顺序一致率(LCS) / 整条可用率；产出 `tmp/_ai_feasibility_out.txt|json`
+  - 关键设计：**没设 `DEEPSEEK_API_KEY` 自动走 DRY**（只验证 prompt 与上下文抽取，不发请求、不花钱）；先前 `$env:AI_DRY='1'` 在外层 `-Command "..."` 里被 PowerShell 展开，已改为脚本内自动判定
+  - DRY 实测：`#01 去孤岛用甲龙敲石头…` → 命中候选 `['金属锭','精炼炉','金属','石头']`，system 333 字符 + user 164 字符
+  - 已知限制：**生物名不在 `item_zh.json`**（那是物品字典），"甲龙/魔方鸟" 抽不到候选 → 真测前需补 ASB 生物字典；`金属矿`/`元素碎片` 等词条也缺
+- 顺带修：用例里「金属锭」原先码点写成「金属锸」→ 改回正确文字
+
+### 步骤 90：修「备注上边距又消失」+「⋯ 按钮不符合规范」（同一根因）
+- 用户反馈：「备注的上边距又消失了」「附件样式完全不符合规范」
+- **根因（一处失误引发两个 bug）**：上一步插入 `.ba{...}` 时把锚点 `.note-row{margin-top:8px}` 当成整条规则去匹配，实际它是 `.sflow.note-row{...}` 的一部分 ⇒ 替换后变成
+  ```
+  .sflow.ba{background:none;...}     ← 错：选择器变成永不匹配的 .sflow.ba
+  .note-row{margin-top:8px}          ← 失效：被后面同权重的 .sflow{margin:0} 覆盖
+  ```
+  ⇒ ① 备注 margin-top 归 0；② `.ba` 完全没有样式，按钮吃浏览器默认（浅灰底 + outset 边框 + Arial）
+- 修法：两条规则整体重写 —— `.sflow.note-row{margin-top:8px}`；新增规范样式
+  `.ba{width:28px;height:28px;inline-flex 居中;padding:0;border:1px solid transparent;border-radius:6px;background:transparent;color:#8b8b9a;font-size:14px;appearance:none}` + `:hover` 深底高亮
+- 附带：去掉 4 个按钮上的 `style="font-size:15px;color:#888"`（inline 会覆盖规范样式）
+- 验证：备注与上一行间距 **8px**、`margin-top:8px`；`button.ba` 实测 **28×28 / 圆角 6 / 背景透明 / border solid（透明） / display:flex**；横向溢出 0
+- 教训（写进记忆点）：插入 CSS 时**锚点必须是完整规则串**，不能用规则内部片段；否则会把上一条规则的尾巴和本条粘在一起，产生「选择器错位 + 规则失效」双 bug
+
+### 步骤 91：AI 离线测试脚本增强（恐龙名可解析 + 本地 key 文件）
+- 用户要求执行「AI 离线可行性测试」，但环境里没有 DeepSeek key（`env: not set`、项目内也没找到 `sk-` 凭据）
+- 增强 1：`load_dict()` 追加读取 `汉化/icon_zh_map.json`（5251 条，格式「甲龙(Ankylosaurus)」）→ 用英文名当比对键，解决**恐龙名不在 item_zh**（物品字典）的问题
+  - DRY 复核：`#01` 命中候选从 `['金属锭','精炼炉','金属','石头']` 变为 **`[...,'甲龙']`**；`#02` 也从 `['金属']` 变为 `['金属','甲龙']`
+- 增强 2：支持从 `tmp/_ds_key.txt`（首行）读 key —— 用户自己把 key 写进本机文件，**不经过聊天**；跑完脚本可删
+- key 状态：`DEEPSEEK_API_KEY` 未设置；`.env`/`.copilot/config.json` 均无
+- 待办：用户提供 key（本机文件或自己跑）后执行实调，产出 `tmp/_ai_feasibility_out.txt|json` 的 4 项指标
+
+### 步骤 92：AI 离线可行性测试实跑结果 + 三项 UI 调整
+- 用用户提供的 key 实调 DeepSeek（15 例，均 0.8~1.4s），报告：`tmp/_ai_feasibility_out.txt|json`；**key 文件跑完已删除**
+- **结果（严格口径）**：动词命中 52.9%（18/34）、物品 key 命中 70.6%（24/34）、顺序一致率(LCS) **88.2%**（30/34）、整条可直接可用 **3/15 = 20%**
+  - 人工复核：多数"低分"其实是**拆得更细但合理**（如 #01 把「带回精炼炉烧成金属锭」拆成 采/拿/放熔炉/烧/收锭 共 8 步；#03 自动补「骑镰刀龙」）
+  - 真错集中在：① 动词语义漂移（拿↔采↔放↔入 混用、`收` 被用于"收产物"）② 步骤数偏多 ③ 低频名词查不到（魔方鸟/保险库/焕炫色隐花 原样返回）
+- 优化方向（待写进 §12.3）：prompt 增加**动词语义说明**（骑=骑乘生物 / 采=采集 / 拿=从容器取出 / 收=收回恐龙 / 传=传送）、步骤数 1~6、未命中名词**保留原文**、补恐龙名到上下文包
+- UI 三项：
+  1. **AI token 申请链接**：计划 §12.1 要求「Token 输入框下方带 🔑 没有 token？点这申请 → platform.deepseek.com/api_keys」；样张 AI 卡已加 `a.tklink`
+  2. **样张旧逻辑清理**：卡标题 `血池（状态分支示例）`→`血池`、`编辑态：点第 1 行 → …`→`编辑态`；顶部 9 条说明压成 3 句；删除 3 个**旧鼠标键帽**（`PC_mouse_LB/MB/RB`，与 IconLeftClick 重复）；删除无用 `.chip.on`
+  3. **图标选择器**：样张编辑态新增 `.iconpick`（搜索框 + 40px 网格 6 图标 + 兜底说明）；计划新增 **R37 图标选择器**、批次 **A32**
+- **图标核对结论（重要）**：样张所有图标哈希与线上 `LB_ITEM_ICON_URL` 完全一致（Stone=dc7ba44980fb、MetalIngot=5d18d1d2dee1、Crystal=568d78ce318c、Forge2_Icon=fba442a63bae、Ankylo=996a7b1c9dea 且 `lbAntiPreset(...,'biology')='dark'` ⇒ 需反色）⇒ **不是旧逻辑**，是这套图本身彩色与线稿混用
+- 验证：4 张卡标题更新、`a.tklink`=1、`.ipitem`=6、旧鼠标键帽=0、`.chip.on`=0、横向溢出 0
+
+### 步骤 93：样张卡片改为「浮窗内直接铺满」（去大圆角 / 去头部色条）
+- 用户口径：「样张 大框无需圆角 以及头部色条，因为 直接就在半屏浮窗里显示的，直接套进去即可」
+- 样张：`.lb-hf-card` 去掉 `border-radius:12px`、去掉 `border-left:3px`（紫/蓝色条）、去掉外边框 → 改 `border:0; border-top:1px solid var(--line); border-radius:0`；`.lb-hf-card:first-child{border-top:0}`；删除 `.lb-hf-card.slim{border-left-color}`；`.wrap` 改为 `gap:0` + 面板底色/边框（模拟半屏浮窗）
+- 实测：卡片 `border-radius:0px`、`border-left:0px`、`border-top:1px solid #2a2a3a`、`.wrap gap:0px`；4 张卡片连续堆叠；横向溢出 0
+- 计划：尺寸铁律后新增「**卡片容器规则（v7）**」—— 卡片不设大圆角 / 左侧色条 / 外边框，直接铺在半屏浮窗内，多卡之间用 1px 上分隔线，圆角与阴影由浮窗负责
+
+### 步骤 94：删除自造选择器，改为复用现有 `lbOpenSpeciesPicker`
+- 用户口径：「选图标，不是应该直接调用页面现有的选物种选物品浮窗么？现在都已经实现了，你为啥还要再加个额外的逻辑？选产物也是」
+- 判断成立：线上已有 `lbOpenSpeciesPicker`（自带搜索/分类/图标/`filter:'rc'`），产出物也在用（`lbHfPickOutput`）；上一步新增的 `.iconpick` 属于**重复造轮子**
+- 样张：删除 `.iconpick` 演示块 + 8 条 `.ip*` CSS；编辑态提示改为「加一步后直接弹出**现有选物品/选生物浮窗**（复用 `lbOpenSpeciesPicker`，自带搜索/分类/图标）」
+- 计划：**R37 重写**为「选择器一律复用现有」——不新建任何选择器，`＋` / `@` / `/` 只是入口，回调里合成徽章 token；选产物沿用 `lbHfPickOutput`。批次 **A32** 改为「仅接回调」
+- 验证：`.iconpick/.ipgrid/.ipitem` = 0、页面出现 `lbOpenSpeciesPicker` 提示、横向溢出 0
+
+### 步骤 95：选图标入口显式化 + 修编辑行样式
+- 用户问题：「选图标的入口在哪？」「附件这个样式怎么怪怪的（.steprow.editing）」
+- 入口（全部复用现有 `lbOpenSpeciesPicker`，不新建）：
+  ① **步骤行尾 `@`**——直接打开「选物品/选生物」浮窗（线上原有按钮）
+  ② **阶段末尾 `＋`**——新增空步骤并进入编辑后自动弹浮窗
+  ③ **输入 `/`**——打开动作面板，选中需要宾语的动词后自动弹浮窗
+  ④ 搜不到时用「＋ 自定义」或直接打中文名
+- 编辑行样式问题与修法：
+  - 问题：`.steprow.editing` 用 `margin-left/right:-6px` 撑出容器、`flex-wrap:wrap` 让说明文字换行 → 实测 **886×48**，背景条横贯整屏，看起来"很怪"
+  - 修法：`margin:8px 0`（去掉负值）、`padding:2px 8px`、**`width:max-content`**、`flex-wrap:nowrap`；`.inline-input` 最小宽 230→**170**
+  - 说明文字「步骤不带序号；@ 选图标、/ 动作面板、⋯ 切类型」**移到编辑行外**（`margin-top:8px`）
+- 实测：编辑行 **260×32**、`margin:8px 0`、`flex-wrap:nowrap`；行内有 `@` 与 `⋯` 两个入口；横向溢出 0
+
+### 步骤 96：新增分支的入口（行尾 ⋯ 菜单）
+- 用户问：「怎么新增分支呢？」
+- 主入口：任意步骤行尾 **`⋯` → 「＋ 加一个分支（二选一）」** → 该步骤被包进 `.branch`，下方自动生成第二条空分支、条件徽章默认「若 不可达」、光标落在新分支可直接选动作
+- 菜单其余项：**设为默认走法** / **删除此分支** / **在下方插入一步**；**已有两条时「加一个分支」置灰**（最多二选一）
+- 规则补充：删除后只剩一条 → **自动拆掉 `.branch` 容器**回到普通步骤
+- 样张：① 两条 `branch-row` 行尾都加 `⋯` 入口 ② 编辑态新增 `.stepmenu` 菜单演示（5 项，含置灰态）+ 说明行
+- 计划：**R30** 补「新增方式 / 置灰 / 删除后自动拆容器」细节
+- 验证：菜单项实测 5 条（`＋ 加一个分支（二选一）`/`设为默认走法`/`删除此分支`/`在下方插入一步`/`＋ 加一个分支（已有两条，已满·disabled）`）；分支行 `＋`+`⋯` 共 4 个；横向溢出 0
+
+### 步骤 97：卡头多产物图标 + 采集点就地编辑 + 全面复查
+- 用户三点要求：① 卡头「有几种产物就显示几个图标」 ② 采集点怎么编辑 ③ 全面复查还有哪些 BUG
+- **① 卡头产物图标**：`.cicons` 图标组，`outputs` 有几个就渲染几个（样张实测 `[2,1,2,1]`），
+  超出 4 个折叠为 `+N`；计划渲染映射表新增「卡片头」一行（icon × outputs.length）
+- **② 采集点编辑**：采集点＝卡片标题，点标题文字就地变输入框 `.ctitle-in`
+  （`flex:0 1 auto;min-width:160px;max-width:70%`，≤20 字，Enter 提交 / Esc 放弃，空值不允许保存，
+  与 `card.title` 同步——线上 `lbHfEditSave` 已有 `c.title = c.spot`）；样张卡 3 已演示
+- **③ 复查清单（Playwright 全量审计 + 1:1 高清截图人工复核）**
+  - 已修 8 项：
+    1. `.btn` 吃 UA 默认样式 → `appearance:none;-webkit-appearance:none;font-family:inherit`
+    2. 13 个动词 chip 缺 `title` → 全部补 `title="动作：X"`
+    3. 分支竖线 1px `#3a3a4a` 几乎不可见 → **2px `#4b5563`**，`padding-left` 12→16、短横 9→13px
+    4. 编辑态末尾孤立 `＋` 独占一行 → 删除
+    5. `.ctitle-in` 由 `flex:1` 撑满 → `flex:0 1 auto;max-width:70%`（实测 219px）
+    6. 残留旧逻辑行「可达 收甲龙」（无「若」前缀）→ 删除，并修掉与下行粘连
+    7. 正文误留 Markdown（`**全量列出**`、3 处反引号）→ 改 `<b>` / 纯文本
+    8. 重复演示的「备注行也是输入框」示例 → 删除（阶段备注已在上方演示）
+  - 审计结果（改后全清）：`uaBtns:0`、`broken:0`、`tiny:0`、`overflow:0`、
+    `headIcons:[2,1,2,1]`、`radius:['0px']`、正文 Markdown 残留仅剩 token 掩码 `****a1b2`（合法）
+  - **非 bug（线上真实效果，需用户拍板是否优化）**：
+    ① 图标彩色图与线稿图混搭（Ankylo=纯黑剪影需反色、Forge2=白色线稿、Stone=彩色）
+    ② 键帽 PNG 自带深底 → 在 `#33333d` 上像黑块（线上同款）
+    ③ 图例文字仍偏长（「真实交互…」整段）
+- 样张字节 35628；线上版本仍为 `v20261019-4872`（**本轮纯设计，未动生产代码**）

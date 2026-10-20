@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>采集流程 · 一体化编辑效果预览（plan-v2）</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
+<style>
+:root{
+  --panel:#16161f; --card:#1a1a24; --chip:#22222c; --btn:#33333d;
+  --line:#2a2a3a; --line2:#3a3a4a; --txt:#e6e6f0; --txt2:#cbd5e1; --muted:#8b8b9a;
+  --accent:#7c3aed;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0b0b12;color:#e0e0e0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:20px}
+.pagehd{max-width:900px;margin:0 auto 16px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.pagehd h1{font-size:16px;color:#fff;font-weight:600}
+.pagehd .sub{font-size:12px;color:var(--muted)}
+.wrap{max-width:900px;margin:0 auto;display:grid;gap:14px}
+.note{font-size:11px;color:var(--muted);line-height:1.7;background:#11111a;border:1px dashed var(--line2);border-radius:10px;padding:8px 10px}
+.lb-hf-card{background:var(--panel);border:1px solid var(--line);border-left:3px solid #a855f7;border-radius:12px;padding:10px 12px}
+.lb-hf-card.slim{border-left-color:#38bdf8}
+.chead{display:flex;align-items:center;gap:8px}
+.cicon{width:34px;height:34px;object-fit:contain;flex-shrink:0}
+.ctitle{font-size:15px;color:#eee;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ba{background:none;border:none;color:#888;font-size:16px;cursor:pointer;flex-shrink:0}
+.tag{display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:9px;font-size:11px;line-height:1;border:1px solid}
+.tag-ok{border-color:#22c55e;color:#bbf7d0;background:#052e16}
+.tag-no{border-color:#64748b;color:#cbd5e1;background:#1e293b}
+.tag-rad{border-color:#a855f7;color:#e9d5ff;background:#2b0b3f}
+.sec{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}
+.sec-lbl{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);flex-shrink:0}
+.numdot{width:18px;height:18px;border-radius:9px;background:var(--accent);color:#fff;font-size:11px;display:inline-flex;align-items:center;justify-content:center;line-height:18px;flex-shrink:0}
+.chip{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 7px;border-radius:6px;font-size:11px;line-height:1;background:var(--chip);border:1px solid var(--line2);color:var(--txt2);white-space:nowrap}
+.chip img{width:14px;height:14px;object-fit:contain;display:block}
+.chip.verb{background:#33333d;border-color:#3a3a4a;color:#ddd}
+.chip.key{background:#111118;border-radius:3px;border:1px solid #555;border-bottom-width:2px;font-family:ui-monospace,Consolas,monospace;padding:0 6px;height:18px}
+.chip.plus{border-style:dashed;background:transparent;color:#cbd5e1;cursor:pointer}
+.chip.plus:hover{border-color:var(--accent);color:#fff}
+.server-tab{height:28px;min-width:28px;padding:0 8px;border-radius:6px;border:1px solid #333;background:#1a1a24;color:#ccc;display:inline-flex;align-items:center;justify-content:center;font-size:14px;cursor:pointer}
+.server-tab.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.steps{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
+.steprow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:4px 0;border-radius:6px}
+.steprow.editing{background:#1d1d29;box-shadow:inset 0 0 0 1px #7c3aed55}
+.steprow.dim{opacity:.55}
+.stepnum{width:18px;height:18px;border-radius:9px;background:#2a2a3a;color:#cbd5e1;font-size:11px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;cursor:pointer}
+.stepnum:hover{background:var(--accent);color:#fff}
+.notemark{color:#f59e0b;font-size:11px;width:18px;text-align:center;flex:0 0 auto}
+.arrow{color:#64748b;font-size:11px}
+.divider{height:1px;background:var(--line);margin:8px 0}
+.inline-input{height:24px;padding:0 8px;background:var(--chip);border:1px solid var(--accent);border-radius:6px;color:#fff;font-size:12px;min-width:230px;outline:none}
+.caret{display:inline-block;width:1px;height:14px;background:#fff;animation:bl 1s steps(1) infinite;vertical-align:-2px}
+@keyframes bl{50%{opacity:0}}
+.verbpanel{display:flex;gap:6px;flex-wrap:wrap;padding:8px;background:var(--card);border:1px solid var(--line2);border-radius:10px;box-shadow:0 8px 24px #000a;margin:6px 0 2px}
+.verbpanel .chip{cursor:pointer}
+.verbpanel .chip:hover{border-color:var(--accent);color:#fff}
+.foot{display:flex;align-items:center;gap:8px;margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
+.btn{height:28px;padding:0 12px;border-radius:6px;background:var(--btn);color:#ddd;border:none;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.btn.primary{background:var(--accent);color:#fff}
+.btn.ghost{background:transparent;border:1px solid var(--line2);color:#cbd5e1}
+.spacer{flex:1}
+.muted{color:var(--muted);font-size:11px}
+.demo-hint{font-size:11px;color:#93c5fd;margin-top:6px}
+.hide{display:none}
+.inv{filter:invert(1)}   /* 生物图标：原始为深色线稿，深色主题需反色（同 App 的 lbAntiPreset 逻辑） */
+</style>
+</head>
+<body>
+<div class="pagehd">
+  <h1>采集流程 · 编辑/预览一体化（plan-v2 效果预览）</h1>
+  <span class="sub">静态样张 · 样式取自线上 v4872 · 图标来自站点缩略图</span>
+</div>
+<div class="wrap">
+  <div class="note">
+    预览说明：① 默认就是"成品态"（无独立预览区）；② 点任意步骤一行 → 该行就地变成输入框 + 弹出动词面板（示例见第三块）；③ 名词全部图标化、动词独立成小胶囊、键位做成键帽；④ 可达/不可达用徽章 + 整行降透明区分。
+  </div>
+
+  <div class="lb-hf-card">
+    <div class="chead">
+      <img class="cicon" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/5d18d1d2dee1_w96.webp" alt="">
+      <div class="ctitle">石头富集区</div>
+      <span class="tag tag-ok">可达</span>
+      <button class="ba" title="折叠"><i class="mdi mdi-chevron-up"></i></button>
+    </div>
+
+    <div class="sec">
+      <span class="sec-lbl"><span class="numdot">1</span>装备</span>
+      <span class="chip"><img src="https://dino.whiterober.ccwu.cc/thumbs/webp96/c97280944bde_w96.webp">吉利胸甲</span>
+      <span class="chip"><img src="https://dino.whiterober.ccwu.cc/thumbs/webp96/88d5a45755d9_w96.webp">金属镐</span>
+      <span class="chip"><img src="https://dino.whiterober.ccwu.cc/thumbs/webp96/9e7ba10128a1_w96.webp">熟肉</span>
+      <span class="chip"><img src="https://dino.whiterober.ccwu.cc/thumbs/webp96/762f46ca80f6_w96.webp">麻醉药</span>
+    </div>
+
+    <div class="sec">
+      <span class="sec-lbl"><span class="numdot">2</span>地图</span>
+      <span class="server-tab" title="所有地图"><i class="mdi mdi-earth"></i></span>
+      <span class="server-tab active" title="孤岛"><i class="mdi mdi-island"></i></span>
+      <span class="server-tab" title="焦土"><i class="mdi mdi-volcano"></i></span>
+      <span class="server-tab" title="核心岛"><i class="mdi mdi-orbit"></i></span>
+      <span class="server-tab" title="畸变"><i class="mdi mdi-radioactive"></i></span>
+    </div>
+
+    <div class="sec">
+      <span class="sec-lbl"><span class="numdot">3</span>产出物</span>
+      <span class="chip" title="点击移除"><img src="https://dino.whiterober.ccwu.cc/thumbs/webp96/5d18d1d2dee1_w96.webp">金属锭 ✕</span>
+      <span class="chip" title="点击移除"><img src="https://dino.whiterober.ccwu.cc/thumbs/webp96/dc7ba44980fb_w96.webp">石头 ✕</span>
+      <span class="chip plus" title="添加产出物">＋</span>
+    </div>
+
+    <div class="steps">
+      <div class="steprow">
+        <span class="stepnum">1</span>
+        <span class="chip verb">骑</span>
+        <span class="chip"><img class="inv" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/996a7b1c9dea_w96.webp">甲龙</span>
+        <span class="chip verb">按</span>
+        <span class="chip key">R</span>
+        <span class="chip verb">采</span>
+        <span class="chip"><img src="https://dino.whiterober.ccwu.cc/thumbs/webp96/dc7ba44980fb_w96.webp">石头</span>
+      </div>
+      <div class="steprow">
+        <span class="stepnum">2</span>
+        <span class="chip verb">从</span>
+        <span class="chip"><img class="inv" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/996a7b1c9dea_w96.webp">甲龙</span>
+        <span class="chip verb">拿</span>
+        <span class="chip"><img src="https://dino.whiterober.ccwu.cc/thumbs/webp96/dc7ba44980fb_w96.webp">石头</span>
+        <span class="chip verb">入</span>
+        <span class="chip"><img src="https://dino.whiterober.ccwu.cc/thumbs/webp96/fba442a63bae_w96.webp">精炼炉</span>
+      </div>
+      <div class="steprow">
+        <span class="stepnum">3</span>
+        <span class="chip verb">用</span>
+        <span class="chip"><img src="https://dino.whiterober.ccwu.cc/thumbs/webp96/fba442a63bae_w96.webp">精炼炉</span>
+        <span class="chip verb">烧</span>
+        <span class="chip"><img src="https://dino.whiterober.ccwu.cc/thumbs/webp96/a6c8a5509bde_w96.webp">金属</span>
+        <span class="arrow">→</span>
+        <span class="chip"><img src="https://dino.whiterober.ccwu.cc/thumbs/webp96/5d18d1d2dee1_w96.webp">金属锭</span>
+      </div>
+      <div class="steprow">
+        <span class="notemark">*</span>
+        <span class="muted">夜间/雨天视野差，记得带照明</span>
+      </div>
+      <div class="divider"></div>
+      <div class="steprow dim">
+        <span class="stepnum">4</span>
+        <span class="tag tag-no">不可达</span>
+        <span class="chip verb">传</span>
+        <span class="chip"><img src="https://dino.whiterober.ccwu.cc/thumbs/webp96/568d78ce318c_w96.webp">水晶</span>
+        <span class="chip verb">采</span>
+        <span class="chip"><img src="https://dino.whiterober.ccwu.cc/thumbs/webp96/568d78ce318c_w96.webp">水晶</span>
+      </div>
+    </div>
+
+    <div class="foot">
+      <button class="btn ghost" title="撤销上一步">撤销</button>
+      <span class="muted">● 未保存</span>
+      <span class="spacer"></span>
+      <button class="btn">＋ 步骤</button>
+      <button class="btn primary">保存</button>
+      <button class="btn ghost">取消</button>
+    </div>
+  </div>
+
+  <div class="lb-hf-card slim">
+    <div class="chead">
+      <img class="cicon" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/a6c8a5509bde_w96.webp" alt="">
+      <div class="ctitle">血池（状态分支示例）</div>
+      <span class="tag tag-rad">辐射</span>
+      <button class="ba" title="折叠"><i class="mdi mdi-chevron-down"></i></button>
+    </div>
+    <div class="sec">
+      <span class="sec-lbl">不可达</span>
+      <span class="chip verb">丢</span>
+      <span class="chip"><img class="inv" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/996a7b1c9dea_w96.webp">甲龙</span>
+      <span class="chip verb">还</span>
+    </div>
+    <div class="sec">
+      <span class="sec-lbl">可到达</span>
+      <span class="chip verb">丢</span>
+      <span class="chip"><img class="inv" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/996a7b1c9dea_w96.webp">甲龙</span>
+      <span class="chip verb">传</span>
+    </div>
+  </div>
+
+  <div class="lb-hf-card">
+    <div class="chead">
+      <img class="cicon" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/5d18d1d2dee1_w96.webp" alt="">
+      <div class="ctitle">编辑态：点第 1 行 → 就地变成输入框</div>
+      <span class="tag tag-ok">编辑中</span>
+    </div>
+    <div class="steps">
+      <div class="steprow editing">
+        <span class="stepnum" title="点击切换 步骤/备注/分隔">1</span>
+        <span class="inline-input">采 [<span>石头</span>]<span class="caret"></span></span>
+      </div>
+      <div class="verbpanel">
+        <span class="chip verb">从</span>
+        <span class="chip verb">拿</span>
+        <span class="chip verb">入</span>
+        <span class="chip verb">丢</span>
+        <span class="chip verb">还</span>
+        <span class="chip verb">传</span>
+        <span class="chip verb">骑</span>
+        <span class="chip verb">按</span>
+        <span class="chip verb">采</span>
+        <span class="chip verb">收</span>
+        <span class="chip verb">开</span>
+        <span class="chip verb">转</span>
+        <span class="chip key">R</span>
+        <span class="chip key">F</span>
+        <span class="chip key">E</span>
+        <span class="chip key">空格</span>
+      </div>
+      <div class="steprow">
+        <span class="stepnum">2</span>
+        <span class="chip verb">骑</span>
+        <span class="chip"><img class="inv" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/996a7b1c9dea_w96.webp">甲龙</span>
+        <span class="chip verb">采</span>
+        <span class="chip"><img src="https://dino.whiterober.ccwu.cc/thumbs/webp96/dc7ba44980fb_w96.webp">石头</span>
+      </div>
+      <div class="demo-hint">提示：真实交互里点动词会直接插入胶囊；点「采 / 骑 / 收」会自动弹物品或生物选择器；Enter 提交并跳到下一行，Esc 放弃。</div>
+    </div>
+    <div class="foot">
+      <span class="muted">动词面板 ＝ 一行可横滚的小胶囊，不离开当前行</span>
+      <span class="spacer"></span>
+      <button class="btn primary">保存</button>
+      <button class="btn ghost">取消</button>
+    </div>
+  </div>
+
+  <div class="note">
+    度量：胶囊高 20px / 圆角 6px / 字号 11px；图标 14px；行间距 6px；地图与操作按钮 28px（与线上 v4872 一致）。<br>
+    文件位置：<b>计划\_预览_采集流程一体化_v1.html</b>（图标为线上缩略图，需联网显示）。
+  </div>
+</div>
+</body>
+</html>

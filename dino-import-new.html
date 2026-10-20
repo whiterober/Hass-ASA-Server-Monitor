@@ -382,7 +382,7 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
 /* v789：分布地图未成年点（SVG 月牙）选中 ring——.lb-picked 时显示沿月牙描边组（SVG stroke 套 mask，缺口处自然断开，不用 box-shadow 方形） */
 .lb-dot-svg.lb-picked .lb-sel-ring{opacity:1 !important}
 /* 物种选择浮窗（ASA 后台选图同款 dark 样式） */
-.lb-picker-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.9);z-index:1000001;display:flex;align-items:center;justify-content:center}
+.lb-picker-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.9);z-index:9998;display:flex;align-items:center;justify-content:center}   /* v4888：9998 < #lbBreedBar 9999，编辑态功能栏浮在遮罩上可点 */
 /* v4377/v4378（用户口径）：区域色点 tips —— 悬停/点按显示区域详情 + hover 放大（全局规则，勿置于 @media 内）*/
 .lbwxz-dot{position:absolute;transform:translate(-50%,-50%);cursor:pointer;z-index:5}   /* v4379（用户口径）：去 hover 放大 */
 .lbwxz-dot:hover{z-index:9}
@@ -447,10 +447,29 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
 .lb-picker-item{position:relative}
 .lb-hf-badge{position:absolute;top:2px;right:2px;color:#f59e0b;line-height:0;pointer-events:none;filter:drop-shadow(0 1px 1px rgba(0,0,0,.6))}
 .lb-hf-btns{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;overflow-x:auto;max-width:56vw;scrollbar-width:thin}
+/* v4898（用户口径）：底栏分组 —— 桌面 display:contents 保持单行原布局；栏内「● 未保存」与弹簧仅移动端显示 */
+.lb-hf-bgrp{display:contents}
+.lb-hf-spring{display:none}
+.lb-hf-undirty-inbar{display:none}
+/* v4896（用户口径·方案A）：移动端底栏两行分组——行1=加行按钮+✨生成，行2=撤销/取消/保存；解开 56vw 横滑 */
+@media (max-width:560px){
+  .lb-hf-btns{max-width:100%;width:100%;flex-wrap:wrap;overflow-x:visible;justify-content:center;row-gap:6px;gap:6px}
+  .lb-hf-btns .lb-hf-btn{flex:0 0 auto;max-width:46vw}
+  /* v4898（用户口径）：两行分组 —— 行1 加行按钮居中；行2 「● 未保存」靠左、「撤销 取消 保存」靠右；虚线分隔去掉 */
+  .lb-hf-bgrp{display:flex;flex:0 0 100%;min-width:0;gap:6px;align-items:center;flex-wrap:wrap}
+  .lb-hf-bgrp1{justify-content:center}
+  .lb-hf-bgrp2{justify-content:flex-end;flex-wrap:nowrap}
+  .lb-hf-spring{display:block;flex:1 1 auto;min-width:0}
+  .lb-hf-undirty-inbar{display:inline-flex;align-items:center;flex:0 0 auto}
+  .lb-hf-undirty-bar{display:none!important}   /* 外挂版「● 未保存」仅桌面显示 */
+  /* v4901（用户口径）：移动端两行之间改用横向虚线（原纵向虚线旋转 90°），不再隐藏 */
+  .lb-hf-btns .lb-hf-vsep{display:block!important;flex:0 0 100%;width:100%;height:0;border:none;border-top:1px dashed #3a3a4a;margin:2px 0}
+}
+/* v4892：去掉「按钮组独占整行」（会把底栏从 45px 撑到 54px）；「● 未保存」改挂 #lbBreedBar 弹簧左侧 */
 .lb-hf-btn{flex:0 0 auto;background:#33333d;color:#ddd;border:none;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lb-hf-btn.lb-hf-add{background:#7c3aed;color:#fff;padding:4px 9px;font-weight:bold}
 .lb-hf-overlay{position:fixed;inset:0;z-index:996;background:rgba(0,0,0,.9);display:block}   /* v4849（用户口径）：完全照抄选种遮罩 #lbBreedMask（996） */
-.lb-hf-panel{position:fixed;bottom:40px;left:0;right:0;max-height:60vh;overflow-y:auto;background:#16161f;border-top:1px solid #2a2a3a;z-index:997;padding:8px 10px;box-sizing:border-box}   /* v4849（用户口径）：完全照抄选种面板 #lbBreedResult（吸底 40px / 全宽 / 60vh / #16161f / 上边框） */
+.lb-hf-panel{position:fixed;bottom:max(40px, var(--lb-bar-h, 0px));left:0;right:0;max-height:60vh;overflow-y:auto;background:#16161f;border-top:1px solid #2a2a3a;z-index:997;padding:8px 10px;box-sizing:border-box}   /* v4849（用户口径）：完全照抄选种面板 #lbBreedResult（吸底 40px / 全宽 / 60vh / #16161f / 上边框） */
 .lb-hf-head{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid #2a2a3a;flex-wrap:wrap}
 .lb-hf-icon{width:34px;height:34px;object-fit:contain;flex-shrink:0}
 .lb-hf-title{font-size:15px;color:#eee;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -477,6 +496,7 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
 .lb-hf-lbl{font-size:11px;color:#8b8b9a;margin:2px 0 6px}
 .lb-hf-prods{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:2px}
 #lbHfERows,#lbHfERows .lb-hf-row{width:100%}   /* v4734：步骤行任何情况下占满整行 */
+#lbHfERows{padding-bottom:12px}   /* v4881（用户口径）：最后一条步骤留足下边距 */
 .lb-hf-inp{background:#22222c;border:1px solid #3a3a4a;border-radius:6px;color:#e6e6f0;font-size:12px;padding:6px 8px;width:100%;box-sizing:border-box}
 .lb-hf-row{display:flex;align-items:center;gap:6px;margin-bottom:6px}
 .lb-hf-row .lb-hf-inp{flex:1}
@@ -486,7 +506,135 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
 .lb-hf-preview{background:#1a1a24;border:1px dashed #3a3a4a;border-radius:8px;padding:10px;display:flex;flex-wrap:wrap;gap:6px;max-height:30vh;overflow-y:auto}
 .lb-hf-prod{display:inline-flex;align-items:center;gap:4px;background:#22222c;border:1px solid #3a3a4a;border-radius:9px;padding:2px 7px;font-size:11px;color:#ddd;cursor:pointer}
 .lb-hf-prod img{width:14px;height:14px}
+.lb-hf-mini.lb-hf-addchip{width:auto;height:auto;min-width:22px;padding:2px 7px;border:1px dashed #3a3a4a;border-radius:9px;background:#22222c;color:#ddd;font-size:11px;line-height:1.2}   /* v4868（用户口径）：产出物品「＋」对齐 lb-hf-prod 徽章（同尺寸/圆角/底色，边框用虚线） */
+.lb-hf-mini.lb-hf-addchip:hover{border-color:#7c3aed;color:#fff}
+/* ===== v4869（用户口径）：编辑浮窗控件规格统一（高 28 / 圆角 6 / 间距 8 / 字号 12，对齐地图按钮 .server-tab） ===== */
+#lbHfEMapGrid .server-tab{height:28px;border-radius:6px}
+.lb-hf-mini{width:28px;height:28px;border-radius:6px;font-size:12px}
+.lb-hf-mini.lb-hf-addchip{width:auto;height:28px;border-radius:6px;padding:0 10px;font-size:12px}
+.lb-hf-prod{height:28px;border-radius:6px;padding:0 10px;font-size:12px}
+.lb-hf-btn2{height:28px;border-radius:6px;padding:0 12px;font-size:12px;display:inline-flex;align-items:center;justify-content:center}
+.lb-hf-badge-t,.lb-hf-mapbadge{border-radius:6px}
+.lb-hf-preview{border-radius:6px;gap:8px}
+.lb-hf-prods{gap:8px}
+.lb-hf-row{gap:8px;margin-bottom:8px}
+.lb-hf-addrow{gap:8px;margin:8px 0}
+/* v4872（用户口径）：采集点输入框与峰左侧标签节奏对齐（标签上 2 + 行高 16 + 下 6）；输入框固定 28px 高对齐按钮 */
+.lb-hf-f{padding-top:2px;gap:6px}
+.lb-hf-inp{height:28px;padding:0 8px}
 .lb-hf-br{flex-basis:100%;height:4px}
+/* v4960（A1）：卡片阅读态 —— 主题紫 / 28px 网格（与样张一致） */
+.lb-hf-dhead{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.lb-hf-dmap{width:28px;height:28px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;background:rgba(124,58,237,.16);color:#a78bfa;font-size:17px}
+.lb-hf-dprods{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+.lb-hf-dprods img{width:30px;height:30px;object-fit:contain;display:block}
+.lb-hf-dtitle{font-size:13px;color:#eee;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lb-hf-dsec{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px}
+.lb-hf-dlbl{font-size:11px;color:#8b8b9a;padding-left:8px;border-left:3px solid #3a3a4a;flex:0 0 auto}
+/* v4896（用户口径）：编辑态不显示行标签（地图/装备/产出）——头部图标+标题已表达同样信息；详情态保留 */
+.lb-hf-edit .lb-hf-dsec>.lb-hf-dlbl{display:none}
+.lb-hf-chip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 8px;border-radius:6px;font-size:12px;line-height:1;background:#22222c;border:1px solid #3a3a4a;color:#d6d6e0;white-space:nowrap;overflow:hidden}
+.lb-hf-chip img{width:26px;height:26px;object-fit:contain;display:block;flex:0 0 auto}
+.lb-hf-chip.lb-hf-inv img{filter:invert(1)}
+.lb-hf-chip.warn{background:#ff9800;border-color:#ff9800;color:#1e1f25}
+.lb-hf-chip.hint{background:#2196f3;border-color:#2196f3;color:#1e1f25}
+.lb-hf-chip .lb-hf-qty{margin-left:2px;font-size:11px;color:#9aa4b2}
+.lb-hf-chip img.lb-hf-keyimg{width:22px;height:22px;object-fit:contain}
+.lb-hf-grp{display:flex;align-items:center;gap:8px;margin:8px 0}
+.lb-hf-gnum{min-width:28px;height:28px;padding:0 6px;border-radius:6px;background:rgba(124,58,237,.25);color:#a78bfa;font-size:12px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
+.lb-hf-gname{height:28px;padding:0 8px;border-radius:6px;background:rgba(124,58,237,.15);color:#a78bfa;font-size:12px;display:inline-flex;align-items:center;gap:6px;overflow:hidden;flex:0 0 auto}
+.lb-hf-gname img{width:26px;height:26px;object-fit:contain;flex:0 0 auto}
+.lb-hf-gline{flex:1;height:1px;background:rgba(124,58,237,.35)}
+.lb-hf-gnote{flex:0 0 auto;display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 8px;border-radius:6px;border:1px solid rgba(245,158,11,.45);background:transparent;color:#f59e0b;font-size:12px;opacity:1;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lb-hf-sflow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0;padding:0}
+.lb-hf-note2{display:inline-flex;align-items:center;gap:6px;min-height:28px;padding:3px 10px;border-radius:6px;background:rgba(245,158,11,.14);border:1px solid rgba(245,158,11,.38);color:#f4d7b2;font-size:12px;line-height:1.45;max-width:100%}
+.lb-hf-branch{display:flex;flex-direction:column;gap:8px;margin:8px 0}
+.lb-hf-brows{position:relative;padding-left:16px;display:flex;flex-direction:column;gap:8px}
+.lb-hf-brows::before{content:'';position:absolute;left:3px;top:14px;bottom:14px;width:2px;border-radius:1px;background:#4b5563}
+.lb-hf-brow + .lb-hf-brow{opacity:.86}   /* v4885 B7：备选走法整行降透明 */
+.lb-hf-brow + .lb-hf-brow:hover,.lb-hf-brow + .lb-hf-brow:focus-within{opacity:1}
+.lb-hf-brow{position:relative}
+.lb-hf-brow::before{content:'';position:absolute;left:-13px;top:50%;width:13px;height:2px;border-radius:1px;background:#4b5563}
+.lb-hf-when{display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 8px;border-radius:6px;font-size:12px;background:transparent;border:1px dashed #64748b;color:#cbd5e1;flex:0 0 auto}
+.lb-hf-when.warn{border-color:#ff9800;color:#ffb74d}
+.lb-hf-when .kw{font-size:11px;color:#94a3b8}
+.lb-hf-when.warn .kw{color:#c77b12}
+.lb-hf-dempty{color:#777;font-size:12px;line-height:1.8}
+.lb-hf-dash{height:0;border-top:1px dashed #2a2a3a;margin:12px 0 8px}
+.lb-hf-lvdot{width:10px;height:10px;border-radius:50%;background:#4b5563;flex:0 0 auto;cursor:pointer}   /* v4882 A18 */
+.lb-hf-lvdot.on{background:#f59e0b}
+.lb-hf-tplbar{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 8px}   /* v4884 B4；v4887：补下方 8px 间距 */
+.lb-hf-tplbar .lb-hf-chip{opacity:.85}
+.lb-hf-tplbar .lb-hf-chip:hover{opacity:1}
+.lb-hf-firsttip{margin:8px 0 0;padding:6px 8px;background:rgba(124,58,237,.12);border:1px solid rgba(124,58,237,.35);border-radius:6px;font-size:11px;line-height:1.7;color:#c9c2f5}   /* v4882 A27 */
+.lb-hf-firsttip-x{margin-left:8px;color:#a78bfa;cursor:pointer;text-decoration:underline}
+.lb-hf-drag{cursor:grab}
+#lbHfEMapBtn{cursor:pointer}   /* v4890（用户口径）：地图徽章有交互，补手型 */
+.lb-hf-edit .lb-hf-chip{cursor:pointer}   /* v4890：编辑态徽章可点（改数量 / 删除 / 改动作） */
+.lb-hf-edit .lb-hf-when{cursor:pointer}   /* v4890：分支条件徽章可点改 */
+.lb-hf-dprod{cursor:pointer;display:inline-flex;flex:0 0 auto}
+.lb-hf-dprod img{width:30px;height:30px;object-fit:contain;display:block}
+.lb-hf-dtitle-in{flex:1;min-width:0;height:28px;font-size:13px}
+.lb-hf-addchip{height:28px;padding:0 10px;border-radius:6px;border:1px dashed #3a3a4a;background:transparent;color:#cbd5e1;font-size:12px;font-family:inherit;cursor:pointer;opacity:.6;transition:opacity .12s,border-color .12s,color .12s;flex:0 0 auto}
+.lb-hf-addchip:hover{opacity:1;border-color:#7c3aed;color:#fff}
+.lb-hf-gname-in{width:110px;flex:0 0 auto}
+.lb-hf-gnote-in{width:170px;flex:0 0 auto;border-color:rgba(245,158,11,.45);color:#f4d7b2}
+.lb-hf-note-inp{border-color:rgba(245,158,11,.45);color:#f4d7b2}
+.lb-hf-notemark{color:#f59e0b;font-size:12px;flex:0 0 auto;width:14px;text-align:center}
+.lb-hf-rowprev{display:inline-flex;gap:6px;flex-wrap:wrap;align-items:center}
+.lb-hf-brline{flex:1;height:1px;background:#3a3a4a;min-width:40px}
+.lb-hf-row{flex-wrap:wrap}
+.lb-hf-dsec .lb-hf-chip,.lb-hf-dsec .lb-hf-addchip{margin:0}
+/* v4962（第1波）：徽章流编辑 / 把手 / 弹层 / 底部工具条 */
+.lb-hf-flow{display:flex;flex-direction:column;gap:8px}
+.lb-hf-grow{display:flex;align-items:center;gap:8px;margin:8px 0}
+.lb-hf-gname-ip{height:28px;padding:0 8px;border-radius:6px;background:rgba(124,58,237,.15);color:#a78bfa;font-size:12px;border:1px solid transparent;outline:none;width:104px;flex:0 0 auto;font-family:inherit}
+.lb-hf-gname-ip:focus{border-color:#7c3aed;background:rgba(124,58,237,.24)}
+.lb-hf-gnote-b{height:28px;padding:0 8px;border-radius:6px;border:1px dashed #3a3a4a;background:transparent;color:#8b8b9a;font-size:12px;font-family:inherit;cursor:pointer;opacity:.6;transition:opacity .12s,border-color .12s,color .12s;flex:0 0 auto;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lb-hf-gnote-b:hover{opacity:1;border-color:#f59e0b;color:#f59e0b}
+.lb-hf-gnote-b.has{opacity:1;border-style:solid;border-color:rgba(245,158,11,.45);color:#f59e0b}
+.lb-hf-gnote-ip{height:28px;padding:0 8px;border-radius:6px;border:1px solid rgba(245,158,11,.45);background:rgba(245,158,11,.10);color:#f4d7b2;font-size:12px;outline:none;width:180px;flex:0 0 auto;font-family:inherit}
+.lb-hf-sflow-edit{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0;padding:0}
+.lb-hf-inline{height:28px;padding:0 8px;border-radius:6px;border:1px dashed #3a3a4a;background:transparent;color:#e6e6f0;font-size:12px;outline:none;min-width:150px;flex:0 1 auto;font-family:inherit}
+.lb-hf-inline:focus{border-color:#7c3aed;border-style:solid}
+.lb-hf-drag{width:20px;height:28px;display:inline-flex;align-items:center;justify-content:center;color:#6b7280;cursor:grab;flex:0 0 auto;font-size:15px;line-height:1;border-radius:4px;user-select:none}
+.lb-hf-drag:hover{color:#c4b5fd;background:#7c3aed1f}
+.lb-hf-gli{flex:1;height:1px;background:rgba(124,58,237,.35);min-width:20px}
+.lb-hf-pop{position:fixed;z-index:1000002;background:#1a1a24;border:1px solid #333;border-radius:8px;padding:8px;box-shadow:0 8px 28px #000a;max-width:min(560px,92vw)}
+.lb-hf-pop-h{font-size:11px;color:#8b8b9a;margin-bottom:6px}
+.lb-hf-pop .lb-hf-sflow{gap:6px}
+.lb-hf-pop .lb-hf-chip{cursor:pointer}
+.lb-hf-foot{position:sticky;bottom:0;display:flex;align-items:center;gap:8px;margin-top:8px;padding:8px 0;background:#16161f;border-top:1px solid #2a2a3a}
+.lb-hf-foot .sp{flex:1}
+.lb-hf-undirty{font-size:11px;color:#f59e0b}
+.lb-hf-vsep{width:0;height:20px;border-left:1px dashed #3a3a4a;flex:0 0 auto;margin:0 2px}   /* v4891（用户口径）：底栏竖向虚线分隔 */
+.lb-hf-aibox{margin:8px 0 0;padding:8px 10px;background:#11111a;border:1px dashed #3a3a4a;border-radius:10px}   /* v4894 D2 */
+.lb-hf-aiinput{width:100%;min-height:56px;background:#1a1a24;border:1px solid #3a3a4a;border-radius:6px;color:#e6e6f0;font-size:12px;line-height:1.6;padding:8px 10px;resize:vertical;font-family:inherit;box-sizing:border-box}
+.lb-hf-aiinput:focus{outline:none;border-color:#7c3aed}
+.lb-hf-airow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px}
+.lb-hf-ai-meta{font-size:11px;color:#8b8b9a}
+.lb-hf-ai-cfg{font-size:11px;color:#a78bfa;cursor:pointer;text-decoration:underline}
+.lb-hf-aicand{margin-top:8px;border-top:1px dashed #2a2a3a;padding-top:8px}
+.lb-hf-aibtn{height:28px;padding:0 12px;border-radius:6px;border:1px solid #333;background:#22222c;color:#fff;font-size:12px;cursor:pointer}
+.lb-hf-aibtn.primary{background:#7c3aed;border-color:#7c3aed}
+/* v4905：底栏「大白鱼」入口 —— 文字 + 右侧 deepseek 图标（贴右边缘、28px 高出部分由按钮 overflow 裁切） */
+.lb-hf-btn.lb-hf-ai-entry{position:relative;overflow:hidden;padding-right:22px}
+.lb-hf-ai-entry-ic{position:absolute;right:0;top:50%;transform:translateY(-50%);height:28px;width:auto;display:block;pointer-events:none}
+.lb-hf-aihint{font-size:11px;color:#8b8b9a;margin-top:8px;line-height:1.7}
+/* v4902（用户口径）：AI 面板出现时收起步骤区整块（步骤列表 + 上方虚线 + 快捷插入条） */
+.lb-hf-edit.lb-hf-ai-mode .lb-hf-dash,
+.lb-hf-edit.lb-hf-ai-mode .lb-hf-tplbar,
+.lb-hf-edit.lb-hf-ai-mode #lbHfERows,
+.lb-hf-edit.lb-hf-ai-mode .lb-hf-dsec{display:none!important}   /* v4907（用户口径）：地图/装备/产出三行一并收起 */
+.lb-hf-aimode{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#8b8b9a}
+.lb-hf-aimode>span{cursor:pointer;padding:1px 8px;border-radius:6px;border:1px solid #3a3a4a;background:#1a1a24;color:#c9c9d6;font-size:11px;line-height:18px}
+.lb-hf-aimode>span.on{background:#7c3aed;border-color:#7c3aed;color:#fff}
+.lb-hf-tokmenu{position:fixed;z-index:1000003;background:#1a1a24;border:1px solid #333;border-radius:8px;padding:6px;box-shadow:0 8px 28px #000a;display:flex;flex-direction:column;gap:4px;min-width:132px}
+.lb-hf-tokmenu b{font-size:10px;color:#8b8b9a;font-weight:400;padding:2px 4px}
+.lb-hf-tokmenu i{display:flex;align-items:center;height:26px;padding:0 8px;border-radius:6px;font-style:normal;font-size:12px;color:#cbd5e1;cursor:pointer}
+.lb-hf-tokmenu i:hover{background:#2a2a3a;color:#fff}
+.lb-hf-tokmenu i.danger{color:#f87171}
+.lb-hf-dragging2{opacity:.45}
 
 .lb-picker-extra{flex:0 0 auto;overflow-y:auto;display:flex;flex-direction:column;max-height:30vh} /* v863：收起时仅标题行；展开时切换 lb-extra-open */
 .lb-picker-extra.lb-extra-open{flex:1 1 auto;max-height:none;min-height:0} /* v864：任一折叠展开 → 非已驯自适应占满剩余页面高度 */
@@ -706,7 +854,7 @@ var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // ⏳ **未部署** v3626（用户要求）：**对照表缺·建筑类 20 条落地** —— 将 t1「中文+图标已定稿」的 20 条并入 `汉化/item_zh.json`（键=短名、kind=structure、src=gap_table_t1）：`SpotLight` 聚光灯 ｜ `Ramp_Wood` 木制楼梯 ｜ `Ramp_Adobe` 黏土楼梯 ｜ `TriCeiling_Wood` 木制三角天花板 ｜ `WoodCage` 木制笼子 ｜ `WoodSpikeWall` 木制拒马 ｜ `Metal_OceanPlatform` / `Wood_OceanPlatform` 海洋平台 ｜ `Furniture_Rug` 粗毛地毯 ｜ `TekFenceFoundation` 泰克栅栏地基 ｜ `AdobePillar` 黏土柱子 ｜ `RopeLadder` 绳梯 ｜ `TriRoof_Adobe` / `TriRoof_Tek` 三角屋顶 ｜ `WoodElevatorPlatform_Small` / `_Medium` / `WoodElevatorTrack` 木制电梯 ｜ `AdobeGateDoor_Large` 黏土巨兽恐龙门 ｜ `Flag_KingKaiju` 君王泰坦旗帜 ｜ `LargeWall_Wood` 大型木制墙；词典 1790 → **1810 键**；缺口表 t1 **33 → 13 条**、总表 320 → **300 行**
 // ⏳ **未部署** v3627（用户要求）：**缺口表其余部分（t2/t3/t4）双就绪条目落地 105 条** —— 质控分档（`tmp/_v3689_qc.py`）后落地：A 档 91 + B 档中经用户确认/属关键词误判者（「新联邦靴子」「那里!」经用户确认正确）；**排除 2 条**：`PrimalItemConsumable_Egg`（中文为 `Egg!` 英文原文）、`PrimalItemArmor_PearlShirt`（t4，中文仅「珍珠」）；跳过 2 条 kind 无法确定（`PrimalItem_FishBasketFilled` / `PrimalItem_Spawner_HoverSail_Main`）与 1 条生物类（`Exosuit_Character_BP`）；t2 的 `PrimalItemRadio`/`PrimalItemRaft` 词典已有键（`Radio`/`Raft`）故仅调 kind：`Raft` weapon → **structure**（`Radio` 本已 weapon）；落地内容以蛋类 37、结构件 29、鞍具 5、弹药 2 为主；词典 **1810 → 1915 键**（kind 空 **0** / other **0**）｜ 缺口表 **300 → 196 行**（t3 215 → 111）
 // v4333（用户口径①）：区域行「前 X」改名「上一段：X」+ 与当前/基础名重复时隐藏（v4347 用户口径②：整条移除，不再显示）
-var LB_VERSION = 'v20261019-4867';   // v4280（根因修复）：① 退出物品模式恢复「选种」按钮（v1368 隐藏无恢复） ② 生物背包容器标题唯一源解析（BP_/_ASA 组件 token → 真实 dinoClass）   // v4231（用户实测「繁育栏把功能栏挡住」）：① 两栏同显繁育栏叠功能栏上方 ② 空繁育栏不显示 ③ 结果浮层/追踪钮偏移联动   // v4230（用户裁定）：皮肤类全链隐藏（词典 skin:1 标记并入判空链——Tileset 外观/Bounce 系列/节日建筑等 54 键）   // v4229（用户确认）：初始笔记全链隐藏（v4083 只滤浮窗，容器漏同步 ⇒ hideItems+硬编码双写入升级）   // v4228（用户口径）：容器 chip 染料补色点（v3593 只改了浮窗，容器漏同步）   // v4227（用户口径）：HotbarSkill_Base（快捷技能芯片，非真实物品）加入隐藏名单（hideItems+硬编码双写入）   // v4226（用户实测「黑曜石仙境没内容却显示tab」根因修复）：lbPickIdx 统计对齐渲染口径（+lbIsEmptyItem 判空）——q=0 空槽残留不再计入 tab/角标/聚落/总数   // v4225（v4224 实测补丁）：预热已走完但缓存被清（材质表到达等）→ 立即兜底冷建，不再干等 6s   // v4224（用户口径「空档期点击卡」）：① 物品栏未预热点击→占位+等预热填充（不再冻结 440ms 无反馈）② 预加载交互让路（600ms 窗口）③ 静默刷新收尾即触发预热（消 3s 空窗）   // v4223（性能优化·用户确认A+B2）：① 预加载热点——字典键数引用缓存（拥有索引 11,531ms 预计降至 1~2s）② 后台检查更新——批量 LM 接口（40+ 次 HEAD → 1 次请求）   // v4222（用户口径）：所有可点击徽章补 hover——① 设施芯片挂载条件扩为「可点即 hover」② 装备榜/选种行卡新增 hover   // v4221（用户实测「角标还显示了2」）：玩家背包同口径排除出服务器 tab 角标/聚落角标/总数（srv/setts/total），修角标与列表不一致   // v4220（用户实测）：「无聚落/离散」容器登记排除玩家背包（消除与「玩家携带」tab 重复的纯背包卡）   // v4219（实测根因）：伪容器 rec 补 server 字段（修「无聚落/离散」卡点进去详情空——lbRecHasPick 键查空导致）   // v4218（用户口径）：物品筛选类别扩至「物品浮窗全部类别」（lbItemIsPick 按浮窗归属类别对齐，修 建筑/资源等非装备类筛选全灭）   // v4217（用户要求）：① 别名表数据化（dino_rank_alias.json + 恐龙recs类名映射，零硬编码）② 物品模式玩家tab恢复位置卡/去平铺卡流 ③ 恐龙侧 mine 与恐龙列表同源（跨服龙鞍显示）   // v4216（实测根因修复）：ASB_DB 懒加载未就绪时缓存空表 ⇒ 词干表 0 条永久失效；改为「就绪才缓存」（lbRankStemMap + lbAsbNameMap）   // v4215（用户口径）：① 装备榜鞍键↔恐龙键同物异名归一（勘误+ASB词干表）② 选物种玩家背包只留该物种鞍/蓝图 ③ 选物品隐藏低温舱+去位置卡 ④ 非鞍剔除   // v4214（用户口径）：装备榜 TAB 角标只计「我的」——外部更高不参与计数   // v4213（用户口径·S7）：物种按钮显隐与物品侧同步——只看桶内容（有效条目）   // v4212：物种榜 qidx<=0 全排除 + 去重 >0 + 角标=实际显示数 + 恐龙背包显示具体龙名   // v4211（用户要求·单一代码源）：装备榜物种/物品渲染统一为 lbRankRenderPanel + 外部更高条目不显示区域名   // v4210（用户口径·位置唯一化）：容器显示接入「坐标→设施真身」统一解析（人台上的矛显示回「人台E」真名）   // v4209：物品模式装备榜=物种榜完整翻版（两 TAB 实物/蓝图 + qidx<=0 过滤 + 类别图标）   // v4208（用户需求）：物品模式装备榜——按钮按「存档有原始以上品质」动态显隐 + 面板细节对齐物种（分组/行卡/弹卡/过滤同源）   // v4207：离散「位置」组展开时数量位同样被按钮替换（对齐改名）   // v4206：离散卡容器组加「位置」按钮（复刻改名按钮 + 弹地图浮窗）   // v4205：物品模式 tab 显隐排除基因条件（Gen(0) 过滤根因）   // v4204：离散 chip 不响应重命名 + 物品模式隐藏基因设备段（基因存储器根因）   // v4203：修详情内部过滤缺口（物品模式详情逐成员对齐主列表 lbRecHasPick）   // v4202：对照表 11 项权威容量落地（容量表 +10 项数据键 + DisplayCase 归 HIDE）   // v4201（用户方案）：生物背包参与聚合——背包容器注入 ctn（byContainer 直接命中）+ 判定剔除背包点 + 容器组归属统一 + 删近邻兜底   // v4200：龙背包归属加「近邻唯一」兜底（帝蟒背包与龙坐标差 1749 也能归位）   // v4199：放出容器坐标键放开 + 物品索引接「生物背包→龙」关联链   // v4198：修 5 处容量别名反向空指（Fireplace/WaterTap/TurretCatapult/TurretBallista/TaxidermyBase_Small）   // v4197：龙背包并入归属过滤（离散/无聚落详情不再混入别人部落的生物背包）   // v4196：离散卡容器化（scatteredList 暴露 + 物品索引兜底 + 卡内容器注入）   // v4195：散置伪 rec 补 isEmpty 容器本体形态（v3452 同口径，防详情渲染崩溃）   // v4194：散置卡修复——伪容器 rec 直取（物品容器哈希与 rec 哈希两套，cid 不可跨查）   // v4193（用户口径）：物品模式隐藏「聚落命名/区域命名」入口 + 「散置容器」卡（无聚落卡，完全对齐物种）   // v4192（用户口径）：物品角标/数量对齐物种——只统计「当前角色拥有」（v3597 归属过滤接入 lbPickIdx）+ 物品模式聚落卡隐藏放出/低温仓/蛋段 + 角标图标按物品类型取 LB_INV_GRP;   // v4191：玩家 tab 自动切换补修（物品模式无该物品 ⇒ 内容区不再驻留空态）;   // v4190（用户要求）：单一物品主体页优化（玩家tab物品口径 / 物品索引双计修复 / 聚落角标武器类别图标 / 详情行隐藏容量角标）   // v4189（用户要求）：水雷迁入「器械>弹药」（Underwater Mine）;   // v4188（用户要求）：陷阱族迁入「器械>弹药」段（Y异种植物陷阱改名入族 + 大型捕兽夹/捕兽夹入族垫底；v4187 设施段位代码撤回）;   // v4186：泰克水壶补录（工具>水容器族末位）+ 巨石核实 + 对照表 5 项去重、恐龙外观表折叠;   // v4185：恐龙装备栏外观全组过滤（用户实锤鞍皮肤；hideItems 18 项）;   // v4184：译名（沙斯塔鱼龙）+ Cute Dino Helmet 过滤（玩家帽）+ lbEggIs 帽子豁免（Easter_Egg_Hat 归位模块栏）;   // v4183：物品浮窗接入 hideItems 过滤（Pepper Mask 修复）+ 恐龙外观 12 款落地（模块>生物外观）;   // v4182：恐龙装备栏外观 12 款图标全配（8 款本地实锤 + 4 款 wiki 补录；icons2 5204 / webp_map 5107）;   // v4181：B1 节日糖果全量入库（8 新键+圣诞糖果合并为节日恐龙糖+玉米糖换 HUD_Event_Halloween_BC）+ PepperMask 浮窗过滤 + 节日族词/类名规则;   // v4177：Air_Jar/Air_Bladder kind 修正（consumable→weapon，正式入器械>工具>水容器）+ 情人节/感恩节糖果补图（Valentines_Dino_Candy/Thanksgiving_Candy）;   // v4175：料理子序微调（鲨鲨小零食!紧挨吉利盛宴3.4后；虫胶19→5.3 紧挨饭团5.2后）;   // v4174：达科寿司/饭团（原稻米球改名）入料理族并紧挨海藻寿司（子序 5.1/5.2）;   // v4173：情人节巧克力正名+配图（Box o' Chocolates/盒装巧克力/VDay_icon）+ WormGum 补录（虫胶）+ Air_Jar/Air_Bladder 移工具·水容器族（族内最后）+ 食肉植物种子排植物种子R后 + 亚特兰汤/虫胶接料理子序18-19;   // v4170：消耗品补录 18 键（胡椒面具/空气罐/气囊/海龙汤/风干鱼肉×2/稻米球/感染系列×6/干海带/达科寿司/亚特兰汤/蓝莓汁 P+/情人节巧克力 ase）+ 新族「感染」（含感染藤壶 7 项）+ 泰克三叉戟归「矛」族;   // v4169：咒缚贴合全局兜底（跨块场景：咒缚火焰喷射器与本体被手炮块隔开 → 最终序列再贴一次）；v4168：咒缚武器贴合本体（16 对：本体在前、咒缚紧跟 — 武装 11 + 工具 3 + 键名兜底 1 +【火焰喷射器 v4169 修复】）+ 制导火箭弹图标→HomingMissileAmmo_Icon + 巡航导弹图标→Cruise_Missile（v4163 交接回调）;   // v4165：立式南瓜哨兵根因修复（facilityIconSpecial 置空 + 合并尊重空串哨兵）+ 圣诞糖果补录（consumable/节日）+ 鲍勃外观改名 + 蛋糕×3 归节日族;   // v4164：设施根因修正（标识归位/旗帜族+节日族垫底链）+ 节日补族（圣诞彩灯/万圣节墓碑）+ 新族「玩家外观」（TOF 卡尔配件，排生物外观前）;   // v4163：C4遥控起爆器→工具段（tool:1）+ 巡航导弹换图 HomingMissileAmmo_Icon + 塔拉萨麻醉弹药归「箭」族;   // v4162：生化皮肤/独木舟皮肤新族（骨架后/生物外观后）+ 设施栏标识族垫底（旗帜后）+ 咒缚电锯/喷火器图标对齐原版 + 弹药段「异种植物」词（W果实/Z手雷相邻）+ Netgun 归弹药;   // v4161：Radar_Rig 补录（雷达配件→跨步者配件族）+ 未组装的泰克跨步者改归「未组装」族;   // v4160：泰克悬停帆与塔拉萨悬停帆族内相邻（载具子序50.2/50.3）+ 6 条泰克跨步者配件补录（官方类名+官方中文，族=跨步者配件）;   // v4159：13 条骨架/幽灵/兔耳套装以**官方类名+官方中文**落地（长键=PrimalItemCostume_*、短键=图标名）+ 失落精灵龙套装补录 + 3 条旧骨骼条目同步官方名 + 全部归骨架皮肤/幽灵皮肤/生物外观族（排模块段最后）;   // v4158：外观族（骨架皮肤/幽灵皮肤/生物外观/尾巴/披风）整体移至模块段最后 + 独木舟3皮肤归生物外观 + 鱼竿族生效（两条相邻） + M.O.M.I.入模块段·机甲族 + 服装类豁免物种绑定过滤 + 跨步者配件族预留;   // v4157：Cryo医院/水下耕地/宠物展示台/绊线照明弹配方补录（材质档排序）+ 蛋糕ASE过滤 + 4服装隐藏 + 骨架皮肤族（3骨骼+生化，附件后） + 幽灵皮肤族（14条，骨骼后） + 战车族提前（附件前） + 立式南瓜清图标 + Plant W果实/Z手雷族内相邻;   // v4154：泰克光刃（TekClaws）换图 → HUD_TEKHandBlades_Icon_BC + 对照表"非皮肤·疑似"补齐后缀过滤;   // v4151：换图 2（巡航导弹→HUD_TEKCruiseMissile_Icon、泰克榴弹发射器→HUD_TEKGrenadeLauncher_Icon）+ 补录 4（绊线照明弹陷阱/泰克三叉戟/泰克长矛/C4遥控起爆器）+ 对照表区①移除 48 项;   // v4150：鱼竿族（FishingRod+Lovely_Fishing）+ 载具族补员（潜艇→木筏后、塔拉萨悬停帆→泰克悬停帆后）+ 生物外观族 26 项落地（模块段最末）+ 对照表无特征项全参数表;   // v4149：换图 3 组（GrapplingHook→GrappleHook_Icon、TribeTower→Tribe_Tower、TranqArrow→TranqArrow_Icon）+ 补录 11 键（Snowball/Carnivorous_Plant_Seed/Thalassian 系×4/ARK_Anniversary_Surprise_Cake/Birthday_Candle/CryoHospital×2/Netgun）;   // v4148：实时补全区无图标补「?」占位（lbWpRtHtml 与主浮窗一致）+ 图标替换 14 组（储物箱/镜子/油罐/电锯/登山镐/矿枪/鞭子/沙漠套×5/吉利面具/防护套×3/喷火器/潜水服）+ 英文补全（Ghillie Mask / Hazard Suit Hat / SCUBA×4）+ 补录 11 键（MachinedBow/宠物展示台/生日蛋糕/水下耕地/潜艇/塔拉萨悬停帆/收割渔线/周年蛋糕×2）+ TransGPS 打 ASE 过滤标记;   // v4147：Lovely_Fishing_Rod 补录（工具 tool:1）+ 次级解药/扎啤/血之灵药 归料理族（words 3.1/3.2/3.3 排在医疗药酒·能量药酒之后）；图标未录对照表 v4147（六分类 66+53 / skins 甄别 689）;   // v4146：RecipeCurry_Icon 挂菲拉咖喱配方（RecipeNote_FriaCurry / PrimalItem_RecipeNote_FriaCurry 两键 icon→RecipeCurry_Icon）+ HoneyLure 补录（蜂蜜诱饵，图标 HoneyLure_Icon）；对照表 v6 重生（待核 4 / 已处理 12 / 染色剂 22 移出主表入脚注）;   // v4145：W 果短名补规则（Plant_Species_W→手雷，浮窗枚举键带下划线）;   // v4144：族修正（Cucumis/Oryraise→蔬菜；Gilly/Oceans/Worm 短名 re: 规则→料理——修 v4143 短名下划线不命中问题）;   // v4143：Aquatica 消耗品补录 9 项（作物×2/料理×3/弹药×1/其它×3）+ 非凡饲料换图 + 族规则 4 条;   // v4142：Ecto Lantern 两键打 tool:1（进器械栏·工具段）;   // v4141：花粉图标换 High_Quality_Pollen（2 条）+ Ecto Lantern 补录（灵质提灯，工具类，2 键 + 节日族 2 规则）;   // v4140：刷新热区修复（仅标记触发）+ 节日族扩展 + 补录 5 项 + 强效麻醉镖图;   // v4139：item_zh 图标修正（麻醉镖→Tranquilizer_Dart；硅酸盐→SilicateCrystal）;   // v4138：公共设施实时区 39 格（WorldProbe 接线 + 刷新 CD 10s + 后端短时缓存共用）;   // v4137：巨齿鲨颚/生存者战利品移至 Cymathoa 之后（61/62 档）+ Dragon Horn 补录（龙之号角）;   // v4136：Aquatica 三战利品移至奖杯族最末（60 档）;   // v4135：焰鬃獠猪两种獠牙图标（Boaratos_Tusk / Flaming_Boaratos_Tusk）;   // v4134：Hydra/Kraken 归一 + 本体过滤 + AstralSoul/HexCoins 图标 + 克拉肯/莫德尔旗帜正名 + 格伦德尔档位修复;   // v4133（修复）：奖杯族修饰词截胡修正（水晶飞龙女王战利品回归奖杯族 9.5）；v4132：旗帜族录入+排序垫底
+var LB_VERSION = 'v20261019-4907';   // v4280（根因修复）：① 退出物品模式恢复「选种」按钮（v1368 隐藏无恢复） ② 生物背包容器标题唯一源解析（BP_/_ASA 组件 token → 真实 dinoClass）   // v4231（用户实测「繁育栏把功能栏挡住」）：① 两栏同显繁育栏叠功能栏上方 ② 空繁育栏不显示 ③ 结果浮层/追踪钮偏移联动   // v4230（用户裁定）：皮肤类全链隐藏（词典 skin:1 标记并入判空链——Tileset 外观/Bounce 系列/节日建筑等 54 键）   // v4229（用户确认）：初始笔记全链隐藏（v4083 只滤浮窗，容器漏同步 ⇒ hideItems+硬编码双写入升级）   // v4228（用户口径）：容器 chip 染料补色点（v3593 只改了浮窗，容器漏同步）   // v4227（用户口径）：HotbarSkill_Base（快捷技能芯片，非真实物品）加入隐藏名单（hideItems+硬编码双写入）   // v4226（用户实测「黑曜石仙境没内容却显示tab」根因修复）：lbPickIdx 统计对齐渲染口径（+lbIsEmptyItem 判空）——q=0 空槽残留不再计入 tab/角标/聚落/总数   // v4225（v4224 实测补丁）：预热已走完但缓存被清（材质表到达等）→ 立即兜底冷建，不再干等 6s   // v4224（用户口径「空档期点击卡」）：① 物品栏未预热点击→占位+等预热填充（不再冻结 440ms 无反馈）② 预加载交互让路（600ms 窗口）③ 静默刷新收尾即触发预热（消 3s 空窗）   // v4223（性能优化·用户确认A+B2）：① 预加载热点——字典键数引用缓存（拥有索引 11,531ms 预计降至 1~2s）② 后台检查更新——批量 LM 接口（40+ 次 HEAD → 1 次请求）   // v4222（用户口径）：所有可点击徽章补 hover——① 设施芯片挂载条件扩为「可点即 hover」② 装备榜/选种行卡新增 hover   // v4221（用户实测「角标还显示了2」）：玩家背包同口径排除出服务器 tab 角标/聚落角标/总数（srv/setts/total），修角标与列表不一致   // v4220（用户实测）：「无聚落/离散」容器登记排除玩家背包（消除与「玩家携带」tab 重复的纯背包卡）   // v4219（实测根因）：伪容器 rec 补 server 字段（修「无聚落/离散」卡点进去详情空——lbRecHasPick 键查空导致）   // v4218（用户口径）：物品筛选类别扩至「物品浮窗全部类别」（lbItemIsPick 按浮窗归属类别对齐，修 建筑/资源等非装备类筛选全灭）   // v4217（用户要求）：① 别名表数据化（dino_rank_alias.json + 恐龙recs类名映射，零硬编码）② 物品模式玩家tab恢复位置卡/去平铺卡流 ③ 恐龙侧 mine 与恐龙列表同源（跨服龙鞍显示）   // v4216（实测根因修复）：ASB_DB 懒加载未就绪时缓存空表 ⇒ 词干表 0 条永久失效；改为「就绪才缓存」（lbRankStemMap + lbAsbNameMap）   // v4215（用户口径）：① 装备榜鞍键↔恐龙键同物异名归一（勘误+ASB词干表）② 选物种玩家背包只留该物种鞍/蓝图 ③ 选物品隐藏低温舱+去位置卡 ④ 非鞍剔除   // v4214（用户口径）：装备榜 TAB 角标只计「我的」——外部更高不参与计数   // v4213（用户口径·S7）：物种按钮显隐与物品侧同步——只看桶内容（有效条目）   // v4212：物种榜 qidx<=0 全排除 + 去重 >0 + 角标=实际显示数 + 恐龙背包显示具体龙名   // v4211（用户要求·单一代码源）：装备榜物种/物品渲染统一为 lbRankRenderPanel + 外部更高条目不显示区域名   // v4210（用户口径·位置唯一化）：容器显示接入「坐标→设施真身」统一解析（人台上的矛显示回「人台E」真名）   // v4209：物品模式装备榜=物种榜完整翻版（两 TAB 实物/蓝图 + qidx<=0 过滤 + 类别图标）   // v4208（用户需求）：物品模式装备榜——按钮按「存档有原始以上品质」动态显隐 + 面板细节对齐物种（分组/行卡/弹卡/过滤同源）   // v4207：离散「位置」组展开时数量位同样被按钮替换（对齐改名）   // v4206：离散卡容器组加「位置」按钮（复刻改名按钮 + 弹地图浮窗）   // v4205：物品模式 tab 显隐排除基因条件（Gen(0) 过滤根因）   // v4204：离散 chip 不响应重命名 + 物品模式隐藏基因设备段（基因存储器根因）   // v4203：修详情内部过滤缺口（物品模式详情逐成员对齐主列表 lbRecHasPick）   // v4202：对照表 11 项权威容量落地（容量表 +10 项数据键 + DisplayCase 归 HIDE）   // v4201（用户方案）：生物背包参与聚合——背包容器注入 ctn（byContainer 直接命中）+ 判定剔除背包点 + 容器组归属统一 + 删近邻兜底   // v4200：龙背包归属加「近邻唯一」兜底（帝蟒背包与龙坐标差 1749 也能归位）   // v4199：放出容器坐标键放开 + 物品索引接「生物背包→龙」关联链   // v4198：修 5 处容量别名反向空指（Fireplace/WaterTap/TurretCatapult/TurretBallista/TaxidermyBase_Small）   // v4197：龙背包并入归属过滤（离散/无聚落详情不再混入别人部落的生物背包）   // v4196：离散卡容器化（scatteredList 暴露 + 物品索引兜底 + 卡内容器注入）   // v4195：散置伪 rec 补 isEmpty 容器本体形态（v3452 同口径，防详情渲染崩溃）   // v4194：散置卡修复——伪容器 rec 直取（物品容器哈希与 rec 哈希两套，cid 不可跨查）   // v4193（用户口径）：物品模式隐藏「聚落命名/区域命名」入口 + 「散置容器」卡（无聚落卡，完全对齐物种）   // v4192（用户口径）：物品角标/数量对齐物种——只统计「当前角色拥有」（v3597 归属过滤接入 lbPickIdx）+ 物品模式聚落卡隐藏放出/低温仓/蛋段 + 角标图标按物品类型取 LB_INV_GRP;   // v4191：玩家 tab 自动切换补修（物品模式无该物品 ⇒ 内容区不再驻留空态）;   // v4190（用户要求）：单一物品主体页优化（玩家tab物品口径 / 物品索引双计修复 / 聚落角标武器类别图标 / 详情行隐藏容量角标）   // v4189（用户要求）：水雷迁入「器械>弹药」（Underwater Mine）;   // v4188（用户要求）：陷阱族迁入「器械>弹药」段（Y异种植物陷阱改名入族 + 大型捕兽夹/捕兽夹入族垫底；v4187 设施段位代码撤回）;   // v4186：泰克水壶补录（工具>水容器族末位）+ 巨石核实 + 对照表 5 项去重、恐龙外观表折叠;   // v4185：恐龙装备栏外观全组过滤（用户实锤鞍皮肤；hideItems 18 项）;   // v4184：译名（沙斯塔鱼龙）+ Cute Dino Helmet 过滤（玩家帽）+ lbEggIs 帽子豁免（Easter_Egg_Hat 归位模块栏）;   // v4183：物品浮窗接入 hideItems 过滤（Pepper Mask 修复）+ 恐龙外观 12 款落地（模块>生物外观）;   // v4182：恐龙装备栏外观 12 款图标全配（8 款本地实锤 + 4 款 wiki 补录；icons2 5204 / webp_map 5107）;   // v4181：B1 节日糖果全量入库（8 新键+圣诞糖果合并为节日恐龙糖+玉米糖换 HUD_Event_Halloween_BC）+ PepperMask 浮窗过滤 + 节日族词/类名规则;   // v4177：Air_Jar/Air_Bladder kind 修正（consumable→weapon，正式入器械>工具>水容器）+ 情人节/感恩节糖果补图（Valentines_Dino_Candy/Thanksgiving_Candy）;   // v4175：料理子序微调（鲨鲨小零食!紧挨吉利盛宴3.4后；虫胶19→5.3 紧挨饭团5.2后）;   // v4174：达科寿司/饭团（原稻米球改名）入料理族并紧挨海藻寿司（子序 5.1/5.2）;   // v4173：情人节巧克力正名+配图（Box o' Chocolates/盒装巧克力/VDay_icon）+ WormGum 补录（虫胶）+ Air_Jar/Air_Bladder 移工具·水容器族（族内最后）+ 食肉植物种子排植物种子R后 + 亚特兰汤/虫胶接料理子序18-19;   // v4170：消耗品补录 18 键（胡椒面具/空气罐/气囊/海龙汤/风干鱼肉×2/稻米球/感染系列×6/干海带/达科寿司/亚特兰汤/蓝莓汁 P+/情人节巧克力 ase）+ 新族「感染」（含感染藤壶 7 项）+ 泰克三叉戟归「矛」族;   // v4169：咒缚贴合全局兜底（跨块场景：咒缚火焰喷射器与本体被手炮块隔开 → 最终序列再贴一次）；v4168：咒缚武器贴合本体（16 对：本体在前、咒缚紧跟 — 武装 11 + 工具 3 + 键名兜底 1 +【火焰喷射器 v4169 修复】）+ 制导火箭弹图标→HomingMissileAmmo_Icon + 巡航导弹图标→Cruise_Missile（v4163 交接回调）;   // v4165：立式南瓜哨兵根因修复（facilityIconSpecial 置空 + 合并尊重空串哨兵）+ 圣诞糖果补录（consumable/节日）+ 鲍勃外观改名 + 蛋糕×3 归节日族;   // v4164：设施根因修正（标识归位/旗帜族+节日族垫底链）+ 节日补族（圣诞彩灯/万圣节墓碑）+ 新族「玩家外观」（TOF 卡尔配件，排生物外观前）;   // v4163：C4遥控起爆器→工具段（tool:1）+ 巡航导弹换图 HomingMissileAmmo_Icon + 塔拉萨麻醉弹药归「箭」族;   // v4162：生化皮肤/独木舟皮肤新族（骨架后/生物外观后）+ 设施栏标识族垫底（旗帜后）+ 咒缚电锯/喷火器图标对齐原版 + 弹药段「异种植物」词（W果实/Z手雷相邻）+ Netgun 归弹药;   // v4161：Radar_Rig 补录（雷达配件→跨步者配件族）+ 未组装的泰克跨步者改归「未组装」族;   // v4160：泰克悬停帆与塔拉萨悬停帆族内相邻（载具子序50.2/50.3）+ 6 条泰克跨步者配件补录（官方类名+官方中文，族=跨步者配件）;   // v4159：13 条骨架/幽灵/兔耳套装以**官方类名+官方中文**落地（长键=PrimalItemCostume_*、短键=图标名）+ 失落精灵龙套装补录 + 3 条旧骨骼条目同步官方名 + 全部归骨架皮肤/幽灵皮肤/生物外观族（排模块段最后）;   // v4158：外观族（骨架皮肤/幽灵皮肤/生物外观/尾巴/披风）整体移至模块段最后 + 独木舟3皮肤归生物外观 + 鱼竿族生效（两条相邻） + M.O.M.I.入模块段·机甲族 + 服装类豁免物种绑定过滤 + 跨步者配件族预留;   // v4157：Cryo医院/水下耕地/宠物展示台/绊线照明弹配方补录（材质档排序）+ 蛋糕ASE过滤 + 4服装隐藏 + 骨架皮肤族（3骨骼+生化，附件后） + 幽灵皮肤族（14条，骨骼后） + 战车族提前（附件前） + 立式南瓜清图标 + Plant W果实/Z手雷族内相邻;   // v4154：泰克光刃（TekClaws）换图 → HUD_TEKHandBlades_Icon_BC + 对照表"非皮肤·疑似"补齐后缀过滤;   // v4151：换图 2（巡航导弹→HUD_TEKCruiseMissile_Icon、泰克榴弹发射器→HUD_TEKGrenadeLauncher_Icon）+ 补录 4（绊线照明弹陷阱/泰克三叉戟/泰克长矛/C4遥控起爆器）+ 对照表区①移除 48 项;   // v4150：鱼竿族（FishingRod+Lovely_Fishing）+ 载具族补员（潜艇→木筏后、塔拉萨悬停帆→泰克悬停帆后）+ 生物外观族 26 项落地（模块段最末）+ 对照表无特征项全参数表;   // v4149：换图 3 组（GrapplingHook→GrappleHook_Icon、TribeTower→Tribe_Tower、TranqArrow→TranqArrow_Icon）+ 补录 11 键（Snowball/Carnivorous_Plant_Seed/Thalassian 系×4/ARK_Anniversary_Surprise_Cake/Birthday_Candle/CryoHospital×2/Netgun）;   // v4148：实时补全区无图标补「?」占位（lbWpRtHtml 与主浮窗一致）+ 图标替换 14 组（储物箱/镜子/油罐/电锯/登山镐/矿枪/鞭子/沙漠套×5/吉利面具/防护套×3/喷火器/潜水服）+ 英文补全（Ghillie Mask / Hazard Suit Hat / SCUBA×4）+ 补录 11 键（MachinedBow/宠物展示台/生日蛋糕/水下耕地/潜艇/塔拉萨悬停帆/收割渔线/周年蛋糕×2）+ TransGPS 打 ASE 过滤标记;   // v4147：Lovely_Fishing_Rod 补录（工具 tool:1）+ 次级解药/扎啤/血之灵药 归料理族（words 3.1/3.2/3.3 排在医疗药酒·能量药酒之后）；图标未录对照表 v4147（六分类 66+53 / skins 甄别 689）;   // v4146：RecipeCurry_Icon 挂菲拉咖喱配方（RecipeNote_FriaCurry / PrimalItem_RecipeNote_FriaCurry 两键 icon→RecipeCurry_Icon）+ HoneyLure 补录（蜂蜜诱饵，图标 HoneyLure_Icon）；对照表 v6 重生（待核 4 / 已处理 12 / 染色剂 22 移出主表入脚注）;   // v4145：W 果短名补规则（Plant_Species_W→手雷，浮窗枚举键带下划线）;   // v4144：族修正（Cucumis/Oryraise→蔬菜；Gilly/Oceans/Worm 短名 re: 规则→料理——修 v4143 短名下划线不命中问题）;   // v4143：Aquatica 消耗品补录 9 项（作物×2/料理×3/弹药×1/其它×3）+ 非凡饲料换图 + 族规则 4 条;   // v4142：Ecto Lantern 两键打 tool:1（进器械栏·工具段）;   // v4141：花粉图标换 High_Quality_Pollen（2 条）+ Ecto Lantern 补录（灵质提灯，工具类，2 键 + 节日族 2 规则）;   // v4140：刷新热区修复（仅标记触发）+ 节日族扩展 + 补录 5 项 + 强效麻醉镖图;   // v4139：item_zh 图标修正（麻醉镖→Tranquilizer_Dart；硅酸盐→SilicateCrystal）;   // v4138：公共设施实时区 39 格（WorldProbe 接线 + 刷新 CD 10s + 后端短时缓存共用）;   // v4137：巨齿鲨颚/生存者战利品移至 Cymathoa 之后（61/62 档）+ Dragon Horn 补录（龙之号角）;   // v4136：Aquatica 三战利品移至奖杯族最末（60 档）;   // v4135：焰鬃獠猪两种獠牙图标（Boaratos_Tusk / Flaming_Boaratos_Tusk）;   // v4134：Hydra/Kraken 归一 + 本体过滤 + AstralSoul/HexCoins 图标 + 克拉肯/莫德尔旗帜正名 + 格伦德尔档位修复;   // v4133（修复）：奖杯族修饰词截胡修正（水晶飞龙女王战利品回归奖杯族 9.5）；v4132：旗帜族录入+排序垫底
 try{ if(document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', function(){ try{ lbMatLoad(); }catch(e){} try{ lbRulesLoad(); }catch(e){} try{ if(typeof lbRankAliasLoad === 'function') lbRankAliasLoad(); }catch(e){} }); } else { lbMatLoad(); try{ lbRulesLoad(); }catch(e){} try{ if(typeof lbRankAliasLoad === 'function') lbRankAliasLoad(); }catch(e){} } }catch(e){}
 try{ if(!window.LB_PERF) window.LB_PERF = {}; window.LB_PERF.t_main0 = Date.now(); }catch(ePerf0){}   // v4465（用户口径·D1）：启动分段计时——主脚本执行开始
 function lbPerfMark(k){ try{ if(!window.LB_PERF[k]) window.LB_PERF[k] = Date.now(); }catch(e){} }
@@ -3935,6 +4083,19 @@ function lbOpenConfigModal(){
     + '<div id="lbCfgRenameTplMsg" style="font-size:12px;min-height:14px;margin-top:6px"></div>'
     + '</div>'
     + '<div style="margin-top:18px;padding-top:14px;border-top:1px solid #2a2a3a">'
+    + '<div style="font-size:13px;font-weight:bold;color:#ddd;margin-bottom:4px">🤖 AI 一键生成（大白鱼）</div>'
+    + '<div style="font-size:11px;color:#666;margin-bottom:10px">Token 只存本机浏览器，不上传、不写日志；建议用限额 Key</div>'
+    + '<input id="lbAiToken" type="password" placeholder="API Token" style="'+inp+'">'
+    + '<a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener" style="font-size:11px;color:#a78bfa;text-decoration:underline;display:inline-block;margin:-2px 0 8px">🔑 没有 token？点这申请</a>'
+    + '<select id="lbAiModel" style="'+inp+'"><option value="deepseek-flash">deepseek-flash（V4.1 Flash · 最新·默认）</option><option value="deepseek-v4-pro">deepseek-v4-pro（V4 Pro）</option></select>'   /* v4898（用户口径）：Base URL 配置项已移除，接口地址固定官方 */
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+    + '<button onclick="lbAiSaveCfg()" style="'+btn+'">保存</button>'
+    + '<button onclick="lbAiTest()" style="padding:7px 14px;border-radius:6px;border:1px solid #333;background:transparent;color:#bbb;cursor:pointer;font-size:13px">测试连接</button>'
+    + '<button onclick="lbAiClearCfg()" style="padding:7px 14px;border-radius:6px;border:none;background:#ef4444;color:#fff;cursor:pointer;font-size:13px">清除</button>'
+    + '</div>'
+    + '<div id="lbAiCfgMsg" style="font-size:12px;min-height:14px;margin-top:6px;color:#888"></div>'
+    + '</div>'
+    + '<div style="margin-top:18px;padding-top:14px;border-top:1px solid #2a2a3a">'
     + '<div style="font-size:13px;font-weight:bold;color:#ddd;margin-bottom:4px">🏘️ 聚落数据</div>'
     + '<div style="font-size:11px;color:#666;margin-bottom:10px">数据不全的服不会计算聚落（列表顶部有提醒）。可先用当前数据重算，或只重下「数据不全」的服（不做全量重下）</div>'
     + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
@@ -3955,6 +4116,80 @@ function lbOpenConfigModal(){
   lbRenderCfgOwnedMaps(); // v377：渲染已拥有地图多选
   var _rt = document.getElementById('lbCfgRenameTpl'); // v474：预填当前自动命名模板
   if(_rt) _rt.value = lbRenameTpl();
+  try { lbAiCfgRefresh(); } catch(e){}   // v4893 D1：回填 AI 配置状态
+}
+// ===== v4893 D1：AI（大白鱼）配置：localStorage['lb_ai_cfg_v1'] 仅本机 =====
+// v4896（用户口径）：模型固定为 DeepSeek 最新 Flash；旧配置里的 deepseek-chat / deepseek-reasoner 自动迁移
+var LB_AI_MODELS = ['deepseek-flash', 'deepseek-v4-pro'];
+var LB_AI_MODEL_DEF = 'deepseek-flash';
+function lbAiNormModel(m){
+  m = String(m || '').trim();
+  if (LB_AI_MODELS.indexOf(m) >= 0) return m;
+  return LB_AI_MODEL_DEF;
+}
+function lbAiCfgGet(){
+  try {
+    var o = JSON.parse(localStorage.getItem('lb_ai_cfg_v1') || 'null');
+    if (!o || !o.token) return null;
+    o.model = lbAiNormModel(o.model);
+    return o;
+  } catch (e) { return null; }
+}
+function lbAiCfgSet(o){ try { localStorage.setItem('lb_ai_cfg_v1', JSON.stringify(o)); } catch (e) {} }
+function lbAiMask(t){ t = String(t || ''); return t.length <= 4 ? '****' : ('****' + t.slice(-4)); }
+function lbAiErrText(code){
+  if (code === 401) return 'Token 无效';
+  if (code === 402) return '余额不足';
+  if (code === 429) return '请求过频（限流）';
+  if (code >= 500) return '服务端错误';
+  return '请求失败';
+}
+function lbAiCfgRefresh(){
+  var c = lbAiCfgGet();
+  var el = document.getElementById('lbAiToken');
+  var md = document.getElementById('lbAiModel');
+  var msg = document.getElementById('lbAiCfgMsg');
+  if (el) el.placeholder = c ? ('已保存 ' + lbAiMask(c.token) + '（留空＝不修改）') : 'API Token';
+  if (md && c) md.value = lbAiNormModel(c.model);
+  if (msg && c){ msg.textContent = '当前：' + lbAiNormModel(c.model) + ' · ' + lbAiMask(c.token); msg.style.color = '#888'; }
+}
+var LB_AI_BASE = 'https://api.deepseek.com';   // v4898（用户口径）：接口地址固定官方，不再让用户配置
+function lbAiSaveCfg(silent){
+  var t = String((document.getElementById('lbAiToken') || {}).value || '').trim();
+  var m = lbAiNormModel((document.getElementById('lbAiModel') || {}).value);
+  var msg = document.getElementById('lbAiCfgMsg');
+  var old = lbAiCfgGet() || {};
+  var tok = t || old.token || '';
+  if (!tok){ if (msg && !silent){ msg.textContent = '请填写 Token'; msg.style.color = '#f87171'; } return false; }
+  lbAiCfgSet({ token: tok, model: m, base: LB_AI_BASE, ts: Date.now() });
+  if (msg && !silent){ msg.textContent = '✅ 已保存到本机（' + lbAiMask(tok) + '）'; msg.style.color = '#22c55e'; }
+  lbAiCfgRefresh();
+  return true;
+}
+function lbAiClearCfg(){
+  try { localStorage.removeItem('lb_ai_cfg_v1'); } catch (e) {}
+  var msg = document.getElementById('lbAiCfgMsg');
+  var el = document.getElementById('lbAiToken'); if (el) el.value = '';
+  if (msg){ msg.textContent = '已清除'; msg.style.color = '#888'; }
+}
+function lbAiTest(){
+  var msg = document.getElementById('lbAiCfgMsg');
+  if (!lbAiSaveCfg(true)){   // v4898（用户口径）：点「测试连接」＝先自动保存当前输入，再发起测试
+    if (msg){ msg.textContent = '请先填写 Token'; msg.style.color = '#f87171'; }
+    return;
+  }
+  var c = lbAiCfgGet();
+  if (!c){ if (msg){ msg.textContent = '尚未配置 Token'; msg.style.color = '#f87171'; } return; }
+  if (msg){ msg.textContent = '已保存，测试中…'; msg.style.color = '#888'; }
+  fetch(String(c.base || LB_AI_BASE).replace(/\/+$/, '') + '/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + c.token },
+    body: JSON.stringify({ model: lbAiNormModel(c.model), messages: [{ role: 'user', content: 'ping' }], max_tokens: 4, temperature: 0, thinking: { type: 'disabled' } })
+  }).then(function(r){ return r.text().then(function(t){ return { s: r.status, t: t }; }); })
+    .then(function(x){
+      if (x.s === 200){ if (msg){ msg.textContent = '✅ 连接正常'; msg.style.color = '#22c55e'; } }
+      else if (msg){ msg.textContent = '❌ ' + lbAiErrText(x.s) + '（' + x.s + '）'; msg.style.color = '#f87171'; }
+    }).catch(function(e){ if (msg){ msg.textContent = '❌ 网络错误：' + ((e && e.message) || e); msg.style.color = '#f87171'; } });
 }
 // 绑定输入即时验证：是否存在于 players[].name
 function lbCfgCheckPlayer(){
@@ -18140,6 +18375,8 @@ function lbPickerFillItemExtra(iec){
 function lbOpenSpeciesPicker(opts){
   LB._pickHook = (opts && typeof opts.onPick === 'function') ? opts.onPick : null;   // v4726：采集流程编辑器引用选择
   LB._pickFilter = (opts && opts.filter) ? String(opts.filter) : '';   // v4731：过滤模式（'rc' = 仅资源/消耗品）
+  LB._pickMulti = (opts && opts.multi) ? [] : null;   // v4965（B6）：多选模式（勾选不关窗）
+  LB._pickMultiHook = (opts && typeof opts.onPickMulti === 'function') ? opts.onPickMulti : null;
   var old=document.querySelector('.lb-picker-overlay'); if(old) old.remove();
   Promise.all([lbLoadIconList(), lbLoadAntiColors(), lbLoadPrefixZh(), lbLoadColors()]).then(function(){   // v3593：+颜色表（染料色点需要 LB_COLORS）
     if(document.querySelector('.lb-picker-overlay')) return; // 期间已关闭则跳过
@@ -18284,6 +18521,24 @@ function lbOpenSpeciesPicker(opts){
     html+='</div>';
     overlay.innerHTML=html;
     document.body.appendChild(overlay);
+    if (LB._pickMulti){   // v4966（B6b）：多选底部条挂 body（panel 内会被切页重建冲掉）
+      try{
+        var _oldBar = document.getElementById('lbPickMultiBar'); if (_oldBar) _oldBar.remove();
+        var _bar = document.createElement('div');
+        _bar.id = 'lbPickMultiBar';
+        _bar.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:72px;z-index:1000003;display:flex;align-items:center;gap:8px;padding:8px 12px;background:#1a1a24;border:1px solid #333;border-radius:8px;box-shadow:0 8px 28px #000a';   // v4888：让到功能栏上方
+        _bar.innerHTML = '<span id="lbPickMultiCnt" style="font-size:12px;color:#a78bfa">已选 0</span><span style="width:12px"></span>'
+          + '<button class="lb-tipb" style="height:28px;padding:0 12px;border-radius:6px;border:1px solid #333;background:#22222c;color:#fff;font-size:12px;cursor:pointer" onclick="lbPickMultiCancel()">取消</button>'
+          + '<button class="lb-tipb" id="lbPickMultiDone" style="height:28px;padding:0 12px;border-radius:6px;border:1px solid #7c3aed;background:#7c3aed;color:#fff;font-size:12px;cursor:pointer" onclick="lbPickMultiDone()">✓ 完成</button>';
+        document.body.appendChild(_bar);
+        var _wt = setInterval(function(){
+          if (!document.querySelector('.lb-picker-overlay') || !LB._pickMulti){
+            clearInterval(_wt);
+            var b2 = document.getElementById('lbPickMultiBar'); if (b2) b2.remove();
+          }
+        }, 500);
+      }catch(e){}
+    }
     if (LB._pickFilter) {   // v4731：过滤模式——默认切物品页并隐藏物种 TAB
       try { lbPickerTab('item'); } catch (eFT) {}
       var _spTab = overlay.querySelector('.lb-pickertab[data-t="sp"]');
@@ -21656,8 +21911,39 @@ function lbPickerScrollToCat(el){
     t.g.scrollTop = Math.max(0, t.el.offsetTop - t.g.offsetTop - 4);
   }catch(e){}
 }
+function lbPickMultiDone(){   // v4965（B6）：一次性提交选中项（数组）
+  var arr = (LB._pickMulti || []).slice();
+  var hook = LB._pickMultiHook;
+  LB._pickMulti = null; LB._pickMultiHook = null;
+  var b0 = document.getElementById('lbPickMultiBar'); if (b0) b0.remove();
+  document.querySelectorAll('.lb-picker-overlay').forEach(function(e){ e.remove(); });
+  if (hook){ try { hook(arr); } catch (e) {} }
+}
+function lbPickMultiCancel(){
+  LB._pickMulti = null; LB._pickMultiHook = null;
+  var b1 = document.getElementById('lbPickMultiBar'); if (b1) b1.remove();
+  document.querySelectorAll('.lb-picker-overlay').forEach(function(e){ e.remove(); });
+}
+function lbHfKeyOfPick(v){   // 'item:kind:base' / 'ClassName' → 规范 base
+  var k = String(v || '');
+  if (k.indexOf('item:') === 0){ var p = k.split(':'); k = p[2] || ''; }
+  try { k = lbCanonBase(k) || k; } catch (e) {}
+  return k;
+}
 function lbPickerSelect(el){
   var v = el.getAttribute('data-cls') || '';
+  if (LB._pickMulti){   // v4965（B6）：多选 —— 只切换勾选，不关窗、不回调
+    if (v && v !== 'itemall'){
+      var _at = LB._pickMulti.indexOf(v);
+      if (_at >= 0) LB._pickMulti.splice(_at, 1); else LB._pickMulti.push(v);
+      el.classList.toggle('selected');
+      var _c = document.getElementById('lbPickMultiCnt');
+      if (_c) _c.textContent = '已选 ' + LB._pickMulti.length;
+      var _d = document.getElementById('lbPickMultiDone');
+      if (_d) _d.textContent = '✓ 完成（' + LB._pickMulti.length + '）';
+    }
+    return;
+  }
   LB._pickFilter = '';   // v4731：选择完成即退出过滤模式
   if(LB._pickHook){   // v4726：回调模式（采集流程编辑器插入引用/产出），不改变主视图
     var _hk = LB._pickHook; LB._pickHook = null;
@@ -28502,22 +28788,70 @@ function lbHfApi(){
   return base + '/api/harvest_flows';
 }
 function lbHfLocalKey(u){ return LB_HF_PREFIX + (u || 'guest'); }
+var LB_HF_DOC_VERSION = 2;   // v4958（A0）：文档版本 2 —— 新增 equip / outputsQty / tokens / alt / hdr.note / lv
+function lbHfNormTokens(arr){   // v4958：token 白名单（verb / item / dino / key）
+  var out = [];
+  (Array.isArray(arr) ? arr : []).forEach(function(t){
+    if (!t || typeof t !== 'object') return;
+    var ty = String(t.t || ''); if (!ty) return;
+    var o = { t: ty };
+    if (t.v != null) o.v = String(t.v);
+    if (t.key != null) o.key = String(t.key);
+    if (t.lv === 'warn' || t.lv === 'hint') o.lv = t.lv;
+    if (t.n != null && !isNaN(Number(t.n))) o.n = Number(t.n);
+    out.push(o);
+  });
+  return out;
+}
 function lbHfNormDoc(d){
   d = d && typeof d === 'object' ? d : {};
-  var doc = { version: Number(d.version) || 1, owner: String(d.owner || ''), updatedAt: Number(d.updatedAt) || 0, cards: [] };
+  var doc = { version: LB_HF_DOC_VERSION, owner: String(d.owner || ''), updatedAt: Number(d.updatedAt) || 0, cards: [] };
   (Array.isArray(d.cards) ? d.cards : []).forEach(function(c){
     if (!c || typeof c !== 'object') return;
     var card = {
       id: String(c.id || ''), title: String(c.title || ''), map: String(c.map || ''), spot: String(c.spot || ''),
       outputs: Array.isArray(c.outputs) ? c.outputs.map(function(x){ return String(x || ''); }).filter(Boolean) : [],
+      outputsQty: {}, equip: [],
       order: Number(c.order) || 0, builtin: !!c.builtin, updatedAt: Number(c.updatedAt) || 0, steps: []
     };
+    if (c.outputsQty && typeof c.outputsQty === 'object'){
+      Object.keys(c.outputsQty).forEach(function(k){
+        var q = Number(c.outputsQty[k]);
+        if (k && !isNaN(q) && q > 0) card.outputsQty[String(k)] = Math.max(1, Math.min(999, Math.round(q)));
+      });
+    }
+    (Array.isArray(c.equip) ? c.equip : []).forEach(function(g){
+      if (!g || typeof g !== 'object') return;
+      var key = String(g.key || g.base || ''); if (!key) return;
+      var q = Number(g.qty); if (!(q > 0)) q = 1;
+      card.equip.push({ key: key, qty: Math.max(1, Math.min(99, Math.round(q))) });
+    });
     (Array.isArray(c.steps) ? c.steps : []).forEach(function(s){
       if (!s || typeof s !== 'object') return;
-      var st = { type: (s.type === 'note' || s.type === 'br') ? s.type : 'step', text: String(s.text || ''), refs: [] };
+      var ty = (s.type === 'note' || s.type === 'br' || s.type === 'hdr') ? s.type : 'step';
+      var st = { type: ty, text: String(s.text || ''), refs: [], tokens: [] };
       (Array.isArray(s.refs) ? s.refs : []).forEach(function(r){
         if (r && r.key) st.refs.push({ type: r.type === 'species' ? 'species' : 'item', key: String(r.key) });
       });
+      st.tokens = lbHfNormTokens(s.tokens);
+      if (s.alt && typeof s.alt === 'object'){   // v4883 A26：旧单条 alt -> alts[0]
+        var at = lbHfNormTokens(s.alt.tokens);
+        var alt = { when: String(s.alt.when || ''), lv: (s.alt.lv === 'warn' || s.alt.lv === 'hint') ? s.alt.lv : '', tokens: at };
+        if (alt.when || at.length) st.alts = [alt];
+      }
+      if (Array.isArray(s.alts)){   // v4883 A26：R30 最多 5 条走法（1 主 + 4 备）
+        var _al = [];
+        s.alts.forEach(function(a){
+          if (!a || typeof a !== 'object' || _al.length >= 4) return;
+          var _t = lbHfNormTokens(a.tokens);
+          var _w = String(a.when || '').slice(0, 12);
+          if (!_w && !_t.length) return;
+          _al.push({ when: _w, lv: (a.lv === 'warn' || a.lv === 'hint') ? a.lv : '', tokens: _t });
+        });
+        if (_al.length) st.alts = _al;
+      }
+      if (s.lv === 'warn' || s.lv === 'hint') st.lv = s.lv;
+      if (ty === 'hdr' && s.note != null) st.note = String(s.note || '');
       card.steps.push(st);
     });
     if (!card.id) card.id = 'hf_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -28623,6 +28957,124 @@ function lbHfRenderText(text, refs){
   out += lbHfEsc(s.slice(last));
   return out;
 }
+// ===== v4960（A1）：卡片阅读态渲染（主题紫 / 28px 网格，与样张一致）=====
+function lbHfMapMdiOf(mv){
+  var ml = lbHfMapList(mv);
+  if (ml.length !== 1) return 'mdi-earth';
+  try { return lbHfMapIcon(ml[0]) || 'mdi-earth'; } catch (e) { return 'mdi-earth'; }
+}
+function lbHfMapLabelOf(mv){
+  var ml = lbHfMapList(mv);
+  if (!ml.length) return '所有地图';
+  try { return ml.map(function(a){ return lbHfMapName(a); }).join('、'); } catch (e) { return String(mv || ''); }
+}
+function lbHfItemMeta2(base){
+  var url = '', zh = String(base || '');
+  try { url = lbItemIconUrl(base) || ''; } catch (e) {}
+  try { var m = lbItemMeta(base) || {}; if (m.zh) zh = m.zh; } catch (e2) {}
+  return { url: url, zh: zh };
+}
+function lbHfTokenChipHtml(t){
+  var cls = 'lb-hf-chip', inner = '', tip = '';
+  if (!t || !t.t) return '';
+  if (t.lv === 'warn') cls += ' warn'; else if (t.lv === 'hint') cls += ' hint';
+  if (t.t === 'verb'){ inner = lbHfEsc(t.v || ''); tip = '动作：' + (t.v || ''); }
+  else if (t.t === 'item' || t.t === 'dino'){
+    var url = '', zh = String(t.key || '');
+    try { url = (t.t === 'item' ? lbItemIconUrl(t.key) : lbIconForDinoClass(t.key)) || ''; } catch (e) {}
+    try { if (t.t === 'item'){ var m = lbItemMeta(t.key) || {}; if (m.zh) zh = m.zh; } else { zh = lbSpName(t.key).zh || zh; } } catch (e2) {}
+    if (t.t === 'dino') cls += ' lb-hf-inv';
+    inner = url ? '<img src="' + lbHfEsc(url) + '" loading="lazy" onerror="this.style.display=\'none\'">' : lbHfEsc(zh);
+    tip = (t.t === 'item' ? '物品：' : '生物：') + zh;
+  } else if (t.t === 'key'){
+    var ku = 'https://img.whiterober.ccwu.cc/ASA/keys/' + encodeURIComponent(String(t.v || '')) + '.png';
+    inner = '<img class="lb-hf-keyimg" src="' + lbHfEsc(ku) + '" alt="" onerror="this.style.display=\'none\'">';
+    tip = '按键：' + (t.v || '');
+  } else { inner = lbHfEsc(t.v || ''); tip = String(t.v || ''); }
+  return '<span class="lb-tipb ' + cls + '" title="' + lbHfEsc(tip) + '">' + inner + '</span>';
+}
+function lbHfStepChipsHtml(st){
+  var toks = (st && Array.isArray(st.tokens)) ? st.tokens : [];
+  if (toks.length){
+    var s = '';
+    for (var i = 0; i < toks.length; i++) s += lbHfTokenChipHtml(toks[i]);
+    return s;
+  }
+  return '<span class="lb-hf-chip">' + lbHfRenderText(st.text, st.refs) + '</span>';
+}
+function lbHfWhenHtml(when, lv){
+  var cls = 'lb-hf-when' + (lv === 'warn' ? ' warn' : '');
+  return '<span class="' + cls + '"><span class="kw">若</span>' + lbHfEsc(when || '') + '</span>';
+}
+function lbHfFlowHtml(card){
+  var steps = (card && Array.isArray(card.steps)) ? card.steps : [];
+  if (!steps.length) return '<div class="lb-hf-dempty">还没有步骤（在编辑态里写第一句）</div>';
+  var hasHdr = false;
+  for (var i0 = 0; i0 < steps.length; i0++){ if (steps[i0] && steps[i0].type === 'hdr'){ hasHdr = true; break; } }
+  var html = '', gnum = 0, curOpen = false;
+  function closeGrp(){ if (curOpen){ html += '</div>'; curOpen = false; } }
+  function openGrp(hdv){
+    gnum++;
+    html += '<div class="lb-hf-grp"><span class="lb-hf-gnum">' + gnum + '</span>'
+      + '<span class="lb-hf-gname">' + lbHfEsc(hdv.text || ('阶段 ' + gnum)) + '</span>'
+      + '<span class="lb-hf-gline"></span>'
+      + (hdv.note ? '<span class="lb-tipb lb-hf-gnote" title="' + lbHfEsc(hdv.note) + '">✎ ' + lbHfEsc(hdv.note) + '</span>' : '')
+      + '</div><div class="lb-hf-sflow">';
+    curOpen = true;
+  }
+  for (var i = 0; i < steps.length; i++){
+    var st = steps[i]; if (!st) continue;
+    if (st.type === 'hdr'){ closeGrp(); openGrp(st); continue; }
+    if (!curOpen){ openGrp({ text: '' }); }
+    if (st.type === 'br'){ html += '</div><div class="lb-hf-sflow" style="height:8px"></div><div class="lb-hf-sflow">'; continue; }
+    if (st.type === 'note'){
+      html += '<span class="lb-tipb lb-hf-note2" title="' + lbHfEsc(st.text || '') + '">' + lbHfRenderText(st.text, st.refs) + '</span>';
+      continue;
+    }
+    if (st.alt && (st.alt.when || (st.alt.tokens && st.alt.tokens.length))){
+      var altChips = '';
+      var at = (st.alt.tokens || []);
+      if (at.length){ for (var k = 0; k < at.length; k++) altChips += lbHfTokenChipHtml(at[k]); }
+      else altChips = '<span class="lb-hf-chip">' + lbHfEsc(st.alt.text || '') + '</span>';
+      html += '<div class="lb-hf-branch" style="flex-basis:100%"><div class="lb-hf-brows">'
+        + '<div class="lb-hf-brow"><div class="lb-hf-sflow">' + lbHfWhenHtml('可到达', '') + lbHfStepChipsHtml(st) + '</div></div>'
+        + '<div class="lb-hf-brow"><div class="lb-hf-sflow">' + lbHfWhenHtml(st.alt.when || '不可达', st.alt.lv || 'warn') + altChips + '</div></div>'
+        + '</div></div>';
+      continue;
+    }
+    html += lbHfStepChipsHtml(st);
+  }
+  closeGrp();
+  return html;
+}
+function lbHfDocHeadHtml(card){
+  var outs = (card && Array.isArray(card.outputs)) ? card.outputs.slice(0, 4) : [];
+  var imgs = '';
+  outs.forEach(function(b){   // v4895 C3：产物 ×N
+    var m = lbHfItemMeta2(b);
+    var q = (card.outputsQty && card.outputsQty[b]) ? Number(card.outputsQty[b]) : 0;
+    var _t = '产物：' + m.zh + (q > 1 ? (' ×' + q) : '');
+    if (m.url) imgs += '<img src="' + lbHfEsc(m.url) + '" class="lb-tipb" loading="lazy" title="' + lbHfEsc(_t) + '" onerror="this.style.display=\'none\'">';
+  });
+  return '<div class="lb-hf-dhead">'
+    + '<span class="lb-tipb lb-hf-dmap" title="地图：' + lbHfEsc(lbHfMapLabelOf(card.map)) + '"><i class="mdi ' + lbHfEsc(lbHfMapMdiOf(card.map)) + '"></i></span>'
+    + (imgs ? '<span class="lb-hf-dprods">' + imgs + '</span>' : '')
+    + '<span class="lb-hf-dtitle">' + lbHfEsc(card.spot || card.title || '采集流程') + '</span>'
+    + '</div>';
+}
+function lbHfEquipHtml(card){
+  var eq = (card && Array.isArray(card.equip)) ? card.equip : [];
+  if (!eq.length) return '';
+  var s = '<div class="lb-hf-dsec"><span class="lb-hf-dlbl">装备</span>';
+  eq.forEach(function(g){
+    var m = lbHfItemMeta2(g.key);
+    s += '<span class="lb-tipb lb-hf-chip" title="' + lbHfEsc(m.zh + (Number(g.qty) > 1 ? ' ×' + g.qty : '')) + '">'
+      + (m.url ? '<img src="' + lbHfEsc(m.url) + '" loading="lazy" onerror="this.style.display=\'none\'">' : lbHfEsc(m.zh))
+      + (Number(g.qty) > 1 ? '<span class="lb-hf-qty">×' + Number(g.qty) + '</span>' : '')
+      + '</span>';
+  });
+  return s + '</div>';
+}
 function lbHfStepsHtml(card){
   var h = '', n = 0;
   (card && card.steps ? card.steps : []).forEach(function(st){
@@ -28640,6 +29092,7 @@ function lbHfMaybeUser(){
     var d0 = lbHfLoadLocal(u);
     LB_HF.doc = d0 || { version: 1, owner: u, updatedAt: 0, cards: [] };
     lbHfBuildIdx(); lbHfMergeGuest(u); lbHfFetchCloud();
+    setTimeout(function(){ try { lbHfDraftCheck(); } catch (e) {} }, 1200);   // v4895 C1：崩溃恢复检查
     return;
   }
   if (LB_HF.user !== u) {
@@ -28719,31 +29172,64 @@ function lbHfConflict(cloud, cb){
     if (cb) cb();
   };
   var _useLocal = function(){ LB_HF.forceOverwrite = true; lbHfSaveAll(cb); };
+  var _saveCopy = function(){   // v4884 B10：本机另存副本后再用云端覆盖
+    try {
+      var _k = 'lb_hf_copy_' + Date.now();
+      localStorage.setItem(_k, JSON.stringify(LB_HF.doc));
+      if (typeof lbToast === 'function') lbToast('已另存本机副本：' + _k);
+    } catch (e) {}
+    _useCloud();
+  };
   // v4741（用户口径）：站内三按钮确认（取消=暂不处理，不再静默用本地覆盖云端）
   var _cmsg = '云端有更新版本。请选择保留哪一份数据：\n· 云端覆盖本地 = 以云端为准\n· 本地覆盖云端 = 以本机为准';
-  if (lbAskMulti(_cmsg, [{ t:'本地覆盖云端', cb:_useLocal }, { t:'云端覆盖本地', cb:_useCloud, primary:true }])) return;
+  if (lbAskMulti(_cmsg, [{ t:'本地覆盖云端', cb:_useLocal }, { t:'另存副本', cb:_saveCopy }, { t:'云端覆盖本地', cb:_useCloud, primary:true }])) return;   // v4884 B10
   if (confirm('云端有更新版本：确定 = 用云端覆盖本地；取消 = 用本地覆盖云端')) _useCloud(); else _useLocal();
 }
 function lbHfRenderBreedBarButtons(){
   lbHfMaybeUser();
   var acts = document.getElementById('lbBreedActions');
   if (!acts) return;
+  try { acts.classList.toggle('hf-editing', !!LB_HF.edit); } catch (e0) {}   // v4881：编辑态底部栏左对齐
   var old = document.getElementById('lbHfBtns');
   if (old) old.remove();
+  document.querySelectorAll('.lb-hf-undirty-bar').forEach(function(e){ e.remove(); });   // v4892：清掉旧外挂未保存
   if (!LB.pickItem || !LB.pickItem.base) return;
   var base = LB.pickItem.base;
   if (!lbHfCanCreate(base)) return;
   var cards = lbHfCardsForItem(base);
   var h = '<div class="lb-hf-btns" id="lbHfBtns">';
   if (LB_HF.edit) {
-    // v4730（用户口径）：编辑器展开时——取消在左、原「新建流程」位置变「保存」
+    // v4969（用户口径）：编辑态由底部功能栏统一承载全部功能（浮窗内不再重复）
+    // v4892：「● 未保存」挂到 #lbBreedBar 弹簧左侧（不占按钮组宽度，底栏保持单行）
+    try {
+      var _wrap0 = document.querySelector('#lbBreedBar > div');
+      if (_wrap0) {
+        var _und = '<span class="lb-hf-undirty lb-hf-undirty-bar" id="lbHfUndirtyBar" style="flex:0 0 auto">● 未保存' + ((LB_HF.undo && LB_HF.undo.length) ? ('（' + LB_HF.undo.length + '）') : '') + '</span>';
+        var _sp = null, _cs = _wrap0.children;
+        for (var _ci = 0; _ci < _cs.length; _ci++){ if (_cs[_ci].tagName === 'SPAN' && /flex:\s*1/.test(_cs[_ci].getAttribute('style') || '')) { _sp = _cs[_ci]; break; } }
+        if (_sp) _sp.insertAdjacentHTML('beforebegin', _und); else _wrap0.insertAdjacentHTML('afterbegin', _und);
+      }
+    } catch (e0) {}
+    h += '<span class="lb-hf-bgrp lb-hf-bgrp1">';   // v4898/4899（用户口径）：移动端分组容器（桌面 display:contents 透明，布局不变）；类名避与阶段行 .lb-hf-grp 冲突
+    h += '<button class="lb-tipb lb-hf-btn" onclick="lbHfEditAddRow(&quot;step&quot;)" title="加一步">＋步骤</button>';
+    h += '<button class="lb-tipb lb-hf-btn" onclick="lbHfEditAddRow(&quot;hdr&quot;)" title="加阶段">＋阶段</button>';
+    h += '<button class="lb-tipb lb-hf-btn" onclick="lbHfEditAddRow(&quot;note&quot;)" title="加备注">＋备注</button>';
+    h += '<button class="lb-tipb lb-hf-btn" onclick="lbHfEditAddRow(&quot;br&quot;)" title="加分隔">＋分隔</button>';
+    h += '<button class="lb-tipb lb-hf-btn lb-hf-ai-entry" onclick="lbHfAutoGen()" title="用大白鱼生成采集流程"><span class="lb-hf-ai-entry-t">大白鱼&nbsp;</span><img class="lb-hf-ai-entry-ic" src="thumbs/webp96/bdb8c3b809e6_w96.webp" alt=""></button>';
+    h += '</span>';
+    h += '<span class="lb-hf-vsep"></span>';   // v4891：竖向虚线分隔（桌面显示；v4898 移动端隐藏，改由分组换行）
+    h += '<span class="lb-hf-bgrp lb-hf-bgrp2">';
+    h += '<span class="lb-hf-undirty lb-hf-undirty-inbar" id="lbHfUndirtyInBar">● 未保存' + ((LB_HF.undo && LB_HF.undo.length) ? ('（' + LB_HF.undo.length + '）') : '') + '</span>';   // v4898（用户口径）：移动端底行靠左
+    h += '<span class="lb-hf-spring"></span>';
+    h += '<button class="lb-tipb lb-hf-btn" onclick="lbHfUndo()" title="撤销上一步">撤销</button>';
     h += '<button class="lb-tipb lb-hf-btn" onclick="lbHfCancelEdit()" title="取消编辑">取消</button>';
     h += '<button class="lb-tipb lb-hf-btn lb-hf-add" onclick="lbHfEditSave()" title="保存流程">保存</button>';
+    h += '</span>';
   } else {
     h += '<button class="lb-tipb lb-hf-btn lb-hf-add" onclick="lbHfNewForCurrent()" title="新建流程">新建流程</button>';
     cards.forEach(function(c){
       var ic = lbHfMdi(lbHfMapIcon(c.map), 12);
-      h += '<button class="lb-tipb lb-hf-btn" onclick="lbHfOpenDetail(&quot;' + lbHfEsc(c.id) + '&quot;)" title="' + lbHfEsc(c.title || '采集流程') + '">' + ic + ' ' + lbHfEsc(c.title || '采集流程') + '</button>';
+      h += '<button class="lb-tipb lb-hf-btn" onclick="lbHfOpenDetail(&quot;' + lbHfEsc(c.id) + '&quot;)" title="' + lbHfEsc(c.spot || c.title || '采集流程') + '">' + ic + ' ' + lbHfEsc(c.spot || c.title || '采集流程') + '</button>';   // v4871：显示优先采集点
     });
   }
   h += '</div>';
@@ -28763,12 +29249,12 @@ function lbHfOpenDetail(id){
   var sub = map + (card.spot ? '<span>· ' + lbHfEsc(card.spot) + '</span>' : '');
   var html = '<div class="lb-hf-overlay" onclick="if(event.target===this)lbHfClosePanel()"><div class="lb-hf-panel">'
     + '<div class="lb-hf-head">'
-    + (icon ? '<img class="lb-hf-icon" src="' + lbHfEsc(icon) + '" onerror="this.style.display=\'none\'">' : '')
-    + '<div style="flex:1;min-width:0"><div class="lb-hf-title">' + lbHfEsc(card.title || '采集流程') + '</div><div class="lb-hf-sub">' + sub + '</div></div>'
-    + '<button class="lb-tipb lb-hf-x" onclick="lbHfClosePanel()">✕</button></div>'
-    + '<div class="lb-hf-body">' + lbHfStepsHtml(card) + '</div>'
+    + '<div style="flex:1;min-width:0">' + lbHfDocHeadHtml(card) + '</div>'
+    + '</div>'
+    + '<div class="lb-hf-body" style="display:block">' + lbHfEquipHtml(card) + lbHfFlowHtml(card) + '</div>'
     + '<div class="lb-hf-head" style="border-top:1px solid #2a2a3a;border-bottom:none"><div class="lb-hf-actions">'
     + '<button class="lb-tipb lb-hf-btn2" onclick="lbHfCopyCard(&quot;' + lbHfEsc(card.id) + '&quot;)">复制</button>'
+    + '<button class="lb-tipb lb-hf-btn2" onclick="lbHfExportCard(&quot;' + lbHfEsc(card.id) + '&quot;)">导出</button>'
     + '<button class="lb-tipb lb-hf-btn2 danger" onclick="lbHfDeleteCard(&quot;' + lbHfEsc(card.id) + '&quot;)">删除</button>'
     + '<button class="lb-tipb lb-hf-btn2 primary" onclick="lbHfOpenEditor(&quot;' + lbHfEsc(card.id) + '&quot;)">编辑</button>'
     + '</div></div></div></div>';
@@ -28832,66 +29318,886 @@ function lbHfEditPickMap(id){
       b.classList.toggle('active', _k ? (_ml.indexOf(_k) >= 0) : !_ml.length);
     });
   }
+  lbHfEditHeadRefresh();
   lbHfEditPreview();
 }
 function lbHfEditRender(){
   var edit = LB_HF.edit; if (!edit) return;
   var card = edit.card;
   lbHfClosePanel();
-  var prods = '';
+
+  // 卡头产物图标（点击移除）
+  var prodIcons = '';
   (card.outputs || []).forEach(function(b, i){
-    var m = {}; var u = '';
-    try { m = lbItemMeta(b) || {}; u = lbItemIconUrl(b) || ''; } catch (e) {}
-    prods += '<span class="lb-tipb lb-hf-prod" onclick="lbHfEditDelOutput(' + i + ')" title="点击移除">'
-      + (u ? '<img src="' + lbHfEsc(u) + '" onerror="this.style.display=\'none\'">' : '')
-      + lbHfEsc(m.zh || b) + ' ✕</span>';
+    var m = lbHfItemMeta2(b);
+    var _pq = (card.outputsQty && card.outputsQty[b]) ? Number(card.outputsQty[b]) : 0;   // v4895 C3
+    prodIcons += '<span class="lb-tipb lb-hf-dprod" title="' + lbHfEsc('产物：' + m.zh + (_pq > 1 ? (' ×' + _pq) : '') + '（点击展开产出行）') + '" onclick="lbHfEditToggleOut()">'
+      + (m.url ? '<img src="' + lbHfEsc(m.url) + '" onerror="this.style.display=\'none\'">' : '<span style="font-size:11px;color:#8b8b9a">' + lbHfEsc(m.zh) + '</span>')
+      + '</span>';
   });
-  var rows = '', n = 0;
-  (card.steps || []).forEach(function(st, i){
-    var type = st.type || 'step';
-    var lead = '';
-    if (type === 'step') { n++; lead = '<span class="lb-hf-num">' + n + '</span>'; }
-    else if (type === 'note') { lead = '<span class="lb-hf-note-mark">*</span>'; }
-    else { lead = '<span class="lb-hf-note-mark">—</span>'; }
-    rows += '<div class="lb-hf-row" data-i="' + i + '">' + lead
-      + '<input class="lb-hf-inp" value="' + lbHfEsc(st.text || '') + '" oninput="lbHfEditInput(' + i + ',this.value)" placeholder="' + (type === 'note' ? '备注' : (type === 'br' ? '分隔行（可留空）' : '步骤文本，可用 [物品名] 引用')) + '">'
-      + (type === 'step' ? '<button class="lb-tipb lb-hf-mini" title="插入物品/生物" onclick="lbHfPickRef(' + i + ')">@</button>' : '')
-      + '<button class="lb-tipb lb-hf-mini" title="上移" onclick="lbHfEditMove(' + i + ',-1)">↑</button>'
-      + '<button class="lb-tipb lb-hf-mini" title="下移" onclick="lbHfEditMove(' + i + ',1)">↓</button>'
-      + '<button class="lb-tipb lb-hf-mini danger" title="删除" onclick="lbHfEditDel(' + i + ')">✕</button>'
-      + '</div>';
+
+  if (!prodIcons) prodIcons = '<span class="lb-tipb lb-hf-dprod" title="产物（点击展开产出行）" onclick="lbHfEditToggleOut()" style="color:#8b8b9a;font-size:14px;align-items:center;justify-content:center">＋</span>';
+  // 装备
+  var eqHtml = '';
+  (card.equip || []).forEach(function(g, i){
+    var m = lbHfItemMeta2(g.key);
+    eqHtml += '<span class="lb-tipb lb-hf-chip" title="' + lbHfEsc(m.zh + '（点＝改数量，右键＝移除）') + '" onclick="lbHfEditEquipQty(' + i + ')" oncontextmenu="lbHfEditDelEquip(' + i + ');return false;">'
+      + (m.url ? '<img src="' + lbHfEsc(m.url) + '" onerror="this.style.display=\'none\'">' : lbHfEsc(m.zh))
+      + ((Number(g.qty) || 1) > 1 ? '<span class="lb-hf-qty">×' + Number(g.qty) + '</span>' : '')   // v4887：×1 不显示'
+      + '</span>';
   });
+  eqHtml += '<button class="lb-tipb lb-hf-addchip" title="添加装备（选完自动回到编辑）" onclick="lbHfPickEquip()">＋ 装备</button>';
+
+  // 产出
+  var outHtml = '';
+  (card.outputs || []).forEach(function(b, i){
+    var m = lbHfItemMeta2(b);
+    outHtml += '<span class="lb-tipb lb-hf-chip" title="' + lbHfEsc(m.zh + '（点击移除）') + '" onclick="lbHfEditDelOutput(' + i + ')">'
+      + (m.url ? '<img src="' + lbHfEsc(m.url) + '" onerror="this.style.display=\'none\'">' : lbHfEsc(m.zh))
+      + '<span class="lb-hf-qty">✕</span>'
+      + '</span>';
+  });
+  outHtml += '<button class="lb-tipb lb-hf-addchip" title="追加产出" onclick="lbHfPickOutput()">＋ 产出</button>';
+
+  // 步骤 / 阶段 / 备注 / 分隔
+  var flowHtml = lbHfEditFlowHtml(card);
   var html = '<div class="lb-hf-overlay" onclick="if(event.target===this)lbHfCancelEdit()"><div class="lb-hf-panel lb-hf-edit">'
-    + '<div class="lb-hf-body">'
-    + '<label class="lb-hf-f">标题<input class="lb-hf-inp" id="lbHfETitle" value="' + lbHfEsc(card.title || '') + '" oninput="lbHfEditField(&quot;title&quot;,this.value)" placeholder="例如：野外（石头）"></label>'
-    + '<label class="lb-hf-f">采集点<input class="lb-hf-inp" id="lbHfESpot" value="' + lbHfEsc(card.spot || '') + '" oninput="lbHfEditField(&quot;spot&quot;,this.value)" placeholder="例如：石头富集区"></label>'
-    + '<div class="lb-hf-c"><div class="lb-hf-lbl">地图</div><div id="lbHfEMapGrid" style="display:flex;flex-wrap:wrap;gap:6px">' + lbHfMapButtons(card.map) + '</div></div>'
-    + '<div class="lb-hf-c"><div class="lb-hf-lbl">产出物品（点击移除）</div><div class="lb-hf-prods">' + (prods || '<span style="font-size:11px;color:#666">未绑定</span>')
-    + '<button class="lb-tipb lb-hf-mini" title="添加产出物品" onclick="lbHfPickOutput()" style="width:30px;padding:0">＋</button></div></div>'
-    + '<div class="lb-hf-full"><div class="lb-hf-lbl">步骤</div><div id="lbHfERows">' + rows + '</div>'
-    + '<div class="lb-hf-addrow"><button class="lb-tipb lb-hf-btn2" onclick="lbHfEditAddRow(&quot;step&quot;)">＋ 步骤</button><button class="lb-tipb lb-hf-btn2" onclick="lbHfEditAddRow(&quot;note&quot;)">＋ 备注</button><button class="lb-tipb lb-hf-btn2" onclick="lbHfEditAddRow(&quot;br&quot;)">＋ 分隔</button></div></div>'
-    + '<div class="lb-hf-full"><div class="lb-hf-lbl">实时预览</div><div class="lb-hf-preview" id="lbHfEPreview"></div></div>'
-    + '</div></div></div>';
+    + '<div class="lb-hf-dhead">'
+    + '<span class="lb-tipb lb-hf-dmap" id="lbHfEMapBtn" title="' + lbHfEsc('地图：' + lbHfMapLabelOf(card.map) + '（点击改地图）') + '" onclick="lbHfEditToggleMap()"><i class="mdi ' + lbHfEsc(lbHfMapMdiOf(card.map)) + '"></i></span>'
+    + (prodIcons ? '<span class="lb-hf-dprods">' + prodIcons + '</span>' : '')
+    + '<input class="lb-tipb lb-hf-inp lb-hf-dtitle-in" id="lbHfESpot" title="采集点会直接作为采集流程标题" value="' + lbHfEsc(card.spot || '') + '" oninput="lbHfEditField(&quot;spot&quot;,this.value)" placeholder="采集点">'
+    + '</div>'
+    + '<div class="lb-hf-dsec" id="lbHfEMapRow" style="display:none"><span class="lb-hf-dlbl">地图</span><div id="lbHfEMapGrid" style="display:flex;flex-wrap:wrap;gap:8px">' + lbHfMapButtons(card.map) + '</div></div>'
+    + '<div class="lb-hf-dsec"><span class="lb-hf-dlbl">装备</span>' + eqHtml + '</div>'
+    + '<div class="lb-hf-dsec" id="lbHfEOutRow" style="display:none"><span class="lb-hf-dlbl">产出</span>' + outHtml + '</div>'
+    + '<div class="lb-hf-dash"></div>'
+    + (function () {   // v4884 B4：快捷插入条
+        var vs = ['传到', '骑', '采', '放入', '烧', '注意'];
+        var s = '';
+        for (var q = 0; q < vs.length; q++){ s += '<span class="lb-tipb lb-hf-chip" title="快捷插入：' + vs[q] + '" onclick="lbHfTplInsert(\'' + vs[q] + '\')">' + vs[q] + '</span>'; }
+        return '<div class="lb-hf-tplbar">' + s + '</div>';
+      })()
+    + '<div id="lbHfERows" class="lb-hf-flow">' + flowHtml + '</div>'
+    + '</div></div>';
   document.body.insertAdjacentHTML('beforeend', html);
-  lbHfEditPreview();
   try{ var _bb = document.getElementById('lbBreedBar'); if (_bb && LB_HF.edit) _bb.style.zIndex = '9999'; }catch(e){}
+  try { lbHfDraftPush(); } catch (e0) {}   // v4883 A24
+}
+// ===== v4962 修复：补回 A2 丢失的辅助函数（被整段替换吞掉）=====
+function lbHfEditFlowHtml(card){   // v4963：编辑态 —— 阶段胶囊行 + 徽章流（与样张一致）
+  var steps = (card && Array.isArray(card.steps)) ? card.steps : [];
+  if (!steps.length) return '<div class="lb-hf-dempty" style="padding:8px 0">还没有步骤，点右下角「＋ 步骤」开始；要分组就点「＋ 阶段」</div>';
+  var h = '', g = 0, n = 0;
+  for (var i = 0; i < steps.length; i++){
+    var st = steps[i] || {}, ty = st.type || 'step';
+    if (ty === 'hdr'){
+      g++;
+      h += '<div class="lb-hf-grow">'
+        + '<span class="lb-tipb lb-hf-drag" draggable="true" title="按住拖动排序" ondragstart="lbHfDragStart(' + i + ',event)" ondragover="event.preventDefault()" ondrop="lbHfDropRow(' + i + ',event)">' + '⠿' + '</span>'
+        + '<span class="lb-hf-gnum">' + g + '</span>'
+        + '<input class="lb-hf-gname-ip" value="' + lbHfEsc(st.text || '') + '" oninput="lbHfEditInput(' + i + ',this.value)" placeholder="阶段名">'
+        + '<span class="lb-hf-gli"></span>'
+        + (st.note
+            ? '<span class="lb-tipb lb-hf-gnote-b has" title="阶段备注（点击改）" onclick="lbHfEditGNoteEdit(' + i + ')">✎ ' + lbHfEsc(st.note) + '</span>'
+            : '<button class="lb-tipb lb-hf-gnote-b" title="加阶段备注" onclick="lbHfEditGNoteEdit(' + i + ')">＋备注</button>')
+        + '<button class="lb-tipb lb-hf-mini" title="这一行" onclick="lbHfStepMenu(' + i + ',event)">⋯</button>'
+        + '</div>';
+      continue;
+    }
+    if (ty === 'br'){
+      h += '<div class="lb-hf-sflow-edit"><span class="lb-hf-gli" style="background:#3a3a4a"></span>'
+        + '<button class="lb-tipb lb-hf-mini" title="这一行" onclick="lbHfStepMenu(' + i + ',event)">⋯</button></div>';
+      continue;
+    }
+    if (ty === 'note'){
+      h += '<div class="lb-hf-sflow-edit"><span class="lb-hf-notemark">✎</span>'
+        + '<input class="lb-hf-inline" style="border-color:rgba(245,158,11,.45);color:#f4d7b2;min-width:200px" value="' + lbHfEsc(st.text || '') + '" oninput="lbHfEditInput(' + i + ',this.value)" placeholder="备注文字">'
+        + '<button class="lb-tipb lb-hf-mini" title="这一行" onclick="lbHfStepMenu(' + i + ',event)">⋯</button></div>';
+      continue;
+    }
+    n++;
+    var toks = (st.tokens || []), chips = '';
+    for (var k = 0; k < toks.length; k++){
+      var tk = toks[k] || {};
+      var cls = 'lb-hf-chip';
+      if (tk.lv === 'warn') cls += ' warn'; else if (tk.lv === 'hint') cls += ' hint';
+      var inner = '', tip = '';
+      if (tk.t === 'verb'){ inner = lbHfEsc(tk.v || ''); tip = '动词：' + (tk.v || ''); }
+      else if (tk.t === 'item' || tk.t === 'dino'){
+        var u2 = '', z2 = String(tk.key || '');
+        try { u2 = (tk.t === 'item' ? lbItemIconUrl(tk.key) : lbIconForDinoClass(tk.key)) || ''; } catch (e) {}
+        try { if (tk.t === 'item'){ var mm = lbItemMeta(tk.key) || {}; if (mm.zh) z2 = mm.zh; } } catch (e2) {}
+        if (tk.t === 'dino') cls += ' lb-hf-inv';
+        inner = u2 ? '<img src="' + lbHfEsc(u2) + '" onerror="this.style.display=\'none\'">' : lbHfEsc(z2);
+        tip = (tk.t === 'item' ? '物品：' : '生物：') + z2;
+      } else if (tk.t === 'key'){
+        inner = '<img class="lb-hf-keyimg" src="' + lbHfKeySrc(tk.v) + '" alt="" onerror="this.style.display=\'none\'">';
+        tip = '按键：' + (tk.v || '');
+      } else { inner = lbHfEsc(tk.v || ''); tip = String(tk.v || ''); }
+      chips += '<span class="lb-tipb ' + cls + '" title="' + lbHfEsc(tip + '（点击改）') + '" onclick="lbHfTokMenu(' + i + ',' + k + ',event)">' + inner + '</span>';
+    }
+    var mainRow = '<div class="lb-hf-sflow-edit">'
+      + '<span class="lb-tipb lb-hf-drag" draggable="true" title="按住拖动排序" ondragstart="lbHfDragStart(' + i + ',event)" ondragover="event.preventDefault()" ondrop="lbHfDropRow(' + i + ',event)">' + '⠿' + '</span>'
+      + '<span class="lb-tipb lb-hf-lvdot' + (st.lv === 'warn' ? ' on' : '') + '" title="' + (st.lv === 'warn' ? '橙色＝注意 / 必做（点击改回普通）' : '灰色＝普通（点击标为注意 / 必做）') + '" onclick="lbHfStepLv(' + i + ')"></span>'
+      + chips
+      + '<input class="lb-hf-inline" value="' + lbHfEsc(st.text || '') + '" oninput="lbHfEditInput(' + i + ',this.value)" onkeydown="if(event.isComposing||event.keyCode===229)return;if(event.key===\'Enter\'){event.preventDefault();lbHfInlineAdd(' + i + ',this);}" placeholder="＋ 打字加动作，或点右边 @ 选">'
+      + '<button class="lb-tipb lb-hf-mini" title="动作 / 键帽面板" onclick="lbHfVerbPanel(' + i + ',event)">@</button>'
+      + '<button class="lb-tipb lb-hf-mini" title="这一行" onclick="lbHfStepMenu(' + i + ',event)">⋯</button>'
+      + '</div>';
+    var _alts = (st.alts && st.alts.length) ? st.alts : [];
+    if (!_alts.length){
+      h += mainRow;
+    } else {   // v4883 A26：分支容器（左竖线 + 条件徽章；最多 4 条备选）
+      h += '<div class="lb-hf-branch" style="flex-basis:100%"><div class="lb-hf-brows">'
+        + '<div class="lb-hf-brow">' + lbHfWhenHtml('可到达', '') + mainRow + '</div>';
+      for (var ai2 = 0; ai2 < _alts.length; ai2++){
+        var _a2 = _alts[ai2] || {};
+        var _ac = '';
+        var _at = _a2.tokens || [];
+        for (var ak = 0; ak < _at.length; ak++){ _ac += lbHfTokenChipHtml(_at[ak]); }
+        h += '<div class="lb-hf-brow"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0">'
+          + '<span class="lb-tipb lb-hf-when' + (_a2.lv === 'warn' ? ' warn' : '') + '" title="条件（点击改，≤6 字）" onclick="lbHfAltWhen(' + i + ',' + ai2 + ')"><span class="kw">若</span>' + lbHfEsc(_a2.when || '不可达') + '</span>'
+          + _ac
+          + '<button class="lb-tipb lb-hf-mini" title="这条走法加动作" onclick="lbHfVerbPanel(' + i + ',event,' + ai2 + ')">@</button>'
+          + '<button class="lb-tipb lb-hf-mini" title="这条走法" onclick="lbHfAltMenu(' + i + ',' + ai2 + ',event)">⋯</button>'
+          + '</div></div>';
+      }
+      h += '</div>'
+        + (_alts.length < 4 ? '<div style="margin-top:8px"><span class="lb-tipb lb-hf-addchip" title="再加一条走法（最多 4 条备选）" onclick="lbHfAltAdd(' + i + ')">＋ 分支</span></div>' : '')
+        + '</div>';
+    }
+  }
+  return h;
+}
+function lbHfTplInsert(v){   // v4884 B4：模板动词快捷插一步
+  if (!LB_HF.edit || !v) return;
+  lbHfPushUndo();
+  LB_HF.edit.card.steps.push({ type: 'step', text: '', refs: [], tokens: [{ t: 'verb', v: String(v).slice(0, 6) }] });
+  LB_HF.dirty = true;
+  lbHfEditRender();
+}
+function lbHfAutoGen(){   // v4894 D2：✨ 生成 → 打开 AI 面板
+  if (!LB_HF.edit) return;
+  var c = null;
+  try { c = lbAiCfgGet(); } catch (e) {}
+  if (!c){
+    try { if (typeof lbToast === 'function') lbToast('请先在「⚙ 自助配置」里填大白鱼 token'); } catch (e1) {}
+    try { lbOpenConfigModal(); } catch (e2) {}
+    setTimeout(function(){ try { var el = document.getElementById('lbAiToken'); if (el) el.scrollIntoView({block:'center'}); } catch (e3) {} }, 260);
+    return;
+  }
+  lbHfAiOpen();
+}
+function lbHfAiOpen(){
+  if (!LB_HF.edit) return;
+  lbHfAiClose();
+  var cfg = lbAiCfgGet() || {};
+  if (!LB_HF.aiMode) LB_HF.aiMode = 'append';   // v4902（用户口径）：应用方式 追加/覆盖（面板内可切）
+  var box = '<div class="lb-hf-aibox" id="lbHfAiBox">'
+    + '<textarea class="lb-hf-aiinput" id="lbHfAiInput" placeholder="例：我去孤岛用甲龙敲石头，带回精炼炉烧成金属锭，晚上记得带照明"></textarea>'
+    + '<div class="lb-hf-airow">'
+    + '<span class="lb-hf-ai-meta" id="lbHfAiMeta">模型 ' + lbHfEsc(lbAiNormModel(cfg.model)) + ' · token ' + lbHfEsc(lbAiMask(cfg.token || '')) + '</span>'
+    + '<span class="lb-tipb lb-hf-aimode" id="lbHfAiMode" title="应用方式（生成后仍可改动）">应用：'
+    +   '<span data-m="append" class="' + (LB_HF.aiMode === 'replace' ? '' : 'on') + '" onclick="lbHfAiModeSet(&quot;append&quot;)">追加</span>'
+    +   '<span data-m="replace" class="' + (LB_HF.aiMode === 'replace' ? 'on' : '') + '" onclick="lbHfAiModeSet(&quot;replace&quot;)">覆盖</span>'
+    + '</span>'
+    + '<span class="lb-hf-ai-cfg" onclick="lbOpenConfigModal()">⚙ 自助配置</span>'
+    + '<span style="flex:1 1 auto"></span>'
+    + '<button class="lb-hf-aibtn primary" id="lbHfAiGo" title="用大白鱼生成采集流程" onclick="lbHfAiGen()">✨ 生成</button>'
+    + '<button class="lb-hf-aibtn" onclick="lbHfAiClose()">取消</button>'
+    + '</div>'
+    + '<div class="lb-hf-aicand" id="lbHfAiCand" style="display:none"></div>'
+    + '<div class="lb-hf-aihint">上方「应用」可先选追加 / 覆盖（生成后仍能改）；结果先预览再应用。token 在「⚙ 自助配置」里填，仅存本机。</div>'
+    + '</div>';
+  var rows = document.getElementById('lbHfERows');
+  if (rows) rows.insertAdjacentHTML('beforebegin', box);
+  else {
+    var p = document.querySelector('.lb-hf-edit');
+    if (p) p.insertAdjacentHTML('beforeend', box);
+  }
+  try { var _pnl = document.querySelector('.lb-hf-panel.lb-hf-edit'); if (_pnl) _pnl.classList.add('lb-hf-ai-mode'); } catch (e0) {}   // v4902：进入 AI 模式（步骤区收起）
+  setTimeout(function(){ try { var el = document.getElementById('lbHfAiInput'); if (el) el.focus(); } catch (e) {} }, 50);
+}
+function lbHfAiClose(){
+  var el = document.getElementById('lbHfAiBox'); if (el) el.remove();
+  try { var p = document.querySelector('.lb-hf-panel.lb-hf-edit'); if (p) p.classList.remove('lb-hf-ai-mode'); } catch (e0) {}   // v4902：退出 AI 模式 → 步骤区恢复
+}
+function lbHfAiModeSet(m){   // v4902（用户口径）：应用方式切换（追加 / 覆盖）
+  LB_HF.aiMode = (m === 'replace') ? 'replace' : 'append';
+  var box = document.getElementById('lbHfAiMode');
+  if (box){ [].slice.call(box.querySelectorAll('[data-m]')).forEach(function(e){ e.classList.toggle('on', e.getAttribute('data-m') === LB_HF.aiMode); }); }
+}
+function lbAiNameToKey(name){
+  var nm = String(name || '').trim(); if (!nm) return '';
+  try {
+    var src = (typeof LB_ITEM_ZH !== 'undefined') ? LB_ITEM_ZH : null;
+    if (src){
+      var ks = Object.keys(src);
+      for (var i = 0; i < ks.length; i++){ var t = src[ks[i]] || {}; if (t.zh === nm || t.en === nm) return ks[i]; }
+    }
+  } catch (e) {}
+  return '';
+}
+function lbAiParseJson(txt){
+  var s = String(txt || '');
+  try { return JSON.parse(s); } catch (e) {}
+  var m = s.match(/\{[\s\S]*\}/);
+  if (m){ try { return JSON.parse(m[0]); } catch (e2) {} }
+  return null;
+}
+function lbAiBuildUserMsg(input){
+  var verbs = (LB_HF_VERBS || []).map(function(v){ return v.v; }).join('/');
+  var ex = '';
+  try {
+    var cs = (LB_HF.doc && LB_HF.doc.cards) ? LB_HF.doc.cards.slice(0, 2) : [];
+    if (cs.length){
+      ex = '参考示例：\n';
+      cs.forEach(function(cd){
+        var o = { spot: cd.spot || cd.title || '', map: String(cd.map || '').split(',').filter(Boolean).slice(0, 1),
+          steps: (cd.steps || []).filter(function(s){ return s && s.type !== 'hdr'; }).slice(0, 5).map(function(s){
+            return { type: s.type || 'step', tokens: (s.tokens || []).map(function(t){ return { t: t.t, v: t.v, name: t.key }; }) };
+          }) };
+        ex += JSON.stringify(o) + '\n';
+      });
+    }
+  } catch (e) {}
+  return '可用动词：' + verbs + '\n'
+    + '地图缩写：Isl/Sco/Cen/Abe/Ext/Ast/Rag/Val/Bob/Los/Gen\n'
+    + ex
+    + '输出 schema（严格按此结构）：{"spot":"采集点名","map":["Isl"],"outputs":["石头"],"equip":[{"name":"金属镐","qty":1}],"steps":['
+    + '{"type":"hdr","text":"准备"},'
+    + '{"type":"step","tokens":[{"t":"verb","v":"传"},{"t":"dino","name":"甲龙"}]},'
+    + '{"type":"hdr","text":"采集"},'
+    + '{"type":"step","tokens":[{"t":"verb","v":"采"},{"t":"item","name":"石头"}]},'
+    + '{"type":"hdr","text":"收尾"},'
+    + '{"type":"step","tokens":[{"t":"verb","v":"取"}]},'
+    + '{"type":"note","text":"夜间记得带照明"}]}\n'
+    + '硬性要求：\n'
+    + '0) map 用地图缩写（可多选）；outputs 写本次能得到的产出物品中文名（1~4 个）；equip 写所需装备/工具（中文名 + qty，没有则空数组 []）；\n'
+    + '1) 必须用 type=hdr 分出 3 个阶段（准备 / 采集 / 收尾，名称可微调但必须 3 个）；\n'
+    + '2) 至少 1 条 type=note 的注意事项；\n'
+    + '3) 【关键】一个步骤的全部内容必须放在同一个 step 的 tokens 数组里 —— 动作动词与它的对象（物品/生物/按键）必须同属一个 step，禁止把「骑」和「甲龙」拆成两个 step；\n'
+    + '4) 除 hdr / note 外，step 条数 3~8；tokens 只用 verb/item/dino/key；物品与生物只写中文名，不要写类名。\n'
+    + '玩家输入：' + String(input || '').slice(0, 300);
+}
+
+function lbAiToSteps(d){
+  var out = [];
+  ((d && d.steps) || []).slice(0, 8).forEach(function(s){
+    if (!s) return;
+    if (s.type === 'note'){ out.push({ type: 'note', text: String(s.text || '').slice(0, 500) }); return; }
+    if (s.type === 'hdr'){ out.push({ type: 'hdr', text: String(s.text || '').slice(0, 20), note: '' }); return; }
+    var toks = [];
+    (s.tokens || []).slice(0, 12).forEach(function(t){
+      if (!t) return;
+      if (t.t === 'verb'){ toks.push({ t: 'verb', v: String(t.v || '').slice(0, 6) }); }
+      else if (t.t === 'item' || t.t === 'dino'){
+        var nm = t.name || t.key || '';
+        var k = lbAiNameToKey(nm);
+        if (k) toks.push({ t: (t.t === 'dino' ? 'dino' : 'item'), key: k });
+        else if (nm) toks.push({ t: 'verb', v: String(nm).slice(0, 6) });   // 反查不到 → 降级纯文字
+      } else if (t.t === 'key'){ toks.push({ t: 'key', v: String(t.v || '') }); }
+    });
+    out.push({ type: 'step', text: '', refs: [], tokens: toks });
+  });
+  return out;
+}
+function lbAiToCard(d){   // v4907（用户口径）：AI 结果 → 卡片字段（地图 / 产出 / 装备）
+  var out = { map: '', outputs: [], equip: [] };
+  if (!d) return out;
+  var maps = [];
+  var ml = Array.isArray(d.map) ? d.map : (d.map ? String(d.map).split(/[,，\s]+/) : []);
+  ml.forEach(function(m){
+    var s = String(m || '').trim(); if (!s) return;
+    var ab = '';
+    try { (LB.SERVERS || []).forEach(function(sv){ if (sv.abbr === s || sv.name === s) ab = sv.abbr; }); } catch (e) {}
+    if (!ab && /^[A-Za-z]{2,4}$/.test(s)) ab = s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+    if (ab && maps.indexOf(ab) < 0) maps.push(ab);
+  });
+  out.map = maps.join(',');
+  (Array.isArray(d.outputs) ? d.outputs : []).forEach(function(o){
+    var nm = (o && typeof o === 'object') ? (o.name || o.zh || o.key || '') : o;
+    var k = lbAiNameToKey(nm); if (k && out.outputs.indexOf(k) < 0) out.outputs.push(k);
+  });
+  (Array.isArray(d.equip) ? d.equip : []).forEach(function(g){
+    var nm = (g && typeof g === 'object') ? (g.name || g.zh || g.key || '') : g;
+    var q = (g && typeof g === 'object' && Number(g.qty) > 1) ? Math.min(999, Math.floor(Number(g.qty))) : 1;
+    var k = lbAiNameToKey(nm); if (k) out.equip.push({ key: k, qty: q });
+  });
+  return out;
+}
+function lbHfAiGen(){
+  var cfg = lbAiCfgGet();
+  var ta = document.getElementById('lbHfAiInput');
+  var cand = document.getElementById('lbHfAiCand');
+  var btn = document.getElementById('lbHfAiGo');
+  var inp = String((ta && ta.value) || '').trim();
+  if (!cfg){ lbHfAiOpen(); return; }
+  if (!inp){ try { if (typeof lbToast === 'function') lbToast('先写一句描述'); } catch (e) {} return; }
+  if (cand){ cand.style.display = 'block'; cand.innerHTML = '<div class="lb-hf-aihint" id="lbHfAiMsg">生成中…</div>'; }
+  if (btn) btn.disabled = true;
+  var msgs = [
+    { role: 'system', content: '你是 ARK: Survival Ascended 的采集流程结构化助手。只输出 JSON，不解释、不加代码块标记。' },
+    { role: 'user', content: lbAiBuildUserMsg(inp) }
+  ];
+  fetch(String(cfg.base || LB_AI_BASE).replace(/\/+$/, '') + '/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.token },
+    // v4903：deepseek-flash 思考默认 enabled(effort=high) 会吃光 max_tokens ⇒ content 为空；关思考 + 强制 JSON 输出 + 放宽 max_tokens
+    body: JSON.stringify({ model: lbAiNormModel(cfg.model), messages: msgs, temperature: 0.2, max_tokens: 1200, thinking: { type: 'disabled' }, response_format: { type: 'json_object' } })
+  }).then(function(r){ return r.text().then(function(t){ return { s: r.status, t: t }; }); })
+    .then(function(x){
+      if (btn) btn.disabled = false;
+      if (x.s !== 200){
+        var em = lbAiErrText(x.s) + '（' + x.s + '）';
+        if (cand) cand.innerHTML = '<div class="lb-hf-aihint" style="color:#f87171">❌ ' + em + '</div>'
+          + '<div class="lb-hf-airow"><button class="lb-hf-aibtn" onclick="lbHfAiGen()">重新生成</button>'
+          + '<button class="lb-hf-aibtn" onclick="lbHfAiLocal()">用本地骨架</button></div>';
+        return;
+      }
+      var j = null; try { j = JSON.parse(x.t); } catch (e) {}
+      var ch0 = (j && j.choices && j.choices[0]) ? j.choices[0] : null;
+      var msg0 = (ch0 && ch0.message) ? ch0.message : null;
+      var content = (msg0 && msg0.content) ? String(msg0.content) : '';
+      var _fr = (ch0 && ch0.finish_reason) ? String(ch0.finish_reason) : '';
+      var d = lbAiParseJson(content);
+      if (!d && msg0 && msg0.reasoning_content) d = lbAiParseJson(String(msg0.reasoning_content));   // v4903：兜底从思考内容里抠 JSON
+      if (!d && j && j.error){   // v4903：服务端明确报错，直接显示原因
+        var _em = String((j.error && (j.error.message || j.error.type)) || '接口报错').slice(0, 160);
+        if (cand) cand.innerHTML = '<div class="lb-hf-aihint" style="color:#f87171">❌ ' + lbHfEsc(_em) + '</div>'
+          + '<div class="lb-hf-airow"><button class="lb-hf-aibtn" onclick="lbHfAiGen()">重新生成</button>'
+          + '<button class="lb-hf-aibtn" onclick="lbHfAiLocal()">用本地骨架</button></div>';
+        return;
+      }
+      if (!d){   // v4903：不再只说"无法解析"，附 finish_reason 与返回内容片段便于定位
+        var _raw = content || ((msg0 && msg0.reasoning_content) ? String(msg0.reasoning_content) : '') || String(x.t || '');
+        var _snip = _raw.replace(/\s+/g, ' ').slice(0, 160);
+        if (cand) cand.innerHTML = '<div class="lb-hf-aihint" style="color:#f87171">❌ 返回格式无法解析' + (_fr ? ('（finish_reason=' + lbHfEsc(_fr) + '）') : '') + '</div>'
+          + (_snip ? '<div class="lb-hf-aihint" style="color:#8b8b9a;word-break:break-all">返回内容：' + lbHfEsc(_snip) + '</div>' : '')
+          + '<div class="lb-hf-airow"><button class="lb-hf-aibtn" onclick="lbHfAiGen()">重新生成</button>'
+          + '<button class="lb-hf-aibtn" onclick="lbHfAiLocal()">用本地骨架</button></div>';
+        return;
+      }
+      LB_HF.aiCand = d;
+      var steps = lbAiToSteps(d);
+      var _pc = lbAiToCard(d);   // v4907
+      var _head = '';
+      if (_pc.map) _head += '<div class="lb-hf-sflow" style="margin-top:6px"><span class="lb-hf-ai-meta">地图：</span><span class="lb-hf-mapbadge">' + lbHfEsc(lbHfMapLabelOf(_pc.map)) + '</span></div>';
+      if (_pc.outputs.length){ var _o1 = ''; _pc.outputs.forEach(function(k){ _o1 += lbHfTokenChipHtml({ t: 'item', key: k }); }); _head += '<div class="lb-hf-sflow" style="margin-top:6px"><span class="lb-hf-ai-meta">产出：</span>' + _o1 + '</div>'; }
+      if (_pc.equip.length){ var _o2 = ''; _pc.equip.forEach(function(g){ _o2 += lbHfTokenChipHtml({ t: 'item', key: g.key }); }); _head += '<div class="lb-hf-sflow" style="margin-top:6px"><span class="lb-hf-ai-meta">装备：</span>' + _o2 + '</div>'; }
+      var chips = _head;
+      steps.forEach(function(s){
+        if (s.type === 'note'){ chips += '<div class="lb-hf-sflow" style="margin-top:6px"><span class="lb-hf-note2">✎ ' + lbHfEsc(s.text) + '</span></div>'; return; }
+        if (s.type === 'hdr'){ chips += '<div class="lb-hf-sflow" style="margin-top:6px"><span class="lb-hf-gname">' + lbHfEsc(s.text) + '</span></div>'; return; }
+        var row = '';
+        (s.tokens || []).forEach(function(t){ row += lbHfTokenChipHtml(t); });
+        chips += '<div class="lb-hf-sflow" style="margin-top:6px">' + (row || '<span class="lb-hf-ai-meta">（空步骤）</span>') + '</div>';
+      });
+      if (cand){
+        cand.innerHTML = '<div class="lb-hf-ai-meta" style="color:#86efac;margin-bottom:6px">已生成 ' + steps.length + ' 步 · 选择应用方式</div>'
+          + chips
+          + '<div class="lb-hf-airow" style="margin-top:8px">'
+          + '<button class="lb-hf-aibtn" onclick="lbHfAiGen()">重新生成</button>'
+          + '<button class="lb-hf-aibtn' + (LB_HF.aiMode === 'replace' ? '' : ' primary') + '" onclick="lbHfAiApply(\'append\')">追加到末尾</button>'
+          + '<button class="lb-hf-aibtn' + (LB_HF.aiMode === 'replace' ? ' primary' : '') + '" onclick="lbHfAiApply(\'replace\')">覆盖当前步骤</button>'
+          + '<button class="lb-hf-aibtn" onclick="lbHfAiClose()">取消</button>'
+          + '</div>';
+      }
+    }).catch(function(e){
+      if (btn) btn.disabled = false;
+      if (cand) cand.innerHTML = '<div class="lb-hf-aihint" style="color:#f87171">❌ 网络错误：' + lbHfEsc((e && e.message) || String(e)) + '</div>'
+        + '<div class="lb-hf-airow"><button class="lb-hf-aibtn" onclick="lbHfAiGen()">重新生成</button>'
+        + '<button class="lb-hf-aibtn" onclick="lbHfAiLocal()">用本地骨架</button></div>';
+    });
+}
+function lbHfAiLocal(){
+  lbHfAiClose();
+  lbHfAutoGenLocal();
+}
+function lbHfAiApply(mode){
+  if (!LB_HF.edit || !LB_HF.aiCand) return;
+  var card = LB_HF.edit.card;
+  var steps = lbAiToSteps(LB_HF.aiCand);
+  var pc = lbAiToCard(LB_HF.aiCand);   // v4907：地图 / 产出 / 装备
+  var isRep = (mode === 'replace');
+  if (!steps.length && !pc.map && !pc.outputs.length && !pc.equip.length){
+    try { if (typeof lbToast === 'function') lbToast('没有可应用的内容'); } catch (e) {}
+    return;
+  }
+  lbHfPushUndo();
+  if (steps.length) card.steps = isRep ? steps : ((card.steps || []).concat(steps));
+  var sp = String(LB_HF.aiCand.spot || '').trim();
+  if (sp && (isRep || !card.spot)) card.spot = sp;
+  // v4907（用户口径）：覆盖=替换，追加=仅补空
+  if (pc.map && (isRep || !card.map)) card.map = pc.map;
+  if (pc.outputs.length){
+    if (isRep){ card.outputs = pc.outputs.slice(); try { card.outputsQty = {}; } catch (e1) {} }
+    else if (!(card.outputs || []).length) card.outputs = pc.outputs.slice();
+  }
+  if (pc.equip.length){
+    var _eq = pc.equip.map(function(g){ return { key: g.key, qty: g.qty }; });
+    if (isRep || !(card.equip || []).length) card.equip = _eq;
+  }
+  LB_HF.aiCand = null;
+  LB_HF.dirty = true;
+  lbHfEditRender();
+}
+function lbHfAutoGenLocal(){   // v4884 B1+B3：按产出 + 采集点生成 3 阶段骨架（本地规则，AI 失败时降级用）
+  if (!LB_HF.edit) return;
+  var c = LB_HF.edit.card;
+  var outs = (c.outputs || []).slice(0, 6);
+  if (!outs.length){ alert('请先选产出物，再点生成'); return; }
+  lbHfPushUndo();
+  var spot = String(c.spot || '').trim() || '采集点';
+  var steps = [];
+  steps.push({ type: 'hdr', text: '准备', note: '' });
+  steps.push({ type: 'step', text: '', refs: [], tokens: [{ t: 'verb', v: '传' }] });
+  steps.push({ type: 'hdr', text: '采集', note: '' });
+  outs.forEach(function (k) {
+    steps.push({ type: 'step', text: '', refs: [], tokens: [{ t: 'verb', v: '采' }, { t: 'item', key: k }] });
+  });
+  steps.push({ type: 'hdr', text: '收尾', note: '' });
+  steps.push({ type: 'step', text: '', refs: [], tokens: [{ t: 'verb', v: '取' }] });
+  var txt = spot + ' ' + String(c.title || '') + ' ' + outs.join(' ');
+  var tips = [];
+  if (/深处|洞|矿洞|开挖/.test(txt)) tips.push('深处：带照明 / 备用火把');
+  if (/水下|海底|深海|潜水/.test(txt)) tips.push('水下：带氧气 / 潜水装备');
+  if (/辐射|红区/.test(txt)) tips.push('辐射区：穿防辐射服');
+  if (/夜间|晚上|夜/.test(txt)) tips.push('夜间：带照明');
+  if (/飞行|翼|飞龙/.test(txt)) tips.push('空中：带飞行坐骑');
+  tips.forEach(function (t) { steps.push({ type: 'note', text: t }); });
+  c.steps = steps;
+  LB_HF.dirty = true;
+  lbHfEditRender();
+}
+function lbHfAltAdd(i){   // v4883 A26：加一条备选走法
+  if (!LB_HF.edit) return;
+  var st = LB_HF.edit.card.steps[i]; if (!st) return;
+  lbHfPushUndo();
+  st.alts = Array.isArray(st.alts) ? st.alts : [];
+  if (st.alts.length >= 4) return;
+  st.alts.push({ when: '不可达', lv: 'warn', tokens: [] });
+  LB_HF.dirty = true; lbHfClosePop(); lbHfEditRender();
+}
+function lbHfAltDel(i, ai){
+  if (!LB_HF.edit) return;
+  var st = LB_HF.edit.card.steps[i]; if (!st || !st.alts) return;
+  lbHfPushUndo();
+  st.alts.splice(ai, 1);
+  if (!st.alts.length) { try { delete st.alts; } catch (e) { st.alts = null; } }
+  LB_HF.dirty = true; lbHfClosePop(); lbHfEditRender();
+}
+function lbHfAltWhen(i, ai){
+  if (!LB_HF.edit) return;
+  var st = LB_HF.edit.card.steps[i];
+  var a = st && st.alts && st.alts[ai]; if (!a) return;
+  var v = prompt('条件（≤6 字，例如 不可达 / 无坐骑 / 夜晚）', a.when || '不可达');
+  if (v === null) return;
+  lbHfPushUndo();
+  a.when = String(v).trim().slice(0, 6) || '不可达';
+  LB_HF.dirty = true; lbHfEditRender();
+}
+function lbHfAltMenu(i, ai, ev){
+  if (ev && ev.stopPropagation) ev.stopPropagation();
+  var html = '<div class="lb-hf-tokmenu"><b>这条走法</b>'
+    + '<i onclick="lbHfAltWhen(' + i + ',' + ai + ')">✎ 改条件</i>'
+    + '<i onclick="lbHfAltAdd(' + i + ')">＋ 再加一条走法</i>'
+    + '<i class="danger" onclick="lbHfAltDel(' + i + ',' + ai + ')">🗑 删除此分支</i></div>';
+  lbHfPop(html, ev && ev.currentTarget);
+}
+function lbHfStepLv(i){   // v4882 A18：步骤状态徽章（普通 ↔ 注意/必做）
+  if (!LB_HF.edit) return;
+  var st = LB_HF.edit.card.steps[i]; if (!st) return;
+  lbHfPushUndo();
+  if (st.lv === 'warn') { try { delete st.lv; } catch (e) { st.lv = ''; } } else { st.lv = 'warn'; }
+  LB_HF.dirty = true;
+  lbHfEditRender();
+}
+function lbHfDragStart(i, ev){   // v4882 A14：拖动排序
+  LB_HF.dragIdx = i;
+  try { ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', String(i)); } catch (e) {}
+}
+function lbHfDropRow(j, ev){   // v4882 A14：放下 → 移动
+  try { ev.preventDefault(); } catch (e) {}
+  var i = (LB_HF.dragIdx == null ? -1 : LB_HF.dragIdx);
+  LB_HF.dragIdx = null;
+  if (i < 0 || i === j || !LB_HF.edit) return;
+  var arr = LB_HF.edit.card.steps;
+  if (!arr || !arr[i] || !arr[j]) return;
+  lbHfPushUndo();
+  var t = arr.splice(i, 1)[0];
+  arr.splice(j, 0, t);
+  LB_HF.dirty = true;
+  lbHfEditRender();
+}
+function lbHfTipSeen(){   // v4882 A27：首用提示只出现一次
+  try { localStorage.setItem('lb_hf_tip_seen', '1'); } catch (e) {}
+  document.querySelectorAll('.lb-hf-firsttip').forEach(function(e){ e.remove(); });
+}
+function lbHfExportCard(id){   // v4882 A31：导出单张采集流程 JSON
+  var c = lbHfCardById(id); if (!c) return;
+  try {
+    var a = document.createElement('a');
+    a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(c, null, 2));
+    a.download = 'hfflow_' + String(c.spot || c.id || 'card') + '.json';
+    document.body.appendChild(a); a.click(); a.remove();
+  } catch (e) {}
+}
+function lbHfEditGNoteEdit(i){   // 阶段备注（就地编辑）
+  if (!LB_HF.edit) return;
+  var st = LB_HF.edit.card.steps[i]; if (!st) return;
+  var v = window.prompt('阶段备注（留空＝删除）', st.note || '');
+  if (v === null) return;
+  lbHfPushUndo();
+  st.note = String(v).slice(0, 500);
+  LB_HF.dirty = true;
+  lbHfEditRender();
+}
+function lbHfEditNote(i, v){
+  if (!LB_HF.edit) return;
+  var st = LB_HF.edit.card.steps[i];
+  if (st) st.note = v;
+  LB_HF.dirty = true;
+}
+function lbHfEditToggleOut(){   // v4886（用户口径）：展开/收起产出行（对齐地图按钮逻辑）
+  var r = document.getElementById('lbHfEOutRow');
+  if (r) r.style.display = (r.style.display === 'none' ? 'flex' : 'none');
+}
+function lbHfEditToggleMap(){
+  var r = document.getElementById('lbHfEMapRow');
+  if (r) r.style.display = (r.style.display === 'none' ? 'flex' : 'none');
+}
+function lbHfEditHeadRefresh(){
+  try {
+    if (!LB_HF.edit) return;
+    var card = LB_HF.edit.card;
+    var el = document.getElementById('lbHfEMapBtn');
+    if (!el) return;
+    el.innerHTML = '<i class="mdi ' + lbHfEsc(lbHfMapMdiOf(card.map)) + '"></i>';
+    el.setAttribute('data-tip', '地图：' + lbHfMapLabelOf(card.map) + '（点击改地图）');
+  } catch (e) {}
+}
+function lbHfEditEquipQty(i){
+  if (!LB_HF.edit) return;
+  var c = LB_HF.edit.card;
+  if (!c.equip || !c.equip[i]) return;
+  var q = Number(c.equip[i].qty) || 1;
+  lbHfPushUndo();
+  c.equip[i].qty = (q >= 9 ? 1 : q + 1);
+  LB_HF.dirty = true;
+  lbHfEditRender();
+}
+function lbHfEditDelEquip(i){
+  if (!LB_HF.edit || !LB_HF.edit.card.equip) return;
+  lbHfPushUndo();
+  LB_HF.edit.card.equip.splice(i, 1);
+  LB_HF.dirty = true;
+  lbHfEditRender();
+}
+function lbHfPickEquip(){
+  if (!LB_HF.edit) return;
+  lbOpenSpeciesPicker({ multi: true, onPickMulti: function(list){
+    if (!LB_HF.edit) return;
+    var c = LB_HF.edit.card;
+    c.equip = Array.isArray(c.equip) ? c.equip : [];
+    lbHfPushUndo();
+    (list || []).forEach(function(v){
+      var k = lbHfKeyOfPick(v);
+      if (!k) return;
+      var found = false;
+      for (var i = 0; i < c.equip.length; i++){
+        if (c.equip[i].key === k){ c.equip[i].qty = Math.min(99, (Number(c.equip[i].qty) || 1) + 1); found = true; break; }
+      }
+      if (!found) c.equip.push({ key: k, qty: 1 });
+    });
+    LB_HF.dirty = true;
+    lbHfEditRender();
+  } });
+}
+// ===== v4962（第1波 A11–A21）：动作积木（token）编辑 =====
+var LB_HF_VERBS = [
+  { v: '骑', obj: 'dino' }, { v: '采', obj: 'item' }, { v: '拿', obj: 'item' }, { v: '入', obj: 'item' },
+  { v: '用', obj: 'item' }, { v: '烧', obj: 'item' }, { v: '取', obj: 'item' }, { v: '丢', obj: 'dino' },
+  { v: '还', obj: '' }, { v: '传', obj: 'item' }, { v: '开', obj: 'item' }, { v: '转', obj: '' }
+];
+var LB_HF_KEYS = ['IconLeftClick','IconMiddleClick','IconRightClick','PC_btn_A','PC_btn_Ctrl','PC_btn_D','PC_btn_E','PC_btn_Enter','PC_btn_Esc','PC_btn_F','PC_btn_H','PC_btn_N','PC_btn_S','PC_btn_Space','PC_btn_Spacebar','PC_btn_W','PC_btn_Q','PC_btn_R','PC_btn_T'];
+function lbHfKeySrc(v){ return 'https://img.whiterober.ccwu.cc/ASA/keys/' + encodeURIComponent(String(v || '')) + '.png'; }
+function lbHfPushUndo(){
+  try {
+    if (!LB_HF.edit) return;
+    LB_HF.undo = LB_HF.undo || [];
+    LB_HF.undo.push(JSON.stringify(LB_HF.edit.card));
+    if (LB_HF.undo.length > 20) LB_HF.undo.shift();
+  } catch (e) {}
+}
+function lbHfUndo(){
+  try {
+    if (!LB_HF.edit || !LB_HF.undo || !LB_HF.undo.length) return;
+    LB_HF.edit.card = JSON.parse(LB_HF.undo.pop());
+    LB_HF.dirty = true;
+  } catch (e) {}
+  lbHfEditRender();
+}
+var LB_HF_POP_ANCHOR = null;
+function lbHfPop(html, anchorEl){
+  var _ex = document.querySelector('.lb-hf-pop,.lb-hf-tokmenu');   // v4893：再点同一触发元素 = 关闭
+  if (_ex && anchorEl && LB_HF_POP_ANCHOR === anchorEl){ lbHfClosePop(); return null; }
+  document.querySelectorAll('.lb-hf-pop,.lb-hf-tokmenu').forEach(function(e){ e.remove(); });
+  var d = document.createElement('div');
+  d.innerHTML = html;
+  var el = d.firstElementChild;
+  document.body.appendChild(el);
+  try {
+    var r = (anchorEl || document.body).getBoundingClientRect();
+    var bw = el.offsetWidth, bh = el.offsetHeight;
+    var x = Math.min(Math.max(8, r.left), window.innerWidth - bw - 8);
+    var y = r.bottom + 6;
+    if (y + bh > window.innerHeight - 8) y = Math.max(8, r.top - bh - 6);
+    el.style.left = x + 'px'; el.style.top = y + 'px';
+  } catch (e) {}
+  LB_HF_POP_ANCHOR = anchorEl || null;
+  return el;
+}
+function lbHfClosePop(){
+  document.querySelectorAll('.lb-hf-pop,.lb-hf-tokmenu').forEach(function(e){ e.remove(); });
+  LB_HF_POP_ANCHOR = null;
+}
+(function(){   // v4893：点浮窗外 / Esc 关闭
+  if (window.__lbHfPopBound) return;
+  window.__lbHfPopBound = true;
+  document.addEventListener('mousedown', function(ev){
+    var el = document.querySelector('.lb-hf-pop,.lb-hf-tokmenu');
+    if (!el) return;
+    if (el.contains(ev.target)) return;
+    if (LB_HF_POP_ANCHOR && LB_HF_POP_ANCHOR.contains && LB_HF_POP_ANCHOR.contains(ev.target)) return;
+    lbHfClosePop();
+  }, true);
+  document.addEventListener('keydown', function(ev){
+    if (ev.key === 'Escape'){ lbHfClosePop(); }
+  }, true);
+})();
+function lbHfTokArr(i, ai){   // v4883 A26：ai<0 = 主走法；否则备选走法
+  if (!LB_HF.edit) return null;
+  var st = LB_HF.edit.card.steps[i]; if (!st) return null;
+  if (!(ai >= 0)) { st.tokens = Array.isArray(st.tokens) ? st.tokens : []; return st.tokens; }
+  var a = (st.alts || [])[ai]; if (!a) return null;
+  a.tokens = Array.isArray(a.tokens) ? a.tokens : [];
+  return a.tokens;
+}
+function lbHfAddToken(i, tok, ai){
+  if (!LB_HF.edit) return;
+  var arr = lbHfTokArr(i, ai); if (!arr) return;
+  lbHfPushUndo();
+  arr.push(tok);
+  LB_HF.dirty = true;
+  lbHfClosePop();
+  lbHfEditRender();
+}
+function lbHfDelToken(i, ti, ai){
+  if (!LB_HF.edit) return;
+  var arr = lbHfTokArr(i, ai); if (!arr) return;
+  lbHfPushUndo();
+  arr.splice(ti, 1);
+  LB_HF.dirty = true;
+  lbHfClosePop();
+  lbHfEditRender();
+}
+function lbHfTokLv(i, ti, lv, ai){
+  if (!LB_HF.edit) return;
+  var arr = lbHfTokArr(i, ai); if (!arr || !arr[ti]) return;
+  lbHfPushUndo();
+  if (lv) arr[ti].lv = lv; else delete arr[ti].lv;
+  LB_HF.dirty = true;
+  lbHfClosePop();
+  lbHfEditRender();
+}
+function lbHfTokMenu(i, ti, ev, ai){
+  if (ev && ev.stopPropagation) ev.stopPropagation();
+  var _sfx = (ai >= 0) ? (',' + ai) : '';
+  var html = '<div class="lb-hf-tokmenu"><b>这个徽章</b>'
+    + '<i onclick="lbHfTokLv(' + i + ',' + ti + ',\'\'' + _sfx + ')">⚪ 普通（灰）</i>'
+    + '<i onclick="lbHfTokLv(' + i + ',' + ti + ',\'warn\'' + _sfx + ')">🟠 注意 / 必做</i>'
+    + '<i onclick="lbHfTokLv(' + i + ',' + ti + ',\'hint\'' + _sfx + ')">🔵 关键动作</i>'
+    + '<i class="danger" onclick="lbHfDelToken(' + i + ',' + ti + _sfx + ')">🗑 删除这个徽章</i></div>';
+  lbHfPop(html, ev && ev.currentTarget);
+}
+function lbHfVerbPanel(i, ev, ai){
+  if (ev && ev.stopPropagation) ev.stopPropagation();
+  var _sfx = (ai >= 0) ? (',' + ai) : '';
+  var html = '<div class="lb-hf-pop"><div class="lb-hf-pop-h">选动作 —— 点一下加进' + (ai >= 0 ? '这条备选走法' : ('第 ' + (i + 1) + ' 行')) + '</div><div class="lb-hf-sflow">';
+  for (var k = 0; k < LB_HF_VERBS.length; k++){
+    html += '<span class="lb-hf-chip" onclick="lbHfPickVerb(' + i + ',\'' + LB_HF_VERBS[k].v + '\'' + _sfx + ')">' + LB_HF_VERBS[k].v + '</span>';
+  }
+  var _cvs = lbHfCustomVerbsGet();   // v4895 C6：自定义动作置顶
+  for (var _ci = 0; _ci < _cvs.length; _ci++){
+    html += '<span class="lb-hf-chip" onclick="lbHfPickVerb(' + i + ',\'' + _cvs[_ci] + '\'' + _sfx + ')">' + lbHfEsc(_cvs[_ci]) + '</span>';
+  }
+  html += '<span class="lb-hf-addchip" onclick="lbHfCustomVerb(' + i + _sfx + ')">＋ 自定义</span>';
+  html += '<span class="lb-hf-addchip" id="lbHfVerbMgrBtn" onclick="lbHfVerbManage()">管理</span></div>';
+    + '<div class="lb-hf-pop-h" style="margin:8px 0 6px">键帽（点一下加进去）</div><div class="lb-hf-sflow">';
+  for (var q = 0; q < LB_HF_KEYS.length; q++){
+    html += '<span class="lb-hf-chip" onclick="lbHfAddToken(' + i + ',{t:\'key\',v:\'' + LB_HF_KEYS[q] + '\'}' + _sfx + ')">'
+      + '<img class="lb-hf-keyimg" src="' + lbHfKeySrc(LB_HF_KEYS[q]) + '" alt="" onerror="this.style.display=\'none\'"></span>';
+  }
+  html += '</div></div>';
+  lbHfPop(html, ev && ev.currentTarget);
+}
+function lbHfPickVerb(i, v, ai){
+  var _a = (ai >= 0) ? ai : -1;
+  var def = null;
+  for (var k = 0; k < LB_HF_VERBS.length; k++){ if (LB_HF_VERBS[k].v === v){ def = LB_HF_VERBS[k]; break; } }
+  if (!def || !def.obj){ lbHfAddToken(i, { t: 'verb', v: v }, _a); return; }
+  lbHfClosePop();
+  lbOpenSpeciesPicker({ onPick: function(r){
+    if (r == null) return;
+    lbHfAddToken(i, { t: 'verb', v: v }, _a);
+    var k2 = '';
+    try { k2 = lbCanonBase(r.base) || r.base; } catch (e) { k2 = r.base; }
+    lbHfAddToken(i, { t: def.obj, key: k2 }, _a);
+  } });
+}
+function lbHfCustomVerbsGet(){   // v4895 C6：自定义动作持久化（本机）
+  try {
+    var a = JSON.parse(localStorage.getItem('lb_hf_custom_verbs') || '[]');
+    return Array.isArray(a) ? a.filter(function(x){ return typeof x === 'string' && x; }).slice(0, 30) : [];
+  } catch (e) { return []; }
+}
+function lbHfCustomVerbsSet(a){
+  try { localStorage.setItem('lb_hf_custom_verbs', JSON.stringify((a || []).slice(0, 30))); } catch (e) {}
+}
+function lbHfCustomVerb(i, ai){
+  var v = prompt('自定义动作（≤6 字）');
+  if (!v) return;
+  v = String(v).trim().slice(0, 6);
+  if (!v) return;
+  var a = lbHfCustomVerbsGet();
+  if (a.indexOf(v) < 0){ a.push(v); lbHfCustomVerbsSet(a); }
+  lbHfAddToken(i, { t: 'verb', v: v }, (ai >= 0) ? ai : -1);
+}
+function lbHfVerbManage(){
+  var a = lbHfCustomVerbsGet();
+  var rows = a.length ? a.map(function(v, idx){
+    return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">'
+      + '<span style="flex:1;font-size:12px;color:#ddd">' + lbHfEsc(v) + '</span>'
+      + '<i onclick="lbHfVerbMove(' + idx + ',-1)" style="cursor:pointer;color:#a78bfa;font-style:normal;padding:0 3px">↑</i>'
+      + '<i onclick="lbHfVerbMove(' + idx + ',1)" style="cursor:pointer;color:#a78bfa;font-style:normal;padding:0 3px">↓</i>'
+      + '<i onclick="lbHfVerbDel(' + idx + ')" style="cursor:pointer;color:#f87171;font-style:normal;padding:0 3px">✕</i>'
+      + '</div>';
+  }).join('') : '<div style="font-size:12px;color:#888">还没有自定义动作</div>';
+  var html = '<div class="lb-hf-tokmenu"><b>自定义动作管理</b>'
+    + '<div style="padding:6px 2px;max-height:220px;overflow-y:auto">' + rows + '</div>'
+    + '<i onclick="lbHfVerbExport()">📋 导出（复制 JSON）</i>'
+    + '<i onclick="lbHfVerbImport()">📥 导入（粘贴 JSON）</i></div>';
+  lbHfPop(html, document.getElementById('lbHfVerbMgrBtn'));
+}
+function lbHfVerbDel(idx){
+  var a = lbHfCustomVerbsGet(); a.splice(idx, 1); lbHfCustomVerbsSet(a); lbHfVerbManage();
+}
+function lbHfVerbMove(idx, d){
+  var a = lbHfCustomVerbsGet(); var j = idx + d;
+  if (j < 0 || j >= a.length) return;
+  var t = a[idx]; a[idx] = a[j]; a[j] = t;
+  lbHfCustomVerbsSet(a); lbHfVerbManage();
+}
+function lbHfVerbExport(){
+  var s = JSON.stringify(lbHfCustomVerbsGet());
+  try { navigator.clipboard.writeText(s); if (typeof lbToast === 'function') lbToast('已复制：' + s); }
+  catch (e) { prompt('复制以下 JSON', s); }
+}
+function lbHfVerbImport(){
+  var s = prompt('粘贴 JSON 数组（如 ["扛","挖"]）');
+  if (!s) return;
+  try {
+    var a = JSON.parse(s);
+    if (!Array.isArray(a)) throw 0;
+    var cur = lbHfCustomVerbsGet();
+    a.forEach(function(x){ if (typeof x === 'string' && x && cur.indexOf(x) < 0) cur.push(x); });
+    lbHfCustomVerbsSet(cur);
+    lbHfVerbManage();
+    if (typeof lbToast === 'function') lbToast('已导入');
+  } catch (e) { if (typeof lbToast === 'function') lbToast('格式不对'); }
+}
+function lbHfStepMenu(i, ev){
+  if (ev && ev.stopPropagation) ev.stopPropagation();
+  var card = LB_HF.edit && LB_HF.edit.card; if (!card) return;
+  var st = card.steps[i] || {};
+  var isHdr = (st.type === 'hdr');
+  var html = '<div class="lb-hf-tokmenu"><b>' + (isHdr ? '这一步（阶段）' : '这一行') + '</b>'
+    + '<i onclick="lbHfStepMove(' + i + ',-1)">↑ 上移</i>'
+    + '<i onclick="lbHfStepMove(' + i + ',1)">↓ 下移</i>'
+    + (isHdr ? '' : '<i onclick="lbHfStepSetType(' + i + ',\'note\')">✎ 改成备注</i>'
+        + '<i onclick="lbHfStepSetType(' + i + ',\'br\')">— 改成分隔</i>')
+    + (isHdr ? '' : '<i onclick="lbHfAltAdd(' + i + ')">＋ 加一条走法（分支）</i>')
+    + '<i onclick="lbHfStepAddAfter(' + i + ')">＋ 在下方插入一步</i>'
+    + '<i class="danger" onclick="lbHfStepDelRow(' + i + ')">🗑 删除</i></div>';
+  lbHfPop(html, ev && ev.currentTarget);
+}
+function lbHfStepMove(i, d){
+  if (!LB_HF.edit) return;
+  var arr = LB_HF.edit.card.steps; var j = i + d;
+  if (j < 0 || j >= arr.length) return;
+  lbHfPushUndo();
+  var t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+  LB_HF.dirty = true; lbHfClosePop(); lbHfEditRender();
+}
+function lbHfStepSetType(i, ty){
+  if (!LB_HF.edit) return;
+  var st = LB_HF.edit.card.steps[i]; if (!st) return;
+  lbHfPushUndo();
+  st.type = ty;
+  LB_HF.dirty = true; lbHfClosePop(); lbHfEditRender();
+}
+function lbHfStepAddAfter(i){
+  if (!LB_HF.edit) return;
+  lbHfPushUndo();
+  LB_HF.edit.card.steps.splice(i + 1, 0, { type: 'step', text: '', refs: [], tokens: [] });
+  LB_HF.dirty = true; lbHfClosePop(); lbHfEditRender();
+}
+function lbHfStepDelRow(i){
+  if (!LB_HF.edit) return;
+  lbHfPushUndo();
+  LB_HF.edit.card.steps.splice(i, 1);
+  LB_HF.dirty = true; lbHfClosePop(); lbHfEditRender();
+}
+function lbHfInlineAdd(i, el){
+  var v = String((el && el.value) || '').trim();
+  if (!v) return;
+  var st = LB_HF.edit && LB_HF.edit.card.steps[i]; if (!st) return;
+  lbHfPushUndo();
+  st.tokens = Array.isArray(st.tokens) ? st.tokens : [];
+  st.tokens.push({ t: 'verb', v: v });
+  el.value = '';
+  LB_HF.dirty = true;
+  lbHfEditRender();
 }
 function lbHfEditField(k, v){
   if (!LB_HF.edit) return;
   LB_HF.edit.card[k] = v;
+  if (k === 'spot') LB_HF.edit.card.title = v;   // v4871（用户口径）：采集点即标题
   LB_HF.dirty = true;
   lbHfEditPreview();
 }
 function lbHfEditInput(i, v){
   if (!LB_HF.edit) return;
   var st = LB_HF.edit.card.steps[i];
-  if (st) st.text = v;
+  var _s = String(v == null ? '' : v);
+  if (st) st.text = _s.slice(0, 200);   // v4882 A30：单步 ≤200 字
   LB_HF.dirty = true;
+  if (_s.slice(-1) === '['){   // v4884 B5：输入 [ 触发物品 / 生物补全
+    if (st) st.text = _s.slice(0, -1);
+    lbHfEditPreview();
+    lbHfPickRef(i);
+    return;
+  }
   lbHfEditPreview();
 }
 function lbHfEditAddRow(type){
   if (!LB_HF.edit) return;
-  LB_HF.edit.card.steps.push({ type: type || 'step', text: '', refs: [] });
+  lbHfPushUndo();
+  var ty = type || 'step';
+  var row = { type: ty, text: '', refs: [], tokens: [] };
+  if (ty === 'hdr') row.note = '';
+  LB_HF.edit.card.steps.push(row);
   LB_HF.dirty = true;
   lbHfEditRender();
 }
@@ -28912,6 +30218,7 @@ function lbHfEditDel(i){
 }
 function lbHfEditDelOutput(i){
   if (!LB_HF.edit) return;
+  lbHfPushUndo();
   LB_HF.edit.card.outputs.splice(i, 1);
   LB_HF.dirty = true;
   lbHfEditRender();
@@ -28935,14 +30242,57 @@ function lbHfPickRef(i){
 }
 function lbHfPickOutput(){
   if (!LB_HF.edit) return;
-  lbOpenSpeciesPicker({ filter: 'rc', onPick: function(r){
-    if (!LB_HF.edit || r == null || r.kind !== 'item') return;
-    var k = '';
-    try { k = lbCanonBase(r.base) || r.base; } catch (e) { k = r.base; }
-    if (LB_HF.edit.card.outputs.indexOf(k) < 0) LB_HF.edit.card.outputs.push(k);
+  lbOpenSpeciesPicker({ filter: 'rc', multi: true, onPickMulti: function(list){
+    if (!LB_HF.edit) return;
+    var c = LB_HF.edit.card;
+    c.outputs = Array.isArray(c.outputs) ? c.outputs : [];
+    lbHfPushUndo();
+    (list || []).forEach(function(v){
+      if (String(v).indexOf('item:') !== 0) return;
+      var k = lbHfKeyOfPick(v);
+      if (k && c.outputs.indexOf(k) < 0) c.outputs.push(k);
+    });
     LB_HF.dirty = true;
     lbHfEditRender();
   } });
+}
+var LB_HF_DRAFT_T = 0;
+function lbHfDraftPush(){   // v4883 A24：本地草稿 500ms 防抖（崩溃恢复用）
+  try { clearTimeout(LB_HF_DRAFT_T); } catch (e) {}
+  LB_HF_DRAFT_T = setTimeout(function(){
+    try {
+      if (!LB_HF.edit) return;
+      localStorage.setItem('lb_hf_draft_v1', JSON.stringify({ ts: Date.now(), isNew: !!LB_HF.edit.isNew, card: LB_HF.edit.card }));
+    } catch (e) {}
+  }, 500);
+}
+function lbHfDraftClear(){
+  try { clearTimeout(LB_HF_DRAFT_T); localStorage.removeItem('lb_hf_draft_v1'); } catch (e) {}
+}
+var LB_HF_DRAFT_CHECKED = false;
+function lbHfDraftCheck(){   // v4895 C1：崩溃恢复——检测到未保存草稿时询问
+  if (LB_HF_DRAFT_CHECKED) return;
+  LB_HF_DRAFT_CHECKED = true;
+  try {
+    var raw = localStorage.getItem('lb_hf_draft_v1');
+    if (!raw) return;
+    var d = JSON.parse(raw);
+    if (!d || !d.card){ localStorage.removeItem('lb_hf_draft_v1'); return; }
+    if (Date.now() - (Number(d.ts) || 0) > 24 * 3600 * 1000){ localStorage.removeItem('lb_hf_draft_v1'); return; }
+    var nd = lbHfNormDoc({ cards: [d.card] });
+    var card = (nd.cards && nd.cards[0]) ? nd.cards[0] : null;
+    if (!card){ localStorage.removeItem('lb_hf_draft_v1'); return; }
+    var nm = card.spot || card.title || '未命名流程';
+    var go = function(){
+      LB_HF.edit = { isNew: !!d.isNew, card: card };
+      LB_HF.dirty = true;
+      try { lbHfEditRender(); } catch (e) {}
+      try { lbRenderBreedBar(); } catch (e2) {}
+      try { if (typeof lbToast === 'function') lbToast('已恢复未保存草稿'); } catch (e3) {}
+    };
+    if (typeof lbAsk === 'function' && lbAsk('检测到未保存的采集流程草稿（' + nm + '），是否恢复？', go, '恢复')) return;
+    if (window.confirm('检测到未保存草稿（' + nm + '），是否恢复？')) go();
+  } catch (e) {}
 }
 function lbHfEditPreview(){
   var el = document.getElementById('lbHfEPreview');
@@ -28952,6 +30302,7 @@ function lbHfEditPreview(){
 function lbHfCancelEdit(){
   var _drop = function(){
     LB_HF.edit = null; LB_HF.dirty = false;
+    try { lbHfDraftClear(); } catch (e0) {}   // v4883 A24
     lbHfClosePanel();
     try { lbRenderBreedBar(); } catch (e) {}
   };
@@ -28964,13 +30315,18 @@ function lbHfCancelEdit(){
 function lbHfEditSave(){
   if (!LB_HF.edit) return;
   var c = LB_HF.edit.card;
-  var t = document.getElementById('lbHfETitle');
   var sp = document.getElementById('lbHfESpot');
-  c.title = t ? String(t.value || '').trim() : (c.title || '');
   c.spot = sp ? String(sp.value || '').trim() : (c.spot || '');
+  c.title = c.spot;   // v4871（用户口径）：采集点直接作为标题
   c.map = c.map || '';
-  if (!c.title) { alert('请填写流程标题'); return; }
+  if (!c.spot) { alert('请填写采集点'); return; }
   if (!c.outputs || !c.outputs.length) { alert('请至少绑定一个产出物品'); return; }
+  var _stv = c.steps || [], _real = 0;   // v4883 A25：至少一步有效步骤
+  for (var _si = 0; _si < _stv.length; _si++){
+    var _s0 = _stv[_si];
+    if (_s0 && (_s0.type || 'step') === 'step' && (((_s0.tokens || []).length) || String(_s0.text || '').trim())) _real++;
+  }
+  if (!_real) { alert('请至少写一步有效步骤（打字或点 @ 加动作）'); return; }
   c.updatedAt = Date.now();
   if (!c.id) c.id = 'hf_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   var cards = LB_HF.doc.cards || [], idx = -1;
@@ -28980,6 +30336,7 @@ function lbHfEditSave(){
   LB_HF.doc.cards = cards;
   LB_HF.doc.updatedAt = Date.now();
   LB_HF.dirty = false; LB_HF.edit = null;
+  try { lbHfDraftClear(); } catch (e0) {}   // v4883 A24
   lbHfBuildIdx(); lbHfSaveLocal();
   lbHfSaveAll(function(){
     lbHfClosePanel();
@@ -29130,7 +30487,8 @@ function lbHfCopyCard(id){
   if (!src) return;
   var c = JSON.parse(JSON.stringify(src));
   c.id = 'hf_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  c.title = (c.title || '采集流程') + '（副本）';
+  c.spot = (c.spot || c.title || '采集流程') + '（副本）';   // v4871（用户口径）：采集点即标题 ⇒ 副本名同步
+  c.title = c.spot;
   c.order = (LB_HF.doc.cards || []).length;
   c.updatedAt = Date.now();
   LB_HF.doc.cards.push(c);
@@ -31396,11 +32754,14 @@ function lbBreedAlignResult(){
 }
 // v1171：底部固定条总留白（繁育栏 z998 / 功能条 z997 均可 position:fixed;bottom:0；两者可见高度相加，都隐藏时保留最小 12px）
 function lbBottomFix(){
-  var list = document.getElementById('lbList'); if(!list) return;
+  var list = document.getElementById('lbList');
   var bb = document.getElementById('lbBreedBar');
   var fb = document.getElementById('lbFuncBar');
   var hb = (bb && bb.style.display !== 'none') ? (bb.offsetHeight || 0) : 0;
   var hf = (fb && fb.style.display !== 'none') ? (fb.offsetHeight || 0) : 0;
+  // v4898（用户口径）：把底栏实高写入 CSS 变量 —— 编辑浮层 .lb-hf-panel 据此贴到栏上方（原固定 bottom:40px 会被移动端高栏遮挡）
+  try { document.documentElement.style.setProperty('--lb-bar-h', (hb + hf) + 'px'); } catch (e0) {}
+  if(!list) return;
   // v4231（用户实测「繁育栏把功能栏挡住」）：两栏同显时**繁育栏叠到功能栏上方**（原两者都贴 bottom:0 ⇒ 繁育栏盖住功能栏上沿）
   if(bb){
     var _bbOn = (bb.style.display !== 'none');

@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>采集流程 · 一体化编辑效果预览（plan-v4）</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
+<style>
+:root{
+  --panel:#16161f; --card:#1a1a24; --chip:#22222c; --btn:#33333d;
+  --line:#2a2a3a; --line2:#3a3a4a; --txt:#e6e6f0; --txt2:#cbd5e1; --muted:#8b8b9a;
+  --accent:#7c3aed;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0b0b12;color:#e0e0e0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:20px}
+.pagehd{max-width:900px;margin:0 auto 16px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.pagehd h1{font-size:16px;color:#fff;font-weight:600}
+.pagehd .sub{font-size:12px;color:var(--muted)}
+.wrap{max-width:900px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+.note{font-size:11px;color:var(--muted);line-height:1.7;background:#11111a;border:1px dashed var(--line2);border-radius:10px;padding:8px 10px}
+.lb-hf-card{background:var(--panel);border:1px solid var(--line);border-left:3px solid #a855f7;border-radius:12px;padding:10px 12px}
+.lb-hf-card.slim{border-left-color:#38bdf8}
+.chead{display:flex;align-items:center;gap:8px}
+.cicon{width:34px;height:34px;object-fit:contain;flex-shrink:0}
+.ctitle{font-size:15px;color:#eee;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ba{background:none;border:none;color:#888;font-size:16px;cursor:pointer;flex-shrink:0}
+.sec{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px}
+.sec-lbl{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);flex-shrink:0}
+.numdot{width:auto;min-width:28px;height:28px;padding:0 6px;border-radius:6px;background:var(--accent);color:#fff;font-size:12px;display:inline-flex;align-items:center;justify-content:center;line-height:28px;flex-shrink:0}
+.chip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 8px;border-radius:6px;font-size:12px;line-height:1;background:var(--chip);border:1px solid var(--line2);color:var(--txt2);white-space:nowrap;overflow:hidden}
+.chip img.ic{width:26px;height:26px;object-fit:contain;display:block;flex-shrink:0}
+.chip.act{gap:6px;padding:0 8px;background:#33333d;border-color:#3a3a4a;color:#e5e7eb}
+.chip.verb{background:#33333d;border-color:#3a3a4a;color:#ddd}
+.chip.keyb{padding:0 6px;height:28px;background:#33333d;border-color:#3a3a4a;box-shadow:inset 0 -2px 0 #26262e}
+.keyimg{height:22px;width:auto;display:block}
+.chip.plus{border-style:dashed;background:transparent;color:#cbd5e1;cursor:pointer}
+.chip.plus:hover{border-color:var(--accent);color:#fff}
+.server-tab{height:28px;min-width:28px;padding:0 8px;border-radius:6px;border:1px solid #333;background:#1a1a24;color:#ccc;display:inline-flex;align-items:center;justify-content:center;font-size:14px;cursor:pointer}
+.server-tab.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.steps{margin-top:8px;border-top:1px solid var(--line);padding-top:8px}
+.steprow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0;padding:2px 6px;border-radius:6px}
+.steprow.editing{background:#1d1d29;box-shadow:inset 0 0 0 1px #7c3aed55}
+.steprow.dim{opacity:.55}
+.stepnum{width:auto;min-width:28px;height:28px;padding:0 6px;border-radius:6px;background:#2a2a3a;color:#cbd5e1;font-size:12px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;cursor:pointer}
+.stepnum:hover{background:var(--accent);color:#fff}
+.notemark{color:#f59e0b;font-size:12px;width:28px;text-align:center;flex:0 0 auto}
+.divider{height:1px;background:var(--line);margin:8px 0}
+.inline-input{height:28px;padding:0 8px;background:var(--chip);border:1px solid var(--accent);border-radius:6px;color:#fff;font-size:12px;min-width:230px;outline:none}
+.note-input{height:28px;padding:0 8px;background:transparent;border:none;border-bottom:1px dashed var(--line2);border-radius:0;color:#cbd5e1;font-size:12px;min-width:260px;outline:none}
+.note-input:focus{border-bottom-color:var(--accent)}
+.caret{display:inline-block;width:1px;height:14px;background:#fff;animation:bl 1s steps(1) infinite;vertical-align:-2px}
+@keyframes bl{50%{opacity:0}}
+.verbpanel{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:8px;background:var(--card);border:1px solid var(--line2);border-radius:10px;box-shadow:0 8px 24px #000a;margin:8px 0}
+.verbpanel .chip{cursor:pointer}
+.verbpanel .chip:hover{border-color:var(--accent);color:#fff}
+.verbpanel .sepv{width:1px;height:20px;background:var(--line2);margin:0 2px}
+.foot{display:flex;align-items:center;gap:8px;margin-top:8px;border-top:1px solid var(--line);padding-top:8px}
+.btn{height:28px;padding:0 12px;border-radius:6px;background:var(--btn);color:#ddd;border:none;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.btn.primary{background:var(--accent);color:#fff}
+.btn.ghost{background:transparent;border:1px solid var(--line2);color:#cbd5e1}
+.spacer{flex:1}
+.muted{color:var(--muted);font-size:11px}
+.demo-hint{font-size:11px;color:#93c5fd;margin-top:8px}
+.chip.on{border-color:var(--accent);color:#fff;background:#2e1065}
+.aibox{background:#11111a;border:1px dashed #3a3a4a;border-radius:10px;padding:8px 10px;margin-top:8px}
+.airow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.aiinput{flex:1;min-width:240px;min-height:56px;background:#1a1a24;border:1px solid #3a3a4a;border-radius:6px;color:#e6e6f0;font-size:12px;line-height:1.6;padding:8px 10px;resize:vertical}
+.aiinput:focus{outline:none;border-color:#7c3aed}
+.aihint{font-size:11px;color:#8b8b9a;margin-top:8px;line-height:1.7}
+.aicand{margin-top:8px;border-top:1px dashed #2a2a3a;padding-top:8px}
+.aiok{color:#86efac}
+.chip.custom{background:transparent;border-style:dashed;border-color:#7c3aed99;color:#e9d5ff}
+.verbpanel.scrollx{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;min-width:0}
+.verbpanel.scrollx>*{flex-shrink:0}
+.verb-input{height:28px;width:92px;padding:0 8px;border-radius:6px;border:1px dashed #7c3aed;background:#11111a;color:#fff;font-size:12px;outline:none}
+.verbadd{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0;padding:8px;background:#11111a;border:1px dashed #2a2a3a;border-radius:10px}
+.verbadd .lbl{font-size:12px;color:#cbd5e1}
+.chip.warn{background:#ff9800;border-color:#ff9800;color:#1e1f25}
+.chip.hint{background:#2196f3;border-color:#2196f3;color:#1e1f25}
+.grp{display:flex;align-items:center;gap:8px;margin:8px 0}
+.grp-num{min-width:22px;height:22px;padding:0 5px;border-radius:4px;background:rgba(33,150,243,.25);color:#2196f3;font-size:12px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
+.grp-name{height:23px;padding:0 8px;border-radius:6px;background:rgba(33,150,243,.15);color:#2196f3;font-size:12px;display:inline-flex;align-items:center;flex:0 0 auto}
+.grp-line{flex:1;height:1px;background:rgba(33,150,243,.35)}
+.grp-note{flex:0 0 auto;display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 8px;border-radius:6px;border:1px dashed #3a3a4a;background:transparent;color:#8b8b9a;font-size:11px;cursor:pointer}
+.grp-note:hover{border-color:#7c3aed;color:#fff}
+.grp-note.has{color:#f59e0b;border-color:rgba(245,158,11,.45)}
+.chip.sel{outline:2px solid #a855f7;outline-offset:1px}
+.colbar{display:inline-flex;align-items:center;gap:8px;padding:6px 8px;background:var(--card);border:1px solid var(--line2);border-radius:10px;box-shadow:0 8px 24px #000a;margin:8px 0}
+.colbar .dot{width:22px;height:22px;border-radius:6px;cursor:pointer;border:1px solid rgba(255,255,255,.15)}
+.colbar .dot.def{background:rgba(255,255,255,.16)}
+.colbar .dot.warn{background:#ff9800}
+.colbar .dot.hint{background:#2196f3}
+.colbar .clbl{font-size:12px;color:#cbd5e1}
+.grp-in{height:23px;padding:0 8px;border-radius:6px;border:1px solid #7c3aed;background:rgba(33,150,243,.12);color:#fff;font-size:12px;outline:none;width:104px}
+.grp.collapsed .grp-name{opacity:.8}
+.sflow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0;padding:0}
+.steplbl{font-size:11px;color:#6b7280;flex:0 0 auto}
+.phonebox{width:390px;max-width:100%;border:1px dashed #3a3a4a;border-radius:10px;padding:8px 10px;margin-top:8px;background:#11111a}
+.chip.keyb .ic{width:24px;height:24px}
+.inv{filter:invert(1)}
+</style>
+</head>
+<body>
+<div class="pagehd">
+  <h1>采集流程 · 编辑/预览一体化（plan-v4 效果预览）</h1>
+  <span class="sub">动作与图标合并成单个徽章 · 图标不带文字 · 键位用 keys 图标 · 备注可输入</span>
+</div>
+<div class="wrap">
+  <div class="note">
+    本轮调整：① 动词与宾语合并为一个徽章（如「骑🦖」「采🪨」），图标不再配文字，长按/悬停看名字；② 键位改用 <b>img.whiterober.ccwu.cc/ASA/keys/</b> 的图标（左键、E、F、空格等）；③ 备注行可直接打字（输入框样式，见第一张卡最后一行）；④ 新增「AI 一键生成」演示（见最后一张卡）；⑤ 新增「新增动作」演示（编辑态卡：`＋ 自定义` → 输入框 → 虚线自定义徽章）；⑥ 新增「阶段分组」（1 准备 / 2 办理 / 3 收尾）与语义色（橙=注意必做、蓝=关键动作），对齐线上毒气洞卡；⑦ 「标签系统」取消，状态全部改用徽章（灰/橙/蓝）；⑧ 新增三类编辑演示：阶段改名/折叠（编辑态卡）、徽章选中 + 颜色工具条、自定义动作长按菜单。
+  </div>
+
+  <div class="lb-hf-card">
+    <div class="chead">
+      <img class="cicon" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/5d18d1d2dee1_w96.webp" alt="">
+      <div class="ctitle">石头富集区</div>
+      <span class="chip" title="整条流程可达">可达</span>
+      <button class="ba" title="折叠"><i class="mdi mdi-chevron-up"></i></button>
+    </div>
+
+    <div class="sec">
+      <span class="sec-lbl">装备</span>
+      <span class="chip" title="吉利胸甲"><img class="ic" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/c97280944bde_w96.webp"></span>
+      <span class="chip" title="金属镐"><img class="ic" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/88d5a45755d9_w96.webp"></span>
+      <span class="chip" title="熟肉"><img class="ic" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/9e7ba10128a1_w96.webp"></span>
+      <span class="chip" title="麻醉药"><img class="ic" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/762f46ca80f6_w96.webp"></span>
+    </div>
+
+    <div class="sec">
+      <span class="sec-lbl">地图</span>
+      <span class="server-tab" title="所有地图"><i class="mdi mdi-earth"></i></span>
+      <span class="server-tab active" title="孤岛"><i class="mdi mdi-island"></i></span>
+      <span class="server-tab" title="焦土"><i class="mdi mdi-volcano"></i></span>
+      <span class="server-tab" title="核心岛"><i class="mdi mdi-orbit"></i></span>
+      <span class="server-tab" title="畸变"><i class="mdi mdi-radioactive"></i></span>
+    </div>
+
+    <div class="sec">
+      <span class="sec-lbl">产出</span>
+      <span class="chip" title="金属锭（点击移除）"><img class="ic" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/5d18d1d2dee1_w96.webp"><span class="muted">✕</span></span>
+      <span class="chip" title="石头（点击移除）"><img class="ic" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/dc7ba44980fb_w96.webp"><span class="muted">✕</span></span>
+      <span class="chip plus" title="添加产出">＋</span>
+    </div>
+
+    <div class="steps">
+      <div class="grp"><span class="grp-num">1</span><span class="grp-name">准备</span><span class="grp-line"></span><span class="grp-note has" title="阶段备注（已有 1 条）：点一下编辑，清空即删除">* 备注</span></div>
+      <div class="sflow">
+        <span class="chip act" title="骑 甲龙">骑<img class="ic inv" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/996a7b1c9dea_w96.webp"></span>
+        <span class="chip keyb act" title="左键：采集 石头"><img class="keyimg" src="https://img.whiterober.ccwu.cc/ASA/keys/IconLeftClick.png"><img class="ic" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/dc7ba44980fb_w96.webp"></span>
+        <span class="chip plus" title="新增一步：点这里 → 直接打字或选动作（自动进入编辑）">＋</span>
+      </div>
+      <div class="steprow">
+        <span class="notemark">*</span>
+        <input class="note-input" value="夜间/雨天视野差，记得带照明">
+      </div>
+      <div class="grp"><span class="grp-num">2</span><span class="grp-name">办理</span><span class="grp-line"></span><span class="grp-note" title="阶段备注（当前无）：点一下添加，最多 1 条">＋备注</span></div>
+      <div class="sflow">
+        <span class="chip warn" title="注意：先把身上物品转移出去，否则装不下矿石">转移所有物品</span>
+        <span class="chip act" title="从 甲龙">从<img class="ic inv" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/996a7b1c9dea_w96.webp"></span>
+        <span class="chip act" title="拿取 石头">拿<img class="ic" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/dc7ba44980fb_w96.webp"></span>
+        <span class="chip act" title="放入 精炼炉">入<img class="ic" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/fba442a63bae_w96.webp"></span>
+        <span class="chip act hint" title="关键动作：使用 精炼炉">用<img class="ic" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/fba442a63bae_w96.webp"></span>
+        <span class="chip act" title="烧炼 金属">烧<img class="ic" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/a6c8a5509bde_w96.webp"></span>
+        <span class="chip keyb act" title="E：开启 精炼炉"><img class="keyimg" src="https://img.whiterober.ccwu.cc/ASA/keys/PC_btn_E.png"><img class="ic" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/fba442a63bae_w96.webp"></span>
+        <span class="chip act" title="取出 金属锭">取<img class="ic" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/5d18d1d2dee1_w96.webp"></span>
+        <span class="chip act" title="放入 熔炉">入<img class="ic" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/a6c8a5509bde_w96.webp"></span>
+        <span class="chip plus" title="新增一步：点这里 → 直接打字或选动作（自动进入编辑）">＋</span>
+      </div>
+      <div class="grp"><span class="grp-num">3</span><span class="grp-name">收尾</span><span class="grp-line"></span><span class="grp-note" title="阶段备注（当前无）：点一下添加，最多 1 条">＋备注</span></div>
+      <div class="sflow dim">
+        <span class="chip warn" title="这一步当前不可达（用橙色徽章表达）">不可达</span>
+        <span class="chip act" title="传送到 水晶点">传<img class="ic" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/568d78ce318c_w96.webp"></span>
+        <span class="chip act" title="采集 水晶">采<img class="ic" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/568d78ce318c_w96.webp"></span>
+        <span class="chip plus" title="新增一步：点这里 → 直接打字或选动作（自动进入编辑）">＋</span>
+      </div>
+    </div>
+    <div class="demo-hint">颜色语义（对齐线上毒气洞卡）：灰＝普通动作 ｜ <b style="color:#ff9800">橙＝注意 / 必做 / 不可达</b>（如「转移所有物品」「查」「戴」）｜ <b style="color:#2196f3">蓝＝关键动作 / 提示</b>（如「用」「转」）。<b>不设标签系统</b>：状态一律用徽章表达（可达=灰徽章、不可达/辐射=橙徽章、关键=蓝徽章）。阶段标题＝小序号方块 + 组名蓝胶囊 + 右侧细线，可折叠整段。<b>同阶段内的步骤不强制分行</b>：一行放不下就自动换行；步骤之间<b>不用任何分隔符</b>（无圆点、无箭头），只靠 8px 间距。备注是<b>阶段级</b>的：每个阶段最多 1 条、也可以没有（阶段标题行尾「＋备注」添加，有备注显示「* 备注」，清空即删）。新增步骤：<b>阶段末尾的「＋」</b>（点后直接编辑/选动作）、行尾「⋯」→「在下方插入」、底部「＋ 步骤」，或最后一步按 Enter 自动续行。键帽<b>同样可以带图标</b>（「左键+石头」＝左键采集石头、「E+熔炉」＝E 开熔炉），与文字动作同一形态。</div>
+
+    <div class="phonebox">
+      <div class="muted" style="margin-bottom:6px">手机宽度 390px 实测：<b>同阶段自动换行</b>（不需要手动分行，也没有第 2 行「步骤」概念）</div>
+      <div class="sflow">
+        <span class="chip warn" title="注意：先转移物品">转移所有物品</span>
+        <span class="chip act" title="从 甲龙">从<img class="ic inv" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/996a7b1c9dea_w96.webp"></span>
+        <span class="chip act" title="拿取 石头">拿<img class="ic" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/dc7ba44980fb_w96.webp"></span>
+        <span class="chip act" title="放入 精炼炉">入<img class="ic" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/fba442a63bae_w96.webp"></span>
+        <span class="chip act hint" title="关键动作：用 精炼炉">用<img class="ic" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/fba442a63bae_w96.webp"></span>
+        <span class="chip act" title="烧炼 金属">烧<img class="ic" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/a6c8a5509bde_w96.webp"></span>
+        <span class="chip act" title="开启 精炼炉">开<img class="ic" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/fba442a63bae_w96.webp"></span>
+        <span class="chip act" title="取出 金属锭">取<img class="ic" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/5d18d1d2dee1_w96.webp"></span>
+      </div>
+    </div>
+    <div class="foot">
+      <button class="btn ghost" title="撤销上一步">撤销</button>
+      <span class="muted">● 未保存</span>
+      <span class="spacer"></span>
+      <button class="btn">＋ 步骤</button>
+      <button class="btn primary">保存</button>
+      <button class="btn ghost">取消</button>
+    </div>
+  </div>
+
+  <div class="lb-hf-card slim">
+    <div class="chead">
+      <img class="cicon inv" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/996a7b1c9dea_w96.webp" alt="">
+      <div class="ctitle">血池（状态分支示例）</div>
+      <span class="chip warn" title="辐射区：需防护">辐射</span>
+      <button class="ba" title="折叠"><i class="mdi mdi-chevron-down"></i></button>
+    </div>
+    <div class="sec">
+      <span class="sec-lbl">不可达</span>
+      <span class="chip act" title="丢下 甲龙">丢<img class="ic inv" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/996a7b1c9dea_w96.webp"></span>
+      <span class="chip verb">还</span>
+      <span class="chip act" title="传送">传<img class="ic" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/568d78ce318c_w96.webp"></span>
+    </div>
+    <div class="sec">
+      <span class="sec-lbl">可到达</span>
+      <span class="chip act" title="丢下 甲龙">丢<img class="ic inv" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/996a7b1c9dea_w96.webp"></span>
+      <span class="chip act" title="传送">传<img class="ic" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/568d78ce318c_w96.webp"></span>
+    </div>
+  </div>
+
+  <div class="lb-hf-card">
+    <div class="chead">
+      <img class="cicon" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/5d18d1d2dee1_w96.webp" alt="">
+      <div class="ctitle">编辑态：点第 1 行 → 就地编辑 + 动词/按键面板</div>
+      <span class="chip hint" title="编辑中">编辑中</span>
+    </div>
+    <div class="steps">
+      <div class="steprow editing">
+        <span class="inline-input">采 [石头]<span class="caret"></span></span>
+        <span class="chip plus" title="行尾 ⋯ 菜单：切换 步骤 / 备注 / 分隔、上移下移、删除">⋯</span>
+        <span class="muted">← 步骤不带序号；类型切换与增删都在行尾「⋯」</span>
+      </div>
+      <div class="sflow">
+        <span class="chip plus" title="新增一步（本阶段末尾）">＋</span>
+        <span class="muted">← 每个阶段末尾都有「＋」：点一下 → 新增空步骤并直接进入编辑（可选动作或打字）；最后一步按 <b>Enter</b> 也会自动续一步</span>
+      </div>
+      <div class="sflow">
+        <span class="notemark">*</span>
+        <input class="note-input" value="备注：Enter 提交，Shift+Enter 换行；行尾 ⋯ 可转为逐步/上移/删除" style="border-bottom-color:#7c3aed">
+        <span class="chip plus" title="行尾菜单">⋯</span>
+        <span class="muted">← 阶段备注：每阶段最多 1 条（可无），入口在阶段标题行尾；多行用 Shift+Enter；清空即删除</span>
+      </div>
+      <div class="verbpanel scrollx">
+        <span class="chip verb">从</span><span class="chip verb">拿</span><span class="chip verb">入</span><span class="chip verb">丢</span><span class="chip verb">还</span><span class="chip verb">传</span><span class="chip verb">骑</span><span class="chip verb">按</span><span class="chip verb">采</span><span class="chip verb">收</span><span class="chip verb">开</span><span class="chip verb">转</span>
+        <span class="chip plus" title="新增动作（≤6 字，回车保存到本机）">＋ 自定义</span>
+        <span class="sepv"></span>
+        <span class="chip keyb" title="鼠标左键"><img class="keyimg" src="https://img.whiterober.ccwu.cc/ASA/keys/IconLeftClick.png"></span>
+        <span class="chip keyb" title="鼠标中键"><img class="keyimg" src="https://img.whiterober.ccwu.cc/ASA/keys/IconMiddleClick.png"></span>
+        <span class="chip keyb" title="鼠标右键"><img class="keyimg" src="https://img.whiterober.ccwu.cc/ASA/keys/IconRightClick.png"></span>
+        <span class="chip keyb" title="A"><img class="keyimg" src="https://img.whiterober.ccwu.cc/ASA/keys/PC_btn_A.png"></span>
+        <span class="chip keyb" title="Ctrl"><img class="keyimg" src="https://img.whiterober.ccwu.cc/ASA/keys/PC_btn_Ctrl.png"></span>
+        <span class="chip keyb" title="D"><img class="keyimg" src="https://img.whiterober.ccwu.cc/ASA/keys/PC_btn_D.png"></span>
+        <span class="chip keyb" title="E"><img class="keyimg" src="https://img.whiterober.ccwu.cc/ASA/keys/PC_btn_E.png"></span>
+        <span class="chip keyb" title="回车"><img class="keyimg" src="https://img.whiterober.ccwu.cc/ASA/keys/PC_btn_Enter.png"></span>
+        <span class="chip keyb" title="Esc"><img class="keyimg" src="https://img.whiterober.ccwu.cc/ASA/keys/PC_btn_Esc.png"></span>
+        <span class="chip keyb" title="F"><img class="keyimg" src="https://img.whiterober.ccwu.cc/ASA/keys/PC_btn_F.png"></span>
+        <span class="chip keyb" title="H"><img class="keyimg" src="https://img.whiterober.ccwu.cc/ASA/keys/PC_btn_H.png"></span>
+        <span class="chip keyb" title="N"><img class="keyimg" src="https://img.whiterober.ccwu.cc/ASA/keys/PC_btn_N.png"></span>
+        <span class="chip keyb" title="S"><img class="keyimg" src="https://img.whiterober.ccwu.cc/ASA/keys/PC_btn_S.png"></span>
+        <span class="chip keyb" title="空格"><img class="keyimg" src="https://img.whiterober.ccwu.cc/ASA/keys/PC_btn_Space.png"></span>
+        <span class="chip keyb" title="空格（长）"><img class="keyimg" src="https://img.whiterober.ccwu.cc/ASA/keys/PC_btn_Spacebar.png"></span>
+        <span class="chip keyb" title="W"><img class="keyimg" src="https://img.whiterober.ccwu.cc/ASA/keys/PC_btn_W.png"></span>
+        <span class="chip keyb" title="鼠标左键（旧）"><img class="keyimg" src="https://img.whiterober.ccwu.cc/ASA/keys/PC_mouse_LB.png"></span>
+        <span class="chip keyb" title="鼠标中键（旧）"><img class="keyimg" src="https://img.whiterober.ccwu.cc/ASA/keys/PC_mouse_MB.png"></span>
+        <span class="chip keyb" title="鼠标右键（旧）"><img class="keyimg" src="https://img.whiterober.ccwu.cc/ASA/keys/PC_mouse_RB.png"></span>
+      </div>
+      <div class="verbadd">
+        <span class="lbl">新增动作演示：</span>
+        <input class="verb-input" value="扛" placeholder="动作名（≤6 字）">
+        <span class="lbl">回车 → 面板末尾多一个</span>
+        <span class="chip act custom" title="扛（自定义动作，可接生物/物品图标）">扛<img class="ic inv" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/996a7b1c9dea_w96.webp"></span>
+        <span class="muted">虚线框＝自定义动作（存本机，长按可删，同样进 AI 白名单）</span>
+      </div>
+      <div class="steprow">
+        <span class="chip act" title="骑 甲龙">骑<img class="ic inv" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/996a7b1c9dea_w96.webp"></span>
+        <span class="chip act" title="采集 石头">采<img class="ic" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/dc7ba44980fb_w96.webp"></span>
+      </div>
+      <div class="steprow">
+        <span class="notemark">*</span>
+        <input class="note-input" value="备注行也是输入框：点一下即可打字" style="border-bottom-color:#7c3aed">
+      </div>
+      <div class="steprow">
+        <span class="tag tag-ok tagbtn" title="点击切换标签">可达 <i class="mdi mdi-chevron-down"></i></span>
+        <span class="chip act" title="回收 甲龙">收<img class="ic inv" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/996a7b1c9dea_w96.webp"></span>
+      </div>      <div class="steprow">
+        <span class="chip plus" title="新增阶段分组（整段可折叠）">＋阶段</span>
+        <span class="chip act" title="采集 石头">采<img class="ic" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/dc7ba44980fb_w96.webp"></span>
+      </div>
+      <div class="steprow">
+        <span class="chip act sel hint" title="已选中：用（关键动作）">用<img class="ic" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/fba442a63bae_w96.webp"></span>
+        <span class="muted">← 点徽章即选中（紫框），下方浮出颜色工具条</span>
+      </div>
+      <div class="colbar">
+        <span class="clbl">语义色：</span>
+        <span class="dot def" title="普通（默认）"></span>
+        <span class="clbl">普通</span>
+        <span class="dot warn" title="注意 / 必做"></span>
+        <span class="clbl">注意</span>
+        <span class="dot hint" title="关键动作 / 提示"></span>
+        <span class="clbl">关键</span>
+        <span class="muted">｜键盘 1 / 2 / 3 切换；手机长按同款菜单；工具条里还有「删除」</span>
+      </div>
+      <div class="grp"><span class="grp-num">2</span><input class="grp-in" value="准备" title="点组名就地改名（≤8 字），Enter 提交"><span class="muted">← 阶段改名中（Enter 提交 / Esc 放弃）</span></div>
+      <div class="grp collapsed"><span class="grp-num">3</span><span class="grp-name">收尾</span><span class="muted">· 2 步</span><span class="grp-line"></span><span class="muted">← 点序号方块折叠，整段收起</span></div>
+      <div class="demo-hint">真实交互：点动词 → 需宾语时自动弹物品/生物选择器 → 合成单徽章；「＋ 自定义」紧跟文字动作、打字即成自定义动作（虚线框）；按键区**全量列出**（PC 套系 19 个：`IconLeftClick/Middle/Right` + 16 个 `PC_btn_*`；`PC_btn_C` 服务器缺图已剔除）；Enter 提交并跳下一行，Esc 放弃。序号只给「阶段」，步骤/装备/地图/产出不显示序号。</div>
+    </div>
+    <div class="foot">
+      <span class="muted">动词面板 ＝ 一行可横滚：文字动作 + ＋自定义 + 全量按键（PC 19 / Xbox 18 / PS 20 / Switch 14，共 76 个）</span>
+      <span class="spacer"></span>
+      <button class="btn primary">保存</button>
+      <button class="btn ghost">取消</button>
+    </div>
+  </div>
+
+  <div class="lb-hf-card slim">
+    <div class="chead">
+      <img class="cicon" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/5d18d1d2dee1_w96.webp" alt="">
+      <div class="ctitle">AI 一键生成流程</div>
+      <span class="chip" title="示例">示例</span>
+    </div>
+    <div class="aibox">
+      <div class="airow">
+        <textarea class="aiinput">我去孤岛用甲龙敲石头，带回精炼炉烧成金属锭，晚上记得带照明</textarea>
+      </div>
+      <div class="airow" style="margin-top:8px">
+        <span class="muted">模型 deepseek-chat · token 已配置（****a1b2）</span>
+        <span class="chip plus" title="点这里打开统一的「⚙ 自助配置」浮窗，AI 区块在里面">⚙ 自助配置</span>
+        <span class="spacer"></span>
+        <button class="btn primary">✨ 生成</button>
+        <button class="btn ghost">取消</button>
+      </div>
+      <div class="aicand">
+        <div class="muted aiok">已生成 4 步 · 将<b>追加</b>到当前流程（可改「覆盖」）</div>
+        <div class="steprow">
+          <span class="chip act" title="骑 甲龙">骑<img class="ic inv" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/996a7b1c9dea_w96.webp"></span>
+          <span class="chip act" title="攻击 石头">采<img class="ic" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/dc7ba44980fb_w96.webp"></span>
+        </div>
+        <div class="steprow">
+          <span class="chip act" title="放入 精炼炉">入<img class="ic" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/fba442a63bae_w96.webp"></span>
+          <span class="chip act" title="烧炼 金属">烧<img class="ic" src="https://dino.whiterober.ccwu.cc/thumbs/webp96/a6c8a5509bde_w96.webp"></span>
+        </div>
+        <div class="steprow">
+          <span class="notemark">*</span>
+          <span class="muted">夜间带照明（AI 自动补的提醒）</span>
+        </div>
+        <div class="airow" style="margin-top:8px">
+          <span class="spacer"></span>
+          <button class="btn">重新生成</button>
+          <button class="btn primary">应用</button>
+        </div>
+      </div>
+      <div class="aihint">
+        说明：生成前可切换「追加 / 覆盖」；结果先预览再应用；token 在「⚙ 自助配置」浮窗内填，仅存本机。
+      </div>
+    </div>
+  </div>
+
+  <div class="note">
+    度量（全部对齐 28 / 6 / 8 / 12 规范，与地图 TAB 同高）：动作徽章、键帽、序号徽章、状态标签、输入框、按钮高 28px（标签 24px）；圆角统一 6px；元素间距 8px；字号 12px；<b>徽章内图标 26px（比徽章内空更高，边缘允许被徽章裁切）</b>；按键图标高 22px；<b>键帽底完全对齐文字动作 `#33333d`</b>（边框 `#3a3a4a` 同色，图标不反色；键位图案深浅不做额外处理）。<br>
+    按键图标来源：<b>https://img.whiterober.ccwu.cc/ASA/keys/</b>（PC_btn_* / XB_btn_* / PS_btn_* / switch_button_* / IconLeftClick 等 76 个）。若正式打包进项目，需按既有压图流程（<code>_webp_incremental.py</code>）转 WebP 后再部署。
+  </div>
+</div>
+</body>
+</html>
