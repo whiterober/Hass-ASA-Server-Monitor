@@ -1,0 +1,368 @@
+# 手柄键位配置系统 · 实施计划 v2
+
+> 立项：2026-10-23 ｜ v2 修订：2026-10-23（全面复核后重写）
+> 需求原话：「我需要一个同流程一样按玩家存储的手柄按键配置系统以及展示界面（默认手柄键位+对应的键盘按键+玩家修改键位）」
+> 追加口径 ①：「展示 / 改键界面 改成放到 角色浮窗内」
+> 追加口径 ②：「不允许配置界面不允许傻傻的把键位全列出来，体验要好」
+> 当前基线版本：`v20261023-5186`（字体 15 套 / 1242 字形 / 537 可选键）
+
+---
+
+## 0. v2 相比 v1 的关键变化
+
+| # | v1 写法 | v2 实际 / 新口径 |
+|---|---|---|
+| 1 | `LB_HF_KEY_GROUPS` 76 键 / 5 组 | **`LB_KEYFONT_SETS`：15 组 / 537 键**（Kenney 全量，字体已建） |
+| 2 | 12 套手柄，其中 8 套「待构建」 | **15 套全部已构建完成**（`lbk-*.woff2` 共 122 KB，1242 字形） |
+| 3 | 背键 / Share / Fn 用**文字徽章** | **全部有字体图标**，文字徽章方案作废（见 §4.3） |
+| 4 | 自建 `lbKeymapKeyChipHtml()` | 直接复用 `lbKeyChipHtml()`（字体优先 + 归一化居中） |
+| 5 | 键名用 `XB_btn_A` / `PC_btn_E` / `IconLeftClick` | **改存 Kenney 原名**：`xbox_button_a` / `keyboard_e` / `mouse_left`（旧名走别名兼容） |
+| 6 | 改键弹层「复用 `LB_HF_KEY_GROUPS` 网格」= 537 键平铺 | **方案 C：搜索 + 折叠分组，打开时零展开**（见 §4.5） |
+| 7 | — | 新增 §4.7「重复字形治理」、§11「优化项清单」 |
+
+---
+
+## 1. 目标
+
+1. **玩家级键位表**：动作 ↔ 手柄键 ↔ 键盘键 的映射，按玩家存储、跨端同步（与采集流程同等级）。
+2. **展示界面**：三列同屏 —— 动作 / 手柄键 / 键盘键（改过的行打紫点标记）。
+3. **可改键**：点键位格改键，支持冲突检测、单行还原、分组还原、全部恢复默认。
+4. **零后端改动**：复用现有 `/api/user_prefs` 存储通道。
+
+**非目标（本期不做）**
+- 不做游戏内实际改键（只做玩家自己的查阅/记录表）
+- 不改采集流程的 key token 语义（联动列入期 3，可选）
+
+---
+
+## 2. 现有可复用资产（已核实，2026-10-23）
+
+| 资产 | 位置 | 说明 |
+|---|---|---|
+| **键位全集（新）** | `LB_KEYFONT_SETS` | **15 组 / 537 键**，结构 `{t, ic, ks}`；`ic` = 该平台整手图标键名 |
+| 字体优先表 | `LB_KEYFONT` | 判断某键能否字体渲染；含旧名别名（`XB_btn_A` → `xbox_button_a`） |
+| 键位渲染（唯一入口） | `lbKeyChipHtml(k, size, extraCls)` | 字体优先 → 角标 → PNG 兜底；**新代码不要再自建渲染** |
+| 键位角标表 | `LB_KEYFONT_LBL` | 视觉重复键的短角标（左/右/侧/←/↑） |
+| 图标字体 | `fonts/lbk-<plat>.woff2?v=<版本>` | 16 个文件；固定文件名 + query 破缓存（见 §4.8） |
+| 玩家级存储 + 跨端同步 | `/api/user_prefs` + `LB_PREFS_KEYS` | 现成的按类时间戳 `kts` 冲突解决 |
+| 角色浮窗 | `lbOpenRolePicker()`（约 L5251） | 键位界面宿主（`max-width:400px`） |
+| 浮窗通用样式 | `.lb-picker-overlay` / `.lb-picker-panel` / `.lb-picker-grid` | 直接套用 |
+| 旧 76 键表 | `LB_HF_KEY_GROUPS` | **仅流程键帽面板的历史引用**，新功能一律用 `LB_KEYFONT_SETS` |
+
+---
+
+## 3. 数据模型
+
+### 3.1 默认键位（静态，写在 `dino-import.html` 内）
+
+```js
+var LB_KEYMAP_ACTIONS = [
+  // id 一旦发布不得改名（玩家 map 以此为主键）；pad/kbm 一律用 Kenney 原名
+  { g:'常用', id:'interact', zh:'使用 / 互动', pad:'xbox_button_x', kbm:'keyboard_e', note:'' },
+  { g:'移动', id:'jump',     zh:'跳跃',        pad:'xbox_button_a', kbm:'keyboard_space', note:'' }
+];
+```
+
+> `g` 分组：常用 / 战斗 / 移动 / 界面（UI 按此折叠，默认只展开「常用」）
+
+### 3.2 玩家自定义（增量 diff，按玩家存）
+
+```js
+// localStorage['lb_keymap_<user>'] + 云端 user_prefs.keys.lb_keymap
+{
+  v: 1,
+  layout: 'xbox',                 // 平台皮肤（15 选 1，默认 xbox）
+  updatedAt: 1792761976793,
+  map: {                          // 只存改过的动作
+    'interact': { pad: 'xbox_button_y', kbm: 'keyboard_f' }
+  }
+}
+```
+
+**要点**
+- 只存 diff ⇒ 以后修正默认值不会覆盖玩家自定义
+- `layout` 只影响**手柄列的图标皮肤**；切平台**不迁移**键值，但**不丢数据**（切回还在）
+- 加载时忽略未知 action id（防旧数据残留）
+
+---
+
+## 4. 界面设计
+
+### 4.1 入口与视图切换
+
+`lbOpenRolePicker()` 增加 `LB._roleView`（`'roles'` | `'keys'`）：
+
+| 位置 | 改动 |
+|---|---|
+| header 图标按钮组 | 新增 🎮（`mdi:gamepad-variant`，title「手柄键位」）→ `lbRoleView('keys')` |
+| 键位视图 header | 「← 返回」+ 标题「🎮 手柄键位」+ 右侧「⋯ 更多」 |
+| 浮窗宽度 | roles `400px`；keys `min(560px, 96vw)`（手机不溢出） |
+| 返回 / 关闭 | 返回只切视图不关浮窗；关闭才移除 overlay |
+
+### 4.2 主视图线框（**只列 20 个动作，永不列键位全集**）
+
+```
++-- 手柄键位 ------------------------------------------+
+| <-  [Xbox][PS][Deck][Switch] ... （横滑图标 chip）    |
+| 搜索动作...             已改 2   !1        [...] [x] |
++------------------------------------------------------+
+| v 常用 (6)                                           |
+|  * 使用 / 互动        [X]          [E]               |
+|    跳跃               [A]          [Space]           |
+|    采集               [RT]         [左键]            |
+| > 战斗 (4)                                           |
+| > 移动 (4)                                           |
+| > 界面 (6)                                           |
++------------------------------------------------------+
+| 已保存 . 12:03                                       |
++------------------------------------------------------+
+```
+
+- 紫点 = 与默认不同，**点紫点单行还原**
+- `!1` = 冲突数，点开跳到该行
+- 平台 chip 用 `g.ic` 的整手图标（15 套），**不是下拉框**
+- 切换平台时：当前键不属于该平台 → 显示「不适用」灰格（**数据保留**）
+
+### 4.3 图标策略（v1 的「文字徽章」方案作废）
+
+全部走 `lbKeyChipHtml()`：
+- 15 套字体已覆盖 1242 字形，精英背键 / Share / Fn / 触控板全部有图：
+  `xbox_elite_paddle_top_left` / `_top_right` / `_bottom_left` / `_bottom_right`（P1~P4）、`xbox_button_share`、
+  `playstation5_elite_fn_l` / `_fn_r` / `_lb` / `_rb`
+- 未覆盖的键（极少）→ 自动回落旧 CDN PNG → 再回落键名文字（`onerror`）
+
+### 4.4 手柄平台（15 套，全部已建字体）
+
+| # | 平台（`layout` 值） | 字体 | 键数 |
+|---|---|---|--:|
+| 1 | `keymouse` 键盘 / 鼠标 | `lbk-keymouse.woff2` | 109 |
+| 2 | `xbox` Xbox Series（Elite） | `lbk-xbox.woff2` | 39 |
+| 3 | `playstation` PlayStation（含 Edge） | `lbk-playstation.woff2` | 39 |
+| 4 | `switch` Switch / Switch 2 | `lbk-switch1.woff2` | 39 |
+| 5 | `steam` Steam 手柄 | `lbk-steam.woff2` | 29 |
+| 6 | `steamdeck` Steam Deck | `lbk-steamdeck.woff2` | 48 |
+| 7 | `valveindex` Valve Index | `lbk-valveindex.woff2` | 22 |
+| 8 | `steamframe` Steam Frame | `lbk-steamframe.woff2` | 29 |
+| 9 | `wii` Wii | `lbk-wii.woff2` | 38 |
+| 10 | `wiiu` WiiU | `lbk-wiiu.woff2` | 33 |
+| 11 | `gamecube` GameCube | `lbk-gamecube.woff2` | 34 |
+| 12 | `playdate` Playdate | `lbk-playdate.woff2` | 11 |
+| 13 | `metaquest` Meta Quest | `lbk-metaquest.woff2` | 23 |
+| 14 | `touch` 触屏 | `lbk-touch.woff2` | 11 |
+| 15 | `generic` 通用 | `lbk-generic.woff2` | 26 |
+
+> `layout` 只决定**手柄列的图标皮肤**；默认键位表统一用 `xbox_*` 命名，渲染时按 `layout` 映射到同义键
+> （映射表 `LB_KEYMAP_SKIN`，如 `xbox_button_a` → `playstation_button_cross` / `switch_button_a` / `gamecube_button_a`）。
+> 无同义键的平台（如 Xbox 背拨片 P1~P4 在 Switch 上不存在）→ 该行显示「不适用」。
+
+### 4.5 改键弹层（**方案 C：搜索 + 折叠，禁止全列**）
+
+```
++-- 改「使用 / 互动」. 手柄键 --------------------------+
+| [搜索] 输入键名 / 别名（如 A、RT、空格）...           |
++------------------------------------------------------+
+| > 面键 (4)                          <- 全折叠         |
+| v 肩键 / 扳机 (4)                   <- 点开才显示     |
+|    [LB] [RB] [LT] [RT]                               |
+| > 摇杆 / 十字 (9)                                    |
+| > 菜单 / 系统 (3)                                    |
+| > 背键 (4)                                           |
+| > 键盘 / 鼠标 (109)                 <- 默认折叠      |
+|                                    [取消]            |
++------------------------------------------------------+
+```
+
+**硬性规则**
+1. 打开时**所有分组折叠**；仅「当前值所在组」自动展开并对当前键打紫框
+2. 输入关键词 → **跨全部组即时过滤**，最多渲染 30 条（超出提示「继续输入以缩小范围」）
+3. `col='pad'` 只显示手柄相关组；`col='kbm'` 只显示键盘 / 鼠标组
+4. 单组超过 20 个键时，组内自带滚动（不撑高弹层）
+5. 不做「最近 / 推荐」（用户选定：极简）；搜索框自动聚焦并全选
+
+### 4.6 改键交互
+
+1. 点键位格 → `lbKeymapPick(actionId, col, anchorEl)` 弹 §4.5 面板
+2. 选中 → 写 `map[actionId][col]` → 立即重渲染该行 + 800ms 防抖保存
+3. **冲突检测**（同列范围）：目标键已被其它动作占用 ⇒ 弹确认
+   - 选项：**交换 / 覆盖并清空对方 / 取消**
+   - 默认推荐「交换」（不会把别的动作弄成空）
+4. **单行还原**：点紫点 → 删 `map[actionId]`
+5. **分组还原**：分组标题右侧 `↺`（只影响该组动作）
+6. **全部恢复默认**：`⋯` 菜单内，二次确认
+
+### 4.7 重复字形治理（v5185 / v5186 落地）
+
+Kenney 有些字形靠**多色**区分，单色字体里轮廓完全一致（实测 **30 组 / 65 个字形**）：
+
+| 处理 | 例子 |
+|---|---|
+| **直接剔除**（选哪个都分不清且无语义差） | `keyboard_arrows_all` / `_left` / `_up` / `_down` / `_right`、`mouse`（整鼠标图）、`mouse_side_back`、`*_dpad_all`、`switch_buttons_all` |
+| **保留 + 角标**（语义不同必须能选） | `mouse_left`（左）/ `mouse_right`（右）/ `mouse_side`（侧）/ `playstation_dpad_left`（←）/ `playstation_dpad_up`（↑） |
+| 由 `BAD`/`SKIP` 词缀自动排除 | `*_color_*` / `*_outline` / `*_horizontal` / `*_vertical` / `controller_*` 整机图 |
+
+**新增键位时的检查方法**：跑 `tmp/_kf_dups.py` → 输出 `tmp/_kf_dup.txt`（同平台内轮廓哈希重复组），按上表处理新出现的重复组。
+
+### 4.8 字体发版铁律（两次踩坑固化）
+
+1. **文件名固定**：`fonts/lbk-<plat>.woff2`，**不要**按版本重命名 —— wrangler 按内容 hash 去重，内容未变的字体不会以新名字上传 ⇒ 新路径 404
+2. **破缓存靠 query**：`@font-face` 运行时拼 `?v=<LB_VERSION>`（`<style id="lbkFontFaces">`）
+3. **重建字体后必须跑 `tmp/_kcss_sync.py`**：新字形需要 `.lbk-<glyph>:before{content;font-family}` 规则
+4. 新字形还要补进 `LB_KEYFONT`（现做法：`LB_KEYFONT_SETS.forEach(g => { if (g.ic && !LB_KEYFONT[g.ic]) LB_KEYFONT[g.ic] = 1; })`）
+
+---
+
+## 5. 存储与同步（零后端改动）
+
+| 步 | 动作 |
+|---|---|
+| 1 | `LB_PREFS_KEYS` 数组追加 `'lb_keymap'` |
+| 2 | 改键 → 写 `localStorage['lb_keymap_<user>']` → `lbPrefsPush()`（800ms 防抖） |
+| 3 | 打开页面 → `lbPrefsPull()` 自动拉取，按 `kts['lb_keymap']` 与 `updatedAt` 判新旧 |
+| 4 | guest / 未绑昵称 → 只存本地 + toast「已存本地，未登录不同步」 |
+| 5 | 两端同时改 → 沿用现有按类时间戳规则，较新者覆盖 |
+
+---
+
+## 6. 代码改动清单
+
+### 6.1 新增（`dino-import.html`）
+
+| 名称 | 说明 |
+|---|---|
+| `LB_KEYMAP_ACTIONS` | ~20 项动作（id / g / zh / pad / kbm / note），pad·kbm 用 Kenney 原名 |
+| `LB_KEYMAP_SKIN` | 默认键位 → 各平台同义键映射（`xbox_button_a` → `playstation_button_cross`…） |
+| `LB_KEYMAP` | 运行时状态 `{ v, layout, updatedAt, map }` |
+| `lbKeymapLoad` / `lbKeymapSave` | 读/写 + 结构校验 + 防抖 |
+| `lbKeymapEffective(id)` | 默认 + map 合并 ⇒ `{pad, kbm, isCustom, note}` |
+| `lbKeymapSet(id, col, key)` | 改键 + 冲突处理（交换 / 覆盖） |
+| `lbKeymapResetRow` / `lbKeymapResetGroup` / `lbKeymapResetAll` | 三种还原粒度 |
+| `lbKeymapPick(id, col, anchor)` | 改键弹层（§4.5 方案 C） |
+| `lbKeymapViewHtml()` / `lbKeymapRender()` | 键位视图 |
+| `lbRoleView(view)` | 角色浮窗视图切换 |
+
+### 6.2 修改
+
+| 位置 | 改动 |
+|---|---|
+| `lbOpenRolePicker()`（约 L5251） | header 加 🎮；content 按 `LB._roleView` 渲染；宽度按视图切 |
+| `LB_PREFS_KEYS` | 追加 `'lb_keymap'` |
+| `lbPrefsAfterApply()` | 应用后 `lbKeymapLoad()` + 若键位视图打开则 `lbKeymapRender()` |
+| `<style>` | 新增 `.lb-km-*`（行 / 键位格 / 冲突态 / 紫点 / 分组标题 / 平台 chip）；**滚动条无需写样式**（全局已统一） |
+
+### 6.3 明确不动
+
+- `LB_KEYFONT` / `LB_KEYFONT_SETS` / `LB_KEYFONT_LBL` / `lbKeyChipHtml`：**只读复用**
+- `LB_HF_KEY_GROUPS`（旧 76 键）：仅供流程键帽面板历史引用，不再扩展
+- 后端 `dino_backend.py`：**零改动**
+
+---
+
+## 7. 分期与验收
+
+### 期 1 · 骨架与只读展示
+
+- [ ] `LB_KEYMAP_ACTIONS` + `LB_KEYMAP_SKIN` + `lbKeymapLoad/Effective/ViewHtml/Render`
+- [ ] 角色浮窗 🎮 入口 + 视图切换 + 宽度自适应
+- [ ] 分组折叠表格（默认只展开「常用」）
+- [ ] 平台 chip 切换（15 套整手图标），无同义键显示「不适用」
+
+**验收**：点「角色」→ 🎮 → 20 行动作（默认展开常用 6 行，其余折叠）；切平台图标正确换肤；「返回」回角色列表；手机上面板宽度不溢出。
+
+### 期 2 · 改键与存储
+
+- [ ] `lbKeymapPick`（§4.5 方案 C：搜索 + 折叠，**打开时零分组展开**）
+- [ ] 冲突检测（交换 / 覆盖 / 取消）
+- [ ] 单行紫点还原 / 分组还原 / 全部恢复默认
+- [ ] `LB_PREFS_KEYS` 接入 + 防抖保存 + 跨端拉取 + 状态条
+
+**验收**：
+1. 改「使用/互动」手柄键为 Y → 刷新仍是 Y、紫点仍在
+2. 另一浏览器登录同账号 → 拉到同一份
+3. 把「跳跃」键盘键改成与「使用/互动」相同 → 冲突提示，选「交换」后两行键值互换
+4. 恢复默认 → 全部回默认、紫点消失、`map` 为 `{}`
+5. 打开改键弹层 → **默认没有任何分组展开**，输入 "rt" 能直接筛到 RT
+
+### 期 3（可选）· 流程卡联动
+
+- [ ] key token 支持 `{"t":"key","v":"@interact"}`，渲染时查玩家当前键位
+- [ ] AI 提示词 key token 清单追加可选写法
+
+---
+
+## 8. 风险与回滚
+
+| 风险 | 应对 |
+|---|---|
+| 默认键位不准确 | 集中在 `LB_KEYMAP_ACTIONS` 一处；UI 给「待核对」淡色角标；三种还原粒度 |
+| 平台同义键映射不全 | `LB_KEYMAP_SKIN` 缺项 → 显示「不适用」，不报错 |
+| 键位图 404 | `lbKeyChipHtml` 三级回落：字体 → PNG → 键名文字 |
+| `user_prefs` 容量 | 单玩家 <2KB，远低于限制 |
+| 破坏角色浮窗现有功能 | 视图切换用 `LB._roleView`，默认 `'roles'`；回滚只需删 🎮 与 keys 分支 |
+| 字体 404（发版） | 见 §4.8 铁律 1 / 2 |
+
+**回滚**：`bak/dino-import.html.bak_<时间戳>` 覆盖 + 重新部署；数据侧删 `lb_keymap` 键即可。
+
+---
+
+## 9. 待确认事项
+
+1. **动作清单**：当前 20 项（常用 6 / 战斗 4 / 移动 4 / 界面 6）够不够？要增删哪些？
+2. **默认键位取值**：先用草案（标「待核对」）上，还是你先给准确表？
+3. **平台默认布局**：默认 `xbox` 还是记住上次选择？（建议记住上次）
+4. **期 3 是否要做**：流程卡按玩家键位显示（需改 AI 提示词 + token 渲染）
+
+---
+
+## 10. 附：默认键位草案（Kenney 原名，20 项）
+
+| 组 | id | 动作 | 手柄（Xbox 原名） | 键盘（原名） | 备注 |
+|---|---|---|---|---|---|
+| 常用 | `interact` | 使用 / 互动 | `xbox_button_x` | `keyboard_e` | |
+| 常用 | `mount` | 骑乘 / 上下坐骑 | `xbox_button_y` | `keyboard_e` | |
+| 常用 | `harvest` | 采集 | `xbox_rt` | `mouse_left` | |
+| 常用 | `transfer` | 转移 / 装入 | `xbox_button_a` | `keyboard_e` | |
+| 常用 | `pickup` | 拾取 | `xbox_button_x` | `keyboard_e` | |
+| 常用 | `whistle` | 吹哨（跟随 / 停） | `xbox_dpad_left` | `keyboard_semicolon` | |
+| 战斗 | `attack` | 主攻击 | `xbox_rt` | `mouse_left` | |
+| 战斗 | `aim` | 瞄准 / 副攻击 | `xbox_lt` | `mouse_right` | |
+| 战斗 | `reload` | 装填 | `xbox_button_x` | `keyboard_r` | 长按 |
+| 战斗 | `switchWeapon` | 切换武器 | `xbox_rb` | `keyboard_1` | 滚轮亦可 |
+| 移动 | `jump` | 跳跃 | `xbox_button_a` | `keyboard_space` | |
+| 移动 | `crouch` | 蹲下 | `xbox_stick_r_press` | `keyboard_c` | |
+| 移动 | `sprint` | 冲刺 | `xbox_lb` | `keyboard_shift` | |
+| 移动 | `lookBack` | 回身 / 视角 | `xbox_stick_r_up` | `mouse_side` | |
+| 界面 | `inventory` | 背包 | `xbox_button_view` | `keyboard_i` | |
+| 界面 | `map` | 地图 | `xbox_button_menu` | `keyboard_m` | |
+| 界面 | `wheel` | 交互轮盘 | `xbox_lb` | `keyboard_e` | 长按 |
+| 界面 | `chat` | 语音 / 聊天 | `xbox_dpad_right` | `keyboard_enter` | |
+| 界面 | `freeCam` | 自由视角 | `xbox_stick_l_press` | `keyboard_alt` | |
+| 界面 | `drop` | 丢弃 | `xbox_dpad_down` | `keyboard_o` | |
+
+> 手柄原名以 `LB_KEYFONT_SETS` 里 xbox 组的实际键名为准（`tmp/_kf_audit.py` 可列全）。
+> 「长按 / 组合」无法用单键表达，写入 `note`，**不参与冲突检测**。
+
+---
+
+## 11. 优化项清单（12 条，v2 采纳）
+
+| # | 优化 | 状态 |
+|---|---|---|
+| 1 | 数据存 Kenney 原名 + 旧名别名层 | ✅ 本计划已定 |
+| 2 | 表格加**备注列**（长按 / 组合） | ✅ §4.2 |
+| 3 | 冲突改**「交换」**优先（而非清空对方） | ✅ §4.6 |
+| 4 | 平台切换用**横滑图标 chip**（15 套整手图标） | ✅ §4.2 |
+| 5 | 切平台不在该平台的键显示**「不适用」并保留数据** | ✅ §4.2 |
+| 6 | **导入 / 导出 JSON**（群友分享键位） | ⬜ 期 2 尾部，可砍 |
+| 7 | 手机端 `min(560px,96vw)` + 表格转卡片 | ✅ §4.1 |
+| 8 | 保存状态条（已保存 / 同步中 / 失败重试） | ✅ §4.2 |
+| 9 | 冲突二次确认（琥珀色行 + 提示条） | ✅ §4.6 |
+| 10 | 「恢复默认」拆**单行 / 单组 / 全部** | ✅ §4.6 |
+| 11 | 期 3 token 联动 `@interact` | ✅ §7 期 3 |
+| 12 | 默认值「待核对」淡色角标 | ✅ §8 |
+
+---
+
+## 12. 相关记忆与脚本
+
+- 记忆：`memories/repo/dino-iconfont-rules.md`（字体构建 + 发版铁律）、`memories/repo/dino-scrollbar-global-css.md`（滚动条）
+- 脚本：`tmp/_keyfont_build5.py`（建字体）、`tmp/_kcss_sync.py`（码位同步）、`tmp/_kf_dups.py`（重复字形检查）、`tmp/_kf_audit.py`（键位覆盖审计）
