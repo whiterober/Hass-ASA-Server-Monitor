@@ -1589,6 +1589,8 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
   .lbk-steam_button_y_outline,.lbk-xbox_button_y_outline{color:#FCB404}
 /* #FCCC04 ×8 */
   .lbk-gamecube_stick_c,.lbk-gamecube_stick_c_down,.lbk-gamecube_stick_c_horizontal,.lbk-gamecube_stick_c_left,.lbk-gamecube_stick_c_right,.lbk-gamecube_stick_c_top,.lbk-gamecube_stick_c_up,.lbk-gamecube_stick_c_vertical{color:#FCCC04}
+/* v5238：上面这段 v5237 的「短名品牌色补丁」已删除 ——
+   显示层统一由 lbKeySrc() 取 LB_KEYFONT_SETS 的原始键名（_outline），品牌专色上面已有单一来源，不再重复 */
 .lbk-controller_button_l1:before{content:'\e043';font-family:'lbk-steam'}
 .lbk-controller_button_l1_outline:before{content:'\e044';font-family:'lbk-steam'}
 .lbk-controller_button_l2:before{content:'\e045';font-family:'lbk-steam'}
@@ -2256,7 +2258,162 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
    它当初用来在 AI 模式收起旧面板的地图/装备/产出行；
    P4 后卡头已撞进预览区（#lbHfAiCand 就在 .lb-hf-panel.lb-hf-edit 内）
    ⇒ 再隐藏 = 预览态卡头 / 装备行全部消失（v5062 修）*/
-.lb-hf-edit.lb-hf-ai-mode{padding-top:10px}   /* v4934（用户口径）：大肥鱼模式下顶部内边距与左右一致（10px） */
+.lb-hf-edit.lb-hf-ai-mode{padding-top:10px}
+/* ===== v5211：键位配置（复用 .lb-hf-ai* 操作栏，仅新增 .lb-km-*） ===== */
+.lb-km-panel{max-width:min(560px,96vw)!important;width:100%;padding:0!important;overflow:hidden}
+.lb-km-header{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #262633;background:#1b1b26}
+.lb-km-back{color:#9fb;cursor:pointer;font-size:16px;line-height:1}
+.lb-km-title{flex:1;font-size:14px;font-weight:bold;color:#a78bfa}
+.lb-km-x{color:#888;cursor:pointer;font-size:14px;opacity:.6}
+.lb-km-scroll{padding:8px 10px 10px}
+.lb-km-plats{display:flex;gap:6px;overflow-x:auto;overflow-y:hidden;padding-bottom:6px;scrollbar-width:thin;scrollbar-color:#3a3a4a transparent}
+.lb-km-plats::-webkit-scrollbar{height:4px}
+.lb-km-plats::-webkit-scrollbar-thumb{background:#3a3a4a;border-radius:2px}
+.lb-km-plats::-webkit-scrollbar-track{background:transparent}
+.lb-km-plat{display:inline-flex;align-items:center;justify-content:center;width:38px;height:34px;border-radius:8px;background:#22222c;border:1px solid #33333f;color:#cfcfe0;cursor:pointer;flex:0 0 auto}
+.lb-km-plat.on{background:#3b2a5e;border-color:#a78bfa;color:#fff}
+.lb-km-profbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:0 0 8px}
+.lb-km-prof{padding:2px 9px;border-radius:12px;background:#22222c;border:1px solid #33333f;color:#cfcfe0;font-size:12px;cursor:pointer;line-height:1.7}
+.lb-km-prof.on{background:#3b2a5e;border-color:#a78bfa;color:#fff}
+.lb-km-prof em{font-style:normal;opacity:.65;font-size:11px;margin-left:1px}
+.lb-km-profadd{width:20px;height:20px;border-radius:50%;background:#2a2a36;color:#9a9ab0;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;line-height:1}
+.lb-km-body{border-top:1px solid #202029}
+/* v5244（用户口径「键位行和标题行之间没有明显区隔」＋「tab 放在附件里不合适」）：
+   四层区隔 —— 标题（下边线）→ 设备工具条（实线浅底）→ AI 虚线框 → 列表控制行（下边线）→ 表格 */
+.lb-km-ai{margin-top:8px}
+.lb-km-ctrl{margin-top:10px;padding-bottom:8px;border-bottom:1px solid #262633;display:flex;align-items:center;gap:8px;flex-wrap:wrap}   /* v5273：右侧容纳旧设备开关 */
+.lb-km-footbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px solid #262633}
+.lb-km-oldbtn{font-size:10.5px;color:#6b6b7d;border:1px dashed #333342;border-radius:5px;padding:1px 7px;line-height:16px;cursor:pointer;white-space:nowrap;user-select:none}   /* v5273：低可视化开关 */
+.lb-km-oldbtn:hover{color:#a78bfa;border-color:#4a3a6e}
+/* v5271：按按键「键功能菜单」——点卡片直接改键 / 绑定 */
+/* v5277：修复样式崩坏 —— 对齐改键弹层（.lb-km-pickpanel）：panel 自身 padding:0，head / tip / list / foot 各自带 padding */
+.lb-km-kmenu{width:100%;padding:0!important;overflow:hidden}
+.lb-km-kmenu-head{flex:none;display:flex;align-items:center;gap:8px;padding:9px 12px;background:#1b1b26;border-bottom:1px solid #262633;font-size:13px;color:#dcdce8}
+.lb-km-kmenu-head .lb-km-x{margin-left:auto}
+.lb-km-kmenu-name{font-size:13.5px;font-weight:bold;color:#e6e6f0}
+.lb-km-kmenu-tip{flex:none;padding:8px 12px;font-size:11.5px;color:#8a8a9c;line-height:1.4;border-bottom:1px solid #202029;background:#171720}
+.lb-km-kmenu-list{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:5px;padding:10px 12px;overflow-y:auto;max-height:min(50vh,360px)}
+.lb-km-kmenu-list:empty{display:none}
+.lb-km-kmenu-scroll{max-height:42vh}
+.lb-km-kmenu-row{display:flex;align-items:center;gap:7px;padding:6px 9px;border-radius:7px;background:#22222c;border:1px solid #33333f}
+.lb-km-kmenu-ic{width:18px;flex:none;display:inline-flex;justify-content:center;align-items:center}
+.lb-km-kmenu-an{flex:1;min-width:0;font-size:12.5px;color:#d2d2e0;line-height:1.35;overflow-wrap:break-word}
+.lb-km-kmenu-g{font-style:normal;font-size:10.5px;color:#7f7f92;margin-right:5px}
+.lb-km-kmenu-foot{flex:none;display:flex;align-items:center;gap:8px;padding:7px 12px;font-size:11px;border-top:1px solid #262633;background:#14141c}
+.lb-km-tabs{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.lb-km-ai-diff{display:flex;flex-wrap:wrap;gap:8px 18px;margin:2px 0 8px}
+.lb-km-ai-d{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#cfcfe0}
+.lb-km-ai-dn{color:#b8b8c8}
+.lb-km-ai-dc{color:#7a7a90;font-size:11px}
+.lb-km-table{width:100%;border-collapse:collapse;font-size:12.5px}
+/* v5247（用户口径「附件上边缘没有分隔」的真实根因）：
+   border-collapse:collapse 下同宽边框「上方单元格 border-bottom 胜出」⇒ 组头的 1px border-top 被上一行 td 的 1px #202029 吃掉（computed 正常但渲染无）；
+   v5245 的 2px 因「宽者胜出」才显示，所以被评价"太显眼"。改用 box-shadow:inset 绕开边框合并，1px 柔和线必定渲染在组头顶部 */
+.lb-km-ghead td{padding:8px 8px 7px 8px;background:#1e1e29;color:#b9b9cc;cursor:pointer;border-top:none;box-shadow:inset 0 1px 0 #32323f;user-select:none;font-weight:bold}
+.lb-km-table tr.lb-km-ghead:first-child td{box-shadow:none}
+.lb-km-ghead.on td{background:#2c2c3e;color:#e8e8f2}
+.lb-km-row td{padding:4px 8px;border-bottom:1px solid #202029;vertical-align:middle}
+.lb-km-act{color:#dcdce8;white-space:nowrap}
+.lb-km-bang{color:#e0a030;margin-left:5px}
+.lb-km-c{width:78px;text-align:center}
+.lb-km-dotc{width:22px;text-align:center}
+.lb-km-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#a78bfa;cursor:pointer}
+.lb-km-row.custom .lb-km-act{color:#fff}
+.lb-km-row.conflict{background:#2a2214}
+/* v5242（用户口径「对齐流程里的立体效果」）：与流程键帽 .lb-hf-chip.lb-hf-keyb 同一套 —— 提亮底 + 底部 2px 内阴影（键帽侧壁），按下压薄到 1px（下沉手感） */
+.lb-km-key{background:#33333d;border:1px solid #3a3a4a;border-radius:7px;min-width:40px;height:32px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0 4px;color:#cfcfe0;box-shadow:inset 0 -2px 0 #26262e}
+.lb-km-key:active{box-shadow:inset 0 -1px 0 #26262e}
+.lb-km-key:hover{border-color:#a78bfa}
+.lb-km-key.conflict{border-color:#e0a030}
+/* v5236（用户口径「去掉改键按钮紫框」）：改动行不再用按钮边框表达，改由键图标/功能名着色 */
+.lb-km-na{display:inline-block;font-size:11px;color:#6a6a80;min-width:34px}
+.lb-km-empty{padding:14px 10px;text-align:center;color:#77778c;font-size:12px}
+.lb-km-menu{position:fixed;z-index:100200;min-width:180px;background:#1b1b26;border:1px solid #3a3a4a;border-radius:8px;padding:4px;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.lb-km-mi{padding:6px 10px;font-size:12.5px;color:#dcdce8;cursor:pointer;border-radius:5px;white-space:nowrap}
+.lb-km-mi:hover{background:#2a2a3a}
+.lb-km-mi.dis{opacity:.4}
+.lb-km-mi em{font-style:normal;opacity:.6;font-size:11px}
+.lb-km-msep{height:1px;background:#2a2a3a;margin:4px 2px}
+.lb-km-pickpanel{max-width:min(440px,96vw)!important;width:100%;padding:0!important;overflow:hidden}
+.lb-km-pickhead{display:flex;align-items:center;padding:9px 12px;background:#1b1b26;border-bottom:1px solid #262633;font-size:13px;color:#dcdce8}
+.lb-km-pickhead .lb-km-x{margin-left:auto}
+.lb-km-pickbody{max-height:min(50vh,360px);overflow-y:auto;border-top:1px solid #202029}
+.lb-km-pgrp{border-bottom:1px solid #202029}
+.lb-km-phead{padding:7px 12px;color:#c5c5d6;font-size:12.5px;cursor:pointer;background:#171720;font-weight:bold}
+.lb-km-phead.on{background:#2c2c3e;color:#e8e8f2}
+.lb-km-pcells{display:flex;gap:6px;flex-wrap:wrap;padding:8px 12px}
+.lb-km-pk{width:42px;height:34px;border-radius:7px;background:#33333d;border:1px solid #3a3a4a;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:inset 0 -2px 0 #26262e}
+.lb-km-pk:active{box-shadow:inset 0 -1px 0 #26262e}
+.lb-km-pk:hover{border-color:#a78bfa}
+.lb-km-pk.on{border-color:#a78bfa;background:#3b2a5e}
+.lb-km-pmore{padding:0 12px 8px;color:#77778c;font-size:11px}
+.lb-km-pickfoot{padding:7px 12px;color:#77778c;font-size:11px;border-top:1px solid #262633;background:#14141c}
+/* v5213：全局游戏上下文 + 堕落玩偶主页 */
+.lb-game-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.lb-game-chip{flex:1 1 45%;min-width:130px;padding:8px 10px;border-radius:8px;border:1px solid #33333f;background:#12121a;color:#cfcfe0;font-size:12.5px;cursor:pointer;line-height:1.4;text-align:left}
+.lb-game-chip.on{border-color:#a78bfa;background:#2a1f42;color:#fff}
+.lb-game-chip em{display:block;font-style:normal;font-size:11px;color:#8a8a9c;margin-top:2px}
+.lb-game-chip.on em{color:#c4b5fd}
+.lb-scum-wrap{max-width:520px;margin:50px auto;padding:0 14px}
+.lb-scum-hero{text-align:center;margin-bottom:22px}
+.lb-scum-ic{font-size:34px;line-height:1}
+.lb-scum-t{font-size:16px;font-weight:bold;color:#dcdce8;margin-top:10px}
+.lb-scum-s{font-size:12px;color:#8a8a9c;margin-top:6px;line-height:1.6}
+.lb-scum-entry{display:flex;align-items:center;gap:12px;width:100%;padding:14px 16px;border-radius:12px;border:1px solid #3a3a4a;background:#16161f;color:#e0e0e0;cursor:pointer;text-align:left;font-family:inherit}
+.lb-scum-entry:hover{border-color:#a78bfa;background:#1b1b26}
+.lb-scum-eic{font-size:20px;line-height:1}
+.lb-scum-etx{display:flex;flex-direction:column}
+.lb-scum-et{font-size:14px;font-weight:bold;color:#fff}
+.lb-scum-es{font-size:11.5px;color:#8a8a9c;margin-top:3px}
+.lb-scum-ea{margin-left:auto;color:#a78bfa;font-size:16px}
+.lb-scum-switch{margin:0 0 20px}
+.lb-scum-switch .lb-game-chip{text-align:center;padding:9px 10px}
+/* v5226：操作标识图标化（长按 / 双击 / 组合 / 清空） */
+.lb-km-ico{font-size:12px;line-height:1;vertical-align:-2px;margin-left:2px;color:inherit}   /* v5234：跟随所属功能色 */
+.lb-km-ico.lb-km-cus{color:#a78bfa}
+.lb-km-ico-mini{font-size:10px;line-height:1;vertical-align:-1px;margin:0 1px;color:#8a8a9c}
+.lb-km-cb{display:inline-flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:1px;white-space:normal;vertical-align:middle;margin-left:2px}   /* v5230 换行；v5231 去掉固定浅蓝，默认原色 */
+.lb-km-cbi{vertical-align:-2px;line-height:1}   /* v5229：组合标签内的字体键/SVG 图标基线 */
+.lb-km-cus{color:#a78bfa}
+.lb-km-an{color:inherit}   /* v5233 默认原色；v5267 改为继承父级，便于卡片统一提亮 */
+.lb-km-an.lb-km-cus{color:#a78bfa;font-weight:bold}   /* v5233 改动→主题色；v5234 加粗提升可辨度 */   /* v5231（用户口径「默认键位原色，改动的用主题色，自带的着色保留」）：只染 currentColor 层；SVG 红臂 fill=E73246 硬编码不受影响 */
+.lb-km-mod{line-height:13px}   /* v5235：同步去掉内边距 */
+.lb-km-mod .mdi{font-size:11px;vertical-align:-1px}
+.lb-km-pmod .mdi{font-size:15px;vertical-align:-3px}
+.lb-km-pclr .mdi{font-size:15px;vertical-align:-3px}
+/* v5221/5222：组合键 + 修饰角标 + 改键弹层选择区 */
+.lb-km-mod{display:inline-block;margin-left:3px;line-height:15px;vertical-align:middle;white-space:nowrap;color:inherit}   /* v5235（用户口径「附件无需圆角框」）：去掉紫底圆角框与内边距，颜色跟随所属功能（默认灰白 / 改动紫） */
+.lb-km-key{min-width:auto;height:auto;padding:3px 6px;gap:1px}
+.lb-km-picksel{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 12px;border-bottom:1px solid #202029;background:#171720;font-size:11.5px;color:#8a8a9c}
+.lb-km-pmod{padding:2px 7px;border-radius:5px;border:1px solid #3a3a4a;color:#a8a8b8;font-size:11px;cursor:pointer;line-height:16px;display:inline-flex;align-items:center;gap:4px}
+.lb-km-pmn{white-space:nowrap}
+.lb-km-pmod.on{background:#3b2a5e;border-color:#a78bfa;color:#fff}
+.lb-km-selline{display:flex;align-items:center;gap:6px;flex-wrap:wrap;width:100%}
+.lb-km-modline{display:flex;align-items:center;gap:5px;flex-wrap:wrap;width:100%;padding-top:6px;border-top:1px solid #202029}
+.lb-km-mtxt{font-size:10.5px;color:#a8a8b8;white-space:nowrap}
+.lb-km-mtxt.lb-km-cus{color:#a78bfa}
+.lb-km-pchord{padding:2px 8px;border-radius:5px;border:1px dashed #4a4a5e;color:#c5c5d6;font-size:11px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;line-height:16px}
+.lb-km-pchord.on{border-style:solid;border-color:#a78bfa;background:#2a2340;color:#fff}
+.lb-km-pchord:hover{border-color:#7c5cf0;color:#e6e6f0}   /* v5264 */
+.lb-km-pchord.picking{border-style:solid;border-color:#a78bfa;background:#3b2a5e;color:#fff}   /* v5260：选组合键进行中（点此返回） */
+.lb-km-pclr{margin-left:auto;color:#f87171;font-size:11px;cursor:pointer}
+.lb-km-pclr:hover{color:#fca5a5}   /* v5263 */
+/* v5220：按键反查视图 + 行高亮闪现 */
+.lb-km-kv-ghead{padding:7px 8px;background:#1b1b26;color:#b9b9cc;font-size:12.5px;border-top:1px solid #262633;user-select:none}
+.lb-km-kv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:6px;padding:8px}   /* v5230：92→116；v5267 116→128，容纳「一行一功能」布局 */
+.lb-km-kv{display:flex;flex-direction:column;align-items:center;gap:4px;padding:7px 5px;border-radius:8px;background:#22222c;border:1px solid #33333f;cursor:pointer}
+.lb-km-kv:hover{border-color:#a78bfa}
+/* v5234（用户口径「框架也无需淡紫色底了」「连组合键蓝框一起去掉」）：卡片框架全中性，
+   已绑定 / 组合 不再用底色或边框表达，改动的识别只靠内容（功能名 + 图标）着色 */
+.lb-km-kv-ic{line-height:0}
+.lb-km-kv-t{font-size:11.5px;color:#8a8a9c;text-align:center;line-height:1.45;max-width:100%;overflow-wrap:break-word;display:flex;flex-direction:column;align-items:center;gap:1px;width:100%}   /* v5267：11.5px/行高1.45，功能逐行排（.lb-km-arow），去掉 break-all 防拆词 */
+.lb-km-arow{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:0 3px;max-width:100%}   /* v5267：一个功能独占一行 */
+.lb-km-kv.used .lb-km-kv-t{color:#d2d2e0}   /* v5234：默认原色；v5267 提亮到 #d2d2e0 提升可读性 */
+.lb-km-row.flash{animation:lbKmFlash 1.4s ease-out}
+@keyframes lbKmFlash{0%{background:#3b2a5e}70%{background:#2a2340}100%{background:transparent}}
+
+
+   /* v4934（用户口径）：大肥鱼模式下顶部内边距与左右一致（10px） */
 .lb-hf-edit.lb-hf-ai-mode #lbHfAiBox{margin-top:0;padding:10px}   /* v4934：虚线框内部四边统一 10px，上方与左右完全对齐 */
 .lb-hf-aimode{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#8b8b9a}
 .lb-hf-aimode>span{cursor:pointer;padding:1px 8px;border-radius:6px;border:1px solid #3a3a4a;background:#1a1a24;color:#c9c9d6;font-size:11px;line-height:18px}
@@ -2552,7 +2709,7 @@ var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // ⏳ **未部署** v3626（用户要求）：**对照表缺·建筑类 20 条落地** —— 将 t1「中文+图标已定稿」的 20 条并入 `汉化/item_zh.json`（键=短名、kind=structure、src=gap_table_t1）：`SpotLight` 聚光灯 ｜ `Ramp_Wood` 木制楼梯 ｜ `Ramp_Adobe` 黏土楼梯 ｜ `TriCeiling_Wood` 木制三角天花板 ｜ `WoodCage` 木制笼子 ｜ `WoodSpikeWall` 木制拒马 ｜ `Metal_OceanPlatform` / `Wood_OceanPlatform` 海洋平台 ｜ `Furniture_Rug` 粗毛地毯 ｜ `TekFenceFoundation` 泰克栅栏地基 ｜ `AdobePillar` 黏土柱子 ｜ `RopeLadder` 绳梯 ｜ `TriRoof_Adobe` / `TriRoof_Tek` 三角屋顶 ｜ `WoodElevatorPlatform_Small` / `_Medium` / `WoodElevatorTrack` 木制电梯 ｜ `AdobeGateDoor_Large` 黏土巨兽恐龙门 ｜ `Flag_KingKaiju` 君王泰坦旗帜 ｜ `LargeWall_Wood` 大型木制墙；词典 1790 → **1810 键**；缺口表 t1 **33 → 13 条**、总表 320 → **300 行**
 // ⏳ **未部署** v3627（用户要求）：**缺口表其余部分（t2/t3/t4）双就绪条目落地 105 条** —— 质控分档（`tmp/_v3689_qc.py`）后落地：A 档 91 + B 档中经用户确认/属关键词误判者（「新联邦靴子」「那里!」经用户确认正确）；**排除 2 条**：`PrimalItemConsumable_Egg`（中文为 `Egg!` 英文原文）、`PrimalItemArmor_PearlShirt`（t4，中文仅「珍珠」）；跳过 2 条 kind 无法确定（`PrimalItem_FishBasketFilled` / `PrimalItem_Spawner_HoverSail_Main`）与 1 条生物类（`Exosuit_Character_BP`）；t2 的 `PrimalItemRadio`/`PrimalItemRaft` 词典已有键（`Radio`/`Raft`）故仅调 kind：`Raft` weapon → **structure**（`Radio` 本已 weapon）；落地内容以蛋类 37、结构件 29、鞍具 5、弹药 2 为主；词典 **1810 → 1915 键**（kind 空 **0** / other **0**）｜ 缺口表 **300 → 196 行**（t3 215 → 111）
 // v4333（用户口径①）：区域行「前 X」改名「上一段：X」+ 与当前/基础名重复时隐藏（v4347 用户口径②：整条移除，不再显示）
-var LB_VERSION = 'v20261024-5209';   // v4280（根因修复）：① 退出物品模式恢复「选种」按钮（v1368 隐藏无恢复） ② 生物背包容器标题唯一源解析（BP_/_ASA 组件 token → 真实 dinoClass）   // v4231（用户实测「繁育栏把功能栏挡住」）：① 两栏同显繁育栏叠功能栏上方 ② 空繁育栏不显示 ③ 结果浮层/追踪钮偏移联动   // v4230（用户裁定）：皮肤类全链隐藏（词典 skin:1 标记并入判空链——Tileset 外观/Bounce 系列/节日建筑等 54 键）   // v4229（用户确认）：初始笔记全链隐藏（v4083 只滤浮窗，容器漏同步 ⇒ hideItems+硬编码双写入升级）   // v4228（用户口径）：容器 chip 染料补色点（v3593 只改了浮窗，容器漏同步）   // v4227（用户口径）：HotbarSkill_Base（快捷技能芯片，非真实物品）加入隐藏名单（hideItems+硬编码双写入）   // v4226（用户实测「黑曜石仙境没内容却显示tab」根因修复）：lbPickIdx 统计对齐渲染口径（+lbIsEmptyItem 判空）——q=0 空槽残留不再计入 tab/角标/聚落/总数   // v4225（v4224 实测补丁）：预热已走完但缓存被清（材质表到达等）→ 立即兜底冷建，不再干等 6s   // v4224（用户口径「空档期点击卡」）：① 物品栏未预热点击→占位+等预热填充（不再冻结 440ms 无反馈）② 预加载交互让路（600ms 窗口）③ 静默刷新收尾即触发预热（消 3s 空窗）   // v4223（性能优化·用户确认A+B2）：① 预加载热点——字典键数引用缓存（拥有索引 11,531ms 预计降至 1~2s）② 后台检查更新——批量 LM 接口（40+ 次 HEAD → 1 次请求）   // v4222（用户口径）：所有可点击徽章补 hover——① 设施芯片挂载条件扩为「可点即 hover」② 装备榜/选种行卡新增 hover   // v4221（用户实测「角标还显示了2」）：玩家背包同口径排除出服务器 tab 角标/聚落角标/总数（srv/setts/total），修角标与列表不一致   // v4220（用户实测）：「无聚落/离散」容器登记排除玩家背包（消除与「玩家携带」tab 重复的纯背包卡）   // v4219（实测根因）：伪容器 rec 补 server 字段（修「无聚落/离散」卡点进去详情空——lbRecHasPick 键查空导致）   // v4218（用户口径）：物品筛选类别扩至「物品浮窗全部类别」（lbItemIsPick 按浮窗归属类别对齐，修 建筑/资源等非装备类筛选全灭）   // v4217（用户要求）：① 别名表数据化（dino_rank_alias.json + 恐龙recs类名映射，零硬编码）② 物品模式玩家tab恢复位置卡/去平铺卡流 ③ 恐龙侧 mine 与恐龙列表同源（跨服龙鞍显示）   // v4216（实测根因修复）：ASB_DB 懒加载未就绪时缓存空表 ⇒ 词干表 0 条永久失效；改为「就绪才缓存」（lbRankStemMap + lbAsbNameMap）   // v4215（用户口径）：① 装备榜鞍键↔恐龙键同物异名归一（勘误+ASB词干表）② 选物种玩家背包只留该物种鞍/蓝图 ③ 选物品隐藏低温舱+去位置卡 ④ 非鞍剔除   // v4214（用户口径）：装备榜 TAB 角标只计「我的」——外部更高不参与计数   // v4213（用户口径·S7）：物种按钮显隐与物品侧同步——只看桶内容（有效条目）   // v4212：物种榜 qidx<=0 全排除 + 去重 >0 + 角标=实际显示数 + 恐龙背包显示具体龙名   // v4211（用户要求·单一代码源）：装备榜物种/物品渲染统一为 lbRankRenderPanel + 外部更高条目不显示区域名   // v4210（用户口径·位置唯一化）：容器显示接入「坐标→设施真身」统一解析（人台上的矛显示回「人台E」真名）   // v4209：物品模式装备榜=物种榜完整翻版（两 TAB 实物/蓝图 + qidx<=0 过滤 + 类别图标）   // v4208（用户需求）：物品模式装备榜——按钮按「存档有原始以上品质」动态显隐 + 面板细节对齐物种（分组/行卡/弹卡/过滤同源）   // v4207：离散「位置」组展开时数量位同样被按钮替换（对齐改名）   // v4206：离散卡容器组加「位置」按钮（复刻改名按钮 + 弹地图浮窗）   // v4205：物品模式 tab 显隐排除基因条件（Gen(0) 过滤根因）   // v4204：离散 chip 不响应重命名 + 物品模式隐藏基因设备段（基因存储器根因）   // v4203：修详情内部过滤缺口（物品模式详情逐成员对齐主列表 lbRecHasPick）   // v4202：对照表 11 项权威容量落地（容量表 +10 项数据键 + DisplayCase 归 HIDE）   // v4201（用户方案）：生物背包参与聚合——背包容器注入 ctn（byContainer 直接命中）+ 判定剔除背包点 + 容器组归属统一 + 删近邻兜底   // v4200：龙背包归属加「近邻唯一」兜底（帝蟒背包与龙坐标差 1749 也能归位）   // v4199：放出容器坐标键放开 + 物品索引接「生物背包→龙」关联链   // v4198：修 5 处容量别名反向空指（Fireplace/WaterTap/TurretCatapult/TurretBallista/TaxidermyBase_Small）   // v4197：龙背包并入归属过滤（离散/无聚落详情不再混入别人部落的生物背包）   // v4196：离散卡容器化（scatteredList 暴露 + 物品索引兜底 + 卡内容器注入）   // v4195：散置伪 rec 补 isEmpty 容器本体形态（v3452 同口径，防详情渲染崩溃）   // v4194：散置卡修复——伪容器 rec 直取（物品容器哈希与 rec 哈希两套，cid 不可跨查）   // v4193（用户口径）：物品模式隐藏「聚落命名/区域命名」入口 + 「散置容器」卡（无聚落卡，完全对齐物种）   // v4192（用户口径）：物品角标/数量对齐物种——只统计「当前角色拥有」（v3597 归属过滤接入 lbPickIdx）+ 物品模式聚落卡隐藏放出/低温仓/蛋段 + 角标图标按物品类型取 LB_INV_GRP;   // v4191：玩家 tab 自动切换补修（物品模式无该物品 ⇒ 内容区不再驻留空态）;   // v4190（用户要求）：单一物品主体页优化（玩家tab物品口径 / 物品索引双计修复 / 聚落角标武器类别图标 / 详情行隐藏容量角标）   // v4189（用户要求）：水雷迁入「器械>弹药」（Underwater Mine）;   // v4188（用户要求）：陷阱族迁入「器械>弹药」段（Y异种植物陷阱改名入族 + 大型捕兽夹/捕兽夹入族垫底；v4187 设施段位代码撤回）;   // v4186：泰克水壶补录（工具>水容器族末位）+ 巨石核实 + 对照表 5 项去重、恐龙外观表折叠;   // v4185：恐龙装备栏外观全组过滤（用户实锤鞍皮肤；hideItems 18 项）;   // v4184：译名（沙斯塔鱼龙）+ Cute Dino Helmet 过滤（玩家帽）+ lbEggIs 帽子豁免（Easter_Egg_Hat 归位模块栏）;   // v4183：物品浮窗接入 hideItems 过滤（Pepper Mask 修复）+ 恐龙外观 12 款落地（模块>生物外观）;   // v4182：恐龙装备栏外观 12 款图标全配（8 款本地实锤 + 4 款 wiki 补录；icons2 5204 / webp_map 5107）;   // v4181：B1 节日糖果全量入库（8 新键+圣诞糖果合并为节日恐龙糖+玉米糖换 HUD_Event_Halloween_BC）+ PepperMask 浮窗过滤 + 节日族词/类名规则;   // v4177：Air_Jar/Air_Bladder kind 修正（consumable→weapon，正式入器械>工具>水容器）+ 情人节/感恩节糖果补图（Valentines_Dino_Candy/Thanksgiving_Candy）;   // v4175：料理子序微调（鲨鲨小零食!紧挨吉利盛宴3.4后；虫胶19→5.3 紧挨饭团5.2后）;   // v4174：达科寿司/饭团（原稻米球改名）入料理族并紧挨海藻寿司（子序 5.1/5.2）;   // v4173：情人节巧克力正名+配图（Box o' Chocolates/盒装巧克力/VDay_icon）+ WormGum 补录（虫胶）+ Air_Jar/Air_Bladder 移工具·水容器族（族内最后）+ 食肉植物种子排植物种子R后 + 亚特兰汤/虫胶接料理子序18-19;   // v4170：消耗品补录 18 键（胡椒面具/空气罐/气囊/海龙汤/风干鱼肉×2/稻米球/感染系列×6/干海带/达科寿司/亚特兰汤/蓝莓汁 P+/情人节巧克力 ase）+ 新族「感染」（含感染藤壶 7 项）+ 泰克三叉戟归「矛」族;   // v4169：咒缚贴合全局兜底（跨块场景：咒缚火焰喷射器与本体被手炮块隔开 → 最终序列再贴一次）；v4168：咒缚武器贴合本体（16 对：本体在前、咒缚紧跟 — 武装 11 + 工具 3 + 键名兜底 1 +【火焰喷射器 v4169 修复】）+ 制导火箭弹图标→HomingMissileAmmo_Icon + 巡航导弹图标→Cruise_Missile（v4163 交接回调）;   // v4165：立式南瓜哨兵根因修复（facilityIconSpecial 置空 + 合并尊重空串哨兵）+ 圣诞糖果补录（consumable/节日）+ 鲍勃外观改名 + 蛋糕×3 归节日族;   // v4164：设施根因修正（标识归位/旗帜族+节日族垫底链）+ 节日补族（圣诞彩灯/万圣节墓碑）+ 新族「玩家外观」（TOF 卡尔配件，排生物外观前）;   // v4163：C4遥控起爆器→工具段（tool:1）+ 巡航导弹换图 HomingMissileAmmo_Icon + 塔拉萨麻醉弹药归「箭」族;   // v4162：生化皮肤/独木舟皮肤新族（骨架后/生物外观后）+ 设施栏标识族垫底（旗帜后）+ 咒缚电锯/喷火器图标对齐原版 + 弹药段「异种植物」词（W果实/Z手雷相邻）+ Netgun 归弹药;   // v4161：Radar_Rig 补录（雷达配件→跨步者配件族）+ 未组装的泰克跨步者改归「未组装」族;   // v4160：泰克悬停帆与塔拉萨悬停帆族内相邻（载具子序50.2/50.3）+ 6 条泰克跨步者配件补录（官方类名+官方中文，族=跨步者配件）;   // v4159：13 条骨架/幽灵/兔耳套装以**官方类名+官方中文**落地（长键=PrimalItemCostume_*、短键=图标名）+ 失落精灵龙套装补录 + 3 条旧骨骼条目同步官方名 + 全部归骨架皮肤/幽灵皮肤/生物外观族（排模块段最后）;   // v4158：外观族（骨架皮肤/幽灵皮肤/生物外观/尾巴/披风）整体移至模块段最后 + 独木舟3皮肤归生物外观 + 鱼竿族生效（两条相邻） + M.O.M.I.入模块段·机甲族 + 服装类豁免物种绑定过滤 + 跨步者配件族预留;   // v4157：Cryo医院/水下耕地/宠物展示台/绊线照明弹配方补录（材质档排序）+ 蛋糕ASE过滤 + 4服装隐藏 + 骨架皮肤族（3骨骼+生化，附件后） + 幽灵皮肤族（14条，骨骼后） + 战车族提前（附件前） + 立式南瓜清图标 + Plant W果实/Z手雷族内相邻;   // v4154：泰克光刃（TekClaws）换图 → HUD_TEKHandBlades_Icon_BC + 对照表"非皮肤·疑似"补齐后缀过滤;   // v4151：换图 2（巡航导弹→HUD_TEKCruiseMissile_Icon、泰克榴弹发射器→HUD_TEKGrenadeLauncher_Icon）+ 补录 4（绊线照明弹陷阱/泰克三叉戟/泰克长矛/C4遥控起爆器）+ 对照表区①移除 48 项;   // v4150：鱼竿族（FishingRod+Lovely_Fishing）+ 载具族补员（潜艇→木筏后、塔拉萨悬停帆→泰克悬停帆后）+ 生物外观族 26 项落地（模块段最末）+ 对照表无特征项全参数表;   // v4149：换图 3 组（GrapplingHook→GrappleHook_Icon、TribeTower→Tribe_Tower、TranqArrow→TranqArrow_Icon）+ 补录 11 键（Snowball/Carnivorous_Plant_Seed/Thalassian 系×4/ARK_Anniversary_Surprise_Cake/Birthday_Candle/CryoHospital×2/Netgun）;   // v4148：实时补全区无图标补「?」占位（lbWpRtHtml 与主浮窗一致）+ 图标替换 14 组（储物箱/镜子/油罐/电锯/登山镐/矿枪/鞭子/沙漠套×5/吉利面具/防护套×3/喷火器/潜水服）+ 英文补全（Ghillie Mask / Hazard Suit Hat / SCUBA×4）+ 补录 11 键（MachinedBow/宠物展示台/生日蛋糕/水下耕地/潜艇/塔拉萨悬停帆/收割渔线/周年蛋糕×2）+ TransGPS 打 ASE 过滤标记;   // v4147：Lovely_Fishing_Rod 补录（工具 tool:1）+ 次级解药/扎啤/血之灵药 归料理族（words 3.1/3.2/3.3 排在医疗药酒·能量药酒之后）；图标未录对照表 v4147（六分类 66+53 / skins 甄别 689）;   // v4146：RecipeCurry_Icon 挂菲拉咖喱配方（RecipeNote_FriaCurry / PrimalItem_RecipeNote_FriaCurry 两键 icon→RecipeCurry_Icon）+ HoneyLure 补录（蜂蜜诱饵，图标 HoneyLure_Icon）；对照表 v6 重生（待核 4 / 已处理 12 / 染色剂 22 移出主表入脚注）;   // v4145：W 果短名补规则（Plant_Species_W→手雷，浮窗枚举键带下划线）;   // v4144：族修正（Cucumis/Oryraise→蔬菜；Gilly/Oceans/Worm 短名 re: 规则→料理——修 v4143 短名下划线不命中问题）;   // v4143：Aquatica 消耗品补录 9 项（作物×2/料理×3/弹药×1/其它×3）+ 非凡饲料换图 + 族规则 4 条;   // v4142：Ecto Lantern 两键打 tool:1（进器械栏·工具段）;   // v4141：花粉图标换 High_Quality_Pollen（2 条）+ Ecto Lantern 补录（灵质提灯，工具类，2 键 + 节日族 2 规则）;   // v4140：刷新热区修复（仅标记触发）+ 节日族扩展 + 补录 5 项 + 强效麻醉镖图;   // v4139：item_zh 图标修正（麻醉镖→Tranquilizer_Dart；硅酸盐→SilicateCrystal）;   // v4138：公共设施实时区 39 格（WorldProbe 接线 + 刷新 CD 10s + 后端短时缓存共用）;   // v4137：巨齿鲨颚/生存者战利品移至 Cymathoa 之后（61/62 档）+ Dragon Horn 补录（龙之号角）;   // v4136：Aquatica 三战利品移至奖杯族最末（60 档）;   // v4135：焰鬃獠猪两种獠牙图标（Boaratos_Tusk / Flaming_Boaratos_Tusk）;   // v4134：Hydra/Kraken 归一 + 本体过滤 + AstralSoul/HexCoins 图标 + 克拉肯/莫德尔旗帜正名 + 格伦德尔档位修复;   // v4133（修复）：奖杯族修饰词截胡修正（水晶飞龙女王战利品回归奖杯族 9.5）；v4132：旗帜族录入+排序垫底
+var LB_VERSION = 'v20261024-5278';   // v4280（根因修复）：① 退出物品模式恢复「选种」按钮（v1368 隐藏无恢复） ② 生物背包容器标题唯一源解析（BP_/_ASA 组件 token → 真实 dinoClass）   // v4231（用户实测「繁育栏把功能栏挡住」）：① 两栏同显繁育栏叠功能栏上方 ② 空繁育栏不显示 ③ 结果浮层/追踪钮偏移联动   // v4230（用户裁定）：皮肤类全链隐藏（词典 skin:1 标记并入判空链——Tileset 外观/Bounce 系列/节日建筑等 54 键）   // v4229（用户确认）：初始笔记全链隐藏（v4083 只滤浮窗，容器漏同步 ⇒ hideItems+硬编码双写入升级）   // v4228（用户口径）：容器 chip 染料补色点（v3593 只改了浮窗，容器漏同步）   // v4227（用户口径）：HotbarSkill_Base（快捷技能芯片，非真实物品）加入隐藏名单（hideItems+硬编码双写入）   // v4226（用户实测「黑曜石仙境没内容却显示tab」根因修复）：lbPickIdx 统计对齐渲染口径（+lbIsEmptyItem 判空）——q=0 空槽残留不再计入 tab/角标/聚落/总数   // v4225（v4224 实测补丁）：预热已走完但缓存被清（材质表到达等）→ 立即兜底冷建，不再干等 6s   // v4224（用户口径「空档期点击卡」）：① 物品栏未预热点击→占位+等预热填充（不再冻结 440ms 无反馈）② 预加载交互让路（600ms 窗口）③ 静默刷新收尾即触发预热（消 3s 空窗）   // v4223（性能优化·用户确认A+B2）：① 预加载热点——字典键数引用缓存（拥有索引 11,531ms 预计降至 1~2s）② 后台检查更新——批量 LM 接口（40+ 次 HEAD → 1 次请求）   // v4222（用户口径）：所有可点击徽章补 hover——① 设施芯片挂载条件扩为「可点即 hover」② 装备榜/选种行卡新增 hover   // v4221（用户实测「角标还显示了2」）：玩家背包同口径排除出服务器 tab 角标/聚落角标/总数（srv/setts/total），修角标与列表不一致   // v4220（用户实测）：「无聚落/离散」容器登记排除玩家背包（消除与「玩家携带」tab 重复的纯背包卡）   // v4219（实测根因）：伪容器 rec 补 server 字段（修「无聚落/离散」卡点进去详情空——lbRecHasPick 键查空导致）   // v4218（用户口径）：物品筛选类别扩至「物品浮窗全部类别」（lbItemIsPick 按浮窗归属类别对齐，修 建筑/资源等非装备类筛选全灭）   // v4217（用户要求）：① 别名表数据化（dino_rank_alias.json + 恐龙recs类名映射，零硬编码）② 物品模式玩家tab恢复位置卡/去平铺卡流 ③ 恐龙侧 mine 与恐龙列表同源（跨服龙鞍显示）   // v4216（实测根因修复）：ASB_DB 懒加载未就绪时缓存空表 ⇒ 词干表 0 条永久失效；改为「就绪才缓存」（lbRankStemMap + lbAsbNameMap）   // v4215（用户口径）：① 装备榜鞍键↔恐龙键同物异名归一（勘误+ASB词干表）② 选物种玩家背包只留该物种鞍/蓝图 ③ 选物品隐藏低温舱+去位置卡 ④ 非鞍剔除   // v4214（用户口径）：装备榜 TAB 角标只计「我的」——外部更高不参与计数   // v4213（用户口径·S7）：物种按钮显隐与物品侧同步——只看桶内容（有效条目）   // v4212：物种榜 qidx<=0 全排除 + 去重 >0 + 角标=实际显示数 + 恐龙背包显示具体龙名   // v4211（用户要求·单一代码源）：装备榜物种/物品渲染统一为 lbRankRenderPanel + 外部更高条目不显示区域名   // v4210（用户口径·位置唯一化）：容器显示接入「坐标→设施真身」统一解析（人台上的矛显示回「人台E」真名）   // v4209：物品模式装备榜=物种榜完整翻版（两 TAB 实物/蓝图 + qidx<=0 过滤 + 类别图标）   // v4208（用户需求）：物品模式装备榜——按钮按「存档有原始以上品质」动态显隐 + 面板细节对齐物种（分组/行卡/弹卡/过滤同源）   // v4207：离散「位置」组展开时数量位同样被按钮替换（对齐改名）   // v4206：离散卡容器组加「位置」按钮（复刻改名按钮 + 弹地图浮窗）   // v4205：物品模式 tab 显隐排除基因条件（Gen(0) 过滤根因）   // v4204：离散 chip 不响应重命名 + 物品模式隐藏基因设备段（基因存储器根因）   // v4203：修详情内部过滤缺口（物品模式详情逐成员对齐主列表 lbRecHasPick）   // v4202：对照表 11 项权威容量落地（容量表 +10 项数据键 + DisplayCase 归 HIDE）   // v4201（用户方案）：生物背包参与聚合——背包容器注入 ctn（byContainer 直接命中）+ 判定剔除背包点 + 容器组归属统一 + 删近邻兜底   // v4200：龙背包归属加「近邻唯一」兜底（帝蟒背包与龙坐标差 1749 也能归位）   // v4199：放出容器坐标键放开 + 物品索引接「生物背包→龙」关联链   // v4198：修 5 处容量别名反向空指（Fireplace/WaterTap/TurretCatapult/TurretBallista/TaxidermyBase_Small）   // v4197：龙背包并入归属过滤（离散/无聚落详情不再混入别人部落的生物背包）   // v4196：离散卡容器化（scatteredList 暴露 + 物品索引兜底 + 卡内容器注入）   // v4195：散置伪 rec 补 isEmpty 容器本体形态（v3452 同口径，防详情渲染崩溃）   // v4194：散置卡修复——伪容器 rec 直取（物品容器哈希与 rec 哈希两套，cid 不可跨查）   // v4193（用户口径）：物品模式隐藏「聚落命名/区域命名」入口 + 「散置容器」卡（无聚落卡，完全对齐物种）   // v4192（用户口径）：物品角标/数量对齐物种——只统计「当前角色拥有」（v3597 归属过滤接入 lbPickIdx）+ 物品模式聚落卡隐藏放出/低温仓/蛋段 + 角标图标按物品类型取 LB_INV_GRP;   // v4191：玩家 tab 自动切换补修（物品模式无该物品 ⇒ 内容区不再驻留空态）;   // v4190（用户要求）：单一物品主体页优化（玩家tab物品口径 / 物品索引双计修复 / 聚落角标武器类别图标 / 详情行隐藏容量角标）   // v4189（用户要求）：水雷迁入「器械>弹药」（Underwater Mine）;   // v4188（用户要求）：陷阱族迁入「器械>弹药」段（Y异种植物陷阱改名入族 + 大型捕兽夹/捕兽夹入族垫底；v4187 设施段位代码撤回）;   // v4186：泰克水壶补录（工具>水容器族末位）+ 巨石核实 + 对照表 5 项去重、恐龙外观表折叠;   // v4185：恐龙装备栏外观全组过滤（用户实锤鞍皮肤；hideItems 18 项）;   // v4184：译名（沙斯塔鱼龙）+ Cute Dino Helmet 过滤（玩家帽）+ lbEggIs 帽子豁免（Easter_Egg_Hat 归位模块栏）;   // v4183：物品浮窗接入 hideItems 过滤（Pepper Mask 修复）+ 恐龙外观 12 款落地（模块>生物外观）;   // v4182：恐龙装备栏外观 12 款图标全配（8 款本地实锤 + 4 款 wiki 补录；icons2 5204 / webp_map 5107）;   // v4181：B1 节日糖果全量入库（8 新键+圣诞糖果合并为节日恐龙糖+玉米糖换 HUD_Event_Halloween_BC）+ PepperMask 浮窗过滤 + 节日族词/类名规则;   // v4177：Air_Jar/Air_Bladder kind 修正（consumable→weapon，正式入器械>工具>水容器）+ 情人节/感恩节糖果补图（Valentines_Dino_Candy/Thanksgiving_Candy）;   // v4175：料理子序微调（鲨鲨小零食!紧挨吉利盛宴3.4后；虫胶19→5.3 紧挨饭团5.2后）;   // v4174：达科寿司/饭团（原稻米球改名）入料理族并紧挨海藻寿司（子序 5.1/5.2）;   // v4173：情人节巧克力正名+配图（Box o' Chocolates/盒装巧克力/VDay_icon）+ WormGum 补录（虫胶）+ Air_Jar/Air_Bladder 移工具·水容器族（族内最后）+ 食肉植物种子排植物种子R后 + 亚特兰汤/虫胶接料理子序18-19;   // v4170：消耗品补录 18 键（胡椒面具/空气罐/气囊/海龙汤/风干鱼肉×2/稻米球/感染系列×6/干海带/达科寿司/亚特兰汤/蓝莓汁 P+/情人节巧克力 ase）+ 新族「感染」（含感染藤壶 7 项）+ 泰克三叉戟归「矛」族;   // v4169：咒缚贴合全局兜底（跨块场景：咒缚火焰喷射器与本体被手炮块隔开 → 最终序列再贴一次）；v4168：咒缚武器贴合本体（16 对：本体在前、咒缚紧跟 — 武装 11 + 工具 3 + 键名兜底 1 +【火焰喷射器 v4169 修复】）+ 制导火箭弹图标→HomingMissileAmmo_Icon + 巡航导弹图标→Cruise_Missile（v4163 交接回调）;   // v4165：立式南瓜哨兵根因修复（facilityIconSpecial 置空 + 合并尊重空串哨兵）+ 圣诞糖果补录（consumable/节日）+ 鲍勃外观改名 + 蛋糕×3 归节日族;   // v4164：设施根因修正（标识归位/旗帜族+节日族垫底链）+ 节日补族（圣诞彩灯/万圣节墓碑）+ 新族「玩家外观」（TOF 卡尔配件，排生物外观前）;   // v4163：C4遥控起爆器→工具段（tool:1）+ 巡航导弹换图 HomingMissileAmmo_Icon + 塔拉萨麻醉弹药归「箭」族;   // v4162：生化皮肤/独木舟皮肤新族（骨架后/生物外观后）+ 设施栏标识族垫底（旗帜后）+ 咒缚电锯/喷火器图标对齐原版 + 弹药段「异种植物」词（W果实/Z手雷相邻）+ Netgun 归弹药;   // v4161：Radar_Rig 补录（雷达配件→跨步者配件族）+ 未组装的泰克跨步者改归「未组装」族;   // v4160：泰克悬停帆与塔拉萨悬停帆族内相邻（载具子序50.2/50.3）+ 6 条泰克跨步者配件补录（官方类名+官方中文，族=跨步者配件）;   // v4159：13 条骨架/幽灵/兔耳套装以**官方类名+官方中文**落地（长键=PrimalItemCostume_*、短键=图标名）+ 失落精灵龙套装补录 + 3 条旧骨骼条目同步官方名 + 全部归骨架皮肤/幽灵皮肤/生物外观族（排模块段最后）;   // v4158：外观族（骨架皮肤/幽灵皮肤/生物外观/尾巴/披风）整体移至模块段最后 + 独木舟3皮肤归生物外观 + 鱼竿族生效（两条相邻） + M.O.M.I.入模块段·机甲族 + 服装类豁免物种绑定过滤 + 跨步者配件族预留;   // v4157：Cryo医院/水下耕地/宠物展示台/绊线照明弹配方补录（材质档排序）+ 蛋糕ASE过滤 + 4服装隐藏 + 骨架皮肤族（3骨骼+生化，附件后） + 幽灵皮肤族（14条，骨骼后） + 战车族提前（附件前） + 立式南瓜清图标 + Plant W果实/Z手雷族内相邻;   // v4154：泰克光刃（TekClaws）换图 → HUD_TEKHandBlades_Icon_BC + 对照表"非皮肤·疑似"补齐后缀过滤;   // v4151：换图 2（巡航导弹→HUD_TEKCruiseMissile_Icon、泰克榴弹发射器→HUD_TEKGrenadeLauncher_Icon）+ 补录 4（绊线照明弹陷阱/泰克三叉戟/泰克长矛/C4遥控起爆器）+ 对照表区①移除 48 项;   // v4150：鱼竿族（FishingRod+Lovely_Fishing）+ 载具族补员（潜艇→木筏后、塔拉萨悬停帆→泰克悬停帆后）+ 生物外观族 26 项落地（模块段最末）+ 对照表无特征项全参数表;   // v4149：换图 3 组（GrapplingHook→GrappleHook_Icon、TribeTower→Tribe_Tower、TranqArrow→TranqArrow_Icon）+ 补录 11 键（Snowball/Carnivorous_Plant_Seed/Thalassian 系×4/ARK_Anniversary_Surprise_Cake/Birthday_Candle/CryoHospital×2/Netgun）;   // v4148：实时补全区无图标补「?」占位（lbWpRtHtml 与主浮窗一致）+ 图标替换 14 组（储物箱/镜子/油罐/电锯/登山镐/矿枪/鞭子/沙漠套×5/吉利面具/防护套×3/喷火器/潜水服）+ 英文补全（Ghillie Mask / Hazard Suit Hat / SCUBA×4）+ 补录 11 键（MachinedBow/宠物展示台/生日蛋糕/水下耕地/潜艇/塔拉萨悬停帆/收割渔线/周年蛋糕×2）+ TransGPS 打 ASE 过滤标记;   // v4147：Lovely_Fishing_Rod 补录（工具 tool:1）+ 次级解药/扎啤/血之灵药 归料理族（words 3.1/3.2/3.3 排在医疗药酒·能量药酒之后）；图标未录对照表 v4147（六分类 66+53 / skins 甄别 689）;   // v4146：RecipeCurry_Icon 挂菲拉咖喱配方（RecipeNote_FriaCurry / PrimalItem_RecipeNote_FriaCurry 两键 icon→RecipeCurry_Icon）+ HoneyLure 补录（蜂蜜诱饵，图标 HoneyLure_Icon）；对照表 v6 重生（待核 4 / 已处理 12 / 染色剂 22 移出主表入脚注）;   // v4145：W 果短名补规则（Plant_Species_W→手雷，浮窗枚举键带下划线）;   // v4144：族修正（Cucumis/Oryraise→蔬菜；Gilly/Oceans/Worm 短名 re: 规则→料理——修 v4143 短名下划线不命中问题）;   // v4143：Aquatica 消耗品补录 9 项（作物×2/料理×3/弹药×1/其它×3）+ 非凡饲料换图 + 族规则 4 条;   // v4142：Ecto Lantern 两键打 tool:1（进器械栏·工具段）;   // v4141：花粉图标换 High_Quality_Pollen（2 条）+ Ecto Lantern 补录（灵质提灯，工具类，2 键 + 节日族 2 规则）;   // v4140：刷新热区修复（仅标记触发）+ 节日族扩展 + 补录 5 项 + 强效麻醉镖图;   // v4139：item_zh 图标修正（麻醉镖→Tranquilizer_Dart；硅酸盐→SilicateCrystal）;   // v4138：公共设施实时区 39 格（WorldProbe 接线 + 刷新 CD 10s + 后端短时缓存共用）;   // v4137：巨齿鲨颚/生存者战利品移至 Cymathoa 之后（61/62 档）+ Dragon Horn 补录（龙之号角）;   // v4136：Aquatica 三战利品移至奖杯族最末（60 档）;   // v4135：焰鬃獠猪两种獠牙图标（Boaratos_Tusk / Flaming_Boaratos_Tusk）;   // v4134：Hydra/Kraken 归一 + 本体过滤 + AstralSoul/HexCoins 图标 + 克拉肯/莫德尔旗帜正名 + 格伦德尔档位修复;   // v4133（修复）：奖杯族修饰词截胡修正（水晶飞龙女王战利品回归奖杯族 9.5）；v4132：旗帜族录入+排序垫底
 try{ if(document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', function(){ try{ lbMatLoad(); }catch(e){} try{ lbRulesLoad(); }catch(e){} try{ if(typeof lbRankAliasLoad === 'function') lbRankAliasLoad(); }catch(e){} }); } else { lbMatLoad(); try{ lbRulesLoad(); }catch(e){} try{ if(typeof lbRankAliasLoad === 'function') lbRankAliasLoad(); }catch(e){} } }catch(e){}
 try{ if(!window.LB_PERF) window.LB_PERF = {}; window.LB_PERF.t_main0 = Date.now(); }catch(ePerf0){}   // v4465（用户口径·D1）：启动分段计时——主脚本执行开始
 function lbPerfMark(k){ try{ if(!window.LB_PERF[k]) window.LB_PERF[k] = Date.now(); }catch(e){} }
@@ -4252,6 +4409,13 @@ function toggleLevelInfo(e, total, base, wild, bonus, xp, isBred) {
 }
 
 /* ================= 最新生物 TAB ================= */
+// v5214：游戏上下文常量必须**早于 lbInit 调用**（lbInit 里会调 lbGame()）；
+//   原位置在文件后段（约 3.5 万行），函数虽已提升但 var 尚未赋值 ⇒ undefined.length 崩溃，卡在"正在初始化…"
+var LB_GAME_LIST = [
+  {id:'ark',  n:'方舟生存飞升',              sub:'完整功能'},
+  {id:'scum', n:'洛夫克拉夫特行动：堕落玩偶', sub:'目前仅有键位配置'}
+];
+var LB_GAME_HIDE = ['mainUI','latestUI','settingsUI','lbBreedBar','lbFuncBar'];
 var LB = {};
 // v920：函数级诊断打点——内存 marks + localStorage 持久化（主线程冻结时仍可从同源另一页面读取）
 LB._bd = function(tag, extra){
@@ -4290,6 +4454,25 @@ function lbCheckVersion(){
 }
 // v985：硬刷新简化为普通 reload —— SW 文档分支已回到 network-first（总是先取网络），
 //       无需删缓存或特殊参数（旧实现的删缓存会清掉唯一兑底 → offline 白屏）
+// v5217（用户口径「刚才为啥页面没有自动提示有新版本」复盘）：
+//   原先自检注册挂在 lbInit() 尾部 ⇒ 初始化链任何一处抛错就永久哑火（v5213 事故即此）；
+//   且 lbInit 只在切到「最新生物」页才调用，挂载点本身不可靠。
+//   ⇒ 改为**独立自执行块**（DOMContentLoaded 兜底），与主初始化链完全解耦。
+(function(){
+  function lbVerCheckStart(){
+    try {
+      if (typeof lbCheckVersion !== 'function') return;
+      if (LB._verCheckStarted) return;
+      LB._verCheckStarted = true;
+      setTimeout(function(){ try{ lbCheckVersion(); }catch(e1){} }, 5000);   // 首检 5s
+      setInterval(function(){ try{ lbCheckVersion(); }catch(e2){} }, 60000); // 之后每 60s
+    } catch (e0) {}
+  }
+  try {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', lbVerCheckStart);
+    else lbVerCheckStart();
+  } catch (e) {}
+})();
 function lbHardReload(){
   try{ location.reload(); }catch(e){}
 }
@@ -5203,8 +5386,10 @@ function lbOpenServerAdminModal(){
   var _defSrv = (LB.SERVERS && LB.SERVERS.length) ? LB.SERVERS[0].abbr : '';
   var tribeOpts = lbServerAdminTribes(_defSrv).map(function(t){ return '<option value="'+t.id+'">'+t.name+'（'+t.id+'）</option>'; }).join('');
   var html = '<div style="background:#1a1a24;border:1px solid #7c3aed55;border-radius:12px;padding:24px;width:420px;max-width:92vw;box-shadow:0 10px 40px rgba(0,0,0,.6);max-height:86vh;overflow-y:auto" class="lb-modal-scroll">'
-    + '<div style="font-size:16px;font-weight:bold;color:#a78bfa;margin-bottom:4px">🛠 服务器管理</div>'
+    + '<div style="font-size:16px;font-weight:bold;color:#a78bfa;margin-bottom:4px">🛠 系统管理</div>'
     + '<div style="font-size:12px;color:#888;margin-bottom:14px">管理员：<b style="color:#bbb">'+auth.user+'</b></div>'
+    + (typeof lbGameChipsHtml === 'function' ? lbGameChipsHtml() : '')   // v5213（用户口径）：游戏切换放进系统管理，切换后整个项目切换游戏
+    + '<div style="' + (lbGame() === 'scum' ? 'display:none' : '') + '">'   // v5213：方舟专属运维块（堕落玩偶下隐藏）
     + '<select id="lbSrvAdminServer" style="'+inp+selExtra+'" onchange="lbSrvAdminFilterTribes()">'+srvOpts+'</select>'
     + '<select id="lbSrvAdminTribe" style="'+inp+selExtra+'">'+tribeOpts+'</select>'
     + '<div style="font-size:13px;font-weight:bold;color:#ddd;margin-bottom:8px">📦 转移死亡包到最近墓碑</div>'
@@ -5221,6 +5406,7 @@ function lbOpenServerAdminModal(){
     + '<div style="display:flex;gap:8px;margin-top:6px;align-items:center">'
     + '<button onclick="lbPerfCopy()" style="padding:5px 12px;border-radius:6px;border:none;background:#7c3aed;color:#fff;cursor:pointer;font-size:12px">📋 复制</button>'
     + '<span id="lbPerfCopyMsg" style="font-size:11px;color:#888"></span>'
+    + '</div>'
     + '</div>'
     + '</div>'
     + '<div style="margin-top:14px;text-align:right"><button onclick="this.closest(\'.lb-picker-overlay\').remove()" style="padding:7px 16px;border-radius:6px;border:1px solid #333;background:transparent;color:#888;cursor:pointer;font-size:13px">关闭</button></div>'
@@ -5340,7 +5526,7 @@ function lbOpenRolePicker(){
   var overlay=document.createElement('div'); overlay.className='lb-picker-overlay';
   overlay.onclick=function(e){ if(e.target===overlay) overlay.remove(); };
   var html='<div class="lb-picker-panel" onclick="event.stopPropagation()" style="max-width:400px">';
-  html+='<div class="lb-picker-header"><span style="flex:1;font-weight:bold;color:#a78bfa">选择生存者</span><span class="lb-tipb" style="font-size:10px;color:#3a3a4a;opacity:.6;margin-right:4px;user-select:none;line-height:1" title="前端版本">'+LB_VERSION+'</span>'+(lbIsAdmin()?'<button class="lb-tipb lb-picker-close" style="opacity:.4;font-size:14px" onclick="lbOpenServerAdminModal()" title="服务器管理"><i class="mdi mdi-server"></i></button>':'')+'<button class="lb-tipb lb-picker-close" style="opacity:.4;font-size:14px" onclick="lbOpenAlliancePos()" title="联盟成员位置"><i class="mdi mdi-account-group-outline"></i></button><button class="lb-tipb lb-picker-close" style="opacity:.4;font-size:14px" onclick="lbOpenConfigModal()" title="自助配置"><i class="mdi mdi-cog"></i></button><button class="lb-tipb lb-picker-close" style="opacity:.4;font-size:14px" onclick="lbLogout()" title="注销登录"><i class="mdi mdi-logout"></i></button><button class="lb-tipb lb-picker-close" onclick="this.closest(\'.lb-picker-overlay\').remove()" title="关闭"><i class="mdi mdi-close"></i></button></div>';
+  html+='<div class="lb-picker-header"><span style="flex:1;font-weight:bold;color:#a78bfa">选择生存者</span><span class="lb-tipb" style="font-size:10px;color:#3a3a4a;opacity:.6;margin-right:4px;user-select:none;line-height:1" title="前端版本">'+LB_VERSION+'</span>'+(lbIsAdmin()?'<button class="lb-tipb lb-picker-close" style="opacity:.4;font-size:14px" onclick="lbOpenServerAdminModal()" title="服务器管理"><i class="mdi mdi-server"></i></button>':'')+'<button class="lb-tipb lb-picker-close" style="opacity:.4;font-size:14px" onclick="lbOpenAlliancePos()" title="联盟成员位置"><i class="mdi mdi-account-group-outline"></i></button><button class="lb-tipb lb-picker-close" style="opacity:.4;font-size:14px" onclick="lbRoleView(\'keys\')" title="键位配置"><i class="mdi mdi-gamepad-variant"></i></button><button class="lb-tipb lb-picker-close" style="opacity:.4;font-size:14px" onclick="lbOpenConfigModal()" title="自助配置"><i class="mdi mdi-cog"></i></button><button class="lb-tipb lb-picker-close" style="opacity:.4;font-size:14px" onclick="lbLogout()" title="注销登录"><i class="mdi mdi-logout"></i></button><button class="lb-tipb lb-picker-close" onclick="this.closest(\'.lb-picker-overlay\').remove()" title="关闭"><i class="mdi mdi-close"></i></button></div>';
   html+='<div class="lb-picker-grid" id="lbRoleGrid">';
   var huIcon=(LB_ICON_BY_NAME && LB_ICON_BY_NAME['Human_icon']) || '';
   LB.playerRoles.forEach(function(r, i){
@@ -5395,6 +5581,12 @@ function switchTab(name){
   if(on) lbInit();
 }
 function lbInit(){
+  try{ if (typeof lbApplyGame === 'function') lbApplyGame(); }catch(eG){}   // v5213：应用全局游戏上下文
+  // v5213（用户口径）：堕落玩偶目前仅保留键位配置 ⇒ 跳过全部方舟预加载链（采集流程/维护/缩略图预热等）
+  // v5214：整段必须防异常——初始化绝不能被游戏判定打断（否则卡在"正在初始化…"）
+  var _lbG = 'ark';
+  try { _lbG = (typeof lbGame === 'function') ? lbGame() : 'ark'; } catch (eG0) { _lbG = 'ark'; }
+  if (_lbG === 'scum') { try{ lbBootHide(); }catch(eS){} return; }
   try{ lbHfInit(); }catch(eHf){}   // v4726：采集流程（玩家级）初始化
   if(!LB._watchList) LB._watchList = lbWatchLoad(); // v616：恢复关注未成年列表
   lbWatchCnt();
@@ -5430,12 +5622,7 @@ function lbInit(){
     setInterval(function(){ try{ lbNetChipUpdate(); }catch(e){} }, 30000);
     try{ var _c = navigator.connection || navigator.mozConnection || navigator.webkitConnection; if(_c && _c.addEventListener) _c.addEventListener('change', function(){ try{ lbNetChipUpdate(); }catch(e){} }); }catch(e){}
   }
-  // v471：周期版本自检——5s 后首检，之后每 60s 检查一次线上版本，发现新版弹升级刷新提示（复用原版 lbCheckVersion/lbVersionPrompt）
-  if(!LB._verCheckStarted){
-    LB._verCheckStarted = true;
-    setTimeout(lbCheckVersion, 5000);
-    setInterval(lbCheckVersion, 60000);
-  }
+  // v5217：版本自检已解耦到独立自执行块（见 lbCheckVersion 定义之后）——不再依赖 lbInit 成功
 }
 // player 来源（改造后）：返回当前选中角色 characterName（仅显示用，不作判定）
 // 未登录 → 「游客」；已登录但身份未解析 → 空
@@ -31284,7 +31471,7 @@ function lbHfTokenParts(t){
     cls += ' lb-hf-seg-t';
   } else if (t.t === 'key'){
     cls += ' lb-hf-keyb';   // v4940（用户口径·对齐样张）：键位走键帽样式
-    inner = lbKeyChipHtml(String(t.v || ''), 22);   // v5170：字体优先（91 键），未覆盖回退 PNG
+    inner = lbKeyChipHtml(lbKeySrc(String(t.v || '')), 22);   // v5170 字体优先；v5238 统一走 lbKeySrc（唯一显示源）
     tip = '按键：' + (t.v || '');
   } else if (t.t === 'cat'){
     // v5041（用户口径「在步骤里加入 一类 无需额外挂文字说明」）：步骤徽章里的「一类」**只显示叠拼图标**，
@@ -35014,7 +35201,7 @@ var LB_KEYFONT = { 'IconLeftClick':1, 'IconRightClick':1, 'PC_btn_0':1, 'PC_btn_
 var LB_KEYFONT_LBL = {};   // v5188：角标全部移除，方向/左右/滚轮均由渐变表达
 // v5175（用户口径「流程里的按键浮窗也要有 kenney 里的全套键位，包括键鼠」）：按平台分组的全量键位表
 //   由 lbkeys2-map.json 生成（已剔除 _outline / _color_ / _alternative 等变体），供「键帽面板」「更换按键」使用
-var LB_KEYFONT_SETS = [{"t":"键盘 / 鼠标","ics":["keyboard","mouse_small"],"ks":["keyboard_0_outline","keyboard_1_outline","keyboard_2_outline","keyboard_3_outline","keyboard_4_outline","keyboard_5_outline","keyboard_6_outline","keyboard_7_outline","keyboard_8_outline","keyboard_9_outline","keyboard_a_outline","keyboard_alt_outline","keyboard_any_outline","keyboard_apostrophe_outline","keyboard_arrow_down_outline","keyboard_arrow_left_outline","keyboard_arrow_right_outline","keyboard_arrow_up_outline","keyboard_arrows","keyboard_arrows_down_outline","keyboard_arrows_horizontal_outline","keyboard_arrows_left_outline","keyboard_arrows_none","keyboard_arrows_right_outline","keyboard_arrows_up_outline","keyboard_arrows_vertical_outline","keyboard_asterisk_outline","keyboard_b_outline","keyboard_backspace_icon_alternative_outline","keyboard_backspace_icon_outline","keyboard_backspace_outline","keyboard_bracket_close_outline","keyboard_bracket_greater_outline","keyboard_bracket_less_outline","keyboard_bracket_open_outline","keyboard_c_outline","keyboard_capslock_icon_outline","keyboard_capslock_outline","keyboard_caret_outline","keyboard_colon_outline","keyboard_comma_outline","keyboard_command_outline","keyboard_ctrl_outline","keyboard_d_outline","keyboard_delete_outline","keyboard_e_outline","keyboard_end_outline","keyboard_enter_outline","keyboard_equals_outline","keyboard_escape_outline","keyboard_exclamation_outline","keyboard_f10_outline","keyboard_f11_outline","keyboard_f12_outline","keyboard_f1_outline","keyboard_f2_outline","keyboard_f3_outline","keyboard_f4_outline","keyboard_f5_outline","keyboard_f6_outline","keyboard_f7_outline","keyboard_f8_outline","keyboard_f9_outline","keyboard_f_outline","keyboard_function_outline","keyboard_g_outline","keyboard_h_outline","keyboard_home_outline","keyboard_i_outline","keyboard_insert_outline","keyboard_j_outline","keyboard_k_outline","keyboard_l_outline","keyboard_m_outline","keyboard_minus_outline","keyboard_n_outline","keyboard_numlock_outline","keyboard_numpad_enter_outline","keyboard_numpad_plus_outline","keyboard_o_outline","keyboard_option_outline","keyboard_outline","keyboard_p_outline","keyboard_page_down_outline","keyboard_page_up_outline","keyboard_pause_break_outline","keyboard_pause_outline","keyboard_period_outline","keyboard_plus_outline","keyboard_printscreen_outline","keyboard_q_outline","keyboard_question_outline","keyboard_quote_outline","keyboard_r_outline","keyboard_return_outline","keyboard_s_outline","keyboard_scroll_lock_outline","keyboard_semicolon_outline","keyboard_shift_icon_outline","keyboard_shift_outline","keyboard_slash_back_outline","keyboard_slash_forward_outline","keyboard_space_icon_outline","keyboard_space_outline","keyboard_t_outline","keyboard_tab_icon_alternative_outline","keyboard_tab_icon_outline","keyboard_tab_outline","keyboard_tilde_outline","keyboard_u_outline","keyboard_underscore_outline","keyboard_v_outline","keyboard_w_outline","keyboard_win_outline","keyboard_x_outline","keyboard_y_outline","keyboard_z_outline","mouse_horizontal","mouse_left_outline","mouse_move","mouse_outline","mouse_right_outline","mouse_scroll_down_outline","mouse_scroll_outline","mouse_scroll_up_outline","mouse_scroll_vertical_outline","mouse_side_back_outline","mouse_side_forward_outline","mouse_side_outline","mouse_vertical"]},{"t":"Xbox Series（Elite）","ics":["controller_xboxseries","controller_xboxone","controller_xbox360"],"ks":["controller_xbox_adaptive","xbox_button_a_outline","xbox_button_b_outline","xbox_button_back_icon_outline","xbox_button_back_outline","xbox_button_menu_outline","xbox_button_share_outline","xbox_button_start_icon_outline","xbox_button_start_outline","xbox_button_view_outline","xbox_button_x_outline","xbox_button_y_outline","xbox_dpad","xbox_dpad_all","xbox_dpad_down_outline","xbox_dpad_horizontal_outline","xbox_dpad_left_outline","xbox_dpad_none","xbox_dpad_right_outline","xbox_dpad_round","xbox_dpad_round_all","xbox_dpad_round_down","xbox_dpad_round_horizontal","xbox_dpad_round_left","xbox_dpad_round_right","xbox_dpad_round_up","xbox_dpad_round_vertical","xbox_dpad_up_outline","xbox_dpad_vertical_outline","xbox_elite_paddle_bottom_left_outline","xbox_elite_paddle_bottom_right_outline","xbox_elite_paddle_top_left_outline","xbox_elite_paddle_top_right_outline","xbox_guide_outline","xbox_lb_outline","xbox_ls_outline","xbox_lt_outline","xbox_rb_outline","xbox_rs_outline","xbox_rt_outline","xbox_stick_l","xbox_stick_l_down","xbox_stick_l_horizontal","xbox_stick_l_left","xbox_stick_l_press","xbox_stick_l_right","xbox_stick_l_up","xbox_stick_l_vertical","xbox_stick_r","xbox_stick_r_down","xbox_stick_r_horizontal","xbox_stick_r_left","xbox_stick_r_press","xbox_stick_r_right","xbox_stick_r_up","xbox_stick_r_vertical","xbox_stick_side_l","xbox_stick_side_r","xbox_stick_top_l","xbox_stick_top_r"]},{"t":"PlayStation（含 Edge）","ics":["controller_playstation5","controller_playstation4","controller_playstation3","controller_playstation2","controller_playstation1"],"ks":["playstation3_button_select_outline","playstation3_button_start_outline","playstation4_button_options_outline","playstation4_button_share_outline","playstation4_touchpad_grid_outline","playstation4_touchpad_outline","playstation4_touchpad_press","playstation4_touchpad_press_center","playstation4_touchpad_press_left","playstation4_touchpad_press_right","playstation4_touchpad_selected","playstation4_touchpad_swipe_down","playstation4_touchpad_swipe_horizontal","playstation4_touchpad_swipe_left","playstation4_touchpad_swipe_right","playstation4_touchpad_swipe_up","playstation4_touchpad_swipe_vertical","playstation4_touchpad_touch_outline","playstation5_button_create_alternative_outline","playstation5_button_create_outline","playstation5_button_mute_outline","playstation5_button_options_alternative_outline","playstation5_button_options_outline","playstation5_elite_fn_l_outline","playstation5_elite_fn_r_outline","playstation5_elite_lb_outline","playstation5_elite_rb_outline","playstation5_touchpad_outline","playstation5_touchpad_press","playstation5_touchpad_press_center","playstation5_touchpad_press_left","playstation5_touchpad_press_right","playstation5_touchpad_selected","playstation5_touchpad_swipe_down","playstation5_touchpad_swipe_horizontal","playstation5_touchpad_swipe_left","playstation5_touchpad_swipe_right","playstation5_touchpad_swipe_up","playstation5_touchpad_swipe_vertical","playstation5_touchpad_touch_outline","playstation_button_analog_outline","playstation_button_circle_outline","playstation_button_cross_outline","playstation_button_l3_outline","playstation_button_r3_outline","playstation_button_square_outline","playstation_button_triangle_outline","playstation_dpad","playstation_dpad_down_outline","playstation_dpad_horizontal_outline","playstation_dpad_left_outline","playstation_dpad_none","playstation_dpad_right_outline","playstation_dpad_up_outline","playstation_dpad_vertical_outline","playstation_stick_l","playstation_stick_l_down","playstation_stick_l_horizontal","playstation_stick_l_left","playstation_stick_l_press","playstation_stick_l_right","playstation_stick_l_up","playstation_stick_l_vertical","playstation_stick_r","playstation_stick_r_down","playstation_stick_r_horizontal","playstation_stick_r_left","playstation_stick_r_press","playstation_stick_r_right","playstation_stick_r_up","playstation_stick_r_vertical","playstation_stick_side_l","playstation_stick_side_r","playstation_stick_top_l","playstation_stick_top_r","playstation_trigger_l1_alternative_outline","playstation_trigger_l1_outline","playstation_trigger_l2_alternative_outline","playstation_trigger_l2_outline","playstation_trigger_r1_alternative_outline","playstation_trigger_r1_outline","playstation_trigger_r2_alternative_outline","playstation_trigger_r2_outline"]},{"t":"Switch / Switch 2","ics":["controller_switch_pro","controller_switch"],"ks":["controller_switch_joycon_down","controller_switch_joycon_up","switch_button_a_outline","switch_button_b_outline","switch_button_c_outline","switch_button_gl_outline","switch_button_gr_outline","switch_button_home_outline","switch_button_l_outline","switch_button_minus_outline","switch_button_plus_outline","switch_button_r_outline","switch_button_sl_outline","switch_button_sr_outline","switch_button_sync_outline","switch_button_x_outline","switch_button_y_outline","switch_button_zl_outline","switch_button_zr_outline","switch_buttons","switch_buttons_down_outline","switch_buttons_horizontal_outline","switch_buttons_left_outline","switch_buttons_none","switch_buttons_right_outline","switch_buttons_up_outline","switch_buttons_vertical_outline","switch_down_outline","switch_dpad","switch_dpad_all","switch_dpad_down_outline","switch_dpad_horizontal_outline","switch_dpad_left_outline","switch_dpad_none","switch_dpad_right_outline","switch_dpad_up_outline","switch_dpad_vertical_outline","switch_joycon_left_diagonal_outline","switch_joycon_left_horizontal_outline","switch_joycon_left_mouse_outline","switch_joycon_left_outline","switch_joycon_left_rotate_outline","switch_joycon_left_vertical_outline","switch_joycon_outline","switch_joycon_right_diagonal_outline","switch_joycon_right_horizontal_outline","switch_joycon_right_mouse_outline","switch_joycon_right_outline","switch_joycon_right_rotate_outline","switch_joycon_right_vertical_outline","switch_left_outline","switch_right_outline","switch_stick_l","switch_stick_l_down","switch_stick_l_horizontal","switch_stick_l_left","switch_stick_l_press","switch_stick_l_right","switch_stick_l_up","switch_stick_l_vertical","switch_stick_r","switch_stick_r_down","switch_stick_r_horizontal","switch_stick_r_left","switch_stick_r_press","switch_stick_r_right","switch_stick_r_up","switch_stick_r_vertical","switch_stick_side_l","switch_stick_side_r","switch_stick_top_l","switch_stick_top_r","switch_up_outline"]},{"t":"Steam 手柄","ics":["controller_steam_new","controller_steam"],"ks":["controller_button_l1_outline","controller_button_l2_outline","controller_button_l4_outline","controller_button_l5_outline","controller_button_options_outline","controller_button_quickaccess_outline","controller_button_r1_outline","controller_button_r2_outline","controller_button_r4_outline","controller_button_r5_outline","controller_button_view_outline","controller_icon_outline","controller_lg_gradient_outline","controller_lg_outline","controller_rg_gradient_outline","controller_rg_outline","steam_button_a_outline","steam_button_b_outline","steam_button_back_icon_outline","steam_button_lp_outline","steam_button_rp_outline","steam_button_start_icon_outline","steam_button_x_outline","steam_button_y_outline","steam_dpad","steam_dpad_all","steam_dpad_down_outline","steam_dpad_horizontal_outline","steam_dpad_left_outline","steam_dpad_right_outline","steam_dpad_up_outline","steam_dpad_vertical_outline","steam_lb_outline","steam_lg_outline","steam_lt_outline","steam_pad","steam_pad_center","steam_pad_down","steam_pad_left","steam_pad_right","steam_pad_up","steam_rb_outline","steam_rg_outline","steam_rt_outline","steam_stick","steam_stick_down","steam_stick_horizontal","steam_stick_l_press","steam_stick_left","steam_stick_right","steam_stick_side_l","steam_stick_up","steam_stick_vertical"]},{"t":"Steam Deck","ics":["controller_steamdeck"],"ks":["steamdeck_button_a_outline","steamdeck_button_b_outline","steamdeck_button_guide_outline","steamdeck_button_l1_outline","steamdeck_button_l2_outline","steamdeck_button_l4_outline","steamdeck_button_l5_outline","steamdeck_button_options_outline","steamdeck_button_quickaccess_outline","steamdeck_button_r1_outline","steamdeck_button_r2_outline","steamdeck_button_r4_outline","steamdeck_button_r5_outline","steamdeck_button_view_outline","steamdeck_button_x_outline","steamdeck_button_y_outline","steamdeck_dpad","steamdeck_dpad_all","steamdeck_dpad_down_outline","steamdeck_dpad_horizontal_outline","steamdeck_dpad_left_outline","steamdeck_dpad_right_outline","steamdeck_dpad_up_outline","steamdeck_dpad_vertical_outline","steamdeck_stick_l","steamdeck_stick_l_down","steamdeck_stick_l_horizontal","steamdeck_stick_l_left","steamdeck_stick_l_press","steamdeck_stick_l_right","steamdeck_stick_l_up","steamdeck_stick_l_vertical","steamdeck_stick_r","steamdeck_stick_r_down","steamdeck_stick_r_horizontal","steamdeck_stick_r_left","steamdeck_stick_r_press","steamdeck_stick_r_right","steamdeck_stick_r_up","steamdeck_stick_r_vertical","steamdeck_stick_side_l","steamdeck_stick_side_r","steamdeck_stick_top_l","steamdeck_stick_top_r","steamdeck_trackpad_all_outline","steamdeck_trackpad_down_outline","steamdeck_trackpad_horizontal_outline","steamdeck_trackpad_l_all_outline","steamdeck_trackpad_l_down_outline","steamdeck_trackpad_l_horizontal_outline","steamdeck_trackpad_l_left_outline","steamdeck_trackpad_l_outline","steamdeck_trackpad_l_right_outline","steamdeck_trackpad_l_up_outline","steamdeck_trackpad_l_vertical_outline","steamdeck_trackpad_left_outline","steamdeck_trackpad_outline","steamdeck_trackpad_r_all_outline","steamdeck_trackpad_r_down_outline","steamdeck_trackpad_r_horizontal_outline","steamdeck_trackpad_r_left_outline","steamdeck_trackpad_r_outline","steamdeck_trackpad_r_right_outline","steamdeck_trackpad_r_up_outline","steamdeck_trackpad_r_vertical_outline","steamdeck_trackpad_right_outline","steamdeck_trackpad_up_outline","steamdeck_trackpad_vertical_outline"]},{"t":"Valve Index","ics":["controller_index_left","controller_index_right"],"ks":["index_button_a_outline","index_button_b_outline","index_button_outline","index_lt_outline","index_rt_outline","index_stick_l","index_stick_l_down","index_stick_l_horizontal","index_stick_l_left","index_stick_l_press","index_stick_l_right","index_stick_l_up","index_stick_l_vertical","index_stick_r","index_stick_r_down","index_stick_r_horizontal","index_stick_r_left","index_stick_r_press","index_stick_r_right","index_stick_r_up","index_stick_r_vertical","index_stick_side_l","index_stick_side_r","index_stick_top_l","index_stick_top_r","index_track","index_track_down","index_track_press","index_track_scroll","index_track_up"]},{"t":"Steam Frame","ics":["controller_frame_left","controller_frame_right"],"ks":["controller_frame_left_letter","controller_frame_right_letter","frame_button_a_outline","frame_button_b_outline","frame_button_l1_outline","frame_button_l2_outline","frame_button_options_outline","frame_button_r1_outline","frame_button_r2_outline","frame_button_view_outline","frame_button_x_outline","frame_button_y_outline","frame_dpad","frame_dpad_all","frame_dpad_down_outline","frame_dpad_horizontal_outline","frame_dpad_left_outline","frame_dpad_none","frame_dpad_right_outline","frame_dpad_up_outline","frame_dpad_vertical_outline","frame_icon_outline","frame_lg_outline","frame_rg_outline","frame_stick_l","frame_stick_l_down","frame_stick_l_horizontal","frame_stick_l_left","frame_stick_l_press","frame_stick_l_right","frame_stick_l_up","frame_stick_l_vertical","frame_stick_r","frame_stick_r_down","frame_stick_r_horizontal","frame_stick_r_left","frame_stick_r_press","frame_stick_r_right","frame_stick_r_up","frame_stick_r_vertical","frame_stick_side_l","frame_stick_side_r","frame_stick_top_l","frame_stick_top_r"]},{"t":"Wii","ics":["wii_controller","controller_wii_classic_pro","controller_wii_classic"],"ks":["wii_button_1_outline","wii_button_2_outline","wii_button_a_outline","wii_button_b_outline","wii_button_c_outline","wii_button_home_outline","wii_button_l_outline","wii_button_minus_outline","wii_button_plus_outline","wii_button_power_outline","wii_button_r_outline","wii_button_x_outline","wii_button_y_outline","wii_button_z_outline","wii_button_zl_outline","wii_button_zr_outline","wii_controller_diagonal_outline","wii_controller_horizontal_outline","wii_controller_nunchuk","wii_controller_nunchuk_wire","wii_controller_outline","wii_controller_rotate_outline","wii_controller_vertical_outline","wii_dpad","wii_dpad_down_outline","wii_dpad_horizontal_outline","wii_dpad_left_outline","wii_dpad_none","wii_dpad_right_outline","wii_dpad_up_outline","wii_dpad_vertical_outline","wii_stick","wii_stick_down","wii_stick_horizontal","wii_stick_l","wii_stick_l_down","wii_stick_l_horizontal","wii_stick_l_left","wii_stick_l_right","wii_stick_l_up","wii_stick_l_vertical","wii_stick_left","wii_stick_r","wii_stick_r_down","wii_stick_r_horizontal","wii_stick_r_left","wii_stick_r_right","wii_stick_r_up","wii_stick_r_vertical","wii_stick_right","wii_stick_top_l","wii_stick_top_r","wii_stick_up","wii_stick_vertical"]},{"t":"WiiU","ics":["controller_wiiu_pro","wiiu_controller"],"ks":["wiiu_button_1_outline","wiiu_button_2_outline","wiiu_button_a_outline","wiiu_button_b_outline","wiiu_button_home_outline","wiiu_button_l_outline","wiiu_button_minus_outline","wiiu_button_plus_outline","wiiu_button_power_outline","wiiu_button_r_outline","wiiu_button_tv_outline","wiiu_button_x_outline","wiiu_button_y_outline","wiiu_button_zl_outline","wiiu_button_zr_outline","wiiu_controller_down_outline","wiiu_controller_outline","wiiu_controller_up","wiiu_controller_up_outlnie","wiiu_dpad","wiiu_dpad_down_outline","wiiu_dpad_horizontal_outline","wiiu_dpad_left_outline","wiiu_dpad_none","wiiu_dpad_right_outline","wiiu_dpad_up_outline","wiiu_dpad_vertical_outline","wiiu_stick_l","wiiu_stick_l_down","wiiu_stick_l_horizontal","wiiu_stick_l_left","wiiu_stick_l_right","wiiu_stick_l_up","wiiu_stick_l_vertical","wiiu_stick_r","wiiu_stick_r_down","wiiu_stick_r_horizontal","wiiu_stick_r_left","wiiu_stick_r_right","wiiu_stick_r_up","wiiu_stick_r_vertical","wiiu_stick_top_l","wiiu_stick_top_r"]},{"t":"GameCube","ics":["gamecube_controller"],"ks":["gamecube_button_a_outline","gamecube_button_b_outline","gamecube_button_start_outline","gamecube_button_x_outline","gamecube_button_x_tilted_outline","gamecube_button_y_outline","gamecube_button_y_tilted_outline","gamecube_button_z_outline","gamecube_controller_wavebird","gamecube_dpad","gamecube_dpad_down_outline","gamecube_dpad_horizontal_outline","gamecube_dpad_left_outline","gamecube_dpad_none","gamecube_dpad_right_outline","gamecube_dpad_up_outline","gamecube_dpad_vertical_outline","gamecube_stick","gamecube_stick_c","gamecube_stick_c_down","gamecube_stick_c_horizontal","gamecube_stick_c_left","gamecube_stick_c_right","gamecube_stick_c_top","gamecube_stick_c_up","gamecube_stick_c_vertical","gamecube_stick_down","gamecube_stick_grip","gamecube_stick_grip_down","gamecube_stick_grip_horizontal","gamecube_stick_grip_left","gamecube_stick_grip_right","gamecube_stick_grip_top","gamecube_stick_grip_up","gamecube_stick_grip_vertical","gamecube_stick_horizontal","gamecube_stick_left","gamecube_stick_right","gamecube_stick_top","gamecube_stick_up","gamecube_stick_vertical","gamecube_trigger_l_outline","gamecube_trigger_r_outline"]},{"t":"Playdate","ics":["playdate_icon"],"ks":["playdate_button_a_outline","playdate_button_b_outline","playdate_button_menu_outline","playdate_crank","playdate_crank_clockwise","playdate_crank_counterclockwise","playdate_dpad","playdate_dpad_down_outline","playdate_dpad_horizontal_outline","playdate_dpad_left_outline","playdate_dpad_none","playdate_dpad_right_outline","playdate_dpad_up_outline","playdate_dpad_vertical_outline","playdate_icon_crank_outline","playdate_icon_outline"]},{"t":"Meta Quest","ics":["controller_quest_touch_plus_left","controller_quest_touch_plus_right","controller_quest_left","controller_quest_right"],"ks":["controller_quest_left_letter","controller_quest_right_letter","controller_quest_touch_plus_left_letter","controller_quest_touch_plus_right_letter","quest_button_a_outline","quest_button_b_outline","quest_button_menu_outline","quest_button_meta_outline","quest_button_oculus_outline","quest_button_x_outline","quest_button_y_outline","quest_grip_left_outline","quest_grip_right_outline","quest_stick_l","quest_stick_l_down","quest_stick_l_horizontal","quest_stick_l_left","quest_stick_l_press","quest_stick_l_right","quest_stick_l_up","quest_stick_l_vertical","quest_stick_r","quest_stick_r_down","quest_stick_r_horizontal","quest_stick_r_left","quest_stick_r_press","quest_stick_r_right","quest_stick_r_up","quest_stick_r_vertical","quest_stick_side_l","quest_stick_side_r","quest_stick_top_l","quest_stick_top_r","quest_trigger_left_outline","quest_trigger_right_outline"]},{"t":"触屏","ics":["touch_tap"],"ks":["touch_finger_one","touch_finger_two","touch_hand_closed","touch_hand_open","touch_rotate_left","touch_rotate_right","touch_swipe_down","touch_swipe_horizontal","touch_swipe_left","touch_swipe_move","touch_swipe_right","touch_swipe_two_down","touch_swipe_two_horizontal","touch_swipe_two_left","touch_swipe_two_move","touch_swipe_two_right","touch_swipe_two_up","touch_swipe_two_vertical","touch_swipe_up","touch_swipe_vertical","touch_tap_double","touch_tap_hold","touch_two","touch_two_double","touch_two_hold","touch_zoom_in","touch_zoom_out"]},{"t":"通用","ics":["generic_joystick"],"ks":["generic_button","generic_button_circle_fill","generic_button_circle_outline","generic_button_finger","generic_button_finger_pressed","generic_button_pressed","generic_button_square_fill","generic_button_square_outline","generic_button_trigger_a_fill","generic_button_trigger_a_outline","generic_button_trigger_b_fill","generic_button_trigger_b_outline","generic_button_trigger_c_fill","generic_button_trigger_c_outline","generic_joystick_horizontal","generic_joystick_left","generic_joystick_red_horizontal","generic_joystick_red_left","generic_joystick_red_right","generic_joystick_right","generic_stick","generic_stick_down","generic_stick_horizontal","generic_stick_left","generic_stick_press","generic_stick_right","generic_stick_up","generic_stick_vertical","switch_stick_side"]}];
+var LB_KEYFONT_SETS = [{"t":"键盘 / 鼠标","ics":["keyboard","mouse_small"],"ks":["keyboard_0_outline","keyboard_1_outline","keyboard_2_outline","keyboard_3_outline","keyboard_4_outline","keyboard_5_outline","keyboard_6_outline","keyboard_7_outline","keyboard_8_outline","keyboard_9_outline","keyboard_a_outline","keyboard_alt_outline","keyboard_any_outline","keyboard_apostrophe_outline","keyboard_arrow_down_outline","keyboard_arrow_left_outline","keyboard_arrow_right_outline","keyboard_arrow_up_outline","keyboard_arrows","keyboard_arrows_down_outline","keyboard_arrows_horizontal_outline","keyboard_arrows_left_outline","keyboard_arrows_none","keyboard_arrows_right_outline","keyboard_arrows_up_outline","keyboard_arrows_vertical_outline","keyboard_asterisk_outline","keyboard_b_outline","keyboard_backspace_icon_alternative_outline","keyboard_backspace_icon_outline","keyboard_backspace_outline","keyboard_bracket_close_outline","keyboard_bracket_greater_outline","keyboard_bracket_less_outline","keyboard_bracket_open_outline","keyboard_c_outline","keyboard_capslock_icon_outline","keyboard_capslock_outline","keyboard_caret_outline","keyboard_colon_outline","keyboard_comma_outline","keyboard_command_outline","keyboard_ctrl_outline","keyboard_d_outline","keyboard_delete_outline","keyboard_e_outline","keyboard_end_outline","keyboard_enter_outline","keyboard_equals_outline","keyboard_escape_outline","keyboard_exclamation_outline","keyboard_f10_outline","keyboard_f11_outline","keyboard_f12_outline","keyboard_f1_outline","keyboard_f2_outline","keyboard_f3_outline","keyboard_f4_outline","keyboard_f5_outline","keyboard_f6_outline","keyboard_f7_outline","keyboard_f8_outline","keyboard_f9_outline","keyboard_f_outline","keyboard_function_outline","keyboard_g_outline","keyboard_h_outline","keyboard_home_outline","keyboard_i_outline","keyboard_insert_outline","keyboard_j_outline","keyboard_k_outline","keyboard_l_outline","keyboard_m_outline","keyboard_minus_outline","keyboard_n_outline","keyboard_numlock_outline","keyboard_numpad_enter_outline","keyboard_numpad_plus_outline","keyboard_o_outline","keyboard_option_outline","keyboard_outline","keyboard_p_outline","keyboard_page_down_outline","keyboard_page_up_outline","keyboard_pause_break_outline","keyboard_pause_outline","keyboard_period_outline","keyboard_plus_outline","keyboard_printscreen_outline","keyboard_q_outline","keyboard_question_outline","keyboard_quote_outline","keyboard_r_outline","keyboard_return_outline","keyboard_s_outline","keyboard_scroll_lock_outline","keyboard_semicolon_outline","keyboard_shift_icon_outline","keyboard_shift_outline","keyboard_slash_back_outline","keyboard_slash_forward_outline","keyboard_space_icon_outline","keyboard_space_outline","keyboard_t_outline","keyboard_tab_icon_alternative_outline","keyboard_tab_icon_outline","keyboard_tab_outline","keyboard_tilde_outline","keyboard_u_outline","keyboard_underscore_outline","keyboard_v_outline","keyboard_w_outline","keyboard_win_outline","keyboard_x_outline","keyboard_y_outline","keyboard_z_outline","mouse_horizontal","mouse_left_outline","mouse_move","mouse_outline","mouse_right_outline","mouse_scroll_down_outline","mouse_scroll_outline","mouse_scroll_up_outline","mouse_scroll_vertical_outline","mouse_side_back_outline","mouse_side_forward_outline","mouse_side_outline","mouse_vertical"]},{"t":"Xbox Series（Elite）","ics":["controller_xboxseries","controller_xboxone","controller_xbox360"],"ks":["controller_xbox_adaptive","xbox_button_a_outline","xbox_button_b_outline","xbox_button_back_icon_outline","xbox_button_back_outline","xbox_button_menu_outline","xbox_button_share_outline","xbox_button_start_icon_outline","xbox_button_start_outline","xbox_button_view_outline","xbox_button_x_outline","xbox_button_y_outline","xbox_dpad","xbox_dpad_all","xbox_dpad_down_outline","xbox_dpad_horizontal_outline","xbox_dpad_left_outline","xbox_dpad_none","xbox_dpad_right_outline","xbox_dpad_round","xbox_dpad_round_all","xbox_dpad_round_down","xbox_dpad_round_horizontal","xbox_dpad_round_left","xbox_dpad_round_right","xbox_dpad_round_up","xbox_dpad_round_vertical","xbox_dpad_up_outline","xbox_dpad_vertical_outline","xbox_elite_paddle_bottom_left_outline","xbox_elite_paddle_bottom_right_outline","xbox_elite_paddle_top_left_outline","xbox_elite_paddle_top_right_outline","xbox_guide_outline","xbox_lb_outline","xbox_ls_outline","xbox_lt_outline","xbox_rb_outline","xbox_rs_outline","xbox_rt_outline","xbox_stick_l","xbox_stick_l_down","xbox_stick_l_horizontal","xbox_stick_l_left","xbox_stick_l_press","xbox_stick_l_right","xbox_stick_l_up","xbox_stick_l_vertical","xbox_stick_r","xbox_stick_r_down","xbox_stick_r_horizontal","xbox_stick_r_left","xbox_stick_r_press","xbox_stick_r_right","xbox_stick_r_up","xbox_stick_r_vertical","xbox_stick_side_l","xbox_stick_side_r","xbox_stick_top_l","xbox_stick_top_r"]},{"t":"PlayStation（含 Edge）","ics":["controller_playstation5","controller_playstation4","controller_playstation3","controller_playstation2","controller_playstation1"],"ks":["playstation3_button_select_outline","playstation3_button_start_outline","playstation4_button_options_outline","playstation4_button_share_outline","playstation4_touchpad_grid_outline","playstation4_touchpad_outline","playstation4_touchpad_press","playstation4_touchpad_press_center","playstation4_touchpad_press_left","playstation4_touchpad_press_right","playstation4_touchpad_selected","playstation4_touchpad_swipe_down","playstation4_touchpad_swipe_horizontal","playstation4_touchpad_swipe_left","playstation4_touchpad_swipe_right","playstation4_touchpad_swipe_up","playstation4_touchpad_swipe_vertical","playstation4_touchpad_touch_outline","playstation5_button_create_alternative_outline","playstation5_button_create_outline","playstation5_button_mute_outline","playstation5_button_options_alternative_outline","playstation5_button_options_outline","playstation5_elite_fn_l_outline","playstation5_elite_fn_r_outline","playstation5_elite_lb_outline","playstation5_elite_rb_outline","playstation5_touchpad_outline","playstation5_touchpad_press","playstation5_touchpad_press_center","playstation5_touchpad_press_left","playstation5_touchpad_press_right","playstation5_touchpad_selected","playstation5_touchpad_swipe_down","playstation5_touchpad_swipe_horizontal","playstation5_touchpad_swipe_left","playstation5_touchpad_swipe_right","playstation5_touchpad_swipe_up","playstation5_touchpad_swipe_vertical","playstation5_touchpad_touch_outline","playstation_button_analog_outline","playstation_button_circle_outline","playstation_button_cross_outline","playstation_button_l3_outline","playstation_button_r3_outline","playstation_button_square_outline","playstation_button_triangle_outline","playstation_dpad","playstation_dpad_down_outline","playstation_dpad_horizontal_outline","playstation_dpad_left_outline","playstation_dpad_none","playstation_dpad_right_outline","playstation_dpad_up_outline","playstation_dpad_vertical_outline","playstation_stick_l","playstation_stick_l_down","playstation_stick_l_horizontal","playstation_stick_l_left","playstation_stick_l_press","playstation_stick_l_right","playstation_stick_l_up","playstation_stick_l_vertical","playstation_stick_r","playstation_stick_r_down","playstation_stick_r_horizontal","playstation_stick_r_left","playstation_stick_r_press","playstation_stick_r_right","playstation_stick_r_up","playstation_stick_r_vertical","playstation_stick_side_l","playstation_stick_side_r","playstation_stick_top_l","playstation_stick_top_r","playstation_trigger_l1_alternative_outline","playstation_trigger_l1_outline","playstation_trigger_l2_alternative_outline","playstation_trigger_l2_outline","playstation_trigger_r1_alternative_outline","playstation_trigger_r1_outline","playstation_trigger_r2_alternative_outline","playstation_trigger_r2_outline"]},{"t":"Switch / Switch 2","ics":["controller_switch_pro","controller_switch"],"ks":["controller_switch_joycon_down","controller_switch_joycon_up","switch_button_a_outline","switch_button_b_outline","switch_button_c_outline","switch_button_gl_outline","switch_button_gr_outline","switch_button_home_outline","switch_button_l_outline","switch_button_minus_outline","switch_button_plus_outline","switch_button_r_outline","switch_button_sl_outline","switch_button_sr_outline","switch_button_sync_outline","switch_button_x_outline","switch_button_y_outline","switch_button_zl_outline","switch_button_zr_outline","switch_buttons","switch_buttons_down_outline","switch_buttons_horizontal_outline","switch_buttons_left_outline","switch_buttons_none","switch_buttons_right_outline","switch_buttons_up_outline","switch_buttons_vertical_outline","switch_down_outline","switch_dpad","switch_dpad_all","switch_dpad_down_outline","switch_dpad_horizontal_outline","switch_dpad_left_outline","switch_dpad_none","switch_dpad_right_outline","switch_dpad_up_outline","switch_dpad_vertical_outline","switch_joycon_left_diagonal_outline","switch_joycon_left_horizontal_outline","switch_joycon_left_mouse_outline","switch_joycon_left_outline","switch_joycon_left_rotate_outline","switch_joycon_left_vertical_outline","switch_joycon_outline","switch_joycon_right_diagonal_outline","switch_joycon_right_horizontal_outline","switch_joycon_right_mouse_outline","switch_joycon_right_outline","switch_joycon_right_rotate_outline","switch_joycon_right_vertical_outline","switch_left_outline","switch_right_outline","switch_stick_l","switch_stick_l_down","switch_stick_l_horizontal","switch_stick_l_left","switch_stick_l_press","switch_stick_l_right","switch_stick_l_up","switch_stick_l_vertical","switch_stick_r","switch_stick_r_down","switch_stick_r_horizontal","switch_stick_r_left","switch_stick_r_press","switch_stick_r_right","switch_stick_r_up","switch_stick_r_vertical","switch_stick_side_l","switch_stick_side_r","switch_stick_top_l","switch_stick_top_r","switch_up_outline"]},{"t":"Steam 手柄","ics":["controller_steam_new","controller_steam","controller_steamdeck"],"ks":["controller_button_l1_outline","controller_button_l2_outline","controller_button_l4_outline","controller_button_l5_outline","controller_button_options_outline","controller_button_quickaccess_outline","controller_button_r1_outline","controller_button_r2_outline","controller_button_r4_outline","controller_button_r5_outline","controller_button_view_outline","controller_icon_outline","controller_lg_gradient_outline","controller_lg_outline","controller_rg_gradient_outline","controller_rg_outline","steam_button_a_outline","steam_button_b_outline","steam_button_back_icon_outline","steam_button_lp_outline","steam_button_rp_outline","steam_button_start_icon_outline","steam_button_x_outline","steam_button_y_outline","steam_dpad","steam_dpad_all","steam_dpad_down_outline","steam_dpad_horizontal_outline","steam_dpad_left_outline","steam_dpad_right_outline","steam_dpad_up_outline","steam_dpad_vertical_outline","steam_lb_outline","steam_lg_outline","steam_lt_outline","steam_pad","steam_pad_center","steam_pad_down","steam_pad_left","steam_pad_right","steam_pad_up","steam_rb_outline","steam_rg_outline","steam_rt_outline","steam_stick","steam_stick_down","steam_stick_horizontal","steam_stick_l_press","steam_stick_left","steam_stick_right","steam_stick_side_l","steam_stick_up","steam_stick_vertical","steamdeck_button_a_outline","steamdeck_button_b_outline","steamdeck_button_guide_outline","steamdeck_button_l1_outline","steamdeck_button_l2_outline","steamdeck_button_l4_outline","steamdeck_button_l5_outline","steamdeck_button_options_outline","steamdeck_button_quickaccess_outline","steamdeck_button_r1_outline","steamdeck_button_r2_outline","steamdeck_button_r4_outline","steamdeck_button_r5_outline","steamdeck_button_view_outline","steamdeck_button_x_outline","steamdeck_button_y_outline","steamdeck_dpad","steamdeck_dpad_all","steamdeck_dpad_down_outline","steamdeck_dpad_horizontal_outline","steamdeck_dpad_left_outline","steamdeck_dpad_right_outline","steamdeck_dpad_up_outline","steamdeck_dpad_vertical_outline","steamdeck_stick_l","steamdeck_stick_l_down","steamdeck_stick_l_horizontal","steamdeck_stick_l_left","steamdeck_stick_l_press","steamdeck_stick_l_right","steamdeck_stick_l_up","steamdeck_stick_l_vertical","steamdeck_stick_r","steamdeck_stick_r_down","steamdeck_stick_r_horizontal","steamdeck_stick_r_left","steamdeck_stick_r_press","steamdeck_stick_r_right","steamdeck_stick_r_up","steamdeck_stick_r_vertical","steamdeck_stick_side_l","steamdeck_stick_side_r","steamdeck_stick_top_l","steamdeck_stick_top_r","steamdeck_trackpad_all_outline","steamdeck_trackpad_down_outline","steamdeck_trackpad_horizontal_outline","steamdeck_trackpad_l_all_outline","steamdeck_trackpad_l_down_outline","steamdeck_trackpad_l_horizontal_outline","steamdeck_trackpad_l_left_outline","steamdeck_trackpad_l_outline","steamdeck_trackpad_l_right_outline","steamdeck_trackpad_l_up_outline","steamdeck_trackpad_l_vertical_outline","steamdeck_trackpad_left_outline","steamdeck_trackpad_outline","steamdeck_trackpad_r_all_outline","steamdeck_trackpad_r_down_outline","steamdeck_trackpad_r_horizontal_outline","steamdeck_trackpad_r_left_outline","steamdeck_trackpad_r_outline","steamdeck_trackpad_r_right_outline","steamdeck_trackpad_r_up_outline","steamdeck_trackpad_r_vertical_outline","steamdeck_trackpad_right_outline","steamdeck_trackpad_up_outline","steamdeck_trackpad_vertical_outline"]},{"t":"Valve Index","ics":["controller_index_left","controller_index_right"],"ks":["index_button_a_outline","index_button_b_outline","index_button_outline","index_lt_outline","index_rt_outline","index_stick_l","index_stick_l_down","index_stick_l_horizontal","index_stick_l_left","index_stick_l_press","index_stick_l_right","index_stick_l_up","index_stick_l_vertical","index_stick_r","index_stick_r_down","index_stick_r_horizontal","index_stick_r_left","index_stick_r_press","index_stick_r_right","index_stick_r_up","index_stick_r_vertical","index_stick_side_l","index_stick_side_r","index_stick_top_l","index_stick_top_r","index_track","index_track_down","index_track_press","index_track_scroll","index_track_up"]},{"t":"Steam Frame","ics":["controller_frame_left","controller_frame_right"],"ks":["controller_frame_left_letter","controller_frame_right_letter","frame_button_a_outline","frame_button_b_outline","frame_button_l1_outline","frame_button_l2_outline","frame_button_options_outline","frame_button_r1_outline","frame_button_r2_outline","frame_button_view_outline","frame_button_x_outline","frame_button_y_outline","frame_dpad","frame_dpad_all","frame_dpad_down_outline","frame_dpad_horizontal_outline","frame_dpad_left_outline","frame_dpad_none","frame_dpad_right_outline","frame_dpad_up_outline","frame_dpad_vertical_outline","frame_icon_outline","frame_lg_outline","frame_rg_outline","frame_stick_l","frame_stick_l_down","frame_stick_l_horizontal","frame_stick_l_left","frame_stick_l_press","frame_stick_l_right","frame_stick_l_up","frame_stick_l_vertical","frame_stick_r","frame_stick_r_down","frame_stick_r_horizontal","frame_stick_r_left","frame_stick_r_press","frame_stick_r_right","frame_stick_r_up","frame_stick_r_vertical","frame_stick_side_l","frame_stick_side_r","frame_stick_top_l","frame_stick_top_r"]},{"t":"Wii","ics":["wii_controller","controller_wii_classic_pro","controller_wii_classic","wii_controller_nunchuk","wii_controller_nunchuk_wire"],"ks":["wii_button_1_outline","wii_button_2_outline","wii_button_a_outline","wii_button_b_outline","wii_button_c_outline","wii_button_home_outline","wii_button_l_outline","wii_button_minus_outline","wii_button_plus_outline","wii_button_power_outline","wii_button_r_outline","wii_button_x_outline","wii_button_y_outline","wii_button_z_outline","wii_button_zl_outline","wii_button_zr_outline","wii_controller_diagonal_outline","wii_controller_horizontal_outline","wii_controller_outline","wii_controller_rotate_outline","wii_controller_vertical_outline","wii_dpad","wii_dpad_down_outline","wii_dpad_horizontal_outline","wii_dpad_left_outline","wii_dpad_none","wii_dpad_right_outline","wii_dpad_up_outline","wii_dpad_vertical_outline","wii_stick","wii_stick_down","wii_stick_horizontal","wii_stick_l","wii_stick_l_down","wii_stick_l_horizontal","wii_stick_l_left","wii_stick_l_right","wii_stick_l_up","wii_stick_l_vertical","wii_stick_left","wii_stick_r","wii_stick_r_down","wii_stick_r_horizontal","wii_stick_r_left","wii_stick_r_right","wii_stick_r_up","wii_stick_r_vertical","wii_stick_right","wii_stick_top_l","wii_stick_top_r","wii_stick_up","wii_stick_vertical"]},{"t":"WiiU","ics":["controller_wiiu_pro","wiiu_controller"],"ks":["wiiu_button_1_outline","wiiu_button_2_outline","wiiu_button_a_outline","wiiu_button_b_outline","wiiu_button_home_outline","wiiu_button_l_outline","wiiu_button_minus_outline","wiiu_button_plus_outline","wiiu_button_power_outline","wiiu_button_r_outline","wiiu_button_tv_outline","wiiu_button_x_outline","wiiu_button_y_outline","wiiu_button_zl_outline","wiiu_button_zr_outline","wiiu_controller_down_outline","wiiu_controller_outline","wiiu_controller_up","wiiu_controller_up_outlnie","wiiu_dpad","wiiu_dpad_down_outline","wiiu_dpad_horizontal_outline","wiiu_dpad_left_outline","wiiu_dpad_none","wiiu_dpad_right_outline","wiiu_dpad_up_outline","wiiu_dpad_vertical_outline","wiiu_stick_l","wiiu_stick_l_down","wiiu_stick_l_horizontal","wiiu_stick_l_left","wiiu_stick_l_right","wiiu_stick_l_up","wiiu_stick_l_vertical","wiiu_stick_r","wiiu_stick_r_down","wiiu_stick_r_horizontal","wiiu_stick_r_left","wiiu_stick_r_right","wiiu_stick_r_up","wiiu_stick_r_vertical","wiiu_stick_top_l","wiiu_stick_top_r"]},{"t":"GameCube","ics":["gamecube_controller","gamecube_controller_wavebird"],"ks":["gamecube_button_a_outline","gamecube_button_b_outline","gamecube_button_start_outline","gamecube_button_x_outline","gamecube_button_x_tilted_outline","gamecube_button_y_outline","gamecube_button_y_tilted_outline","gamecube_button_z_outline","gamecube_dpad","gamecube_dpad_down_outline","gamecube_dpad_horizontal_outline","gamecube_dpad_left_outline","gamecube_dpad_none","gamecube_dpad_right_outline","gamecube_dpad_up_outline","gamecube_dpad_vertical_outline","gamecube_stick","gamecube_stick_c","gamecube_stick_c_down","gamecube_stick_c_horizontal","gamecube_stick_c_left","gamecube_stick_c_right","gamecube_stick_c_top","gamecube_stick_c_up","gamecube_stick_c_vertical","gamecube_stick_down","gamecube_stick_grip","gamecube_stick_grip_down","gamecube_stick_grip_horizontal","gamecube_stick_grip_left","gamecube_stick_grip_right","gamecube_stick_grip_top","gamecube_stick_grip_up","gamecube_stick_grip_vertical","gamecube_stick_horizontal","gamecube_stick_left","gamecube_stick_right","gamecube_stick_top","gamecube_stick_up","gamecube_stick_vertical","gamecube_trigger_l_outline","gamecube_trigger_r_outline"]},{"t":"Playdate","ics":["playdate_icon"],"ks":["playdate_button_a_outline","playdate_button_b_outline","playdate_button_menu_outline","playdate_crank","playdate_crank_clockwise","playdate_crank_counterclockwise","playdate_dpad","playdate_dpad_down_outline","playdate_dpad_horizontal_outline","playdate_dpad_left_outline","playdate_dpad_none","playdate_dpad_right_outline","playdate_dpad_up_outline","playdate_dpad_vertical_outline","playdate_icon_crank_outline","playdate_icon_outline"]},{"t":"Meta Quest","ics":["controller_quest_touch_plus_left","controller_quest_touch_plus_right","controller_quest_left","controller_quest_right"],"ks":["controller_quest_left_letter","controller_quest_right_letter","controller_quest_touch_plus_left_letter","controller_quest_touch_plus_right_letter","quest_button_a_outline","quest_button_b_outline","quest_button_menu_outline","quest_button_meta_outline","quest_button_oculus_outline","quest_button_x_outline","quest_button_y_outline","quest_grip_left_outline","quest_grip_right_outline","quest_stick_l","quest_stick_l_down","quest_stick_l_horizontal","quest_stick_l_left","quest_stick_l_press","quest_stick_l_right","quest_stick_l_up","quest_stick_l_vertical","quest_stick_r","quest_stick_r_down","quest_stick_r_horizontal","quest_stick_r_left","quest_stick_r_press","quest_stick_r_right","quest_stick_r_up","quest_stick_r_vertical","quest_stick_side_l","quest_stick_side_r","quest_stick_top_l","quest_stick_top_r","quest_trigger_left_outline","quest_trigger_right_outline"]},{"t":"触屏","ics":["touch_tap"],"ks":["touch_finger_one","touch_finger_two","touch_hand_closed","touch_hand_open","touch_rotate_left","touch_rotate_right","touch_swipe_down","touch_swipe_horizontal","touch_swipe_left","touch_swipe_move","touch_swipe_right","touch_swipe_two_down","touch_swipe_two_horizontal","touch_swipe_two_left","touch_swipe_two_move","touch_swipe_two_right","touch_swipe_two_up","touch_swipe_two_vertical","touch_swipe_up","touch_swipe_vertical","touch_tap_double","touch_tap_hold","touch_two","touch_two_double","touch_two_hold","touch_zoom_in","touch_zoom_out"]},{"t":"通用","ics":["generic_joystick"],"ks":["generic_button","generic_button_circle_fill","generic_button_circle_outline","generic_button_finger","generic_button_finger_pressed","generic_button_pressed","generic_button_square_fill","generic_button_square_outline","generic_button_trigger_a_fill","generic_button_trigger_a_outline","generic_button_trigger_b_fill","generic_button_trigger_b_outline","generic_button_trigger_c_fill","generic_button_trigger_c_outline","generic_joystick_horizontal","generic_joystick_left","generic_joystick_red_horizontal","generic_joystick_red_left","generic_joystick_red_right","generic_joystick_right","generic_stick","generic_stick_down","generic_stick_horizontal","generic_stick_left","generic_stick_press","generic_stick_right","generic_stick_up","generic_stick_vertical","switch_stick_side"]}];
 // v5182：把分组整手图标补进字体优先表（v5170 生成 LB_KEYFONT 时这些字形还没进字体）
 LB_KEYFONT_SETS.forEach(function(g){ g.ks.forEach(function(k){ if (!LB_KEYFONT[k]) LB_KEYFONT[k] = 1; }); (g.ics || []).forEach(function(k){ if (!LB_KEYFONT[k]) LB_KEYFONT[k] = 1; }); });   // v5198：ics 数组进字体优先表
 
@@ -35051,7 +35238,11 @@ var LB_KEYSVG = {
 'steam_dpad_up_outline':"<g transform=\"translate(41.3333,42.6667) scale(30.70833,30.66667)\"><path stroke=\"none\" fill=\"currentColor\" d=\"M46.85 17.15 Q40.75 11 32 11 23.3 11 17.15 17.15 11 23.3 11 32 11 40.75 17.15 46.85 23.3 53 32 53 40.75 53 46.85 46.85 53 40.75 53 32 53 23.3 46.85 17.15 M56 32 Q56 42 48.95 48.95 42 56 32 56 22.05 56 15 48.95 8 42 8 32 8 22.05 15 15 20.45 9.55 27.7 8.35 L32 8 36.35 8.35 Q43.55 9.55 48.95 15 56 22.05 56 32 M36 28 L44 28 Q45.65 28 46.85 29.15 48 30.35 48 32 48 33.65 46.85 34.8 45.65 36 44 36 L36 36 36 44 Q36 45.65 34.8 46.8 33.65 48 32 48 30.35 48 29.15 46.8 28 45.65 28 44 L28 36 20 36 Q18.35 36 17.2 34.8 16 33.65 16 32 16 30.35 17.2 29.15 18.35 28 20 28 L28 28 36 28\"/>\n    <path stroke=\"none\" fill=\"#E73246\" d=\"M36 28 L28 28 28 20 Q28 18.35 29.15 17.15 30.35 16 32 16 33.65 16 34.8 17.15 36 18.35 36 20 L36 28\"/></g>",
 'steam_dpad_down_outline':"<g transform=\"translate(41.3333,42.6667) scale(30.70833,30.66667)\"><path stroke=\"none\" fill=\"currentColor\" d=\"M28 36 L20 36 Q18.35 36 17.2 34.85 16 33.65 16 32 16 30.35 17.2 29.2 18.35 28 20 28 L28 28 28 20 Q28 18.35 29.15 17.2 30.35 16 32 16 33.65 16 34.8 17.2 36 18.35 36 20 L36 28 44 28 Q45.65 28 46.85 29.2 48 30.35 48 32 48 33.65 46.85 34.85 45.65 36 44 36 L36 36 28 36 M56 32 Q56 41.95 48.95 49 43.55 54.45 36.35 55.65 L32 56 27.7 55.65 Q20.45 54.45 15 49 8 41.95 8 32 8 22 15 15.05 22.05 8 32 8 42 8 48.95 15.05 56 22 56 32 M46.85 46.85 Q53 40.7 53 32 53 23.25 46.85 17.15 40.75 11 32 11 23.3 11 17.15 17.15 11 23.25 11 32 11 40.7 17.15 46.85 23.3 53 32 53 40.75 53 46.85 46.85\"/>\n    <path stroke=\"none\" fill=\"#E73246\" d=\"M28 36 L36 36 36 44 Q36 45.65 34.8 46.85 33.65 48 32 48 30.35 48 29.15 46.85 28 45.65 28 44 L28 36\"/></g>",
 'steam_dpad_left_outline':"<g transform=\"translate(41.3333,42.6667) scale(30.70833,30.66667)\"><path stroke=\"none\" fill=\"currentColor\" d=\"M32 8 Q42 8 48.95 15.05 56 22 56 32 56 41.95 48.95 49 42 56 32 56 22.05 56 15 49 9.55 43.55 8.35 36.3 8 34.2 8 32 8 29.75 8.35 27.65 9.55 20.45 15 15.05 22.05 8 32 8 M17.15 17.15 Q11 23.25 11 32 11 40.7 17.15 46.85 23.3 53 32 53 40.75 53 46.85 46.85 53 40.7 53 32 53 23.25 46.85 17.15 40.75 11 32 11 23.3 11 17.15 17.15 M28 28 L28 20 Q28 18.35 29.15 17.15 30.35 16 32 16 33.65 16 34.8 17.15 36 18.35 36 20 L36 28 44 28 Q45.65 28 46.8 29.2 48 30.35 48 32 48 33.65 46.8 34.85 45.65 36 44 36 L36 36 36 44 Q36 45.65 34.8 46.8 33.65 48 32 48 30.35 48 29.15 46.8 28 45.65 28 44 L28 36 28 28\"/>\n    <path stroke=\"none\" fill=\"#E73246\" d=\"M28 28 L28 36 20 36 Q18.35 36 17.15 34.85 16 33.65 16 32 16 30.35 17.15 29.2 18.35 28 20 28 L28 28\"/></g>",
-'steam_dpad_right_outline':"<g transform=\"translate(41.3333,42.6667) scale(30.70833,30.66667)\"><path stroke=\"none\" fill=\"#E73246\" d=\"M36 28 L44 28 Q45.65 28 46.85 29.2 48 30.35 48 32 48 33.65 46.85 34.85 45.65 36 44 36 L36 36 36 28\"/>\n    <path stroke=\"none\" fill=\"currentColor\" d=\"M36 28 L36 36 36 44 Q36 45.65 34.85 46.8 33.65 48 32 48 30.35 48 29.2 46.8 28 45.65 28 44 L28 36 20 36 Q18.35 36 17.2 34.85 16 33.65 16 32 16 30.35 17.2 29.2 18.35 28 20 28 L28 28 28 20 Q28 18.35 29.2 17.15 30.35 16 32 16 33.65 16 34.85 17.15 36 18.35 36 20 L36 28 M32 8 Q41.95 8 49 15.05 54.45 20.45 55.65 27.65 56 29.75 56 32 L55.65 36.3 Q54.45 43.55 49 49 41.95 56 32 56 22 56 15.05 49 8 41.95 8 32 8 22 15.05 15.05 22 8 32 8 M46.85 17.15 Q40.7 11 32 11 23.25 11 17.15 17.15 11 23.25 11 32 11 40.7 17.15 46.85 23.25 53 32 53 40.7 53 46.85 46.85 53 40.7 53 32 53 23.25 46.85 17.15\"/></g>"
+'steam_dpad_right_outline':"<g transform=\"translate(41.3333,42.6667) scale(30.70833,30.66667)\"><path stroke=\"none\" fill=\"#E73246\" d=\"M36 28 L44 28 Q45.65 28 46.85 29.2 48 30.35 48 32 48 33.65 46.85 34.85 45.65 36 44 36 L36 36 36 28\"/>\n    <path stroke=\"none\" fill=\"currentColor\" d=\"M36 28 L36 36 36 44 Q36 45.65 34.85 46.8 33.65 48 32 48 30.35 48 29.2 46.8 28 45.65 28 44 L28 36 20 36 Q18.35 36 17.2 34.85 16 33.65 16 32 16 30.35 17.2 29.2 18.35 28 20 28 L28 28 28 20 Q28 18.35 29.2 17.15 30.35 16 32 16 33.65 16 34.85 17.15 36 18.35 36 20 L36 28 M32 8 Q41.95 8 49 15.05 54.45 20.45 55.65 27.65 56 29.75 56 32 L55.65 36.3 Q54.45 43.55 49 49 41.95 56 32 56 22 56 15.05 49 8 41.95 8 32 8 22 15.05 15.05 22 8 32 8 M46.85 17.15 Q40.7 11 32 11 23.25 11 17.15 17.15 11 23.25 11 32 11 40.7 17.15 46.85 23.25 53 32 53 40.7 53 46.85 46.85 53 40.7 53 32 53 23.25 46.85 17.15\"/></g>",
+'index_track':"<g transform=\"translate(40.0000,41.3333) scale(30.75000,30.70833)\"><path stroke=\"none\" fill=\"currentColor\" d=\"M32 8 Q38.6 8 43.3 12.7 48 17.4 48 24 L48 40 Q48 46.6 43.3 51.3 38.6 56 32 56 25.4 56 20.7 51.3 16 46.6 16 40 L16 24 Q16 17.4 20.7 12.7 25.4 8 32 8\"/></g>",
+'index_track_up':"<g transform=\"translate(40.0000,41.3333) scale(30.75000,30.70833)\"><path stroke=\"none\" fill=\"currentColor\" d=\"M32 8 Q38.6 8 43.3 12.7 48 17.4 48 24 L48 40 Q48 46.6 43.3 51.3 38.6 56 32 56 25.4 56 20.7 51.3 16 46.6 16 40 L16 24 Q16 17.4 20.7 12.7 25.4 8 32 8\"/><path fill=\"#E73246\" d=\"M32 13.6 Q34.6 13.6 36.4 16.4 L40.2 22.4 Q41.8 24.8 38.8 24.8 L25.2 24.8 Q22.2 24.8 23.8 22.4 L27.6 16.4 Q29.4 13.6 32 13.6 Z\"/></g>",
+'index_track_down':"<g transform=\"translate(40.0000,41.3333) scale(30.75000,30.70833)\"><path stroke=\"none\" fill=\"currentColor\" d=\"M32 8 Q38.6 8 43.3 12.7 48 17.4 48 24 L48 40 Q48 46.6 43.3 51.3 38.6 56 32 56 25.4 56 20.7 51.3 16 46.6 16 40 L16 24 Q16 17.4 20.7 12.7 25.4 8 32 8\"/><path fill=\"#E73246\" d=\"M32 50.4 Q29.4 50.4 27.6 47.6 L23.8 41.6 Q22.2 39.2 25.2 39.2 L38.8 39.2 Q41.8 39.2 40.2 41.6 L36.4 47.6 Q34.6 50.4 32 50.4 Z\"/></g>",
+'index_track_scroll':"<g transform=\"translate(40.0000,41.3333) scale(30.75000,30.70833)\"><path stroke=\"none\" fill=\"currentColor\" d=\"M32 8 Q38.6 8 43.3 12.7 48 17.4 48 24 L48 40 Q48 46.6 43.3 51.3 38.6 56 32 56 25.4 56 20.7 51.3 16 46.6 16 40 L16 24 Q16 17.4 20.7 12.7 25.4 8 32 8\"/><path fill=\"#E73246\" d=\"M32 11.6 Q33.9 11.6 35.3 13.7 L38.2 18.1 Q39.4 19.9 37.1 19.9 L26.9 19.9 Q24.6 19.9 25.8 18.1 L28.7 13.7 Q30.1 11.6 32 11.6 Z\"/><path fill=\"#E73246\" d=\"M32 52.4 Q30.1 52.4 28.7 50.3 L25.8 45.9 Q24.6 44.1 26.9 44.1 L37.1 44.1 Q39.4 44.1 38.2 45.9 L35.3 50.3 Q33.9 52.4 32 52.4 Z\"/></g>"
 };
 function lbKeyChipHtml(k, size, extraCls){
   var kk = String(k || '');
@@ -35062,6 +35253,1637 @@ function lbKeyChipHtml(k, size, extraCls){
     + ((LB_KEYFONT_LBL && LB_KEYFONT_LBL[kk]) ? ('<em class="lbk-lbl">' + LB_KEYFONT_LBL[kk] + '</em>') : '');   // v5185：单色字体下视觉相同的键加角标
   return '<img class="lb-hf-keyimg" src="' + lbHfKeySrc(kk) + '" alt="" onerror="this.style.display=\'none\'">';
 }
+// ===================== v5213 键位配置（v6：12 台交互设备 · 只显示当前设备列 · 跟随全局游戏）=====================
+// v5228（用户口径「手柄配置改叫键位配置」+「键位这边单向统一到流程那种」）：
+//   · 全局改名：手柄键位 → 键位配置（浮窗标题 / 角色入口 tooltip / 堕落玩偶主页 2 处 / 游戏副标题 2 处）
+//   · 键格图标 22 → 24，与流程键帽面板 lbKeyChipHtml(k, 24) 同尺寸（单向对齐，流程零改动）
+//   · 改键浮窗去掉 48 格上限（不再隐藏任何键），搜索框保留
+// 交互设备（顺序固定，键盘/鼠标第一位；触屏/通用不算设备，字体仍保留）
+var LB_KEYMAP_DEVICE = [
+  {id:'keymouse',   n:'键盘 / 鼠标',        ic:'keyboard'},
+  {id:'xbox',       n:'Xbox',              ic:'controller_xboxseries'},
+  {id:'playstation',n:'PlayStation',       ic:'controller_playstation5'},
+  {id:'switch',     n:'Switch',            ic:'controller_switch_pro'},
+  {id:'steam',      n:'Steam 手柄（含 Deck）',ic:'controller_steam_new'},
+  {id:'valveindex', n:'Valve Index',       ic:'controller_index_left'},
+  {id:'steamframe', n:'Steam Frame',       ic:'controller_frame_left'},
+  {id:'wii',        n:'Wii',               ic:'wii_controller', hid:1},   // v5249：用户口径「键位配置内隐藏」
+  {id:'wiiu',       n:'WiiU',              ic:'controller_wiiu_pro'},
+  {id:'gamecube',   n:'GameCube',          ic:'gamecube_controller'},
+  {id:'playdate',   n:'Playdate',          ic:'playdate_icon', hid:1},
+  {id:'metaquest',  n:'Meta Quest',        ic:'controller_quest_left'}
+];
+// 动作表：id 一旦发布不得改名（玩家 map 以此为主键）；方向键一律用 dpad_round（SVG 红臂标方向）
+var LB_KEYMAP_ACTIONS = [
+  // v5221：默认值按官方 Wiki「Controls」页 Xbox 列重写（组合键 / 长按 见 pad 结构）
+  // v5278（用户口径「动作不齐，按 ASA 键鼠完整动作清单补齐」）：按 ARK Wiki Controls 页全量扩充 20 → 84 项
+  //   pad = null 表示该动作为 PC 专属（手柄无对应键，手柄页显示「不适用」）；kbm 为空则 note 里注明组合形式
+  {g:'常用', id:'interact',  zh:'使用 / 互动',      pad:'xbox_button_y',                    kbm:'keyboard_e',                note:''},
+  {g:'常用', id:'mount',     zh:'骑乘 / 上下坐骑',  pad:'xbox_button_y',                    kbm:'keyboard_e',                note:''},
+  {g:'常用', id:'harvest',   zh:'采集',            pad:'xbox_rt',                          kbm:'mouse_left',                note:''},
+  {g:'常用', id:'transfer',  zh:'转移 / 装入',      pad:{k:['xbox_button_a'], hold:1},      kbm:'keyboard_t',                note:''},
+  {g:'常用', id:'pickup',    zh:'存取 / 拾取',      pad:'xbox_button_x',                    kbm:'keyboard_f',                note:''},
+  {g:'战斗', id:'attack',    zh:'主攻击',          pad:'xbox_rt',                          kbm:'mouse_left',                note:''},
+  {g:'战斗', id:'aim',       zh:'瞄准 / 副攻击',    pad:'xbox_lt',                          kbm:'mouse_right',               note:''},
+  {g:'战斗', id:'reload',    zh:'装填',            pad:'xbox_button_x',                    kbm:'keyboard_r',                note:''},
+  {g:'战斗', id:'melee',     zh:'近战 / 枪托',      pad:'xbox_rb',                          kbm:'keyboard_ctrl',             note:''},
+  {g:'战斗', id:'fists',     zh:'切换空手',        pad:{k:['xbox_lb','xbox_dpad_up']},     kbm:'keyboard_q',                note:'收起 / 取出武器'},
+  {g:'战斗', id:'drag',      zh:'拖拽尸体',        pad:'xbox_button_y',                    kbm:'keyboard_g',                note:'尸体 / 昏迷目标'},
+  {g:'战斗', id:'attach',    zh:'切换武器配件',    pad:{k:['xbox_button_x'], dbl:1},       kbm:'keyboard_n',                note:'也可 R 双击'},
+  {g:'移动', id:'jump',      zh:'跳跃',            pad:'xbox_button_a',                    kbm:'keyboard_space',            note:''},
+  {g:'移动', id:'crouch',    zh:'蹲下',            pad:'xbox_stick_r_press',               kbm:'keyboard_c',                note:''},
+  {g:'移动', id:'prone',     zh:'趴下',            pad:{k:['xbox_stick_r_press'], hold:1}, kbm:'keyboard_x',                note:''},
+  {g:'移动', id:'sprint',    zh:'奔跑',            pad:'xbox_stick_l_press',               kbm:'keyboard_shift',            note:''},
+  {g:'移动', id:'move_fwd',  zh:'前进',            pad:null,                               kbm:'keyboard_w',                note:'手柄用左摇杆'},
+  {g:'移动', id:'move_back', zh:'后退',            pad:null,                               kbm:'keyboard_s',                note:'手柄用左摇杆'},
+  {g:'移动', id:'move_left', zh:'左平移',          pad:null,                               kbm:'keyboard_a',                note:'手柄用左摇杆'},
+  {g:'移动', id:'move_right',zh:'右平移',          pad:null,                               kbm:'keyboard_d',                note:'手柄用左摇杆'},
+  {g:'移动', id:'run_toggle',zh:'切换跑 / 走',      pad:null,                               kbm:'',                          note:'Right Shift（无独立图标）'},
+  {g:'界面', id:'inventory', zh:'背包',            pad:'xbox_button_b',                    kbm:'keyboard_i',                note:''},
+  {g:'界面', id:'map',       zh:'地图',            pad:'xbox_button_view',                 kbm:'keyboard_m',                note:''},
+  {g:'界面', id:'wheel',     zh:'上下文轮盘',      pad:{k:['xbox_button_b'], hold:1},      kbm:{k:['keyboard_e'], hold:1},  note:'生物行为 / 结构拆除'},
+  {g:'界面', id:'chat',      zh:'世界聊天',        pad:['xbox_lb','xbox_button_view'],     kbm:'keyboard_enter',            note:''},
+  {g:'界面', id:'drop',      zh:'丢弃',            pad:'xbox_lt',                          kbm:'keyboard_o',                note:'背包内'},
+  {g:'界面', id:'hotbar',    zh:'快捷键栏',        pad:'xbox_dpad_round_up',               kbm:'keyboard_1',                note:''},
+  {g:'界面', id:'admin',     zh:'管理控制台',      pad:{k:['xbox_button_menu','xbox_lb','xbox_rb','xbox_button_x','xbox_button_y'], hold:1}, kbm:'keyboard_escape', note:'超组合'},
+  {g:'界面', id:'craftables',zh:'显示可制作',      pad:'xbox_rb',                          kbm:'keyboard_v',                note:'背包内'},
+  {g:'界面', id:'marker',    zh:'地图标记',        pad:'xbox_button_x',                    kbm:'keyboard_p',                note:'地图内'},
+  {g:'界面', id:'itemmenu',  zh:'物品菜单',        pad:'xbox_button_menu',                 kbm:'keyboard_question',         note:''},
+  {g:'界面', id:'throw_sh',  zh:'投掷肩宠',        pad:{k:['xbox_button_b'], dbl:1},       kbm:{k:['keyboard_f'], dbl:1},   note:'F 双击'},
+  {g:'界面', id:'emote',     zh:'表情',            pad:'xbox_button_b',                    kbm:'keyboard_bracket_open',     note:'长按'},
+  {g:'界面', id:'defecate',  zh:'排泄',            pad:null,                               kbm:'keyboard_plus',             note:''},
+  {g:'口哨', id:'wh_menu',   zh:'口哨菜单',        pad:{k:['xbox_button_b'], hold:1},      kbm:'keyboard_apostrophe',       note:'或长按 T'},
+  {g:'口哨', id:'wh_follow1',zh:'跟随（单个）',    pad:null,                               kbm:'keyboard_t',                note:''},
+  {g:'口哨', id:'wh_stop1',  zh:'停止（单个）',    pad:null,                               kbm:'keyboard_y',                note:''},
+  {g:'口哨', id:'wh_land1',  zh:'降落（单个）',    pad:null,                               kbm:'',                          note:'PC 默认未绑定'},
+  {g:'口哨', id:'wh_followall', zh:'全部跟随',     pad:null,                               kbm:'keyboard_j',                note:''},
+  {g:'口哨', id:'wh_stopall',   zh:'全部停止',     pad:null,                               kbm:'keyboard_u',                note:''},
+  {g:'口哨', id:'wh_move',   zh:'移动到指定点',    pad:null,                               kbm:'keyboard_comma',            note:''},
+  {g:'口哨', id:'wh_atk_this',  zh:'攻击此目标',   pad:null,                               kbm:'keyboard_period',           note:''},
+  {g:'口哨', id:'wh_atk_mine',  zh:'攻击我的目标', pad:null,                               kbm:'keyboard_equals',           note:''},
+  {g:'口哨', id:'wh_aggr',   zh:'攻击性',          pad:null,                               kbm:'',                          note:'NumPad -（无独立图标）'},
+  {g:'口哨', id:'wh_neutral',zh:'中立',            pad:null,                               kbm:'keyboard_minus',            note:''},
+  {g:'口哨', id:'wh_passive',zh:'被动',            pad:null,                               kbm:'keyboard_semicolon',        note:''},
+  {g:'口哨', id:'wh_showgrp',zh:'显示当前组',      pad:null,                               kbm:'keyboard_h',                note:''},
+  {g:'口哨', id:'wh_addgrp', zh:'加入 / 移出组',   pad:null,                               kbm:'keyboard_z',                note:''},
+  {g:'口哨', id:'wh_setgrp', zh:'切换活动组',      pad:null,                               kbm:'',                          note:'NumPad 0-9'},
+  {g:'聊天', id:'chat_local',   zh:'本地聊天',     pad:null,                               kbm:'keyboard_insert',           note:''},
+  {g:'聊天', id:'chat_tribe',   zh:'部落聊天',     pad:null,                               kbm:'keyboard_slash_forward',    note:''},
+  {g:'聊天', id:'chat_alliance',zh:'联盟聊天',     pad:null,                               kbm:'keyboard_home',             note:''},
+  {g:'聊天', id:'chat_up',      zh:'聊天上翻',     pad:null,                               kbm:'keyboard_page_up',          note:''},
+  {g:'聊天', id:'chat_down',    zh:'聊天下翻',     pad:null,                               kbm:'keyboard_page_down',        note:''},
+  {g:'聊天', id:'chat_switch',  zh:'切换聊天类型', pad:null,                               kbm:'keyboard_tab',              note:''},
+  {g:'聊天', id:'voice',        zh:'语音（按键说话）', pad:null,                           kbm:'keyboard_b',                note:''},
+  {g:'聊天', id:'chat_autohide',zh:'自动隐藏聊天框', pad:null,                             kbm:'keyboard_slash_back',       note:''},
+  {g:'骑乘', id:'ride_attack',zh:'坐骑主攻击',      pad:'xbox_rt',                        kbm:'mouse_left',                note:''},
+  {g:'骑乘', id:'ride_alt',   zh:'坐骑副攻击',      pad:'xbox_lt',                        kbm:'mouse_right',               note:''},
+  {g:'骑乘', id:'ride_jump',  zh:'坐骑跳跃',        pad:'xbox_button_a',                  kbm:'keyboard_space',            note:''},
+  {g:'骑乘', id:'ride_land',  zh:'降落 / 起飞',     pad:'xbox_button_a',                  kbm:'keyboard_space',            note:'飞行坐骑'},
+  {g:'骑乘', id:'ride_brake', zh:'刹车 / 悬停',     pad:null,                             kbm:'keyboard_x',                note:'飞行坐骑'},
+  {g:'骑乘', id:'ride_throw', zh:'骑乘时投掷肩宠',  pad:{k:['xbox_button_y'], dbl:1},     kbm:'keyboard_r',                note:''},
+  {g:'骑乘', id:'ride_roll',  zh:'翻滚 / 第三动作', pad:'xbox_stick_r_press',             kbm:'keyboard_c',                note:''},
+  {g:'背包内', id:'inv_split',   zh:'拆分堆叠',     pad:null,                             kbm:'',                          note:'右键菜单'},
+  {g:'背包内', id:'inv_transfer',zh:'转移整堆',     pad:{k:['xbox_button_a'], hold:1},    kbm:'keyboard_t',                note:''},
+  {g:'背包内', id:'inv_half',    zh:'转移半堆',     pad:null,                             kbm:{k:['keyboard_t'], mode:'chord', chord:'keyboard_shift'}, note:'Shift + T'},
+  {g:'背包内', id:'inv_one',     zh:'转移一个',     pad:null,                             kbm:{k:['keyboard_t'], mode:'chord', chord:'keyboard_ctrl'},  note:'Ctrl + T'},
+  {g:'背包内', id:'inv_five',    zh:'转移五个',     pad:null,                             kbm:'',                          note:'Shift + 双击'},
+  {g:'背包内', id:'inv_labels',  zh:'物品标签',     pad:null,                             kbm:'keyboard_q',                note:''},
+  {g:'背包内', id:'inv_tips',    zh:'工具提示',     pad:null,                             kbm:'keyboard_g',                note:''},
+  {g:'背包内', id:'inv_craft',   zh:'切到制作页',   pad:null,                             kbm:'keyboard_v',                note:''},
+  {g:'背包内', id:'inv_equip',   zh:'装备到快捷栏', pad:null,                             kbm:'',                          note:'Shift + 0-9'},
+  {g:'背包内', id:'inv_unequip', zh:'从快捷栏卸下', pad:null,                             kbm:'',                          note:'Ctrl + 0-9'},
+  {g:'背包内', id:'inv_repair',  zh:'修理物品',     pad:null,                             kbm:'keyboard_e',                note:''},
+  {g:'建造', id:'build_flip',    zh:'翻转建筑朝向', pad:null,                             kbm:'keyboard_e',                note:''},
+  {g:'建造', id:'build_snap',    zh:'吸附点循环',   pad:null,                             kbm:'keyboard_q',                note:'或 Z'},
+  {g:'镜头', id:'cam_orbit',   zh:'环绕镜头',       pad:null,                             kbm:'keyboard_k',                note:''},
+  {g:'镜头', id:'cam_zoom_in', zh:'镜头拉近',       pad:null,                             kbm:'mouse_scroll_up',           note:''},
+  {g:'镜头', id:'cam_zoom_out',zh:'镜头拉远',       pad:null,                             kbm:'mouse_scroll_down',         note:''},
+  {g:'镜头', id:'cam_person',  zh:'骑乘时切一 / 三人称', pad:'xbox_rb',                   kbm:'mouse_scroll',              note:''},
+  {g:'镜头', id:'hud_ext',     zh:'扩展 HUD 信息',  pad:null,                             kbm:{k:['keyboard_h'], hold:1},   note:'长按'},
+  {g:'镜头', id:'hud_hide',    zh:'隐藏 HUD',       pad:null,                             kbm:'keyboard_backspace',        note:''},
+  {g:'镜头', id:'nameplate',   zh:'名牌显示距离',   pad:null,                             kbm:'keyboard_end',              note:''}
+];
+// Xbox 原名 -> 语义键
+var LB_KEYMAP_SEM = {
+  'xbox_button_a':'ax','xbox_button_b':'bx','xbox_button_x':'xx','xbox_button_y':'yx',
+  'xbox_lb':'lb','xbox_rb':'rb','xbox_lt':'lt','xbox_rt':'rt',
+  'xbox_dpad_up':'du','xbox_dpad_down':'dd','xbox_dpad_left':'dl','xbox_dpad_right':'dr',
+  'xbox_dpad_round_up':'du','xbox_dpad_round_down':'dd','xbox_dpad_round_left':'dl','xbox_dpad_round_right':'dr',
+  'xbox_stick_l_press':'lsp','xbox_stick_r_press':'rsp','xbox_stick_r_up':'rsu',
+  'xbox_button_view':'view','xbox_button_menu':'menu'
+};
+// 语义键 -> 各设备同义键（null / 缺项 = 该设备不适用，数据仍保留）
+var LB_KEYMAP_SKIN = {
+  playstation:{ax:'playstation_button_cross',bx:'playstation_button_circle',xx:'playstation_button_square',yx:'playstation_button_triangle',
+    lb:'playstation_trigger_l1',rb:'playstation_trigger_r1',lt:'playstation_trigger_l2',rt:'playstation_trigger_r2',
+    du:'playstation_dpad_up',dd:'playstation_dpad_down',dl:'playstation_dpad_left',dr:'playstation_dpad_right',
+    lsp:'playstation_stick_l_press',rsp:'playstation_stick_r_press',rsu:'playstation_stick_r_up',
+    view:'playstation5_button_create',menu:'playstation5_button_options'},   // v5276：原为 null ⇒ 表格显示「不适用」；改指当前世代（PS5）
+  switch:{ax:'switch_button_a',bx:'switch_button_b',xx:'switch_button_x',yx:'switch_button_y',
+    lb:'switch_button_l',rb:'switch_button_r',lt:'switch_button_zl',rt:'switch_button_zr',
+    du:'switch_dpad_up',dd:'switch_dpad_down',dl:'switch_dpad_left',dr:'switch_dpad_right',
+    lsp:'switch_stick_l_press',rsp:'switch_stick_r_press',rsu:'switch_stick_r_up',
+    view:'switch_button_minus',menu:'switch_button_plus'},
+  // v5276（用户口径「表格这类默认为啥是旧设备的」）：**显示层主映射**改用新体系 steamdeck_*
+  //   （= Steam 2 代与 Steam Deck 共享的那套）；1 代 steam_* 仅作为「按按键」视图的第二套等价键保留
+  steam:{ax:'steamdeck_button_a',bx:'steamdeck_button_b',xx:'steamdeck_button_x',yx:'steamdeck_button_y',
+    lb:'steamdeck_button_l1',rb:'steamdeck_button_r1',lt:'steamdeck_button_l2',rt:'steamdeck_button_r2',
+    du:'steamdeck_dpad_up',dd:'steamdeck_dpad_down',dl:'steamdeck_dpad_left',dr:'steamdeck_dpad_right',
+    lsp:'steamdeck_stick_l_press',rsp:'steamdeck_stick_r_press',rsu:'steamdeck_stick_r_up',
+    view:'steamdeck_button_view',menu:'steamdeck_button_options'},
+  valveindex:{ax:'index_button_a',bx:'index_button_b',xx:null,yx:null,
+    lb:null,rb:null,lt:'index_lt',rt:'index_rt',
+    du:'index_track_up',dd:'index_track_down',dl:null,dr:null,
+    lsp:'index_stick_l_press',rsp:null,rsu:'index_stick_r_up',view:null,menu:null},
+  steamframe:{ax:'frame_button_a',bx:'frame_button_b',xx:'frame_button_x',yx:'frame_button_y',
+    lb:'frame_button_l1',rb:'frame_button_r1',lt:'frame_button_l2',rt:'frame_button_r2',
+    du:'frame_dpad_up',dd:'frame_dpad_down',dl:'frame_dpad_left',dr:'frame_dpad_right',
+    lsp:'frame_stick_l_press',rsp:'frame_stick_r_press',rsu:'frame_stick_r_up',
+    view:'frame_button_view',menu:'frame_button_options'},
+  wii:{ax:'wii_button_a',bx:'wii_button_b',xx:'wii_button_x',yx:'wii_button_y',
+    lb:'wii_button_l',rb:'wii_button_r',lt:'wii_button_zl',rt:'wii_button_zr',
+    du:'wii_dpad_up',dd:'wii_dpad_down',dl:'wii_dpad_left',dr:'wii_dpad_right',
+    lsp:null,rsp:null,rsu:null,view:'wii_button_minus',menu:'wii_button_plus'},
+  wiiu:{ax:'wiiu_button_a',bx:'wiiu_button_b',xx:'wiiu_button_x',yx:'wiiu_button_y',
+    lb:'wiiu_button_l',rb:'wiiu_button_r',lt:'wiiu_button_zl',rt:'wiiu_button_zr',
+    du:'wiiu_dpad_up',dd:'wiiu_dpad_down',dl:'wiiu_dpad_left',dr:'wiiu_dpad_right',
+    lsp:null,rsp:null,rsu:null,view:'wiiu_button_minus',menu:'wiiu_button_plus'},
+  gamecube:{ax:'gamecube_button_a',bx:'gamecube_button_b',xx:'gamecube_button_x',yx:'gamecube_button_y',
+    lb:'gamecube_button_z',rb:null,lt:'gamecube_trigger_l',rt:'gamecube_trigger_r',
+    du:'gamecube_dpad_up',dd:'gamecube_dpad_down',dl:'gamecube_dpad_left',dr:'gamecube_dpad_right',
+    lsp:null,rsp:null,rsu:null,view:null,menu:'gamecube_button_start'},
+  playdate:{ax:'playdate_button_a',bx:'playdate_button_b',xx:null,yx:null,
+    lb:null,rb:null,lt:null,rt:null,
+    du:'playdate_dpad_up',dd:'playdate_dpad_down',dl:'playdate_dpad_left',dr:'playdate_dpad_right',
+    lsp:null,rsp:null,rsu:null,view:null,menu:'playdate_button_menu'},
+  metaquest:{ax:'quest_button_a',bx:'quest_button_b',xx:'quest_button_x',yx:'quest_button_y',
+    lb:'quest_grip_left',rb:'quest_grip_right',lt:'quest_trigger_left',rt:'quest_trigger_right',
+    du:null,dd:null,dl:null,dr:null,
+    lsp:'quest_stick_l_press',rsp:'quest_stick_r_press',rsu:'quest_stick_r_up',
+    view:'quest_button_menu',menu:'quest_button_meta'}
+};
+var LB_KEYMAP_GROUPS = ['常用','战斗','移动','界面','口哨','聊天','骑乘','背包内','建造','镜头'];   // v5278：按 ARK Wiki Controls 全量扩充
+// v5253：操作方式（对齐 Steam 输入「激活器 / 激活类型」全集）—— 同一动作只能选一种，单选
+// v5254：6 项全部改用 lbk-touch 同一套字体字形（风格统一，不新造任何图标）
+//   touch_tap 点按 / touch_tap_hold 长按 / touch_tap_double 双击
+//   touch_hand_closed 手握=按下瞬间 / touch_hand_open 松手=松开瞬间 / touch_finger_two 两指=组合键
+var LB_KEYMAP_MODES = [
+  {id:'',        n:'普通按压', ic:'touch_tap'},
+  {id:'long',    n:'长按',     ic:'touch_tap_hold'},
+  {id:'double',  n:'双击',     ic:'touch_tap_double'},
+  {id:'start',   n:'开始按压', ic:'touch_hand_closed'},
+  {id:'release', n:'释放按压', ic:'touch_hand_open'},
+  {id:'chord',   n:'组合键',   ic:'touch_finger_two'}
+];
+var LB_KM_MODE_OK = (function(){ var o = {}; LB_KEYMAP_MODES.forEach(function(m){ o[m.id] = 1; }); return o; })();
+function lbKmMode(id){
+  var s = (id === undefined || id === null) ? '' : String(id);
+  for (var i=0;i<LB_KEYMAP_MODES.length;i++) if (LB_KEYMAP_MODES[i].id === s) return LB_KEYMAP_MODES[i];
+  return LB_KEYMAP_MODES[0];
+}
+// v5271（用户口径「按按键里的功能必须按操作顺序排列」→ 选 Steam 激活器官方顺序）
+//   Start Press → Regular Press → Release Press → Long Press → Double Press → Chorded
+var LB_KM_MODE_ORD = {'start':0, '':1, 'release':2, 'long':3, 'double':4, 'chord':5};
+function lbKmModeOrder(m){
+  var v = LB_KM_MODE_ORD[(m === undefined || m === null) ? '' : String(m)];
+  return (v === undefined) ? 9 : v;
+}
+var LB_KEYMAP = null;
+var LB_KEYMAP_UI = {open:{'常用':true}, mode:'list'};
+var LB_KEYMAP_PICK = {grp:{}, aid:'', pickFor:''};   // v5253：pickFor='chord' 时键池改为「选组合键」
+var LB_KEYMAP_KCACHE = {};
+
+function lbKeymapGames(){ return [{id:'ark', name:'方舟生存飞升'}, {id:'scum', name:'洛夫克拉夫特行动：堕落玩偶'}]; }
+function lbKeymapDefault(){
+  return { v:2, device:'keymouse', cur:'ark', updatedAt:0,
+           profiles: lbKeymapGames().map(function(g){ return {id:g.id, name:g.name, map:{}}; }) };
+}
+// v1 单档 / v2 自由多档 -> 固定两档（零丢失：旧第一档并入 ark，旧第 2 个有改动的档并入 scum）
+// v5239（用户口径「严禁多个键位图标源，必须统一同源」）：
+//   这是一张**历史存档迁移表**（旧键名 → 键全集原始键名），**只用于把老存档升级**，
+//   不参与任何渲染。渲染的唯一来源是 lbKeySrc()。
+var LB_KM_ALIAS = {
+  'steam_button_view': 'controller_button_view_outline',
+  'steam_button_menu': 'controller_button_options_outline',
+  'steam_button_L3'  : 'steam_stick_l_press',
+  'steam_button_R3'  : 'steam_button_rp_outline'
+};
+function lbKeymapMigrateKeys(obj){
+  try {
+    var ps = (obj && obj.profiles) || [];
+    for (var i=0;i<ps.length;i++){
+      var m = ps[i] && ps[i].map; if (!m) continue;
+      for (var aid in m){
+        if (!Object.prototype.hasOwnProperty.call(m, aid)) continue;
+        var row = m[aid]; if (!row) continue;
+        ['pad','kbm'].forEach(function(col){
+          var v = row[col]; if (v === undefined || v === null) return;
+          var arr = (Object.prototype.toString.call(v) === '[object Array]') ? v : (v && v.k);
+          if (!arr) return;
+          for (var j=0;j<arr.length;j++){
+            var nk = LB_KM_ALIAS[arr[j]];
+            if (nk) arr[j] = nk;
+          }
+        });
+      }
+    }
+  } catch (e) {}
+}
+function lbKeymapMigrateV1(d){
+  var base = lbKeymapDefault();
+  if (!d || typeof d !== 'object') return base;
+  base.device = d.device || d.layout || 'keymouse';
+  var okDev = false;
+  LB_KEYMAP_DEVICE.forEach(function(x){ if (!x.hid && x.id === base.device) okDev = true; });   // v5249：隐藏设备视为非法
+  if (!okDev) base.device = 'keymouse';
+  base.updatedAt = d.updatedAt || 0;
+  if (!d.profiles || !d.profiles.length) {                       // v1
+    base.profiles[0].map = (d.map && typeof d.map === 'object') ? d.map : {};
+    return base;
+  }
+  base.profiles[0].map = (d.profiles[0] && d.profiles[0].map) ? d.profiles[0].map : {};
+  for (var i=1;i<d.profiles.length;i++){                          // 找旧的第 2 个有改动的档
+    var p = d.profiles[i];
+    if (p && p.map && lbKeymapMapCount(p.map) > 0) { base.profiles[1].map = p.map; break; }
+  }
+  return base;
+}
+function lbKeymapUserKey(){
+  var u = '';
+  try { u = (typeof lbPlayer === 'function') ? String(lbPlayer() || '') : ''; } catch (e) {}
+  return 'lb_keymap' + (u ? ('_' + u) : '');
+}
+function lbKeymapLoad(){
+  if (LB_KEYMAP) return LB_KEYMAP;
+  var raw = null;
+  try { raw = localStorage.getItem(lbKeymapUserKey()) || localStorage.getItem('lb_keymap'); } catch (e) {}
+  var d = null;
+  try { d = raw ? JSON.parse(raw) : null; } catch (e) { d = null; }
+  LB_KEYMAP = lbKeymapMigrateV1(d);
+  try { lbKeymapMigrateKeys(LB_KEYMAP); } catch (eM) {}   // v5239：老存档键名升级
+  return LB_KEYMAP;
+}
+function lbKeymapSave(){
+  lbKeymapLoad();
+  LB_KEYMAP.updatedAt = Date.now();
+  try { localStorage.setItem(lbKeymapUserKey(), JSON.stringify(LB_KEYMAP)); } catch (e) {}
+  try { if (typeof lbPrefsPush === 'function') lbPrefsPush(); } catch (e) {}
+}
+// 当前游戏档（跟随全局游戏上下文）
+function lbKeymapCurGame(){
+  var g = 'ark';
+  try { if (typeof lbGame === 'function') g = lbGame(); } catch (e) {}
+  return g;
+}
+function lbKeymapProf(){
+  lbKeymapLoad();
+  var g = lbKeymapCurGame();
+  for (var i=0;i<LB_KEYMAP.profiles.length;i++) if (LB_KEYMAP.profiles[i].id === g) return LB_KEYMAP.profiles[i];
+  return LB_KEYMAP.profiles[0];
+}
+
+// ---- v5221：修饰体系归一化（组合 / 操作方式）----
+//   兼容四种写法：'xbox_button_x' | ['xbox_lb','xbox_button_view']
+//                | {k:[...], hold:1, dbl:1}（v5252 及更早的旧存档）
+//                | {k:[...], mode:'long', chord:'keyboard_left_shift'}（v5253 起）
+//   v5253：hold/dbl 双布尔 → mode 单选（读时自动换算，两者都真时取长按）
+function lbKmN(v){
+  var ks = [], md = '', ch = '';
+  if (!v) return {k:ks, mode:md, chord:ch};
+  if (typeof v === 'string') ks = [v];
+  else if (Object.prototype.toString.call(v) === '[object Array]') ks = v.slice();
+  else {
+    ks = (v.k || []).slice();
+    md = (v.mode !== undefined) ? String(v.mode || '') : (v.hold ? 'long' : (v.dbl ? 'double' : ''));
+    if (!LB_KM_MODE_OK[md]) md = '';
+    ch = String(v.chord || '');
+  }
+  // v5256：主键只允许一个 —— 老存档多主键自动转成「主键 + 组合键」（第 1 个留主键，第 2 个转组合键，多余丢弃）
+  if (ks.length > 1){
+    if (!ch) ch = ks[1];
+    ks = ks.slice(0, 1);
+    md = 'chord';
+  }
+  return {k:ks, mode:md, chord:ch};
+}
+// v5253：写一列键位（唯一出口，避免各调用点重复判空）
+function lbKmWrite(aid, col, nn){
+  var m = lbKeymapProf().map;
+  if (!nn || ((!nn.k || !nn.k.length) && !nn.mode && !nn.chord)){
+    if (m[aid]) { delete m[aid][col]; if (m[aid].pad === undefined && m[aid].kbm === undefined) delete m[aid]; }
+    return;
+  }
+  if (!m[aid]) m[aid] = {};
+  m[aid][col] = { k:(nn.k || []).slice(), mode:(nn.mode || ''), chord:(nn.chord || '') };
+}
+// 冲突签名：键集合（排序） + 操作方式 + 组合键 ⇒ 「B」「长按B」「双击B」互不冲突
+function lbKmSig(n){
+  if (!n || !n.k || !n.k.length) return '';
+  return n.k.slice().sort().join('+') + (n.mode ? ('|' + n.mode) : '') + (n.chord ? ('@' + n.chord) : '');
+}
+function lbKmShort(n){
+  var s = (n.k || []).join(' + ');
+  if (n.mode){
+    s += '（' + lbKmMode(n.mode).n;
+    if (n.mode === 'chord' && n.chord) s += ':' + lbKmBase(n.chord);
+    s += '）';
+  }
+  return s;
+}
+// v5258：该列存的值是否与默认**完全相同**（主键 + 操作方式 + 组合键，均按当前设备换算后比较）
+//   相同 ⇒ 视为「没改过」，展示/统计/冲突一律按默认处理（数据本身不删）
+function lbKmSameAsDefault(aid, col, val){
+  try {
+    var a = lbKeymapAct(aid); if (!a) return false;
+    var conv = function(x){ return lbKmBase((col === 'pad') ? lbKeymapSkinKey(x) : x); };
+    var cur = lbKmN(val), def = lbKmN(a[col]);
+    if (cur.k.map(conv).sort().join('+') !== def.k.map(conv).sort().join('+')) return false;
+    if ((cur.mode || '') !== (def.mode || '')) return false;
+    var cc = cur.chord ? conv(cur.chord) : '', dc = def.chord ? conv(def.chord) : '';
+    return cc === dc;
+  } catch (e) { return false; }
+}
+// v5231：该动作的「当前列」是否被玩家显式改过（决定键位着色：原色 / 主题色）
+// v5258：与默认相同 ⇒ 不算改过
+function lbKmColCustom(aid, col){
+  try {
+    var m = lbKeymapProf().map[aid];
+    if (!m || m[col] === undefined) return false;
+    return !lbKmSameAsDefault(aid, col, m[col]);
+  } catch (e) { return false; }
+}
+// v5258：「已改 N」只数真正与默认不同的动作
+function lbKeymapChangedCount(){
+  var n = 0;
+  LB_KEYMAP_ACTIONS.forEach(function(a){
+    if (lbKmColCustom(a.id, 'pad') || lbKmColCustom(a.id, 'kbm')) n++;
+  });
+  return n;
+}
+// v5265（用户口径）：键图标**自身带颜色**时不允许染紫 —— 染紫逻辑不变，只是保护非原色图标
+//   判定①：走多色 SVG 的键（LB_KEYSVG 内 currentColor + 固定色，染色会影响其着色部分）
+//   判定②：字体键的 CSS 里**显式设置过 color**（如 .lbk-steam_button_y_outline{color:#FCB404}）
+//   判定②名单在运行时扫描样式表自动生成，不写死键名
+var _LB_KM_SELFCOLOR = null;
+function lbKmSelfColorInit(){
+  var set = {};
+  try {
+    var sheets = document.styleSheets || [];
+    for (var i=0;i<sheets.length;i++){
+      var rules = null;
+      try { rules = sheets[i].cssRules; } catch (e0) { rules = null; }   // 跨域样式表会抛错
+      if (!rules) continue;
+      for (var j=0;j<rules.length;j++){
+        var r = rules[j]; if (!r || !r.selectorText || !r.style) continue;
+        if (!r.style.color) continue;
+        var sels = String(r.selectorText).split(',');
+        for (var s=0;s<sels.length;s++){
+          var mm = /^\.lbk-([a-z0-9_]+)$/i.exec(sels[s].trim());
+          if (mm) set[mm[1]] = 1;
+        }
+      }
+    }
+  } catch (e) {}
+  _LB_KM_SELFCOLOR = set;
+  return set;
+}
+function lbKmSelfColor(k){
+  var kk = String(k || '');
+  if (!kk) return false;
+  try { if (LB_KEYSVG && LB_KEYSVG[kk]) return true; } catch (e0) {}
+  if (!_LB_KM_SELFCOLOR) lbKmSelfColorInit();
+  return !!(_LB_KM_SELFCOLOR && _LB_KM_SELFCOLOR[kk]);
+}
+// 渲染一个按键定义（多键用 + 连接，长按/双击加角标）
+function lbKmChips(n, col, size, custom, noMod){   // v5252：noMod=不画长按/双击角标（改键弹层「当前：」行由 pmod 按钮承担）
+  if (!n || !n.k || !n.k.length) return '<span class="lb-km-na">未设</span>';
+  var parts = [];
+  var _sz = size || 22, _cls = custom ? 'lb-km-cus' : '';
+  // v5265：键图标自身带色（Y 黄 / ABXY 品牌色 / SVG 多色）时不染紫
+  var _kcls = function(fk){ return (custom && !lbKmSelfColor(fk)) ? 'lb-km-cus' : ''; };
+  // v5257（用户口径）：组合键放在主键**前面**，两者之间不加分隔符
+  if (n.mode === 'chord' && n.chord){
+    var _ck = (col === 'pad') ? lbKeymapSkinKey(n.chord) : n.chord;
+    if (_ck) { var _fk0 = lbKeySrc(_ck); parts.push(lbKeyChipHtml(_fk0, _sz, _kcls(_fk0))); }
+  }
+  for (var i=0;i<n.k.length;i++){
+    var raw = n.k[i];
+    var k = (col === 'pad') ? lbKeymapSkinKey(raw) : raw;
+    if (col === 'pad' && !k) return '<span class="lb-km-na" title="该设备无此键（数据仍保留）">不适用</span>';
+    var _fk1 = lbKeySrc(k);
+    parts.push(lbKeyChipHtml(_fk1, _sz, _kcls(_fk1)));   // v5238：统一走 lbKeySrc（唯一显示源）；v5231 改动→主题色
+  }
+  var h = parts.join('');   // v5257：不再插加号
+  // v5253：操作方式单选 —— 图标 / 短文字；v5258：组合键不画方式图标
+  // v5266（用户口径）：操作方式图标显示在主键**前面**
+  if (n.mode && n.mode !== 'chord' && !noMod){
+    var _md = lbKmMode(n.mode), _cx = custom ? 'lb-km-cus' : '';
+    h = '<span class="lb-km-mod" title="' + _md.n + '">'
+       + (_md.ic ? lbKeyChipHtml(_md.ic, 18, _cx) : '<span class="lb-km-mtxt' + _cx + '">' + _md.n + '</span>')
+       + '</span>' + h;
+  }
+  return h;
+}
+function lbKeymapAct(aid){
+  for (var i=0;i<LB_KEYMAP_ACTIONS.length;i++) if (LB_KEYMAP_ACTIONS[i].id === aid) return LB_KEYMAP_ACTIONS[i];
+  return null;
+}
+function lbKeymapDev(id){
+  for (var i=0;i<LB_KEYMAP_DEVICE.length;i++) if (LB_KEYMAP_DEVICE[i].id === id) return LB_KEYMAP_DEVICE[i];
+  return LB_KEYMAP_DEVICE[0];
+}
+// 当前设备显示哪一列：键盘/鼠标 -> kbm，其余 -> pad
+function lbKeymapShowCol(){
+  lbKeymapLoad();
+  return (LB_KEYMAP.device === 'keymouse') ? 'kbm' : 'pad';
+}
+function lbKeymapEff(aid){
+  var a = lbKeymapAct(aid); if (!a) return null;
+  var m = lbKeymapProf().map[aid] || {};
+  var padN = lbKmN(m.pad !== undefined ? m.pad : a.pad);
+  var kbmN = lbKmN(m.kbm !== undefined ? m.kbm : a.kbm);
+  var _sc = lbKeymapShowCol();
+  return { act:a, padN:padN, kbmN:kbmN,
+    pad:(padN.k[0] || ''), kbm:(kbmN.k[0] || ''),
+    // v5258：只看当前显示列，且与默认相同 ⇒ 视为未改动
+    isCustom:(m[_sc] !== undefined && !lbKmSameAsDefault(aid, _sc, m[_sc])),
+    note:a.note || '' };
+}
+// v5275（用户口径「steam 1代 独立键位、steam 2代+dock 共享键位；默认键位要同时映射到 2 种体系上」）：
+//   同一设备页内存在**多套并行的键位体系**时，一个语义键要同时落到每一套的具体键上。
+//   · Steam：1 代 steam_* 一套；2 代与 Steam Deck 共享 steamdeck_* 另一套
+//   · PlayStation：通用 playstation_* 一套；PS3 / PS4 / PS5 各有专属功能键
+//   注：只影响「默认值展开与按按键反查」；玩家自己改的键存的是设备键名，仍是独立的那一个。
+var LB_KEYMAP_SKIN_MULTI = {
+  steam: {
+    ax:['steamdeck_button_a','steam_button_a'],
+    bx:['steamdeck_button_b','steam_button_b'],
+    xx:['steamdeck_button_x','steam_button_x'],
+    yx:['steamdeck_button_y','steam_button_y'],
+    lb:['steamdeck_button_l1','steam_lb'],
+    rb:['steamdeck_button_r1','steam_rb'],
+    lt:['steamdeck_button_l2','steam_lt'],
+    rt:['steamdeck_button_r2','steam_rt'],
+    du:['steamdeck_dpad_up','steam_dpad_up'],
+    dd:['steamdeck_dpad_down','steam_dpad_down'],
+    dl:['steamdeck_dpad_left','steam_dpad_left'],
+    dr:['steamdeck_dpad_right','steam_dpad_right'],
+    lsp:['steamdeck_stick_l_press','steam_stick_l_press'],
+    rsp:['steamdeck_stick_r_press','steam_button_rp_outline'],
+    rsu:['steamdeck_stick_r_up','steam_stick_up'],
+    view:['steamdeck_button_view','controller_button_view_outline'],
+    menu:['steamdeck_button_options','controller_button_options_outline']
+  },
+  playstation: {
+    lsp:['playstation_stick_l_press','playstation_button_l3'],
+    rsp:['playstation_stick_r_press','playstation_button_r3'],
+    view:['playstation5_button_create','playstation4_button_share','playstation3_button_select'],
+    menu:['playstation5_button_options','playstation4_button_options','playstation3_button_start']
+  }
+};
+function lbKeymapSkinKeys(k){
+  if (!k) return [];
+  lbKeymapLoad();
+  var dev = LB_KEYMAP.device || 'keymouse';
+  // v5222 口径：玩家改键存的是该设备自己的键名 ⇒ 只认那一个（保证改键独立）
+  try { var dk = lbKeymapDevKeys(dev); if (dk && dk.indexOf(k) >= 0) return [k]; } catch (e0) {}
+  var sem = LB_KEYMAP_SEM[k];
+  if (sem){
+    var mm = LB_KEYMAP_SKIN_MULTI[dev];
+    if (mm && mm[sem] && mm[sem].length) return mm[sem].slice();
+  }
+  var one = lbKeymapSkinKey(k);
+  return one ? [one] : [];
+}
+function lbKeymapSkinKey(k){
+  if (!k) return k;
+  lbKeymapLoad();
+  var dev = LB_KEYMAP.device || 'keymouse';
+  if (dev === 'xbox' || dev === 'keymouse') return k;
+  // v5222：玩家改键时存的是**该设备自己的键名**（不在 LB_KEYMAP_SEM 里）⇒ 必须原样返回，不能再映射一次
+  try {
+    var dk = lbKeymapDevKeys(dev);
+    if (dk && dk.indexOf(k) >= 0) return k;
+  } catch (e0) {}
+  var sem = LB_KEYMAP_SEM[k]; if (!sem) return k;
+  var m = LB_KEYMAP_SKIN[dev];
+  if (!m) return k;
+  return (m[sem] === undefined) ? k : m[sem];
+}
+function lbKeymapMapCount(map){
+  var n = 0;
+  for (var k in map) { if (!Object.prototype.hasOwnProperty.call(map,k)) continue;
+    var m = map[k]; if (m && (m.pad !== undefined || m.kbm !== undefined)) n++; }
+  return n;
+}
+// 冲突：只算「当前显示那一列被显式改过」的同键重复（默认值本身的重复不算）
+function lbKeymapConflicts(){
+  var col = lbKeymapShowCol();
+  var seen = {}, out = {}, n = 0;
+  var map = lbKeymapProf().map;
+  LB_KEYMAP_ACTIONS.forEach(function(a){
+    var e = lbKeymapEff(a.id);
+    var nn = (col === 'pad') ? e.padN : e.kbmN;
+    var sig = lbKmSig(nn); if (!sig) return;
+    if (!seen[sig]) seen[sig] = [];
+    var colCustom = lbKmColCustom(a.id, col);   // v5258：与默认相同不算改动
+    seen[sig].push({ id:a.id, custom:colCustom });
+  });
+  for (var s in seen) {
+    var arr = seen[s]; if (arr.length < 2) continue;
+    var anyC = false;
+    for (var q=0;q<arr.length;q++) if (arr[q].custom) anyC = true;
+    if (!anyC) continue;
+    out[s] = arr.map(function(x){ return x.id; });
+    n++;
+  }
+  out.n = n;
+  return out;
+}
+
+// 设备键全集（剔除装饰 / 组合变体）
+var LB_KEYMAP_BADKEY = ['_all','_none','_horizontal','_vertical','_color_','_icon','_letter','_gradient',
+  '_tilted','_alternative','_press_center','_press_left','_press_right','_swipe_','_touch_','_selected',
+  '_outlnie','_rotate','_diagonal','_mouse','_clockwise','_counterclockwise','_zoom','_finger','_move',
+  '_tap_double','_tap_hold','_two'];
+// v5227（用户口径「部分着色 svg 这个逻辑也要同步一致」）：
+//   同一语义存在两套字形 —— 单色字体版 + 部分着色内联 SVG 版（LB_KEYSVG）。
+//   若两者都在键全集里，界面会重新出现「同形不可辨」的旧问题 ⇒ 一律排除单色版，只保留 SVG 版。
+function lbKmHasSvgDup(k){
+  try {
+    if (typeof LB_KEYSVG === 'undefined' || !LB_KEYSVG) return false;
+    if (LB_KEYSVG[k]) return false;                                  // 自己就是 SVG 版，保留
+    if (LB_KEYSVG[k + '_outline']) return true;                      // 如 steam_dpad_up → steam_dpad_up_outline
+    var m = /^(.+?_dpad)_(up|down|left|right)$/.exec(k);
+    if (m && LB_KEYSVG[m[1] + '_round_' + m[2]]) return true;         // 如 xbox_dpad_up → xbox_dpad_round_up
+    return false;
+  } catch (e) { return false; }
+}
+function lbKeymapDevKeys(devId){
+  if (LB_KEYMAP_KCACHE[devId]) return LB_KEYMAP_KCACHE[devId];
+  var ks = [];
+  var dev = lbKeymapDev(devId);
+  var g = null;
+  for (var i=0;i<LB_KEYFONT_SETS.length;i++){
+    var x = LB_KEYFONT_SETS[i];
+    if (x.ics && x.ics.indexOf(dev.ic) >= 0) { g = x; break; }
+  }
+  if (!g && devId === 'keymouse') g = LB_KEYFONT_SETS[0];
+  if (g) {
+    ks = g.ks.filter(function(k){
+      if (k.indexOf('controller_') === 0) return false;   // v5225：整手图键不算「按键」
+      for (var j=0;j<LB_KEYMAP_BADKEY.length;j++) if (k.indexOf(LB_KEYMAP_BADKEY[j]) >= 0) return false;
+      if (lbKmHasSvgDup(k)) return false;                 // v5227：有 SVG 版的单色同形键不再单列
+      return true;
+    });
+  }
+  LB_KEYMAP_KCACHE[devId] = ks;
+  return ks;
+}
+// v5268（用户口径「按按键里的分类尽量拆开，比如摇杆/十字要拆开」）：手柄 5 组 → 10 组
+//   ① 先归一化去掉 _outline —— 旧版用 `$` 结尾锚点，而键名全以 _outline 结尾，导致 A/B/X/Y 面键全部匹配失败被错归「菜单 / 系统」
+//   ② 判定顺序：特殊（触控板/背键/肩键）→ 扳机 → 十字 → 摇杆按键 → 摇杆 → 体感 → 面键 → 菜单兜底
+function lbKeymapGrpOf(k0){
+  var k = String(k0 || '').replace(/_outline$/, '');
+  if (/trackpad|touchpad|(^|_)track(_|$)|(^|_)pad(_|$)/.test(k)) return '触控板';
+  if (/paddle|(^|_)l4$|(^|_)l5$|(^|_)r4$|(^|_)r5$|(^|_)lp$|(^|_)rp$|grip|(^|_)fn_[lr]$/.test(k)) return '背键 / 附加';
+  if (/(^|_)(lb|rb)$|(^|_)(l1|r1)$|button_l$|button_r$|button_(gl|gr|sl|sr)$|elite_lb|elite_rb|trigger_(l1|r1)/.test(k)) return '肩键';
+  if (/(^|_)(lt|rt)$|(^|_)(l2|r2)$|zl$|zr$|trigger/.test(k)) return '扳机';
+  if (/dpad|switch_buttons|(^|_)buttons(_|$)|(^|_)switch_(up|down|left|right)$/.test(k)) return '十字键';
+  if (/stick_(side|top)_[lr]$|stick_[lr]_press|(^|_)stick_press$|button_(l3|r3)$|(^|_)l[sr]$/.test(k)) return '摇杆按键';
+  if (/stick|joystick/.test(k)) return '摇杆';
+  if (/crank|rotate|joycon|adaptive|(^|_)controller_(diagonal|horizontal|vertical)$/.test(k)) return '体感 / 手势';
+  if (/button_(a|b|x|y|z|c|1|2)$|button_(cross|circle|square|triangle)$|(^|_)(a|b|x|y)$/.test(k)) return '面键';
+  if (/view|menu|options|start|select|(^|_)plus$|(^|_)minus$|home|share|guide|back|steam|(^|_)lg$|(^|_)rg$|lg_gradient|rg_gradient|meta|oculus|sync|capture|power|tv$|mute|create|quickaccess/.test(k)) return '菜单 / 系统';
+  return '其它';
+}
+// v5268：键盘 / 鼠标细分（键盘拆 7 组，替代原来「键盘」「鼠标」2 大组）
+function lbKeymapKbmGrpOf(k0){
+  var s = String(k0 || '').replace(/_outline$/, '');
+  if (s.indexOf('mouse_') === 0) return '鼠标';
+  var b = s.replace(/^keyboard_/, '');
+  if (!b) return '其它';
+  if (/^[a-z]$/.test(b)) return '字母键';
+  if (/^[0-9]$/.test(b)) return '数字键';
+  if (/^f([1-9]|1[0-2])$/.test(b) || b === 'function') return '功能键';
+  if (/^arrows?(_|$)/.test(b)) return '方向键';
+  if (/^numpad_/.test(b) || b === 'numlock') return '小键盘';
+  if (/^(enter|return|backspace.*|delete|insert|home|end|page_(up|down)|tab.*|capslock.*|shift.*|ctrl|alt|win|command|option|space.*|escape|printscreen|scroll_lock|pause.*)$/.test(b)) return '编辑 / 控制';
+  if (/^(asterisk|apostrophe|bracket_.*|caret|colon|comma|equals|exclamation|minus|period|plus|question|quote|semicolon|slash_.*|tilde|underscore|any)$/.test(b)) return '符号键';
+  return '其它';
+}
+// v5273（用户口径「按按键中要有一个低可视化按钮可以切换隐藏旧设备」）：同一设备页内的旧世代前缀
+//   Steam 手柄页混了 52 个 Steam Deck 键（新 Steam Controller 仅 30 个）；PlayStation 页混了 PS3 / PS4 键。
+//   其他设备页为单一前缀，无旧设备 ⇒ 不显示该按钮。
+var LB_KM_OLD_PRE = {
+  // v5274（用户确认，经逐键预览）：steam_* 整体 = Steam 1 代（旧）；steamdeck_* = Steam 2 代与 Steam Deck **共享的同一套键**（新），不再隐藏
+  steam:       [{pre:'steam',       label:'Steam 1 代'}],
+  playstation: [{pre:'playstation3', label:'PS3'}, {pre:'playstation4', label:'PS4'}]
+};
+function lbKmOldRules(){ return LB_KM_OLD_PRE[LB_KEYMAP.device] || null; }
+function lbKmIsOld(k){
+  var arr = lbKmOldRules(); if (!arr) return false;
+  var s = String(k || '');
+  for (var i=0;i<arr.length;i++) if (s.indexOf(arr[i].pre + '_') === 0) return true;
+  return false;
+}
+function lbKmOldCount(){
+  try { return lbKeymapDevKeys(LB_KEYMAP.device).filter(lbKmIsOld).length; } catch (e) { return 0; }
+}
+function lbKmOldLabel(){
+  var arr = lbKmOldRules();
+  if (!arr) return '';
+  return arr.map(function(x){ return x.label; }).join(' / ');
+}
+function lbKmHideOld(){   // v5273：默认隐藏旧设备；用户手动切换后记住
+  try { var v = localStorage.getItem('lb_km_hideold'); return (v === null) ? true : (v === '1'); } catch (e) { return true; }
+}
+function lbKeymapToggleOld(){
+  try { localStorage.setItem('lb_km_hideold', lbKmHideOld() ? '0' : '1'); } catch (e) {}
+  lbKeymapRender();
+}
+function lbKmOldBtnHtml(){
+  var n = lbKmOldCount();
+  if (!n) return '';
+  var hid = lbKmHideOld(), lb = lbKmOldLabel();
+  return '<span class="lb-km-oldbtn" onclick="lbKeymapToggleOld()"'
+    + ' title="' + (hid ? ('当前已隐藏 ' + lb + ' 的 ' + n + ' 个键，点击显示') : ('当前显示 ' + lb + ' 的 ' + n + ' 个键，点击隐藏')) + '">'
+    + (hid ? ('显示 ' + lb + ' ' + n) : ('隐藏 ' + lb + ' ' + n)) + '</span>';
+}
+function lbKeymapPickGroups(){
+  var col = lbKeymapShowCol();
+  if (col === 'kbm') {
+    // v5269：整键盘 / 整鼠标图属于装饰图不是「按键」，剔除后不再出现只有 2 张图的「其它」组
+    var ks = lbKeymapDevKeys('keymouse').filter(function(k){ return !/^(keyboard|mouse)_outline$/.test(k); });
+    var out = [];
+    // v5268：键盘拆字母 / 数字 / 功能键 / 方向 / 编辑控制 / 符号 / 小键盘；鼠标单列
+    var korder = ['字母键','数字键','功能键','方向键','编辑 / 控制','符号键','小键盘','鼠标','其它'];
+    korder.forEach(function(name){
+      var list = ks.filter(function(k){ return lbKeymapKbmGrpOf(k) === name; });
+      if (list.length) out.push({name:name, keys:list});
+    });
+    return out;
+  }
+  var dk = lbKeymapDevKeys(LB_KEYMAP.device);
+  if (lbKmHideOld()) dk = dk.filter(function(k){ return !lbKmIsOld(k); });   // v5273：隐藏旧设备键
+  var order = ['面键','肩键','扳机','十字键','摇杆','摇杆按键','触控板','菜单 / 系统','背键 / 附加','体感 / 手势','其它'], res = [];   // v5268：5 组 → 10 组（按物理部位）
+  order.forEach(function(name){
+    var list = dk.filter(function(k){ return lbKeymapGrpOf(k) === name; });
+    if (list.length) res.push({name:name, keys:list});
+  });
+  return res;
+}
+function lbKeymapTimeStr(){
+  try { if (!LB_KEYMAP || !LB_KEYMAP.updatedAt) return '';
+    var d = new Date(LB_KEYMAP.updatedAt);
+    return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+  } catch (e) { return ''; }
+}
+function lbKeymapDot(aid){
+  return '<span class="lb-km-dot" title="已修改，点击还原" onclick="lbKeymapResetRow(\'' + aid + '\')"></span>';
+}
+function lbKeymapCellHtml(aid, e, conf){
+  var col = lbKeymapShowCol();
+  var nn = (col === 'pad') ? e.padN : e.kbmN;
+  if (!nn.k.length) return '<span class="lb-km-na">' + ((col === 'pad' && e.act && !e.act.pad) ? '不适用' : '未设') + '</span>';   // v5278：PC 专属动作手柄侧显示「不适用」
+  var bad = !!(conf[lbKmSig(nn)]);
+  return '<button type="button" class="lb-km-key' + (bad ? ' conflict' : '') + (e.isCustom ? ' custom' : '') + '"'
+    + ' onclick="lbKeymapPick(\'' + aid + '\',this)" title="点击改键">' + lbKmChips(nn, col, 22, lbKmColCustom(aid, col)) + '</button>';
+}
+function lbKeymapRowHtml(a, conf){
+  var e = lbKeymapEff(a.id), col = lbKeymapShowCol();
+  var bad = !!(conf[lbKmSig((col === 'pad') ? e.padN : e.kbmN)]);
+  var cls = 'lb-km-row' + (e.isCustom ? ' custom' : '') + (bad ? ' conflict' : '');
+  return '<tr class="' + cls + '" data-aid="' + a.id + '">'
+    + '<td class="lb-km-act">' + escapeHtml(a.zh) + (bad ? '<b class="lb-km-bang" title="同键冲突">!</b>' : '') + '</td>'
+    + '<td class="lb-km-c">' + lbKeymapCellHtml(a.id, e, conf) + '</td>'
+    + '<td class="lb-km-dotc">' + (e.isCustom ? lbKeymapDot(a.id) : '') + '</td>'
+    + '</tr>';
+}
+
+// ---- v5220：按键反查视图（用户口径「按手柄图」→ 零坐标方案：平铺该设备全部键，标注已绑定动作）----
+// v5225：键名口径统一 —— 字体全集里多为 xxx_outline，默认键位用短名 xxx，比对前必须去后缀
+function lbKmBase(k){ return String(k || '').replace(/_outline$/, ''); }
+// v5238（用户口径「全项目同源键位图标，基准 = 流程里的键位面板，严禁多个键位图标源」）：
+//   ★ 唯一显示入口 lbKeySrc() —— 项目里任何地方渲染键位图标都必须经过它。
+//   规则：① SVG 版优先（方向键红臂，LB_KEYSVG）② 否则取 LB_KEYFONT_SETS 里的**原始键名**
+//        （多为一 xxx_outline，与流程键帽面板同一形态）③ 找不到则回退入参。
+//   ★ lbKmBase() 只用于「存储与比对」，**禁止再用于显示**。
+var LB_KM_SRC = null;
+function lbKeySrcBuild(){
+  LB_KM_SRC = {};
+  try {
+    (LB_KEYFONT_SETS || []).forEach(function(g){
+      var arr = (g.ks || []).concat(g.ics || []);
+      for (var i=0;i<arr.length;i++){
+        var k = String(arr[i] || ''); if (!k) continue;
+        var b = k.replace(/_outline$/, '');
+        if (!LB_KM_SRC[b]) LB_KM_SRC[b] = k;
+      }
+    });
+  } catch (e) { LB_KM_SRC = {}; }
+}
+function lbKeySrc(k){
+  var s = String(k || '');
+  if (!s) return s;
+  try {
+    if (typeof LB_KEYSVG !== 'undefined' && LB_KEYSVG){
+      if (LB_KEYSVG[s]) return s;
+      if (LB_KEYSVG[s + '_outline']) return s + '_outline';
+      var m = /^(.+?_dpad)_(up|down|left|right)$/.exec(s);
+      if (m && LB_KEYSVG[m[1] + '_round_' + m[2]]) return m[1] + '_round_' + m[2];
+    }
+    if (!LB_KM_SRC) lbKeySrcBuild();
+    var hit = LB_KM_SRC[s.replace(/_outline$/, '')];
+    return hit || s;
+  } catch (e) { return s; }
+}
+var LB_KM_NAME = {'lb':'LB','rb':'RB','lt':'LT','rt':'RT','button_a':'A','button_b':'B','button_x':'X','button_y':'Y',
+  'button_view':'View','button_menu':'Menu','button_share':'Share','stick_l_press':'L摇杆按','stick_r_press':'R摇杆按'};
+var LB_KM_DIR = {up:'↑', down:'↓', left:'←', right:'→'};
+function lbKmKeyName(k){
+  var s = String(k || '').replace(/_outline$/, '');
+  // v5272：迭代剥掉「设备 / 系列」前缀（原先只处理 xbox_/keyboard_/mouse_，导致 steam_button_a → "STEAM BUTTON A"）
+  var pre = /^(steamdeck|steamframe|steam|frame|playstation\d*|switch|wiiu|wii|gamecube|playdate|quest|index|controller|xbox|keyboard|mouse|elite)_/;
+  var guard = 0;
+  while (pre.test(s) && guard++ < 4) s = s.replace(pre, '');
+  // v5227：方向键 → 十字↑ / 十字↓ / 十字← / 十字→（含 _round 版）
+  var md = /^dpad_(?:round_)?(up|down|left|right)$/.exec(s);
+  if (md) return '十字' + LB_KM_DIR[md[1]];
+  if (LB_KM_NAME[s]) return LB_KM_NAME[s];
+  s = s.replace(/^button_/, '').replace(/^dpad_/, '十字').replace(/_/g, ' ');
+  return s.toUpperCase();
+}
+function lbKeymapBindMap(){
+  var col = lbKeymapShowCol(), bind = {};
+  LB_KEYMAP_ACTIONS.forEach(function(a){
+    var e = lbKeymapEff(a.id);
+    var nn = (col === 'pad') ? e.padN : e.kbmN;
+    if (!nn.k.length) return;
+    // v5224：组合键的**每个成员键**都要挂载；v5225：统一去 _outline；v5226：修饰信息结构化留给视图拼图标
+    // v5275：disp = 显示用（主体系第一个等价键）；mount = 挂载用（全部等价键，多套体系的键都算已绑定）
+    var disp = [], mount = [];
+    for (var i=0;i<nn.k.length;i++){
+      if (col === 'pad'){
+        var ds = lbKeymapSkinKeys(nn.k[i]);
+        if (!ds.length) continue;
+        disp.push(lbKmBase(ds[0]));
+        for (var q=0;q<ds.length;q++) mount.push(lbKmBase(ds[q]));
+      } else {
+        disp.push(lbKmBase(nn.k[i])); mount.push(lbKmBase(nn.k[i]));
+      }
+    }
+    // v5256：组合键也参与索引（沿用 v5224「每个成员键都挂载」口径）
+    // v5257：组合键排到主键前面（与弹层/表格显示顺序一致）
+    if (nn.mode === 'chord' && nn.chord){
+      if (col === 'pad'){
+        var cs = lbKeymapSkinKeys(nn.chord);
+        if (cs.length){
+          disp.unshift(lbKmBase(cs[0]));
+          for (var q2=0;q2<cs.length;q2++) mount.unshift(lbKmBase(cs[q2]));
+        }
+      } else {
+        disp.unshift(lbKmBase(nn.chord)); mount.unshift(lbKmBase(nn.chord));
+      }
+    }
+    if (!disp.length) return;
+    var _seen = {};
+    for (var j=0;j<mount.length;j++){
+      var kk = mount[j];
+      if (_seen[kk]) continue;
+      _seen[kk] = 1;
+      if (!bind[kk]) bind[kk] = [];
+      bind[kk].push({ id:a.id, zh:a.zh, g:a.g, custom:e.isCustom,
+        combo:false, keys:disp.slice(), mode:(nn.mode || ''), chord:(nn.chord || '') });   // v5256：不再有多主键组合
+    }
+  });
+  return bind;
+}
+
+function lbKeymapKeysViewHtml(){
+  var groups = lbKeymapPickGroups();
+  var bind = lbKeymapBindMap();
+  var h = '', total = 0;
+  groups.forEach(function(g){
+    var list = g.keys;
+    if (!list.length) return;
+    total += list.length;
+    h += '<div class="lb-km-kv-ghead">' + escapeHtml(g.name) + '（' + list.length + '）</div>';
+    h += '<div class="lb-km-kv-grid">';
+    list.forEach(function(k){
+      // v5271：同键多功能按操作顺序排列（Start → Regular → Release → Long → Double → Chorded）
+      var b = (bind[k] || bind[lbKmBase(k)] || []).slice().sort(function(x, y){ return lbKmModeOrder(x.mode) - lbKmModeOrder(y.mode); });
+      var isCombo = false, lblHtml = '';
+      if (b.length){
+        lblHtml = b.map(function(x){
+          // v5233（用户口径「改动着色对齐到功能层级」）：功能名 / 该功能的键图标 / 修饰图标，统一按该功能是否改动着色
+          var _x1 = x.custom ? ' lb-km-cus' : '';
+          var s = '<span class="lb-km-an' + _x1 + '">' + escapeHtml(x.zh) + '</span>';
+          // v5266（用户口径）：操作方式图标显示在键图标**前面**
+          if (x.mode && x.mode !== 'chord'){   // v5253 出图标；v5258 组合键不画方式图标
+            var _m2 = lbKmMode(x.mode);
+            s += _m2.ic ? lbKeyChipHtml(_m2.ic, 15, 'lb-km-ico' + _x1)
+                        : '<span class="lb-km-mtxt' + _x1 + '">' + _m2.n + '</span>';
+          }
+          if (x.keys && x.keys.length > 1){
+            // v5229（用户口径「不允许出现键位的文字表述，必须严格全换成图标」）：组合成员逐键出图标
+            s += '<span class="lb-km-cb">'
+               + x.keys.map(function(kk){ var _fk = lbKeySrc(kk); return lbKeyChipHtml(_fk, 17, 'lb-km-cbi' + ((x.custom && !lbKmSelfColor(_fk)) ? ' lb-km-cus' : '')); }).join('')   // v5257 不加加号；v5265 自带色键不染紫；v5267 21→15；v5271 15→17
+               + '</span>';
+          }
+          // v5267（用户口径「功能可读性太差」）：一个功能独占一行，取消「、」连写
+          return '<span class="lb-km-arow">' + s + '</span>';
+        }).join('');
+      }
+      for (var bi=0; bi<b.length; bi++) if (b[bi].combo) isCombo = true;
+      var _tt = b.length ? b.map(function(x){ return x.zh; }).join('、') : '未绑定动作';
+      h += '<div class="lb-km-kv' + (b.length ? ' used' : '') + (isCombo ? ' combo' : '') + '" data-k="' + k + '"'
+        + ' onclick="lbKeymapKeyClick(\'' + k + '\')" title="' + escapeHtml(_tt) + '">'
+        + '<div class="lb-km-kv-ic">' + lbKeyChipHtml(k, 24) + '</div>'
+        + '<div class="lb-km-kv-t">' + (b.length ? lblHtml : '未使用') + '</div></div>';
+    });
+    h += '</div>';
+  });
+  if (!total) h += '<div class="lb-km-empty">没有可用的键</div>';
+  return h;
+}
+
+// v5271（用户口径「这里也要能直接配置键位」）：点卡片 → 弹「该键的功能菜单」，逐项可改键
+function lbKeymapKeyClick(k){ lbKeymapKeyMenu(k); }
+var LB_KM_KMENU_K = '';
+function lbKeymapKeyMenu(k){
+  var col = lbKeymapShowCol();
+  var _bm = lbKeymapBindMap();
+  var list = (_bm[k] || _bm[lbKmBase(k)] || []).slice().sort(function(x, y){ return lbKmModeOrder(x.mode) - lbKmModeOrder(y.mode); });
+  var old = document.querySelector('.lb-km-kmenu-wrap'); if (old) old.remove();
+  LB_KM_KMENU_K = k;
+  var ov = document.createElement('div');
+  ov.className = 'lb-picker-overlay lb-km-kmenu-wrap';
+  ov.onclick = function(e){ if (e.target === ov) ov.remove(); };
+  var h = '<div class="lb-picker-panel lb-km-kmenu" onclick="event.stopPropagation()" style="max-width:min(440px,96vw)">'
+    + '<div class="lb-km-kmenu-head">' + lbKeyChipHtml(lbKeySrc(k), 24)
+    + '<span class="lb-km-kmenu-name">' + escapeHtml(lbKmKeyName(k)) + '</span>'
+    + '<span class="lb-hf-ai-fill"></span>'
+    + '<span class="lb-km-x" onclick="this.closest(\'.lb-picker-overlay\').remove()"><i class="mdi mdi-close"></i></span></div>';
+  if (list.length){
+    h += '<div class="lb-km-kmenu-tip">该键绑定了 ' + list.length + ' 个功能</div><div class="lb-km-kmenu-list">';
+    list.forEach(function(x){
+      var _md = lbKmMode(x.mode);
+      var mi = (x.mode && x.mode !== 'chord' && _md.ic) ? lbKeyChipHtml(_md.ic, 15, 'lb-km-ico') : '';
+      h += '<div class="lb-km-kmenu-row" data-aid="' + x.id + '">'
+        + '<span class="lb-km-kmenu-ic">' + mi + '</span>'
+        + '<span class="lb-km-kmenu-an">' + escapeHtml(x.zh) + '</span>'
+        + '<button class="lb-hf-aibtn" onclick="lbKeymapKeyMenuEdit(\'' + x.id + '\')">改键</button></div>';
+    });
+    h += '</div>';
+  } else {
+    h += '<div class="lb-km-kmenu-tip">该键还没有绑定功能。选一个功能，把它的主键设为这个键：</div>'
+      + '<div class="lb-km-kmenu-list lb-km-kmenu-scroll">';
+    LB_KEYMAP_ACTIONS.forEach(function(a){
+      h += '<div class="lb-km-kmenu-row" data-aid="' + a.id + '">'
+        + '<span class="lb-km-kmenu-ic"></span>'
+        + '<span class="lb-km-kmenu-an"><i class="lb-km-kmenu-g">' + escapeHtml(a.g) + '</i>' + escapeHtml(a.zh) + '</span>'
+        + '<button class="lb-hf-aibtn" onclick="lbKeymapKeyMenuBind(\'' + a.id + '\')">绑到该键</button></div>';
+    });
+    h += '</div>';
+  }
+  h += '<div class="lb-km-kmenu-foot"><span class="lb-hf-ai-meta">点「改键」可换键 / 改操作方式</span><span class="lb-hf-ai-fill"></span>'
+    + '<button class="lb-hf-aibtn" onclick="lbKeymapKeyMenuGo(\'' + k + '\')">去按动作看</button></div>';
+  h += '</div>';
+  ov.innerHTML = h;
+  document.body.appendChild(ov);
+  lbTipify(ov);
+}
+function lbKeymapKeyMenuEdit(aid){
+  var ov = document.querySelector('.lb-km-kmenu-wrap'); if (ov) ov.remove();
+  lbKeymapPick(aid, null);
+}
+function lbKeymapKeyMenuBind(aid){
+  var k = LB_KM_KMENU_K, col = lbKeymapShowCol();
+  var a = lbKeymapAct(aid); if (!a || !k) return;
+  var cur = lbKeymapEff(aid);
+  var nn = (col === 'pad') ? cur.padN : cur.kbmN;
+  var kn = lbKmKeyName(k);
+  var _do = function(){
+    lbKmWrite(aid, col, { k:[k], mode:(nn.mode || ''), chord:(nn.chord || '') });
+    lbKeymapSave();
+    lbKeymapRender();
+    var ov = document.querySelector('.lb-km-kmenu-wrap'); if (ov) ov.remove();
+    try { if (typeof lbToast === 'function') lbToast('已把「' + a.zh + '」的主键设为 ' + kn); } catch (e) {}
+  };
+  var q = '把「' + a.zh + '」的主键改为 ' + kn + '？' + (nn.k.length ? '\n原键位将被替换。' : '');
+  var ok = false;
+  try { if (typeof lbAsk === 'function') ok = lbAsk(q, _do, '设为该键'); } catch (e0) {}
+  if (!ok && confirm(q)) _do();
+}
+function lbKeymapKeyMenuGo(k){
+  var ov = document.querySelector('.lb-km-kmenu-wrap'); if (ov) ov.remove();
+  var _bm = lbKeymapBindMap();
+  var hits = _bm[k] || _bm[lbKmBase(k)] || [];
+  if (!hits.length) return;
+  var a = hits[0];
+  LB_KEYMAP_UI.mode = 'list';
+  LB_KEYMAP_UI.open = {}; LB_KEYMAP_UI.open[a.g] = true;   // v5240 手风琴：只展开目标组
+  var bar = document.querySelector('.lb-km-tabs');
+  if (bar) bar.querySelectorAll('[data-m]').forEach(function(el){ el.classList.toggle('on', el.getAttribute('data-m') === 'list'); });
+  lbKeymapRender();
+  setTimeout(function(){
+    try {
+      var tr = document.querySelector('.lb-km-row[data-aid="' + a.id + '"]');
+      if (tr) { tr.classList.add('flash'); try { tr.scrollIntoView({ block:'center', behavior:'smooth' }); } catch (e) {} }
+    } catch (e) {}
+  }, 80);
+}
+function lbKeymapBodyHtml(){
+  return (LB_KEYMAP_UI.mode === 'pad') ? lbKeymapKeysViewHtml() : lbKeymapTableHtml();
+}
+// ---- v5220：浮窗内 tips 统一走站内自定义引擎（引擎只认 .lb-tipb，见 badgeOf）----
+function lbTipify(root){
+  try {
+    var r = root || document;
+    var els = r.querySelectorAll('[title]');
+    for (var i=0;i<els.length;i++){
+      try { els[i].classList.add('lb-tipb'); } catch (e1) {}
+    }
+  } catch (e) {}
+}
+function lbKeymapTableHtml(){
+  var conf = lbKeymapConflicts();
+  var diff = (LB_KEYMAP_UI.mode === 'diff');
+  var col = lbKeymapShowCol();
+  var h = '<table class="lb-km-table">', total = 0;
+  LB_KEYMAP_GROUPS.forEach(function(g){
+    var list = LB_KEYMAP_ACTIONS.filter(function(a){ return a.g === g; });
+    if (diff) list = list.filter(function(a){ return lbKeymapEff(a.id).isCustom; });
+    if (!list.length) return;
+    var op = (LB_KEYMAP_UI.open[g] === true) || diff;
+    total += list.length;
+    h += '<tr class="lb-km-ghead' + (op ? ' on' : '') + '"><td colspan="3" onclick="lbKeymapToggleGroup(\'' + g + '\')">'
+      + escapeHtml(g) + '（' + list.length + '）</td></tr>';
+    if (op) list.forEach(function(a){ h += lbKeymapRowHtml(a, conf); });
+  });
+  h += '</table>';
+  if (!total) h += '<div class="lb-km-empty">' + (diff ? '还没有改动可看' : '没有动作') + '</div>';
+  return h;
+}
+function lbKeymapDevHtml(){
+  var h = '<div class="lb-km-plats">';
+  LB_KEYMAP_DEVICE.forEach(function(p){
+    if (p.hid) return;   // v5249：隐藏设备不出现在切换行
+    h += '<span class="lb-km-plat' + (p.id === LB_KEYMAP.device ? ' on' : '') + '" data-did="' + p.id + '"'
+      + ' onclick="lbKeymapDeviceSet(\'' + p.id + '\')" title="' + escapeHtml(p.n) + '">' + lbKeyChipHtml(p.ic, 26) + '</span>';
+  });
+  return h + '</div>';
+}
+// ===== v5244：AI 框（完全复用流程 .lb-hf-ai* 的样式与结构；调用链独立，不改流程 AI）=====
+var LB_KEYMAP_AI = {busy:false, cand:null};
+var LB_KEYMAP_AI_SYS = '你是 ARK: Survival Ascended 的键位配置助手。只输出 JSON，不解释、不加代码块标记。';
+function lbKeymapAiPlaceholder(){ return '例：把跳跃改成空格，背包改成 B，装填用 R'; }
+function lbKeymapAiHtml(){
+  var cfg = {}; try { cfg = lbAiCfgGet() || {}; } catch (e) {}
+  return '<div class="lb-hf-aibox lb-km-ai" id="lbKmAiBox">'
+    + '<div class="lb-hf-aiinput-wrap">'
+    + '<textarea class="lb-hf-aiinput" id="lbKmAiInput" placeholder="' + escapeHtml(lbKeymapAiPlaceholder()) + '"></textarea>'
+    + '<img class="lb-hf-aiinput-water" src="thumbs/webp96/bdb8c3b809e6_w96.webp" alt="">'
+    + '</div>'
+    + '<div class="lb-hf-airow">'
+    + '<span class="lb-hf-ai-meta" style="text-align:left;white-space:normal">仅当前设备</span>'
+    + '<span class="lb-hf-ai-fill"></span>'
+    + '<span class="lb-hf-ai-meta" id="lbKmAiMeta">模型 ' + escapeHtml(lbAiModelShort(cfg.model)) + ' · token ' + escapeHtml(lbAiMask(cfg.token || '')) + '</span>'
+    + '<span class="lb-hf-ai-cfg" onclick="lbOpenConfigModal()">⚙ 配置</span>'
+    + '<button class="lb-hf-aibtn primary" id="lbKmAiGo" onclick="lbKeymapAiGen()">✨ 生成</button>'
+    + '</div>'
+    + '<div class="lb-hf-aicand" id="lbKmAiCand" style="display:none"></div>'
+    + '</div>';
+}
+// 列表控制行：v5261 只保留页签（状态/重置/保存已移到底部与「关闭」同排）
+function lbKeymapTabsHtml(){
+  var mode = LB_KEYMAP_UI.mode || 'list';
+  return '<div class="lb-km-ctrl">'
+    + '<div class="lb-km-tabs"><span class="lb-hf-aimode">'
+    + '<span class="' + (mode === 'list' ? 'on' : '') + '" data-m="list" onclick="lbKeymapModeSet(\'list\')">按动作</span>'
+    + '<span class="' + (mode === 'pad' ? 'on' : '') + '" data-m="pad" onclick="lbKeymapModeSet(\'pad\')" title="按按键查看：每个键绑定了哪些动作">按按键</span>'
+    + '<span class="' + (mode === 'diff' ? 'on' : '') + '" data-m="diff" onclick="lbKeymapModeSet(\'diff\')">只看改动</span>'
+    + '</span></div>'
+    + '<span class="lb-hf-ai-fill"></span>'
+    + (mode === 'pad' ? lbKmOldBtnHtml() : '')   // v5273：低可视化开关，仅「按按键」视图显示
+    + '</div>';
+}
+// v5261：底部工具行 = 状态 + 重置(线性) + 保存(实心) + 关闭(线性)
+function lbKeymapFootBarHtml(){
+  var conf = lbKeymapConflicts();
+  var changed = lbKeymapChangedCount();
+  var t = lbKeymapTimeStr();
+  return '<div class="lb-km-footbar">'
+    + '<span class="lb-hf-ai-meta lb-km-meta">' + escapeHtml(lbKeymapDev(LB_KEYMAP.device).n)
+    + ' · 已改 ' + changed + ' · 冲突 ' + conf.n + (t ? (' · 已同步 ' + t) : '') + '</span>'
+    + '<span class="lb-hf-ai-fill"></span>'
+    + '<button class="lb-hf-aibtn" onclick="lbKeymapResetAll()" title="全部恢复默认">⚙ 重置</button>'
+    + '<button class="lb-hf-aibtn primary" onclick="lbKeymapSave2()">💾 保存</button>'
+    + '<button class="lb-hf-aibtn" onclick="this.closest(\'.lb-picker-overlay\').remove()">关闭</button>'
+    + '</div>';
+}
+function lbKeymapBarHtml(){ return lbKeymapAiHtml() + lbKeymapTabsHtml(); }   // 兼容旧调用
+// 当前设备可用键池：基名 → 全集原始键名（按当前设备前缀过滤 + 通用家族）
+function lbKeymapAiKeyPool(){
+  var dev = LB_KEYMAP.device || 'keymouse';
+  var skin = {}; try { skin = LB_KEYMAP_SKIN[dev] || {}; } catch (e0) {}
+  var pre = {};
+  Object.keys(skin).forEach(function(sem){
+    var v = skin[sem]; if (!v) return;
+    var seg = String(v).split('_')[0];
+    if (seg) pre[seg] = 1;
+  });
+  pre['controller'] = 1;
+  if (dev === 'keymouse' || dev === 'steam') { pre['keyboard'] = 1; pre['mouse'] = 1; }
+  var pool = {};
+  try {
+    (LB_KEYFONT_SETS || []).forEach(function(g){
+      ((g.ks || []).concat(g.ics || [])).forEach(function(k){
+        var s = String(k || ''); if (!s) return;
+        if (!pre[String(s).split('_')[0]]) return;
+        var b = lbKmBase(s);
+        if (!pool[b]) pool[b] = s;
+      });
+    });
+  } catch (e1) {}
+  if (!Object.keys(pool).length) { try { pool = LB_KM_SRC || {}; } catch (e2) {} }
+  return pool;
+}
+function lbKeymapAiCtx(){
+  var dev = LB_KEYMAP.device || 'keymouse';
+  var devN = ''; try { devN = lbKeymapDev(dev).n; } catch (e0) {}
+  var col = lbKeymapShowCol();
+  var rows = [];
+  LB_KEYMAP_ACTIONS.forEach(function(a){
+    var e = null; try { e = lbKeymapEff(a.id); } catch (e1) {}
+    if (!e) return;
+    var p = ''; try { p = e.pad ? (lbKeymapSkinKey(e.pad) || '') : ''; } catch (e2) {}
+    rows.push(a.id + ' | ' + a.zh + ' | ' + (p || '无') + ' | ' + (e.kbm || '无'));
+  });
+  var pool = lbKeymapAiKeyPool();
+  var keys = Object.keys(pool).sort();
+  var MAXK = 260;
+  var ktxt = keys.length > MAXK ? (keys.slice(0, MAXK).join(', ') + ' …共 ' + keys.length + ' 个') : keys.join(', ');
+  return '当前设备：' + dev + '（' + devN + '）\n'
+    + '当前显示列：' + col + '\n'
+    + '动作表（aid | 中文 | 当前手柄键 | 当前键盘键）：\n' + rows.join('\n') + '\n'
+    + '可用键（必须原样使用，共 ' + keys.length + ' 个）：\n' + ktxt + '\n';
+}
+function lbKeymapAiSchema(){
+  return '输出 schema（严格按此结构）：{"changes":[{"aid":"jump","col":"pad","keys":["steam_button_a"]}],"note":"一句话说明"}\n'
+    + '硬性要求：\n'
+    + '0) aid 必须来自上面动作表的 aid 列，禁止自造；\n'
+    + '1) col 只能是 pad（手柄键）或 kbm（键盘键）；由你判断该改哪一列，用户没指明时优先当前显示列；\n'
+    + '2) keys 必须是上面「可用键」里的名字，1~4 个（组合键按按下顺序）；空数组表示清空该动作在此列的绑定；\n'
+    + '3) 同一 aid + col 只能出现一次；不要输出与现状完全相同的条目；\n'
+    + '4) 不要臆造键名，拿不准的动作宁可跳过；\n'
+    + '5) note 用中文一句话，不超过 30 字。';
+}
+function lbKeymapAiCandHtml(msg, color){
+  var box = document.getElementById('lbKmAiCand');
+  if (!box) return;
+  box.style.display = 'block';
+  box.innerHTML = '<div class="lb-hf-aihint"' + (color ? (' style="color:' + color + '"') : '') + '>' + msg + '</div>';
+}
+function lbKeymapAiGen(){
+  var cfg = null; try { cfg = lbAiCfgGet(); } catch (e0) {}
+  var ta = document.getElementById('lbKmAiInput');
+  var btn = document.getElementById('lbKmAiGo');
+  var inp = String((ta && ta.value) || '').trim();
+  if (!cfg || !cfg.token){
+    try { if (typeof lbToast === 'function') lbToast('请先在「⚙ 配置」里填大肥鱼 token'); } catch (e1) {}
+    try { lbOpenConfigModal(); } catch (e2) {}
+    return;
+  }
+  if (!inp){ try { if (typeof lbToast === 'function') lbToast('先写一句需求'); } catch (e3) {} return; }
+  if (LB_KEYMAP_AI.busy) return;
+  LB_KEYMAP_AI.busy = true;
+  if (btn){ btn.disabled = true; btn.textContent = '生成中…'; }
+  lbKeymapAiCandHtml('正在生成键位调整方案…');
+  var msgs = [
+    { role: 'system', content: LB_KEYMAP_AI_SYS },
+    { role: 'user', content: lbKeymapAiCtx() + '\n需求：' + inp + '\n' + lbKeymapAiSchema() }
+  ];
+  var done = function(){ LB_KEYMAP_AI.busy = false; if (btn){ btn.disabled = false; btn.textContent = '✨ 生成'; } };
+  fetch(String(cfg.base || LB_AI_BASE).replace(/\/+$/, '') + '/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.token },
+    body: JSON.stringify({ model: lbAiNormModel(cfg.model), messages: msgs, temperature: 0.2, max_tokens: 1200, thinking: { type: 'disabled' }, response_format: { type: 'json_object' } })
+  }).then(function(r){ return r.text().then(function(t){ return { s: r.status, t: t }; }); })
+    .then(function(x){
+      done();
+      if (x.s !== 200){
+        lbKeymapAiCandHtml('✖ ' + escapeHtml(String(lbAiErrText(x.s) || '接口报错')) + '（' + x.s + '）', '#f87171');
+        return;
+      }
+      var j = null; try { j = JSON.parse(x.t); } catch (eJ) {}
+      var ch0 = (j && j.choices && j.choices[0]) ? j.choices[0] : null;
+      var msg0 = (ch0 && ch0.message) ? ch0.message : null;
+      var content = (msg0 && msg0.content) ? String(msg0.content) : '';
+      var d = null; try { d = lbAiParseJson(content); } catch (eP) {}
+      if (!d && msg0 && msg0.reasoning_content) { try { d = lbAiParseJson(String(msg0.reasoning_content)); } catch (eR) {} }
+      if (!d){
+        var _snip = (content || String(x.t || '')).replace(/\s+/g, ' ').slice(0, 120);
+        lbKeymapAiCandHtml('✖ 返回格式无法解析' + (_snip ? ('：' + escapeHtml(_snip)) : ''), '#f87171');
+        return;
+      }
+      lbKeymapAiValidate(d);
+    })
+    .catch(function(e){
+      done();
+      lbKeymapAiCandHtml('✖ 网络错误：' + escapeHtml(String((e && e.message) || e)), '#f87171');
+    });
+}
+// 校验 + 归一（不合法的整条丢弃，并列出原因）
+function lbKeymapAiValidate(d){
+  var pool = lbKeymapAiKeyPool();
+  var ok = [], bad = [], seen = {};
+  var col0 = lbKeymapShowCol();
+  var chs = (d && d.changes) ? d.changes : [];
+  chs.forEach(function(ch){
+    if (!ch) return;
+    var aidRaw = String(ch.aid || '').trim();
+    var act = null;
+    try { act = lbKeymapAct(aidRaw); } catch (e0) {}
+    if (!act && aidRaw){
+      LB_KEYMAP_ACTIONS.forEach(function(a){
+        if (act) return;
+        if (String(a.zh || '').replace(/\s/g, '') === aidRaw.replace(/\s/g, '')) act = a;
+      });
+    }
+    if (!act){ bad.push(aidRaw || '(空 aid)'); return; }
+    var col = (ch.col === 'kbm') ? 'kbm' : ((ch.col === 'pad') ? 'pad' : col0);
+    var key = act.id + '::' + col;
+    if (seen[key]) return;
+    var arr = (Object.prototype.toString.call(ch.keys) === '[object Array]') ? ch.keys : (ch.keys ? [ch.keys] : []);
+    var keys = [], miss = [];
+    arr.forEach(function(k){
+      var s = String(k || '').trim(); if (!s) return;
+      var nk = s;
+      try { nk = lbKeySrc(s); } catch (e1) {}
+      var b = lbKmBase(nk);
+      if (pool[b]) keys.push(pool[b]); else miss.push(s);
+    });
+    if (!arr.length) keys = [];                       // 显式清空
+    if (miss.length && !keys.length){ bad.push(aidRaw + '（键名无效：' + miss.slice(0, 3).join('/') + '）'); return; }
+    seen[key] = 1;
+    var cur = '';
+    try {
+      var e2 = lbKeymapEff(act.id);
+      cur = (col === 'pad') ? (e2.pad ? (lbKeymapSkinKey(e2.pad) || '') : '') : (e2.kbm || '');
+    } catch (e3) {}
+    if (!miss.length && cur === (keys[0] || '') && keys.length === 1) return;   // 与现状相同 ⇒ 跳过
+    ok.push({ aid: act.id, zh: act.zh, col: col, keys: keys, old: cur, miss: miss });
+  });
+  LB_KEYMAP_AI.cand = { ok: ok, bad: bad, note: String((d && d.note) || '') };
+  lbKeymapAiPreview();
+}
+function lbKeymapAiPreview(){
+  var box = document.getElementById('lbKmAiCand');
+  if (!box) return;
+  var cand = LB_KEYMAP_AI.cand || { ok: [], bad: [], note: '' };
+  box.style.display = 'block';
+  var h = '';
+  if (cand.note) h += '<div class="lb-hf-ai-meta" style="color:#86efac;text-align:left;white-space:normal;margin-bottom:4px">🪄 ' + escapeHtml(cand.note) + '</div>';
+  if (!cand.ok.length){
+    h += '<div class="lb-hf-aihint" style="color:#fbbf24">没有可应用的改动</div>';
+    if (cand.bad.length) h += '<div class="lb-hf-aihint" style="color:#8b8b9a;word-break:break-all">跳过：' + escapeHtml(cand.bad.join('、')) + '</div>';
+    box.innerHTML = h;
+    return;
+  }
+  h += '<div class="lb-hf-ai-meta" style="text-align:left;white-space:normal;margin-bottom:6px">已解析 <b>' + cand.ok.length + '</b> 处改动（点「应用」才写入并保存）</div>';
+  h += '<div class="lb-km-ai-diff">';
+  cand.ok.forEach(function(it){
+    var oldH = it.old ? lbKeyChipHtml(lbKeySrc(it.old), 20) : '<span class="lb-km-ai-dc">（空）</span>';
+    var newH = it.keys.length ? it.keys.map(function(k){ return lbKeyChipHtml(lbKeySrc(k), 20); }).join('') : '<span class="lb-km-ai-dc">（清空）</span>';
+    h += '<span class="lb-km-ai-d">'
+      + '<span class="lb-km-ai-dn">' + escapeHtml(it.zh) + '</span>'
+      + '<span class="lb-km-ai-dc">' + (it.col === 'pad' ? '手柄' : '键盘') + '</span>'
+      + oldH + '<span class="lb-km-ai-dc">→</span>' + newH
+      + '</span>';
+  });
+  h += '</div>';
+  if (cand.bad.length) h += '<div class="lb-hf-aihint" style="color:#fbbf24;word-break:break-all">⚠ 跳过 ' + cand.bad.length + ' 条：' + escapeHtml(cand.bad.join('、')) + '</div>';
+  h += '<div class="lb-hf-airow"><button class="lb-hf-aibtn primary" onclick="lbKeymapAiApply()">✅ 应用</button>'
+     + '<button class="lb-hf-aibtn" onclick="lbKeymapAiDiscard()">✖ 放弃</button></div>';
+  box.innerHTML = h;
+}
+function lbKeymapAiApply(){
+  var cand = LB_KEYMAP_AI.cand;
+  if (!cand || !cand.ok || !cand.ok.length) return;
+  var n = 0;
+  var mp = lbKeymapProf().map;
+  cand.ok.forEach(function(it){
+    try {
+      // v5244b / v5253：AI 只改键、不改「操作方式 / 组合键」⇒ 写入前把原设置保留下来
+      var old = (mp[it.aid] ? mp[it.aid][it.col] : undefined);
+      var n0 = lbKmN(old);
+      var _mk = (n0 && n0.mode) || '', _mc = (n0 && n0.chord) || '';
+      var arr0 = it.keys || [];
+      var val;
+      if (!arr0.length) val = null;
+      else if (_mk || _mc) val = { k: arr0.slice(), mode:_mk, chord:_mc };
+      else val = (arr0.length === 1 ? arr0[0] : arr0.slice());
+      _lbKmRawSet(it.aid, it.col, val);
+      n++;
+    } catch (e0) {}
+  });
+  lbKeymapSave();
+  LB_KEYMAP_AI.cand = null;
+  var box = document.getElementById('lbKmAiCand'); if (box){ box.innerHTML = ''; box.style.display = 'none'; }
+  lbKeymapRender();
+  try { if (typeof lbToast === 'function') lbToast('已应用 ' + n + ' 处键位改动'); } catch (e1) {}
+}
+function lbKeymapAiDiscard(){
+  LB_KEYMAP_AI.cand = null;
+  var box = document.getElementById('lbKmAiCand'); if (box){ box.innerHTML = ''; box.style.display = 'none'; }
+}
+function lbKeymapViewHtml(){
+  lbKeymapLoad();
+  // v5216（用户口径）：结构对齐其它配置浮窗——无「返回」，底部有「关闭」，标题块同「系统管理」
+  // v5243（用户口径「附件不需要」）：删掉「当前游戏：…」一行；标题下边距 4→14 作间距补偿
+  return '<div class="lb-modal-scroll" style="background:#1a1a24;border:1px solid #7c3aed55;border-radius:12px;padding:24px;width:560px;max-width:92vw;box-shadow:0 10px 40px rgba(0,0,0,.6);max-height:86vh;overflow-y:auto">'
+    + '<div style="font-size:16px;font-weight:bold;color:#a78bfa;margin-bottom:14px">🎮 键位配置</div>'
+    + lbKeymapDevHtml()
+    + lbKeymapAiHtml()
+    + lbKeymapTabsHtml()
+    + '<div id="lbKmBody" class="lb-km-body">' + lbKeymapBodyHtml() + '</div>'
+    + lbKeymapFootBarHtml()
+    + '</div>';
+}
+function lbKeymapOpenView(){
+  lbKeymapLoad();
+  var old = document.querySelector('.lb-picker-overlay'); if (old) old.remove();
+  var overlay = document.createElement('div'); overlay.className = 'lb-picker-overlay';
+  overlay.onclick = function(e){ if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = lbKeymapViewHtml();
+  var _box = overlay.firstElementChild;
+  if (_box) _box.onclick = function(e){ e.stopPropagation(); };
+  document.body.appendChild(overlay);
+  lbTipify(overlay);   // v5220：浮窗内 tips 统一走自定义引擎
+}
+function lbKeymapRender(){
+  var box = document.getElementById('lbKmBody');
+  if (box) box.innerHTML = lbKeymapBodyHtml();
+  var pl = document.querySelector('.lb-km-plats');
+  var npl = lbKeymapDevHtml();
+  if (pl && npl) pl.outerHTML = npl;
+  var ctl = document.querySelector('.lb-km-ctrl');   // v5273：标签行同步重建（旧设备开关文案 / 显隐要跟随）
+  var nctl = lbKeymapTabsHtml();
+  if (ctl && nctl) ctl.outerHTML = nctl;
+  var meta = document.querySelector('.lb-km-footbar .lb-km-meta');   // v5261：状态已移到下方工具行
+  if (meta) {
+    var conf = lbKeymapConflicts();
+    meta.textContent = lbKeymapDev(LB_KEYMAP.device).n + ' · 已改 ' + lbKeymapChangedCount() + ' · 冲突 ' + conf.n + (lbKeymapTimeStr() ? (' · 已同步 ' + lbKeymapTimeStr()) : '');
+  }
+  lbTipify(document.querySelector('.lb-km-modal') || document);   // v5220：重绘后补 tips
+}
+// v5240（用户口径「改成手风琴式，同时只能有一个展开」）：点开某组时其余组一律收起；点已展开的组则全收起
+function lbKeymapToggleGroup(g){
+  var was = (LB_KEYMAP_UI.open[g] === true);
+  var o = {}; if (!was) o[g] = true;
+  LB_KEYMAP_UI.open = o;
+  lbKeymapRender();
+}
+function lbKeymapModeSet(m){
+  // v5220（用户口径）：pad 模式改为「按键反查」，正式启用
+  if (m === 'diff' && lbKeymapChangedCount() === 0) {   // v5261：同默认不算改动
+    try { if (typeof lbToast === 'function') lbToast('还没有改动可看'); } catch (e) {}
+    LB_KEYMAP_UI.mode = 'list';
+  } else { LB_KEYMAP_UI.mode = m; }
+  var bar = document.querySelector('.lb-km-tabs');
+  if (bar) bar.querySelectorAll('[data-m]').forEach(function(el){ el.classList.toggle('on', el.getAttribute('data-m') === LB_KEYMAP_UI.mode); });
+  lbKeymapRender();
+}
+function lbKeymapDeviceSet(id){
+  lbKeymapLoad();
+  if (!id || LB_KEYMAP.device === id) return;
+  LB_KEYMAP.device = id;
+  lbKeymapSave();
+  lbKeymapRender();
+}
+// ---- 改键弹层 ----
+function lbKeymapPickBody(){
+  var aid = LB_KEYMAP_PICK.aid, col = lbKeymapShowCol();
+  var e = lbKeymapEff(aid);
+  var cur = (col === 'pad') ? e.padN : e.kbmN;
+  var _chordMode = (LB_KEYMAP_PICK.pickFor === 'chord');   // v5253：高亮对象改为组合键
+  var curKeys = _chordMode
+    ? (cur.chord ? [lbKmBase((col === 'pad') ? lbKeymapSkinKey(cur.chord) : cur.chord)] : [])
+    : cur.k.map(function(x){ return lbKmBase((col === 'pad') ? lbKeymapSkinKey(x) : x); });   // v5225
+  var groups = lbKeymapPickGroups();
+  var h = '', shown = 0;
+  // v5240 手风琴：预计算「唯一展开组」
+  //   ① 用户点过（grp 里有键，true/false 都算"动过"）→ 只认 true 的那一个；全 false = 全收起（不再回落默认）
+  //   ② 没点过 → 回落到"第一个含当前已绑定键的组"，否则第一组
+  var _openGrp = '', _touched = false;
+  try {
+    var _ks = Object.keys(LB_KEYMAP_PICK.grp || {});
+    _touched = _ks.length > 0;
+    for (var _ki=0; _ki<_ks.length; _ki++){ if (LB_KEYMAP_PICK.grp[_ks[_ki]] === true) { _openGrp = _ks[_ki]; break; } }
+  } catch (e) {}
+  if (!_touched) {
+    for (var _gi=0; _gi<groups.length && !_openGrp; _gi++){
+      var _gk = groups[_gi].keys || [];
+      for (var _ci=0; _ci<curKeys.length; _ci++){ if (_gk.indexOf(curKeys[_ci]) >= 0) { _openGrp = groups[_gi].name; break; } }
+    }
+    if (!_openGrp && groups.length) _openGrp = groups[0].name;
+  }
+  groups.forEach(function(g){
+    var list = g.keys;
+    if (!list.length) return;
+    var anyCur = false;
+    for (var ci=0; ci<curKeys.length; ci++) if (g.keys.indexOf(curKeys[ci]) >= 0) anyCur = true;
+    var op = (g.name === _openGrp);   // v5240：只展开唯一组（v5252 去掉搜索后不再全展开）
+    h += '<div class="lb-km-pgrp"><div class="lb-km-phead' + (op ? ' on' : '') + '" onclick="lbKeymapPickToggle(\'' + g.name + '\')">'
+      + escapeHtml(g.name) + '（' + list.length + '）</div>';
+    if (op) {
+      h += '<div class="lb-km-pcells">';
+      list.forEach(function(k){
+        shown++;
+        h += '<span class="lb-km-pk' + ((curKeys.indexOf(lbKmBase(k)) >= 0) ? ' on' : '') + '" onclick="lbKeymapToggleKey(\'' + k + '\')" title="' + escapeHtml(k) + '">' + lbKeyChipHtml(k, 24) + '</span>';
+      });
+      h += '</div>';
+    }
+    h += '</div>';
+  });
+  if (!h) h = '<div class="lb-km-empty">没有可用的键</div>';
+  return h;
+}
+function lbKeymapPickSelHtml(){
+  var col = lbKeymapShowCol(), aid = LB_KEYMAP_PICK.aid;
+  var e = lbKeymapEff(aid);
+  var cur = (col === 'pad') ? e.padN : e.kbmN;
+  var md = cur.mode || '';
+  var h = '<div class="lb-km-selline">'   // v5255：去掉「当前：」字样
+    + (cur.k.length ? lbKmChips(cur, col, 20, lbKmColCustom(aid, col)) : '<span class="lb-km-na">未设</span>')   // v5255：恢复主键后的操作方式副标
+    + '<span class="lb-km-pclr" onclick="lbKeymapClearKeys()" title="清空该动作的键位"><i class="mdi mdi-eraser"></i></span></div>'   // v5263：改用橡皮擦图标（原退格键帽语义不符且内部小字发糊）
+    + '<div class="lb-km-modline">';   // v5255：去掉「操作方式」字样
+  // v5264（用户口径）：组合键不再单设按钮，与组合键槽位**合并成一个控件**（4 状态）
+  LB_KEYMAP_MODES.forEach(function(m){
+    if (m.id === 'chord') return;
+    h += '<span class="lb-km-pmod' + (md === m.id ? ' on' : '') + '" onclick="lbKeymapSetMode(\'' + m.id + '\')" title="' + m.n + '">'
+       + (m.ic ? lbKeyChipHtml(m.ic, 15) : '') + '<span class="lb-km-pmn">' + m.n + '</span></span>';   // v5254：图标 + 文字
+  });
+  var _ci = lbKmMode('chord').ic;
+  var _chip = function(){ return _ci ? lbKeyChipHtml(_ci, 15) : ''; };
+  var ck = cur.chord ? ((col === 'pad') ? lbKeymapSkinKey(cur.chord) : cur.chord) : '';
+  if (LB_KEYMAP_PICK.pickFor === 'chord')
+    h += '<span class="lb-km-pchord picking" onclick="lbKeymapChordPick()" title="返回主键选择">' + _chip()
+       + '<span class="lb-km-pmn">选组合键中 · 点此返回</span></span>';
+  else if (md === 'chord')
+    h += '<span class="lb-km-pchord on" onclick="lbKeymapChordPick()" title="改选组合键">' + _chip()
+       + '<span class="lb-km-pmn">组合键：' + (ck ? lbKeyChipHtml(lbKeySrc(ck), 16) : '未设') + '</span></span>';
+  else
+    h += '<span class="lb-km-pchord" onclick="lbKeymapChordStart()" title="启用组合键：与另一个键同时按下">' + _chip()
+       + '<span class="lb-km-pmn">组合键</span></span>';
+  h += '</div>';
+  return h;
+}
+// v5253：弹层页头 / 底部提示（随「选组合键」模式变化）
+function lbKeymapPickHeadTxtHtml(){
+  var a = lbKeymapAct(LB_KEYMAP_PICK.aid);
+  return '改「' + escapeHtml(a ? a.zh : '') + '」· ' + (lbKeymapShowCol() === 'kbm' ? '键盘 / 鼠标' : '手柄键');   // v5260：返回入口已合并到组合键槽位
+}
+function lbKeymapPickFootHtml(){
+  if (LB_KEYMAP_PICK.pickFor === 'chord') return '点键 = 设为组合键（再点同一键取消）· 组合键与主键需不同';
+  return '点键 = 设为主键（再点取消）· 组合键在「组合键」方式下另选';
+}
+function lbKeymapPickRefresh(){
+  var b = document.getElementById('lbKmPickBody'); if (b) b.innerHTML = lbKeymapPickBody();
+  var s = document.getElementById('lbKmPickSel'); if (s) s.innerHTML = lbKeymapPickSelHtml();
+  var t = document.getElementById('lbKmPickHeadTxt'); if (t) t.innerHTML = lbKeymapPickHeadTxtHtml();
+  var f = document.getElementById('lbKmPickFoot'); if (f) f.innerHTML = lbKeymapPickFootHtml();
+}
+// v5221：切换某个键（加入/移出组合）
+function lbKeymapToggleKey(k){
+  var col = lbKeymapShowCol(), aid = LB_KEYMAP_PICK.aid;
+  var e = lbKeymapEff(aid);
+  var cur = (col === 'pad') ? e.padN : e.kbmN;
+  var kBase = lbKmBase(k);   // v5225：一律存短名，与默认键位同口径
+  // v5253：选组合键模式 —— 单键设置（再点同一键取消），不动主键列表
+  if (LB_KEYMAP_PICK.pickFor === 'chord'){
+    var same = !!cur.chord && lbKmBase((col === 'pad') ? lbKeymapSkinKey(cur.chord) : cur.chord) === kBase;
+    lbKmWrite(aid, col, { k:cur.k.slice(), mode:'chord', chord:(same ? '' : kBase) });
+    lbKeymapSave(); lbKeymapPickRefresh(); lbKeymapRender();
+    return;
+  }
+  // v5256：主键只允许一个 —— 点键 = 替换当前主键；点已选中的那一个 = 取消
+  var list = cur.k.slice();
+  var same = (list.length === 1) && (lbKmBase((col === 'pad') ? lbKeymapSkinKey(list[0]) : list[0]) === kBase);
+  lbKmWrite(aid, col, { k:(same ? [] : [kBase]), mode:(cur.mode || ''), chord:(cur.chord || '') });
+  lbKeymapSave(); lbKeymapPickRefresh(); lbKeymapRender();
+}
+// v5253：操作方式单选 —— 点新的替换旧的；点已选中的那一个 = 取消回普通按压
+function lbKeymapSetMode(mode){
+  var col = lbKeymapShowCol(), aid = LB_KEYMAP_PICK.aid;
+  var e = lbKeymapEff(aid);
+  var cur = (col === 'pad') ? e.padN : e.kbmN;
+  var cm = cur.mode || '';
+  var nm = (cm === mode) ? '' : mode;
+  var nc = (nm === 'chord') ? (cur.chord || '') : '';   // 离开组合键模式即清掉组合键
+  lbKmWrite(aid, col, { k:cur.k.slice(), mode:nm, chord:nc });
+  LB_KEYMAP_PICK.pickFor = '';
+  lbKeymapSave(); lbKeymapPickRefresh(); lbKeymapRender();
+}
+// v5264：点「组合键」控件 = 设为组合键方式 + 立即进入选键（一步到位）
+function lbKeymapChordStart(){
+  var col = lbKeymapShowCol(), aid = LB_KEYMAP_PICK.aid;
+  var e = lbKeymapEff(aid); if (!e) return;
+  var cur = (col === 'pad') ? e.padN : e.kbmN;
+  lbKmWrite(aid, col, { k:cur.k.slice(), mode:'chord', chord:(cur.chord || '') });
+  LB_KEYMAP_PICK.pickFor = 'chord';
+  LB_KEYMAP_PICK.grp = {};
+  lbKeymapSave(); lbKeymapPickRefresh(); lbKeymapRender();
+}
+// v5253：进入 / 退出「选组合键」模式
+function lbKeymapChordPick(){
+  LB_KEYMAP_PICK.pickFor = (LB_KEYMAP_PICK.pickFor === 'chord') ? '' : 'chord';
+  LB_KEYMAP_PICK.grp = {};   // 让手风琴回落默认展开（含当前组合键的组）
+  lbKeymapPickRefresh();
+}
+function lbKeymapClearKeys(){
+  var col = lbKeymapShowCol(), aid = LB_KEYMAP_PICK.aid;
+  var m = lbKeymapProf().map;
+  if (m[aid]) { delete m[aid][col]; if (m[aid].pad === undefined && m[aid].kbm === undefined) delete m[aid]; }
+  lbKeymapSave(); lbKeymapPickRefresh(); lbKeymapRender();
+}
+// v5240 手风琴：只允许一组展开；点已展开的组则全收起（写显式 false 是为了阻止回落默认展开）
+function lbKeymapPickToggle(name){
+  var was = (LB_KEYMAP_PICK.grp[name] === true);
+  LB_KEYMAP_PICK.grp = {}; LB_KEYMAP_PICK.grp[name] = !was;
+  lbKeymapPickRefresh();
+}
+function lbKeymapPick(aid, anchorEl){
+  var a = lbKeymapAct(aid); if (!a) return;
+  LB_KEYMAP_PICK.aid = aid; LB_KEYMAP_PICK.grp = {}; LB_KEYMAP_PICK.pickFor = '';
+  var old = document.querySelector('.lb-km-pickwrap'); if (old) old.remove();
+  var overlay = document.createElement('div'); overlay.className = 'lb-picker-overlay lb-km-pickwrap';
+  overlay.onclick = function(e){ if (e.target === overlay) overlay.remove(); };
+  var h = '<div class="lb-picker-panel lb-km-pickpanel" onclick="event.stopPropagation()" style="max-width:min(440px,96vw)">'
+    + '<div class="lb-km-pickhead"><span id="lbKmPickHeadTxt">' + lbKeymapPickHeadTxtHtml() + '</span>'
+    + '<span class="lb-km-x" onclick="this.closest(\'.lb-picker-overlay\').remove()"><i class="mdi mdi-close"></i></span></div>'
+    + '<div class="lb-km-picksel" id="lbKmPickSel">' + lbKeymapPickSelHtml() + '</div>'
+    + '<div id="lbKmPickBody" class="lb-km-pickbody">' + lbKeymapPickBody() + '</div>'
+    + '<div class="lb-km-pickfoot" id="lbKmPickFoot">' + lbKeymapPickFootHtml() + '</div></div>';
+  overlay.innerHTML = h;
+  document.body.appendChild(overlay);
+  lbTipify(overlay);   // v5220：改键弹层 tips 也走自定义
+}
+function _lbKmRawSet(id, col, val){
+  var m = lbKeymapProf().map;
+  if (val === undefined || val === null || val === '') {
+    if (m[id]) { delete m[id][col]; if (m[id].pad === undefined && m[id].kbm === undefined) delete m[id]; }
+  } else {
+    if (!m[id]) m[id] = {};
+    m[id][col] = val;
+  }
+}
+function lbKeymapSet(key){
+  var aid = LB_KEYMAP_PICK.aid, col = lbKeymapShowCol();
+  if (!lbKeymapAct(aid)) return;
+  var clash = [];
+  LB_KEYMAP_ACTIONS.forEach(function(a){
+    if (a.id === aid) return;
+    var e = lbKeymapEff(a.id);
+    var k = (col === 'pad') ? lbKeymapSkinKey(e.pad) : e.kbm;
+    if (k === key) clash.push(e.act);
+  });
+  var back = lbKeymapEff(aid)[col];
+  if (clash.length) {
+    var names = clash.map(function(x){ return x.zh; }).join('、');
+    if (!confirm('「' + key + '」已被「' + names + '」使用。\n\n确定 = 与第一个交换键值\n取消 = 保持不变')) return;
+    _lbKmRawSet(clash[0].id, col, back || null);
+  }
+  _lbKmRawSet(aid, col, key);
+  lbKeymapSave();
+  var ov = document.querySelector('.lb-km-pickwrap'); if (ov) ov.remove();
+  lbKeymapRender();
+}
+function lbKeymapResetRow(aid){
+  _lbKmRawSet(aid, 'pad', null); _lbKmRawSet(aid, 'kbm', null);
+  lbKeymapSave(); lbKeymapRender();
+}
+function lbKeymapResetAll(){
+  var _do = function(){
+    lbKeymapProf().map = {};
+    lbKeymapSave(); lbKeymapRender();
+    try { if (typeof lbToast === 'function') lbToast('已恢复默认'); } catch (e) {}
+  };
+  // v5262：复用项目统一确认浮窗 lbAsk（创建失败则回退原生 confirm）
+  var _ok = false;
+  try { if (typeof lbAsk === 'function') _ok = lbAsk('全部恢复默认？\n当前游戏的所有键位改动将清空。', _do, '恢复默认'); } catch (e0) {}
+  if (!_ok && confirm('全部恢复默认？当前游戏的所有键位改动将清空。')) _do();
+}
+function lbKeymapSave2(){
+  lbKeymapSave(); lbKeymapRender();
+  try { if (typeof lbToast === 'function') lbToast('已保存' + (lbKeymapTimeStr() ? (' · ' + lbKeymapTimeStr()) : '')); } catch (e) {}
+}
+// v5218（用户口径「打开过键位配置后，再点角色入口会自动跳到键位」复盘）：
+//   旧实现用内存态 LB._roleView 做分流；v5216 去掉「← 返回」后**没有任何地方把它重置回 roles**
+//   ⇒ 一旦进过键位视图，之后所有角色入口都被劫持。⇒ 改为各入口直接调用各自视图，不再共享状态。
+function lbRoleView(v){
+  if (v === 'keys') { lbKeymapOpenView(); return; }
+  lbOpenRolePicker();
+}
+
+// ===================== v5213 全局游戏上下文（仅创建者生效）=====================
+// 用户口径：游戏配置切换做到「服务器管理」浮窗里，切换后整个项目切换游戏；
+//           堕落玩偶目前只保留键位配置功能；只对创建者生效。
+var LB_GAME_LIST = [
+  {id:'ark',  n:'方舟生存飞升',              sub:'完整功能'},
+  {id:'scum', n:'洛夫克拉夫特行动：堕落玩偶', sub:'目前仅有键位配置'}
+];
+var LB_GAME_HIDE = ['mainUI','latestUI','settingsUI','lbBreedBar','lbFuncBar'];
+
+function lbIsAdminU(){
+  try { return (typeof lbIsAdmin === 'function') && lbIsAdmin(); } catch (e) { return false; }
+}
+// 当前游戏：非创建者恒 ark（普通玩家不受影响）
+function lbGame(){
+  if (!lbIsAdminU()) return 'ark';
+  var g = 'ark';
+  try { g = localStorage.getItem('lbGame') || 'ark'; } catch (e) { g = 'ark'; }
+  if (!LB_GAME_LIST || !LB_GAME_LIST.length) return 'ark';   // v5214：防御（常量尚未就绪时安全回落）
+  for (var i=0;i<LB_GAME_LIST.length;i++) if (LB_GAME_LIST[i].id === g) return g;
+  return 'ark';
+}
+function lbGameName(id){
+  for (var i=0;i<LB_GAME_LIST.length;i++) if (LB_GAME_LIST[i].id === id) return LB_GAME_LIST[i].n;
+  return id || '';
+}
+function lbGameSet(g){
+  if (!lbIsAdminU()) return;
+  var ok = false;
+  (LB_GAME_LIST || []).forEach(function(x){ if (x.id === g) ok = true; });
+  if (!ok) return;
+  try { localStorage.setItem('lbGame', g); } catch (e) {}
+  lbApplyGame();
+  // v5219（用户口径「点了附件却没有选中效果」）：浮窗里的 chip 行必须就地刷新选中态，
+  //   否则游戏已切换、按钮看起来却没反应（原实现只重建页面，不重绘浮窗）
+  try {
+    var _rows = document.querySelectorAll('.lb-picker-overlay .lb-game-row');
+    for (var _i=0; _i<_rows.length; _i++) _rows[_i].outerHTML = lbGameChipsHtml(true);
+    if (typeof lbTipify === 'function') lbTipify(document.querySelector('.lb-picker-overlay'));
+  } catch (eC) {}
+  try { if (typeof lbToast === 'function') lbToast('已切换到「' + lbGameName(g) + '」'); } catch (e) {}
+}
+function lbGameChipsHtml(slim){
+  var cur = lbGame();
+  var h = '';
+  if (!slim) h += '<div style="font-size:13px;font-weight:bold;color:#ddd;margin:0 0 8px">🎮 当前游戏</div>';
+  h += '<div class="lb-game-row">';
+  (LB_GAME_LIST || []).forEach(function(g){
+    h += '<span class="lb-game-chip' + (g.id === cur ? ' on' : '') + '" onclick="lbGameSet(\'' + g.id + '\')">'
+       + escapeHtml(g.n) + '<em>' + escapeHtml(g.sub) + '</em></span>';
+  });
+  h += '</div>';
+  if (!slim) h += '<div style="font-size:11px;color:#666;margin-bottom:16px">切换后整个项目进入该游戏；仅创建者可见此开关，普通玩家恒为方舟。</div>';
+  return h;
+}
+function lbScumUiHtml(){
+  return '<div class="lb-scum-wrap">'
+    + '<div class="lb-scum-hero"><div class="lb-scum-ic">🎮</div>'
+    + '<div class="lb-scum-t">洛夫克拉夫特行动：堕落玩偶</div>'
+    + '<div class="lb-scum-s">当前仅提供「键位配置」，更多功能陆续接入</div></div>'
+    + '<div class="lb-scum-switch">' + lbGameChipsHtml(true) + '</div>'   // v5215（用户口径）：本页也要有游戏切换控件
+    + '<button class="lb-scum-entry" onclick="lbRoleView(\'keys\')">'
+    + '<span class="lb-scum-eic">🎮</span>'
+    + '<span class="lb-scum-etx"><span class="lb-scum-et">键位配置</span>'
+    + '<span class="lb-scum-es">12 台交互设备 · 改键 / 冲突检测 / 只看改动</span></span>'
+    + '<span class="lb-scum-ea">→</span></button>'
+    + '</div>';
+}
+function lbApplyGame(){
+  var g = lbGame(), scum = (g === 'scum');
+  LB.game = g;
+  var sc = document.getElementById('lbScumUI');
+  if (!sc) {
+    sc = document.createElement('div');
+    sc.id = 'lbScumUI';
+    document.body.appendChild(sc);
+  }
+  sc.innerHTML = lbScumUiHtml();
+  sc.style.display = scum ? 'block' : 'none';
+  (LB_GAME_HIDE || []).forEach(function(id){
+    var el = document.getElementById(id);
+    if (!el) return;
+    if (scum) {
+      if (el.getAttribute('data-arkdisp') === null) el.setAttribute('data-arkdisp', el.style.display || '');
+      el.style.display = 'none';
+    } else {
+      var d = el.getAttribute('data-arkdisp');
+      if (d !== null) { el.style.display = d; el.removeAttribute('data-arkdisp'); }
+    }
+  });
+  // 若正开着键位浮窗，切换游戏后按新游戏重新渲染
+  try {
+    var kmBody = document.getElementById('lbKmBody');
+    if (kmBody && typeof lbKeymapRender === 'function') lbKeymapRender();
+  } catch (e) {}
+}
+
 function lbHfPushUndo(){
   try {
     if (!LB_HF.edit) return;
@@ -36200,7 +38022,7 @@ function lbHfEditSave(){
 }
 // ===== v4742（用户口径）：关注项绑定玩家跨客户端存储 =====
 //   键：关注未成年 / 被关注设施 / 蓝图关注 / 待制作数量；云端 /api/user_prefs（按账号存、nick 校验）
-var LB_PREFS_KEYS = ['lb_watch_babies', 'lbMaintWatch_v1', 'lb_bp_follow', 'lb_bp_todo'];
+var LB_PREFS_KEYS = ['lb_watch_babies', 'lbMaintWatch_v1', 'lb_bp_follow', 'lb_bp_todo', 'lb_keymap'];   // v5211：键位配置
 var LB_PREFS = { user: '', timer: 0, ts: 0, lastPull: 0 };   // v4841：lastPull 用于可见性唤醒节流
 function lbPrefsUser(){
   try{ var a = JSON.parse(localStorage.getItem('dinoAuth') || 'null'); return (a && a.user) ? String(a.user) : ''; }catch(e){ return ''; }
