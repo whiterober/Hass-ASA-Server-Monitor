@@ -1936,6 +1936,11 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
 .lb-picker-item{position:relative}
 .lb-hf-badge{position:absolute;top:3px;right:3px;width:6px;height:6px;border-radius:50%;background:#7c3aed;box-shadow:0 0 0 1px rgba(0,0,0,.55);cursor:help}   /* v4936：有采集流程角标 = 右上角 6px 紫圆点；v4937：去掉 pointer-events:none 让 tooltip 能触发 */
 .lb-hf-badge::after{content:'';position:absolute;left:50%;top:50%;width:20px;height:20px;transform:translate(-50%,-50%);border-radius:50%}   /* v4937：把 hover 命中区撑到 20px（视觉仍是 6px 圆点） */
+/* v5443（用户口径）：有「操作」键位的项 —— 造型/命中区完全复用流程点（.lb-hf-badge），只把颜色换成操作入口的橙色 #f59e0b
+   位置：右上角；若该角已有流程点则并排到它左侧（-2nd） */
+.lb-ops-badge{position:absolute;top:3px;right:3px;width:6px;height:6px;border-radius:50%;background:#f59e0b;box-shadow:0 0 0 1px rgba(0,0,0,.55);cursor:help}
+.lb-ops-badge.lb-ops-badge-2nd{right:11px}
+.lb-ops-badge::after{content:'';position:absolute;left:50%;top:50%;width:20px;height:20px;transform:translate(-50%,-50%);border-radius:50%}
 .lb-hf-btns{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;overflow-x:auto;max-width:56vw}
 /* v4898（用户口径）：底栏分组 —— 桌面 display:contents 保持单行原布局；栏内「● 未保存」与弹簧仅移动端显示 */
 .lb-hf-bgrp{display:contents}
@@ -2384,7 +2389,11 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
 .lb-km-ae-btn{flex:none;padding:5px 9px;border-radius:6px;border:1px solid #333;background:#22222c;color:#ccc;font-size:11.5px;cursor:pointer}
 .lb-km-ae-foot{flex:none;display:flex;align-items:center;gap:8px;padding:8px 12px;border-top:1px solid #262633;background:#14141c}
 /* v5405：物种键位只读态（非系统拥有者）——改键区与底栏不可点 */
-.lb-km-ro .lb-km-body,.lb-km-ro .lb-km-fix-bot{pointer-events:none;opacity:.7}
+/* v5446（用户口径「只读不是指连展开折叠都不让操作」）：
+   v5405 原写法 `.lb-km-ro .lb-km-body{pointer-events:none}` 把整个表格区冻结 ⇒ 分组标题点不动、也无法滚动。
+   v5444/v5445 已把配置入口（改键 onclick / 紫点 / 重置 / 保存）全部移除，这层冻结纯属误伤 ⇒ 作废。
+   只读保留：切设备、按动作/按按键/只看改动、分组展开折叠、只看已绑定、滚动 —— 全部照常可操作 */
+.lb-km-ro .lb-km-body{opacity:1}
 /* v5393：自建下拉（用户口径「所有的下拉应该用自定义圆角样式 而不是现在这种原生样式」） */
 .lb-km-sel{position:relative;flex:1;min-width:0;display:flex;align-items:center;gap:6px;padding:5px 8px;min-height:29px;border-radius:8px;border:1px solid #333;background:#12121a;color:#ddd;font-size:12px;cursor:pointer;user-select:none;box-sizing:border-box}
 .lb-km-sel:hover{border-color:#5b4b8a}
@@ -2442,7 +2451,18 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
 .lb-km-dotc{width:22px;text-align:center}
 .lb-km-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#a78bfa;cursor:pointer}
 /* v5423：动作备注（普通玩家可见）—— 动作名下方一行灰色小字 */
-.lb-km-note{font-size:11px;line-height:1.35;color:#8a8a9c;font-weight:normal;margin-top:2px;white-space:normal;word-break:break-word;max-width:100%}   /* v5436（用户口径「备注为啥这么早就换行了」）：150px 太窄 -> 跟随动作名列宽 */
+.lb-km-note{font-size:11px;line-height:1.35;color:#8a8a9c;font-weight:normal;margin-top:2px;white-space:normal;word-break:break-word;max-width:100%}
+/* v5453：切换型动作标识 —— 紧贴动作名右侧的 repeat 图标（青绿，与紫=已改动 / 橙=冲突 / 青=未绑定语义不冲突） */
+.lb-km-tgwrap{display:inline-block;width:12px;height:12px;line-height:0;vertical-align:-2px;margin-left:3px;color:#22d3ee;flex:0 0 auto}   /* v5455（用户口径「图标离文字太近了 拉远2px」）：1px -> 3px */
+.lb-km-tgwrap svg{display:block;width:12px;height:12px}
+/* v5456（用户口径「附件不应该用原生样式」）：「切换式」自建胶囊开关（复用 .lb-km-emptybtn 观感） */
+.lb-km-tgsw{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:5px;border:1px dashed #333342;color:#6b6b7d;font-size:11px;line-height:17px;cursor:pointer;user-select:none;white-space:nowrap}
+.lb-km-tgsw:hover{color:#a78bfa;border-color:#4a3a6e}
+.lb-km-tgsw.on{color:#a78bfa;border-color:#4a3a6e;border-style:solid}
+.lb-km-tgsw-ic{display:inline-block;line-height:0;color:inherit}
+.lb-km-tgsw-ic svg{display:block;width:11px;height:11px}
+.lb-km-tgsw-t{font-style:normal}
+.lb-km-row:hover .lb-km-tgwrap{color:#67e8f9}   /* v5436（用户口径「备注为啥这么早就换行了」）：150px 太窄 -> 跟随动作名列宽 */
 /* v5427（用户口径「玩家不可能凭空加新动作，所以不存在删除的情况，全部改成紫色圆点」）：红叉样式已移除 */
 
 .lb-km-row.custom .lb-km-act{color:#fff}
@@ -2852,7 +2872,7 @@ var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // ⏳ **未部署** v3626（用户要求）：**对照表缺·建筑类 20 条落地** —— 将 t1「中文+图标已定稿」的 20 条并入 `汉化/item_zh.json`（键=短名、kind=structure、src=gap_table_t1）：`SpotLight` 聚光灯 ｜ `Ramp_Wood` 木制楼梯 ｜ `Ramp_Adobe` 黏土楼梯 ｜ `TriCeiling_Wood` 木制三角天花板 ｜ `WoodCage` 木制笼子 ｜ `WoodSpikeWall` 木制拒马 ｜ `Metal_OceanPlatform` / `Wood_OceanPlatform` 海洋平台 ｜ `Furniture_Rug` 粗毛地毯 ｜ `TekFenceFoundation` 泰克栅栏地基 ｜ `AdobePillar` 黏土柱子 ｜ `RopeLadder` 绳梯 ｜ `TriRoof_Adobe` / `TriRoof_Tek` 三角屋顶 ｜ `WoodElevatorPlatform_Small` / `_Medium` / `WoodElevatorTrack` 木制电梯 ｜ `AdobeGateDoor_Large` 黏土巨兽恐龙门 ｜ `Flag_KingKaiju` 君王泰坦旗帜 ｜ `LargeWall_Wood` 大型木制墙；词典 1790 → **1810 键**；缺口表 t1 **33 → 13 条**、总表 320 → **300 行**
 // ⏳ **未部署** v3627（用户要求）：**缺口表其余部分（t2/t3/t4）双就绪条目落地 105 条** —— 质控分档（`tmp/_v3689_qc.py`）后落地：A 档 91 + B 档中经用户确认/属关键词误判者（「新联邦靴子」「那里!」经用户确认正确）；**排除 2 条**：`PrimalItemConsumable_Egg`（中文为 `Egg!` 英文原文）、`PrimalItemArmor_PearlShirt`（t4，中文仅「珍珠」）；跳过 2 条 kind 无法确定（`PrimalItem_FishBasketFilled` / `PrimalItem_Spawner_HoverSail_Main`）与 1 条生物类（`Exosuit_Character_BP`）；t2 的 `PrimalItemRadio`/`PrimalItemRaft` 词典已有键（`Radio`/`Raft`）故仅调 kind：`Raft` weapon → **structure**（`Radio` 本已 weapon）；落地内容以蛋类 37、结构件 29、鞍具 5、弹药 2 为主；词典 **1810 → 1915 键**（kind 空 **0** / other **0**）｜ 缺口表 **300 → 196 行**（t3 215 → 111）
 // v4333（用户口径①）：区域行「前 X」改名「上一段：X」+ 与当前/基础名重复时隐藏（v4347 用户口径②：整条移除，不再显示）
-var LB_VERSION = 'v20261025-5440';   // v4280（根因修复）：① 退出物品模式恢复「选种」按钮（v1368 隐藏无恢复） ② 生物背包容器标题唯一源解析（BP_/_ASA 组件 token → 真实 dinoClass）   // v4231（用户实测「繁育栏把功能栏挡住」）：① 两栏同显繁育栏叠功能栏上方 ② 空繁育栏不显示 ③ 结果浮层/追踪钮偏移联动   // v4230（用户裁定）：皮肤类全链隐藏（词典 skin:1 标记并入判空链——Tileset 外观/Bounce 系列/节日建筑等 54 键）   // v4229（用户确认）：初始笔记全链隐藏（v4083 只滤浮窗，容器漏同步 ⇒ hideItems+硬编码双写入升级）   // v4228（用户口径）：容器 chip 染料补色点（v3593 只改了浮窗，容器漏同步）   // v4227（用户口径）：HotbarSkill_Base（快捷技能芯片，非真实物品）加入隐藏名单（hideItems+硬编码双写入）   // v4226（用户实测「黑曜石仙境没内容却显示tab」根因修复）：lbPickIdx 统计对齐渲染口径（+lbIsEmptyItem 判空）——q=0 空槽残留不再计入 tab/角标/聚落/总数   // v4225（v4224 实测补丁）：预热已走完但缓存被清（材质表到达等）→ 立即兜底冷建，不再干等 6s   // v4224（用户口径「空档期点击卡」）：① 物品栏未预热点击→占位+等预热填充（不再冻结 440ms 无反馈）② 预加载交互让路（600ms 窗口）③ 静默刷新收尾即触发预热（消 3s 空窗）   // v4223（性能优化·用户确认A+B2）：① 预加载热点——字典键数引用缓存（拥有索引 11,531ms 预计降至 1~2s）② 后台检查更新——批量 LM 接口（40+ 次 HEAD → 1 次请求）   // v4222（用户口径）：所有可点击徽章补 hover——① 设施芯片挂载条件扩为「可点即 hover」② 装备榜/选种行卡新增 hover   // v4221（用户实测「角标还显示了2」）：玩家背包同口径排除出服务器 tab 角标/聚落角标/总数（srv/setts/total），修角标与列表不一致   // v4220（用户实测）：「无聚落/离散」容器登记排除玩家背包（消除与「玩家携带」tab 重复的纯背包卡）   // v4219（实测根因）：伪容器 rec 补 server 字段（修「无聚落/离散」卡点进去详情空——lbRecHasPick 键查空导致）   // v4218（用户口径）：物品筛选类别扩至「物品浮窗全部类别」（lbItemIsPick 按浮窗归属类别对齐，修 建筑/资源等非装备类筛选全灭）   // v4217（用户要求）：① 别名表数据化（dino_rank_alias.json + 恐龙recs类名映射，零硬编码）② 物品模式玩家tab恢复位置卡/去平铺卡流 ③ 恐龙侧 mine 与恐龙列表同源（跨服龙鞍显示）   // v4216（实测根因修复）：ASB_DB 懒加载未就绪时缓存空表 ⇒ 词干表 0 条永久失效；改为「就绪才缓存」（lbRankStemMap + lbAsbNameMap）   // v4215（用户口径）：① 装备榜鞍键↔恐龙键同物异名归一（勘误+ASB词干表）② 选物种玩家背包只留该物种鞍/蓝图 ③ 选物品隐藏低温舱+去位置卡 ④ 非鞍剔除   // v4214（用户口径）：装备榜 TAB 角标只计「我的」——外部更高不参与计数   // v4213（用户口径·S7）：物种按钮显隐与物品侧同步——只看桶内容（有效条目）   // v4212：物种榜 qidx<=0 全排除 + 去重 >0 + 角标=实际显示数 + 恐龙背包显示具体龙名   // v4211（用户要求·单一代码源）：装备榜物种/物品渲染统一为 lbRankRenderPanel + 外部更高条目不显示区域名   // v4210（用户口径·位置唯一化）：容器显示接入「坐标→设施真身」统一解析（人台上的矛显示回「人台E」真名）   // v4209：物品模式装备榜=物种榜完整翻版（两 TAB 实物/蓝图 + qidx<=0 过滤 + 类别图标）   // v4208（用户需求）：物品模式装备榜——按钮按「存档有原始以上品质」动态显隐 + 面板细节对齐物种（分组/行卡/弹卡/过滤同源）   // v4207：离散「位置」组展开时数量位同样被按钮替换（对齐改名）   // v4206：离散卡容器组加「位置」按钮（复刻改名按钮 + 弹地图浮窗）   // v4205：物品模式 tab 显隐排除基因条件（Gen(0) 过滤根因）   // v4204：离散 chip 不响应重命名 + 物品模式隐藏基因设备段（基因存储器根因）   // v4203：修详情内部过滤缺口（物品模式详情逐成员对齐主列表 lbRecHasPick）   // v4202：对照表 11 项权威容量落地（容量表 +10 项数据键 + DisplayCase 归 HIDE）   // v4201（用户方案）：生物背包参与聚合——背包容器注入 ctn（byContainer 直接命中）+ 判定剔除背包点 + 容器组归属统一 + 删近邻兜底   // v4200：龙背包归属加「近邻唯一」兜底（帝蟒背包与龙坐标差 1749 也能归位）   // v4199：放出容器坐标键放开 + 物品索引接「生物背包→龙」关联链   // v4198：修 5 处容量别名反向空指（Fireplace/WaterTap/TurretCatapult/TurretBallista/TaxidermyBase_Small）   // v4197：龙背包并入归属过滤（离散/无聚落详情不再混入别人部落的生物背包）   // v4196：离散卡容器化（scatteredList 暴露 + 物品索引兜底 + 卡内容器注入）   // v4195：散置伪 rec 补 isEmpty 容器本体形态（v3452 同口径，防详情渲染崩溃）   // v4194：散置卡修复——伪容器 rec 直取（物品容器哈希与 rec 哈希两套，cid 不可跨查）   // v4193（用户口径）：物品模式隐藏「聚落命名/区域命名」入口 + 「散置容器」卡（无聚落卡，完全对齐物种）   // v4192（用户口径）：物品角标/数量对齐物种——只统计「当前角色拥有」（v3597 归属过滤接入 lbPickIdx）+ 物品模式聚落卡隐藏放出/低温仓/蛋段 + 角标图标按物品类型取 LB_INV_GRP;   // v4191：玩家 tab 自动切换补修（物品模式无该物品 ⇒ 内容区不再驻留空态）;   // v4190（用户要求）：单一物品主体页优化（玩家tab物品口径 / 物品索引双计修复 / 聚落角标武器类别图标 / 详情行隐藏容量角标）   // v4189（用户要求）：水雷迁入「器械>弹药」（Underwater Mine）;   // v4188（用户要求）：陷阱族迁入「器械>弹药」段（Y异种植物陷阱改名入族 + 大型捕兽夹/捕兽夹入族垫底；v4187 设施段位代码撤回）;   // v4186：泰克水壶补录（工具>水容器族末位）+ 巨石核实 + 对照表 5 项去重、恐龙外观表折叠;   // v4185：恐龙装备栏外观全组过滤（用户实锤鞍皮肤；hideItems 18 项）;   // v4184：译名（沙斯塔鱼龙）+ Cute Dino Helmet 过滤（玩家帽）+ lbEggIs 帽子豁免（Easter_Egg_Hat 归位模块栏）;   // v4183：物品浮窗接入 hideItems 过滤（Pepper Mask 修复）+ 恐龙外观 12 款落地（模块>生物外观）;   // v4182：恐龙装备栏外观 12 款图标全配（8 款本地实锤 + 4 款 wiki 补录；icons2 5204 / webp_map 5107）;   // v4181：B1 节日糖果全量入库（8 新键+圣诞糖果合并为节日恐龙糖+玉米糖换 HUD_Event_Halloween_BC）+ PepperMask 浮窗过滤 + 节日族词/类名规则;   // v4177：Air_Jar/Air_Bladder kind 修正（consumable→weapon，正式入器械>工具>水容器）+ 情人节/感恩节糖果补图（Valentines_Dino_Candy/Thanksgiving_Candy）;   // v4175：料理子序微调（鲨鲨小零食!紧挨吉利盛宴3.4后；虫胶19→5.3 紧挨饭团5.2后）;   // v4174：达科寿司/饭团（原稻米球改名）入料理族并紧挨海藻寿司（子序 5.1/5.2）;   // v4173：情人节巧克力正名+配图（Box o' Chocolates/盒装巧克力/VDay_icon）+ WormGum 补录（虫胶）+ Air_Jar/Air_Bladder 移工具·水容器族（族内最后）+ 食肉植物种子排植物种子R后 + 亚特兰汤/虫胶接料理子序18-19;   // v4170：消耗品补录 18 键（胡椒面具/空气罐/气囊/海龙汤/风干鱼肉×2/稻米球/感染系列×6/干海带/达科寿司/亚特兰汤/蓝莓汁 P+/情人节巧克力 ase）+ 新族「感染」（含感染藤壶 7 项）+ 泰克三叉戟归「矛」族;   // v4169：咒缚贴合全局兜底（跨块场景：咒缚火焰喷射器与本体被手炮块隔开 → 最终序列再贴一次）；v4168：咒缚武器贴合本体（16 对：本体在前、咒缚紧跟 — 武装 11 + 工具 3 + 键名兜底 1 +【火焰喷射器 v4169 修复】）+ 制导火箭弹图标→HomingMissileAmmo_Icon + 巡航导弹图标→Cruise_Missile（v4163 交接回调）;   // v4165：立式南瓜哨兵根因修复（facilityIconSpecial 置空 + 合并尊重空串哨兵）+ 圣诞糖果补录（consumable/节日）+ 鲍勃外观改名 + 蛋糕×3 归节日族;   // v4164：设施根因修正（标识归位/旗帜族+节日族垫底链）+ 节日补族（圣诞彩灯/万圣节墓碑）+ 新族「玩家外观」（TOF 卡尔配件，排生物外观前）;   // v4163：C4遥控起爆器→工具段（tool:1）+ 巡航导弹换图 HomingMissileAmmo_Icon + 塔拉萨麻醉弹药归「箭」族;   // v4162：生化皮肤/独木舟皮肤新族（骨架后/生物外观后）+ 设施栏标识族垫底（旗帜后）+ 咒缚电锯/喷火器图标对齐原版 + 弹药段「异种植物」词（W果实/Z手雷相邻）+ Netgun 归弹药;   // v4161：Radar_Rig 补录（雷达配件→跨步者配件族）+ 未组装的泰克跨步者改归「未组装」族;   // v4160：泰克悬停帆与塔拉萨悬停帆族内相邻（载具子序50.2/50.3）+ 6 条泰克跨步者配件补录（官方类名+官方中文，族=跨步者配件）;   // v4159：13 条骨架/幽灵/兔耳套装以**官方类名+官方中文**落地（长键=PrimalItemCostume_*、短键=图标名）+ 失落精灵龙套装补录 + 3 条旧骨骼条目同步官方名 + 全部归骨架皮肤/幽灵皮肤/生物外观族（排模块段最后）;   // v4158：外观族（骨架皮肤/幽灵皮肤/生物外观/尾巴/披风）整体移至模块段最后 + 独木舟3皮肤归生物外观 + 鱼竿族生效（两条相邻） + M.O.M.I.入模块段·机甲族 + 服装类豁免物种绑定过滤 + 跨步者配件族预留;   // v4157：Cryo医院/水下耕地/宠物展示台/绊线照明弹配方补录（材质档排序）+ 蛋糕ASE过滤 + 4服装隐藏 + 骨架皮肤族（3骨骼+生化，附件后） + 幽灵皮肤族（14条，骨骼后） + 战车族提前（附件前） + 立式南瓜清图标 + Plant W果实/Z手雷族内相邻;   // v4154：泰克光刃（TekClaws）换图 → HUD_TEKHandBlades_Icon_BC + 对照表"非皮肤·疑似"补齐后缀过滤;   // v4151：换图 2（巡航导弹→HUD_TEKCruiseMissile_Icon、泰克榴弹发射器→HUD_TEKGrenadeLauncher_Icon）+ 补录 4（绊线照明弹陷阱/泰克三叉戟/泰克长矛/C4遥控起爆器）+ 对照表区①移除 48 项;   // v4150：鱼竿族（FishingRod+Lovely_Fishing）+ 载具族补员（潜艇→木筏后、塔拉萨悬停帆→泰克悬停帆后）+ 生物外观族 26 项落地（模块段最末）+ 对照表无特征项全参数表;   // v4149：换图 3 组（GrapplingHook→GrappleHook_Icon、TribeTower→Tribe_Tower、TranqArrow→TranqArrow_Icon）+ 补录 11 键（Snowball/Carnivorous_Plant_Seed/Thalassian 系×4/ARK_Anniversary_Surprise_Cake/Birthday_Candle/CryoHospital×2/Netgun）;   // v4148：实时补全区无图标补「?」占位（lbWpRtHtml 与主浮窗一致）+ 图标替换 14 组（储物箱/镜子/油罐/电锯/登山镐/矿枪/鞭子/沙漠套×5/吉利面具/防护套×3/喷火器/潜水服）+ 英文补全（Ghillie Mask / Hazard Suit Hat / SCUBA×4）+ 补录 11 键（MachinedBow/宠物展示台/生日蛋糕/水下耕地/潜艇/塔拉萨悬停帆/收割渔线/周年蛋糕×2）+ TransGPS 打 ASE 过滤标记;   // v4147：Lovely_Fishing_Rod 补录（工具 tool:1）+ 次级解药/扎啤/血之灵药 归料理族（words 3.1/3.2/3.3 排在医疗药酒·能量药酒之后）；图标未录对照表 v4147（六分类 66+53 / skins 甄别 689）;   // v4146：RecipeCurry_Icon 挂菲拉咖喱配方（RecipeNote_FriaCurry / PrimalItem_RecipeNote_FriaCurry 两键 icon→RecipeCurry_Icon）+ HoneyLure 补录（蜂蜜诱饵，图标 HoneyLure_Icon）；对照表 v6 重生（待核 4 / 已处理 12 / 染色剂 22 移出主表入脚注）;   // v4145：W 果短名补规则（Plant_Species_W→手雷，浮窗枚举键带下划线）;   // v4144：族修正（Cucumis/Oryraise→蔬菜；Gilly/Oceans/Worm 短名 re: 规则→料理——修 v4143 短名下划线不命中问题）;   // v4143：Aquatica 消耗品补录 9 项（作物×2/料理×3/弹药×1/其它×3）+ 非凡饲料换图 + 族规则 4 条;   // v4142：Ecto Lantern 两键打 tool:1（进器械栏·工具段）;   // v4141：花粉图标换 High_Quality_Pollen（2 条）+ Ecto Lantern 补录（灵质提灯，工具类，2 键 + 节日族 2 规则）;   // v4140：刷新热区修复（仅标记触发）+ 节日族扩展 + 补录 5 项 + 强效麻醉镖图;   // v4139：item_zh 图标修正（麻醉镖→Tranquilizer_Dart；硅酸盐→SilicateCrystal）;   // v4138：公共设施实时区 39 格（WorldProbe 接线 + 刷新 CD 10s + 后端短时缓存共用）;   // v4137：巨齿鲨颚/生存者战利品移至 Cymathoa 之后（61/62 档）+ Dragon Horn 补录（龙之号角）;   // v4136：Aquatica 三战利品移至奖杯族最末（60 档）;   // v4135：焰鬃獠猪两种獠牙图标（Boaratos_Tusk / Flaming_Boaratos_Tusk）;   // v4134：Hydra/Kraken 归一 + 本体过滤 + AstralSoul/HexCoins 图标 + 克拉肯/莫德尔旗帜正名 + 格伦德尔档位修复;   // v4133（修复）：奖杯族修饰词截胡修正（水晶飞龙女王战利品回归奖杯族 9.5）；v4132：旗帜族录入+排序垫底
+var LB_VERSION = 'v20261027-5552';   // v4280（根因修复）：① 退出物品模式恢复「选种」按钮（v1368 隐藏无恢复） ② 生物背包容器标题唯一源解析（BP_/_ASA 组件 token → 真实 dinoClass）   // v4231（用户实测「繁育栏把功能栏挡住」）：① 两栏同显繁育栏叠功能栏上方 ② 空繁育栏不显示 ③ 结果浮层/追踪钮偏移联动   // v4230（用户裁定）：皮肤类全链隐藏（词典 skin:1 标记并入判空链——Tileset 外观/Bounce 系列/节日建筑等 54 键）   // v4229（用户确认）：初始笔记全链隐藏（v4083 只滤浮窗，容器漏同步 ⇒ hideItems+硬编码双写入升级）   // v4228（用户口径）：容器 chip 染料补色点（v3593 只改了浮窗，容器漏同步）   // v4227（用户口径）：HotbarSkill_Base（快捷技能芯片，非真实物品）加入隐藏名单（hideItems+硬编码双写入）   // v4226（用户实测「黑曜石仙境没内容却显示tab」根因修复）：lbPickIdx 统计对齐渲染口径（+lbIsEmptyItem 判空）——q=0 空槽残留不再计入 tab/角标/聚落/总数   // v4225（v4224 实测补丁）：预热已走完但缓存被清（材质表到达等）→ 立即兜底冷建，不再干等 6s   // v4224（用户口径「空档期点击卡」）：① 物品栏未预热点击→占位+等预热填充（不再冻结 440ms 无反馈）② 预加载交互让路（600ms 窗口）③ 静默刷新收尾即触发预热（消 3s 空窗）   // v4223（性能优化·用户确认A+B2）：① 预加载热点——字典键数引用缓存（拥有索引 11,531ms 预计降至 1~2s）② 后台检查更新——批量 LM 接口（40+ 次 HEAD → 1 次请求）   // v4222（用户口径）：所有可点击徽章补 hover——① 设施芯片挂载条件扩为「可点即 hover」② 装备榜/选种行卡新增 hover   // v4221（用户实测「角标还显示了2」）：玩家背包同口径排除出服务器 tab 角标/聚落角标/总数（srv/setts/total），修角标与列表不一致   // v4220（用户实测）：「无聚落/离散」容器登记排除玩家背包（消除与「玩家携带」tab 重复的纯背包卡）   // v4219（实测根因）：伪容器 rec 补 server 字段（修「无聚落/离散」卡点进去详情空——lbRecHasPick 键查空导致）   // v4218（用户口径）：物品筛选类别扩至「物品浮窗全部类别」（lbItemIsPick 按浮窗归属类别对齐，修 建筑/资源等非装备类筛选全灭）   // v4217（用户要求）：① 别名表数据化（dino_rank_alias.json + 恐龙recs类名映射，零硬编码）② 物品模式玩家tab恢复位置卡/去平铺卡流 ③ 恐龙侧 mine 与恐龙列表同源（跨服龙鞍显示）   // v4216（实测根因修复）：ASB_DB 懒加载未就绪时缓存空表 ⇒ 词干表 0 条永久失效；改为「就绪才缓存」（lbRankStemMap + lbAsbNameMap）   // v4215（用户口径）：① 装备榜鞍键↔恐龙键同物异名归一（勘误+ASB词干表）② 选物种玩家背包只留该物种鞍/蓝图 ③ 选物品隐藏低温舱+去位置卡 ④ 非鞍剔除   // v4214（用户口径）：装备榜 TAB 角标只计「我的」——外部更高不参与计数   // v4213（用户口径·S7）：物种按钮显隐与物品侧同步——只看桶内容（有效条目）   // v4212：物种榜 qidx<=0 全排除 + 去重 >0 + 角标=实际显示数 + 恐龙背包显示具体龙名   // v4211（用户要求·单一代码源）：装备榜物种/物品渲染统一为 lbRankRenderPanel + 外部更高条目不显示区域名   // v4210（用户口径·位置唯一化）：容器显示接入「坐标→设施真身」统一解析（人台上的矛显示回「人台E」真名）   // v4209：物品模式装备榜=物种榜完整翻版（两 TAB 实物/蓝图 + qidx<=0 过滤 + 类别图标）   // v4208（用户需求）：物品模式装备榜——按钮按「存档有原始以上品质」动态显隐 + 面板细节对齐物种（分组/行卡/弹卡/过滤同源）   // v4207：离散「位置」组展开时数量位同样被按钮替换（对齐改名）   // v4206：离散卡容器组加「位置」按钮（复刻改名按钮 + 弹地图浮窗）   // v4205：物品模式 tab 显隐排除基因条件（Gen(0) 过滤根因）   // v4204：离散 chip 不响应重命名 + 物品模式隐藏基因设备段（基因存储器根因）   // v4203：修详情内部过滤缺口（物品模式详情逐成员对齐主列表 lbRecHasPick）   // v4202：对照表 11 项权威容量落地（容量表 +10 项数据键 + DisplayCase 归 HIDE）   // v4201（用户方案）：生物背包参与聚合——背包容器注入 ctn（byContainer 直接命中）+ 判定剔除背包点 + 容器组归属统一 + 删近邻兜底   // v4200：龙背包归属加「近邻唯一」兜底（帝蟒背包与龙坐标差 1749 也能归位）   // v4199：放出容器坐标键放开 + 物品索引接「生物背包→龙」关联链   // v4198：修 5 处容量别名反向空指（Fireplace/WaterTap/TurretCatapult/TurretBallista/TaxidermyBase_Small）   // v4197：龙背包并入归属过滤（离散/无聚落详情不再混入别人部落的生物背包）   // v4196：离散卡容器化（scatteredList 暴露 + 物品索引兜底 + 卡内容器注入）   // v4195：散置伪 rec 补 isEmpty 容器本体形态（v3452 同口径，防详情渲染崩溃）   // v4194：散置卡修复——伪容器 rec 直取（物品容器哈希与 rec 哈希两套，cid 不可跨查）   // v4193（用户口径）：物品模式隐藏「聚落命名/区域命名」入口 + 「散置容器」卡（无聚落卡，完全对齐物种）   // v4192（用户口径）：物品角标/数量对齐物种——只统计「当前角色拥有」（v3597 归属过滤接入 lbPickIdx）+ 物品模式聚落卡隐藏放出/低温仓/蛋段 + 角标图标按物品类型取 LB_INV_GRP;   // v4191：玩家 tab 自动切换补修（物品模式无该物品 ⇒ 内容区不再驻留空态）;   // v4190（用户要求）：单一物品主体页优化（玩家tab物品口径 / 物品索引双计修复 / 聚落角标武器类别图标 / 详情行隐藏容量角标）   // v4189（用户要求）：水雷迁入「器械>弹药」（Underwater Mine）;   // v4188（用户要求）：陷阱族迁入「器械>弹药」段（Y异种植物陷阱改名入族 + 大型捕兽夹/捕兽夹入族垫底；v4187 设施段位代码撤回）;   // v4186：泰克水壶补录（工具>水容器族末位）+ 巨石核实 + 对照表 5 项去重、恐龙外观表折叠;   // v4185：恐龙装备栏外观全组过滤（用户实锤鞍皮肤；hideItems 18 项）;   // v4184：译名（沙斯塔鱼龙）+ Cute Dino Helmet 过滤（玩家帽）+ lbEggIs 帽子豁免（Easter_Egg_Hat 归位模块栏）;   // v4183：物品浮窗接入 hideItems 过滤（Pepper Mask 修复）+ 恐龙外观 12 款落地（模块>生物外观）;   // v4182：恐龙装备栏外观 12 款图标全配（8 款本地实锤 + 4 款 wiki 补录；icons2 5204 / webp_map 5107）;   // v4181：B1 节日糖果全量入库（8 新键+圣诞糖果合并为节日恐龙糖+玉米糖换 HUD_Event_Halloween_BC）+ PepperMask 浮窗过滤 + 节日族词/类名规则;   // v4177：Air_Jar/Air_Bladder kind 修正（consumable→weapon，正式入器械>工具>水容器）+ 情人节/感恩节糖果补图（Valentines_Dino_Candy/Thanksgiving_Candy）;   // v4175：料理子序微调（鲨鲨小零食!紧挨吉利盛宴3.4后；虫胶19→5.3 紧挨饭团5.2后）;   // v4174：达科寿司/饭团（原稻米球改名）入料理族并紧挨海藻寿司（子序 5.1/5.2）;   // v4173：情人节巧克力正名+配图（Box o' Chocolates/盒装巧克力/VDay_icon）+ WormGum 补录（虫胶）+ Air_Jar/Air_Bladder 移工具·水容器族（族内最后）+ 食肉植物种子排植物种子R后 + 亚特兰汤/虫胶接料理子序18-19;   // v4170：消耗品补录 18 键（胡椒面具/空气罐/气囊/海龙汤/风干鱼肉×2/稻米球/感染系列×6/干海带/达科寿司/亚特兰汤/蓝莓汁 P+/情人节巧克力 ase）+ 新族「感染」（含感染藤壶 7 项）+ 泰克三叉戟归「矛」族;   // v4169：咒缚贴合全局兜底（跨块场景：咒缚火焰喷射器与本体被手炮块隔开 → 最终序列再贴一次）；v4168：咒缚武器贴合本体（16 对：本体在前、咒缚紧跟 — 武装 11 + 工具 3 + 键名兜底 1 +【火焰喷射器 v4169 修复】）+ 制导火箭弹图标→HomingMissileAmmo_Icon + 巡航导弹图标→Cruise_Missile（v4163 交接回调）;   // v4165：立式南瓜哨兵根因修复（facilityIconSpecial 置空 + 合并尊重空串哨兵）+ 圣诞糖果补录（consumable/节日）+ 鲍勃外观改名 + 蛋糕×3 归节日族;   // v4164：设施根因修正（标识归位/旗帜族+节日族垫底链）+ 节日补族（圣诞彩灯/万圣节墓碑）+ 新族「玩家外观」（TOF 卡尔配件，排生物外观前）;   // v4163：C4遥控起爆器→工具段（tool:1）+ 巡航导弹换图 HomingMissileAmmo_Icon + 塔拉萨麻醉弹药归「箭」族;   // v4162：生化皮肤/独木舟皮肤新族（骨架后/生物外观后）+ 设施栏标识族垫底（旗帜后）+ 咒缚电锯/喷火器图标对齐原版 + 弹药段「异种植物」词（W果实/Z手雷相邻）+ Netgun 归弹药;   // v4161：Radar_Rig 补录（雷达配件→跨步者配件族）+ 未组装的泰克跨步者改归「未组装」族;   // v4160：泰克悬停帆与塔拉萨悬停帆族内相邻（载具子序50.2/50.3）+ 6 条泰克跨步者配件补录（官方类名+官方中文，族=跨步者配件）;   // v4159：13 条骨架/幽灵/兔耳套装以**官方类名+官方中文**落地（长键=PrimalItemCostume_*、短键=图标名）+ 失落精灵龙套装补录 + 3 条旧骨骼条目同步官方名 + 全部归骨架皮肤/幽灵皮肤/生物外观族（排模块段最后）;   // v4158：外观族（骨架皮肤/幽灵皮肤/生物外观/尾巴/披风）整体移至模块段最后 + 独木舟3皮肤归生物外观 + 鱼竿族生效（两条相邻） + M.O.M.I.入模块段·机甲族 + 服装类豁免物种绑定过滤 + 跨步者配件族预留;   // v4157：Cryo医院/水下耕地/宠物展示台/绊线照明弹配方补录（材质档排序）+ 蛋糕ASE过滤 + 4服装隐藏 + 骨架皮肤族（3骨骼+生化，附件后） + 幽灵皮肤族（14条，骨骼后） + 战车族提前（附件前） + 立式南瓜清图标 + Plant W果实/Z手雷族内相邻;   // v4154：泰克光刃（TekClaws）换图 → HUD_TEKHandBlades_Icon_BC + 对照表"非皮肤·疑似"补齐后缀过滤;   // v4151：换图 2（巡航导弹→HUD_TEKCruiseMissile_Icon、泰克榴弹发射器→HUD_TEKGrenadeLauncher_Icon）+ 补录 4（绊线照明弹陷阱/泰克三叉戟/泰克长矛/C4遥控起爆器）+ 对照表区①移除 48 项;   // v4150：鱼竿族（FishingRod+Lovely_Fishing）+ 载具族补员（潜艇→木筏后、塔拉萨悬停帆→泰克悬停帆后）+ 生物外观族 26 项落地（模块段最末）+ 对照表无特征项全参数表;   // v4149：换图 3 组（GrapplingHook→GrappleHook_Icon、TribeTower→Tribe_Tower、TranqArrow→TranqArrow_Icon）+ 补录 11 键（Snowball/Carnivorous_Plant_Seed/Thalassian 系×4/ARK_Anniversary_Surprise_Cake/Birthday_Candle/CryoHospital×2/Netgun）;   // v4148：实时补全区无图标补「?」占位（lbWpRtHtml 与主浮窗一致）+ 图标替换 14 组（储物箱/镜子/油罐/电锯/登山镐/矿枪/鞭子/沙漠套×5/吉利面具/防护套×3/喷火器/潜水服）+ 英文补全（Ghillie Mask / Hazard Suit Hat / SCUBA×4）+ 补录 11 键（MachinedBow/宠物展示台/生日蛋糕/水下耕地/潜艇/塔拉萨悬停帆/收割渔线/周年蛋糕×2）+ TransGPS 打 ASE 过滤标记;   // v4147：Lovely_Fishing_Rod 补录（工具 tool:1）+ 次级解药/扎啤/血之灵药 归料理族（words 3.1/3.2/3.3 排在医疗药酒·能量药酒之后）；图标未录对照表 v4147（六分类 66+53 / skins 甄别 689）;   // v4146：RecipeCurry_Icon 挂菲拉咖喱配方（RecipeNote_FriaCurry / PrimalItem_RecipeNote_FriaCurry 两键 icon→RecipeCurry_Icon）+ HoneyLure 补录（蜂蜜诱饵，图标 HoneyLure_Icon）；对照表 v6 重生（待核 4 / 已处理 12 / 染色剂 22 移出主表入脚注）;   // v4145：W 果短名补规则（Plant_Species_W→手雷，浮窗枚举键带下划线）;   // v4144：族修正（Cucumis/Oryraise→蔬菜；Gilly/Oceans/Worm 短名 re: 规则→料理——修 v4143 短名下划线不命中问题）;   // v4143：Aquatica 消耗品补录 9 项（作物×2/料理×3/弹药×1/其它×3）+ 非凡饲料换图 + 族规则 4 条;   // v4142：Ecto Lantern 两键打 tool:1（进器械栏·工具段）;   // v4141：花粉图标换 High_Quality_Pollen（2 条）+ Ecto Lantern 补录（灵质提灯，工具类，2 键 + 节日族 2 规则）;   // v4140：刷新热区修复（仅标记触发）+ 节日族扩展 + 补录 5 项 + 强效麻醉镖图;   // v4139：item_zh 图标修正（麻醉镖→Tranquilizer_Dart；硅酸盐→SilicateCrystal）;   // v4138：公共设施实时区 39 格（WorldProbe 接线 + 刷新 CD 10s + 后端短时缓存共用）;   // v4137：巨齿鲨颚/生存者战利品移至 Cymathoa 之后（61/62 档）+ Dragon Horn 补录（龙之号角）;   // v4136：Aquatica 三战利品移至奖杯族最末（60 档）;   // v4135：焰鬃獠猪两种獠牙图标（Boaratos_Tusk / Flaming_Boaratos_Tusk）;   // v4134：Hydra/Kraken 归一 + 本体过滤 + AstralSoul/HexCoins 图标 + 克拉肯/莫德尔旗帜正名 + 格伦德尔档位修复;   // v4133（修复）：奖杯族修饰词截胡修正（水晶飞龙女王战利品回归奖杯族 9.5）；v4132：旗帜族录入+排序垫底
 try{ if(document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', function(){ try{ lbMatLoad(); }catch(e){} try{ lbRulesLoad(); }catch(e){} try{ if(typeof lbRankAliasLoad === 'function') lbRankAliasLoad(); }catch(e){} }); } else { lbMatLoad(); try{ lbRulesLoad(); }catch(e){} try{ if(typeof lbRankAliasLoad === 'function') lbRankAliasLoad(); }catch(e){} } }catch(e){}
 try{ if(!window.LB_PERF) window.LB_PERF = {}; window.LB_PERF.t_main0 = Date.now(); }catch(ePerf0){}   // v4465（用户口径·D1）：启动分段计时——主脚本执行开始
 function lbPerfMark(k){ try{ if(!window.LB_PERF[k]) window.LB_PERF[k] = Date.now(); }catch(e){} }
@@ -5513,6 +5533,39 @@ function lbIsAdmin(){
   return !!(auth && auth.user === 'whiterober');
 }
 // v455：服务器管理浮窗（仅管理员 whiterober；MoveDeathBag/CreateCryoTest）
+// 2026-10-27：全局服务器域名（后端 /api/server_config；所有人共享，仅拥有者可写）
+function lbSrvDomainApiBase(){ return (typeof LB_API === 'string' && LB_API) ? LB_API : 'https://data.whiterober.ccwu.cc'; }
+function lbSrvDomainLoad(){
+  var el = document.getElementById('lbSrvDomain');
+  if(!el) return;
+  fetch(lbSrvDomainApiBase() + '/api/server_config?t=' + Date.now(), { cache: 'no-store' })
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(d){ if(d && typeof d.server_domain === 'string') el.value = d.server_domain; })
+    .catch(function(){});
+}
+function lbSrvDomainSave(btn){
+  var el = document.getElementById('lbSrvDomain');
+  var msg = document.getElementById('lbSrvDomainMsg');
+  var a = null; try{ a = JSON.parse(localStorage.getItem('dinoAuth') || 'null'); }catch(e){}
+  if(!a || !a.user){ if(msg) msg.innerHTML = '<span style="color:#ef4444">未登录</span>'; return; }
+  var v = (el && el.value || '').trim();
+  var old = btn ? btn.innerHTML : '';
+  if(btn){ btn.disabled = true; btn.style.opacity = '.5'; btn.innerHTML = '⏳ 保存中…'; }
+  fetch(lbSrvDomainApiBase() + '/api/server_config?username=' + encodeURIComponent(a.user) + '&nick=' + encodeURIComponent(a.nick || ''), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ server_domain: v })
+  }).then(function(r){ return r.json().then(function(j){ return { s: r.status, j: j }; }); }).then(function(x){
+    if(btn){ btn.disabled = false; btn.style.opacity = ''; btn.innerHTML = old; }
+    if(x.s === 401){ if(msg) msg.innerHTML = '<span style="color:#ef4444">未登录或账号不匹配</span>'; return; }
+    if(x.s === 403){ if(msg) msg.innerHTML = '<span style="color:#ef4444">仅系统拥有者可用</span>'; return; }
+    if(x.s !== 200){ if(msg) msg.innerHTML = '<span style="color:#ef4444">保存失败：' + escapeHtml((x.j && x.j.error) || ('HTTP ' + x.s)) + '</span>'; return; }
+    if(el) el.value = x.j.server_domain || '';
+    if(msg) msg.innerHTML = '<span style="color:#22c55e">已保存（所有人共享）</span>';
+    if(typeof lbToast === 'function') lbToast('服务器域名已保存');
+  }).catch(function(e){
+    if(btn){ btn.disabled = false; btn.style.opacity = ''; btn.innerHTML = old; }
+    if(msg) msg.innerHTML = '<span style="color:#ef4444">' + escapeHtml(String((e && e.message) || e)) + '</span>';
+  });
+}
 function lbOpenServerAdminModal(){
   var auth = null;
   try{ auth = JSON.parse(localStorage.getItem('dinoAuth') || 'null'); }catch(e){}
@@ -5544,6 +5597,27 @@ function lbOpenServerAdminModal(){
     + '<button onclick="lbSrvAdminMovePendings()" style="'+btn+'">恢复低温仓</button>'
     + '<div id="lbSrvAdminCryoMsg" style="font-size:12px;min-height:14px;margin-top:6px"></div>'
     + '<div style="margin-top:18px;padding-top:14px;border-top:1px solid #2a2a3a">'
+    + '<div style="font-size:13px;font-weight:bold;color:#ddd;margin-bottom:6px">🖥️ 服务器规则更新</div>'
+    + '<div style="font-size:11px;color:#666;margin-bottom:8px">一次读取<b style="color:#f59e0b">全部服务器</b>的实服 ini，与出厂默认比对；<b style="color:#f59e0b">不会自动刷新</b>，结果在「生存者」浮窗查看。</div>'
+    + '<button id="lbCfgUpdBtn" onclick="lbCfgUpdateAll(this)" style="'+btn+'">开始更新</button>'
+    + '<div id="lbCfgProg" style="display:none;margin-top:10px">'
+    + '<div style="margin-bottom:4px"><div style="height:8px;border-radius:5px;background:#22222c;overflow:hidden"><div id="lbCfgProgBar" style="height:100%;width:0%;background:linear-gradient(90deg,#7c3aed,#a78bfa);transition:width .2s"></div></div></div>'
+    + '<div id="lbCfgProgText" style="font-size:11px;color:#9aa0b5;line-height:1.6"></div>'
+    + '</div>'
+    + '<div id="lbCfgStatus" style="font-size:11px;color:#888;margin-top:8px"></div>'
+    + '<div id="lbCfgMsg" style="font-size:12px;min-height:14px;margin-top:4px"></div>'
+    + '</div>'
+    + '</div>'
+    + '<div style="margin-top:18px;padding-top:14px;border-top:1px solid #2a2a3a">'
+    + '<div style="font-size:13px;font-weight:bold;color:#ddd;margin-bottom:6px">🌐 服务器域名</div>'
+    + '<div style="font-size:11px;color:#666;margin-bottom:6px">配置服务器域名</div>'
+    + '<input id="lbSrvDomain" style="'+inp+'" placeholder="例如 work.whiterober.cn" autocomplete="off">'
+    + '<div style="display:flex;gap:8px;align-items:center">'
+    + '<button onclick="lbSrvDomainSave(this)" style="'+btn+'">保存域名</button>'
+    + '<span id="lbSrvDomainMsg" style="font-size:11px;color:#888"></span>'
+    + '</div>'
+    + '</div>'
+    + '<div style="margin-top:18px;padding-top:14px;border-top:1px solid #2a2a3a">'
     + '<div style="font-size:13px;font-weight:bold;color:#ddd;margin-bottom:6px">⏱ 启动耗时</div>'
     + '<pre style="margin:0;font-size:11px;color:#9aa0b5;white-space:pre-wrap;word-break:break-all;line-height:1.6;background:#12121a;border:1px solid #2a2a3a;border-radius:6px;padding:8px 10px;max-height:240px;overflow-y:auto">' + (typeof lbAttr === 'function' ? lbAttr(lbPerfText()) : lbPerfText()) + '</pre>'
     + '<div style="display:flex;gap:8px;margin-top:6px;align-items:center">'
@@ -5556,8 +5630,1772 @@ function lbOpenServerAdminModal(){
     + '</div>';
   overlay.innerHTML = html;
   document.body.appendChild(overlay);
+  lbSrvDomainLoad();
 }
-// v470：RCON 返回结果中文化（保留数字/ID 细节；长短语优先匹配）
+// ===== 2026-10-27：服务器规则（后端 /api/cfg_rules，逐服查询，绝不自动轮询）=====
+//   · 更新：仅系统拥有者（后端强制），前端串行/低并发逐服拉 GUS，真实进度条
+//   · 结果存 localStorage（本机可见）；同服数据对所有人一致，因为是读同一份实服 ini
+var LB_CFG_KEY = 'lbCfgRules_v1';
+var LB_CFG_FILES = [['GUS', 'GameUserSettings.ini'], ['GAME', 'Game.ini']];
+var LB_CFG_VIEW = { srv: '', fk: 'GUS', q: '', mode: 'changed' };
+var LB_CFG_ZH = null;
+var LB_CFG_ZH_CI = {};
+// 2026-10-27 改：不再隐藏，改为归入置顶「服务器信息」组
+// 2026-10-27 v5488（用户口径）：服务器端口 / RCON 端口 / 启用模组 / 模组ID列表 → 前端隐藏
+//   ⚠️ 仅前端不显示，后端 /api/cfg_rules 数据原样保留（未来功能要用）
+var LB_CFG_INFO_ORDER = ['sessionname', 'port', 'rconport', 'activemods', 'servermodids'];
+var LB_CFG_INFO_HIDE = ['port', 'rconport', 'activemods', 'servermodids'];
+function lbCfgInfoHide(k){
+  var low = String(k || '').trim().toLowerCase();
+  if(LB_CFG_INFO_HIDE.indexOf(low) >= 0) return true;
+  if(/port$/.test(low)) return true;   // 其它端口类（ServerPort / QueryPort 等）一并隐藏
+  return false;
+}
+function lbCfgInfoRank(k){
+  var low = String(k || '').trim().toLowerCase();
+  var i = LB_CFG_INFO_ORDER.indexOf(low);
+  if(i >= 0) return i;
+  if(low === 'port' || /port$/.test(low)) return 40;   // 其它端口类一并归入
+  return -1;
+}
+function lbCfgLoadZh(cb){
+  if(LB_CFG_ZH){ if(cb) cb(); return; }
+  fetch('cfg_zh.json?t=' + Date.now(), { cache: 'no-store' })
+    .then(function(r){ return r.ok ? r.json() : {}; })
+    .then(function(d){
+      LB_CFG_ZH = d || {};
+      LB_CFG_ZH_CI = {};
+      Object.keys(LB_CFG_ZH).forEach(function(k){ LB_CFG_ZH_CI[k.toLowerCase()] = LB_CFG_ZH[k]; });
+      if(cb) cb();
+    })
+    .catch(function(){ LB_CFG_ZH = {}; if(cb) cb(); });
+}
+var LB_CFG_CONC = 2;   // 并发上限：隧道+后端都是单点，2 并发足够快且不互相挤占
+function lbCfgAuthRaw(){ try{ return JSON.parse(localStorage.getItem('dinoAuth') || 'null'); }catch(e){ return null; } }
+function lbCfgCacheAll(){ try{ return JSON.parse(localStorage.getItem(LB_CFG_KEY) || '{}') || {}; }catch(e){ return {}; } }
+function lbCfgCacheGet(srv, fk){
+  var a = lbCfgCacheAll();
+  var c = ((a[srv] || {})[fk]) || null;
+  // v5505：串台自愈 —— 槽内文档不属于该服（请求飞行期切服所致）→ 判无效并清掉该槽，面板自动重拉
+  if(c && c.doc && c.doc.server && String(c.doc.server) !== String(srv)){
+    try{ delete a[srv][fk]; localStorage.setItem(LB_CFG_KEY, JSON.stringify(a)); }catch(e){}
+    return null;
+  }
+  return c;
+}
+function lbCfgCachePut(srv, fk, doc){
+  // v5505：护栏 —— 文档 server 与目标槽不一致 → 拒写（根治请求飞行期切服串台）
+  if(doc && doc.server && String(doc.server) !== String(srv)) return;
+  var a = lbCfgCacheAll(); a[srv] = a[srv] || {}; a[srv][fk] = { ts: Date.now(), doc: doc };
+  try{ localStorage.setItem(LB_CFG_KEY, JSON.stringify(a)); }catch(e){}
+}
+function lbCfgAgo(ts){
+  if(!ts) return '从未更新';
+  var s = Math.round((Date.now() - ts) / 1000);
+  if(s < 60) return s + ' 秒前';
+  if(s < 3600) return Math.round(s / 60) + ' 分钟前';
+  if(s < 86400) return Math.round(s / 3600) + ' 小时前';
+  return Math.round(s / 86400) + ' 天前';
+}
+function lbCfgApi(srv, fk){
+  var a = lbCfgAuthRaw();
+  if(!a || !a.user) return '';
+  var base = (typeof LB_API === 'string' && LB_API) ? LB_API : 'https://data.whiterober.ccwu.cc';
+  return base + '/api/cfg_rules?server=' + encodeURIComponent(srv) + '&file=' + fk
+    + '&username=' + encodeURIComponent(a.user) + '&nick=' + encodeURIComponent(a.nick || '');
+}
+function lbCfgFetchOne(srv, fk){
+  return new Promise(function(res, rej){
+    var u = lbCfgApi(srv, fk);
+    if(!u){ rej('未登录'); return; }
+    fetch(u, { cache: 'no-store' }).then(function(r){
+      if(r.status === 401){ rej('未登录或账号不匹配'); return null; }
+      if(r.status === 403){ rej('仅系统拥有者可用'); return null; }
+      if(!r.ok){ rej('HTTP ' + r.status); return null; }
+      return r.json();
+    }).then(function(d){ if(d) res(d); }).catch(function(e){ rej(String((e && e.message) || e)); });
+  });
+}
+function lbCfgStatusText(){
+  var all = lbCfgCacheAll();
+  var total = (LB.SERVERS || []).length || 11;
+  var done = 0, ts = 0;
+  Object.keys(all).forEach(function(k){
+    if(all[k] && all[k].GUS) done++;
+    ['GUS', 'GAME'].forEach(function(f){ if(all[k][f] && all[k][f].ts > ts) ts = all[k][f].ts; });
+  });
+  return '已更新 ' + done + '/' + total + ' 台' + (ts ? '　·　最近 ' + lbCfgAgo(ts) : '');
+}
+function lbCfgRefreshStatus(){ var el = document.getElementById('lbCfgStatus'); if(el) el.textContent = lbCfgStatusText(); }
+function lbCfgProg(pct, text){
+  var w = document.getElementById('lbCfgProg'), b = document.getElementById('lbCfgProgBar'), t = document.getElementById('lbCfgProgText');
+  if(w) w.style.display = 'block';
+  if(b) b.style.width = Math.max(0, Math.min(100, pct)) + '%';
+  if(t) t.innerHTML = text || '';
+}
+var LB_CFG_ALL = null;
+var LB_CFG_KEYCNT = null;        // v5498：{ GUS:{key:台数}, GAME:{}, GUS_total, GAME_total }
+var LB_CFG_KEYCNT_TRIED = false;
+var LB_CFG_SRV_HIDE = ['Bob'];   // v5504（用户口径）：规则面板不显示「俱乐部」，且不计入「全服」统计
+function lbCfgApiBase(){ return (typeof LB_API === 'string' && LB_API) ? LB_API : 'https://data.whiterober.ccwu.cc'; }
+function lbCfgQ(){
+  var a = lbCfgAuthRaw();
+  return 'username=' + encodeURIComponent((a && a.user) || '') + '&nick=' + encodeURIComponent((a && a.nick) || '');
+}
+function lbCfgLoadAll(cb){
+  fetch(lbCfgApiBase() + '/api/cfg_rules?all=1', { cache: 'no-store' }).then(function(r){
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  }).then(function(d){
+    LB_CFG_ALL = d;
+    LB_CFG_KEYCNT = lbCfgCountKeys(d); LB_CFG_KEYCNT_TRIED = true;   // v5498：更新完成后顺手重算跨服计数
+    var sv = d.servers || {};
+    Object.keys(sv).forEach(function(srv){
+      ['GUS', 'GAME'].forEach(function(fk){
+        var x = sv[srv][fk];
+        if(!x) return;
+        var doc = { ok: true, server: srv, file: (fk === 'GUS' ? 'GameUserSettings.ini' : 'Game.ini'), file_key: fk,
+          count: x.count || 0, changed_count: x.changed_count || 0, ini_mtime: x.ini_mtime,
+          pending_restart: x.pending_restart, partial: x.partial, path_exists: x.path_exists,
+          items: x.items || [], changed_only: true, from_snapshot: true,
+          snapshot_at: d.generated_at, snapshot_by: d.updated_by, baseline: null, missing: [] };
+        lbCfgCachePut(srv, fk, doc);
+      });
+    });
+    if(cb) cb(null, d);
+  }).catch(function(e){ if(cb) cb(e); });
+}
+// v5498：跨服统计「有几个服务器改了这一项」（数据源：公开全服快照 /api/cfg_rules?all=1）
+function lbCfgCountKeys(d){
+  var out = { GUS: {}, GAME: {}, GUS_total: 0, GAME_total: 0 };
+  try{
+    var sv = (d && d.servers) || {};
+    Object.keys(sv).forEach(function(srv){
+      if(LB_CFG_SRV_HIDE.indexOf(srv) >= 0) return;   // v5504：俱乐部不计入全服
+      ['GUS', 'GAME'].forEach(function(fk){
+        var x = sv[srv] && sv[srv][fk];
+        if(!x) return;
+        out[fk + '_total'] = (out[fk + '_total'] || 0) + 1;   // 有该文件数据的服计入总数
+        var items = x.items || [], seen = {};
+        for(var i = 0; i < items.length; i++){
+          var it = items[i];
+          if(!it || it.changed === false) continue;            // 快照是 slim（只含改动项）；显式 false 跳过
+          var k = String(it.key || '').trim().toLowerCase();
+          if(!k || seen[k]) continue;                          // 同服重复键只算一次
+          seen[k] = 1;
+          out[fk][k] = (out[fk][k] || 0) + 1;
+        }
+      });
+    });
+  }catch(e){}
+  return out;
+}
+function lbCfgLoadKeyCounts(cb){
+  if(LB_CFG_KEYCNT || LB_CFG_KEYCNT_TRIED){ if(cb) cb(); return; }
+  LB_CFG_KEYCNT_TRIED = true;
+  fetch(lbCfgApiBase() + '/api/cfg_rules?all=1', { cache: 'no-store' })
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(d){ LB_CFG_KEYCNT = lbCfgCountKeys(d); if(cb) cb(); })
+    .catch(function(){ LB_CFG_KEYCNT = lbCfgCountKeys(null); if(cb) cb(); });
+}
+function lbCfgKeyBadge(x, fk){
+  // 全服应用（台数 = 有数据的服总数）不显示；<=0 或未知也不显示
+  try{
+    if(!LB_CFG_KEYCNT || !fk) return '';
+    var k = String(x.key || '').trim().toLowerCase();
+    if(!k) return '';
+    var n = (LB_CFG_KEYCNT[fk] || {})[k] || 0;
+    var tot = LB_CFG_KEYCNT[fk + '_total'] || 0;
+    if(n <= 0 || tot <= 1 || n >= tot) return '';
+    var tip = '共 ' + tot + ' 台服务器，其中 ' + n + ' 台改了这一项';
+    return '<span class="lb-tipb" title="' + lbCfgAttr(tip) + '" style="flex:0 0 auto;margin-left:6px;padding:0 5px;border-radius:999px;background:#7c3aed26;border:1px solid #7c3aed4d;color:#c4b5fd;font-size:10px;font-weight:700;line-height:15px;cursor:help">' + n + '</span>';
+  }catch(e){ return ''; }
+}
+// v5540（用户口径）：地图专属段只在对应地图的面板显示
+//   根因：11 个服的 GUS ini 是同一模板，[Ragnarok] 段每个服都有（EnableVolcano 等），
+//         但只有仙境真正读该段 → 别的服显示这些项纯噪声。
+//   OasisaurTweaks 属生物微调（非地图段）→ 不在此表，各服照常显示。
+var LB_CFG_MAP_SEC = {
+  ragnarok: 'Rag', theisland: 'Isl', scorchedearth: 'Sco', thecenter: 'Cen',
+  aberration: 'Abe', extinction: 'Ext', astraeos: 'Ast', valguero: 'Val',
+  lostcolony: 'Los', lostisland: 'Los', genesis: 'Gen', genesis1: 'Gen', genesis2: 'Gen',
+  clubark: 'Bob'
+};
+function lbCfgMapSecOwner(section){
+  var s = String(section || '').toLowerCase().replace(/%2f/g, '').replace(/[^a-z0-9]/g, '');
+  return (s && LB_CFG_MAP_SEC[s]) ? LB_CFG_MAP_SEC[s] : '';
+}
+function lbCfgSecForeign(x, srv){
+  var own = lbCfgMapSecOwner(x && x.section);
+  return !!(own && String(own).toLowerCase() !== String(srv || '').toLowerCase());
+}
+// v5541（用户口径）：无基准项改用「全服多数值」当动态基准
+//   与全服多数一致 → 不算改动（「只看改动」不显示）；不一致才显示（标题保持绿色）
+//   数据源：各服 /api/cfg_rules?server=X&file=GUS|GAME 的快照全量，只统计「无基准项」（changed/default 均为 null）
+//   一次会话只拉一次；失败不重试；加载完成自动重绘。ConfigOverride / dup 项不参与此判定。
+var LB_CFG_PEER = null;          // { GUS:{keyLower:{v:众数值,n:次数,tot:服数,tie:并列}}, GAME:{...} }
+var LB_CFG_PEER_TRIED = false;
+var LB_CFG_PEER_LOADING = false;
+var LB_CFG_PEER_CBS = [];
+function lbCfgPeerOk(ps){
+  return !!(ps && ps.tot >= 3 && !ps.tie && ps.n * 2 > ps.tot);
+}
+function lbCfgPeerStat(fk, key){
+  try{
+    if(!LB_CFG_PEER || !fk) return null;
+    var k = String(key || '').trim().toLowerCase();
+    if(!k) return null;
+    return (LB_CFG_PEER[fk] || {})[k] || null;
+  }catch(e){ return null; }
+}
+function lbCfgPeerLoad(cb){
+  if(LB_CFG_PEER){ if(cb) cb(); return; }
+  if(cb) LB_CFG_PEER_CBS.push(cb);
+  if(LB_CFG_PEER_LOADING || LB_CFG_PEER_TRIED) return;
+  LB_CFG_PEER_LOADING = true;
+  var acc = { GUS: {}, GAME: {} };
+  function addDoc(fk, items){
+    var seen = {};
+    for(var i = 0; i < (items || []).length; i++){
+      var x = items[i];
+      if(!x) continue;
+      if(!(x.changed === null || x.changed === undefined)) continue;    // 只看后端判不出改动的项
+      if(!(x['default'] === null || x['default'] === undefined)) continue;
+      var k = String(x.key || '').trim().toLowerCase();
+      if(!k || seen[k]) continue;
+      seen[k] = 1;
+      var vRaw = String(x.value === null || x.value === undefined ? '' : x.value).trim();
+      var v = vRaw.toLowerCase();
+      var rec = acc[fk][k] || (acc[fk][k] = { c: {}, tot: 0, raw: {} });
+      rec.tot++;
+      rec.c[v] = (rec.c[v] || 0) + 1;
+      if(rec.raw[v] === undefined) rec.raw[v] = vRaw;
+    }
+  }
+  function fin(fk){
+    var src = acc[fk], out = {};
+    Object.keys(src).forEach(function(k){
+      var rec = src[k], best = '', bn = 0, tie = false;
+      Object.keys(rec.c).forEach(function(v){
+        var n = rec.c[v];
+        if(n > bn){ bn = n; best = v; tie = false; }
+        else if(n === bn){ tie = true; }
+      });
+      out[k] = { v: best, raw: (rec.raw && rec.raw[best] !== undefined ? rec.raw[best] : best), n: bn, tot: rec.tot, tie: tie };
+    });
+    return out;
+  }
+  var _fin = false;
+  function finish(){
+    if(_fin) return;
+    _fin = true;
+    LB_CFG_PEER = { GUS: fin('GUS'), GAME: fin('GAME') };
+    LB_CFG_PEER_TRIED = true;
+    LB_CFG_PEER_LOADING = false;
+    var cbs = LB_CFG_PEER_CBS.slice();
+    LB_CFG_PEER_CBS = [];
+    cbs.forEach(function(f){ try{ f(); }catch(e){} });
+  }
+  var srvs = Object.keys(LB_CFG_PORT_FALLBACK).filter(function(s){ return LB_CFG_SRV_HIDE.indexOf(s) < 0; });
+  var jobs = [];
+  srvs.forEach(function(s){ jobs.push([s, 'GUS']); jobs.push([s, 'GAME']); });
+  var idx = 0, done = 0;
+  function pump(){
+    if(done >= jobs.length){ finish(); return; }
+    if(idx >= jobs.length) return;
+    var job = jobs[idx++];
+    fetch(lbCfgApiBase() + '/api/cfg_rules?server=' + encodeURIComponent(job[0]) + '&file=' + job[1], { cache: 'no-store' })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(d){ if(d && d.items) addDoc(job[1], d.items); })
+      .catch(function(){})
+      .then(function(){ done++; pump(); });
+  }
+  for(var p = 0; p < 6; p++) pump();
+}
+function lbCfgIsNewKey(x, fk){
+  // v5499 根因修复：出厂基线里没有这个键（default=null）且后端判不出变化（changed=null）
+  //   → 实服 ini 里存在即等于「服务器新增配置」（如 ConfigOverride*），默认「只看改动」也要显示
+  try{
+    if(!x || x.changed !== null || x['default'] !== null || x.masked) return false;
+    // 实测（Isl）：GUS 93 个无默认项中 dup=0；GAME 57 个中 dup=11 且全是 ConfigOverride*
+    //   → 只认「重复出现的多值覆盖项」与 ConfigOverride*，避免把普通无默认键误标为新增
+    if(x.dup === true) return true;
+    if(/^configoverride/i.test(String(x.key || ''))) return true;
+    // v5538（用户口径「Rag 改了火山开关没显示」根因修复）：
+    //   基线缺键 ⇒ changed=null ⇒ 原来被「只看改动」过滤掉（如 [Ragnarok] 的 EnableVolcano/VolcanoIntensity/VolcanoInterval）
+    //   放宽边界：**只认地图/模式专属段**（Ragnarok / Oasisaur / GameSession 等条目少的段）
+    //   排除 ServerSettings / SessionSettings / MultiHome / MessageOfTheDay 四个通用大段
+    //   （实测 Rag GUS 无基线键 108 条，其中 96 条属于 ServerSettings，全放会从 19 条变 127 条噪声）
+    var _sec = String(x.section || '').toLowerCase().replace(/%2f/g, '/').replace(/^\/+/, '');
+    if(!_sec) return false;
+    if(/^(serversettings|sessionsettings|multihome|messageoftheday)$/.test(_sec)) return false;
+    // v5541（用户口径）：以「全服多数值」当动态基准 —— 与多数一致就不算改动（不显示），不一致才显示
+    var ps = lbCfgPeerStat(fk, x.key);
+    if(lbCfgPeerOk(ps)){
+      var cur = String(x.value === null || x.value === undefined ? '' : x.value).trim().toLowerCase();
+      if(String(ps.v) === cur) return false;          // 与全服多数一致 → 不算改动
+    }
+    return true;
+  }catch(e){ return false; }
+}
+function lbCfgFetchFull(cb){
+  // 2026-10-27：两文件合并展示 → 一次拉 GUS + GAME 全量
+  var srv = LB_CFG_VIEW.srv;
+  var body = document.getElementById('lbCfgBody');
+  if(body) body.innerHTML = '<div style="padding:18px;color:#888;font-size:13px">⏳ 正在读取 ' + escapeHtml(lbCfgSrvName(srv)) + ' 全量…</div>';
+  Promise.all([
+    lbCfgFetchOne(srv, 'GUS').catch(function(){ return null; }),
+    lbCfgFetchOne(srv, 'GAME').catch(function(){ return null; })
+  ]).then(function(arr){
+    if(arr[0]) lbCfgCachePut(srv, 'GUS', arr[0]);
+    if(arr[1]) lbCfgCachePut(srv, 'GAME', arr[1]);
+    lbCfgRender(); if(cb) cb(null, arr);
+  }).catch(function(e){ if(cb) cb(e); });
+}
+
+function lbCfgUpdateAll(btn){
+  var msg = document.getElementById('lbCfgMsg');
+  var a = lbCfgAuthRaw();
+  if(!a || !a.user){ if(msg) msg.innerHTML = '<span style="color:#ef4444">未登录</span>'; return; }
+  var oldHtml = btn ? btn.innerHTML : '';
+  if(btn){ btn.disabled = true; btn.style.opacity = '.5'; btn.innerHTML = '⏳ 更新中…'; }
+  if(msg) msg.innerHTML = '';
+  lbCfgProg(0, '已向后端发出更新指令（后端自己读取全服，浏览器不搬数据）…');
+  fetch(lbCfgApiBase() + '/api/cfg_rules/refresh?' + lbCfgQ(), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+  }).then(function(r){ return r.json().then(function(j){ return { s: r.status, j: j }; }); }).then(function(x){
+    if(x.s === 401) throw new Error('未登录或账号不匹配');
+    if(x.s === 403) throw new Error('仅系统拥有者可用');
+    if(x.s !== 200) throw new Error((x.j && x.j.error) || ('HTTP ' + x.s));
+    lbCfgPollJob(btn, oldHtml);
+  }).catch(function(e){
+    if(btn){ btn.disabled = false; btn.style.opacity = ''; btn.innerHTML = oldHtml; }
+    lbCfgProg(100, '<span style="color:#ef4444">' + escapeHtml(String((e && e.message) || e)) + '</span>');
+  });
+}
+function lbCfgPollJob(btn, oldHtml){
+  var msg = document.getElementById('lbCfgMsg');
+  var t0 = Date.now();
+  function tick(){
+    fetch(lbCfgApiBase() + '/api/cfg_rules/refresh_status', { cache: 'no-store' }).then(function(r){ return r.json(); }).then(function(d){
+      var j = (d && d.job) || {};
+      var total = j.total || 11, done = j.done || 0;
+      lbCfgProg(total ? (done / total * 100) : 0, '后端读取中：' + done + '/' + total
+        + (j.current ? '　当前 <b style="color:#a78bfa">' + escapeHtml(j.current) + '</b>' : ''));
+      if(j.running){ setTimeout(tick, 700); return; }
+      lbCfgProg(100, '✅ 后端已完成，正在装载全服概览…');
+      lbCfgLoadAll(function(err, doc){
+        if(btn){ btn.disabled = false; btn.style.opacity = ''; btn.innerHTML = oldHtml; }
+        lbCfgRefreshStatus();
+        if(err){ lbCfgProg(100, '<span style="color:#ef4444">装载失败：' + escapeHtml(String(err)) + '</span>'); return; }
+        var sv = (doc && doc.servers) || {};
+        var n = Object.keys(sv).length, chg = 0;
+        Object.keys(sv).forEach(function(k){ chg += ((sv[k].GUS || {}).changed_count) || 0; });
+        lbCfgProg(100, '✅ 完成：' + n + ' 台　·　共 <b style="color:#f59e0b">' + chg + '</b> 项改动　·　耗时 '
+          + Math.round((Date.now() - t0) / 1000) + 's');
+        if(msg) msg.innerHTML = '<span style="color:#22c55e">✅ 已发布共享快照，所有玩家打开即可查看</span>';
+        setTimeout(function(){ var w = document.getElementById('lbCfgProg'); if(w) w.style.display = 'none'; }, 6000);
+      });
+    }).catch(function(){ setTimeout(tick, 1200); });
+  }
+  tick();
+}
+
+// ===== v5526（用户口径）：粑粑笔记（固定数据文件 bb_notes.json，只读） =====
+var LB_BBNOTES = null, LB_BBNOTES_P = null;
+// ===== v5529（用户口径）：后端读写 + Markdown 渲染 + 导出/导入 =====
+function lbBbNotesFetch(){
+  // 优先后端（可写回 /api/bb_notes），后端未就绪时回落 CF 静态文件
+  var base = lbCfgApiBase();
+  return authFetch(base + '/api/bb_notes?v=' + LB_VERSION, {}).then(function(r){
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  }).then(function(d){
+    // v5530：后端尚未建立笔记文件时（missing）回落 CF 静态兜底内容，避免首屏空白
+    if(d && d.missing) throw new Error('backend missing');
+    return d;
+  }).catch(function(){
+    return authFetch(LB_ASA + '/bb_notes.json?v=' + LB_VERSION, {}).then(function(r){ return r.json(); });
+  });
+}
+function lbMdEsc(s){
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function lbMdInline(s){
+  s = lbMdEsc(s);
+  s = s.replace(/`([^`]+)`/g, '<code style="background:#ffffff14;border-radius:4px;padding:1px 4px;font-family:ui-monospace,Consolas,monospace">$1</code>');
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<b style="color:#f1f5f9">$1</b>');
+  s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<i>$2</i>');
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener" style="color:#a78bfa;text-decoration:underline">$1</a>');
+  // v5536（用户口径）：允许 Markdown 使用主题色 —— ==文字== 渲染为主题紫加粗
+  s = s.replace(/==([^=\n]+)==/g, '<span style="color:#a78bfa;font-weight:600;font-size:1.25em">$1</span>');   // v5548：放大 1.25em
+  // v5549（用户口径）：%%文字%% 只着色不放大（仍限主题紫）
+  s = s.replace(/%%([^%\n]+)%%/g, '<span style="color:#a78bfa">$1</span>');
+  // v5545（用户口径）：历史笔记 / AI 误写的 <span style="...">文字</span> —— 按白名单渲染成真实样式，不再显示源码
+  s = s.replace(/&lt;span(?:\s+style=&quot;([^&]*)&quot;)?&gt;([\s\S]*?)&lt;\/span&gt;/gi, function(m0, sty, inner){
+    var keep = String(sty || '').toLowerCase().replace(/\s+/g, '');
+    // v5547（用户口径）：着色只允许主题色 —— 丢弃原始 color，统一主题紫加粗；字号照原样保留
+    var css = ['color:#a78bfa', 'font-weight:600'];
+    var c2 = keep.match(/font-size:([0-9.]+(?:px|em|rem|%))/);
+    if(c2) css.push('font-size:' + c2[1]);
+    return '<span' + (css.length ? (' style="' + css.join(';') + '"') : '') + '>' + inner + '</span>';
+  });
+  return s;
+}
+function lbMdRender(md){
+  // 轻量 Markdown：标题 / 粗体 / 斜体 / 行内码 / 代码块 / 列表 / 分隔线 / 链接 / 空行
+  var lines = String(md == null ? '' : md).replace(/\r\n/g, '\n').split('\n');
+  var out = [], i = 0, listBuf = null, listTag = '';
+  function flushList(){
+    if(!listBuf) return;
+    out.push('<' + listTag + ' style="margin:4px 0 6px;padding-left:18px">' + listBuf.join('') + '</' + listTag + '>');
+    listBuf = null; listTag = '';
+  }
+  while(i < lines.length){
+    var ln = lines[i], t = ln.trim();
+    if(t.indexOf('```') === 0){
+      flushList();
+      var cb = []; i++;
+      while(i < lines.length && lines[i].trim().indexOf('```') !== 0){ cb.push(lbMdEsc(lines[i])); i++; }
+      i++;
+      out.push('<pre style="margin:6px 0;padding:8px 10px;border-radius:6px;background:#0b0b12;border:1px solid #ffffff14;overflow:auto"><code style="font-family:ui-monospace,Consolas,monospace;font-size:12px;color:#cbd5e1">' + cb.join('\n') + '</code></pre>');
+      continue;
+    }
+    if(!t){ flushList(); out.push('<div style="height:6px"></div>'); i++; continue; }
+    var mh = ln.match(/^(#{1,6})\s+(.*)$/);
+    if(mh){
+      flushList();
+      var sz = [16, 14.5, 13.5, 13, 12.5, 12.5][mh[1].length - 1];
+      out.push('<div style="font-size:' + sz + 'px;font-weight:700;color:#e2e8f0;margin:6px 0 3px">' + lbMdInline(mh[2]) + '</div>');
+      i++; continue;
+    }
+    if(/^(-{3,}|\*{3,}|_{3,})$/.test(t)){ flushList(); out.push('<div style="height:1px;background:#ffffff1a;margin:8px 0"></div>'); i++; continue; }
+    var mu = ln.match(/^\s*[-*+]\s+(.*)$/);
+    if(mu){ if(listTag !== 'ul'){ flushList(); listTag = 'ul'; } if(!listBuf) listBuf = []; listBuf.push('<li style="margin:2px 0">' + lbMdInline(mu[1]) + '</li>'); i++; continue; }
+    var mo = ln.match(/^\s*\d+[.)]\s+(.*)$/);
+    if(mo){ if(listTag !== 'ol'){ flushList(); listTag = 'ol'; } if(!listBuf) listBuf = []; listBuf.push('<li style="margin:2px 0">' + lbMdInline(mo[1]) + '</li>'); i++; continue; }
+    flushList();
+    out.push('<div style="margin:2px 0">' + lbMdInline(ln) + '</div>');
+    i++;
+  }
+  flushList();
+  return out.join('');
+}
+function lbBbNotesMdText(){
+  var d = LB_BBNOTES || { notes: [] };
+  var L = ['# 粑粑笔记', ''];
+  (d.notes || []).forEach(function(n){
+    n = n || {};
+    L.push('## ' + String(n.title || '未命名'));
+    L.push('<!-- icon: ' + String(n.icon || 'mdi:information-outline') + ' -->');
+    L.push('');
+    L.push(String(n.body || ''));
+    L.push('');
+  });
+  return L.join('\n') + '\n';
+}
+// v5550（用户口径）：导出 .md 文件 → 直接复制 Markdown 到剪贴板
+function lbBbNotesCopyMd(el){
+  var md = '';
+  try{ md = lbBbNotesMdText(); }catch(e0){ md = ''; }
+  if(!md){ try { if (typeof lbToast === 'function') lbToast('还没有可复制的笔记'); } catch (e1) {} return; }
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(md).then(function(){
+        try { if (typeof lbToast === 'function') lbToast('已复制 Markdown（' + md.length + ' 字）'); } catch (e2) {}
+      }, function(){
+        lbCfgCopyCmd(md, el);
+        try { if (typeof lbToast === 'function') lbToast('已复制 Markdown（' + md.length + ' 字）'); } catch (e3) {}
+      });
+      return;
+    }
+  }catch(e4){}
+  lbCfgCopyCmd(md, el);
+  try { if (typeof lbToast === 'function') lbToast('已复制 Markdown（' + md.length + ' 字）'); } catch (e5) {}
+}
+function lbBbNotesExport(){
+  try{
+    var txt = lbBbNotesMdText();
+    var d = new Date(), p = function(x){ return (x < 10 ? '0' : '') + x; };
+    var fn = '粑粑笔记_' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '.md';
+    var blob = new Blob([txt], { type: 'text/markdown;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = fn;
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ try{ document.body.removeChild(a); URL.revokeObjectURL(url); }catch(e){} }, 600);
+  }catch(e){ alert('导出失败：' + ((e && e.message) || e)); }
+}
+function lbBbNotesParseMd(text){
+  // 与导出格式对称：'## 标题' 分条；紧随的 <!-- icon: xxx --> 指定图标
+  var lines = String(text || '').replace(/\r\n/g, '\n').split('\n');
+  var notes = [], cur = null, body = [];
+  function push(){
+    if(!cur) return;
+    var b = body.join('\n').replace(/^\n+/, '').replace(/\s+$/, '');
+    if(cur.title || b) notes.push({ icon: cur.icon, title: cur.title, body: b });
+  }
+  lines.forEach(function(ln){
+    var m = ln.match(/^##\s+(.+?)\s*$/);
+    if(m){ push(); cur = { title: m[1].trim(), icon: 'mdi:information-outline' }; body = []; return; }
+    if(!cur) return;
+    var mi = ln.match(/^\s*<!--\s*icon:\s*([^\s>]+)\s*-->\s*$/i);
+    if(mi){ cur.icon = mi[1]; return; }
+    if(/^\s*<!--.*-->\s*$/.test(ln)) return;
+    body.push(ln);
+  });
+  push();
+  return notes;
+}
+function lbBbNotesEdit(){
+  // v5531（用户口径）：直接编辑 Markdown 源码（替代选文件导入）
+  try { LB_BBNOTE_AI.md = ''; LB_BBNOTE_AI.note = ''; LB_BBNOTE_AI.busy = false; } catch (eR) {}
+  var old = document.getElementById('lbBbEditOv'); if(old) old.remove();
+  var ov = document.createElement('div');
+  ov.id = 'lbBbEditOv';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#000000a8;display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.onclick = function(e){ if(e.target === ov) ov.remove(); };
+  ov.innerHTML = '<div class="lb-picker-panel" onclick="event.stopPropagation()" style="max-width:760px;width:100%;max-height:92vh;display:flex;flex-direction:column">'
+    + '<div class="lb-picker-header"><span style="flex:1;font-weight:bold;color:#a78bfa">✏️ 编辑粑粑笔记（Markdown 源码）</span>'
+    + '<button class="lb-picker-close" onclick="document.getElementById(\'lbBbEditOv\').remove()" title="关闭"><i class="mdi mdi-close"></i></button></div>'
+    // v5532（用户口径）：编辑区上方内嵌 AI 模块（复用流程 .lb-hf-ai* 样式，不做第二套皮肤）
+    + '<div style="flex:1;min-height:0;overflow-y:auto;padding:8px 12px 4px">'
+    + lbBbNotesAiHtml()
+    + '<div style="margin-top:8px;font-size:11px;color:#888;line-height:1.7">'
+    + '　<b style="color:#a78bfa">## 标题</b> 分条；标题下一行 <b style="color:#a78bfa">&lt;!-- icon: mdi:xxx --&gt;</b> 指定图标；正文支持 Markdown，'
+    + '<b style="color:#a78bfa">==重点==</b> 主题色+放大，<b style="color:#a78bfa">%%重点%%</b> 只变色。</div>'
+    + '<div style="margin-top:6px;display:flex">'
+    + '<textarea id="lbBbEditTa" spellcheck="false" wrap="soft" style="width:100%;height:260px;min-height:200px;box-sizing:border-box;background:#0b0b12;border:1px solid #ffffff1a;border-radius:8px;color:#e5e7eb;font-family:ui-monospace,Consolas,monospace;font-size:12.5px;line-height:1.7;padding:10px;resize:vertical;outline:none"></textarea>'
+    + '</div></div>'
+    + '<div style="display:flex;gap:8px;align-items:center;padding:8px 12px 12px">'
+    + '<span id="lbBbEditTip" style="flex:1;min-width:0;font-size:11px;color:#6b7280"></span>'
+    + '<span class="lb-cat-chip" onclick="document.getElementById(\'lbBbEditOv\').remove()" style="cursor:pointer;padding:5px 12px;border-radius:8px;font-size:12.5px;background:#2a2a3a;color:#cbd5e1">取消</span>'
+    + '<span class="lb-cat-chip" onclick="lbBbNotesEditSave()" style="cursor:pointer;padding:5px 12px;border-radius:8px;font-size:12.5px;background:#7c3aed;color:#fff;font-weight:600">保存</span>'
+    + '</div></div>';
+  document.body.appendChild(ov);
+  var ta = document.getElementById('lbBbEditTa');
+  if(ta){
+    ta.value = lbBbNotesMdText();
+    ta.focus();
+    try{ ta.setSelectionRange(0, 0); ta.scrollTop = 0; }catch(e){}
+    ta.oninput = function(){
+      var tip = document.getElementById('lbBbEditTip');
+      if(!tip) return;
+      var n = 0;
+      try{ n = lbBbNotesParseMd(ta.value).length; }catch(e){ n = 0; }
+      tip.textContent = '解析到 ' + n + ' 条 · ' + ta.value.length + ' 字';
+      tip.style.color = n ? '#6b7280' : '#f59e0b';
+    };
+  }
+  try { lbBbNotesAiModeSet(lbBbNotesAiModeDefault(), true); } catch (eM) {}   // v5533：有内容→优化 / 空→覆盖
+}
+// ===== v5532（用户口径）：编辑 MD 内嵌 AI 模块 —— 完全复用流程 .lb-hf-ai* 的样式与结构，调用链独立 =====
+var LB_BBNOTE_AI = { busy: false, md: '', note: '', mode: '' };
+var LB_BBNOTES_AI_SYS = '你是 ARK: Survival Ascended 服务器「粑粑笔记」的文案助手。笔记是给普通玩家看的小提示，要清楚、简短、条目化。只输出 JSON，不解释、不加代码块标记。禁止输出任何 HTML 标签（span / div / font / b / br 等），需要强调或着色只能用 ==文字==（主题紫+放大）或 %%文字%%（只主题紫，不放大）。';
+// v5533（用户口径）：复用流程 AI 的三选项「追加 / 覆盖 / 优化」（同 .lb-hf-aimode 结构与语义）
+function lbBbNotesAiPlaceholder(m){
+  m = m || LB_BBNOTE_AI.mode || 'replace';
+  if(m === 'append') return '例：补一条「每周三晚 8 点服务器重启」';
+  if(m === 'opt') return '例：把重启提示改到周四凌晨，并补上补偿方式';
+  return '例：重写成三块——新手指引 / 常见问题 / 服务器规矩';
+}
+function lbBbNotesAiModeDefault(){
+  var ta = document.getElementById('lbBbEditTa');
+  var v = ta ? String(ta.value || '') : '';
+  return v.trim() ? 'opt' : 'replace';   // 有内容→优化；空→覆盖（与流程 AI 同逻辑）
+}
+function lbBbNotesAiModeSet(m, silent){
+  m = (m === 'replace' || m === 'opt') ? m : 'append';
+  if(m === 'opt'){
+    var ta = document.getElementById('lbBbEditTa');
+    if(!ta || !String(ta.value || '').trim()){
+      if(!silent){ try { if (typeof lbToast === 'function') lbToast('编辑器还是空的，先写点内容再优化'); } catch (eT) {} }
+      m = 'replace';
+    }
+  }
+  LB_BBNOTE_AI.mode = m;
+  var box = document.getElementById('lbBbAiMode');
+  if(box){ [].slice.call(box.querySelectorAll('[data-m]')).forEach(function(e){ e.classList.toggle('on', e.getAttribute('data-m') === m); }); }
+  try { var go = document.getElementById('lbBbAiGo'); if(go) go.innerHTML = (m === 'opt' ? '🪄 优化' : '✨ 生成'); } catch (eB) {}
+  try { var it = document.getElementById('lbBbAiInput'); if(it) it.placeholder = lbBbNotesAiPlaceholder(m); } catch (eP) {}
+}
+function lbBbNotesAiModeHtml(){
+  var m = LB_BBNOTE_AI.mode || 'replace';
+  return '<span class="lb-hf-aimode" id="lbBbAiMode">'
+    + '<span data-m="append" class="' + (m === 'append' ? 'on' : '') + '" onclick="lbBbNotesAiModeSet(&quot;append&quot;)">追加</span>'
+    + '<span data-m="replace" class="' + (m === 'replace' ? 'on' : '') + '" onclick="lbBbNotesAiModeSet(&quot;replace&quot;)">覆盖</span>'
+    + '<span data-m="opt" class="' + (m === 'opt' ? 'on' : '') + '" onclick="lbBbNotesAiModeSet(&quot;opt&quot;)">优化</span>'
+    + '</span>';
+}
+function lbBbNotesAiHtml(){
+  var cfg = {}; try { cfg = lbAiCfgGet() || {}; } catch (e) {}
+  return '<div class="lb-hf-aibox" id="lbBbAiBox">'
+    + '<div class="lb-hf-aiinput-wrap">'
+    + '<textarea class="lb-hf-aiinput" id="lbBbAiInput" placeholder="' + lbCfgAttr(lbBbNotesAiPlaceholder()) + '"></textarea>'
+    + '<img class="lb-hf-aiinput-water" src="thumbs/webp96/bdb8c3b809e6_w96.webp" alt="">'
+    + '</div>'
+    + '<div class="lb-hf-airow">'
+    + lbBbNotesAiModeHtml()
+    + '<span class="lb-hf-ai-fill"></span>'
+    + '<span class="lb-hf-ai-meta" id="lbBbAiMeta">模型 ' + lbCfgAttr(lbAiModelShort(cfg.model)) + ' · token ' + lbCfgAttr(lbAiMask(cfg.token || '')) + '</span>'
+    + '<span class="lb-hf-ai-cfg" onclick="lbOpenConfigModal()">⚙ 配置</span>'
+    + '<button class="lb-hf-aibtn primary" id="lbBbAiGo" onclick="lbBbNotesAiGen()">' + (LB_BBNOTE_AI.mode === 'opt' ? '🪄 优化' : '✨ 生成') + '</button>'
+    + '</div>'
+    + '<div class="lb-hf-aicand" id="lbBbAiCand" style="display:none"></div>'
+    + '</div>';
+}
+function lbBbNotesAiCandHtml(html){
+  var box = document.getElementById('lbBbAiCand');
+  if(!box) return;
+  box.style.display = 'block';
+  box.innerHTML = html;
+}
+function lbBbNotesAiGen(){
+  var cfg = null; try { cfg = lbAiCfgGet(); } catch (e0) {}
+  var inpEl = document.getElementById('lbBbAiInput');
+  var goBtn = document.getElementById('lbBbAiGo');
+  var taEdit = document.getElementById('lbBbEditTa');
+  var inp = String((inpEl && inpEl.value) || '').trim();
+  if(!cfg || !cfg.token){
+    try { if (typeof lbToast === 'function') lbToast('请先在「⚙ 配置」里填大肥鱼 token'); } catch (e1) {}
+    try { lbOpenConfigModal(); } catch (e2) {}
+    return;
+  }
+  if(!inp){ try { if (typeof lbToast === 'function') lbToast('先写一句需求'); } catch (e3) {} return; }
+  if(LB_BBNOTE_AI.busy) return;
+  LB_BBNOTE_AI.busy = true;
+  if(goBtn){ goBtn.disabled = true; goBtn.textContent = '生成中…'; }
+  lbBbNotesAiCandHtml('<div class="lb-hf-aihint">正在生成笔记…</div>');
+  var cur = String((taEdit && taEdit.value) || '');
+  var mode = LB_BBNOTE_AI.mode || 'replace';
+  // v5533：三模式的写作策略（追加=只补新的；优化=就地改；覆盖=整段重写）
+  var task = (mode === 'append')
+    ? '【本次任务：追加】只输出**新增**的条目，忽略现有笔记内容（系统会把结果接在现有笔记末尾）。\n'
+    : ((mode === 'opt')
+      ? '【本次任务：优化】保留原有意图与结构，按需求就地调整下面的现有笔记，输出**调整后的完整**笔记 Markdown。\n'
+      : '【本次任务：覆盖】按本次需求重新组织，输出**完整**笔记 Markdown，忽略现有笔记内容。\n');
+  // v5534（用户口径）：只有「优化」模式才喂现有原文；追加 / 覆盖只按需求生成
+  var ctx = (mode === 'opt') ? ('【当前笔记 Markdown】\n' + (cur.trim() ? cur : '（空）') + '\n\n') : '';
+  var usr = ctx + '【我的需求】\n' + inp + '\n\n' + task
+    + '【输出要求】\n'
+    + '1) 严格输出 JSON：{"notes_md":"<笔记 Markdown>","note":"一句话说明改动"}\n'
+    + '2) notes_md 必须可直接保存，每条格式：\n'
+    + '## 标题\n<!-- icon: mdi:information-outline -->\n正文（支持 **粗体**、- 列表、1. 编号、--- 分隔线、[文字](https://链接)）\n\n'
+    + '3) 每条标题下一行必须是 HTML 注释形式的图标；icon 只能用 mdi 名，示例：mdi:information-outline / mdi:alert / mdi:clock-outline / mdi:map-marker / mdi:shield-alert / mdi:heart / mdi:star\n'
+    + '4) 标记重点两种写法：==文字== 渲染为主题紫+加粗+放大（大标题用）；%%文字%% 渲染为纯主题紫不放大（小强调用）；每条笔记最多 2~3 处，禁止整段包裹、禁止嵌套其它语法；\n'
+    + '5) 不要输出代码块标记，不要输出任何解释性前后缀；\n'
+    + '6) 严禁输出任何 HTML/XML 标签（span、div、font、b、br 等），需要强调或主题色一律用 ==文字==。';
+  var goLabel = function(){ return (LB_BBNOTE_AI.mode === 'opt') ? '🪄 优化' : '✨ 生成'; };
+  var done = function(){ LB_BBNOTE_AI.busy = false; if(goBtn){ goBtn.disabled = false; goBtn.textContent = goLabel(); } };
+  fetch(String(cfg.base || LB_AI_BASE).replace(/\/+$/, '') + '/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.token },
+    body: JSON.stringify({
+      model: lbAiNormModel(cfg.model),
+      messages: [{ role: 'system', content: LB_BBNOTES_AI_SYS }, { role: 'user', content: usr }],
+      temperature: 0.3, max_tokens: 2000,
+      thinking: { type: 'disabled' },
+      response_format: { type: 'json_object' }
+    })
+  }).then(function(r){ return r.text().then(function(t){ return { s: r.status, t: t }; }); })
+    .then(function(x){
+      done();
+      if(x.s !== 200){
+        lbBbNotesAiCandHtml('<div class="lb-hf-aihint" style="color:#f87171">✖ ' + lbCfgAttr(String(lbAiErrText(x.s) || '接口报错')) + '（' + x.s + '）</div>');
+        return;
+      }
+      var j = null; try { j = JSON.parse(x.t); } catch (eJ) {}
+      var ch0 = (j && j.choices && j.choices[0]) ? j.choices[0] : null;
+      var m0 = (ch0 && ch0.message) ? ch0.message : null;
+      var content = (m0 && m0.content) ? String(m0.content) : '';
+      var d = null; try { d = lbAiParseJson(content); } catch (eP) {}
+      if(!d && m0 && m0.reasoning_content){ try { d = lbAiParseJson(String(m0.reasoning_content)); } catch (eR) {} }
+      var md = '';
+      if(d && (d.notes_md || d.markdown)) md = String(d.notes_md || d.markdown);
+      else md = String(content || '').replace(/^```[a-z]*\s*/i, '').replace(/```\s*$/, '').trim();
+      if(!md){
+        var snip = String(content || x.t || '').replace(/\s+/g, ' ').slice(0, 120);
+        lbBbNotesAiCandHtml('<div class="lb-hf-aihint" style="color:#f87171">✖ 返回无法解析' + (snip ? ('：' + lbCfgAttr(snip)) : '') + '</div>');
+        return;
+      }
+      LB_BBNOTE_AI.md = md;
+      LB_BBNOTE_AI.note = (d && d.note) ? String(d.note) : '';
+      var n = 0; try { n = lbBbNotesParseMd(md).length; } catch (eN) {}
+      lbBbNotesAiCandHtml(
+        '<div class="lb-hf-ai-meta" style="text-align:left;white-space:normal">'
+          + (LB_BBNOTE_AI.note ? (lbCfgAttr(LB_BBNOTE_AI.note) + '　·　') : '') + '解析到 ' + n + ' 条</div>'
+        + '<div style="margin:6px 0;max-height:260px;overflow:auto">'
+        + lbBbNotesCardsHtml((function(){ try { return lbBbNotesParseMd(md); } catch (eP2) { return []; } })(), '解析不到条目')
+        + '</div>'
+        + '<div class="lb-hf-airow" style="margin-top:6px">'
+        + '<span class="lb-hf-ai-fill"></span>'
+        + '<button class="lb-hf-aibtn primary" onclick="lbBbNotesAiApply()">'
+        + (LB_BBNOTE_AI.mode === 'append' ? '追加到末尾' : (LB_BBNOTE_AI.mode === 'opt' ? '应用优化' : '覆盖编辑器'))
+        + '</button>'
+        + '</div>'
+      );
+    })
+    .catch(function(e){
+      done();
+      lbBbNotesAiCandHtml('<div class="lb-hf-aihint" style="color:#f87171">✖ 网络错误：' + lbCfgAttr(String((e && e.message) || e)) + '</div>');
+    });
+}
+function lbBbNotesAiApply(){
+  var ta = document.getElementById('lbBbEditTa');
+  var md = String(LB_BBNOTE_AI.md || '');
+  if(!ta || !md) return;
+  var mode = LB_BBNOTE_AI.mode || 'replace';
+  if(mode === 'append'){
+    var cur = String(ta.value || '');
+    ta.value = (cur.trim() ? (cur.replace(/\s+$/, '') + '\n\n') : '') + md;
+  } else {
+    ta.value = md;
+  }
+  try { ta.dispatchEvent(new Event('input')); } catch (e) {}
+  try { ta.focus(); } catch (e2) {}
+  try { if (typeof lbToast === 'function') lbToast(mode === 'append' ? '已追加到末尾' : (mode === 'opt' ? '已应用优化结果' : '已覆盖编辑器内容')); } catch (e3) {}
+}
+function lbBbNotesEditSave(){
+  var ta = document.getElementById('lbBbEditTa');
+  if(!ta) return;
+  var notes = [];
+  try{ notes = lbBbNotesParseMd(ta.value); }catch(e){ alert('解析失败：' + ((e && e.message) || e)); return; }
+  if(!notes.length){ alert('没有解析到任何笔记。\n\n格式要求：\n\n## 标题\n<!-- icon: mdi:information-outline -->\n正文…'); return; }
+  lbBbNotesSave(notes, true);
+}
+function lbBbNotesSave(notes, closeEditor){
+  var a = (lbCfgAuthRaw ? (lbCfgAuthRaw() || {}) : {});
+  fetch(lbCfgApiBase() + '/api/bb_notes', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: a.user || '', nick: a.nick || '', notes: notes })
+  }).then(function(r){ return r.json(); }).then(function(d){
+    if(!d || d.ok !== true){ alert('保存失败：' + ((d && (d.error || d.detail)) || '未知错误')); return; }
+    LB_BBNOTES = d.doc || { version: 1, updated: d.updated || '', notes: notes };
+    LB_BBNOTES_P = null;
+    if(closeEditor){ var _ov = document.getElementById('lbBbEditOv'); if(_ov) _ov.remove(); }
+    lbCfgRender();
+    try { if (typeof lbToast === 'function') lbToast('已保存 ' + (d.count || notes.length) + ' 条笔记' + (d.updated ? ('（' + d.updated + '）') : '')); } catch (eT) {}
+  }).catch(function(e){ alert('保存失败：' + ((e && e.message) || e)); });
+}
+function lbBbNotesLoad(cb){
+  if(LB_BBNOTES){ if(cb) cb(); return LB_BBNOTES; }
+  if(LB_BBNOTES_P) return LB_BBNOTES_P;
+  LB_BBNOTES_P = lbBbNotesFetch().then(function(d){
+    LB_BBNOTES = (d && d.notes && d.notes.length !== undefined) ? d : { notes: [] };
+    if(cb) cb();
+    return LB_BBNOTES;
+  }).catch(function(){
+    LB_BBNOTES = { notes: [] }; LB_BBNOTES_P = null;
+    if(cb) cb();
+    return LB_BBNOTES;
+  });
+  return LB_BBNOTES_P;
+}
+function lbBbNotesCardsHtml(list, emptyText){
+  // v5535（用户口径「预览要所见即所得，icon 也要渲染」）：笔记卡片**唯一渲染源**
+  //   —— 笔记页与 AI 结果预览共用，禁止第二套卡片样式
+  list = list || [];
+  var h = '';
+  if(!list.length) h += '<div style="padding:16px;color:#888;font-size:13px">' + lbCfgAttr(emptyText || '暂无笔记') + '</div>';
+  list.forEach(function(n){
+    n = n || {};
+    var ic = String(n.icon || 'mdi:information-outline');
+    ic = ic.indexOf('mdi:') === 0 ? ('mdi-' + ic.slice(4)) : ('mdi-' + ic.replace(/^mdi-/, ''));
+    h += '<div style="margin-bottom:8px;padding:10px 12px;border-radius:8px;background:#ffffff06;border:1px solid #ffffff10">'
+      + '<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">'
+      + '<i class="mdi ' + lbCfgAttr(ic) + '" style="font-size:17px;color:#a78bfa"></i>'
+      + '<span style="color:#e2e8f0;font-weight:600;font-size:13px">' + lbMdInline(String(n.title || '')) + '</span>'
+      + '</div>'
+      + '<div class="lb-md" style="font-size:12.5px;color:#cbd5e1;line-height:1.8;word-break:break-word">' + lbMdRender(String(n.body || '')) + '</div>'
+      + '</div>';
+  });
+  return h;
+}
+function lbBbNotesHtml(){
+  var d = LB_BBNOTES || { notes: [] };
+  var h = '<div style="margin-top:6px">' + lbBbNotesCardsHtml(d.notes || []);
+  if(d.updated) h += '<div style="margin-top:10px;font-size:11px;color:#4b5563">更新于 ' + lbCfgAttr(String(d.updated)) + '</div>';
+  h += '</div>';
+  return h;
+}
+function lbCfgOpenRules(srv, keep){
+  // v5526（用户口径）：面板本身只读（密码已脱敏），放开给所有人查看；拉全量/刷新仍仅拥有者
+  if(!keep){
+    LB_CFG_VIEW.srv = srv || LB_CFG_VIEW.srv || '';
+    LB_CFG_VIEW.fk = 'GUS'; LB_CFG_VIEW.mode = 'changed'; LB_CFG_VIEW._tried = {}; LB_CFG_VIEW._fFull = {};
+  } else if(srv){ LB_CFG_VIEW.srv = srv; }
+  var all = lbCfgCacheAll();
+  if(!LB_CFG_VIEW.srv){
+    var ks = Object.keys(all);
+    LB_CFG_VIEW.srv = ks.length ? ks[0] : ((LB.SERVERS && LB.SERVERS[0]) ? LB.SERVERS[0].abbr : '');
+  }
+  var old = document.querySelector('.lb-picker-overlay'); if(old) old.remove();
+  var overlay = document.createElement('div'); overlay.className = 'lb-picker-overlay';
+  // v5514（用户口径）：点遮罩不关闭浮窗，只能点右上角 X 关闭
+  overlay.onclick = function(e){ if(e.target === overlay) e.stopPropagation(); };
+  var srvChips = (LB.SERVERS || []).filter(function(s){ return LB_CFG_SRV_HIDE.indexOf(s.abbr) < 0; }).map(function(s){
+    var ent = all[s.abbr] || {};
+    var _fk = LB_CFG_VIEW.fk || 'GUS';
+    var has = !!ent[_fk];
+    var n = (ent[_fk] && ent[_fk].doc) ? (ent[_fk].doc.changed_count || 0) : 0;
+    var mdi = (typeof LB_SERVER_MDI !== 'undefined' && LB_SERVER_MDI[s.abbr]) ? LB_SERVER_MDI[s.abbr] : 'mdi-map-marker';
+    return '<span class="lb-tipb server-tab' + (s.abbr === LB_CFG_VIEW.srv ? ' active' : '') + '"'
+      + ' data-srv="' + s.abbr + '" onclick="lbCfgSetSrv(this.getAttribute(\'data-srv\'))"'
+      + ' title="' + escapeHtml(s.name || s.abbr) + '（改动 ' + n + ' 项）"'
+      + (has ? '' : ' style="opacity:.45"') + '>'
+      + '<i class="mdi ' + mdi + '"></i>'
+      + (n ? '<em class="server-tab-cnt">' + n + '</em>' : '')
+      + '</span>';
+  }).join('');
+  var fileChips = '';   // 2026-10-27：两文件合并展示，取消文件切换
+  var _chipStyle = 'cursor:pointer;padding:3px 9px;border-radius:9px;font-size:12px;background:#2a2a3a;color:#a78bfa;margin-left:auto';
+  var fullBtn = (LB_CFG_VIEW.mode === 'full')
+    ? '<span class="lb-cat-chip" onclick="lbCfgToggleMode()" title="只显示与出厂默认不同的项" style="' + _chipStyle + '">只看改动</span>'
+    : '<span class="lb-cat-chip" onclick="lbCfgToggleMode()" title="拉取该服全部项（含未改动）" style="' + _chipStyle + '">查看全部项</span>';
+  // v5526（用户口径）：地图 TAB 末尾追加「粑粑笔记」TAB
+  var noteTab = '<span class="lb-tipb server-tab' + (LB_CFG_VIEW.srv === '__bbnote' ? ' active' : '') + '"'
+    + ' data-srv="__bbnote" onclick="lbCfgSetSrv(\'__bbnote\')" title="粑粑笔记（服务器小提示）">'
+    + '<i class="mdi mdi-note-text"></i></span>';
+  // v5551（用户口径）：粑粑笔记 TAB 与服务器 TAB 组之间加竖向虚线分隔
+  var noteSep = '<span style="align-self:center;width:0;border-left:1px dashed #4b5563;height:16px;margin:0 2px 0 4px"></span>';
+  srvChips += noteSep + noteTab;
+  if(!lbIsAdmin()) fullBtn = '';   // 拉全量仅拥有者（后端 owner only）
+  // v5529（用户口径）：笔记页专用按钮（导出 / 导入 .md，均仅管理员）
+  var noteBtns = lbIsAdmin()
+    ? ('<span id="lbCfgNoteBtns" style="display:none;gap:6px;align-items:center">'
+      + '<span class="lb-cat-chip" onclick="lbBbNotesCopyMd(this)" title="把当前笔记的 Markdown 复制到剪贴板" style="cursor:pointer;padding:3px 9px;border-radius:9px;font-size:12px;background:#2a2a3a;color:#a78bfa">复制 MD</span>'
+      + '<span class="lb-cat-chip" onclick="lbBbNotesEdit()" title="直接编辑 Markdown 源码并保存到服务器" style="cursor:pointer;padding:3px 9px;border-radius:9px;font-size:12px;background:#2a2a3a;color:#34d399">编辑 MD</span>'
+      + '</span>')
+    : '';
+  if(fullBtn) fullBtn = '<span id="lbCfgFullBtn" style="display:contents">' + fullBtn + '</span>';
+  var html = '<div class="lb-picker-panel" onclick="event.stopPropagation()" style="max-width:760px">'
+    + '<div class="lb-picker-header"><span style="flex:1;font-weight:bold;color:#a78bfa">📋 服务器规则</span>'
+    + '<button class="lb-picker-close" onclick="this.closest(\'.lb-picker-overlay\').remove()" title="关闭"><i class="mdi mdi-close"></i></button></div>'
+    + '<div style="padding:10px 12px 4px"><div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">' + srvChips + '</div>'
+    + '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">'
+    + '<div id="lbCfgBar" style="flex:1;min-width:0;font-size:11px;color:#888;line-height:1.7"></div>'
+    + fileChips + fullBtn + noteBtns + '</div></div>'
+    + '<div id="lbCfgBody" style="flex:1;overflow-y:auto;padding:0 12px 12px"></div>'
+    + '</div>';
+  overlay.innerHTML = html;
+  document.body.appendChild(overlay);
+  lbCfgLoadZh(function(){ lbCfgRender(); });
+}
+function lbCfgSetSrv(s){ lbCfgOpenRules(s, false); }
+function lbCfgSetFile(f){
+  var srv0 = LB_CFG_VIEW.srv;   // v5505：捕获请求发起时的服（回调里禁止再读全局，防切服串台）
+  LB_CFG_VIEW.fk = f;
+  if(!lbCfgCacheGet(srv0, f) && lbIsAdmin()){
+    lbCfgOpenRules(null, true);
+    var body = document.getElementById('lbCfgBody');
+    if(body) body.innerHTML = '<div style="padding:18px;color:#888;font-size:13px">⏳ 正在读取 ' + escapeHtml(f) + '…</div>';
+    lbCfgFetchOne(srv0, f).then(function(d){ lbCfgCachePut(srv0, f, d); lbCfgOpenRules(null, true); })
+      .catch(function(e){ var b = document.getElementById('lbCfgBody'); if(b) b.innerHTML = '<div style="padding:18px;color:#ef4444;font-size:13px">' + escapeHtml(String(e)) + '</div>'; });
+    return;
+  }
+  lbCfgOpenRules(null, true);
+}
+function lbCfgToggleMode(){
+  if(LB_CFG_VIEW.mode === 'full'){ LB_CFG_VIEW.mode = 'changed'; lbCfgOpenRules(null, true); return; }
+  var c = lbCfgCacheGet(LB_CFG_VIEW.srv, LB_CFG_VIEW.fk);
+  if(c && c.doc && c.doc.changed_only){
+    lbCfgFetchFull(function(err){
+      if(!err){ LB_CFG_VIEW.mode = 'full'; lbCfgOpenRules(null, true); }
+    });
+    return;
+  }
+  LB_CFG_VIEW.mode = 'full';
+  lbCfgOpenRules(null, true);
+}
+function lbCfgBadges(){
+  try{
+    var all = lbCfgCacheAll();
+    var _fk = LB_CFG_VIEW.fk || 'GUS';
+    var nodes = document.querySelectorAll('.lb-picker-overlay .server-tab[data-srv]');
+    for(var i = 0; i < nodes.length; i++){
+      var el = nodes[i], ab = el.getAttribute('data-srv') || '';
+      if(ab.charAt(0) === '_') continue;   // v5537（用户口径）：虚拟页签（如 __bbnote 粑粑笔记）不是服务器 —— 不计改动、不淡化、不插徽章
+      var ent = all[ab] || {};
+      var n = 0;
+      ['GUS', 'GAME'].forEach(function(f){
+        var dd = ent[f] && ent[f].doc;
+        if(!dd) return;
+        n += (dd.changed_count || 0);
+        // v5544（用户口径）：绿色（无基准但与全服多数不一致）也算「已改」，与 bar 口径一致；ConfigOverride 不计
+        if(LB_CFG_PEER && dd.items){
+          for(var _k = 0; _k < dd.items.length; _k++){
+            var _x = dd.items[_k];
+            if(!_x || _x.changed === true) continue;                  // 已含在 changed_count 内
+            if(!lbCfgIsNewKey(_x, f)) continue;
+            if(/^configoverride/i.test(String(_x.key || ''))) continue;
+            n++;
+          }
+        }
+      });
+      var _has = !!(ent.GUS || ent.GAME);
+      var nm = (el.getAttribute('title') || ab).replace(/（改动 \d+ 项）$/, '');
+      el.setAttribute('title', nm + '（改动 ' + n + ' 项）');
+      var em = el.querySelector('.server-tab-cnt');
+      if(!n){ if(em) em.remove(); }
+      else if(em){ em.textContent = String(n); }
+      else { el.insertAdjacentHTML('beforeend', '<em class="server-tab-cnt">' + n + '</em>'); }
+      el.style.opacity = _has ? '' : '.45';
+    }
+  }catch(e){}
+}
+function lbCfgSrvName(abbr){
+  try{
+    var arr = (typeof LB !== 'undefined' && LB.SERVERS) || [];
+    for(var i = 0; i < arr.length; i++){ if(arr[i] && arr[i].abbr === abbr) return arr[i].name || abbr; }
+  }catch(e){}
+  return abbr;
+}
+// ===== v5507（用户要求）：ConfigOverride 制作消耗 / 堆叠上限 → 自动翻译成可读公式，并给出原默认值对比 =====
+//   默认值来源：CF 静态表 cfg_default_cost.json（ARK Wiki 抓取，随前端部署）；解析失败/未收录 → 退回原始串 + 统一 tips
+//   配方渲染复用页面既有「材料徽章」lbBpMatsHtml（图标 + 中文名 + ×数量 + ★exact），不新造样式
+var LB_DEF_COST = null, LB_DEF_COST_TRIED = false;
+function lbCfgDefCostEnsure(cb){
+  if(LB_DEF_COST !== null || LB_DEF_COST_TRIED){ if(cb) cb(); return; }
+  LB_DEF_COST_TRIED = true;
+  fetch('cfg_default_cost.json?t=' + Date.now(), { cache: 'no-store' })
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(d){ LB_DEF_COST = d || {}; if(cb) cb(); })
+    .catch(function(){ LB_DEF_COST = {}; if(cb) cb(); });
+}
+function lbCfgNumTxt(v){
+  var n = Number(v);
+  if(!isFinite(n)) return String(v === null || v === undefined ? '' : v);
+  if(Math.abs(n - Math.round(n)) < 1e-9) return String(Math.round(n));
+  return String(Math.round(n * 100) / 100);
+}
+function lbCfgParseCraftCost(raw){
+  try{
+    var s = String(raw || '');
+    var mi = /ItemClassString\s*=\s*"([^"]+)"/i.exec(s);
+    if(!mi) return null;
+    var costs = [];
+    var re = /ResourceItemTypeString\s*=\s*"([^"]+)"\s*,\s*BaseResourceRequirement\s*=\s*(-?[\d.]+)\s*,\s*bCraftingRequireExactResourceType\s*=\s*(True|False)/gi, m;
+    while((m = re.exec(s))) costs.push({ item: m[1], count: Number(m[2]) || 0, exact: /^true$/i.test(m[3]) ? 1 : 0 });
+    return { item: mi[1], costs: costs };
+  }catch(e){ return null; }
+}
+function lbCfgParseMaxQty(raw){
+  try{
+    var s = String(raw || '');
+    var mi = /ItemClassString\s*=\s*"([^"]+)"/i.exec(s);
+    var mq = /MaxItemQuantity\s*=\s*(-?[\d.]+)/i.exec(s);
+    if(!mi || !mq) return null;
+    var ig = /bIgnoreMultiplier\s*=\s*(True|False)/i.exec(s);
+    return { item: mi[1], max: Number(mq[1]) || 0, ignore: ig ? /^true$/i.test(ig[1]) : false };
+  }catch(e){ return null; }
+}
+function lbCfgCoItemChip(cls){
+  var url = '', nm = String(cls || '');
+  try{ url = lbItemIconUrl(cls) || ''; }catch(e){}
+  try{ var mm = lbItemMeta(cls); if(mm && mm.zh) nm = mm.zh; }catch(e){}
+  // v5509：主徽章略放大（图标 16→18、字号 12→13、内边距 3/8→4/10）
+  return '<span style="display:inline-flex;align-items:center;gap:6px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:4px 10px;font-size:13px">'
+    + (url ? '<img src="' + lbCfgAttr(url) + '" style="width:18px;height:18px;object-fit:contain" onerror="lbImgRetry(this)">' : '')
+    + '<span style="color:#e2e8f0;font-weight:600">' + lbCfgAttr(nm) + '</span></span>';
+}
+function lbCfgCoMatsRow(label, color, costs, emptyText){
+  return '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:5px">'
+    + '<span style="flex:0 0 auto;font-size:11px;color:' + color + '">' + label + '</span>'
+    + ((costs && costs.length) ? lbBpMatsHtml(costs, 1) : '<span style="font-size:11px;color:#666">' + lbCfgAttr(emptyText) + '</span>')
+    + '</div>';
+}
+function lbCfgCoSameCosts(a, b){
+  if(!a || !b || a.length !== b.length) return false;
+  var m = {};
+  for(var i = 0; i < b.length; i++) m[String(b[i].item)] = Number(b[i].count) || 0;
+  for(var j = 0; j < a.length; j++){
+    var k = String(a[j].item);
+    if(!(k in m) || m[k] !== (Number(a[j].count) || 0)) return false;
+  }
+  return true;
+}
+// ===== v5515：ConfigOverrideSupplyCrateItems 解析 + 三层折叠渲染（箱子 → 组 → 条目） =====
+//   UE 括号表达式通用解析（括号栈 + 顶层逗号切分；不依赖正则硬切，避免嵌套/引号内逗号误伤）
+function lbUeFields(s){
+  var t = String(s || '').trim();
+  if(t.charAt(0) === '(' && t.charAt(t.length - 1) === ')') t = t.slice(1, -1);
+  var out = {}, depth = 0, cur = '', inQ = false;
+  var push = function(){
+    var seg = cur.trim(); cur = '';
+    if(!seg) return;
+    var m = /^([A-Za-z0-9_]+)\s*=([\s\S]*)$/.exec(seg);
+    if(m) out[m[1]] = m[2].trim();
+  };
+  for(var i = 0; i < t.length; i++){
+    var ch = t.charAt(i);
+    if(inQ){ cur += ch; if(ch === '"' && t.charAt(i - 1) !== '\\') inQ = false; continue; }
+    if(ch === '"'){ inQ = true; cur += ch; continue; }
+    if(ch === '(' || ch === '['){ depth++; cur += ch; continue; }
+    if(ch === ')' || ch === ']'){ depth--; cur += ch; continue; }
+    if(ch === ',' && depth === 0){ push(); continue; }
+    cur += ch;
+  }
+  push();
+  return out;
+}
+function lbUeList(s){
+  var t = String(s || '').trim();
+  if(!t) return [];
+  if(t.charAt(0) === '(' && t.charAt(t.length - 1) === ')') t = t.slice(1, -1);
+  var out = [], depth = 0, cur = '', inQ = false;
+  for(var i = 0; i < t.length; i++){
+    var ch = t.charAt(i);
+    if(inQ){ cur += ch; if(ch === '"' && t.charAt(i - 1) !== '\\') inQ = false; continue; }
+    if(ch === '"'){ inQ = true; cur += ch; continue; }
+    if(ch === '(' || ch === '['){ depth++; cur += ch; continue; }
+    if(ch === ')' || ch === ']'){ depth--; cur += ch; continue; }
+    if(ch === ',' && depth === 0){ if(cur.trim()) out.push(cur.trim()); cur = ''; continue; }
+    cur += ch;
+  }
+  if(cur.trim()) out.push(cur.trim());
+  return out;
+}
+function lbUeStrs(v){
+  var out = [], re = /"([^"]*)"/g, m, s = String(v || '');
+  while((m = re.exec(s))) out.push(m[1]);
+  return out;
+}
+function lbUeNums(v){
+  var out = [];
+  lbUeList(v).forEach(function(x){
+    var n = Number(String(x).replace(/^"|"$/g, '').trim());
+    if(isFinite(n)) out.push(n);
+  });
+  return out;
+}
+function lbUeNum(v, d){ var n = Number(String(v === null || v === undefined ? '' : v).trim()); return isFinite(n) ? n : (d === undefined ? 0 : d); }
+function lbUeBool(v){ return /^true$/i.test(String(v || '').trim()); }
+// 箱子类名 → 可读名（无中文表，按片段规则拼）
+var LB_CRATE_MAP = [
+  [/Aberration/i, '畸变'], [/(Deep)?Ocean|Underwater/i, '海洋'], [/Desert/i, '沙漠'],
+  [/Jungle|Swamp/i, '丛林'], [/Mountain/i, '山地'], [/Cave/i, '洞窟'], [/Beacon/i, '信标'],
+  [/Extinction|City/i, '灭绝'], [/Boss|Artifact/i, '神器'], [/Volcano/i, '火山'],
+  [/Snow|Ice/i, '雪原'], [/Fishing/i, '钓鱼'], [/Surface/i, '地表'], [/Genesis|Mission/i, '创世'],
+  [/SupplyDrop|Drop\b/i, '空投']
+];
+function lbCfgCrateName(cls){
+  var s = String(cls || '').replace(/_C$/, '');
+  var m;
+  // v5521（用户口径）：箱名全中文 —— 官方译名依据 PO（Kaiju=泰坦 / Astraeos=星耀 / Easy..Legendary=简单..传说）
+  //   Horde 用户指定直称「空投」
+  m = /ArtifactCrate_KingKaiju_(Alpha|Beta)/i.exec(s);
+  if(m) return '君王泰坦补给箱（' + (/alpha/i.test(m[1]) ? '困难' : '中等') + '）';
+  if(/DinoDropInventoryComponent/i.test(s) || /Kaiju_/i.test(s)){
+    if(/Kaiju/i.test(s)){
+      var tk = /Desert/i.test(s) ? '沙漠' : (/Forest/i.test(s) ? '森林' : (/Ice|Snow/i.test(s) ? '雪原' : ''));
+      if(tk) return tk + '泰坦补给箱';
+    }
+  }
+  if(/Base_?Horde/i.test(s)){
+    var dl = /Legendary/i.test(s) ? '传说' : (/Hard/i.test(s) ? '困难' : (/Medium/i.test(s) ? '中等' : '简单'));
+    var mp = /Astraeos/i.test(s) ? '星耀' : (/Aberration/i.test(s) ? '畸变' : (/Extinction/i.test(s) ? '灭绝' : ''));
+    return mp + '空投（' + dl + '）';
+  }
+  // 洞穴：Level / QualityTier
+  if(/Cave/i.test(s)){
+    var cv = /Aberration/i.test(s) ? '畸变' : (/Extinction/i.test(s) ? '灭绝' : '');
+    var lvm = /Level0*(\d+)/i.exec(s);
+    if(lvm) return cv + '洞窟补给箱 Lv' + lvm[1];
+    return cv + '洞窟补给箱';
+  }
+  // 兜底：原有碎片规则
+  var sn = s.replace(/^SupplyCrate_?/i, '');
+  var lv = '', mm = /Level0*(\d+)/i.exec(sn);
+  if(mm){ lv = ' Lv' + mm[1]; sn = sn.replace(/Level0*\d+/i, ''); }
+  var parts = [];
+  for(var i = 0; i < LB_CRATE_MAP.length; i++){
+    if(LB_CRATE_MAP[i][0].test(sn) && parts.indexOf(LB_CRATE_MAP[i][1]) < 0) parts.push(LB_CRATE_MAP[i][1]);
+  }
+  var nm = parts.length ? (parts.join('') + '补给箱') : (sn ? (sn.replace(/[_\s]+/g, ' ').trim() + ' 补给箱') : '补给箱');
+  return nm + lv;
+}
+// v5517：箱子图标 —— 精确命中优先；未命中按前缀基名回落（与「公共设施」同源：SupplyCrate→补给箱图、ArtifactCrate→神器箱图）
+// v5518（用户口径 A）：箱子图标按**类别 + 品质档**取，不再一律基名回落
+//   空投（Base_Horde / SupplyDrop）→ RW_Tracking_Type_SupplyDrop（空投 GUI 图）
+//   洞穴（*_Cave_*）→ QualityTier1/2/3 = Lootcrate/Tier_2/Tier_3；否则 Level：<50→Lootcrate、50~79→Tier_2、≥80→Tier_3
+//   神器（ArtifactCrate）→ White_Crate；普通光柱补给（其它 SupplyCrate*）→ White_Crate
+//   巨兽掉落（DinoDropInventoryComponent_*）不特判 → 返回空，走 mdi 包裹图标
+// v5519（用户口径）：箱子图标按**类别 + 等级/难度**取（颜色阈值同公共设施注释）
+//   巨兽掉落 Kaiju：Desert/Forest → TrophyKingTitan_Icon；Ice（最难）→ TrophyKingTitanMecha_Icon
+//   空投（Base_Horde / SupplyDrop / OSD）→ Orbital_Supply_Drop
+//   洞穴：QualityTier1/2/3 = Blue/Yellow/Red_Crate（easy蓝/medium黄/hard红）；Level 按 L03白/L15绿/L25蓝/L35紫/L45黄/L60红
+//   神器箱 → White_Crate；普通地表光柱补给 → White_Beacon
+// v5520（用户口径）：
+//   泰坦掉落 DinoDropInventoryComponent_Kaiju_{Ice,Forest,Desert} → TrophyIceTitan_Icon / TrophyForestTitan_Icon / TrophyDesertTitan_Icon
+//   君王泰坦神器箱 ArtifactCrate_KingKaiju_Alpha → TrophyKingTitanMecha_Icon；_Beta → TrophyKingTitan_Icon
+//   其余：空投 Orbital_Supply_Drop；洞穴按等级/难度取彩色 Crate；神器 White_Crate；地表光柱 White_Beacon
+function lbCfgCrateIcon(cls){
+  var s = String(cls || ''), u = '', m, ck = '';
+  try{ u = lbItemIconUrl(s) || ''; }catch(e){}
+  if(u) return u;   // 实例已登记则优先用实例图标
+  function pk(k){
+    var r = '';
+    try{ r = lbItemIconUrl(k) || ''; }catch(e1){}
+    if(r) return r;
+    try{
+      var raw = (typeof LB_ITEM_ICON_URL !== 'undefined' && LB_ITEM_ICON_URL) ? (LB_ITEM_ICON_URL[k] || '') : '';
+      if(raw){ var b = lbPackURL(raw); return b || raw; }
+    }catch(e2){}
+    return '';
+  }
+  if(/dinodropinventorycomponent/i.test(s)){
+    if(/ice/i.test(s)) return pk('TrophyIceTitan_Icon') || pk('TrophyKingTitan_Icon');
+    if(/forest/i.test(s)) return pk('TrophyForestTitan_Icon') || pk('TrophyKingTitan_Icon');
+    if(/desert/i.test(s)) return pk('TrophyDesertTitan_Icon') || pk('TrophyKingTitan_Icon');
+    return pk('TrophyKingTitan_Icon');
+  }
+  if(/base_horde|supply_?drop/i.test(s)) return pk('Orbital_Supply_Drop') || pk('White_Beacon');
+  if(/cave/i.test(s)){
+    m = /qualitytier\s*([123])/i.exec(s);
+    if(m){
+      var tn = Number(m[1]);
+      return pk(tn === 1 ? 'Blue_Crate' : (tn === 2 ? 'Yellow_Crate' : 'Red_Crate')) || pk('White_Crate');
+    }
+    m = /level\s*0*(\d+)/i.exec(s);
+    if(m){
+      var lv = Number(m[1]);
+      ck = lv <= 3 ? 'White_Crate' : (lv <= 15 ? 'Green_Crate' : (lv <= 25 ? 'Blue_Crate' : (lv <= 35 ? 'Purple_Crate' : (lv <= 45 ? 'Yellow_Crate' : 'Red_Crate'))));
+      return pk(ck) || pk('White_Crate');
+    }
+    return pk('White_Crate');
+  }
+  if(/artifactcrate/i.test(s)){
+    if(/kingkaiju/i.test(s)){   // 君王泰坦两档：Alpha=困难（机甲版头颅）/ Beta=中等（普通头颅）
+      if(/alpha/i.test(s)) return pk('TrophyKingTitanMecha_Icon') || pk('White_Crate');
+      return pk('TrophyKingTitan_Icon') || pk('White_Crate');
+    }
+    return pk('White_Crate');
+  }
+  if(/supplycrate|lootcrate|treasurecache/i.test(s)) return pk('White_Beacon') || pk('White_Crate');
+  return '';
+}
+function lbCfgParseCrate(raw){
+  try{
+    var top = lbUeFields(raw);
+    if(!top.SupplyCrateClassString) return null;
+    var crate = String(top.SupplyCrateClassString).replace(/^"|"$/g, '');
+    var sets = lbUeList(top.ItemSets || '').map(function(sr){
+      var f = lbUeFields(sr);
+      var entries = lbUeList(f.ItemEntries || '').map(function(er){
+        var g = lbUeFields(er);
+        var cls = lbUeStrs(g.ItemClassStrings || '');
+        var ws = lbUeNums(g.ItemsWeights || '');
+        return {
+          weight: lbUeNum(g.EntryWeight, 0),
+          items: cls.map(function(c, i){ return { cls: c, w: (ws[i] != null ? ws[i] : (ws[0] || 0)) }; }),
+          minQ: lbUeNum(g.MinQuantity, 1), maxQ: lbUeNum(g.MaxQuantity, 1),
+          minQl: lbUeNum(g.MinQuality, 0), maxQl: lbUeNum(g.MaxQuality, 0),
+          bp: lbUeBool(g.bForceBlueprint)
+        };
+      });
+      return { name: String(f.SetName || '').replace(/^"|"$/g, ''), weight: lbUeNum(f.SetWeight, 0),
+               min: lbUeNum(f.MinNumItems, 0), max: lbUeNum(f.MaxNumItems, 0), entries: entries };
+    });
+    var n = 0; sets.forEach(function(s){ n += s.entries.length; });
+    return { crate: crate, minSets: lbUeNum(top.MinItemSets, 1), maxSets: lbUeNum(top.MaxItemSets, 1), sets: sets, nEntries: n };
+  }catch(e){ return null; }
+}
+var LB_CRATE_CACHE = {};
+var LB_CRATE_PAGE = 40;
+function lbCfgCrateItemChip(cls){
+  var nm = '', url = '';
+  try{ var mm = lbItemMeta(cls); if(mm && mm.zh) nm = mm.zh; url = lbItemIconUrl(cls) || ''; }catch(e){}
+  if(!nm) nm = String(cls || '').replace(/^PrimalItem[A-Za-z]*_?/, '').replace(/_C$/, '');
+  return '<span style="display:inline-flex;align-items:center;gap:4px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:3px 7px;font-size:12px">'
+    + (url ? '<img src="' + lbCfgAttr(url) + '" style="width:16px;height:16px;object-fit:contain" onerror="lbImgRetry(this)">' : '')
+    + '<span style="color:#cbd5e1">' + lbCfgAttr(nm) + '</span></span>';
+}
+function lbCfgCrateEntryHtml(en){
+  var labels = (en.items || []).map(function(it){ return lbCfgCrateItemChip(it.cls); }).join('');
+  var q = (en.minQ === en.maxQ) ? ('×' + lbCfgNumTxt(en.minQ)) : ('×' + lbCfgNumTxt(en.minQ) + '~' + lbCfgNumTxt(en.maxQ));
+  var ql = (en.maxQl > 0) ? ('品质 ' + Math.round(en.minQl * 100) + '~' + Math.round(en.maxQl * 100) + '%') : '';
+  return '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px">'
+    + labels
+    + '<span style="font-size:11px;color:#f59e0b">' + q + '</span>'
+    + (ql ? '<span style="font-size:11px;color:#64748b">' + ql + '</span>' : '')
+    + (en.bp ? '<span class="lb-tipb" title="bForceBlueprint=True：强制蓝图" style="font-size:11px;color:#38bdf8">蓝图</span>' : '')
+    + '<span style="font-size:11px;color:#4b5563">权重 ' + lbCfgNumTxt(en.weight) + '</span>'
+    + '</div>';
+}
+function lbCfgCrateEntriesHtml(set, from, to){
+  var h = '';
+  for(var i = from; i < to && i < set.entries.length; i++) h += lbCfgCrateEntryHtml(set.entries[i]);
+  return h;
+}
+function lbCfgCrateToggle(el){
+  if(!el) return;
+  var wrap = el.closest('[data-crate-wrap]');
+  if(!wrap) return;
+  var body = wrap.querySelector('[data-crate-body]');
+  if(!body) return;
+  var open = (body.style.display !== 'none');
+  body.style.display = open ? 'none' : 'block';
+  el.textContent = open ? '展开' : '收起';
+}
+function lbCfgCrateMore(el, uid, si){
+  var d = LB_CRATE_CACHE[uid];
+  if(!d || !d.sets[si]) return;
+  var st = d.sets[si];
+  var host = el.parentNode;
+  if(!host) return;
+  var more = document.createElement('div');
+  more.innerHTML = lbCfgCrateEntriesHtml(st, LB_CRATE_PAGE, st.entries.length);
+  while(more.firstChild) host.insertBefore(more.firstChild, el);
+  el.remove();
+}
+// v5521（用户口径）：组名全中文（词表 + 序号/等级规则；未命中保留原文）
+var LB_SET_ZH = {
+  'thatch structures':'茅草建筑', 'wood structures':'木制建筑', 'stone structures':'石制建筑',
+  'metal structures':'金属建筑', 'ammo':'弹药', 'very rare':'极稀有',
+  'items rare':'稀有物品', 'items common':'普通物品', 'items uncommon':'罕见物品',
+  'items with quantity':'数量型物品', 'items with quality':'品质型物品',
+  'cave weapons':'洞穴武器', 'cave saddles':'洞穴鞍具', 'cave armor':'洞穴护甲',
+  'cave items':'洞穴物品', 'saddles':'鞍具', 'weapons':'武器', 'armor':'护甲',
+  'resources':'资源', 'consumables':'消耗品', 'blueprints':'蓝图'
+};
+function lbCfgSetZh(n){
+  var s = String(n || '').trim();
+  if(!s) return '未命名组';
+  var m;
+  m = /^lootset\s+level\s*0*(\d+)\s*(quality\s*only)?\s*(\d+)?$/i.exec(s);
+  if(m){
+    return '等级 ' + m[1] + ' 战利品' + (m[2] ? ('（仅品质）' + (m[3] || '')) : (m[3] ? ' ' + m[3] : ''));
+  }
+  var key = s.toLowerCase().replace(/\s+/g, ' ');
+  m = /^(.*?)\s+(\d+)$/.exec(key);
+  if(m && LB_SET_ZH[m[1]]) return LB_SET_ZH[m[1]] + ' ' + m[2];
+  if(LB_SET_ZH[key]) return LB_SET_ZH[key];
+  return s;
+}
+// v5523（用户口径）：箱子排序键 —— 同类内按难度升序（简单→困难）
+function lbCfgCrateOrder(cls){
+  // v5524：必须先取箱子类名 —— 直接扫整条 UE 串会被物品类名（如 Hard/Medium）污染 ⇒ 难度误判（实测 Ast Easy 被算成 lv3）
+  var _raw = String(cls || ''), _cm = /SupplyCrateClassString="([^"]+)"/i.exec(_raw);
+  var s = _cm ? _cm[1] : _raw, m;
+  m = /Cave_([A-Za-z]+)_Level0*(\d+)/i.exec(s);
+  if(m) return { type: 'cave_' + m[1].toLowerCase(), lv: Number(m[2]) };
+  m = /Cave_.*?QualityTier\s*(\d+)/i.exec(s);
+  if(m) return { type: 'cave_q', lv: Number(m[1]) };
+  if(/Base_?Horde/i.test(s)){
+    var ht = /Astraeos/i.test(s) ? 'horde_ast' : (/Aberration/i.test(s) ? 'horde_ab' : 'horde');
+    var hd = /Legendary/i.test(s) ? 4 : (/Hard/i.test(s) ? 3 : (/Medium/i.test(s) ? 2 : 1));
+    return { type: ht, lv: hd };
+  }
+  if(/KingKaiju/i.test(s)){
+    var kk = /Alpha/i.test(s) ? 3 : (/Beta/i.test(s) ? 2 : 1);
+    return { type: 'kingkaiju', lv: kk };
+  }
+  if(/DinoDropInventoryComponent/i.test(s) || /Kaiju/i.test(s)){
+    var kd = /Ice/i.test(s) ? 3 : (/Forest/i.test(s) ? 2 : (/Desert/i.test(s) ? 1 : 1));
+    return { type: 'kaijudrop', lv: kd };
+  }
+  if(/ArtifactCrate/i.test(s)) return { type: 'artifact', lv: 0 };
+  if(/TreasureCache/i.test(s)) return { type: 'treasure', lv: 0 };
+  return { type: 'other', lv: 0 };
+}
+// v5523（用户口径）：组行排序权重（小→大 = 简单→困难；未识别排后，保持原相对序）
+var LB_SET_ORD = {
+  'thatch structures': 10, 'wood structures': 11, 'stone structures': 12, 'metal structures': 13,
+  'items common': 200, 'items uncommon': 201, 'items rare': 202, 'very rare': 203,
+  'ammo': 300, 'items with quantity': 310, 'items with quality': 311,
+  'cave weapons': 400, 'cave saddles': 401, 'cave armor': 402,
+  'resources': 410, 'consumables': 411, 'blueprints': 420,
+  'saddles': 430, 'weapons': 431, 'armor': 432
+};
+function lbCfgSetOrd(n){
+  var s = String(n || '').trim().toLowerCase().replace(/\s+/g, ' '), m;
+  m = /^lootset\s+level\s*0*(\d+)\s*(quality\s*only)?\s*(\d+)?$/.exec(s);
+  if(m) return 1000 + Number(m[1]) * 10 + (m[2] ? 5 : 0) + (m[3] ? Number(m[3]) * 0.1 : 0);
+  m = /^(.*?)\s+(\d+)$/.exec(s);
+  if(m && LB_SET_ORD[m[1]] !== undefined) return LB_SET_ORD[m[1]] + Number(m[2]) * 0.01;
+  if(LB_SET_ORD[s] !== undefined) return LB_SET_ORD[s];
+  return 9000;
+}
+// v5521（用户口径）：补给折叠改手风琴 —— 同一时刻只允许一条展开链路（自身 + 祖先），其余全部收起
+function lbCfgFoldAcc(e){
+  var d = e.target;
+  if(!d || !d.classList || !d.classList.contains('lb-cfg-fold')) return;
+  if(!d.open) return;
+  var root = document.getElementById('lbCfgBody');
+  if(!root) return;
+  var all = root.querySelectorAll('details.lb-cfg-fold'), i, o;
+  for(i = 0; i < all.length; i++){
+    o = all[i];
+    if(o === d || !o.open) continue;
+    if(o.contains(d)) continue;   // 祖先保持展开，否则看不到自己
+    o.open = false;
+  }
+}
+function lbCfgCrateHtml(x){
+  var raw = String((x && x.value) || '');
+  var c = lbCfgParseCrate(raw);
+  if(!c || !c.sets.length) return '';
+  var uid = 'c' + ((x.occurrence || 0)) + '_' + Math.random().toString(36).slice(2, 8);
+  LB_CRATE_CACHE[uid] = c;
+  var box = 'margin-top:5px;padding:8px;border-radius:8px;background:#ffffff06;border:1px solid #ffffff10';
+  // v5517：复用页面现成折叠样式（details + .lb-fold-tri 三角；与繁育分组同款 pill 头）
+  var sum = 'cursor:pointer;list-style:none;font-size:11px;color:#ccc;background:#1a1a24;border:1px solid #2a2a3a;border-radius:6px;padding:4px 8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap';
+  var ic = lbCfgCrateIcon(c.crate);
+  var h = '<div style="' + box + '">';
+  // 箱子头（类名只在 title 里，不占明面）
+  h += '<details class="lb-cfg-fold" style="margin:0">'
+    + '<summary class="lb-cfg-fold-sum" title="' + lbCfgAttr(c.crate) + '" style="' + sum + '">'
+    + '<span class="lb-fold-tri"></span>'
+    + (ic ? ('<img src="' + lbCfgAttr(ic) + '" style="width:18px;height:18px;object-fit:contain" onerror="lbImgRetry(this)">') : '<i class="mdi mdi-package-variant-closed" style="font-size:18px;color:#a78bfa"></i>')
+    + '<span style="color:#e2e8f0;font-weight:600;font-size:12px">' + lbCfgAttr(lbCfgCrateName(c.crate)) + '</span>'
+    + '<span style="color:#64748b">' + c.sets.length + ' 组 · ' + c.nEntries + ' 条</span>'
+    + '</summary>'
+    + '<div style="margin-top:6px">';
+  c.sets = c.sets.slice().sort(function(a, b){ return lbCfgSetOrd(a.name) - lbCfgSetOrd(b.name); });   // v5523：组行按简单→困难排序
+  c.sets.forEach(function(st, si){
+    h += '<details class="lb-cfg-fold" style="margin:2px 0">'
+      + '<summary class="lb-cfg-fold-sum" style="' + sum + '">'
+      + '<span class="lb-fold-tri"></span>'
+      + '<span style="color:#cbd5e1;font-weight:600">' + lbCfgAttr(lbCfgSetZh(st.name || '未命名组')) + '</span>'
+      + '<span style="color:#64748b">权重 ' + lbCfgNumTxt(st.weight) + ' · ' + st.min + '~' + st.max + ' 件 · ' + st.entries.length + ' 条</span>'
+      + '</summary>'
+      + '<div style="margin-top:5px">'
+      + lbCfgCrateEntriesHtml(st, 0, LB_CRATE_PAGE)
+      + (st.entries.length > LB_CRATE_PAGE ? ('<div onclick="lbCfgCrateMore(this,\'' + uid + '\',' + si + ')" style="margin-top:5px;font-size:11px;color:#38bdf8;cursor:pointer">还有 ' + (st.entries.length - LB_CRATE_PAGE) + ' 条，点此展开全部</div>') : '')
+      + '</div></details>';
+  });
+  h += '</div></details></div>';
+  return h;
+}
+// v5510：复制该配置项的原始 UE 代码（低可视化按钮；成功后短暂变绿勾）
+function lbCfgCoCopy(el){
+  var t = (el && el.getAttribute) ? (el.getAttribute('data-copy') || '') : '';
+  var ic = el ? el.querySelector('i') : null;
+  var done = function(ok){
+    if(ic) ic.className = ok ? 'mdi mdi-check' : 'mdi mdi-close';
+    if(el){ el.style.color = ok ? '#4ade80' : '#ef4444'; el.style.opacity = '1'; }
+    setTimeout(function(){
+      if(ic) ic.className = 'mdi mdi-content-copy';
+      if(el){ el.style.color = '#4b5563'; el.style.opacity = '.6'; }
+    }, 1300);
+  };
+  // v5511 修复：clipboard API 被拒（非用户手势/权限限制）时必须回退 execCommand，否则只显示红叉
+  var fallback = function(){
+    var ok = false;
+    try{
+      var ta = document.createElement('textarea'); ta.value = t; ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      try{ ta.setSelectionRange(0, ta.value.length); }catch(e3){}
+      ok = document.execCommand('copy'); ta.remove();
+    }catch(e2){ ok = false; }
+    done(ok);
+  };
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(t).then(function(){ done(true); }, function(){ fallback(); });
+      return;
+    }
+  }catch(e1){}
+  fallback();
+}
+// v5509：默认配方材料顺序对齐「现」配方顺序（现里没有的材料追加到末尾）
+function lbCfgCoOrderCosts(def, now){
+  if(!def || !def.length) return def || [];
+  if(!now || !now.length) return def;
+  var byKey = {}, used = {}, out = [];
+  for(var i = 0; i < def.length; i++){ var k0 = String(def[i].item); if(!(k0 in byKey)) byKey[k0] = def[i]; }
+  for(var j = 0; j < now.length; j++){
+    var k = String(now[j].item);
+    if(byKey[k] && !used[k]){ out.push(byKey[k]); used[k] = 1; }
+  }
+  for(var m = 0; m < def.length; m++){
+    var kk = String(def[m].item);
+    if(!used[kk]){ out.push(def[m]); used[kk] = 1; }
+  }
+  return out;
+}
+function lbCfgCoValSpan(x){
+  var k = String((x && x.key) || '').toLowerCase(), raw = String((x && x.value) || ''), txt = '';
+  if(k === 'configoverrideitemcraftingcosts'){ var p = lbCfgParseCraftCost(raw); if(p) txt = '配方 ' + p.costs.length + ' 项'; }
+  else if(k === 'configoverrideitemmaxquantity'){ var q = lbCfgParseMaxQty(raw); if(q) txt = '上限 ' + lbCfgNumTxt(q.max); }
+  if(!txt) return lbCfgValSpan(x.value === '' ? '(空)' : x.value, 'color:#eee;font-size:12px');
+  return '<span class="lb-tipb" title="' + lbCfgAttr(raw) + '" style="flex:0 0 auto;font-size:12px;color:#a78bfa;white-space:nowrap;cursor:help">' + escapeHtml(txt) + '</span>';
+}
+function lbCfgCoExtraHtml(x){
+  if(!x) return '';
+  var k = String(x.key || '').toLowerCase(), raw = String(x.value || '');
+  if(k === 'configoverridesupplycrateitems'){ var crateHtml = lbCfgCrateHtml(x); if(crateHtml) return crateHtml; }   // v5515：补给箱掉落覆盖
+  var box = 'margin-top:5px;padding:8px;border-radius:8px;background:#ffffff06;border:1px solid #ffffff10';   // v5512：上下内边距 6→8
+  if(k === 'configoverrideitemcraftingcosts'){
+    var p = lbCfgParseCraftCost(raw);
+    if(!p || !p.costs.length) return '';
+    var def = (LB_DEF_COST && LB_DEF_COST.craft) ? LB_DEF_COST.craft[p.item] : null;
+    var h = '<div style="' + box + '">'
+      + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' + lbCfgCoItemChip(p.item) + '<span style="font-size:11px;color:#888">制作配方</span></div>'
+      + lbCfgCoMatsRow('当前', '#f59e0b', p.costs, '无');
+    if(def && def.length){
+      h += lbCfgCoMatsRow('默认', '#64748b', lbCfgCoOrderCosts(def, p.costs), '无');
+      if(lbCfgCoSameCosts(p.costs, def)) h += '<div style="font-size:11px;color:#4b5563;margin-top:4px">与默认配方一致</div>';
+    }else{
+      h += '<div style="font-size:11px;color:#6b7280;margin-top:5px">默认配方未收录</div>';
+    }
+    return h + '</div>';
+  }
+  if(k === 'configoverrideitemmaxquantity'){
+    var q = lbCfgParseMaxQty(raw);
+    if(!q) return '';
+    var d = (LB_DEF_COST && LB_DEF_COST.stack) ? LB_DEF_COST.stack[q.item] : undefined;
+    var dtxt = (d === undefined || d === null) ? '未收录' : lbCfgNumTxt(d);
+    var tip = q.ignore ? 'bIgnoreMultiplier=True：该物品堆叠上限不受「全局堆叠倍率」影响' : 'bIgnoreMultiplier=False：仍受全局堆叠倍率影响';
+    return '<div style="' + box + '"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+      + lbCfgCoItemChip(q.item)
+      + '<span style="font-size:12px;color:#cbd5e1">堆叠上限</span>'
+      + '<span style="font-size:12px;color:#64748b">默认 ' + lbCfgAttr(dtxt) + '</span>'
+      + '<span style="font-size:12px;color:#475569">→</span>'
+      + '<span style="font-size:13px;font-weight:700;color:#f59e0b">当前 ' + lbCfgAttr(lbCfgNumTxt(q.max)) + '</span>'
+      + '<span class="lb-tipb" style="font-size:11px;color:#64748b;cursor:help" title="' + lbCfgAttr(tip) + '">'
+      + (q.ignore ? '<i class="mdi mdi-check" style="color:#4ade80"></i> 忽略堆叠倍率' : '受堆叠倍率影响')
+      + '</span>'
+      + '</div></div>';
+  }
+  return '';
+}
+// ===== v5496：数字最多保留 2 位小数；完整原值挂项目统一 tips（.lb-tipb + title → #lbTipBox）=====
+function lbCfgNumShort(v){
+  var s = String(v === null || v === undefined ? '' : v).trim();
+  if(!/^-?\d+\.\d{3,}$/.test(s)) return null;    // 只处理 3 位以上小数（整数/短小数/文本原样）
+  var n = parseFloat(s);
+  if(!isFinite(n)) return null;
+  var out = String(Math.round(n * 100) / 100);
+  return out === s ? null : out;                   // 四舍五入后与原值相同 → 不改
+}
+function lbCfgValSpan(val, extraCss, prefixText){
+  var raw = String(val === null || val === undefined ? '' : val);
+  var pre = prefixText ? String(prefixText) : '';
+  // v5503：超长值（如 ConfigOverrideSupplyCrateItems 整段物品表）折叠显示，全文挂统一 tips
+  if(!prefixText && raw.length > 120){
+    var at2;
+    try{ at2 = (typeof lbCfgAttr === 'function') ? lbCfgAttr(raw) : escapeHtml(raw).replace(/"/g, '&quot;'); }
+    catch(e9){ at2 = escapeHtml(raw); }
+    return '<span class="lb-tipb" title="' + at2 + '" style="flex:0 1 auto;max-width:58%;text-align:right;word-break:break-all;cursor:help;' + extraCss + '">' + escapeHtml(raw.slice(0, 120)) + '…</span>';
+  }
+  var short = lbCfgNumShort(raw);
+  if(short === null) return '<span style="flex:0 1 auto;max-width:58%;text-align:right;word-break:break-all;' + extraCss + '">' + escapeHtml(pre + raw) + '</span>';
+  var at;
+  try{ at = (typeof lbCfgAttr === 'function') ? lbCfgAttr(pre + raw) : escapeHtml(pre + raw).replace(/"/g, '&quot;'); }
+  catch(e0){ at = escapeHtml(pre + raw); }
+  return '<span class="lb-tipb" title="' + at + '" style="flex:0 1 auto;max-width:58%;text-align:right;word-break:break-all;cursor:help;' + extraCss + '">' + escapeHtml(pre + short) + '</span>';
+}
+function lbCfgRowHtml(x, noDefault, fk){
+  var changed = (x.changed === true);
+  var isNew = (!changed) && lbCfgIsNewKey(x, fk);
+  var zh = (LB_CFG_ZH && (LB_CFG_ZH[x.key] || LB_CFG_ZH_CI[x.key.toLowerCase()])) || '';
+  var title = zh || x.key;
+  // v5509（用户口径）：ConfigOverride 行不显示「自定义xxx」主标题；序号 #n + 改动徽章移到灰色键名行；去掉「新增」胶囊
+  var isCo = /^configoverride/i.test(String(x.key || '').trim());
+  // v5539（用户口径）：去掉绿色徽章，复用「默认」同款灰字；位置=当前值右侧（CO 行放到该行最右）
+  var _ps = isNew ? lbCfgPeerStat(fk, x.key) : null;
+  // v5542（用户口径）：能判定全服多数 → 灰字显示「基准 <多数值>」；判不出（少于 3 台/并列）才显示「无基准」
+  var noBase = isNew ? ('<span style="flex:0 0 auto;color:#666;font-size:11px;white-space:nowrap">'
+    + (lbCfgPeerOk(_ps) ? ('基准 ' + escapeHtml(String(_ps.raw))) : '无基准') + '</span>') : '';
+  var occHtml = x.dup ? ' <span style="color:#666;font-size:10px;font-weight:400">#' + ((x.occurrence || 0) + 1) + '</span>' : '';
+  // v5510（用户口径）：CO 行不再显示右侧摘要（配方 N 项）；灰字行右侧加低可视化「复制原始代码」按钮
+  var coRaw = String(x.value === null || x.value === undefined ? '' : x.value);
+  var copyBtn = isCo ? ('<span class="lb-tipb" data-copy="' + lbCfgAttr(coRaw) + '" onclick="lbCfgCoCopy(this)" title="复制原始配置代码" style="flex:0 0 auto;color:#4b5563;opacity:.6;cursor:pointer;font-size:11px;line-height:1"><i class="mdi mdi-content-copy"></i></span>') : '';
+  var headDiv = isCo ? '' : ('<div style="display:flex;gap:8px;align-items:baseline">'
+    + '<span style="flex:1;min-width:0;font-size:13px;font-weight:600;color:' + (changed ? '#f59e0b' : (isNew ? '#34d399' : '#ddd')) + ';word-break:break-all">' + escapeHtml(title) + occHtml + (changed ? lbCfgKeyBadge(x, fk) : '') + '</span>'
+    + lbCfgCoValSpan(x)
+    + noBase
+    + (changed && !noDefault ? lbCfgValSpan(x['default'] === null ? '—' : x['default'], 'color:#666;font-size:11px', '默认 ') : '')
+    + '</div>');
+  var keyDiv = (zh || isCo) ? ('<div style="display:flex;align-items:center;gap:4px;font-size:11px;color:#666;font-family:ui-monospace,Consolas,monospace;' + (isCo ? '' : 'margin-top:1px;') + 'word-break:break-all">'
+    + '<span style="flex:1;min-width:0;word-break:break-all">' + escapeHtml(x.key) + (isCo ? occHtml : '')
+    + (isCo && changed ? lbCfgKeyBadge(x, fk) : '') + '</span>'
+    + copyBtn + '</div>') : '';
+  return '<div style="padding:4px 0;border-bottom:1px dashed #1f1f2a">' + headDiv + keyDiv + lbCfgCoExtraHtml(x) + '</div>';
+}
+// ===== v5488：入口命令（open 域名:端口）=====
+//   域名 = 系统管理里配置的全局服务器域名（后端 /api/server_config，所有人共享）
+//   端口 = 该服实服 ini 的 Port（取不到则用内置兜底表）；只拉一次，绝不轮询
+var LB_CFG_DOMAIN = null;        // null = 尚未拉取；'' = 未配置
+var LB_CFG_DOMAIN_TRIED = false;
+var LB_CFG_PORT_FALLBACK = { Isl: 7777, Sco: 7779, Cen: 7781, Abe: 7783, Ext: 7785, Ast: 7787, Rag: 7789, Val: 7791, Bob: 7775, Los: 7793, Gen: 7795 };
+function lbCfgAttr(s){
+  return String(s === null || s === undefined ? '' : s)
+    .replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function lbCfgDomainEnsure(cb){
+  if(LB_CFG_DOMAIN !== null || LB_CFG_DOMAIN_TRIED){ if(cb) cb(); return; }
+  LB_CFG_DOMAIN_TRIED = true;
+  fetch(lbSrvDomainApiBase() + '/api/server_config?t=' + Date.now(), { cache: 'no-store' })
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(d){ LB_CFG_DOMAIN = (d && typeof d.server_domain === 'string') ? String(d.server_domain) : ''; if(cb) cb(); })
+    .catch(function(){ LB_CFG_DOMAIN = ''; if(cb) cb(); });
+}
+function lbCfgPortOf(srv, gAll){
+  var p = '';
+  (gAll || []).forEach(function(x){
+    if(p) return;
+    if(String(x.key || '').trim().toLowerCase() === 'port') p = String(x.value === null || x.value === undefined ? '' : x.value).trim();
+  });
+  if(!p) p = String(LB_CFG_PORT_FALLBACK[srv] || '');
+  return p;
+}
+function lbCfgEntryCmd(srv, gAll){
+  if(LB_CFG_DOMAIN === null) return '';
+  var dom = String(LB_CFG_DOMAIN).trim();
+  if(!dom) return '';
+  var port = lbCfgPortOf(srv, gAll);
+  return 'open ' + dom + (port ? (':' + port) : '');
+}
+function lbCfgCopyCmd(txt, el){
+  var finish = function(ok){
+    if(!el) return;
+    el.textContent = ok ? '已复制' : '复制失败';
+    setTimeout(function(){ el.textContent = txt; }, 1200);
+  };
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(function(){ finish(true); }, function(){ finish(false); }); return; }
+  }catch(e1){}
+  var ok = false;
+  try{
+    var ta = document.createElement('textarea'); ta.value = txt; ta.style.cssText = 'position:fixed;left:-9999px';
+    document.body.appendChild(ta); ta.select(); ok = document.execCommand('copy'); ta.remove();
+  }catch(e2){ ok = false; }
+  finish(ok);
+}
+// v5495：命令文本不换行 —— 宽度不够时自动缩字号（15px → 最小 10px；仍放不下由 text-overflow 省略号兜底）
+function lbCfgFitCmd(){
+  var els = document.querySelectorAll('#lbCfgBody .lb-cfg-entry-cmd');
+  for(var i = 0; i < els.length; i++){
+    var el = els[i];
+    if(!el || !el.clientWidth) continue;
+    el.style.fontSize = '15px';
+    var size = 15, guard = 0;
+    while(el.scrollWidth > el.clientWidth + 1 && size > 10 && guard++ < 20){
+      size -= 0.5;
+      el.style.fontSize = size + 'px';
+    }
+  }
+}
+function lbCfgFitBind(){
+  try{
+    if(window.__lbCfgFitBound) return;
+    window.__lbCfgFitBound = true;
+    window.addEventListener('resize', function(){ try{ lbCfgFitCmd(); }catch(e){} });
+  }catch(e){}
+}
+function lbCfgCopyEl(el){
+  if(!el) return;
+  var tgt = el.querySelector ? el.querySelector('.lb-cfg-entry-cmd') : null;
+  if(!tgt) return;
+  lbCfgCopyCmd(el.getAttribute('data-cmd') || '', tgt);
+}
+function lbCfgEntryRowHtml(srv, gAll){
+  // v5489：独占整行徽章样式（左「入口命令」小标签 + 命令文本 + 复制提示）
+  var cmd = lbCfgEntryCmd(srv, gAll);
+  var inner;
+  var boxStyle = 'display:flex;align-items:center;gap:8px;box-sizing:border-box;width:100%;padding:10px;border-radius:8px;';
+  var tagOn = '<span style="flex:0 0 auto;font-size:11px;line-height:1;color:#c4b5fd;background:#7c3aed26;border:1px solid #7c3aed4d;border-radius:5px;padding:6px">入口命令</span>';
+  var tagOff = '<span style="flex:0 0 auto;font-size:11px;line-height:1;color:#6b7280;background:#ffffff0d;border:1px solid #ffffff1a;border-radius:5px;padding:6px">入口命令</span>';
+  if(cmd){
+    inner = tagOn
+      + '<span class="lb-cfg-entry-cmd" style="flex:1;min-width:0;color:#fff;font-size:15px;font-weight:700;font-family:ui-monospace,Consolas,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escapeHtml(cmd) + '</span>';
+  }else{
+    var tip = (LB_CFG_DOMAIN === null) ? '读取域名中…' : '未配置服务器域名（系统管理 → 服务器域名）';
+    inner = tagOff + '<span style="flex:1;min-width:0;color:#666;font-size:11.5px">' + escapeHtml(tip) + '</span>';
+  }
+  return '<div style="padding:7px 0 7px;border-bottom:1px dashed #1f1f2a">'
+    + '<div' + (cmd ? (' data-cmd="' + lbCfgAttr(cmd) + '" onclick="lbCfgCopyEl(this)" title="点击复制"') : '')
+    + ' style="' + boxStyle + (cmd ? 'background:#7c3aed1a;border:1px solid #7c3aed4d;cursor:pointer' : 'background:#ffffff08;border:1px solid #ffffff14') + '">'
+    + inner
+    + '</div></div>';
+}
+function lbCfgRender(){
+  var body = document.getElementById('lbCfgBody');
+  var bar = document.getElementById('lbCfgBar');
+  if(!body) return;
+  var srv = LB_CFG_VIEW.srv;
+  // v5529（用户口径）：笔记页隐藏「查看全部项」，改显「导出 / 导入 MD」
+  var _isNote = (srv === '__bbnote');
+  var _fbEl = document.getElementById('lbCfgFullBtn'); if(_fbEl) _fbEl.style.display = _isNote ? 'none' : 'contents';
+  var _nbEl = document.getElementById('lbCfgNoteBtns'); if(_nbEl) _nbEl.style.display = _isNote ? 'flex' : 'none';
+  if(srv === '__bbnote'){   // v5526（用户口径）：粑粑笔记 TAB —— 只读展示，内容来自 bb_notes.json
+    if(!LB_BBNOTES && !LB_BBNOTES_P){ lbBbNotesLoad(function(){ lbCfgRender(); }); }
+    if(bar) bar.innerHTML = '粑粑笔记　共 ' + (((LB_BBNOTES && LB_BBNOTES.notes) ? LB_BBNOTES.notes.length : 0)) + ' 条';
+    body.innerHTML = lbBbNotesHtml();
+    return;
+  }
+  var cG = lbCfgCacheGet(srv, 'GUS'), cM = lbCfgCacheGet(srv, 'GAME');
+  var dG = cG && cG.doc, dM = cM && cM.doc;
+  if(!dG && !dM){
+    if(bar) bar.textContent = '';
+    if(lbCfgTryShared()) return;
+    body.innerHTML = '<div style="padding:18px;color:#888;font-size:13px;line-height:1.8">这台还没有共享数据。<br>请拥有者在 <b style="color:#a78bfa">系统管理 → 服务器规则更新</b> 更新一次。</div>';
+    return;
+  }
+  // 全量补拉：GUS 恒需（服务器信息组要常显无默认值项）；full 模式两文件都要全量
+  [['GUS', cG], ['GAME', cM]].forEach(function(pair){
+    var fk = pair[0], cc = pair[1];
+    var dd = cc && cc.doc;
+    if(dd && dd.changed_only !== true) return;            // 已是全量，无需再拉
+    if(dd && dd._fullTried) return;
+    LB_CFG_VIEW._fFull = LB_CFG_VIEW._fFull || {};
+    if(LB_CFG_VIEW._fFull[fk]) return;                    // 本面板已尝试过（失败不重试，防死循环）
+    LB_CFG_VIEW._fFull[fk] = 1;
+    if(dd) dd._fullTried = true;
+    // v5499/5501：GAME 也要全量——基线缺失键（ConfigOverride*）的 changed=null，只在全量里存在；
+    //   文档缺失（cc 为空）时同样要拉，否则整段 GAME 内容永远看不到
+    try{
+      lbCfgFetchOne(srv, fk).then(function(full){
+        if(full && full.items){ lbCfgCachePut(srv, fk, full); lbCfgRender(); }
+      }).catch(function(){});
+    }catch(e){}
+  });
+  // v5488：入口命令要全局域名 → 首次渲染补拉一次（只拉一次，不轮询）
+  if(LB_CFG_DOMAIN === null && !LB_CFG_DOMAIN_TRIED){ lbCfgDomainEnsure(function(){ lbCfgRender(); }); }
+  if(LB_DEF_COST === null && !LB_DEF_COST_TRIED){ lbCfgDefCostEnsure(function(){ lbCfgRender(); }); }   // v5507：默认配方/堆叠上限表
+  if(!LB_CFG_KEYCNT && !LB_CFG_KEYCNT_TRIED){ lbCfgLoadKeyCounts(function(){ lbCfgRender(); }); }   // v5498：跨服改动计数
+  if(!LB_CFG_PEER && !LB_CFG_PEER_TRIED){ lbCfgPeerLoad(function(){ lbCfgRender(); }); }          // v5541：全服多数值当动态基准
+  var mode = LB_CFG_VIEW.mode;
+  function pick(doc, fk){
+    if(!doc) return [];
+    return (doc.items || []).filter(function(x){
+      if(lbCfgSecForeign(x, srv)) return false;          // v5540：别的地图的专属段不显示
+      return mode === 'full' ? true : (x.changed === true || lbCfgIsNewKey(x, fk));
+    });
+  }
+  var gAll = (dG && dG.items) || [];
+  // 服务器信息组：不受「只看改动」影响，始终展示
+  var infoItems = gAll.filter(function(x){ return lbCfgInfoRank(x.key) >= 0 && !lbCfgInfoHide(x.key) && !lbCfgSecForeign(x, srv); })
+    .sort(function(a, b){ return lbCfgInfoRank(a.key) - lbCfgInfoRank(b.key); });
+  var rulesG = pick(dG, 'GUS').filter(function(x){ return lbCfgInfoRank(x.key) < 0; });
+  var rulesM = pick(dM, 'GAME').filter(function(x){ return lbCfgInfoRank(x.key) < 0; });
+  var _cntShow = ((dG && dG.count) || 0) + ((dM && dM.count) || 0);
+  var _chgShow = ((dG && dG.changed_count) || 0) + ((dM && dM.changed_count) || 0);
+  var _rst = false, _par = false;
+  [dG, dM].forEach(function(d){ if(!d) return; if(d.pending_restart === true) _rst = true; if(d.partial) _par = true; });
+  var _mtime = (dG && dG.ini_mtime) || (dM && dM.ini_mtime) || '';
+  // v5542（用户口径）：绿色（无基准但与全服多数不一致）也算「已改」；ConfigOverride 不计任何无基准计数
+  var _greenCnt = 0, _coCnt = 0;
+  function _cntOne(x, fk){
+    if(!lbCfgIsNewKey(x, fk)) return;
+    if(/^configoverride/i.test(String(x.key || ''))){ _coCnt++; return; }   // v5543：自定义（ConfigOverride*）单独计数
+    _greenCnt++;
+  }
+  rulesG.forEach(function(x){ _cntOne(x, 'GUS'); });
+  rulesM.forEach(function(x){ _cntOne(x, 'GAME'); });
+  _chgShow = _chgShow + _greenCnt;
+  if(bar){
+    var _ts = Math.max((cG && cG.ts) || 0, (cM && cM.ts) || 0);
+    bar.innerHTML = escapeHtml(lbCfgSrvName(srv)) + '　共 ' + _cntShow + ' 项 · 已改 <b style="color:#f59e0b">' + _chgShow + '</b>' + (_coCnt ? ' · 自定义 <b style="color:#34d399">' + _coCnt + '</b>' : '') + '<br>缓存于 ' + lbCfgAgo(_ts)
+      + (_mtime ? ' · ini ' + escapeHtml(_mtime) : '')
+      + (_rst ? '<br><span style="color:#f59e0b">⚠️ 有改动未生效（ini 比服务器进程新，需重启）</span>' : '')
+      + (_par ? (_rst ? '　' : '<br>') + '<span style="color:#f59e0b">⚠️ 数据不全</span>' : '');
+  }
+  // v5488：服务器信息组恒显示（入口命令）→ 不再整体拦截空态
+  try{
+    var _un = 0, _all = rulesG.concat(rulesM);
+    for(var _i = 0; _i < _all.length; _i++){
+      if(!(LB_CFG_ZH && (LB_CFG_ZH[_all[_i].key] || LB_CFG_ZH_CI[_all[_i].key.toLowerCase()]))) _un++;
+    }
+    if(bar && _un) bar.innerHTML += '　·　<span style="color:#f59e0b">未译 ' + _un + ' 项</span>';
+  }catch(e){}
+  var DIV = '<div style="border-top:1px solid #2a2a3a;margin:10px 0 8px"></div>';
+  var html = '<div style="margin-top:6px">';
+  html += lbCfgEntryRowHtml(srv, gAll);   // v5488：置顶固定入口命令 open 域名:端口
+  infoItems.forEach(function(x){ html += lbCfgRowHtml(x, String(x.key || '').toLowerCase() === 'sessionname'); });
+  html += DIV;
+  if(!rulesG.length && !rulesM.length) html += '<div style="padding:12px 0;color:#888;font-size:12.5px">当前筛选下没有其它规则项</div>';
+  // v5506（用户口径）：ConfigOverride* 组与常规项之间加一根分割线（与其它分组线同款 DIV）
+  //   规则：当前项是 ConfigOverride 且上一项不是 → 先输出分割线；若刚在文件分段处输出过则不重复（避免双线）
+  var _coRe = /^configoverride/i;
+  var _prevCO = null, _sepJust = false;
+  var _scRe = /^configoverridesupplycrateitems$/i;   // v5517（用户口径）：该项恒排最后
+  var _emitRows = function(list, fk){
+    // v5523（用户口径）：同类箱子内部按「简单→困难」排序；类型之间保持首次出现顺序
+    var _arr = list.slice();
+    var _seen = {}, _ord = 0;
+    _arr.forEach(function(x){
+      if(!_scRe.test(String((x && x.key) || '').trim())) return;
+      var _t = lbCfgCrateOrder(x.value).type;
+      if(_seen[_t] === undefined) _seen[_t] = _ord++;
+    });
+    _arr.sort(function(a, b){
+      var sa = _scRe.test(String((a && a.key) || '').trim()) ? 1 : 0, sb = _scRe.test(String((b && b.key) || '').trim()) ? 1 : 0;
+      if(sa !== sb) return sa - sb;                  // SupplyCrateItems 恒排最后
+      if(!sa) return 0;                               // 其它项保持原序
+      var ka = lbCfgCrateOrder(a.value), kb = lbCfgCrateOrder(b.value);
+      if(ka.type !== kb.type) return _seen[ka.type] - _seen[kb.type];
+      return ka.lv - kb.lv;                           // 同类内按难度升序
+    });
+    list = _arr;
+    list.forEach(function(x){
+      var co = _coRe.test(String((x && x.key) || '').trim());
+      if(co && _prevCO === false && !_sepJust){ html += DIV; _sepJust = true; }
+      html += lbCfgRowHtml(x, false, fk);
+      _prevCO = co; _sepJust = false;
+    });
+  };
+  _emitRows(rulesG, 'GUS');
+  if(rulesM.length){
+    if(rulesG.length){ html += DIV; _sepJust = true; }
+    _emitRows(rulesM, 'GAME');
+  }
+  html += '</div>';
+  body.innerHTML = html;
+  // v5521：手风琴（只绑一次；toggle 不冒泡，用捕获阶段在 body 上接）
+  if(body && !body._accBound){ body._accBound = 1; body.addEventListener('toggle', lbCfgFoldAcc, true); }
+  lbCfgBadges();
+  lbCfgFitBind(); lbCfgFitCmd();   // v5495：命令不换行，宽窄自适应
+}
+
+// ---- 共享快照：拥有者拉完后逐台发布；其他人直接读（无需自己更新） ----
+function lbCfgSlim(doc){
+  if(!doc) return null;
+  var items = (doc.items || []).filter(function(x){ return x.changed === true; });
+  return {
+    ok: doc.ok !== false, server: doc.server, file: doc.file, file_key: doc.file_key,
+    partial: !!doc.partial, missing: doc.missing || [], note: doc.note || '',
+    path_exists: doc.path_exists, ini_mtime: doc.ini_mtime, proc_start: doc.proc_start,
+    pending_restart: doc.pending_restart, baseline: doc.baseline || null,
+    count: doc.count || 0, changed_count: doc.changed_count || 0,
+    items: items, changed_only: true,
+    generated_at: new Date().toISOString()
+  };
+}
+function lbCfgUploadServer(srv, doc){
+  var a = lbCfgAuthRaw();
+  if(!a || !a.user || !lbIsAdmin()) return;
+  var slim = lbCfgSlim(doc);
+  if(!slim) return;
+  var files = {}; files['GUS'] = slim;
+  var base = (typeof LB_API === 'string' && LB_API) ? LB_API : 'https://data.whiterober.ccwu.cc';
+  var url = base + '/api/cfg_rules/snapshot?username=' + encodeURIComponent(a.user) + '&nick=' + encodeURIComponent(a.nick || '');
+  fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ server: srv, files: files, generated_at: slim.generated_at }) })
+    .then(function(r){ return r.json().then(function(j){ return { s: r.status, j: j }; }); })
+    .then(function(x){
+      var msg = document.getElementById('lbCfgMsg');
+      if(x.s !== 200 && msg) msg.innerHTML = '<span style="color:#ef4444">共享发布失败（' + escapeHtml(srv) + '）：' + escapeHtml((x.j && x.j.error) || String(x.s)) + '</span>';
+    }).catch(function(){});
+}
+function lbCfgTryShared(){
+  var srv0 = LB_CFG_VIEW.srv, fk0 = LB_CFG_VIEW.fk;   // v5505：捕获请求发起时的服/文件
+  var key = srv0 + '|' + fk0;
+  LB_CFG_VIEW._tried = LB_CFG_VIEW._tried || {};
+  if(LB_CFG_VIEW._tried[key]) return false;
+  LB_CFG_VIEW._tried[key] = 1;
+  var body = document.getElementById('lbCfgBody');
+  if(body) body.innerHTML = '<div style="padding:18px;color:#888;font-size:13px">⏳ 正在读取共享数据…</div>';
+  lbCfgFetchOne(srv0, fk0).then(function(d){
+    lbCfgCachePut(srv0, fk0, d);
+    lbCfgRender();
+  }).catch(function(){
+    if(body) body.innerHTML = '<div style="padding:18px;color:#888;font-size:13px;line-height:1.8">这台还没有共享数据。<br>请拥有者在 <b style="color:#a78bfa">系统管理 → 服务器规则更新</b> 更新一次。</div>';
+  });
+  return true;
+}
+
 function lbSrvResultZh(t){
   if(!t) return '';
   var s = String(t);
@@ -5671,7 +7509,7 @@ function lbOpenRolePicker(){
   var html='<div class="lb-picker-panel" onclick="event.stopPropagation()" style="max-width:400px">';
   // v5404（用户口径「版本号放到该浮窗底栏，可以不要那么低可视化」「选择生存者 改叫 生存者」）
   //   标题改名；版本号移到底栏（见下方 footer），不再挤在标题右侧
-  html+='<div class="lb-picker-header"><span style="flex:1;font-weight:bold;color:#a78bfa">生存者</span>'+(lbIsAdmin()?'<button class="lb-tipb lb-picker-close" style="opacity:.4;font-size:14px" onclick="lbOpenServerAdminModal()" title="服务器管理"><i class="mdi mdi-server"></i></button>':'')+'<button class="lb-tipb lb-picker-close" style="opacity:.4;font-size:14px" onclick="lbOpenAlliancePos()" title="联盟成员位置"><i class="mdi mdi-account-group-outline"></i></button><button class="lb-tipb lb-picker-close" style="opacity:.4;font-size:14px" onclick="lbRoleView(\'keys\')" title="键位配置"><i class="mdi mdi-gamepad-variant"></i></button><button class="lb-tipb lb-picker-close" style="opacity:.4;font-size:14px" onclick="lbOpenConfigModal()" title="自助配置"><i class="mdi mdi-cog"></i></button><button class="lb-tipb lb-picker-close" style="opacity:.4;font-size:14px" onclick="lbLogout()" title="注销登录"><i class="mdi mdi-logout"></i></button><button class="lb-tipb lb-picker-close" onclick="this.closest(\'.lb-picker-overlay\').remove()" title="关闭"><i class="mdi mdi-close"></i></button></div>';
+  html+='<div class="lb-picker-header"><span style="flex:1;font-weight:bold;color:#a78bfa">生存者</span>'+(lbIsAdmin()?'<button class="lb-tipb lb-picker-close" style="opacity:.4;font-size:14px" onclick="lbOpenServerAdminModal()" title="服务器管理"><i class="mdi mdi-server"></i></button>':'')+'<button class="lb-tipb lb-picker-close" style="opacity:.4;font-size:14px" onclick="lbOpenAlliancePos()" title="联盟成员位置"><i class="mdi mdi-account-group-outline"></i></button><button class="lb-tipb lb-picker-close" style="opacity:.4;font-size:14px" onclick="lbRoleView(\'keys\')" title="键位配置"><i class="mdi mdi-gamepad-variant"></i></button><button class="lb-tipb lb-picker-close" style="opacity:.4;font-size:14px" onclick="lbOpenConfigModal()" title="自助配置"><i class="mdi mdi-cog"></i></button>'+'<button class="lb-tipb lb-picker-close" style="opacity:.4;font-size:14px" onclick="lbCfgOpenRules()" title="服务器规则"><i class="mdi mdi-clipboard-text-outline"></i></button>'+'<button class="lb-tipb lb-picker-close" style="opacity:.4;font-size:14px" onclick="lbLogout()" title="注销登录"><i class="mdi mdi-logout"></i></button><button class="lb-tipb lb-picker-close" onclick="this.closest(\'.lb-picker-overlay\').remove()" title="关闭"><i class="mdi mdi-close"></i></button></div>';
   html+='<div class="lb-picker-grid" id="lbRoleGrid">';
   var huIcon=(LB_ICON_BY_NAME && LB_ICON_BY_NAME['Human_icon']) || '';
   LB.playerRoles.forEach(function(r, i){
@@ -20768,6 +22606,7 @@ function lbPickerExtraSync(){
 // v865：内容不满的滚动容器收紧到「内容恰好高度」——刚好无滚动条、不留大空白；内容超限才保持滚动
 // v1373：覆盖物品页容器（#lbItemPickGrid / #lbItemExtra），并跳过隐藏容器
 function lbPickerFitScroll(){
+  try { lbPickerDecorateOps(); } catch (eOps) {}   // v5443：每次布局收尾都补一次橙色操作点（幂等）
   var els=[];
   ['lbPickerGrid','lbSpExtra','lbItemExtra','lbPubFacGrid'].forEach(function(id){ var e=document.getElementById(id); if(e) els.push(e); }); // v3575：去 lbItemPickGrid
   els.forEach(function(el){
@@ -35611,10 +37450,10 @@ var LB_KEYMAP_ACTIONS = [
   {g:'战斗', id:'reload',    zh:'装填弹药 / 物品选项（长按）', zhPad:'装填弹药',        pad:'xbox_button_x',                    kbm:'keyboard_r',                note:''},   // v5283 图校
   {g:'战斗', id:'melee',     zh:'近战 / 武器击打', zhPad:'近战',      pad:'xbox_rb',                          kbm:'keyboard_ctrl_left',             note:''},
   {g:'战斗', id:'pin_wheel', zh:'标记转盘', zhPad:'标记转盘', pad:{k:['xbox_rb'], mode:'long', chord:'xbox_lb'}, kbm:'', note:'LB + R1 长按', dev:'pad'},   // v5342（用户口径「R1：短按=近战 / LB+长按=标记转盘」）：手柄侧新增；id 不入 LB_KM_KBSHOT => 键鼠页不新增行
-  {g:'战斗', id:'fists',     zh:'切换拳头 / 快捷背包（长按）', zhPad:'切换拳头',        pad:{k:['xbox_lb','xbox_dpad_up']},     kbm:'keyboard_q',                note:'收起 / 取出武器'},   // v5338（用户口径「快捷背包要独立」）：zhPad 只留「切换拳头」；zh 保持键鼠列口径不动
+  {g:'战斗', id:'fists', toggle:1,     zh:'拳头 / 快捷背包（长按）', zhPad:'拳头',        pad:{k:['xbox_lb','xbox_dpad_up']},     kbm:'keyboard_q',                note:'收起 / 取出武器'},   // v5338（用户口径「快捷背包要独立」）：zhPad 只留「切换拳头」；zh 保持键鼠列口径不动
   {g:'战斗', id:'quick_pack', zh:'快捷背包', zhPad:'快捷背包', pad:{k:['xbox_lb'], mode:'long', chord:'xbox_dpad_up', modeOn:'chord'}, kbm:'', note:'LB + 十字↑ 长按', dev:'pad'},   // v5343：长按作用在组合键成员（十字↑）=> 标识排在键图标前面   // v5338：从 fists 拆出；v5339（用户口径「快捷背包 才要长按标识」）：改成 mode:'long' + chord ⇒ 显示「十字↑ LB + 长按图标」，不再靠文字写（长按）；id 不入 LB_KM_KBSHOT
   {g:'战斗', id:'drag',      zh:'拖拽',        pad:'xbox_button_y',                    kbm:'keyboard_g',                note:'尸体 / 昏迷目标'},
-  {g:'战斗', id:'attach',    zh:'切换武器附件', zhPad:'激活武器附件',    pad:{k:['xbox_button_x'], mode:'double'},      kbm:'keyboard_n',                note:'长按 = 附件轮盘(R)；双击 = 激活(N)'},   // v5279 · v5286 回退（键鼠叫法）
+  {g:'战斗', id:'attach', toggle:1,    zh:'武器附件', zhPad:'激活武器附件',    pad:{k:['xbox_button_x'], mode:'double'},      kbm:'keyboard_n',                note:'长按 = 附件轮盘(R)；双击 = 激活(N)'},   // v5279 · v5286 回退（键鼠叫法）
   {g:'战斗', id:'attach_wheel', zh:'附件轮盘', zhPad:'附件轮盘', pad:{k:['xbox_button_x'], hold:1}, kbm:{k:['keyboard_r'], hold:1}, note:'X 长按 / R 长按'},   // v5376（用户口径「附件轮盘可以解禁」）：解除「仅手柄」，键鼠补 R 长按（依据 attach 的 note「长按 = 附件轮盘(R)）   // v5363（用户口径「长按X 附件轮盘 这个漏了」）：attach 的 note 写有「长按 = 附件轮盘」但只落了双击 => 补上独立动作；id 不入 LB_KM_KBSHOT => 键鼠页不新增行
   {g:'移动', id:'jump',      zh:'跳跃', zhPad:'跳',            pad:'xbox_button_a',                    kbm:'keyboard_space',            note:''},
   {g:'移动', id:'crouch',    zh:'下蹲',            pad:'xbox_stick_r_press',               kbm:'keyboard_c',                note:''},
@@ -35627,8 +37466,8 @@ var LB_KEYMAP_ACTIONS = [
   {g:'移动', id:'move_back', zh:'向后',            zhPad:'向后', pad:{k:['xbox_stick_l_vertical']},      kbm:'keyboard_s',                note:'左摇杆 上下'},   // v5352：挂左摇杆上下；v5356：手柄叫法各自独立，不合并（一个功能一行）
   {g:'移动', id:'move_left', zh:'向左平移',          zhPad:'向左平移', pad:{k:['xbox_stick_l_horizontal']},    kbm:'keyboard_a',                note:'左摇杆 左右'},   // v5352：挂左摇杆左右；v5356：手柄叫法各自独立，不合并（一个功能一行）
   {g:'移动', id:'move_right',zh:'向右平移',          zhPad:'向右平移', pad:{k:['xbox_stick_l_horizontal']},    kbm:'keyboard_d',                note:'左摇杆 左右'},   // v5352：挂左摇杆左右；v5356：手柄叫法各自独立，不合并（一个功能一行）
-  {g:'移动', id:'run_toggle',zh:'切换跑步',      pad:null,                               kbm:'keyboard_shift_right',            note:'右键 Shift（RightShift）· 切换型'},   // v5280 权威：RightShift；v5355（用户口径「手柄里 切换跑步 和跑步重复，只保留跑步」）：手柄侧解绑，改由 sprint 独占左摇杆按下
-  {g:'移动', id:'auto_run',  zh:'切换自动奔跑',   pad:null,                               kbm:'',                          note:'键鼠默认未分配'},   // v5289：按权威键鼠截图补条目（该行键值被裁切，按用户口径视为未分配）
+  {g:'移动', id:'run_toggle', toggle:1,zh:'跑步',      pad:null,                               kbm:'keyboard_shift_right',            note:'右键 Shift（RightShift）'},   // v5280 权威：RightShift；v5355（用户口径「手柄里 切换跑步 和跑步重复，只保留跑步」）：手柄侧解绑，改由 sprint 独占左摇杆按下
+  {g:'移动', id:'auto_run', toggle:1,  zh:'自动奔跑',   pad:null,                               kbm:'',                          note:'键鼠默认未分配'},   // v5289：按权威键鼠截图补条目（该行键值被裁切，按用户口径视为未分配）
   {g:'界面', id:'inventory', zh:'物品栏',          pad:'xbox_button_b',                    kbm:'keyboard_i',                note:''},   // v5283 图校
   {g:'界面', id:'map',       zh:'地图',            pad:'xbox_button_view',                 kbm:'keyboard_m',                note:''},
   {g:'界面', id:'wheel',     zh:'上下文轮盘', zhPad:'轮盘',      pad:{k:['xbox_button_b'], hold:1},      kbm:{k:['keyboard_e'], hold:1},  note:'生物行为 / 结构拆除'},
@@ -35644,8 +37483,8 @@ var LB_KEYMAP_ACTIONS = [
   {g:'界面', id:'slot8',   zh:'使用快捷栏8',   pad:{k:['xbox_button_a'], chord:'xbox_lb'},  kbm:'keyboard_8',        note:'L1 + A'},   // v5348：手柄键位补齐
   {g:'界面', id:'slot9',   zh:'使用快捷栏9',   pad:{k:['xbox_dpad_left'], chord:'xbox_lb'},  kbm:'keyboard_9',        note:'L1 + 十字←'},   // v5348：手柄键位补齐
   {g:'界面', id:'slot10',  zh:'使用快捷栏10',  pad:{k:['xbox_dpad_right'], chord:'xbox_lb'},  kbm:'keyboard_0',        note:'L1 + 十字→'},   // v5348：手柄键位补齐
-  {g:'界面', id:'admin',     zh:'切换控制台', zhPad:'游戏选项',        pad:'xbox_button_menu',                 kbm:'keyboard_tilde',            note:'权威：Tilde；Esc 为暂停菜单'},   // v5280   // v5279：菜单键(Esc)
-  {g:'界面', id:'steam_overlay', zh:'切换 STEAM 叠层', zhPad:'切换 STEAM 叠层', pad:{k:['controller_icon']}, kbm:'', note:'Steam 页 · ICON / GUIDE 键', dev:'pad'},   // v5347（用户口径「ICON/GUIDE：切换STEAM叠层」）：Steam logo 键短按；LB_KM_EQUIV 等价组让 controller_icon 与 steamdeck_button_guide 共享绑定；id 不入 LB_KM_KBSHOT => 键鼠页不新增行
+  {g:'界面', id:'admin', toggle:1,     zh:'控制台', zhPad:'游戏选项',        pad:'xbox_button_menu',                 kbm:'keyboard_tilde',            note:'权威：Tilde；Esc 为暂停菜单'},   // v5280   // v5279：菜单键(Esc)
+  {g:'界面', id:'steam_overlay', toggle:1, zh:'STEAM 叠层', zhPad:'STEAM 叠层', pad:{k:['controller_icon']}, kbm:'', note:'Steam 页 · ICON / GUIDE 键', dev:'pad'},   // v5347（用户口径「ICON/GUIDE：切换STEAM叠层」）：Steam logo 键短按；LB_KM_EQUIV 等价组让 controller_icon 与 steamdeck_button_guide 共享绑定；id 不入 LB_KM_KBSHOT => 键鼠页不新增行
   {g:'界面', id:'craftables',zh:'打开制作栏',      pad:'xbox_rb',                          kbm:'keyboard_v',                note:'背包内'},
   {g:'界面', id:'marker',    zh:'标点', pad:{k:['xbox_stick_r_press'], chord:'xbox_lb'}, kbm:'mouse_scroll',              note:'鼠标中键（用滚轮图标）；摇杆R + LB'},   // v5279 · v5282 补键 · v5359：pad 由 LB 长按改为 R3 + LB 组合 · v5387（用户口径「附件这个其实就是 标点（去掉多余的动作）」）：删除 zhPad 别名「标记：到这里」，两列统一显示「标点」
   {g:'界面', id:'itemmenu',  zh:'物品菜单',        pad:null,               kbm:'keyboard_question',         note:''},   // v5346（用户口径「OPTIONS 去掉 物品菜单」）：手柄侧解绑，键鼠列 ? 保留
@@ -35654,7 +37493,7 @@ var LB_KEYMAP_ACTIONS = [
   {g:'界面', id:'emote',     zh:'表情键 1',            pad:null,                               kbm:'keyboard_bracket_open',     note:'长按；手柄通过轮盘选择'},   // v5361（用户口径「表情键1 挂错了 不是在B上吧？」）：原 pad 错挂 B 短按（与物品栏抢键、且 note 写「长按」自相矛盾）=> 手柄解绑，与 emote2 一致
   {g:'界面', id:'defecate',  zh:'排泄',            pad:null,                          kbm:'keyboard_numpad_plus',             note:'拉屎'},   // v5338（用户口径「排泄不是 L1 的」）：手柄侧解绑（pad → null）；v5373：手柄可映射键盘键，故「手柄无此键」说法已删，pad:null 现为「未设」可编辑；kbm 保持 keyboard_numpad_plus 不动
   {g:'界面', id:'op_select', zh:'操作选择', zhPad:'操作选择', pad:'xbox_lb', kbm:'', note:'L1 短按', dev:'pad'},   // v5338（用户口径「L1 短按：操作选择」）：新建独立条目接替 L1；kbm 置空、id 不入 LB_KM_KBSHOT ⇒ 键鼠侧不受影响
-  {g:'界面', id:'inv_frame_switch', zh:'背包 / 目标框架快速切换', pad:'xbox_stick_l_press', kbm:'',                     note:'虚拟鼠标场景；非物品上方', dev:'pad'},   // v5279 新增
+  {g:'界面', id:'inv_frame_switch', toggle:1, zh:'背包 / 目标框架快速切换', pad:'xbox_stick_l_press', kbm:'',                     note:'虚拟鼠标场景；非物品上方', dev:'pad'},   // v5279 新增
   {g:'界面', id:'select',    zh:'选中',            pad:'xbox_button_a',                    kbm:'mouse_left',                note:'虚拟鼠标场景'},   // v5279 新增 · v5282 补键
   {g:'界面', id:'tribe_mgr', zh:'部落管理器',      pad:null,                               kbm:'keyboard_l',                note:''},   // v5280 新增
   {g:'界面', id:'emote2',    zh:'表情键 2',        pad:null,                               kbm:'keyboard_bracket_close',    note:''},   // v5280 新增
@@ -35681,7 +37520,7 @@ var LB_KEYMAP_ACTIONS = [
   {g:'聊天', id:'chat_alliance',zh:'联盟聊天',     pad:null,                               kbm:'keyboard_home',             note:''},
   {g:'聊天', id:'chat_up',      zh:'聊天上翻',     pad:null,                               kbm:'keyboard_page_up',          note:''},
   {g:'聊天', id:'chat_down',    zh:'聊天下翻',     pad:null,                               kbm:'keyboard_page_down',        note:''},
-  {g:'聊天', id:'chat_switch',  zh:'切换聊天框显示方式', pad:null,                               kbm:'keyboard_slash_back',              note:''},
+  {g:'聊天', id:'chat_switch', toggle:1,  zh:'聊天框显示方式', pad:null,                               kbm:'keyboard_slash_back',              note:''},
   {g:'聊天', id:'voice',        zh:'按键说话', pad:null,                           kbm:'keyboard_b',                note:''},
   {g:'骑乘', id:'ride_attack',zh:'坐骑主攻击',      pad:'xbox_rt',                        kbm:'mouse_left',                note:''},
   {g:'骑乘', id:'ride_alt',   zh:'坐骑副攻击',      pad:'xbox_lt',                        kbm:'mouse_right',               note:''},
@@ -35701,18 +37540,18 @@ var LB_KEYMAP_ACTIONS = [
   {g:'背包内', id:'inv_repair',  zh:'修理物品',     pad:null,                             kbm:'keyboard_e',                note:''},
   {g:'建造', id:'build_flip',    zh:'翻转建筑朝向', pad:null,                             kbm:'keyboard_e',                note:''},
   {g:'建造', id:'build_snap',    zh:'吸附点循环',   pad:null,                             kbm:'keyboard_q',                note:'或 Z'},
-  {g:'镜头', id:'cam_orbit',   zh:'切换球形镜头',       pad:null,                             kbm:'keyboard_k',                note:''},
+  {g:'镜头', id:'cam_orbit', toggle:1,   zh:'球形镜头',       pad:null,                             kbm:'keyboard_k',                note:''},
   {g:'镜头', id:'cam_zoom_in', zh:'拉近镜头',       pad:null,                             kbm:'mouse_scroll_up',           note:''},
   {g:'镜头', id:'cam_zoom_out',zh:'拉远镜头',       pad:null,                             kbm:'mouse_scroll_down',         note:''},
   {g:'镜头', id:'cam_person',  zh:'更改恐龙镜头模式', zhPad:'更改恐龙镜头模式', pad:'xbox_rb',                      kbm:{k:['keyboard_alt_left'], hold:1}, note:'左 Alt 长按'},   // v5280
   {g:'镜头', id:'hud_ext',     zh:'更多HUD信息',  pad:{k:['xbox_button_view'], hold:1},  kbm:'keyboard_h',   note:'键鼠 H；View 长按'},   // v5279：View 长按；v5345 曾解绑给 func_wheel；v5384（用户口径「长按 有2个功能都要保留 是2条」）：恢复 View 长按，与 func_wheel 并存为两条独立记录
   {g:'镜头', id:'func_wheel', zh:'功能转盘', zhPad:'功能转盘', pad:{k:['xbox_button_view'], hold:1}, kbm:'', note:'View 长按', dev:'pad'},   // v5345：View 长按；v5384（用户口径「长按 有2个功能都要保留 是2条」）：与 hud_ext 并存，同为 View 长按两条记录；id 不入 LB_KM_KBSHOT => 键鼠页不新增行
-  {g:'镜头', id:'hud_hide',    zh:'开关HUD',       pad:null,                             kbm:'keyboard_backspace',        note:''},
+  {g:'镜头', id:'hud_hide', toggle:1,    zh:'HUD',       pad:null,                             kbm:'keyboard_backspace',        note:''},
   {g:'镜头', id:'turn_left',  zh:'向左转',         pad:{k:['xbox_stick_r_horizontal']},                               kbm:'keyboard_arrow_left',       note:'右摇杆 左右'},   // v5280 新增；v5358：手柄挂右摇杆左右
   {g:'镜头', id:'turn_right', zh:'向右转',         pad:{k:['xbox_stick_r_horizontal']},                               kbm:'keyboard_arrow_right',      note:'右摇杆 左右'},   // v5280 新增；v5358：手柄挂右摇杆左右
   {g:'镜头', id:'look_up',    zh:'向上看',         pad:{k:['xbox_stick_r_vertical']},                               kbm:'keyboard_arrow_up',         note:'右摇杆 上下'},   // v5280 新增；v5358：手柄挂右摇杆上下
   {g:'镜头', id:'look_down',  zh:'向下看',         pad:{k:['xbox_stick_r_vertical']},                               kbm:'keyboard_arrow_down',       note:'右摇杆 上下'},   // v5280 新增；v5358：手柄挂右摇杆上下
-  {g:'镜头', id:'cam_selfie', zh:'切换自拍镜头',   pad:null,                               kbm:'keyboard_alt_right',              note:'右 Alt'},   // v5280 新增
+  {g:'镜头', id:'cam_selfie', toggle:1, zh:'自拍镜头',   pad:null,                               kbm:'keyboard_alt_right',              note:'右 Alt'},   // v5280 新增
   {g:'镜头', id:'nameplate',   zh:'名牌显示距离',   pad:null,                             kbm:'keyboard_end',              note:''}
 ];
 // v5284（用户口径「只加提到的精确的动作，比如瞄准就不加粗」）：
@@ -35780,6 +37619,23 @@ function lbKmActName(a){
   }
   return out;
 }
+// ===== v5453（用户口径「所有动作（包括全局的）里面涉及到切换的，要通过一种方式标识出来」）=====
+//   切换型 = 触发一次开启、再触发一次关闭（toggle）。数据位在**动作定义层**：`toggle: 1`
+//   标识：动作名**右侧紧贴**一个 mdi-repeat 图标（青绿 #22d3ee / 12px / stroke 0.8 加粗 / viewBox 裁边贴合）
+//   ⚠️ 与「操作方式」正交：操作方式是「怎么按」（单击/长按/双击…），切换是「按下去之后会怎样」
+var LB_KM_TOGGLE_PATH = 'M17,17H7V14L3,18L7,22V19H19V13H17M7,7H17V10L21,6L17,2V5H5V11H7V7Z';
+function lbKmIsToggle(aidOrAct){
+  var a = (typeof aidOrAct === 'string') ? lbKeymapAct(aidOrAct) : aidOrAct;
+  return !!(a && Number(a.toggle) === 1);
+}
+var LB_KM_TOGGLE_SVG = '<svg viewBox="2 2 20 20" fill="currentColor" aria-hidden="true">'
+  + '<path d="' + LB_KM_TOGGLE_PATH + '" stroke="currentColor" stroke-width="0.8" stroke-linejoin="round"/></svg>';
+function lbKmToggleIcon(){
+  return '<span class="lb-km-tgwrap" title="切换型：触发一次开启、再触发一次关闭">' + LB_KM_TOGGLE_SVG + '</span>';
+}
+function lbKmToggleIconHtml(aidOrAct){
+  try { return lbKmIsToggle(aidOrAct) ? lbKmToggleIcon() : ''; } catch (e) { return ''; }
+}
 // Xbox 原名 -> 语义键
 var LB_KEYMAP_SEM = {
   'xbox_button_a':'ax','xbox_button_b':'bx','xbox_button_x':'xx','xbox_button_y':'yx',
@@ -35789,7 +37645,12 @@ var LB_KEYMAP_SEM = {
   'xbox_stick_l_press':'lsp','xbox_stick_r_press':'rsp','xbox_stick_r_up':'rsu',
   'xbox_stick_l_vertical':'lsv','xbox_stick_l_horizontal':'lsh',   // v5352：左摇杆上下一组 / 左右一组
   'xbox_stick_r_vertical':'rsv','xbox_stick_r_horizontal':'rsh',   // v5358：右摇杆上下一组 / 左右一组
-  'xbox_button_view':'view','xbox_button_menu':'menu'
+  'xbox_button_view':'view','xbox_button_menu':'menu',
+  // v5462（用户口径「附件显示为啥没有自动变成xbox的键位图标」）：
+  //   背键此前**完全没进语义表** ⇒ controller_button_r4 等设备键查不到语义、原样显示（切任何设备都不转换）。
+  //   按物理位置补 4 个语义位：L4→P1(上左) / R4→P2(上右) / L5→P3(下左) / R5→P4(下右)
+  'xbox_elite_paddle_top_left':'p1','xbox_elite_paddle_top_right':'p2',
+  'xbox_elite_paddle_bottom_left':'p3','xbox_elite_paddle_bottom_right':'p4'
 };
 // 语义键 -> 各设备同义键（null / 缺项 = 该设备不适用，数据仍保留）
 var LB_KEYMAP_SKIN = {
@@ -35797,6 +37658,7 @@ var LB_KEYMAP_SKIN = {
     lb:'playstation_trigger_l1',rb:'playstation_trigger_r1',lt:'playstation_trigger_l2',rt:'playstation_trigger_r2',
     du:'playstation_dpad_up',dd:'playstation_dpad_down',dl:'playstation_dpad_left',dr:'playstation_dpad_right',
     lsp:'playstation_stick_l_press',rsp:'playstation_stick_r_press',rsu:'playstation_stick_r_up',
+    p1:'playstation5_elite_fn_l',p2:'playstation5_elite_fn_r',   // v5462：PS5 精英只有 2 个背键 ⇒ FN L→P1、FN R→P2
     view:'playstation5_button_create',menu:'playstation5_button_options'},   // v5276：原为 null ⇒ 表格显示「不适用」；改指当前世代（PS5）
   switch:{ax:'switch_button_a',bx:'switch_button_b',xx:'switch_button_x',yx:'switch_button_y',
     lb:'switch_button_l',rb:'switch_button_r',lt:'switch_button_zl',rt:'switch_button_zr',
@@ -35809,7 +37671,8 @@ var LB_KEYMAP_SKIN = {
     lb:'controller_button_l1',rb:'controller_button_r1',lt:'controller_button_l2',rt:'controller_button_r2',   // v5325（用户口径「组合键要显示对应图标」）：LT/RT 显示层改用 Steam 2 代手柄专用图标；steamdeck_* 仍保留在 SKIN_MULTI 等价键里 v5326：LB/RB 因 steamdeck_* 与 controller_* 字形相同、键池只留 controller 套，显示层同步改指
     du:'steamdeck_dpad_up',dd:'steamdeck_dpad_down',dl:'steamdeck_dpad_left',dr:'steamdeck_dpad_right',
     lsp:'steamdeck_stick_l_press',rsp:'steamdeck_stick_r_press',rsu:'steamdeck_stick_r_up',
-    view:'controller_button_view',menu:'controller_button_options'},   // v5326：steamdeck_button_view/options 与 controller 版字形完全相同 ⇒ 键池只留 controller 套，显示层同步改指
+    view:'controller_button_view',menu:'controller_button_options',   // v5326：steamdeck_button_view/options 与 controller 版字形完全相同 ⇒ 键池只留 controller 套，显示层同步改指
+    p1:'controller_button_l4',p2:'controller_button_r4',p3:'controller_button_l5',p4:'controller_button_r5'},   // v5462：Steam 背键 ↔ 拨片（按物理位置）
   valveindex:{ax:'index_button_a',bx:'index_button_b',xx:null,yx:null,
     lb:null,rb:null,lt:'index_lt',rt:'index_rt',
     du:'index_track_up',dd:'index_track_down',dl:null,dr:null,
@@ -36081,7 +37944,50 @@ function lbSpeciesStoreSave(d){
   if (!d) return;
   d.updatedAt = Date.now();
   try { localStorage.setItem(lbSpeciesOpsKey(), JSON.stringify(d)); } catch (e) {}
+  LB_SPECIES_OPS_IDX = null;   // v5443：索引失效（下次重新统计）
   try { if (typeof lbPrefsPush === 'function') lbPrefsPush(); } catch (e2) {}
+}
+// v5443（用户口径「有操作的项，也要加标记点，复用流程点的样式，只是颜色用操作入口的橙色」）
+//   索引：键 = 物种类名 / 物品 canon 名；只收「有动作」的作用域。带缓存 —— 浮窗里有上千项，不能每项都解析 localStorage
+var LB_SPECIES_OPS_IDX = null;
+function lbSpeciesOpsIdx(force){
+  if (LB_SPECIES_OPS_IDX && !force) return LB_SPECIES_OPS_IDX;
+  var m = {};
+  try {
+    var st = lbSpeciesStoreLoad();
+    var by = (st && st.byCls) || {};
+    Object.keys(by).forEach(function(k){
+      var a = by[k] && by[k].actions;
+      if (Array.isArray(a) && a.length) m[k] = a.length;
+    });
+  } catch (e) {}
+  LB_SPECIES_OPS_IDX = m;
+  return m;
+}
+function lbSpeciesOpsHas(key){
+  try { return !!lbSpeciesOpsIdx()[String(key || '')]; } catch (e) { return false; }
+}
+// 给选择浮窗里「已配置操作」的项补橙色圆点（幂等：打 data-ops=1 后不再重复加）
+function lbPickerDecorateOps(){
+  var items = document.querySelectorAll('.lb-picker-item[data-cls]');
+  for (var i = 0; i < items.length; i++){
+    var el = items[i];
+    if (el.getAttribute('data-ops') === '1') continue;
+    var cls = String(el.getAttribute('data-cls') || '');
+    var key = '';
+    if (cls.indexOf('item:') === 0){
+      var p = cls.split(':');
+      key = p[2] || '';
+    } else if (cls && cls.indexOf('cat:') !== 0){
+      key = cls;   // 物种：data-cls 就是类名
+    }
+    if (!key || !lbSpeciesOpsHas(key)) continue;
+    var d = document.createElement('span');
+    d.className = 'lb-tipb lb-ops-badge' + (el.querySelector('.lb-hf-badge') ? ' lb-ops-badge-2nd' : '');
+    d.setAttribute('title', '有操作键位');
+    el.appendChild(d);
+    el.setAttribute('data-ops', '1');
+  }
 }
 function lbSpeciesEntry(cls, st){
   var d = st || lbSpeciesStoreLoad();
@@ -36123,7 +38029,26 @@ function lbKeymapDevsSave(arr){
   try { localStorage.setItem(lbKeymapDevsKey(), JSON.stringify(Array.isArray(arr) ? arr : [])); } catch (e) {}
   try { if (typeof lbPrefsPush === 'function') lbPrefsPush(); } catch (e2) {}
 }
+// v5442（用户口径「物品的器械分类，也要复用（非复制）物种的操作入口」）：
+//   器械 = 器械 tab 覆盖的四类 kind（armor/attachment/weapon/ammo，见 v4130 合并口径）
+//   ⚠️ 不能用 kind==='gear' —— LB.pickItem.kind 是物品自身 kind，gear 只是 tab 名
+function lbSpeciesOpsItemOk(){
+  try {
+    var p = LB.pickItem;
+    if (!p || !p.base) return false;
+    return ['armor','attachment','weapon','ammo'].indexOf(String(p.kind || '')) >= 0;
+  } catch (e) { return false; }
+}
 function lbSpeciesCnName(cls){
+  // v5442：物品作用域键 = lbCanonBase 名（GrapplingHook / TekHelmet / GooGun / Stopwatch…）
+  //   先查物品中文表；物种类名（含 _Character_BP）跳过此分支
+  try {
+    var _sp0 = String(cls || '');
+    if (_sp0 && _sp0.indexOf('_Character_BP') < 0) {
+      var _mm0 = lbItemMeta(_sp0);
+      if (_mm0 && _mm0.zh) return _mm0.zh;
+    }
+  } catch (eI) {}
   // v5409（用户口径「附件用物种浮窗内的同源中文」）：直接复用物种浮窗的 lbSpName().zh
   //   原实现走 lbZhDeep(短名)，拿 Rex_Character_BP 这种完整类名查不到 ⇒ 回退英文
   try {
@@ -36139,10 +38064,61 @@ function lbSpeciesCnName(cls){
   try { var z = lbZhDeep(s); if (z && z !== s) return z; } catch (e2) {}
   return s || '物种';
 }
+// ===== v5462：旧存档里的「设备独有背键名」归一为 Xbox 基准键 =====
+//   补了 p1~p4 语义映射后，新选键会自动归一（lbKmWrite 走 lbKmStoreKey）；
+//   但旧数据里存的是 controller_button_r4 这类设备键名 ⇒ 这里做一次**幂等**归一，任何玩家打开作用域时自动修。
+function lbKmNormalizeKeyList(arr){
+  var ch = 0;
+  if (!Array.isArray(arr)) return 0;
+  for (var i = 0; i < arr.length; i++){
+    var nk = lbKmStoreKey(arr[i]);
+    if (nk && nk !== arr[i]) { arr[i] = nk; ch++; }
+  }
+  return ch;
+}
+function lbKmNormalizeBindValue(v){
+  var ch = 0;
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return 0;
+  if (v.k) ch += lbKmNormalizeKeyList(v.k);
+  if (v.chord){ var nc = lbKmStoreKey(v.chord); if (nc && nc !== v.chord) { v.chord = nc; ch++; } }
+  return ch;
+}
+function lbKmMigrateBackKeys(){
+  if (LB_KM_SCOPE.mode !== 'species' || !LB_KM_SCOPE.cls) return 0;
+  var ch = 0;
+  try {
+    var mp = (LB_KM_SCOPE.shadow && LB_KM_SCOPE.shadow.map) || {};
+    Object.keys(mp).forEach(function(aid){
+      var r = mp[aid]; if (!r) return;
+      ch += lbKmNormalizeBindValue(r.pad);
+      ch += lbKmNormalizeBindValue(r.kbm);
+    });
+    var acts = (LB_KEYMAP_CUSTOM && LB_KEYMAP_CUSTOM.actions) || [];
+    acts.forEach(function(a){
+      if (!a) return;
+      ch += lbKmNormalizeBindValue(a.pad);
+      ch += lbKmNormalizeBindValue(a.kbm);
+    });
+    if (ch){
+      var st = lbSpeciesStoreLoad();
+      var ent = lbSpeciesEntry(LB_KM_SCOPE.cls, st);
+      ent.map = mp;
+      ent.actions = acts;
+      ent.updatedAt = Date.now();
+      lbSpeciesStoreSave(st);
+    }
+  } catch (e) {}
+  return ch;
+}
 function lbKeymapScopeEnter(cls){
   if (!cls) return false;
   if (LB_KM_SCOPE.mode === 'species' && LB_KM_SCOPE.cls === cls) return true;
   if (LB_KM_SCOPE.mode === 'species') lbKeymapScopeExit();
+  // v5442（既有缺陷修复）：进入前必须确保内置快照已初始化。
+  //   否则首次进入（BASE === null）会捕获 null，退出时 lbKeymapApplyCustom 的
+  //   `if (!BASE) BASE = ACTION.slice()` 会把【物种动作】当成内置表 ⇒ 方舟动作表被 12 条物种动作替换。
+  try { if (!LB_KEYMAP_ACTIONS_BASE) { lbKeymapCustomInit(); } } catch (eInit) {}
+  try { if (!LB_KEYMAP_ACTIONS_BASE) { lbKeymapSetBaseForGame(); } } catch (eInit2) {}
   LB_KM_SCOPE.gBase = LB_KEYMAP_ACTIONS_BASE;
   LB_KM_SCOPE.gCustom = LB_KEYMAP_CUSTOM;
   var st = lbSpeciesStoreLoad();
@@ -36153,11 +38129,15 @@ function lbKeymapScopeEnter(cls){
   LB_KEYMAP_CUSTOM_INITED = 1;
   try { lbKeymapApplyCustom(); } catch (eA) {}
   LB_KM_SCOPE.mode = 'species'; LB_KM_SCOPE.cls = cls;
+  // v5462：进入即归一旧存档里的设备背键名（幂等；有改动才写盘）
+  try { lbKmMigrateBackKeys(); } catch (eMig) {}
   return true;
 }
 function lbKeymapScopeExit(){
   if (LB_KM_SCOPE.mode !== 'species') return;
   LB_KEYMAP_ACTIONS_BASE = LB_KM_SCOPE.gBase;
+  // v5442：gBase 为空时按当前游戏重建内置表，绝不把当时的 ACTION（可能是物种动作）当内置
+  try { if (!LB_KEYMAP_ACTIONS_BASE || !LB_KEYMAP_ACTIONS_BASE.length && LB_KEYMAP_BUILTIN_ARK && LB_KEYMAP_BUILTIN_ARK.length){ lbKeymapSetBaseForGame(); } } catch (eX) {}
   LB_KEYMAP_CUSTOM = LB_KM_SCOPE.gCustom;
   LB_KM_SCOPE.mode = 'global'; LB_KM_SCOPE.cls = ''; LB_KM_SCOPE.shadow = null;
   if (!LB_KEYMAP_CUSTOM || !LB_KEYMAP_CUSTOM.actions){
@@ -36169,9 +38149,44 @@ function lbKeymapScopeExit(){
   }
 }
 function lbKeymapScopeIsSpecies(){ return LB_KM_SCOPE.mode === 'species'; }
+// ===== v5460（用户口径「物种/器械的操作里面 要有 特殊允许玩家编辑的动作」）=====
+//   动作定义层 `allowEdit: 1` ⇒ 该动作在物种/器械作用域里**允许玩家自己改键**（其余动作仍只读）。
+//   玩家改动写入该作用域的玩家键位覆盖层（lbKeymapProf().map），动作定义的默认值不受影响 ⇒ 各玩家互不影响。
+function lbKmActEditable(aid){
+  if (LB_KM_SCOPE.mode !== 'species') return false;
+  var a = null;
+  try { a = lbKeymapAct(aid); } catch (e) { a = null; }
+  return !!(a && Number(a.allowEdit) === 1);
+}
+function lbKmScopeHasEditable(){
+  if (LB_KM_SCOPE.mode !== 'species') return false;
+  try {
+    for (var i = 0; i < LB_KEYMAP_ACTIONS.length; i++){ if (Number(LB_KEYMAP_ACTIONS[i].allowEdit) === 1) return true; }
+  } catch (e) {}
+  return false;
+}
+// ===== v5464（用户口径「键鼠、手柄要分开考虑」）=====
+//   只读判定必须**按列**：allowEdit 只代表「这条动作允许玩家补键」。
+//   只有**该列定义层默认键为空（待对应）**的列才真正放开编辑入口；
+//   定义层已有默认键的列（如劫掠者·下绳索 的键鼠 X）仍按只读展示 ——
+//   否则玩家会在「本来就有默认值」的格子上看到改键入口（v5463 只修了紫底，没修这个）。
+function lbKmColEditable(aid, col){
+  try { if (!lbKmActEditable(aid)) return false; } catch (e0) { return false; }
+  var a = null;
+  try { a = lbKeymapAct(aid); } catch (e1) { a = null; }
+  if (!a) return false;
+  try {
+    var d = lbKmN((col === 'pad') ? a.pad : a.kbm);
+    return !(d.k && d.k.length);
+  } catch (e2) { return false; }
+}
 function lbKeymapScopeReadOnly(){
   if (LB_KM_SCOPE.mode !== 'species') return false;
-  try { return !((typeof lbKeymapActionAdmin === 'function') && lbKeymapActionAdmin()); } catch (e) { return true; }
+  // v5445（用户口径「键位谁都不可改，只走动作管理」）：
+  //   物种/器械操作页的键位 = 默认动作绑定，属**展示**性质 ⇒ 任何人（含 owner）都不可在此页改键。
+  //   要改默认绑定请进「动作管理」改动作定义（.lb-km-key 的改键入口已不再渲染）。
+  //   ⚠️ 「动作管理」入口/内部选键器走的是 lbKeymapActionAdmin()，与本函数无关 ⇒ 不受影响。
+  return true;
 }
 function lbKeymapUserKey(){
   var u = '';
@@ -36338,7 +38353,9 @@ function lbKmN(v){
 // v5253：写一列键位（唯一出口，避免各调用点重复判空）
 function lbKmWrite(aid, col, nn){
   // v5405：物种作用域下仅系统拥有者可编辑（其他玩家只读）
-  if (lbKeymapScopeReadOnly()) { try { lbToast('仅系统拥有者可编辑物种键位'); } catch (eRO) {} return; }
+  // v5460：名单内（allowEdit:1）的动作对所有玩家放开
+  // v5464：按列判定 —— 该列已有默认键则仍写不进（防空改）
+  if (lbKeymapScopeReadOnly() && !lbKmColEditable(aid, col)) { try { lbToast('该动作键位为默认绑定，不可修改（请用「动作管理」维护）'); } catch (eRO) {} return; }
   var m = lbKeymapProf().map;
   if (!nn || ((!nn.k || !nn.k.length) && !nn.mode && !nn.chord)){
     if (m[aid]) { delete m[aid][col]; if (m[aid].pad === undefined && m[aid].kbm === undefined) delete m[aid]; }
@@ -36390,11 +38407,26 @@ function lbKmColCustom(aid, col){
   } catch (e) { return false; }
 }
 // v5258：「已改 N」只数真正与默认不同的动作
+// v5441（口径统一）：与紫点/「只看改动」同源 —— 新增动作、列级标记(_markPad/_markKbm) 也计入，
+//   否则界面上有 17 行紫点、底栏却显示「已改 0」
 function lbKeymapChangedCount(){
   var n = 0;
-  LB_KEYMAP_ACTIONS.forEach(function(a){
-    if (lbKmColCustom(a.id, 'pad') || lbKmColCustom(a.id, 'kbm')) n++;
-  });
+  try {
+    var _m = lbKeymapProf().map || {};
+    // v5461：物种/器械作用域 —— 动作定义层的 custom:1 表示「非官方动作」，不是「玩家改过」
+    //   若照旧统计会把整页动作都算成已改（血蛛 12 条全 custom:1 ⇒ 显示「已改 12」）
+    //   ⇒ 该域只统计玩家覆盖层里真正偏离默认的记录
+    var _spMode = false;
+    try { _spMode = (LB_KM_SCOPE.mode === 'species'); } catch (eS0) { _spMode = false; }
+    LB_KEYMAP_ACTIONS.forEach(function(a){
+      var r = _m[a.id] || {};
+      var _diff = (r._markPad === 1) || (r._markKbm === 1) ||
+                  (r.pad !== undefined && !lbKmSameAsDefault(a.id, 'pad', r.pad)) ||
+                  (r.kbm !== undefined && !lbKmSameAsDefault(a.id, 'kbm', r.kbm));
+      var isC = _spMode ? _diff : ((a.custom === 1) || (r._mark === 1) || _diff);
+      if (isC) n++;
+    });
+  } catch (e) {}
   return n;
 }
 // v5265（用户口径）：键图标**自身带颜色**时不允许染紫 —— 染紫逻辑不变，只是保护非原色图标
@@ -36498,6 +38530,13 @@ function lbKeymapEff(aid){
   var padN = lbKmN(m.pad !== undefined ? m.pad : a.pad);
   var kbmN = lbKmN(m.kbm !== undefined ? m.kbm : a.kbm);
   var _sc = lbKeymapShowCol();
+  // v5463（用户口径「附件这里 键鼠默认就是x，为啥显示的改键样式？（键鼠、手柄要分开考虑）」）：
+  //   `a.custom === 1` 语义 = 「非官方动作」，**不是**「玩家改过键」；而物种/器械作用域的动作全部 custom:1
+  //   ⇒ 该项会让整行恒判"已改"，且是**行级**不区分列 ⇒ 只改了手柄、键鼠列也被染紫。
+  //   v5448 靠只读态 !_ro1 遮蔽；v5460 放开编辑后紫底复现 ⇒ 该域不再把 a.custom 计入，
+  //   只按「本列覆盖层偏离默认」+「本列 _markPad/_markKbm」判定 ⇒ 键鼠/手柄各判各的。
+  var _spScope = false;
+  try { _spScope = (LB_KM_SCOPE.mode === 'species'); } catch (eSpS0) { _spScope = false; }
   // v5439（用户口径「为啥把键鼠那边的自定义改成默认后，这边也变了」根因）：
   //   _mark 原是【行级】单份标记，手柄列与键鼠列共用 ⇒ 动一边必然连带另一边。
   //   改为【列级】_markPad / _markKbm；旧行级 _mark 仅作兼容回退（两列都未设时才生效）。
@@ -36508,7 +38547,7 @@ function lbKeymapEff(aid){
     // v5258：只看当前显示列，且与默认相同 ⇒ 视为未改动
     // v5438：行级「自定义」= ① 新增动作（定义层 custom === 1）② 当前列真改动 ③ 当前列显式标记
     // v5439：③ 改成列级 _markPad/_markKbm，手柄列与键鼠列互不牵连
-    isCustom:(a.custom === 1) || (_mkCol === 1) || (m[_sc] !== undefined && !lbKmSameAsDefault(aid, _sc, m[_sc])),
+    isCustom:(!_spScope && a.custom === 1) || (_mkCol === 1) || (m[_sc] !== undefined && !lbKmSameAsDefault(aid, _sc, m[_sc])),   // v5463：物种域不看 a.custom
     note:a.note || '' };
 }
 // v5275（用户口径「steam 1代 独立键位、steam 2代+dock 共享键位；默认键位要同时映射到 2 种体系上」）：
@@ -36538,7 +38577,12 @@ var LB_KEYMAP_SKIN_MULTI = {
     rsh:['steamdeck_stick_r_horizontal'],    // v5358：右摇杆左右
     lsh:['steamdeck_stick_l_horizontal'],    // v5352：左摇杆左右
     view:['controller_button_view_outline','steamdeck_button_view'],   // v5326：controller 提到首位
-    menu:['controller_button_options_outline','steamdeck_button_options']   // v5326：同上
+    menu:['controller_button_options_outline','steamdeck_button_options'],   // v5326：同上
+    // v5462：Steam 背键三套并行体系（2 代/Deck 的 controller_button_*、Deck 的 steamdeck_button_*、1 代的 steam_button_*）
+    p1:['controller_button_l4','steamdeck_button_l4','steam_button_L4'],
+    p2:['controller_button_r4','steamdeck_button_r4','steam_button_R4'],
+    p3:['controller_button_l5','steamdeck_button_l5','steam_button_L5'],
+    p4:['controller_button_r5','steamdeck_button_r5','steam_button_R5']
   },
   playstation: {
     lsv:['playstation_stick_l_vertical'],     // v5352：左摇杆上下
@@ -36860,6 +38904,9 @@ function lbKmOldBtnHtml(){
 // v5330（用户口径「附件改成三态切换」）：二态 → 三态 all → empty → bound → all
 //   旧值兼容：'1' = empty（只看未绑定）、'0'/缺省 = all；新值直接存 'all' / 'empty' / 'bound'
 function lbKmFilter(){
+  // v5452（用户口径「附件这种筛选 也不需要显示了 对于物种器械」）：
+  //   物种/器械只读作用域不参与三态筛选 ⇒ 恒返回 all（本函数是全部 5 个消费点的唯一入口）
+  try { if (lbKeymapScopeReadOnly()) return 'all'; } catch (eROF) {}
   try {
     var v = localStorage.getItem('lb_km_onlyempty');
     if (v === 'all' || v === 'empty' || v === 'bound') return v;
@@ -36935,6 +38982,8 @@ function lbKmBoundCount(){
   return n;
 }
 function lbKmEmptyBtnHtml(){
+  // v5452：物种/器械只读作用域不渲染「只看未绑定 / 只看已绑定 / 全部」筛选按钮
+  try { if (lbKeymapScopeReadOnly()) return ''; } catch (eROE) {}
   var f = lbKmFilter();
   if (f === 'empty'){
     var n1 = lbKmEmptyCount();
@@ -36981,8 +39030,10 @@ function lbKmSortKeyOrder(list){
 }
 // v5425（用户口径「动作管理里面 选键 应该用xbox做基准」）：新增可选参数 devOverride
 //   ★ 只有动作管理选键器传 'xbox'；玩家改键弹层 / 按按键视图计数等**全部不传** ⇒ 行为与原来完全一致
-function lbKeymapPickGroups(devOverride){
-  var col = lbKeymapShowCol();
+function lbKeymapPickGroups(devOverride, colOverride){
+  // v5449：新增 colOverride —— 动作管理编辑某个字段时，键池必须按【字段所属列】取，
+  //   不能按【当前设备页签】取（否则停在 Xbox 页签给"键鼠键"选键 → 弹出来全是手柄键）
+  var col = colOverride || lbKeymapShowCol();
   if (col === 'kbm') {
     // v5269：整键盘 / 整鼠标图属于装饰图不是「按键」，剔除后不再出现只有 2 张图的「其它」组
     var ks = lbKeymapDevKeys('keymouse').filter(function(k){ return !/^(keyboard|mouse)_outline$/.test(k); });
@@ -37120,10 +39171,18 @@ function lbKeymapDot(aid){
 function lbKeymapCellHtml(aid, e, conf){
   var col = lbKeymapShowCol();
   var nn = (col === 'pad') ? e.padN : e.kbmN;
+  // v5444（用户口径「物种的操作配置不应该支持玩家配置键位，所有键位都应该是默认动作绑定」）：
+  //   只读作用域下键格不给任何配置入口 —— 不挂 onclick、光标默认、提示改为「默认绑定」
+  var _ro1 = false;
+  try { _ro1 = lbKeymapScopeReadOnly(); } catch (eRo) { _ro1 = false; }
+  // v5460：动作在「允许玩家编辑」名单内 ⇒ 本行键格恢复可点（其余行仍只读）
+  // v5464（用户口径「键鼠、手柄要分开考虑」）：改**按列**判定 —— 只有该列定义层默认键为空（待对应）才可编辑
+  if (_ro1){ try { if (lbKmColEditable(aid, col)) _ro1 = false; } catch (eRE) {} }
   if (!nn.k.length){   // v5302：未设 → 虚线立体键格（可点击进入改键）
     // v5373（用户口径「手柄可以通过映射所有的键鼠键位」「手柄端无需展示该动作所对应的键鼠键位」）：
     //   原 v5278 把 pad:null 判为「不适用」并锁成不可点的纯文字 —— 前提错误。
     //   手柄可把任意按键映射到键鼠动作 ⇒ pad:null 只是「还没填手柄键」，一律走可点空键格。
+    if (_ro1) return '<span class="lb-km-key empty" style="cursor:default" title="默认未绑定"><i class="lbk lbk-keyboard_a" style="font-size:22px;line-height:1;visibility:hidden"></i></span>';
     return '<button type="button" class="lb-km-key empty" onclick="lbKeymapPick(\'' + aid + '\',this)" title="点击设置键位"><i class="lbk lbk-keyboard_a" style="font-size:22px;line-height:1;visibility:hidden"></i></button>';
   }
   var bad = !!(conf[lbKmSig(nn)]);
@@ -37131,20 +39190,31 @@ function lbKeymapCellHtml(aid, e, conf){
   //   = 新增动作(custom:1) || 本列真改动 || 本列显式标记(_markPad/_markKbm)
   //   v5438 曾改成纯 lbKmColCustom ⇒ 新增动作（鼠标三键）也没有紫底，用户报障。
   //   isCustom 已在 lbKeymapEff 内按当前显示列计算，不会再串列；键帽内文字/图标仍按列级 diff 着色
-  var _cc = !!e.isCustom;
+  // v5448（用户口径「明明都是默认动作，为啥界面显示成改动键的样式」）：
+  //   物种/器械操作里每条都是该作用域的默认绑定，不是「改过的键」⇒ 只读作用域一律不套 .custom 紫底
+  var _cc = !!e.isCustom && !_ro1;
+  if (_ro1){
+    return '<button type="button" class="lb-km-key' + (bad ? ' conflict' : '') + (_cc ? ' custom' : '') + '"'
+      + ' style="cursor:default" title="默认绑定">' + lbKmChips(nn, col, 22, lbKmColCustom(aid, col)) + '</button>';
+  }
   return '<button type="button" class="lb-km-key' + (bad ? ' conflict' : '') + (_cc ? ' custom' : '') + '"'
     + ' onclick="lbKeymapPick(\'' + aid + '\',this)" title="点击改键">' + lbKmChips(nn, col, 22, lbKmColCustom(aid, col)) + '</button>';
 }
 function lbKeymapRowHtml(a, conf){
   var e = lbKeymapEff(a.id), col = lbKeymapShowCol();
   var bad = !!(conf[lbKmSig((col === 'pad') ? e.padN : e.kbmN)]);
-  var cls = 'lb-km-row' + (e.isCustom ? ' custom' : '') + (bad ? ' conflict' : '');
+  // v5444：只读作用域不显示紫点（紫点 = 点击还原，属配置入口）
+  var _roRow = false;
+  try { _roRow = lbKeymapScopeReadOnly(); } catch (eRo2) { _roRow = false; }
+  // v5448：同一口径 —— 只读作用域里没有「改动过的行」，不套 .custom（动作名就不会变白）
+  var _cusRow = !!e.isCustom && !_roRow;
+  var cls = 'lb-km-row' + (_cusRow ? ' custom' : '') + (bad ? ' conflict' : '');
   // v5423：备注对普通玩家可见（动作名下方灰色小字）
   // v5426（用户口径「未改过的键位 就不应该有删除按钮」）：右侧图标严格只在 e.isCustom 时出现
   var _noteH = e.note ? ('<div class="lb-km-note">' + escapeHtml(e.note) + '</div>') : '';
-  var _showDot = e.isCustom;
+  var _showDot = _cusRow;
   return '<tr class="' + cls + '" data-aid="' + a.id + '">'
-    + '<td class="lb-km-act">' + lbKmActName(a) + (bad ? '<b class="lb-km-bang" title="同键冲突">!</b>' : '') + _noteH + '</td>'
+    + '<td class="lb-km-act">' + lbKmActName(a) + lbKmToggleIconHtml(a) + (bad ? '<b class="lb-km-bang" title="同键冲突">!</b>' : '') + _noteH + '</td>'
     + '<td class="lb-km-c">' + lbKeymapCellHtml(a.id, e, conf) + '</td>'
     + '<td class="lb-km-dotc">' + (_showDot ? lbKeymapDot(a.id) : '') + '</td>'
     + '</tr>';
@@ -37316,7 +39386,7 @@ function lbKeymapKeysViewHtml(){
         lblHtml = b.map(function(x){
           // v5233（用户口径「改动着色对齐到功能层级」）：功能名 / 该功能的键图标 / 修饰图标，统一按该功能是否改动着色
           var _x1 = x.custom ? ' lb-km-cus' : '';
-          var s = '<span class="lb-km-an' + _x1 + '">' + escapeHtml(lbKmBindName(x)) + '</span>';   // v5339：按当前列取名
+          var s = '<span class="lb-km-an' + _x1 + '">' + escapeHtml(lbKmBindName(x)) + lbKmToggleIconHtml(x.id) + '</span>';   // v5339：按当前列取名；v5453：切换型标识紧贴名字右侧
           // v5343（用户口径「操作作用在主键上就把标识放在后面，否则相反，比如附件」）：
           //   默认（作用在主键）=> 标识排在键图标**后面**；x.modeOn==='chord'（作用在组合键成员）=> 排在**前面**
           var _modH = '';
@@ -37544,12 +39614,19 @@ function lbKeymapActionsHtml(){
     + '<div class="lb-km-am-head"><span>📋 动作管理</span>'
     + '<span class="lb-hf-ai-meta" style="font-size:10.5px;color:#7f7f92">仅系统拥有者</span>'
     + '<span class="lb-km-x" onclick="this.closest(\'.lb-picker-overlay\').remove()"><i class="mdi mdi-close"></i></span></div>';
-  h += '<div class="lb-km-am-tool">'
-    + '<span class="lb-km-am-gc' + (LB_KM_AM.g === '*' ? ' on' : '') + '" onclick="lbKeymapActionsGset(\'*\')">全部<em>' + tot + '</em></span>';
-  lbKeymapGroupsAll().forEach(function(g){
-    if (!cnt[g]) return;
-    h += '<span class="lb-km-am-gc' + (LB_KM_AM.g === g ? ' on' : '') + '" onclick="lbKeymapActionsGset(\'' + g + '\')">' + escapeHtml(g) + '<em>' + cnt[g] + '</em></span>';
-  });
+  // v5451（用户口径「物种/器械的操作浮窗的动作管理里也不需要显示分类标签组」）：
+  //   只读作用域只有「作用域本身」一个分类 ⇒ 不渲染「全部 / 分类」chips，列表恒按全部展示
+  var _spAM = false;
+  try { _spAM = lbKeymapScopeReadOnly(); } catch (eAM0) { _spAM = false; }
+  if (_spAM) { try { LB_KM_AM.g = '*'; } catch (eAM1) {} }
+  h += '<div class="lb-km-am-tool">';
+  if (!_spAM){
+    h += '<span class="lb-km-am-gc' + (LB_KM_AM.g === '*' ? ' on' : '') + '" onclick="lbKeymapActionsGset(\'*\')">全部<em>' + tot + '</em></span>';
+    lbKeymapGroupsAll().forEach(function(g){
+      if (!cnt[g]) return;
+      h += '<span class="lb-km-am-gc' + (LB_KM_AM.g === g ? ' on' : '') + '" onclick="lbKeymapActionsGset(\'' + g + '\')">' + escapeHtml(g) + '<em>' + cnt[g] + '</em></span>';
+    });
+  }
   h += '<span style="flex:1"></span>'
     + '<button class="lb-km-am-b" onclick="lbKeymapActionEdit(\'\',1)">＋ 新增</button>'
     + '<button class="lb-km-am-b" onclick="lbKeymapActionsIO(0)">导出</button>'
@@ -37567,12 +39644,61 @@ function lbKeymapActionsHtml(){
   h += '</div>';
   return h;
 }
+// ===== v5459（用户口径「操作界面的 按动作，的排序要和 动作管理同步」）=====
+//   物种/器械作用域**唯一**排序口径，供「按动作」表格与「动作管理」列表共用。
+//   一级：手柄主键在 LB_KEYMAP_SEM 定义表里的次序（未绑手柄键 ⇒ 恒排最后）
+//   二级：手势复杂度 lbKmGestureOrder（普通按压0 → 轻按0.5 → 长按1 → 双击2 → 开始3 → 释放4 → 组合5+）
+//   三级：动作名拼音（保证同键同方式的多条动作顺序稳定）
+//   🔴 v5450 曾按名称排、v5455 又按主键排 ⇒ 两处不一致；现在只允许调用本函数，禁止各写一套
+var LB_KM_PAD_SEM_IX = null;
+function lbKmPadSemIx(){
+  if (LB_KM_PAD_SEM_IX) return LB_KM_PAD_SEM_IX;
+  var m = {}, i = 0, k;
+  for (k in LB_KEYMAP_SEM){ if (Object.prototype.hasOwnProperty.call(LB_KEYMAP_SEM, k)) m[k] = i++; }
+  LB_KM_PAD_SEM_IX = m;
+  return m;
+}
+function lbKmPadMainOf(act){
+  try {
+    var nn = lbKmN(act && act.pad);
+    if (!nn || !nn.k || !nn.k.length) return '';
+    var mk = '';
+    if (nn.chord && nn.k.length > 1){
+      for (var i = 0; i < nn.k.length; i++){ if (nn.k[i] !== nn.chord) { mk = nn.k[i]; break; } }
+    }
+    if (!mk) mk = nn.k[0];
+    return lbKmStoreKey(mk) || mk;   // 设备键名不可直接比，必须归一为 Xbox 基准键
+  } catch (e) { return ''; }
+}
+function lbKmSpeciesSort(acts){
+  var ix = lbKmPadSemIx(), coll = null;
+  try { coll = new Intl.Collator('zh-Hans-CN'); } catch (eC) { coll = null; }
+  return acts.slice().sort(function(x, y){
+    var ax = (ix[lbKmPadMainOf(x)] === undefined) ? 9999 : ix[lbKmPadMainOf(x)];
+    var ay = (ix[lbKmPadMainOf(y)] === undefined) ? 9999 : ix[lbKmPadMainOf(y)];
+    if (ax !== ay) return ax - ay;
+    var gx = lbKmGestureOrder(lbKmN(x && x.pad));
+    var gy = lbKmGestureOrder(lbKmN(y && y.pad));
+    if (gx !== gy) return gx - gy;
+    var nx = String((x && (x.zhPad || x.zh)) || ''), ny = String((y && (y.zhPad || y.zh)) || '');
+    if (coll) return coll.compare(nx, ny);
+    return nx < ny ? -1 : (nx > ny ? 1 : 0);
+  });
+}
 // v5399：动作管理列表的「单侧键位」渲染
 //   isPad=1 → 手柄侧，键名统一归一为 Xbox 语义键（用户口径「用xbox代表」）
-//   组合键用低可视 + 连接（主键 + 组合键），方式图标置于最前
+//   v5458：顺序改为「组合键 → 方式图标 → 主键」，与主表 lbKmChips 同口径（原为 方式 → 主键 → + → 组合键）
 function lbKeymapAmSideHtml(nn, isPad){
   if (!nn || !nn.k || !nn.k.length) return '<i class="lb-km-am-knone">—</i>';
   var h = '', i, kk;
+  // v5458（用户口径「附件这里的显示 为啥是 组合键在主键之后？」）：
+  //   根因：v5399 此处把顺序写成「方式图标 → 主键 → + → 组合键」，
+  //   而主表 lbKmChips 早在 v5350/v5379 就定下「组合键 → 方式标识 → 主键」
+  //   ⇒ 同一组数据两处显示顺序相反。现改为与主表完全同口径（并去掉 + 连接符，主表也无）
+  if (nn.chord){
+    kk = isPad ? lbKmStoreKey(nn.chord) : nn.chord;
+    h += lbKeyChipHtml(kk, 16);
+  }
   try {
     if (nn.mode && nn.mode !== 'chord'){
       var md = lbKmMode(nn.mode);
@@ -37582,10 +39708,6 @@ function lbKeymapAmSideHtml(nn, isPad){
   for (i = 0; i < nn.k.length; i++){
     kk = isPad ? lbKmStoreKey(nn.k[i]) : nn.k[i];
     h += lbKeyChipHtml(kk, 16);
-  }
-  if (nn.chord){
-    kk = isPad ? lbKmStoreKey(nn.chord) : nn.chord;
-    h += '<i class="lb-km-am-kplus">+</i>' + lbKeyChipHtml(kk, 16);
   }
   return h;
 }
@@ -37612,6 +39734,18 @@ function lbKeymapActionsListHtml(){
     rows.push({ a:a, ov:null, off:!!a._off, isBase:false });
   });
   if (!rows.length) return '<div class="lb-km-kmenu-none">该分组没有动作</div>';
+  // ===== v5455 / v5459：物种/器械作用域统一排序，调用公共 lbKmSpeciesSort（与「按动作」表格同源）=====
+  var _spSort = false;
+  try { _spSort = (LB_KM_SCOPE.mode === 'species'); } catch (eSpS) { _spSort = false; }
+  if (_spSort){
+    var _ordS = {}, _on = 0;
+    lbKmSpeciesSort(rows.map(function(r){ return r.a; })).forEach(function(a){ _ordS[a.id] = _on++; });
+    rows.sort(function(x, y){
+      var ix = (_ordS[x.a.id] === undefined) ? 9999 : _ordS[x.a.id];
+      var iy = (_ordS[y.a.id] === undefined) ? 9999 : _ordS[y.a.id];
+      return ix - iy;
+    });
+  }
   var h = '';
   rows.forEach(function(r){
     var a = r.a;
@@ -37625,11 +39759,14 @@ function lbKeymapActionsListHtml(){
     } catch (e2) {}
     // v5392（用户口径「选了标签后 无需前置的灰字，并且 原灰字所占的空位也要去掉」）：
     // 仅「全部」时渲染分组灰字；选中具体分组时整段不输出（含 min-width 占位一并消失）
-    var _gH = (LB_KM_AM.g === '*') ? ('<i class="lb-km-am-g">' + escapeHtml(a.g || '') + '</i>') : '';
+    // v5451：作用域模式下列表行的分组小标签也去掉（分类已在浮窗标题体现）
+    var _spAMRow = false;
+    try { _spAMRow = lbKeymapScopeReadOnly(); } catch (eAMR) { _spAMRow = false; }
+    var _gH = (!_spAMRow && LB_KM_AM.g === '*') ? ('<i class="lb-km-am-g">' + escapeHtml(a.g || '') + '</i>') : '';
     h += '<div class="lb-km-am-row' + (r.off ? ' off' : '') + '">'
       + _gH
       // v5424：动作管理改的就是默认键位本身 ⇒ 名字不再加 ov（紫）class
-      + '<span class="lb-km-am-n" title="' + escapeHtml(a.id) + '">' + escapeHtml(a.zhPad || a.zh || '') + (r.off ? '（停用）' : '') + '</span>'
+      + '<span class="lb-km-am-n" title="' + escapeHtml(a.id) + '">' + escapeHtml(a.zhPad || a.zh || '') + (r.off ? '（停用）' : '') + lbKmToggleIconHtml(a) + '</span>'
       // v5400（用户口径「编辑按键 换成 直接点按键图标 作为入口」）：键区本身即可点，删掉「编辑」按钮
       + '<span class="lb-km-am-k" title="点击编辑：' + escapeHtml(a.zhPad || a.zh || '') + '"'
       + ' onclick="lbKeymapActionEdit(\'' + a.id + '\',0)">' + (keyHtml || '<span style="font-size:10.5px;color:#5a5a6e">未绑</span>') + '</span>'
@@ -37654,7 +39791,7 @@ function lbKeymapActionsGset(g){ LB_KM_AM.g = g; lbKeymapActionsRerender(); }
 function lbKeymapActionEdit(aid, isNew){
   if (!lbKeymapActionAdmin()) { try { lbToast('仅系统拥有者可用'); } catch (e) {} return; }
   var src = null;
-  if (isNew){ src = { g:(LB_KM_AM.g === '*' ? '常用' : LB_KM_AM.g), zh:'', zhPad:'', pad:'', kbm:'', note:'', dev:'both' }; }
+  if (isNew){ src = { g:(LB_KM_AM.g === '*' ? '常用' : LB_KM_AM.g), zh:'', zhPad:'', pad:'', kbm:'', note:'', dev:'both', toggle:0 }; }
   else {
     var ov = (LB_KEYMAP_CUSTOM.overrides || {})[aid];
     var base = null, cus = null;
@@ -37663,7 +39800,7 @@ function lbKeymapActionEdit(aid, isNew){
     var cur = cus || base;
     if (!cur) return;
     src = {};
-    ['g','zh','zhPad','note','dev','pad','kbm'].forEach(function(k){ src[k] = cur[k]; });
+    ['g','zh','zhPad','note','dev','pad','kbm','toggle'].forEach(function(k){ src[k] = cur[k]; });   // v5453：带出切换型标记
     if (ov) { for (var k2 in ov){ if (Object.prototype.hasOwnProperty.call(ov,k2) && k2 !== '_off') src[k2] = ov[k2]; } }
   }
   var padN = null, kbmN = null;
@@ -37671,6 +39808,7 @@ function lbKeymapActionEdit(aid, isNew){
   try { kbmN = lbKmN(src.kbm); } catch (e4) {}
   LB_KM_AE = { aid:aid || '', isNew:isNew ? 1 : 0,
     draft:{ g:src.g || '常用', zh:src.zh || '', zhPad:src.zhPad || '', note:src.note || '', dev:src.dev || 'both',
+      toggle:(Number(src.toggle) === 1 ? 1 : 0),
       padKey:(padN && padN.k && padN.k.length) ? padN.k[0] : '', padMode:(padN && padN.mode) || '', padChord:(padN && padN.chord) || '',
       kbmKey:(kbmN && kbmN.k && kbmN.k.length) ? kbmN.k[0] : '', kbmMode:(kbmN && kbmN.mode) || '', kbmChord:(kbmN && kbmN.chord) || '' },
     pickField:'' };
@@ -37691,7 +39829,10 @@ function lbKeymapActionEditHtml(){
     + '<span class="lb-km-x" onclick="this.closest(\'.lb-picker-overlay\').remove()"><i class="mdi mdi-close"></i></span></div>'
     + '<div class="lb-km-ae-body">';
   // 分组
-  h += '<div class="lb-km-ae-f"><span class="lb-km-ae-l">分组</span>' + lbKeymapAeSelHtml('g', d.g) + '</div>';
+  // v5450：物种/器械作用域的分类由「作用域本身」决定（每个物种/器械一个分类）⇒ 编辑表单不再提供分组
+  var _spEdit = false;
+  try { _spEdit = lbKeymapScopeReadOnly(); } catch (eE0) { _spEdit = false; }
+  if (!_spEdit) h += '<div class="lb-km-ae-f"><span class="lb-km-ae-l">分组</span>' + lbKeymapAeSelHtml('g', d.g) + '</div>';
   // 名称
   h += '<div class="lb-km-ae-f"><span class="lb-km-ae-l">中文名</span><input class="lb-km-ae-in" value="' + escapeHtml(d.zh) + '" oninput="lbKeymapAeSet(\'zh\',this.value)" placeholder="必填"></div>';
   h += '<div class="lb-km-ae-f"><span class="lb-km-ae-l">手柄名</span><input class="lb-km-ae-in" value="' + escapeHtml(d.zhPad) + '" oninput="lbKeymapAeSet(\'zhPad\',this.value)" placeholder="可选，留空则用手柄也用中文名"></div>';
@@ -37722,6 +39863,14 @@ function lbKeymapActionEditHtml(){
   h += '<div class="lb-km-ae-f"><span class="lb-km-ae-l">键鼠方式</span>' + lbKeymapAeSelHtml('kbmMode', d.kbmMode) + '</div>';
   // 适用设备
   h += '<div class="lb-km-ae-f"><span class="lb-km-ae-l">适用设备</span>' + lbKeymapAeSelHtml('dev', d.dev) + '</div>';
+  // v5453：切换型标记（动作名右侧会显示 repeat 图标）
+  // v5456（用户口径「附件不应该用原生样式」）：原生 checkbox -> 自建胶囊开关
+  var _tgOn = (Number(d.toggle) === 1);
+  h += '<div class="lb-km-ae-f"><span class="lb-km-ae-l">切换式</span>'
+    + '<span class="lb-km-tgsw' + (_tgOn ? ' on' : '') + '" onclick="lbKeymapAeToggleSwitch()" title="触发一次开启、再触发一次关闭">'
+    + '<i class="lb-km-tgsw-ic">' + LB_KM_TOGGLE_SVG + '</i>'
+    + '<i class="lb-km-tgsw-t">' + (_tgOn ? '切换式' : '非切换式') + '</i></span>'
+    + '<span style="font-size:11px;color:#77778c">触发一次开启、再触发一次关闭</span></div>';
   // 备注
   h += '<div class="lb-km-ae-f"><span class="lb-km-ae-l">备注</span><input class="lb-km-ae-in" value="' + escapeHtml(d.note) + '" oninput="lbKeymapAeSet(\'note\',this.value)"></div>';
   h += '<div class="lb-km-ae-hint">提示：四个键字段都可点「选键」从当前设备键池挑选；未绑定时显示「未绑定」，点「清除」可解除绑定。</div>';
@@ -37735,6 +39884,17 @@ function lbKeymapActionEditHtml(){
 function lbKeymapAeSet(f, v){
   if (!LB_KM_AE.draft) return;
   LB_KM_AE.draft[f] = String(v == null ? '' : v);
+}
+// v5456：「切换式」胶囊开关 —— 就地改 class / 文字，不重渲染表单（避免输入框失焦）
+function lbKeymapAeToggleSwitch(){
+  if (!LB_KM_AE.draft) return;
+  var on = (Number(LB_KM_AE.draft.toggle) === 1) ? 0 : 1;
+  LB_KM_AE.draft.toggle = on;
+  var sw = document.querySelector('.lb-km-tgsw');
+  if (!sw) return;
+  if (on === 1) sw.classList.add('on'); else sw.classList.remove('on');
+  var t = sw.querySelector('.lb-km-tgsw-t');
+  if (t) t.textContent = (on === 1) ? '切换式' : '非切换式';
 }
 // ===== v5393：自建下拉（替代原生 select，统一深色圆角风格） =====
 // v5395（用户口径「为啥附件有2个普通按压」「为啥没有组合键的选项」）：
@@ -37884,8 +40044,9 @@ function lbKeymapAeClear(field){
   if (!LB_KM_AE.draft) return;
   lbKeymapSelPopClose();
   if (field === 'pad'){ LB_KM_AE.draft.padKey = ''; LB_KM_AE.draft.padMode = ''; LB_KM_AE.draft.padChord = ''; }
-  else if (field === 'padChord'){ LB_KM_AE.draft.padChord = ''; }
-  else if (field === 'kbmChord'){ LB_KM_AE.draft.kbmChord = ''; }
+  // v5457（用户口径「清空组合键时方式自动回落」）：避免留下「方式=组合键却没有组合键」的非法状态
+  else if (field === 'padChord'){ LB_KM_AE.draft.padChord = ''; if (String(LB_KM_AE.draft.padMode || '') === 'chord') LB_KM_AE.draft.padMode = ''; }
+  else if (field === 'kbmChord'){ LB_KM_AE.draft.kbmChord = ''; if (String(LB_KM_AE.draft.kbmMode || '') === 'chord') LB_KM_AE.draft.kbmMode = ''; }
   else if (field === 'kbm'){ LB_KM_AE.draft.kbmKey = ''; LB_KM_AE.draft.kbmMode = ''; LB_KM_AE.draft.kbmChord = ''; }
   var ae = document.querySelector('.lb-km-ae-wrap');
   if (ae){ ae.innerHTML = lbKeymapActionEditHtml(); lbTipify(ae); }
@@ -37895,8 +40056,12 @@ function lbKeymapActionKeyPick(field){
   if (!lbKeymapActionAdmin()) return;
   LB_KM_AE.pickField = field;
   var groups = [];
-  // v5425：动作管理选键固定用 Xbox 基准键池（与列表里 lbKmStoreKey 归一化后的显示一致）
-  try { groups = lbKeymapPickGroups('xbox'); } catch (e) {}
+  // v5425：手柄列固定用 Xbox 基准键池（与列表里 lbKmStoreKey 归一化后的显示一致）
+  // v5449（用户口径「附件这种为啥是给的手柄键」）：键鼠键 / 键鼠组合键必须给【键盘鼠标池】。
+  //   原实现不看 field，一律 lbKeymapPickGroups('xbox')；而该函数又按【当前显示列】取池
+  //   ⇒ 设备停在 Steam/Xbox 时，键鼠键的选键器弹层标题写着「键盘 / 鼠标」、内容却全是手柄键。
+  var _aeCol = (field === 'kbm' || field === 'kbmChord') ? 'kbm' : 'pad';
+  try { groups = lbKeymapPickGroups('xbox', _aeCol); } catch (e) {}
   var old = document.querySelector('.lb-km-ak-wrap'); if (old) old.remove();
   var ov = document.createElement('div');
   ov.className = 'lb-picker-overlay lb-km-ak-wrap';
@@ -37921,10 +40086,12 @@ function lbKeymapActionKeyPick(field){
 }
 function lbKeymapActionKeySet(k){
   var f = LB_KM_AE.pickField;
+  // v5457（用户口径「选了 手柄组合键 后 手柄方式 应该自动变成 组合键」）：选完组合键即把对应「方式」置为 chord
+  //   （保存侧 v5397 本来就会强制 padModeEff='chord'，此前只是界面不同步，易被误认为没生效）
   if (f === 'pad') LB_KM_AE.draft.padKey = k;
-  else if (f === 'padChord') LB_KM_AE.draft.padChord = k;
+  else if (f === 'padChord') { LB_KM_AE.draft.padChord = k; LB_KM_AE.draft.padMode = 'chord'; }
   else if (f === 'kbm') LB_KM_AE.draft.kbmKey = k;
-  else if (f === 'kbmChord') LB_KM_AE.draft.kbmChord = k;
+  else if (f === 'kbmChord') { LB_KM_AE.draft.kbmChord = k; LB_KM_AE.draft.kbmMode = 'chord'; }
   var ov = document.querySelector('.lb-km-ak-wrap'); if (ov) ov.remove();
   try { lbKeymapSelPopClose(); } catch (eS) {}
   // 回填编辑表单
@@ -37954,8 +40121,12 @@ function lbKeymapActionSave(){
     if (kbmModeEff) kbmVal.mode = kbmModeEff;
     if (String(d.kbmChord || '').trim()) kbmVal.chord = String(d.kbmChord).trim();   // v5395
   }
-  var rec = { g:d.g || '常用', zh:String(d.zh || '').trim() || String(d.zhPad).trim(),
-    zhPad:String(d.zhPad || '').trim(), pad:padVal, kbm:kbmVal, note:String(d.note || '').trim(), dev:d.dev || 'both' };
+  // v5450：物种/器械作用域保存时，分类恒记为该作用域名（数据层保留分类，只是粒度=作用域）
+  var _gSave = String(d.g || '').trim() || '常用';
+  try { if (lbKeymapScopeReadOnly()) _gSave = lbSpeciesCnName(LB_KM_SCOPE.cls) || _gSave; } catch (eG0) {}
+  var rec = { g:_gSave, zh:String(d.zh || '').trim() || String(d.zhPad).trim(),
+    zhPad:String(d.zhPad || '').trim(), pad:padVal, kbm:kbmVal, note:String(d.note || '').trim(), dev:d.dev || 'both',
+    toggle:(Number(d.toggle) === 1 ? 1 : 0) };   // v5453：切换型标记落盘
   if (LB_KM_AE.isNew){
     rec.id = 'c_' + Date.now().toString(36) + Math.floor(Math.random() * 1000).toString(36);
     rec.custom = 1;   // v5438：新增动作必须在动作定义层打 custom:1（否则界面无法区分「新增动作」与「官方动作」）
@@ -38114,7 +40285,26 @@ function lbKeymapTableHtml(){
   var conf = lbKeymapConflicts();
   var diff = (LB_KEYMAP_UI.mode === 'diff');
   var col = lbKeymapShowCol();
+  // v5450（用户口径「物种物品的操作动作去掉分类」）：
+  //   分类粒度上移为「每个物种/器械 = 一个分类」⇒ 页面内不再按 g 分组折叠，一律平铺，按名称排序
+  var _flat = false;
+  try { _flat = lbKeymapScopeReadOnly(); } catch (eF0) { _flat = false; }
   var h = '<table class="lb-km-table">', total = 0;
+  if (_flat){
+    var _fl = LB_KEYMAP_ACTIONS.filter(function(a){ return lbKmDevVisible(a, col); });
+    if (diff) _fl = _fl.filter(function(a){ return lbKeymapEff(a.id).isCustom; });
+    var _afF = lbKmFilter();
+    if (_afF === 'empty') _fl = _fl.filter(function(a){ return lbKmIsActEmpty(a, col); });
+    else if (_afF === 'bound') _fl = _fl.filter(function(a){ return !lbKmIsActEmpty(a, col); });
+    // v5459（用户口径「操作界面的 按动作，的排序要和 动作管理同步」）：
+    //   原 v5450 按名称拼音排序 ⇒ 改为与「动作管理」同一套（手柄主键 → 操作方式 → 名称）
+    _fl = lbKmSpeciesSort(_fl);
+    total = _fl.length;
+    _fl.forEach(function(a){ h += lbKeymapRowHtml(a, conf); });
+    h += '</table>';
+    if (!total) h += '<div class="lb-km-empty">没有动作</div>';
+    return h;
+  }
   lbKeymapGroupsAll().forEach(function(g){
     var list = LB_KEYMAP_ACTIONS.filter(function(a){ return a.g === g; });
     list = list.filter(function(a){ return lbKmDevVisible(a, col); });   // v5375：按 dev 过滤（v5290 的 KBSHOT 白名单退休）
@@ -38161,10 +40351,9 @@ var LB_KEYMAP_AI_SYS = '你是 ARK: Survival Ascended 的键位配置助手。�
 function lbKeymapAiPlaceholder(){ return '例：把跳跃改成空格，背包改成 B，装填用 R'; }
 // v5334（用户口径「AI 只针对当前选中手柄」）：把范围直接写在 AI 框上，避免误以为会改到另一列
 function lbKeymapAiScopeText(){
-  var col = ''; try { col = lbKeymapShowCol(); } catch (e) {}
   var devN = ''; try { devN = lbKeymapDev(LB_KEYMAP.device || 'keymouse').n; } catch (e2) {}
-  var cn = (col === 'kbm') ? '键盘键' : '手柄键';
-  return '仅 ' + (devN || '当前设备') + ' · ' + cn;
+  // v5454（用户口径「· 键盘键、· 手柄键 这两个说法不需要显示」）：只留设备名
+  return '仅 ' + (devN || '当前设备');
 }
 function lbKeymapAiHtml(){
   var cfg = {}; try { cfg = lbAiCfgGet() || {}; } catch (e) {}
@@ -38186,13 +40375,19 @@ function lbKeymapAiHtml(){
 // 列表控制行：v5261 只保留页签（状态/重置/保存已移到底部与「关闭」同排）
 function lbKeymapTabsHtml(){
   var mode = LB_KEYMAP_UI.mode || 'list';
+  // v5448：只读作用域（物种/器械操作）里每条都是默认绑定，没有「只看改动」这个概念 ⇒ 该页签不渲染
+  var _roTabs = false;
+  try { _roTabs = lbKeymapScopeReadOnly(); } catch (eRT) { _roTabs = false; }
+  if (_roTabs && mode === 'diff') { mode = 'list'; try { LB_KEYMAP_UI.mode = 'list'; } catch (eRM) {} }
+  // v5451（用户口径「物种/器械的操作浮窗里也不需要显示按按键」）：只读作用域只剩「按动作」一个视图
+  if (_roTabs && mode === 'pad') { mode = 'list'; try { LB_KEYMAP_UI.mode = 'list'; } catch (eRM2) {} }
   return '<div class="lb-km-ctrl">'
     + '<div class="lb-km-tabs">'
     + '<span class="lb-km-tab' + (mode === 'list' ? ' on' : '') + '" data-m="list" onclick="lbKeymapModeSet(\'list\')">按动作</span>'
-    + '<span class="lb-km-tab-sep"></span>'
-    + '<span class="lb-km-tab' + (mode === 'pad' ? ' on' : '') + '" data-m="pad" onclick="lbKeymapModeSet(\'pad\')" title="按按键查看：每个键绑定了哪些动作">按按键</span>'
-    + '<span class="lb-km-tab-sep"></span>'
-    + '<span class="lb-km-tab' + (mode === 'diff' ? ' on' : '') + '" data-m="diff" onclick="lbKeymapModeSet(\'diff\')">只看改动</span>'
+    + (_roTabs ? '' : ('<span class="lb-km-tab-sep"></span>'
+      + '<span class="lb-km-tab' + (mode === 'pad' ? ' on' : '') + '" data-m="pad" onclick="lbKeymapModeSet(\'pad\')" title="按按键查看：每个键绑定了哪些动作">按按键</span>'
+      + '<span class="lb-km-tab-sep"></span>'
+      + '<span class="lb-km-tab' + (mode === 'diff' ? ' on' : '') + '" data-m="diff" onclick="lbKeymapModeSet(\'diff\')">只看改动</span>'))
     + '</div>'
     + '<span class="lb-hf-ai-fill"></span>'
     + ((mode === 'list' || mode === 'pad') ? lbKmEmptyBtnHtml() : '')   // v5320：只看未绑定 / 显示全部（低可视化）
@@ -38205,13 +40400,23 @@ function lbKeymapFootBarHtml(){
   var conf = lbKeymapConflicts();
   var changed = lbKeymapChangedCount();
   var t = lbKeymapTimeStr();
+  // v5444：只读作用域（物种/器械操作）底栏不提供「重置 / 保存」—— 键位是默认绑定说明，不可配置
+  var _roFoot = false;
+  try { _roFoot = lbKeymapScopeReadOnly(); } catch (eRo3) { _roFoot = false; }
+  // v5460：作用域内存在「允许玩家编辑」的动作 ⇒ 底栏恢复「重置 / 保存」（玩家改完需要落盘）
+  if (_roFoot){ try { if (lbKmScopeHasEditable()) _roFoot = false; } catch (eEd) {} }
+  var _nActs = 0;
+  try { _nActs = LB_KEYMAP_ACTIONS.length; } catch (eNA) {}
   return '<div class="lb-km-footbar">'
     // v5319（用户口径「键盘 / 鼠标 · 不需要显示」）：设备已在设备按钮行选过，状态行不再重复设备名
     + '<span class="lb-hf-ai-meta lb-km-meta">'
-    + '已改 ' + changed + ' · 冲突 ' + conf.n + (t ? (' · 已同步 ' + t) : '') + '</span>'
+    + (_roFoot ? ('共 ' + _nActs + ' 条操作 · 冲突 ' + conf.n)
+               : ('已改 ' + changed + ' · 冲突 ' + conf.n + (t ? (' · 已同步 ' + t) : '')))
+    + '</span>'
     + '<span class="lb-hf-ai-fill"></span>'
-    + '<button class="lb-hf-aibtn" onclick="lbKeymapResetAll()" title="全部恢复默认">⚙ 重置</button>'
-    + '<button class="lb-hf-aibtn primary" onclick="lbKeymapSave2()"><i class="mdi mdi-content-save"></i> 保存</button>'
+    + (_roFoot ? '' :
+        ('<button class="lb-hf-aibtn" onclick="lbKeymapResetAll()" title="全部恢复默认">⚙ 重置</button>'
+       + '<button class="lb-hf-aibtn primary" onclick="lbKeymapSave2()"><i class="mdi mdi-content-save"></i> 保存</button>'))
     + '</div>';
 }
 function lbKeymapBarHtml(){ return lbKeymapAiHtml() + lbKeymapTabsHtml(); }   // 兼容旧调用
@@ -38530,7 +40735,7 @@ function lbKeymapViewHtml(){
     + '<div class="lb-km-fix-top">'
     + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">'
     + '<span style="flex:1;font-size:16px;font-weight:bold;color:#a78bfa">'
-    + (_isSp5405 ? ('🎮 操作 · ' + escapeHtml(lbSpeciesCnName(LB_KM_SCOPE.cls)) + (_ro5405 ? ' <span style="font-size:10.5px;color:#8a8a9c;font-weight:normal">只读</span>' : '')) : '🎮 键位配置')
+    + (_isSp5405 ? ('🎮 操作 · ' + escapeHtml(lbSpeciesCnName(LB_KM_SCOPE.cls))) : '🎮 键位配置')   // v5453（用户口径「只读 字样无需显示」）：标题不再附「只读」
     + '</span>'
     // v5391（用户口径「动作配置 要只开放给 系统拥有者」）：非拥有者**不渲染**入口
     + (lbKeymapActionAdmin() ? '<button class="lb-tipb lb-picker-close" onclick="lbKeymapActionsOpen()" title="动作管理（仅系统拥有者）"><i class="mdi mdi-format-list-bulleted"></i></button>' : '')
@@ -38582,7 +40787,16 @@ function lbKeymapRender(){
   var meta = document.querySelector('.lb-km-footbar .lb-km-meta');   // v5261：状态已移到下方工具行
   if (meta) {
     var conf = lbKeymapConflicts();
-    meta.textContent = '已改 ' + lbKeymapChangedCount() + ' · 冲突 ' + conf.n + (lbKeymapTimeStr() ? (' · 已同步 ' + lbKeymapTimeStr()) : '');   // v5319：去设备名前缀
+    // v5447：此处每次 render 都会覆写状态文案 —— 必须与 v5445 的只读口径一致，
+    //   否则只读作用域刚打开是对的、一刷新又变回「已改 N」
+    var _roMeta = false;
+    try { _roMeta = lbKeymapScopeReadOnly(); } catch (eM0) {}
+    if (_roMeta){ try { if (lbKmScopeHasEditable()) _roMeta = false; } catch (eMd) {} }   // v5460：与底栏同口径
+    var _nMeta = 0;
+    try { _nMeta = LB_KEYMAP_ACTIONS.length; } catch (eM1) {}
+    meta.textContent = _roMeta
+      ? ('共 ' + _nMeta + ' 条操作 · 冲突 ' + conf.n)
+      : ('已改 ' + lbKeymapChangedCount() + ' · 冲突 ' + conf.n + (lbKeymapTimeStr() ? (' · 已同步 ' + lbKeymapTimeStr()) : ''));   // v5319：去设备名前缀
   }
   // v5406（用户口径「附件1说明为啥没随着切换」）：切设备 / 切键鼠手柄列后，AI 框范围文案同步刷新
   //   只改文本、不重建 AI 框 ⇒ 已输入的提示词不会丢
@@ -38779,6 +40993,8 @@ function lbKeymapPickToggle(name){
   lbKeymapPickRefresh();
 }
 function lbKeymapPick(aid, anchorEl){
+  // v5444：只读作用域（物种/器械操作）不得进入改键弹层（界面上已无入口，这里再兜一层）
+  try { if (lbKeymapScopeReadOnly() && !lbKmColEditable(aid, lbKeymapShowCol())) { try { lbToast('该动作键位为默认绑定，不可修改（请用「动作管理」维护）'); } catch (eT) {} return; } } catch (eRo4) {}   // v5460：名单内动作放开 · v5464：按列判定
   var a = lbKeymapAct(aid); if (!a) return;
   LB_KEYMAP_PICK.aid = aid; LB_KEYMAP_PICK.grp = {}; LB_KEYMAP_PICK.pickFor = '';
   var old = document.querySelector('.lb-km-pickwrap'); if (old) old.remove();
@@ -40281,7 +42497,9 @@ function lbHfInit(){
 function lbSpeciesOpsOpen(){
   var cls = '';
   try { cls = String(LB.curClass || ''); } catch (e) {}
-  if (!cls) { try { lbToast('请先选择一个物种'); } catch (e2) {} return; }
+  // v5442：器械模式下取物品键（LB.pickItem.base 已是 lbCanonBase 名，可直接作 byCls 键）
+  if (!cls) { try { if (LB.pickItem && LB.pickItem.base) cls = String(LB.pickItem.base); } catch (e1) {} }
+  if (!cls) { try { lbToast('请先选择一个物种或器械'); } catch (e2) {} return; }
   lbKeymapScopeEnter(cls);
   try { lbRoleView('keys'); } catch (e3) {}
 }
@@ -40315,8 +42533,44 @@ function lbRenderBreedBar(){
   }
   if(!show){ LB.breedResult = false; lbRenderBreedResult(); }
   // v5405：物种「操作」按钮显隐（仅物种；物品模式不显示）
+  // v5442：器械（armor/attachment/weapon/ammo）也显示 —— 复用同一入口与同一浮窗
   var _spOpsBtn = document.getElementById('lbSpeciesOpsBtn');
-  if (_spOpsBtn) _spOpsBtn.style.display = (show && !LB.pickItem && !!LB.curClass) ? 'inline-flex' : 'none';
+  if (_spOpsBtn) {
+    // v5552（用户口径）：判定依据是「该物种 / 器械有没有配置操作」，不是有没有选中
+    //   有操作 → 常规橙色按钮（图标 + 操作）
+    //   没操作 → 虚线圆角方框、只留图标，且**仅系统拥有者**可见（配置入口）
+    var _opsKey = '';
+    try { _opsKey = String(LB.curClass || ''); } catch (e0x) {}
+    if (!_opsKey) { try { if (LB.pickItem && LB.pickItem.base) _opsKey = String(LB.pickItem.base); } catch (e1x) {} }
+    var _hasOps = _opsKey ? lbSpeciesOpsHas(_opsKey) : false;
+    var _isAdm = false;
+    try { _isAdm = (typeof lbIsAdmin === 'function') && lbIsAdmin(); } catch (e2x) {}
+    var _showBtn = !!show && !!_opsKey && (_hasOps || _isAdm);
+    _spOpsBtn.style.display = _showBtn ? 'inline-flex' : 'none';
+    if (_showBtn && !_hasOps) {
+      _spOpsBtn.style.background = 'transparent';
+      _spOpsBtn.style.border = '1px dashed #f59e0b';
+      _spOpsBtn.style.borderRadius = '8px';
+      _spOpsBtn.style.padding = '0';
+      _spOpsBtn.style.width = '35px';
+      _spOpsBtn.style.minWidth = '35px';
+      _spOpsBtn.innerHTML = '<i class="mdi mdi-gamepad-variant" style="font-size:17px;color:#f59e0b"></i>';
+      _spOpsBtn.setAttribute('title', '该物种 / 器械还没有操作键位（点击配置）');
+      _spOpsBtn.setAttribute('data-tip', '该物种 / 器械还没有操作键位（点击配置）');
+      _spOpsBtn.setAttribute('aria-label', '该物种 / 器械还没有操作键位（点击配置）');
+    } else if (_showBtn) {
+      _spOpsBtn.style.background = '#f59e0b';
+      _spOpsBtn.style.border = '';
+      _spOpsBtn.style.borderRadius = '';
+      _spOpsBtn.style.padding = '';
+      _spOpsBtn.style.width = '';
+      _spOpsBtn.style.minWidth = '';
+      _spOpsBtn.innerHTML = '<i class="mdi mdi-gamepad-variant" style="font-size:15px"></i> 操作';
+      _spOpsBtn.setAttribute('title', '该物种 / 器械的操作键位（每个作用域从 0 配）');
+      _spOpsBtn.setAttribute('data-tip', '该物种 / 器械的操作键位（每个作用域从 0 配）');
+      _spOpsBtn.setAttribute('aria-label', '该物种 / 器械的操作键位（每个作用域从 0 配）');
+    }
+  }
   var attrs = document.getElementById('lbBreedAttrs');
   if(attrs){
     var h = '';
@@ -46140,7 +48394,7 @@ function lbRouteHelpClose(){
       <!-- v5401：四个主按钮统一 .lb-bar-btn（35px），不再用内联 padding/font-size -->
       <!-- v5403（用户口径「追踪最近移到分布地图左边」）：该按钮已移入选种结果 #lbWildInline，底栏不再放 -->
       <!-- v5405（用户口径）：物种「操作」键位入口（仅物种；完全复用键位配置浮窗） -->
-      <button class="lb-tipb lb-bar-btn" id="lbSpeciesOpsBtn" onclick="lbSpeciesOpsOpen()" style="display:none;background:#f59e0b" title="该物种的操作键位（每个物种从 0 配）"><i class="mdi mdi-gamepad-variant" style="font-size:15px"></i> 操作</button>
+      <button class="lb-tipb lb-bar-btn" id="lbSpeciesOpsBtn" onclick="lbSpeciesOpsOpen()" style="display:none;background:#f59e0b" title="该物种 / 器械的操作键位（每个作用域从 0 配）"><i class="mdi mdi-gamepad-variant" style="font-size:15px"></i> 操作</button>
       <button class="lb-tipb lb-bar-btn" id="lbRouteBtn" onclick="lbRouteOpen()" style="background:#0ea5e9" title="繁育路线自动看板：自动拆线/配种计划/颜色繁育">🧬 路线</button>
       <button class="lb-tipb lb-bar-btn" id="lbRankBtn" onclick="lbRankToggle()" title="装备榜：选中物种的鞍 / 图纸排行" style="background:#33333d;color:#ddd"></button>
       <button class="lb-bar-btn" id="lbBreedBtn" onclick="event.stopPropagation();lbBreedToggle()" style="background:#7c3aed">选种</button>
@@ -46179,6 +48433,7 @@ function lbRouteHelpClose(){
 .lb-stage-fold>summary::-webkit-details-marker{display:none}
 .lb-fold-tri{display:inline-block;width:3px;height:5px;background:#999;clip-path:polygon(0 0,0 100%,100% 50%);transition:transform .15s;flex-shrink:0} /* v1272：5×9→3×5（用户要求缩小） */
 .lb-stage-fold[open] .lb-fold-tri{transform:rotate(90deg)}
+.lb-cfg-fold[open]>.lb-cfg-fold-sum .lb-fold-tri{transform:rotate(90deg)} /* v5517：补给箱折叠三角（仅直接子，防外层展开带动内层） */
 #lbRouteOverlay *::-webkit-scrollbar,#lbRouteScroll::-webkit-scrollbar{width:3px;height:3px}
 #lbRouteOverlay *::-webkit-scrollbar-track,#lbRouteScroll::-webkit-scrollbar-track{background:transparent}
 #lbRouteOverlay *::-webkit-scrollbar-thumb,#lbRouteScroll::-webkit-scrollbar-thumb{background:#333;border-radius:1px}

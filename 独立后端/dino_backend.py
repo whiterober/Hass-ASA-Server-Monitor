@@ -38,6 +38,7 @@ import os
 import re
 import socket
 import struct
+import subprocess
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -47,6 +48,465 @@ from datetime import datetime
 # ================= 配置 =================
 DINO_DATA = os.environ.get('DINO_DATA', r'D:\ARK Server\DinoData')
 ASA_DATA = os.environ.get('ASA_DATA', os.path.join(DINO_DATA, 'asa-data'))
+
+# ===== 2026-10-27 配置改动规则（/api/cfg_rules）=====
+# 说明：ARK 服务器 ini 为本地文件；后端与游戏服同机（D:\ARK Server）⇒ 直接本地读，无需插件导出。
+CFG_SERVERS_DIR = os.environ.get('CFG_SERVERS_DIR', os.path.join(os.path.dirname(DINO_DATA), 'Servers'))
+CFG_BASELINE_PATH = os.environ.get('CFG_BASELINE', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cfg_factory_baseline.json'))
+CFG_FILE_MAP = {'GUS': 'GameUserSettings.ini', 'GAME': 'Game.ini', 'ENGINE': 'Engine.ini'}
+# 只允许系统拥有者拉取（用户名白名单，逗号分隔；默认 whiterober）
+CFG_OWNERS = set(x.strip() for x in os.environ.get('CFG_OWNER', 'whiterober').split(',') if x.strip())
+_CFG_CACHE = {}
+_CFG_BASELINE = {'mtime': -1.0, 'doc': None}
+_CFG_PROC = {'ts': 0.0, 'map': None}
+# 只按「密码/密钥」语义脱敏（不含 spectator，避免 bSpectatorManualFloatingNames 被误判）
+_CFG_SECRET_TOKENS = ('password', 'secret', 'token', 'apikey', 'api_key')
+# 2026-10-27：全局服务器域名（所有人共享；仅拥有者可写）——用于拼接服务器信息 / open 命令
+SRV_CONFIG_FILE = os.environ.get('SRV_CONFIG', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'server_config.json'))
+# 2026-10-28：粑粑笔记（公开只读 / 仅拥有者导入覆盖）—— 单文件，前端「导出/导入 MD」对称
+BB_NOTES_FILE = os.environ.get('BB_NOTES_FILE', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bb_notes.json'))
+BB_NOTES_MAX = 200          # 条数上限
+BB_NOTES_BODY_MAX = 8000    # 单条正文上限（字符）
+# 2026-10-27：只返回「服务端相关段」——客户端设置段（ShooterGameUserSettings/ScalabilityGroups 等）一律不返回
+CFG_SERVER_SECTIONS = ('serversettings', 'sessionsettings', 'multihome', 'messageoftheday',
+                       'ragnarok', 'oasisaur', 'shootergamemode', 'gamesession')
+
+
+def _srv_cfg_read():
+    try:
+        with open(SRV_CONFIG_FILE, 'r', encoding='utf-8') as f:
+            d = json.load(f)
+        return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
+
+
+def _srv_cfg_write(doc):
+    tmp = SRV_CONFIG_FILE + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(doc, f, ensure_ascii=False, indent=1)
+    os.replace(tmp, SRV_CONFIG_FILE)
+
+
+def _bb_notes_read():
+    """读粑粑笔记；文件不存在/损坏时返回 missing 标记（前端据此回落静态兜底）。"""
+    try:
+        with open(BB_NOTES_FILE, 'r', encoding='utf-8') as f:
+            d = json.load(f)
+        if isinstance(d, dict) and isinstance(d.get('notes'), list):
+            d.setdefault('version', 1)
+            d.setdefault('updated', '')
+            return d
+    except FileNotFoundError:
+        return {'version': 1, 'updated': '', 'notes': [], 'missing': True}
+    except Exception:
+        pass
+    return {'version': 1, 'updated': '', 'notes': [], 'missing': True}
+
+
+def _bb_notes_write(doc):
+    tmp = BB_NOTES_FILE + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(doc, f, ensure_ascii=False, indent=1)
+    os.replace(tmp, BB_NOTES_FILE)
+
+
+def _bb_notes_norm(raw):
+    """规范化导入数据：只保留 icon/title/body；去纯空白条目。返回 (notes, err)。"""
+    if not isinstance(raw, list):
+        return [], 'notes 必须是数组'
+    if len(raw) > BB_NOTES_MAX:
+        return [], '条目过多（上限 %d）' % BB_NOTES_MAX
+    out = []
+    for it in raw:
+        if not isinstance(it, dict):
+            continue
+        title = str(it.get('title') or '').strip()[:200]
+        body = str(it.get('body') or '')
+        if len(body) > BB_NOTES_BODY_MAX:
+            return [], '单条正文超长（上限 %d 字）' % BB_NOTES_BODY_MAX
+        icon = str(it.get('icon') or '').strip() or 'mdi:information-outline'
+        if not (title or body.strip()):
+            continue
+        out.append({'icon': icon, 'title': title, 'body': body})
+    if not out:
+        return [], '没有任何有效条目'
+    return out, ''
+
+
+def _srv_domain_norm(v):
+    s = str(v or '').strip()
+    for p in ('https://', 'http://'):
+        if s.lower().startswith(p):
+            s = s[len(p):]
+    return s.strip().strip('/')
+
+
+def _cfg_iso(ts):
+    try:
+        return time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(ts))
+    except Exception:
+        return None
+
+
+def _cfg_ini_path(server, file_key):
+    return os.path.join(CFG_SERVERS_DIR, server, 'ShooterGame', 'Saved', 'Config', 'WindowsServer', CFG_FILE_MAP[file_key])
+
+
+def _cfg_section_ok(sec):
+    low = str(sec or '').lower().replace('%2f', '/').replace('%2F', '/')
+    return any(t in low for t in CFG_SERVER_SECTIONS)
+
+
+def _cfg_is_secret(k):
+    low = str(k).lower()
+    return any(t in low for t in _CFG_SECRET_TOKENS)
+
+
+def _cfg_parse_ini(path):
+    """返回 (entries, sections, dups, size)；entries 保序且保留重复键（如 ConfigOverrideItemCraftingCosts）。"""
+    raw = open(path, 'rb').read()
+    enc = 'utf-16' if raw[:2] in (b'\xff\xfe', b'\xfe\xff') else 'utf-8'
+    txt = raw.decode(enc, errors='replace')
+    if txt and txt[0] == '\ufeff':
+        txt = txt[1:]
+    sec = ''
+    entries = []
+    sections = []
+    dups = []
+    seen = {}
+    for ln in txt.splitlines():
+        s = ln.strip()
+        if not s or s[0] in ';#':
+            continue
+        if s.startswith('[') and s.endswith(']'):
+            sec = s[1:-1]
+            if sec not in sections:
+                sections.append(sec)
+            continue
+        if '=' in s:
+            if not _cfg_section_ok(sec):
+                continue
+            k, v = s.split('=', 1)
+            k = k.strip()
+            v = v.strip()
+            ck = (sec.lower(), k.lower())
+            if ck in seen:
+                dups.append(sec + '|' + k)
+            seen[ck] = seen.get(ck, 0) + 1
+            entries.append((sec, k, v))
+    return entries, sections, dups, len(raw)
+
+
+def _cfg_same(a, b):
+    """值是否等价：布尔忽略大小写；数值给容差（0.999989986 与 1 视为相同）。"""
+    sa = str(a).strip()
+    sb = str(b).strip()
+    if sa == sb:
+        return True
+    if sa.lower() == sb.lower():
+        return True
+    try:
+        fa = float(sa)
+        fb = float(sb)
+        return abs(fa - fb) <= max(1e-4, 1e-6 * max(abs(fa), abs(fb)))
+    except Exception:
+        return False
+
+
+def _cfg_baseline():
+    try:
+        m = os.path.getmtime(CFG_BASELINE_PATH)
+    except OSError:
+        return None
+    if _CFG_BASELINE['doc'] is not None and _CFG_BASELINE['mtime'] == m:
+        return _CFG_BASELINE['doc']
+    doc = None
+    try:
+        with open(CFG_BASELINE_PATH, 'r', encoding='utf-8') as f:
+            doc = json.load(f)
+    except Exception:
+        doc = None
+    _CFG_BASELINE['mtime'] = m
+    _CFG_BASELINE['doc'] = doc
+    return doc
+
+
+def _cfg_proc_start(server):
+    """该服 ArkAscendedServer.exe 的启动时间（epoch 秒）；取不到返回 None。60s 缓存。"""
+    now = time.time()
+    if _CFG_PROC['map'] is None or (now - _CFG_PROC['ts']) > 60:
+        m = {}
+        try:
+            ps = ("Get-CimInstance Win32_Process -Filter \"Name='ArkAscendedServer.exe'\" | "
+                  "ForEach-Object { '{0}|{1}|{2}' -f $_.ProcessId, "
+                  "[int]([datetime]$_.CreationDate - (Get-Date '1970-01-01')).TotalSeconds, $_.CommandLine }")
+            r = subprocess.run(['powershell', '-NoProfile', '-Command', ps],
+                               capture_output=True, timeout=25)
+            out = (r.stdout or b'').decode('utf-8', 'replace')
+            for line in out.splitlines():
+                parts = line.strip().split('|', 2)
+                if len(parts) != 3:
+                    continue
+                _pid, _start, _cmd = parts
+                try:
+                    st = float(_start)
+                except ValueError:
+                    continue
+                low = (_cmd or '').lower()
+                for a in SERVERS.keys():
+                    if ('\\servers\\' + a.lower() + '\\') in low or ('/servers/' + a.lower() + '/') in low:
+                        m[a] = st
+                        break
+        except Exception:
+            m = {}
+        _CFG_PROC['ts'] = now
+        _CFG_PROC['map'] = m
+    return (_CFG_PROC['map'] or {}).get(server)
+
+
+def _cfg_build(server, file_key, mtime, proc_start):
+    path = _cfg_ini_path(server, file_key)
+    fname = CFG_FILE_MAP[file_key]
+    doc = {'ok': True, 'server': server, 'file': fname, 'file_key': file_key,
+           'generated_at': time.strftime('%Y-%m-%dT%H:%M:%S+08:00'),
+           'partial': False, 'missing': []}
+    if mtime is None or mtime < 0 or not os.path.isfile(path):
+        doc['path_exists'] = False
+        doc['items'] = []
+        doc['count'] = 0
+        doc['changed_count'] = 0
+        doc['note'] = 'ini 不可读（文件不存在或该服未安装）'
+        doc['partial'] = True
+        doc['missing'].append('ini')
+        doc['proc_start'] = _cfg_iso(proc_start) if proc_start else None
+        doc['pending_restart'] = None
+        doc['baseline'] = {'present': False}
+        return doc
+    entries, sections, dups, size = _cfg_parse_ini(path)
+    base = _cfg_baseline()
+    bfile = None
+    if isinstance(base, dict) and isinstance(base.get('files'), dict):
+        for k, v in base['files'].items():
+            if str(k).lower() == fname.lower():
+                bfile = v
+                break
+    if bfile is None:
+        doc['partial'] = True
+        doc['missing'].append('baseline')
+    blink = {}
+    if bfile:
+        for bs, bd in bfile.items():
+            blink[str(bs).lower()] = {str(x).lower(): y for x, y in (bd or {}).items()}
+    total = {}
+    for sec, k, _v in entries:
+        ck = (str(sec).lower(), k.lower())
+        total[ck] = total.get(ck, 0) + 1
+    occ = {}
+    items = []
+    for sec, k, v in entries:
+        ck = (str(sec).lower(), k.lower())
+        idx = occ.get(ck, 0)
+        occ[ck] = idx + 1
+        bv = (blink.get(ck[0]) or {}).get(ck[1])
+        secret = _cfg_is_secret(k)
+        items.append({
+            'section': sec, 'key': k,
+            'value': ('***' if secret else v),
+            'masked': bool(secret),
+            'default': (None if bv is None else ('***' if secret else bv)),
+            'changed': (None if bv is None else (not _cfg_same(bv, v))),
+            'occurrence': idx,
+            'dup': total.get(ck, 0) > 1,
+        })
+    doc['items'] = items
+    doc['sections'] = sections
+    doc['path_exists'] = True
+    doc['ini_size'] = size
+    doc['ini_mtime'] = _cfg_iso(mtime)
+    doc['dups'] = dups[:50]
+    doc['count'] = len(items)
+    doc['changed_count'] = sum(1 for x in items if x['changed'] is True)
+    doc['baseline'] = {'present': bool(bfile),
+                       'generated_at': (base or {}).get('generated_at'),
+                       'source': (base or {}).get('source'),
+                       'coverage': (base or {}).get('coverage')}
+    doc['proc_start'] = _cfg_iso(proc_start) if proc_start else None
+    doc['pending_restart'] = (bool(proc_start) and mtime > proc_start) if proc_start else None
+    return doc
+
+
+def _cfg_rules_cached(server, file_key):
+    key = (server, file_key)
+    proc_start = _cfg_proc_start(server)
+    path = _cfg_ini_path(server, file_key)
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        mtime = -1.0
+    hit = _CFG_CACHE.get(key)
+    if hit and hit.get('mtime') == mtime and hit.get('ps') == proc_start:
+        return hit['etag'], hit['body']
+    doc = _cfg_build(server, file_key, mtime, proc_start)
+    body = json.dumps(doc, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+    etag = '"%x-%x"' % ((int((mtime if mtime > 0 else 0) * 1000)) & 0x7fffffff, len(body))
+    if len(_CFG_CACHE) > 32:
+        _CFG_CACHE.clear()
+    _CFG_CACHE[key] = {'mtime': mtime, 'etag': etag, 'body': body, 'ps': proc_start}
+    return etag, body
+
+
+# ===== 2026-10-27：规则快照（拥有者上传 → 全玩家共享读）=====
+_CFG_SNAP = {'mtime': -1.0, 'doc': None}
+_CFG_SNAP_LOCK = threading.Lock()
+
+
+def _cfg_snapshot_path():
+    p = os.environ.get('CFG_SNAPSHOT')
+    if p:
+        return p
+    return os.path.join(os.path.dirname(ACCOUNTS_FILE), 'cfg_rules_snapshot.json')
+
+
+def _cfg_snapshot():
+    p = _cfg_snapshot_path()
+    try:
+        m = os.path.getmtime(p)
+    except OSError:
+        return None
+    if _CFG_SNAP['doc'] is not None and _CFG_SNAP['mtime'] == m:
+        return _CFG_SNAP['doc']
+    doc = None
+    try:
+        with open(p, 'r', encoding='utf-8') as f:
+            doc = json.load(f)
+    except Exception:
+        doc = None
+    _CFG_SNAP['mtime'] = m
+    _CFG_SNAP['doc'] = doc
+    return doc
+
+
+def _cfg_snapshot_write(doc):
+    p = _cfg_snapshot_path()
+    tmp = p + '.tmp'
+    with _CFG_SNAP_LOCK:
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(doc, f, ensure_ascii=False, separators=(',', ':'))
+        os.replace(tmp, p)
+        try:
+            st = os.stat(p)
+            _CFG_SNAP['mtime'] = st.st_mtime
+            _CFG_SNAP['doc'] = doc
+        except OSError:
+            _CFG_SNAP['mtime'] = -1.0
+            _CFG_SNAP['doc'] = None
+    return os.path.getsize(p)
+
+
+_CFG_JOB = {'running': False, 'done': 0, 'total': 0, 'current': '', 'errors': [], 'started': 0.0, 'finished': 0.0}
+_CFG_JOB_LOCK = threading.RLock()
+
+
+def _cfg_live_doc(server, file_key):
+    p = _cfg_ini_path(server, file_key)
+    try:
+        mtime = os.path.getmtime(p)
+    except OSError:
+        mtime = -1.0
+    return _cfg_build(server, file_key, mtime, _cfg_proc_start(server))
+
+
+def _cfg_job_view():
+    with _CFG_JOB_LOCK:
+        return {'running': _CFG_JOB['running'], 'done': _CFG_JOB['done'], 'total': _CFG_JOB['total'],
+                'current': _CFG_JOB['current'], 'errors': list(_CFG_JOB['errors']),
+                'started': _CFG_JOB['started'], 'finished': _CFG_JOB['finished']}
+
+
+def _cfg_refresh_all():
+    servers = sorted(SERVERS.keys())
+    with _CFG_JOB_LOCK:
+        _CFG_JOB.update({'running': True, 'done': 0, 'total': len(servers), 'current': '',
+                         'errors': [], 'started': time.time(), 'finished': 0.0})
+    snap = {'schema': 1, 'generated_at': time.strftime('%Y-%m-%dT%H:%M:%S+08:00'),
+            'updated_by': 'backend', 'servers': {}}
+    try:
+        for s in servers:
+            with _CFG_JOB_LOCK:
+                _CFG_JOB['current'] = s
+            ent = {}
+            for fk in ('GUS', 'GAME'):
+                try:
+                    ent[fk] = _cfg_live_doc(s, fk)
+                except Exception as e:
+                    with _CFG_JOB_LOCK:
+                        _CFG_JOB['errors'].append('%s/%s %s' % (s, fk, repr(e)))
+                    ent[fk] = {'ok': False, 'server': s, 'file': CFG_FILE_MAP[fk], 'file_key': fk,
+                               'partial': True, 'missing': ['ini'], 'items': [], 'count': 0,
+                               'changed_count': 0, 'path_exists': False, 'note': '读取失败'}
+            snap['servers'][s] = ent
+            with _CFG_JOB_LOCK:
+                _CFG_JOB['done'] += 1
+        _cfg_snapshot_write(snap)
+    except Exception as e:
+        with _CFG_JOB_LOCK:
+            _CFG_JOB['errors'].append('fatal ' + repr(e))
+    finally:
+        with _CFG_JOB_LOCK:
+            _CFG_JOB.update({'running': False, 'current': '', 'finished': time.time()})
+
+
+def _cfg_refresh_start(by):
+    with _CFG_JOB_LOCK:
+        if _CFG_JOB['running']:
+            return False, _cfg_job_view()
+    threading.Thread(target=_cfg_refresh_all, kwargs={}, daemon=True).start()
+    return True, _cfg_job_view()
+
+
+def _cfg_all_slim():
+    """全服概览：只含改动项 + 计数（体积小；详情再单拉）。"""
+    snap = _cfg_snapshot()
+    src = (snap or {}).get('servers') or {}
+    out = {'ok': True, 'from_snapshot': bool(snap),
+           'generated_at': (snap or {}).get('generated_at'),
+           'updated_by': (snap or {}).get('updated_by'),
+           'servers': {}}
+    for s in sorted(SERVERS.keys()):
+        ent = src.get(s) or {}
+        item_ent = {}
+        for fk in ('GUS', 'GAME'):
+            d = ent.get(fk)
+            if not isinstance(d, dict):
+                continue
+            item_ent[fk] = {'count': d.get('count'), 'changed_count': d.get('changed_count'),
+                            'ini_mtime': d.get('ini_mtime'), 'pending_restart': d.get('pending_restart'),
+                            'partial': d.get('partial'), 'path_exists': d.get('path_exists'),
+                            'items': [x for x in (d.get('items') or []) if x.get('changed') is True]}
+        out['servers'][s] = item_ent
+    body = json.dumps(out, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+    mm = _CFG_SNAP['mtime'] if _CFG_SNAP['mtime'] and _CFG_SNAP['mtime'] > 0 else 0
+    etag = '"a%x-%x"' % (int(mm * 1000) & 0x7fffffff, len(body))
+    return etag, body
+
+
+def _cfg_rules_read(server, file_key):
+    """优先返回快照（全玩家共享）；无快照时退回现场读。"""
+    snap = _cfg_snapshot()
+    if isinstance(snap, dict):
+        doc = ((snap.get('servers') or {}).get(server) or {}).get(file_key)
+        if isinstance(doc, dict):
+            out = dict(doc)
+            out['from_snapshot'] = True
+            out['snapshot_at'] = snap.get('generated_at')
+            out['snapshot_by'] = snap.get('updated_by')
+            body = json.dumps(out, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+            mm = _CFG_SNAP['mtime'] if _CFG_SNAP['mtime'] and _CFG_SNAP['mtime'] > 0 else 0
+            etag = '"s%x-%x"' % (int(mm * 1000) & 0x7fffffff, len(body))
+            return etag, body
+    return _cfg_rules_cached(server, file_key)
+
 # 2026-08-28 修复：硬编码 RCON 目标为物理服务器内网 IP（游戏服 MultiHomeIp 绑定地址，实测返回真实 JSON）。
 # 不用 os.environ 读取——服务器残留系统环境变量 RCON_HOST=127.0.0.1 会覆盖默认值导致连到错误服务（返回 Keep Alive）。
 RCON_HOST = '192.168.199.3'
@@ -2401,6 +2861,75 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(401, {'ok': False, 'error': _err})
                 return
             self._send(200, {'ok': True, 'data': _load_user_prefs(username)})
+        elif path == '/api/cfg_rules':
+            # 2026-10-27：配置改动规则只读接口（本地读 ini + 拼 CF 基线 + mtime 缓存/ETag/304）
+            _qs = parse_qs(parsed.query)
+            if ((_qs.get('all') or [''])[0].strip().lower() in ('1', 'true', 'yes')):
+                try:
+                    _ea, _ba = _cfg_all_slim()
+                except Exception as _e:
+                    self._send(500, {'ok': False, 'error': 'cfg_all failed', 'detail': repr(_e)})
+                    return
+                _ia = (self.headers.get('If-None-Match') or '').strip()
+                if _ia and _ea and _ia == _ea:
+                    self.send_response(304)
+                    self._cors()
+                    self.send_header('ETag', _ea)
+                    self.send_header('Cache-Control', 'no-cache')
+                    self.end_headers()
+                    return
+                self.send_response(200)
+                self._cors()
+                self.send_header('Content-Type', 'application/json; charset=utf-8')
+                self.send_header('Content-Length', str(len(_ba)))
+                self.send_header('Cache-Control', 'no-cache')
+                self.send_header('ETag', _ea or '')
+                self.end_headers()
+                if not getattr(self, '_head_only', False):
+                    self.wfile.write(_ba)
+                return
+            _server = (_qs.get('server') or [''])[0].strip()
+            _fk = ((_qs.get('file') or [''])[0].strip() or 'GUS').upper()
+            if _server not in SERVERS:
+                self._send(400, {'ok': False, 'error': 'unknown server', 'servers': sorted(SERVERS.keys())})
+                return
+            if _fk not in CFG_FILE_MAP:
+                self._send(400, {'ok': False, 'error': 'unknown file', 'files': sorted(CFG_FILE_MAP.keys())})
+                return
+            try:
+                _etag, _body = _cfg_rules_read(_server, _fk)
+            except Exception as _e:
+                self._send(500, {'ok': False, 'error': 'cfg_rules failed', 'detail': repr(_e)})
+                return
+            _inm = (self.headers.get('If-None-Match') or '').strip()
+            if _inm and _etag and _inm == _etag:
+                self.send_response(304)
+                self._cors()
+                self.send_header('ETag', _etag)
+                self.send_header('Cache-Control', 'no-cache')
+                self.end_headers()
+                return
+            try:
+                self.send_response(200)
+                self._cors()
+                self.send_header('Content-Type', 'application/json; charset=utf-8')
+                self.send_header('Content-Length', str(len(_body)))
+                self.send_header('Cache-Control', 'no-cache')
+                self.send_header('ETag', _etag or '')
+                self.end_headers()
+                if not getattr(self, '_head_only', False):
+                    self.wfile.write(_body)
+            except Exception:
+                pass
+        elif path == '/api/server_config':
+            # 公开读：全局服务器域名（不含任何密钥）
+            self._send(200, {'ok': True, 'server_domain': _srv_cfg_read().get('server_domain') or ''})
+            return
+        elif path == '/api/cfg_rules/refresh_status':
+            self._send(200, {'ok': True, 'job': _cfg_job_view()})
+        elif path == '/api/bb_notes':
+            # 2026-10-28：粑粑笔记（公开只读；内容由拥有者「导入 MD」覆盖）
+            self._send(200, _bb_notes_read())
         elif path.startswith('/api/status/'):
             server = path[len('/api/status/'):].strip('/').strip()
             if server not in SERVERS:
@@ -2491,6 +3020,106 @@ class Handler(BaseHTTPRequestHandler):
             if v is None:
                 v = (qs.get(name) or [default])[0]
             return str(v).strip()
+        # 配置规则：全服刷新（仅系统拥有者；后端自己读 11 台 ini → 落快照，全玩家共享）
+        # 服务器域名：写（仅系统拥有者）
+        # 2026-10-28：粑粑笔记导入（仅拥有者；整份覆盖）
+        if path == '/api/bb_notes':
+            _u = g('username')
+            _n = g('nick')
+            _ok, _err = _harvest_auth(_u, _n)
+            if not _ok:
+                self._send(401, {'ok': False, 'error': _err})
+                return
+            if _u not in CFG_OWNERS:
+                self._send(403, {'ok': False, 'error': 'owner only'})
+                return
+            _notes, _nerr = _bb_notes_norm(body.get('notes'))
+            if _nerr:
+                self._send(400, {'ok': False, 'error': _nerr})
+                return
+            _doc = {'version': 1,
+                    'updated': time.strftime('%Y-%m-%d'),
+                    'updated_by': _u,
+                    'notes': _notes}
+            try:
+                _bb_notes_write(_doc)
+            except Exception as _e:
+                self._send(500, {'ok': False, 'error': repr(_e)})
+                return
+            self._send(200, {'ok': True, 'count': len(_notes), 'updated': _doc['updated'], 'doc': _doc})
+            return
+        if path == '/api/server_config':
+            _u = g('username')
+            _n = g('nick')
+            _ok, _err = _harvest_auth(_u, _n)
+            if not _ok:
+                self._send(401, {'ok': False, 'error': _err})
+                return
+            if _u not in CFG_OWNERS:
+                self._send(403, {'ok': False, 'error': 'owner only'})
+                return
+            _dom = _srv_domain_norm(body.get('server_domain', g('server_domain', '')))
+            try:
+                _d = _srv_cfg_read()
+                _d['server_domain'] = _dom
+                _d['updated_at'] = time.strftime('%Y-%m-%dT%H:%M:%S+08:00')
+                _d['updated_by'] = _u
+                _srv_cfg_write(_d)
+            except Exception as e:
+                self._send(500, {'ok': False, 'error': repr(e)})
+                return
+            self._send(200, {'ok': True, 'server_domain': _dom})
+            return
+        if path == '/api/cfg_rules/refresh':
+            _u = g('username')
+            _n = g('nick')
+            _ok, _err = _harvest_auth(_u, _n)
+            if not _ok:
+                self._send(401, {'ok': False, 'error': _err})
+                return
+            if _u not in CFG_OWNERS:
+                self._send(403, {'ok': False, 'error': 'owner only', 'owners': sorted(CFG_OWNERS)})
+                return
+            _started, _job = _cfg_refresh_start(_u)
+            self._send(200, {'ok': True, 'started': _started, 'job': _job})
+            return
+        # 配置规则：上传快照（旧路径，保留兼容；建议改用 /api/cfg_rules/refresh）
+        if path == '/api/cfg_rules/snapshot':
+            _u = g('username')
+            _n = g('nick')
+            _ok, _err = _harvest_auth(_u, _n)
+            if not _ok:
+                self._send(401, {'ok': False, 'error': _err})
+                return
+            if _u not in CFG_OWNERS:
+                self._send(403, {'ok': False, 'error': 'owner only', 'owners': sorted(CFG_OWNERS)})
+                return
+            _servers = body.get('servers')
+            _one_srv = str(body.get('server') or '').strip()
+            _files = body.get('files')
+            if isinstance(_one_srv, str) and _one_srv and isinstance(_files, dict):
+                # 逐台合并模式（避开 512KB body 上限）：{server:'Isl', files:{GUS:..,GAME:..}}
+                if _one_srv not in SERVERS:
+                    self._send(400, {'ok': False, 'error': 'unknown server'})
+                    return
+                _base = _cfg_snapshot() or {}
+                _servers = dict(_base.get('servers') or {})
+                _servers[_one_srv] = _files
+            if not isinstance(_servers, dict) or not _servers:
+                self._send(400, {'ok': False, 'error': 'missing servers/files'})
+                return
+            _snap = {'schema': 1,
+                     'generated_at': str(body.get('generated_at') or time.strftime('%Y-%m-%dT%H:%M:%S+08:00')),
+                     'updated_by': _u,
+                     'servers': _servers}
+            try:
+                _size = _cfg_snapshot_write(_snap)
+            except Exception as _e:
+                self._send(500, {'ok': False, 'error': 'snapshot write failed', 'detail': repr(_e)})
+                return
+            self._send(200, {'ok': True, 'servers': len(_servers), 'server': (_one_srv or None),
+                             'size': _size, 'generated_at': _snap['generated_at']})
+            return
         # 采集流程（玩家级）：GET/POST /api/harvest_flows
         if path.endswith('/api/harvest_flows'):
             username = g('username')
