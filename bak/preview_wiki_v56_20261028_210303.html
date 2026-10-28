@@ -1,0 +1,1346 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wiki 面板原型 v3（含驯服计算器）· 粑粑服搞事系统</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0f0f13;color:#e0e0e0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:20px 16px 60px}
+.tip{max-width:900px;margin:0 auto 18px;padding:10px 14px;border-radius:8px;background:#7c3aed14;border:1px solid #7c3aed44;font-size:12.5px;color:#c4b5fd;line-height:1.8}
+.tip b{color:#a78bfa}
+.wrap{max-width:900px;margin:0 auto}
+.label{font-size:11px;color:#6b7280;margin:22px 0 8px}
+.bar{display:flex;align-items:center;gap:10px;padding:12px;background:#15151f;border:1px solid #2a2a3a;border-radius:10px}
+.sq{display:inline-flex;align-items:center;justify-content:center;width:35px;height:35px;border-radius:8px;border:none;font-size:17px;cursor:pointer;color:#fff;transition:transform .12s,filter .12s}
+.sq:hover{transform:translateY(-1px);filter:brightness(1.1)}
+.sq-ops{background:#f59e0b}
+.sq-wiki{background:#22c55e}
+.note{font-size:11.5px;color:#6b7280}
+.sp-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.sp{padding:5px 12px;border-radius:999px;border:1px solid #333;background:#1a1a24;color:#ccc;font-size:12.5px;cursor:pointer}
+.sp.on{background:#7c3aed;border-color:#7c3aed;color:#fff;font-weight:600}
+
+.ov{position:fixed;inset:0;z-index:9999;background:#000000a8;display:none;align-items:center;justify-content:center;padding:16px}
+.ov.show{display:flex}
+.panel{background:#15151f;border:1px solid #7c3aed55;border-radius:12px;width:900px;max-width:96vw;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 20px 60px #000a;overflow:hidden}
+.phead{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid #2a2a3a;flex-shrink:0}
+.ptitle{flex:1;min-width:0;font-weight:700;color:#a78bfa;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip{padding:5px 14px;border-radius:8px;font-size:12.5px;cursor:pointer;border:none;flex-shrink:0;font-weight:600}
+.chip-upd{background:#7c3aed;color:#fff}
+.chip-upd:disabled{opacity:.55;cursor:default}
+.chip-close{background:#2a2a3a;color:#cbd5e1}
+.ptabs{display:flex;gap:6px;overflow-x:auto;padding:8px 14px;border-bottom:1px solid #2a2a3a;flex-shrink:0;scrollbar-width:none}
+.ptabs::-webkit-scrollbar{display:none}
+.ptab{padding:4px 12px;border-radius:999px;font-size:12px;cursor:pointer;border:1px solid #333;background:#1a1a24;color:#bbb;white-space:nowrap;flex-shrink:0}
+.ptab.on{background:#22c55e;border-color:#22c55e;color:#062b14;font-weight:700}
+.ptab:hover{border-color:#22c55e}
+.pmeta{padding:6px 14px 8px;font-size:11px;color:#6b7280;line-height:1.7;border-bottom:1px dashed #1f1f2a;flex-shrink:0}
+.pmeta b{color:#9aa0b5;font-weight:600}
+.pbody{flex:1;overflow-y:auto;padding:10px 16px 18px}
+
+/* 技能视频 */
+.abil{margin:16px 0 6px;padding:12px;border-radius:10px;background:#ffffff06;border:1px solid #ffffff10}
+.abil-h{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px;font-weight:700;color:#a78bfa}
+.abil-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.abil-t{padding:4px 10px;border-radius:8px;font-size:12px;cursor:pointer;border:1px solid #333;background:#1a1a24;color:#cbd5e1}
+.abil-t.on{background:#7c3aed;border-color:#7c3aed;color:#fff;font-weight:600}
+.abil-t em{font-style:normal;opacity:.65;font-size:10.5px;margin-left:4px;padding:1px 4px;border-radius:4px;background:#ffffff14}
+.abil video{width:100%;max-height:420px;border-radius:8px;background:#000;display:block}
+.abil-desc{margin-top:8px;font-size:12.5px;color:#cbd5e1;line-height:1.8}
+.abil-desc b{color:#f59e0b}
+.extra{margin:12px 0;padding:8px 10px;border-radius:8px;background:#f59e0b10;border:1px dashed #f59e0b55;font-size:11.5px;color:#f59e0b;line-height:1.7}
+
+.wiki-body h1{font-size:19px;color:#e2e8f0;margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid #2a2a3a}
+.wiki-body h2{font-size:15.5px;color:#a78bfa;margin:16px 0 7px;font-weight:700}
+.wiki-body h3{font-size:13.5px;color:#cbd5e1;margin:12px 0 5px}
+.wiki-body h4{font-size:13px;color:#94a3b8;margin:10px 0 4px}
+.wiki-body p{font-size:12.8px;color:#cbd5e1;line-height:1.9;margin:6px 0}
+.wiki-body ul,.wiki-body ol{padding-left:20px;margin:6px 0}
+.wiki-body li{font-size:12.8px;color:#cbd5e1;line-height:1.85;margin:3px 0}
+.wiki-body strong,.wiki-body b{color:#f1f5f9}
+.wiki-body a{color:#a78bfa;text-decoration:none}
+.wiki-body a:hover{text-decoration:underline}
+/* v52：正式项目物品 chip 样式（逐字对齐 dino-import.html .lb-hf-chip）*/
+.lb-hf-chip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 8px;border-radius:6px;font-size:12px;line-height:1;background:#22222c;border:1px solid #3a3a4a;color:#d6d6e0;white-space:nowrap;overflow:hidden}
+.lb-hf-chip img{vertical-align:0;margin-right:0}
+.wiki-body table{display:block;width:100%;max-width:100%;overflow-x:auto;border-collapse:collapse;margin:8px 0;font-size:12px}
+/* v46：自主渲染表格（.tc-tb）不走 wikily 原始表格那套 display:block —— 否则列宽按内容塌缩、右侧留白 */
+.wiki-body .tc-tb{display:table;width:100%;max-width:none;margin:0;overflow:visible;border:1px solid #22222e;border-radius:8px;border-collapse:separate;border-spacing:0}
+.wiki-body .tc-tb thead th:first-child{border-top-left-radius:7px}
+.wiki-body .tc-tb thead th:last-child{border-top-right-radius:7px}
+.wiki-body .tc-tb tbody tr:last-child>*:first-child{border-bottom-left-radius:7px}
+.wiki-body .tc-tb tbody tr:last-child>*:last-child{border-bottom-right-radius:7px}
+.wiki-body .tc-tb tbody tr:last-child th,.wiki-body .tc-tb tbody tr:last-child td{border-bottom:none}
+/* 窄屏时整块区块横向滚动（代替原包裹 div 的 overflow:auto） */
+.tc-sec{overflow-x:auto}
+.wiki-body th,.wiki-body td{border:1px solid #2a2a3a;padding:5px 9px;text-align:left;white-space:nowrap}
+.wiki-body th{background:#1e1e2a;color:#a78bfa;font-weight:600}
+.wiki-body tr:nth-child(even) td{background:#ffffff04}
+.wiki-body img{max-width:100%;max-height:420px;height:auto;object-fit:contain;border-radius:4px;background:#ffffff08}
+.wiki-body code{background:#ffffff14;border-radius:4px;padding:1px 5px;font-family:ui-monospace,Consolas,monospace;font-size:11.5px;color:#93c5fd}
+.wiki-body blockquote{border-left:3px solid #7c3aed;padding-left:10px;color:#94a3b8;margin:8px 0}
+
+.toast{position:fixed;left:50%;bottom:36px;transform:translateX(-50%) translateY(20px);background:#22c55e;color:#062b14;font-weight:700;font-size:12.5px;padding:8px 16px;border-radius:999px;opacity:0;transition:all .25s;pointer-events:none;z-index:10001}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.loading{padding:40px 0;text-align:center;color:#888;font-size:13px}
+.spin{display:inline-block;width:16px;height:16px;border:2px solid #7c3aed;border-right-color:transparent;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-3px;margin-right:8px}
+@keyframes sp{to{transform:rotate(360deg)}}
+/* ===== v2：驯服计算器 ===== */
+.tc{padding:2px 0 8px}
+.tc-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:4px 0 12px}
+.tc-h1{font-size:16px;font-weight:700;color:#e2e8f0}
+.tc-badge{padding:2px 9px;border-radius:999px;background:#22c55e18;border:1px solid #22c55e55;color:#4ade80;font-size:11px;font-weight:600}
+.tc-badge2{padding:2px 9px;border-radius:999px;background:#7c3aed18;border:1px solid #7c3aed55;color:#a78bfa;font-size:11px;font-weight:600}
+.tc-ctrl{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:11px 13px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:10px;margin-bottom:14px}
+.tc-ctrl label{font-size:12px;color:#8b93a7}
+.tc-hint{font-size:10.5px;color:#7c8497;margin-left:-4px}
+.tc-intro .tc-line{margin:2px 0}
+.tc-more .tc-line{margin:2px 0}
+.tc-expand{margin-top:6px;background:#a78bfa22;border:1px solid #a78bfa44;color:#c4b5fd;border-radius:6px;padding:3px 10px;font-size:11.5px;cursor:pointer;font-family:inherit}
+.tc-expand:hover{background:#a78bfa33}
+.tc-tip{position:relative;display:inline-flex;align-items:center;margin-left:5px;color:#6b7280;cursor:help}
+.tc-tip:hover{color:#a78bfa}
+.tc-tip svg{width:13px;height:13px;fill:currentColor;display:block}
+.tc-tip::after{content:attr(data-tip);position:absolute;left:50%;transform:translateX(-50%);bottom:150%;white-space:nowrap;background:#262637;color:#d5dae6;border:1px solid #3d3d55;border-radius:6px;padding:5px 9px;font-size:11px;font-weight:400;line-height:1.6;opacity:0;pointer-events:none;transition:opacity .15s;z-index:20;box-shadow:0 6px 18px #00000066}
+.tc-tip:hover::after{opacity:1}
+.tc-fx{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:9px 13px;background:#16161f;border:1px solid #26263a;border-radius:10px;margin-bottom:14px}
+.tc-fx label{font-size:12px;color:#8b93a7}
+.tc-num{width:80px;background:#1a1a24;border:1px solid #2a2a3a;color:#e6e9f0;border-radius:8px;padding:5px 8px;font-size:13px;text-align:center;font-family:inherit}
+.tc-num:focus{outline:none;border-color:#a78bfa}
+.tc-ctrl input[type=range]{flex:1;min-width:150px;accent-color:#a78bfa;cursor:pointer}
+.tc-lv{font-size:15px;font-weight:700;color:#a78bfa;min-width:36px;text-align:right}
+.tc-div{width:0;height:18px;border-left:1px dashed #3a3a4a;margin:0 2px}
+.tc-pre{padding:4px 12px;border-radius:8px;border:1px solid #333;background:#15151f;color:#9aa0b5;font-size:12px;cursor:pointer}
+.tc-pre.on{background:#22c55e;border-color:#22c55e;color:#062b14;font-weight:700}
+.tc-sec{margin-bottom:14px}
+.tc-h{display:flex;align-items:center;gap:8px;margin:0 0 8px;font-size:13px;font-weight:700;color:#a78bfa}
+.tc-h em{font-style:normal;font-weight:400;font-size:11px;color:#6b7280}
+.tc-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:8px}
+.tc-tile{padding:9px 11px;border-radius:9px;background:#ffffff06;border:1px solid #ffffff10}
+.tc-tile-k{font-size:10.5px;color:#6b7280;margin-bottom:3px}
+.tc-tile-v{font-size:16px;font-weight:700;color:#e2e8f0;line-height:1.25}
+.tc-tile-s{font-size:10.5px;color:#7c8497;margin-top:2px}
+.tc-tile.hot{border-color:#f59e0b55;background:#f59e0b0e}
+.tc-tile.hot .tc-tile-v{color:#fbbf24}
+.tc-own{display:flex;flex-direction:column;gap:6px}
+.tc-own-r{display:flex;align-items:center;gap:9px;padding:7px 11px;border-radius:8px;background:#ffffff05;border:1px solid #ffffff0d;font-size:12.5px}
+.tc-own-r img{width:24px;height:24px;object-fit:contain;flex-shrink:0}
+.tc-ph{width:24px;height:24px;flex-shrink:0;border-radius:5px;background:#ffffff0a;border:1px dashed #333;display:inline-flex;align-items:center;justify-content:center;color:#4b5563;font-size:11px}
+.tc-own-n{flex:1;min-width:0;color:#cbd5e1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tc-own-q{color:#9aa0b5;font-variant-numeric:tabular-nums}
+/* v23：直接复用 dino-import 的条目小卡样式（lbsum-ic 尺寸 / hover） */
+.lb-breed-card .lb-sum-ic{width:16px;height:16px;vertical-align:-3px;margin-right:3px;border-radius:3px;object-fit:contain}
+.lb-breed-card:hover{border-color:#a78bfa!important;background:#22222f!important}
+.tc-ok{color:#4ade80;font-weight:700}
+.tc-no{color:#f87171;font-weight:700}
+.tc-ic{width:13px;height:13px;vertical-align:-2px;margin-right:3px;fill:currentColor;display:inline-block}
+.tc-adv{padding:11px 13px;border-radius:9px;background:#7c3aed0e;border:1px solid #7c3aed33;font-size:12.5px;color:#cbd5e1;line-height:1.95}
+.tc-adv b{color:#a78bfa}
+.tc-adv .warn{color:#fbbf24}
+.tc-tb{width:100%;border-collapse:collapse;font-size:12px}
+.tc-tb th,.tc-tb td{border-bottom:1px solid #22222e;padding:6px 8px;text-align:left;white-space:nowrap}
+.tc-tb th{background:#1e1e2a;color:#a78bfa;font-weight:600;position:sticky;top:0;z-index:1}
+.tc-tb td.num{text-align:right;font-variant-numeric:tabular-nums}
+.tc-tb tr.on td{background:#22c55e10}
+.tc-tb tr.on td:first-child{box-shadow:inset 3px 0 0 #22c55e}
+.tc-tb img{width:20px;height:20px;object-fit:contain;vertical-align:-5px;margin-right:5px}
+.tc-intro{margin:0 0 12px;padding:10px 13px;border-radius:9px;background:#ffffff06;border:1px solid #ffffff10}
+.tc-intro p,.tc-intro .tc-line{margin:0;font-size:12.8px;color:#cbd5e1;line-height:1.9}
+.tc-note{margin-top:10px;padding:8px 11px;border-radius:8px;background:#f59e0b0e;border:1px dashed #f59e0b44;font-size:11px;color:#d3a247;line-height:1.8}
+
+</style>
+</head>
+<body>
+<div class="tip">
+  <b>Wiki 面板原型 v2</b> ｜ 真实抓取 <code>wikily.gg/zh-cn</code>（霸王龙 / 重爪龙 / 渡渡鸟）
+  <br>v3 新增：<b>「驯服」tab 变成我们自己的动态计算器</b> —— 目标等级滑块，实时算出<b>口数 / 时间 / 效率 / 眩晕值 / 驯服后等级</b>，并与「我的库存」比对给出够不够的建议（公式已用 3 物种 SSR 黄金值校准）<br>其余：① 顶部 <b>7 个 tab 全部在面板内显示</b>（概览/驯服/繁殖/采集/收割/技能/生成指令，不再跳原站；采集与收割已分开）② 正文末「技能演示」<b>视频可直接播放</b>
+</div>
+
+<div class="wrap">
+  <div class="label">↓ 模拟「生物速查页」底部功能条</div>
+  <div class="bar">
+    <button class="sq sq-ops" title="该物种 / 器械的操作键位">🎮</button>
+    <button class="sq sq-wiki" onclick="openWiki()" title="查看该物种 Wiki">📖</button>
+    <span class="note">← 左：操作（橙实心）　右：Wiki（绿实心）</span>
+  </div>
+  <div class="label">↓ 切换物种（模拟在速查页选不同物种）</div>
+  <div class="sp-row" id="spRow"></div>
+</div>
+
+<div class="ov" id="ov">
+  <div class="panel" onclick="event.stopPropagation()">
+    <div class="phead">
+      <span class="ptitle">📖 <span id="pName"></span> · Wiki</span>
+      <button class="chip chip-upd" id="updBtn" onclick="doUpdate()">更新</button>
+      <button class="chip chip-close" onclick="closeWiki()" title="关闭">✕</button>
+    </div>
+    <div class="ptabs" id="pTabBar"></div>
+    <div class="pmeta" id="pMeta"></div>
+    <div class="pbody wiki-body" id="pBody"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+var DATA = {"Rex": {"zh": "霸王龙", "slug": "rex", "url": "https://wikily.gg/zh-cn/ark-survival-ascended/dinosaurs/rex", "title": "霸王龙 动物 | ARK: Survival Ascended Wiki", "html": "<h2>概览<\/h2><p>霸王龙是一种大型肉食性恐龙，以其强大的近战伤害和击晕敌人的咆哮能力著称。它能被托斯特巨鱿携带，实现快速部署和空中支援。因此常用于前线作战或作为移动火力平台。<\/p><h2>基础属性1级数值与每级增长<\/h2><table><thead><tr><th>属性<\/th><th>基础<\/th><th>野生 +/级<\/th><th>已驯服 +/级<\/th><th>野生成长<\/th><\/tr><\/thead><tbody><tr><th>生命值<\/th><td>1100<\/td><td>+220<\/td><td>+5.4%<\/td><td><i><\/i><em>20<!-- -->%<\/em><\/td><\/tr><tr><th>体力<\/th><td>420<\/td><td>+42<\/td><td>+10%<\/td><td><i><\/i><em>10<!-- -->%<\/em><\/td><\/tr><tr><th>麻痹值<\/th><td>1550<\/td><td>+93<\/td><td>+0%<\/td><td><i><\/i><em>6<!-- -->%<\/em><\/td><\/tr><tr><th>氧气<\/th><td>150<\/td><td>+15<\/td><td>+10%<\/td><td><i><\/i><em>10<!-- -->%<\/em><\/td><\/tr><tr><th>食物<\/th><td>3000<\/td><td>+300<\/td><td>+10%<\/td><td><i><\/i><em>10<!-- -->%<\/em><\/td><\/tr><tr><th>重量<\/th><td>500<\/td><td>+10<\/td><td>+4%<\/td><td><i><\/i><em>2<!-- -->%<\/em><\/td><\/tr><tr><th>近战伤害<\/th><td>100%<\/td><td>+5%<\/td><td>+1.7%<\/td><td><i><\/i><em>5<!-- -->%<\/em><\/td><\/tr><tr><th>移动速度<\/th><td>100%<\/td><td>+0%<\/td><td>+1%<\/td><td><i><\/i><em>0<!-- -->%<\/em><\/td><\/tr><\/tbody><\/table><h2>技巧<\/h2><ul><li>霸王龙的咆哮技能可使最远35米、75度锥形范围内的敌人昏迷，昏迷持续4秒。<\/li><li>使用咆哮后，霸王龙会进入6分钟的冷却锁定期，在这6分钟内无法再次咆哮。<\/li><li>在正常情况下，咆哮技能每次使用之间有10秒的冷却时间。<\/li><li>负重上限低于200的生物可以使霸王龙昏迷。<\/li><\/ul>", "ms": 3014, "raw_kb": 876, "used": "ark:sky-main", "text_len": 2430, "imgs": 18, "tables": 2, "tabs": [{"label": "概览", "path": "/zh-cn/ark-survival-ascended/dinosaurs/rex", "url": "https://wikily.gg/zh-cn/ark-survival-ascended/dinosaurs/rex"}, {"label": "驯服", "path": "/zh-cn/ark-survival-ascended/dinosaurs/rex/taming-calculator", "url": "https://wikily.gg/zh-cn/ark-survival-ascended/dinosaurs/rex/taming-calculator"}, {"label": "繁殖", "path": "/zh-cn/ark-survival-ascended/dinosaurs/rex/breeding-calculator", "url": "https://wikily.gg/zh-cn/ark-survival-ascended/dinosaurs/rex/breeding-calculator"}, {"label": "采集", "path": "/zh-cn/ark-survival-ascended/dinosaurs/rex/harvesting", "url": "https://wikily.gg/zh-cn/ark-survival-ascended/dinosaurs/rex/harvesting"}, {"label": "收割", "path": "/zh-cn/ark-survival-ascended/dinosaurs/rex/harvesting", "url": "https://wikily.gg/zh-cn/ark-survival-ascended/dinosaurs/rex/harvesting"}, {"label": "技能", "path": "/zh-cn/ark-survival-ascended/dinosaurs/rex/abilities", "url": "https://wikily.gg/zh-cn/ark-survival-ascended/dinosaurs/rex/abilities"}, {"label": "生成指令", "path": "/zh-cn/ark-survival-ascended/dinosaurs/rex/spawn-command", "url": "https://wikily.gg/zh-cn/ark-survival-ascended/dinosaurs/rex/spawn-command"}], "abils": [{"id": "519", "title": "咆哮", "desc": "短暂击晕易受影响的低等级敌人并迫使它们排便。", "key": "RMB", "kind": "attack", "video": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-10-04/e2bccbdc-ec75-4702-afcb-980c5dc531e5-ark-5a66f7826923-ability-519-9f4141ccbf8e.mp4", "poster": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-10-04/0b70a8e9-1a1f-4657-9a20-1b26148c7761-ark-802fc50029cb-ability-519-9f4141ccbf8e-poster.webp"}, {"id": "520", "title": "啃咬", "desc": "啃咬你前方的目标。", "key": "LMB", "kind": "attack", "video": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-10-04/7940ccf0-d7df-44ba-b4c4-f7f71db245a1-ark-f808a09e4a86-ability-520-d1e3fe01e630.mp4", "poster": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-10-04/655a6b92-0c9b-4188-af69-ace6d54f0d0f-ark-6b9c72028f22-ability-520-d1e3fe01e630-poster.webp"}, {"id": "1003", "title": "泰克鞍炮", "desc": "激活泰克鞍并发射其火炮。需要泰克图纸以及物品栏中的能量元素。", "key": "Left Ctrl: activate; RMB: fire", "kind": "control", "video": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-10-04/0c3e7f9d-21bc-4fbe-94ff-879598d98ab7-ark-2d7865a5ecba-ability-1003-ccd78dff5179.mp4", "poster": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-10-04/e3ec8ee7-513b-4452-bef2-ec21022ffc9d-ark-d5af6dbb8fe7-ability-1003-ccd78dff5179-poster.webp"}], "fetched_at": 1793172763, "tabHtml": {"1": {"html": "<p>雷克斯必须通过击晕方式进行驯服。最佳食物是卓越饲料，生羊肉也可作为替代选择。推荐使用弓配合麻醉箭进行远程击晕，或用流星锁链限制其移动。整个过程大约需要58分钟，共消耗17个优质饲料，无需麻醉剂。使用下方计算器调整具体设置。<\/p>", "abils": []}, "2": {"html": "<p>繁殖计算器<\/p><h1>霸王龙<\/h1>预设变体设置孵化 1× · 成长 1× · 食物 1× · 重量 500<!-- -->蛋孵化速度幼崽成熟速度食物消耗倍率生物重量<ol><\/ol><p>幼体<!-- -->: <!-- -->已孵化的恐龙，作为幼崽，需要持续关注和直接放入物品栏的食物才能生存，或者附近有鸭嘴飞鼠照顾其需求。<\/p><img alt=\"\" width=\"32\" height=\"32\" src=\"https://r2.wikily.gg/images/ark/icons/Egg_Icon.webp\" loading=\"lazy\">孵化4h 59m 58s<img alt=\"\" width=\"32\" height=\"32\" src=\"https://r2.wikily.gg/images/ark/icons/Condition_SpinoWaterBuff.webp\" loading=\"lazy\">成熟92h 35m 33s<img alt=\"\" width=\"32\" height=\"32\" src=\"https://r2.wikily.gg/images/ark/icons/CompassIcon.webp\" loading=\"lazy\">孵化温度32 - 34 °C<img alt=\"\" width=\"32\" height=\"32\" src=\"https://r2.wikily.gg/images/ark/icons/Food_Icon.webp\" loading=\"lazy\">出生时食物70.81/min<h2><img alt=\"\" width=\"24\" height=\"24\" src=\"https://r2.wikily.gg/images/ark/icons/Condition_SpinoWaterBuff.webp\" loading=\"lazy\">成熟进度<\/h2>选择食物<img alt=\"\" width=\"28\" height=\"28\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/a3685d1e-b1a2-4ab4-9d6e-8c82c58af6bb-ark-d2fe3fe63da4-meat_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\">5<!-- -->%<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/BabyCuddleIcon.webp\" loading=\"lazy\">状态:幼体剩余时间:87:57:46总时间:92:35:33<h3><img alt=\"\" width=\"18\" height=\"18\" src=\"https://r2.wikily.gg/images/ark/icons/Egg_Icon.webp\" loading=\"lazy\">成熟<\/h3><img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/Egg_Icon.webp\" loading=\"lazy\">孵化时间4h 59m 58s<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/CompassIcon.webp\" loading=\"lazy\">已过时间4h 37m 47s<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/Condition_SpinoWaterBuff.webp\" loading=\"lazy\">剩余成熟时间87h 57m 46s<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/FeedingTrough_Icon.webp\" loading=\"lazy\">幼年期时间4h 37m 47s<h3><img alt=\"\" width=\"18\" height=\"18\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/a3685d1e-b1a2-4ab4-9d6e-8c82c58af6bb-ark-d2fe3fe63da4-meat_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\">食物<\/h3><img alt=\"\" width=\"22\" height=\"22\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/a3685d1e-b1a2-4ab4-9d6e-8c82c58af6bb-ark-d2fe3fe63da4-meat_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\">食物总数3934物品<img alt=\"\" width=\"22\" height=\"22\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/a3685d1e-b1a2-4ab4-9d6e-8c82c58af6bb-ark-d2fe3fe63da4-meat_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\">食物至成年2567物品<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/Food_Icon.webp\" loading=\"lazy\">每小时食物81<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/Gas_Icon.webp\" loading=\"lazy\">食物容量250物品<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/ConditionIcon_NursingBuff.webp\" loading=\"lazy\">手动喂养幼崽1h 1m 55s6.1% 成熟<h2><img alt=\"\" width=\"24\" height=\"24\" src=\"https://r2.wikily.gg/images/ark/icons/BabyCuddleIcon.webp\" loading=\"lazy\">烙印<\/h2><img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/BabyCuddleIcon.webp\" loading=\"lazy\">抚摸间隔8h<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/BabyCuddleIcon.webp\" loading=\"lazy\">每次印痕8.8%<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/BabyCuddleIcon.webp\" loading=\"lazy\">最大印痕<!-- -->96.8%（11次抚摸）设置8 小时 · 间隔 ×1 · 数量 ×1最小抚摸间隔（小时）最大抚摸间隔（小时）幼崽抚摸间隔倍率幼崽印痕量倍率<h2><img alt=\"\" width=\"24\" height=\"24\" src=\"https://r2.wikily.gg/images/ark/icons/ConditionIcon_NursingBuff.webp\" loading=\"lazy\">养育食物<\/h2>幼崽当前成熟度（%）食物<img alt=\"\" width=\"28\" height=\"28\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/a3685d1e-b1a2-4ab4-9d6e-8c82c58af6bb-ark-d2fe3fe63da4-meat_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\"><img alt=\"\" width=\"22\" height=\"22\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/a3685d1e-b1a2-4ab4-9d6e-8c82c58af6bb-ark-d2fe3fe63da4-meat_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\">每物品食物<!-- -->50<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/Weight_Icon.webp\" loading=\"lazy\">堆叠大小40<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/Food_Icon.webp\" loading=\"lazy\">在5%时进食67.27 食物/分钟<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/Condition_SpinoWaterBuff.webp\" loading=\"lazy\">成熟92h 35m 33s<table><thead><tr><th>阶段<\/th><th>剩余时间<\/th><th>食物点数<\/th><th>生肉<\/th><th>堆叠<\/th><th>重量<\/th><\/tr><\/thead><tbody><tr><th><img alt=\"\" width=\"18\" height=\"18\" src=\"https://r2.wikily.gg/images/ark/icons/BabyCuddleIcon.webp\" loading=\"lazy\">幼体从5%到10%需要此数量<\/th><td>4h 37m 46s<\/td><td>18,194<\/td><td>364<\/td><td>10<\/td><td>36.4<\/td><\/tr><tr><th><img alt=\"\" width=\"18\" height=\"18\" src=\"https://r2.wikily.gg/images/ark/icons/FeedingTrough_Icon.webp\" loading=\"lazy\">青少年从10%到50%需要此数量<\/th><td>37h 2m 13s<\/td><td>110,146<\/td><td>2,203<\/td><td>56<\/td><td>220.3<\/td><\/tr><tr><th><img alt=\"\" width=\"18\" height=\"18\" src=\"https://r2.wikily.gg/images/ark/icons/Condition_SpinoWaterBuff.webp\" loading=\"lazy\">青年从50%到100%需要此数量<\/th><td>46h 17m 46s<\/td><td>49,172<\/td><td>984<\/td><td>25<\/td><td>98.4<\/td><\/tr><\/tbody><tr><th>总计<\/th><td>87h 57m 46s<\/td><td><\/td><td>3,551<\/td><td>91<\/td><td>355.1<\/td><\/tr><\/table><p><img alt=\"\" width=\"22\" height=\"22\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/a3685d1e-b1a2-4ab4-9d6e-8c82c58af6bb-ark-d2fe3fe63da4-meat_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\">总计：3,551个生肉<\/p><img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/FeedingTrough_Icon.webp\" loading=\"lazy\">饲料槽2,400 物品 (60 格子)需要2次满载<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/TEKTrough_Icon.webp\" loading=\"lazy\">泰克饲料槽4,000 物品 (100 格子)一次装载即可<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/ConditionIcon_NursingBuff.webp\" loading=\"lazy\">鸭嘴飞鼠 / 风行蜥<!-- -->300 格子肉类和浆果减重50%<ul><li>幼体<!-- --> -<!-- --> <!-- -->需要补充饲料槽7次（食物会在阶段结束前变质）<\/li><li>青少年<!-- --> -<!-- --> <!-- -->需要补充饲料槽56次（食物会在阶段结束前变质）<\/li><li>青年<!-- --> -<!-- --> <!-- -->需要补充饲料槽70次（食物会在阶段结束前变质）<\/li><\/ul><p>变质时间<!-- --> <!-- -->10m<!-- --> | <!-- -->饲料槽 / 鸭嘴飞鼠<!-- -->:<!-- --> <!-- -->40m<!-- --> | <!-- -->泰克饲料槽<!-- -->:<!-- --> <!-- -->16h 40m<\/p><p>在幼崽阶段(0-10%)，您必须手动喂食或使用鸭嘴飞鼠哺乳。从青少年期(10%+)开始，恐龙可以自己从饲料槽进食。在饲料槽中使用保鲜盐可以将变质时间延长一倍。<\/p>▸More about breeding the 霸王龙<p>繁殖霸王龙会产生受精卵，需要仔细控制温度。孵化温度必须保持在32°C到34°C之间, 使用空调、立式火把或异齿龙来维持这个范围。在正确温度下，蛋大约需要4小时59分钟孵化。<\/p><p>出生后，小霸王龙的成长周期非常长，是游戏中最长的之一，在1倍成长速度下需要大约3天20小时才能成年。最费劲的是幼年阶段（0-10%成熟度），这时它还不能使用喂食槽。<\/p><p>后代会继承父母的属性，并有小概率发生变异，随机获得+2级的属性加成。使用繁殖计算器来规划食物需求、孵化计时和成熟阶段。<\/p><p>霸王龙的成长分为三个阶段：幼年期（0-10%）持续约556分钟，需要持续手动喂食。青少年期（10-50%）持续约37小时，现在可以从食槽进食。青少年期（50-100%）持续约46小时，继续从食槽进食，几乎完全长成。<\/p><p>在成长过程中进行印记可以提供永久属性加成。当印记达到100%时，霸王龙在被印记者骑乘时，会获得30%的伤害和抗性加成。准备好各种饲料，因为印记请求会随机在拥抱、散步和喂食饲料之间切换。<\/p><p>计划批量养成？霸王龙养成计算器会按阶段分解食物需求，确保不浪费任何资源。幼崽阶段（0-10%）需要约9小时16分钟，是最需要动手的阶段，需要直接喂食或使用鸭嘴飞鼠。<\/p><p>同时驯养多个霸王龙？设置恐龙数量，计算器会自动调整食物需求。根据你的游戏时间选择合适的食物, 更长的腐败时间意味着更少的看护。<\/p><p>在ARK各地图中都能找到霸王龙，它是ARK: Survival Ascended中一种可驯服的肉食生物，属于DMG组。<\/p><p>基础生命值为1100，霸王龙相当耐打。基础近战伤害为100%，霸王龙的输出相当可观。基础耐力为420，提供充足的耐力储备。负重能力从500开始，拥有巨大的物品栏空间。<\/p><p>驯服霸王龙需要先让它失去意识 - 使用麻醉箭、麻醉镖或强效麻醉镖来施加昏迷值。喂食卓越饲料可以实现最快的驯服速度和最高的效果加成。<\/p><p>驯服后，霸王龙因其高效的采集能力而备受青睐，收集关键资源的速度比大多数工具都快。它通过下蛋繁殖，蛋必须在32°C到34°C之间孵化。在野外击败一只可获得30基础经验值。它可以在克隆室以0.87元素加上每级0.01元素的价格进行克隆。<\/p><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/ark-survival-ascended/go/discord/end-box\">加入创作者社区建设 ARK: Survival Ascended Wiki 的伙伴们都在我们的 Discord。欢迎提问或推荐页面。加入 Discord (<!-- -->在新标签页打开 Discord<!-- -->)<\/a><!--$--><!--/$-->", "abils": []}, "3": {"html": "ARK: Survival Ascended<h2>霸王龙采集<\/h2><h2>资源点计算器<\/h2>变体<p>Rex 不会采集岩石、树木或金属等资源点。<\/p><p>该物种的尸体产出见「收割」tab。<\/p><p>采集计算器<\/p>"}, "4": {"html": "<h2>尸体产量<\/h2>368种有记录的生物尸体生物采集者<img alt=\"\" width=\"36\" height=\"36\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/c6d48413-8cbd-4c92-9160-ca11fd78f712-ark-84a0c804921c-empty_trexhead_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\">霸王龙<img alt=\"\" width=\"36\" height=\"36\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/c6d48413-8cbd-4c92-9160-ca11fd78f712-ark-84a0c804921c-empty_trexhead_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\"><p>霸王龙对霸王龙<\/p><p>520尸体生命值 · 19.5采集间隔<\/p><p>54<\/p><p>近战100%时的掷骰<\/p><p>9<\/p><p>命中<\/p><p>31<\/p><p>生肉平均<\/p><p>21<\/p><p>兽皮平均<\/p><p>近战1,000%以内的峰值：645%时2次命中82次掷骰<\/p>近战与服务器设置 · 1×采集倍率采集倍率精确近战 %图表最大近战 %尸体生命值520采集间隔19.5基础伤害62伤害倍率1<!-- -->×采集量倍率1<!-- -->×攻击间隔0.4秒<h3>每具尸体资源<\/h3><img alt=\"\" width=\"36\" height=\"36\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/a3685d1e-b1a2-4ab4-9d6e-8c82c58af6bb-ark-d2fe3fe63da4-meat_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\"><h4><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/raw-meat\">生肉<\/a><\/h4><p>每次掷骰58.3%<\/p><p>31<!-- --> 平均<\/p><p>%近战时24 - 39<\/p><p>峰值：近战%时平均48<!-- --> (<!-- -->39<!-- --> - <!-- -->57<!-- -->)<\/p><img alt=\"\" width=\"36\" height=\"36\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/8727d17e-6106-46c7-ac79-7d8eb62bc53c-ark-000e71f7dc10-hide_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\"><h4><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/hide\">兽皮<\/a><\/h4><p>每次掷骰38.8%<\/p><p>21<!-- --> 平均<\/p><p>%近战时14 - 28<\/p><p>峰值：近战%时平均32<!-- --> (<!-- -->23<!-- --> - <!-- -->41<!-- -->)<\/p><img alt=\"\" width=\"36\" height=\"36\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/d58efa58-bb08-42cd-9178-39857792931c-ark-6ce64919d7b9-primemeat_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\"><h4><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/raw-prime-meat\">优质生肉<\/a><\/h4><p>每次掷骰2.9%<\/p><p>2<!-- --> 平均<\/p><p>%近战时0 - 4<\/p><p>峰值：近战%时平均2<!-- --> (<!-- -->0<!-- --> - <!-- -->5<!-- -->)<\/p><h3>按近战伤害的产量<\/h3><p>每具尸体平均生肉<\/p>图表资源在图表中比较所有资源查看近战：100%<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/ark-survival-ascended/go/discord/end-box\">加入创作者社区建设 ARK: Survival Ascended Wiki 的伙伴们都在我们的 Discord。欢迎提问或推荐页面。加入 Discord (<!-- -->在新标签页打开 Discord<!-- -->)<\/a><!--$--><!--/$-->\n<hr style=\"border:none;border-top:1px dashed #2a2a3a;margin:14px 0\">\n<h2>掉落物与互动<\/h2><h3>掉落物<\/h3><a target=\"_blank\" rel=\"noopener noreferrer\" title=\"霸王龙手臂\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/items/tyrannosaurus-arm\"><img src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/b1d84ddb-3077-4340-8632-cb6065d29619-ark-d0849d3043c9-apexdrop_rex_icon.webp?w=48\" alt=\"\" width=\"46\" height=\"46\" loading=\"lazy\">霸王龙手臂<\/a><a target=\"_blank\" rel=\"noopener noreferrer\" title=\"霸王龙骨制头盔\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/items/rex-bone-helmet\"><img src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-10-01/be136a64-dfc2-4515-ad83-0fc80f51fd2d-ark-verified-item-rex-bone-helmet-606e09a61a57.webp?w=48\" alt=\"\" width=\"46\" height=\"46\" loading=\"lazy\">霸王龙骨制头盔<\/a><a target=\"_blank\" rel=\"noopener noreferrer\" title=\"兽皮\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/items/hide\"><img src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/8727d17e-6106-46c7-ac79-7d8eb62bc53c-ark-000e71f7dc10-hide_icon.webp?w=48\" alt=\"\" width=\"46\" height=\"46\" loading=\"lazy\">兽皮<\/a><a target=\"_blank\" rel=\"noopener noreferrer\" title=\"生肉\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/items/raw-meat\"><img src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/a3685d1e-b1a2-4ab4-9d6e-8c82c58af6bb-ark-d2fe3fe63da4-meat_icon.webp?w=48\" alt=\"\" width=\"46\" height=\"46\" loading=\"lazy\">生肉<\/a><a target=\"_blank\" rel=\"noopener noreferrer\" title=\"优质生肉\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/items/raw-prime-meat\"><img src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/d58efa58-bb08-42cd-9178-39857792931c-ark-6ce64919d7b9-primemeat_icon.webp?w=48\" alt=\"\" width=\"46\" height=\"46\" loading=\"lazy\">优质生肉<\/a><h3>被以下方式束缚<\/h3><a target=\"_blank\" rel=\"noopener noreferrer\" title=\"流星锁链\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/items/chain-bola\"><img src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/841a0671-b9f7-4562-9273-b3f3f36473ca-ark-3079b94d289c-metalbola_icon.webp?w=48\" alt=\"\" width=\"46\" height=\"46\" loading=\"lazy\">流星锁链<\/a><a target=\"_blank\" rel=\"noopener noreferrer\" title=\"捕兽夹\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/items/bear-trap\"><img src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/881099a2-6865-4a2f-a216-73ca54d50e58-ark-5f39258a470d-smallbeartrap_icon.webp?w=48\" alt=\"\" width=\"46\" height=\"46\" loading=\"lazy\">捕兽夹<\/a><a target=\"_blank\" rel=\"noopener noreferrer\" title=\"大型捕兽夹\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/items/large-bear-trap\"><img src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/ceaa5a57-7ced-4005-8f18-36822aeab267-ark-8d822583eb75-largebeartrap_icon.webp?w=48\" alt=\"\" width=\"46\" height=\"46\" loading=\"lazy\">大型捕兽夹<\/a><a target=\"_blank\" rel=\"noopener noreferrer\" title=\"Y异种植物陷阱\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/items/plant-species-y-trap\"><img src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/262c3fdc-1fb6-4f40-bf0c-6bc8bb407946-ark-94ef29a49e35-plantspeciesytrap_icon.webp?w=48\" alt=\"\" width=\"46\" height=\"46\" loading=\"lazy\">Y异种植物陷阱<\/a>各工具的采集产量\n<h2>掉落与采集资源<\/h2><p>按采集工具比较已记录的尸体资源产出。<\/p>设置采集身体生命值 520 · 你的近战 % 100 · 武器伤害 % 100 · 采集倍率 × 1采集身体生命值你的近战 %武器伤害 %采集倍率 ×<table><thead><tr><th>资源<\/th><th><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/items/metal-pick\"><img width=\"28\" height=\"28\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/35e441f0-f529-41de-bf5c-39048726d75f-ark-65786b47fc50-metalpick_icon.webp?w=32\" alt=\"\" loading=\"lazy\">镐<\/a><\/th><th><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/items/metal-hatchet\"><img width=\"28\" height=\"28\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/a80679b3-d8db-47bd-8d79-31411d16bdc2-ark-762059af548c-metalhatchet_icon.webp?w=32\" alt=\"\" loading=\"lazy\">斧头<\/a><\/th><\/tr><\/thead><tbody><tr><th><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/items/hide\"><img width=\"28\" height=\"28\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/8727d17e-6106-46c7-ac79-7d8eb62bc53c-ark-000e71f7dc10-hide_icon.webp?w=32\" alt=\"\" loading=\"lazy\">兽皮<\/a><\/th><td><strong>~<!-- -->21<\/strong>40<!-- -->% <!-- -->· <!-- -->约17次命中<\/td><td><strong>~<!-- -->32<!-- --><\/strong>60<!-- -->% <!-- -->· <!-- -->约13次命中<\/td><\/tr><tr><th><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/items/raw-meat\"><img width=\"28\" height=\"28\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/a3685d1e-b1a2-4ab4-9d6e-8c82c58af6bb-ark-d2fe3fe63da4-meat_icon.webp?w=32\" alt=\"\" loading=\"lazy\">生肉<\/a><\/th><td><strong>~<!-- -->24<\/strong>60<!-- -->% <!-- -->· <!-- -->约17次命中<\/td><td><strong>~<!-- -->16<!-- --><\/strong>40<!-- -->% <!-- -->· <!-- -->约13次命中<\/td><\/tr><tr><th><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/items/raw-prime-meat\"><img width=\"28\" height=\"28\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/d58efa58-bb08-42cd-9178-39857792931c-ark-6ce64919d7b9-primemeat_icon.webp?w=32\" alt=\"\" loading=\"lazy\">优质生肉<\/a><\/th><td><strong>~<!-- -->1<\/strong>3<!-- -->% <!-- -->· <!-- -->约17次命中<\/td><td><strong>~<!-- -->1<!-- --><\/strong>2<!-- -->% <!-- -->· <!-- -->约13次命中<\/td><\/tr><\/tbody><\/table><p>每次采集都会独立计算资源。实际产量会有所不同。<\/p><p>击杀雷克斯后可从其尸体上采集到霸王龙手臂、霸王龙骨制头盔、兽皮、生肉和优质生肉。使用镐子可获得最多的皮革，而采集生肉与优质生肉则推荐使用恐龙（优质）工具。<\/p><p>生物研磨机<\/p><ul><li><img alt=\"\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/148527b9-98d1-4799-8514-08a084eda2fc-ark-9e1c096e8564-kibble_icon_exlarge.webp?w=1920\" loading=\"lazy\"><h3><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/items/exceptional-kibble\">卓越饲料<\/a><\/h3><\/li><\/ul>"}, "5": {"html": "<p>攻击01<!-- --> / 03<\/p><h3>咆哮<\/h3><p>短暂击晕易受影响的低等级敌人并迫使它们排便。<\/p>操作<ul><li>RMB<\/li><\/ul><p>PC默认操作。自定义按键可能不同。<\/p><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/ark-survival-ascended/go/discord/end-box\">加入创作者社区建设 ARK: Survival Ascended Wiki 的伙伴们都在我们的 Discord。欢迎提问或推荐页面。加入 Discord (<!-- -->在新标签页打开 Discord<!-- -->)<\/a><!--$--><!--/$-->\n<hr style=\"border:none;border-top:1px dashed #2a2a3a;margin:14px 0\">\n<h2>战斗与技能<\/h2><h3>攻击与技能<\/h3><p>可破坏茅草木材石头金属泰克<\/p><ul><li><strong>啃咬<\/strong>LMB<p>基础伤害<b>62<\/b><\/p><ol><li>茅草<b>341<\/b><\/li><li>木材<b>186<\/b><\/li><li>石头<b>-<\/b><\/li><li>金属<b>-<\/b><\/li><li>泰克<b>-<\/b><\/li><\/ol>x1.15 对草食<\/li><\/ul>更多技能<ul><li>咆哮RMB<\/li><li>泰克鞍炮Left Ctrl<\/li><\/ul><p><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/dinosaurs/rex/abilities\">技能与操作<!-- --> ›<\/a><\/p><h3>受到的伤害<\/h3><p>抗性弱点<\/p><h4>武器<\/h4><ul><li>矿枪<i><\/i><b>免疫<\/b><\/li><li>石制武器<i><\/i><b>-34%<\/b><\/li><li>玩家近战<i><\/i><b>-20%<\/b><\/li><li>穿透投射物<i><\/i><b>+40%<\/b><\/li><li>对生物伤害<i><\/i><b>+120%<\/b><\/li><\/ul><h4>爆炸物<\/h4><ul><li>拆除炸药<i><\/i><b>+50%<\/b><\/li><\/ul><h4>生物<\/h4><ul><li>生物攻击<i><\/i><b>-50%<\/b><\/li><li>草食生物攻击<i><\/i><b>-40%<\/b><\/li><li>强力生物攻击<i><\/i><b>+50%<\/b><\/li><li>突袭生物攻击<i><\/i><b>+55%<\/b><\/li><\/ul><h4>环境与其他<\/h4><ul><li>X型植物<i><\/i><b>-50%<\/b><\/li><li>环境伤害<i><\/i><b>-30%<\/b><\/li><li>尖刺墙<i><\/i><b>+400%<\/b><\/li><\/ul><p>命中部位头部<!-- --> ×<!-- -->1.5<\/p><p>1 级、100% 驯服效率、无烙印时的基础伤害。<!-- --> <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/tools/damage-calculator\">打开伤害计算器<!-- --> ›<\/a><\/p>战斗说明<p>雷克斯对尖刺墙伤害极为脆弱，受到的伤害增加400%，在防御工事中需特别注意。同时对近战金属攻击和爆炸类伤害敏感，分别增加55%和50%。建议优先提升生命值与近战伤害以增强生存与输出能力。<\/p><p>雷克斯的头部具有1.5倍伤害倍率，击中头部可造成更高伤害。其余部位无特殊伤害修正。<\/p><p>可破坏茅草与木制结构。建议至少使用石质结构进行防御。<\/p>", "abils": [{"id": "519", "title": "咆哮", "desc": "短暂击晕易受影响的低等级敌人并迫使它们排便。", "key": "RMB", "kind": "attack", "video": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-10-04/e2bccbdc-ec75-4702-afcb-980c5dc531e5-ark-5a66f7826923-ability-519-9f4141ccbf8e.mp4", "poster": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-10-04/0b70a8e9-1a1f-4657-9a20-1b26148c7761-ark-802fc50029cb-ability-519-9f4141ccbf8e-poster.webp"}, {"id": "520", "title": "啃咬", "desc": "啃咬你前方的目标。", "key": "LMB", "kind": "attack", "video": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-10-04/7940ccf0-d7df-44ba-b4c4-f7f71db245a1-ark-f808a09e4a86-ability-520-d1e3fe01e630.mp4", "poster": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-10-04/655a6b92-0c9b-4188-af69-ace6d54f0d0f-ark-6b9c72028f22-ability-520-d1e3fe01e630-poster.webp"}, {"id": "1003", "title": "泰克鞍炮", "desc": "激活泰克鞍并发射其火炮。需要泰克图纸以及物品栏中的能量元素。", "key": "Left Ctrl: activate; RMB: fire", "kind": "control", "video": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-10-04/0c3e7f9d-21bc-4fbe-94ff-879598d98ab7-ark-2d7865a5ecba-ability-1003-ccd78dff5179.mp4", "poster": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-10-04/e3ec8ee7-513b-4452-bef2-ec21022ffc9d-ark-d5af6dbb8fe7-ability-1003-ccd78dff5179-poster.webp"}]}, "6": {"html": "<p>生物指令<\/p>\n<h1>霸王龙生成指令<\/h1>\n<p>使用下方生成器为 ARK: Survival Ascended 中的 霸王龙 创建管理员命令。有多种变体可用 - 使用选择器挑选你想要的版本。<\/p>\n<p>可以选择Summon快速生成，SpawnDino精确放置，或者GMSummon瞬间召唤已驯服的生物。GMSummon是最方便的方式，可以立即获得一只已驯服的霸王龙。在PC上按Tab键打开管理员控制台，或者在主机上通过暂停菜单进入。需要管理员权限。<\/p>\n<p>在ARK各地图中都能找到霸王龙，它是ARK: Survival Ascended中一种可驯服的肉食生物，属于DMG组。<\/p>\n<p>生成150级已驯服个体<\/p>\n霸王龙设置变体等级<code>admincheat GMSummon &quot;Rex_Character_BP_C&quot; 150<\/code>高级更多命令\n<ul><li>生成野生的Summon 会生成一只野生 霸王龙。<code>admincheat summon Rex_Character_BP_C<\/code><\/li><li>生成150级野生个体SpawnDino 会生成一只等级 150 的野生 霸王龙。<code>admincheat SpawnDino &quot;Blueprint&#x27;/Game/PrimalEarth/Dinos/Rex/Rex_Character_BP.Rex_Character_BP&#x27;&quot; 500 0 0 150<\/code><\/li><li>生成150级已驯服个体GMSummon 会生成一只等级 150 的已驯服 霸王龙。<code>admincheat GMSummon Rex_Character_BP_C 150<\/code><\/li><li><img alt=\"\" width=\"24\" height=\"24\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/4a073304-fa2f-4ccb-9c60-f38c989d73e5-ark-6a89f583ea49-rexsaddle_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\">给予Rex SaddleGiveItem 会把鞍直接放入你的物品栏。<code>admincheat GiveItem &quot;Blueprint&#x27;/Game/PrimalEarth/CoreBlueprints/Items/Armor/Saddles/PrimalItemArmor_RexSaddle.PrimalItemArmor_RexSaddle&#x27;&quot; 1 0 0<\/code><\/li><li><img alt=\"\" width=\"24\" height=\"24\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/ccd09bd0-7ea6-4021-ac60-f0c5fce00b66-ark-8d6e263aa8b0-teksaddle_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\">给予Rex Tek Saddle<code>admincheat GiveItem &quot;Blueprint&#x27;/Game/PrimalEarth/CoreBlueprints/Items/Armor/Saddles/PrimalItemArmor_RexSaddle_Tek.PrimalItemArmor_RexSaddle_Tek&#x27;&quot; 1 0 0<\/code><\/li><li>生成150级已驯服个体并附带鞍按顺序粘贴两条指令：第一条生成等级 150 的已驯服 霸王龙，第二条给你鞍。<code>admincheat GMSummon Rex_Character_BP_C 150 | admincheat GiveItem &quot;Blueprint&#x27;/Game/PrimalEarth/CoreBlueprints/Items/Armor/Saddles/PrimalItemArmor_RexSaddle.PrimalItemArmor_RexSaddle&#x27;&quot; 1 0 0<\/code><\/li><li>强制驯服所瞄准的生物ForceTame驯服任何恐龙并使其可骑乘且无需鞍具，DoTame仅驯服可驯服的生物。 同时驯服你当前正在看的生物。<code>admincheat ForceTame<\/code><\/li><li>驯服所瞄准的生物<code>admincheat DoTame<\/code><\/li><li>添加经验值AddExperience可以升级你正在骑乘的恐龙，而GiveExpToTarget可以升级你正在看的生物/玩家。<code>admincheat AddExperience &lt;Amount&gt; &lt;From Tribe&gt; &lt;Prevent Sharing With Tribe&gt;<\/code><\/li><li>给予目标经验值<code>admincheat GiveExpToTarget &lt;Amount&gt; &lt;From Tribe&gt; &lt;Prevent Sharing With Tribe&gt;<\/code><\/li><li>杀死所瞄准的生物杀死您当前所看的生物或玩家。<code>admincheat Kill<\/code><\/li><li>获取所有恐龙将属于目标玩家或部落的所有恐龙的所有权转移到您当前的部落。您必须看着属于目标玩家/部落的恐龙。<code>admincheat TakeAllDino<\/code><\/li><\/ul>\nMore about the 霸王龙\n<p>基础生命值为1100，霸王龙相当耐打。基础近战伤害为100%，霸王龙的输出相当可观。基础耐力为420，提供充足的耐力储备。负重能力从500开始，拥有巨大的物品栏空间。<\/p>\n<p>驯服霸王龙需要先让它失去意识 - 使用麻醉箭、麻醉镖或强效麻醉镖来施加昏迷值。喂食卓越饲料可以实现最快的驯服速度和最高的效果加成。<\/p>\n<p>驯服后，霸王龙因其高效的采集能力而备受青睐，收集关键资源的速度比大多数工具都快。它通过下蛋繁殖，蛋必须在32°C到34°C之间孵化。在野外击败一只可获得30基础经验值。它可以在克隆室以0.87元素加上每级0.01元素的价格进行克隆。<\/p>\n<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/ark-survival-ascended/go/discord/end-box\">加入创作者社区建设 ARK: Survival Ascended Wiki 的伙伴们都在我们的 Discord。欢迎提问或推荐页面。加入 Discord (<!-- -->在新标签页打开 Discord<!-- -->)<\/a><!--$--><!--/$-->", "abils": []}}}, "Baryonyx": {"zh": "重爪龙", "slug": "baryonyx", "url": "https://wikily.gg/zh-cn/ark-survival-ascended/dinosaurs/baryonyx", "title": "重爪龙 动物 | ARK: Survival Ascended Wiki", "html": "<h2>概览<\/h2><p>重爪龙是一种中型肉食性恐龙，主要以鱼类为食，在战斗中表现出色。它擅长采集生物毒素，是玩家在沼泽和水域区域探险时的理想选择。其近战攻击可高效获取生物毒素、角蛋白和优质鱼肉。它可被巨蟹怪、风神翼龙或托斯特巨鱿携带，便于快速部署。<\/p><p>驯服后可用于资源采集与轻型战斗任务，尤其适合配合空中或水下行动。<\/p><h2>基础属性1级数值与每级增长<\/h2><table><thead><tr><th>属性<\/th><th>基础<\/th><th>野生 +/级<\/th><th>已驯服 +/级<\/th><th>野生成长<\/th><\/tr><\/thead><tbody><tr><th>生命值<\/th><td>440<\/td><td>+88<\/td><td>+5.4%<\/td><td><i><\/i><em>20<!-- -->%<\/em><\/td><\/tr><tr><th>体力<\/th><td>325<\/td><td>+32.5<\/td><td>+10%<\/td><td><i><\/i><em>10<!-- -->%<\/em><\/td><\/tr><tr><th>麻痹值<\/th><td>400<\/td><td>+24<\/td><td>+0%<\/td><td><i><\/i><em>6<!-- -->%<\/em><\/td><\/tr><tr><th>氧气<\/th><td>225<\/td><td>+22.5<\/td><td>-<\/td><td><i><\/i><em>10<!-- -->%<\/em><\/td><\/tr><tr><th>食物<\/th><td>2250<\/td><td>+225<\/td><td>+10%<\/td><td><i><\/i><em>10<!-- -->%<\/em><\/td><\/tr><tr><th>重量<\/th><td>325<\/td><td>+6.5<\/td><td>+4%<\/td><td><i><\/i><em>2<!-- -->%<\/em><\/td><\/tr><tr><th>近战伤害<\/th><td>100%<\/td><td>+5%<\/td><td>+1.7%<\/td><td><i><\/i><em>5<!-- -->%<\/em><\/td><\/tr><tr><th>移动速度<\/th><td>100%<\/td><td>+0%<\/td><td>+1%<\/td><td><i><\/i><em>0<!-- -->%<\/em><\/td><\/tr><\/tbody><\/table><h2>技巧<\/h2><p>其普通攻击和游泳击晕技能均可高效采集生物毒素，采集效率为3倍。游泳击晕技能范围达7米，冷却时间为18秒，适合在水下控制敌人。可被巨蟹怪、风神翼龙或托斯特巨鱿携带，实现快速战场转移。对尖刺墙具有+100%伤害脆弱性，部署时需避开此类防御设施。<\/p>", "ms": 2795, "raw_kb": 779, "used": "ark:sky-main", "text_len": 2316, "imgs": 15, "tables": 2, "tabs": [{"label": "概览", "path": "/zh-cn/ark-survival-ascended/dinosaurs/baryonyx", "url": "https://wikily.gg/zh-cn/ark-survival-ascended/dinosaurs/baryonyx"}, {"label": "驯服", "path": "/zh-cn/ark-survival-ascended/dinosaurs/baryonyx/taming-calculator", "url": "https://wikily.gg/zh-cn/ark-survival-ascended/dinosaurs/baryonyx/taming-calculator"}, {"label": "繁殖", "path": "/zh-cn/ark-survival-ascended/dinosaurs/baryonyx/breeding-calculator", "url": "https://wikily.gg/zh-cn/ark-survival-ascended/dinosaurs/baryonyx/breeding-calculator"}, {"label": "采集", "path": "/zh-cn/ark-survival-ascended/dinosaurs/baryonyx/harvesting", "url": "https://wikily.gg/zh-cn/ark-survival-ascended/dinosaurs/baryonyx/harvesting"}, {"label": "收割", "path": "/zh-cn/ark-survival-ascended/dinosaurs/baryonyx/harvesting", "url": "https://wikily.gg/zh-cn/ark-survival-ascended/dinosaurs/baryonyx/harvesting"}, {"label": "技能", "path": "/zh-cn/ark-survival-ascended/dinosaurs/baryonyx/abilities", "url": "https://wikily.gg/zh-cn/ark-survival-ascended/dinosaurs/baryonyx/abilities"}, {"label": "生成指令", "path": "/zh-cn/ark-survival-ascended/dinosaurs/baryonyx/spawn-command", "url": "https://wikily.gg/zh-cn/ark-survival-ascended/dinosaurs/baryonyx/spawn-command"}], "abils": [{"id": "90", "title": "啃咬", "desc": "在陆地或水下啃咬目标。", "key": "LMB", "kind": "attack", "video": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/33bcb261-c1cf-4fa5-8074-1c084f64def6-ark-0ddab07dcab7-ability-90-1267481f9296.mp4", "poster": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/b575994b-38d5-42d5-bb6c-8308be82d454-ark-c659bac9ebfb-ability-90-1267481f9296-poster.webp"}, {"id": "89", "title": "咆哮", "desc": "纯装饰性的咆哮。", "key": "C", "kind": "control", "video": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/60db309a-c98b-4bfa-b496-e8345777f458-ark-faa43c76a5d0-ability-89-42401e2132e2.mp4", "poster": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/e316e883-b7e2-4dbd-b796-8c8a2a39a5c1-ark-4e1380988d43-ability-89-42401e2132e2-poster.webp"}, {"id": "91", "title": "旋尾", "desc": "在水下旋转，伤害并击晕易受影响的敌人。", "key": "RMB: underwater", "kind": "attack", "video": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/d5e67571-2cb5-4f95-ba2e-f5e73e1760a2-ark-79b1ca476880-ability-91-6b1b8f8e3044.mp4", "poster": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/f1d4ecec-1534-463e-a944-01d816856577-ark-d7b11ccbb050-ability-91-6b1b8f8e3044-poster.webp"}, {"id": "1034", "title": "捕鱼 / 治疗", "desc": "击杀腔棘鱼、剑齿鲑鱼或食人鱼可恢复生命值。通过菜单选项，受伤的重爪龙会自动寻找这些鱼。", "key": "Hold E: enable fish hunting", "kind": "multiuse", "video": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/c6d70cad-26d4-452e-a7f7-dad44496e783-ark-d3cd2ce7c414-ability-1034-f5568269c876.mp4", "poster": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/2de72472-7e7e-4b9d-afbd-2a86b6632e19-ark-7c392b84ecb1-ability-1034-f5568269c876-poster.webp"}, {"id": "1087", "title": "跳跃", "desc": "向前跳跃。", "key": "Space", "kind": "control", "video": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/e6785a7f-4d0f-492f-8876-e85d617179fe-ark-7d6dac211b24-ability-1087-fbf4ad305482.mp4", "poster": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/b8075c47-a3e8-4638-ac40-373009ea9586-ark-888801ff347d-ability-1087-fbf4ad305482-poster.webp"}], "fetched_at": 1793172766, "tabHtml": {"1": {"html": "<p>重爪龙需通过击晕方式驯服。最佳食物为普通饲料，生羊肉也适用。使用链球或陷阱可有效限制其移动。推荐使用弓配合麻醉箭或长颈步枪进行远程击晕。驯服过程约需16分钟，使用普通饲料共需11个。使用计算器调整具体设置。<\/p>", "abils": []}, "2": {"html": "<p>繁殖计算器<\/p><h1>重爪龙<\/h1>预设变体设置孵化 1× · 成长 1× · 食物 1× · 重量 325蛋孵化速度幼崽成熟速度食物消耗倍率生物重量<ol><\/ol><p>幼体<!-- -->: <!-- -->已孵化的恐龙，作为幼崽，需要持续关注和直接放入物品栏的食物才能生存，或者附近有鸭嘴飞鼠照顾其需求。<\/p><img alt=\"\" width=\"32\" height=\"32\" src=\"https://r2.wikily.gg/images/ark/icons/Egg_Icon.webp\" loading=\"lazy\">孵化1h 59m 59s<img alt=\"\" width=\"32\" height=\"32\" src=\"https://r2.wikily.gg/images/ark/icons/Condition_SpinoWaterBuff.webp\" loading=\"lazy\">成熟46h 17m 46s<img alt=\"\" width=\"32\" height=\"32\" src=\"https://r2.wikily.gg/images/ark/icons/CompassIcon.webp\" loading=\"lazy\">孵化温度29 - 35 °C<img alt=\"\" width=\"32\" height=\"32\" src=\"https://r2.wikily.gg/images/ark/icons/Food_Icon.webp\" loading=\"lazy\">出生时食物47.22/min<h2><img alt=\"\" width=\"24\" height=\"24\" src=\"https://r2.wikily.gg/images/ark/icons/Condition_SpinoWaterBuff.webp\" loading=\"lazy\">成熟进度<\/h2>选择食物<img alt=\"\" width=\"28\" height=\"28\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/0b8aeea6-88c1-488c-9bb4-58cd5cac6386-ark-17d9ad90687a-rawfishmeat_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\">5<!-- -->%<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/BabyCuddleIcon.webp\" loading=\"lazy\">状态:幼体剩余时间:43:58:52总时间:46:17:46<h3><img alt=\"\" width=\"18\" height=\"18\" src=\"https://r2.wikily.gg/images/ark/icons/Egg_Icon.webp\" loading=\"lazy\">成熟<\/h3><img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/Egg_Icon.webp\" loading=\"lazy\">孵化时间1h 59m 59s<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/CompassIcon.webp\" loading=\"lazy\">已过时间2h 18m 54s<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/Condition_SpinoWaterBuff.webp\" loading=\"lazy\">剩余成熟时间43h 58m 53s<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/FeedingTrough_Icon.webp\" loading=\"lazy\">幼年期时间2h 18m 53s<h3><img alt=\"\" width=\"18\" height=\"18\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/0b8aeea6-88c1-488c-9bb4-58cd5cac6386-ark-17d9ad90687a-rawfishmeat_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\">食物<\/h3><img alt=\"\" width=\"22\" height=\"22\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/0b8aeea6-88c1-488c-9bb4-58cd5cac6386-ark-17d9ad90687a-rawfishmeat_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\">食物总数2624物品<img alt=\"\" width=\"22\" height=\"22\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/0b8aeea6-88c1-488c-9bb4-58cd5cac6386-ark-17d9ad90687a-rawfishmeat_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\">食物至成年1712物品<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/Food_Icon.webp\" loading=\"lazy\">每小时食物108<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/Gas_Icon.webp\" loading=\"lazy\">食物容量163物品<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/ConditionIcon_NursingBuff.webp\" loading=\"lazy\">手动喂养幼崽32m 38s6.2% 成熟<h2><img alt=\"\" width=\"24\" height=\"24\" src=\"https://r2.wikily.gg/images/ark/icons/BabyCuddleIcon.webp\" loading=\"lazy\">烙印<\/h2><img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/BabyCuddleIcon.webp\" loading=\"lazy\">抚摸间隔8h<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/BabyCuddleIcon.webp\" loading=\"lazy\">每次印痕18.1%<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/BabyCuddleIcon.webp\" loading=\"lazy\">最大印痕<!-- -->90.5%（5次抚摸）设置8 小时 · 间隔 ×1 · 数量 ×1最小抚摸间隔（小时）最大抚摸间隔（小时）幼崽抚摸间隔倍率幼崽印痕量倍率<h2><img alt=\"\" width=\"24\" height=\"24\" src=\"https://r2.wikily.gg/images/ark/icons/ConditionIcon_NursingBuff.webp\" loading=\"lazy\">养育食物<\/h2>幼崽当前成熟度（%）食物<img alt=\"\" width=\"28\" height=\"28\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/0b8aeea6-88c1-488c-9bb4-58cd5cac6386-ark-17d9ad90687a-rawfishmeat_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\"><img alt=\"\" width=\"22\" height=\"22\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/0b8aeea6-88c1-488c-9bb4-58cd5cac6386-ark-17d9ad90687a-rawfishmeat_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\">每物品食物<!-- -->25<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/Weight_Icon.webp\" loading=\"lazy\">堆叠大小40<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/Food_Icon.webp\" loading=\"lazy\">在5%时进食44.86 食物/分钟<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/Condition_SpinoWaterBuff.webp\" loading=\"lazy\">成熟46h 17m 46s<table><thead><tr><th>阶段<\/th><th>剩余时间<\/th><th>食物点数<\/th><th>生鱼肉<\/th><th>堆叠<\/th><th>重量<\/th><\/tr><\/thead><tbody><tr><th><img alt=\"\" width=\"18\" height=\"18\" src=\"https://r2.wikily.gg/images/ark/icons/BabyCuddleIcon.webp\" loading=\"lazy\">幼体从5%到10%需要此数量<\/th><td>2h 18m 53s<\/td><td>6,066<\/td><td>243<\/td><td>7<\/td><td>24.3<\/td><\/tr><tr><th><img alt=\"\" width=\"18\" height=\"18\" src=\"https://r2.wikily.gg/images/ark/icons/FeedingTrough_Icon.webp\" loading=\"lazy\">青少年从10%到50%需要此数量<\/th><td>18h 31m 6s<\/td><td>36,723<\/td><td>1,469<\/td><td>37<\/td><td>146.9<\/td><\/tr><tr><th><img alt=\"\" width=\"18\" height=\"18\" src=\"https://r2.wikily.gg/images/ark/icons/Condition_SpinoWaterBuff.webp\" loading=\"lazy\">青年从50%到100%需要此数量<\/th><td>23h 8m 53s<\/td><td>16,394<\/td><td>656<\/td><td>17<\/td><td>65.6<\/td><\/tr><\/tbody><tr><th>总计<\/th><td>43h 58m 53s<\/td><td><\/td><td>2,368<\/td><td>61<\/td><td>236.8<\/td><\/tr><\/table><p><img alt=\"\" width=\"22\" height=\"22\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/0b8aeea6-88c1-488c-9bb4-58cd5cac6386-ark-17d9ad90687a-rawfishmeat_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\">总计：2,368个生鱼肉<\/p><img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/FeedingTrough_Icon.webp\" loading=\"lazy\">饲料槽2,400 物品 (60 格子)一次装载即可<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/TEKTrough_Icon.webp\" loading=\"lazy\">泰克饲料槽4,000 物品 (100 格子)一次装载即可<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/ConditionIcon_NursingBuff.webp\" loading=\"lazy\">鸭嘴飞鼠 / 风行蜥<!-- -->300 格子肉类和浆果减重50%<ul><li>幼体<!-- --> -<!-- --> <!-- -->需要补充饲料槽2次（食物会在阶段结束前变质）<\/li><li>青少年<!-- --> -<!-- --> <!-- -->需要补充饲料槽14次（食物会在阶段结束前变质）<\/li><li>青年<!-- --> -<!-- --> <!-- -->需要补充饲料槽18次（食物会在阶段结束前变质）<\/li><\/ul><p>变质时间<!-- --> <!-- -->20m<!-- --> | <!-- -->饲料槽 / 鸭嘴飞鼠<!-- -->:<!-- --> <!-- -->1h 20m<!-- --> | <!-- -->泰克饲料槽<!-- -->:<!-- --> <!-- -->1d 9h<\/p><p>在幼崽阶段(0-10%)，您必须手动喂食或使用鸭嘴飞鼠哺乳。从青少年期(10%+)开始，恐龙可以自己从饲料槽进食。在饲料槽中使用保鲜盐可以将变质时间延长一倍。<\/p>▸More about breeding the 重爪龙<p>交配成功后，重爪龙会产下一个受精卵。孵化温度必须保持在29°C到35°C之间, 使用空调、立式火把或异齿龙来维持这个范围。在正确温度下，蛋大约需要1小时59分钟孵化。<\/p><p>从幼体到成体的完全成熟大约需要1天22小时（1倍速度），成长过程需要极大的耐心。成熟度达到10%之前需要手动喂食。之后交给饲料槽即可。<\/p><p>每只幼崽会从双亲继承属性，并有一定几率发生变异, 随机属性增加2级野生等级并改变颜色。使用繁殖计算器来规划食物需求、孵化计时和成熟阶段。<\/p><p>成长分为三个阶段：幼年期（0-10%）持续约278分钟，需要持续手动喂食。青少年期（10-50%）持续约19小时，现在可以从食槽进食。青少年期（50-100%）持续约23小时，继续从食槽进食，几乎完全长成。<\/p><p>印记加成很可观：完全印记的重爪龙在骑乘者骑乘时，伤害和伤害抗性提升30%。在成长过程中，你会被要求定期进行拥抱、散步或喂食特定的饲料。<\/p><p>上面的培育计算器精确显示了你为重爪龙每个成熟阶段所需的饲料数量。幼年阶段需要大约4小时38分钟 - 这个阶段必须手动喂食或使用鸭嘴飞鼠哺乳。<\/p><p>同时驯养多个重爪龙？设置恐龙数量，计算器会自动调整食物需求。不同类型的食物有不同的腐败时间, 在囤积食物时要考虑这一点。<\/p><p>ARK: Survival Ascended 里的 重爪龙 是一种可以驯服的食鱼生物，幸存者会在野外遇到它。它属于DMG类别。<\/p><p>初始血量为 440，还算耐打。它的基础近战伤害为 100%，输出相当可观。基础耐力为325，提供中等的耐力。基础负重为 325，意味着有相当大的背包空间。<\/p><p>要驯服 重爪龙，你需要用致晕武器将其击晕，然后在它倒地时投喂。投喂 普通饲料 效果最快，增益也最高。<\/p><p>驯服后，重爪龙 主要用于采集资源，特别擅长收集特定材料。繁殖会产生受精蛋，在 29°C, 35°C 的温度范围内孵化。击杀一只野生的 重爪龙 可获得 5 点基础经验。它可以在克隆室用0.52元素加上每级0.01元素进行克隆。<\/p><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/ark-survival-ascended/go/discord/end-box\">加入创作者社区建设 ARK: Survival Ascended Wiki 的伙伴们都在我们的 Discord。欢迎提问或推荐页面。加入 Discord (<!-- -->在新标签页打开 Discord<!-- -->)<\/a><!--$--><!--/$-->", "abils": []}, "3": {"html": "<h2>采集能力<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting\">采集指南<!-- --> ›<\/a><\/h2><figure><img alt=\"生物毒素\" width=\"256\" height=\"256\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/e140386a-98c6-44b6-a479-3e47c34ba20c-ark-b227a7a33f1c-jellyfishgel_icon.webp?w=1920\" loading=\"lazy\"><\/figure>生物毒素3x<figure><img alt=\"几丁质\" width=\"256\" height=\"256\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/401bc565-0dd5-400b-bcf7-7c5ea29bc3ef-ark-2b04d73a6270-chitin_icon.webp?w=1920\" loading=\"lazy\"><\/figure>几丁质2x<figure><img alt=\"角质\" width=\"256\" height=\"256\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/6653b089-47e3-4041-8b3a-a509707ee2f3-ark-c2eaa4b5616e-keratin_icon.webp?w=1920\" loading=\"lazy\"><\/figure>角质2x<figure><img alt=\"生鱼肉\" width=\"256\" height=\"256\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/0b8aeea6-88c1-488c-9bb4-58cd5cac6386-ark-17d9ad90687a-rawfishmeat_icon.webp?w=1920\" loading=\"lazy\"><\/figure>生鱼肉2x<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/raw-fish-meat\">资源详情<\/a>优质生鱼肉2x<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/raw-prime-fish-meat\">资源详情<\/a>关于采集<p>骑乘重爪龙时，其普通攻击和游泳击晕技能均可采集资源。每次攻击可获得3倍生物毒素，以及2倍角蛋白、生鱼肉和生优质鱼肉。该能力使其成为采集生物毒素的高效选择，尤其适用于水域作战环境。<\/p>\n<hr style=\"border:none;border-top:1px dashed #2a2a3a;margin:14px 0\">\nARK: Survival Ascended<h2>重爪龙采集<\/h2><h2>资源点计算器<\/h2>变体<p>Baryonyx 不会采集岩石、树木或金属等资源点。<\/p><p>该物种的尸体产出见「收割」tab。<\/p><p>采集计算器<\/p>"}, "4": {"html": "<h2>尸体产量<\/h2>368种有记录的生物尸体生物采集者<img alt=\"\" width=\"36\" height=\"36\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/68d5ffca-33b2-48f1-98ee-813b29bde248-ark-e3bda40fce6d-empty_baryonyxhead_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\">重爪龙<img alt=\"\" width=\"36\" height=\"36\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/c6d48413-8cbd-4c92-9160-ca11fd78f712-ark-84a0c804921c-empty_trexhead_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\"><p>重爪龙对霸王龙<\/p><p>520尸体生命值 · 19.5采集间隔<\/p><p>50<\/p><p>近战100%时的掷骰<\/p><p>17<\/p><p>命中<\/p><p>29<\/p><p>生肉平均<\/p><p>19<\/p><p>兽皮平均<\/p><p>近战1,000%以内的峰值：713%时3次命中69次掷骰<\/p>近战与服务器设置 · 1×采集倍率采集倍率精确近战 %图表最大近战 %尸体生命值520采集间隔19.5基础伤害31.5伤害倍率1<!-- -->×采集量倍率1<!-- -->×攻击间隔0.2秒<h3>每具尸体资源<\/h3><img alt=\"\" width=\"36\" height=\"36\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/a3685d1e-b1a2-4ab4-9d6e-8c82c58af6bb-ark-d2fe3fe63da4-meat_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\"><h4><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/raw-meat\">生肉<\/a><\/h4><p>每次掷骰58.3%<\/p><p>29<!-- --> 平均<\/p><p>%近战时22 - 36<\/p><p>峰值：近战%时平均40<!-- --> (<!-- -->32<!-- --> - <!-- -->48<!-- -->)<\/p><img alt=\"\" width=\"36\" height=\"36\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/8727d17e-6106-46c7-ac79-7d8eb62bc53c-ark-000e71f7dc10-hide_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\"><h4><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/hide\">兽皮<\/a><\/h4><p>每次掷骰38.8%<\/p><p>19<!-- --> 平均<\/p><p>%近战时13 - 26<\/p><p>峰值：近战%时平均27<!-- --> (<!-- -->19<!-- --> - <!-- -->35<!-- -->)<\/p><img alt=\"\" width=\"36\" height=\"36\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/d58efa58-bb08-42cd-9178-39857792931c-ark-6ce64919d7b9-primemeat_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\"><h4><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/raw-prime-meat\">优质生肉<\/a><\/h4><p>每次掷骰2.9%<\/p><p>1<!-- --> 平均<\/p><p>%近战时0 - 4<\/p><p>峰值：近战%时平均2<!-- --> (<!-- -->0<!-- --> - <!-- -->5<!-- -->)<\/p><h3>按近战伤害的产量<\/h3><p>每具尸体平均生肉<\/p>图表资源在图表中比较所有资源查看近战：100%<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/ark-survival-ascended/go/discord/end-box\">加入创作者社区建设 ARK: Survival Ascended Wiki 的伙伴们都在我们的 Discord。欢迎提问或推荐页面。加入 Discord (<!-- -->在新标签页打开 Discord<!-- -->)<\/a><!--$--><!--/$-->\n<hr style=\"border:none;border-top:1px dashed #2a2a3a;margin:14px 0\">\n<h2>掉落物与互动<\/h2><h3>被以下方式束缚<\/h3><a target=\"_blank\" rel=\"noopener noreferrer\" title=\"流星锁链\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/items/chain-bola\"><img src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/841a0671-b9f7-4562-9273-b3f3f36473ca-ark-3079b94d289c-metalbola_icon.webp?w=48\" alt=\"\" width=\"46\" height=\"46\" loading=\"lazy\">流星锁链<\/a><a target=\"_blank\" rel=\"noopener noreferrer\" title=\"捕兽夹\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/items/bear-trap\"><img src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/881099a2-6865-4a2f-a216-73ca54d50e58-ark-5f39258a470d-smallbeartrap_icon.webp?w=48\" alt=\"\" width=\"46\" height=\"46\" loading=\"lazy\">捕兽夹<\/a><a target=\"_blank\" rel=\"noopener noreferrer\" title=\"大型捕兽夹\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/items/large-bear-trap\"><img src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/ceaa5a57-7ced-4005-8f18-36822aeab267-ark-8d822583eb75-largebeartrap_icon.webp?w=48\" alt=\"\" width=\"46\" height=\"46\" loading=\"lazy\">大型捕兽夹<\/a><a target=\"_blank\" rel=\"noopener noreferrer\" title=\"Y异种植物陷阱\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/items/plant-species-y-trap\"><img src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/262c3fdc-1fb6-4f40-bf0c-6bc8bb407946-ark-94ef29a49e35-plantspeciesytrap_icon.webp?w=48\" alt=\"\" width=\"46\" height=\"46\" loading=\"lazy\">Y异种植物陷阱<\/a>各工具的采集产量\n<h2>掉落与采集资源<\/h2><p>按采集工具比较已记录的尸体资源产出。<\/p>设置采集身体生命值 230 · 你的近战 % 100 · 武器伤害 % 100 · 采集倍率 × 1采集身体生命值你的近战 %武器伤害 %采集倍率 ×<table><thead><tr><th>资源<\/th><th><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/items/metal-pick\"><img width=\"28\" height=\"28\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/35e441f0-f529-41de-bf5c-39048726d75f-ark-65786b47fc50-metalpick_icon.webp?w=32\" alt=\"\" loading=\"lazy\">镐<\/a><\/th><th><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/items/metal-hatchet\"><img width=\"28\" height=\"28\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/a80679b3-d8db-47bd-8d79-31411d16bdc2-ark-762059af548c-metalhatchet_icon.webp?w=32\" alt=\"\" loading=\"lazy\">斧头<\/a><\/th><\/tr><\/thead><tbody><tr><th><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/items/hide\"><img width=\"28\" height=\"28\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/8727d17e-6106-46c7-ac79-7d8eb62bc53c-ark-000e71f7dc10-hide_icon.webp?w=32\" alt=\"\" loading=\"lazy\">兽皮<\/a><\/th><td><strong>~<!-- -->9<\/strong>40<!-- -->% <!-- -->· <!-- -->约8次命中<\/td><td><strong>~<!-- -->14<!-- --><\/strong>60<!-- -->% <!-- -->· <!-- -->约6次命中<\/td><\/tr><tr><th><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/items/raw-meat\"><img width=\"28\" height=\"28\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/a3685d1e-b1a2-4ab4-9d6e-8c82c58af6bb-ark-d2fe3fe63da4-meat_icon.webp?w=32\" alt=\"\" loading=\"lazy\">生肉<\/a><\/th><td><strong>~<!-- -->11<\/strong>60<!-- -->% <!-- -->· <!-- -->约8次命中<\/td><td><strong>~<!-- -->7<!-- --><\/strong>40<!-- -->% <!-- -->· <!-- -->约6次命中<\/td><\/tr><\/tbody><\/table><p>每次采集都会独立计算资源。实际产量会有所不同。<\/p><p>击杀重爪龙后可从其尸体采集到兽皮和生肉。使用斧头可获得最多兽皮，使用镐可获得更多生肉。<\/p><p>生物研磨机<\/p><ul><li><img alt=\"\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/11a9388d-e33b-48cb-92a0-ddfaf1226ff1-ark-aa6d303a11b0-kibble_icon_medium.webp?w=1920\" loading=\"lazy\"><h3><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/items/regular-kibble\">普通饲料<\/a><\/h3><\/li><\/ul>"}, "5": {"html": "<p>攻击01<!-- --> / 05<\/p><h3>啃咬<\/h3><p>在陆地或水下啃咬目标。<\/p>操作<ul><li>LMB<\/li><\/ul><p>基础伤害<b>35<\/b><\/p><ol><li>茅草<b>192.5<\/b><\/li><li>木材<b>105<\/b><\/li><li>石头<b>-<\/b><\/li><li>金属<b>-<\/b><\/li><li>泰克<b>-<\/b><\/li><\/ol><p>PC默认操作。自定义按键可能不同。<\/p><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/ark-survival-ascended/go/discord/end-box\">加入创作者社区建设 ARK: Survival Ascended Wiki 的伙伴们都在我们的 Discord。欢迎提问或推荐页面。加入 Discord (<!-- -->在新标签页打开 Discord<!-- -->)<\/a><!--$--><!--/$-->\n<hr style=\"border:none;border-top:1px dashed #2a2a3a;margin:14px 0\">\n<h2>战斗与技能<\/h2><h3>受到的伤害<\/h3><p>抗性弱点<\/p><h4>武器<\/h4><ul><li>矿枪<i><\/i><b>免疫<\/b><\/li><li>石制武器<i><\/i><b>-34%<\/b><\/li><li>玩家近战<i><\/i><b>-20%<\/b><\/li><li>穿透投射物<i><\/i><b>+40%<\/b><\/li><li>对生物伤害<i><\/i><b>+120%<\/b><\/li><\/ul><h4>爆炸物<\/h4><ul><li>拆除炸药<i><\/i><b>+50%<\/b><\/li><\/ul><h4>生物<\/h4><ul><li>生物攻击<i><\/i><b>-50%<\/b><\/li><li>草食生物攻击<i><\/i><b>-40%<\/b><\/li><li>强力生物攻击<i><\/i><b>+50%<\/b><\/li><li>突袭生物攻击<i><\/i><b>+55%<\/b><\/li><\/ul><h4>环境与其他<\/h4><ul><li>X型植物<i><\/i><b>-50%<\/b><\/li><li>环境伤害<i><\/i><b>-30%<\/b><\/li><li>尖刺墙<i><\/i><b>+100%<\/b><\/li><\/ul><p>命中部位头部<!-- --> ×<!-- -->1.5<\/p><p>1 级、100% 驯服效率、无烙印时的基础伤害。<!-- --> <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/tools/damage-calculator\">打开伤害计算器<!-- --> ›<\/a><\/p>战斗说明<p>重爪龙对Instant HurtDinos类型伤害具有+120%的脆弱性，受到此类攻击时伤害显著提升。同时对爆炸类防御工事极为敏感，易受爆破伤害。建议优先提升生命值与近战伤害以增强生存与输出能力。<\/p><p>头部为重爪龙的要害区域，命中头部可造成1.5倍伤害。其余部位无特殊伤害倍率，常规攻击建议瞄准头部以提高效率。<\/p><p>可破坏茅草和木制结构。建造时至少使用石材结构以确保安全。<\/p>", "abils": [{"id": "90", "title": "啃咬", "desc": "在陆地或水下啃咬目标。", "key": "LMB", "kind": "attack", "video": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/33bcb261-c1cf-4fa5-8074-1c084f64def6-ark-0ddab07dcab7-ability-90-1267481f9296.mp4", "poster": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/b575994b-38d5-42d5-bb6c-8308be82d454-ark-c659bac9ebfb-ability-90-1267481f9296-poster.webp"}, {"id": "89", "title": "咆哮", "desc": "纯装饰性的咆哮。", "key": "C", "kind": "control", "video": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/60db309a-c98b-4bfa-b496-e8345777f458-ark-faa43c76a5d0-ability-89-42401e2132e2.mp4", "poster": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/e316e883-b7e2-4dbd-b796-8c8a2a39a5c1-ark-4e1380988d43-ability-89-42401e2132e2-poster.webp"}, {"id": "91", "title": "旋尾", "desc": "在水下旋转，伤害并击晕易受影响的敌人。", "key": "RMB: underwater", "kind": "attack", "video": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/d5e67571-2cb5-4f95-ba2e-f5e73e1760a2-ark-79b1ca476880-ability-91-6b1b8f8e3044.mp4", "poster": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/f1d4ecec-1534-463e-a944-01d816856577-ark-d7b11ccbb050-ability-91-6b1b8f8e3044-poster.webp"}, {"id": "1034", "title": "捕鱼 / 治疗", "desc": "击杀腔棘鱼、剑齿鲑鱼或食人鱼可恢复生命值。通过菜单选项，受伤的重爪龙会自动寻找这些鱼。", "key": "Hold E: enable fish hunting", "kind": "multiuse", "video": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/c6d70cad-26d4-452e-a7f7-dad44496e783-ark-d3cd2ce7c414-ability-1034-f5568269c876.mp4", "poster": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/2de72472-7e7e-4b9d-afbd-2a86b6632e19-ark-7c392b84ecb1-ability-1034-f5568269c876-poster.webp"}, {"id": "1087", "title": "跳跃", "desc": "向前跳跃。", "key": "Space", "kind": "control", "video": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/e6785a7f-4d0f-492f-8876-e85d617179fe-ark-7d6dac211b24-ability-1087-fbf4ad305482.mp4", "poster": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/b8075c47-a3e8-4638-ac40-373009ea9586-ark-888801ff347d-ability-1087-fbf4ad305482-poster.webp"}]}, "6": {"html": "<p>生物指令<\/p>\n<h1>重爪龙生成指令<\/h1>\n<p>命令选项包括Summon（随机等级，在准心位置）、SpawnDino（精确坐标和等级）以及GMSummon（指定等级并强制驯服）。想要一个可以直接骑乘的重爪龙，GMSummon是你的首选。在PC上按Tab键打开管理员控制台，或者在主机上通过暂停菜单进入。需要管理员权限。<\/p>\n<p>生成150级已驯服个体<\/p>\n重爪龙设置变体等级<code>admincheat GMSummon &quot;Baryonyx_Character_BP_C&quot; 150<\/code>高级更多命令\n<ul><li>生成野生的Summon 会生成一只野生 重爪龙。<code>admincheat summon Baryonyx_Character_BP_C<\/code><\/li><li>生成150级野生个体SpawnDino 会生成一只等级 150 的野生 重爪龙。<code>admincheat SpawnDino &quot;Blueprint&#x27;/Game/PrimalEarth/Dinos/Baryonyx/Baryonyx_Character_BP.Baryonyx_Character_BP&#x27;&quot; 500 0 0 150<\/code><\/li><li>生成150级已驯服个体GMSummon 会生成一只等级 150 的已驯服 重爪龙。<code>admincheat GMSummon Baryonyx_Character_BP_C 150<\/code><\/li><li><img alt=\"\" width=\"24\" height=\"24\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/59b6075a-3c12-44ae-b5e1-af90f514880f-ark-a5fd4f874e26-baryonyxsaddle_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\">给予Baryonyx SaddleGiveItem 会把鞍直接放入你的物品栏。<code>admincheat GiveItem &quot;Blueprint&#x27;/Game/PrimalEarth/CoreBlueprints/Items/Armor/Saddles/PrimalItemArmor_BaryonyxSaddle.PrimalItemArmor_BaryonyxSaddle&#x27;&quot; 1 0 0<\/code><\/li><li>生成150级已驯服个体并附带鞍按顺序粘贴两条指令：第一条生成等级 150 的已驯服 重爪龙，第二条给你鞍。<code>admincheat GMSummon Baryonyx_Character_BP_C 150 | admincheat GiveItem &quot;Blueprint&#x27;/Game/PrimalEarth/CoreBlueprints/Items/Armor/Saddles/PrimalItemArmor_BaryonyxSaddle.PrimalItemArmor_BaryonyxSaddle&#x27;&quot; 1 0 0<\/code><\/li><li>强制驯服所瞄准的生物ForceTame驯服任何恐龙并使其可骑乘且无需鞍具，DoTame仅驯服可驯服的生物。 同时驯服你当前正在看的生物。<code>admincheat ForceTame<\/code><\/li><li>驯服所瞄准的生物<code>admincheat DoTame<\/code><\/li><li>添加经验值AddExperience可以升级你正在骑乘的恐龙，而GiveExpToTarget可以升级你正在看的生物/玩家。<code>admincheat AddExperience &lt;Amount&gt; &lt;From Tribe&gt; &lt;Prevent Sharing With Tribe&gt;<\/code><\/li><li>给予目标经验值<code>admincheat GiveExpToTarget &lt;Amount&gt; &lt;From Tribe&gt; &lt;Prevent Sharing With Tribe&gt;<\/code><\/li><li>杀死所瞄准的生物杀死您当前所看的生物或玩家。<code>admincheat Kill<\/code><\/li><li>获取所有恐龙将属于目标玩家或部落的所有恐龙的所有权转移到您当前的部落。您必须看着属于目标玩家/部落的恐龙。<code>admincheat TakeAllDino<\/code><\/li><\/ul>\nMore about the 重爪龙\n<p>这个召唤命令工具可以让你创建控制台命令，用你想要的设置生成一只重爪龙。有多种变体可用 - 使用选择器挑选你想要的版本。<\/p>\n<p>ARK: Survival Ascended 里的 重爪龙 是一种可以驯服的食鱼生物，幸存者会在野外遇到它。它属于DMG类别。<\/p>\n<p>初始血量为 440，还算耐打。它的基础近战伤害为 100%，输出相当可观。基础耐力为325，提供中等的耐力。基础负重为 325，意味着有相当大的背包空间。<\/p>\n<p>要驯服 重爪龙，你需要用致晕武器将其击晕，然后在它倒地时投喂。投喂 普通饲料 效果最快，增益也最高。<\/p>\n<p>驯服后，重爪龙 主要用于采集资源，特别擅长收集特定材料。繁殖会产生受精蛋，在 29°C, 35°C 的温度范围内孵化。击杀一只野生的 重爪龙 可获得 5 点基础经验。它可以在克隆室用0.52元素加上每级0.01元素进行克隆。<\/p>\n<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/ark-survival-ascended/go/discord/end-box\">加入创作者社区建设 ARK: Survival Ascended Wiki 的伙伴们都在我们的 Discord。欢迎提问或推荐页面。加入 Discord (<!-- -->在新标签页打开 Discord<!-- -->)<\/a><!--$--><!--/$-->", "abils": []}}}, "Dodo": {"zh": "渡渡鸟", "slug": "dodo", "url": "https://wikily.gg/zh-cn/ark-survival-ascended/dinosaurs/dodo", "title": "渡渡鸟 动物 | ARK: Survival Ascended Wiki", "html": "<h2>概览<\/h2><p>渡渡鸟是一种生活在岛上的小型食草恐龙，性情温和且极易驯服。它能通过被飞行生物携带实现快速空中运输，显著提升资源转移效率。玩家通常驯服渡渡鸟用于采集浆果和纤维类资源，同时利用其轻便特性进行空运部署。<\/p><p>它可以被阿根廷巨鹰、风神翼龙或巨蟹怪等飞行生物携带，实现跨区域快速移动。<\/p><h2>基础属性1级数值与每级增长<\/h2><table><thead><tr><th>属性<\/th><th>基础<\/th><th>野生 +/级<\/th><th>已驯服 +/级<\/th><th>野生成长<\/th><\/tr><\/thead><tbody><tr><th>生命值<\/th><td>40<\/td><td>+8<\/td><td>+5.4%<\/td><td><i><\/i><em>20<!-- -->%<\/em><\/td><\/tr><tr><th>体力<\/th><td>100<\/td><td>+10<\/td><td>+10%<\/td><td><i><\/i><em>10<!-- -->%<\/em><\/td><\/tr><tr><th>麻痹值<\/th><td>30<\/td><td>+1.8<\/td><td>+0%<\/td><td><i><\/i><em>6<!-- -->%<\/em><\/td><\/tr><tr><th>氧气<\/th><td>150<\/td><td>+15<\/td><td>+10%<\/td><td><i><\/i><em>10<!-- -->%<\/em><\/td><\/tr><tr><th>食物<\/th><td>450<\/td><td>+45<\/td><td>+10%<\/td><td><i><\/i><em>10<!-- -->%<\/em><\/td><\/tr><tr><th>重量<\/th><td>50<\/td><td>+1<\/td><td>+4%<\/td><td><i><\/i><em>2<!-- -->%<\/em><\/td><\/tr><tr><th>近战伤害<\/th><td>100%<\/td><td>+5%<\/td><td>+1.7%<\/td><td><i><\/i><em>5<!-- -->%<\/em><\/td><\/tr><tr><th>移动速度<\/th><td>100%<\/td><td>+0%<\/td><td>+1%<\/td><td><i><\/i><em>0<!-- -->%<\/em><\/td><\/tr><\/tbody><\/table>", "ms": 2732, "raw_kb": 1636, "used": "ark:sky-main", "text_len": 2167, "imgs": 33, "tables": 2, "tabs": [{"label": "概览", "path": "/zh-cn/ark-survival-ascended/dinosaurs/dodo", "url": "https://wikily.gg/zh-cn/ark-survival-ascended/dinosaurs/dodo"}, {"label": "驯服", "path": "/zh-cn/ark-survival-ascended/dinosaurs/dodo/taming-calculator", "url": "https://wikily.gg/zh-cn/ark-survival-ascended/dinosaurs/dodo/taming-calculator"}, {"label": "繁殖", "path": "/zh-cn/ark-survival-ascended/dinosaurs/dodo/breeding-calculator", "url": "https://wikily.gg/zh-cn/ark-survival-ascended/dinosaurs/dodo/breeding-calculator"}, {"label": "采集", "path": "/zh-cn/ark-survival-ascended/dinosaurs/dodo/harvesting", "url": "https://wikily.gg/zh-cn/ark-survival-ascended/dinosaurs/dodo/harvesting"}, {"label": "收割", "path": "/zh-cn/ark-survival-ascended/dinosaurs/dodo/harvesting", "url": "https://wikily.gg/zh-cn/ark-survival-ascended/dinosaurs/dodo/harvesting"}, {"label": "技能", "path": "/zh-cn/ark-survival-ascended/dinosaurs/dodo/abilities", "url": "https://wikily.gg/zh-cn/ark-survival-ascended/dinosaurs/dodo/abilities"}, {"label": "生成指令", "path": "/zh-cn/ark-survival-ascended/dinosaurs/dodo/spawn-command", "url": "https://wikily.gg/zh-cn/ark-survival-ascended/dinosaurs/dodo/spawn-command"}], "abils": [{"id": "205", "title": "啄击", "desc": "受命攻击时近距离啄击敌人。", "key": "Whistle: Attack This Target", "kind": "attack", "video": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/a7313cf8-bb0e-4d59-b52c-4684e63677f3-ark-fec004367216-ability-205-110e0b542500.mp4", "poster": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/2bbd9ac8-d87d-4f8c-b433-a661ca871c2f-ark-79a26e4b6e1d-ability-205-110e0b542500-poster.webp"}], "fetched_at": 1793172769, "tabHtml": {"1": {"html": "<p>渡渡鸟需通过击晕方式进行驯服。最佳驯服食物为基础饲料，可大幅缩短驯服时间。若无法获取饲料，紫色浆果也可作为替代食物。使用流星锤或捕兽夹可有效限制其移动，再以麻醉箭或麻醉镖进行击晕。整个过程约需2分钟，无需麻醉剂。使用下方计算器可查看不同设置下的驯服参数。<\/p>", "abils": []}, "2": {"html": "<p>繁殖计算器<\/p><h1>渡渡鸟<\/h1>预设变体设置孵化 1× · 成长 1× · 食物 1× · 重量 50蛋孵化速度幼崽成熟速度食物消耗倍率生物重量<ol><\/ol><p>幼体<!-- -->: <!-- -->已孵化的恐龙，作为幼崽，需要持续关注和直接放入物品栏的食物才能生存，或者附近有鸭嘴飞鼠照顾其需求。<\/p><img alt=\"\" width=\"32\" height=\"32\" src=\"https://r2.wikily.gg/images/ark/icons/Egg_Icon.webp\" loading=\"lazy\">孵化49m 59s<img alt=\"\" width=\"32\" height=\"32\" src=\"https://r2.wikily.gg/images/ark/icons/Condition_SpinoWaterBuff.webp\" loading=\"lazy\">成熟15h 25m 55s<img alt=\"\" width=\"32\" height=\"32\" src=\"https://r2.wikily.gg/images/ark/icons/CompassIcon.webp\" loading=\"lazy\">孵化温度22 - 30 °C<img alt=\"\" width=\"32\" height=\"32\" src=\"https://r2.wikily.gg/images/ark/icons/Food_Icon.webp\" loading=\"lazy\">出生时食物26.56/min<h2><img alt=\"\" width=\"24\" height=\"24\" src=\"https://r2.wikily.gg/images/ark/icons/Condition_SpinoWaterBuff.webp\" loading=\"lazy\">成熟进度<\/h2>选择食物<img alt=\"\" width=\"28\" height=\"28\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/50d098f3-9cff-4827-b797-a4f98a4d1956-ark-b4c2bbcac80e-mejoberry_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\">5<!-- -->%<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/BabyCuddleIcon.webp\" loading=\"lazy\">状态:幼体剩余时间:14:39:37总时间:15:25:55<h3><img alt=\"\" width=\"18\" height=\"18\" src=\"https://r2.wikily.gg/images/ark/icons/Egg_Icon.webp\" loading=\"lazy\">成熟<\/h3><img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/Egg_Icon.webp\" loading=\"lazy\">孵化时间49m 59s<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/CompassIcon.webp\" loading=\"lazy\">已过时间46m 18s<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/Condition_SpinoWaterBuff.webp\" loading=\"lazy\">剩余成熟时间14h 39m 37s<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/FeedingTrough_Icon.webp\" loading=\"lazy\">幼年期时间46m 18s<h3><img alt=\"\" width=\"18\" height=\"18\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/50d098f3-9cff-4827-b797-a4f98a4d1956-ark-b4c2bbcac80e-mejoberry_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\">食物<\/h3><img alt=\"\" width=\"22\" height=\"22\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/50d098f3-9cff-4827-b797-a4f98a4d1956-ark-b4c2bbcac80e-mejoberry_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\">食物总数410物品<img alt=\"\" width=\"22\" height=\"22\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/50d098f3-9cff-4827-b797-a4f98a4d1956-ark-b4c2bbcac80e-mejoberry_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\">食物至成年268物品<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/Food_Icon.webp\" loading=\"lazy\">每小时食物51<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/Gas_Icon.webp\" loading=\"lazy\">食物容量25物品<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/ConditionIcon_NursingBuff.webp\" loading=\"lazy\">手动喂养幼崽11m 14s6.2% 成熟<h2><img alt=\"\" width=\"24\" height=\"24\" src=\"https://r2.wikily.gg/images/ark/icons/BabyCuddleIcon.webp\" loading=\"lazy\">烙印<\/h2><img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/BabyCuddleIcon.webp\" loading=\"lazy\">抚摸间隔8h<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/BabyCuddleIcon.webp\" loading=\"lazy\">每次印痕59.6%<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/BabyCuddleIcon.webp\" loading=\"lazy\">最大印痕<!-- -->59.6%（1次抚摸）设置8 小时 · 间隔 ×1 · 数量 ×1最小抚摸间隔（小时）最大抚摸间隔（小时）幼崽抚摸间隔倍率幼崽印痕量倍率<h2><img alt=\"\" width=\"24\" height=\"24\" src=\"https://r2.wikily.gg/images/ark/icons/ConditionIcon_NursingBuff.webp\" loading=\"lazy\">养育食物<\/h2>幼崽当前成熟度（%）食物<img alt=\"\" width=\"28\" height=\"28\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/50d098f3-9cff-4827-b797-a4f98a4d1956-ark-b4c2bbcac80e-mejoberry_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\"><img alt=\"\" width=\"22\" height=\"22\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/50d098f3-9cff-4827-b797-a4f98a4d1956-ark-b4c2bbcac80e-mejoberry_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\">每物品食物<!-- -->30<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/Weight_Icon.webp\" loading=\"lazy\">堆叠大小100<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/Food_Icon.webp\" loading=\"lazy\">在5%时进食25.23 食物/分钟<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/Condition_SpinoWaterBuff.webp\" loading=\"lazy\">成熟15h 25m 55s<table><thead><tr><th>阶段<\/th><th>剩余时间<\/th><th>食物点数<\/th><th>紫莓<\/th><th>堆叠<\/th><th>重量<\/th><\/tr><\/thead><tbody><tr><th><img alt=\"\" width=\"18\" height=\"18\" src=\"https://r2.wikily.gg/images/ark/icons/BabyCuddleIcon.webp\" loading=\"lazy\">幼体从5%到10%需要此数量<\/th><td>46m 17s<\/td><td>1,137<\/td><td>38<\/td><td>1<\/td><td>3.8<\/td><\/tr><tr><th><img alt=\"\" width=\"18\" height=\"18\" src=\"https://r2.wikily.gg/images/ark/icons/FeedingTrough_Icon.webp\" loading=\"lazy\">青少年从10%到50%需要此数量<\/th><td>6h 10m 22s<\/td><td>6,886<\/td><td>230<\/td><td>3<\/td><td>23<\/td><\/tr><tr><th><img alt=\"\" width=\"18\" height=\"18\" src=\"https://r2.wikily.gg/images/ark/icons/Condition_SpinoWaterBuff.webp\" loading=\"lazy\">青年从50%到100%需要此数量<\/th><td>7h 42m 57s<\/td><td>3,074<\/td><td>103<\/td><td>2<\/td><td>10.3<\/td><\/tr><\/tbody><tr><th>总计<\/th><td>14h 39m 37s<\/td><td><\/td><td>371<\/td><td>6<\/td><td>37.1<\/td><\/tr><\/table><p><img alt=\"\" width=\"22\" height=\"22\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/50d098f3-9cff-4827-b797-a4f98a4d1956-ark-b4c2bbcac80e-mejoberry_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\">总计：371个紫莓<\/p><img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/FeedingTrough_Icon.webp\" loading=\"lazy\">饲料槽6,000 物品 (60 格子)一次装载即可<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/TEKTrough_Icon.webp\" loading=\"lazy\">泰克饲料槽10,000 物品 (100 格子)一次装载即可<img alt=\"\" width=\"22\" height=\"22\" src=\"https://r2.wikily.gg/images/ark/icons/ConditionIcon_NursingBuff.webp\" loading=\"lazy\">鸭嘴飞鼠 / 风行蜥<!-- -->300 格子肉类和浆果减重50%<ul><li>幼体<!-- --> -<!-- --> <!-- -->需要补充饲料槽2次（食物会在阶段结束前变质）<\/li><li>青少年<!-- --> -<!-- --> <!-- -->需要补充饲料槽10次（食物会在阶段结束前变质）<\/li><li>青年<!-- --> -<!-- --> <!-- -->需要补充饲料槽12次（食物会在阶段结束前变质）<\/li><\/ul><p>变质时间<!-- --> <!-- -->10m<!-- --> | <!-- -->饲料槽 / 鸭嘴飞鼠<!-- -->:<!-- --> <!-- -->40m<!-- --> | <!-- -->泰克饲料槽<!-- -->:<!-- --> <!-- -->16h 40m<\/p><p>在幼崽阶段(0-10%)，您必须手动喂食或使用鸭嘴飞鼠哺乳。从青少年期(10%+)开始，恐龙可以自己从饲料槽进食。在饲料槽中使用保鲜盐可以将变质时间延长一倍。<\/p>▸More about breeding the 渡渡鸟<p>繁殖渡渡鸟会产生受精卵，需要仔细控制温度。孵化温度必须保持在22°C到30°C之间, 使用空调、立式火把或异齿龙来维持这个范围。在正确温度下，蛋大约需要49分钟孵化。<\/p><p>宝宝渡渡鸟在默认速度下大约需要15小时25分钟才能完全成熟 - 这个过程会持续几个小时。最费劲的是幼年阶段（0-10%成熟度），这时它还不能使用喂食槽。<\/p><p>每只幼崽会从双亲继承属性，并有一定几率发生变异, 随机属性增加2级野生等级并改变颜色。使用繁殖计算器来规划食物需求、孵化计时和成熟阶段。<\/p><p>养小渡渡鸟有三个成长阶段：宝宝期（0-10%）持续约93分钟，需要持续手动喂食。青少年期（10-50%）持续约6小时，现在可以从食槽进食。青少年期（50-100%）持续约8小时，继续从食槽进食，几乎完全长成。<\/p><p>在成长过程中进行印记可以提供永久属性加成。当印记达到100%时，渡渡鸟在被印记者骑乘时，会获得30%的伤害和抗性加成。在成长过程中，你会被要求定期进行拥抱、散步或喂食特定的饲料。<\/p><p>上面的培育计算器精确显示了你为渡渡鸟每个成熟阶段所需的饲料数量。在幼崽阶段，预计需要约1小时33分钟的主动照顾，之后它会升级为幼年期的食槽喂养。<\/p><p>倍率功能有助于规划大规模的渡渡鸟养成，通过汇总所有幼崽的食物需求。不同类型的食物有不同的腐败时间, 在囤积食物时要考虑这一点。<\/p><p>渡渡鸟 是 ARK: Survival Ascended 中一种可驯服的食草生物。它属于杂项分类。<\/p><p>基础耐力为 100，掉血很快。近战伤害初始为100%，输出稳定且随等级提升而增强。渡渡鸟的基础生命值是40, 非常脆弱。基础负重为50，背包空间非常有限。<\/p><p>渡渡鸟 是一种击晕驯服：将其击晕后，放入食物即可。投喂 基础饲料 效果最快，增益也最高。<\/p><p>驯服后，渡渡鸟能帮你快速采集资源，省不少事。繁殖会产生受精蛋，在 22°C, 30°C 的温度范围内孵化。击杀一只野生的 渡渡鸟 可获得 0.5 点基础经验。它可以在克隆室用0.01元素加上每级0元素进行克隆。<\/p><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/ark-survival-ascended/go/discord/end-box\">加入创作者社区建设 ARK: Survival Ascended Wiki 的伙伴们都在我们的 Discord。欢迎提问或推荐页面。加入 Discord (<!-- -->在新标签页打开 Discord<!-- -->)<\/a><!--$--><!--/$-->", "abils": []}, "3": {"html": "<h2>采集能力<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting\">采集指南<!-- --> ›<\/a><\/h2><figure><img alt=\"树脂\" width=\"256\" height=\"256\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/64ea2c11-d43f-41c0-bd9b-766f27cf0de3-ark-d727145e07cd-treesap_icon.webp?w=1920\" loading=\"lazy\"><\/figure>树脂<figure><img alt=\"木材\" width=\"256\" height=\"256\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/3f5234f0-3c8f-4dca-bc6c-a825f3ed3f7b-ark-8ec8c9b90730-wood_icon.webp?w=1920\" loading=\"lazy\"><\/figure>木材<figure><img alt=\"茅草\" width=\"256\" height=\"256\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/629a3c8b-bc35-420c-b952-5f74937b31d3-ark-40c2c65ad9dc-thatch_icon.webp?w=1920\" loading=\"lazy\"><\/figure>茅草<figure><img alt=\"黄色浆果\" width=\"256\" height=\"256\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/03bc36d0-2760-45a9-881c-910329a26a58-ark-5d18d226b8eb-amarberry_icon.webp?w=1920\" loading=\"lazy\"><\/figure>黄色浆果<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/amarberry\">资源详情<\/a>蓝色浆果<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/azulberry\">资源详情<\/a>青色浆果<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/cianberry\">资源详情<\/a><figure><img alt=\"紫莓\" width=\"256\" height=\"256\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/50d098f3-9cff-4827-b797-a4f98a4d1956-ark-b4c2bbcac80e-mejoberry_icon.webp?w=1920\" loading=\"lazy\"><\/figure>紫莓<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/mejoberry\">资源详情<\/a>白色浆果<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/stimberry\">资源详情<\/a>更多采集能力⌄绿色浆果<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/verdberry\">资源详情<\/a><figure><img alt=\"紫红色浆果\" width=\"256\" height=\"256\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/21b068f7-b63d-4ff6-9f25-84525dce69e2-ark-08afdfc95972-magenberry_icon.webp?w=1920\" loading=\"lazy\"><\/figure>紫红色浆果<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/magenberry\">资源详情<\/a>黑色浆果<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/narcoberry\">资源详情<\/a><figure><img alt=\"红色浆果\" width=\"256\" height=\"256\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/7fc39db4-9556-49a9-af1c-1fb3397a9cb1-ark-c45f05aa7f07-tintoberry_icon.webp?w=1920\" loading=\"lazy\"><\/figure>红色浆果<figure><img alt=\"稀有花朵\" width=\"256\" height=\"256\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/d216f574-7319-42cd-9ce8-752a5e3961c0-ark-0b86979fdcda-rareflower_icon.webp?w=1920\" loading=\"lazy\"><\/figure>稀有花朵<figure><img alt=\"柠檬种子\" width=\"256\" height=\"256\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/d40cdd8d-0bb5-45d7-8cdb-f6dbac931a5d-ark-8a3196239557-citronalseed_icon.webp?w=1920\" loading=\"lazy\"><\/figure>柠檬种子<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/citronal-seed\">资源详情<\/a>玉米种子<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/longrass-seed\">资源详情<\/a>稀有蘑菇<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/rare-mushroom\">资源详情<\/a><figure><img alt=\"土豆种子\" width=\"256\" height=\"256\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/96f29802-5aeb-457d-b382-69bfc3194366-ark-fbe7732b3c4d-savrootseed_icon.webp?w=1920\" loading=\"lazy\"><\/figure>土豆种子<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/savoroot-seed\">资源详情<\/a>黄色浆果种子<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/amarberry-seed\">资源详情<\/a><figure><img alt=\"金色蘑菇\" width=\"256\" height=\"256\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/f44b9338-838e-454f-9887-08a4225ab949-ark-5ef46c750d10-goldmushroom.webp?w=1920\" loading=\"lazy\"><\/figure>金色蘑菇<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/auric-mushroom\">资源详情<\/a><figure><img alt=\"蓝色浆果种子\" width=\"256\" height=\"256\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/4784d09c-cb16-40ba-b154-d47e877b5c57-ark-56ef6da6b73d-azulberryseed_icon.webp?w=1920\" loading=\"lazy\"><\/figure>蓝色浆果种子<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/azulberry-seed\">资源详情<\/a>青色浆果种子<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/cianberry-seed\">资源详情<\/a><figure><img alt=\"紫色浆果种子\" width=\"256\" height=\"256\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/93cffd5c-5619-44ae-845d-5ba7be8bfe69-ark-9591f5cf5810-mejoberryseed_icon.webp?w=1920\" loading=\"lazy\"><\/figure>紫色浆果种子<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/mejoberry-seed\">资源详情<\/a>胡萝卜种子<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/rockarrot-seed\">资源详情<\/a><figure><img alt=\"白色浆果种子\" width=\"256\" height=\"256\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/df3c3712-29fb-4675-ab6f-3471f8701139-ark-a6cc1e9e96fe-stimberryseed_icon.webp?w=1920\" loading=\"lazy\"><\/figure><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/stimberry-seed\">资源详情<\/a><figure><img alt=\"绿色浆果种子\" width=\"256\" height=\"256\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/114c8e8e-52f7-41ed-bf4b-213ca16f7aca-ark-6fc9a00bb805-verdberryseed_icon.webp?w=1920\" loading=\"lazy\"><\/figure>绿色浆果种子<figure><img alt=\"紫红色浆果种子\" width=\"256\" height=\"256\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/4b382f59-5a7c-49c6-9fbe-9a79371d2258-ark-8661ab573247-magenberryseed_icon.webp?w=1920\" loading=\"lazy\"><\/figure>紫红色浆果种子<figure><img alt=\"黑色浆果种子\" width=\"256\" height=\"256\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/264a7191-164e-4c50-9702-4881ebaa3496-ark-0b1e083cddaf-narcoberryseed_icon.webp?w=1920\" loading=\"lazy\"><\/figure>黑色浆果种子<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/narcoberry-seed\">资源详情<\/a>红色浆果种子<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/tintoberry-seed\">资源详情<\/a>青色蘑菇<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/aquatic-mushroom\">资源详情<\/a><figure><img alt=\"黑色蘑菇\" width=\"256\" height=\"256\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/131d9ac9-b9ea-445c-81ad-9a89e2e2ffba-ark-56bc23fcaafe-blackmushroom.webp?w=1920\" loading=\"lazy\"><\/figure>黑色蘑菇<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/ascerbic-mushroom\">资源详情<\/a>AAggeravic Mushroom<figure><img alt=\"X异种植物种子\" width=\"256\" height=\"256\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/8a592ef9-9df3-49c6-a465-8947cd5a6101-ark-8dc30778b3ed-spitterseed_icon.webp?w=1920\" loading=\"lazy\"><\/figure>X异种植物种子<figure><img alt=\"Y异种植物种子\" width=\"256\" height=\"256\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/a4c3c2bb-4e39-4636-98c6-7a4e74f02855-ark-c81b09341cab-plantspeciesyseed_icon.webp?w=1920\" loading=\"lazy\"><\/figure>Y异种植物种子<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/plant-species-y-seed\">资源详情<\/a>Z异种植物种子<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/plant-species-z-seed\">资源详情<\/a><figure><img alt=\"纤维\" width=\"256\" height=\"256\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/fd7a7160-52c8-4830-b9e9-4eab44826124-ark-f8ae8fa4a9c0-fiber_icon.webp?w=1920\" loading=\"lazy\"><\/figure><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/fiber\">资源详情<\/a><figure><img alt=\"石头\" width=\"256\" height=\"256\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/ca6d6150-e5bb-438e-b669-8e43aa4c2a19-ark-501c837cbb75-stone_icon.webp?w=1920\" loading=\"lazy\"><\/figure>石头<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/stone\">资源详情<\/a><figure><img alt=\"水晶\" width=\"256\" height=\"256\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/75114e39-7254-41b0-a4bc-ca07454f4cf8-ark-3659c34c3230-crystal_icon.webp?w=1920\" loading=\"lazy\"><\/figure>水晶<figure><img alt=\"仙人掌汁\" width=\"256\" height=\"256\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/296689c9-fe84-487c-a429-51678a8764b4-ark-99220322c737-cactussap_icon.webp?w=1920\" loading=\"lazy\"><\/figure>仙人掌汁关于采集<p>骑乘渡渡鸟时，其近战攻击可高效采集多种资源。浆果类（包括紫色浆果、黑色浆果、白色浆果）、种子、蘑菇、稀有花朵、稀有蘑菇、木头、仙人掌汁和纤维均可获得10倍采集加成。其他纤维类资源也有8倍加成，使其成为早期资源收集的高效选择。<\/p>\n<hr style=\"border:none;border-top:1px dashed #2a2a3a;margin:14px 0\">\nARK: Survival Ascended<h2>渡渡鸟采集<\/h2><p>采集计算器<\/p><h2>资源节点产量<\/h2>1种有记录的节点变体节点类型节点变体采集者<img alt=\"X灌木丛节点\" width=\"120\" height=\"96\" src=\"https://r2.wikily.gg/images/ark/harvesting/SM_PlantX_A/SM_PlantX_A_front.png\" loading=\"lazy\"><img alt=\"\" width=\"44\" height=\"44\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/dfec24f4-e061-4b30-b624-8051c780f7c4-ark-bf918e648822-empty_dodohead_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\"><p>渡渡鸟对X灌木丛<\/p><p>300节点生命值<\/p><p>457.5%近战 · 8次掷骰 · 2次命中<\/p><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/dinosaurs/dodo\">生物详情<\/a><p>24<!-- --><\/p><p>X异种植物种子平均<\/p><p>近战1,000%以内的峰值：1,000%时1次命中10次掷骰<\/p>近战与服务器设置 · 1×采集倍率采集倍率野生近战等级突变等级驯服后近战等级精确近战 %图表最大近战 %节点生命值300采集间隔100伤害倍率10<!-- -->×采集量倍率1<!-- -->×基础伤害5基础近战134.1<!-- -->%<h3>每个节点资源<\/h3><img alt=\"\" width=\"32\" height=\"32\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/8a592ef9-9df3-49c6-a465-8947cd5a6101-ark-8dc30778b3ed-spitterseed_icon.webp?dpl=7b40ef33-50a4-4004-aa19-91a06e748380\" loading=\"lazy\"><h4><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/harvesting/plant-species-x-seed\">X异种植物种子<\/a><\/h4><p>每次掷骰100%<\/p><table><thead><tr><th>产量<\/th><th>低<\/th><th>平均<\/th><th>高<\/th><\/tr><\/thead><tbody><tr><th>当前<\/th><td>19<\/td><td>24<\/td><td>29<\/td><\/tr><tr><th>峰值<\/th><td>25<\/td><td>30<\/td><td>35<\/td><\/tr><\/tbody><\/table><h3>按近战伤害的产量<\/h3><p>每个节点平均物品数<\/p>图表视图查看近战：457.5%"}, "4": {"html": "<h2>尸体产量<\/h2><p>没有 渡渡鸟 的尸体采集记录。<\/p><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/ark-survival-ascended/go/discord/end-box\">加入创作者社区建设 ARK: Survival Ascended Wiki 的伙伴们都在我们的 Discord。欢迎提问或推荐页面。加入 Discord (<!-- -->在新标签页打开 Discord<!-- -->)<\/a><!--$--><!--/$-->\n<hr style=\"border:none;border-top:1px dashed #2a2a3a;margin:14px 0\">\n<h2>掉落物与互动<\/h2><h3>被以下方式束缚<\/h3><a target=\"_blank\" rel=\"noopener noreferrer\" title=\"流星锤\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/items/bola\"><img src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/028d8731-1a41-4a9c-abfe-648969d48799-ark-9e58cc1721ba-bolas_icon.webp?w=48\" alt=\"\" width=\"46\" height=\"46\" loading=\"lazy\">流星锤<\/a><a target=\"_blank\" rel=\"noopener noreferrer\" title=\"捕兽夹\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/items/bear-trap\"><img src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/881099a2-6865-4a2f-a216-73ca54d50e58-ark-5f39258a470d-smallbeartrap_icon.webp?w=48\" alt=\"\" width=\"46\" height=\"46\" loading=\"lazy\">捕兽夹<\/a><a target=\"_blank\" rel=\"noopener noreferrer\" title=\"Y异种植物陷阱\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/items/plant-species-y-trap\"><img src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/262c3fdc-1fb6-4f40-bf0c-6bc8bb407946-ark-94ef29a49e35-plantspeciesytrap_icon.webp?w=48\" alt=\"\" width=\"46\" height=\"46\" loading=\"lazy\">Y异种植物陷阱<\/a>各工具的采集产量\n<h2>掉落与采集资源<\/h2><p>按采集工具比较已记录的尸体资源产出。<\/p>设置采集身体生命值 50 · 你的近战 % 100 · 武器伤害 % 100 · 采集倍率 × 1采集身体生命值你的近战 %武器伤害 %采集倍率 ×<table><thead><tr><th>资源<\/th><th><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/items/metal-pick\"><img width=\"28\" height=\"28\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/35e441f0-f529-41de-bf5c-39048726d75f-ark-65786b47fc50-metalpick_icon.webp?w=32\" alt=\"\" loading=\"lazy\">镐<\/a><\/th><th><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/items/metal-hatchet\"><img width=\"28\" height=\"28\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/a80679b3-d8db-47bd-8d79-31411d16bdc2-ark-762059af548c-metalhatchet_icon.webp?w=32\" alt=\"\" loading=\"lazy\">斧头<\/a><\/th><\/tr><\/thead><tbody><tr><th><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/items/hide\"><img width=\"28\" height=\"28\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/8727d17e-6106-46c7-ac79-7d8eb62bc53c-ark-000e71f7dc10-hide_icon.webp?w=32\" alt=\"\" loading=\"lazy\">兽皮<\/a><\/th><td><strong>~<!-- -->2<\/strong>40<!-- -->% <!-- -->· <!-- -->约2次命中<\/td><td><strong>~<!-- -->3<!-- --><\/strong>60<!-- -->% <!-- -->· <!-- -->约2次命中<\/td><\/tr><tr><th><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/items/raw-meat\"><img width=\"28\" height=\"28\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/a3685d1e-b1a2-4ab4-9d6e-8c82c58af6bb-ark-d2fe3fe63da4-meat_icon.webp?w=32\" alt=\"\" loading=\"lazy\">生肉<\/a><\/th><td><strong>~<!-- -->2<\/strong>60<!-- -->% <!-- -->· <!-- -->约2次命中<\/td><td><strong>~<!-- -->2<!-- --><\/strong>40<!-- -->% <!-- -->· <!-- -->约2次命中<\/td><\/tr><\/tbody><\/table><p>每次采集都会独立计算资源。实际产量会有所不同。<\/p><p>击杀渡渡鸟的尸体可采集到兽皮和生肉。使用斧头可获得最多兽皮，而使用镐则能收获更多生肉。<\/p><p>生物研磨机<\/p><ul><li><img alt=\"\" src=\"https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/403155f6-79ca-4e0b-b5b3-3bdc726590f2-ark-b11e7c5279da-kibble_icon_exsmall.webp?w=1920\" loading=\"lazy\"><h3><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/items/basic-kibble\">基础饲料<\/a><\/h3><\/li><\/ul>"}, "5": {"html": "<p>攻击01<!-- --> / 01<\/p><h3>啄击<\/h3><p>受命攻击时近距离啄击敌人。<\/p>操作<ul><li>WhistleAttack This Target<\/li><\/ul><p>基础伤害<b>5<\/b><\/p><ol><li>茅草<b>27.5<\/b><\/li><li>木材<b>-<\/b><\/li><li>石头<b>-<\/b><\/li><li>金属<b>-<\/b><\/li><li>泰克<b>-<\/b><\/li><\/ol><p>PC默认操作。自定义按键可能不同。<\/p><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/ark-survival-ascended/go/discord/end-box\">加入创作者社区建设 ARK: Survival Ascended Wiki 的伙伴们都在我们的 Discord。欢迎提问或推荐页面。加入 Discord (<!-- -->在新标签页打开 Discord<!-- -->)<\/a><!--$--><!--/$-->\n<hr style=\"border:none;border-top:1px dashed #2a2a3a;margin:14px 0\">\n<h2>战斗与技能<\/h2><h3>受到的伤害<\/h3><p>抗性弱点<\/p><h4>武器<\/h4><ul><li>石制武器<i><\/i><b>-34%<\/b><\/li><li>玩家近战<i><\/i><b>-20%<\/b><\/li><li>穿透投射物<i><\/i><b>+40%<\/b><\/li><li>对生物伤害<i><\/i><b>+120%<\/b><\/li><\/ul><h4>爆炸物<\/h4><ul><li>爆炸<i><\/i><b>-40%<\/b><\/li><li>拆除炸药<i><\/i><b>+50%<\/b><\/li><\/ul><h4>生物<\/h4><ul><li>生物攻击<i><\/i><b>-50%<\/b><\/li><li>强力生物攻击<i><\/i><b>+50%<\/b><\/li><li>突袭生物攻击<i><\/i><b>+55%<\/b><\/li><\/ul><h4>环境与其他<\/h4><ul><li>尖刺墙<i><\/i><b>-50%<\/b><\/li><li>X型植物<i><\/i><b>-50%<\/b><\/li><li>环境伤害<i><\/i><b>-30%<\/b><\/li><\/ul><p>命中部位头部<!-- --> ×<!-- -->3<\/p><p>1 级、100% 驯服效率、无烙印时的基础伤害。<!-- --> <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/zh-cn/ark-survival-ascended/tools/damage-calculator\">打开伤害计算器<!-- --> ›<\/a><\/p>战斗说明<p>渡渡鸟对爆炸伤害具有40%的减伤效果，同时对尖刺墙伤害有50%的减伤。然而，它对即时伤害型恐龙攻击有120%的额外易伤，对金属近战攻击也有55%的额外易伤。因此在防御工事中应避免使用尖刺墙对抗它，而敌方则可利用近战单位高效击杀。<\/p>", "abils": [{"id": "205", "title": "啄击", "desc": "受命攻击时近距离啄击敌人。", "key": "Whistle: Attack This Target", "kind": "attack", "video": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/a7313cf8-bb0e-4d59-b52c-4684e63677f3-ark-fec004367216-ability-205-110e0b542500.mp4", "poster": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/2bbd9ac8-d87d-4f8c-b433-a661ca871c2f-ark-79a26e4b6e1d-ability-205-110e0b542500-poster.webp"}]}, "6": {"html": "<p>生物指令<\/p>\n<h1>渡渡鸟生成指令<\/h1>\n<p>使用下方生成器为 ARK: Survival Ascended 中的 渡渡鸟 创建管理员命令。有多种变体可用 - 使用选择器挑选你想要的版本。<\/p>\n<p>命令选项包括Summon（随机等级，在准心位置）、SpawnDino（精确坐标和等级）以及GMSummon（指定等级并强制驯服）。想要一个可以直接骑乘的渡渡鸟，GMSummon是你的首选。在PC上按Tab键打开管理员控制台，或者在主机上通过暂停菜单进入。需要管理员权限。<\/p>\n<p>生成150级已驯服个体<\/p>\n渡渡鸟设置变体等级<code>admincheat GMSummon &quot;Dodo_Character_BP_C&quot; 150<\/code>高级更多命令\n<ul><li>生成野生的Summon 会生成一只野生 渡渡鸟。<code>admincheat summon Dodo_Character_BP_C<\/code><\/li><li>生成150级野生个体SpawnDino 会生成一只等级 150 的野生 渡渡鸟。<code>admincheat SpawnDino &quot;Blueprint&#x27;/Game/PrimalEarth/Dinos/Dodo/Dodo_Character_BP.Dodo_Character_BP&#x27;&quot; 500 0 0 150<\/code><\/li><li>生成150级已驯服个体GMSummon 会生成一只等级 150 的已驯服 渡渡鸟。<code>admincheat GMSummon Dodo_Character_BP_C 150<\/code><\/li><li>强制驯服所瞄准的生物ForceTame驯服任何恐龙并使其可骑乘且无需鞍具，DoTame仅驯服可驯服的生物。 同时驯服你当前正在看的生物。<code>admincheat ForceTame<\/code><\/li><li>驯服所瞄准的生物<code>admincheat DoTame<\/code><\/li><li>添加经验值AddExperience可以升级你正在骑乘的恐龙，而GiveExpToTarget可以升级你正在看的生物/玩家。<code>admincheat AddExperience &lt;Amount&gt; &lt;From Tribe&gt; &lt;Prevent Sharing With Tribe&gt;<\/code><\/li><li>给予目标经验值<code>admincheat GiveExpToTarget &lt;Amount&gt; &lt;From Tribe&gt; &lt;Prevent Sharing With Tribe&gt;<\/code><\/li><li>杀死所瞄准的生物杀死您当前所看的生物或玩家。<code>admincheat Kill<\/code><\/li><li>获取所有恐龙将属于目标玩家或部落的所有恐龙的所有权转移到您当前的部落。您必须看着属于目标玩家/部落的恐龙。<code>admincheat TakeAllDino<\/code><\/li><\/ul>\nMore about the 渡渡鸟\n<p>渡渡鸟 是 ARK: Survival Ascended 中一种可驯服的食草生物。它属于杂项分类。<\/p>\n<p>基础耐力为 100，掉血很快。近战伤害初始为100%，输出稳定且随等级提升而增强。渡渡鸟的基础生命值是40, 非常脆弱。基础负重为50，背包空间非常有限。<\/p>\n<p>渡渡鸟 是一种击晕驯服：将其击晕后，放入食物即可。投喂 基础饲料 效果最快，增益也最高。<\/p>\n<p>驯服后，渡渡鸟能帮你快速采集资源，省不少事。繁殖会产生受精蛋，在 22°C, 30°C 的温度范围内孵化。击杀一只野生的 渡渡鸟 可获得 0.5 点基础经验。它可以在克隆室用0.01元素加上每级0元素进行克隆。<\/p>\n<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://wikily.gg/ark-survival-ascended/go/discord/end-box\">加入创作者社区建设 ARK: Survival Ascended Wiki 的伙伴们都在我们的 Discord。欢迎提问或推荐页面。加入 Discord (<!-- -->在新标签页打开 Discord<!-- -->)<\/a><!--$--><!--/$-->", "abils": []}}}};
+var CUR = 'Rex';
+var opened = false;
+var ABIL_IDX = 0;
+// ===== v2：驯服计算器（真实公式，方案 §4.3 已用 3 物种 SSR 黄金值校准）=====
+// ===== 基础数据（全部取自项目自带数值库，计算不再依赖 wikily）=====
+// 物种参数：ASA-values.json / values.json 的 taming + fullStatsRaw（ASA 优先，ARK 兜底）
+var TAME = {"Rex":{"zh":"霸王龙","setup":{"req":3450,"per_level":150,"ineff":1.25,"rate":0.4166667076,"torpor_base":1550,"torpor_inc":0.06,"food_base":3000,"torpor_rate":0.7250000108033419},"diet":["Exceptional Kibble","Raw Mutton","Raw Prime Meat","Cooked Lamb Chop","Cooked Prime Meat","Raw Prime Fish Meat","Raw Meat","Cooked Prime Fish Meat","Cooked Meat","Raw Fish Meat","Cooked Fish Meat"],"_src":"ASA","_bp":"Rex_Character_BP_Outpost.Rex_Character_BP_Outpost"},"Baryonyx":{"zh":"重爪龙","setup":{"req":2500,"per_level":100,"ineff":2.5,"rate":0.9999999383000001,"torpor_base":400,"torpor_inc":0.06,"food_base":2250,"torpor_rate":0.30000000447034836},"diet":["Regular Kibble","Raw Mutton","Cooked Lamb Chop","Raw Prime Fish Meat","Cooked Prime Fish Meat","Raw Fish Meat","Cooked Fish Meat"],"_src":"ARK","_bp":"Baryonyx_Character_BP_Escort.Baryonyx_Character_BP_Escort"},"Dodo":{"zh":"渡渡鸟","setup":{"req":450,"per_level":22.5,"ineff":1.333333,"rate":2.499999712,"torpor_base":30,"torpor_inc":0.06,"food_base":450,"torpor_rate":0.30000000447034836},"diet":["Basic Kibble","Mejoberry","Amarberry","Azulberry","Tintoberry","Cianberry","Magenberry","Verdberry","Stimberry","Sweet Vegetable Cake","Crops","Archelon Algae"],"_src":"ASA","_bp":"Dodo_Character_BP_Gen_Outpost_Market.Dodo_Character_BP_Gen_Outpost_Market"}};
+// 全局食物表：一次抓齐后内置（affinity=每口亲和度 / base=喂食单位）
+var FOODS = {"Exceptional Kibble":{"zh":"卓越饲料","aff":400.0,"base":85.248,"icon":"https://img.whiterober.ccwu.cc/ASA/consumables/Kibble_Icon_ExLarge.png"},"Raw Mutton":{"zh":"生羊肉","aff":187.5,"base":50.0,"icon":"https://img.whiterober.ccwu.cc/ASA/consumables/Mutton_Icon.png"},"Raw Prime Meat":{"zh":"优质生肉","aff":150.0,"base":50.0,"icon":"https://img.whiterober.ccwu.cc/ASA/consumables/PrimeMeat_Icon.png"},"Cooked Lamb Chop":{"zh":"熟羊肉","aff":101.25,"base":49.945,"icon":"https://img.whiterober.ccwu.cc/ASA/consumables/Lambchops_Icon.png"},"Cooked Prime Meat":{"zh":"优质熟肉","aff":75.0,"base":49.945,"icon":"https://img.whiterober.ccwu.cc/ASA/consumables/Cooked_Prime_Meat.png"},"Raw Prime Fish Meat":{"zh":"优质生鱼肉","aff":60.0,"base":25.0,"icon":"https://img.whiterober.ccwu.cc/ASA/consumables/Raw_Prime_Fish_Meat.png"},"Raw Meat":{"zh":"生肉","aff":50.0,"base":50.0,"icon":"https://img.whiterober.ccwu.cc/ASA/consumables/Meat_Icon.png"},"Cooked Prime Fish Meat":{"zh":"优质熟鱼肉","aff":30.0,"base":25.686,"icon":"https://img.whiterober.ccwu.cc/ASA/consumables/Cooked_Prime_Fish_Meat.png"},"Cooked Meat":{"zh":"熟肉","aff":25.0,"base":25.0,"icon":"https://img.whiterober.ccwu.cc/ASA/consumables/Cooked_Meat.png"},"Raw Fish Meat":{"zh":"生鱼肉","aff":20.0,"base":25.0,"icon":"https://img.whiterober.ccwu.cc/ASA/consumables/Raw_Fish_Meat.png"},"Cooked Fish Meat":{"zh":"熟鱼肉","aff":10.0,"base":12.5,"icon":"https://img.whiterober.ccwu.cc/ASA/consumables/Cooked_Fish_Meat.png"},"Regular Kibble":{"zh":"普通饲料","aff":400.0,"base":85.248,"icon":"https://img.whiterober.ccwu.cc/ASA/consumables/Kibble_Icon_Medium.png"},"Basic Kibble":{"zh":"基础饲料","aff":400.0,"base":85.248,"icon":"https://r2.wikily.gg/images/ark/icons/Kibble_Icon_ExSmall.webp"},"Mejoberry":{"zh":"紫莓","aff":30.0,"base":30.0,"icon":"https://img.whiterober.ccwu.cc/ASA/consumables/Mejoberry.png"},"Amarberry":{"zh":"黄色浆果","aff":20.0,"base":20.0,"icon":"https://img.whiterober.ccwu.cc/ASA/consumables/Amarberry.png"},"Azulberry":{"zh":"蓝色浆果","aff":20.0,"base":20.0,"icon":"https://img.whiterober.ccwu.cc/ASA/consumables/Azulberry.png"},"Tintoberry":{"zh":"红色浆果","aff":20.0,"base":20.0,"icon":"https://img.whiterober.ccwu.cc/ASA/consumables/Tintoberry.png"},"Cianberry":{"zh":"青色浆果","aff":20.0,"base":20.0,"icon":"https://img.whiterober.ccwu.cc/ASA/consumables/Cianberry.png"},"Magenberry":{"zh":"紫红色浆果","aff":20.0,"base":20.0,"icon":"https://img.whiterober.ccwu.cc/ASA/consumables/Magenberry.png"},"Verdberry":{"zh":"绿色浆果","aff":20.0,"base":20.0,"icon":"https://img.whiterober.ccwu.cc/ASA/consumables/Verdberry.png"},"Stimberry":{"zh":"白色浆果","aff":1.0,"base":15.0,"icon":"https://img.whiterober.ccwu.cc/ASA/consumables/Stimberry.png"},"Sweet Vegetable Cake":{"zh":"蔬菜蛋糕","aff":1.0,"base":20.0,"icon":"https://img.whiterober.ccwu.cc/ASA/consumables/Sweet_Vegetable_Cake.png"},"Crops":{"zh":"作物","aff":40.0,"base":40.0,"icon":"https://r2.wikily.gg/images/ark/icons/CropsNew_Icon.webp"},"Archelon Algae":{"zh":"古巨龟海藻","aff":160.0,"base":40.0,"icon":"https://r2.wikily.gg/images/ark/icons/Algae_Icon_ASA.webp"},"Superior Kibble":{"zh":"上等饲料","aff":400.0,"base":85.248,"icon":"https://r2.wikily.gg/images/ark/icons/Kibble_Icon_Large.webp"},"Simple Kibble":{"zh":"简易饲料","aff":400.0,"base":85.248,"icon":"https://r2.wikily.gg/images/ark/icons/Kibble_Icon_Small.webp"}};
+var TC_LV = 150;      // 目标等级
+var TC_SP = 6;        // 驯服速度倍率：孤岛实服 TamingSpeedMultiplier=6
+// ⚠️ 演示库存：正式版改调 lbItemOwnCnt()（玩家层级：本人背包 + 我的部落容器）
+var TC_OWN = { 'Exceptional Kibble': 23, 'Regular Kibble': 8, 'Basic Kibble': 5,
+               'Raw Mutton': 45, 'Raw Prime Meat': 12, 'Cooked Meat': 210,
+               'Raw Meat': 860, 'Mejoberry': 320, 'Narcotic': 120,
+               '__dino_Rex': 3, '__dino_Baryonyx': 2, '__dino_Dodo': 11,
+               '__dinoLv_Rex': 224, '__dinoLv_Baryonyx': 196, '__dinoLv_Dodo': 148 };
+// 经验数据（基础经验来自 wiki「经验值」段，或繁殖/收割页正文；公式已校正；缺失则显示无数据）
+var EXP = {
+  'Rex': { base: 30, saddle: [ { zh: '霸王龙鞍', base: 86, lv: 74 }, { zh: '霸王龙泰克鞍', base: 86, lv: 0 } ] },
+  'Baryonyx': { base: 5, saddle: [ { zh: '重爪龙鞍', base: 17.6, lv: 49 } ] },
+  'Dodo': { base: 0.5, saddle: [] }
+};
+var EXP_LV = 150, EXP_KILLS = 1;   // v20：目标类型 / 额外加成 / 鞍品质 定义见经验 tab 区块
+
+// ===== v24：驯服工具组合（武器 + 弹药）=====
+//   每条 = wikily weapons 表里的一个组合；torpor = 该组合每发眩晕，shot = 每发间隔秒
+//   源码 hits()：每发眩晕 = Σ(damage×multiplier[i]) + 固定torpor；综合效率 = torpor / shot
+var TAME_COMBOS = [
+  { key:'rifle-shock',   zh:'长管步枪 + 强效麻醉镖', w:'longneck', a:'shock',       torpor:442,   shot:5,
+    wIc:'',                                                                   aIc:'https://img.whiterober.ccwu.cc/ASA/ammo/RefinedTranqDart_Icon.png' },
+  { key:'tekbow',        zh:'泰克弓 + 泰克麻醉箭',       w:'tekbow',   a:'tekarrow',    torpor:336,   shot:5,
+    wIc:'https://img.whiterober.ccwu.cc/ASA/weapons/Tek_Bow.png',              aIc:'' },
+  { key:'harpoon',       zh:'鱼叉枪 + 麻醉鱼叉',             w:'harpoon',  a:'harpoonbolt', torpor:306,   shot:5,
+    wIc:'https://img.whiterober.ccwu.cc/ASA/weapons/HarpoonGun_Icon.png',      aIc:'' },
+  { key:'fabxbow-spear', zh:'机械十字弓 + 麻醉长矛箭', w:'fabxbow', a:'tranqspear', torpor:306, shot:5,
+    wIc:'https://img.whiterober.ccwu.cc/ASA/weapons/HUD_FabricatedCrossbow_Icon.png', aIc:'https://img.whiterober.ccwu.cc/ASA/ammo/TranqSpearBolt_Icon.png' },
+  { key:'rifle-dart',    zh:'长管步枪 + 麻醉镖',             w:'longneck', a:'dart',        torpor:221,   shot:5,
+    wIc:'',                                                                   aIc:'https://img.whiterober.ccwu.cc/ASA/weapons/TranqDart3_Icon.png' },
+  { key:'xbow',          zh:'十字弓 + 麻醉箭',                   w:'crossbow', a:'tranqarrow',  torpor:157.5, shot:5,
+    wIc:'https://img.whiterober.ccwu.cc/ASA/weapons/ForgedCrossbow_Icon.png',  aIc:'https://img.whiterober.ccwu.cc/ASA/ammo/TranqArrow_Icon.png' },
+  { key:'compound',      zh:'复合弓 + 麻醉箭',                   w:'compound', a:'tranqarrow',  torpor:121.5, shot:5,
+    wIc:'https://img.whiterober.ccwu.cc/ASA/weapons/MachinedBow_Icon.png',     aIc:'https://img.whiterober.ccwu.cc/ASA/ammo/TranqArrow_Icon.png' },
+  { key:'bow',           zh:'弓 + 麻醉箭',                               w:'bow',      a:'tranqarrow',  torpor:90,    shot:5,
+    wIc:'https://img.whiterober.ccwu.cc/ASA/weapons/Bow_Icon.png',             aIc:'https://img.whiterober.ccwu.cc/ASA/ammo/TranqArrow_Icon.png' }
+];
+// 演示：当前玩家（EOS）名下角色 → 容器 → 物品（正式版取 data.recs 的 containerName/containerX/Y/Z，只取当前角色）
+var ROLES = [
+  { name:'白某', srv:'孤岛', locs:[
+    { c:'角色背包', t:'player', x:null, y:null,
+      items:{ longneck:1, shock:56, dart:60, bow:1, tranqarrow:120 } },
+    { c:'基地主箱', t:'box', x:12.3, y:45.6,
+      items:{ fabxbow:1, tranqspear:18, crossbow:1, tekbow:1, shock:24 } }
+  ]},
+  { name:'白某(小号)', srv:'焦土', locs:[
+    { c:'角色背包', t:'player', x:null, y:null, items:{ dart:18, fabxbow:1 } }
+  ]}
+];
+var CUR_ROLE = 0;
+// 武器 / 弹药 独立元数据（图标来自项目 icons2；长管步枪、泰克麻醉箭、麻醉鱼叉项目暂无图标）
+var TAME_WEAPONS = {
+  longneck: { zh:'长管步枪', ic:'' },
+  tekbow:   { zh:'泰克弓',     ic:'https://img.whiterober.ccwu.cc/ASA/weapons/Tek_Bow.png' },
+  harpoon:  { zh:'鱼叉枪',     ic:'https://img.whiterober.ccwu.cc/ASA/weapons/HarpoonGun_Icon.png' },
+  fabxbow:  { zh:'机械十字弓', ic:'https://img.whiterober.ccwu.cc/ASA/weapons/HUD_FabricatedCrossbow_Icon.png' },
+  crossbow: { zh:'十字弓',     ic:'https://img.whiterober.ccwu.cc/ASA/weapons/ForgedCrossbow_Icon.png' },
+  compound: { zh:'复合弓',     ic:'https://img.whiterober.ccwu.cc/ASA/weapons/MachinedBow_Icon.png' },
+  bow:      { zh:'弓',                 ic:'https://img.whiterober.ccwu.cc/ASA/weapons/Bow_Icon.png' }
+};
+var TAME_AMMO = {
+  shock:       { zh:'强效麻醉镖',   ic:'https://img.whiterober.ccwu.cc/ASA/ammo/RefinedTranqDart_Icon.png' },
+  dart:        { zh:'麻醉镖',               ic:'https://img.whiterober.ccwu.cc/ASA/weapons/TranqDart3_Icon.png' },
+  tranqspear:  { zh:'麻醉长矛箭',   ic:'https://img.whiterober.ccwu.cc/ASA/ammo/TranqSpearBolt_Icon.png' },
+  tranqarrow:  { zh:'麻醉箭',               ic:'https://img.whiterober.ccwu.cc/ASA/ammo/TranqArrow_Icon.png' },
+  tekarrow:    { zh:'泰克麻醉箭',   ic:'' },
+  harpoonbolt: { zh:'麻醉鱼叉',         ic:'' }
+};
+// 武器**装备实例**（演示）：与 dino-import 条目小卡同字段语义 —— stats 走 lbStatRows 的 {label,txt}，
+//   rating = 评分，q = 品质档 0~5（描边色走 LB_BP_STAGE_COL），cont/srv = 归属（容器 / 位置）
+var TC_BP_COL = ['#b8b8b8', '#1eff00', '#0070dd', '#a335ee', '#ff8000', '#00bfff'];
+var TAME_W_INST = {
+  longneck: { zh:'长管步枪', ic:'', q:5, rating:27.0, dura:288, cont:'角色背包', srv:'孤岛',
+              stats:[ {label:'伤害', txt:'442.9%'}, {label:'耐久', txt:'323'} ] },
+  fabxbow:  { zh:'机械十字弓', ic:'https://img.whiterober.ccwu.cc/ASA/weapons/HUD_FabricatedCrossbow_Icon.png', q:3, rating:17.4, dura:186, cont:'基地主箱', srv:'孤岛',
+              stats:[ {label:'伤害', txt:'236.2%'}, {label:'耐久', txt:'210'} ] },
+  crossbow: { zh:'十字弓', ic:'https://img.whiterober.ccwu.cc/ASA/weapons/ForgedCrossbow_Icon.png', q:2, rating:14.2, dura:92, cont:'基地主箱', srv:'孤岛',
+              stats:[ {label:'伤害', txt:'198.4%'}, {label:'耐久', txt:'186'} ] },
+  bow:      { zh:'弓', ic:'https://img.whiterober.ccwu.cc/ASA/weapons/Bow_Icon.png', q:0, rating:8.1, dura:41, cont:'角色背包', srv:'孤岛',
+              stats:[ {label:'伤害', txt:'96.5%'}, {label:'耐久', txt:'74'} ] },
+  tekbow:   { zh:'泰克弓', ic:'https://img.whiterober.ccwu.cc/ASA/weapons/Tek_Bow.png', q:4, rating:21.8, dura:498, cont:'基地主箱', srv:'孤岛',
+              stats:[ {label:'伤害', txt:'281.0%'}, {label:'耐久', txt:'540'} ] },
+  harpoon:  { zh:'鱼叉枪', ic:'https://img.whiterober.ccwu.cc/ASA/weapons/HarpoonGun_Icon.png', q:2, rating:15.6, cont:'', srv:'孤岛',
+              stats:[ {label:'伤害', txt:'204.7%'}, {label:'耐久', txt:'192'} ] },
+  compound: { zh:'复合弓', ic:'https://img.whiterober.ccwu.cc/ASA/weapons/MachinedBow_Icon.png', q:2, rating:12.9, cont:'', srv:'孤岛',
+              stats:[ {label:'伤害', txt:'176.3%'}, {label:'耐久', txt:'168'} ] }
+};
+var TAME_KIND_W = '武器';
+var TAME_KIND_A = '弹药';
+var TC_TIPS = {
+  player: '角色背包', box: '容器', dino: '生物背包'
+};
+// ===== v55：技能 tab 自主渲染数据 =====
+//   来源：本地已抓缓存 tabHtml['5'] 解析（技能详情 / 采集伤害 / 抗性 / 命中部位 / 战斗说明）
+//   材质名（茅草/木头/石头/金属/泰克）已过 汉化/item_zh.json
+//   视频：项目无本地视频，沿用 wikily CDN（用户确认保留）
+var ABIL = {"Rex": {"mats": [{"zh": "茅草", "wiki": "茅草"}, {"zh": "木头", "wiki": "木材"}, {"zh": "石头", "wiki": "石头"}, {"zh": "金属", "wiki": "金属"}, {"zh": "泰克", "wiki": "泰克"}], "skills": [{"zh": "啃咬", "key": "LMB", "dmg": "62", "mats": [{"zh": "茅草", "v": "341"}, {"zh": "木头", "v": "186"}, {"zh": "石头", "v": "-"}, {"zh": "金属", "v": "-"}, {"zh": "泰克", "v": "-"}], "mult": "x1.15 对草食"}], "resist": [{"cat": "武器", "items": [{"zh": "矿枪", "v": "免疫"}, {"zh": "石制武器", "v": "-34%"}, {"zh": "玩家近战", "v": "-20%"}, {"zh": "穿透投射物", "v": "+40%"}, {"zh": "对生物伤害", "v": "+120%"}]}, {"cat": "爆炸物", "items": [{"zh": "拆除炸药", "v": "+50%"}]}, {"cat": "生物", "items": [{"zh": "生物攻击", "v": "-50%"}, {"zh": "草食生物攻击", "v": "-40%"}, {"zh": "强力生物攻击", "v": "+50%"}, {"zh": "突袭生物攻击", "v": "+55%"}]}, {"cat": "环境与其他", "items": [{"zh": "X型植物", "v": "-50%"}, {"zh": "环境伤害", "v": "-30%"}, {"zh": "尖刺墙", "v": "+400%"}]}], "hit": [], "notes": ["雷克斯对尖刺墙伤害极为脆弱，受到的伤害增加400%，在防御工事中需特别注意。同时对近战金属攻击和爆炸类伤害敏感，分别增加55%和50%。建议优先提升生命值与近战伤害以增强生存与输出能力。", "雷克斯的头部具有1.5倍伤害倍率，击中头部可造成更高伤害。其余部位无特殊伤害修正。", "可破坏茅草与木制结构。建议至少使用石质结构进行防御。"], "videos": [{"id": "519", "title": "咆哮", "desc": "短暂击晕易受影响的低等级敌人并迫使它们排便。", "key": "RMB", "kind": "attack", "video": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-10-04/e2bccbdc-ec75-4702-afcb-980c5dc531e5-ark-5a66f7826923-ability-519-9f4141ccbf8e.mp4", "poster": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-10-04/0b70a8e9-1a1f-4657-9a20-1b26148c7761-ark-802fc50029cb-ability-519-9f4141ccbf8e-poster.webp"}, {"id": "520", "title": "啃咬", "desc": "啃咬你前方的目标。", "key": "LMB", "kind": "attack", "video": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-10-04/7940ccf0-d7df-44ba-b4c4-f7f71db245a1-ark-f808a09e4a86-ability-520-d1e3fe01e630.mp4", "poster": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-10-04/655a6b92-0c9b-4188-af69-ace6d54f0d0f-ark-6b9c72028f22-ability-520-d1e3fe01e630-poster.webp"}, {"id": "1003", "title": "泰克鞍炮", "desc": "激活泰克鞍并发射其火炮。需要泰克图纸以及物品栏中的能量元素。", "key": "Left Ctrl: activate; RMB: fire", "kind": "control", "video": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-10-04/0c3e7f9d-21bc-4fbe-94ff-879598d98ab7-ark-2d7865a5ecba-ability-1003-ccd78dff5179.mp4", "poster": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-10-04/e3ec8ee7-513b-4452-bef2-ec21022ffc9d-ark-d5af6dbb8fe7-ability-1003-ccd78dff5179-poster.webp"}], "first": {"zh": "咆哮", "desc": "短暂击晕易受影响的低等级敌人并迫使它们排便。", "key": "RMB"}, "more": ["咆哮RMB", "泰克鞍炮Left Ctrl"], "hitRaw": "头部 ×1.5"}, "Baryonyx": {"mats": [{"zh": "茅草", "wiki": "茅草"}], "skills": [{"zh": "啃咬", "key": "LMB", "dmg": "35", "mats": [{"zh": "茅草", "v": "192.5"}, {"zh": "木头", "v": "105"}, {"zh": "石头", "v": "-"}, {"zh": "金属", "v": "-"}, {"zh": "泰克", "v": "-"}], "mult": "", "desc": "在陆地或水下啃咬目标。"}], "resist": [{"cat": "武器", "items": [{"zh": "矿枪", "v": "免疫"}, {"zh": "石制武器", "v": "-34%"}, {"zh": "玩家近战", "v": "-20%"}, {"zh": "穿透投射物", "v": "+40%"}, {"zh": "对生物伤害", "v": "+120%"}]}, {"cat": "爆炸物", "items": [{"zh": "拆除炸药", "v": "+50%"}]}, {"cat": "生物", "items": [{"zh": "生物攻击", "v": "-50%"}, {"zh": "草食生物攻击", "v": "-40%"}, {"zh": "强力生物攻击", "v": "+50%"}, {"zh": "突袭生物攻击", "v": "+55%"}]}, {"cat": "环境与其他", "items": [{"zh": "X型植物", "v": "-50%"}, {"zh": "环境伤害", "v": "-30%"}, {"zh": "尖刺墙", "v": "+100%"}]}], "hit": [], "notes": ["重爪龙对Instant HurtDinos类型伤害具有+120%的脆弱性，受到此类攻击时伤害显著提升。同时对爆炸类防御工事极为敏感，易受爆破伤害。建议优先提升生命值与近战伤害以增强生存与输出能力。", "头部为重爪龙的要害区域，命中头部可造成1.5倍伤害。其余部位无特殊伤害倍率，常规攻击建议瞄准头部以提高效率。", "可破坏茅草和木制结构。建造时至少使用石材结构以确保安全。"], "videos": [{"id": "90", "title": "啃咬", "desc": "在陆地或水下啃咬目标。", "key": "LMB", "kind": "attack", "video": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/33bcb261-c1cf-4fa5-8074-1c084f64def6-ark-0ddab07dcab7-ability-90-1267481f9296.mp4", "poster": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/b575994b-38d5-42d5-bb6c-8308be82d454-ark-c659bac9ebfb-ability-90-1267481f9296-poster.webp"}, {"id": "89", "title": "咆哮", "desc": "纯装饰性的咆哮。", "key": "C", "kind": "control", "video": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/60db309a-c98b-4bfa-b496-e8345777f458-ark-faa43c76a5d0-ability-89-42401e2132e2.mp4", "poster": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/e316e883-b7e2-4dbd-b796-8c8a2a39a5c1-ark-4e1380988d43-ability-89-42401e2132e2-poster.webp"}, {"id": "91", "title": "旋尾", "desc": "在水下旋转，伤害并击晕易受影响的敌人。", "key": "RMB: underwater", "kind": "attack", "video": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/d5e67571-2cb5-4f95-ba2e-f5e73e1760a2-ark-79b1ca476880-ability-91-6b1b8f8e3044.mp4", "poster": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/f1d4ecec-1534-463e-a944-01d816856577-ark-d7b11ccbb050-ability-91-6b1b8f8e3044-poster.webp"}, {"id": "1034", "title": "捕鱼 / 治疗", "desc": "击杀腔棘鱼、剑齿鲑鱼或食人鱼可恢复生命值。通过菜单选项，受伤的重爪龙会自动寻找这些鱼。", "key": "Hold E: enable fish hunting", "kind": "multiuse", "video": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/c6d70cad-26d4-452e-a7f7-dad44496e783-ark-d3cd2ce7c414-ability-1034-f5568269c876.mp4", "poster": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/2de72472-7e7e-4b9d-afbd-2a86b6632e19-ark-7c392b84ecb1-ability-1034-f5568269c876-poster.webp"}, {"id": "1087", "title": "跳跃", "desc": "向前跳跃。", "key": "Space", "kind": "control", "video": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/e6785a7f-4d0f-492f-8876-e85d617179fe-ark-7d6dac211b24-ability-1087-fbf4ad305482.mp4", "poster": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/b8075c47-a3e8-4638-ac40-373009ea9586-ark-888801ff347d-ability-1087-fbf4ad305482-poster.webp"}], "first": {"zh": "啃咬", "desc": "在陆地或水下啃咬目标。", "key": "LMB"}, "hitRaw": "头部 ×1.5"}, "Dodo": {"mats": [], "skills": [{"zh": "啄击", "key": "WhistleAttack This Target", "dmg": "5", "mats": [{"zh": "茅草", "v": "27.5"}, {"zh": "木头", "v": "-"}, {"zh": "石头", "v": "-"}, {"zh": "金属", "v": "-"}, {"zh": "泰克", "v": "-"}], "mult": "", "desc": "受命攻击时近距离啄击敌人。"}], "resist": [{"cat": "武器", "items": [{"zh": "石制武器", "v": "-34%"}, {"zh": "玩家近战", "v": "-20%"}, {"zh": "穿透投射物", "v": "+40%"}, {"zh": "对生物伤害", "v": "+120%"}]}, {"cat": "爆炸物", "items": [{"zh": "爆炸", "v": "-40%"}, {"zh": "拆除炸药", "v": "+50%"}]}, {"cat": "生物", "items": [{"zh": "生物攻击", "v": "-50%"}, {"zh": "强力生物攻击", "v": "+50%"}, {"zh": "突袭生物攻击", "v": "+55%"}]}, {"cat": "环境与其他", "items": [{"zh": "尖刺墙", "v": "-50%"}, {"zh": "X型植物", "v": "-50%"}, {"zh": "环境伤害", "v": "-30%"}]}], "hit": [], "notes": ["渡渡鸟对爆炸伤害具有40%的减伤效果，同时对尖刺墙伤害有50%的减伤。然而，它对即时伤害型恐龙攻击有120%的额外易伤，对金属近战攻击也有55%的额外易伤。因此在防御工事中应避免使用尖刺墙对抗它，而敌方则可利用近战单位高效击杀。"], "videos": [{"id": "205", "title": "啄击", "desc": "受命攻击时近距离啄击敌人。", "key": "Whistle: Attack This Target", "kind": "attack", "video": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/a7313cf8-bb0e-4d59-b52c-4684e63677f3-ark-fec004367216-ability-205-110e0b542500.mp4", "poster": "https://wikily.gg/api/media/3b03f159-fe77-45a9-ad5b-d1576063910f/2026-09-30/2bbd9ac8-d87d-4f8c-b433-a661ca871c2f-ark-79a26e4b6e1d-ability-205-110e0b542500-poster.webp"}], "first": {"zh": "啄击", "desc": "受命攻击时近距离啄击敌人。", "key": "WhistleAttack This Target"}, "hitRaw": "头部 ×3"}};
+// ===== v42：采集 / 收割 自主渲染数据 =====
+//   来源：本地已抓缓存 tabHtml['3']（采集）/ ['4']（收割）解析结果，无外站依赖
+//   图标：全部取自项目 CDN img.whiterober.ccwu.cc（未匹配到的留空，前端自动隐藏）
+var GATHER = {"Rex": {"caps": [], "about": "", "nodes": [], "nodeRes": [], "params": {}, "noNode": true}, "Baryonyx": {"caps": [{"zh": "麻醉药", "mult": "3", "ic": "https://img.whiterober.ccwu.cc/ASA/consumables/Narcotic.png"}, {"zh": "甲壳素", "mult": "2", "ic": "https://img.whiterober.ccwu.cc/ASA/resources/Chitin.png"}, {"zh": "角质", "mult": "2", "ic": "https://img.whiterober.ccwu.cc/ASA/resources/Keratin.png"}, {"zh": "生鱼肉", "mult": "2", "ic": "https://img.whiterober.ccwu.cc/ASA/consumables/Raw_Fish_Meat.png"}], "about": "骑乘重爪龙时，其普通攻击和游泳击晕技能均可采集资源。每次攻击可获得3倍生物毒素，以及2倍角蛋白、生鱼肉和生优质鱼肉。该能力使其成为采集生物毒素的高效选择，尤其适用于水域作战环境。", "nodes": [], "nodeRes": [], "params": {}, "noNode": true}, "Dodo": {"caps": [{"zh": "树脂", "mult": "", "ic": "https://img.whiterober.ccwu.cc/ASA/resources/Sap.png"}, {"zh": "木头", "mult": "", "ic": "https://img.whiterober.ccwu.cc/ASA/resources/Wood.png"}, {"zh": "茅草", "mult": "", "ic": "https://img.whiterober.ccwu.cc/ASA/resources/Thatch.png"}, {"zh": "黄色浆果", "mult": "", "ic": "https://img.whiterober.ccwu.cc/ASA/consumables/Amarberry.png"}, {"zh": "紫色浆果", "mult": "", "ic": "https://img.whiterober.ccwu.cc/ASA/consumables/Mejoberry.png"}, {"zh": "紫红色浆果", "mult": "", "ic": "https://img.whiterober.ccwu.cc/ASA/consumables/Magenberry.png"}, {"zh": "红色浆果", "mult": "", "ic": "https://img.whiterober.ccwu.cc/ASA/consumables/Tintoberry.png"}, {"zh": "稀有花朵", "mult": "", "ic": "https://img.whiterober.ccwu.cc/ASA/resources/Rare_Flower.png"}, {"zh": "柠檬", "mult": "", "ic": "https://img.whiterober.ccwu.cc/ASA/consumables/Citronal.png"}, {"zh": "土豆种子", "mult": "", "ic": "https://img.whiterober.ccwu.cc/ASA/eggs/SavrootSeed_Icon.png"}, {"zh": "金色蘑菇", "mult": "", "ic": "https://img.whiterober.ccwu.cc/ASA/consumables/Goldmushroom.png"}, {"zh": "蓝色浆果种子", "mult": "", "ic": "https://img.whiterober.ccwu.cc/ASA/eggs/Azulberry_Seed.png"}, {"zh": "紫色浆果种子", "mult": "", "ic": "https://img.whiterober.ccwu.cc/ASA/eggs/Mejoberry_Seed.png"}, {"zh": "白色浆果种子", "mult": "", "ic": "https://img.whiterober.ccwu.cc/ASA/eggs/Stimberry_Seed.png"}, {"zh": "绿色浆果种子", "mult": "", "ic": "https://img.whiterober.ccwu.cc/ASA/eggs/Verdberry_Seed.png"}, {"zh": "紫红色浆果种子", "mult": "", "ic": "https://img.whiterober.ccwu.cc/ASA/eggs/Magenberry_Seed.png"}, {"zh": "黑色浆果种子", "mult": "", "ic": "https://img.whiterober.ccwu.cc/ASA/eggs/Narcoberry_Seed.png"}, {"zh": "黑色蘑菇", "mult": "", "ic": "https://img.whiterober.ccwu.cc/ASA/consumables/BlackMushroom.png"}, {"zh": "X异种植物种子", "mult": "", "ic": "https://img.whiterober.ccwu.cc/ASA/eggs/Plant_Species_X_Seed.png"}, {"zh": "Y异种植物种子", "mult": "", "ic": "https://img.whiterober.ccwu.cc/ASA/eggs/PlantSpeciesYSeed_Icon.png"}, {"zh": "纤维", "mult": "", "ic": "https://img.whiterober.ccwu.cc/ASA/resources/Fiber.png"}, {"zh": "石头", "mult": "", "ic": "https://img.whiterober.ccwu.cc/ASA/resources/Stone.png"}, {"zh": "水晶", "mult": "", "ic": "https://img.whiterober.ccwu.cc/ASA/resources/Crystal.png"}, {"zh": "仙人掌汁", "mult": "", "ic": "https://img.whiterober.ccwu.cc/ASA/resources/CactusSap_Icon.png"}], "about": "骑乘渡渡鸟时，其近战攻击可高效采集多种资源。浆果类（包括紫色浆果、黑色浆果、白色浆果）、种子、蘑菇、稀有花朵、稀有蘑菇、木头、仙人掌汁和纤维均可获得10倍采集加成。其他纤维类资源也有8倍加成，使其成为早期资源收集的高效选择。", "nodes": [{"zh": "X灌木丛", "hp": 300, "melee": "457.5", "rolls": 8, "hits": 2, "avg": 24, "res": "X异种植物种子", "ic": "https://img.whiterober.ccwu.cc/ASA/eggs/Plant_Species_X_Seed.png"}], "nodeRes": [{"zh": "X异种植物种子", "roll": "100", "cur": [19, 24, 29], "peak": [25, 30, 35], "ic": "https://img.whiterober.ccwu.cc/ASA/eggs/Plant_Species_X_Seed.png"}], "params": {"hp": "300", "interval": "100", "dmgMult": "10", "amtMult": "1", "baseDmg": "5", "baseMelee": "134.1"}, "noNode": false}};
+var HARVEST = {"Rex": {"noRecord": false, "corpse": {"hp": 520, "interval": "19.5", "rolls": 54, "hits": 9, "sum": [{"zh": "", "avg": 31, "ic": ""}, {"zh": "", "avg": 21, "ic": ""}, {"zh": "", "avg": 2, "ic": ""}], "peak": "645%时2次命中82次掷骰", "baseDmg": "62", "dmgMult": "1", "amtMult": "1", "atk": "0.4"}, "perRes": [{"zh": "生肉", "roll": "58.3", "avg": 31, "range": [24, 39], "peakAvg": 48, "peakRange": [39, 57], "ic": "https://img.whiterober.ccwu.cc/ASA/consumables/Meat_Icon.png"}, {"zh": "兽皮", "roll": "38.8", "avg": 21, "range": [14, 28], "peakAvg": 32, "peakRange": [23, 41], "ic": "https://img.whiterober.ccwu.cc/ASA/resources/Hide.png"}, {"zh": "优质生肉", "roll": "2.9", "avg": 2, "range": [0, 4], "peakAvg": 2, "peakRange": [0, 5], "ic": "https://img.whiterober.ccwu.cc/ASA/consumables/PrimeMeat_Icon.png"}], "drops": [{"zh": "霸王龙手臂", "ic": "https://img.whiterober.ccwu.cc/ASA/drops/ApexDrop_Rex_Icon.png"}, {"zh": "霸王龙骨架套装", "ic": "https://img.whiterober.ccwu.cc/ASA/skins/Rex_Bone_Costume.png"}, {"zh": "兽皮", "ic": "https://img.whiterober.ccwu.cc/ASA/resources/Hide.png"}, {"zh": "生肉", "ic": "https://img.whiterober.ccwu.cc/ASA/consumables/Meat_Icon.png"}, {"zh": "优质生肉", "ic": "https://img.whiterober.ccwu.cc/ASA/consumables/PrimeMeat_Icon.png"}], "bound": [{"zh": "流星锁链", "ic": "https://img.whiterober.ccwu.cc/ASA/ammo/Chain_Bola.png"}, {"zh": "捕兽夹", "ic": "https://img.whiterober.ccwu.cc/ASA/weapons/Bear_Trap.png"}, {"zh": "大型捕兽夹", "ic": "https://img.whiterober.ccwu.cc/ASA/weapons/LargeBearTrap_Icon.png"}, {"zh": "Y异种植物陷阱", "ic": "https://img.whiterober.ccwu.cc/ASA/weapons/PlantSpeciesYTrap_Icon.png"}], "tools": {"cols": ["金属镐", "金属斧子"], "rows": [{"zh": "兽皮", "ic": "https://img.whiterober.ccwu.cc/ASA/resources/Hide.png", "cells": [{"avg": 21, "pct": 40, "hits": 17}, {"avg": 32, "pct": 60, "hits": 13}]}, {"zh": "生肉", "ic": "https://img.whiterober.ccwu.cc/ASA/consumables/Meat_Icon.png", "cells": [{"avg": 24, "pct": 60, "hits": 17}, {"avg": 16, "pct": 40, "hits": 13}]}, {"zh": "优质生肉", "ic": "https://img.whiterober.ccwu.cc/ASA/consumables/PrimeMeat_Icon.png", "cells": [{"avg": 1, "pct": 3, "hits": 17}, {"avg": 1, "pct": 2, "hits": 13}]}]}}, "Baryonyx": {"noRecord": false, "corpse": {"hp": 520, "interval": "19.5", "rolls": 50, "hits": 17, "sum": [{"zh": "", "avg": 29, "ic": ""}, {"zh": "", "avg": 19, "ic": ""}, {"zh": "", "avg": 1, "ic": ""}], "peak": "713%时3次命中69次掷骰", "baseDmg": "31.5", "dmgMult": "1", "amtMult": "1", "atk": "0.2"}, "perRes": [{"zh": "生肉", "roll": "58.3", "avg": 29, "range": [22, 36], "peakAvg": 40, "peakRange": [32, 48], "ic": "https://img.whiterober.ccwu.cc/ASA/consumables/Meat_Icon.png"}, {"zh": "兽皮", "roll": "38.8", "avg": 19, "range": [13, 26], "peakAvg": 27, "peakRange": [19, 35], "ic": "https://img.whiterober.ccwu.cc/ASA/resources/Hide.png"}, {"zh": "优质生肉", "roll": "2.9", "avg": 1, "range": [0, 4], "peakAvg": 2, "peakRange": [0, 5], "ic": "https://img.whiterober.ccwu.cc/ASA/consumables/PrimeMeat_Icon.png"}], "drops": [], "bound": [{"zh": "流星锁链", "ic": "https://img.whiterober.ccwu.cc/ASA/ammo/Chain_Bola.png"}, {"zh": "捕兽夹", "ic": "https://img.whiterober.ccwu.cc/ASA/weapons/Bear_Trap.png"}, {"zh": "大型捕兽夹", "ic": "https://img.whiterober.ccwu.cc/ASA/weapons/LargeBearTrap_Icon.png"}, {"zh": "Y异种植物陷阱", "ic": "https://img.whiterober.ccwu.cc/ASA/weapons/PlantSpeciesYTrap_Icon.png"}], "tools": {"cols": ["金属镐", "金属斧子"], "rows": [{"zh": "兽皮", "ic": "https://img.whiterober.ccwu.cc/ASA/resources/Hide.png", "cells": [{"avg": 9, "pct": 40, "hits": 8}, {"avg": 14, "pct": 60, "hits": 6}]}, {"zh": "生肉", "ic": "https://img.whiterober.ccwu.cc/ASA/consumables/Meat_Icon.png", "cells": [{"avg": 11, "pct": 60, "hits": 8}, {"avg": 7, "pct": 40, "hits": 6}]}]}}, "Dodo": {"noRecord": true, "corpse": {}, "perRes": [], "drops": [], "bound": [{"zh": "流星锤", "ic": "https://img.whiterober.ccwu.cc/ASA/weapons/Bolas_Icon.png"}, {"zh": "捕兽夹", "ic": "https://img.whiterober.ccwu.cc/ASA/weapons/Bear_Trap.png"}, {"zh": "Y异种植物陷阱", "ic": "https://img.whiterober.ccwu.cc/ASA/weapons/PlantSpeciesYTrap_Icon.png"}], "tools": {"cols": ["金属镐", "金属斧子"], "rows": [{"zh": "兽皮", "ic": "https://img.whiterober.ccwu.cc/ASA/resources/Hide.png", "cells": [{"avg": 2, "pct": 40, "hits": 2}, {"avg": 3, "pct": 60, "hits": 2}]}, {"zh": "生肉", "ic": "https://img.whiterober.ccwu.cc/ASA/consumables/Meat_Icon.png", "cells": [{"avg": 2, "pct": 60, "hits": 2}, {"avg": 2, "pct": 40, "hits": 2}]}]}}};
+// 采集工具图标（工具对比表表头用）
+var TC_GH_ICON = {
+  // v54：key 改用项目标准中文（Metal_Pick=金属镐 / Metal_Hatchet=金属斧子）
+  '金属镐': 'https://img.whiterober.ccwu.cc/ASA/tools/Metal_Pick.png',
+  '金属斧子': 'https://img.whiterober.ccwu.cc/ASA/tools/Metal_Hatchet.png'
+};
+// ===== v32：繁殖 tab 自主渲染（参数全部取自本项目）=====
+//   基础时长/温度/食物：从已抓缓存 tabHtml['2'] 提取（Rex 4h59m58s / 92h35m33s / 32-34°C / 70.81）
+//   倍率：本项目服务器配置基线（cfg_factory_baseline.json → Game.ini ShooterGameMode）
+var BREED = {
+  'Rex':      { inc:17998, mat:333333, tMin:32, tMax:34, food:70.81 },
+  'Baryonyx': { inc:7199,  mat:166666, tMin:29, tMax:35, food:47.22 },
+  'Dodo':     { inc:2999,  mat:55555,  tMin:22, tMax:30, food:26.56 }
+};
+// 繁殖描述（取自 wikily 繁殖页 <p>，9 段；运行时零外站依赖）
+var BREED_DESC = {
+  'Rex': [
+    "幼体: 已孵化的恐龙，作为幼崽，需要持续关注和直接放入物品栏的食物才能生存，或者附近有鸭嘴飞鼠照顾其需求。",
+    "在幼崽阶段(0-10%)，您必须手动喂食或使用鸭嘴飞鼠哺乳。从青少年期(10%+)开始，恐龙可以自己从饲料槽进食。在饲料槽中使用保鲜盐可以将变质时间延长一倍。",
+    "繁殖霸王龙会产生受精卵，需要仔细控制温度。孵化温度必须保持在32°C到34°C之间, 使用空调、立式火把或异齿龙来维持这个范围。在正确温度下，蛋大约需要4小时59分钟孵化。",
+    "出生后，小霸王龙的成长周期非常长，是游戏中最长的之一，在1倍成长速度下需要大约3天20小时才能成年。最费劲的是幼年阶段（0-10%成熟度），这时它还不能使用喂食槽。",
+    "后代会继承父母的属性，并有小概率发生变异，随机获得+2级的属性加成。使用繁殖计算器来规划食物需求、孵化计时和成熟阶段。",
+    "霸王龙的成长分为三个阶段：幼年期（0-10%）持续约556分钟，需要持续手动喂食。青少年期（10-50%）持续约37小时，现在可以从食槽进食。青少年期（50-100%）持续约46小时，继续从食槽进食，几乎完全长成。",
+    "在成长过程中进行印记可以提供永久属性加成。当印记达到100%时，霸王龙在被印记者骑乘时，会获得30%的伤害和抗性加成。准备好各种饲料，因为印记请求会随机在拥抱、散步和喂食饲料之间切换。",
+    "计划批量养成？霸王龙养成计算器会按阶段分解食物需求，确保不浪费任何资源。幼崽阶段（0-10%）需要约9小时16分钟，是最需要动手的阶段，需要直接喂食或使用鸭嘴飞鼠。",
+    "同时驯养多个霸王龙？设置恐龙数量，计算器会自动调整食物需求。根据你的游戏时间选择合适的食物, 更长的腐败时间意味着更少的看护。"
+  ],
+  'Baryonyx': [
+    "幼体: 已孵化的恐龙，作为幼崽，需要持续关注和直接放入物品栏的食物才能生存，或者附近有鸭嘴飞鼠照顾其需求。",
+    "在幼崽阶段(0-10%)，您必须手动喂食或使用鸭嘴飞鼠哺乳。从青少年期(10%+)开始，恐龙可以自己从饲料槽进食。在饲料槽中使用保鲜盐可以将变质时间延长一倍。",
+    "交配成功后，重爪龙会产下一个受精卵。孵化温度必须保持在29°C到35°C之间, 使用空调、立式火把或异齿龙来维持这个范围。在正确温度下，蛋大约需要1小时59分钟孵化。",
+    "从幼体到成体的完全成熟大约需要1天22小时（1倍速度），成长过程需要极大的耐心。成熟度达到10%之前需要手动喂食。之后交给饲料槽即可。",
+    "每只幼崽会从双亲继承属性，并有一定几率发生变异, 随机属性增加2级野生等级并改变颜色。使用繁殖计算器来规划食物需求、孵化计时和成熟阶段。",
+    "成长分为三个阶段：幼年期（0-10%）持续约278分钟，需要持续手动喂食。青少年期（10-50%）持续约19小时，现在可以从食槽进食。青少年期（50-100%）持续约23小时，继续从食槽进食，几乎完全长成。",
+    "印记加成很可观：完全印记的重爪龙在骑乘者骑乘时，伤害和伤害抗性提升30%。在成长过程中，你会被要求定期进行拥抱、散步或喂食特定的饲料。",
+    "上面的培育计算器精确显示了你为重爪龙每个成熟阶段所需的饲料数量。幼年阶段需要大约4小时38分钟 - 这个阶段必须手动喂食或使用鸭嘴飞鼠哺乳。",
+    "同时驯养多个重爪龙？设置恐龙数量，计算器会自动调整食物需求。不同类型的食物有不同的腐败时间, 在囤积食物时要考虑这一点。"
+  ],
+  'Dodo': [
+    "幼体: 已孵化的恐龙，作为幼崽，需要持续关注和直接放入物品栏的食物才能生存，或者附近有鸭嘴飞鼠照顾其需求。",
+    "在幼崽阶段(0-10%)，您必须手动喂食或使用鸭嘴飞鼠哺乳。从青少年期(10%+)开始，恐龙可以自己从饲料槽进食。在饲料槽中使用保鲜盐可以将变质时间延长一倍。",
+    "繁殖渡渡鸟会产生受精卵，需要仔细控制温度。孵化温度必须保持在22°C到30°C之间, 使用空调、立式火把或异齿龙来维持这个范围。在正确温度下，蛋大约需要49分钟孵化。",
+    "宝宝渡渡鸟在默认速度下大约需要15小时25分钟才能完全成熟 - 这个过程会持续几个小时。最费劲的是幼年阶段（0-10%成熟度），这时它还不能使用喂食槽。",
+    "每只幼崽会从双亲继承属性，并有一定几率发生变异, 随机属性增加2级野生等级并改变颜色。使用繁殖计算器来规划食物需求、孵化计时和成熟阶段。",
+    "养小渡渡鸟有三个成长阶段：宝宝期（0-10%）持续约93分钟，需要持续手动喂食。青少年期（10-50%）持续约6小时，现在可以从食槽进食。青少年期（50-100%）持续约8小时，继续从食槽进食，几乎完全长成。",
+    "在成长过程中进行印记可以提供永久属性加成。当印记达到100%时，渡渡鸟在被印记者骑乘时，会获得30%的伤害和抗性加成。在成长过程中，你会被要求定期进行拥抱、散步或喂食特定的饲料。",
+    "上面的培育计算器精确显示了你为渡渡鸟每个成熟阶段所需的饲料数量。在幼崽阶段，预计需要约1小时33分钟的主动照顾，之后它会升级为幼年期的食槽喂养。",
+    "倍率功能有助于规划大规模的渡渡鸟养成，通过汇总所有幼崽的食物需求。不同类型的食物有不同的腐败时间, 在囤积食物时要考虑这一点。"
+  ]
+};
+// v34：按句拆行（仅纯文本 <p>，>40 字；句尾补「。」）
+function tcSentences(html){
+  var d = document.createElement('div');
+  d.innerHTML = html;
+  Array.prototype.forEach.call(d.querySelectorAll('p'), function(p){
+    if(p.querySelector('*')) return;
+    var t = (p.textContent || '').trim();
+    if(t.length <= 40) return;
+    var parts = t.split('。').map(function(s){ return s.trim(); }).filter(function(s){ return s.length > 0; });
+    if(parts.length < 2) return;
+    p.innerHTML = parts.map(function(s){ return s + '。'; }).join('<br>');
+  });
+  return d.innerHTML;
+}
+// v35：描述最多显示 maxLines 行，其余折叠可展开
+function tcCollapseIntro(el, maxLines){
+  if(!el) return;
+  maxLines = maxLines || 5;
+  var lines = [];
+  Array.prototype.forEach.call(el.querySelectorAll('p'), function(p){
+    String(p.innerHTML || '').split(/<br\s*\/?>/i).forEach(function(s){
+      var t = s.trim();
+      if(t) lines.push(t);
+    });
+  });
+  if(!lines.length) return;
+  var mk = function(s){ return '<div class="tc-line">' + s + '</div>'; };
+  if(lines.length <= maxLines){
+    el.innerHTML = lines.map(mk).join('');
+    return;
+  }
+  var head = lines.slice(0, maxLines).map(mk).join('');
+  var rest = lines.slice(maxLines).map(mk).join('');
+  var moreTxt = '展开全部（共 ' + lines.length + ' 行）';
+  el.innerHTML = head
+    + '<div class="tc-more" style="display:none">' + rest + '</div>'
+    + '<button class="tc-expand" data-more="' + moreTxt + '">' + moreTxt + '</button>';
+  var btn = el.querySelector('.tc-expand');
+  if(btn) btn.onclick = function(){
+    var box = el.querySelector('.tc-more');
+    if(!box) return;
+    var closed = (box.style.display === 'none');
+    box.style.display = closed ? '' : 'none';
+    btn.textContent = closed ? '收起' : btn.getAttribute('data-more');
+  };
+}
+function tcMountIntro(){
+  var el = document.querySelector('#pBody .tc-intro');
+  if(el) tcCollapseIntro(el, 5);
+}
+// 服务器倍率（v39：改为实配值，取自 GET /api/cfg_rules?server=X&file=GAME 实读 Game.ini）
+//   11 台服务器实测一致：EggHatchSpeed 6 / BabyMatureSpeed 6 / MatingInterval 0.25 /
+//   BabyCuddleInterval 0.15 / BabyImprintAmount 3（旧版占位全 1× 是错的）
+//   语义：hatch / mature 是「速度」倍率（时间 ÷ 它）；mating / cuddle 是「间隔」倍率（时间 × 它）；
+//         imprint 是「每次留痕给的量」倍率（所需次数 ÷ 它）
+var BREED_MULT = { mating:0.25, hatch:6, mature:6, cuddle:0.15, layEgg:1, imprint:3 };
+var BREED_MULT_SRC = '实服 Game.ini（/api/cfg_rules 实读 · 11 台一致）';
+// ARK 基础常量
+var BREED_BASE = { matingMinH:18, matingMaxH:48, cuddleH:8 };
+var TC_NARC = 40;     // 每支麻醉药增加眩晕值（待核）
+var TC_DART = 240;    // 每发麻醉镖增加眩晕值（待核）
+// 项目自带图标（img.whiterober.ccwu.cc），不用 wikily 的 r2.wikily.gg
+var TC_ICON = { 'Narcotic': 'https://img.whiterober.ccwu.cc/ASA/consumables/Narcotic.png' };
+
+function tcDur(s){
+  s = Math.max(0, Math.round(s || 0));
+  var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
+  return (h ? h + 'h ' : '') + ((h || m) ? m + 'm ' : '') + x + 's';
+}
+function tcNum(n){ return String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+// MDI 图标（内联 SVG，path 取自 @mdi/font；颜色继承 currentColor）
+var TC_MDI = {
+  check: 'M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z',
+  close: 'M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z',
+  info: 'M13,9H11V7H13M13,17H11V11H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z'
+};
+function tcIco(name){
+  var d = TC_MDI[name] || TC_MDI.check;
+  return '<svg class="tc-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="' + d + '"/></svg>';
+}
+function tcPct(n){ return (Math.round(n * 100) / 100).toFixed(2); }
+
+function tcRows(){
+  var t = TAME[CUR]; if(!t) return null;
+  var s = t.setup || t.s || {};
+  var lv = Math.max(1, Math.min(150, TC_LV));
+  var A = (+s.req || 0) + (+s.per_level || 0) * Math.max(0, lv - 1);   // 总亲和度需求
+  var rate = +s.rate || 0.4167, ineff = +s.ineff || 1, sp = TC_SP;
+  var list = (t.diet || []).map(function(en){
+    var f = FOODS[en] || {};
+    var aff = +f.aff || 0, base = +f.base || 0;
+    var qty = aff > 0 ? Math.ceil(A / (aff * 4 * sp)) : 0;                    // 口数
+    var itv = rate > 0 ? base / (rate * sp) : 0;                             // 喂食间隔（秒）
+    var time = qty > 0 ? Math.floor(qty * itv + 1) : 0;                      // 总时间
+    var eff = (aff > 0 && qty > 0) ? (1 / (1 + ineff * qty / (aff * 4))) * 100 : 0;  // 效率
+    var plus = Math.floor(lv * eff / 100 * 0.5);                             // 等级加成
+    return { en:en, zh:f.zh || en, icon:f.icon || '', aff:aff, base:base, qty:qty,
+             itv:itv, time:time, eff:eff, plus:plus, tlv:lv + plus,
+             own:(TC_OWN[en] || 0) };
+  });
+  list.sort(function(a, b){ return (b.eff - a.eff) || (a.time - b.time); });
+  var torpor = Math.ceil((+s.torpor_base || 0) * (1 + (+s.torpor_inc || 0) * Math.max(0, lv - 1)));
+  var wakeRate = (+s.torpor_rate || 0) * 4.2;
+  // 「最合适」= 库存够的里效率最高；都不够则取效率最高
+  var enough = list.filter(function(r){ return r.own >= r.qty && r.qty > 0; });
+  var best = enough.length ? enough[0] : list[0];
+  // 麻醉药口径（v5 修正）：只需补「驯服时长超出眩晕值续航」的部分，**不是**从零把眩晕值填满。
+  //   眩晕值（满晕 torpor）在击晕那刻就是满的；全程按 wakeRate 自然衰减。
+  //   衰减总量 <= 满晕值 ⇒ 全程不会醒 ⇒ 需补 0 支（对齐 wikily 原文「在此设置下无需更多」）。
+  var bestTime = (best && best.time) || 0;
+  var wakeTotal = wakeRate * bestTime;                     // 全程自然衰减
+  var awakeIn = wakeRate > 0 ? torpor / wakeRate : 0;      // 满晕值能撑多少秒
+  var narc = Math.ceil(Math.max(0, wakeTotal - torpor) / TC_NARC);   // 驯服中需补
+  var narcStun = Math.ceil(torpor / TC_NARC);              // 击晕阶段把眩晕值打满（麻醉药口径）
+  var narcDart = Math.ceil(torpor / TC_DART);              // 麻醉镖口径（待核）
+  return { lv:lv, A:A, torpor:torpor, wakeRate:wakeRate, awakeIn:awakeIn, wakeTotal:wakeTotal,
+           list:list, best:best, enoughAll:enough.length > 0,
+           narc:narc, narcStun:narcStun, narcDart:narcDart };
+}
+
+// ===== v14：经验 tab（自主渲染，不依赖 wikily）=====
+// v20：按 wikily creature_xp Lua 源码重构
+//   perKill   = base × (1+0.1×(lv-1)) × 4 × kindRate × (server × toilet × broth × ex2 × ex4)
+//   kindRate  = wild 1.25 | alpha 1.33 | boss 5 | cave 1.33   ← 单选
+//   saddleXp  = saddleBase × QUALITY_XP[q] × 4 × server
+var EXP_KIND = 'wild';
+var EXP_BUFF = { toilet: false, broth: false, ex2: false, ex4: false };
+var EXP_Q = 0;
+var EXP_KINDS = [ ['wild', '野生 1.25', 1.25], ['alpha', 'Alpha 1.33', 1.33],
+                  ['boss', '首领 5×', 5], ['cave', '洞穴内 1.33', 1.33] ];
+var EXP_BUFFS = [ ['toilet', '马桶 +33%', 1.33], ['broth', '启蒙肉汤 1.5×', 1.5],
+                  ['ex2', '笔记 2×', 2], ['ex4', '笔记 4×', 4] ];
+var EXP_QUALITY = [ ['原始', 1], ['粗糙', 2], ['学徒', 3], ['工匠', 4], ['精工', 5], ['卓越', 6] ];
+
+function expLvSet(v){ EXP_LV = Math.max(1, Math.min(150, parseInt(v, 10) || 1)); document.getElementById('expLvV').textContent = EXP_LV; expCalc(); }
+function expKillsSet(v){ EXP_KILLS = Math.max(1, Math.min(9999, parseInt(v, 10) || 1)); expCalc(); }
+function expKindSet(k){
+  EXP_KIND = k;
+  Array.prototype.forEach.call(document.querySelectorAll('#pBody .tc-kind .tc-pre'), function(b){
+    b.classList.toggle('on', b.getAttribute('data-kind') === k);
+  });
+  var bd = document.querySelector('#pBody .tc-badge2');
+  if (bd) bd.textContent = expKindName() + ' ' + expKindRate() + '×';
+  expCalc();
+}
+function expBuffSet(k){
+  EXP_BUFF[k] = !EXP_BUFF[k];
+  Array.prototype.forEach.call(document.querySelectorAll('#pBody .tc-buff .tc-pre'), function(b){
+    b.classList.toggle('on', !!EXP_BUFF[b.getAttribute('data-buff')]);
+  });
+  expCalc();
+}
+function expQSet(v){
+  EXP_Q = Math.max(0, Math.min(5, parseInt(v, 10) || 0));
+  expCalc();
+}
+function expKindRate(){
+  for (var i = 0; i < EXP_KINDS.length; i++) if (EXP_KINDS[i][0] === EXP_KIND) return EXP_KINDS[i][2];
+  return 1.25;
+}
+function expKindName(){
+  for (var i = 0; i < EXP_KINDS.length; i++) if (EXP_KINDS[i][0] === EXP_KIND) return EXP_KINDS[i][1].split(' ')[0];
+  return '野生';
+}
+function expBuffMul(){
+  var r = 1;
+  EXP_BUFFS.forEach(function(b){ if (EXP_BUFF[b[0]]) r *= b[2]; });
+  return r;
+}
+function expBuffTxt(){
+  var a = [];
+  EXP_BUFFS.forEach(function(b){ if (EXP_BUFF[b[0]]) a.push(b[2] + ' ' + b[1].split(' ')[0]); });
+  return a.length ? ' × ' + a.join(' × ') : '';
+}
+function expPerKill(e){
+  var lvBase = 1 + (EXP_LV - 1) * 0.1;
+  return e.base * lvBase * 4 * expKindRate() * (TC_SP * expBuffMul());
+}
+function expCalc(){
+  var e = EXP[CUR]; if(!e) return;
+  var lvBase = 1 + (EXP_LV - 1) * 0.1;
+  var srv = TC_SP, per = expPerKill(e);
+  var tile = function(k, v, s){
+    return '<div class="tc-tile"><div class="tc-tile-k">' + k + '</div>'
+      + '<div class="tc-tile-v">' + v + '</div>' + (s ? '<div class="tc-tile-s">' + s + '</div>' : '') + '</div>';
+  };
+  var h = tile('等级系数', lvBase.toFixed(1), '1 + (等级-1) × 0.1')
+        + tile('单次击杀经验', tcNum(per), e.base + ' 基础 × ' + lvBase.toFixed(1) + ' × 4 × ' + expKindRate() + ' ' + expKindName() + ' × ' + srv + ' 服务器' + expBuffTxt())
+        + tile('升到 100 级需', tcNum(Math.ceil(1000000 / per)) + ' 次', '按约 100 万经验估算')
+        + tile('基础经验', String(e.base), '每次击杀（wiki 原值）')
+        + tile('累计击杀经验', tcNum(per * EXP_KILLS), EXP_KILLS + ' 只 × 单只 ' + tcNum(per));
+  document.getElementById('expTiles').innerHTML = h;
+
+  var qm = EXP_QUALITY[EXP_Q][1], qn = EXP_QUALITY[EXP_Q][0];
+  var sd = '';
+  (e.saddle || []).forEach(function(s){
+    var xp = s.base * qm * 4 * srv;    // 源码：基础 × 品质 × 4 × 服务器
+    sd += '<div class="tc-own-r"><span class="tc-own-n">' + s.zh
+        + (s.lv ? '（' + s.lv + ' 级）' : '') + '</span>'
+        + '<span class="tc-own-q">基础 ' + s.base + ' × ' + qm + '× ' + qn + ' × 4 × ' + srv + '× 服务器</span>'
+        + '<span class="tc-ok">' + tcNum(xp) + ' 经验</span></div>';
+  });
+  document.getElementById('expSaddle').innerHTML = sd || '<div class="tc-adv">该物种无鞍制作经验数据</div>';
+}
+
+function renderExp(){
+  var e = EXP[CUR];
+  var h = '<div class="tc">'
+    + '<div class="tc-top"><span class="tc-badge">服务器 ' + TC_SP + '×</span>'
+    + '<span class="tc-badge2">' + expKindName() + ' ' + expKindRate() + '×</span></div>';
+  if(!e){
+    h += '<div class="tc-sec"><div class="tc-adv">⚠️ 该物种未收录经验数据。</div></div></div>';
+    document.getElementById('pBody').innerHTML = h;
+    return;
+  }
+  var kinds = EXP_KINDS.map(function(k){
+    return '<button class="tc-pre' + (EXP_KIND === k[0] ? ' on' : '') + '" data-kind="' + k[0] + '">' + k[1] + '</button>';
+  }).join('');
+  var buffs = EXP_BUFFS.map(function(b){
+    return '<button class="tc-pre' + (EXP_BUFF[b[0]] ? ' on' : '') + '" data-buff="' + b[0] + '">' + b[1] + '</button>';
+  }).join('');
+  var qopts = EXP_QUALITY.map(function(q, i){
+    return '<option value="' + i + '"' + (EXP_Q === i ? ' selected' : '') + '>' + q[0] + ' ×' + q[1] + '</option>';
+  }).join('');
+  h += '<div class="tc-ctrl"><label>目标等级</label>'
+    + '<input type="range" min="1" max="150" value="' + EXP_LV + '" oninput="expLvSet(this.value)">'
+    + '<span class="tc-lv" id="expLvV">' + EXP_LV + '</span>'
+    + '<span class="tc-div"></span><label>击杀数</label>'
+    + '<input class="tc-num" type="number" min="1" max="9999" value="' + EXP_KILLS + '" oninput="expKillsSet(this.value)">'
+    + '</div>'
+    + '<div class="tc-fx tc-kind"><label>目标类型</label><span class="tc-hint">单选</span>'
+    + '<span class="tc-tip" data-tip="原站按击杀目标类型取一个倍率：野生 1.25 / Alpha 1.33 / 首领 5 / 洞穴内 1.33，互斥"><svg viewBox="0 0 24 24"><path d="' + TC_MDI.info + '"/></svg></span>'
+    + kinds + '</div>'
+    + '<div class="tc-fx tc-buff"><label>额外加成</label><span class="tc-hint">可多选叠加</span>'
+    + '<span class="tc-tip" data-tip="马桶 ×1.33、启蒙肉汤 ×1.5、探险家笔记 ×2 / ×4（读笔记获得的限时经验加成），均与上方类型倍率连乘"><svg viewBox="0 0 24 24"><path d="' + TC_MDI.info + '"/></svg></span>'
+    + buffs + '</div>'
+    + '<div class="tc-fx"><label>鞍品质</label>'
+    + '<span class="tc-tip" data-tip="原站品质倍率：原始 1 / 粗糙 2 / 学徒 3 / 工匠 4 / 精工 5 / 卓越 6（取自 wikily creature_xp 脚本）"><svg viewBox="0 0 24 24"><path d="' + TC_MDI.info + '"/></svg></span>'
+    + '<select class="tc-num" style="width:120px" onchange="expQSet(this.value)">' + qopts + '</select>'
+    + '<span class="tc-hint">影响「② 鞍制作经验」</span></div>'
+    + '<div class="tc-sec"><div class="tc-h">① 击杀经验<em>基础 × 等级系数 × 4 × 类型 × 服务器 × 加成</em></div><div class="tc-tiles" id="expTiles"></div></div>'
+    + '<div class="tc-sec"><div class="tc-h">② 鞍制作经验<em>基础 × 品质 × 4 × 服务器</em></div><div class="tc-own" id="expSaddle"></div></div>'
+    + '<div class="tc-sec"><div class="tc-h">③ 经验倍率参考</div><div class="tc-adv">'
+    + '固定项：公式内 <b>×4</b> · 服务器 <code>XPMultiplier = ' + TC_SP + '</code>。'
+    + '目标类型与额外加成见上方开关；鞍品质 6 档倍率 1~6。</div></div>'
+    + '<div class="tc-note">公式取自 wikily <code>creature_xp</code> Lua 源码：<code>base × (1+0.1×(等级-1)) × 4 × kindRate × (server × toilet × broth × explorer)</code>，kindRate 取目标类型（野生 1.25 / Alpha 1.33 / 首领 5 / 洞穴内 1.33）。校核：30 × 15.9 × 4 × 1.25 × 1 = <b>2,385</b>（原站显示值）。鞍经验 <code>基础 × 品质 × 4 × 服务器</code>，品质倍率 1~6；原始 1× 下 86 × 4 × 1 = 344（原站值）。</div>'
+    + '</div>';
+  document.getElementById('pBody').innerHTML = h;
+  Array.prototype.forEach.call(document.querySelectorAll('#pBody .tc-kind .tc-pre'), function(b){
+    b.onclick = function(){ expKindSet(b.getAttribute('data-kind')); };
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('#pBody .tc-buff .tc-pre'), function(b){
+    b.onclick = function(){ expBuffSet(b.getAttribute('data-buff')); };
+  });
+  expCalc();
+}
+
+// ===== v55：技能 tab 自主渲染（结构对齐驯服/繁殖/采集/收割）=====
+function renderAbilTab(){
+  var d = ABIL[CUR];
+  var _N = 0, _CN = ['\u2460','\u2461','\u2462','\u2463','\u2464','\u2465','\u2466'];
+  var _H = function(t, em){ var x = _CN[_N++] || ''; return '<div class="tc-h">' + x + ' ' + t + (em ? '<em>' + em + '</em>' : '') + '</div>'; };
+  var h = '<div class="tc">';
+  if(!d){
+    h += '<div class="tc-sec"><div class="tc-adv">\u26a0\ufe0f \u8be5\u7269\u79cd\u672a\u6536\u5f55\u6280\u80fd\u6570\u636e\u3002</div></div></div>';
+    document.getElementById('pBody').innerHTML = h;
+    return;
+  }
+  // 描述前置：战斗说明（一句一行，>5 行折叠）
+  if(d.notes && d.notes.length){
+    h += '<div class="tc-intro">' + d.notes.map(function(t){ return '<p>' + t + '</p>'; }).join('') + '</div>';
+  }
+  // 徽章
+  h += '<div class="tc-top">'
+     + '<span class="tc-badge">' + (d.videos ? d.videos.length : 0) + ' \u4e2a\u6280\u80fd</span>'
+     + (d.mats && d.mats.length ? '<span class="tc-badge2">\u53ef\u7834\u574f ' + d.mats.map(function(m){ return m.zh; }).join('\u00b7') + '</span>' : '')
+     + (d.hitRaw ? '<span class="tc-badge2">' + d.hitRaw + '</span>' : '')
+     + '</div>';
+
+  // ① 技能一览（技能 / 操作键 / 基础伤害 / 特殊倍率）
+  if(d.skills && d.skills.length){
+    var t1 = '<thead><tr><th>\u6280\u80fd</th><th>\u64cd\u4f5c\u952e</th><th>\u57fa\u7840\u4f24\u5bb3</th><th>\u7279\u6b8a\u500d\u7387</th></tr></thead><tbody>'
+      + d.skills.map(function(k){
+          return '<tr><th>' + k.zh + '</th>'
+            + '<td>' + (k.key || '\u2014') + '</td>'
+            + '<td class="num">' + (k.dmg || '\u2014') + '</td>'
+            + '<td>' + (k.mult || '\u2014') + '</td></tr>';
+        }).join('') + '</tbody>';
+    h += '<div class="tc-sec">' + _H('\u6280\u80fd\u4e00\u89c8', '1 \u7ea7 \u00b7 100% \u9a6f\u670d\u6548\u7387 \u00b7 \u65e0\u70d9\u5370')
+       + '<table class="tc-tb">' + t1 + '</table></div>';
+  }
+
+  // ② 采集伤害（技能 × 材质）
+  var withMats = (d.skills || []).filter(function(k){ return k.mats && k.mats.length; });
+  if(withMats.length){
+    var matNames = withMats[0].mats.map(function(m){ return m.zh; });
+    var t2 = '<thead><tr><th>\u6280\u80fd</th>' + matNames.map(function(m){ return '<th>' + m + '</th>'; }).join('') + '</tr></thead><tbody>'
+      + withMats.map(function(k){
+          return '<tr><th>' + k.zh + '</th>'
+            + k.mats.map(function(m){ return '<td class="num">' + (m.v || '\u2014') + '</td>'; }).join('')
+            + '</tr>';
+        }).join('') + '</tbody>';
+    h += '<div class="tc-sec">' + _H('\u91c7\u96c6\u4f24\u5bb3', '\u5bf9\u5404\u6750\u8d28\u7684\u7834\u574f\u503c')
+       + '<table class="tc-tb">' + t2 + '</table></div>';
+  }
+
+  // ③ 伤害抗性（分类 / 项目 / 效果）
+  if(d.resist && d.resist.length){
+    var rows = [];
+    d.resist.forEach(function(c){
+      c.items.forEach(function(it, i){
+        var v = it.v || '';
+        var col = '#8b93a7';
+        if (v.indexOf('+') === 0) col = '#f87171';
+        else if (v.indexOf('-') === 0) col = '#4ade80';
+        else if (v.indexOf('\u514d\u75ab') >= 0) col = '#38bdf8';
+        rows.push('<tr><th>' + (i === 0 ? c.cat : '') + '</th><td>' + it.zh + '</td>'
+          + '<td class="num" style="color:' + col + '">' + v + '</td></tr>');
+      });
+    });
+    h += '<div class="tc-sec">' + _H('\u4f24\u5bb3\u6297\u6027', '\u6b63\u503c=\u53d7\u4f24\u52a0\u6210 \u00b7 \u8d1f\u503c=\u51cf\u4f24')
+       + '<table class="tc-tb"><thead><tr><th>\u5206\u7c7b</th><th>\u9879\u76ee</th><th>\u6548\u679c</th></tr></thead><tbody>'
+       + rows.join('') + '</tbody></table></div>';
+  }
+
+  // ④ 技能演示（视频，源仍为 wikily CDN）
+  if(d.videos && d.videos.length){
+    h += '<div class="tc-sec">' + _H('\u6280\u80fd\u6f14\u793a', '\u70b9\u51fb\u5207\u6362')
+       + renderAbil(d.videos, 'tab') + '</div>';
+  }
+
+  h += '<div class="tc-note">\u6570\u636e\u53d6\u81ea<b>\u672c\u9879\u76ee\u672c\u5730\u7f13\u5b58</b>\uff08wikily \u6293\u53d6\u7ed3\u679c\u89e3\u6790\uff09\uff1b'
+     + '\u6750\u8d28\u4e0e\u7269\u54c1\u540d\u5747\u5df2\u8fc7 <code>\u6c49\u5316/item_zh.json</code> \u5bf9\u7167\u8868\u3002'
+     + '\u6280\u80fd\u6f14\u793a\u89c6\u9891\u6e90\u4e3a\u5916\u7ad9\uff08\u9879\u76ee\u65e0\u672c\u5730\u89c6\u9891\uff09\u3002</div>'
+     + '</div>';
+  document.getElementById('pBody').innerHTML = h;
+  tcMountIntro();
+}
+
+// ===== v42：采集 tab 自主渲染（结构完全对齐驯服/繁殖：描述 → 徽章 → ①②③④ → 说明）=====
+function tcGhIco(url, sz){
+  if(!url) return '';
+  return '<img src="' + url + '" style="width:' + (sz||16) + 'px;height:' + (sz||16) + 'px;object-fit:contain;vertical-align:-3px;margin-right:4px" onerror="this.style.display=\'none\'">';
+}
+function tcGhChip(zh, ic, tail){
+  // v52：用正式项目的 .lb-hf-chip（不再自编圆角矩形）
+  return '<span class="lb-hf-chip">'
+    + tcGhIco(ic, 16) + '<span>' + zh + '</span>'
+    + (tail ? '<span style="color:#4ade80">' + tail + '</span>' : '')
+    + '</span>';
+}
+function tcGhTile(k, v, sub){
+  return '<div class="tc-tile"><div class="tc-tile-k">' + k + '</div>'
+    + '<div class="tc-tile-v">' + v + '</div>'
+    + (sub ? '<div class="tc-tile-s">' + sub + '</div>' : '') + '</div>';
+}
+function renderGather(){
+  var d = GATHER[CUR];
+  var _N = 0, _CN = ['\u2460','\u2461','\u2462','\u2463','\u2464','\u2465','\u2466'];
+  var _H = function(t, em){ var s = _CN[_N++] || ''; return '<div class="tc-h">' + s + ' ' + t + (em ? '<em>' + em + '</em>' : '') + '</div>'; };
+  var h = '<div class="tc">';
+  if(!d){
+    h += '<div class="tc-sec"><div class="tc-adv">\u26a0\ufe0f \u8be5\u7269\u79cd\u672a\u6536\u5f55\u91c7\u96c6\u6570\u636e\u3002</div></div></div>';
+    document.getElementById('pBody').innerHTML = h;
+    return;
+  }
+  // \u63cf\u8ff0\u524d\u7f6e\uff08\u5173\u4e8e\u91c7\u96c6\uff09
+  if(d.about) h += '<div class="tc-intro"><p>' + d.about + '</p></div>';
+  // \u5fbd\u7ae0\uff08\u63cf\u8ff0\u4e4b\u540e\uff0c\u4e0e\u4f0f\u6b96/\u9a6f\u670d\u4e00\u81f4\uff09
+  var amt = (d.params && d.params.amtMult) ? d.params.amtMult : '1';
+  h += '<div class="tc-top"><span class="tc-badge">' + (d.caps.length ? ('\u53ef\u91c7 ' + d.caps.length + ' \u79cd') : '\u65e0\u91c7\u96c6\u52a0\u6210') + '</span>'
+     + '<span class="tc-badge2">\u91c7\u96c6\u91cf ' + amt + '\u00d7</span>'
+     + (d.nodes.length ? '<span class="tc-badge2">\u8d44\u6e90\u8282\u70b9 ' + d.nodes.length + ' \u79cd</span>' : '')
+     + '</div>';
+  // \u2460 \u91c7\u96c6\u52a0\u6210
+  var s1;
+  if(d.caps.length){
+    s1 = '<div style="display:flex;flex-wrap:wrap;gap:6px">'
+       + d.caps.map(function(c){ return tcGhChip(c.zh, c.ic, c.mult ? (c.mult + '\u00d7') : ''); }).join('')
+       + '</div>';
+  }else{
+    s1 = '<div class="tc-adv">\u8be5\u7269\u79cd\u6ca1\u6709\u989d\u5916\u7684\u8d44\u6e90\u91c7\u96c6\u52a0\u6210\u3002</div>';
+  }
+  h += '<div class="tc-sec">' + _H('\u91c7\u96c6\u52a0\u6210', '\u9a91\u4e58\u91c7\u96c6\u65f6\u7684\u989d\u5916\u500d\u7387') + s1 + '</div>';
+  // \u2461 \u8d44\u6e90\u8282\u70b9\u4ea7\u91cf
+  var s2;
+  if(d.nodes.length){
+    // v44：卡片 → 表格（与「每个节点资源」「工具对比」同一套 .tc-tb）
+    var t1 = '<thead><tr><th>\u8282\u70b9</th><th>\u8282\u70b9\u751f\u547d\u503c</th><th>\u8fd1\u6218</th><th>\u63b7\u9ab0</th><th>\u547d\u4e2d</th><th>\u5e73\u5747\u4ea7\u51fa</th></tr></thead><tbody>'
+      + d.nodes.map(function(n){
+          return '<tr><th>' + n.zh + '</th>'
+            + '<td class="num">' + tcNum(n.hp) + '</td>'
+            + '<td class="num">' + n.melee + '%</td>'
+            + '<td class="num">' + n.rolls + '</td>'
+            + '<td class="num">' + n.hits + '</td>'
+            + '<td class="num"><b style="color:#4ade80">' + n.avg + '</b> <span style="color:#8b93a7;font-size:11px">' + n.res + '</span></td>'
+            + '</tr>';
+        }).join('') + '</tbody>';
+    s2 = '<table class="tc-tb">' + t1 + '</table>';
+  }else if(d.noNode){
+    s2 = '<div class="tc-adv">\u8be5\u7269\u79cd\u4e0d\u91c7\u96c6\u5ca9\u77f3\u3001\u6811\u6728\u3001\u91d1\u5c5e\u7b49\u8d44\u6e90\u8282\u70b9 \u2014\u2014 \u5b83\u7684\u4ea7\u51fa\u89c1\u300c\u6536\u5272\u300dtab\u3002</div>';
+  }else{
+    s2 = '<div class="tc-adv">\u6682\u65e0\u8be5\u7269\u79cd\u7684\u8d44\u6e90\u8282\u70b9\u91c7\u96c6\u8bb0\u5f55\u3002</div>';
+  }
+  h += '<div class="tc-sec">' + _H('\u8d44\u6e90\u8282\u70b9\u4ea7\u91cf', '\u8fd1\u6218 100% \u57fa\u51c6') + s2 + '</div>';
+  // \u2462 \u6bcf\u4e2a\u8282\u70b9\u8d44\u6e90
+  if(d.nodeRes.length){
+    // v51\uff1a\u8868\u5934\u300c\u4f4e/\u5e73\u5747/\u9ad8\u300d\u8d34\u5de6\u3001\u300c\u5f53\u524d\u300d\u300c\u5cf0\u503c\u300d\u8d34\u53f3\n    //   \u26a0 th \u4e0d\u80fd\u76f4\u63a5\u7528 flex\uff08\u4f1a\u8ba9 table \u5217\u5bbd\u5854\u7f29\uff09\uff0c\u5fc5\u987b\u5185\u5c42 div \u505a\u5bf9\u9f50
+    var _thc = 'display:flex;align-items:center;justify-content:space-between;gap:8px';
+    var tb = '<thead><tr><th>\u8d44\u6e90</th><th>\u6bcf\u6b21\u63b7\u9ab0</th>'
+      + '<th><div style="' + _thc + '"><span>\u4f4e/\u5e73\u5747/\u9ad8</span><span>\u5f53\u524d</span></div></th>'
+      + '<th><div style="' + _thc + '"><span>\u4f4e/\u5e73\u5747/\u9ad8</span><span>\u5cf0\u503c</span></div></th>'
+      + '</tr></thead><tbody>'
+      + d.nodeRes.map(function(x){
+          return '<tr><th>' + tcGhIco(x.ic, 16) + x.zh + '</th><td>' + x.roll + '%</td>'
+            + '<td>' + x.cur[0] + ' / <b style="color:#e0e0e0">' + x.cur[1] + '</b> / ' + x.cur[2] + '</td>'
+            + '<td>' + x.peak[0] + ' / <b style="color:#4ade80">' + x.peak[1] + '</b> / ' + x.peak[2] + '</td></tr>';
+        }).join('') + '</tbody>';
+    h += '<div class="tc-sec">' + _H('\u6bcf\u4e2a\u8282\u70b9\u8d44\u6e90')
+       + '<table class="tc-tb">' + tb + '</table></div>';
+  }
+  // \u2463 \u91c7\u96c6\u53c2\u6570
+  if(d.params && d.params.hp){
+    var p = d.params;
+    h += '<div class="tc-sec">' + _H('\u91c7\u96c6\u53c2\u6570', '\u8282\u70b9\u57fa\u7840\u503c') + '<div class="tc-tiles">'
+      + tcGhTile('\u8282\u70b9\u751f\u547d\u503c', tcNum(p.hp), '\u57fa\u7840\u8010\u4e45')
+      + tcGhTile('\u91c7\u96c6\u95f4\u9694', p.interval + 's', '\u6bcf\u6b21\u547d\u4e2d\u8017\u65f6')
+      + tcGhTile('\u4f24\u5bb3\u500d\u7387', p.dmgMult + '\u00d7', '\u6b66\u5668\u4f24\u5bb3\u7cfb\u6570')
+      + tcGhTile('\u91c7\u96c6\u91cf\u500d\u7387', p.amtMult + '\u00d7', '\u670d\u52a1\u5668\u91c7\u96c6\u500d\u7387')
+      + tcGhTile('\u57fa\u7840\u4f24\u5bb3', p.baseDmg, '\u8be5\u8282\u70b9\u7c7b\u578b')
+      + tcGhTile('\u57fa\u7840\u8fd1\u6218', p.baseMelee + '%', '\u91ce\u751f\u57fa\u51c6')
+      + '</div></div>';
+  }
+  h += '<div class="tc-note">\u6570\u636e\u53d6\u81ea<b>\u672c\u9879\u76ee\u672c\u5730\u7f13\u5b58</b>\uff08wikily \u6293\u53d6\u7ed3\u679c\u89e3\u6790\uff0c\u4e0d\u518d\u8bbf\u95ee\u5916\u7ad9\uff09\uff1b'
+     + '\u56fe\u6807\u5747\u53d6\u81ea <code>img.whiterober.ccwu.cc</code>\u3002'
+     + '\u8fd1\u6218\u57fa\u51c6 100%\uff1b\u5b9e\u9645\u4ea7\u91cf\u6309\u89d2\u8272\u5f53\u524d\u8fd1\u6218\u4f24\u5bb3\u4e58\u7b97\u3002</div>'
+     + '</div>';
+  document.getElementById('pBody').innerHTML = h;
+  tcMountIntro();
+}
+
+// ===== v42：收割 tab 自主渲染 =====
+function renderHarvest(){
+  var d = HARVEST[CUR];
+  var _N = 0, _CN = ['\u2460','\u2461','\u2462','\u2463','\u2464','\u2465','\u2466'];
+  var _H = function(t, em){ var s = _CN[_N++] || ''; return '<div class="tc-h">' + s + ' ' + t + (em ? '<em>' + em + '</em>' : '') + '</div>'; };
+  var h = '<div class="tc">';
+  if(!d){
+    h += '<div class="tc-sec"><div class="tc-adv">\u26a0\ufe0f \u8be5\u7269\u79cd\u672a\u6536\u5f55\u6536\u5272\u6570\u636e\u3002</div></div></div>';
+    document.getElementById('pBody').innerHTML = h;
+    return;
+  }
+  var c = d.corpse || {};
+  // \u5fbd\u7ae0
+  h += '<div class="tc-top">'
+     + '<span class="tc-badge">' + (c.hp ? ('\u5c38\u4f53 ' + tcNum(c.hp) + ' HP') : '\u65e0\u5c38\u4f53\u8bb0\u5f55') + '</span>'
+     + (c.interval ? '<span class="tc-badge2">\u91c7\u96c6\u95f4\u9694 ' + c.interval + 's</span>' : '')
+     + (c.rolls ? '<span class="tc-badge2">' + c.rolls + ' \u6b21\u63b7\u9ab0</span>' : '')
+     + (c.hits ? '<span class="tc-badge2">' + c.hits + ' \u6b21\u547d\u4e2d</span>' : '')
+     + '</div>';
+  // \u2460 \u6bcf\u5177\u5c38\u4f53\u8d44\u6e90
+  var s1;
+  if(d.perRes.length){
+    s1 = '<div class="tc-own">' + d.perRes.map(function(r){
+      return '<div class="tc-own-r">'
+        + '<span class="tc-own-n">' + tcGhIco(r.ic, 18) + r.zh + '</span>'
+        + '<span class="tc-own-q">\u6bcf\u6b21\u63b7\u9ab0 ' + r.roll + '% \u00b7 \u8fd1\u6218 ' + r.range[0] + '-' + r.range[1]
+        + ' \u00b7 \u5cf0\u503c ' + r.peakRange[0] + '-' + r.peakRange[1] + '</span>'
+        + '<span class="tc-ok">\u5e73\u5747 ' + r.avg + '</span></div>';
+    }).join('') + '</div>'
+    + (c.peak ? '<div class="tc-adv" style="margin-top:8px">\u8fd1\u6218\u5cf0\u503c\uff1a' + c.peak + '</div>' : '');
+  }else if(d.noRecord){
+    s1 = '<div class="tc-adv">\u6682\u65e0\u8be5\u7269\u79cd\u7684\u5c38\u4f53\u91c7\u96c6\u8bb0\u5f55\uff08wiki \u672a\u6536\u5f55\uff09\u3002\u4e0b\u65b9\u5de5\u5177\u5bf9\u6bd4\u4ecd\u6309\u5df2\u8bb0\u5f55\u6570\u636e\u7ed9\u51fa\u3002</div>';
+  }else{
+    s1 = '<div class="tc-adv">\u65e0\u6bcf\u5177\u5c38\u4f53\u8d44\u6e90\u6570\u636e\u3002</div>';
+  }
+  h += '<div class="tc-sec">' + _H('\u6bcf\u5177\u5c38\u4f53\u8d44\u6e90', '\u8fd1\u6218 100% \u57fa\u51c6') + s1 + '</div>';
+  // \u2461 \u5de5\u5177\u5bf9\u6bd4
+  var tw = d.tools || {};
+  if((tw.rows || []).length){
+    var cols = tw.cols || ['\u9550', '\u65a7\u5934'];
+    var t2 = '<thead><tr><th>\u8d44\u6e90</th>';
+    cols.forEach(function(nm){ t2 += '<th>' + tcGhIco(TC_GH_ICON[nm], 16) + nm + '</th>'; });
+    t2 += '</tr></thead><tbody>';
+    tw.rows.forEach(function(r){
+      t2 += '<tr><th>' + tcGhIco(r.ic, 16) + r.zh + '</th>';
+      r.cells.forEach(function(cc){
+        t2 += '<td><b style="color:#e0e0e0">' + cc.avg + '</b> '
+            + '<span style="color:#8b93a7;font-size:11px">' + cc.pct + '%</span> '
+            + '<span style="color:#64748b;font-size:10px">\u7ea6' + cc.hits + '\u6b21</span></td>';
+      });
+      t2 += '</tr>';
+    });
+    t2 += '</tbody>';
+    h += '<div class="tc-sec">' + _H('\u5de5\u5177\u5bf9\u6bd4', '\u5c38\u4f53\u91c7\u96c6 \u00b7 \u8fd1\u6218 100%')
+       + '<table class="tc-tb">' + t2 + '</table></div>';
+  }
+  // \u2462 \u6389\u843d\u7269 / \u2463 \u88ab\u675f\u7f1a
+  if(d.drops.length){
+    h += '<div class="tc-sec">' + _H('\u6389\u843d\u7269', '\u51fb\u6740\u540e\u53ef\u91c7\u96c6')
+       + '<div style="display:flex;flex-wrap:wrap;gap:6px">'
+       + d.drops.map(function(x){ return tcGhChip(x.zh, x.ic, ''); }).join('') + '</div></div>';
+  }
+  if(d.bound.length){
+    h += '<div class="tc-sec">' + _H('\u88ab\u4ee5\u4e0b\u65b9\u5f0f\u675f\u7f1a', '\u56f0\u4f4f\u7528')
+       + '<div style="display:flex;flex-wrap:wrap;gap:6px">'
+       + d.bound.map(function(x){ return tcGhChip(x.zh, x.ic, ''); }).join('') + '</div></div>';
+  }
+  // \u2464 \u5c38\u4f53\u53c2\u6570
+  if(c.baseDmg){
+    h += '<div class="tc-sec">' + _H('\u91c7\u96c6\u53c2\u6570', '\u5c38\u4f53\u57fa\u7840\u503c') + '<div class="tc-tiles">'
+      + tcGhTile('\u57fa\u7840\u4f24\u5bb3', c.baseDmg, '\u8be5\u7269\u79cd\u5c38\u4f53')
+      + tcGhTile('\u4f24\u5bb3\u500d\u7387', c.dmgMult + '\u00d7', '\u6b66\u5668\u7cfb\u6570')
+      + tcGhTile('\u91c7\u96c6\u91cf\u500d\u7387', c.amtMult + '\u00d7', '\u670d\u52a1\u5668\u91c7\u96c6\u500d\u7387')
+      + tcGhTile('\u653b\u51fb\u95f4\u9694', c.atk + 's', '\u6bcf\u6b21\u547d\u4e2d\u8017\u65f6')
+      + '</div></div>';
+  }
+  h += '<div class="tc-note">\u6570\u636e\u53d6\u81ea<b>\u672c\u9879\u76ee\u672c\u5730\u7f13\u5b58</b>\uff08wikily \u6293\u53d6\u7ed3\u679c\u89e3\u6790\uff0c\u4e0d\u518d\u8bbf\u95ee\u5916\u7ad9\uff09\uff1b'
+     + '\u56fe\u6807\u5747\u53d6\u81ea <code>img.whiterober.ccwu.cc</code>\u3002'
+     + '\u6bcf\u6b21\u91c7\u96c6\u72ec\u7acb\u8ba1\u7b97\u8d44\u6e90\uff0c\u5b9e\u9645\u4ea7\u91cf\u4f1a\u6709\u6ce2\u52a8\u3002</div>'
+     + '</div>';
+  document.getElementById('pBody').innerHTML = h;
+}
+
+function renderTame(){
+  var t = TAME[CUR]; if(!t){ document.getElementById('pBody').innerHTML = '<div class="loading">（该物种无驯服数据）</div>'; return; }
+  // v39：介绍前置到 .tc 内、徽章之前（顺序 = 描述 → 徽章 → 计算器）
+  var intro = ((((DATA[CUR] || {}).tabHtml || {})['1'] || {}).html) || '';
+  var introHtml = intro ? ('<div class="tc-intro">' + tcSentences(intro) + '</div>') : '';
+  var h = '<div class="tc">'
+    + introHtml
+    + '<div class="tc-top">'
+    + '<span class="tc-badge">倍率 ' + TC_SP + '×</span><span class="tc-badge2">野生上限 150</span></div>'
+    + '<div class="tc-ctrl"><label>目标等级</label>'
+    + '<input type="range" min="1" max="150" value="' + TC_LV + '" oninput="tcLvSet(this.value)">'
+    + '<span class="tc-lv" id="tcLvV">' + TC_LV + '</span></div>'
+    + '<div class="tc-sec"><div class="tc-h">① 需要什么<em>滑块一动即时重算</em></div><div class="tc-tiles" id="tcTiles"></div></div>'
+    + '<div class="tc-sec"><div class="tc-h">② 你现在有多少<em>我的库存：本人背包 + 我的部落容器</em></div><div class="tc-own" id="tcOwn"></div></div>'
+    + '<div class="tc-sec"><div class="tc-h">③ 驯服工具<em>当前角色 · 最优武器 / 最优弹药</em></div><div class="tc-tool" id="tcTool"></div></div>'
+    + '<div class="tc-sec"><div class="tc-h">④ 建议</div><div class="tc-adv" id="tcAdv"></div></div>'
+    + '<div class="tc-sec"><div class="tc-h">食物对照<em>全部 ' + (t.diet || []).length + ' 种 · 按我的库存标记</em></div>'
+    + '<div style="max-height:340px;overflow:auto;border:1px solid #22222e;border-radius:8px"><table class="tc-tb" id="tcFood"></table></div></div>'
+    + '<div class="tc-note">公式按 wikily 前端源码复现，并用 3 个物种的 SSR 黄金值校准：<b>口数 / 时间 / 效率 / 驯服后等级 / 眩晕值</b> 五项全部吻合。'
+    + '图标取自本项目 <code>icons2.json</code>。库存数字为<b>演示数据</b>（正式版调 <code>lbItemOwnCnt()</code>，玩家层级口径，绝不混入他人库存）。</div>'
+    + '</div>';
+  // v39：介绍已在函数开头前置（.tc 内、徽章之前）
+  document.getElementById('pBody').innerHTML = h;
+  tcMountIntro();
+  tcCalc();
+}
+
+function tcLvSet(v){ TC_LV = Math.max(1, Math.min(150, parseInt(v, 10) || 1)); document.getElementById('tcLvV').textContent = TC_LV; tcCalc(); }
+function tcSpSet(v){
+  TC_SP = v;
+  document.querySelectorAll('#pBody .tc-pre').forEach(function(b, i){
+    b.classList.toggle('on', (i === 0) === (v === 6));
+  });
+  tcCalc();
+}
+
+// v24：只输出「最优工具组合」（武器 + 弹药）；结构完全沿用 dino-import 条目小卡 .lb-breed-card
+var SVG_GEAR = 'M18 8H11L9 13H6L2 22H22L18 8M13 1H15V5H13V1M16.12 5.47L18.95 2.64L20.36 4.05L17.54 6.88L16.12 5.47M7.64 4.05L9.05 2.64L11.88 5.46L10.47 6.88L7.64 4.05Z';
+var SVG_BOX  = 'M4,6C4,7.19 4.39,8.27 5,9A3,3 0 0,1 2,6A3,3 0 0,1 5,3C4.39,3.73 4,4.81 4,6M2,21V19H4.76L12,4.96L19.24,19H22V21H2M12,9.19L7,19H17L12,9.19Z';
+var SVG_POS  = 'M14,11.5A2.5,2.5 0 0,0 16.5,9A2.5,2.5 0 0,0 14,6.5A2.5,2.5 0 0,0 11.5,9A2.5,2.5 0 0,0 14,11.5M14,2C17.86,2 21,5.13 21,9C21,14.25 14,22 14,22C14,22 7,14.25 7,9C7,5.13 10.14,2 14,2M5,9C5,13.5 10.08,19.66 11,20.81L10,22C10,22 3,14.25 3,9C3,5.83 5.11,3.15 8,2.29C6.16,3.94 5,6.33 5,9Z';
+
+// 当前角色库存：key -> { n, locs:[] }
+function tcRoleInv(){
+  var role = ROLES[CUR_ROLE] || { locs:[] }, inv = {};
+  role.locs.forEach(function(L){
+    Object.keys(L.items || {}).forEach(function(k){
+      var n = L.items[k] || 0; if(!n) return;
+      if(!inv[k]) inv[k] = { n:0, locs:[] };
+      inv[k].n += n;
+      if(inv[k].locs.indexOf(L.c) < 0) inv[k].locs.push(L.c);
+    });
+  });
+  return inv;
+}
+// v26：武器与弹药**独立**取最优
+//   武器效率 = 该武器在本角色库存中能配出的最佳组合每秒眩晕；弹药同理（互相配对）
+function tcBestPair(){
+  var inv = tcRoleInv();
+  var wBest = {}, aBest = {};
+  TAME_COMBOS.forEach(function(cb){
+    var w = inv[cb.w] || { n:0, locs:[] }, a = inv[cb.a] || { n:0, locs:[] };
+    if(w.n < 1 || a.n < 1) return;                 // 缺武器或缺弹药 ⇒ 该组合不可用
+    var perSec = cb.torpor / cb.shot;              // 综合效率 = 每发眩晕 / 每发间隔
+    var r = { cb:cb, perSec:perSec, shots:a.n, wLocs:w.locs, aLocs:a.locs };
+    if(!wBest[cb.w] || perSec > wBest[cb.w].perSec) wBest[cb.w] = r;
+    if(!aBest[cb.a] || perSec > aBest[cb.a].perSec) aBest[cb.a] = r;
+  });
+  var pick = function(o){
+    var k = null;
+    Object.keys(o).forEach(function(x){
+      if(!k || o[x].perSec > o[k].perSec || (o[x].perSec === o[k].perSec && o[x].shots > o[k].shots)) k = x;
+    });
+    return k ? { key:k, r:o[k] } : null;
+  };
+  return { w: pick(wBest), a: pick(aBest) };
+}
+// v30：武器卡 +「可驯 N 只」（当前耐久 ÷ 单只发数，每发耗 1 耐久）；弹药 chip 外补「单只用量 / 够训几只」
+var TC_SHOT_NOTE = '射速按 5s/发（与 wikily 计算器同口径，含瞄准与装填的实战节奏；纯 Time Between Shots 仅 0.6s）';
+function tcWeaponCard(key, perKill){
+  var w = TAME_W_INST[key];
+  if(!w) return '';
+  var col = TC_BP_COL[Math.round(w.q)] || TC_BP_COL[0];
+  var attr = (w.stats || []).map(function(s, i){
+    var txt = s.txt;
+    // 耐久项：当前/最大（当前取物品耐久字段 durability，最大取 stats 槽2 模板值）
+    if(s.label === '耐久' && typeof w.dura === 'number') txt = w.dura + '/' + s.txt;
+    return '<span style="margin-right:6px;color:' + (i === 0 ? '#38bdf8' : '#999') + '">' + s.label + ' ' + txt + '</span>';
+  }).join('');
+  var can = (typeof w.dura === 'number' && perKill > 0) ? Math.floor(w.dura / perKill) : null;
+  if(can !== null){
+    attr += '<span style="margin-right:6px;color:#999" title="当前耐久 ' + w.dura + ' ÷ 单只 ' + perKill + ' 发（每发耗 1 耐久）；' + TC_SHOT_NOTE + '">可驯 ' + can + ' 只</span>';
+  }
+  var owner = '<span style="color:#f59e0b">'
+    + '<svg viewBox="0 0 24 24" width="12" height="12" style="vertical-align:-1px;fill:currentColor;flex-shrink:0"><path d="' + SVG_GEAR + '"></path></svg> '
+    + '<span class="acc-title">' + (w.ic ? '<img src="' + w.ic + '" class="lb-sum-ic lb-img-ok">' : '') + TAME_KIND_W + '</span> '
+    + '<span style="opacity:.7;font-size:10px"><svg viewBox="0 0 24 24" width="10" height="10" style="vertical-align:-1px;fill:currentColor;flex-shrink:0"><path d="' + SVG_BOX + '"></path></svg> ' + w.cont + '</span> '
+    + '<span style="opacity:.7;font-size:10px"><svg viewBox="0 0 24 24" width="10" height="10" style="vertical-align:-1px;fill:currentColor;flex-shrink:0"><path d="' + SVG_POS + '"></path></svg> ' + w.srv + '</span>'
+    + '</span>';
+  return '<div class="lb-breed-card" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;background:#1a1a24;border:1px solid ' + col + ';border-radius:8px;padding:6px 10px;margin-bottom:6px;font-size:12px">'
+    + '<div style="min-width:0">'
+    + '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:' + col + ';margin-right:5px;vertical-align:1px"></span>'
+    + '<b style="color:#fff">' + w.zh + '</b>'
+    + ' <span style="background:#7c3aed33;border-radius:2px;padding:0 6px;color:#c4b5fd">评分 ' + Number(w.rating).toFixed(1) + '</span>'
+    + (attr ? '<br>' + attr : '')
+    + '</div>'
+    + '<div style="flex-shrink:0;font-size:11px;color:#999;text-align:right">' + owner + '</div>'
+    + '</div>';
+}
+function tcAmmoChip(key){
+  var a = TAME_AMMO[key] || { zh:key, ic:'' };
+  var inv = tcRoleInv(), g = inv[key] || { n:0, locs:[] };
+  var ic = a.ic
+    ? '<img src="' + a.ic + '" style="width:16px;height:16px;object-fit:contain">'
+    : '<span style="width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;color:#64748b;font-size:11px;flex-shrink:0">?</span>';
+  return '<span class="lb-hf-chip" title="' + a.zh + '">'
+    + ic
+    + '<span style="color:#cbd5e1">' + a.zh + '</span>'
+    + '<span style="color:#475569;font-size:10px">·</span>'
+    + '<span style="color:#94a3b8;font-size:11px">' + g.locs.length + '组</span>'
+    + '<span style="color:#475569;font-size:10px">·</span>'
+    + '<span style="color:#64748b">' + tcNum(g.n) + '</span>'
+    + '</span>';
+}
+function tcToolsHtml(r){
+  var pr = tcBestPair();
+  if(!pr.w || !pr.a) return '<div class="tc-adv">⚠️ 当前角色没有「武器 + 对应弹药」可用的击晕组合。</div>';
+  var torpor = (r && r.torpor) ? r.torpor : 0;                 // 满眩晕值（随物种+等级）
+  var perShot = pr.a.r.cb.torpor || 0;                          // 每发眩晕
+  var perKill = perShot > 0 ? Math.ceil(torpor / perShot) : 0;  // 单只所需发数
+  var inv = tcRoleInv()[pr.a.key] || { n:0 };
+  var amt = inv.n || 0;
+  var kills = perKill > 0 ? Math.floor(amt / perKill) : 0;
+  var tipLine = '<span style="font-size:11.5px;color:#8b93a7" title="' + TC_SHOT_NOTE + '">'
+    + '单只 ' + tcNum(perKill) + ' 发 · 现有 ' + tcNum(amt) + ' 发 ≈ 够训 ' + kills + ' 只'
+    + (kills === 0 && perKill > 0 ? '<b style="color:#f87171">（不够一只）</b>' : '')
+    + '</span>';
+  return tcWeaponCard(pr.w.key, perKill)
+    + '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:2px 0 4px">'
+    + tcAmmoChip(pr.a.key) + tipLine
+    + '</div>';
+}
+// v32：繁殖计算（全部本地参数，无外站依赖）
+function breedRows(){
+  var b = BREED[CUR]; if(!b) return null;
+  var M = BREED_MULT;
+  var inc = b.inc / (M.hatch || 1);
+  var mat = b.mat / (M.mature || 1);
+  var cudIv = BREED_BASE.cuddleH * 3600 * (M.cuddle || 1);
+  // v39：满留痕所需次数 = 成熟期内留痕点数 ÷ 每次留痕量倍率（BabyImprintAmountMultiplier）
+  var impSlots = cudIv > 0 ? Math.ceil(mat / cudIv) : 0;
+  var imprints = impSlots > 0 ? Math.ceil(impSlots / (M.imprint || 1)) : 0;
+  var matingMin = BREED_BASE.matingMinH * 3600 * (M.mating || 1);
+  var matingMax = BREED_BASE.matingMaxH * 3600 * (M.mating || 1);
+  return { b:b, inc:inc, mat:mat, total:inc + mat, cudIv:cudIv, imprints:imprints,
+           matingMin:matingMin, matingMax:matingMax };
+}
+function renderBreed(){
+  var r = breedRows();
+  var M = BREED_MULT;
+  var h = '<div class="tc">';
+  if(!r){
+    h += '<div class="tc-sec"><div class="tc-adv">⚠️ 该物种未收录繁殖参数。</div></div></div>';
+    document.getElementById('pBody').innerHTML = h;
+    return;
+  }
+  // v39：顺序 = 描述 → 徽章 → 区块（徽章在描述之下）
+  if((BREED_DESC[CUR] || []).length){
+    var ds = '<div class="tc-intro">' + BREED_DESC[CUR].map(function(s){ return '<p>' + s + '</p>'; }).join('') + '</div>';
+    h += tcSentences(ds);
+  }
+  h += '<div class="tc-top"><span class="tc-badge">孵化 ' + M.hatch + '×</span>'
+    + '<span class="tc-badge">成长 ' + M.mature + '×</span>'
+    + '<span class="tc-badge2">交配间隔 ' + M.mating + '×</span>'
+    + '<span class="tc-badge2">留痕间隔 ' + M.cuddle + '×</span>'
+    + '<span class="tc-badge2">留痕量 ' + M.imprint + '×</span></div>';
+  var b = r.b;
+  var tile = function(k, v, s, hot){
+    return '<div class="tc-tile' + (hot ? ' hot' : '') + '"><div class="tc-tile-k">' + k + '</div>'
+      + '<div class="tc-tile-v">' + v + '</div>' + (s ? '<div class="tc-tile-s">' + s + '</div>' : '') + '</div>';
+  };
+  // ① 关键时长
+  var t1 = tile('蛋孵化', tcDur(r.inc), '基础 ' + tcDur(b.inc) + ' ÷ ' + M.hatch + '×', true)
+         + tile('幼崽成熟', tcDur(r.mat), '基础 ' + tcDur(b.mat) + ' ÷ ' + M.mature + '×', true)
+         + tile('交配冷却', tcDur(r.matingMin) + ' ~ ' + tcDur(r.matingMax), '18h~48h × ' + M.mating + '×')
+         + tile('蛋→成体', tcDur(r.total), '孵化 + 成长');
+  // ② 孵化条件
+  var t2 = tile('孵化温度', b.tMin + ' ~ ' + b.tMax + ' °C', '需恒温区间')
+         + tile('出生食物', b.food.toFixed(2) + '/min', '幼崽期持续消耗');
+  // ③ 留痕
+  var t3 = tile('留痕间隔', tcDur(r.cudIv), '8h × ' + M.cuddle + '×')
+         + tile('留痕次数', r.imprints + ' 次', '每次给 ' + M.imprint + '× 量 · 满留痕即可')
+         + tile('满留痕加成', '+100%', '属性加成（满留痕）');
+  // ④ 时间轴
+  var axis = '<div class="tc-adv">'
+    + '下蛋 → 【孵化 ' + tcDur(r.inc) + '】→ 幼崽 → 【成长 ' + tcDur(r.mat) + '】→ 成体'
+    + '<br>共 <b>' + tcDur(r.total) + '</b>；成长期内需留痕 <b>' + r.imprints + '</b> 次（每 ' + tcDur(r.cudIv) + ' 一次）'
+    + '</div>';
+  h += '<div class="tc-sec"><div class="tc-h">① 关键时长<em>基础 ÷ 服务器倍率</em></div><div class="tc-tiles">' + t1 + '</div></div>'
+    + '<div class="tc-sec"><div class="tc-h">② 孵化条件</div><div class="tc-tiles">' + t2 + '</div></div>'
+    + '<div class="tc-sec"><div class="tc-h">③ 留痕</div><div class="tc-tiles">' + t3 + '</div></div>'
+    + '<div class="tc-sec"><div class="tc-h">④ 时间轴</div>' + axis + '</div>'
+    + '<div class="tc-note">基础时长 / 温度 / 食物取自本项目缓存（无外站依赖）；'
+    + '倍率取自 <b>' + BREED_MULT_SRC + '</b> 的 <code>Game.ini → ShooterGameMode</code>：'
+    + '<code>EggHatchSpeed ' + M.hatch + '×</code> / <code>BabyMatureSpeed ' + M.mature + '×</code> / '
+    + '<code>MatingInterval ' + M.mating + '×</code> / <code>BabyCuddleInterval ' + M.cuddle + '×</code> / '
+    + '<code>BabyImprintAmount ' + M.imprint + '×</code>。'
+    + '留痕基础间隔 8h、交配冷却 18~48h 为游戏默认值（乘上述倍率后生效）。</div>'
+    + '</div>';
+  document.getElementById('pBody').innerHTML = h;
+  tcMountIntro();
+}
+function tcCalc(){
+  var r = tcRows(); if(!r) return;
+  var b = r.best;
+  var tile = function(k, v, s, hot){
+    return '<div class="tc-tile' + (hot ? ' hot' : '') + '"><div class="tc-tile-k">' + k + '</div>'
+      + '<div class="tc-tile-v">' + v + '</div>' + (s ? '<div class="tc-tile-s">' + s + '</div>' : '') + '</div>';
+  };
+  var h = tile('最优食物', b.zh, '效率 ' + tcPct(b.eff) + '%', true)
+        + tile('需要数量', '×' + tcNum(b.qty), '喂食间隔 ' + tcDur(b.itv), true)
+        + tile('驯服时间', tcDur(b.time), '共 ' + b.qty + ' 口')
+        + tile('眩晕值', tcNum(r.torpor), '满晕 · 每秒 -' + (Math.round(r.wakeRate * 100) / 100) + '，' + tcDur(r.torpor / (r.wakeRate || 1)) + '后醒来')
+        + tile('驯服后等级', String(b.tlv), '+' + b.plus + '（野生 ' + r.lv + '）')
+        + tile('升级后最高', String(b.tlv + Math.floor(r.lv * 73 / 150)), '再 +' + Math.floor(r.lv * 73 / 150) + ' 级')
+        + (r.narc > 0
+            ? tile('需补麻醉药', '≈' + tcNum(r.narc) + ' 支',
+                   '满晕 ' + tcNum(r.torpor) + ' · 驯服期 -' + tcNum(r.wakeTotal) + ' · 缺 ' + tcNum(r.wakeTotal - r.torpor), true)
+            : tile('需补麻醉药', '无需补充',
+                   '满晕 ' + tcNum(r.torpor) + ' · 驯服期 -' + tcNum(r.wakeTotal) + ' · 剩 ' + tcNum(r.torpor - r.wakeTotal)));
+  document.getElementById('tcTiles').innerHTML = h;
+
+  // ② 我的库存
+  var own = '';
+  var addOwn = function(name, need, have, icon){
+    var ok = have >= need;
+    own += '<div class="tc-own-r">' + (icon ? '<img src="' + icon + '" referrerpolicy="no-referrer">' : '<span class="tc-ph">?</span>')
+      + '<span class="tc-own-n">' + name + '</span>'
+      + '<span class="tc-own-q">需要 <b style="color:#e2e8f0">' + tcNum(need) + '</b> · 我有 ' + tcNum(have) + '</span>'
+      + '<span class="' + (ok ? 'tc-ok' : 'tc-no') + '">' + (ok ? tcIco('check') + '够（余 ' + tcNum(have - need) + '）' : tcIco('close') + '缺 ' + tcNum(need - have)) + '</span></div>';
+  };
+  addOwn(b.zh, b.qty, b.own, b.icon);
+  if(r.narc > 0){
+    addOwn('麻醉药 Narcotic（驯服中）', r.narc, TC_OWN['Narcotic'] || 0, TC_ICON['Narcotic']);
+  } else {
+    own += '<div class="tc-own-r"><img src="' + TC_ICON['Narcotic'] + '" referrerpolicy="no-referrer">'
+      + '<span class="tc-own-n">麻醉药 Narcotic</span>'
+      + '<span class="tc-own-q">满晕 ' + tcNum(r.torpor) + ' · 驯服期 -' + tcNum(r.wakeTotal) + '</span>'
+      + '<span class="tc-ok">' + tcIco('check') + '无需补充</span></div>';
+  }
+  var alt = r.list.filter(function(x){ return x.en !== b.en; }).slice(0, 3);
+  alt.forEach(function(x){ addOwn(x.zh + '（替代）', x.qty, x.own, x.icon); });
+  document.getElementById('tcOwn').innerHTML = own;
+  document.getElementById('tcTool').innerHTML = tcToolsHtml(r);
+
+  // ③ 建议
+  var adv = '';
+  if(r.enoughAll){
+    adv += '<div>✅ <b>' + b.zh + '</b> 库存充足（需 ' + tcNum(b.qty) + '，我有 ' + tcNum(b.own) + '）—— 可直接开驯。</div>';
+  } else {
+    adv += '<div class="warn">⚠️ 最优食物 <b>' + b.zh + '</b> 库存不足：需 ' + tcNum(b.qty) + '，我有 ' + tcNum(b.own) + '，<b>缺 ' + tcNum(Math.max(0, b.qty - b.own)) + '</b>。</div>';
+  }
+  if(r.narc > 0){
+    adv += '<div>· 麻醉药：驯服期间需补 <b>' + tcNum(r.narc) + ' 支</b>，我有 ' + tcNum(TC_OWN['Narcotic'] || 0)
+        + (r.narc > (TC_OWN['Narcotic'] || 0) ? '，<b class="warn">缺 ' + tcNum(r.narc - (TC_OWN['Narcotic'] || 0)) + '</b>' : '，<b>够</b>') + '。</div>';
+  } else {
+    adv += '<div>· 麻醉药：<b>全程无需补充</b> —— 眩晕值打满时是 ' + tcNum(r.torpor) + '，' + tcDur(b.time)
+        + ' 里只掉 ' + tcNum(r.wakeTotal) + '，还剩 ' + tcNum(r.torpor - r.wakeTotal) + '，不会中途醒来。</div>';
+  }
+  adv += '<div style="font-size:11.5px;color:#6b7280">· 击晕阶段另需把眩晕值打到满（' + tcNum(r.torpor)
+      + '）：麻醉镖 ≈' + tcNum(r.narcDart) + ' 发 / 麻醉药 ≈' + tcNum(r.narcStun)
+      + ' 支 —— 属击晕手段，不算驯服消耗。</div>';
+  adv += '<div>· 时间：约 <b>' + tcDur(b.time) + '</b>（' + b.qty + ' 口 × ' + tcDur(b.itv) + '）；驯服后 <b>' + b.tlv + ' 级</b>（+' + b.plus + '）。</div>';
+  var myN = TC_OWN['__dino_' + CUR] || 0, myLv = TC_OWN['__dinoLv_' + CUR] || 0;
+  adv += '<div>· 你已有同种 <b>' + myN + ' 只</b>' + (myLv ? '（最高 Lv.' + myLv + (b.tlv >= myLv ? '，本只<b>可超越</b>' : '，本只持平/略低') + '）' : '')
+      + '（演示值；正式版取 <code>lbCollectSettleMembers()</code> + <code>lbIsPlayerRec()</code> 的当前角色生物）。</div>';
+  document.getElementById('tcAdv').innerHTML = adv;
+
+  // 食物表
+  var tb = '<thead><tr><th>食物</th><th style="text-align:right">数量</th><th style="text-align:right">驯服时间</th>'
+         + '<th style="text-align:right">效率</th><th style="text-align:right">喂食间隔</th><th style="text-align:right">我有</th><th>状态</th></tr></thead><tbody>';
+  r.list.forEach(function(x){
+    var isBest = (x.en === b.en);
+    var ok = x.own >= x.qty;
+    tb += '<tr class="' + (isBest ? 'on' : '') + '">'
+      + '<td>' + (x.icon ? '<img src="' + x.icon + '" referrerpolicy="no-referrer">' : '<span class="tc-ph">?</span>') + x.zh + '</td>'
+      + '<td class="num">×' + tcNum(x.qty) + '</td>'
+      + '<td class="num">' + tcDur(x.time) + '</td>'
+      + '<td class="num">' + tcPct(x.eff) + '%</td>'
+      + '<td class="num">' + tcDur(x.itv) + '</td>'
+      + '<td class="num">' + tcNum(x.own) + '</td>'
+      + '<td class="' + (ok ? 'tc-ok' : 'tc-no') + '">' + (ok ? tcIco('check') + '够' : tcIco('close') + '缺 ' + tcNum(x.qty - x.own)) + '</td></tr>';
+  });
+  document.getElementById('tcFood').innerHTML = tb + '</tbody>';
+}
+
+function ago(ts){
+  var s = Math.max(0, Math.floor(Date.now()/1000) - (ts||0));
+  if(s < 60) return '刚刚';
+  if(s < 3600) return Math.floor(s/60) + ' 分钟前';
+  if(s < 86400) return Math.floor(s/3600) + ' 小时前';
+  return Math.floor(s/86400) + ' 天前';
+}
+function nfmt(n){ return String(n||0).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+
+function renderSp(){
+  var h = '';
+  Object.keys(DATA).forEach(function(k){
+    h += '<button class="sp' + (k === CUR ? ' on' : '') + '" onclick="setSp(\'' + k + '\')">' + DATA[k].zh
+       + ' <span style="opacity:.6;font-size:11px">' + k + '</span></button>';
+  });
+  document.getElementById('spRow').innerHTML = h;
+}
+
+function renderTabs(){
+  var d = DATA[CUR], h = '';
+  var list = (d.tabs || []).slice();
+  list.push({ label: '经验', url: '', _custom: 1 });   // v14：自渲染 tab
+  list.forEach(function(t, i){
+    var on = (i === 0) ? ' on' : '';
+    h += '<span class="ptab' + on + '" data-i="' + i + '" onclick="tabGo(' + i + ')" title="' + (t.url || '') + '">' + t.label + '</span>';
+  });
+  document.getElementById('pTabBar').innerHTML = h;
+}
+
+function tabGo(i){
+  var d = DATA[CUR];
+  var base = (d.tabs || []);
+  var t = (i === base.length) ? { label: '经验', url: '', _custom: 1 } : base[i];
+  if(!t) return;
+  var nodes = document.querySelectorAll('#pTabBar .ptab');
+  nodes.forEach(function(n){ n.classList.toggle('on', n.getAttribute('data-i') === String(i)); });
+  var body = document.getElementById('pBody');
+  // v40：改为按 label 判断（拆分「收割」后 tab index 全部移位，硬编码会错位）
+  var lb = t.label || '';
+  if(lb === '概览'){ render(); return; }
+  if(lb === '驯服' && TAME[CUR]){ renderTame(); return; }   // 驯服 tab = 我们自己的动态计算器
+  if(lb === '繁殖'){ renderBreed(); return; }               // v32：繁殖 tab = 自主渲染
+  if(lb === '采集'){ renderGather(); return; }               // v42：采集 tab = 自主渲染
+  if(lb === '收割'){ renderHarvest(); return; }              // v42：收割 tab = 自主渲染
+  if(lb === '技能'){ renderAbilTab(); return; }               // v55：技能 tab = 自主渲染
+  if(t._custom){ renderExp(); return; }                     // 经验 tab = 自渲染
+  // v8：其余 tab 全部内嵌显示，不再跳 wikily
+  var td = (d.tabHtml || {})[String(i)];
+  if(td){
+    ABIL_SEL['tab'] = 0;
+    var hh = td.html || '';
+    if((td.abils || []).length) hh += renderAbil(td.abils, 'tab');
+    if(!hh) hh = '<div class="loading">（该页为交互组件，无静态正文）</div>';
+    body.innerHTML = hh;
+    body.scrollTop = 0;
+    return;
+  }
+  body.innerHTML = '<div class="loading">「' + t.label + '」暂无本地缓存</div>';
+  body.scrollTop = 0;
+}
+
+// v8：多作用域（main=概览底部 / tab=技能 tab），data 属性传参避免引号嵌套
+var ABIL_SEL = {};
+function renderAbil(list, scope){
+  scope = scope || 'main';
+  list = list || (DATA[CUR] || {}).abils || [];
+  if(!list.length) return '';
+  var idx = ABIL_SEL[scope] || 0;
+  if(idx >= list.length) idx = 0;
+  var cur = list[idx];
+  var h = '<div class="abil" id="abilBox_' + scope + '"><div class="abil-h">🎬 技能演示（' + list.length + ' 个）</div><div class="abil-tabs">';
+  list.forEach(function(a, i){
+    h += '<span class="abil-t' + (i === idx ? ' on' : '') + '" data-scope="' + scope + '" data-i="' + i + '"'
+       + ' onclick="abilGo(this)">' + (a.title || ('技能' + (i + 1)))
+       + (a.key ? '<em>' + a.key + '</em>' : '') + '</span>';
+  });
+  h += '</div>';
+  h += '<video id="abVideo_' + scope + '" controls preload="none" playsinline'
+     + (cur.poster ? (' poster="' + cur.poster + '"') : '') + '>'
+     + '<source src="' + cur.video + '" type="video/mp4">'
+     + '</video>';
+  h += '<div class="abil-desc" id="abilDesc_' + scope + '">' + (cur.desc || '') + '</div></div>';
+  return h;
+}
+
+function abilGo(el){
+  if(!el) return;
+  var scope = el.getAttribute('data-scope') || 'main';
+  var i = parseInt(el.getAttribute('data-i'), 10) || 0;
+  var d = DATA[CUR] || {};
+  // v41：不再硬编码 tabHtml['5']（拆分「收割」后技能 tab index 变 6）——按当前选中的 ptab 动态取
+  var list;
+  if(scope === 'main'){
+    list = d.abils || [];
+  }else{
+    var onTab = document.querySelector('#pTabBar .ptab.on');
+    var ti = onTab ? onTab.getAttribute('data-i') : null;
+    list = (((d.tabHtml || {})[String(ti)] || {}).abils) || [];
+  }
+  var a = list[i];
+  if(!a) return;
+  ABIL_SEL[scope] = i;
+  var box = document.getElementById('abilBox_' + scope);
+  if(box) box.querySelectorAll('.abil-t').forEach(function(n, k){ n.classList.toggle('on', k === i); });
+  var v = document.getElementById('abVideo_' + scope);
+  if(v){
+    if(a.poster) v.setAttribute('poster', a.poster); else v.removeAttribute('poster');
+    var src = v.querySelector('source');
+    if(src) src.src = a.video;
+    try { v.pause(); } catch(e) {}
+    v.load();
+  }
+  var desc = document.getElementById('abilDesc_' + scope);
+  if(desc) desc.innerHTML = a.desc || '';
+}
+
+function render(){
+  var d = DATA[CUR];
+  if(!d) return;
+  document.getElementById('pName').textContent = d.zh;
+  renderTabs();
+  document.getElementById('pMeta').innerHTML =
+    '来源 <b>wikily.gg</b> · /zh-cn/ark-survival-ascended/dinosaurs/' + d.slug
+    + ' · 抓取于 <b>' + ago(d.fetched_at) + '</b> · ' + nfmt(String(d.html || '').replace(/<[^>]+>/g, '').length) + ' 字 · '
+    + d.tables + ' 表 · ' + d.imgs + ' 图 · ' + (d.abils || []).length + ' 视频 · 原页 <b>' + d.raw_kb + ' KB</b> → 缓存 <b>'
+    + Math.round((d.html || '').length / 1024) + ' KB</b>';
+  var body = document.getElementById('pBody');
+  var extra = '<div class="extra">⚠️ 「生成指令器 / 繁育计算 / 评论」等交互组件在原站是 React 组件，静态提取只保留静态内容 —— 可用顶部 tab 切换查看。</div>';
+  // v10：技能演示已合并进「技能」tab，概览页不再显示（避免重复）
+  body.innerHTML = (d.html || '<div class="loading">（无内容）</div>') + extra;
+  // v31：概览正文拆句 —— 纯文本段落（>40 字）按「。」切开，一句一行、句尾补「。」
+  body.querySelectorAll('p').forEach(function(p){
+    if(p.querySelector('*')) return;                 // 含标签（链接/图片）不拆
+    var t = (p.textContent || '').trim();
+    if(t.length <= 40) return;                        // 短句不动
+    var parts = t.split('。').map(function(s){ return s.trim(); }).filter(function(s){ return s.length > 0; });
+    if(parts.length < 2) return;
+    p.innerHTML = parts.map(function(s){ return s + '。'; }).join('<br>');
+  });
+  body.querySelectorAll('img').forEach(function(im){
+    im.onerror = function(){
+      im.style.cssText = 'width:56px;height:56px;background:#ffffff08;border:1px dashed #2a2a3a;border-radius:6px';
+      im.removeAttribute('src');
+    };
+  });
+}
+
+function setSp(k){ CUR = k; ABIL_IDX = 0; renderSp(); if(opened) render(); }
+
+function openWiki(){
+  opened = true;
+  document.getElementById('ov').classList.add('show');
+  document.getElementById('pBody').innerHTML = '<div class="loading"><span class="spin"></span>正在读取 Wiki（首次约 2~3 秒）…</div>';
+  document.getElementById('pTabBar').innerHTML = '';
+  setTimeout(render, 320);
+}
+function closeWiki(){ opened = false; document.getElementById('ov').classList.remove('show'); }
+function toast(t){
+  var el = document.getElementById('toast');
+  el.textContent = t; el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(function(){ el.classList.remove('show'); }, 1600);
+}
+function doUpdate(){
+  var btn = document.getElementById('updBtn'), d = DATA[CUR];
+  btn.disabled = true; btn.textContent = '更新中…';
+  document.getElementById('pBody').innerHTML = '<div class="loading"><span class="spin"></span>正在重新抓取 wikily.gg …</div>';
+  setTimeout(function(){
+    d.fetched_at = Math.floor(Date.now()/1000);
+    render();
+    btn.disabled = false; btn.textContent = '更新';
+    toast('已更新 ' + d.zh + '（原型为模拟）');
+  }, 1200);
+}
+document.addEventListener('keydown', function(e){ if(e.key === 'Escape' && opened) closeWiki(); });
+renderSp();
+</script>
+</body>
+</html>

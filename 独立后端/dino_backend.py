@@ -47,6 +47,703 @@ from datetime import datetime
 
 # ================= 配置 =================
 DINO_DATA = os.environ.get('DINO_DATA', r'D:\ARK Server\DinoData')
+
+# ============ Wiki 按需抓取（v72e）============
+# 思路：前端点开物种时才抓，抓到后落盘缓存；不用把 1000+ 物种预置进 CF
+WIKI_CACHE_DIR = os.environ.get('WIKI_CACHE', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'wiki_cache'))
+WIKI_ROOT = 'https://wikily.gg/zh-cn/ark-survival-ascended/dinosaurs'
+WIKI_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
+WIKI_SKIP_WORDS = (u'使用计算器', u'广告', 'Cookie', u'订阅',
+                   u'登录', u'下载', u'切换游戏', u'去广告', u'会员',
+                   u'显示全部', u'打开完整', u'查看全部', u'查看详情')   # v111：页面按钮文字，不是正文
+
+
+def _wiki_strip(s):
+    import re as _re, html as _h
+    s = _re.sub(r'<script\b.*?</script>', '', s, flags=_re.S | _re.I)
+    s = _re.sub(r'<style\b.*?</style>', '', s, flags=_re.S | _re.I)
+    s = _re.sub(r'<[^>]+>', '', s)
+    return _re.sub(r'\s+', ' ', _h.unescape(s)).strip()
+
+
+def _wiki_h2seg(raw, name, maxlen=6000):
+    import re as _re
+    for m in _re.finditer(r'<h2[^>]*>(.*?)</h2>', raw, _re.S):
+        if _wiki_strip(m.group(1)) == name:
+            start = m.end()
+            nxt = _re.search(r'<h2[^>]*>', raw[start:start + maxlen])
+            end = start + (nxt.start() if nxt else maxlen)
+            return raw[start:min(end, start + maxlen)]
+    return ''
+
+
+def _wiki_parse_overview(raw):
+    import re as _re
+    out = {'zh': '', 'intro': [], 'tips': []}
+    m = _re.search(r'<h1[^>]*>(.*?)</h1>', raw, _re.S)
+    if m:
+        out['zh'] = _re.sub(r'^[\s\W]+', '', _wiki_strip(m.group(1)))[:20]
+    for p in _re.findall(r'<p[^>]*>(.*?)</p>', _wiki_h2seg(raw, u'\u6982\u89c8'), _re.S):
+        t = _wiki_strip(p)
+        if len(t) >= 25 and not any(w in t for w in WIKI_SKIP_WORDS) and t not in out['intro']:
+            out['intro'].append(t)
+    for li in _re.findall(r'<li[^>]*>(.*?)</li>', _wiki_h2seg(raw, u'\u6280\u5de7'), _re.S):
+        t = _wiki_strip(li)
+        if 15 <= len(t) <= 220 and not any(w in t for w in WIKI_SKIP_WORDS) and t not in out['tips']:
+            out['tips'].append(t)
+    return out
+
+
+def _wiki_nextdata(raw):
+    """提取 Next.js 的 self.__next_f 载荷，反转义后拼成一整段（数据全在里面）"""
+    import re as _re
+    out = []
+    for c in _re.findall(r'self\.__next_f\.push\(\[1,\s*"((?:[^"\\]|\\.)*)"\]\)', raw):
+        try:
+            out.append(json.loads('"' + c + '"'))
+        except Exception:
+            pass
+    return ''.join(out)
+
+
+_WIKI_ALIAS = None
+
+
+def _wiki_alias():
+    """读项目别名表（Anky->Ankylosaurus / Trike->Triceratops ...），失败返回 {}"""
+    global _WIKI_ALIAS
+    if _WIKI_ALIAS is not None:
+        return _WIKI_ALIAS
+    _WIKI_ALIAS = {}
+    here = os.path.dirname(os.path.abspath(__file__))
+    for p in (os.path.join(here, 'wiki_alias.json'),
+              os.path.join(here, 'data', 'wiki_alias.json')):
+        try:
+            if os.path.isfile(p):
+                with open(p, 'r', encoding='utf-8') as f:
+                    _WIKI_ALIAS = json.loads(f.read()) or {}
+                print('[wiki] alias loaded %d from %s' % (len(_WIKI_ALIAS), p))
+                break
+        except Exception as e:
+            print('[wiki] alias load fail %s: %s' % (p, str(e)[:80]))
+    return _WIKI_ALIAS
+
+
+_WIKI_EN_MAP = None
+
+
+def _wiki_en_map():
+    """项目 DinoEntry 表：类名短名 -> 英文名（汉化/facility_official.json 的 DinoEntry_* 导出，
+    196 条，如 JumpingSpider->Cosmo / Anky->Ankylosaurus / Beetle->DungBeetle）。
+    v105：**这是唯一权威来源，禁止再猜 s/saurus/连字符等后缀**。
+    实测反例：JumpingSpider 的 wikily slug 是 cosmo；jumping-spider / jumpingspider / jumpingspidersaurus 全部 404。"""
+    global _WIKI_EN_MAP
+    if _WIKI_EN_MAP is not None:
+        return _WIKI_EN_MAP
+    _WIKI_EN_MAP = {}
+    here = os.path.dirname(os.path.abspath(__file__))
+    for p in (os.path.join(here, 'dino_en_map.json'),
+              os.path.join(here, 'data', 'dino_en_map.json')):
+        try:
+            if os.path.isfile(p):
+                with open(p, 'r', encoding='utf-8') as f:
+                    _WIKI_EN_MAP = json.loads(f.read()) or {}
+                print('[wiki] en_map loaded %d from %s' % (len(_WIKI_EN_MAP), p))
+                break
+        except Exception as e:
+            print('[wiki] en_map load fail %s: %s' % (p, str(e)[:80]))
+    return _WIKI_EN_MAP
+
+
+def _wiki_slug_cands(key):
+    """短名 -> wikily slug 候选（v105：以项目 DinoEntry 的 en 字段为准，最多 3 个）"""
+    import re as _re
+    k = str(key or '')
+    out = []
+
+    def add(x):
+        x = _re.sub(r'[^a-z0-9]+', '-', str(x or '').lower()).strip('-')
+        if x and x not in out:
+            out.append(x)
+
+    al = _wiki_alias()
+    em = _wiki_en_map()
+    # ① 项目英文名（最权威）：Cosmo -> cosmo / Ankylosaurus -> ankylosaurus / DungBeetle -> dung-beetle
+    for src in (em.get(k), al.get(k), al.get(k.lower())):
+        if src:
+            add(src)
+    # ② 短名本身（小写）
+    add(k)
+    # ③ 短名驼峰连字符
+    try:
+        add(_re.sub(r'(?<!^)(?=[A-Z])', '-', k))
+    except Exception:
+        pass
+    return out[:3]
+
+
+def _wiki_abs(u):
+    u = str(u or '')
+    if u.startswith('/'):
+        return 'https://wikily.gg' + u
+    return u
+
+
+def _wiki_h2seg_like(raw, kw, maxlen=12000):
+    """取 h2 文本包含 kw 的那一段（到下一个 h2），原型页 h2 常带副标题"""
+    import re as _re
+    for m in _re.finditer(r'<h2[^>]*>([\s\S]*?)</h2>', raw):
+        if kw in _wiki_strip(m.group(1)):
+            start = m.end()
+            nxt = _re.search(r'<h2[^>]*>', raw[start:start + maxlen])
+            end = start + (nxt.start() if nxt else maxlen)
+            return raw[start:min(end, start + maxlen)]
+    return ''
+
+
+def _wiki_bracket(s, start):
+    """从 s[start] 的 [ 或 { 起做括号配对（字符串感知），返回结束位置（不含）"""
+    op = s[start]
+    cl = ']' if op == '[' else '}'
+    depth = 0
+    i = start
+    in_str = False
+    esc = False
+    while i < len(s):
+        ch = s[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == '\\':
+                esc = True
+            elif ch == '"':
+                in_str = False
+        else:
+            if ch == '"':
+                in_str = True
+            elif ch == op:
+                depth += 1
+            elif ch == cl:
+                depth -= 1
+                if depth == 0:
+                    return i + 1
+        i += 1
+    return -1
+
+
+def _wiki_parse_home(raw):
+    """首页全量富数据：技能 / 伤害 / 采集加成 / 鞍 / 击杀经验 / 驯服食物 / 食性"""
+    import re as _re
+    nd = _wiki_nextdata(raw)
+    out = {}
+
+    # ---- 技能 abilities[] ----
+    skills = []
+    m = _re.search(r'"abilities":\[', nd)
+    if m:
+        e = _wiki_bracket(nd, m.end() - 1)
+        if e > 0:
+            try:
+                skills = json.loads(nd[m.end() - 1:e])
+            except Exception:
+                skills = []
+    if isinstance(skills, list) and skills:
+        sk = []
+        for x in skills[:40]:
+            if not isinstance(x, dict) or not x.get('title'):
+                continue
+            sk.append({'id': x.get('id'),
+                       'zh': x.get('title'),
+                       'desc': x.get('description') or '',
+                       'key': x.get('inputHint') or x.get('inputHintText') or '',
+                       'kind': x.get('kind') or '',
+                       'video': _wiki_abs(x.get('videoUrl') or ''),
+                       'poster': _wiki_abs(x.get('thumbnailUrl') or '')})
+        if sk:
+            out['skills'] = sk
+
+    # ---- 采集伤害 damage{} ----
+    dmg = {}
+    m = _re.search(r'"damage":\{', nd)
+    if m:
+        e = _wiki_bracket(nd, m.end() - 1)
+        if e > 0:
+            try:
+                dmg = json.loads(nd[m.end() - 1:e])
+            except Exception:
+                dmg = {}
+    if isinstance(dmg, dict) and dmg:
+        out['damage'] = dmg
+
+    # ---- 采集加成（HTML「采集能力」段）----
+    seg = _wiki_h2seg_like(raw, u'采集能力')
+    caps = []
+    if seg:
+        seen = set()
+        for part in _wiki_strip(seg).split(u'资源详情'):
+            # _wiki_strip 会把 <span>树脂</span><span>10x</span> 拼成 "树脂10x"（无空格），故用 \s*
+            # 部分物种带等级标记（如星尾兽 "沙 21x #7"），允许尾部 #N
+            mm = _re.search(r'([\u4e00-\u9fa5A-Za-z]{1,10}?)\s*(\d+(?:\.\d+)?)x(?:\s*#\d+)?\s*$', part.strip())
+            if not mm:
+                continue
+            nm = mm.group(1).strip()
+            if not nm or len(nm) < 1 or nm in seen:
+                continue
+            seen.add(nm)
+            caps.append({'zh': nm, 'mult': mm.group(2)})
+            if len(caps) >= 24:
+                break
+    if caps:
+        out['caps'] = caps
+
+    # ---- 鞍（名称 / 制作经验）----
+    sad = _re.findall(r'"base_xp":([\d.]+),"slug":"([^"]*saddle[^"]*)","name":"([^"]+)","xp":(\d+)', nd)
+    if sad:
+        out['saddles'] = [{'slug': a[1], 'zh': a[2], 'base': float(a[0]), 'xp': int(a[3])}
+                          for a in sad[:12]]
+
+    # ---- 击杀经验（注意：鞍的 xp 要大得多，必须用 no_xp 前缀精确定位）----
+    xpk = _re.findall(r'"no_xp":(?:true|false),"xp":(\d+)', nd)
+    if xpk:
+        out['xpKill'] = int(xpk[0])
+
+    # ---- 食性 ----
+    m = _re.search(r'"diet":"([^"]*)"', nd)
+    if m:
+        out['diet'] = m.group(1)
+        # v125：食性中文由后端统一给出（前端不再硬编码映射）
+        _DIET_ZH = {'Herbivore': u'草食', 'Carnivore': u'肉食',
+                    'Omnivore': u'杂食', 'Piscivore': u'鱼食'}
+        out['dietZh'] = _DIET_ZH.get(m.group(1), m.group(1))
+    if '"is_carnivore":true' in nd:
+        out['carn'] = True
+
+    # ---- 驯服食物 ----
+    # v91：优先取页面**结构化组件**「最佳食物」（所有物种都有；原来只认「最佳驯服食物是」
+    #   正文句子，只有甲龙这类页面才有，导致 Dodo/Rex/Triceratops 全空）。
+    #   结构：["$","div","最佳食物",{"children":[["$","dt",...],"最佳食物"],
+    #          ["$","dd",null,{"children":["$","$L38",null,
+    #            {"href":"/zh-cn/.../items/basic-kibble","children":"基础饲料"}]}]]}]
+    foods = []
+    _mb = _re.search(u'\\["\\$","div","最佳食物"', nd)
+    if _mb:
+        _seg = nd[_mb.start():_mb.start() + 1600]
+        _mh = _re.search(u'"href":"/zh-cn/[^"]*/items/[^"]*","children":"([^"]+)"', _seg)
+        if _mh:
+            _b = _mh.group(1).strip()
+            if _b and len(_b) <= 20 and u'<' not in _b:
+                foods.append(_b)
+    # 正文句子补充「次选」（甲龙这类页面才有，不影响主食物）
+    m = _re.search(u'最佳驯服食物是', nd)
+    if m:
+        tail = nd[m.end():m.end() + 120]
+        tail = _re.split(u'[。\\n"]', tail)[0]
+        for x in _re.split(u'[，,、]', tail):
+            x = x.strip()
+            for t in (u'也可作为次选', u'可作为次选', u'也可以', u'也可', u'等'):
+                x = x.replace(t, '')
+            x = x.strip()
+            if 1 < len(x) <= 12 and not x.startswith(u'是') and x not in foods:
+                foods.append(x)
+    if foods:
+        out['tamingFoods'] = foods[:6]
+
+    # ---- v95：各 tab 的前置文案 ----
+    # 实测首页有 18 个 h2，5 个 tab 都有引导段落，之前一条没抓（只有概览/繁殖抓了）。
+    # 统一放 HOME，前端各 render 读取。
+    _TXT_SPECS = (
+        # v111：门槛 12 字（低于 12 多是被 v111 的 SKIP_WORDS 漏掉的按钮/标签文字）
+        ('tameIntro',    u'驯服',           (12, 600)),
+        ('gatherIntro',  u'采集能力',       (12, 600)),
+        ('harvestIntro', u'掉落与采集资源', (12, 600)),
+        ('expIntro',     u'经验值',         (6, 400)),
+        ('abilIntro',    u'战斗与技能',     (12, 500)),
+    )
+    # v114：wiki 驯服食物表（h2「驯服」段的 <li>，格式如
+    #   「基础饲料 最佳 亲和度 400 × 3 1m 43s + 74 Lvl (224)」）
+    try:
+        _tseg = _wiki_h2seg_like(raw, u'驯服', 12000)
+        if _tseg:
+            _tf = []
+            for _li in _re.findall(r'<li[^>]*>(.*?)</li>', _tseg, _re.S):
+                _t = _wiki_strip(_li)
+                if not _t or u'×' not in _t or u'Lvl' not in _t:
+                    continue
+                _best = bool(_re.search(u'最佳', _t))
+                _t2 = _t.replace(u'最佳', ' ')
+                _mq = _re.search(u'×\\s*(\\d+)', _t2)
+                _md = _re.search(u'(\\d+)\\s*m\\s*(\\d+)\\s*s', _t2)
+                _ms = _re.search(u'(\\d+)\\s*s(?!\\s*\\d)', _t2)
+                _ml = _re.search(u'\\+\\s*(\\d+)\\s*Lvl', _t2)
+                # v131：「亲和度 N」= 每口亲和度 aff（原来直接被丢弃 ⇒ FO0DS 表无此食物时无法重算）
+                _ma = _re.search(u'亲和度\\s*(\\d+)', _t)
+                # 名字：第一个 × 之前，去掉「亲和度 N」
+                _nm = _re.split(u'×', _t2)[0]
+                _nm = _re.sub(u'\\s*亲和度\\s*\\d+\\s*', ' ', _nm).strip()
+                _nm = _re.sub(u'\\s+', ' ', _nm)[:24]
+                if not _nm or len(_nm) < 2:
+                    continue
+                if _md:
+                    _dur = u'%s分%s秒' % (_md.group(1), _md.group(2))
+                elif _ms:
+                    _dur = u'%s秒' % _ms.group(1)
+                else:
+                    _dur = ''
+                _tf.append({'zh': _nm, 'best': _best,
+                            'aff': int(_ma.group(1)) if _ma else 0,
+                            'qty': int(_mq.group(1)) if _mq else 0,
+                            'dur': _dur,
+                            'lvl': int(_ml.group(1)) if _ml else 0})
+                if len(_tf) >= 8:
+                    break
+            if _tf:
+                out['tameFoods'] = _tf
+    except Exception:
+        pass
+
+    for _k, _kw, _rng in _TXT_SPECS:
+        try:
+            _seg = _wiki_h2seg_like(raw, _kw, 9000)
+            if not _seg:
+                continue
+            _arr = []
+            for _p in _re.findall(r'<p[^>]*>(.*?)</p>', _seg, _re.S):
+                _t = _wiki_strip(_p)
+                if not (_rng[0] <= len(_t) <= _rng[1]):
+                    continue
+                if any(w in _t for w in WIKI_SKIP_WORDS):
+                    continue
+                if _t in _arr:
+                    continue
+                _arr.append(_t)
+                if len(_arr) >= 3:
+                    break
+            if _arr:
+                out[_k] = _arr
+        except Exception:
+            pass
+
+    return out
+
+
+def _wiki_parse_abil(raw):
+    """技能页：从 nd 里抓 title/videoUrl/thumbnailUrl 三元组"""
+    import re as _re
+    nd = _wiki_nextdata(raw)
+    skills = []
+    pat = r'"title":"((?:[^"\\]|\\.)*)","videoUrl":"((?:[^"\\]|\\.)*)","thumbnailUrl":"((?:[^"\\]|\\.)*)"'
+    for m in _re.finditer(pat, nd):
+        t = m.group(1)
+        if not t or len(t) > 40:
+            continue
+        v = _wiki_abs(m.group(2))
+        if not v:
+            continue
+        if any(x['zh'] == t for x in skills):
+            continue
+        skills.append({'zh': t, 'video': v, 'poster': _wiki_abs(m.group(3))})
+        if len(skills) >= 40:
+            break
+    return {'skills': skills}
+
+
+def _wiki_parse_harvest(raw):
+    """收割页：提取全部 HTML 表格（节点产量表 / 尸体产量表）"""
+    import re as _re
+    tabs = []
+    for tb in _re.findall(r'<table[^>]*>([\s\S]*?)</table>', raw):
+        rows = []
+        for tr in _re.findall(r'<tr[^>]*>([\s\S]*?)</tr>', tb):
+            cells = [_wiki_strip(c) for c in _re.findall(r'<t[hd][^>]*>([\s\S]*?)</t[hd]>', tr)]
+            cells = [c for c in cells if c]
+            if cells:
+                rows.append(cells)
+        if len(rows) >= 2:
+            tabs.append(rows)
+    titles = []
+    for m in _re.finditer(r'<h2[^>]*>(.*?)</h2>', raw, _re.S):
+        t = _wiki_strip(m.group(1))
+        if t and t not in titles:
+            titles.append(t)
+    return {'tables': tabs[:6], 'titles': titles[:8]}
+
+
+def _wiki_parse_breed(raw):
+    """繁殖页：中文段落 + 表格"""
+    import re as _re
+    out = {'intro': [], 'tables': []}
+    for p in _re.findall(r'<p[^>]*>(.*?)</p>', raw, _re.S):
+        t = _wiki_strip(p)
+        if len(t) >= 20 and not any(w in t for w in WIKI_SKIP_WORDS) and t not in out['intro']:
+            out['intro'].append(t)
+        if len(out['intro']) >= 14:
+            break
+    out['tables'] = _wiki_parse_harvest(raw)['tables']
+    return out
+
+
+def _wiki_parse_gather(raw):
+    """采集页（/buildings）只存放建筑模板，且正文混英文+页脚导航 → 不再采用；
+       采集加成与节点产量统一由首页 HOME.caps 提供（v73b）"""
+    return {'intro': [], 'skip': 1}
+
+
+
+
+
+
+# ============ Wiki 按需抓取（v72f 分级版）============
+# 思路：概览先抓先落盘（约 4 秒），其余子页后续批次补清洗
+WIKI_SUBS = [('breeding-calculator', 'BREED'), ('harvesting', 'HARVEST'),
+             ('buildings', 'GATHER'), ('abilities', 'ABIL'), ('spawn-command', 'SPAWN')]
+# v72q：worker 实际抓取顺序与落盘 block 名（首项为空 sub = 抓首页）
+_WIKI_STEPS = [('', 'HOME'), ('abilities', 'ABIL'), ('harvesting', 'HARVEST'),
+               ('breeding-calculator', 'BREED_DESC'), ('buildings', 'GATHER')]
+_WIKI_LOCK = threading.Lock()
+_WIKI_TASKS = {}
+
+
+def _wiki_cache_path(key):
+    return os.path.join(WIKI_CACHE_DIR, key + '.json')
+
+
+def _wiki_load(key):
+    p = _wiki_cache_path(key)
+    if not os.path.isfile(p):
+        return None
+    try:
+        with open(p, 'r', encoding='utf-8') as f:
+            return json.loads(f.read())
+    except Exception:
+        return None
+
+
+def _wiki_save(key, data):
+    try:
+        os.makedirs(WIKI_CACHE_DIR, exist_ok=True)
+        p = _wiki_cache_path(key)
+        tmp = p + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            f.write(json.dumps(data, ensure_ascii=False, separators=(',', ':')))
+        os.replace(tmp, p)
+        return True
+    except Exception as e:
+        print('[wiki] save fail ' + key + ': ' + str(e)[:100])
+        return False
+
+
+def _wiki_log(msg):
+    """worker 运行日志（写文件，便于定位卡在哪一步）"""
+    try:
+        os.makedirs(WIKI_CACHE_DIR, exist_ok=True)
+        p = os.path.join(WIKI_CACHE_DIR, '_worker.log')
+        line = time.strftime('%Y-%m-%d %H:%M:%S') + ' ' + str(msg)[:400] + '\n'
+        with open(p, 'a', encoding='utf-8') as f:
+            f.write(line)
+        # 超过 400KB 截半，避免无限增长
+        if os.path.getsize(p) > 400 * 1024:
+            with open(p, 'r', encoding='utf-8', errors='replace') as f:
+                ls = f.readlines()[-800:]
+            with open(p, 'w', encoding='utf-8') as f:
+                f.writelines(ls)
+    except Exception:
+        pass
+
+
+def _wiki_fetch_page(url, timeout=18):
+    import urllib.request as _u
+    req = _u.Request(url, headers={'User-Agent': WIKI_UA, 'Accept': 'text/html'})
+    r = _u.urlopen(req, timeout=timeout)
+    return r.read().decode('utf-8', 'replace')
+
+
+def _wiki_worker(key):
+    """后台抓取：首页(概览+经验+食性) -> 各子页清洗后逐块落盘（分级可用）"""
+    slug = str(key).lower()
+    steps = _WIKI_STEPS
+    total = len(steps)
+    _wiki_log('worker START %s steps=%d' % (key, total))
+    try:
+        data = _wiki_load(key) or {}
+        for i, (sub, block) in enumerate(steps):
+            with _WIKI_LOCK:
+                t = _WIKI_TASKS.get(key)
+                if t:
+                    t['done'] = i
+            _blk = data.get(block)
+            _okJump = bool(_blk) and not (isinstance(_blk, dict) and _blk.get('_fail'))
+            # v73f：HOME 旧结构只有 xp/diet，必须含 xpKill 才算完整
+            if _okJump and block == 'HOME' and 'xpKill' not in (_blk if isinstance(_blk, dict) else {}):
+                _okJump = False
+            if _okJump:
+                continue
+            _t0 = time.time()
+            raw = None
+            _used = slug
+            # v78：子页优先复用首页已确认的真实 slug（ankylo -> ankylosaurus）
+            _known = str((data.get('DATA') or {}).get('slug') or '')
+            if sub and _known:
+                _cands = [_known]
+            else:
+                _cands = _wiki_slug_cands(key)
+            for _si, _cand in enumerate(_cands):
+                url = WIKI_ROOT + '/' + _cand + (('/' + sub) if sub else '')
+                _wiki_log('start %s %s slug=%s' % (key, block, _cand))
+                try:
+                    raw = _wiki_fetch_page(url, 60 if block == 'HOME' else 18)
+                    _used = _cand
+                    if _si > 0:
+                        _wiki_log('slug hit %s -> %s' % (key, _cand))
+                    break
+                except Exception as _e1:
+                    if '404' in str(_e1) and _si < len(_cands) - 1:
+                        continue
+                    _wiki_log('FAIL %s %s %dms %s' % (key, block, int((time.time() - _t0) * 1000), str(_e1)[:140]))
+                    data[block] = {'_fail': 1, 'at': int(time.time() * 1000), 'err': str(_e1)[:120]}
+                    _wiki_save(key, data)
+                    raw = None
+                    break
+            if raw is None and sub == '':
+                # v105：首页所有候选都失败（wikily 无此页面）→ 直接给全部 block 标 fail 并结束，
+                #   不再让 4 个子页各试 3 个候选（原来会白跑 40+ 秒，前端轮询到超时）。
+                _now = int(time.time() * 1000)
+                for _sb, _bk in steps:
+                    if not data.get(_bk):
+                        data[_bk] = {'_fail': 1, 'at': _now, 'err': 'wiki 无此物种页面'}
+                try:
+                    _wiki_save(key, data)
+                except Exception:
+                    pass
+                _wiki_log('worker ABORT %s (首页所有 slug 候选均失败)' % key)
+                break
+            if raw is None:
+                continue
+            if block == 'HOME':
+                ov = _wiki_parse_overview(raw)
+                try:
+                    extra = _wiki_parse_home(raw)
+                except Exception:
+                    extra = {}
+                data['DATA'] = {'zh': ov['zh'], 'slug': _used, 'title': '', 'tabs': [],
+                                'fetched_at': int(time.time() * 1000), 'tabHtml': {}}
+                data['OVERVIEW'] = {'intro': ov['intro'], 'tips': ov['tips'], 'stats': [], 'bp': ''}
+                data['HOME'] = extra or {}
+            elif block == 'ABIL':
+                data['ABIL'] = _wiki_parse_abil(raw)
+            elif block == 'HARVEST':
+                data['HARVEST'] = _wiki_parse_harvest(raw)
+            elif block == 'BREED_DESC':
+                data['BREED_DESC'] = _wiki_parse_breed(raw)
+            elif block == 'GATHER':
+                data['GATHER'] = _wiki_parse_gather(raw)
+            _wiki_save(key, data)
+            _wiki_log('ok %s %s %dms %dB' % (key, block, int((time.time() - _t0) * 1000), len(raw)))
+            time.sleep(0.6)
+            with _WIKI_LOCK:
+                t = _WIKI_TASKS.get(key)
+                if t:
+                    t['done'] = i + 1
+                    t['data'] = data
+        _wiki_log('worker DONE %s blocks=%s' % (key, ','.join([b for (_s2, b) in steps if data.get(b)])))
+        with _WIKI_LOCK:
+            t = _WIKI_TASKS.get(key)
+            if t:
+                t['status'] = 'ready'
+                t['data'] = data
+                t['done'] = total
+    except Exception as e:
+        import traceback as _tb
+        print('[wiki] worker err ' + str(key) + ': ' + str(e)[:160])
+        _tb.print_exc()
+        with _WIKI_LOCK:
+            t = _WIKI_TASKS.get(key)
+            if t:
+                t['status'] = 'error'
+                t['err'] = str(e)[:160]
+
+
+def _wiki_get(key, start=True):
+    """取当前状态；start=True 时若无任务则启动后台抓取（幂等）"""
+    key = str(key or '').strip()
+    if not key:
+        return {'status': 'error', 'err': 'missing key'}
+    if not re.match(r'^[A-Za-z0-9_]+$', key):
+        return {'status': 'error', 'err': 'bad key'}
+    cached = _wiki_load(key)
+    with _WIKI_LOCK:
+        t = _WIKI_TASKS.get(key)
+    if t and t.get('status') in ('fetching', 'partial'):
+        return {'key': key, 'status': t['status'], 'done': t.get('done', 0),
+                'total': t.get('total', 1), 'err': t.get('err'),
+                'data': (t.get('data') if t.get('data') else None)}
+    # v72q：缓存完整性判定 —— 缺任一 block 就补抓（旧缓存只有 OVERVIEW，需增量补齐子页）
+    if cached and cached.get('OVERVIEW', {}).get('intro'):
+        _miss = [b for (_sub, b) in _WIKI_STEPS if not cached.get(b)]
+        if not _miss or not start:
+            return {'key': key, 'status': 'ready', 'done': len(_WIKI_STEPS),
+                    'total': len(_WIKI_STEPS), 'data': cached, '_from': 'cache',
+                    '_miss': _miss}
+        # 有缺口且允许启动 → 走下面的 worker 增量补抓（已有的 block 会 continue 跳过）
+    if not start:
+        return {'key': key, 'status': 'idle', 'done': 0, 'total': len(_WIKI_STEPS)}
+    with _WIKI_LOCK:
+        _WIKI_TASKS[key] = {'status': 'fetching', 'done': 0, 'total': len(_WIKI_STEPS),
+                            'err': None, 'data': cached, 'startedAt': int(time.time() * 1000)}
+    threading.Thread(target=_wiki_worker, args=(key,), daemon=True).start()
+    return {'key': key, 'status': 'fetching', 'done': 0,
+            'total': len(_WIKI_STEPS), 'data': cached, '_miss': (_miss if cached else None)}
+
+
+def _wiki_index():
+    out = {}
+    try:
+        if os.path.isdir(WIKI_CACHE_DIR):
+            for f in os.listdir(WIKI_CACHE_DIR):
+                if not f.endswith('.json'):
+                    continue
+                k = f[:-5]
+                d = _wiki_load(k) or {}
+                zh = ((d.get('DATA') or {}).get('zh') or '')
+                out[k] = zh
+    except Exception:
+        pass
+    return {'ok': True, 'count': len(out), 'species': out}
+
+
+def _wiki_probe(slug):
+    # 探测：出网 / 耗时 / 解析 / 缓存目录可写
+    import time as _t, urllib.request as _u
+    out = {'ok': False, 'slug': slug, 'cacheDir': WIKI_CACHE_DIR}
+    try:
+        os.makedirs(WIKI_CACHE_DIR, exist_ok=True)
+        tp = os.path.join(WIKI_CACHE_DIR, '_p.tmp')
+        f = open(tp, 'w'); f.write('x'); f.close()
+        os.remove(tp)
+        out['writable'] = True
+    except Exception as e:
+        out['writable'] = False
+        out['cacheErr'] = str(e)[:140]
+    url = WIKI_ROOT + '/' + slug
+    out['url'] = url
+    t0 = _t.time()
+    try:
+        req = _u.Request(url, headers={'User-Agent': WIKI_UA, 'Accept': 'text/html'})
+        r = _u.urlopen(req, timeout=30)
+        raw = r.read().decode('utf-8', 'replace')
+        out['httpStatus'] = r.getcode()
+        out['ms'] = int((_t.time() - t0) * 1000)
+        out['bytes'] = len(raw)
+        pv = _wiki_parse_overview(raw)
+        out['zh'] = pv['zh']
+        out['introN'] = len(pv['intro'])
+        out['tipsN'] = len(pv['tips'])
+        out['intro0'] = (pv['intro'][0][:60] if pv['intro'] else '')
+        out['ok'] = bool(pv['zh'] and pv['intro'])
+    except Exception as e:
+        out['ms'] = int((_t.time() - t0) * 1000)
+        out['err'] = str(e)[:160]
+    return out
+
 ASA_DATA = os.environ.get('ASA_DATA', os.path.join(DINO_DATA, 'asa-data'))
 
 # ===== 2026-10-27 配置改动规则（/api/cfg_rules）=====
@@ -2927,6 +3624,19 @@ class Handler(BaseHTTPRequestHandler):
             return
         elif path == '/api/cfg_rules/refresh_status':
             self._send(200, {'ok': True, 'job': _cfg_job_view()})
+        elif path == '/api/wiki_probe':
+            # v72e：wikily 抓取可行性探测（出网 / 耗时 / 解析 / 缓存目录）
+            _qs = parse_qs(parsed.query)
+            self._send(200, _wiki_probe((_qs.get('slug') or ['ankylosaurus'])[0].strip()))
+        elif path.startswith('/api/wiki/'):
+            # v72f：按需抓取。/api/wiki/index | /api/wiki/<Key> | /api/wiki/<Key>/progress
+            _rest = path[len('/api/wiki/'):].strip('/')
+            if _rest == 'index':
+                self._send(200, _wiki_index())
+            elif _rest.endswith('/progress'):
+                self._send(200, _wiki_get(_rest[:-len('/progress')], start=False))
+            else:
+                self._send(200, _wiki_get(_rest, start=True))
         elif path == '/api/bb_notes':
             # 2026-10-28：粑粑笔记（公开只读；内容由拥有者「导入 MD」覆盖）
             self._send(200, _bb_notes_read())
