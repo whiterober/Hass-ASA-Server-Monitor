@@ -36,6 +36,7 @@ dino_backend.py — ASA 生物数据独立后端（dino-import.html 脱离 HA �
 import json
 import os
 import re
+import re as _re
 import socket
 import struct
 import subprocess
@@ -57,6 +58,13 @@ WIKI_SKIP_WORDS = (u'使用计算器', u'广告', 'Cookie', u'订阅',
                    u'登录', u'下载', u'切换游戏', u'去广告', u'会员',
                    u'显示全部', u'打开完整', u'查看全部', u'查看详情')   # v111：页面按钮文字，不是正文
 
+# ===== v286：ARK Wiki（wiki.gg）第二数据源 =====
+# 原因：wikily 物品页只有「快速信息 / 制作配方 / 武器属性」等数值表格，
+#       没有「使用说明 / 按键」章节 —— 武器专属按键（黏液枪 R 切黏液类型、Ctrl 采尸体）
+#       与使用要点（电锯水下不可用、弩永远满蓄力）只存在于 ARK Wiki 的 Usage / Notes 段。
+ARK_ROOT = 'https://ark.wiki.gg/wiki/'
+_ARK_SEC_NAMES = ('Usage', 'Usage & Strategies', 'Notes', 'Notes/Tips', 'Notes / Tips')
+
 
 def _wiki_strip(s):
     import re as _re, html as _h
@@ -64,6 +72,26 @@ def _wiki_strip(s):
     s = _re.sub(r'<style\b.*?</style>', '', s, flags=_re.S | _re.I)
     s = _re.sub(r'<[^>]+>', '', s)
     return _re.sub(r'\s+', ' ', _h.unescape(s)).strip()
+
+
+def _wiki_strip_sp(s):
+    """v260: 标签替换为空格再 strip，保留标签边界。
+
+    _wiki_strip 直接删标签，会把 <span>× 9</span><span>30m 42s</span>
+    粘成「× 930m 42s」⇒ 驯服食物口数/时长被放大 10 倍（Rex 曾显示口数 930）。
+    """
+    import re as _re, html as _h
+    s = _re.sub(r'<script\b.*?</script>', '', s, flags=_re.S | _re.I)
+    s = _re.sub(r'<style\b.*?</style>', '', s, flags=_re.S | _re.I)
+    s = _re.sub(r'<[^>]+>', ' ', s)
+    return _re.sub(r'\s+', ' ', _h.unescape(s)).strip()
+
+
+# v260: 解析器版本戳 —— 缓存 _pv 低于此值判未就绪并重抓
+_WIKI_PARSE_VER = 304   # v304：lootRows 改数据源 = wikily 内嵌完整掉落表 TSV（v301 的 HTML 解析只拿到约 1/6 行）
+# v5646：升到 302 —— lootRows 每行新增 mapSlug（wikily 行 href 的 ?map=，权威地图归属）。
+#   版本戳不升的话 _ready() 会把旧缓存（无 mapSlug）判为已就绪，永不重解析，前端地图图标永远缺失。
+                         # v287：物品补 ARK Wiki 专属按键（ark 字段）
 
 
 def _wiki_h2seg(raw, name, maxlen=6000):
@@ -109,56 +137,224 @@ def _wiki_nextdata(raw):
 _WIKI_ALIAS = None
 
 
+def _wk_json_load(names, pick=None):
+    """通用：按候选文件名顺序加载 json（脚本同目录 / data 子目录）。返回 (obj, path)"""
+    here = os.path.dirname(os.path.abspath(__file__))
+    for n in names:
+        for p in (os.path.join(here, n), os.path.join(here, 'data', n)):
+            try:
+                if os.path.isfile(p):
+                    with open(p, 'r', encoding='utf-8') as f:
+                        obj = json.loads(f.read()) or {}
+                    if pick:
+                        obj = pick(obj)
+                    return obj, p
+            except Exception as e:
+                print('[wiki] load fail %s: %s' % (p, str(e)[:80]))
+    return None, ''
+
+
+def _wk_index_scan(cache_dir, zh_of, field):
+    """通用：扫描缓存目录生成清单 {键: 中文名}"""
+    out = {}
+    try:
+        if os.path.isdir(cache_dir):
+            for f in os.listdir(cache_dir):
+                if not f.endswith('.json'):
+                    continue
+                kk = f[:-5]
+                try:
+                    out[kk] = zh_of(kk)
+                except Exception:
+                    out[kk] = ''
+    except Exception:
+        pass
+    d = {'ok': True, 'count': len(out)}
+    d[field] = out
+    return d
+
+
+def _wk_lookup(names, index, limit=8):
+    """通用：名字列表 -> 多形态 -> 白名单归一索引命中（去重保序）"""
+    out = []
+    for x in names:
+        for f in _wk_forms(x):
+            real = index.get(_re.sub(r'[^a-z0-9]', '', f))
+            if real and real not in out:
+                out.append(real)
+    return out[:limit]
+
+
 def _wiki_alias():
-    """读项目别名表（Anky->Ankylosaurus / Trike->Triceratops ...），失败返回 {}"""
+    """短名 -> 全名兜底表（v163：走 _wk_json_load 统一加载）"""
     global _WIKI_ALIAS
     if _WIKI_ALIAS is not None:
         return _WIKI_ALIAS
-    _WIKI_ALIAS = {}
-    here = os.path.dirname(os.path.abspath(__file__))
-    for p in (os.path.join(here, 'wiki_alias.json'),
-              os.path.join(here, 'data', 'wiki_alias.json')):
-        try:
-            if os.path.isfile(p):
-                with open(p, 'r', encoding='utf-8') as f:
-                    _WIKI_ALIAS = json.loads(f.read()) or {}
-                print('[wiki] alias loaded %d from %s' % (len(_WIKI_ALIAS), p))
-                break
-        except Exception as e:
-            print('[wiki] alias load fail %s: %s' % (p, str(e)[:80]))
+    obj, p = _wk_json_load(['wiki_alias.json'])
+    _WIKI_ALIAS = obj if isinstance(obj, dict) else {}
+    if p:
+        print('[wiki] alias loaded %d from %s' % (len(_WIKI_ALIAS), p))
     return _WIKI_ALIAS
-
 
 _WIKI_EN_MAP = None
 
 
 def _wiki_en_map():
-    """项目 DinoEntry 表：类名短名 -> 英文名（汉化/facility_official.json 的 DinoEntry_* 导出，
-    196 条，如 JumpingSpider->Cosmo / Anky->Ankylosaurus / Beetle->DungBeetle）。
-    v105：**这是唯一权威来源，禁止再猜 s/saurus/连字符等后缀**。
-    实测反例：JumpingSpider 的 wikily slug 是 cosmo；jumping-spider / jumpingspider / jumpingspidersaurus 全部 404。"""
+    """项目 DinoEntry 表：类名短名 -> 英文名（v163：走 _wk_json_load 统一加载）"""
     global _WIKI_EN_MAP
     if _WIKI_EN_MAP is not None:
         return _WIKI_EN_MAP
-    _WIKI_EN_MAP = {}
-    here = os.path.dirname(os.path.abspath(__file__))
-    for p in (os.path.join(here, 'dino_en_map.json'),
-              os.path.join(here, 'data', 'dino_en_map.json')):
-        try:
-            if os.path.isfile(p):
-                with open(p, 'r', encoding='utf-8') as f:
-                    _WIKI_EN_MAP = json.loads(f.read()) or {}
-                print('[wiki] en_map loaded %d from %s' % (len(_WIKI_EN_MAP), p))
-                break
-        except Exception as e:
-            print('[wiki] en_map load fail %s: %s' % (p, str(e)[:80]))
+    obj, p = _wk_json_load(['dino_en_map.json'])
+    _WIKI_EN_MAP = obj if isinstance(obj, dict) else {}
+    if p:
+        print('[wiki] en_map loaded %d from %s' % (len(_WIKI_EN_MAP), p))
     return _WIKI_EN_MAP
+
+_WIKI_SLUGS = None
+_WIKI_SLUGS_RAW = []
+
+
+def _wiki_slugs():
+    """wikily 全量恐龙 slug 白名单（557 条）-> 归一化索引（v163：走 _wk_json_load）"""
+    global _WIKI_SLUGS, _WIKI_SLUGS_RAW
+    if _WIKI_SLUGS is not None:
+        return _WIKI_SLUGS
+    _WIKI_SLUGS = {}
+    _WIKI_SLUGS_RAW = []
+    obj, p = _wk_json_load(['wiki_slugs.json'],
+                           pick=lambda o: (o.get('slugs') if isinstance(o, dict) else o) or [])
+    for s in (obj or []):
+        s = str(s or '').strip()
+        if not s:
+            continue
+        n = _re.sub(r'[^a-z0-9]', '', s.lower())
+        if n:
+            _WIKI_SLUGS[n] = s
+            _WIKI_SLUGS_RAW.append(s)
+    if p:
+        print('[wiki] slugs loaded %d from %s' % (len(_WIKI_SLUGS), p))
+    return _WIKI_SLUGS
+
+_WK_PRE = ('Aberrant ', 'Brute ', 'Alpha ', 'Beta ', 'Gamma ', 'Corrupted ', 'Enraged ', 'Astral ',
+           'Ghost ', 'Skeletal ', 'Tek ', 'Mega ', 'Primal ', 'Celestial ', 'Elder ', 'Lightning ',
+           'Infused ', 'X-', 'R-', 'Bionic ')
+_WK_SUF = (' Ghost', ' Alpha', ' Beta', ' Gamma', ' (Autumn)', ' (Spring)', ' (Summer)', ' (Winter)',
+           ' Drone', ' Male', ' Female', ' Tentacle', ' Tentacles', ' (Large)', ' (Small)', ' (Shark)',
+           ' (Squid)')
+
+# 同物异名 / 拼写差异（仅当项目表缺项时兜底）
+_WK_ALIAS = {
+    'T-Rex': 'Rex', 'TRex': 'Rex', 'Mosasaur': 'Mosasaurus', 'Dilophosaur': 'Dilophosaurus',
+    'Therizinosaur': 'Therizinosaurus', 'Parasaur': 'Parasaurolophus', 'Polar Bear': 'Dire Bear',
+}
+
+
+def _wk_peel(nm):
+    """名字 -> 逐级降级形态（细 -> 粗），剥变体前缀/后缀/所有格/括号"""
+    out = [nm]
+    s = nm
+    for _ in range(6):
+        changed = False
+        for p in _WK_PRE:
+            if s.startswith(p):
+                s = s[len(p):]
+                changed = True
+        for f in _WK_SUF:
+            if s.endswith(f):
+                s = s[:-len(f)]
+                changed = True
+        m = _re.match(r"^[A-Za-z'\-]+'s\s+(.+)$", s)
+        if m:
+            s = m.group(1)
+            changed = True
+        m2 = _re.match(r'^(.+?)\s*\([^)]*\)\s*$', s)
+        if m2 and m2.group(1).strip():
+            s = m2.group(1).strip()
+            changed = True
+        s = s.strip()
+        if not changed:
+            break
+        if s and s not in out:
+            out.append(s)
+    return out
+
+
+def _wk_forms(x):
+    r = []
+    for f in (str(x).lower().replace(' ', '-'), str(x).lower().replace(' ', ''),
+              str(x).lower().replace(' ', '_')):
+        f = _re.sub(r'[^a-z0-9\-_]', '', f)
+        if f and f not in r:
+            r.append(f)
+    return r
 
 
 def _wiki_slug_cands(key):
-    """短名 -> wikily slug 候选（v105：以项目 DinoEntry 的 en 字段为准，最多 3 个）"""
-    import re as _re
-    k = str(key or '')
+    """短名/物种名 -> wikily slug 候选（v175）。
+
+    策略：真实 slug 白名单优先（变体降级 + 多形态），命中的即为站上存在的页面；
+    白名单未命中时退回项目 en_map/alias 直出（兼容新物种未进白名单的情况）。
+    """
+    k = str(key or '').strip()
+    sn = _wiki_slugs()
+    em = _wiki_en_map()
+    al = _wiki_alias()
+    res = []
+
+    seq = []
+    for base in _wk_peel(k):
+        seq.append(base)
+        if em.get(base):
+            seq.append(em[base])
+        if al.get(base):
+            seq.append(al[base])
+        if _WK_ALIAS.get(base):
+            a = _WK_ALIAS[base]
+            seq.append(a)
+            if em.get(a):
+                seq.append(em[a])
+
+    res = _wk_lookup(seq, sn)
+
+    # v192：精确名未收录时，试站上以 Alpha/Beta/Gamma 形态收录的写法
+    # 实例：Abyssalus the Void Beneath 的 blueprintPath 是 Kraken_Character_BP_Gamma
+    if not res:
+        _alt = []
+        for base in _wk_peel(k):
+            for _sfx in (' Gamma', ' Alpha', ' Beta'):
+                _alt.append(base + _sfx)
+                if em.get(base):
+                    _alt.append(em[base] + _sfx)
+                if al.get(base):
+                    _alt.append(al[base] + _sfx)
+                if _WK_ALIAS.get(base):
+                    _alt.append(_WK_ALIAS[base] + _sfx)
+        res = _wk_lookup(_alt, sn)
+
+    # v163：仍是未命中 -> 试「同族变体」：白名单里以 "<短名>-" 开头的 slug
+    #   实例：前端只传短名 Abyssalus，站上收录为 abyssalus-the-void-beneath-gamma
+    #   排序：gamma 优先（多数 BOSS 的最终形态），其次 alpha / beta，其余按长度升序
+    if not res:
+        _pref = _re.sub(r'[^a-z0-9]+', '-', k.lower()).strip('-')
+        if _pref and _pref != '':
+            _p2 = _pref + '-'
+            fam = [s for s in _WIKI_SLUGS_RAW if s.startswith(_p2)]
+
+            def _rank(x):
+                if x.endswith('-gamma'):
+                    return 0
+                if x.endswith('-alpha'):
+                    return 1
+                if x.endswith('-beta'):
+                    return 2
+                return 3
+            fam.sort(key=lambda x: (_rank(x), len(x), x))
+            res = fam[:3]
+
+    if res:
+        return res[:8]
+
+    # 兜底：原逻辑（en_map / alias / 短名 / 驼峰）
     out = []
 
     def add(x):
@@ -166,21 +362,15 @@ def _wiki_slug_cands(key):
         if x and x not in out:
             out.append(x)
 
-    al = _wiki_alias()
-    em = _wiki_en_map()
-    # ① 项目英文名（最权威）：Cosmo -> cosmo / Ankylosaurus -> ankylosaurus / DungBeetle -> dung-beetle
     for src in (em.get(k), al.get(k), al.get(k.lower())):
         if src:
             add(src)
-    # ② 短名本身（小写）
     add(k)
-    # ③ 短名驼峰连字符
     try:
         add(_re.sub(r'(?<!^)(?=[A-Z])', '-', k))
     except Exception:
         pass
-    return out[:3]
-
+    return out[:4]
 
 def _wiki_abs(u):
     u = str(u or '')
@@ -366,29 +556,35 @@ def _wiki_parse_home(raw):
         if _tseg:
             _tf = []
             for _li in _re.findall(r'<li[^>]*>(.*?)</li>', _tseg, _re.S):
-                _t = _wiki_strip(_li)
+                # v260: 用带标签边界的 strip，杜绝「× 9」+「30m」粘连
+                _t = _wiki_strip_sp(_li)
                 if not _t or u'×' not in _t or u'Lvl' not in _t:
                     continue
-                _best = bool(_re.search(u'最佳', _t))
-                _t2 = _t.replace(u'最佳', ' ')
-                _mq = _re.search(u'×\\s*(\\d+)', _t2)
-                _md = _re.search(u'(\\d+)\\s*m\\s*(\\d+)\\s*s', _t2)
-                _ms = _re.search(u'(\\d+)\\s*s(?!\\s*\\d)', _t2)
-                _ml = _re.search(u'\\+\\s*(\\d+)\\s*Lvl', _t2)
-                # v131：「亲和度 N」= 每口亲和度 aff（原来直接被丢弃 ⇒ FO0DS 表无此食物时无法重算）
-                _ma = _re.search(u'亲和度\\s*(\\d+)', _t)
-                # 名字：第一个 × 之前，去掉「亲和度 N」
-                _nm = _re.split(u'×', _t2)[0]
-                _nm = _re.sub(u'\\s*亲和度\\s*\\d+\\s*', ' ', _nm).strip()
-                _nm = _re.sub(u'\\s+', ' ', _nm)[:24]
-                if not _nm or len(_nm) < 2:
-                    continue
-                if _md:
+                _best = bool(_re.search(r'最佳', _t))
+                _t2 = _t.replace(r'最佳', ' ')
+                _ma = _re.search(r'亲和度\s*(\d+)', _t2)
+                _ml = _re.search(r'\+\s*(\d+)\s*Lvl', _t2)
+                # v260: 先抠时长并从文本移除，再取口数（否则 30m 的 30 被吃掉）
+                _dur = u''
+                _t3 = _t2
+                _mh2 = _re.search(r'(\d+)\s*h\s*(\d+)\s*m\s*(\d+)\s*s', _t2)
+                _md = _re.search(r'(\d+)\s*m\s*(\d+)\s*s', _t2)
+                _ms = _re.search(r'(\d+)\s*s(?![a-zA-Z0-9])', _t2)
+                if _mh2:
+                    _dur = u'%s小时%s分%s秒' % (_mh2.group(1), _mh2.group(2), _mh2.group(3))
+                    _t3 = _t2.replace(_mh2.group(0), ' ', 1)
+                elif _md:
                     _dur = u'%s分%s秒' % (_md.group(1), _md.group(2))
+                    _t3 = _t2.replace(_md.group(0), ' ', 1)
                 elif _ms:
                     _dur = u'%s秒' % _ms.group(1)
-                else:
-                    _dur = ''
+                    _t3 = _t2.replace(_ms.group(0), ' ', 1)
+                _mq = _re.search(r'×\s*(\d+)', _t3)
+                _nm = _re.split(r'×', _t3)[0]
+                _nm = _re.sub(r'\s*亲和度\s*\d+\s*', ' ', _nm)
+                _nm = _re.sub(r'\s+', ' ', _nm).strip()[:24]
+                if not _nm or len(_nm) < 2:
+                    continue
                 _tf.append({'zh': _nm, 'best': _best,
                             'aff': int(_ma.group(1)) if _ma else 0,
                             'qty': int(_mq.group(1)) if _mq else 0,
@@ -400,6 +596,7 @@ def _wiki_parse_home(raw):
                 out['tameFoods'] = _tf
     except Exception:
         pass
+
 
     for _k, _kw, _rng in _TXT_SPECS:
         try:
@@ -422,6 +619,34 @@ def _wiki_parse_home(raw):
                 out[_k] = _arr
         except Exception:
             pass
+
+    # v260: 无食物表时从「驯服」引导段兜底（毒蜥这类被动驯服喂蛋的物种）
+    if not out.get('tameFoods'):
+        _ti = u' '.join([str(x) for x in (out.get('tameIntro') or [])])
+        if _ti:
+            _fb = []
+            _nmseen = set()
+            for _m4 in _re.finditer(r'(?:使用|需使用|要用|采用)\s*([^\s，。、；][^，。、；]{1,24}?)\s*(?:作为食物|作为诱饵|作为驯服食物|作为饲料)', _ti):
+                _n4 = _m4.group(1).strip()
+                if _n4 and _n4 not in _nmseen:
+                    _nmseen.add(_n4)
+                    _fb.append({'zh': _n4, 'best': True, 'aff': 0, 'qty': 0, 'dur': u'', 'lvl': 0})
+            for _m4 in _re.finditer(r'([^\s，。、；][^，。、；]{1,24}?)\s*也可用作?替代', _ti):
+                _n4 = _m4.group(1).strip()
+                if _n4 and _n4 not in _nmseen:
+                    _nmseen.add(_n4)
+                    _fb.append({'zh': _n4, 'best': False, 'aff': 0, 'qty': 0, 'dur': u'', 'lvl': 0})
+            _mq4 = _re.search(r'大约需要\s*(\d+)\s*个', _ti)
+            _mdur4 = _re.search(r'耗时约\s*(\d+)\s*分钟', _ti)
+            if _fb:
+                for _x in _fb:
+                    if _x['best']:
+                        if _mq4:
+                            _x['qty'] = int(_mq4.group(1))
+                        if _mdur4:
+                            _x['dur'] = u'约%s分钟' % _mdur4.group(1)
+                out['tameFoods'] = _fb[:6]
+                out['tameFoodsFrom'] = 'intro'
 
     return out
 
@@ -520,6 +745,8 @@ def _wiki_load(key):
 
 def _wiki_save(key, data):
     try:
+        if isinstance(data, dict):
+            data['_pv'] = _WIKI_PARSE_VER
         os.makedirs(WIKI_CACHE_DIR, exist_ok=True)
         p = _wiki_cache_path(key)
         tmp = p + '.tmp'
@@ -572,7 +799,12 @@ def _wiki_worker(key):
                     t['done'] = i
             _blk = data.get(block)
             _okJump = bool(_blk) and not (isinstance(_blk, dict) and _blk.get('_fail'))
-            # v73f：HOME 旧结构只有 xp/diet，必须含 xpKill 才算完整
+            # v269：关键修复 —— 只有「整份缓存已是当前解析版本」时才允许跳过。
+            # 否则 _ready 因缺 _pv 判未就绪 -> 触发 worker -> worker 全跳过不写盘 -> _pv 永远补不上
+            # -> 每 5 秒无限触发 worker 的死循环。
+            if int(data.get('_pv') or 0) < _WIKI_PARSE_VER:
+                _okJump = False
+            # v73f：HOME 旧结构只有 xp/diet，必须含 xpKill 才算完整（仅在允许跳过时才有意义）
             if _okJump and block == 'HOME' and 'xpKill' not in (_blk if isinstance(_blk, dict) else {}):
                 _okJump = False
             if _okJump:
@@ -662,53 +894,954 @@ def _wiki_worker(key):
                 t['err'] = str(e)[:160]
 
 
-def _wiki_get(key, start=True):
-    """取当前状态；start=True 时若无任务则启动后台抓取（幂等）"""
+def _wk_task_get(key, start, cfg):
+    """通用 wiki 任务状态机（物种 / 物品共用）。
+
+    流程：键校验 -> 进行中任务 -> 缓存就绪 -> （未启动）error / idle -> 起后台任务 -> fetching
+    cfg:
+      id_field    : 返回体主键字段名（'key' 物种 / 'cls' 物品）
+      tasks, lock : 任务表与锁
+      valid       : fn(key)->bool
+      load        : fn(key)->cached|None
+      is_ready    : fn(cached)->bool
+      ready_extra : fn(cached)->dict        额外字段（物种 _miss）
+      fail_err    : fn(cached)->str         缓存「全失败」时的错误文案；'' 表示非全失败
+      total       : int
+      meta        : fn(key)->dict           起任务时附加元数据（物品 slug）
+      worker      : fn(key)
+    """
     key = str(key or '').strip()
-    if not key:
-        return {'status': 'error', 'err': 'missing key'}
-    if not re.match(r'^[A-Za-z0-9_]+$', key):
-        return {'status': 'error', 'err': 'bad key'}
-    cached = _wiki_load(key)
-    with _WIKI_LOCK:
-        t = _WIKI_TASKS.get(key)
+    idf = cfg.get('id_field') or 'key'
+    if not key or not (cfg.get('valid') or (lambda x: True))(key):
+        return {idf: key, 'status': 'error', 'err': 'bad key'}
+    tasks, lock = cfg['tasks'], cfg['lock']
+    total = cfg.get('total') or 1
+    ready_extra = cfg.get('ready_extra') or (lambda c: {})
+
+    with lock:
+        t = tasks.get(key)
     if t and t.get('status') in ('fetching', 'partial'):
-        return {'key': key, 'status': t['status'], 'done': t.get('done', 0),
-                'total': t.get('total', 1), 'err': t.get('err'),
-                'data': (t.get('data') if t.get('data') else None)}
-    # v72q：缓存完整性判定 —— 缺任一 block 就补抓（旧缓存只有 OVERVIEW，需增量补齐子页）
-    if cached and cached.get('OVERVIEW', {}).get('intro'):
-        _miss = [b for (_sub, b) in _WIKI_STEPS if not cached.get(b)]
-        if not _miss or not start:
-            return {'key': key, 'status': 'ready', 'done': len(_WIKI_STEPS),
-                    'total': len(_WIKI_STEPS), 'data': cached, '_from': 'cache',
-                    '_miss': _miss}
-        # 有缺口且允许启动 → 走下面的 worker 增量补抓（已有的 block 会 continue 跳过）
+        d = {idf: key, 'status': t['status'], 'done': t.get('done', 0),
+             'total': t.get('total', total), 'err': t.get('err'),
+             'data': (t.get('data') if t.get('data') else None)}
+        if t.get('slug'):
+            d['slug'] = t['slug']
+        return d
+
+    cached = cfg['load'](key)
+    miss = None
+    if cached and cfg['is_ready'](cached):
+        extra = ready_extra(cached) or {}
+        miss = extra.get('_miss')
+        if not miss or not start:
+            d = {idf: key, 'status': 'ready', 'done': total, 'total': total,
+                 'data': cached, '_from': 'cache'}
+            d.update(extra)
+            return d
+
     if not start:
-        return {'key': key, 'status': 'idle', 'done': 0, 'total': len(_WIKI_STEPS)}
-    with _WIKI_LOCK:
-        _WIKI_TASKS[key] = {'status': 'fetching', 'done': 0, 'total': len(_WIKI_STEPS),
-                            'err': None, 'data': cached, 'startedAt': int(time.time() * 1000)}
-    threading.Thread(target=_wiki_worker, args=(key,), daemon=True).start()
-    return {'key': key, 'status': 'fetching', 'done': 0,
-            'total': len(_WIKI_STEPS), 'data': cached, '_miss': (_miss if cached else None)}
+        e = ''
+        if cached:
+            e = (cfg.get('fail_err') or (lambda c: ''))(cached) or ''
+        if e:
+            return {idf: key, 'status': 'error', 'done': 0, 'total': total, 'err': e}
+        return {idf: key, 'status': 'idle', 'done': 0, 'total': total}
+
+    meta = (cfg.get('meta') or (lambda k: {}))(key) or {}
+    tk = {'status': 'fetching', 'done': 0, 'total': total, 'err': None,
+          'data': cached, 'startedAt': int(time.time() * 1000)}
+    tk.update(meta)
+    with lock:
+        tasks[key] = tk
+    threading.Thread(target=cfg['worker'], args=(key,), daemon=True).start()
+    d = {idf: key, 'status': 'fetching', 'done': 0, 'total': total, 'data': cached}
+    d.update(meta)
+    if cached:
+        d['_miss'] = miss
+    return d
+
+
+def _wk_task_get(key, start, cfg):
+    """通用 wiki 任务状态机（物种 / 物品共用）。
+
+    流程：键校验 -> 进行中任务 -> 缓存就绪 -> （未启动）error / idle -> 起后台任务 -> fetching
+    cfg:
+      id_field    : 返回体主键字段名（'key' 物种 / 'cls' 物品）
+      tasks, lock : 任务表与锁
+      valid       : fn(key)->bool
+      load        : fn(key)->cached|None
+      is_ready    : fn(cached)->bool
+      ready_extra : fn(cached)->dict        额外字段（物种 _miss）
+      fail_err    : fn(cached)->str         缓存「全失败」时的错误文案；'' 表示非全失败
+      total       : int
+      meta        : fn(key)->dict           起任务时附加元数据（物品 slug）
+      worker      : fn(key)
+    """
+    key = str(key or '').strip()
+    idf = cfg.get('id_field') or 'key'
+    if not key or not (cfg.get('valid') or (lambda x: True))(key):
+        return {idf: key, 'status': 'error', 'err': 'bad key'}
+    tasks, lock = cfg['tasks'], cfg['lock']
+    total = cfg.get('total') or 1
+    ready_extra = cfg.get('ready_extra') or (lambda c: {})
+
+    with lock:
+        t = tasks.get(key)
+    if t and t.get('status') in ('fetching', 'partial'):
+        d = {idf: key, 'status': t['status'], 'done': t.get('done', 0),
+             'total': t.get('total', total), 'err': t.get('err'),
+             'data': (t.get('data') if t.get('data') else None)}
+        if t.get('slug'):
+            d['slug'] = t['slug']
+        return d
+
+    cached = cfg['load'](key)
+    miss = None
+    if cached and cfg['is_ready'](cached):
+        extra = ready_extra(cached) or {}
+        miss = extra.get('_miss')
+        if not miss or not start:
+            d = {idf: key, 'status': 'ready', 'done': total, 'total': total,
+                 'data': cached, '_from': 'cache'}
+            d.update(extra)
+            return d
+
+    if not start:
+        e = ''
+        if cached:
+            e = (cfg.get('fail_err') or (lambda c: ''))(cached) or ''
+        if e:
+            return {idf: key, 'status': 'error', 'done': 0, 'total': total, 'err': e}
+        return {idf: key, 'status': 'idle', 'done': 0, 'total': total}
+
+    meta = (cfg.get('meta') or (lambda k: {}))(key) or {}
+    tk = {'status': 'fetching', 'done': 0, 'total': total, 'err': None,
+          'data': cached, 'startedAt': int(time.time() * 1000)}
+    tk.update(meta)
+    with lock:
+        tasks[key] = tk
+    threading.Thread(target=cfg['worker'], args=(key,), daemon=True).start()
+    d = {idf: key, 'status': 'fetching', 'done': 0, 'total': total, 'data': cached}
+    d.update(meta)
+    if cached:
+        d['_miss'] = miss
+    return d
+
+
+def _wiki_get(key, start=True):
+    """取物种 wiki 状态（v163：流程统一走 _wk_task_get）"""
+    def _ready(c):
+        if not (c.get('OVERVIEW') or {}).get('intro'):
+            return False
+        # v260: 老缓存版本戳低 -> 强制重抓（旧驯服食物口数/时长是错的）
+        return int(c.get('_pv') or 0) >= _WIKI_PARSE_VER
+
+    def _extra(c):
+        return {'_miss': [b for (_s, b) in _WIKI_STEPS if not c.get(b)]}
+
+    def _fail(c):
+        # v166：缓存里全是 _fail（首页抓取失败）时必须回 error，否则前端空转到超时
+        vals = [v for v in c.values() if isinstance(v, dict)]
+        if vals and all(v.get('_fail') for v in vals):
+            for v in vals:
+                if v.get('err'):
+                    return str(v.get('err'))[:120]
+            return u'该物种暂无数据'
+        return ''
+
+    return _wk_task_get(key, start, {
+        'id_field': 'key', 'tasks': _WIKI_TASKS, 'lock': _WIKI_LOCK,
+        'valid': lambda k: bool(_re.match(r'^[A-Za-z0-9_]+$', k)),
+        'load': _wiki_load, 'is_ready': _ready, 'ready_extra': _extra,
+        'fail_err': _fail, 'total': len(_WIKI_STEPS), 'worker': _wiki_worker,
+    })
 
 
 def _wiki_index():
+    """已缓存的物种清单 {短名: 中文名}（v163：走 _wk_index_scan）"""
+    def _zh(kk):
+        d = _wiki_load(kk) or {}
+        return ((d.get('DATA') or {}).get('zh') or '')
+    return _wk_index_scan(WIKI_CACHE_DIR, _zh, 'species')
+
+WIKI_ITEM_ROOT = 'https://wikily.gg/zh-cn/ark-survival-ascended/items'
+WIKI_ITEM_CACHE = os.path.join(WIKI_CACHE_DIR, 'items')
+_WIKI_ITEM_MAP = None
+_WIKI_ITEM_TASKS = {}
+_WIKI_ITEM_LOCK = threading.Lock()
+_WIKI_ITEM_STEPS = [('', 'ITEM')]
+
+# 快速信息键（wikily zh 站原文）
+_WK_ITEM_QUICK = [u'重量', u'堆栈大小', u'耐久度', u'记忆印痕', 'Craft XP', u'制作时间',
+                  u'护甲值', u'伤害', u'使用时间', u'消耗', u'效果持续时间', u'耐久',
+                  u'弹药容量', u'装填时间', u'采集倍率',
+                  # v244: 补全快速信息键，避免值粘连到下一键
+                  'Spoil time', u'腐坏时间', 'Stack size', 'Weight', 'Engram',
+                  u'堆叠上限', u'腐烂时间']
+# 属性键（wikily 原文英文键）
+_WK_ITEM_STAT = [
+    'Equip Time', 'Harvest Tool', 'Melee Damage', 'Ammo Per Clip', 'Ammo Per Shot',
+    'Infinite Ammo', 'Reload Duration', 'Time Between Shots', 'Durability Per Shot',
+    'Durability Per Melee Hit', 'Harvest Resource Multiplier', 'Hit Damage',
+    'Armor', 'Durability', 'Hypothermal Insulation', 'Hyperthermal Insulation',
+    'Water Capacity', 'Food', 'Health', 'Stamina', 'Oxygen', 'Torpidity',
+    'Night Vision', 'FOV', 'Size', 'Weight', 'Decay Time', 'Socket Count',
+    'Craft XP', 'Craft Time', 'Stack Size',
+    # v288：黏液枪页实测出现 'Melee Damage Impulse0.2Disable On Electric Storm是'
+    #   —— 这两个键不在白名单 ⇒ 值被后文吃进上一条 Melee Damage（显示「基础伤害 Impulse0.2Disable...是」）
+    'Impulse', 'Disable On Electric Storm',
+]
+
+
+def _wiki_item_map():
+    """物品类名 -> wikily 真实 slug（v163：走 _wk_json_load 统一加载）"""
+    global _WIKI_ITEM_MAP
+    if _WIKI_ITEM_MAP is not None:
+        return _WIKI_ITEM_MAP
+    obj, p = _wk_json_load(['wiki_item_map.json'],
+                           pick=lambda o: (o.get('map') if isinstance(o, dict) else o) or {})
+    _WIKI_ITEM_MAP = obj if isinstance(obj, dict) else {}
+    if p:
+        print('[wiki_item] map loaded %d from %s' % (len(_WIKI_ITEM_MAP), p))
+    return _WIKI_ITEM_MAP
+
+def _wk_item_camel(cls):
+    s = _re.sub(r'(?<=[a-z0-9])(?=[A-Z])', ' ', str(cls))
+    s = _re.sub(r'(?<=[A-Z])(?=[A-Z][a-z])', ' ', s)
+    return s.replace('_', ' ').strip()
+
+
+def _wiki_item_cands(cls):
+    """物品类名 -> 候选 slug（映射优先，未命中用类名驼峰兜底）"""
+    cls = str(cls or '').strip()
+    m = _wiki_item_map()
+    out = []
+    s = m.get(cls)
+    if s:
+        out.append(s)
+    for n in (_wk_item_camel(cls), cls):
+        f = _re.sub(r'[^a-z0-9]+', '-', n.lower()).strip('-')
+        if f and f not in out:
+            out.append(f)
+    return out[:3]
+
+
+def _wk_item_split_kv(txt, keys):
+    """把 'Key1 v1 Key2 v2' 按已知键拆成 [[key, val], ...]"""
+    if not txt:
+        return []
+    pat = '|'.join(_re.escape(k) for k in sorted(keys, key=len, reverse=True))
+    if not pat:
+        return []
+    parts = _re.split('(' + pat + ')', txt)
+    out = []
+    i = 1
+    while i < len(parts):
+        k = parts[i]
+        v = (parts[i + 1] if i + 1 < len(parts) else '').strip()
+        v = _wk_item_val_clean(v)   # v5690
+        if v:
+            out.append([k, v[:40]])
+        i += 2
+    return out
+
+
+def _wk_item_val_clean(v):
+    """v5690（用户报「1使用弹药简易步枪子弹信息素镖麻醉镖」看不懂）：
+    属性表最后一项会吃掉其后的非属性小节（如「使用弹药」标题 + 子弹列表 + 富文本图）。
+    规则：① 遇 HTML 标签即断 ② 值以数字开头 => 只取开头数字段（含 - . ~ x % , 与空格）
+    实例：Harvest Resource Multiplier 的 '1使用弹药...' -> '1'
+    """
+    s = str(v or '')
+    if '<' in s:
+        s = s.split('<', 1)[0]
+    if s[:1] and s[:1] in u'0123456789-+.~':
+        m = _re.match(r'^[-+0-9.,~xX%\s]+', s)
+        if m:
+            s = m.group(0)
+    return s.strip()
+
+
+def _wiki_cjk_space(s):
+    """v244: 中文与字母/数字紧邻时插空格，改善阅读（页面标签间无空格）"""
+    s = str(s or '')
+    s = _re.sub(r'([\u4e00-\u9fa5])([A-Za-z0-9])', r'\1 \2', s)
+    s = _re.sub(r'([A-Za-z0-9%])([\u4e00-\u9fa5])', r'\1 \2', s)
+    # 数字/百分点后紧跟大写字母（页面标签间无空格：×1-2Lost -> ×1-2 Lost）
+    s = _re.sub(r'([0-9x%])([A-Z][a-z])', r'\1 \2', s)
+    return _re.sub(r'\s+', ' ', s).strip()
+
+
+# ===== v287：ARK Wiki 物品「专属按键」抽取 =====
+# 背景：wikily 物品页只有数值表格，没有使用/按键章节；
+#       ARK Wiki 的 Usage 段才是武器专属操作（黏液枪 Ctrl 采尸体 / R 切黏液 / RMB 蓄力）的来源。
+# 约定：这里只抽「键名 token + 项目键名」，中文动作名由前端查项目键位配置，不重复翻译键位。
+_ARK_TOKENS = [
+    ('lmb',   r'\blmbs?\b|\bleft\s+mouse\b',   'mouse_left',         'xbox_rt'),
+    ('rmb',   r'\brmbs?\b|\bright\s+mouse\b',  'mouse_right',        'xbox_lt'),
+    ('mmb',   r'\bmmbs?\b|\bmiddle\s+mouse\b', 'mouse_middle',       ''),
+    ('ctrl',  r'\b(?:left\s+)?ctrl\b',         'keyboard_ctrl_left', 'xbox_rb'),
+    ('shift', r'\b(?:left\s+)?shift\b',        'keyboard_shift_left', 'xbox_stick_l_press'),
+    ('alt',   r'\b(?:left\s+)?alt\b',          'keyboard_alt_left',  ''),
+    ('space', r'\bspace(?:bar)?\b',            'keyboard_space',     'xbox_button_a'),
+    ('tab',   r'\btab\b',                      'keyboard_tab',       'xbox_button_view'),
+]
+# 单字母键只在「括号内」或「press/use/hold + X」上下文里认，避免 "a" "an" 之类误命中
+_ARK_SINGLE = {
+    'r': ('keyboard_r', 'xbox_button_x'),
+    'e': ('keyboard_e', 'xbox_button_y'),
+    'c': ('keyboard_c', 'xbox_stick_r_press'),
+    'x': ('keyboard_x', ''),
+    'f': ('keyboard_f', 'xbox_button_x'),
+    'g': ('keyboard_g', 'xbox_button_y'),
+    'q': ('keyboard_q', 'xbox_lb'),
+    'z': ('keyboard_z', ''),
+    'v': ('keyboard_v', 'xbox_rb'),
+    't': ('keyboard_t', ''),
+}
+
+
+def _ark_slug_from(ws):
+    """wikily slug（goo-gun）-> ARK Wiki 页名（Goo_Gun）"""
+    parts = [x for x in str(ws or '').split('-') if x]
+    return '_'.join(p[:1].upper() + p[1:] for p in parts)
+
+
+def _ark_keys_from_usage(lines):
+    """Usage 段纯文本行 -> [{'k','kbm','pad','en'}]（按首次出现顺序）"""
+    import re as _re
+    out, seen = [], set()
+    for ln in lines:
+        toks = []
+        low = ln.lower()
+        for k, pat, _kbm, _pad in _ARK_TOKENS:
+            if k not in toks and _re.search(pat, low):
+                toks.append(k)
+        for m in _re.finditer(r'\(([^()]{0,40})\)', ln):
+            for w in _re.split(r'[\s,]+', m.group(1)):
+                w = w.strip().lower()
+                if w in _ARK_SINGLE and w not in toks:
+                    toks.append(w)
+        for m in _re.finditer(r'(?:press(?:ing)?|use|using|hold(?:ing)?)\s+(?:the\s+)?([A-Za-z]{1,6})\b', low):
+            w = m.group(1)
+            if w in _ARK_SINGLE and w not in toks:
+                toks.append(w)
+        if not toks:
+            continue
+        for w in toks:
+            if w in seen:
+                continue
+            kv = None
+            for k, _pat, kbm, pad in _ARK_TOKENS:
+                if k == w:
+                    kv = (kbm, pad)
+                    break
+            if not kv:
+                kv = _ARK_SINGLE.get(w, ('', ''))
+            seen.add(w)
+            out.append({'k': w, 'kbm': kv[0], 'pad': kv[1], 'en': ln[:170]})
+    return out[:12]
+
+
+def _ark_usage_lines(raw):
+    """ARK Wiki 物品页 -> Usage 段纯文本行"""
+    for t, seg in _ark_h2_segs(raw):
+        if t in ('Usage', 'Usage & Strategies', 'Usage & strategies'):
+            return _ark_flat_lines(seg, 60)
+    return []
+
+
+def _wk_item_mats(raw, self_zh=''):
+    """制作材料 -> [[中文名, 数量, slug], ...]
+
+    v292：优先按 <a class="ark-slot" href=".../items/<slug>"> 结构化提取。
+      wikily 一侧中文译名与项目不一致（电子元件 vs 项目「电路元件」），靠中文名对齐必断；
+      slug 是机器标识，前端据此查项目 LB_ITEM_ZH 得项目译名 + 项目图标。
+      页面无链接时回退旧「×N 名称」文本正则（slug 留空）。
+    """
+    import re as _re
+    out = []
+    seen = set()
+    self_zh = str(self_zh or '').strip()
+
+    def _push(nm, q, slug):
+        nm = str(nm or '').strip()
+        if not nm or nm in seen or nm == self_zh:
+            return
+        try:
+            q = int(q)
+        except Exception:
+            return
+        if q <= 0:
+            return
+        seen.add(nm)
+        out.append([nm, q, str(slug or '')])
+
+    if raw:
+        for m in _re.finditer(r'<a\b([^>]*)>([\s\S]{0,900}?)</a>', raw, _re.I):
+            attrs, body = m.group(1), m.group(2)
+            hm = _re.search(r'href="[^"]*?/items/([A-Za-z0-9\-]+)"', attrs)
+            if not hm:
+                continue
+            slug = hm.group(1).lower()
+            tm = _re.search(r'title="([^"]{1,40})"', attrs)
+            nm = tm.group(1).strip() if tm else ''
+            if not nm:
+                nm2 = _re.search(u'ark-slot-name[^>]*>([^<]{1,30})<', body)
+                nm = nm2.group(1).strip() if nm2 else ''
+            qm = _re.search(u'ark-slot-count[^>]*>[^0-9]{0,10}([0-9]+)', body)
+            if not qm:
+                qm = _re.search(u'×\\s*([0-9]+)', body)
+            _push(nm, (qm.group(1) if qm else 0), slug)
+            if len(out) >= 20:
+                return out
+
+    txt = _wiki_strip(raw or '')
+    _BAD = (u'制作', u'配方', u'工作台', u'经验', u'时间', u'倍率',
+            u'计算', u'印痕', u'等级', u'数量', u'品质')
+    for m2 in _re.finditer(u'×\\s*(\\d+)\\s*([^\\s×<>0-9][^\\s×<>]{0,18})', txt):
+        nm = m2.group(2).strip()
+        if any(b in nm for b in _BAD) or _re.search(r'[0-9]$', nm):
+            continue
+        _push(nm, m2.group(1), '')
+        if len(out) >= 20:
+            break
+    return out
+
+
+# ===== v5659：wikily 物品页内嵌「完整掉落表 TSV」解析 =====
+#   背景：原实现只解析 `ark-ils-row` / `ark-ils-pick` 的 HTML，而 wikily 服务端只渲染约 10 条
+#        （实测金属锭：页面声称 166 箱子来源，HTML 只拿到 9 个 crate，缺失 86%）。
+#   实测：页面 RSC payload 里内嵌了完整 TSV（金属锭 168 行 / 黏液枪 136 行，与页面计数吻合）。
+#   列结构（\t 分隔）：
+#     序号 / crate类名 / 地图slug / 类型(supply|cave|mission|horde) / 箱子等级 / (空) /
+#     掉落表名 / 概率(0~1) / 品质(英文) / 评分下限 / 评分上限 / (空) / (空)
+# =====
+_WK_OFF_MAPS = {
+    'theisland', 'scorchedearth', 'aberration', 'extinction', 'ragnarok', 'valguero',
+    'lostcolony', 'genesis', 'genesisocean', 'astraeos', 'thecenter',
+    'crystal-isles', 'crystal_isles', 'crystal', 'fjordur',
+}
+# 同一张图的陆地/海洋分区合并（wikily 拆成两个 slug，对玩家是同一张图）
+_WK_MAP_MERGE = {'genesisocean': 'genesis'}
+
+_WK_TSV_RE = None
+
+
+def _wk_loot_tsv(raw):
+    """解析物品页 RSC 里的完整掉落表 TSV → {crate: {...}}"""
+    global _WK_TSV_RE
+    if not raw:
+        return {}
+    import re as _re
+    if _WK_TSV_RE is None:
+        _WK_TSV_RE = _re.compile(
+            r'(?<![0-9])(\d{1,4})\\t([A-Za-z0-9_]{6,80})\\t([a-z0-9\-]{3,24})\\t([a-z]{3,10})'
+            r'\\t(-?\d{1,3})\\t[^\\]*\\t([A-Za-z0-9_]*)\\t([0-9.eE\-]+)\\t([A-Za-z]*)'
+            r'\\t([0-9.eE\-]*)\\t([0-9.eE\-]*)')
     out = {}
     try:
-        if os.path.isdir(WIKI_CACHE_DIR):
-            for f in os.listdir(WIKI_CACHE_DIR):
-                if not f.endswith('.json'):
-                    continue
-                k = f[:-5]
-                d = _wiki_load(k) or {}
-                zh = ((d.get('DATA') or {}).get('zh') or '')
-                out[k] = zh
+        it = _WK_TSV_RE.finditer(raw)
     except Exception:
-        pass
-    return {'ok': True, 'count': len(out), 'species': out}
+        return {}
+    for m in it:
+        crate = m.group(2)
+        slug = (m.group(3) or '').lower()
+        typ = m.group(4)
+        lvl = m.group(5)
+        q = m.group(8) or ''
+        rmin = m.group(9) or ''
+        rmax = m.group(10) or ''
+        try:
+            chance = float(m.group(7))
+        except Exception:
+            chance = 0.0
+        d = out.get(crate)
+        if d is None:
+            d = out[crate] = {'crate': crate, 'type': typ, 'lvl': lvl, 'maps': [],
+                              'chance': 0.0, 'q': '', 'rmin': '', 'rmax': ''}
+        if slug and slug not in d['maps']:
+            d['maps'].append(slug)
+        # 概率只认官方图（Mod 图的概率不代表本服）
+        if slug in _WK_OFF_MAPS and chance > d['chance']:
+            d['chance'] = chance
+        if not d['q'] and q:
+            d['q'] = q
+        if not d['rmin'] and rmin:
+            d['rmin'] = rmin
+            d['rmax'] = rmax
+    return out
 
+
+def _wk_tsv_tags(crate):
+    """从类名恢复难度/环境 tag（TSV 本身不带 tags）"""
+    s = crate or ''
+    t = []
+    if 'Alpha' in s:
+        t.append(u'阿尔法')
+    elif 'Beta' in s:
+        t.append(u'贝塔')
+    elif 'Gamma' in s:
+        t.append(u'伽马')
+    for k, v in (('Legendary', 'Legendary'), ('Hard', u'困难'), ('Medium', u'中等'), ('Easy', u'简单')):
+        if k in s:
+            t.append(v)
+            break
+    if 'Double' in s:
+        t.append('Double')      # 前端 v5636 已显式剔除
+    return t[:4]
+
+
+def _wk_loot_rows(seg, raw=''):
+    """战利品来源明细（wikily「在战利品箱中找到」段）
+
+    返回 [{'k':精选标签, 'crate':箱子类名, 'name':英文箱名, 'tags':[难度/环境],
+           'map':地图文本, 'lvl':等级, 'q':品质, 'qr':品质范围, 'chance':概率%}, ...]
+
+    v301 说明：wikily 只在服务端渲染约 10 条（精选 3 条 ark-ils-pick + 「任务」组 6 条
+    ark-ils-row + 其他来源 1 条），其余 120+ 条要点「显示全部」异步加载，静态抓取取不到。
+    因此本字段是「可得的明细」，全量数量由 lootSum 提供，前端据此标注「共 N 条」。
+    """
+    import re as _re
+    out = []
+    seen = set()
+
+    # v5659：**优先走内嵌完整 TSV**（HTML 只渲染约 1/6，见文件头说明）
+    _tsv = _wk_loot_tsv(raw)
+    if _tsv:
+        # v5660：剔除 Double/double 变体 —— 与基础箱同名同概率，会渲染成两条一模一样的行
+        #   仅当该「基名」只剩 Double 版时才保留（防误删独有箱子）
+        def _wk_nod(c):
+            return _re.sub(r'[_\-]?double$', '', str(c).lower())
+        _base_has = set()
+        for _c in _tsv:
+            if 'double' not in _c.lower():
+                _base_has.add(_wk_nod(_c))
+        for _crate, _d in _tsv.items():
+            if 'double' in _crate.lower() and _wk_nod(_crate) in _base_has:
+                continue
+            _maps = []
+            for _s in _d['maps']:
+                _s2 = _WK_MAP_MERGE.get(_s, _s)
+                if _s2 not in _maps:
+                    _maps.append(_s2)
+            _off = [x for x in _maps if x in _WK_OFF_MAPS]
+            _qr = ''
+            if _d['rmin']:
+                try:
+                    _qr = u'%.1f~%.1f' % (float(_d['rmin']), float(_d['rmax']))
+                except Exception:
+                    _qr = ''
+            out.append({
+                'k': '',
+                'crate': _crate,
+                'name': '',
+                'tags': _wk_tsv_tags(_crate),
+                'map': '',
+                'mapSlug': (_off[0] if _off else (_maps[0] if _maps else '')),
+                'maps': _maps,
+                'offMaps': _off,
+                'lvl': _d['lvl'],
+                'q': _d['q'],
+                'qr': _qr,
+                'chance': round(_d['chance'] * 100.0, 3) if _d['chance'] else 0.0,
+                'type': _d['type'],
+            })
+        out.sort(key=lambda r: (-(r.get('chance') or 0), r.get('crate') or ''))
+        return out[:220]
+
+    if not seg:
+        return out
+
+    def _txt(x):
+        t = _re.sub(r'<[^>]+>', ' ', x or '')
+        return _re.sub(r'\s+', ' ', t).strip()
+
+    for m in _re.finditer(r'<a class="ark-ils-(pick|row)"([\s\S]{0,1400}?)</a>', seg):
+        body = m.group(2)
+        hm = _re.search(r'crate=([A-Za-z0-9_]+)', body)
+        crate = hm.group(1) if hm else ''
+        # v5645（Bug 修复）：wikily 每个掉落行（含精选 pick 行）的 href 自带 ?map=<slug>，
+        #   这是**权威地图归属**；此前只抓 crate 未抓 map ⇒ 前端只能靠类名猜，多数箱子无地图图标。
+        msm = _re.search(r'[?&]map=([A-Za-z0-9_\-]+)', body)
+        map_slug = msm.group(1).lower() if msm else ''
+        nm = _re.search(r'ark-ils-name">([^<]*)<', body)
+        name = _txt(nm.group(1)) if nm else ''
+        if not crate and not name:
+            continue
+        key = crate or name
+        if key in seen:
+            continue
+        seen.add(key)
+
+        tags = [_txt(t) for t in _re.findall(r'ark-ils-tag"[^>]*>([^<]*)<', body) if _txt(t)]
+        pk = _re.search(r'ark-ils-pick-k">([^<]*)<', body)
+        mp = _re.search(r'ark-ils-pick-map">([\s\S]{0,120}?)</span>', body)
+        lvl = _re.search(r'ark-ils-lvl">([^<]*)<', body)
+        q = _re.search(r'ark-ils-q"[^>]*>(?:<b[^>]*>)?([^<]*)<', body)
+        qr = _re.search(r'<small>([^<]*)</small>', body)
+        ch = _re.search(r'ark-ils-(?:pick-)?chance"[^>]*>(?:\s*<b>)?\s*([0-9]+(?:\.[0-9]+)?)', body)
+        # pick 行的等级/品质在 ark-ils-pick-stats 的裸 <span> 里（与 row 行的 class 不同）
+        if not lvl:
+            lvl = _re.search(u'<span>\\s*等级\\s*([^<]*)</span>', body)
+        if not q:
+            q = _re.search(u'<span[^>]*>\\s*最多\\s*([^<]*)</span>', body)
+        # 精选标签中文化（wikily 中文站只译了 Highest chance，另两个仍是英文）
+        kw = _txt(pk.group(1)) if pk else ''
+        kw = {'Best quality': u'最好品质', 'Lowest level': u'最低等级',
+              'Highest chance': u'最高概率'}.get(kw, kw)
+
+        maptxt = _txt(mp.group(1)) if mp else ''
+        out.append({
+            'k': kw,
+            'crate': crate,
+            'name': name[:40],
+            'tags': tags[:4],
+            'map': maptxt[:40],
+            'mapSlug': map_slug,
+            'lvl': _txt(lvl.group(1)).replace(u'等级', '').strip() if lvl else '',
+            'q': _txt(q.group(1)).replace(u'最多', '').strip() if q else '',
+            'qr': _txt(qr.group(1)).replace(u'品质', '').strip() if qr else '',
+            'chance': float(ch.group(1)) if ch else 0.0,
+        })
+    return out[:30]
+
+
+def _wiki_item_parse(raw):
+    """物品页解析：h1 中文名 / GFI / 快速信息 / 制作材料 / 属性 / 品质倍率表"""
+    clean = _re.sub(r'<!--.*?-->', '', raw or '', flags=_re.S)
+    out = {'zh': '', 'gfi': '', 'quick': [], 'mats': [], 'attrs': [],
+           'quality': {'cols': [], 'rows': []}, 'loot': '',
+           # v240: desc / kick / tags / station / effects / same / loot* (文案与扩展)
+           'desc': '', 'kick': '', 'tags': [], 'station': [], 'effects': [],
+           'same': [], 'lootSum': '', 'lootTop': [], 'lootMap': [], 'lootKind': [],
+           'lootRows': [],
+           # v287：ARK Wiki 专属按键/使用段（wikily 没有按键章节，只能从这里取）
+           'ark': {}}
+
+    m = _re.search(r'<h1[^>]*>([\s\S]{0,400}?)</h1>', clean)
+    if m:
+        out['zh'] = _wiki_strip(m.group(1))[:40]
+
+    m = _re.search(r'<code[^>]*class="ark-code"[^>]*>([\s\S]{0,200}?)</code>', clean)
+    if m:
+        out['gfi'] = _wiki_strip(m.group(1))[:120]
+    else:
+        m = _re.search(r'((?:admin)?cheat\s+gfi\s+[A-Za-z0-9_]+[^<\n]{0,30})', clean, _re.I)
+        if m:
+            out['gfi'] = m.group(1).strip()[:120]
+
+    # 快速信息
+    seg = _wiki_strip(_wiki_h2seg_like(clean, u'快速信息', 8000))
+    if not seg:
+        seg = _wiki_strip(_wiki_h2seg_like(clean, 'Quick Info', 8000))
+    out['quick'] = _wk_item_split_kv(seg, _WK_ITEM_QUICK)
+
+    # 制作材料（v292：结构化提取，见 _wk_item_mats —— 元素为 [名称, 数量, wikily slug]）
+    rraw = _wiki_h2seg_like(clean, u'制作配方', 20000)
+    if not rraw:
+        rraw = _wiki_h2seg_like(clean, 'Crafting', 20000)
+    out['mats'] = _wk_item_mats(rraw, out.get('zh') or '')
+
+    # 属性
+    aseg = _wiki_strip(_wiki_h2seg_like(clean, u'武器属性', 12000))
+    if not aseg:
+        aseg = _wiki_strip(_wiki_h2seg_like(clean, u'属性', 12000))
+    if not aseg:
+        aseg = _wiki_strip(_wiki_h2seg_like(clean, 'Stats', 12000))
+    out['attrs'] = _wk_item_split_kv(aseg, _WK_ITEM_STAT)
+
+    # 战利品箱（获取 tab）
+    lseg = _wiki_strip(_wiki_h2seg_like(clean, u'战利品箱', 12000))
+    if not lseg:
+        lseg = _wiki_strip(_wiki_h2seg_like(clean, 'Loot', 12000))
+    out['loot'] = lseg[:800]
+
+    # 品质倍率表
+    for tb in _re.findall(r'<table[^>]*>([\s\S]*?)</table>', clean):
+        _thd = _re.search(r'<thead[^>]*>([\s\S]*?)</thead>', tb)
+        ths = [_wiki_strip(x) for x in _re.findall(r'<th[^>]*>([\s\S]*?)</th>', (_thd.group(1) if _thd else tb))]
+        if not ths:
+            continue
+        if ths[0] not in ('Quality', u'品质', u'品\u8d28'):
+            continue
+        cols = [x for x in ths[1:] if x][:8]
+        rows = []
+        for r2 in _re.findall(r'<tr[^>]*>([\s\S]*?)</tr>', tb):
+            th0 = _re.findall(r'<th[^>]*>([\s\S]*?)</th>', r2)
+            tds = [_wiki_strip(x) for x in _re.findall(r'<td[^>]*>([\s\S]*?)</td>', r2)]
+            if th0 and tds:
+                rows.append({'name': _wiki_strip(th0[0])[:20], 'vals': tds[:8]})
+        if cols and rows:
+            out['quality'] = {'cols': cols, 'rows': rows[:8]}
+            break
+
+    # ===== v240: 文案与扩展数据 =====
+    # ① 一句话描述（页面顶部引言）
+    m = _re.search(r'<p[^>]*class="[^"]*ark-quote[^"]*"[^>]*>([\s\S]{0,800}?)</p>', clean)
+    if m:
+        out['desc'] = _wiki_strip(m.group(1))[:300]
+
+    # ② 分类 / 等级（页面顶部小字）
+    m = _re.search(r'<p[^>]*class="[^"]*ark-kicker[^"]*"[^>]*>([\s\S]{0,500}?)</p>', clean)
+    if m:
+        out['kick'] = _wiki_strip(m.group(1))[:60]
+
+    # ③ 标签（武器 / 铁匠台 / 有品质 / 蓝图）
+    m = _re.search(r'<ul[^>]*class="[^"]*ark-tags[^"]*"[^>]*>([\s\S]{0,900}?)</ul>', clean)
+    if m:
+        _TAGMAP = {'Player Inventory': u'玩家背包', 'Has quality': u'有品质',
+                   'Blueprint': u'蓝图', 'Weapon': u'武器', 'Resource': u'资源',
+                   'Structure': u'结构物', 'Consumable': u'消耗品', 'Armor': u'护甲'}
+        for li in _re.findall(r'<li[^>]*>([\s\S]*?)</li>', m.group(1)):
+            t = _wiki_strip(li)[:20]
+            t = _TAGMAP.get(t, t)
+            if t and t not in out['tags']:
+                out['tags'].append(t)
+        out['tags'] = out['tags'][:8]
+
+    flat = _wiki_strip(clean)
+
+    # ④ 制作工作台
+    m = _re.search(r'Available crafting stations:\s*([^.<]{2,160})', flat)
+    if not m:
+        m = _re.search(r'可用制作工作台[：:]\s*([^.<]{2,160})', flat)
+    if m:
+        _STMAP = {'Player Inventory': u'玩家背包', 'Smithy': u'铁匠台',
+                  'Tek Replicator': u'泰克复制器', 'Campfire': u'篝火'}
+        for s2 in _re.split(u'[,，]', m.group(1)):
+            s2 = s2.strip()[:20]
+            s2 = _STMAP.get(s2, s2)
+            if s2 and s2 not in out['station']:
+                out['station'].append(s2)
+        out['station'] = out['station'][:6]
+
+    # ⑤ 属性效果
+    eseg = _wiki_strip(_wiki_h2seg_like(clean, u'属性效果', 8000))
+    if not eseg:
+        eseg = _wiki_strip(_wiki_h2seg_like(clean, 'Stat effects', 8000))
+    if eseg:
+        # v244: 按「键：」出现位置切片（页面标签间无空格，非贪婪正则会把下一键吞进值里）
+        _marks = [(mm.start(), mm.end(), mm.group(1).strip())
+                  for mm in _re.finditer(r'([^\s：:\d]{2,10})[：:]', eseg)]
+        for _i, (_st, _en2, _k) in enumerate(_marks):
+            _vend = _marks[_i + 1][0] if _i + 1 < len(_marks) else len(eseg)
+            _v = eseg[_en2:_vend].strip()
+            if _k and _v and len(_v) <= 40:
+                out['effects'].append([_k, _v])
+                if len(out['effects']) >= 8:
+                    break
+
+    # ⑥ 同类物品
+    sseg = _wiki_h2seg_like(clean, u'此类型的更多物品', 30000)
+    if not sseg:
+        sseg = _wiki_h2seg_like(clean, 'More items of this type', 30000)
+    if sseg:
+        _REL = [(u'同一系列', u'同一系列'), (u'属性相近', u'属性相近'),
+                ('Used to craft', u'用于制作'), ('Crafting materials', u'制作材料'),
+                ('Taming food cards', u'驯服食物'), ('Has quality', u'有品质'),
+                ('Consumable', u'消耗品'), ('Same family', u'同一系列'),
+                ('Similar stats', u'属性相近')]
+        _used = set()
+        for h3 in _re.findall(r'<h3[^>]*>([\s\S]{0,200}?)</h3>', sseg):
+            nm = _wiki_strip(h3)[:28]
+            if not nm or nm in _used:
+                continue
+            _used.add(nm)
+            pos = sseg.find(h3)
+            tail = _wiki_strip(sseg[pos:pos + 900]) if pos >= 0 else ''
+            head = tail[:len(nm) + 120]
+            rel = ''
+            for en, zh in _REL:
+                if en in head:
+                    rel = zh
+                    break
+            out['same'].append([nm, rel])
+            if len(out['same']) >= 8:
+                break
+
+    # ⑦ 战利品箱分布
+    lseg2 = _wiki_h2seg_like(clean, u'在战利品箱中找到', 60000)
+    if not lseg2:
+        lseg2 = _wiki_h2seg_like(clean, 'Found in loot crates', 60000)
+    if lseg2:
+        ltxt = _wiki_strip(lseg2)
+        m = _re.search(r'(\d+)\s*箱子来源\s*横跨\s*(\d+)\s*地图(?:\s*·\s*(\d+)\s*其他箱子来源)?', ltxt)
+        if not m:
+            m = _re.search(r'(\d+) crate sources across (\d+) maps(?: · (\d+) other crate sources)?', ltxt)
+        if m:
+            out['lootSum'] = u'%s 个箱子来源，横跨 %s 张地图%s' % (
+                m.group(1), m.group(2),
+                (u'，另有 %s 个其它来源' % m.group(3)) if m.group(3) else u'')
+        for lab, pat in ((u'最高概率', u'最高概率\\s*([\\s\\S]{0,90}?)(?=Best quality|最多|Lowest level|地图|$)'),
+                         (u'最好品质', r'Best quality\s*([\s\S]{0,90}?)(?=Lowest level|地图|$)'),
+                         (u'最低等级', r'Lowest level\s*([\s\S]{0,90}?)(?=地图|$)')):
+            mm = _re.search(pat, ltxt)
+            if mm:
+                v2 = _re.sub(r'\s+', ' ', mm.group(1)).strip()[:70]
+                v2 = _wiki_cjk_space(v2)
+                if v2:
+                    out['lootTop'].append([lab, v2])
+        # v245: 页面标签间无空格（Astraeos18Ragnarok23），故不用空白分隔
+        mm = _re.search(r'地图([A-Z][\s\S]{0,600}?)箱子来源', ltxt)
+        if not mm:
+            mm = _re.search(r'Maps?\s*([A-Z][\s\S]{0,600}?)crate sources', ltxt)
+        if mm:
+            _seen_m = set()
+            for g in _re.finditer(r'([A-Z][A-Za-z.\-]*(?: [A-Z][A-Za-z.\-]*)*)(\d+)', mm.group(1)):
+                nm, n2 = g.group(1).strip(), int(g.group(2))
+                if nm in ('Mod maps', 'Mod', 'Double', 'Lv', 'Tier') or nm in _seen_m:
+                    continue
+                if 0 < n2 <= 999:
+                    _seen_m.add(nm)
+                    out['lootMap'].append([nm, n2])
+            out['lootMap'].sort(key=lambda x: -x[1])
+            out['lootMap'] = out['lootMap'][:14]
+        # v301：来源明细（wikily 仅 SSR 约 10 条，全量数量见 lootSum）
+        out['lootRows'] = _wk_loot_rows(lseg2, clean)   # v5659：传整页 raw（TSV 在 RSC payload 里）
+        _KIND = [('Supply drops', u'空投'), ('Caves', u'洞穴'), (u'洞穴', u'洞穴'),
+                 ('Deep sea', u'深海'), (u'深海', u'深海'), ('Hordes', u'巢穴'),
+                 (u'巢穴', u'巢穴'), ('Surface', u'地表'), (u'地表', u'地表')]
+        for h3 in _re.findall(r'<h3[^>]*>([\s\S]{0,200}?)</h3>', lseg2):
+            t = _wiki_strip(h3)
+            g = _re.match(u'([^\\d]{2,24}?)\\s*(\\d+)$', t)
+            if not g:
+                continue
+            raw_k, n2 = g.group(1).strip(), g.group(2)
+            kz = raw_k
+            for en, zh in _KIND:
+                if en == raw_k:
+                    kz = zh
+                    break
+            out['lootKind'].append([_wiki_cjk_space(kz)[:14], n2])
+
+    return out
+
+
+def _wiki_item_cache_path(cls):
+    return os.path.join(WIKI_ITEM_CACHE, _re.sub(r'[^A-Za-z0-9_]', '_', str(cls)) + '.json')
+
+
+def _wiki_item_load(cls):
+    p = _wiki_item_cache_path(cls)
+    if not os.path.isfile(p):
+        return None
+    try:
+        with open(p, 'r', encoding='utf-8') as f:
+            return json.loads(f.read())
+    except Exception:
+        return None
+
+
+def _wiki_item_save(cls, data):
+    try:
+        os.makedirs(WIKI_ITEM_CACHE, exist_ok=True)
+        p = _wiki_item_cache_path(cls)
+        tmp = p + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            f.write(json.dumps(data, ensure_ascii=False))
+        os.replace(tmp, p)
+    except Exception as e:
+        _wiki_log('item save fail %s: %s' % (cls, str(e)[:80]))
+
+
+def _wiki_item_worker(cls):
+    _wiki_log('item worker START %s' % cls)
+    try:
+        data = _wiki_item_load(cls) or {}
+        cands = _wiki_item_cands(cls)
+        with _WIKI_ITEM_LOCK:
+            t = _WIKI_ITEM_TASKS.get(cls)
+            if t:
+                t['slug'] = cands[0] if cands else ''
+        raw = None
+        used = ''
+        err = ''
+        for c in cands:
+            url = WIKI_ITEM_ROOT + '/' + c
+            t0 = time.time()
+            try:
+                raw = _wiki_fetch_page(url, 40)
+                used = c
+                _wiki_log('item ok %s slug=%s %dms %dB' % (cls, c, int((time.time() - t0) * 1000), len(raw)))
+                break
+            except Exception as e1:
+                err = str(e1)[:100]
+                _wiki_log('item FAIL %s slug=%s %s' % (cls, c, err))
+        if raw:
+            parsed = _wiki_item_parse(raw)
+            # v287：ARK Wiki 专属按键（wikily 无按键章节，取 Usage 段抽键名 token）
+            try:
+                _ak = _ark_slug_from(used)
+                if _ak:
+                    _u2, _c2, _raw2 = _ark_fetch(_ak, timeout=20)
+                    _keys = _ark_keys_from_usage(_ark_usage_lines(_raw2))
+                    parsed['ark'] = {'slug': _ak, 'keys': _keys,
+                                     'at': int(time.time() * 1000)}
+                    _wiki_log('item ark %s slug=%s keys=%s' % (
+                        cls, _ak, ','.join(x['k'] for x in _keys) or '-'))
+            except Exception as _e2:
+                parsed['ark'] = {'slug': '', 'keys': [], 'err': str(_e2)[:80]}
+                _wiki_log('item ark FAIL %s: %s' % (cls, str(_e2)[:100]))
+            data['DATA'] = {'slug': used, 'zh': parsed.get('zh') or '', 'at': int(time.time() * 1000)}
+            data['PARSED'] = parsed
+            data['_pv'] = _WIKI_PARSE_VER      # v294：物品缓存打解析版本戳，供 _ready 判是否需重抓
+            _wiki_item_save(cls, data)
+            with _WIKI_ITEM_LOCK:
+                t = _WIKI_ITEM_TASKS.get(cls)
+                if t:
+                    t['status'] = 'ready'
+                    t['done'] = 1
+                    t['data'] = data
+            _wiki_log('item DONE %s slug=%s mats=%d attrs=%d' % (cls, used, len(parsed.get('mats') or []), len(parsed.get('attrs') or [])))
+        else:
+            _wiki_item_save(cls, {'_fail': 1, 'err': err or u'该物品暂无资料', 'at': int(time.time() * 1000)})
+            with _WIKI_ITEM_LOCK:
+                t = _WIKI_ITEM_TASKS.get(cls)
+                if t:
+                    t['status'] = 'error'
+                    t['err'] = err or u'该物品暂无资料'
+                    t['done'] = 1
+    except Exception as e:
+        _wiki_log('item worker EXC %s: %s' % (cls, str(e)[:160]))
+        with _WIKI_ITEM_LOCK:
+            t = _WIKI_ITEM_TASKS.get(cls)
+            if t:
+                t['status'] = 'error'
+                t['err'] = str(e)[:120]
+
+
+def _wiki_item_get(cls, start=True):
+    """取物品 wiki 状态（v163：流程统一走 _wk_task_get）"""
+    def _ready(c):
+        # v250: 老缓存（v240 之前只有 7 字段、无 desc）判为未就绪 -> 自动重新抓取
+        # v287: 加 'ark' 门槛 -> 老缓存补抓 ARK Wiki 专属按键
+        # v294: 加版本戳门槛 —— 解析逻辑一改（如材料改 slug 对齐）就必须重抓；
+        #       原实现只判字段、不判版本，提升 _WIKI_PARSE_VER 对物品完全无效（缓存永远命中旧值）
+        pa = c.get('PARSED') or {}
+        return (bool(pa) and ('desc' in pa) and ('ark' in pa)
+                and int(c.get('_pv') or 0) >= _WIKI_PARSE_VER)
+
+    def _fail(c):
+        if c.get('_fail'):
+            return str(c.get('err') or u'该物品暂无资料')[:120]
+        return ''
+
+    return _wk_task_get(cls, start, {
+        'id_field': 'cls', 'tasks': _WIKI_ITEM_TASKS, 'lock': _WIKI_ITEM_LOCK,
+        'valid': lambda k: bool(_re.match(r'^[A-Za-z0-9_]+$', k)),
+        'load': _wiki_item_load, 'is_ready': _ready,
+        'fail_err': _fail, 'total': 1, 'worker': _wiki_item_worker,
+        'meta': lambda k: {'slug': ((_wiki_item_cands(k) or [''])[0])},
+    })
+
+
+def _wiki_item_index():
+    """已缓存的物品清单 {类名: 中文名}（v163：走 _wk_index_scan）"""
+    def _zh(kk):
+        d = _wiki_item_load(kk) or {}
+        return ((d.get('DATA') or {}).get('zh') or '')
+    return _wk_index_scan(WIKI_ITEM_CACHE, _zh, 'items')
 
 def _wiki_probe(slug):
     # 探测：出网 / 耗时 / 解析 / 缓存目录可写
@@ -743,6 +1876,80 @@ def _wiki_probe(slug):
         out['ms'] = int((_t.time() - t0) * 1000)
         out['err'] = str(e)[:160]
     return out
+
+# ===== v286：ARK Wiki 抓取 / 解析 / 探测 =====
+def _ark_h2_segs(raw):
+    """ARK Wiki 页面按 h2 切段 -> [(标题, 段HTML)]"""
+    import re as _re
+    heads = []
+    for m in _re.finditer(r'<h2[^>]*>([\s\S]{0,200}?)</h2>', raw):
+        heads.append((_wiki_strip(m.group(1)), m.end()))
+    out = []
+    for i, (t, st) in enumerate(heads):
+        en = heads[i + 1][1] - 250 if i + 1 < len(heads) else len(raw)
+        out.append((t, raw[st:max(st, en)]))
+    return out
+
+
+def _ark_flat_lines(seg, limit=40):
+    """段 HTML -> 纯文本行（块级元素补换行，避免行间粘连）"""
+    import re as _re, html as _h
+    s = _re.sub(r'<script\b.*?</script>', ' ', seg, flags=_re.S | _re.I)
+    s = _re.sub(r'<style\b.*?</style>', ' ', s, flags=_re.S | _re.I)
+    s = _re.sub(r'</(p|div|li|tr|h[1-6]|dd|dt|table|section)>', '\n', s, flags=_re.I)
+    s = _re.sub(r'<br\s*/?>', '\n', s, flags=_re.I)
+    s = _re.sub(r'<[^>]+>', '', s)
+    s = _re.sub(r'[ \t\u00a0]+', ' ', s)
+    lines = [x.strip() for x in _h.unescape(s).split('\n')]
+    return [x for x in lines if len(x) > 3][:limit]
+
+
+def _ark_fetch(slug, timeout=30):
+    import urllib.request as _u
+    url = ARK_ROOT + str(slug or '').strip().replace(' ', '_')
+    req = _u.Request(url, headers={
+        'User-Agent': WIKI_UA,
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'en-US,en;q=0.9',
+    })
+    r = _u.urlopen(req, timeout=timeout)
+    return url, r.getcode(), r.read().decode('utf-8', 'replace')
+
+
+def _ark_probe(slug):
+    """v286：探测后端能否取到 ARK Wiki（出网 / CF 拦截 / Usage·Notes 段可用性）"""
+    import time as _t, re as _re
+    out = {'ok': False, 'src': 'ark', 'slug': slug}
+    t0 = _t.time()
+    try:
+        url, code, raw = _ark_fetch(slug, timeout=30)
+        out['url'] = url
+        out['httpStatus'] = code
+        out['ms'] = int((_t.time() - t0) * 1000)
+        out['bytes'] = len(raw)
+        if 'Just a second' in raw[:4000] or 'cf-browser-verification' in raw[:9000]:
+            out['err'] = 'cloudflare challenge'
+            return out
+        segs = _ark_h2_segs(raw)
+        out['h2'] = [t for t, _ in segs][:24]
+        got = {}
+        for t, seg in segs:
+            if t in _ARK_SEC_NAMES and t not in got:
+                got[t] = _ark_flat_lines(seg, 30)
+        for k in _ARK_SEC_NAMES:
+            if k in got:
+                out[k] = got[k]
+        flat = ' '.join(_ark_flat_lines(raw, 4000))
+        out['keyHits'] = sorted(set(
+            m.group(1) for m in _re.finditer(
+                r'press(?:ing)?\s+(?:the\s+)?([A-Za-z0-9+]{1,10})\s*(?:key|button)', flat, _re.I)
+        ))[:20]
+        out['ok'] = bool(got)
+    except Exception as e:
+        out['ms'] = int((_t.time() - t0) * 1000)
+        out['err'] = str(e)[:200]
+    return out
+
 
 ASA_DATA = os.environ.get('ASA_DATA', os.path.join(DINO_DATA, 'asa-data'))
 
@@ -1303,7 +2510,7 @@ SERVER_THEMES = {
             'light_color': '#EF9A9A', 'dark_color': '#D32F2F',
             'bg_image': "url('https://img.whiterober.ccwu.cc/ASA/misc/Ext_compressed.jpg')",
             'overlay_color': 'rgba(244, 67, 54, 0.7)'},
-    'Ast': {'name': '繁星', 'icon': 'mdi:star-four-points', 'emoji': '✨', 'primary_color': '#3F51B5',
+    'Ast': {'name': '星耀', 'icon': 'mdi:star-four-points', 'emoji': '✨', 'primary_color': '#3F51B5',
             'light_color': '#9FA8DA', 'dark_color': '#303F9F',
             'bg_image': "url('https://img.whiterober.ccwu.cc/ASA/misc/Ast_compressed.jpg')",
             'overlay_color': 'rgba(63, 81, 181, 0.7)'},
@@ -1323,7 +2530,7 @@ SERVER_THEMES = {
             'light_color': '#BCAAA4', 'dark_color': '#5D4037',
             'bg_image': "url('https://img.whiterober.ccwu.cc/ASA/misc/Los_compressed.jpg')",
             'overlay_color': 'rgba(121, 85, 72, 0.7)'},
-    'Gen': {'name': '创世模拟', 'icon': 'mdi:dna', 'emoji': '🧬', 'primary_color': '#009688',
+    'Gen': {'name': '创世', 'icon': 'mdi:dna', 'emoji': '🧬', 'primary_color': '#009688',
             'light_color': '#80CBC4', 'dark_color': '#00796B',
             'bg_image': "url('https://img.whiterober.ccwu.cc/ASA/misc/Gen_compressed.jpg')",
             'overlay_color': 'rgba(0, 150, 136, 0.7)'},
@@ -3626,8 +4833,20 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, {'ok': True, 'job': _cfg_job_view()})
         elif path == '/api/wiki_probe':
             # v72e：wikily 抓取可行性探测（出网 / 耗时 / 解析 / 缓存目录）
+            # v286：src=ark -> 探测 ARK Wiki（第二数据源，取 Usage/Notes 段）
             _qs = parse_qs(parsed.query)
-            self._send(200, _wiki_probe((_qs.get('slug') or ['ankylosaurus'])[0].strip()))
+            _slug = (_qs.get('slug') or ['ankylosaurus'])[0].strip()
+            _src = (_qs.get('src') or ['wikily'])[0].strip().lower()
+            self._send(200, _ark_probe(_slug) if _src == 'ark' else _wiki_probe(_slug))
+        elif path.startswith('/api/wiki_item/'):
+            # v212：物品 wiki 按需抓取。/api/wiki_item/index | /api/wiki_item/<Cls> | .../progress
+            _irest = path[len('/api/wiki_item/'):].strip('/')
+            if _irest == 'index':
+                self._send(200, _wiki_item_index())
+            elif _irest.endswith('/progress'):
+                self._send(200, _wiki_item_get(_irest[:-len('/progress')], start=False))
+            else:
+                self._send(200, _wiki_item_get(_irest, start=True))
         elif path.startswith('/api/wiki/'):
             # v72f：按需抓取。/api/wiki/index | /api/wiki/<Key> | /api/wiki/<Key>/progress
             _rest = path[len('/api/wiki/'):].strip('/')
