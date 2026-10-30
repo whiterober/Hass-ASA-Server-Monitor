@@ -1754,7 +1754,8 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 #lbWikiOverlay .tc-tip{position:relative;display:inline-flex;align-items:center;margin-left:5px;color:#6b7280;cursor:help}
 #lbWikiOverlay .tc-tip:hover{color:#a78bfa}
 #lbWikiOverlay .tc-tip svg{width:13px;height:13px;fill:currentColor;display:block}
-#lbWikiOverlay .tc-tip::after{content:attr(data-tip);position:absolute;left:50%;transform:translateX(-50%);bottom:150%;white-space:nowrap;background:#262637;color:#d5dae6;border:1px solid #3d3d55;border-radius:6px;padding:5px 9px;font-size:11px;font-weight:400;line-height:1.6;opacity:0;pointer-events:none;transition:opacity .15s;z-index:20;box-shadow:0 6px 18px #00000066}
+/* v5731（用户口径）：原 white-space:nowrap 会让长说明**溢出框外** ⇒ 改为框内换行（width:max-content + max-width:260px） */
+#lbWikiOverlay .tc-tip::after{content:attr(data-tip);position:absolute;left:50%;transform:translateX(-50%);bottom:150%;white-space:normal;width:max-content;max-width:260px;overflow-wrap:anywhere;word-break:break-word;background:#262637;color:#d5dae6;border:1px solid #3d3d55;border-radius:6px;padding:5px 9px;font-size:11px;font-weight:400;line-height:1.6;opacity:0;pointer-events:none;transition:opacity .15s;z-index:20;box-shadow:0 6px 18px #00000066}
 #lbWikiOverlay .tc-tip:hover::after{opacity:1}
 #lbWikiOverlay .tc-fx{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:9px 13px;background:#16161f;border:1px solid #26263a;border-radius:10px;margin-bottom:14px}
 #lbWikiOverlay .tc-fx label{font-size:12px;color:#8b93a7}
@@ -1771,15 +1772,39 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 #lbWikiOverlay .tc-tiles > .tc-adv, #lbWikiItemOverlay .tc-tiles > .tc-adv{grid-column:1/-1}
 #lbWikiOverlay .tc-tiles > .tc-note{grid-column:1/-1}
 #lbWikiOverlay .tc-tiles > .lw-err{grid-column:1/-1}
-#lbWikiOverlay .tc-tile{padding:9px 11px;border-radius:9px;background:#ffffff06;border:1px solid #ffffff10}
+#lbWikiOverlay .tc-tile{padding:9px 11px;border-radius:9px;background:#ffffff06;border:1px solid #ffffff10;min-width:0}
 #lbWikiOverlay .tc-tile-k{font-size:10.5px;color:#6b7280;margin-bottom:3px}
-#lbWikiOverlay .tc-tile-v{font-size:16px;font-weight:700;color:#e2e8f0;line-height:1.25}
-#lbWikiOverlay .tc-tile-s{font-size:10.5px;color:#7c8497;margin-top:2px}
+#lbWikiOverlay .tc-tile-v{font-size:16px;font-weight:700;color:#e2e8f0;line-height:1.25;overflow-wrap:anywhere}
+/* v5731（用户口径）：副行较长（效率/喂食间隔、满晕·驯服期-0·剩 N、每秒-X·Nh Nm Ns后醒来）⇒ 卡内自动折行，不撑破卡片 */
+#lbWikiOverlay .tc-tile-s{font-size:10.5px;color:#7c8497;margin-top:2px;white-space:normal;overflow-wrap:anywhere;word-break:break-word;line-height:1.5}
 #lbWikiOverlay .tc-tile.hot{border-color:#f59e0b55;background:#f59e0b0e}
 #lbWikiOverlay .tc-tile.hot .tc-tile-v{color:#fbbf24}
 #lbWikiOverlay .tc-own{display:flex;flex-direction:column;gap:6px}
-#lbWikiOverlay .tc-own-r{display:flex;align-items:center;gap:9px;padding:7px 11px;border-radius:8px;background:#ffffff05;border:1px solid #ffffff0d;font-size:12.5px}
+#lbWikiOverlay .tc-own-r{display:flex;align-items:center;gap:0 9px;padding:7px 11px;border-radius:8px;background:#ffffff05;border:1px solid #ffffff0d;font-size:12.5px}
+/* v5728（用户口径）：射速/发数/伤害/弹药/耐久 改为简易徽章分组（同类信息同框） */
+#lbWikiOverlay .tc-bdg{display:inline-flex;align-items:center;gap:5px;background:#ffffff0a;border:1px solid #ffffff14;border-radius:5px;padding:2px 7px;font-size:11px;color:#c3cad8;white-space:nowrap}
+#lbWikiOverlay .tc-bdg-k{color:#6f7a90;font-size:10px;flex-shrink:0}
+#lbWikiOverlay .tc-bdg b{color:#e2e8f0;font-weight:600}
+/* v5729（用户口径）：② 库存行 row-gap 归零后仍有 3px，来源是图标 24px 撑高首行后 vertical-center 的留白 ⇒ 负 margin 抵消 */
+#lbWikiOverlay .tc-own-r .tc-where{margin-top:-3px !important}
 #lbWikiOverlay .tc-own-r img{width:24px;height:24px;object-fit:contain;flex-shrink:0}
+/* v5717（用户口径）：wiki 内一切物品名/弹药品可点 —— 点击回到主页面并选中该物品 */
+#lbWikiOverlay [onclick*="tcPickByZh"]{cursor:pointer;transition:background .12s,border-color .12s}
+#lbWikiOverlay [onclick*="tcPickByZh"]:hover{background:#2a2a3a !important;border-color:#7c3aed !important}
+#lbWikiOverlay .tc-tb td[onclick*="tcPickByZh"]:hover{background:#2a2a3a !important;color:#fff !important}
+/* v5721（用户口径）：面包屑内的容器图标必须与 10.5px 文字同档；且 chip 的 white-space:nowrap 不能传给面包屑 */
+#lbWikiOverlay .tc-where{white-space:normal;overflow-wrap:anywhere;word-break:break-word}
+#lbWikiOverlay .tc-where img{width:12px !important;height:12px !important;min-width:12px;max-width:12px;object-fit:contain;vertical-align:-2px;margin-right:2px;flex-shrink:0}
+#lbWikiOverlay .tc-where svg{width:12px !important;height:12px !important;vertical-align:-2px;flex-shrink:0}
+#lbWikiOverlay .lb-hf-chip{max-width:100%}
+/* v5722（用户口径）：chip 比行内窄得多 ⇒ 其面包屑再收紧一档，避免明显高于相邻无面包屑 chip */
+#lbWikiOverlay .lb-hf-chip .tc-where{font-size:9.5px !important;line-height:1.3 !important;margin-top:0 !important;white-space:nowrap !important;overflow:hidden !important;text-overflow:ellipsis !important;display:inline-block !important;vertical-align:middle !important}
+/* v5725（根因修复）：lbContainerLabel 输出的 .acc-title 等内容级元素在通用样式里是块级
+   ⇒ 面包屑内部被强制换行（white-space:nowrap 管不住块级）。统一拍平为 inline。 */
+#lbWikiOverlay .tc-where *:not(img):not(svg){display:inline !important}
+#lbWikiOverlay .tc-where img,#lbWikiOverlay .tc-where svg{display:inline-block !important;vertical-align:-2px !important}
+#lbWikiOverlay .lb-hf-chip .tc-where img,
+#lbWikiOverlay .lb-hf-chip .tc-where svg{width:10px !important;height:10px !important;min-width:10px;max-width:10px;vertical-align:-2px !important}
 #lbWikiOverlay .tc-ph{width:24px;height:24px;flex-shrink:0;border-radius:5px;background:#ffffff0a;border:1px dashed #333;display:inline-flex;align-items:center;justify-content:center;color:#4b5563;font-size:11px}
 #lbWikiOverlay .tc-ico-multi{display:inline-flex;align-items:center;gap:1px;flex-shrink:0;vertical-align:middle}
 #lbWikiOverlay .tc-own-r .tc-ico-multi img{width:17px;height:17px}
@@ -1815,8 +1840,14 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 #lbWikiOverlay .tc-note, #lbWikiItemOverlay .tc-note{margin-top:10px;padding:8px 11px;border-radius:8px;background:#f59e0b0e;border:1px dashed #f59e0b44;font-size:11px;color:#d3a247;line-height:1.8}
 #lbWikiOverlay .ov-p{margin:0 0 7px;font-size:12.5px;color:#c9d1d9;line-height:1.85}
 #lbWikiOverlay .ov-tipk{color:#a78bfa;font-weight:600;width:82px}
-#lbWikiOverlay .ov-tips{margin:0;padding-left:18px;font-size:12.5px;color:#c9d1d9;line-height:1.9}
-#lbWikiOverlay .ov-tips li{margin-bottom:5px}
+/* v5730（用户口径）：浮窗内不允许浏览器原生 tips 样式（原生 disc 圆点 + 18px 缩进）→ 自绘紫色小圆点 */
+#lbWikiOverlay .ov-tips, #lbWikiItemOverlay .ov-tips{margin:0;padding-left:0;list-style:none;font-size:12.5px;color:#c9d1d9;line-height:1.9}
+#lbWikiOverlay .ov-tips li, #lbWikiItemOverlay .ov-tips li{margin-bottom:5px;position:relative;padding-left:13px}
+#lbWikiOverlay .ov-tips li::before, #lbWikiItemOverlay .ov-tips li::before{content:"";position:absolute;left:2px;top:.72em;width:5px;height:5px;border-radius:50%;background:#7c3aed}
+/* v5730（用户口径）：推荐标签用主题色徽章 */
+#lbWikiOverlay .tc-bdg-hot{background:#7c3aed1f;border-color:#7c3aed66;color:#c4b5fd;font-weight:600}
+/* v5731（用户口径）：v5730 曾在此**重复定义**了一份冲突的 .tc-tip（left:0 / top:100% / 另一套配色）
+   ⇒ 已删除，统一走项目原有定义（见上方 .tc-tip::after 完整版）。重复定义是「tips 文字跑到框外」的根因之一。 */
 #lbWikiOverlay .tc-tb td.ov-k, #lbWikiItemOverlay .tc-tb td.ov-k{color:#a78bfa;font-weight:600}
 #lbWikiItemOverlay .tc-tb th, #lbWikiItemOverlay .tc-tb td{white-space:normal;vertical-align:top}
 #lbWikiItemOverlay .tc-tb tbody th{width:34%;color:#cbd5e1}
@@ -2956,7 +2987,7 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
 <!-- Tab② 最新生物 -->
 <div id="latestUI" style="display:flex;flex:1;flex-direction:column;min-height:0;gap:12px;overflow:hidden">
   <div class="card" style="position:relative;margin-bottom:0">
-    <button class="lb-tipb" id="lbRefreshBtn2" onclick="lbConfirmRefresh()" title="刷新低温仓数据" style="position:absolute;top:10px;right:10px;background:none;border:none;color:#999;padding:2px 4px;border-radius:6px;cursor:pointer;font-size:12px;line-height:1;opacity:.65"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg></button>
+    <button class="lb-tipb" id="lbRefreshBtn2" onclick="lbConfirmRefresh()" title="刷新数据" style="position:absolute;top:10px;right:10px;background:none;border:none;color:#999;padding:2px 4px;border-radius:6px;cursor:pointer;font-size:12px;line-height:1;opacity:.65"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg></button>
     <button class="lb-tipb" id="lbIdSearchBtn" onclick="lbSearchFromClipboard()" title="搜ID：自动读取剪贴板中的生物ID并显示卡片" style="position:absolute;bottom:8px;right:10px;width:22px;height:22px;background:none;border:none;color:#999;padding:0;border-radius:4px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;opacity:.65;z-index:30"><svg viewBox="2.5 2.5 17 17" width="14" height="14" style="fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round"><circle cx="10" cy="10" r="6.5"/><path d="M15.2 15.2 19 19"/></svg></button>
     <div class="lb-filter-bar" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding-right:44px">
       <button id="lbRoleBtn" class="lb-tipb lb-class-btn" onclick="lbOpenRolePicker()" title="生存者" style="display:none;margin-right:0;min-width:80px;padding:5px 10px;max-width:140px"><span class="lb-class-label">角色</span></button>
@@ -3086,7 +3117,7 @@ var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // ⏳ **未部署** v3626（用户要求）：**对照表缺·建筑类 20 条落地** —— 将 t1「中文+图标已定稿」的 20 条并入 `汉化/item_zh.json`（键=短名、kind=structure、src=gap_table_t1）：`SpotLight` 聚光灯 ｜ `Ramp_Wood` 木制楼梯 ｜ `Ramp_Adobe` 黏土楼梯 ｜ `TriCeiling_Wood` 木制三角天花板 ｜ `WoodCage` 木制笼子 ｜ `WoodSpikeWall` 木制拒马 ｜ `Metal_OceanPlatform` / `Wood_OceanPlatform` 海洋平台 ｜ `Furniture_Rug` 粗毛地毯 ｜ `TekFenceFoundation` 泰克栅栏地基 ｜ `AdobePillar` 黏土柱子 ｜ `RopeLadder` 绳梯 ｜ `TriRoof_Adobe` / `TriRoof_Tek` 三角屋顶 ｜ `WoodElevatorPlatform_Small` / `_Medium` / `WoodElevatorTrack` 木制电梯 ｜ `AdobeGateDoor_Large` 黏土巨兽恐龙门 ｜ `Flag_KingKaiju` 君王泰坦旗帜 ｜ `LargeWall_Wood` 大型木制墙；词典 1790 → **1810 键**；缺口表 t1 **33 → 13 条**、总表 320 → **300 行**
 // ⏳ **未部署** v3627（用户要求）：**缺口表其余部分（t2/t3/t4）双就绪条目落地 105 条** —— 质控分档（`tmp/_v3689_qc.py`）后落地：A 档 91 + B 档中经用户确认/属关键词误判者（「新联邦靴子」「那里!」经用户确认正确）；**排除 2 条**：`PrimalItemConsumable_Egg`（中文为 `Egg!` 英文原文）、`PrimalItemArmor_PearlShirt`（t4，中文仅「珍珠」）；跳过 2 条 kind 无法确定（`PrimalItem_FishBasketFilled` / `PrimalItem_Spawner_HoverSail_Main`）与 1 条生物类（`Exosuit_Character_BP`）；t2 的 `PrimalItemRadio`/`PrimalItemRaft` 词典已有键（`Radio`/`Raft`）故仅调 kind：`Raft` weapon → **structure**（`Radio` 本已 weapon）；落地内容以蛋类 37、结构件 29、鞍具 5、弹药 2 为主；词典 **1810 → 1915 键**（kind 空 **0** / other **0**）｜ 缺口表 **300 → 196 行**（t3 215 → 111）
 // v4333（用户口径①）：区域行「前 X」改名「上一段：X」+ 与当前/基础名重复时隐藏（v4347 用户口径②：整条移除，不再显示）
-var LB_VERSION = 'v20261029-5695';   // v4280（根因修复）：① 退出物品模式恢复「选种」按钮（v1368 隐藏无恢复） ② 生物背包容器标题唯一源解析（BP_/_ASA 组件 token → 真实 dinoClass）   // v4231（用户实测「繁育栏把功能栏挡住」）：① 两栏同显繁育栏叠功能栏上方 ② 空繁育栏不显示 ③ 结果浮层/追踪钮偏移联动   // v4230（用户裁定）：皮肤类全链隐藏（词典 skin:1 标记并入判空链——Tileset 外观/Bounce 系列/节日建筑等 54 键）   // v4229（用户确认）：初始笔记全链隐藏（v4083 只滤浮窗，容器漏同步 ⇒ hideItems+硬编码双写入升级）   // v4228（用户口径）：容器 chip 染料补色点（v3593 只改了浮窗，容器漏同步）   // v4227（用户口径）：HotbarSkill_Base（快捷技能芯片，非真实物品）加入隐藏名单（hideItems+硬编码双写入）   // v4226（用户实测「黑曜石仙境没内容却显示tab」根因修复）：lbPickIdx 统计对齐渲染口径（+lbIsEmptyItem 判空）——q=0 空槽残留不再计入 tab/角标/聚落/总数   // v4225（v4224 实测补丁）：预热已走完但缓存被清（材质表到达等）→ 立即兜底冷建，不再干等 6s   // v4224（用户口径「空档期点击卡」）：① 物品栏未预热点击→占位+等预热填充（不再冻结 440ms 无反馈）② 预加载交互让路（600ms 窗口）③ 静默刷新收尾即触发预热（消 3s 空窗）   // v4223（性能优化·用户确认A+B2）：① 预加载热点——字典键数引用缓存（拥有索引 11,531ms 预计降至 1~2s）② 后台检查更新——批量 LM 接口（40+ 次 HEAD → 1 次请求）   // v4222（用户口径）：所有可点击徽章补 hover——① 设施芯片挂载条件扩为「可点即 hover」② 装备榜/选种行卡新增 hover   // v4221（用户实测「角标还显示了2」）：玩家背包同口径排除出服务器 tab 角标/聚落角标/总数（srv/setts/total），修角标与列表不一致   // v4220（用户实测）：「无聚落/离散」容器登记排除玩家背包（消除与「玩家携带」tab 重复的纯背包卡）   // v4219（实测根因）：伪容器 rec 补 server 字段（修「无聚落/离散」卡点进去详情空——lbRecHasPick 键查空导致）   // v4218（用户口径）：物品筛选类别扩至「物品浮窗全部类别」（lbItemIsPick 按浮窗归属类别对齐，修 建筑/资源等非装备类筛选全灭）   // v4217（用户要求）：① 别名表数据化（dino_rank_alias.json + 恐龙recs类名映射，零硬编码）② 物品模式玩家tab恢复位置卡/去平铺卡流 ③ 恐龙侧 mine 与恐龙列表同源（跨服龙鞍显示）   // v4216（实测根因修复）：ASB_DB 懒加载未就绪时缓存空表 ⇒ 词干表 0 条永久失效；改为「就绪才缓存」（lbRankStemMap + lbAsbNameMap）   // v4215（用户口径）：① 装备榜鞍键↔恐龙键同物异名归一（勘误+ASB词干表）② 选物种玩家背包只留该物种鞍/蓝图 ③ 选物品隐藏低温舱+去位置卡 ④ 非鞍剔除   // v4214（用户口径）：装备榜 TAB 角标只计「我的」——外部更高不参与计数   // v4213（用户口径·S7）：物种按钮显隐与物品侧同步——只看桶内容（有效条目）   // v4212：物种榜 qidx<=0 全排除 + 去重 >0 + 角标=实际显示数 + 恐龙背包显示具体龙名   // v4211（用户要求·单一代码源）：装备榜物种/物品渲染统一为 lbRankRenderPanel + 外部更高条目不显示区域名   // v4210（用户口径·位置唯一化）：容器显示接入「坐标→设施真身」统一解析（人台上的矛显示回「人台E」真名）   // v4209：物品模式装备榜=物种榜完整翻版（两 TAB 实物/蓝图 + qidx<=0 过滤 + 类别图标）   // v4208（用户需求）：物品模式装备榜——按钮按「存档有原始以上品质」动态显隐 + 面板细节对齐物种（分组/行卡/弹卡/过滤同源）   // v4207：离散「位置」组展开时数量位同样被按钮替换（对齐改名）   // v4206：离散卡容器组加「位置」按钮（复刻改名按钮 + 弹地图浮窗）   // v4205：物品模式 tab 显隐排除基因条件（Gen(0) 过滤根因）   // v4204：离散 chip 不响应重命名 + 物品模式隐藏基因设备段（基因存储器根因）   // v4203：修详情内部过滤缺口（物品模式详情逐成员对齐主列表 lbRecHasPick）   // v4202：对照表 11 项权威容量落地（容量表 +10 项数据键 + DisplayCase 归 HIDE）   // v4201（用户方案）：生物背包参与聚合——背包容器注入 ctn（byContainer 直接命中）+ 判定剔除背包点 + 容器组归属统一 + 删近邻兜底   // v4200：龙背包归属加「近邻唯一」兜底（帝蟒背包与龙坐标差 1749 也能归位）   // v4199：放出容器坐标键放开 + 物品索引接「生物背包→龙」关联链   // v4198：修 5 处容量别名反向空指（Fireplace/WaterTap/TurretCatapult/TurretBallista/TaxidermyBase_Small）   // v4197：龙背包并入归属过滤（离散/无聚落详情不再混入别人部落的生物背包）   // v4196：离散卡容器化（scatteredList 暴露 + 物品索引兜底 + 卡内容器注入）   // v4195：散置伪 rec 补 isEmpty 容器本体形态（v3452 同口径，防详情渲染崩溃）   // v4194：散置卡修复——伪容器 rec 直取（物品容器哈希与 rec 哈希两套，cid 不可跨查）   // v4193（用户口径）：物品模式隐藏「聚落命名/区域命名」入口 + 「散置容器」卡（无聚落卡，完全对齐物种）   // v4192（用户口径）：物品角标/数量对齐物种——只统计「当前角色拥有」（v3597 归属过滤接入 lbPickIdx）+ 物品模式聚落卡隐藏放出/低温仓/蛋段 + 角标图标按物品类型取 LB_INV_GRP;   // v4191：玩家 tab 自动切换补修（物品模式无该物品 ⇒ 内容区不再驻留空态）;   // v4190（用户要求）：单一物品主体页优化（玩家tab物品口径 / 物品索引双计修复 / 聚落角标武器类别图标 / 详情行隐藏容量角标）   // v4189（用户要求）：水雷迁入「器械>弹药」（Underwater Mine）;   // v4188（用户要求）：陷阱族迁入「器械>弹药」段（Y异种植物陷阱改名入族 + 大型捕兽夹/捕兽夹入族垫底；v4187 设施段位代码撤回）;   // v4186：泰克水壶补录（工具>水容器族末位）+ 巨石核实 + 对照表 5 项去重、恐龙外观表折叠;   // v4185：恐龙装备栏外观全组过滤（用户实锤鞍皮肤；hideItems 18 项）;   // v4184：译名（沙斯塔鱼龙）+ Cute Dino Helmet 过滤（玩家帽）+ lbEggIs 帽子豁免（Easter_Egg_Hat 归位模块栏）;   // v4183：物品浮窗接入 hideItems 过滤（Pepper Mask 修复）+ 恐龙外观 12 款落地（模块>生物外观）;   // v4182：恐龙装备栏外观 12 款图标全配（8 款本地实锤 + 4 款 wiki 补录；icons2 5204 / webp_map 5107）;   // v4181：B1 节日糖果全量入库（8 新键+圣诞糖果合并为节日恐龙糖+玉米糖换 HUD_Event_Halloween_BC）+ PepperMask 浮窗过滤 + 节日族词/类名规则;   // v4177：Air_Jar/Air_Bladder kind 修正（consumable→weapon，正式入器械>工具>水容器）+ 情人节/感恩节糖果补图（Valentines_Dino_Candy/Thanksgiving_Candy）;   // v4175：料理子序微调（鲨鲨小零食!紧挨吉利盛宴3.4后；虫胶19→5.3 紧挨饭团5.2后）;   // v4174：达科寿司/饭团（原稻米球改名）入料理族并紧挨海藻寿司（子序 5.1/5.2）;   // v4173：情人节巧克力正名+配图（Box o' Chocolates/盒装巧克力/VDay_icon）+ WormGum 补录（虫胶）+ Air_Jar/Air_Bladder 移工具·水容器族（族内最后）+ 食肉植物种子排植物种子R后 + 亚特兰汤/虫胶接料理子序18-19;   // v4170：消耗品补录 18 键（胡椒面具/空气罐/气囊/海龙汤/风干鱼肉×2/稻米球/感染系列×6/干海带/达科寿司/亚特兰汤/蓝莓汁 P+/情人节巧克力 ase）+ 新族「感染」（含感染藤壶 7 项）+ 泰克三叉戟归「矛」族;   // v4169：咒缚贴合全局兜底（跨块场景：咒缚火焰喷射器与本体被手炮块隔开 → 最终序列再贴一次）；v4168：咒缚武器贴合本体（16 对：本体在前、咒缚紧跟 — 武装 11 + 工具 3 + 键名兜底 1 +【火焰喷射器 v4169 修复】）+ 制导火箭弹图标→HomingMissileAmmo_Icon + 巡航导弹图标→Cruise_Missile（v4163 交接回调）;   // v4165：立式南瓜哨兵根因修复（facilityIconSpecial 置空 + 合并尊重空串哨兵）+ 圣诞糖果补录（consumable/节日）+ 鲍勃外观改名 + 蛋糕×3 归节日族;   // v4164：设施根因修正（标识归位/旗帜族+节日族垫底链）+ 节日补族（圣诞彩灯/万圣节墓碑）+ 新族「玩家外观」（TOF 卡尔配件，排生物外观前）;   // v4163：C4遥控起爆器→工具段（tool:1）+ 巡航导弹换图 HomingMissileAmmo_Icon + 塔拉萨麻醉弹药归「箭」族;   // v4162：生化皮肤/独木舟皮肤新族（骨架后/生物外观后）+ 设施栏标识族垫底（旗帜后）+ 咒缚电锯/喷火器图标对齐原版 + 弹药段「异种植物」词（W果实/Z手雷相邻）+ Netgun 归弹药;   // v4161：Radar_Rig 补录（雷达配件→跨步者配件族）+ 未组装的泰克跨步者改归「未组装」族;   // v4160：泰克悬停帆与塔拉萨悬停帆族内相邻（载具子序50.2/50.3）+ 6 条泰克跨步者配件补录（官方类名+官方中文，族=跨步者配件）;   // v4159：13 条骨架/幽灵/兔耳套装以**官方类名+官方中文**落地（长键=PrimalItemCostume_*、短键=图标名）+ 失落精灵龙套装补录 + 3 条旧骨骼条目同步官方名 + 全部归骨架皮肤/幽灵皮肤/生物外观族（排模块段最后）;   // v4158：外观族（骨架皮肤/幽灵皮肤/生物外观/尾巴/披风）整体移至模块段最后 + 独木舟3皮肤归生物外观 + 鱼竿族生效（两条相邻） + M.O.M.I.入模块段·机甲族 + 服装类豁免物种绑定过滤 + 跨步者配件族预留;   // v4157：Cryo医院/水下耕地/宠物展示台/绊线照明弹配方补录（材质档排序）+ 蛋糕ASE过滤 + 4服装隐藏 + 骨架皮肤族（3骨骼+生化，附件后） + 幽灵皮肤族（14条，骨骼后） + 战车族提前（附件前） + 立式南瓜清图标 + Plant W果实/Z手雷族内相邻;   // v4154：泰克光刃（TekClaws）换图 → HUD_TEKHandBlades_Icon_BC + 对照表"非皮肤·疑似"补齐后缀过滤;   // v4151：换图 2（巡航导弹→HUD_TEKCruiseMissile_Icon、泰克榴弹发射器→HUD_TEKGrenadeLauncher_Icon）+ 补录 4（绊线照明弹陷阱/泰克三叉戟/泰克长矛/C4遥控起爆器）+ 对照表区①移除 48 项;   // v4150：鱼竿族（FishingRod+Lovely_Fishing）+ 载具族补员（潜艇→木筏后、塔拉萨悬停帆→泰克悬停帆后）+ 生物外观族 26 项落地（模块段最末）+ 对照表无特征项全参数表;   // v4149：换图 3 组（GrapplingHook→GrappleHook_Icon、TribeTower→Tribe_Tower、TranqArrow→TranqArrow_Icon）+ 补录 11 键（Snowball/Carnivorous_Plant_Seed/Thalassian 系×4/ARK_Anniversary_Surprise_Cake/Birthday_Candle/CryoHospital×2/Netgun）;   // v4148：实时补全区无图标补「?」占位（lbWpRtHtml 与主浮窗一致）+ 图标替换 14 组（储物箱/镜子/油罐/电锯/登山镐/矿枪/鞭子/沙漠套×5/吉利面具/防护套×3/喷火器/潜水服）+ 英文补全（Ghillie Mask / Hazard Suit Hat / SCUBA×4）+ 补录 11 键（MachinedBow/宠物展示台/生日蛋糕/水下耕地/潜艇/塔拉萨悬停帆/收割渔线/周年蛋糕×2）+ TransGPS 打 ASE 过滤标记;   // v4147：Lovely_Fishing_Rod 补录（工具 tool:1）+ 次级解药/扎啤/血之灵药 归料理族（words 3.1/3.2/3.3 排在医疗药酒·能量药酒之后）；图标未录对照表 v4147（六分类 66+53 / skins 甄别 689）;   // v4146：RecipeCurry_Icon 挂菲拉咖喱配方（RecipeNote_FriaCurry / PrimalItem_RecipeNote_FriaCurry 两键 icon→RecipeCurry_Icon）+ HoneyLure 补录（蜂蜜诱饵，图标 HoneyLure_Icon）；对照表 v6 重生（待核 4 / 已处理 12 / 染色剂 22 移出主表入脚注）;   // v4145：W 果短名补规则（Plant_Species_W→手雷，浮窗枚举键带下划线）;   // v4144：族修正（Cucumis/Oryraise→蔬菜；Gilly/Oceans/Worm 短名 re: 规则→料理——修 v4143 短名下划线不命中问题）;   // v4143：Aquatica 消耗品补录 9 项（作物×2/料理×3/弹药×1/其它×3）+ 非凡饲料换图 + 族规则 4 条;   // v4142：Ecto Lantern 两键打 tool:1（进器械栏·工具段）;   // v4141：花粉图标换 High_Quality_Pollen（2 条）+ Ecto Lantern 补录（灵质提灯，工具类，2 键 + 节日族 2 规则）;   // v4140：刷新热区修复（仅标记触发）+ 节日族扩展 + 补录 5 项 + 强效麻醉镖图;   // v4139：item_zh 图标修正（麻醉镖→Tranquilizer_Dart；硅酸盐→SilicateCrystal）;   // v4138：公共设施实时区 39 格（WorldProbe 接线 + 刷新 CD 10s + 后端短时缓存共用）;   // v4137：巨齿鲨颚/生存者战利品移至 Cymathoa 之后（61/62 档）+ Dragon Horn 补录（龙之号角）;   // v4136：Aquatica 三战利品移至奖杯族最末（60 档）;   // v4135：焰鬃獠猪两种獠牙图标（Boaratos_Tusk / Flaming_Boaratos_Tusk）;   // v4134：Hydra/Kraken 归一 + 本体过滤 + AstralSoul/HexCoins 图标 + 克拉肯/莫德尔旗帜正名 + 格伦德尔档位修复;   // v4133（修复）：奖杯族修饰词截胡修正（水晶飞龙女王战利品回归奖杯族 9.5）；v4132：旗帜族录入+排序垫底
+var LB_VERSION = 'v20261030-5734';   // v4280（根因修复）：① 退出物品模式恢复「选种」按钮（v1368 隐藏无恢复） ② 生物背包容器标题唯一源解析（BP_/_ASA 组件 token → 真实 dinoClass）   // v4231（用户实测「繁育栏把功能栏挡住」）：① 两栏同显繁育栏叠功能栏上方 ② 空繁育栏不显示 ③ 结果浮层/追踪钮偏移联动   // v4230（用户裁定）：皮肤类全链隐藏（词典 skin:1 标记并入判空链——Tileset 外观/Bounce 系列/节日建筑等 54 键）   // v4229（用户确认）：初始笔记全链隐藏（v4083 只滤浮窗，容器漏同步 ⇒ hideItems+硬编码双写入升级）   // v4228（用户口径）：容器 chip 染料补色点（v3593 只改了浮窗，容器漏同步）   // v4227（用户口径）：HotbarSkill_Base（快捷技能芯片，非真实物品）加入隐藏名单（hideItems+硬编码双写入）   // v4226（用户实测「黑曜石仙境没内容却显示tab」根因修复）：lbPickIdx 统计对齐渲染口径（+lbIsEmptyItem 判空）——q=0 空槽残留不再计入 tab/角标/聚落/总数   // v4225（v4224 实测补丁）：预热已走完但缓存被清（材质表到达等）→ 立即兜底冷建，不再干等 6s   // v4224（用户口径「空档期点击卡」）：① 物品栏未预热点击→占位+等预热填充（不再冻结 440ms 无反馈）② 预加载交互让路（600ms 窗口）③ 静默刷新收尾即触发预热（消 3s 空窗）   // v4223（性能优化·用户确认A+B2）：① 预加载热点——字典键数引用缓存（拥有索引 11,531ms 预计降至 1~2s）② 后台检查更新——批量 LM 接口（40+ 次 HEAD → 1 次请求）   // v4222（用户口径）：所有可点击徽章补 hover——① 设施芯片挂载条件扩为「可点即 hover」② 装备榜/选种行卡新增 hover   // v4221（用户实测「角标还显示了2」）：玩家背包同口径排除出服务器 tab 角标/聚落角标/总数（srv/setts/total），修角标与列表不一致   // v4220（用户实测）：「无聚落/离散」容器登记排除玩家背包（消除与「玩家携带」tab 重复的纯背包卡）   // v4219（实测根因）：伪容器 rec 补 server 字段（修「无聚落/离散」卡点进去详情空——lbRecHasPick 键查空导致）   // v4218（用户口径）：物品筛选类别扩至「物品浮窗全部类别」（lbItemIsPick 按浮窗归属类别对齐，修 建筑/资源等非装备类筛选全灭）   // v4217（用户要求）：① 别名表数据化（dino_rank_alias.json + 恐龙recs类名映射，零硬编码）② 物品模式玩家tab恢复位置卡/去平铺卡流 ③ 恐龙侧 mine 与恐龙列表同源（跨服龙鞍显示）   // v4216（实测根因修复）：ASB_DB 懒加载未就绪时缓存空表 ⇒ 词干表 0 条永久失效；改为「就绪才缓存」（lbRankStemMap + lbAsbNameMap）   // v4215（用户口径）：① 装备榜鞍键↔恐龙键同物异名归一（勘误+ASB词干表）② 选物种玩家背包只留该物种鞍/蓝图 ③ 选物品隐藏低温舱+去位置卡 ④ 非鞍剔除   // v4214（用户口径）：装备榜 TAB 角标只计「我的」——外部更高不参与计数   // v4213（用户口径·S7）：物种按钮显隐与物品侧同步——只看桶内容（有效条目）   // v4212：物种榜 qidx<=0 全排除 + 去重 >0 + 角标=实际显示数 + 恐龙背包显示具体龙名   // v4211（用户要求·单一代码源）：装备榜物种/物品渲染统一为 lbRankRenderPanel + 外部更高条目不显示区域名   // v4210（用户口径·位置唯一化）：容器显示接入「坐标→设施真身」统一解析（人台上的矛显示回「人台E」真名）   // v4209：物品模式装备榜=物种榜完整翻版（两 TAB 实物/蓝图 + qidx<=0 过滤 + 类别图标）   // v4208（用户需求）：物品模式装备榜——按钮按「存档有原始以上品质」动态显隐 + 面板细节对齐物种（分组/行卡/弹卡/过滤同源）   // v4207：离散「位置」组展开时数量位同样被按钮替换（对齐改名）   // v4206：离散卡容器组加「位置」按钮（复刻改名按钮 + 弹地图浮窗）   // v4205：物品模式 tab 显隐排除基因条件（Gen(0) 过滤根因）   // v4204：离散 chip 不响应重命名 + 物品模式隐藏基因设备段（基因存储器根因）   // v4203：修详情内部过滤缺口（物品模式详情逐成员对齐主列表 lbRecHasPick）   // v4202：对照表 11 项权威容量落地（容量表 +10 项数据键 + DisplayCase 归 HIDE）   // v4201（用户方案）：生物背包参与聚合——背包容器注入 ctn（byContainer 直接命中）+ 判定剔除背包点 + 容器组归属统一 + 删近邻兜底   // v4200：龙背包归属加「近邻唯一」兜底（帝蟒背包与龙坐标差 1749 也能归位）   // v4199：放出容器坐标键放开 + 物品索引接「生物背包→龙」关联链   // v4198：修 5 处容量别名反向空指（Fireplace/WaterTap/TurretCatapult/TurretBallista/TaxidermyBase_Small）   // v4197：龙背包并入归属过滤（离散/无聚落详情不再混入别人部落的生物背包）   // v4196：离散卡容器化（scatteredList 暴露 + 物品索引兜底 + 卡内容器注入）   // v4195：散置伪 rec 补 isEmpty 容器本体形态（v3452 同口径，防详情渲染崩溃）   // v4194：散置卡修复——伪容器 rec 直取（物品容器哈希与 rec 哈希两套，cid 不可跨查）   // v4193（用户口径）：物品模式隐藏「聚落命名/区域命名」入口 + 「散置容器」卡（无聚落卡，完全对齐物种）   // v4192（用户口径）：物品角标/数量对齐物种——只统计「当前角色拥有」（v3597 归属过滤接入 lbPickIdx）+ 物品模式聚落卡隐藏放出/低温仓/蛋段 + 角标图标按物品类型取 LB_INV_GRP;   // v4191：玩家 tab 自动切换补修（物品模式无该物品 ⇒ 内容区不再驻留空态）;   // v4190（用户要求）：单一物品主体页优化（玩家tab物品口径 / 物品索引双计修复 / 聚落角标武器类别图标 / 详情行隐藏容量角标）   // v4189（用户要求）：水雷迁入「器械>弹药」（Underwater Mine）;   // v4188（用户要求）：陷阱族迁入「器械>弹药」段（Y异种植物陷阱改名入族 + 大型捕兽夹/捕兽夹入族垫底；v4187 设施段位代码撤回）;   // v4186：泰克水壶补录（工具>水容器族末位）+ 巨石核实 + 对照表 5 项去重、恐龙外观表折叠;   // v4185：恐龙装备栏外观全组过滤（用户实锤鞍皮肤；hideItems 18 项）;   // v4184：译名（沙斯塔鱼龙）+ Cute Dino Helmet 过滤（玩家帽）+ lbEggIs 帽子豁免（Easter_Egg_Hat 归位模块栏）;   // v4183：物品浮窗接入 hideItems 过滤（Pepper Mask 修复）+ 恐龙外观 12 款落地（模块>生物外观）;   // v4182：恐龙装备栏外观 12 款图标全配（8 款本地实锤 + 4 款 wiki 补录；icons2 5204 / webp_map 5107）;   // v4181：B1 节日糖果全量入库（8 新键+圣诞糖果合并为节日恐龙糖+玉米糖换 HUD_Event_Halloween_BC）+ PepperMask 浮窗过滤 + 节日族词/类名规则;   // v4177：Air_Jar/Air_Bladder kind 修正（consumable→weapon，正式入器械>工具>水容器）+ 情人节/感恩节糖果补图（Valentines_Dino_Candy/Thanksgiving_Candy）;   // v4175：料理子序微调（鲨鲨小零食!紧挨吉利盛宴3.4后；虫胶19→5.3 紧挨饭团5.2后）;   // v4174：达科寿司/饭团（原稻米球改名）入料理族并紧挨海藻寿司（子序 5.1/5.2）;   // v4173：情人节巧克力正名+配图（Box o' Chocolates/盒装巧克力/VDay_icon）+ WormGum 补录（虫胶）+ Air_Jar/Air_Bladder 移工具·水容器族（族内最后）+ 食肉植物种子排植物种子R后 + 亚特兰汤/虫胶接料理子序18-19;   // v4170：消耗品补录 18 键（胡椒面具/空气罐/气囊/海龙汤/风干鱼肉×2/稻米球/感染系列×6/干海带/达科寿司/亚特兰汤/蓝莓汁 P+/情人节巧克力 ase）+ 新族「感染」（含感染藤壶 7 项）+ 泰克三叉戟归「矛」族;   // v4169：咒缚贴合全局兜底（跨块场景：咒缚火焰喷射器与本体被手炮块隔开 → 最终序列再贴一次）；v4168：咒缚武器贴合本体（16 对：本体在前、咒缚紧跟 — 武装 11 + 工具 3 + 键名兜底 1 +【火焰喷射器 v4169 修复】）+ 制导火箭弹图标→HomingMissileAmmo_Icon + 巡航导弹图标→Cruise_Missile（v4163 交接回调）;   // v4165：立式南瓜哨兵根因修复（facilityIconSpecial 置空 + 合并尊重空串哨兵）+ 圣诞糖果补录（consumable/节日）+ 鲍勃外观改名 + 蛋糕×3 归节日族;   // v4164：设施根因修正（标识归位/旗帜族+节日族垫底链）+ 节日补族（圣诞彩灯/万圣节墓碑）+ 新族「玩家外观」（TOF 卡尔配件，排生物外观前）;   // v4163：C4遥控起爆器→工具段（tool:1）+ 巡航导弹换图 HomingMissileAmmo_Icon + 塔拉萨麻醉弹药归「箭」族;   // v4162：生化皮肤/独木舟皮肤新族（骨架后/生物外观后）+ 设施栏标识族垫底（旗帜后）+ 咒缚电锯/喷火器图标对齐原版 + 弹药段「异种植物」词（W果实/Z手雷相邻）+ Netgun 归弹药;   // v4161：Radar_Rig 补录（雷达配件→跨步者配件族）+ 未组装的泰克跨步者改归「未组装」族;   // v4160：泰克悬停帆与塔拉萨悬停帆族内相邻（载具子序50.2/50.3）+ 6 条泰克跨步者配件补录（官方类名+官方中文，族=跨步者配件）;   // v4159：13 条骨架/幽灵/兔耳套装以**官方类名+官方中文**落地（长键=PrimalItemCostume_*、短键=图标名）+ 失落精灵龙套装补录 + 3 条旧骨骼条目同步官方名 + 全部归骨架皮肤/幽灵皮肤/生物外观族（排模块段最后）;   // v4158：外观族（骨架皮肤/幽灵皮肤/生物外观/尾巴/披风）整体移至模块段最后 + 独木舟3皮肤归生物外观 + 鱼竿族生效（两条相邻） + M.O.M.I.入模块段·机甲族 + 服装类豁免物种绑定过滤 + 跨步者配件族预留;   // v4157：Cryo医院/水下耕地/宠物展示台/绊线照明弹配方补录（材质档排序）+ 蛋糕ASE过滤 + 4服装隐藏 + 骨架皮肤族（3骨骼+生化，附件后） + 幽灵皮肤族（14条，骨骼后） + 战车族提前（附件前） + 立式南瓜清图标 + Plant W果实/Z手雷族内相邻;   // v4154：泰克光刃（TekClaws）换图 → HUD_TEKHandBlades_Icon_BC + 对照表"非皮肤·疑似"补齐后缀过滤;   // v4151：换图 2（巡航导弹→HUD_TEKCruiseMissile_Icon、泰克榴弹发射器→HUD_TEKGrenadeLauncher_Icon）+ 补录 4（绊线照明弹陷阱/泰克三叉戟/泰克长矛/C4遥控起爆器）+ 对照表区①移除 48 项;   // v4150：鱼竿族（FishingRod+Lovely_Fishing）+ 载具族补员（潜艇→木筏后、塔拉萨悬停帆→泰克悬停帆后）+ 生物外观族 26 项落地（模块段最末）+ 对照表无特征项全参数表;   // v4149：换图 3 组（GrapplingHook→GrappleHook_Icon、TribeTower→Tribe_Tower、TranqArrow→TranqArrow_Icon）+ 补录 11 键（Snowball/Carnivorous_Plant_Seed/Thalassian 系×4/ARK_Anniversary_Surprise_Cake/Birthday_Candle/CryoHospital×2/Netgun）;   // v4148：实时补全区无图标补「?」占位（lbWpRtHtml 与主浮窗一致）+ 图标替换 14 组（储物箱/镜子/油罐/电锯/登山镐/矿枪/鞭子/沙漠套×5/吉利面具/防护套×3/喷火器/潜水服）+ 英文补全（Ghillie Mask / Hazard Suit Hat / SCUBA×4）+ 补录 11 键（MachinedBow/宠物展示台/生日蛋糕/水下耕地/潜艇/塔拉萨悬停帆/收割渔线/周年蛋糕×2）+ TransGPS 打 ASE 过滤标记;   // v4147：Lovely_Fishing_Rod 补录（工具 tool:1）+ 次级解药/扎啤/血之灵药 归料理族（words 3.1/3.2/3.3 排在医疗药酒·能量药酒之后）；图标未录对照表 v4147（六分类 66+53 / skins 甄别 689）;   // v4146：RecipeCurry_Icon 挂菲拉咖喱配方（RecipeNote_FriaCurry / PrimalItem_RecipeNote_FriaCurry 两键 icon→RecipeCurry_Icon）+ HoneyLure 补录（蜂蜜诱饵，图标 HoneyLure_Icon）；对照表 v6 重生（待核 4 / 已处理 12 / 染色剂 22 移出主表入脚注）;   // v4145：W 果短名补规则（Plant_Species_W→手雷，浮窗枚举键带下划线）;   // v4144：族修正（Cucumis/Oryraise→蔬菜；Gilly/Oceans/Worm 短名 re: 规则→料理——修 v4143 短名下划线不命中问题）;   // v4143：Aquatica 消耗品补录 9 项（作物×2/料理×3/弹药×1/其它×3）+ 非凡饲料换图 + 族规则 4 条;   // v4142：Ecto Lantern 两键打 tool:1（进器械栏·工具段）;   // v4141：花粉图标换 High_Quality_Pollen（2 条）+ Ecto Lantern 补录（灵质提灯，工具类，2 键 + 节日族 2 规则）;   // v4140：刷新热区修复（仅标记触发）+ 节日族扩展 + 补录 5 项 + 强效麻醉镖图;   // v4139：item_zh 图标修正（麻醉镖→Tranquilizer_Dart；硅酸盐→SilicateCrystal）;   // v4138：公共设施实时区 39 格（WorldProbe 接线 + 刷新 CD 10s + 后端短时缓存共用）;   // v4137：巨齿鲨颚/生存者战利品移至 Cymathoa 之后（61/62 档）+ Dragon Horn 补录（龙之号角）;   // v4136：Aquatica 三战利品移至奖杯族最末（60 档）;   // v4135：焰鬃獠猪两种獠牙图标（Boaratos_Tusk / Flaming_Boaratos_Tusk）;   // v4134：Hydra/Kraken 归一 + 本体过滤 + AstralSoul/HexCoins 图标 + 克拉肯/莫德尔旗帜正名 + 格伦德尔档位修复;   // v4133（修复）：奖杯族修饰词截胡修正（水晶飞龙女王战利品回归奖杯族 9.5）；v4132：旗帜族录入+排序垫底
 try{ if(document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', function(){ try{ lbMatLoad(); }catch(e){} try{ lbRulesLoad(); }catch(e){} try{ if(typeof lbRankAliasLoad === 'function') lbRankAliasLoad(); }catch(e){} }); } else { lbMatLoad(); try{ lbRulesLoad(); }catch(e){} try{ if(typeof lbRankAliasLoad === 'function') lbRankAliasLoad(); }catch(e){} } }catch(e){}
 try{ if(!window.LB_PERF) window.LB_PERF = {}; window.LB_PERF.t_main0 = Date.now(); }catch(ePerf0){}   // v4465（用户口径·D1）：启动分段计时——主脚本执行开始
 function lbPerfMark(k){ try{ if(!window.LB_PERF[k]) window.LB_PERF[k] = Date.now(); }catch(e){} }
@@ -3185,7 +3216,8 @@ function lbPerfCopy(){
     var ok = document.execCommand('copy'); ta.remove(); done(ok);
   }catch(e2){ done(false); }
 }
-var LB_SCHEMA_VER = 17;  // v3428：16→17 —— facilities 新增 isPublic（后端 2026-09-20 上线）+ 补采家族（耕地/船体/神器箱等 2454 条）、rec 新增 isPublic/isPlayerStruct；不升版 ⇒ 旧 IndexedDB 缓存继续命中，新设施与新字段永不出现
+var LB_SCHEMA_VER = 18;  // v5714：17→18 —— facility rec 新增 towerAct/towerDeact/towerItems/towerMax/towerFuel（部落塔 5 字段）；不升版 ⇒ 旧 IndexedDB 缓存继续命中，塔字段永不出现
+                         //   （v3428 原注：16→17 —— facilities 新增 isPublic + 补采家族；同因不升版会命中旧缓存）
 // 历史：v1069 14→15——根因：recs 构建结果随 IndexedDB 持久化（v931）、
                          //   命中后跳过重建；仅改 _decorRe 等**构建期过滤**时，旧 rec 会长期残留（实测南瓜 rec 改过滤后仍显示）。
                          //   lbCacheGet 校验 _schemaVer !== LB_SCHEMA_VER → resolve(null) → 全量重拉重建。
@@ -9427,7 +9459,7 @@ async function lbLoad(servers, oldData, onProgress){ // v207：onProgress({phase
             if(!(Number(f.x)||Number(f.y))) return; // 无坐标跳过（蓝图/未放置）
             if(!f.tribeId) return; // 无部落跳过（兜底：数据异常 / 存档未写归属，如实测 13 条 *ShipPlayerFollowingBP）
             var _sub = lbContainerTypeOf({ containerClass:_cc, containerType:'' }); // 容器子类型命名（词表不生成分流）
-            lbAddRec({ src:'facility', server:abbr, isEmpty:true, podId:'', dinoId1:'', dinoId2:'', dinoClass:'',
+            var _frec = { src:'facility', server:abbr, isEmpty:true, podId:'', dinoId1:'', dinoId2:'', dinoClass:'',
               name:'', level:0, gender:'', babyAge:0, isBaby:false, tribeId:Number(f.tribeId||0),
               statValues:[], statPoints:[], statMutations:[], imprintingQuality:0,
               randomMutationsMale:0, randomMutationsFemale:0, ancestors:[], colors:'',
@@ -9437,7 +9469,16 @@ async function lbLoad(servers, oldData, onProgress){ // v207：onProgress({phase
               colorRegions:(f.colorRegions||null),   // v1322：建筑涂装（变长 0–5 下标；-1=未设置；值=ARK 调色板索引；缺省=无染色数据）
               playerName:'', containerOwnerPid:null, containerOwnerEosId:null,
               containerX:Number(f.x)||0, containerY:Number(f.y)||0, containerZ:Number(f.z)||0,
-              imprinterName:'', imprinterEosId:'' });
+              imprinterName:'', imprinterEosId:'' };
+            // v5714（2026-10-30）：部落塔 5 字段透传（存档唯一来源；activatedAtTime=0 表示已停用，lastDeactivatedTime=-1000 表示从未停用）
+            if(typeof f.activatedAtTime === 'number'){
+              _frec.towerAct = Number(f.activatedAtTime) || 0;
+              _frec.towerDeact = (f.lastDeactivatedTime == null) ? -1000 : (Number(f.lastDeactivatedTime) || 0);
+              _frec.towerItems = Number(f.currentItemCount) || 0;
+              _frec.towerMax = Number(f.maxItemCount) || 0;
+              _frec.towerFuel = Number(f.fuelTimeCache) || 0;
+            }
+            lbAddRec(_frec);
           });
           // v134：基因台/基因枪（geneDevices）按 type 分组
           (cryo.geneDevices||[]).forEach(function(d){
@@ -11429,6 +11470,7 @@ async function lbLoadEggs(servers, force){
       // v501：并入 recs 并无感重渲染（聚落详情/容器即可看到蛋与胚胎）
       lbEggMergeToView();
       lbEggCacheSet(cache, merged); // v527：写入 IndexedDB 持久缓存
+      try{ lbDataStaleCheck(); }catch(e){}   // v5712：蛋 LM 刚更新 ⇒ 复查陈旧状态（超期图标可自动复原）
       return cache;
     } finally {
       // v1252：蛋数据下载收尾——恢复数据加载标志（解除预取让路）+ 收起横幅
@@ -14018,7 +14060,124 @@ function lbMaintPlayerBeeHives(){
   LB._beeHiveCache = { k: _ck, v: out };
   return out;
 }
+// v5714（2026-10-30）：**部落塔固定常驻**（同绿洲龙背包/蜂巢口径：不进关注列表、不可取消、只算当前角色名下）
+//   数据源 = 设施 recs（StructureBP_TribeTower，由 cryo.facilities 透传 towerAct/towerDeact/towerItems/towerMax/towerFuel）
+//   世界时钟 = 后端 /api/world_clock 逆推（RCON worldTime 锚点 - 存档 mtime；插件定论：存档含不到世界时钟）
+LB._towerClock = LB._towerClock || {};     // sv -> { ts, d }
+LB._towerBusy = LB._towerBusy || {};       // sv -> 1（防重复并发）
+LB._towerCache = LB._towerCache || {};     // { k, v }（内存缓存：同数据版本 + 同角色）
+function lbMaintTribeTowers(){
+  var d = LB._cache && LB._cache.data; if(!d || !Array.isArray(d.recs)) return [];
+  var curPid = (typeof lbCurPid === 'function') ? lbCurPid() : null;
+  var _ck = String((LB._cache && LB._cache.ts) || 0) + '|' + String(curPid || '');
+  if(LB._towerCache && LB._towerCache.k === _ck && LB._towerCache.v) return LB._towerCache.v;
+  var playerSet = (curPid && typeof lbPlayerTribes === 'function') ? lbPlayerTribes(d.tribesByServer || {}, curPid) : null;
+  var out = [], _seen = {};
+  try{
+    for(var i = 0; i < d.recs.length; i++){
+      var r = d.recs[i]; if(!r) continue;
+      if(r.towerAct === undefined) continue;
+      var cc = String(r.containerClass || '');
+      if(!/TribeTower/i.test(cc)) continue;
+      if(playerSet && typeof lbIsPlayerRec === 'function' && !lbIsPlayerRec(r, playerSet, curPid)) continue;
+      var sv = String(r.server || '');
+      var _k = sv + '|' + cc;
+      if(_seen[_k]) continue; _seen[_k] = 1;
+      var x = Number(r.containerX != null ? r.containerX : r.x) || 0;
+      var y = Number(r.containerY != null ? r.containerY : r.y) || 0;
+      out.push({ sv: sv, cls: cc, x: x, y: y, name: String(r.containerName || ''), _pinned: true, _tower: true, _zh: '部落塔', _noInvert: true, _rec: r });
+    }
+  }catch(e){}
+  LB._towerCache = { k: _ck, v: out };
+  return out;
+}
+// 世界时钟：后端逆推（TTL 3 分钟；失败也写缓存，防重复轮询）
+function lbMaintTowerLoad(sv, done){
+  var c = LB._towerClock[sv];
+  if(c && (Date.now() - c.ts < 180000)){ done && done(); return; }
+  if(LB._towerBusy[sv]){ done && done(); return; }
+  LB._towerBusy[sv] = 1;
+  var _fin = function(d){ LB._towerClock[sv] = { ts: Date.now(), d: d }; delete LB._towerBusy[sv]; done && done(); };
+  try{
+    fetch(LB_API + '/api/world_clock?server=' + encodeURIComponent(sv), { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ server: sv }) })
+      .then(function(r){ return r.json(); })
+      .then(function(j){ _fin((j && j.ok) ? j : { ok: false, error: (j && j.error) || 'bad' }); })
+      .catch(function(e){ _fin({ ok: false, error: 'network' }); });
+  }catch(e){ _fin({ ok: false, error: 'fetch' }); }
+}
+// 部落塔倍数 + 加成（插件文档 §5：TribeTowerBonusMultiplier 9 服 = 2，Bob 无该行 ⇒ 1）
+function lbTowerMult(sv){ return (String(sv || '') === 'Bob') ? 1 : 2; }
+// v5717（用户口径）：部落塔图标必须用 icons2 的 `Tribe_Tower`（ASA/facility/Tribe_Tower.png）。
+//   原先走 lbItemIconUrl(cls) → lbItemMeta 把塔映射成 `T_TribeTower_Icon`（错误图）。
+function tcTowerIcon(cls){
+  try{
+    if (typeof LB_ITEM_ICON_URL !== 'undefined' && LB_ITEM_ICON_URL && LB_ITEM_ICON_URL['Tribe_Tower']){
+      var u = LB_ITEM_ICON_URL['Tribe_Tower'];
+      if (typeof lbPackURL === 'function'){ var b = lbPackURL(u); if (b) return b; }
+      return u;
+    }
+  }catch(e){}
+  try{ return (typeof lbItemIconUrl === 'function') ? (lbItemIconUrl(cls) || '') : ''; }catch(e){}
+  return '';
+}
+function lbTowerBonus(days, M){
+  var d = Math.max(0, Number(days) || 0);
+  return { xp: Math.min(20, d) * M, tame: Math.min(20, d) * M, elem: Math.min(30, Math.floor(d / 30) * 6) * M };
+}
+function lbMaintTowerRow(w, anTag){
+  var r = w._rec || {};
+  var sv = String(w.sv || '');
+  var act = Number(r.towerAct) || 0;
+  var deact = (r.towerDeact === undefined || r.towerDeact === null) ? -1000 : Number(r.towerDeact);
+  var active = (act > 0) && (deact === -1000);
+  var items = Number(r.towerItems) || 0, maxI = Number(r.towerMax) || 0;
+  var tname = '';
+  try{
+    var tb = ((LB._cache && LB._cache.data && LB._cache.data.tribesByServer) || {})[sv] || {};
+    var t = tb[String(r.containerTribe || r.ownerTribeId || '')];
+    if(t) tname = String(t.tribeName || t.name || '');
+  }catch(e){}
+  var clk = LB._towerClock[sv] && LB._towerClock[sv].d;
+  var wt = (clk && clk.ok && typeof clk.fileWorldTime === 'number') ? clk.fileWorldTime : null;
+  var days = (wt != null && act > 0) ? ((wt - act) / 86400) : null;
+  var bad = false;
+  if(clk && !clk.ok) bad = true;
+  if(days != null && (days < 0 || days > 5000)){ bad = true; days = null; }
+  var M = lbTowerMult(sv);
+  var bs = (days != null) ? lbTowerBonus(days, M) : null;
+  // v5716（用户口径）：塔卡也要背景图标 —— 与其他设施/风机卡同款（走项目图标链 lbItemIconUrl）
+  var _ticU = ''; try{ _ticU = tcTowerIcon(w.cls); }catch(e){}
+  var _tcardIc = _ticU ? ('<img class="lb-card-ic lb-maint-ic" src="' + _ticU + '"' + lbIconFilterStyleByName('', _ticU) + ' onerror="lbImgRetry(this)">') : '';
+  var _ico = (typeof lbMdiSvg === 'function') ? lbMdiSvg('mdi-tent', 13) : '';
+  var _stTxt = active ? '激活中' : '未激活';
+  var _stCol = active ? '#4ade80' : '#94a3b8';
+  var _daysTxt;
+  if(bs != null){ _daysTxt = '已激活 ' + (days >= 100 ? String(Math.floor(days)) : String(Math.round(days * 10) / 10)) + ' 天'; }
+  else if(active){ _daysTxt = bad ? '天数待校准（时钟）' : '天数计算中…'; }
+  else { _daysTxt = '—'; }
+  var _pct = maxI > 0 ? Math.min(100, Math.round(items / maxI * 100)) : 0;
+  var h = '<div style="position:relative;overflow:hidden;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:8px 10px;margin-bottom:6px">'
+    + _tcardIc
+    + '<div style="position:relative;z-index:1">'
+    + '<div style="display:flex;align-items:center;gap:6px;font-size:13px;color:#e5e7eb">' + (anTag || '')
+    + _ico + '<b>' + lbAttr(w.name || '部落塔') + '</b>'
+    + (tname ? ('<span style="color:#888;font-size:11px">' + lbAttr(tname) + '</span>') : '')
+    + '<span style="flex:1"></span>'
+    + '<span style="font-size:11px;color:' + _stCol + ';font-weight:bold">' + _stTxt + '</span></div>'
+    + '<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#94a3b8;margin-top:4px">'
+    + '<span>' + _daysTxt + '</span><span style="flex:1"></span>'
+    + (maxI > 0 ? ('<span>库存 ' + items + '/' + maxI + '</span>') : '') + '</div>'
+    + (maxI > 0 ? ('<div style="height:4px;background:#22223a;border-radius:2px;margin-top:4px;overflow:hidden"><div style="height:100%;width:' + _pct + '%;background:#38bdf8"></div></div>') : '')
+    + (bs ? ('<div style="display:flex;gap:10px;font-size:11px;margin-top:5px;flex-wrap:wrap">'
+        + '<span style="color:#a78bfa">经验 +' + bs.xp + '%</span>'
+        + '<span style="color:#a78bfa">驯服 +' + bs.tame + '%</span>'
+        + '<span style="color:#f59e0b">元素 +' + bs.elem + '%</span></div>')
+      : '')
+    + '</div></div>';
+  return h;
+}
 function lbMaintFacRow(w, anTag){
+  if(w && w._tower){ try{ return lbMaintTowerRow(w, anTag); }catch(e){} }   // v5714：部落塔走专用卡片
   var m = null; try{ m = lbMaintFacMeta(w.cls); }catch(e){}
   var _pinned = !!w._pinned;   // v4709：常驻特例（不显示取消关注按钮）
   // v4713（用户口径·预加载）：译名/rec/库存/容量/距停机/图标统一走 lbMaintFacData 缓存（预热建、开窗直读）
@@ -14147,6 +14306,7 @@ function lbMaintMergeBoxes(list){
   if(!list || !list.length) return list || [];
   var groups = {}, order = [];
   list.forEach(function(w){
+    if(w && w._tower){ out.push(w); return; }   // v5714：部落塔不合并（每座独立显示加成）
     var fb = ''; try{ fb = lbFacBase(w.cls) || String(w.cls || ''); }catch(e){ fb = String(w.cls || ''); }
     // v4739（用户指正）：区域**沿用项目统一解析**（lbMaintFacCrumbOf = 卡片面包屑同源：聚落 → 区域），不自造坐标粗格
     var sn = '', an = '';
@@ -14187,6 +14347,13 @@ function lbMaintRender(){
       if(!_seenW[k]){ _seenW[k] = 1; watch.push(w); }
     });
     lbMaintPlayerBeeHives().forEach(function(w){   // v4737（用户口径）：玩家蜂巢常驻
+      var k = String(w.sv) + '|' + String(w.cls) + '|' + Math.round(Number(w.x) || 0) + ',' + Math.round(Number(w.y) || 0);
+      if(!_seenW[k]){ _seenW[k] = 1; watch.push(w); }
+    });
+  }catch(e){}
+  // v5714（2026-10-30）：部落塔常驻（存档数据 + world_clock 逆推加成）
+  try{
+    lbMaintTribeTowers().forEach(function(w){
       var k = String(w.sv) + '|' + String(w.cls) + '|' + Math.round(Number(w.x) || 0) + ',' + Math.round(Number(w.y) || 0);
       if(!_seenW[k]){ _seenW[k] = 1; watch.push(w); }
     });
@@ -14305,6 +14472,21 @@ function lbMaintRender(){
     LB._maintWindBusy = true;
     try{ lbMaintWindLoad(winds, function(){ LB._maintWindBusy = false; try{ if(LB._maintOpen) lbMaintRender(); }catch(e){} }); }catch(e){ LB._maintWindBusy = false; }
   }
+  // v5714：部落塔世界时钟（后端逆推，TTL 3 分钟；异步拉完再重绘）
+  try{
+    var _twSvs = {};
+    watch.forEach(function(w){ if(w && w._tower && w.sv) _twSvs[w.sv] = 1; });
+    var _twArr = Object.keys(_twSvs);
+    var _twNeed = _twArr.some(function(sv2){ var c2 = LB._towerClock[sv2]; return !c2 || (Date.now() - c2.ts >= 180000); });
+    if(_twNeed && !LB._twBusy){
+      LB._twBusy = 1;
+      var _ti = 0;
+      (function _twn(){
+        if(_ti >= _twArr.length){ LB._twBusy = 0; try{ if(LB._maintOpen) lbMaintRender(); }catch(e){} return; }
+        lbMaintTowerLoad(_twArr[_ti++], _twn);
+      })();
+    }
+  }catch(e){}
 }
 
 // v4674：组内首个"可关注设施"（10 类）的原始 rec——供关注钮/图标使用
@@ -22555,6 +22737,66 @@ function lbUpdateDataTime(){
   // 兼容旧 #lbDataTime（v109 已移除，保留防御）
   var el=document.getElementById('lbDataTime');
   if(el){ el.textContent=LB._dataTimeText; el.title=LB._dataTimeTitle; }
+  try{ lbDataStaleCheck(); }catch(e){}
+}
+/* v5712（用户口径）：蛋 / tamed 数据超过 7 天未更新 ⇒ 右上角刷新图标点**主题色** `#7c3aed` + title 提醒
+   根因背景：这两类数据不是存档自动导出的（cryo/tamed/item 才是），蛋必须 RCON EggProbe 触发、
+   tamed 必须 ArkTamedDinos 触发 ⇒ 长期没人手动刷新时它们会一直停在旧文件上，页面上看不出来。
+   判据：扫 tamed（data._lm[服].tamed）与 eggs（LB._eggLm[服]）的 Last-Modified，**任一** > 7 天即点亮。
+   404 哨兵 LB_LM_404（'__404__'）与缺失键跳过，不当超期。 */
+var LB_STALE_DAYS = 7;
+var LB_STALE_INFO = null;
+function lbDataStaleCheck(){
+  var DAY = 86400000, now = Date.now();
+  var eggDays = [], tamedDays = [];
+  try{
+    var el = LB._eggLm || {};
+    Object.keys(el).forEach(function(abbr){
+      var t = el[abbr];
+      if(!t || t === LB_LM_404) return;
+      var ts = Date.parse(t);
+      if(!ts || !isFinite(ts)) return;
+      var d = Math.floor((now - ts) / DAY);
+      if(d > LB_STALE_DAYS) eggDays.push(d);
+    });
+  }catch(e){}
+  try{
+    var d0 = LB._cache && LB._cache.data;
+    var lm = (d0 && d0._lm) || {};
+    Object.keys(lm).forEach(function(abbr){
+      var t = lm[abbr] && lm[abbr].tamed;
+      if(!t || t === LB_LM_404) return;
+      var ts = Date.parse(t);
+      if(!ts || !isFinite(ts)) return;
+      var d = Math.floor((now - ts) / DAY);
+      if(d > LB_STALE_DAYS) tamedDays.push(d);
+    });
+  }catch(e){}
+  function span(a){
+    if(!a.length) return '';
+    var mn = Math.min.apply(null, a), mx = Math.max.apply(null, a);
+    return (mn === mx ? String(mn) : (mn + '~' + mx));
+  }
+  var parts = [];
+  if(eggDays.length) parts.push('蛋数据 ' + span(eggDays) + ' 天未更新（' + eggDays.length + ' 服）');
+  if(tamedDays.length) parts.push('tamed 数据 ' + span(tamedDays) + ' 天未更新（' + tamedDays.length + ' 服）');
+  LB_STALE_INFO = { stale: parts.length > 0, text: parts.join('、'),
+                    egg: eggDays.length, tamed: tamedDays.length };
+  try{
+    var btn = document.getElementById('lbRefreshBtn2');
+    if(btn){
+      if(LB_STALE_INFO.stale){
+        btn.style.color = '#7c3aed';
+        btn.style.opacity = '1';
+        btn.title = '刷新数据　' + LB_STALE_INFO.text;   // v5713（用户口径）：文案简化 + 去掉 ⚠️（蛋数据前面那个图标太难看了）
+      }else{
+        btn.style.color = '#999';
+        btn.style.opacity = '.65';
+        btn.title = '刷新数据';   // v5713（用户口径）：刷新低温仓数据 → 刷新数据
+      }
+    }
+  }catch(e){}
+  return LB_STALE_INFO;
 }
 // 静默增量检查（启动后后台，2026-08-28）：HEAD 对比数据文件 Last-Modified，变化才重拉更新缓存渲染
 // 解决「清缓存不清 IndexedDB」导致旧数据永不刷新的问题；无进度条不打扰，未变化零开销
@@ -49572,6 +49814,21 @@ function lbWikiBind(){
       if ((_hm.tameFoods || []).length) {
         TAME[CUR] = TAME[CUR] || {};
         TAME[CUR].wikiFoods = _hm.tameFoods;
+        /* v5732（用户口径「不用完整食物列表，前3即可」）：后端 tamingFoods 只给「最佳」1 项，
+           而 tameFoods（口数表）有约 3 项 ⇒ 把后者命中的 FOODS 键也并入 diet（去重、wiki 最佳优先），
+           食物对照表即从 1 行变 3 行。 */
+        try{
+          var _ft0 = (typeof FOODS !== 'undefined' && FOODS) ? FOODS : {};
+          var _d0 = (TAME[CUR].diet || []).slice();
+          (_hm.tameFoods || []).forEach(function(x){
+            var zh = String((x && x.zh) || '').trim();
+            if (!zh) return;
+            var hit = '';
+            Object.keys(_ft0).forEach(function(k){ if (!hit && _ft0[k] && _ft0[k].zh === zh) hit = k; });
+            if (hit && _d0.indexOf(hit) < 0) _d0.push(hit);
+          });
+          if (_d0.length) TAME[CUR].diet = _d0;
+        }catch(eM){}
       }
       // v264：驯服引导文案 -> 用于区分「无法驯服」与「未收录」
       if ((_hm.tameIntro || []).length) {
@@ -50087,13 +50344,31 @@ function tcCollapseIntro(el, maxLines){
   });
   if(!lines.length) return;
   var mk = function(s){ return '<div class="tc-line">' + s + '</div>'; };
-  if(lines.length <= maxLines){
+  /* v5735（用户口径「不能超过 5 行，超过就折叠」）：
+     原判据 = **段落数**（p / br 拆出的条数）。tameIntro 现为 5 段×每段 2~3 视觉行 ⇒ 5<=5 被判「不需折叠」，
+     整块 8~9 行全铺开。改为**视觉行数估算**：容器约 886px、字号 12.5px ⇒ 每行约 62 个中文字，
+     逐段 ceil(len/62) 累加，超过 maxLines 就折叠（前 N 行按视觉行累计取整段）。 */
+  var CPL = 62;
+  var plain = function(s){ return String(s).replace(/<[^>]*>/g, ''); };
+  var vlines = 0;
+  for (var li = 0; li < lines.length; li++){
+    vlines += Math.max(1, Math.ceil(plain(lines[li]).length / CPL));
+  }
+  if (vlines <= maxLines){
     el.innerHTML = lines.map(mk).join('');
     return;
   }
-  var head = lines.slice(0, maxLines).map(mk).join('');
-  var rest = lines.slice(maxLines).map(mk).join('');
-  var moreTxt = '展开全部（共 ' + lines.length + ' 行）';
+  // 按视觉行累计取前 maxLines 行（整段为单位，避免把一句话劈两半）
+  var headArr = [], restArr = [], acc = 0, cut = false;
+  for (var lj = 0; lj < lines.length; lj++){
+    var n = Math.max(1, Math.ceil(plain(lines[lj]).length / CPL));
+    if (!cut && acc + n <= maxLines){ headArr.push(mk(lines[lj])); acc += n; }
+    else { cut = true; restArr.push(mk(lines[lj])); }
+  }
+  if (!headArr.length){ headArr.push(mk(lines[0])); restArr = lines.slice(1).map(mk); }
+  var head = headArr.join('');
+  var rest = restArr.join('');
+  var moreTxt = '展开全部（共 ' + vlines + ' 行）';
   el.innerHTML = head
     + '<div class="tc-more" style="display:none">' + rest + '</div>'
     + '<button class="tc-expand" data-more="' + moreTxt + '">' + moreTxt + '</button>';
@@ -50126,13 +50401,27 @@ function tpDurSec(s){
   return 0;
 }
 
+/* ===== tcMaxWild（v5730 用户口径） ===== */
+/* 野生等级上限：Tek 变种（BionicRex_Character_BP_C 等）上限 180，普通 150。
+   判定源 = 物种键 + 当前类名；识别不出 Tek 时**安全降级**为 150（绝不误放宽）。 */
+function tcMaxWild(){
+  try{
+    var s = String((typeof LB_WIKI !== 'undefined' && LB_WIKI.cur) || '')
+          + ' ' + String((typeof LB !== 'undefined' && LB.curClass) || '')
+          + ' ' + String((typeof CUR !== 'undefined' && CUR) || '');
+    if (/Bionic|Tek/i.test(s)) return 180;
+  }catch(e){}
+  return 150;
+}
+
 /* ===== tcRows ===== */
-function tcRows(){
+function tcRows(spOverride){
   var t = TAME[CUR]; if(!t) return null;
   var s = t.setup || t.s || {};
-  var lv = Math.max(1, Math.min(150, TC_LV));
+  var lv = Math.max(5, Math.min(tcMaxWild(), TC_LV));
   var A = (+s.req || 0) + (+s.per_level || 0) * Math.max(0, lv - 1);   // 总亲和度需求
-  var sp = lbTameSpeedEnsure() || 0;
+  // v5716：spOverride 供「④ 部落塔」对比块用（传入含塔加成的倍率）；不传则用服务器裸倍率（原行为不变）
+  var sp = (Number(spOverride) > 0) ? Number(spOverride) : (lbTameSpeedEnsure() || 0);
   if (sp <= 0) return null;                   // 倍率未取到 → 不算（绝不用假数字）
   var rate = +s.rate || 0.4167, ineff = +s.ineff || 1;
   var list = (t.diet || []).map(function(en){
@@ -50144,9 +50433,10 @@ function tcRows(){
     var eff = (aff > 0 && qty > 0) ? (1 / (1 + ineff * qty / (aff * 4))) * 100 : 0;  // 效率
     var plus = Math.floor(lv * eff / 100 * 0.5);                             // 等级加成
     var _ic = lbWikiResIcon(f.zh || en) || lbWikiResIcon(en);            // v145：项目链，不用 FOODS[en].icon（CDN）
-    return { en:en, zh:lbWikiZhName(f.zh || en) || (f.zh || en), icon:_ic, icons:null, aff:aff, base:base, qty:qty,
+    var _zh = lbWikiZhName(f.zh || en) || (f.zh || en);
+    return { en:en, zh:_zh, icon:_ic, icons:null, aff:aff, base:base, qty:qty,
              itv:itv, time:time, eff:eff, plus:plus, tlv:lv + plus,
-             own:lbTameOwn(en) };
+             own:lbTameOwn(_zh) };   // v5701 BUG 修复：原来传 FOODS 英文键，lbItemClsByZh 只认中文 ⇒ own 恒为 0
   });
   /* v131：FOODS 静态表只有 26 条（肉 / 饲料），
      wiki 食物（几丁质 / 蜂蜜 / 腐肉 等）不在其中 ⇒ 以前只能降级显示 wiki 原始表。
@@ -50212,20 +50502,21 @@ function renderTame(){
     + introHtml
     + '<div class="tc-top">'
     + '<span class="tc-badge">倍率 ' + (TC_SP > 0 ? (TC_SP + '×') : '读取中') + '</span>'
-    + '<span class="tc-badge2">野生上限 150</span>'
-    + (TC_SP_SRC ? '<span class="tc-badge2" style="opacity:.7">' + TC_SP_SRC + '</span>' : '') + '</div>'
+    + '<span class="tc-badge2">野生上限 ' + tcMaxWild() + '</span>'
+    + '</div>'
     + '<div class="tc-ctrl"><label>目标等级</label>'
-    + '<input type="range" min="1" max="150" value="' + TC_LV + '" oninput="tcLvSet(this.value)">'
+    + '<input type="range" min="5" max="' + tcMaxWild() + '" step="5" value="' + TC_LV + '" oninput="tcLvSet(this.value)">'
     + '<span class="tc-lv" id="tcLvV">' + TC_LV + '</span></div>'
-    + '<div class="tc-sec"><div class="tc-h">① 需要什么<em>滑块一动即时重算</em></div>'
+    // v5733（用户口径）：「建议」上移为 ①，其余编号顺延；「食物对照」改为折叠块嵌入 ③ 你现在有多少
+    + '<div class="tc-sec"><div class="tc-h">① 建议</div><div class="tc-adv" id="tcAdv"></div></div>'
+    + '<div class="tc-sec"><div class="tc-h">② 需要什么<em>滑块一动即时重算</em></div>'
     + '<div class="tc-tiles" id="tcTiles"></div>'
     // v118：.tc-tiles 是 grid(minmax 132px)，表格必须放外面，否则被挤成 132px 并与相邻格重叠
     + '<div id="tcWikiFoods" style="margin-top:10px"></div></div>'
-    + '<div class="tc-sec"><div class="tc-h">② 你现在有多少<em>我的库存：本人背包 + 我的部落容器</em></div><div class="tc-own" id="tcOwn"></div></div>'
-    + '<div class="tc-sec"><div class="tc-h">③ 驯服工具<em>当前角色 · 最优武器 / 最优弹药</em></div><div class="tc-tool" id="tcTool"></div></div>'
-    + '<div class="tc-sec"><div class="tc-h">④ 建议</div><div class="tc-adv" id="tcAdv"></div></div>'
-    + '<div class="tc-sec"><div class="tc-h">食物对照<em>全部 ' + (t.diet || []).length + ' 种 · 按我的库存标记</em></div>'
-    + '<div style="max-height:340px;overflow:auto;border:1px solid #22222e;border-radius:8px"><table class="tc-tb" id="tcFood"></table></div></div>'
+    + '<div class="tc-sec"><div class="tc-h">③ 你现在有多少<em>我的库存：本人背包 + 我的部落容器</em></div><div class="tc-own" id="tcOwn"></div></div>'
+    + '<div class="tc-sec"><div class="tc-h">④ 驯服工具<em>当前角色 · 最优武器弹药组合</em></div><div class="tc-tool" id="tcTool"></div></div>'
+    + '<div class="tc-sec"><div class="tc-h">⑤ 部落塔<em>Tribe Tower · 驯服速度加成</em></div><div id="tcTower"></div></div>'
+    + '<div class="tc-sec"><div class="tc-h">⑥ 血之灵药<em>Sanguine Elixir · 驯服进度 +30%</em></div><div id="tcElixir"></div></div>'
     + '</div>';
   // v39：介绍已在函数开头前置（.tc 内、徽章之前）
   document.getElementById('lbWikiBody').innerHTML = h;
@@ -50234,7 +50525,14 @@ function renderTame(){
 }
 
 /* ===== tcLvSet ===== */
-function tcLvSet(v){ TC_LV = Math.max(1, Math.min(150, parseInt(v, 10) || 1)); document.getElementById('tcLvV').textContent = TC_LV; tcCalc(); }
+function tcLvSet(v){
+  // v5730（用户口径）：粒度 5 —— 对齐到 5 的倍数，上限随物种（Tek 180 / 普通 150）
+  var mx = tcMaxWild();
+  var n = Math.round((parseInt(v, 10) || 5) / 5) * 5;
+  TC_LV = Math.max(5, Math.min(mx, n));
+  document.getElementById('tcLvV').textContent = TC_LV;
+  tcCalc();
+}
 
 /* ===== tcSpSet ===== */
 function tcSpSet(v){
@@ -50245,117 +50543,742 @@ function tcSpSet(v){
   tcCalc();
 }
 
+/* ===== v5702（用户口径）：示例值清理 =====
+   原 wiki_dex.json 的 ROLES（角色「白某」+ 假库存）与 TAME_W_INST（假武器 rating27/耐久288）
+   是原型页时代的 demo 数据，已全部废弃 → 改读真实库存 / 真实武器实例。
+   短名→类名用**实测类名**（wiki_dex 里的中文是旧的：机械十字弓=制式弩、十字弓=十字弩、麻醉长矛箭=麻醉弩箭） */
+var TC_W_CLS = { longneck:'OneShotRifle', tekbow:'TekBow', harpoon:'Harpoon',
+                 fabxbow:'Crossbow_Fab', crossbow:'Crossbow', compound:'CompoundBow', bow:'Bow' };
+var TC_A_CLS = { shock:'RefinedTranqDart', dart:'TranqDart',
+                 tranqspear:'TranqSpearBolt', tranqarrow:'ArrowTranq' };
+/* v5705（权威重建）：驯服武器/弹药组合表，取代 wiki_dex.json 的 TAME_COMBOS
+     · 弹药 torpor/damage：ark.wiki.gg/wiki/Tranquilizer_Dart 的 Ammunition 对比表（原文抓取）
+     · 武器射速：项目 /api/wiki_item/<cls> 的 PARSED.attrs —— Reload Duration + Time Between Shots，
+       弹匣 >1 时按 Ammo Per Clip 摊平（制式弩 10 发弹匣 ⇒ 平均 1.1s/发）
+     · 🔴 麻醉弩箭(Tranq Spear Bolt) 只能由 **鱼叉枪(Harpoon Launcher)** 发射，装不进制式弩
+     · 泰克弓没有「泰克麻醉箭」这个物品（wiki 说 Tek Bow 用普通箭，对比表无此项）⇒ 整条删除 */
+var TC_W_RATE = { longneck:4.6, fabxbow:1.1, crossbow:2.3, bow:1.3, compound:1.3, harpoon:3.0 };
+/* v5708（用户口径）：武器环境适用性 —— 水下不能用长管步枪/弓/复合弓；鱼叉枪只在水中
+     env: land = 仅陆地 · water = 仅水下 · both = 两栖通用 */
+var TC_COMBOS = [
+  { key:'rifle-shock', w:'longneck', a:'shock',      torpor:442,   dmg:26, env:'land'  },  // 长管步枪 + 强效麻醉镖
+  { key:'rifle-dart',  w:'longneck', a:'dart',       torpor:221,   dmg:26, env:'land'  },  // 长管步枪 + 麻醉镖
+  { key:'harpoon',     w:'harpoon',  a:'tranqspear', torpor:306,   dmg:36, env:'water' },  // 鱼叉枪   + 麻醉弩箭
+  { key:'xbow',        w:'crossbow', a:'tranqarrow', torpor:157.5, dmg:35, env:'both'  },  // 十字弩   + 麻醉箭
+  { key:'fabxbow',     w:'fabxbow',  a:'tranqarrow', torpor:157.5, dmg:35, env:'both'  },  // 制式弩   + 麻醉箭
+  { key:'compound',    w:'compound', a:'tranqarrow', torpor:121.5, dmg:27, env:'land'  },  // 复合弓   + 麻醉箭
+  { key:'bow',         w:'bow',      a:'tranqarrow', torpor:90,    dmg:20, env:'land'  }   // 弓       + 麻醉箭
+];
+/* v5708：水下生物清单（只能在水下击晕 —— 水下拉不开弓、枪械也打不出）
+   判定：优先用 wikily 中文名关键词，其次类名兜底（ARK 类名与中文常不一致，如鱼龙 = Dolphin_Character_BP）
+   两栖类（古巨龟/巨蛙/棘背龙/帝鳄/恐鳄/猪鳄/笠头螈/碳龟/巨龟）按**陆地**处理 —— 岸上就能打 */
+/* v5709（用户口径·B）：手写中文清单永远会漏（ASA 新生物：古章鱼/海妖/旋齿鲨/潮汐兽/狮子鱼…）
+   ⇒ 改为「类名词根全量 + 中文兜底」双轨，类名词根取自项目权威物种表 ASA-values.json（1144 物种）实扫
+   陷阱：① 裸 `鲨` 会误伤「鲨齿龙」⇒ 只列 巨齿鲨/旋齿鲨
+        ② `Ichthyo` 会误伤鱼鸟 Ichthyornis ⇒ 鱼龙走 `Dolphin`（其类名就是 Dolphin_Character_BP）
+        ③ `Diplo` 会误伤梁龙 Diplodocus ⇒ 不用该词根
+   两栖按陆地：古巨龟/巨蛙/棘背龙/帝鳄/恐鳄/猪鳄/笠头螈/碳龟/巨龟/巨蟹 —— 岸上就能打 */
+var TC_AQ_RE = /章鱼|鱿|乌贼|海妖|沧龙|蛇颈龙|鱼龙|邓氏鱼|巨齿鲨|旋齿鲨|鲸|蝠鲼|广翅鲎|电鳗|滑齿龙|鮟鱇|灯笼鱼|剑射鱼|三叶虫|菊石|水母|利兹鱼|七鳃鳗|腔棘鱼|剑齿鲑|食人鱼|鲎|潮汐兽|狮子鱼|海德拉/;
+var TC_AQ_CLS = /Mosa|Plesiosaur|Dolphin|Dunkle|Megalodon|Tuso|Squid|Octopus|Manta|Electrophorus|Eel|Basilosaurus|Liopleurodon|Angler|Ammonite|Trilobite|Cnidaria|Leedsichthys|Coel|Salmon|Piranha|Euryp|Lamprey|Xiphactinus|Shastasaurus|Kraken|Shark_Character|SpaceWhale|Lionfish|Hydra_|Helicoprion|Axolotl|RockwellTentacle/i;
+function tcIsAquatic(){
+  try{
+    var z = String(((DATA || {})[CUR] || {}).zh || '');
+    if (z && TC_AQ_RE.test(z)) return true;
+    var c = String(LB_WIKI.cur || LB.curClass || '');
+    if (c && TC_AQ_CLS.test(c)) return true;
+  }catch(e){}
+  return false;
+}
+function tcTargetHp(lv){
+  // v5706（根因修复）：必须按目标等级算**实际血量** —— 只取 1 级基础值会把 150 级阿根廷巨鹰算成 365 血
+  //   （实际 365 × (1 + 0.2 × 149) = 11242），导致「会打死」全线误报。
+  //   OVERVIEW.stats[0] = ["生命值", base, 野生每级成长率]（与 tcRows 同一数据源）
+  try{
+    var ov = (OVERVIEW || {})[CUR] || {};
+    var st = ov.stats || [];
+    if (!st.length || !st[0]) return 0;
+    var base = Number(st[0][1]) || 0, pw = Number(st[0][2]) || 0;
+    var L = Number(lv) || 0;
+    if (!L) return base;
+    return base * (1 + pw * Math.max(0, L - 1));
+  }catch(e){}
+  return 0;
+}
+function tcClsOf(shortKey){
+  var c = TC_W_CLS[shortKey] || TC_A_CLS[shortKey] || '';
+  if (c) return c;
+  var zh = ((TAME_WEAPONS || {})[shortKey] || (TAME_AMMO || {})[shortKey] || {}).zh || '';
+  try{ return zh ? (lbItemClsByZh(zh) || '') : ''; }catch(e){ return ''; }
+}
+function tcWZh(shortKey){
+  // v5703（用户口径·根治）：短名 → 类名 → lbItemZh 取项目统一中文（item_zh.json 唯一源），
+  //   彻底不再依赖 wiki_dex.json 里的旧中文（机械十字弓/十字弓/麻醉长矛箭 均已过时）
+  var cls = tcClsOf(shortKey);
+  if (cls){ try{ var z = lbItemZh(cls); if (z) return z; }catch(e){} }
+  return ((TAME_WEAPONS || {})[shortKey] || (TAME_AMMO || {})[shortKey] || {}).zh || shortKey;
+}
+function tcBestWeaponInst(shortKey){
+  var cls = tcClsOf(shortKey); if (!cls) return null;
+  var d = LB._cache && LB._cache.data; if (!d || !d.itemsByServer) return null;
+  var tbase = ''; try{ tbase = String((lbItemMeta(cls) || {}).base || cls); }catch(e){ tbase = cls; }
+  var best = null;
+  Object.keys(d.itemsByServer).forEach(function(sv){
+    var bc = (d.itemsByServer[sv] || {}).byCid || {};
+    Object.keys(bc).forEach(function(cid){
+      var arr = bc[cid] || [];
+      for (var i = 0; i < arr.length; i++){
+        var it = arr[i]; if (!it || it.isBlueprint) continue;
+        var ic = String(it['class'] || '').replace(/_C_\d+$/, '').replace(/_C$/, '');
+        // v5704（根因修复）：归一必须走 lbItemMeta().base —— lbCanonBase 对 `PrimalItem_Weapon*` 只剥
+        //   `PrimalItem_`，会留下 Weapon 前缀（WeaponCrossbow_Fab ≠ Crossbow_Fab）⇒ 48 把制式弩全被跳过
+        var mb = ''; try{ mb = String((lbItemMeta(ic) || {}).base || ''); }catch(e){ mb = ''; }
+        var hit = (ic === cls) || (!!mb && mb === tbase);
+        if (!hit) continue;
+        // v5705（用户口径）：只认「我的」—— 背包按当前角色名、容器按所属部落（与库存数字同口径）
+        try{ if (typeof lbMatIsMine === 'function' && !lbMatIsMine(sv, it)) continue; }catch(e){}
+        var rr = Number(it.rating) || 0;
+        if (!best || rr > best.r) best = { it: it, sv: sv, r: rr };
+      }
+    });
+  });
+  return best;
+}
+function tcMySpecies(){
+  try{
+    var cls = String(LB_WIKI.cur || LB.curClass || ''); if (!cls) return null;
+    var d = LB._cache && LB._cache.data; if (!d || !d.recs) return null;
+    var curPid = (typeof lbCurPid === 'function') ? lbCurPid() : '';
+    var ps = curPid ? lbPlayerTribes(d.tribesByServer || {}, curPid) : null;
+    var n = 0, lv = 0;
+    (d.recs || []).forEach(function(r){
+      if (!r || r.isEmpty) return;
+      if (String(r.dinoClass || '') !== cls) return;
+      if (ps && !lbIsPlayerRec(r, ps, curPid)) return;
+      n++;
+      var L2 = Number(r.level) || 0; if (L2 > lv) lv = L2;
+    });
+    return { n: n, lv: lv };
+  }catch(e){ return null; }
+}
 /* ===== tcRoleInv ===== */
 function tcRoleInv(){
-  var role = ROLES[CUR_ROLE] || { locs:[] }, inv = {};
-  role.locs.forEach(function(L){
-    Object.keys(L.items || {}).forEach(function(k){
-      var n = L.items[k] || 0; if(!n) return;
-      if(!inv[k]) inv[k] = { n:0, locs:[] };
-      inv[k].n += n;
-      if(inv[k].locs.indexOf(L.c) < 0) inv[k].locs.push(L.c);
-    });
+  // v5702：改读真实全服库存（lbItemOwnCnt 已按「当前角色 + 所属部落」过滤）
+  var inv = {}, keys = [];
+  TC_COMBOS.forEach(function(cb){ keys.push(cb.w); keys.push(cb.a); });
+  keys.forEach(function(k){
+    if (inv[k]) return;
+    var cls = tcClsOf(k), n = 0, svc = 0;
+    if (cls){ try{ var o = lbItemOwnCnt(cls, true) || {}; n = Number(o.n) || 0; svc = Number(o.svc) || 0; }catch(e){} }
+    inv[k] = { n: n, svc: svc, cls: cls, locs: (svc > 0 ? new Array(svc) : []) };
   });
   return inv;
 }
 
 /* ===== tcBestPair ===== */
-function tcBestPair(){
+function tcBestPair(r){
+  // v5705：排序口径 = 「净增速」—— 扣掉射击期间 torpor 自然衰减
+  //   每发净增 net = torpor - wakeRate × 射速；net <= 0 ⇒ 该组合永远打不晕，直接剔除
+  //   再加致死闸：击晕总伤害 = 发数 × 每发伤害，>= 目标血量 ⇒ 会打死
   var inv = tcRoleInv();
-  var wBest = {}, aBest = {};
-  TAME_COMBOS.forEach(function(cb){
-    var w = inv[cb.w] || { n:0, locs:[] }, a = inv[cb.a] || { n:0, locs:[] };
-    if(w.n < 1 || a.n < 1) return;                 // 缺武器或缺弹药 ⇒ 该组合不可用
-    var perSec = cb.torpor / cb.shot;              // 综合效率 = 每发眩晕 / 每发间隔
-    var r = { cb:cb, perSec:perSec, shots:a.n, wLocs:w.locs, aLocs:a.locs };
-    if(!wBest[cb.w] || perSec > wBest[cb.w].perSec) wBest[cb.w] = r;
-    if(!aBest[cb.a] || perSec > aBest[cb.a].perSec) aBest[cb.a] = r;
+  var wake = (r && r.wakeRate) ? r.wakeRate : 0;
+  var target = (r && r.torpor) ? r.torpor : 0;
+  var hp = tcTargetHp(r && r.lv);
+  var out = [];
+  var aq = tcIsAquatic();                            // v5708：水下生物只能弩/鱼叉枪；陆地禁用鱼叉枪
+  TC_COMBOS.forEach(function(cb){
+    var env = cb.env || 'land';
+    if (aq && env === 'land') return;
+    if (!aq && env === 'water') return;
+    var w = inv[cb.w] || { n:0 }, a = inv[cb.a] || { n:0 };
+    // v5709（用户口径）：**不再按库存过滤** —— 要的是「最佳组合」，不是「我有的组合」。
+    //   库存只作标注（0 ⇒ 弹药 chip 标红「无库存」、武器无实例出虚线「无实例」卡）。
+    var rate = TC_W_RATE[cb.w] || 5;
+    var net = cb.torpor - wake * rate;              // 每发净增
+    if (net <= 0) return;                           // 涨得还没掉得快 ⇒ 永远打不晕
+    var shots = target > 0 ? Math.ceil(target / net) : 0;
+    out.push({ cb:cb, rate:rate, net:net, shots:shots,
+               totalDmg: shots * cb.dmg, perSec: net / rate,
+               wn:w.n, an:a.n });
   });
-  var pick = function(o){
-    var k = null;
-    Object.keys(o).forEach(function(x){
-      if(!k || o[x].perSec > o[k].perSec || (o[x].perSec === o[k].perSec && o[x].shots > o[k].shots)) k = x;
-    });
-    return k ? { key:k, r:o[k] } : null;
-  };
-  return { w: pick(wBest), a: pick(aBest) };
+  if (!out.length) return null;
+  var safe = hp > 0 ? out.filter(function(x){ return x.totalDmg < hp; }) : out;
+  var pool = safe.length ? safe : out;
+  pool.sort(function(a,b){ return (b.perSec - a.perSec) || (a.shots - b.shots); });
+  return { best: pool[0], list: pool, all: out, hp: hp, willKill: (hp > 0 && !safe.length) };
 }
 
 /* ===== tcWeaponCard ===== */
-function tcWeaponCard(key, perKill){
-  var w = TAME_W_INST[key];
-  if(!w) return '';
-  var col = (typeof lbBpStageCol === 'function') ? lbBpStageCol(w.q) : '#b8b8b8';   // v125：项目唯一源
-  var attr = (w.stats || []).map(function(s, i){
-    var txt = s.txt;
-    // 耐久项：当前/最大（当前取物品耐久字段 durability，最大取 stats 槽2 模板值）
-    if(s.label === '耐久' && typeof w.dura === 'number') txt = w.dura + '/' + s.txt;
-    return '<span style="margin-right:6px;color:' + (i === 0 ? '#38bdf8' : '#999') + '">' + s.label + ' ' + txt + '</span>';
-  }).join('');
-  var can = (typeof w.dura === 'number' && perKill > 0) ? Math.floor(w.dura / perKill) : null;
-  if(can !== null){
-    attr += '<span style="margin-right:6px;color:#999" title="当前耐久 ' + w.dura + ' ÷ 单只 ' + perKill + ' 发（每发耗 1 耐久）；' + TC_SHOT_NOTE + '">可驯 ' + can + ' 只</span>';
+function tcWeaponCard(key, perKill, subHtml){
+  // v5702（用户口径）：废弃 TAME_W_INST 示例武器，改读真实库存里的最优那把；右侧复用 lbOwnerTagMy 统一归属标签
+  // v5708：+subHtml —— 弹药与「射速/发数/耐久够训」数据行塞进同一张卡；外层改 block 以便数据行整行铺开
+  var wzh = tcWZh(key);
+  var bst = tcBestWeaponInst(key);
+  // v5709（用户口径）：组合已不按库存过滤 ⇒ 没实例也必须出卡，否则「最佳组合」会整条消失
+  if (!bst){
+    return '<div class="lb-breed-card" style="background:#1a1a24;border:1px dashed #475569;border-radius:8px;padding:6px 10px;margin-bottom:6px;font-size:12px">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">'
+      + '<div style="min-width:0">'
+      + '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#475569;margin-right:5px;vertical-align:1px"></span>'
+      + '<b style="color:#fff"' + tcPickAttr(wzh) + '>' + wzh + '</b>'
+      + ' <span style="background:#f8717122;border-radius:2px;padding:0 6px;color:#f87171">无实例</span>'
+      + '</div><div style="flex-shrink:0;font-size:11px;color:#999;text-align:right"></div></div>'
+      + (subHtml ? ('<div style="margin-top:5px;padding-top:5px;border-top:1px solid #ffffff12">' + subHtml + '</div>') : '')
+      + '</div>';
   }
-  var owner = '<span style="color:#f59e0b">'
-    + lbMdiSvg('mdi-cog', 12) + ' '
-    + '<span class="acc-title">' + (lbWikiResIcon(w.zh) ? '<img src="' + lbWikiResIcon(w.zh) + '" class="lb-sum-ic lb-img-ok" onerror="lbImgRetry(this)">' : '') + TAME_KIND_W + '</span> '
-    + '<span style="opacity:.7;font-size:10px">' + lbMdiSvg('mdi-tent', 10) + ' ' + w.cont + '</span> '
-    + '<span style="opacity:.7;font-size:10px">' + lbMdiSvg('mdi-map-marker-multiple', 10) + ' ' + w.srv + '</span>'
-    + '</span>';
-  return '<div class="lb-breed-card" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;background:#1a1a24;border:1px solid ' + col + ';border-radius:8px;padding:6px 10px;margin-bottom:6px;font-size:12px">'
+  var it = bst.it;
+  var col = (typeof lbBpStageCol === 'function') ? lbBpStageCol(it.qidx) : '#b8b8b8';
+  var rows = []; try{ rows = lbStatRows(String(it['class'] || ''), it.stats || [], String(it.kind || '')); }catch(e){ rows = []; }
+  var dura = Number(it.durability) || 0;
+  var attr = (rows || []).map(function(s, i){
+    return '<span style="margin-right:6px;color:' + (i === 0 ? '#38bdf8' : '#999') + '">' + s.label + ' ' + s.txt + '</span>';
+  }).join('');
+  var canTame = (dura > 0 && perKill > 0) ? Math.floor(dura / perKill) : null;   // v5708：移到数据行集中展示
+  // v5705：rec 与装备榜 lbRankRow 同构 —— 缺 _rankItem 时 lbSettlementOf 会走 dinoId 分支（武器没有 dinoId）
+  //   ⇒ 聚落恒空；补上 _rankItem/tribeId/坐标 后再经 lbRealFacOf 换成设施真身，聚落与区域才显示
+  var rec = { server: bst.sv,
+              containerType: String(it.containerType || ''),
+              containerClass: String(it.containerClass || ''),
+              containerName: String(it.containerName || ''),
+              containerId: String(it.containerId || ''),
+              containerTribe: Number(it.containerTribe || 0),
+              containerTribeName: String(it.containerTribeName || ''),
+              containerOwnerPid: (it.containerOwnerPid !== undefined ? it.containerOwnerPid : undefined),
+              ownerTribeId: Number(it.containerTribe || 0),
+              tribeId: Number(it.containerTribe || 0),
+              playerName: String(it.playerName || ''),
+              containerX: Number(it.x) || 0, containerY: Number(it.y) || 0, containerZ: Number(it.z) || 0,
+              x: Number(it.x) || 0, y: Number(it.y) || 0, z: Number(it.z) || 0,
+              isEmpty: false, _rankItem: true };
+  try{
+    var _fr = (typeof lbRealFacOf === 'function') ? lbRealFacOf(rec) : null;
+    if (_fr){
+      rec.containerClass = String(_fr.containerClass || rec.containerClass);
+      if (_fr.containerName) rec.containerName = String(_fr.containerName);
+    }
+  }catch(e0){}
+  var owner = '';
+  try{ owner = lbOwnerTagMy(rec, { noEn: true }) || ''; }catch(e){ owner = ''; }
+  if (!owner){
+    var _sn = bst.sv;
+    try{ (LB.SERVERS || []).forEach(function(s){ if (s.abbr === bst.sv) _sn = s.name || s.abbr; }); }catch(e){}
+    owner = '<span style="color:#f59e0b">' + lbMdiSvg('mdi-map', 12) + ' ' + _sn + '</span>';
+  }
+  var rate = Number(it.rating) || 0;
+  return '<div class="lb-breed-card" style="background:#1a1a24;border:1px solid ' + col + ';border-radius:8px;padding:6px 10px;margin-bottom:6px;font-size:12px">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">'
     + '<div style="min-width:0">'
     + '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:' + col + ';margin-right:5px;vertical-align:1px"></span>'
-    + '<b style="color:#fff">' + w.zh + '</b>'
-    + ' <span style="background:#7c3aed33;border-radius:2px;padding:0 6px;color:#c4b5fd">评分 ' + Number(w.rating).toFixed(1) + '</span>'
+    + '<b style="color:#fff"' + tcPickAttr(wzh) + '>' + wzh + '</b>'
+    + (rate > 0 ? ' <span style="background:#7c3aed33;border-radius:2px;padding:0 6px;color:#c4b5fd">评分 ' + rate.toFixed(1) + '</span>' : '')
     + (attr ? '<br>' + attr : '')
     + '</div>'
     + '<div style="flex-shrink:0;font-size:11px;color:#999;text-align:right">' + owner + '</div>'
+    + '</div>'
+    // v5708（用户口径）：弹药 + 数据行与武器同框，数据行独立一行
+    + (subHtml ? ('<div style="margin-top:5px;padding-top:5px;border-top:1px solid #ffffff12">' + subHtml + '</div>') : '')
     + '</div>';
 }
 
+/* ===== v5720（用户口径）：物品「点位面包屑」=====
+   与「最优武器卡片右侧」**完全同源**（同一个 lbOwnerTagMy）：
+     🗺️地图图标 + 容器名 + ⛺聚落名 + 📍区域名
+   数据源：LB._cache.data.itemsByServer[sv].byCid[cid]（每容器内的物品数组）；
+   口径：只算**当前角色拥有**（lbItemOwnKeep，与数量统计 lbItemOwnIndex 同一套过滤）；
+   取「该物品**数量最多**的那个容器」。缓存键 = 数据版本 ts | 当前角色 pid。 */
+LB._itemWhereIdx = LB._itemWhereIdx || null;
+LB._itemWhereIdxKey = LB._itemWhereIdxKey || '';
+function lbItemWhereIndex(){
+  var ts = (LB._cache && LB._cache.ts) || 0;
+  var D = LB._cache && LB._cache.data;
+  var curPid = null; try{ curPid = lbCurPid(); }catch(e0){ curPid = null; }
+  var _ck = String(ts) + '|' + String(curPid || '');
+  if (LB._itemWhereIdx && LB._itemWhereIdxKey === _ck) return LB._itemWhereIdx;
+  var map = {};
+  var _ownCtx = null;
+  try{ _ownCtx = lbItemOwnCtx(); }catch(e1){ _ownCtx = null; }
+  if (D && D.itemsByServer){
+    Object.keys(D.itemsByServer).forEach(function(sv){
+      var ix = D.itemsByServer[sv] || {};
+      var bc = ix.byCid || {};
+      Object.keys(bc).forEach(function(cid){
+        var arr = bc[cid] || [];
+        if (!arr.length) return;
+        var cnt = {};
+        for (var i = 0; i < arr.length; i++){
+          var x = arr[i]; if (!x) continue;
+          try{ if (typeof lbIsEmptyItem === 'function' && lbIsEmptyItem(x)) continue; }catch(e){}
+          try{ if (typeof lbItemOwnKeep === 'function' && !lbItemOwnKeep(x, sv, _ownCtx)) continue; }catch(e){}
+          var cls = String(x['class'] || ''); if (!cls) continue;
+          var k = ''; try{ k = lbItemAggKey(cls); }catch(e2){ k = cls; }
+          if (!k) continue;
+          var _q = (Number(x.quantity) || 0);
+          if (_q <= 0) _q = 1;
+          if (!cnt[k]){ cnt[k] = { n: 0, it: x }; }
+          cnt[k].n += _q;
+        }
+        Object.keys(cnt).forEach(function(k){
+          var cur = map[k];
+          if (cur && cnt[k].n <= cur.n) return;
+          var rec = { n: cnt[k].n, sv: sv, cid: cid, it: cnt[k].it };
+          map[k] = rec;
+          // 别名（词典短键口径），与 lbItemOwnIndex 的 en: 归一保持同一套
+          var b = ''; try{ b = lbCanonBase((lbItemMeta(cnt[k].it['class']) || {}).base || ''); }catch(e3){ b = ''; }
+          if (b && b !== k){ var a = map[b]; if (!a || rec.n > a.n) map[b] = rec; }
+        });
+      });
+    });
+  }
+  LB._itemWhereIdx = map; LB._itemWhereIdxKey = _ck;
+  return map;
+}
+// 生成面包屑（另起一行、右对齐）；查不到容器 / 没有库存 ⇒ 返回空串（不造假）
+function tcItemWhereHtml(zh, inlineMode){
+  var cls = ''; try{ cls = lbItemClsByZh(zh) || ''; }catch(e){ cls = ''; }
+  if (!cls) return '';
+  var k = ''; try{ k = lbItemAggKey(cls) || ''; }catch(e2){ k = ''; }
+  if (!k) return '';
+  var idx = null; try{ idx = lbItemWhereIndex(); }catch(e3){ idx = null; }
+  var hit = idx && idx[k];
+  if (!hit || !hit.it) return '';
+  var it = hit.it;
+  var rec = { server: hit.sv,
+              containerType: String(it.containerType || ''),
+              containerClass: String(it.containerClass || ''),
+              containerName: String(it.containerName || ''),
+              containerId: String(hit.cid || it.containerId || ''),
+              containerTribe: Number(it.containerTribe || 0),
+              ownerTribeId: Number(it.containerTribe || 0),
+              tribeId: Number(it.containerTribe || 0),
+              playerName: String(it.playerName || ''),
+              containerX: Number(it.x) || 0, containerY: Number(it.y) || 0, containerZ: Number(it.z) || 0,
+              x: Number(it.x) || 0, y: Number(it.y) || 0, z: Number(it.z) || 0,
+              isEmpty: false, _rankItem: true };
+  // 与 tcWeaponCard 完全一致：先经 lbRealFacOf 换成设施真身，再交由 lbOwnerTagMy 出标签
+  try{
+    var fr = (typeof lbRealFacOf === 'function') ? lbRealFacOf(rec) : null;
+    if (fr){
+      rec.containerClass = String(fr.containerClass || rec.containerClass);
+      if (fr.containerName) rec.containerName = String(fr.containerName);
+    }
+  }catch(e4){}
+  var tag = '';
+  try{ tag = lbOwnerTagMy(rec, { noEn: true }) || ''; }catch(e5){ tag = ''; }
+  if (!tag) return '';
+  // v5730（用户口径）：原 title=面包屑全文与正文**完全一致**（冗余）⇒ 删除，不再显示浏览器原生 tooltip
+  // v5726：inlineMode = chip 内「同一行右对齐」版（不另起一行、上间距 0）；否则为行内「另起一行右对齐」版
+  if (inlineMode){
+    return '<span class="tc-where" style="margin-left:auto;display:inline-block;text-align:right;font-size:10px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:62%;opacity:.9;flex-shrink:1">' + tag + '</span>';
+  }
+  return '<span class="tc-where" style="flex:1 0 100%;display:block;text-align:right;font-size:10.5px;line-height:1.55;margin-top:0;opacity:.9">' + tag + '</span>';
+}
+// 有面包屑时容器需允许换行
+function tcWhereWrap(whereHtml, base){
+  if (!whereHtml) return '';
+  return ' style="' + (base || '') + 'flex-wrap:wrap"';
+}
+/* ===== v5717（用户口径）：wiki 内物品一律可点 → 关闭 wiki + 主页面选中该物品 =====
+   范式与 lbPickerSelect / 草稿恢复完全一致：LB.pickItem={kind,base} → LB.curClass='' →
+   lbRecordRecentItem → switchTab('latest') → lbView()。中文名走项目唯一源 lbItemClsByZh。 */
+function tcPickByZh(zh){
+  var z = String(zh == null ? '' : zh).trim();
+  if (!z) return;
+  var cls = '';
+  try{ cls = lbItemClsByZh(z) || ''; }catch(e){ cls = ''; }
+  if (!cls) return;                              // 项目物品表查不到 ⇒ 不响应（不制造假交互）
+  var kind = '', base = cls;
+  try{ var m = lbItemMeta(cls) || {}; kind = String(m.kind || ''); base = String(m.base || cls); }catch(e){}
+  try{ if (typeof lbWikiClose === 'function') lbWikiClose(); }catch(e){}
+  LB.pickItem = { kind: kind, base: base };
+  LB.curClass = '';
+  try{ if (typeof lbRecordRecentItem === 'function') lbRecordRecentItem(kind, base); }catch(e){}
+  try{ if (typeof switchTab === 'function') switchTab('latest'); }catch(e){}
+  try{ if (typeof lbView === 'function') lbView(); }catch(e){}
+  try{ if (typeof lbRenderBreedBar === 'function') lbRenderBreedBar(); }catch(e){}
+}
+// 生成 onclick 属性（中文名查不到物品类名时不返回任何属性 ⇒ 该处保持不可点）
+function tcPickAttr(zh){
+  var z = String(zh == null ? '' : zh).trim();
+  if (!z) return '';
+  var ok = false;
+  try{ ok = !!lbItemClsByZh(z); }catch(e){ ok = false; }
+  if (!ok) return '';
+  var esc = z.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+  // v5718：不带 title —— 目标元素常自带 title（如弹药品的"麻醉箭"），重复属性会让后者被忽略
+  return ' onclick="event.stopPropagation();tcPickByZh(\'' + esc + '\')"';
+}
 /* ===== tcAmmoChip ===== */
 function tcAmmoChip(key){
-  var a = TAME_AMMO[key] || { zh:key, ic:'' };
-  var inv = tcRoleInv(), g = inv[key] || { n:0, locs:[] };
+  var a = { zh: tcWZh(key), ic: '' };   // v5703：中文走项目源 lbItemZh（原 TAME_AMMO[key].zh 是 wiki_dex 旧值）
+  var inv = tcRoleInv(), g = inv[key] || { n:0, svc:0, locs:[] };
   // v76：优先按项目物品类名取图（item_zh 口径），回退 index.json 的 ic（再过分包）
-  var _ammoCls = { shock:'RefinedTranqDart', dart:'TranqDart', tranqspear:'TranqSpearBolt',
-                   tranqarrow:'TranqArrow', tekarrow:'PrimalItemAmmo_TekArrow',
-                   harpoonbolt:'TranqSpearBolt' }[key] || '';
+  var _ammoCls = { shock:'RefinedTranqDart', dart:'TranqDart',
+                   tranqspear:'TranqSpearBolt', tranqarrow:'ArrowTranq' }[key] || '';
   var _ammoIc = lbWikiResIcon(a.zh) || lbWikiIcCls(_ammoCls);   // v147：不再用 a.ic（index ic 外链）
   var ic = _ammoIc
     ? '<img src="' + _ammoIc + '" style="width:16px;height:16px;object-fit:contain" onerror="lbImgRetry(this)">'
     : '<span style="width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;color:#64748b;font-size:11px;flex-shrink:0">?</span>';
-  return '<span class="lb-hf-chip" title="' + a.zh + '">'
+  var _where2 = ''; try{ _where2 = tcItemWhereHtml(a.zh, true); }catch(e){ _where2 = ''; }
+  // v5726/v5727（用户口径）：弹药卡**自适应独占一行**（无论有无面包屑），面包屑与左侧信息**同一行**、贴右对齐（不另起一行）
+  // v5730（用户口径）：title=物品名 与正文完全一致（冗余）⇒ 删除
+  return '<span class="lb-hf-chip" style="width:100%;max-width:100%;overflow:hidden"' + tcPickAttr(a.zh) + '>'
     + ic
     + '<span style="color:#cbd5e1">' + a.zh + '</span>'
     + '<span style="color:#475569;font-size:10px">·</span>'
-    + '<span style="color:#94a3b8;font-size:11px">' + g.locs.length + '组</span>'
+    + '<span style="color:#94a3b8;font-size:11px">' + (g.svc || 0) + ' 服</span>'
     + '<span style="color:#475569;font-size:10px">·</span>'
-    + '<span style="color:#64748b">' + tcNum(g.n) + '</span>'
+    + (g.n > 0 ? ('<span style="color:#64748b">' + tcNum(g.n) + '</span>')
+               : '<span style="color:#f87171;font-weight:600">无库存</span>')   // v5709：库存 0 红标（组合不再被过滤）
+    + _where2
     + '</span>';
 }
 
 /* ===== tcToolsHtml ===== */
 function tcToolsHtml(r){
-  var pr = tcBestPair();
-  if(!pr.w || !pr.a) return '<div class="tc-adv">⚠️ 当前角色没有「武器 + 对应弹药」可用的击晕组合。</div>';
-  var torpor = (r && r.torpor) ? r.torpor : 0;                 // 满眩晕值（随物种+等级）
-  var perShot = pr.a.r.cb.torpor || 0;                          // 每发眩晕
-  var perKill = perShot > 0 ? Math.ceil(torpor / perShot) : 0;  // 单只所需发数
-  var inv = tcRoleInv()[pr.a.key] || { n:0 };
-  var amt = inv.n || 0;
-  var kills = perKill > 0 ? Math.floor(amt / perKill) : 0;
-  var tipLine = '<span style="font-size:11.5px;color:#8b93a7" title="' + TC_SHOT_NOTE + '">'
-    + '单只 ' + tcNum(perKill) + ' 发 · 现有 ' + tcNum(amt) + ' 发 ≈ 够训 ' + kills + ' 只'
-    + (kills === 0 && perKill > 0 ? '<b style="color:#f87171">（不够一只）</b>' : '')
-    + '</span>';
-  return tcWeaponCard(pr.w.key, perKill)
-    + '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:2px 0 4px">'
-    + tcAmmoChip(pr.a.key) + tipLine
-    + '</div>';
+  // v5707（用户口径）：不只给「效率最高」一个，而是三方案并排 —— 最快击晕 / 最少箭数 / 最低伤害
+  var pr = tcBestPair(r);
+  if(!pr) return '<div class="tc-adv" style="margin-bottom:6px">⚠️ 当前角色没有「武器 + 对应弹药」可用的击晕组合。</div>';
+  var wake = (r && r.wakeRate) ? r.wakeRate : 0;
+  var pool = (pr.list && pr.list.length) ? pr.list : [pr.best];
+  var byFast = pool.slice().sort(function(a,b){ return (b.perSec - a.perSec) || (a.shots - b.shots); });
+  var byFew  = pool.slice().sort(function(a,b){ return (a.shots - b.shots) || (b.perSec - a.perSec); });
+  var byLow  = pool.slice().sort(function(a,b){ return (a.totalDmg - b.totalDmg) || (b.perSec - a.perSec); });
+  var picks = [];
+  var addPick = function(tag, x){
+    if (!x) return;
+    for (var i = 0; i < picks.length; i++){
+      if (picks[i].x.cb.key === x.cb.key){
+        if (picks[i].tags.indexOf(tag) < 0) picks[i].tags.push(tag);
+        return;
+      }
+    }
+    picks.push({ x:x, tags:[tag] });
+  };
+  addPick('最快击晕', byFast[0]);
+  addPick('最少箭数', byFew[0]);
+  addPick('最低伤害', byLow[0]);
+
+  var out = '';
+  picks.forEach(function(pk){
+    var b = pk.x;
+    var stopSec = (wake > 0 && b.cb.torpor > 0) ? Math.round(b.cb.torpor / wake) : 0;
+    var kills = b.shots > 0 ? Math.floor((b.an || 0) / b.shots) : 0;
+    // v5711（插件 exe 2026-10-30 新字段）：`durabilityPct` = **当前耐久比例**（0~1，-1 = 该物品无耐久属性）。
+    //   旧字段 `durability` 源属性 `ItemDurability` 在存档里根本不存在（恒 0，全服实测 10 图 = 0 条），已弃用。
+    //   用户口径：**只显示百分比**，不推绝对值（存档无「最大耐久」字段，绝对值只能靠 stats 换算，属推算）。
+    //   但「够训几只」仍要用 上限 × 比例 才有意义 ⇒ 上限仍走 lbStatRows 取，仅在内部使用、不上屏。
+    //   🔴 v5710 教训：必须**先算再拼 line** —— var 提升会让「先拼后算」拿到 undefined ⇒ 整段静默不渲染。
+    var canT = null, duraV = 0, duraPct = -1;
+    try{
+      var _bst = tcBestWeaponInst(b.cb.w);
+      if (_bst){
+        var _p = _bst.it.durabilityPct;
+        if (typeof _p === 'number' && isFinite(_p) && _p >= 0) duraPct = _p;
+        var _rs = lbStatRows(String(_bst.it['class'] || ''), _bst.it.stats || [], String(_bst.it.kind || ''));
+        for (var _ri = 0; _ri < (_rs || []).length; _ri++){
+          if (_rs[_ri] && _rs[_ri].label === '耐久'){ duraV = Number(_rs[_ri].txt) || 0; break; }
+        }
+        // 蓝图为图纸、无真实耐久 ⇒ 不参与够训计算（插件限制：图纸 pct 恒 1.0）
+        if (!_bst.it.isBlueprint && duraPct >= 0 && duraV > 0 && b.shots > 0){
+          canT = Math.floor(duraV * duraPct / b.shots);
+        }
+      }
+    }catch(e){}
+    // v5728（用户口径）：原「射速 1.1s/发 · 单只 39 发 · 约 43s · 总伤害 … 」单行长文字可读性差
+    //   → 拆成 5 个简易徽章，同类信息放同一个徽章内；每箭可停改用 tcDur() 动态格式（125 -> 2m 5s）
+    var _bdg = function(k, v){
+      return '<span class="tc-bdg"><span class="tc-bdg-k">' + k + '</span><span>' + v + '</span></span>';
+    };
+    // v5730（用户口径）：最快击晕/最少箭数/最低伤害 由纯紫字一行改为**主题色徽章**，并排到徽章行最前面
+    var _tagHot = pk.tags.map(function(tg){ return '<span class="tc-bdg tc-bdg-hot">' + tg + '</span>'; }).join('');
+    var line = _tagHot
+      + _bdg('射击节奏', '射速 <b>' + b.rate.toFixed(1) + '</b>s/发 · 单只 <b>' + b.shots + '</b> 发 · 约 <b>'
+                        + tcDur(Math.round(b.shots * b.rate)) + '</b>')
+      + _bdg('伤害', '总伤 <b>' + tcNum(b.totalDmg) + '</b>'
+                    + (pr.hp > 0 ? (' / 血量 <b>' + tcNum(pr.hp) + '</b>') : ''))
+      + (stopSec > 0 ? _bdg('麻醉窗口', '每箭可停 <b>' + tcDur(stopSec) + '</b>') : '')
+      + (b.an > 0
+          ? _bdg('弹药', '<b>' + tcNum(b.an) + '</b> 发 ≈ 够训 <b>' + kills + '</b> 只'
+                        + (kills === 0 && b.shots > 0 ? '<b style="color:#f87171">（不够一只）</b>' : ''))
+          : _bdg('弹药', '<b style="color:#f87171">无库存</b>'))
+      // v5711（用户口径·B）：耐久只显示**百分比**（当前耐久比例，插件原生值，不推算绝对值）；
+      //   pct > 1 实测存在（最高 1.29）⇒ 数值不截断（否则误报成 100%）；-1/缺失 ⇒ 显示「—」不当 0% 处理
+      + (duraPct >= 0
+          ? _bdg('耐久', '<b>' + (duraPct * 100).toFixed(1) + '%</b>'
+                        + (canT !== null ? (' · 够训 <b>' + canT + '</b> 只') : ''))
+          : _bdg('耐久', '<b style="color:#888">—</b>'));
+    // v5731（用户口径）：射速口径 ⓘ 悬浮**没必要显示** ⇒ 移除图标，徽章行直接以标签徽章开头
+    var sub = '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px">' + tcAmmoChip(b.cb.a) + '</div>'
+            + '<div style="margin-top:5px;display:flex;flex-wrap:wrap;align-items:center;gap:5px">' + line + '</div>';
+    out += '<div style="margin-bottom:10px">'
+        + tcWeaponCard(b.cb.w, b.shots, sub)   // v5730：tags 已并入卡内徽章行，此处不再单列
+        + '</div>';
+  });
+
+  var warn = '';
+  if (pr.hp > 0 && pr.willKill){
+    warn = '<div class="tc-adv" style="margin-top:2px;border-color:#f8717166;background:#f871711a">'
+         + '⚠️ 可用组合的击晕总伤害都 ≥ 目标血量 <b>' + Math.round(pr.hp) + '</b> —— <b>会打死</b>。'
+         + '建议换伤害更低的弹药，或先提升武器品质。</div>';
+  } else if (pr.hp > 0 && pr.best.totalDmg >= pr.hp * 0.9){
+    warn = '<div class="tc-adv" style="margin-top:2px;border-color:#f59e0b66;background:#f59e0b1a">'
+         + '⚠️ 击晕总伤害 <b>' + Math.round(pr.best.totalDmg) + '</b> 已接近目标血量 <b>' + Math.round(pr.hp)
+         + '</b>，打晕即停，别补枪。</div>';
+  }
+  return out + warn;
 }
 
 /* ===== tcCalc ===== */
+/* ===== v5700：血之灵药（Sanguine Elixir）=====
+   官方口径（ark.wiki.gg/wiki/Sanguine_Elixir）：
+     · 使用后立即为任意生物的驯服进度 +30%（对婴儿则是留痕 +30%）
+     · 每只生物限用一次（打醒再打晕也不能再用）
+     · 4 小时腐坏，任何方式都无法延长；放快捷栏、看着生物使用
+     · 配方 200 × 血袋，制作 5 秒
+   ⇒ 进度 +30% = 剩余亲和度需求 ×0.7 ⇒ 口数/时间重算，效率按公式自然提高。 */
+/* v5701（用户口径）：驯服 tab 物品名统一「中文 + 英文」，英文小字浅色弱化 */
+function tcZhEn(zh, en){
+  var e = String(en || '').trim();
+  if (!e || !/[A-Za-z]/.test(e) || /[\u4e00-\u9fa5]/.test(e)) return String(zh || '');
+  return String(zh || '') + '<span style="opacity:.5;font-size:10px;font-weight:400;margin-left:4px">' + e + '</span>';
+}
+function tcElixirOwn(){
+  var a = 0, b = 0;
+  try{ a = lbItemOwnCnt('PrimalItem_SanguineElixir') | 0; }catch(e){}
+  try{ b = lbItemOwnCnt('Sanguine_Elixir') | 0; }catch(e){}
+  return Math.max(a, b);
+}
+/* ===== v5716：部落塔（Tribe Tower）驯服速度加成 =====
+   插件口径（报告 WorldProbe_部落塔加成_前端对接_20261030 §5）：
+     · 每真实天 +1% 驯服速度，20 天封顶 +20%，再乘 TribeTowerBonusMultiplier（本站 M=2 ⇒ 上限 +40%）
+     · 只对**塔所属部落成员**生效；塔必须处于激活中（towerAct>0 且 towerDeact=-1000）
+     · 数据源：存档 facilities（v5714 透传）+ 后端 /api/world_clock 逆推世界时钟
+   驯服 tab 固定按孤岛服倍率算（TC_SP 来源 = Isl GUS）⇒ 此处同样取 Isl 的塔 */
+LB._tcTwAsked = LB._tcTwAsked || {};     // v5718：按服记录（sv -> 1），防重复触发时钟加载
+// 单座塔的计算结果（不读 UI，纯数据）
+function tcTowerCalc(w){
+  var sv = String((w && w.sv) || '');
+  var rr = (w && w._rec) || {};
+  var act = Number(rr.towerAct) || 0;
+  var deact = (rr.towerDeact === undefined || rr.towerDeact === null) ? -1000 : Number(rr.towerDeact);
+  var out = { w: w, sv: sv, active: (act > 0 && deact === -1000), days: 0, ready: false, bs: null, tribe: '', act: act };
+  try{
+    var tb = ((LB._cache && LB._cache.data && LB._cache.data.tribesByServer) || {})[sv] || {};
+    var tt = tb[String(rr.containerTribe || rr.ownerTribeId || '')];
+    if (tt) out.tribe = String(tt.tribeName || tt.name || '');
+  }catch(e){}
+  if (out.active){
+    var clk = LB._towerClock[sv] && LB._towerClock[sv].d;
+    if (clk && clk.ok && typeof clk.fileWorldTime === 'number'){
+      var dd = (clk.fileWorldTime - act) / 86400;
+      if (dd >= 0 && dd <= 5000){
+        out.days = dd;
+        out.bs = lbTowerBonus(dd, lbTowerMult(sv));
+        out.ready = true;
+      }
+    }
+  }
+  return out;
+}
+// 全部塔（排序：本页服务器孤岛优先 → 激活优先 → 天数降序）
+function tcTowerRows(){
+  var list = [];
+  try{ list = (typeof lbMaintTribeTowers === 'function') ? lbMaintTribeTowers() : []; }catch(e){ list = []; }
+  var rows = list.map(function(w){ return tcTowerCalc(w); });
+  rows.sort(function(a, b){
+    var sa = (a.sv === 'Isl') ? 0 : 1, sb = (b.sv === 'Isl') ? 0 : 1;
+    if (sa !== sb) return sa - sb;
+    if (a.active !== b.active) return a.active ? -1 : 1;
+    return (b.days || 0) - (a.days || 0);
+  });
+  return rows;
+}
+// 当前页（孤岛）那条 —— 保留给其它模块调用
+function tcTowerTame(){
+  var rows = tcTowerRows();
+  var cur = null;
+  for (var i = 0; i < rows.length; i++){ if (rows[i].sv === 'Isl'){ cur = rows[i]; break; } }
+  var out = { sv: 'Isl', active: false, pct: 0, days: 0, tribe: '', icon: '', ready: false, all: rows };
+  if (!cur) return out;
+  out.active = cur.active; out.days = cur.days; out.ready = cur.ready; out.tribe = cur.tribe;
+  out.pct = (cur.bs && cur.bs.tame) ? cur.bs.tame : 0;
+  out.icon = tcTowerIcon(cur.w && cur.w.cls);
+  return out;
+}
+function tcTowerHtml(r){
+  var el = document.getElementById('tcTower');
+  if (!el) return;
+  var rows = tcTowerRows();
+  // 世界时钟：对「已激活但天数未知」的服各触发一次（TTL 3 分钟 + 按服记账，防 tcCalc 递归）
+  var need = rows.filter(function(x){ return x.active && !x.ready && !LB._tcTwAsked[x.sv]; });
+  if (need.length){
+    need.forEach(function(x){ LB._tcTwAsked[x.sv] = 1; });
+    var _i = 0;
+    (function _next(){
+      if (_i >= need.length){ try{ tcCalc(); }catch(e){} return; }
+      var _sv = need[_i++].sv;
+      try{ lbMaintTowerLoad(_sv, _next); }catch(e){ _next(); }
+    })();
+  }
+  var cur = null;
+  for (var k = 0; k < rows.length; k++){ if (rows[k].sv === 'Isl'){ cur = rows[k]; break; } }
+  var _ico = tcTowerIcon(cur && cur.w ? cur.w.cls : '');
+  var _stTxt, _stCls;
+  if (!cur){ _stTxt = '此服无塔'; _stCls = 'tc-no'; }
+  else if (!cur.active){ _stTxt = '无激活塔'; _stCls = 'tc-no'; }
+  else if (!cur.ready){ _stTxt = '计算中'; _stCls = 'tc-ok'; }
+  else { _stTxt = '+ ' + tcNum(cur.bs.tame) + '%'; _stCls = 'tc-ok'; }
+  var h = '<div class="tc-own-r">'
+        + (_ico ? ('<img src="' + _ico + '" referrerpolicy="no-referrer" onerror="lbImgRetry(this)">') : '')
+        + '<span class="tc-own-n">' + tcZhEn('部落塔', 'Tribe Tower') + '</span>'
+        // v5733（用户口径）：不显示所属部落
+        + '<span class="' + _stCls + '">' + _stTxt + '</span></div>';
+  var sp0 = lbTameSpeedEnsure() || 0;
+  if (cur && cur.active && cur.ready && cur.bs && cur.bs.tame > 0 && sp0 > 0 && r && r.best){
+    var r2 = null;
+    try{ r2 = tcRows(sp0 * (1 + cur.bs.tame / 100)); }catch(e){ r2 = null; }
+    if (r2 && r2.best){
+      var b0 = r.best, b1 = r2.best;
+      h += '<div class="tc-note">应用到正在驯服的生物 —— 实际倍率 <b>' + tcNum(sp0) + '×</b> × (1 + '
+         + tcNum(cur.bs.tame) + '%) = <b style="color:#4ade80">'
+         + (Math.round(sp0 * (1 + cur.bs.tame / 100) * 100) / 100) + '×</b></div>';
+      h += '<table class="tc-tb" style="margin-top:8px"><thead><tr><th>项目</th>'
+         + '<th class="num">无塔加成</th><th class="num">有塔 +' + tcNum(cur.bs.tame) + '%</th><th class="num">少/多</th></tr></thead><tbody>'
+         + '<tr><td class="ov-k">' + lbAttr(b0.zh) + ' 口数</td>'
+         + '<td class="num">×' + tcNum(b0.qty) + '</td>'
+         + '<td class="num" style="color:#4ade80">×' + tcNum(b1.qty) + '</td>'
+         + '<td class="num">-' + tcNum(Math.max(0, b0.qty - b1.qty)) + '</td></tr>'
+         + '<tr><td class="ov-k">驯服时间</td>'
+         + '<td class="num">' + tcDur(b0.time) + '</td>'
+         + '<td class="num" style="color:#4ade80">' + tcDur(b1.time) + '</td>'
+         + '<td class="num">-' + tcDur(Math.max(0, b0.time - b1.time)) + '</td></tr>'
+         + '<tr><td class="ov-k">驯服效率</td>'
+         + '<td class="num">' + tcPct(b0.eff) + '%</td>'
+         + '<td class="num" style="color:#4ade80">' + tcPct(b1.eff) + '%</td>'
+         + '<td class="num">+' + tcPct(Math.max(0, b1.eff - b0.eff)) + '%</td></tr>'
+         + '<tr><td class="ov-k">驯服后等级</td>'
+         + '<td class="num">' + tcNum(b0.tlv) + '</td>'
+         + '<td class="num" style="color:#4ade80">' + tcNum(b1.tlv) + '</td>'
+         + '<td class="num">+' + tcNum(Math.max(0, b1.tlv - b0.tlv)) + '</td></tr>'
+         + '</tbody></table>';
+    }
+  } else if (cur && cur.active && !cur.ready){
+    h += '<div class="tc-note">部落塔已激活，正在读取世界时钟以计算天数…</div>';
+  } else if (cur && cur.active && cur.ready && cur.bs && !(cur.bs.tame > 0)){
+    h += '<div class="tc-note">部落塔已激活，但激活时长不足 1 天，加成尚未生效（每真实天 +1%）。</div>';
+  } else {
+    h += '<div class="tc-note">没有<b>你部落</b>的激活部落塔 —— 激活后驯服速度最高 <b>+40%</b>。</div>';
+  }
+  if (rows.length){
+    var _svName = function(svv){ try{ return (typeof LB.servName === 'function' && LB.servName(svv)) || svv; }catch(e){ return svv; } };
+    var _actN = 0; try{ _actN = rows.filter(function(x){ return x.active; }).length; }catch(e2){ _actN = 0; }
+    // v5726（用户口径·默认折叠）：折叠按钮复用「物品 wiki 获取」补给箱同款（details.lb-cfg-fold + .lb-fold-tri 三角）
+    h += '<details class="lb-cfg-fold" style="margin-top:10px">'
+       + '<summary class="lb-cfg-fold-sum" style="cursor:pointer;list-style:none;font-size:11px;color:#ccc;background:#1a1a24;border:1px solid #2a2a3a;border-radius:6px;padding:4px 8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+       + '<span class="lb-fold-tri"></span>'
+       + '<span style="color:#e2e8f0;font-weight:600;font-size:12px">你的全部部落塔</span>'
+       + '<span style="color:#64748b">' + rows.length + ' 座 · ' + _actN + ' 座激活</span>'
+       + '</summary>'
+       + '<div style="display:flex;flex-direction:column;gap:5px;margin-top:6px">';
+    rows.forEach(function(x){
+      var ic2 = tcTowerIcon(x.w && x.w.cls);
+      var dtxt = x.ready ? (x.days >= 100 ? String(Math.floor(x.days)) : String(Math.round(x.days * 10) / 10)) : '';
+      h += '<div style="display:flex;align-items:center;gap:7px;background:#ffffff05;border:1px solid #ffffff0d;border-radius:6px;padding:5px 9px;font-size:12px;flex-wrap:wrap">'
+         + (ic2 ? ('<img src="' + ic2 + '" style="width:20px;height:20px;object-fit:contain;flex-shrink:0" onerror="lbImgRetry(this)">') : '')
+         + '<span style="color:#94a3b8;font-size:11px;flex:0 0 auto">' + lbAttr(_svName(x.sv)) + '</span>'
+         + '<span style="color:#e2e8f0;flex:0 0 auto">' + lbAttr(x.tribe || '（未知部落）') + '</span>'
+         + '<span style="flex:1;min-width:6px"></span>'
+         + (x.active
+             ? (x.ready
+                 ? ('<span style="color:#4ade80;font-size:11px">激活 ' + dtxt + ' 天</span>'
+                    + '<span style="color:#a78bfa;font-size:11px;margin-left:6px">驯服 +' + tcNum(x.bs.tame) + '%</span>'
+                    + '<span style="color:#38bdf8;font-size:11px;margin-left:6px">经验 +' + tcNum(x.bs.xp) + '%</span>'
+                    + '<span style="color:#f59e0b;font-size:11px;margin-left:6px">元素 +' + tcNum(x.bs.elem) + '%</span>')
+                 : '<span style="color:#f59e0b;font-size:11px">激活中 · 天数读取中</span>')
+             : '<span style="color:#64748b;font-size:11px">未激活</span>')
+         + '</div>';
+    });
+    h += '</div></details>';
+  } else {
+    h += '<div class="tc-note" style="margin-top:8px">当前角色名下没有部落塔。</div>';
+  }
+  h += '<details class="lb-cfg-fold" style="margin-top:8px">'
+     + '<summary class="lb-cfg-fold-sum" style="cursor:pointer;list-style:none;font-size:11px;color:#ccc;background:#1a1a24;border:1px solid #2a2a3a;border-radius:6px;padding:4px 8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+     + '<span class="lb-fold-tri"></span>'
+     + '<span style="color:#e2e8f0;font-weight:600;font-size:12px">说明</span>'
+     + '<span style="color:#64748b">加成规则 · 生效条件</span>'
+     + '</summary>'
+     + '<ul class="ov-tips" style="margin-top:6px">'
+     + '<li>每<b>真实天</b> +1%，<b>20 天封顶 +20%</b>；本站倍率 ×2 ⇒ 驯服/经验最高 <b>+40%</b>，元素每 30 天 +6%×2。</li>'
+     + '<li>只对<b>塔所属部落的成员</b>生效 —— 别人部落的塔对你无效。</li>'
+     + '<li>需塔处于<b>激活中</b>（放入元素并启动）；停用后加成归零。</li>'
+     + '</ul></details>';
+  el.innerHTML = h;
+}
+function tcElixirHtml(r){
+  var own = tcElixirOwn(), _ic = '';
+  try{ _ic = lbWikiResIcon('血之灵药') || ''; }catch(e){ _ic = ''; }
+  var _wE = ''; try{ _wE = tcItemWhereHtml('血之灵药'); }catch(e){ _wE = ''; }
+  var h = '<div class="tc-own-r"' + tcPickAttr('血之灵药') + tcWhereWrap(_wE) + '>'
+    + (_ic ? ('<img src="' + _ic + '" referrerpolicy="no-referrer" onerror="lbImgRetry(this)">')
+           : '')
+    + '<span class="tc-own-n">' + tcZhEn('血之灵药', 'Sanguine Elixir') + '</span>'
+    + '<span class="tc-own-q">我有 <b style="color:#e2e8f0">' + own + '</b> 个</span>'
+    + '<span class="' + (own > 0 ? 'tc-ok' : 'tc-no') + '">'
+    + (own > 0 ? (tcIco('check') + '可用') : (tcIco('close') + '暂无库存')) + '</span>'
+    + _wE + '</div>';
+  if (r && r.best && (+r.best.aff || 0) > 0 && r.A > 0){
+    var b = r.best, aff = +b.aff || 0, sp = 0;
+    try{ sp = lbTameSpeedEnsure() || 0; }catch(e){ sp = 0; }
+    var ineff = 1;
+    try{ ineff = +(((TAME[CUR] || {}).setup || {}).ineff) || 1; }catch(e){ ineff = 1; }
+    if (sp > 0 && aff > 0){
+      var A2 = r.A * 0.7;
+      var qty2 = Math.ceil(A2 / (aff * 4 * sp));
+      var time2 = (qty2 > 0 && b.itv > 0) ? Math.floor(qty2 * b.itv + 1) : 0;
+      var eff2 = (qty2 > 0) ? (1 / (1 + ineff * qty2 / (aff * 4))) * 100 : 0;
+      var plus2 = Math.floor(r.lv * eff2 / 100 * 0.5);
+      // v5709（用户口径）：口数已够（灵药不减少口数）⇒ **不渲染对比表格**，只留一句说明
+      if (qty2 >= b.qty) {
+        h += '<div class="tc-note">本档只需 ' + b.qty + ' 口，灵药不减少口数（进度已够，喂满即完成）。</div>';
+      } else {
+        h += '<table class="tc-tb" style="margin-top:8px"><thead><tr><th>项目</th>'
+           + '<th class="num">不用灵药</th><th class="num">用 1 个后</th><th class="num">少/多</th></tr></thead><tbody>'
+           + '<tr><td class="ov-k">' + b.zh + ' 口数</td>'
+           + '<td class="num">×' + tcNum(b.qty) + '</td>'
+           + '<td class="num" style="color:#4ade80">×' + tcNum(qty2) + '</td>'
+           + '<td class="num">-' + tcNum(Math.max(0, b.qty - qty2)) + '</td></tr>'
+           + '<tr><td class="ov-k">驯服时间</td>'
+           + '<td class="num">' + tcDur(b.time) + '</td>'
+           + '<td class="num" style="color:#4ade80">' + tcDur(time2) + '</td>'
+           + '<td class="num">-' + tcDur(Math.max(0, b.time - time2)) + '</td></tr>'
+           + '<tr><td class="ov-k">驯服效率</td>'
+           + '<td class="num">' + tcPct(b.eff) + '%</td>'
+           + '<td class="num" style="color:#4ade80">' + tcPct(eff2) + '%</td>'
+           + '<td class="num">+' + tcPct(Math.max(0, eff2 - b.eff)) + '%</td></tr>'
+           + '<tr><td class="ov-k">驯服后等级</td>'
+           + '<td class="num">' + tcNum(b.tlv) + '</td>'
+           + '<td class="num" style="color:#4ade80">' + tcNum(r.lv + plus2) + '</td>'
+           + '<td class="num">+' + tcNum(Math.max(0, plus2 - b.plus)) + '</td></tr>'
+           + '</tbody></table>';
+      }
+    }
+  }
+  h += '<details class="lb-cfg-fold" style="margin-top:8px">'
+    + '<summary class="lb-cfg-fold-sum" style="cursor:pointer;list-style:none;font-size:11px;color:#ccc;background:#1a1a24;border:1px solid #2a2a3a;border-radius:6px;padding:4px 8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+    + '<span class="lb-fold-tri"></span>'
+    + '<span style="color:#e2e8f0;font-weight:600;font-size:12px">说明</span>'
+    + '<span style="color:#64748b">效果 · 用法 · 腐坏 · 配方</span>'
+    + '</summary>'
+    + '<ul class="ov-tips" style="margin-top:6px">'
+    + '<li>对正在驯服的生物用一次，驯服进度立即 <b>+30%</b>（对婴儿则是留痕 +30%）。</li>'
+    + '<li>每只生物<b>限用一次</b> —— 打醒再打晕也不能再用。</li>'
+    + '<li>腐坏 <b>4 小时</b>，放背包或保鲜箱都无法延长。</li>'
+    + '<li>用法：放快捷栏，走到生物跟前<b>看着它</b>使用；配方 <b>200 × 血袋</b>，制作 5 秒。</li>'
+    + '</ul></details>';
+  var el = document.getElementById('tcElixir');
+  if (el) el.innerHTML = h;
+}
+
 function tcCalc(){
   var r = tcRows();
   if(!r){
@@ -50385,7 +51308,7 @@ function tcCalc(){
         _put('<table class="tc-tb"><thead><tr><th>食物</th><th>口数</th>'
           + '<th>驯服时间</th><th>驯服后等级</th></tr></thead><tbody>'
           + _tf.map(function(x){
-              return '<tr><th>' + tcGhChip(x.zh, '', x.best ? '最佳' : '') + '</th>'
+              return '<tr><th>' + tcGhChip(x.zh, '', x.best ? '最佳' : '', true) + '</th>'
                 + '<td class="num">×' + (x.qty || '-') + '</td>'
                 + '<td class="num">' + (x.dur || '-') + '</td>'
                 + '<td class="num">' + (x.lvl ? ('+' + x.lvl) : '-') + '</td></tr>';
@@ -50394,7 +51317,7 @@ function tcCalc(){
           + '食物效率数据暂缺，故未按目标等级重算。</div>');
       } else if (_dl.length) {
         _put('<div style="display:flex;flex-wrap:wrap;gap:6px">'
-          + _dl.map(function(zh){ return tcGhChip(zh, '', ''); }).join('')
+          + _dl.map(function(zh){ return tcGhChip(zh, '', '', true); }).join('')
           + '</div><div class="tc-adv" style="margin-top:8px">驯服食物：<b>'
           + _dl.map(function(zh){ return lbWikiZhName(zh) || zh; }).join('</b> · <b>') + '</b>。效率 / 口数数据暂缺，故不计算耗量与时间。</div>');
       } else {
@@ -50442,42 +51365,51 @@ function tcCalc(){
     if (_ta) _ta.innerHTML = '已知参数：所需爱意值 <b>' + (function(){ try { return tcNum((TAME[CUR]||{}).setup.req); } catch(e){ return '-'; } })()
       + '</b>，爱意值每级递增 <b>' + (function(){ try { return tcNum((TAME[CUR]||{}).setup.per_level); } catch(e){ return '-'; } })()
       + '</b>，驯服不效率 <b>' + (function(){ try { return tcPct((TAME[CUR]||{}).setup.ineff); } catch(e){ return '-'; } })() + '%</b>。';
+    tcElixirHtml(null);
     return;
   }
   var tile = tcTile;
-  var h = tile('最优食物', b.zh, '效率 ' + tcPct(b.eff) + '%', true)
-        + tile('需要数量', '×' + tcNum(b.qty), '喂食间隔 ' + tcDur(b.itv), true)
+  // v5730（用户口径）：最优食物 + 需要数量 合并为一张卡
+  // v5732（用户口径）：副行内容**各自另起一行**（不是自动折行）
+  var h = tile('最优食物', b.zh + ' ×' + tcNum(b.qty),
+               '效率 ' + tcPct(b.eff) + '%<br>喂食间隔 ' + tcDur(b.itv), true)
         + tile('驯服时间', tcDur(b.time), '共 ' + b.qty + ' 口')
-        + tile('眩晕值', tcNum(r.torpor), '满晕 · 每秒 -' + (Math.round(r.wakeRate * 100) / 100) + '，' + tcDur(r.torpor / (r.wakeRate || 1)) + '后醒来')
+        + tile('眩晕值', tcNum(r.torpor),
+               '满晕 · 每秒 -' + (Math.round(r.wakeRate * 100) / 100) + '<br>' + tcDur(r.torpor / (r.wakeRate || 1)) + '后醒来')
         + tile('驯服后等级', String(b.tlv), '+' + b.plus + '（野生 ' + r.lv + '）')
         + tile('升级后最高', String(b.tlv + Math.floor(r.lv * 73 / 150)), '再 +' + Math.floor(r.lv * 73 / 150) + ' 级')
         + (r.narc > 0
             ? tile('需补麻醉药', '≈' + tcNum(r.narc) + ' 支',
-                   '满晕 ' + tcNum(r.torpor) + ' · 驯服期 -' + tcNum(r.wakeTotal) + ' · 缺 ' + tcNum(r.wakeTotal - r.torpor), true)
+                   '满晕 ' + tcNum(r.torpor) + '<br>驯服期 -' + tcNum(r.wakeTotal) + '<br>缺 ' + tcNum(r.wakeTotal - r.torpor), true)
             : tile('需补麻醉药', '无需补充',
-                   '满晕 ' + tcNum(r.torpor) + ' · 驯服期 -' + tcNum(r.wakeTotal) + ' · 剩 ' + tcNum(r.torpor - r.wakeTotal)));
+                   '满晕 ' + tcNum(r.torpor) + '<br>驯服期 -' + tcNum(r.wakeTotal) + '<br>剩 ' + tcNum(r.torpor - r.wakeTotal)));
   document.getElementById('tcTiles').innerHTML = h;
 
   // ② 我的库存
   var own = '';
-  var addOwn = function(en, name, need, have, icon){
+  var addOwn = function(en, name, need, have, icon, pickZh){
     var ok = have >= need;
-    own += '<div class="tc-own-r">' + tcIconHtml(en, icon)
+    var _w = ''; try{ _w = tcItemWhereHtml(pickZh || ''); }catch(e){ _w = ''; }
+    own += '<div class="tc-own-r"' + tcPickAttr(pickZh || '') + tcWhereWrap(_w) + '>' + tcIconHtml(en, icon)
       + '<span class="tc-own-n">' + name + '</span>'
       + '<span class="tc-own-q">需要 <b style="color:#e2e8f0">' + tcNum(need) + '</b> · 我有 ' + tcNum(have) + '</span>'
-      + '<span class="' + (ok ? 'tc-ok' : 'tc-no') + '">' + (ok ? tcIco('check') + '够（余 ' + tcNum(have - need) + '）' : tcIco('close') + '缺 ' + tcNum(need - have)) + '</span></div>';
+      + '<span class="' + (ok ? 'tc-ok' : 'tc-no') + '">' + (ok ? tcIco('check') + '够（余 ' + tcNum(have - need) + '）' : tcIco('close') + '缺 ' + tcNum(need - have)) + '</span>'
+      + _w + '</div>';
   };
-  addOwn(b.en, b.zh, b.qty, b.own, b.icon);
+  addOwn(b.en, tcZhEn(b.zh, b.en), b.qty, b.own, b.icon, b.zh);
+  // v5733（用户口径）：食物对照折叠块挂在「最优食物行」下方（位于麻醉药等非驯服度项之上）
+  own += '<div id="tcFoodFold"></div>';
   if(r.narc > 0){
-    addOwn('麻醉药 Narcotic（驯服中）', r.narc, lbTameOwn('Narcotic'), lbWikiIcCls(lbItemClsByZh('麻醉药')));
+    addOwn('Narcotic', tcZhEn('麻醉药（驯服中）', 'Narcotic'), r.narc, lbTameOwn('麻醉药'), lbWikiIcCls(lbItemClsByZh('麻醉药')), '麻醉药');
   } else {
-    own += '<div class="tc-own-r"><img src="' + lbWikiResIcon('麻醉药') + '" referrerpolicy="no-referrer" onerror="lbImgRetry(this)">'
-      + '<span class="tc-own-n">麻醉药 Narcotic</span>'
+    var _wN = ''; try{ _wN = tcItemWhereHtml('麻醉药'); }catch(e2){ _wN = ''; }
+    own += '<div class="tc-own-r"' + tcPickAttr('麻醉药') + tcWhereWrap(_wN) + '><img src="' + lbWikiResIcon('麻醉药') + '" referrerpolicy="no-referrer" onerror="lbImgRetry(this)">'
+      + '<span class="tc-own-n">' + tcZhEn('麻醉药', 'Narcotic') + '</span>'
       + '<span class="tc-own-q">满晕 ' + tcNum(r.torpor) + ' · 驯服期 -' + tcNum(r.wakeTotal) + '</span>'
-      + '<span class="tc-ok">' + tcIco('check') + '无需补充</span></div>';
+      + '<span class="tc-ok">' + tcIco('check') + '无需补充</span>'
+      + _wN + '</div>';
   }
-  var alt = r.list.filter(function(x){ return x.en !== b.en; }).slice(0, 3);
-  alt.forEach(function(x){ addOwn(x.en, x.zh + '（替代）', x.qty, x.own, x.icon); });
+  // v5733（用户口径）：不显示「（替代）」食物行
   document.getElementById('tcOwn').innerHTML = own;
   document.getElementById('tcTool').innerHTML = tcToolsHtml(r);
 
@@ -50489,7 +51421,7 @@ function tcCalc(){
     adv += '<div class="warn">⚠️ 最优食物 <b>' + b.zh + '</b> 库存不足：需 ' + tcNum(b.qty) + '，我有 ' + tcNum(b.own) + '，<b>缺 ' + tcNum(Math.max(0, b.qty - b.own)) + '</b>。</div>';
   }
   if(r.narc > 0){
-    var _nO = lbTameOwn('Narcotic');
+    var _nO = lbTameOwn('麻醉药');
     adv += '<div>· 麻醉药：驯服期间需补 <b>' + tcNum(r.narc) + ' 支</b>，我有 ' + tcNum(_nO)
         + (r.narc > _nO ? '，<b class="warn">缺 ' + tcNum(r.narc - _nO) + '</b>' : '，<b>够</b>') + '。</div>';
   } else {
@@ -50500,9 +51432,7 @@ function tcCalc(){
       + '）：麻醉镖 ≈' + tcNum(r.narcDart) + ' 发 / 麻醉药 ≈' + tcNum(r.narcStun)
       + ' 支 —— 属击晕手段，不算驯服消耗。</div>';
   adv += '<div>· 时间：约 <b>' + tcDur(b.time) + '</b>（' + b.qty + ' 口 × ' + tcDur(b.itv) + '）；驯服后 <b>' + b.tlv + ' 级</b>（+' + b.plus + '）。</div>';
-  var myN = -1, myLv = -1;   // v125：项目无「我的某物种数量」接口，改为未知
-  adv += '<div>· 你已有同种 <b>' + myN + ' 只</b>' + (myLv ? '（最高 Lv.' + myLv + (b.tlv >= myLv ? '，本只<b>可超越</b>' : '，本只持平/略低') + '）' : '')
-      + '（演示值；正式版取 <code>lbCollectSettleMembers()</code> + <code>lbIsPlayerRec()</code> 的当前角色生物）。</div>';
+  // v5728（用户口径）：「同种生物」建议无意义，整段移除
   document.getElementById('tcAdv').innerHTML = adv;
 
   // 食物表
@@ -50512,7 +51442,8 @@ function tcCalc(){
     var isBest = (x.en === b.en);
     var ok = x.own >= x.qty;
     tb += '<tr class="' + (isBest ? 'on' : '') + '">'
-      + '<td>' + tcIconHtml(x.en, x.icon) + x.zh + '</td>'
+      // v5729（用户口径）：「食物对照」表内无需点位面包屑 —— 整表只看食物/数量/时间/效率
+      + '<td' + tcPickAttr(x.zh) + '>' + tcIconHtml(x.en, x.icon) + tcZhEn(x.zh, x.en) + '</td>'
       + '<td class="num">×' + tcNum(x.qty) + '</td>'
       + '<td class="num">' + tcDur(x.time) + '</td>'
       + '<td class="num">' + tcPct(x.eff) + '%</td>'
@@ -50520,7 +51451,26 @@ function tcCalc(){
       + '<td class="num">' + tcNum(x.own) + '</td>'
       + '<td class="' + (ok ? 'tc-ok' : 'tc-no') + '">' + (ok ? tcIco('check') + '够' : tcIco('close') + '缺 ' + tcNum(x.qty - x.own)) + '</td></tr>';
   });
-  document.getElementById('tcFood').innerHTML = tb + '</tbody>';
+  // v5733（用户口径）：食物对照整块折叠，挂到「③ 你现在有多少」最优食物行下方；默认收起
+  var _fdEl = document.getElementById('tcFoodFold');
+  if (_fdEl){
+    var _sumSty = 'cursor:pointer;list-style:none;font-size:11px;color:#ccc;background:#1a1a24;border:1px solid #2a2a3a;border-radius:6px;padding:4px 8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap';
+    _fdEl.innerHTML = '<details class="lb-cfg-fold" style="margin:2px 0 0">'
+      + '<summary class="lb-cfg-fold-sum" style="' + _sumSty + '">'
+      + '<span class="lb-fold-tri"></span>'
+      + '<span style="color:#e2e8f0;font-weight:600;font-size:12px">食物对照</span>'
+      + '<span style="color:#64748b">全部 ' + ((r.list || []).length) + ' 种 · 按我的库存标记</span>'
+      + '</summary>'
+      + '<div style="max-height:340px;overflow:auto;border:1px solid #22222e;border-radius:8px;margin-top:6px">'
+      + '<table class="tc-tb" id="tcFood"></table></div></details>';
+  }
+  var _tfEl = document.getElementById('tcFood');
+  if (_tfEl) _tfEl.innerHTML = tb + '</tbody>';
+
+  // v5716：部落塔（驯服速度加成 + 对比）
+  tcTowerHtml(r);
+  // v5700：血之灵药（库存 + 使用前后对比）
+  tcElixirHtml(r);
 }
 
 /* 第二批新增数据块（原写法 var X = WIKI_DEX.X，由 lbWikiBind2 赋值）*/
@@ -50594,14 +51544,17 @@ function tcGhIco(url, sz){
 }
 
 /* ===== tcGhChip ===== */
-function tcGhChip(zh, ic, tail){
+function tcGhChip(zh, ic, tail, noWhere){
   // v52：用正式项目的 .lb-hf-chip（不再自编圆角矩形）
   // v130：文字 + 图标全走项目表（lbWikiZhName / lbWikiResIc），不再直出 wiki 原名
+  // v5728（用户口径）：noWhere=true 时不显示点位面包屑（食物对照用）
   var _nm = lbWikiZhName(zh) || zh;
   var _u = lbWikiResIcon(zh) || lbWikiResIcon(_nm);     // v147：只走项目链，ic 参数已废弃（保留兼容但不使用）
-  return '<span class="lb-hf-chip">'
+  var _w = ''; if (!noWhere){ try{ _w = tcItemWhereHtml(_nm); }catch(e){ _w = ''; } }
+  return '<span class="lb-hf-chip"' + (_w ? ' style="flex-wrap:wrap;align-content:flex-start;align-items:center;height:auto;min-height:28px;padding:4px 8px;overflow:visible"' : '') + tcPickAttr(_nm) + '>'
     + (_u ? tcGhIco(_u, 16) : '') + '<span>' + _nm + '</span>'
     + (tail ? '<span style="color:#4ade80">' + tail + '</span>' : '')
+    + _w
     + '</span>';
 }
 
@@ -51413,7 +52366,6 @@ function renderAbilTab(){
   }
 
   // v5695（用户口径「4 个技能 这个无需显示」）：徽章与下方「🎬 技能演示（N 个）」重复，整块删除
-
 
   // ① 技能一览（技能 / 操作键 / 基础伤害 / 特殊倍率）
   if(d.skills && d.skills.length){
@@ -52588,6 +53540,7 @@ function lbWikiRender(){
      · 进度 = 后端 /api/wiki/<key>/progress 的 done/total（真实值，非假动画）
      · 只更新内部 i 的 width（不重建节点）-> transition 平滑增长 */
   if (_pgNow) {
+    meta.style.display = '';
     var _dn = _pgNow.done || 0, _tt = _pgNow.total || 5;
     var _pc = _tt > 0 ? Math.max(0, Math.min(100, Math.round(_dn / _tt * 100))) : 0;
     var _bar = document.getElementById('lwPgBar');
@@ -52604,7 +53557,9 @@ function lbWikiRender(){
     }
   } else {
     if (meta.getAttribute('data-mode') === 'prog') meta.removeAttribute('data-mode');
-    meta.innerHTML = '属性 <b>' + (ov.stats || []).length + '</b> 项 · <b>' + ab.length + '</b> 技能演示';
+    // v5701（用户口径「不用展示」）：属性 N 项 · M 技能演示 整行不再显示
+    meta.innerHTML = '';
+    meta.style.display = 'none';
   }
 
   // P2：按当前 tab 分发到真实渲染

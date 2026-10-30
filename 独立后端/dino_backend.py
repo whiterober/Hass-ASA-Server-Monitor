@@ -22,6 +22,7 @@ dino_backend.py — ASA 生物数据独立后端（dino-import.html 脱离 HA �
   POST /api/ingame_time?server=X       游戏内时间（原生 RCON GetInGameTime；60s TTL + 同键并发合并）
   POST /api/worldprobe_biometemps?server=X&skip=&count=&brief=&filter=  区域温度（ABiomeZoneVolume 绝对温度 ℃；TTL 60s + 同键合并）
   POST /api/wind_status?server=X&fresh=     风力发电机耐久（风机清单+逐台 5 字段；TTL 60s + 同键合并；v4670）
+  POST /api/world_clock?server=X&fresh=     存档世界时钟逆推（RCON worldTime 锚点 − 存档 mtime；TTL 3 分钟；v5714）
   GET  /asa-data/*                     静态资源（汉化/图标/颜色 8 个 JSON）
   GET  /dino-data/*                    数据 JSON（<缩写>_cryo/tamed/wild_*.json 直读）
 
@@ -88,7 +89,7 @@ def _wiki_strip_sp(s):
 
 
 # v260: 解析器版本戳 —— 缓存 _pv 低于此值判未就绪并重抓
-_WIKI_PARSE_VER = 304   # v304：lootRows 改数据源 = wikily 内嵌完整掉落表 TSV（v301 的 HTML 解析只拿到约 1/6 行）
+_WIKI_PARSE_VER = 307   # v307(v5734)：tameIntro 追加「驯服计算器页 ark-tame-after 的 intro 组」；改写解析必升版本号
 # v5646：升到 302 —— lootRows 每行新增 mapSlug（wikily 行 href 的 ?map=，权威地图归属）。
 #   版本戳不升的话 _ready() 会把旧缓存（无 mapSlug）判为已就绪，永不重解析，前端地图图标永远缺失。
                          # v287：物品补 ARK Wiki 专属按键（ark 字段）
@@ -152,6 +153,60 @@ def _wk_json_load(names, pick=None):
             except Exception as e:
                 print('[wiki] load fail %s: %s' % (p, str(e)[:80]))
     return None, ''
+
+
+_NAME_FIX = None
+_NAME_FIX_MT = 0.0
+
+
+def _wk_name_fix_path():
+    here = os.path.dirname(os.path.abspath(__file__))
+    for p in (os.path.join(here, 'wiki_name_fix.json'), os.path.join(here, 'data', 'wiki_name_fix.json')):
+        if os.path.isfile(p):
+            return p
+    return ''
+
+
+def _wk_name_fix():
+    """wikily 中文页错译名 -> 项目正式名（按 mtime 热加载，改 json 无需重启进程）"""
+    global _NAME_FIX, _NAME_FIX_MT
+    p = _wk_name_fix_path()
+    if not p:
+        return _NAME_FIX or {}
+    try:
+        mt = os.path.getmtime(p)
+    except OSError:
+        return _NAME_FIX or {}
+    if _NAME_FIX is not None and mt <= _NAME_FIX_MT:
+        return _NAME_FIX
+    try:
+        with open(p, 'r', encoding='utf-8') as f:
+            obj = json.loads(f.read()) or {}
+        mp = obj.get('map') if isinstance(obj, dict) and 'map' in obj else obj
+        _NAME_FIX = {str(k): str(v) for k, v in (mp or {}).items() if k and v}
+        _NAME_FIX_MT = mt
+        print('[wiki] name fix loaded %d from %s' % (len(_NAME_FIX), p))
+    except Exception as e:
+        print('[wiki] name fix fail %s: %s' % (p, str(e)[:80]))
+        _NAME_FIX = _NAME_FIX or {}
+    return _NAME_FIX
+
+
+def _wk_name_fix_obj(o):
+    """v5700：递归把 wikily 错译名替换成项目正式名（只改字符串值，不改键）"""
+    fx = _wk_name_fix()
+    if not fx:
+        return o
+    if isinstance(o, str):
+        for a, b in fx.items():
+            if a in o:
+                o = o.replace(a, b)
+        return o
+    if isinstance(o, list):
+        return [_wk_name_fix_obj(x) for x in o]
+    if isinstance(o, dict):
+        return {k: _wk_name_fix_obj(v) for k, v in o.items()}
+    return o
 
 
 def _wk_index_scan(cache_dir, zh_of, field):
@@ -562,7 +617,7 @@ def _wiki_parse_home(raw):
                     continue
                 _best = bool(_re.search(r'最佳', _t))
                 _t2 = _t.replace(r'最佳', ' ')
-                _ma = _re.search(r'亲和度\s*(\d+)', _t2)
+                _ma = _re.search(r'亲和度\s*([0-9.]+)', _t2)
                 _ml = _re.search(r'\+\s*(\d+)\s*Lvl', _t2)
                 # v260: 先抠时长并从文本移除，再取口数（否则 30m 的 30 被吃掉）
                 _dur = u''
@@ -581,12 +636,13 @@ def _wiki_parse_home(raw):
                     _t3 = _t2.replace(_ms.group(0), ' ', 1)
                 _mq = _re.search(r'×\s*(\d+)', _t3)
                 _nm = _re.split(r'×', _t3)[0]
-                _nm = _re.sub(r'\s*亲和度\s*\d+\s*', ' ', _nm)
+                # v5732 修复：亲和度可能是小数（如 187.5），原 \d+ 只吃掉「187」⇒ 残留「.5」污染食物名
+                _nm = _re.sub(r'\s*亲和度\s*[0-9.]+\s*', ' ', _nm)
                 _nm = _re.sub(r'\s+', ' ', _nm).strip()[:24]
                 if not _nm or len(_nm) < 2:
                     continue
                 _tf.append({'zh': _nm, 'best': _best,
-                            'aff': int(_ma.group(1)) if _ma else 0,
+                            'aff': (float(_ma.group(1)) if _ma else 0),
                             'qty': int(_mq.group(1)) if _mq else 0,
                             'dur': _dur,
                             'lvl': int(_ml.group(1)) if _ml else 0})
@@ -619,6 +675,21 @@ def _wiki_parse_home(raw):
                 out[_k] = _arr
         except Exception:
             pass
+
+    # ---- v5732（用户口径）: wikily「更多XX驯服信息」折叠块 -> tameIntro（驯服置顶文案）----
+    #   源 = SSR HTML 里的 <details class="ark-otame-fold"><summary>更多XX驯服信息</summary><div><p>…</p></div></details>
+    #   说明：这是**自动抓取**，对全部物种持续生效（非针对某一物种的一次性硬编码）；
+    #         前端仍交给 tcSentences() 渲染，保持 .tc-more/.tc-expand 自动折叠结构不变。
+    try:
+        _mf = _re.search(u'<details class="ark-otame-fold"><summary>[^<]*</summary><div>(.*?)</div></details>', raw, _re.S)
+        if _mf:
+            _mt = _wiki_strip(_mf.group(1))
+            if _mt and len(_mt) >= 12:
+                _arrT = [x for x in (out.get(u'tameIntro') or []) if x]
+                if _mt not in _arrT:
+                    out[u'tameIntro'] = [_mt] + _arrT
+    except Exception:
+        pass
 
     # v260: 无食物表时从「驯服」引导段兜底（毒蜥这类被动驯服喂蛋的物种）
     if not out.get('tameFoods'):
@@ -856,6 +927,23 @@ def _wiki_worker(key):
                     extra = _wiki_parse_home(raw)
                 except Exception:
                     extra = {}
+                # v5734（用户口径）：额外抓「驯服计算器页 /taming-calculator」的 ark-tame-after，
+                #   只取 data-ark-fact-text="intro" 组（物种介绍 4 段）并入 tameIntro。
+                #   说明：物种主页只有 ark-otame-fold（1 段短文案），用户要的那段在计算器页，主页搜不到。
+                try:
+                    _craw = _wiki_fetch_page(WIKI_ROOT + '/' + _used + '/taming-calculator', 30)
+                    _mi = _re.search(u'<div data-ark-fact-text="intro"[^>]*>(.*?)</div>', _craw, _re.S)
+                    if _mi:
+                        _arrT2 = list(extra.get(u'tameIntro') or [])
+                        for _pp in _re.findall(r'<p[^>]*>(.*?)</p>', _mi.group(1), _re.S):
+                            _tt = _wiki_strip(_pp)
+                            if _tt and len(_tt) >= 12 and _tt not in _arrT2:
+                                _arrT2.append(_tt)
+                        if _arrT2:
+                            extra[u'tameIntro'] = _arrT2
+                            _wiki_log('calc intro %s +%d' % (key, len(_arrT2)))
+                except Exception as _eC:
+                    _wiki_log('calcFAIL %s %s' % (key, str(_eC)[:100]))
                 data['DATA'] = {'zh': ov['zh'], 'slug': _used, 'title': '', 'tabs': [],
                                 'fetched_at': int(time.time() * 1000), 'tabHtml': {}}
                 data['OVERVIEW'] = {'intro': ov['intro'], 'tips': ov['tips'], 'stats': [], 'bp': ''}
@@ -1049,12 +1137,12 @@ def _wiki_get(key, start=True):
             return u'该物种暂无数据'
         return ''
 
-    return _wk_task_get(key, start, {
+    return _wk_name_fix_obj(_wk_task_get(key, start, {
         'id_field': 'key', 'tasks': _WIKI_TASKS, 'lock': _WIKI_LOCK,
         'valid': lambda k: bool(_re.match(r'^[A-Za-z0-9_]+$', k)),
         'load': _wiki_load, 'is_ready': _ready, 'ready_extra': _extra,
         'fail_err': _fail, 'total': len(_WIKI_STEPS), 'worker': _wiki_worker,
-    })
+    }))
 
 
 def _wiki_index():
@@ -1093,6 +1181,29 @@ _WK_ITEM_STAT = [
 ]
 
 
+_WIKI_ITEM_SLUGS = None
+
+
+def _wiki_item_slugs():
+    """wikily 全量物品 slug 白名单（v5697：与 _wiki_slugs 同构，来自 sitemap ?part=pages-* -> /items/）"""
+    global _WIKI_ITEM_SLUGS
+    if _WIKI_ITEM_SLUGS is not None:
+        return _WIKI_ITEM_SLUGS
+    _WIKI_ITEM_SLUGS = {}
+    obj, p = _wk_json_load(['wiki_item_slugs.json'],
+                           pick=lambda o: (o.get('slugs') if isinstance(o, dict) else o) or [])
+    for x in (obj or []):
+        x = str(x or '').strip()
+        if not x:
+            continue
+        n = _re.sub(r'[^a-z0-9]', '', x.lower())
+        if n:
+            _WIKI_ITEM_SLUGS[n] = x
+    if p:
+        print('[wiki_item] slugs loaded %d from %s' % (len(_WIKI_ITEM_SLUGS), p))
+    return _WIKI_ITEM_SLUGS
+
+
 def _wiki_item_map():
     """物品类名 -> wikily 真实 slug（v163：走 _wk_json_load 统一加载）"""
     global _WIKI_ITEM_MAP
@@ -1112,16 +1223,30 @@ def _wk_item_camel(cls):
 
 
 def _wiki_item_cands(cls):
-    """物品类名 -> 候选 slug（映射优先，未命中用类名驼峰兜底）"""
+    """物品类名 -> 候选 slug（v5697：映射优先；驼峰兜底走 sitemap 白名单校验，与 _wiki_slug_cands 同构）
+
+    v5697（用户口径「物品映射表、物种映射表的位置方式为啥不一样」）：
+      物种侧有 wiki_slugs.json 白名单做候选存在性校验，物品侧此前**没有**白名单，
+      驼峰兜底生成的 slug 无从判断对错（实测 1286 条缺口里驼峰兜底只真中 2 条）。
+      现在补 wiki_item_slugs.json（2548 条，来自 sitemap /items/），
+      兜底候选一律先过白名单，只返回站上真实存在的 slug；白名单缺失时退回旧行为。
+    """
     cls = str(cls or '').strip()
     m = _wiki_item_map()
+    sn = _wiki_item_slugs()
     out = []
     s = m.get(cls)
     if s:
         out.append(s)
     for n in (_wk_item_camel(cls), cls):
         f = _re.sub(r'[^a-z0-9]+', '-', n.lower()).strip('-')
-        if f and f not in out:
+        if not f or f in out:
+            continue
+        if sn:
+            real = sn.get(_re.sub(r'[^a-z0-9]', '', f))
+            if real and real not in out:
+                out.append(real)
+        else:
             out.append(f)
     return out[:3]
 
@@ -2468,6 +2593,12 @@ WIND_TTL_MS = 600000       # v4687：60s→10 分钟（前端同 TTL + 预热；
 WIND_FIELDS = 'Health,MaxHealth,PoweredBatteryDurabilityToDecreasePerSecond,DecayDestructionPeriod,CurrentWind'
 WIND_DECAY_MULT = 0.35   # v4686（2026-10-16 实测标定）：实际消耗 = PoweredBatteryDurabilityToDecreasePerSecond × 0.35（25min 差分实测 0.0049/s，prop 值 0.0141/s；满耐久由此吻合 14 天）
 _WIND_CACHE = {}           # (server, 'wind') -> {'ts': ms, 'data': {...}}
+# ---- v5714（2026-10-30）：存档世界时钟逆推（world_clock）----
+# 原理：RCON worldTime 与真实秒 1:1（插件实测 Δ21.11/Δ21s）
+#   ⇒ fileWorldTime = rconWorldTime - (锚点现实时刻 - 存档 mtime)
+WORLD_CLOCK_TTL_MS = 180000   # 3 分钟：worldTime 线性，mtime 不变则结果不变；TTL 主要防抖
+WORLD_CLOCK_JUMP_SEC = 120    # 与上次锚点外推值偏差 > 120s ⇒ 判定重启/回档
+_WORLD_CLOCK_CACHE = {}        # (server, 'wclock') -> {'ts': ms, 'data': {...}}
 _WP_LOCKS = {}             # 查询键 -> Lock（同键并发合并：后到者等锁→双检缓存，只发 1 条 RCON）
 _WP_LOCKS_GUARD = threading.Lock()
 _WP_CACHE_MAX = 2000       # 宽松上限；超限按 ts 清掉一半最旧（防 key 泄漏）
@@ -4227,6 +4358,91 @@ def wind_status(server, fresh=False):
         return dict(out)
 
 
+def world_clock(server, fresh=False):
+    """存档世界时钟逆推（v5714·2026-10-30）。
+    存档本身不含世界时钟（插件定论：GameState/GameMode/WorldSettings 不持久化），
+    改用 RCON 实时 worldTime 锚点 + 存档文件 mtime 逆推：
+        fileWorldTime = rconWorldTime - (锚点现实时刻 - 存档 mtime)   （世界钟与真实秒 1:1）
+    一次 RCON 即可锚定该服任意时刻的存档；TTL 3 分钟 + 同键并发合并 + 跳变检测。"""
+    port = SERVERS.get(server)
+    if not port:
+        return {'ok': False, 'server': server, 'error': 'unknown server'}
+    key = (server, 'wclock')
+    now_ms = int(time.time() * 1000)
+    if not fresh:
+        c = _WORLD_CLOCK_CACHE.get(key)
+        if c and (now_ms - c['ts'] < WORLD_CLOCK_TTL_MS):
+            d = dict(c['data'])
+            d['cacheAgeMs'] = now_ms - c['ts']
+            d['serverNowMs'] = now_ms
+            return d
+    with _wp_lock(key):
+        now_ms = int(time.time() * 1000)
+        if not fresh:
+            c = _WORLD_CLOCK_CACHE.get(key)
+            if c and (now_ms - c['ts'] < WORLD_CLOCK_TTL_MS):
+                d = dict(c['data'])
+                d['cacheAgeMs'] = now_ms - c['ts']
+                d['serverNowMs'] = now_ms
+                return d
+        # 1) 存档文件 mtime（item 优先：每次存档都导出，最新鲜；cryo 兜底）
+        file_ms = None
+        file_name = None
+        for sfx in ('_item.json.gz', '_item.json', '_cryo.json.gz', '_cryo.json'):
+            p = os.path.join(DINO_DATA, server + sfx)
+            try:
+                if os.path.isfile(p):
+                    file_ms = int(os.path.getmtime(p) * 1000)
+                    file_name = server + sfx
+                    break
+            except Exception:
+                continue
+        if not file_ms:
+            return {'ok': False, 'server': server, 'error': 'save file not found', 'serverNowMs': now_ms}
+        # 2) RCON 取实时世界时间（weather 轻查询；full=1 limit=1）
+        j, err = _wp_rcon_json(port, CMD_WORLDPROBE + ' weather full=1 limit=1', server, None, now_ms)
+        if err:
+            return err
+        anchor_ms = int(time.time() * 1000)   # 取响应后时刻，最接近读值时刻
+        wt = j.get('worldTime')
+        try:
+            wt = float(wt)
+        except Exception:
+            wt = None
+        if wt is None or wt <= 0:
+            return {'ok': False, 'server': server, 'error': 'no worldTime in RCON',
+                    'worldTimeRaw': j.get('worldTime'), 'serverNowMs': now_ms}
+        src = j.get('worldTimeSource')
+        # 3) 逆推存档对应的世界时间
+        age_sec = max(0.0, (anchor_ms - file_ms) / 1000.0)
+        file_world = round(wt - age_sec, 2)
+        # 4) 跳变检测（重启/回档 ⇒ 旧锚点失效）
+        jumped = False
+        prev = _WORLD_CLOCK_CACHE.get(key)
+        if prev:
+            try:
+                pd = prev['data']
+                expect = float(pd['rconWorldTime']) + (anchor_ms - int(pd['anchorMs'])) / 1000.0
+                if abs(wt - expect) > WORLD_CLOCK_JUMP_SEC:
+                    jumped = True
+            except Exception:
+                jumped = True
+        out = {'ok': True, 'server': server,
+               'fileWorldTime': file_world,       # ← 前端直接用：这份存档对应的世界时间
+               'fileMtimeMs': file_ms,
+               'file': file_name,
+               'rconWorldTime': wt,
+               'worldTimeSource': src,
+               'anchorMs': anchor_ms,
+               'ageSec': round(age_sec, 1),
+               'jumped': jumped,
+               'generatedAt': time.strftime('%Y-%m-%dT%H:%M:%S') + '+08:00',
+               'serverNowMs': now_ms, 'cacheAgeMs': 0}
+        _WORLD_CLOCK_CACHE[key] = {'ts': now_ms, 'data': out}
+        _wp_trim(_WORLD_CLOCK_CACHE, now_ms)
+        return dict(out)
+
+
 def worldprobe_badwx(server, filt='WeatherSystem'):
     """坏天气权重因子（WorldProbe badwx [filter=]）。TTL 300s + 同键并发合并。"""
     port = SERVERS.get(server)
@@ -5316,6 +5532,13 @@ class Handler(BaseHTTPRequestHandler):
                 return
             fresh = g('fresh').lower() in ('1', 'true', 'yes')
             self._send(200, wind_status(server, fresh))
+        elif path.endswith('world_clock'):  # v5714：存档世界时钟逆推（RCON 锚点 + 存档 mtime；TTL 3 分钟）
+            server = g('server')
+            if not server:
+                self._send(400, {'ok': False, 'error': 'missing server'})
+                return
+            fresh = g('fresh').lower() in ('1', 'true', 'yes')
+            self._send(200, world_clock(server, fresh))
         elif path.endswith('worldprobe_zones'):  # 2026-10-03：天气区域（WorldProbe zones；TTL 60s + 同键并发合并）
             server = g('server')
             if not server:

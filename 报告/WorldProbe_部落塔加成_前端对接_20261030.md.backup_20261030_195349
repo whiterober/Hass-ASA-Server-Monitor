@@ -1,0 +1,191 @@
+# 部落塔（Tribe Tower）加成 前端对接说明
+
+> 日期：2026-10-30 ｜ 数据来源：实服 Isl 只读实测（RCON）+ 官方 wiki + 服务器 ini
+> 插件：**无需改动**（现有 `actor` 命令已够用）
+> ⚠️ **dll 版本要求：≥ v135**（`TargetingTeam` 修正版，md5 `c10f301c860c6d91c2fec6e896be579c`，build `Oct 30 2026 19:06:38`）
+> 🔁 **2026-10-30 更正**：本文原写"≥ v129"，但 v129（按 FProperty 类型读）实测失败并已回退，v132–v134 的"按数值大小猜"同样漏判 5 个部落 ID；最终以 **v135（引擎 ExportText 取值）** 为准。
+> 旧版 `props=1` 返回的 `TargetingTeam` 是**错误值**，会导致部落匹配失败 → 详见 `WorldProbe_TargetingTeam字段修正_20261030.md`
+
+---
+
+## 1. 一句话
+
+前端只需读一条 `actor` 命令返回的 **5 个字段 + 顶层 worldTime**，即可自行算出某部落塔当前的 **经验 / 驯服 / 元素** 三项加成。
+
+---
+
+## 2. 数据来源（一条命令）
+
+```
+TransferIdentityFix.WorldProbe actor filter=StructureBP_TribeTower_C props=1 \
+  fields=ActivatedAtTime,LastDeactivatedTime,CurrentItemCount,CurrentFuelTimeCache,TargetingTeam
+```
+
+- 可用 `propsIdx=N` 选第几台塔（Isl 现有 2 台）
+- 响应顶层已带 `worldTime`（`worldTimeSource = "gamedouble"`）
+- **`TargetingTeam` 需 dll ≥ v135**（见 §3.1），旧版读到的是浮点垃圾值
+
+---
+
+## 3. 字段定义
+
+| 字段 | 类型 | 含义 |
+|---|---|---|
+| `ActivatedAtTime` | double | **激活起点**（worldTime）。`0` = 当前未激活 |
+| `LastDeactivatedTime` | double | 上次停用时刻。**`-1000` = 从未停用过**（哨兵值）|
+| `CurrentItemCount` | int | 塔内燃料物品数（上限 `MaxItemCount = 32`）|
+| `CurrentFuelTimeCache` | double | 剩余燃料秒（**可能陈旧，勿用于判生效**）|
+| `TargetingTeam` | **int32** | 所属部落 ID（用于匹配部落）。**需 dll ≥ v135**，旧版返回 float 垃圾值（如 `2.53e+30`）|
+| `worldTime` | double | 响应顶层；**与真实秒 1:1**（实测 Δ21.11 / Δ21s）|
+
+### 3.1 ⚠️ `TargetingTeam` 的版本门槛（重要）
+
+| dll 版本 | `props=1` 里的 `TargetingTeam` | 能否用于匹配部落 |
+|---|---|---|
+| **≥ v135**（当前 `c10f301c…`）| 正确 int32，如 `1912594779` | 可以 |
+| v129–v134（已回退/已废弃）| 仍为 float 误读值，或 float 被读成 int32 位模式 | 不可用 |
+| v127 及更早 | float 误读值，如 `2.5341156975745992e+30` | 不可用 |
+
+- 根因：**4 字节槽仅凭 `ElementSize` 无法区分 int32 / float32**；旧逻辑只把"次正规"当整数，大整数（如 `1912594779`→`2.53e+30`）就被当成浮点。
+  v135 改为让引擎 `ExportText_Direct()` 按**声明类型**格式化取值，类型由引擎保证；导出不可用时才回退旧启发式。
+- 本报告 §7 的部落 ID（`1912594779` / `1621369181`）当时取自 `probe=TargetingTeam` 的
+  `asInt2`；**v135 起 `props=1` 直接正确**
+- 若暂时无法升级 dll，可用单属性探测兜底（读返回的 `asInt2`）：
+
+```
+TransferIdentityFix.WorldProbe actor filter=StructureBP_TribeTower_C props=1 propsIdx=0 probe=TargetingTeam
+```
+
+---
+
+## 4. 判据：是否处于「持续激活」
+
+```
+active = (ActivatedAtTime > 0) AND (LastDeactivatedTime === -1000)
+```
+
+- **停用后 `ActivatedAtTime` 会被清零** ⇒ 用它 >0 即可判"当前有激活起点"
+- **`LastDeactivatedTime === -1000` 表示从未停用**；只要停过一次就会写入真实时间戳，加成归零重算
+- 燃料字段只作辅助（见 §8 注意 3）
+
+---
+
+## 5. 加成公式
+
+持续激活天数：
+
+```
+days = (worldTime - ActivatedAtTime) / 86400
+```
+
+| 加成 | 成长 | 封顶 | 公式 |
+|---|---|---|---|
+| 经验 XP | 每真实天 +1% | **20 天 / +20%** | `min(20, days) × M` |
+| 驯服速度 | 每真实天 +1% | **20 天 / +20%** | `min(20, days) × M` |
+| 元素产出 | 每 30 天 +6% | **150 天 / +30%** | `min(30, floor(days/30) × 6) × M` |
+
+`M` = `TribeTowerBonusMultiplier`（服务器 `Game.ini`，段 `[/script/shootergame.shootergamemode]`）
+
+- 实测 9 个服 **全部 = 2**（Bob 服无此行 ⇒ 默认 1）
+- 对应官方 Patch 68.5「PvP 服加成翻倍」
+
+---
+
+## 6. 前端代码（可直接用）
+
+```js
+const M = 2;   // TribeTowerBonusMultiplier，建议由后端下发
+
+// v135 之前的 dll 把 TargetingTeam 当 float 读（如 2.53e+30），先做合法性校验
+function tribeIdOf(t) {
+  const v = t.TargetingTeam;
+  if (typeof v !== "number" || !Number.isFinite(v)) return -1;
+  if (!Number.isInteger(v) || v < 0 || v > 2147483647) return -1;  // int32 上限（勿用 1e9）；异常值 = 该 dll 版本不可用
+  return v;
+}
+
+function tribeTowerBuff(t, worldTime) {
+  const tribeId = tribeIdOf(t);          // -1 = 版本过低，部落 ID 不可信
+  const active =
+    t.ActivatedAtTime > 0 &&
+    t.LastDeactivatedTime === -1000;
+
+  if (!active) {
+    return { active: false, tribeId, days: 0, xpPct: 0, tamePct: 0, elemPct: 0 };
+  }
+
+  const days = (worldTime - t.ActivatedAtTime) / 86400;
+
+  return {
+    active: true,
+    tribeId,                       // -1 = 版本过低，读不到合法部落 ID
+    days,
+    xpPct:   Math.min(20, days) * M,
+    tamePct: Math.min(20, days) * M,
+    elemPct: Math.min(30, Math.floor(days / 30) * 6) * M,
+  };
+}
+```
+
+---
+
+## 7. 实服验证（Isl，2026-10-30 15:25）
+
+| 塔 | 部落 | ActivatedAtTime | LastDeactivatedTime | 燃料 | 结果 |
+|---|---|---|---|---|---|
+| `…2146585526` | **1912594779 基纽特战队**（含嘎巴丸）| 234,634,159.99 | **-1000** | 28/32 | **active**，624 天 ⇒ **XP+40% / 驯服+40% / 元素+60%** |
+| `…2146499346` | 1621369181 北境游骑兵 | **0** | 246,314,610.57 | 0/32 | **未激活** ⇒ 全 0 |
+
+> 表中两个部落 ID 当时由 `probe=TargetingTeam` 的 `asInt2` 读取（v129 之前 `props=1` 会给出
+> `2.534e+30` 这类错误值）。**v135 及以后 `props=1` 直接可用，无需再走 probe。**
+
+计算过程（塔①）：
+
+```
+days = (288,548,704.56 - 234,634,159.99) / 86400 = 624.0
+xpPct   = min(20, 624.0) × 2          = 40%
+tamePct = min(20, 624.0) × 2          = 40%
+elemPct = min(30, floor(624/30)×6)×2  = min(30,120)×2 = 60%
+```
+
+---
+
+## 8. ⚠️ 三个必须注意的点
+
+1. **`-1000` 是"从未停用"的哨兵值**，不能当时间戳比较。
+2. **停用后 `ActivatedAtTime` 归零**（塔② 即 0）⇒ 不能用 `OriginalCreationTime` 代替，那是**建造时间**，且塔可能建了却一直没燃料。
+3. **燃料字段不可作生效判据**：
+   - 塔① `CurrentFuelTimeCache = 3232`（仅 54 分钟），`LastCheckedFuelTime` 却停在 **12.9 小时前** ⇒ 缓存陈旧
+   - 只建议做「燃料偏低」预警，判定生效请用 §4 的两条
+
+---
+
+## 9. 已排除的方案（勿再尝试）
+
+塔的蓝图里确实有三个 getter：`GetExpMultiplier` / `GetTamingSpeedMultiplier` / `GetElementMultiplier`，
+但实测**不能用作当前加成**：
+
+| 函数 | 塔①（满加成）| 塔②（**无加成**）|
+|---|---|---|
+| `GetExpMultiplier` | 80 | **80** |
+| `GetTamingSpeedMultiplier` | 80 | **80** |
+| `GetElementMultiplier` | 120 | **120** |
+
+⇒ 一台已停用、无燃料、`ActivatedAtTime=0` 的塔，与满加成塔**返回值完全相同** ⇒ 该返回值不反映当前生效加成。
+（相关调试改动已全部回退，插件源码已恢复到改动前状态并逐字节核对通过。）
+
+---
+
+## 10. 其它已知事实
+
+- `CreationTime` / `LastActiveStateChangeTime` 会**随时间变动**（14:44 的 288,543,149.79 → 15:21 的 288,547,932.42），**不可当建造/激活时间**
+- `ActiveEffectIds` / `CharsToBuff` 两台塔都是 0，且加成是**全图生效**（与距离无关，用户确认），故这两个字段无参考价值
+- 世界坐标、血量（175000/175000）、塔内物品数均可正常读取
+
+---
+
+## 11. 一句话总结
+
+**一条命令 6 个值 → 前端 5 行公式 → 直接出三项加成百分比**，且能准确区分「激活中」与「已停用」。
+
+**前提：dll ≥ v135**（`build = Oct 30 2026 19:06:38`）——否则 `TargetingTeam` 为 float 误读值，部落匹配会失败。

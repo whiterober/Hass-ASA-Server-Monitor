@@ -1,0 +1,113 @@
+# 物品耐久字段修正说明
+
+> 日期：2026-10-30 ｜ 影响：`<图>_item.json.gz` ｜ 插件 dll：**无改动**（只改 exe）
+
+---
+
+## 1. 问题
+
+前端反馈：**武器当前耐久全部为 0**。
+
+实测 Isl：24,184 条物品 / 2,258 件武器，`durability ≠ 0` 的数量 = **0**。
+
+---
+
+## 2. 根因
+
+exe 一直解析的字段是 **`ItemDurability`**，但存档里武器/护甲/工具**根本没有这个属性**。
+
+真实字段是 **`SavedDurability`**（`FloatProperty`，4 字节），已用 Isl 存档实际 dump 确证：
+
+| 属性 | 类型 | 是否存在 |
+|---|---|---|
+| `SavedDurability` | `FloatProperty` size=4 | ✅ 存在 |
+| `ItemDurability` | — | ❌ **不存在** |
+
+⇒ 所以 `durability` 恒为 0，属解析字段名错误，不是数据缺失。
+
+---
+
+## 3. ⚠️ 它是「比例」，不是「绝对值」
+
+`SavedDurability` 的取值范围是 **0 ~ 1（1.0 = 满耐久）**，实测样本：
+
+```
+1.0     0.992    0.9788    0.9968    0.9955
+0.9885  0.867    0.7158    0.5446    0.3906    0.1331
+```
+
+存档里**没有"最大耐久"字段**（上限由物品类默认值决定，不随物品存档），
+所以**无法还原成 1234/2000 这种绝对值**，只能给百分比。
+
+---
+
+## 4. 新增字段（前端改用这个）
+
+```json
+{
+  "class": "PrimalItem_WeaponMetalPick_C_2146590424",
+  "kind": "weapon",
+  "durability": 0,              // ⚠️ 旧字段，恒 0，请忽略
+  "durabilityPct": 0.8670,      // ✅ 新字段：当前耐久比例
+  "isBlueprint": 0
+}
+```
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `durabilityPct` | number | **当前耐久比例**（0~1）；`-1` = 该物品无耐久属性 |
+| `durability` | int | 旧字段，**保留但不生效**（源属性不存在），勿使用 |
+
+**前端改法**
+
+```js
+const pct = item.durabilityPct;
+const text = pct < 0 ? "—" : (pct * 100).toFixed(1) + "%";
+const color = pct < 0 ? "#888" : pct < 0.2 ? "#f87171" : pct < 0.5 ? "#fb923c" : "#4ade80";
+```
+
+---
+
+## 5. 验证结果（Isl，本地存档 24,128 条物品）
+
+| 指标 | 值 |
+|---|---|
+| 带 `durabilityPct` 键的物品 | **24,128 / 24,128（100%）** |
+| 武器数 | 2,401 |
+| 武器 `durabilityPct ≥ 0` | **2,084** ✅（修复前为 0）|
+| 武器 `durabilityPct = -1` | 317（确实没有该属性）|
+| 取值范围 | `min 0.0100` / `max 1.2906` / `avg 0.9735` |
+| 满耐久（≥0.999）武器 | 1,811 |
+| 全物品覆盖率 | 9,908 / 24,128 = **41.1%**（材料/结构本就无耐久）|
+
+---
+
+## 6. 三个注意点
+
+1. **`max = 1.2906`（>100%）确实存在** —— 某些物品耐久可超过基准值（修复/加成等），前端进度条请做 `Math.min(1, pct)` 截断显示，但**数值不要截断**
+2. **`-1` 表示"无此属性"**，不是"0 耐久"，别渲染成 0%
+3. **蓝图（`isBlueprint=1`）耐久通常为 1.0**（图纸无真实耐久），展示时可跳过或标注
+
+---
+
+## 7. 生效前提
+
+新 exe：**1,558,016 B，md5 `49c9d5cc7c4bbd0263c927cd2f6eb0ab`**
+
+- 已同步到 `TransferIdentityFixAPI\package\TransferIdentityFixAPI\ark_save_reader.exe`
+- 旧版备份：`TransferIdentityFixAPI\bak\ark_save_reader_backup_20261030_164115.exe`
+- **需部署到** `\\SERVER\ARK Server\DinoData\ark_save_reader.exe` 并**重跑一次解析**，
+  各图 `*_item.json.gz` 才会出现 `durabilityPct`
+
+---
+
+## 8. 附：诊断能力新增
+
+exe 新增通用诊断开关（排查物品字段用，生产默认关闭）：
+
+```
+set TIF_ITEM_DIAG=MetalPick
+ark_save_reader.exe <存档> <输出> <图名>
+```
+会在 stderr 打印该类物品的**完整属性表**（属性名 / 类型 / size / flags / 原始字节），
+修复字段名错误时用它一次定位，不必再猜。

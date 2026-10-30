@@ -1,0 +1,164 @@
+# `TargetingTeam` 字段修正说明（v133 定稿）
+
+> 日期：2026-10-30 ｜ 影响：所有 `props=1` 输出里的**4 字节整数字段** ｜ 插件版本：**v133**
+> ⚠️ 本文已在 v129 方案**失败回退**后重写，若你手里是旧版（写着"按 FProperty 类型读"），请以本版为准。
+
+---
+
+## 1. 问题
+
+`actor ... props=1` 返回的 `TargetingTeam`（所属部落 ID）是**无意义的浮点大数**：
+
+```json
+"TargetingTeam": 2.5341156975745992e+30     // 旧 dll
+```
+
+该部落真实 ID 是 **1912594779**（另一座塔实测 **1621369181**）。前端拿这个值去匹配部落，**永远匹配不上**。
+
+---
+
+## 2. 排查过程（重要：v129 的做法是错的，已回退）
+
+| 版本 | 尝试 | 结果 |
+|---|---|---|
+| v129 | 按 `FProperty` 声明类型（`IntProperty` / `FloatProperty`）决定 int32 / float32 | ❌ **失败**：5 个 float 属性被按 int32 读成位模式（`CustomTimeDilation` 1→1065353216、`MinNetUpdateFrequency` 0.1→1036831949、`NetPriority` 0.5→1056964608、`NetUpdateFrequency` 0.01→1008981770、`NetCullDistanceSquared` 溢出）⇒ **已回退** |
+| v131 | 加 `ptype=1` 诊断：输出 `off` / `sz` / 原始 `bytes` / `u32` / `i32` / `f32` / `f64` | ✅ 证明「偏移对、字节对」（`off=416` 处 `u32=1912594779` 与真值一致） |
+| v132 | 加 `tname`（`FProperty::GetCPPType`）+ `rmode=auto/int/float/type` 四模式 | ❌ `tname` 恒为 `null` ⇒ 该 AsaApi 构建的运行时偏移表里取不到类型文本；`rmode=int` 得正确值，`rmode=type` 因无类型回落 |
+| v133 | 改为**按数值合理性**判 int32（见 §4） | ✅ 定稿 |
+
+**结论：问引擎要"属性声明类型"这条路在本服不可用**（`GetCPPType` / `GetCPPMacroType` 都取不到），所以不能靠类型，只能靠数值特征。
+
+---
+
+## 3. 真正根因
+
+一个 **4 字节槽**在内存里既可能是 `int32` 也可能是 `float32`，**`ElementSize` 无法区分**。
+
+旧逻辑只用一条启发式：float 读出来是「次正规数」（`1e-44` 量级）才改按 int32 读。
+于是：
+
+| 真值（int32） | 按 float32 解 | 旧逻辑判定 |
+|---|---|---|
+| `28` | `3.9e-44`（次正规） | 认出是整数 → **读对** |
+| `1912594779` | `2.53e+30`（正常范围的巨大数） | 不是次正规 → 判成 float → **读错** |
+
+---
+
+## 4. 修复（v133）
+
+4 字节槽先按 float32 读，命中以下**任一**条件即改按 int32 解释同一 4 字节：
+
+1. 读值是 **次正规数**（原判据，保留）；
+2. 读值是 **NaN / Inf**；
+3. 读值 **|v| > 1e15** —— 游戏里任何 float 属性都不会到这个量级，而 int32 的位模式被当 float 解读时很容易落在这里。
+
+改动落在 `TifReadNumByRef()` 与 `TifFillWeatherSem()` 的 4 字节分支（两处口径一致）。
+
+> 说明：这是**启发式**而非类型推断。已知的失败边界：某些整数（如 `1e9`）按 float 解会得到 `0.0047` 这种"看起来正常"的小数 ⇒ 这类值仍会被读成小数。目前已知受影响的字段（`TargetingTeam` 等 ID 类）都落在 `>1e15` 区间，不受此限。
+
+---
+
+## 5. 影响范围
+
+| 属性实际类型 | 行为 | 说明 |
+|---|---|---|
+| `int32`（值较大，float 解读 `>1e15`） | **会变（修正）** | 例如 `TargetingTeam`：`9.46e+19` → `1621369181` |
+| `int32`（值很小） | 不变 | 原本就走次正规分支，读法正确 |
+| `float32`（值 ≤ 1e15） | **不变** | `1 / 0.5 / 0.01` 等照旧 |
+| 8 字节 / 1 字节槽 | 不变 | 不经过此分支 |
+| `ByteProperty` / 结构体 / 数组 | 不变 | 不经过此分支 |
+
+理论上只有「值 > 1e15 的合法 float」会被误判成 int，实际游戏属性中不存在。
+
+---
+
+## 6. 前端影响
+
+| 字段 | 旧值（错） | 新值（对） |
+|---|---|---|
+| `TargetingTeam`（塔 `_2146585526`） | `2.5341156975745992e+30` | `1912594779` |
+| `TargetingTeam`（塔 `_2146499346`） | `9.4614690808264e+19` | `1621369181` |
+| `CustomTimeDilation` | `1` | `1`（不变） |
+| `NetPriority` | `0.5` | `0.5`（不变） |
+| `NetUpdateFrequency` | `0.01` | `0.01`（不变） |
+
+- 以前若前端对 `TargetingTeam` 做过**取整 / 截断 / 字符串处理**，请重新检查 —— 旧值本身就是错的；
+- 若旧值被当字符串展示，会出现一长串科学计数法，现在会变成干净的整数；
+- 其它 4 字节整数字段同理。
+
+**建议保留一道合法性校验（旧 dll 仍在线时有用）**
+
+```js
+function tribeIdOf(obj) {
+  const v = obj.TargetingTeam;
+  if (typeof v !== "number" || !Number.isFinite(v)) return -1;
+  if (!Number.isInteger(v) || v < 0 || v > 2147483647) return -1;  // 旧版 dll 会落到这里
+  return v;
+}
+```
+
+---
+
+## 7. 生效前提
+
+新版 dll（v133）：**2,041,856 B，md5 `9d2b92f25ce2c9efd128f7eb6a53e1ff`**（2026-10-30 18:15:22 构建）
+
+- 部署到各服 `ShooterGame\Binaries\Win64\ArkApi\Plugins\TransferIdentityFixAPI\` 并**重启服务端**
+- 源码回退备份：`TransferIdentityFixAPI\bak\TransferIdentityFixAPI_backup_20261030_175735.cpp`
+- 🔴 **判断某台是否已升级：只看 `TransferIdentityFix.DinoMutPing` 返回的 `build` 字段**（v133 应为 `Oct 30 2026 18:1x:xx`）。
+  `config.json` 里的 `version` 是旧值，**不可作判据**；也不要只看 dll 体积/时间（SMB 缓存会读到旧值）。
+
+**临时兜底（不升级 dll 时）**
+
+单属性探测的 `asInt2` 一直是对的（读 `asInt2[0]`，不要读 `value`）：
+
+```
+TransferIdentityFix.WorldProbe actor filter=<类名> props=1 propsIdx=0 probe=TargetingTeam
+```
+
+---
+
+## 8. 诊断参数（v132+，只读）
+
+```
+TransferIdentityFix.WorldProbe actor filter=<类名> props=1 ptype=1 rmode=auto|int|float|type
+```
+
+| 参数 | 作用 |
+|---|---|
+| `ptype=1` | 每个属性额外输出 `off` / `sz` / `tname` / `bytes`(8B hex) / `u32` / `i32` / `f32` / `f64` |
+| `rmode=auto` | 默认（v133 起 = 本文 §4 判据） |
+| `rmode=int` / `float` | 强制按 int32 / float32 读（用于现场比对，不做业务用途） |
+| `rmode=type` | 按 `tname` 决定；当前 `tname` 恒为 `null`，等价于 `auto` |
+
+---
+
+## 9. 回归验证
+
+### 已实测（Isl，v132，build `Oct 30 2026 17:58:04`）
+
+| 属性 | `rmode=auto` | `rmode=int` | `rmode=type` | 正确值 |
+|---|---|---|---|---|
+| `TargetingTeam` | `9.46e+19` ❌ | `1621369181` ✅ | `9.46e+19` ❌ | 整数 |
+| `CustomTimeDilation` | `1` ✅ | `1065353216` ❌ | `1` ✅ | 浮点 |
+| `NetPriority` | `0.5` ✅ | `1056964608` ❌ | `0.5` ✅ | 浮点 |
+| `NetUpdateFrequency` | `0.01` ✅ | `1008981770` ❌ | `0.01` ✅ | 浮点 |
+| `tname` | `null` | `null` | `null` | —— |
+
+### 待填（v133 部署后，每项各采 2 组）
+
+| 命令 | 关注点 | 结论 |
+|---|---|---|
+| `weather full=1 limit=1` | 无浮点字段被误判成整数 | 待填 |
+| `zones` | 同上 | 待填 |
+| `actor filter=StructureBP_TribeTower_C props=1 ptype=1 fields=TargetingTeam,CustomTimeDilation,NetPriority` | `TargetingTeam` 应为 `1621369181` / `1912594779`，其余仍为 `1 / 0.5` | 待填 |
+| `actor filter=WindTurbine props=1` | 浮点字段不变 | 待填 |
+| `biometemps brief=1` | 同上 | 待填 |
+
+**判据**：`TargetingTeam` 变为 10 位整数 + 无任何原有 float 字段变成 `1.0e+9` 量级 ⇒ 通过；否则立即回退。
+
+---
+
+## 10. 一句话总结
+
+**部落 ID 以前被当成小数读了；现在除了"次正规 / NaN / 超过 1e15"这三种明显不像小数的值改按整数读，其余照旧**——大整数不再变科学计数法，前端部落匹配恢复正常。

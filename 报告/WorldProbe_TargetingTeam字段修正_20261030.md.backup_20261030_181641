@@ -1,0 +1,117 @@
+# `TargetingTeam` 字段修正说明
+
+> 日期：2026-10-30 ｜ 影响：所有 `props=1` 输出里的**整数字段** ｜ 插件 dll：**已改动**（v129）
+
+---
+
+## 1. 问题
+
+`actor ... props=1` 返回的 `TargetingTeam`（所属部落 ID）是**无意义的浮点大数**：
+
+```json
+"TargetingTeam": 2.5341156975745992e+30
+```
+
+而该部落真实 ID 是 **1912594779**。前端拿这个值去匹配部落，**永远匹配不上**。
+
+---
+
+## 2. 根因
+
+插件读数值属性时用一个「**subnormal 启发式**」猜 4 字节该按 int32 还是 float32 解：
+
+| 值 | 按 int32 解 | 按 float32 解 | 启发式结果 |
+|---|---|---|---|
+| `28` | `28` | `3.9e-44`（subnormal）| 能认出是整数 → **读对** |
+| `1912594779`（`0x71FFE15B`）| `1912594779` | `2.53e+30` | 不像整数 → 判成 float → **读错** |
+
+而属性的**真实类型**就写在 `FProperty` 里（`IntProperty` / `FloatProperty`），插件当时拿到了它却没看。
+
+---
+
+## 3. 修复（v129）
+
+`TifReadNumByRef()` 的 4 字节分支改为「**先看声明类型，再决定怎么读**」：
+
+```
+取 FProperty 类名
+  ├─ 含 IntProperty / EnumProperty → 强制按 int32 读
+  ├─ 含 FloatProperty              → 按 float32 读（与旧行为一致）
+  └─ 取不到类型                     → 回退旧启发式（行为不变）
+```
+
+---
+
+## 4. 影响范围
+
+| 属性声明类型 | 行为 | 说明 |
+|---|---|---|
+| `IntProperty` / `EnumProperty` | **会变（修正）** | 大整数从 float 垃圾 → 正确整数 |
+| `FloatProperty` | **不变** | 仍按 float32 |
+| `ByteProperty` / `BoolProperty` / 结构体 / 其它 | **不变** | 不经过此分支 |
+| 取不到 `FProperty` | **不变** | 回退旧启发式 |
+
+涉及 100 个调用点（含 9 处「遍历全部属性」），但**只有声明为整型的属性值会改变**。
+
+---
+
+## 5. 前端影响
+
+| 字段 | 旧值（错） | 新值（对） |
+|---|---|---|
+| `TargetingTeam` | `2.5341156975745992e+30` | `1912594779` |
+
+- 以前若前端对 `TargetingTeam` **做了取整 / 截断 / 字符串处理**，请重新检查——旧值本身就是错的
+- 若旧值被当字符串拼接展示，会出现一长串科学计数法，现在会变成干净的整数
+- **其它整数字段同理**：凡 `props=1` 里读到 `e+30`、`e-44` 这类值的，都应恢复正常
+
+**前端建议加一道合法性校验**
+
+```js
+function tribeIdOf(obj) {
+  const v = obj.TargetingTeam;
+  if (typeof v !== "number" || !Number.isFinite(v)) return -1;
+  if (!Number.isInteger(v) || v < 0 || v > 1e9) return -1;  // 旧版 dll 会落到这里
+  return v;
+}
+```
+
+---
+
+## 6. 生效前提
+
+新版 dll：**2,036,224 B，md5 `2c00a9262f2ac89f3e8c00868f814b3b`**（2026-10-30 17:00:23 构建）
+
+- 部署到各服 `ShooterGame\Binaries\Win64\ArkApi\Plugins\TransferIdentityFixAPI\` 并**重启服务端**
+- 回退备份：`TransferIdentityFixAPI\bak\TransferIdentityFixAPI_v129_backup_20261030_165852.cpp`
+
+**临时兜底（不升级 dll 时）**
+
+单属性探测返回的 `asInt2` 一直是对的（读 `asInt2`，不要读 `value`）：
+
+```
+TransferIdentityFix.WorldProbe actor filter=<类名> props=1 propsIdx=0 probe=TargetingTeam
+```
+
+---
+
+## 7. 回归验证（Isl，2026-10-30）
+
+部署前后各采集 5 组命令输出，逐字段 diff：
+
+| 命令 | 结论 |
+|---|---|
+| `weather full=1 limit=1` | 待填 |
+| `zones` | 待填 |
+| `actor StructureBP_TribeTower_C props=1` | 待填 |
+| `actor WindTrubine props=1` | 待填 |
+| `biometemps brief=1` | 待填 |
+
+预期：**仅整型字段变化**（`TargetingTeam` `2.534e+30` → `1912594779`）；
+若出现 float 字段变化 ⇒ 判定回归，立即回退。
+
+---
+
+## 8. 一句话总结
+
+**部落 ID 以前被当成小数读了，现在按属性表声明的类型读**——大整数不再变科学计数法，前端部落匹配恢复正常。
