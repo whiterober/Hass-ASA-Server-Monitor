@@ -1116,6 +1116,35 @@ def _wk_task_get(key, start, cfg):
     return d
 
 
+# ===================== v5751：上游机翻错误读取层纠正 =====================
+# 背景（用户 2026-10-31 报「负重上限低于200的生物可以使霸王龙昏迷」明显理解错）：
+#   · 该句**上游 wikily.gg 中文站原文就错**（实测直抓 /dinosaurs/Rex「技巧」段第 4 条逐字一致）
+#   · 英文原意：Creatures with a Drag Weight below 200 can be knocked out by the Rex's roar
+#     → 机翻把主宾颠倒（B 使 A 昏迷）+ 把 Drag Weight（拖拽重量）误译成「负重上限」
+#   · 缓存里已固化旧文本，而 _WIKI_PARSE_VER 递增会让 **557 个物种全部重抓**（代价极大）
+#   ⇒ 改为**读取时纠正**：API 返回前对 OVERVIEW.tips 做已知错误替换（幂等、零重抓成本）
+WIKI_TIP_FIX = (
+    (u'负重上限低于200的生物可以使霸王龙昏迷',
+     u'霸王龙的咆哮可让拖拽重量（Drag Weight）低于200的生物昏迷。'),
+)
+
+
+def _wiki_tipfix(obj):
+    """把 OVERVIEW.tips 里的**已知机翻错误**就地纠正（原地改，返回原对象）"""
+    try:
+        d = (obj or {}).get('data') or {}
+        tps = (d.get('OVERVIEW') or {}).get('tips') or []
+        for i, t in enumerate(tps):
+            st = str(t or '')
+            for bad, good in WIKI_TIP_FIX:
+                if bad in st:
+                    tps[i] = good
+                    break
+    except Exception:
+        pass
+    return obj
+
+
 def _wiki_get(key, start=True):
     """取物种 wiki 状态（v163：流程统一走 _wk_task_get）"""
     def _ready(c):
@@ -1151,6 +1180,474 @@ def _wiki_index():
         d = _wiki_load(kk) or {}
         return ((d.get('DATA') or {}).get('zh') or '')
     return _wk_index_scan(WIKI_CACHE_DIR, _zh, 'species')
+
+
+
+# ===================== v5740：dododex 玩家技巧（前端「技巧」TAB） =====================
+# 设计要点：
+#   · dododex 无 CF 拦截（实测普通 UA 直取 200，与 ark.wiki.gg 的 403 完全不同）
+#   · 单页 20 条 tip；分页 /tips/<slug>/2；分类 /tips/<slug>/taming-ko|utility|...
+#   · 缓存独立于 wiki 缓存、自带 _ts 做 30 天 TTL —— **不参与 _WIKI_PARSE_VER 判定**
+#     （升 _WIKI_PARSE_VER 会让全部 557 个物种的 wiki 缓存失效重抓，代价极大；
+#       本轮未改 wiki 解析逻辑，故刻意不升）
+#   · 翻译不在后端做：前端复用「大肥鱼」AI 模块自带的 token 配置（lbAiCfgGet），
+#     翻完 POST 回写中文映射，按 tip id 合并、已存在不覆盖 ⇒ 一个人翻过，所有人秒开
+DODO_ROOT = 'https://www.dododex.com'
+DODO_UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+           '(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36')
+DODO_TTL = 30 * 86400            # 缓存 30 天
+DODO_PAGES = 2                   # 最多抓 2 页（约 40 条原始）
+DODO_KEEP_CAT = ('taming-ko', 'utility', 'encountering')   # 丢弃 funny/opinion/stories/name-ideas
+DODO_MIN_POINTS = 100            # 低赞多是「我朋友笑了」这类废话
+DODO_MIN_LEN = 60                # 过短无信息量
+DODO_TOP_N = 15                  # 单物种最多 15 条
+DODO_LOG_TTL = 6 * 3600          # 抓取失败后 6 小时内不再重试（别反复打人家站）
+
+_DODO_CAT_ZH = {
+    'taming-ko': u'驯服·击晕', 'utility': u'实用', 'encountering': u'遭遇',
+    'funny': u'搞笑', 'opinion': u'观点', 'stories': u'故事', 'name-ideas': u'起名',
+}
+
+# 单条 tip 的正则 —— 结构取自 2026-10-31 实抓的原始 HTML，改前必须先 dump 原文核对
+_DODO_TIP_RE = _re.compile(
+    r'<div class="lightbox marginBottom row aifs tip" data-tipid="(\d+)">'
+    r'.*?<span class="pill">.*?</i>\s*([\d,]+)\s*point'
+    r'.*?<a class="pill noDec" href="/tips/[^/"]+/([a-z\-]+)">([^<]+)</a>'
+    r'.*?<time datetime="([^"]+)"'
+    r'.*?<div class="tipText lh">(.*?)</div>',
+    _re.S)
+
+# dododex 自家 AI 汇总（页面顶部「Dododex users say: …」一段连贯玩法摘要）
+_DODO_SUM_RE = _re.compile(r'Dododex users say:</div>\s*<div>(.*?)</div>', _re.S)
+
+
+_DODO_SLUGS = None
+
+
+def _dodo_slugs():
+    """dododex 权威 slug 表（247 条，2026-10-31 从 dododex.com/sitemap.xml 的 /taming/ 提取）"""
+    global _DODO_SLUGS
+    if _DODO_SLUGS is not None:
+        return _DODO_SLUGS
+    _DODO_SLUGS = set()
+    obj, p = _wk_json_load(['dodo_slugs.json'],
+                           pick=lambda o: (o.get('slugs') if isinstance(o, dict) else o) or [])
+    for s in (obj or []):
+        s = str(s or '').strip().lower()
+        if s:
+            _DODO_SLUGS.add(s)
+    if p:
+        print('[dodo] slugs loaded %d from %s' % (len(_DODO_SLUGS), p))
+    return _DODO_SLUGS
+
+
+_DODO_NORM = None
+
+
+def _dodo_norm_map():
+    """dododex slug 的归一化索引 {纯小写字母数字: 原 slug}，供 en_map 英文名比对用"""
+    global _DODO_NORM
+    if _DODO_NORM is not None:
+        return _DODO_NORM
+    _DODO_NORM = {}
+    for s in _dodo_slugs():
+        n = _re.sub(r'[^a-z0-9]', '', s)
+        if n and n not in _DODO_NORM:
+            _DODO_NORM[n] = s
+    return _DODO_NORM
+
+
+def _dodo_slug(key):
+    """物种键 -> dododex slug（**必须命中 dododex 权威表**，否则 tips 页 404）
+
+    2026-10-31 实测教训（踩过）：
+      · dododex 用**英文全名** —— ankylosaurus / argentavis / tusoteuthis / doedicurus，
+        不是社区短名（ankylo / argy / tuso / doed）；
+      · 项目 dino_en_map 里是带空格的俗名，且拼写有误（Rex -> 'Tyranosaurus Rex'）⇒
+        直接拿它归一化会得到 `tyranosaurus-rex`，实测 404；
+      · wikily 与 dododex 命名高度一致（557 ∩ 247 = **188 条**），
+        故正解是走项目成熟的 `_wiki_slug_cands()`（wikily 白名单候选链）做桥梁。
+    """
+    k = str(key or '').strip()
+    if not k:
+        return ''
+    ds = _dodo_slugs()
+    kl = k.lower()
+    # ① 已是 dododex slug（前端传 wikily slug / 已命中的类名时走这里）
+    if kl in ds:
+        return kl
+    # ② 走 wikily slug 候选链：类名 -> 短名 -> en_map/alias -> wikily 白名单命中
+    cands = []
+    if ds:
+        try:
+            cands = [str(c or '').strip().lower() for c in _wiki_slug_cands(k)]
+            for c in cands:
+                if c and c in ds:
+                    return c
+        except Exception:
+            cands = []
+    # ③ en_map / alias 的英文名归一化后与 dododex 表**精确**比对
+    #    实例：Ankylo -> 'Ankylosaurus'（dododex ankylosaurus）/ Tuso -> 'Tusoteuthis' /
+    #          Dolphin -> 'Ichthyosaurus' / BionicRex -> 'Tek Rex'（dododex tek-rex）
+    base = k
+    for suf in ('_ASA', '_C'):
+        if base.endswith(suf):
+            base = base[:-len(suf)]
+    if base.endswith('_Character_BP'):
+        base = base[:-len('_Character_BP')]
+    nm = _dodo_norm_map()
+    if nm:
+        names = []
+        try:
+            em = _wiki_en_map() or {}
+            al = _wiki_alias() or {}
+            for x in (em.get(base), em.get(k), al.get(base), al.get(k), base):
+                if x:
+                    names.append(str(x))
+            # 变体前缀剥离：dododex **没有** Tek/Bionic/Aberrant 等变种的独立 tips 页
+            #   （实测 247 条表里无 tek-rex），技巧与普通种通用 ⇒ 回退查普通种
+            for _pre in ('Bionic', 'Tek', 'Aberrant', 'Corrupted', 'Enraged', 'Astral',
+                         'Ghost', 'Skeletal', 'Brute', 'Alpha', 'Beta', 'Gamma', 'Mega',
+                         'Primal', 'Celestial', 'Elder', 'Infused'):
+                if base.startswith(_pre) and len(base) > len(_pre):
+                    names.append(base[len(_pre):])
+        except Exception:
+            names.append(base)
+        for s0 in names:
+            n0 = _re.sub(r'[^a-z0-9]', '', s0.lower())
+            if n0 and n0 in nm:
+                return nm[n0]
+        # ④ 前缀模糊：候选与 dododex 表互为前缀（ankylo -> ankylosaurus / tuso -> tusoteuthis）
+        for s0 in (names + cands):
+            n0 = _re.sub(r'[^a-z0-9]', '', str(s0).lower())
+            if len(n0) < 4:
+                continue
+            hit = [v for k2, v in nm.items() if k2.startswith(n0) or n0.startswith(k2)]
+            if hit:
+                hit.sort(key=len)
+                return hit[0]
+    # ⑤ 仍未命中：退回朴素转换（大概率 404，由上层降级成「dododex 暂未收录」）
+    return _re.sub(r'[^A-Za-z0-9]+', '-', base).strip('-').lower()
+
+
+def _dodo_fetch_page(url, timeout=25):
+    """dododex 专用抓取（独立 UA/语言头；带 gzip 解压兜底）"""
+    import urllib.request as _u
+    req = _u.Request(url, headers={
+        'User-Agent': DODO_UA,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip',
+    })
+    r = _u.urlopen(req, timeout=timeout)
+    raw = r.read()
+    try:
+        if 'gzip' in (r.headers.get('Content-Encoding') or '').lower():
+            import gzip as _gz
+            raw = _gz.decompress(raw)
+    except Exception:
+        pass
+    return raw.decode('utf-8', 'replace')
+
+
+def _dodo_parse(html):
+    """解析一页 tips -> (items[], summary)"""
+    items, seen = [], set()
+    for m in _DODO_TIP_RE.finditer(html or ''):
+        tid, pts, cat, catraw, dt, raw = (m.group(1), m.group(2), m.group(3),
+                                         m.group(4), m.group(5), m.group(6))
+        if tid in seen:
+            continue
+        seen.add(tid)
+        try:
+            p = int(_re.sub(r'[^0-9]', '', pts) or 0)
+        except Exception:
+            p = 0
+        txt = _wiki_strip(raw)
+        if not txt:
+            continue
+        items.append({
+            'id': tid,
+            'points': p,
+            'cat': cat,
+            'catZh': _DODO_CAT_ZH.get(cat, cat),
+            'catRaw': _wiki_strip(catraw),
+            'date': (dt or '')[:10],
+            'text': txt,
+        })
+    sm = ''
+    ms = _DODO_SUM_RE.search(html or '')
+    if ms:
+        sm = _wiki_strip(ms.group(1))
+    return items, sm
+
+
+def _dodo_pick(items):
+    """过滤 + 排序 + 截断（高赞优先，同分按日期新者优先）"""
+    keep = []
+    for x in (items or []):
+        if x.get('cat') not in DODO_KEEP_CAT:
+            continue
+        if int(x.get('points') or 0) < DODO_MIN_POINTS:
+            continue
+        if len(str(x.get('text') or '')) < DODO_MIN_LEN:
+            continue
+        keep.append(x)
+    keep.sort(key=lambda x: str(x.get('date') or ''), reverse=True)   # 先按日期新->旧
+    keep.sort(key=lambda x: -int(x.get('points') or 0))                # 再按赞数稳定排序
+    return keep[:DODO_TOP_N]
+
+
+def _dodo_fetch(slug):
+    """抓 dododex 前 N 页 -> (全部原始 items, summary)"""
+    allitems, summary = [], ''
+    for i in range(DODO_PAGES):
+        url = DODO_ROOT + '/tips/' + slug + ('' if i == 0 else ('/%d' % (i + 1)))
+        try:
+            html = _dodo_fetch_page(url, 25)
+        except Exception as e:
+            _wiki_log('dodo fetch fail %s p%d: %s' % (slug, i, str(e)[:120]))
+            break
+        its, sm = _dodo_parse(html)
+        if sm:
+            summary = sm
+        if not its:
+            break
+        allitems.extend(its)
+    seen, ded = set(), []
+    for x in allitems:
+        if x['id'] in seen:
+            continue
+        seen.add(x['id'])
+        ded.append(x)
+    return ded, summary
+
+
+def _dodo_cache_path(slug, zh=False):
+    return os.path.join(WIKI_CACHE_DIR, 'dodo_%s%s.json' % (slug, '_zh' if zh else ''))
+
+
+def _dodo_read(slug, zh=False):
+    p = _dodo_cache_path(slug, zh)
+    if not os.path.isfile(p):
+        return None
+    try:
+        with open(p, 'r', encoding='utf-8') as f:
+            return json.loads(f.read())
+    except Exception:
+        return None
+
+
+def _dodo_write(slug, obj, zh=False):
+    try:
+        os.makedirs(WIKI_CACHE_DIR, exist_ok=True)
+        p = _dodo_cache_path(slug, zh)
+        tmp = p + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            f.write(json.dumps(obj, ensure_ascii=False, separators=(',', ':')))
+        os.replace(tmp, p)
+        return True
+    except Exception as e:
+        print('[dodo] save fail: ' + str(e)[:120])
+        return False
+
+
+def _dodo_get(key, force=False):
+    """取某物种的技巧（带 30 天缓存；失败退避 6 小时）"""
+    slug = _dodo_slug(key)
+    if not slug:
+        return {'ok': False, 'err': 'no-slug', 'items': [], 'summary': ''}
+    c = _dodo_read(slug)
+    now = int(time.time())
+    fresh = bool(c) and (now - int(c.get('_ts') or 0) < DODO_TTL)
+    if force or not fresh:
+        # 失败退避：上次抓取失败且未到 6 小时，直接用旧缓存（没有就返回空）
+        if (not force) and c and c.get('_failTs') and (now - int(c.get('_failTs') or 0) < DODO_LOG_TTL):
+            return {'ok': True, 'slug': slug, 'ts': c.get('_ts'), 'stale': True,
+                    'summary': c.get('summary') or '', 'rawN': c.get('rawN') or 0,
+                    'items': c.get('items') or []}
+        its, sm = _dodo_fetch(slug)
+        if its:
+            c = {'_ts': now, 'slug': slug, 'summary': sm,
+                 'rawN': len(its), 'items': _dodo_pick(its)}
+            _dodo_write(slug, c)
+        else:
+            _wiki_log('dodo empty %s (raw items=0)' % slug)
+            if c:
+                c['_failTs'] = now
+                _dodo_write(slug, c)
+                return {'ok': True, 'slug': slug, 'ts': c.get('_ts'), 'stale': True,
+                        'summary': c.get('summary') or '', 'rawN': c.get('rawN') or 0,
+                        'items': c.get('items') or []}
+            return {'ok': False, 'slug': slug, 'err': 'fetch',
+                    'items': [], 'summary': '', 'note': u'dododex 暂未收录该物种的技巧'}
+    return {'ok': True, 'slug': slug, 'ts': c.get('_ts'),
+            'summary': c.get('summary') or '', 'rawN': c.get('rawN') or 0,
+            'items': c.get('items') or []}
+
+
+def _dodo_zh_doc(key):
+    """整份中文缓存文档：{'map': {tipId: 译文}, 'merged': {secs:[{h,t}]}}"""
+    slug = _dodo_slug(key)
+    return (_dodo_read(slug, zh=True) or {}), slug
+
+
+def _dodo_zh_map(key):
+    slug = _dodo_slug(key)
+    z = _dodo_read(slug, zh=True) or {}
+    return (z.get('map') or {}), slug
+
+
+def _dodo_zh_merge(key, pairs, merged=None):
+    """前端回写中文。
+
+    · pairs  = 逐条译文 [{id, text}] —— 已存在的不覆盖（多客户端并发安全）
+    · merged = 整合后的攻略长文 {'secs': [{'h': 标题, 't': 正文}]}
+              —— v5742 新增。整篇只**写一次**（已有则不覆盖），保证所有人看到同一份。
+    """
+    slug = _dodo_slug(key)
+    if not slug:
+        return 0
+    z = _dodo_read(slug, zh=True) or {}
+    m = z.get('map') or {}
+    n = 0
+    for it in (pairs or []):
+        if not isinstance(it, dict):
+            continue
+        tid = str(it.get('id') or '').strip()
+        tx = str(it.get('text') or '').strip()
+        if (not tid) or (not tx) or (tid in m):
+            continue
+        m[tid] = tx[:2000]
+        n += 1
+    # 长文：校验结构后写入。
+    # v5754（用户报「长文里 juvenile/Tek/Alpha/boss 又回来了」）：
+    #   原实现 secs 是「只写一次」，pv 只覆盖 auth ⇒ prompt 升级后长文永远停在最老那版。
+    #   现改为：**secs 与 auth 共用同一个 pv 门槛** —— 旧缓存无该字段，或 pv 变大，才允许覆盖。
+    if isinstance(merged, dict):
+        _pv_new = merged.get('pv') if isinstance(merged.get('pv'), int) else 0
+        _mg_old = z.get('merged') if isinstance(z.get('merged'), dict) else {}
+        _pv_old = _mg_old.get('pv') if isinstance(_mg_old.get('pv'), int) else 0
+        _upg = _pv_new > _pv_old
+        secs = merged.get('secs')
+        if isinstance(secs, list) and secs and ((not (_mg_old.get('secs') or [])) or _upg):
+            clean = []
+            for s in secs[:12]:
+                if not isinstance(s, dict):
+                    continue
+                hh = str(s.get('h') or '').strip()[:60]
+                tt = str(s.get('t') or '').strip()[:6000]
+                if tt:
+                    clean.append({'h': hh, 't': tt})
+            if clean:
+                _mm = dict(_mg_old)
+                _mm['secs'] = clean
+                if _pv_new:
+                    _mm['pv'] = _pv_new
+                _mm['ts'] = int(time.time())
+                z['merged'] = _mm
+                _mg_old = _mm
+                n += 1
+        # v5748：原文权威要点（技巧 TAB 置顶块）
+        # v5750：pv 变大时允许覆盖旧 auth（prompt/数据源升级后自动刷新）
+        auth = merged.get('auth')
+        _has_old = bool(_mg_old.get('auth') or [])
+        if isinstance(auth, list) and auth and ((not _has_old) or _upg):
+            _a = []
+            for s in auth[:12]:
+                tx = str(s or '').strip()[:1200]
+                if tx:
+                    _a.append(tx)
+            if _a:
+                _mm = dict(_mg_old)
+                _mm['auth'] = _a
+                if _pv_new:
+                    _mm['pv'] = _pv_new
+                _mm['ts'] = int(time.time())
+                z['merged'] = _mm
+                n += 1
+    if n:
+        z['_ts'] = int(time.time())
+        z['slug'] = slug
+        z['map'] = m
+        _dodo_write(slug, z, zh=True)
+    return n
+
+
+# ===================== v5745：wikily 原文整理（按物种共享缓存） =====================
+# 背景（用户 2026-10-31 口径）：
+#   「原文案 通过 AI整理归纳后，再重新分配到 各个TAB里」+「原样搬，但是只包括 wikily 取的」
+#   ⇒ 素材仅限后端从 wikily 抓来的 6 类描述，项目自己写的 UI 提示不参与。
+#   「原文案 和 技巧 完全独立处理，互不干涉」⇒ 与 dodo_* 缓存完全隔离，各存各的。
+# 6 类素材：OVERVIEW.intro / OVERVIEW.tips / HOME.tameIntro / BREED_DESC / ABIL.skills[].desc / SPAWN.intro
+# 因每个物种的原文都不同 ⇒ **按物种存**，一次整理全服共享。
+_WT_LOCK = threading.Lock()
+# v5746：`ovTips`（原概览·技巧·原文要点）已改归「技巧」线（喂进技巧整合，见前端 lbTipsDigest），
+#   不再由本模块整理；本模块只处理其余 5 类 wikily 原文
+_WT_BLOCKS = ('ovIntro', 'tameIntro', 'breedDesc', 'abil', 'spawnIntro')
+
+
+def _wt_path(slug):
+    return os.path.join(WIKI_CACHE_DIR, 'wikitext_%s.json' % slug)
+
+
+def _wt_read(slug):
+    """返回该物种已整理的原文（无则 None）"""
+    if not slug:
+        return None
+    p = _wt_path(slug)
+    if not os.path.isfile(p):
+        return None
+    try:
+        with open(p, 'r', encoding='utf-8') as f:
+            return json.loads(f.read())
+    except Exception:
+        return None
+
+
+def _wt_write(slug, blocks):
+    """写入整理结果 —— **只写一次**（已有则不覆盖），保证全服看到同一份"""
+    if (not slug) or (not isinstance(blocks, dict)):
+        return 0
+    with _WT_LOCK:
+        if os.path.isfile(_wt_path(slug)):
+            return 0
+        clean = {}
+        for k in _WT_BLOCKS:
+            v = blocks.get(k)
+            if k == 'abil':
+                if isinstance(v, list):
+                    arr = []
+                    for it in v[:60]:
+                        if not isinstance(it, dict):
+                            continue
+                        zh = str(it.get('zh') or '').strip()[:80]
+                        ds = str(it.get('desc') or '').strip()[:3000]
+                        if zh and ds:
+                            arr.append({'zh': zh, 'desc': ds})
+                    if arr:
+                        clean['abil'] = arr
+            else:
+                if isinstance(v, list):
+                    arr = [str(x).strip()[:3000] for x in v[:40] if str(x or '').strip()]
+                    if arr:
+                        clean[k] = arr
+        if not clean:
+            return 0
+        clean['_ts'] = int(time.time())
+        clean['slug'] = slug
+        try:
+            os.makedirs(WIKI_CACHE_DIR, exist_ok=True)
+            p = _wt_path(slug)
+            tmp = p + '.tmp'
+            with open(tmp, 'w', encoding='utf-8') as f:
+                f.write(json.dumps(clean, ensure_ascii=False, separators=(',', ':')))
+            os.replace(tmp, p)
+            return len(clean) - 2
+        except Exception as e:
+            print('[wikitext] write fail: ' + str(e)[:120])
+            return 0
+
 
 WIKI_ITEM_ROOT = 'https://wikily.gg/zh-cn/ark-survival-ascended/items'
 WIKI_ITEM_CACHE = os.path.join(WIKI_CACHE_DIR, 'items')
@@ -5054,6 +5551,32 @@ class Handler(BaseHTTPRequestHandler):
             _slug = (_qs.get('slug') or ['ankylosaurus'])[0].strip()
             _src = (_qs.get('src') or ['wikily'])[0].strip().lower()
             self._send(200, _ark_probe(_slug) if _src == 'ark' else _wiki_probe(_slug))
+        elif path == '/api/dino/tips':
+            # v5740：dododex 玩家技巧（前端「技巧」TAB）。?slug=rex 或 ?cls=Rex_Character_BP_C
+            #   force=1 强制刷新；返回 {ok, slug, ts, summary, rawN, items[]}
+            _qs = parse_qs(parsed.query)
+            _sl = (_qs.get('slug') or [''])[0].strip()
+            _cl = (_qs.get('cls') or [''])[0].strip()
+            _fo = ((_qs.get('force') or [''])[0].strip().lower() in ('1', 'true', 'yes'))
+            self._send(200, _dodo_get(_sl or _cl, _fo))
+        elif path == '/api/dino/wikitext':
+            # v5745：某物种「wikily 原文经 AI 整理后」的结果（按物种共享缓存；未整理过返回 null）
+            _qs = parse_qs(parsed.query)
+            _sl = (_qs.get('slug') or [''])[0].strip()
+            _cl = (_qs.get('cls') or [''])[0].strip()
+            _sg = _dodo_slug(_sl or _cl)
+            _d = _wt_read(_sg)
+            self._send(200, {'ok': True, 'slug': _sg, 'blocks': _d,
+                             'ready': bool(_d), 'fields': list(_WT_BLOCKS)})
+        elif path == '/api/dino/tips/zh':
+            # v5740：已翻译缓存（{tipId: 中文}）。前端命中即直接渲染，未命中才调 AI 翻译
+            _qs = parse_qs(parsed.query)
+            _sl = (_qs.get('slug') or [''])[0].strip()
+            _cl = (_qs.get('cls') or [''])[0].strip()
+            _z, _sg = _dodo_zh_doc(_sl or _cl)
+            _m = _z.get('map') or {}
+            self._send(200, {'ok': True, 'slug': _sg, 'map': _m,
+                             'merged': _z.get('merged') or None, 'count': len(_m)})
         elif path.startswith('/api/wiki_item/'):
             # v212：物品 wiki 按需抓取。/api/wiki_item/index | /api/wiki_item/<Cls> | .../progress
             _irest = path[len('/api/wiki_item/'):].strip('/')
@@ -5069,9 +5592,9 @@ class Handler(BaseHTTPRequestHandler):
             if _rest == 'index':
                 self._send(200, _wiki_index())
             elif _rest.endswith('/progress'):
-                self._send(200, _wiki_get(_rest[:-len('/progress')], start=False))
+                self._send(200, _wiki_tipfix(_wiki_get(_rest[:-len('/progress')], start=False)))
             else:
-                self._send(200, _wiki_get(_rest, start=True))
+                self._send(200, _wiki_tipfix(_wiki_get(_rest, start=True)))
         elif path == '/api/bb_notes':
             # 2026-10-28：粑粑笔记（公开只读；内容由拥有者「导入 MD」覆盖）
             self._send(200, _bb_notes_read())
@@ -5168,6 +5691,34 @@ class Handler(BaseHTTPRequestHandler):
         # 配置规则：全服刷新（仅系统拥有者；后端自己读 11 台 ini → 落快照，全玩家共享）
         # 服务器域名：写（仅系统拥有者）
         # 2026-10-28：粑粑笔记导入（仅拥有者；整份覆盖）
+        if path == '/api/dino/wikitext':
+            # v5745：前端 AI 整理完回写。body {slug|cls, blocks:{ovIntro,ovTips,tameIntro,breedDesc,abil,spawnIntro}}
+            #   **只写一次**（已有则不覆盖），全服共享同一份
+            _sg = _dodo_slug(g('slug') or g('cls'))
+            if not _sg:
+                self._send(400, {'ok': False, 'error': 'slug required'})
+                return
+            _n = _wt_write(_sg, body.get('blocks'))
+            self._send(200, {'ok': True, 'slug': _sg, 'added': _n,
+                             'ready': bool(_wt_read(_sg))})
+            return
+        if path == '/api/dino/tips/zh':
+            # v5740：前端翻完回写中文。body {slug|cls, items:[{id, text}]}
+            #   · 按 tip id 合并，已存在的中文**不覆盖**（多客户端并发安全）
+            #   · 条数上限 60、单条 ≤2000 字（_dodo_zh_merge 内截断）
+            _arr = body.get('items') or body.get('zh') or []
+            if not isinstance(_arr, list):
+                _arr = []
+            if len(_arr) > 60:
+                _arr = _arr[:60]
+            if not _arr and not body.get('merged'):
+                self._send(400, {'ok': False, 'error': 'nothing to save (items/merged both empty)'})
+                return
+            _mg = body.get('merged')
+            _n = _dodo_zh_merge(g('slug') or g('cls'), _arr, _mg)
+            _m, _sg = _dodo_zh_map(g('slug') or g('cls'))
+            self._send(200, {'ok': True, 'slug': _sg, 'added': _n, 'count': len(_m)})
+            return
         if path == '/api/bb_notes':
             _u = g('username')
             _n = g('nick')

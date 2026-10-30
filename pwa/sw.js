@@ -1,25 +1,17 @@
-/* PWA Service Worker — dino.whiterober.ccwu.cc
- * v976 双缓存改造（2026-09-11）
- * ---------------------------------------------------------------
- * 问题：原实现 activate 只保留「当前版本缓存」，而缓存名随每次部署变化
- *       → 每部署一次就清空图标/地图缓存（5000+ 张）→ 用户端全量重下，「资源加载中」极慢
- * 修法：把「页面壳」与「静态资源」拆成两个缓存
- *   · dino-import-shell-<VER>：index.html 等文档，随版本变（network-first，部署即生效）
- *   · dino-import-assets     ：图标/地图/json 等，**跨版本永久复用**（cache-first，超 1200 条淘汰最旧）
- *   并保留历史单缓存（dino-import-v*）不删，让已下载资源继续命中
- * 策略：index.html 走 network-first（保证新版本刷新即生效），其他同源静态 cache-first。
- */
-var VER = 'v20261030-5734'; // v1145：随前端版本递增，强制移动端（PWA/Safari）拿到新壳并丢弃旧 shell 缓存
-//   背景：手机/iPad 曾长期停留在旧版前端（跑旧的逐台加载逻辑 ⇒ 卡在「存档已落盘」达 10 分钟）；
-//   index.html 虽为 network-first，但弱网/离线时仍回退旧缓存 ⇒ 每次部署同步递增本版本号可确保换壳生效。
-var SHELL = 'dino-import-shell-' + VER;
+﻿/* PWA Service Worker 鈥?dino.whiterober.ccwu.cc
+ * v976 鍙岀紦瀛樻敼閫狅紙2026-09-11锛? * ---------------------------------------------------------------
+ * 闂锛氬師瀹炵幇 activate 鍙繚鐣欍€屽綋鍓嶇増鏈紦瀛樸€嶏紝鑰岀紦瀛樺悕闅忔瘡娆￠儴缃插彉鍖? *       鈫?姣忛儴缃蹭竴娆″氨娓呯┖鍥炬爣/鍦板浘缂撳瓨锛?000+ 寮狅級鈫?鐢ㄦ埛绔叏閲忛噸涓嬶紝銆岃祫婧愬姞杞戒腑銆嶆瀬鎱? * 淇硶锛氭妸銆岄〉闈㈠３銆嶄笌銆岄潤鎬佽祫婧愩€嶆媶鎴愪袱涓紦瀛? *   路 dino-import-shell-<VER>锛歩ndex.html 绛夋枃妗ｏ紝闅忕増鏈彉锛坣etwork-first锛岄儴缃插嵆鐢熸晥锛? *   路 dino-import-assets     锛氬浘鏍?鍦板浘/json 绛夛紝**璺ㄧ増鏈案涔呭鐢?*锛坈ache-first锛岃秴 1200 鏉℃窐姹版渶鏃э級
+ *   骞朵繚鐣欏巻鍙插崟缂撳瓨锛坉ino-import-v*锛変笉鍒狅紝璁╁凡涓嬭浇璧勬簮缁х画鍛戒腑
+ * 绛栫暐锛歩ndex.html 璧?network-first锛堜繚璇佹柊鐗堟湰鍒锋柊鍗崇敓鏁堬級锛屽叾浠栧悓婧愰潤鎬?cache-first銆? */
+var VER = 'v20261030-5758'; // v1145锛氶殢鍓嶇鐗堟湰閫掑锛屽己鍒剁Щ鍔ㄧ锛圥WA/Safari锛夋嬁鍒版柊澹冲苟涓㈠純鏃?shell 缂撳瓨
+//   鑳屾櫙锛氭墜鏈?iPad 鏇鹃暱鏈熷仠鐣欏湪鏃х増鍓嶇锛堣窇鏃х殑閫愬彴鍔犺浇閫昏緫 鈬?鍗″湪銆屽瓨妗ｅ凡钀界洏銆嶈揪 10 鍒嗛挓锛夛紱
+//   index.html 铏戒负 network-first锛屼絾寮辩綉/绂荤嚎鏃朵粛鍥為€€鏃х紦瀛?鈬?姣忔閮ㄧ讲鍚屾閫掑鏈増鏈彿鍙‘淇濇崲澹崇敓鏁堛€?var SHELL = 'dino-import-shell-' + VER;
 var ASSETS = 'dino-import-assets';
-var ASSETS_MAX = 1200; // v20260912-1029：600→1200（实测预取需 717 张，600 上限导致缓存震荡：每写一张即淘汰一张）
-var CORE = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/icon-maskable-192.png', '/icons/icon-maskable-512.png', '/icons/apple-touch-icon-180.png'];   // v4465：maskable/iOS 图标入预缓存
-// v984：网络与缓存都不可用时的「自动重试页」（避免用户看到 'offline' 白屏字样）
-var RETRY_HTML = '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>正在重试…</title></head><body style="background:#0f0f13;color:#ddd;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><div style="text-align:center"><div style="font-size:15px;margin-bottom:10px">网络暂时不可用，正在自动重试…</div><div id="t" style="font-size:12px;color:#888">3 秒后重试</div></div><script>var n=3;setInterval(function(){n--;var e=document.getElementById("t");if(e)e.textContent=n>0?(n+" 秒后重试"):"正在重试…";if(n<=0)location.reload();},1000);</script></body></html>';
+var ASSETS_MAX = 1200; // v20260912-1029锛?00鈫?200锛堝疄娴嬮鍙栭渶 717 寮狅紝600 涓婇檺瀵艰嚧缂撳瓨闇囪崱锛氭瘡鍐欎竴寮犲嵆娣樻卑涓€寮狅級
+var CORE = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/icon-maskable-192.png', '/icons/icon-maskable-512.png', '/icons/apple-touch-icon-180.png'];   // v4465锛歮askable/iOS 鍥炬爣鍏ラ缂撳瓨
+// v984锛氱綉缁滀笌缂撳瓨閮戒笉鍙敤鏃剁殑銆岃嚜鍔ㄩ噸璇曢〉銆嶏紙閬垮厤鐢ㄦ埛鐪嬪埌 'offline' 鐧藉睆瀛楁牱锛?var RETRY_HTML = '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>姝ｅ湪閲嶈瘯鈥?/title></head><body style="background:#0f0f13;color:#ddd;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><div style="text-align:center"><div style="font-size:15px;margin-bottom:10px">缃戠粶鏆傛椂涓嶅彲鐢紝姝ｅ湪鑷姩閲嶈瘯鈥?/div><div id="t" style="font-size:12px;color:#888">3 绉掑悗閲嶈瘯</div></div><script>var n=3;setInterval(function(){n--;var e=document.getElementById("t");if(e)e.textContent=n>0?(n+" 绉掑悗閲嶈瘯"):"姝ｅ湪閲嶈瘯鈥?;if(n<=0)location.reload();},1000);</script></body></html>';
 
-// 资源缓存超量淘汰（按插入顺序删最旧；异步不阻塞响应）
+// 璧勬簮缂撳瓨瓒呴噺娣樻卑锛堟寜鎻掑叆椤哄簭鍒犳渶鏃э紱寮傛涓嶉樆濉炲搷搴旓級
 function trimAssets() {
   return caches.open(ASSETS).then(function (c) {
     return c.keys().then(function (keys) {
@@ -33,16 +25,15 @@ function trimAssets() {
 self.addEventListener('install', function (e) {
   e.waitUntil(
     caches.open(SHELL).then(function (c) {
-      // v978：逐个 add 并容错 —— 链路抖动时任一资源失败不再导致整个 install 失败（SW 无法激活）
-      // v982：每个 add 加 10s 超时 —— 否则网络挂起会让 install 永不完成 → 新 SW 永不接管 → 修复到不了用户端
+      // v978锛氶€愪釜 add 骞跺閿?鈥斺€?閾捐矾鎶栧姩鏃朵换涓€璧勬簮澶辫触涓嶅啀瀵艰嚧鏁翠釜 install 澶辫触锛圫W 鏃犳硶婵€娲伙級
+      // v982锛氭瘡涓?add 鍔?10s 瓒呮椂 鈥斺€?鍚﹀垯缃戠粶鎸傝捣浼氳 install 姘镐笉瀹屾垚 鈫?鏂?SW 姘镐笉鎺ョ 鈫?淇鍒颁笉浜嗙敤鎴风
       return Promise.all(CORE.map(function (u) {
         var ac = new AbortController();
         var to = setTimeout(function () { try { ac.abort(); } catch (e2) {} }, 10000);
         return c.add(new Request(u, { signal: ac.signal })).catch(function () {}).then(function () { clearTimeout(to); });
       }));
     }).then(function () {
-      // v980：仅当核心文档成功入壳才立即接管；否则不 skipWaiting —— 旧 SW 继续用已缓存文档服务，
-      //       避免「新壳为空 + 网络失败」时回退成 offline 白屏
+      // v980锛氫粎褰撴牳蹇冩枃妗ｆ垚鍔熷叆澹虫墠绔嬪嵆鎺ョ锛涘惁鍒欎笉 skipWaiting 鈥斺€?鏃?SW 缁х画鐢ㄥ凡缂撳瓨鏂囨。鏈嶅姟锛?      //       閬垮厤銆屾柊澹充负绌?+ 缃戠粶澶辫触銆嶆椂鍥為€€鎴?offline 鐧藉睆
       return caches.open(SHELL).then(function (c) { return c.match('/'); });
     }).then(function (hit) {
       if (hit) return self.skipWaiting();
@@ -53,13 +44,11 @@ self.addEventListener('install', function (e) {
 self.addEventListener('activate', function (e) {
   e.waitUntil(
     caches.open(SHELL).then(function (c) { return c.match('/'); }).then(function (hasDoc) {
-      // v984：仅当「当前壳已有 '/' 文档」（预缓存成功）时才清理旧壳；
-      //       否则旧壳是唯一兑底，一律不动（清掉后网络一失败就是白屏）
-      if (!hasDoc) return null;
+      // v984锛氫粎褰撱€屽綋鍓嶅３宸叉湁 '/' 鏂囨。銆嶏紙棰勭紦瀛樻垚鍔燂級鏃舵墠娓呯悊鏃у３锛?      //       鍚﹀垯鏃у３鏄敮涓€鍏戝簳锛屼竴寰嬩笉鍔紙娓呮帀鍚庣綉缁滀竴澶辫触灏辨槸鐧藉睆锛?      if (!hasDoc) return null;
       return caches.keys().then(function (keys) {
         var shells = keys.filter(function (k) {
           return k !== SHELL && k.indexOf('dino-import-shell-') === 0;
-        }).sort(); // 名字含日期-序号，字典序即时间序
+        }).sort(); // 鍚嶅瓧鍚棩鏈?搴忓彿锛屽瓧鍏稿簭鍗虫椂闂村簭
         var drop = shells.slice(0, Math.max(0, shells.length - 2));
         return Promise.all(drop.map(function (k) { return caches.delete(k); }));
       });
@@ -72,44 +61,30 @@ self.addEventListener('activate', function (e) {
 self.addEventListener('fetch', function (e) {
   var req = e.request;
   if (req.method !== 'GET') return;
-  // v1175（用户定策 B，2026-09-15）：**导航请求不再由 SW 接管** —— 浏览器直连 Cloudflare Assets。
-  //   原实现要 res.arrayBuffer() 整份读完才 respondWith，且 delete('content-encoding')
-  //   ⇒ 首字节 = 最后一字节，且 1.17MB 明文（实测 TTFB 12,735ms / HTML 1,170,501 B 未压缩）。
-  //   代价（已确认接受）：断网或服务器不可用时页面打不开（旧壳回退链失效）；资源/分片缓存策略不变。
-  if (req.mode === 'navigate') return;
+  // v1175锛堢敤鎴峰畾绛?B锛?026-09-15锛夛細**瀵艰埅璇锋眰涓嶅啀鐢?SW 鎺ョ** 鈥斺€?娴忚鍣ㄧ洿杩?Cloudflare Assets銆?  //   鍘熷疄鐜拌 res.arrayBuffer() 鏁翠唤璇诲畬鎵?respondWith锛屼笖 delete('content-encoding')
+  //   鈬?棣栧瓧鑺?= 鏈€鍚庝竴瀛楄妭锛屼笖 1.17MB 鏄庢枃锛堝疄娴?TTFB 12,735ms / HTML 1,170,501 B 鏈帇缂╋級銆?  //   浠ｄ环锛堝凡纭鎺ュ彈锛夛細鏂綉鎴栨湇鍔″櫒涓嶅彲鐢ㄦ椂椤甸潰鎵撲笉寮€锛堟棫澹冲洖閫€閾惧け鏁堬級锛涜祫婧?鍒嗙墖缂撳瓨绛栫暐涓嶅彉銆?  if (req.mode === 'navigate') return;
   var url = new URL(req.url);
   if (url.origin !== location.origin) return;
 
-  // 首页/主文档：v978 缓存优先（秒开）+ 后台更新（stale-while-revalidate）
-  // 旧实现 network-first 的两个问题：① 链路中途断流时文档流悬挂 → 整页停在「加载中」、JS 永不执行；
-  // ② res.clone() 写缓存会与浏览器流式解析争抢 tee 缓冲 → 可能背压阻塞文档。
-  // 现改为：命中当前壳缓存立即返回；后台完整下载 → 校验 → 回写缓存（无 tee 背压）。
-  // 「立即刷新」按钮（lbHardReload）会先清掉本文档缓存再 reload，保证一键拿新版。
-  // 首页/主文档：v985 回到 network-first（总是先取网络 → 部署即生效），失败再回退缓存。
-  // 保留的加固：12s 超时（防链路挂起导致整页卡死）、完整读取后写缓存（无 tee 背压）、
-  //              put 全程 catch、跨缓存兑底（含旧壳）、最终兑底为「自动重试页」而非 offline 文本。
-  if (url.pathname === '/' || url.pathname === '/index.html') {
+  // 棣栭〉/涓绘枃妗ｏ細v978 缂撳瓨浼樺厛锛堢寮€锛? 鍚庡彴鏇存柊锛坰tale-while-revalidate锛?  // 鏃у疄鐜?network-first 鐨勪袱涓棶棰橈細鈶?閾捐矾涓€旀柇娴佹椂鏂囨。娴佹偓鎸?鈫?鏁撮〉鍋滃湪銆屽姞杞戒腑銆嶃€丣S 姘镐笉鎵ц锛?  // 鈶?res.clone() 鍐欑紦瀛樹細涓庢祻瑙堝櫒娴佸紡瑙ｆ瀽浜夋姠 tee 缂撳啿 鈫?鍙兘鑳屽帇闃诲鏂囨。銆?  // 鐜版敼涓猴細鍛戒腑褰撳墠澹崇紦瀛樼珛鍗宠繑鍥烇紱鍚庡彴瀹屾暣涓嬭浇 鈫?鏍￠獙 鈫?鍥炲啓缂撳瓨锛堟棤 tee 鑳屽帇锛夈€?  // 銆岀珛鍗冲埛鏂般€嶆寜閽紙lbHardReload锛変細鍏堟竻鎺夋湰鏂囨。缂撳瓨鍐?reload锛屼繚璇佷竴閿嬁鏂扮増銆?  // 棣栭〉/涓绘枃妗ｏ細v985 鍥炲埌 network-first锛堟€绘槸鍏堝彇缃戠粶 鈫?閮ㄧ讲鍗崇敓鏁堬級锛屽け璐ュ啀鍥為€€缂撳瓨銆?  // 淇濈暀鐨勫姞鍥猴細12s 瓒呮椂锛堥槻閾捐矾鎸傝捣瀵艰嚧鏁撮〉鍗℃锛夈€佸畬鏁磋鍙栧悗鍐欑紦瀛橈紙鏃?tee 鑳屽帇锛夈€?  //              put 鍏ㄧ▼ catch銆佽法缂撳瓨鍏戝簳锛堝惈鏃у３锛夈€佹渶缁堝厬搴曚负銆岃嚜鍔ㄩ噸璇曢〉銆嶈€岄潪 offline 鏂囨湰銆?  if (url.pathname === '/' || url.pathname === '/index.html') {
     var ac = new AbortController();
-    // v987：12s → 30s（实测链路忙时 HTML 下载可超 12s，超时回退旧缓存会把整页退回旧代码）
-    var to = setTimeout(function () { try { ac.abort(); } catch (e2) {} }, 30000);
+    // v987锛?2s 鈫?30s锛堝疄娴嬮摼璺繖鏃?HTML 涓嬭浇鍙秴 12s锛岃秴鏃跺洖閫€鏃х紦瀛樹細鎶婃暣椤甸€€鍥炴棫浠ｇ爜锛?    var to = setTimeout(function () { try { ac.abort(); } catch (e2) {} }, 30000);
     e.respondWith(
       fetch(req, { signal: ac.signal }).then(function (res) {
         clearTimeout(to);
         if (!res.ok) return res;
         return res.arrayBuffer().then(function (buf) {
-          if (!buf || buf.byteLength < 50000) throw new Error('doc too small'); // 断流防护
+          if (!buf || buf.byteLength < 50000) throw new Error('doc too small'); // 鏂祦闃叉姢
           var hdr = new Headers(res.headers);
-          hdr.delete('content-encoding'); // buf 已是解压后数据，保留此头会让浏览器二次解压失败
-          hdr.delete('content-length');
+          hdr.delete('content-encoding'); // buf 宸叉槸瑙ｅ帇鍚庢暟鎹紝淇濈暀姝ゅご浼氳娴忚鍣ㄤ簩娆¤В鍘嬪け璐?          hdr.delete('content-length');
           var mk = function () { return new Response(buf, { status: res.status, statusText: res.statusText, headers: hdr }); };
           caches.open(SHELL).then(function (c2) { return c2.put(new Request('/'), mk()).catch(function () {}); }).catch(function () {});
           return mk();
         });
       }).catch(function () {
         clearTimeout(to);
-        // v987：兑底文档必须取「最新」副本 —— caches.match() 按缓存创建顺序命中最旧的那个
-        //       （实测因此把页面退回到 v976 旧代码）；改为：当前壳 → 其余壳按名字倒序 → 最后才全缓存
-        return caches.keys().then(function (keys) {
+        // v987锛氬厬搴曟枃妗ｅ繀椤诲彇銆屾渶鏂般€嶅壇鏈?鈥斺€?caches.match() 鎸夌紦瀛樺垱寤洪『搴忓懡涓渶鏃х殑閭ｄ釜
+        //       锛堝疄娴嬪洜姝ゆ妸椤甸潰閫€鍥炲埌 v976 鏃т唬鐮侊級锛涙敼涓猴細褰撳墠澹?鈫?鍏朵綑澹虫寜鍚嶅瓧鍊掑簭 鈫?鏈€鍚庢墠鍏ㄧ紦瀛?        return caches.keys().then(function (keys) {
           var shells = keys.filter(function (k) { return k.indexOf('dino-import-shell-') === 0; }).sort().reverse();
           var order = [SHELL].concat(shells.filter(function (k) { return k !== SHELL; }));
           return order.reduce(function (p, k) {
@@ -131,13 +106,11 @@ self.addEventListener('fetch', function (e) {
     return;
   }
 
-  // 其他同源静态：cache-first（caches.match 跨全部 cache 查找 → 自动复用历史/资源缓存）
-  e.respondWith(
+  // 鍏朵粬鍚屾簮闈欐€侊細cache-first锛坈aches.match 璺ㄥ叏閮?cache 鏌ユ壘 鈫?鑷姩澶嶇敤鍘嗗彶/璧勬簮缂撳瓨锛?  e.respondWith(
     caches.match(req).then(function (hit) {
       if (hit) return hit;
-      // v982：put 全程 catch —— 流被链路抖动中断时 put 会抛 NetworkError，不能成为未处理拒绝
-      // v985：10s → 20s（实测链路延迟上限 13.4s，10s 会把慢资源误判为失败）
-      var ac = new AbortController();
+      // v982锛歱ut 鍏ㄧ▼ catch 鈥斺€?娴佽閾捐矾鎶栧姩涓柇鏃?put 浼氭姏 NetworkError锛屼笉鑳芥垚涓烘湭澶勭悊鎷掔粷
+      // v985锛?0s 鈫?20s锛堝疄娴嬮摼璺欢杩熶笂闄?13.4s锛?0s 浼氭妸鎱㈣祫婧愯鍒や负澶辫触锛?      var ac = new AbortController();
       var to = setTimeout(function () { try { ac.abort(); } catch (e2) {} }, 20000);
       return fetch(req, { signal: ac.signal }).then(function (res) {
         clearTimeout(to);
