@@ -64,7 +64,19 @@ WIKI_SKIP_WORDS = (u'使用计算器', u'广告', 'Cookie', u'订阅',
 #       没有「使用说明 / 按键」章节 —— 武器专属按键（黏液枪 R 切黏液类型、Ctrl 采尸体）
 #       与使用要点（电锯水下不可用、弩永远满蓄力）只存在于 ARK Wiki 的 Usage / Notes 段。
 ARK_ROOT = 'https://ark.wiki.gg/wiki/'
-_ARK_SEC_NAMES = ('Usage', 'Usage & Strategies', 'Notes', 'Notes/Tips', 'Notes / Tips')
+_ARK_SEC_NAMES = ('Usage', 'Usage & Strategies', 'Notes', 'Notes/Tips', 'Notes / Tips',
+                  'Use', 'Uses', 'Using', 'Tips')
+# v5818（实测根因）：ARK Wiki 现版物品页的 H2 是 **Use**（不是 Usage），如 Grappling_Hook 页：
+#   Navigation menu | Contents | Use | Grappling Hook Physics | Fleeing Behavior |
+#   Dragging with the Grappling Hook | Notes | Changelog | Spotlight
+#   原实现只精确匹配 'Usage' / 'Usage & Strategies' ⇒ **几乎所有物品都抽不到**（只黏液枪等极少数命中）。
+#   改为前缀判定：use / usage / uses / using / note(s) / tip(s)。
+_ARK_SEC_RE = r'^(?:use|usage|uses|using|note|notes|tip|tips)\b'
+
+def _ark_is_sec(t):
+    """H2 标题是否属于「使用/要点」类段落（v5818 前缀判定，替代精确枚举）"""
+    import re as _re
+    return bool(_re.match(_ARK_SEC_RE, str(t or '').strip(), _re.I))
 
 
 def _wiki_strip(s):
@@ -89,7 +101,7 @@ def _wiki_strip_sp(s):
 
 
 # v260: 解析器版本戳 —— 缓存 _pv 低于此值判未就绪并重抓
-_WIKI_PARSE_VER = 307   # v307(v5734)：tameIntro 追加「驯服计算器页 ark-tame-after 的 intro 组」；改写解析必升版本号
+_WIKI_PARSE_VER = 309   # v309(v5818)：段名改前缀判定（Use/Usage/Notes/Tips，原只认 Usage ⇒ 几乎全空）；改写解析必升版本号
 # v5646：升到 302 —— lootRows 每行新增 mapSlug（wikily 行 href 的 ?map=，权威地图归属）。
 #   版本戳不升的话 _ready() 会把旧缓存（无 mapSlug）判为已就绪，永不重解析，前端地图图标永远缺失。
                          # v287：物品补 ARK Wiki 专属按键（ark 字段）
@@ -743,25 +755,111 @@ def _wiki_parse_abil(raw):
     return {'skills': skills}
 
 
-def _wiki_parse_harvest(raw):
-    """收割页：提取全部 HTML 表格（节点产量表 / 尸体产量表）"""
+def _wiki_raw_tables(raw):
+    """把页面里所有 <table> 抓成 [[cells], …]（不绑标题；繁殖页表格用）"""
     import re as _re
-    tabs = []
-    for tb in _re.findall(r'<table[^>]*>([\s\S]*?)</table>', raw):
+    out = []
+    for tb in _re.findall(r'<table[^>]*>([\s\S]*?)</table>', raw, _re.I):
         rows = []
-        for tr in _re.findall(r'<tr[^>]*>([\s\S]*?)</tr>', tb):
-            cells = [_wiki_strip(c) for c in _re.findall(r'<t[hd][^>]*>([\s\S]*?)</t[hd]>', tr)]
+        for tr in _re.findall(r'<tr[^>]*>([\s\S]*?)</tr>', tb, _re.I):
+            cells = [_wiki_strip(c) for c in _re.findall(r'<t[hd][^>]*>([\s\S]*?)</t[hd]>', tr, _re.I)]
             cells = [c for c in cells if c]
             if cells:
                 rows.append(cells)
         if len(rows) >= 2:
-            tabs.append(rows)
-    titles = []
-    for m in _re.finditer(r'<h2[^>]*>(.*?)</h2>', raw, _re.S):
+            out.append(rows)
+    return out
+
+
+def _wiki_parse_harvest(raw):
+    """收割页：wikily 现用 ark-hc-cards 卡片承载资源，**资源名在卡片 <h4>**。
+
+    v5793 根因（用户口径「收割 TAB 里的里的数据表格 完全看不懂」）：
+      · 资源节点产量：表其实嵌在 <article><h4>石头</h4><table>…</table></article> 里，
+        旧实现只抽 <table>、只把 <h2> 当标题 ⇒ 资源名全丢，前端出现 2~6 张一模一样的
+        「产量/低/平均/高」表，完全无法分辨；
+      · 尸体产量：wikily 已改为卡片（<h4>生肉</h4> + <p>数值），页面里根本没有 <table>
+        ⇒ 旧实现产出 0 张表。
+    v5793 改法：按 <article> 顺序扫描，把最近的 <h2> 绑成 group、卡片 <h4> 绑成 title；
+      卡片内含 <table> 就取它的行，否则把卡片 <p> 归纳成「项目 / 数值」两列。
+    """
+    import re as _re
+    _FIX = ((u'corpse yield', u'尸体产量'),)     # wikily 部分 h2 混英文，顺手汉化
+    h2 = []
+    for m in _re.finditer(r'<h2[^>]*>([\s\S]*?)</h2>', raw, _re.I):
         t = _wiki_strip(m.group(1))
-        if t and t not in titles:
+        if not t:
+            continue
+        for _b, _g in _FIX:
+            if _b in t:
+                t = t.replace(_b, _g).strip()
+        h2.append((m.start(), t))
+    titles = []
+    for _p, t in h2:
+        if t not in titles:
             titles.append(t)
-    return {'tables': tabs[:6], 'titles': titles[:8]}
+
+    def _grp(pos):
+        g = u''
+        for p, t in h2:
+            if p < pos:
+                g = t
+            else:
+                break
+        return g
+
+    tabs = []
+    for m in _re.finditer(r'<article[^>]*>([\s\S]*?)</article>', raw, _re.I):
+        body = m.group(1)
+        mh = _re.search(r'<h4[^>]*>([\s\S]*?)</h4>', body, _re.I)
+        nm = _wiki_strip(mh.group(1)) if mh else u''
+        if not nm:
+            continue
+        rows = []
+        for tb in _re.findall(r'<table[^>]*>([\s\S]*?)</table>', body, _re.I):
+            rs = []
+            for tr in _re.findall(r'<tr[^>]*>([\s\S]*?)</tr>', tb, _re.I):
+                cells = [_wiki_strip(c) for c in _re.findall(r'<t[hd][^>]*>([\s\S]*?)</t[hd]>', tr, _re.I)]
+                cells = [c for c in cells if c]
+                if cells:
+                    rs.append(cells)
+            if len(rs) >= 2:
+                rows = rs
+                break
+        if not rows:
+            ps = [_wiki_strip(x) for x in _re.findall(r'<p[^>]*>([\s\S]*?)</p>', body, _re.I)]
+            kv = []
+            for x in ps:
+                if not x:
+                    continue
+                m1 = _re.search(r'每次掷骰\s*([\d.]+\s*%)', x)
+                if m1:
+                    kv.append([u'每次掷骰', m1.group(1).replace(' ', u'')])
+                    continue
+                m2 = _re.match(r'^([\d,.]+)\s*平均$', x)
+                if m2:
+                    kv.append([u'平均', m2.group(1)])
+                    continue
+                m3 = _re.search(r'近战时\s*([\d,.]+\s*-\s*[\d,.]+)', x)
+                if m3:
+                    kv.append([u'近战100%', m3.group(1)])
+                    continue
+                m4 = _re.search(r'峰值[:：]?\s*(.+)$', x)
+                if m4:
+                    kv.append([u'峰值', _re.sub(u'近战%时', u'', m4.group(1)).strip()])
+                    continue
+            if kv:
+                rows = [[u'项目', u'数值']] + kv
+        if rows:
+            tabs.append({'title': nm, 'group': _grp(m.start()), 'rows': rows})
+            if len(tabs) >= 40:
+                break
+    if not tabs:
+        # 兜底：页面没有 ark-hc-cards 卡片、但仍有裸 <table> 的旧版式
+        for i, rows in enumerate(_wiki_raw_tables(raw)[:6]):
+            tabs.append({'title': (titles[i + 2] if len(titles) > i + 2 else (u'表 %d' % (i + 1))),
+                         'group': u'', 'rows': rows})
+    return {'tables': tabs[:40], 'titles': titles[:8]}   # v5793c：14 -> 40（实测恐熊 23 组：20 资源节点 + 生肉/兽皮/优质生肉；按数量截断会把排在最后的尸体产出整段挤掉）
 
 
 def _wiki_parse_breed(raw):
@@ -774,7 +872,7 @@ def _wiki_parse_breed(raw):
             out['intro'].append(t)
         if len(out['intro']) >= 14:
             break
-    out['tables'] = _wiki_parse_harvest(raw)['tables']
+    out['tables'] = _wiki_raw_tables(raw)   # v5793：繁殖页仍是真 <table>，用裸表提取保持旧结构
     return out
 
 
@@ -907,7 +1005,21 @@ def _wiki_worker(key):
                     raw = None
                     break
             if raw is None and sub == '':
-                # v105：首页所有候选都失败（wikily 无此页面）→ 直接给全部 block 标 fail 并结束，
+                # v5831：wikily 首页全部候选失败 → 先试第二数据源 ark.wiki.gg（纯载具只有这个源有）
+                try:
+                    if _ark_seed(key, data):
+                        _wiki_save(key, data)
+                        _wiki_log('worker DONE %s (ark fallback %s)' % (key, str((data.get('DATA') or {}).get('_arkSlug') or '')))
+                        with _WIKI_LOCK:
+                            _t9 = _WIKI_TASKS.get(key)
+                            if _t9:
+                                _t9['status'] = 'ready'
+                                _t9['data'] = data
+                                _t9['done'] = total
+                        break
+                except Exception as _eA:
+                    _wiki_log('arkFAIL %s %s' % (key, str(_eA)[:140]))
+                # v105：两源都失败 → 直接给全部 block 标 fail 并结束，
                 #   不再让 4 个子页各试 3 个候选（原来会白跑 40+ 秒，前端轮询到超时）。
                 _now = int(time.time() * 1000)
                 for _sb, _bk in steps:
@@ -1149,6 +1261,10 @@ def _wiki_get(key, start=True):
     """取物种 wiki 状态（v163：流程统一走 _wk_task_get）"""
     def _ready(c):
         if not (c.get('OVERVIEW') or {}).get('intro'):
+            return False
+        # v5833：ark.wiki.gg 回退数据按 _ARK_SEED_VER 单独重抓（旧数据 _arkVer 缺失 = 0）
+        _d0 = c.get('DATA') or {}
+        if _d0.get('_src') == 'ark' and int(_d0.get('_arkVer') or 0) < _ARK_SEED_VER:
             return False
         # v260: 老缓存版本戳低 -> 强制重抓（旧驯服食物口数/时长是错的）
         return int(c.get('_pv') or 0) >= _WIKI_PARSE_VER
@@ -1498,7 +1614,7 @@ def _dodo_zh_map(key):
     return (z.get('map') or {}), slug
 
 
-def _dodo_zh_merge(key, pairs, merged=None):
+def _dodo_zh_merge(key, pairs, merged=None, force=False):
     """前端回写中文。
 
     · pairs  = 逐条译文 [{id, text}] —— 已存在的不覆盖（多客户端并发安全）
@@ -1528,7 +1644,7 @@ def _dodo_zh_merge(key, pairs, merged=None):
         _pv_new = merged.get('pv') if isinstance(merged.get('pv'), int) else 0
         _mg_old = z.get('merged') if isinstance(z.get('merged'), dict) else {}
         _pv_old = _mg_old.get('pv') if isinstance(_mg_old.get('pv'), int) else 0
-        _upg = _pv_new > _pv_old
+        _upg = (_pv_new > _pv_old) or bool(force)   # v5768：重新整理时可强制覆盖
         secs = merged.get('secs')
         if isinstance(secs, list) and secs and ((not (_mg_old.get('secs') or [])) or _upg):
             clean = []
@@ -1583,8 +1699,16 @@ def _dodo_zh_merge(key, pairs, merged=None):
 # 因每个物种的原文都不同 ⇒ **按物种存**，一次整理全服共享。
 _WT_LOCK = threading.Lock()
 # v5746：`ovTips`（原概览·技巧·原文要点）已改归「技巧」线（喂进技巧整合，见前端 lbTipsDigest），
-#   不再由本模块整理；本模块只处理其余 5 类 wikily 原文
-_WT_BLOCKS = ('ovIntro', 'tameIntro', 'breedDesc', 'abil', 'spawnIntro')
+#   不再由本模块整理
+# v5780（用户口径「我发现了 根源是你漏了置顶正文都应该 AI 整理」）：补 `gatherIntro`（采集 Tab 置顶正文）。
+#   后端此前**已经解析出** gatherIntro（见 _WIKI_PAGES 里的 ('gatherIntro', u'采集能力', (12,600))），
+#   但没列进本元组 ⇒ 整理结果被 _wt_write 的 clean 白名单直接丢弃，前端永远拿不到。
+# v5781（用户口径「置顶正文都应该 AI 整理」）：补 harvestIntro / abilIntro / expIntro 三个 Tab 的置顶正文。
+#   至此 9 个 Tab 中 8 个走本模块（技巧走 dodo 独立管道）：
+#     概览 ovIntro · 驯服 tameIntro · 繁殖 breedDesc · 采集 gatherIntro · 收割 harvestIntro
+#     技能 abilIntro + abil · 经验 expIntro · 生成 spawnIntro
+_WT_BLOCKS = ('ovIntro', 'tameIntro', 'gatherIntro', 'harvestIntro', 'abilIntro', 'expIntro',
+              'breedDesc', 'abil', 'spawnIntro', 'gearTips')
 
 
 def _wt_path(slug):
@@ -1605,12 +1729,14 @@ def _wt_read(slug):
         return None
 
 
-def _wt_write(slug, blocks):
+def _wt_write(slug, blocks, force=False):
     """写入整理结果 —— **只写一次**（已有则不覆盖），保证全服看到同一份"""
     if (not slug) or (not isinstance(blocks, dict)):
         return 0
     with _WT_LOCK:
-        if os.path.isfile(_wt_path(slug)):
+        # v5768（用户实测「再次整理后刷新页面还是原来的缓存」）：原逻辑「只写一次」导致
+        #   点「重新整理」时新结果被直接丢弃 ⇒ 加 force：前端连点「重新整理」时传 force=true 覆盖
+        if os.path.isfile(_wt_path(slug)) and not force:
             return 0
         clean = {}
         for k in _WT_BLOCKS:
@@ -1799,15 +1925,18 @@ def _wiki_cjk_space(s):
 #       ARK Wiki 的 Usage 段才是武器专属操作（黏液枪 Ctrl 采尸体 / R 切黏液 / RMB 蓄力）的来源。
 # 约定：这里只抽「键名 token + 项目键名」，中文动作名由前端查项目键位配置，不重复翻译键位。
 _ARK_TOKENS = [
-    ('lmb',   r'\blmbs?\b|\bleft\s+mouse\b',   'mouse_left',         'xbox_rt'),
-    ('rmb',   r'\brmbs?\b|\bright\s+mouse\b',  'mouse_right',        'xbox_lt'),
-    ('mmb',   r'\bmmbs?\b|\bmiddle\s+mouse\b', 'mouse_middle',       ''),
+    ('lmb',   r'\blmbs?\b|\bleft\s+(?:mouse|click)\b|\bprimary\s+(?:fire|attack)\b', 'mouse_left',         'xbox_rt'),
+    ('rmb',   r'\brmbs?\b|\bright\s+(?:mouse|click)\b|\bsecondary\s+(?:fire|attack)\b', 'mouse_right',        'xbox_lt'),
+    ('mmb',   r'\bmmbs?\b|\bmiddle\s+(?:mouse|click)\b', 'mouse_middle',       ''),
     ('ctrl',  r'\b(?:left\s+)?ctrl\b',         'keyboard_ctrl_left', 'xbox_rb'),
     ('shift', r'\b(?:left\s+)?shift\b',        'keyboard_shift_left', 'xbox_stick_l_press'),
-    ('alt',   r'\b(?:left\s+)?alt\b',          'keyboard_alt_left',  ''),
     ('space', r'\bspace(?:bar)?\b',            'keyboard_space',     'xbox_button_a'),
     ('tab',   r'\btab\b',                      'keyboard_tab',       'xbox_button_view'),
 ]
+# v5817（用户口径「物品中 为啥只有 黏液枪 有指南」根因之一）：
+#   原 `alt` 走「裸词」匹配 ⇒ 石头 / 黏土 / 硫磺 / 制式弩等页面正文里的 "alt" 被误命中，
+#   凭空长出 keys=['alt'] ⇒ 指南 Tab 出现但内容无意义（实测 45 个缓存物品里 4 个假指南）。
+#   改为与单字母同规则：**只在「括号内」或 press/hold/use + Alt 语境里认**（见 _ARK_SINGLE）。
 # 单字母键只在「括号内」或「press/use/hold + X」上下文里认，避免 "a" "an" 之类误命中
 _ARK_SINGLE = {
     'r': ('keyboard_r', 'xbox_button_x'),
@@ -1820,6 +1949,7 @@ _ARK_SINGLE = {
     'z': ('keyboard_z', ''),
     'v': ('keyboard_v', 'xbox_rb'),
     't': ('keyboard_t', ''),
+    'alt': ('keyboard_alt_left', ''),
 }
 
 
@@ -1866,11 +1996,45 @@ def _ark_keys_from_usage(lines):
 
 
 def _ark_usage_lines(raw):
-    """ARK Wiki 物品页 -> Usage 段纯文本行"""
+    """ARK Wiki 物品页 -> 使用段纯文本行（v5818：改用 _ark_is_sec 前缀判定，兼容 "Use"）"""
     for t, seg in _ark_h2_segs(raw):
-        if t in ('Usage', 'Usage & Strategies', 'Usage & strategies'):
+        if _ark_is_sec(t):
             return _ark_flat_lines(seg, 60)
     return []
+
+
+def _ark_points_from_page(raw, limit=10):
+    """v5817（用户口径「物品中 为啥只有 黏液枪 有指南」根治）：ARK Wiki Usage / Notes 段的
+    「使用要点」条目 -> [str]
+
+    背景：原 `ark` 只存 keys（键位 token）⇒ 40/45 物品的 Usage 段抽不出键名就整个空掉，
+          指南 Tab 直接消失；而 Usage / Notes 段里的**文字要点**（伤害机制、克制对象、
+          使用技巧）一直没被利用。这里把它们抽出来，前端「指南」页按要点列表展示。
+    """
+    import re as _re
+    out, seen = [], set()
+    for t, seg in _ark_h2_segs(raw):
+        if not _ark_is_sec(t):
+            continue
+        items = _re.findall(r'<li[^>]*>([\s\S]*?)</li>', seg)
+        if not items:
+            items = _re.findall(r'<p[^>]*>([\s\S]*?)</p>', seg)
+        for it in items:
+            try:
+                s1 = _wiki_strip(it)
+            except Exception:
+                s1 = _re.sub(r'<[^>]+>', ' ', it)
+            s1 = _re.sub(r'\s+', ' ', s1).strip()
+            if not (12 <= len(s1) <= 220):
+                continue
+            k = s1.lower()
+            if k in seen:
+                continue
+            seen.add(k)
+            out.append(s1)
+            if len(out) >= limit:
+                return out
+    return out
 
 
 def _wk_item_mats(raw, self_zh=''):
@@ -2398,10 +2562,12 @@ def _wiki_item_worker(cls):
                 if _ak:
                     _u2, _c2, _raw2 = _ark_fetch(_ak, timeout=20)
                     _keys = _ark_keys_from_usage(_ark_usage_lines(_raw2))
-                    parsed['ark'] = {'slug': _ak, 'keys': _keys,
+                    # v5817：同时抽「使用要点」（Usage / Notes 段条目），指南页按键为空时也有内容
+                    _pts = _ark_points_from_page(_raw2, 10)
+                    parsed['ark'] = {'slug': _ak, 'keys': _keys, 'points': _pts,
                                      'at': int(time.time() * 1000)}
-                    _wiki_log('item ark %s slug=%s keys=%s' % (
-                        cls, _ak, ','.join(x['k'] for x in _keys) or '-'))
+                    _wiki_log('item ark %s slug=%s keys=%s pts=%d' % (
+                        cls, _ak, ','.join(x['k'] for x in _keys) or '-', len(_pts)))
             except Exception as _e2:
                 parsed['ark'] = {'slug': '', 'keys': [], 'err': str(_e2)[:80]}
                 _wiki_log('item ark FAIL %s: %s' % (cls, str(_e2)[:100]))
@@ -2456,6 +2622,103 @@ def _wiki_item_get(cls, start=True):
         'fail_err': _fail, 'total': 1, 'worker': _wiki_item_worker,
         'meta': lambda k: {'slug': ((_wiki_item_cands(k) or [''])[0])},
     })
+
+
+# ===== v5819（用户口径「指南 TAB 常驻 + 复用物种技巧 AI 模块」）=====
+#   物品指南页的 AI 整理结果（中文要点 + 分节），**全服共享一份**：
+#   一人点过「一键整理」，其他人打开同物品直接命中缓存，不再各花 token。
+#   存储：单文件 {cls: {points:[str], secs:[{h,t}], pv:int, ts:int}}
+ITEM_TIPS_FILE = os.environ.get('ITEM_TIPS_FILE',
+                                os.path.join(os.path.dirname(os.path.abspath(__file__)), 'item_tips_zh.json'))
+_ITEM_TIPS_LOCK = threading.Lock()
+
+
+def _item_tips_read(cls):
+    cls = str(cls or '').strip()
+    if not cls:
+        return None
+    try:
+        with _ITEM_TIPS_LOCK:
+            if not os.path.exists(ITEM_TIPS_FILE):
+                return None
+            with open(ITEM_TIPS_FILE, 'r', encoding='utf-8') as f:
+                d = json.load(f)
+        v = d.get(cls) if isinstance(d, dict) else None
+        return v if isinstance(v, dict) else None
+    except Exception:
+        return None
+
+
+def _item_tips_merge(cls, merged=None, force=False):
+    """前端 AI 整理完回写。points / secs 各自「只写一次」，或 pv 变大 / force 时覆盖。"""
+    cls = str(cls or '').strip()[:120]
+    if (not cls) or (not isinstance(merged, dict)):
+        return 0
+    try:
+        with _ITEM_TIPS_LOCK:
+            d = {}
+            if os.path.exists(ITEM_TIPS_FILE):
+                try:
+                    with open(ITEM_TIPS_FILE, 'r', encoding='utf-8') as f:
+                        d = json.load(f) or {}
+                except Exception:
+                    d = {}
+            cur = d.get(cls) if isinstance(d.get(cls), dict) else {}
+            pv_new = merged.get('pv') if isinstance(merged.get('pv'), int) else 0
+            pv_old = cur.get('pv') if isinstance(cur.get('pv'), int) else 0
+            upg = (pv_new > pv_old) or bool(force)
+            n = 0
+            # v5822：AI 提取的「动作 → 键」（器械类无官方键位时）
+            akeys = merged.get('keys')
+            if isinstance(akeys, list) and akeys and ((not cur.get('keys')) or upg):
+                ka = []
+                for x in akeys[:12]:
+                    if not isinstance(x, dict):
+                        continue
+                    an = str(x.get('a') or '').strip()[:40]
+                    kz = str(x.get('k') or '').strip()[:40]
+                    # v5823：保留 Xbox 手柄键（p），与键鼠（k）成对存储
+                    pz = str(x.get('p') or '').strip()[:40]
+                    if an and (kz or pz):
+                        ka.append({'a': an, 'k': kz, 'p': pz})
+                if ka:
+                    cur['keys'] = ka
+                    n += 1
+            pts = merged.get('points')
+            if isinstance(pts, list) and pts and ((not cur.get('points')) or upg):
+                arr = []
+                for x in pts[:16]:
+                    tx = str(x or '').strip()[:1200]
+                    if tx:
+                        arr.append(tx)
+                if arr:
+                    cur['points'] = arr
+                    n += 1
+            secs = merged.get('secs')
+            if isinstance(secs, list) and secs and ((not cur.get('secs')) or upg):
+                cl2 = []
+                for x in secs[:12]:
+                    if not isinstance(x, dict):
+                        continue
+                    hh = str(x.get('h') or '').strip()[:60]
+                    tt = str(x.get('t') or '').strip()[:6000]
+                    if tt:
+                        cl2.append({'h': hh, 't': tt})
+                if cl2:
+                    cur['secs'] = cl2
+                    n += 1
+            if n:
+                if pv_new:
+                    cur['pv'] = pv_new
+                cur['ts'] = int(time.time())
+                d[cls] = cur
+                tmp = ITEM_TIPS_FILE + '.tmp'
+                with open(tmp, 'w', encoding='utf-8') as f:
+                    json.dump(d, f, ensure_ascii=False)
+                os.replace(tmp, ITEM_TIPS_FILE)
+            return n
+    except Exception:
+        return 0
 
 
 def _wiki_item_index():
@@ -2521,6 +2784,12 @@ def _ark_flat_lines(seg, limit=40):
     s = _re.sub(r'</(p|div|li|tr|h[1-6]|dd|dt|table|section)>', '\n', s, flags=_re.I)
     s = _re.sub(r'<br\s*/?>', '\n', s, flags=_re.I)
     s = _re.sub(r'<[^>]+>', '', s)
+    # v5833：_ark_h2_segs 在「下一个标题前 250 字符」处硬截断，可能把 HTML 标签切一半；
+    #   半个标签没有闭合 '>' ⇒ 上面那条正则匹配不到 ⇒ 原样残留在正文里
+    #   （实测 BattleRig 的 OVERVIEW.tips[0] 就是 308 字符的「<img ... data-fi」截断串）。
+    #   下面这条兜底：要求 '<' 后紧跟 / ! 或字母 —— 完整标签与截断标签都能吃掉，
+    #   且不会误伤「Drag Weight < 200」这类正文（曾用 `<[^>]*$` 直接删尾部，会把「<」之后整段删掉）。
+    s = _re.sub(r'<[/!]?[A-Za-z][^>]*>?', '', s)
     s = _re.sub(r'[ \t\u00a0]+', ' ', s)
     lines = [x.strip() for x in _h.unescape(s).split('\n')]
     return [x for x in lines if len(x) > 3][:limit]
@@ -2571,6 +2840,151 @@ def _ark_probe(slug):
         out['ms'] = int((_t.time() - t0) * 1000)
         out['err'] = str(e)[:200]
     return out
+
+
+# ===== v5831（用户口径「wikily没数据的 至少要保留技巧TAB，然后可以玩家通过AI从wiki取信息渲染其他TAB」）=====
+#   实测：wikily 的 dinosaurs 分类不含纯载具（battlerig/canoe/raft/train 全 404），
+#        但第二数据源 ark.wiki.gg 有页面（BattleRig 200/186KB · Canoe 200/168KB）。
+#        ⇒ wikily 首页所有候选失败时，回退 ark.wiki.gg 拉起基础资料，写进项目同一套 block 结构。
+#   ark 页面 h2 实测（BattleRig）：Navigation menu | Contents | Crafting/Obtaining | Equipment | Notes | Changelog
+# v5832（用户口径「回退到 wiki 时，其他 TAB 都只填置顶文案；技巧只从 wiki 分解；留空的不显示 TAB」）：
+#   v5831 的「ark 章节 -> 结构化 block」映射已删除 —— 它把 Crafting 塞进概览正文、
+#   Taming 塞进概览技巧、Abilities 塞进技能正文，内容张冠李戴。
+#   现改为**每个 TAB 只填它自己的置顶文案（章节首段）**，没对应章节就不填、也不显示 TAB。
+_ARK_SEC_PAT = (
+    ('tips',   r'^(?:notes?|use|usage|uses|using|tip|tips)\b'),
+    ('equip',  r'^(?:equipment|gear|attachments?|modules?|upgrades?)\b'),
+    ('gather', r'^(?:harvesting|gathering|harvest|resources)\b'),
+    ('abil',   r'^(?:abilities|ability|attacks?|skills?)\b'),
+    ('tame',   r'^(?:taming|domestication)\b'),
+    ('breed',  r'^(?:breeding|reproduction)\b'),
+    ('exp',    r'^(?:experience|exp)\b'),
+    ('spawn',  r'^(?:spawning|spawn)\b'),
+)
+_ARK_SKIP_H2 = ('Navigation menu', 'Contents', 'Changelog', 'Spotlight', 'Gallery',
+                'References', 'External links', 'See also', 'Trivia', 'Media', 'Notes and references')
+# v5833：ark 回退数据的版本戳。旧数据（_arkVer 缺失或更低）下次打开时自动重抓；
+#   只影响 _src == 'ark' 的少数物种，**不动 _WIKI_PARSE_VER**（否则 557 个 wikily 物种全部重抓）。
+_ARK_SEED_VER = 5833
+
+
+def _ark_lead_lines(raw, limit=6):
+    """页首正文（第一个 h2 之前的内容）—— 概览置顶文案的唯一来源"""
+    s = str(raw or '')
+    i = s.find('<h2')
+    head = s[:i] if i > 0 else s[:60000]
+    return _ark_flat_lines(head, limit)
+
+
+def _ark_seed(key, data):
+    """wikily 无页面时用 ark.wiki.gg 拉起资料。
+    v5832（用户口径「其他 TAB 都只填置顶文案；技巧只从 wiki 分解；留空的不显示 TAB」）：
+      · 概览 OVERVIEW.intro   <- 页首 lead 段（无 lead 时用首个可用章节首段兜底）
+      · 采集 HOME.gatherIntro + GATHER.intro <- Harvesting 章节首段
+      · 技能 HOME.abilIntro   + ABIL.notes   <- Abilities 章节首段
+      · 经验 HOME.expIntro                   <- Experience 章节首段
+      · 装备 EQUIP.intro                     <- Equipment 章节首段
+      · 技巧 OVERVIEW.tips                   <- Notes/Use/Tips 章节原文（前端只拿它做 AI 分解）
+      · 驯服 HOME.tameIntro / 繁殖 BREED_DESC / 生成 SPAWN.intro：只写文案供 AI 整理，
+        **不给 TAB**（缺结构化数据，显示出来只有「未收录」一句，与「留空的不显示」冲突）
+      · DATA._avail = 实际有内容的 TAB 索引（0 概览/3 采集/5 技能/6 经验/7 技巧/9 装备）
+    返回 True = 至少拿到一段可用资料。"""
+    import re as _re
+    cands = []
+    def _add(x):
+        x = str(x or '').strip()
+        if x and x not in cands:
+            cands.append(x)
+    _add(key)
+    _add(str(key).replace('_', ' '))
+    _add(str(key).replace('_', ''))
+    try:
+        em = _wiki_en_map()
+        _add(em.get(key))
+        _add(em.get(str(key).lower()))
+    except Exception:
+        pass
+    raw = None
+    used = ''
+    for c in cands[:5]:
+        try:
+            _u2, code, r = _ark_fetch(c, timeout=30)
+            if code == 200 and len(r) > 20000 and 'Just a second' not in r[:4000]:
+                raw = r
+                used = c
+                break
+        except Exception:
+            continue
+    if not raw:
+        return False
+    lead = _ark_lead_lines(raw, 6)
+    sec = {}
+    for t, seg in _ark_h2_segs(raw):
+        tt = str(t or '').strip()
+        if (not tt) or (tt in _ARK_SKIP_H2):
+            continue
+        for k, pat in _ARK_SEC_PAT:
+            if k in sec:
+                break
+            if _re.match(pat, tt, _re.I):
+                ls = _ark_flat_lines(seg, 6)      # 只要章节首段 = 置顶文案
+                if ls:
+                    sec[k] = ls
+                break
+    ov = list(lead)
+    if not ov:
+        # 载具页常是 infobox 直接开头（无页首正文）⇒ 用首个可用章节首段兜底；
+        # 否则 _wiki_get 的 is_ready（要求 OVERVIEW.intro 非空）永不成立，任务永远不 ready。
+        for _k in ('equip', 'gather', 'abil', 'tame', 'breed', 'exp', 'spawn', 'tips'):
+            if sec.get(_k):
+                ov = list(sec[_k])
+                break
+    tips = list(sec.get('tips') or [])
+    if not tips:
+        # 无 Notes/Use 章节时用页首 + 各章节首段拼技巧素材（仍全部来自 wiki 原文）
+        tips = list(ov)
+        for _k in ('equip', 'gather', 'abil', 'tame', 'breed', 'exp'):
+            for _x in (sec.get(_k) or [])[:3]:
+                if _x not in tips:
+                    tips.append(_x)
+        tips = tips[:20]
+    if not (ov or sec or tips):
+        return False
+    home = {}
+    av = []
+    if ov:
+        av.append(0)
+    if sec.get('gather'):
+        home['gatherIntro'] = sec['gather'][:6]
+        data['GATHER'] = {'about': '', 'intro': sec['gather'][:6], 'caps': [],
+                          'nodes': [], 'nodeRes': [], 'params': {}}
+        av.append(3)
+    if sec.get('abil'):
+        home['abilIntro'] = sec['abil'][:6]
+        data['ABIL'] = {'skills': [], 'notes': sec['abil'][:6], 'videos': [], 'mats': []}
+        av.append(5)
+    if sec.get('exp'):
+        home['expIntro'] = sec['exp'][:6]
+        av.append(6)
+    if tips:
+        av.append(7)
+    if sec.get('equip'):
+        data['EQUIP'] = {'intro': sec['equip'][:6]}
+        av.append(9)
+    if sec.get('tame'):
+        home['tameIntro'] = sec['tame'][:6]
+    if sec.get('breed'):
+        data['BREED_DESC'] = sec['breed'][:6]
+    if sec.get('spawn'):
+        data['SPAWN'] = {'intro': sec['spawn'][:6]}
+    if home:
+        data['HOME'] = home
+    av.sort()
+    data['DATA'] = {'zh': '', 'slug': str(key).lower(), 'title': '', 'tabs': [],
+                    'fetched_at': int(time.time() * 1000), 'tabHtml': {},
+                    '_src': 'ark', '_arkSlug': used, '_avail': av, '_arkVer': _ARK_SEED_VER}
+    data['OVERVIEW'] = {'intro': ov[:6], 'tips': tips[:20], 'stats': [], 'bp': ''}
+    return True
 
 
 ASA_DATA = os.environ.get('ASA_DATA', os.path.join(DINO_DATA, 'asa-data'))
@@ -5577,6 +5991,11 @@ class Handler(BaseHTTPRequestHandler):
             _m = _z.get('map') or {}
             self._send(200, {'ok': True, 'slug': _sg, 'map': _m,
                              'merged': _z.get('merged') or None, 'count': len(_m)})
+        elif path == '/api/item/tips':
+            # v5819：物品「指南」AI 整理结果（全服共享缓存）。?cls=Stopwatch
+            _qs = parse_qs(parsed.query)
+            _cl = (_qs.get('cls') or [''])[0].strip()
+            self._send(200, {'ok': True, 'cls': _cl, 'merged': _item_tips_read(_cl)})
         elif path.startswith('/api/wiki_item/'):
             # v212：物品 wiki 按需抓取。/api/wiki_item/index | /api/wiki_item/<Cls> | .../progress
             _irest = path[len('/api/wiki_item/'):].strip('/')
@@ -5698,7 +6117,7 @@ class Handler(BaseHTTPRequestHandler):
             if not _sg:
                 self._send(400, {'ok': False, 'error': 'slug required'})
                 return
-            _n = _wt_write(_sg, body.get('blocks'))
+            _n = _wt_write(_sg, body.get('blocks'), force=bool(body.get('force')))
             self._send(200, {'ok': True, 'slug': _sg, 'added': _n,
                              'ready': bool(_wt_read(_sg))})
             return
@@ -5715,9 +6134,19 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(400, {'ok': False, 'error': 'nothing to save (items/merged both empty)'})
                 return
             _mg = body.get('merged')
-            _n = _dodo_zh_merge(g('slug') or g('cls'), _arr, _mg)
+            _n = _dodo_zh_merge(g('slug') or g('cls'), _arr, _mg, force=bool(body.get('force')))
             _m, _sg = _dodo_zh_map(g('slug') or g('cls'))
             self._send(200, {'ok': True, 'slug': _sg, 'added': _n, 'count': len(_m)})
+            return
+        if path == '/api/item/tips':
+            # v5819：物品指南 AI 整理回写。body {cls, merged:{points,secs,pv}, force}
+            _cl = g('cls')
+            _mg = body.get('merged')
+            if (not _cl) or (not isinstance(_mg, dict)):
+                self._send(400, {'ok': False, 'error': 'cls and merged required'})
+                return
+            _n2 = _item_tips_merge(_cl, _mg, force=bool(body.get('force')))
+            self._send(200, {'ok': True, 'cls': _cl, 'added': _n2, 'merged': _item_tips_read(_cl)})
             return
         if path == '/api/bb_notes':
             _u = g('username')

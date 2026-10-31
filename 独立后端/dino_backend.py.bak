@@ -1520,10 +1520,17 @@ def _dodo_zh_merge(key, pairs, merged=None):
             continue
         m[tid] = tx[:2000]
         n += 1
-    # 长文：校验结构后写入，且只写一次
+    # 长文：校验结构后写入。
+    # v5754（用户报「长文里 juvenile/Tek/Alpha/boss 又回来了」）：
+    #   原实现 secs 是「只写一次」，pv 只覆盖 auth ⇒ prompt 升级后长文永远停在最老那版。
+    #   现改为：**secs 与 auth 共用同一个 pv 门槛** —— 旧缓存无该字段，或 pv 变大，才允许覆盖。
     if isinstance(merged, dict):
+        _pv_new = merged.get('pv') if isinstance(merged.get('pv'), int) else 0
+        _mg_old = z.get('merged') if isinstance(z.get('merged'), dict) else {}
+        _pv_old = _mg_old.get('pv') if isinstance(_mg_old.get('pv'), int) else 0
+        _upg = _pv_new > _pv_old
         secs = merged.get('secs')
-        if isinstance(secs, list) and secs and not ((z.get('merged') or {}).get('secs') or []):
+        if isinstance(secs, list) and secs and ((not (_mg_old.get('secs') or [])) or _upg):
             clean = []
             for s in secs[:12]:
                 if not isinstance(s, dict):
@@ -1533,23 +1540,26 @@ def _dodo_zh_merge(key, pairs, merged=None):
                 if tt:
                     clean.append({'h': hh, 't': tt})
             if clean:
-                z['merged'] = {'secs': clean, 'ts': int(time.time())}
+                _mm = dict(_mg_old)
+                _mm['secs'] = clean
+                if _pv_new:
+                    _mm['pv'] = _pv_new
+                _mm['ts'] = int(time.time())
+                z['merged'] = _mm
+                _mg_old = _mm
                 n += 1
-        # v5748：原文权威要点（技巧 TAB 置顶块）—— 同样只写一次，秒级补写（旧缓存无 auth 时可补）
-        # v5750：新增 pv（prompt 版本戳）—— pv 变大时允许覆盖旧 auth（prompt/数据源升级后自动刷新）
+        # v5748：原文权威要点（技巧 TAB 置顶块）
+        # v5750：pv 变大时允许覆盖旧 auth（prompt/数据源升级后自动刷新）
         auth = merged.get('auth')
-        _pv_new = merged.get('pv') if isinstance(merged.get('pv'), int) else 0
-        _mg_old = z.get('merged') if isinstance(z.get('merged'), dict) else {}
-        _pv_old = _mg_old.get('pv') if isinstance(_mg_old.get('pv'), int) else 0
         _has_old = bool(_mg_old.get('auth') or [])
-        if isinstance(auth, list) and auth and ((not _has_old) or (_pv_new > _pv_old)):
+        if isinstance(auth, list) and auth and ((not _has_old) or _upg):
             _a = []
             for s in auth[:12]:
                 tx = str(s or '').strip()[:1200]
                 if tx:
                     _a.append(tx)
             if _a:
-                _mm = z.get('merged') if isinstance(z.get('merged'), dict) else {}
+                _mm = dict(_mg_old)
                 _mm['auth'] = _a
                 if _pv_new:
                     _mm['pv'] = _pv_new
