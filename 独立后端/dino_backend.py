@@ -135,6 +135,50 @@ def _wiki_parse_overview(raw):
     return out
 
 
+def _wiki_parse_stats(raw):
+    """v5851（用户口径「能力为啥都没取到」）：解析 wikily「基础属性」表
+
+    输出与前端 OVERVIEW.stats 同口径：[[属性名, 基础值, 每级倍率], ...]
+      · 前端列 = 基础 / 野生 +/级（base*pw）/ 已驯服 +/级 / 野生成长（pw）
+      · wikily 表头 = 属性 | 基础 | 野生 +/级 | 已驯服 +/级 | 野生成长
+      · pw = 野生+/~/基础（实测生命 10000 / +2000 / 20% 三者一致）
+    """
+    import re as _re
+    seg = ''
+    for _t in (u'基础属性', u'Stats', u'Base Stats'):
+        seg = _wiki_h2seg_like(raw, _t)
+        if seg:
+            break
+    if not seg:
+        return []
+
+    def _num(s):
+        s = str(s or '').replace(',', '').replace(u'，', '').replace(u'%', '').replace('*', '').strip()
+        m = _re.search(r'-?\d+(?:\.\d+)?', s)
+        return float(m.group(0)) if m else None
+
+    out, seen = [], set()
+    for r in _re.findall(r'<tr[^>]*>([\s\S]*?)</tr>', seg):
+        cells = [_wiki_strip(x) for x in _re.findall(r'<t[dh][^>]*>([\s\S]*?)</t[dh]>', r)]
+        if len(cells) < 3:
+            continue
+        nm = str(cells[0] or '').strip()
+        if (not nm) or nm in seen or len(nm) > 12:
+            continue
+        if nm in (u'属性', u'Attribute', u'Attributes', u'Stats'):
+            continue
+        base = _num(cells[1])
+        add = _num(cells[2])
+        if base is None:
+            continue
+        pw = (add / base) if (base and add) else 0.0
+        seen.add(nm)
+        out.append([nm, base, pw])
+        if len(out) >= 12:
+            break
+    return out
+
+
 def _wiki_nextdata(raw):
     """提取 Next.js 的 self.__next_f 载荷，反转义后拼成一整段（数据全在里面）"""
     import re as _re
@@ -356,6 +400,42 @@ def _wk_forms(x):
     return r
 
 
+_UE_BP_RE = _re.compile(r'^(.*?)_character_bp(?:_([A-Za-z0-9_]+))?$', _re.I)
+
+
+def _wk_ue_names(key):
+    """UE 类名 -> wiki 页名形态（v5872）
+
+    背景（用户口径「wikily 不可能没有飞龙的数据页」）：
+      UE 类名是「主名_Character_BP_变体」，wiki 上的页名却是英文语序「变体 主名」
+      例：Wyvern_Character_BP_Fire_C -> Fire Wyvern -> fire-wyvern
+      （wiki.gg 同：Fire_Wyvern）
+      缺了这一步反转，候选只剩 wyvern-character-bp-fire，白名单必然不命中 -> 全部 404。
+
+    返回按可信度排序的名称列表（不含归一化，交给 _wk_forms 处理）：
+      'Wyvern_Character_BP_Fire_C' -> ['Fire Wyvern', 'Wyvern Fire', 'Wyvern']
+      'Ankylo_Character_BP_C'      -> ['Ankylo']
+      'Rex'                        -> []   （非 UE 类名形态，不参与）
+    """
+    s = str(key or '').strip()
+    if s.lower().endswith('_c'):
+        s = s[:-2]
+    m = _UE_BP_RE.match(s)
+    if not m:
+        return []
+    base = _re.sub(r'_+', ' ', (m.group(1) or '')).strip()
+    var = _re.sub(r'_+', ' ', (m.group(2) or '')).strip()
+    out = []
+    if var and base:
+        out.append(var + ' ' + base)
+        out.append(base + ' ' + var)
+    elif var and not base:
+        out.append(var)
+    if base:
+        out.append(base)
+    return out
+
+
 def _wiki_slug_cands(key):
     """短名/物种名 -> wikily slug 候选（v175）。
 
@@ -380,6 +460,13 @@ def _wiki_slug_cands(key):
             seq.append(a)
             if em.get(a):
                 seq.append(em[a])
+    # v5872：UE 类名反转形态追加在**末尾** —— 已有物种的候选顺序完全不变，
+    #   只有原始形态全军覆没时才会用到 'Fire Wyvern' 这类名称。
+    try:
+        for _un in _wk_ue_names(k):
+            seq.append(_un)
+    except Exception:
+        pass
 
     res = _wk_lookup(seq, sn)
 
@@ -1058,7 +1145,44 @@ def _wiki_worker(key):
                     _wiki_log('calcFAIL %s %s' % (key, str(_eC)[:100]))
                 data['DATA'] = {'zh': ov['zh'], 'slug': _used, 'title': '', 'tabs': [],
                                 'fetched_at': int(time.time() * 1000), 'tabHtml': {}}
-                data['OVERVIEW'] = {'intro': ov['intro'], 'tips': ov['tips'], 'stats': [], 'bp': ''}
+                _st = []
+                try:
+                    _st = _wiki_parse_stats(raw)
+                except Exception as _eS:
+                    _st = []
+                if _st:
+                    _wiki_log('stats %s +%d' % (key, len(_st)))
+                data['OVERVIEW'] = {'intro': ov['intro'], 'tips': ov['tips'], 'stats': _st, 'bp': ''}
+                # v5851（用户口径「操作方法」）：载具/器械的 Controls / Utility / Fuel 只在 wiki.gg，
+                #   wikily 抓成功也要去补一次，并入技能页置顶文案（abilIntro）。
+                try:
+                    _apName = ''
+                    try:
+                        _apName = (_wk_ark_pages() or {}).get(key) or ''
+                    except Exception:
+                        _apName = ''
+                    if _apName:
+                        _au, _ac, _ar = _ark_fetch(_apName, timeout=30)
+                        if _ac == 200 and _ar and len(_ar) > 5000 and 'Just a second' not in _ar[:4000]:
+                            _vls = _ark_vehicle_lines(_ar)
+                            if _vls:
+                                _arrV = list(extra.get(u'abilIntro') or [])
+                                for _x in _vls:
+                                    if _x not in _arrV:
+                                        _arrV.append(_x)
+                                if _arrV:
+                                    extra[u'abilIntro'] = _arrV
+                                _wiki_log('arkVehicle %s %s +%d' % (key, _apName, len(_vls)))
+                            # v5855：操作键单独结构化存下来，前端「技能」页直接渲染成键位表
+                            try:
+                                _cks = _ark_controls(_ar)
+                                if _cks:
+                                    extra[u'abilKeys'] = _cks
+                                    _wiki_log('arkControls %s +%d' % (key, len(_cks)))
+                            except Exception as _eK:
+                                _wiki_log('arkControlsFAIL %s %s' % (key, str(_eK)[:100]))
+                except Exception as _eV:
+                    _wiki_log('arkVehicleFAIL %s %s' % (key, str(_eV)[:120]))
                 data['HOME'] = extra or {}
             elif block == 'ABIL':
                 data['ABIL'] = _wiki_parse_abil(raw)
@@ -1133,7 +1257,17 @@ def _wk_task_get(key, start, cfg):
     if cached and cfg['is_ready'](cached):
         extra = ready_extra(cached) or {}
         miss = extra.get('_miss')
-        if not miss or not start:
+        # v5862（用户口径「战车 的 wiki 似乎没有和 泰克悬浮艇 走同样的解析逻辑」）：
+        #   ark 回退物种的 wiki.gg 页面可能本身就是 stub（BattleRig 只有 Equipment/Notes，
+        #   没有 HOME/ABIL/HARVEST/GATHER 段）⇒ _miss 永远非空 ⇒ 每次带 start 的请求都重新起抓取任务、
+        #   前端永远拿不到 ready（TAB 残缺 + 反复重抓 wiki.gg）。
+        #   只要 is_ready 已通过（_src=='ark' 且 _arkVer 达标），就按 ready 返回，_miss 照旧附带供调试。
+        _isArkCache = False
+        try:
+            _isArkCache = ((cached.get('DATA') or {}).get('_src') == 'ark')
+        except Exception:
+            _isArkCache = False
+        if not miss or not start or _isArkCache:
             d = {idf: key, 'status': 'ready', 'done': total, 'total': total,
                  'data': cached, '_from': 'cache'}
             d.update(extra)
@@ -1200,7 +1334,17 @@ def _wk_task_get(key, start, cfg):
     if cached and cfg['is_ready'](cached):
         extra = ready_extra(cached) or {}
         miss = extra.get('_miss')
-        if not miss or not start:
+        # v5862（用户口径「战车 的 wiki 似乎没有和 泰克悬浮艇 走同样的解析逻辑」）：
+        #   ark 回退物种的 wiki.gg 页面可能本身就是 stub（BattleRig 只有 Equipment/Notes，
+        #   没有 HOME/ABIL/HARVEST/GATHER 段）⇒ _miss 永远非空 ⇒ 每次带 start 的请求都重新起抓取任务、
+        #   前端永远拿不到 ready（TAB 残缺 + 反复重抓 wiki.gg）。
+        #   只要 is_ready 已通过（_src=='ark' 且 _arkVer 达标），就按 ready 返回，_miss 照旧附带供调试。
+        _isArkCache = False
+        try:
+            _isArkCache = ((cached.get('DATA') or {}).get('_src') == 'ark')
+        except Exception:
+            _isArkCache = False
+        if not miss or not start or _isArkCache:
             d = {idf: key, 'status': 'ready', 'done': total, 'total': total,
                  'data': cached, '_from': 'cache'}
             d.update(extra)
@@ -1260,11 +1404,13 @@ def _wiki_tipfix(obj):
 def _wiki_get(key, start=True):
     """取物种 wiki 状态（v163：流程统一走 _wk_task_get）"""
     def _ready(c):
-        if not (c.get('OVERVIEW') or {}).get('intro'):
-            return False
-        # v5833：ark.wiki.gg 回退数据按 _ARK_SEED_VER 单独重抓（旧数据 _arkVer 缺失 = 0）
+        # v5835（用户口径「概览不要强行填充」）：ark 回退数据允许 OVERVIEW.intro 为空，
+        #   否则概览留空时本函数恒 False，任务永远不 ready（前端会一直转圈并反复重抓）。
+        #   版本过低时返回 False 照样触发重抓（v5833 口径不变）。
         _d0 = c.get('DATA') or {}
-        if _d0.get('_src') == 'ark' and int(_d0.get('_arkVer') or 0) < _ARK_SEED_VER:
+        if _d0.get('_src') == 'ark':
+            return int(_d0.get('_arkVer') or 0) >= _ARK_SEED_VER
+        if not (c.get('OVERVIEW') or {}).get('intro'):
             return False
         # v260: 老缓存版本戳低 -> 强制重抓（旧驯服食物口数/时长是错的）
         return int(c.get('_pv') or 0) >= _WIKI_PARSE_VER
@@ -1604,12 +1750,12 @@ def _dodo_get(key, force=False):
 
 def _dodo_zh_doc(key):
     """整份中文缓存文档：{'map': {tipId: 译文}, 'merged': {secs:[{h,t}]}}"""
-    slug = _dodo_slug(key)
+    slug = _cache_slug(key)   # v5871：按变体隔离（飞龙 _Ice/_Fire 不再共用 merged）
     return (_dodo_read(slug, zh=True) or {}), slug
 
 
 def _dodo_zh_map(key):
-    slug = _dodo_slug(key)
+    slug = _cache_slug(key)   # v5871：按变体隔离
     z = _dodo_read(slug, zh=True) or {}
     return (z.get('map') or {}), slug
 
@@ -1621,7 +1767,7 @@ def _dodo_zh_merge(key, pairs, merged=None, force=False):
     · merged = 整合后的攻略长文 {'secs': [{'h': 标题, 't': 正文}]}
               —— v5742 新增。整篇只**写一次**（已有则不覆盖），保证所有人看到同一份。
     """
-    slug = _dodo_slug(key)
+    slug = _cache_slug(key)   # v5871：回写也要按变体隔离
     if not slug:
         return 0
     z = _dodo_read(slug, zh=True) or {}
@@ -1711,6 +1857,34 @@ _WT_BLOCKS = ('ovIntro', 'tameIntro', 'gatherIntro', 'harvestIntro', 'abilIntro'
               'breedDesc', 'abil', 'spawnIntro', 'gearTips')
 
 
+_WT_VAR_RE = _re.compile(r'_character_bp_([a-z0-9]+)_c$', _re.I)
+
+
+def _wt_variant(key):
+    """v5871：从物种类名抽变体后缀：Wyvern_Character_BP_Fire_C -> 'fire'；无变体 -> ''"""
+    m = _WT_VAR_RE.search(str(key or '').strip())
+    if not m:
+        return ''
+    v = m.group(1).lower()
+    return '' if v in ('', 'c') else v
+
+
+def _cache_slug(key):
+    """v5871（用户口径「火焰飞龙 wiki 为啥显示的是寒冰飞龙的数据」）：
+
+    **AI 整理类缓存的文件名应用键** = dododex slug + 变体后缀。
+    原因：飞龙三姐妹（寒冰/火焰/毒素）在 dododex 上同属 `wyvern` 一个 slug
+      ⇒ `wikitext_wyvern.json` / `dodo_wyvern_zh.json` 被三个物种共用，谁先整理另外两个就读到谁的内容。
+    只用于「AI 整理结果」类缓存（wikitext_* / dodo_*_zh）；
+      原始英文心得 `dodo_<slug>.json` **保持共用**（dododex 上本就是同一页）。
+    """
+    sg = _dodo_slug(key)
+    if not sg:
+        return ''
+    v = _wt_variant(key)
+    return (sg + '_' + v) if v else sg
+
+
 def _wt_path(slug):
     return os.path.join(WIKI_CACHE_DIR, 'wikitext_%s.json' % slug)
 
@@ -1727,6 +1901,29 @@ def _wt_read(slug):
             return json.loads(f.read())
     except Exception:
         return None
+
+
+def _wt_flat_item(x):
+    """v5838：把 AI 整理结果里的数组元素拍成可读字符串（对象则抽字段值）"""
+    if x is None:
+        return ''
+    if isinstance(x, str):
+        return x.strip()
+    if isinstance(x, (int, float, bool)):
+        return str(x)
+    if isinstance(x, dict):
+        for _k in ('t', 'text', 'point', 'zh', 'desc', 'title', 'name', 'note', 'n', 'd', 'v', 'k', 'a', 'p'):
+            _v = x.get(_k)
+            if isinstance(_v, str) and _v.strip():
+                return _v.strip()
+        _vals = []
+        for _k2, _v2 in x.items():
+            if isinstance(_v2, str) and _v2.strip():
+                _vals.append(_v2.strip())
+            elif isinstance(_v2, (int, float, bool)):
+                _vals.append(str(_v2))
+        return u'：'.join(_vals)
+    return ''
 
 
 def _wt_write(slug, blocks, force=False):
@@ -1755,9 +1952,16 @@ def _wt_write(slug, blocks, force=False):
                         clean['abil'] = arr
             else:
                 if isinstance(v, list):
-                    arr = [str(x).strip()[:3000] for x in v[:40] if str(x or '').strip()]
-                    if arr:
-                        clean[k] = arr
+                    # v5838：AI 可能把元素写成对象（{装备:"…", 说明:"…"}）—— 旧代码 str(x) 会存成
+                    #   Python repr（"{'装备': '…'}"）或前端已污染的 "[object Object]"。
+                    #   这里抽可读文本再存，两种脏数据都不落地。
+                    _arr = []
+                    for _x in v[:40]:
+                        _tx = _wt_flat_item(_x)
+                        if _tx and _tx != '[object Object]' and _tx not in _arr:
+                            _arr.append(_tx[:3000])
+                    if _arr:
+                        clean[k] = _arr
         if not clean:
             return 0
         clean['_ts'] = int(time.time())
@@ -1995,6 +2199,104 @@ def _ark_keys_from_usage(lines):
     return out[:12]
 
 
+_WK_ARK_PAGES = None
+
+
+def _wk_ark_pages():
+    """v5851：物种类名 -> wiki.gg 页名。
+    载具 / 器械的「操作方法（Controls）」「能力（Utility / Fuel / Basic Info）」
+    **wikily 没有**，只有 wiki.gg 有 ⇒ 这张表里列出来的才会去补抓。"""
+    global _WK_ARK_PAGES
+    if _WK_ARK_PAGES is not None:
+        return _WK_ARK_PAGES
+    obj, p = _wk_json_load(['wiki_ark_pages.json'],
+                           pick=lambda o: (o.get('map') if isinstance(o, dict) and 'map' in o else o) or {})
+    _WK_ARK_PAGES = {str(k): str(v) for k, v in (obj or {}).items() if k and v} if isinstance(obj, dict) else {}
+    if p:
+        print('[wiki] ark pages loaded %d from %s' % (len(_WK_ARK_PAGES), p))
+    return _WK_ARK_PAGES
+
+
+def _ark_vehicle_lines(raw, limit=24):
+    """v5851：wiki.gg 载具页的操作方法 / 能力段 -> 文本行
+
+    v5854（用户口径「技能里为啥没取到操作键」根因）：
+      v5851 首版把 basic info 也纳入白名单、且按页面顺序取。而 wiki.gg 载具页里
+      Basic Info（Acquiring / Structures / Carriable Creatures）**排在 Controls 之前且很长**
+      ⇒ limit 额度在 Basic Info 阶段就吃光，Controls 一条都没轮到。
+      现改为：去掉 basic info；按 Controls → Utility → Fuel 优先级；每段单独限行。"""
+    segs = []
+    for t, seg in _ark_h2_segs(raw):
+        tt = str(t or '').strip().lower()
+        if tt:
+            segs.append((tt, seg))
+    out = []
+    for keys in (('controls', '操作方法', '操作键'),
+                 ('utility', '能力', '用途'),
+                 ('fuel', '燃料')):
+        for tt, seg in segs:
+            if not any(tt.startswith(w) for w in keys):
+                continue
+            n = 0
+            for ln in _ark_clean_lines(_ark_flat_lines(seg, 60)):
+                s = str(ln or '').strip()
+                if len(s) < 3 or len(s) > 200 or s in out:
+                    continue
+                out.append(s)
+                n += 1
+                if n >= 14 or len(out) >= limit:
+                    break
+            if len(out) >= limit:
+                return out[:limit]
+    return out[:limit]
+
+
+def _ark_controls(raw, limit=24):
+    """v5855：wiki.gg 载具页 Controls 段 -> [{'k': 键名, 'a': 动作}, ...]
+
+    实测来源行（Hover_Skiff）：
+      'N - Toggle headlights. Can be toggled via the radial menu, too.'
+      'X - Attempt to land and then deploy stilts/ramp.'
+      'Hold  Shift - Sprint'   /  'W S - Forward/backward movement'
+      'LMB/RMB to toggle Tractor Turret (changing field of view to below the skiff).'
+      'Press LMB to let go of a target.'
+    """
+    import re as _re
+    seg = ''
+    for t, s in _ark_h2_segs(raw):
+        tt = str(t or '').strip().lower()
+        if tt.startswith('controls') or tt.startswith(u'操作'):
+            seg = s
+            break
+    if not seg:
+        return []
+    out, seen = [], set()
+    for li in _re.findall(r'<li[^>]*>([\s\S]*?)</li>', seg):
+        s = _wiki_strip(li)
+        s = _re.sub(r'\s+', ' ', s).strip()
+        if (not s) or len(s) > 220:
+            continue
+        # 去掉前置动词，保留「键 - 动作」或「键 to 动作」
+        m = _re.match(r'^(?:Hold|Tap|Press|Held)?\s*([A-Za-z0-9/ ]{1,18}?)\s*[-–—]\s*(.+)$', s)
+        if not m:
+            m = _re.match(r'^(?:Hold|Tap|Press|Held)?\s*([A-Za-z0-9/]{1,12}?)\s+to\s+(.+)$', s)
+        if not m:
+            continue
+        k = _re.sub(r'\s+', ' ', str(m.group(1) or '')).strip()
+        a = str(m.group(2) or '').strip()
+        k = k.replace(u'⇧', 'Shift').replace(u'⌥', 'Alt').strip()
+        if (not k) or (not a) or len(k) > 16:
+            continue
+        key = k.lower() + '|' + a.lower()[:40]
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({'k': k, 'a': a[:140]})
+        if len(out) >= limit:
+            break
+    return out
+
+
 def _ark_usage_lines(raw):
     """ARK Wiki 物品页 -> 使用段纯文本行（v5818：改用 _ark_is_sec 前缀判定，兼容 "Use"）"""
     for t, seg in _ark_h2_segs(raw):
@@ -2054,6 +2356,8 @@ def _wk_item_mats(raw, self_zh=''):
         nm = str(nm or '').strip()
         if not nm or nm in seen or nm == self_zh:
             return
+        # v5849（用户实测「金属锭 4,100 被拆成 4 和 ,100金属锭」）：数量先去千分位
+        q = str(q).replace(',', '').replace(u'，', '').replace(' ', '').strip()
         try:
             q = int(q)
         except Exception:
@@ -2075,9 +2379,9 @@ def _wk_item_mats(raw, self_zh=''):
             if not nm:
                 nm2 = _re.search(u'ark-slot-name[^>]*>([^<]{1,30})<', body)
                 nm = nm2.group(1).strip() if nm2 else ''
-            qm = _re.search(u'ark-slot-count[^>]*>[^0-9]{0,10}([0-9]+)', body)
+            qm = _re.search(u'ark-slot-count[^>]*>[^0-9]{0,10}([0-9][0-9,]*)', body)
             if not qm:
-                qm = _re.search(u'×\\s*([0-9]+)', body)
+                qm = _re.search(u'×\\s*([0-9][0-9,]*)', body)
             _push(nm, (qm.group(1) if qm else 0), slug)
             if len(out) >= 20:
                 return out
@@ -2085,7 +2389,7 @@ def _wk_item_mats(raw, self_zh=''):
     txt = _wiki_strip(raw or '')
     _BAD = (u'制作', u'配方', u'工作台', u'经验', u'时间', u'倍率',
             u'计算', u'印痕', u'等级', u'数量', u'品质')
-    for m2 in _re.finditer(u'×\\s*(\\d+)\\s*([^\\s×<>0-9][^\\s×<>]{0,18})', txt):
+    for m2 in _re.finditer(u'×\\s*([0-9][0-9,]*)\\s*([^\\s×<>0-9,][^\\s×<>]{0,18})', txt):
         nm = m2.group(2).strip()
         if any(b in nm for b in _BAD) or _re.search(r'[0-9]$', nm):
             continue
@@ -2853,6 +3157,12 @@ def _ark_probe(slug):
 #   现改为**每个 TAB 只填它自己的置顶文案（章节首段）**，没对应章节就不填、也不显示 TAB。
 _ARK_SEC_PAT = (
     ('tips',   r'^(?:notes?|use|usage|uses|using|tip|tips)\b'),
+    # v5849（用户口径「操作方法 / 能力为啥都没取到」）：
+    #   wiki.gg 载具 / 器械页的这几段此前全被丢弃（实测 Hover_Skiff 页）。
+    ('ctrl',   r'^(?:controls?|操作|控制)\b'),
+    ('util',   r'^(?:utility|utilities|用途|使用)\b'),
+    ('fuel',   r'^(?:fuel|fueling|燃料)\b'),
+    ('base',   r'^(?:basic info|基本信息|基础信息)\b'),
     ('equip',  r'^(?:equipment|gear|attachments?|modules?|upgrades?)\b'),
     ('gather', r'^(?:harvesting|gathering|harvest|resources)\b'),
     ('abil',   r'^(?:abilities|ability|attacks?|skills?)\b'),
@@ -2865,15 +3175,62 @@ _ARK_SKIP_H2 = ('Navigation menu', 'Contents', 'Changelog', 'Spotlight', 'Galler
                 'References', 'External links', 'See also', 'Trivia', 'Media', 'Notes and references')
 # v5833：ark 回退数据的版本戳。旧数据（_arkVer 缺失或更低）下次打开时自动重抓；
 #   只影响 _src == 'ark' 的少数物种，**不动 _WIKI_PARSE_VER**（否则 557 个 wikily 物种全部重抓）。
-_ARK_SEED_VER = 5833
+# v5834：升 5834 —— 修复「页首全是站点 UI 文案」后必须让 ark 物种再重抓一次。
+# v5835：升 5835 —— 概览不再强行填充（lead 为空就保持空）+ _avail 去掉技巧位。
+_ARK_SEED_VER = 5835
+
+# v5834（用户口径「其他 TAB 都只填置顶文案」）：
+#   实测 BattleRig 页第一个 <h2> 之前**没有正文**，只有 infobox + MediaWiki 导航栏 ⇒
+#   _ark_lead_lines() 捞回 6 条全是站点噪声：
+#     'BattleRig - ARK Official Community Wiki' / 'Indie game deals' / 'Create account' /
+#     'Log in' / 'Toggle personal tools menu' / 'Create account'
+#   概览置顶文案整段变成垃圾。这里统一加噪声黑名单，lead 与各章节首段都要过一遍。
+_ARK_NOISE_RE = (
+    r'^.{1,80}\s+-\s+ARK Official Community Wiki$',
+    r'^(?:Jump to content|Navigation menu|Main page|Contents|Current events|Random page|'
+    r'Recent changes|Help|Contribute|Create account|Log in|Log out|Personal tools|'
+    r'Search|Indie game deals|Donate|Special pages|What links here|Related changes|'
+    r'Printable version|Permanent link|Page information|Cite this page|Read|Edit|'
+    r'Edit source|View history|Talk|From ARK: Survival Ascended Wiki|From ARK Wiki)$',
+    r'^Toggle\b',
+    r'^(?:Deutsch|Español|Français|Italiano|Magyar|Nederlands|Polski|Português|'
+    r'Português do Brasil|Suomi|Svenska|Türkçe|日本語|한국어|中文|Русский)$',
+)
+_ARK_NOISE_CACHE = None
+
+
+def _ark_is_noise(s):
+    """v5834：是否 MediaWiki 站点 UI 文案（页标题 / 登录注册 / 侧栏 / 语言列表）"""
+    global _ARK_NOISE_CACHE
+    if _ARK_NOISE_CACHE is None:
+        import re as _re0
+        _ARK_NOISE_CACHE = [_re0.compile(p, _re0.I) for p in _ARK_NOISE_RE]
+    for _rx in _ARK_NOISE_CACHE:
+        if _rx.match(s):
+            return True
+    return False
+
+
+def _ark_clean_lines(lines):
+    """v5834：去空 / 去短串 / 去站点 UI 噪声 / 去重"""
+    out = []
+    for x in (lines or []):
+        t = str(x or '').strip()
+        if len(t) < 8:
+            continue
+        if _ark_is_noise(t):
+            continue
+        if t not in out:
+            out.append(t)
+    return out
 
 
 def _ark_lead_lines(raw, limit=6):
-    """页首正文（第一个 h2 之前的内容）—— 概览置顶文案的唯一来源"""
+    """页首正文（第一个 h2 之前的内容）—— 概览置顶文案的唯一来源（已过噪声过滤）"""
     s = str(raw or '')
     i = s.find('<h2')
     head = s[:i] if i > 0 else s[:60000]
-    return _ark_flat_lines(head, limit)
+    return _ark_clean_lines(_ark_flat_lines(head, limit * 4))[:limit]
 
 
 def _ark_seed(key, data):
@@ -2898,6 +3255,13 @@ def _ark_seed(key, data):
     _add(key)
     _add(str(key).replace('_', ' '))
     _add(str(key).replace('_', ''))
+    # v5872：UE 类名反转形态（Wyvern_Character_BP_Fire -> Fire Wyvern）
+    #   ark.wiki.gg 的页名就是英文语序（Fire_Wyvern），不反转必然 404。
+    try:
+        for _un2 in _wk_ue_names(key):
+            _add(_un2)
+    except Exception:
+        pass
     try:
         em = _wiki_en_map()
         _add(em.get(key))
@@ -2917,6 +3281,13 @@ def _ark_seed(key, data):
             continue
     if not raw:
         return False
+    # v5834：ark 回退前 worker 已给各 block 写过 {_fail:1}（wikily 404）；若本次没有对应章节，
+    #   这些失败标记会原样留在缓存里（实测 BattleRig 的 HOME/GATHER/ABIL 就是 {_fail,at,err}）
+    #   ⇒ 先清掉，避免前端拿到「有块但全是失败标记」的脏结构。
+    for _b in ('HOME', 'GATHER', 'ABIL', 'BREED_DESC', 'SPAWN', 'HARVEST', 'TAME', 'BREED', 'EXP'):
+        _v = data.get(_b)
+        if (isinstance(_v, dict) and _v.get('_fail')) or (isinstance(_v, list) and not _v):
+            data.pop(_b, None)
     lead = _ark_lead_lines(raw, 6)
     sec = {}
     for t, seg in _ark_h2_segs(raw):
@@ -2924,26 +3295,25 @@ def _ark_seed(key, data):
         if (not tt) or (tt in _ARK_SKIP_H2):
             continue
         for k, pat in _ARK_SEC_PAT:
-            if k in sec:
-                break
             if _re.match(pat, tt, _re.I):
-                ls = _ark_flat_lines(seg, 6)      # 只要章节首段 = 置顶文案
+                # v5834：段内同样过噪声过滤（MediaWiki 工具栏文案会混进段首）
+                ls = _ark_clean_lines(_ark_flat_lines(seg, 12))[:6]   # 只要章节首段 = 置顶文案
                 if ls:
-                    sec[k] = ls
+                    # v5849：同一类别可出现多个章节（Abilities + Controls + Utility）⇒ 累计合并
+                    _cur = sec.setdefault(k, [])
+                    for _x in ls:
+                        if _x not in _cur:
+                            _cur.append(_x)
                 break
+    # v5835（用户口径「概览里不要强行填充，而是直接空置」）：
+    #   lead 为空就保持空 —— 不再拿章节首段兜底（那会把装备清单当成「概述」塞进概览）。
+    #   _wiki_get 的 _ready 已对 ark 数据放宽（允许 OVERVIEW.intro 为空）。
     ov = list(lead)
-    if not ov:
-        # 载具页常是 infobox 直接开头（无页首正文）⇒ 用首个可用章节首段兜底；
-        # 否则 _wiki_get 的 is_ready（要求 OVERVIEW.intro 非空）永不成立，任务永远不 ready。
-        for _k in ('equip', 'gather', 'abil', 'tame', 'breed', 'exp', 'spawn', 'tips'):
-            if sec.get(_k):
-                ov = list(sec[_k])
-                break
-    tips = list(sec.get('tips') or [])
+    tips = _ark_clean_lines(sec.get('tips') or [])
     if not tips:
         # 无 Notes/Use 章节时用页首 + 各章节首段拼技巧素材（仍全部来自 wiki 原文）
         tips = list(ov)
-        for _k in ('equip', 'gather', 'abil', 'tame', 'breed', 'exp'):
+        for _k in ('equip', 'gather', 'abil', 'ctrl', 'util', 'fuel', 'base', 'tame', 'breed', 'exp'):
             for _x in (sec.get(_k) or [])[:3]:
                 if _x not in tips:
                     tips.append(_x)
@@ -2959,15 +3329,23 @@ def _ark_seed(key, data):
         data['GATHER'] = {'about': '', 'intro': sec['gather'][:6], 'caps': [],
                           'nodes': [], 'nodeRes': [], 'params': {}}
         av.append(3)
-    if sec.get('abil'):
-        home['abilIntro'] = sec['abil'][:6]
-        data['ABIL'] = {'skills': [], 'notes': sec['abil'][:6], 'videos': [], 'mats': []}
+    # v5849：wiki.gg 的 Controls（操作键）/ Utility（能力用途）/ Basic Info（载具能力描述）
+    #   与 Abilities 同属「能力 + 操作」，一并写进技能块。
+    _ab = []
+    for _k in ('abil', 'ctrl', 'util', 'base'):
+        for _x in (sec.get(_k) or []):
+            if _x not in _ab:
+                _ab.append(_x)
+    _ab = _ab[:12]
+    if _ab:
+        home['abilIntro'] = _ab[:6]
+        data['ABIL'] = {'skills': [], 'notes': _ab, 'videos': [], 'mats': []}
         av.append(5)
     if sec.get('exp'):
         home['expIntro'] = sec['exp'][:6]
         av.append(6)
-    if tips:
-        av.append(7)
+    # v5835（用户口径「技巧 TAB 按有没有整理出技巧来决定展示」）：
+    #   技巧位不再由后端 _avail 决定 —— 前端按 LB_TIPS.merged 是否有整理结果动态加。
     if sec.get('equip'):
         data['EQUIP'] = {'intro': sec['equip'][:6]}
         av.append(9)
@@ -2985,6 +3363,478 @@ def _ark_seed(key, data):
                     '_src': 'ark', '_arkSlug': used, '_avail': av, '_arkVer': _ARK_SEED_VER}
     data['OVERVIEW'] = {'intro': ov[:6], 'tips': tips[:20], 'stats': [], 'bp': ''}
     return True
+
+
+# ===== v5874：地图 Wiki（源 = wikily.gg 中文站，与物种 wiki 同一个站、同一个抓取器）=====
+# 用户口径（2026-11-01）：
+#   · 「按照wiki里的规则，在没有AI整理之前 只显示从wikily取到的中文内容」
+#   · 「我说的同构是和物种物品wiki的所有规则方法样式结构完全逐字节照抄」
+#   · 「Bob 是被整个项目过滤掉的，直接别考虑」
+#   · v5873 的错误：主源误用 ark.wiki.gg（英文站）并把英文原文整块渲染 ⇒ 本版全部删掉
+# 设计（对齐物种侧）：
+#   · 源：WIKI_MAP_ROOT + '/<slug>'（zh-cn），抓取走 _wiki_fetch_page（与 _wiki_worker 同一函数）
+#   · 只保留中文行（纯英文行丢弃）—— 未整理前只显示 wikily 中文原文
+#   · 缓存 wiki_cache/mapwiki_<id>.json；**失败不落缓存**
+_MW_ROOT = 'https://wikily.gg/zh-cn/ark-survival-ascended/maps'
+_MW_SLUGS = {
+    'Isl': 'the-island', 'Sco': 'scorched-earth', 'Cen': 'the-center', 'Abe': 'aberration',
+    'Ext': 'extinction', 'Ast': 'astraeos', 'Rag': 'ragnarok', 'Val': 'valguero',
+    'Los': 'lost-colony', 'Gen': 'genesis',
+}
+_MW_NAMES = {'Isl': u'孤岛', 'Sco': u'焦土', 'Cen': u'核心岛', 'Abe': u'畸变', 'Ext': u'灭绝',
+             'Ast': u'星耀', 'Rag': u'仙境', 'Val': u'瓦尔盖罗', 'Los': u'失落地', 'Gen': u'创世'}
+_MW_VER = 7   # v5899：ark 页地址修正 → 旧缓存失效重抓
+# 块键 -> TAB 中文名（顺序即 TAB 顺序；空块不显示，与物种侧「留空的不显示 TAB」同口径）
+_MW_TABS = (
+    ('OVERVIEW', u'概览'),
+    ('BIOME', u'群系'),
+    ('RES', u'资源'),
+    ('CAVE', u'洞穴'),
+    ('CREATURE', u'生物'),
+    ('BOSS', u'首领'),
+    ('TIPS', u'技巧'),
+    ('BASE', u'基地'),
+    ('LORE', u'笔记'),
+    ('STATS', u'统计'),
+)
+
+_MW_BLOCKS = tuple(k for (k, _z) in _MW_TABS)
+# 章节标题（wikily 中文站实测）-> 块。按顺序匹配，命中即停
+# v5878（用户口径「sco对应不到数据；除了isl为啥其他都只有统计数据」）：
+#   每张图的「详细指南」小节标题**完全不一样**（实测）：
+#     Isl: 地理与区域 / 独特之处 / 生存技巧 / 重要资源位置 / 推荐基地位置 / 探险家笔记与背景故事
+#     Sco: 严酷气候与天气事件 / 区域与地标 / 独特之处与挑战 / 沙漠生存指南 / 必备资源指南 / 独有生物 / 战略基地位置
+#     Cen: 独特的区域与地标 / 独特之处与优势 / 生存与建造指南 / 资源指南 / 最佳基地位置 / 首领挑战 / 必看地点
+#     Abe: 地下环境 / 独特之处 / Aberration 生存指南 / 必备资源指南 / 独有生物 / 战略基地位置 / 发展路线
+#     Ast: 多样的生物群系与区域 / 独特之处与机制 / 生存策略 / 资源指南 / 值得关注的生物 / 首领与小首领战 / …
+#   固定标题硬匹配只能认出孤岛 ⇒ 改为「语义归类」，顺序即优先级（先命中先归类）。
+_MW_TITLE_MAP = (
+    ('CAVE',     u'洞穴|神器'),
+    ('RES',      u'资源|物资|材料'),          # 优先于「指南」：「必备资源指南」应归资源
+    ('BASE',     u'基地'),
+    ('BOSS',     u'首领|竞技场|arena'),
+    ('CREATURE', u'独有生物|关注.*生物'),
+    ('BIOME',    u'区域|群系|地标|地形|环境|生态'),   # 「生物群系」含「群系」⇒ 需排在生物之前
+    ('OVERVIEW', u'独特|特色|机制|气候|天气|神话|外观|模组'),   # 优先于「挑战」：「独特之处与挑战」归概览
+    ('TIPS',     u'生存|技巧|策略|指南|路线|挑战'),
+    ('LORE',     u'探险家笔记|explorer'),
+    ('STATS',    u'统计'),
+)
+# v5879（用户口径「灭绝 暂无 wiki 资料（解析失败：'CREATURE'） 除了isl 全部报错」）：
+#   语义分类键必须全部登记在 _MW_TABS 内，否则 blocks[hit] 抛 KeyError。
+#   这里做模块级自检：以后新增语义分类忘了登记 TAB，启动即报错，不会拖到运行时才炸。
+assert set((k for (k, _kw) in _MW_TITLE_MAP)) <= set((k for (k, _z) in _MW_TABS)), \
+    'semantic key missing in _MW_TABS'
+# ark.wiki.gg 英文地图页（第二数据源，**只作 AI 素材，不在界面展示**）
+_MW_ARK_PAGES = {
+    'Isl': 'The_Island', 'Sco': 'Scorched_Earth', 'Cen': 'The_Center', 'Abe': 'Aberration',
+    'Ext': 'Extinction', 'Ast': 'Astraeos', 'Rag': 'Ragnarok', 'Val': 'Valguero',
+    'Los': 'Lost_Colony', 'Gen': 'Genesis:_Part_1',   # v5899：原 'Genesis' 是消歧义页（实测 40KB / 10 个导航标题），真正创世页为 Genesis:_Part_1（836KB / 41 小节）
+}
+_ARK_MAP_SEC = (
+    ('OVERVIEW', r'^(?:overview|introduction|unique environmental features|environmental features)\b'),
+    ('BIOME',    r'^(?:biomes?|regions?|areas?|environment)\b'),
+    ('RES',      r'^(?:resources?|harvestables?|resource nodes?)\b'),
+    ('CAVE',     r'^(?:caves?|caverns?)\b'),
+    ('BOSS',     r'^(?:boss ?arenas?|bosses?|arena|artifacts?)\b'),
+    ('CREATURE', r'^(?:unique creatures|new creatures)\b'),
+    ('TIPS',     r'^(?:notes?\s*/\s*trivia|notes?|trivia|tips?|guides?|strategies)\b'),
+    ('BASE',     r'^(?:outposts?|recommended base|base locations?)\b'),
+)
+# 明确丢弃（导航/模板/FAQ/其他地图）
+_MW_SKIP = (u'精选地图地点', u'热门建筑模板', u'Spawn Containers', u'地图问题',
+            u'探索其他地图', u'野外指南', u'探险家笔记系列')
+
+
+def _mw_h_segs(raw):
+    """按 h2/h3/h4 平铺切段 -> [(level, 标题, 本段HTML)]（中文站 h4 是区域/资源小节）"""
+    import re as _re2
+    hs = []
+    for m in _re2.finditer(r'<h([2-4])[^>]*>([\s\S]{0,300}?)</h\1>', raw):
+        hs.append((int(m.group(1)), _wiki_strip(m.group(2)), m.start(), m.end()))
+    out = []
+    for i, (lv, t, st0, st) in enumerate(hs):
+        en = hs[i + 1][2] if i + 1 < len(hs) else len(raw)
+        out.append((lv, t, raw[st:max(st, en)]))
+    return out
+
+
+def _mw_has_zh(s):
+    import re as _re3
+    return bool(_re3.search(u'[\u4e00-\u9fff]', str(s or '')))
+
+
+def _mw_block_lines(seg, maxn=12, maxlen=300):
+    """段 HTML -> 中文行。有 h4 子标题时合成「子标题：正文」，否则按段落/列表逐行"""
+    import re as _re4
+    h4s = list(_re4.finditer(r'<h4[^>]*>([\s\S]{0,200}?)</h4>', seg))
+    out = []
+    if h4s:
+        for k, m in enumerate(h4s):
+            t = _wiki_strip(m.group(1)).strip()
+            st = m.end()
+            en = h4s[k + 1].start() if k + 1 < len(h4s) else len(seg)
+            txt = ' '.join(_ark_flat_lines(seg[st:en], 14))
+            txt = _re4.sub(r'\s+', ' ', txt).strip()
+            if t and txt:
+                out.append((t + u'：' + txt)[:maxlen])
+            elif t and _mw_has_zh(t):
+                out.append(t[:maxlen])
+    else:
+        for x in _ark_flat_lines(seg, maxn * 3):
+            x = _re4.sub(r'\s+', ' ', str(x or '')).strip()
+            if len(x) >= 8 and (not _ark_is_noise(x)) and x not in out:
+                out.append(x[:maxlen])
+    return [x for x in out if _mw_has_zh(x)][:maxn]
+
+
+def _mw_stats_lines(seg):
+    """「统计」的 <dl><dd>值</dd><dt>键</dt> → 「键 值」"""
+    import re as _re5
+    out = []
+    # 结构 A：<dd>值</dd><dt>键</dt>
+    for m in _re5.finditer(r'<dd[^>]*>([\s\S]{0,60}?)</dd>\s*<dt[^>]*>([\s\S]{0,60}?)</dt>', seg):
+        v = _wiki_strip(m.group(1)).strip()
+        k = _wiki_strip(m.group(2)).strip()
+        if k and v and _mw_has_zh(k):
+            out.append(u'%s %s' % (k, v))
+    # 结构 B：<dt>键</dt><dd>值</dd>（部分地图页用这个顺序）
+    if not out:
+        for m in _re5.finditer(r'<dt[^>]*>([\s\S]{0,60}?)</dt>\s*<dd[^>]*>([\s\S]{0,60}?)</dd>', seg):
+            k = _wiki_strip(m.group(1)).strip()
+            v = _wiki_strip(m.group(2)).strip()
+            if k and v and _mw_has_zh(k):
+                out.append(u'%s %s' % (k, v))
+    return out[:20]
+
+
+_MW_PT_RE = _re.compile(u'[\uff08(][^\uff09)]{0,24}?(\\d{1,3}(?:\\.\\d+)?)\\s*[,，]\\s*(\\d{1,3}(?:\\.\\d+)?)\\s*[\uff09)]')
+# v5895：允许括号内先写区域名——螰变 wikily 页写的是「传送门（肥沃区，45,30）」，
+#   旧正则要求左括号后紧跟数字 ⇒ points.BASE 恒为空 ⇒ 基地地图不渲染（用户实鍏反馈）。
+
+
+def _mw_points(lines):
+    """从「基地位置」段落里解析 (x,y) 坐标 -> [{n, x, y}]（名称取括号前的文字）"""
+    out = []
+    for s in (lines or []):
+        t = str(s or '')
+        m = _MW_PT_RE.search(t)
+        if not m:
+            continue
+        try:
+            x = float(m.group(1))
+            y = float(m.group(2))
+        except Exception:
+            continue
+        if not (0 <= x <= 100 and 0 <= y <= 100):
+            continue
+        nm = t[:m.start()].strip()
+        nm = nm.lstrip(u'\u2022\u00b7\u25cf-\u2014>\u203a ').strip(u' \uff1a:\uff0c,\u3002 ')
+        if len(nm) > 28:
+            nm = nm[:28]
+        out.append({'n': nm, 'x': x, 'y': y})
+    return out[:24]
+
+
+# v5884（用户口径「笔记不要显示具体详细数据」）：探险家笔记段里混着表格/清单类数据
+#   （每条笔记的坐标、已找到/未找到计数、Record #N · 21.2, 77.0 ……），只保留叙述性段落。
+_MW_LORE_BAD = _re.compile(
+    u'已找到|未找到|列表显示|记录进度|Record #|Note #|Dossier|图鉴#|'
+    u'\\d{1,3}\\.\\d+\\s*[,，]\\s*\\d{1,3}\\.\\d+', _re.I)
+
+
+def _mw_lore_filter(lines):
+    out = []
+    for s in (lines or []):
+        t = str(s or '').strip()
+        if len(t) < 12:
+            continue
+        if _MW_LORE_BAD.search(t):
+            continue
+        if t not in out:
+            out.append(t)
+    return out[:10]
+
+
+def _mw_parse(raw):
+    """wikily 中文地图页 -> {块: [中文行]}；块与 TAB 一一对应"""
+    blocks = dict((k, []) for k in _MW_BLOCKS)
+    for _lv, t, seg in _mw_h_segs(raw):
+        tt = str(t or '').strip()
+        if not tt:
+            continue
+        if any((sk in tt) for sk in _MW_SKIP):
+            continue
+        hit = ''
+        for k, kw in _MW_TITLE_MAP:
+            try:
+                if _re.search(kw, tt, _re.I):
+                    hit = k
+                    break
+            except Exception:
+                if kw in tt:
+                    hit = k
+                    break
+        if not hit:
+            continue
+        if hit == 'STATS':
+            ls = _mw_stats_lines(seg)
+        else:
+            ls = _mw_block_lines(seg, 12)
+        if ls:
+            cur = blocks.setdefault(hit, [])   # v5879：防御性，键缺失也不炸
+            for x in ls:
+                if x and x not in cur:
+                    cur.append(x)
+    if blocks.get('LORE'):
+        blocks['LORE'] = _mw_lore_filter(blocks['LORE'])
+    for k in _MW_BLOCKS:
+        if not blocks[k]:
+            blocks.pop(k, None)
+        else:
+            blocks[k] = blocks[k][:14]
+    return blocks, _mw_points(blocks.get('BASE'))
+
+
+def _mw_ark_blocks(mid):
+    """ark.wiki.gg 英文地图页 -> {块: [英文行]}。**只作 AI 素材，不在界面展示**。
+       失败返回 {} （不影响主流程）。"""
+    name = _MW_ARK_PAGES.get(mid) or ''
+    if not name:
+        return {}
+    try:
+        _u, code, raw = _ark_fetch(name, timeout=45)
+    except Exception as e:
+        print('[mapwiki] arkFAIL %s %s' % (mid, str(e)[:100]))
+        return {}
+    if code != 200 or (not raw) or len(raw) < 20000 or 'Just a second' in raw[:4000]:
+        return {}
+    blocks = {}
+    try:
+        lead = _ark_clean_lines(_ark_lead_lines(raw, 10))
+        if lead:
+            blocks['OVERVIEW'] = list(lead)[:8]
+        for t, seg in _ark_h2_segs(raw):
+            tt = str(t or '').strip()
+            if (not tt) or (tt in _ARK_SKIP_H2) or _ark_is_noise(tt):
+                continue
+            for k, pat in _ARK_MAP_SEC:
+                if _re.match(pat, tt, _re.I):
+                    ls = _ark_clean_lines(_ark_flat_lines(seg, 30))[:12]
+                    if ls:
+                        cur = blocks.setdefault(k, [])
+                        for x in ls:
+                            if x not in cur:
+                                cur.append(x)
+                    break
+    except Exception as e:
+        print('[mapwiki] arkParseFAIL %s %s' % (mid, str(e)[:100]))
+        return {}
+    return blocks
+
+
+def _mw_path(mid):
+    return os.path.join(WIKI_CACHE_DIR, 'mapwiki_%s.json' % str(mid).lower())
+
+
+def _mw_load(mid):
+    p = _mw_path(mid)
+    if not os.path.isfile(p):
+        return None
+    try:
+        with open(p, 'r', encoding='utf-8') as f:
+            return json.loads(f.read())
+    except Exception:
+        return None
+
+
+def _mw_save(mid, d):
+    try:
+        os.makedirs(WIKI_CACHE_DIR, exist_ok=True)
+        p = _mw_path(mid)
+        tmp = p + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            f.write(json.dumps(d, ensure_ascii=False, separators=(',', ':')))
+        os.replace(tmp, p)
+        return True
+    except Exception as e:
+        print('[mapwiki] save fail: ' + str(e)[:120])
+        return False
+
+
+def _mw_build(mid):
+    """抓 wikily 中文地图页并解析。失败**不落缓存**（下次自动重试）"""
+    slug = _MW_SLUGS.get(mid) or ''
+    rec = {'ok': False, 'id': mid, 'name': _MW_NAMES.get(mid, mid), 'status': 'error',
+           'slug': slug, 'err': u'未知地图'}
+    if not slug:
+        return rec
+    url = _MW_ROOT + '/' + slug
+    t0 = time.time()
+    try:
+        raw = _wiki_fetch_page(url, 45)
+    except Exception as e:
+        rec['err'] = u'抓取失败：' + str(e)[:140]
+        rec['ms'] = int((time.time() - t0) * 1000)
+        print('[mapwiki] FAIL %s %s' % (mid, rec['err']))
+        return rec
+    rec['ms'] = int((time.time() - t0) * 1000)
+    rec['bytes'] = len(raw)
+    if (not raw) or len(raw) < 20000:
+        rec['err'] = u'页面内容过短（%d 字节）' % len(raw)
+        return rec
+    try:
+        blocks, bpts = _mw_parse(raw)
+    except Exception as e:
+        rec['err'] = u'解析失败：' + str(e)[:140]
+        return rec
+    avail = [k for k in _MW_BLOCKS if blocks.get(k)]
+    if not avail:
+        rec['err'] = u'页面无可解析章节'
+        print('[mapwiki] EMPTY %s' % mid)
+        return rec
+    # v5878（用户口径「喂给AI应该是三个源的所有数据信息 而不是只有wikily」）：
+    #   ai 里放全部素材源：wikily 中文（展示用那份）+ ark.wiki.gg 英文
+    #   （第三源 dododex 经实测**没有地图页**，待用户指定替代源后再补）
+    ai = {'wikily': dict((k, list(v)) for k, v in blocks.items())}
+    try:
+        _arkb = _mw_ark_blocks(mid)
+        if _arkb:
+            ai['ark'] = _arkb
+    except Exception as _eA:
+        print('[mapwiki] arkBLOCKFAIL %s %s' % (mid, str(_eA)[:100]))
+    out = {'ok': True, 'id': mid, 'status': 'ready',
+           'data': {'DATA': {'zh': _MW_NAMES.get(mid, mid), 'slug': slug, 'src': 'wikily',
+                             'fetched_at': int(time.time() * 1000), 'avail': avail},
+                    'blocks': blocks, 'ai': ai,
+                    'points': {'BASE': bpts}},
+           'avail': avail, '_v': _MW_VER, 'at': int(time.time()), 'ms': rec['ms'],
+           'bytes': len(raw)}
+    print('[mapwiki] OK %s %s blocks=%s' % (mid, slug, ','.join(avail)))
+    return out
+
+
+def _mw_get(mid, force=False):
+    mid = str(mid or '').strip()
+    if mid not in _MW_SLUGS:
+        return {'ok': False, 'status': 'error', 'id': mid, 'err': 'unknown map id'}
+    if not force:
+        cd = _mw_load(mid)
+        if cd and int(cd.get('_v') or 0) >= _MW_VER and cd.get('ok'):
+            out = dict(cd)
+            out['cached'] = True
+            return out
+    d = _mw_build(mid)
+    if d.get('ok'):
+        _mw_save(mid, d)
+    out = dict(d)
+    out['cached'] = False
+    return out
+
+
+def _mw_index():
+    maps = {}
+    for k in _MW_SLUGS:
+        cd = _mw_load(k) or {}
+        maps[k] = {'name': _MW_NAMES.get(k, k), 'ready': bool(cd.get('ok')),
+                   'at': cd.get('at') or 0, 'avail': cd.get('avail') or []}
+    return {'ok': True, 'count': len(_MW_SLUGS), 'maps': maps}
+
+
+def _mw_probe(only=''):
+    ids = [only] if str(only or '') in _MW_SLUGS else list(_MW_SLUGS.keys())
+    out = {}
+    for k in ids:
+        rec = {'id': k, 'name': _MW_NAMES.get(k, k), 'slug': _MW_SLUGS.get(k, ''), 'h': []}
+        url = _MW_ROOT + '/' + (rec['slug'] or '')
+        rec['url'] = url
+        t0 = time.time()
+        try:
+            raw = _wiki_fetch_page(url, 45)
+            rec['ms'] = int((time.time() - t0) * 1000)
+            rec['bytes'] = len(raw)
+            try:
+                rec['h'] = [('%d|%s' % (lv, t)) for (lv, t, _s) in _mw_h_segs(raw)][:46]
+                bl, bp = _mw_parse(raw)
+                rec['points'] = len(bp)
+                rec['avail'] = [x for x in _MW_BLOCKS if bl.get(x)]
+                rec['n'] = dict((x, len(bl.get(x) or [])) for x in _MW_BLOCKS)
+            except Exception as e2:
+                rec['parseErr'] = str(e2)[:140]
+        except Exception as e:
+            rec['ms'] = int((time.time() - t0) * 1000)
+            rec['err'] = str(e)[:140]
+        out[k] = rec
+    return {'ok': True, 'probe': out}
+
+
+def _mw_text_path(mid):
+    return os.path.join(WIKI_CACHE_DIR, 'mapwiki_text_%s.json' % str(mid).lower())
+
+
+def _mw_text_read(mid):
+    p = _mw_text_path(mid)
+    if not os.path.isfile(p):
+        return None
+    try:
+        with open(p, 'r', encoding='utf-8') as f:
+            return json.loads(f.read())
+    except Exception:
+        return None
+
+
+def _mw_text_write(mid, blocks, force=False):
+    """AI 整理结果落盘（全服共享一份；force=true 覆盖），字段与物种侧同构"""
+    mid = str(mid or '').strip()
+    if (mid not in _MW_SLUGS) or (not isinstance(blocks, dict)):
+        return 0
+    with _WT_LOCK:
+        if os.path.isfile(_mw_text_path(mid)) and not force:
+            return 0
+        clean = {}
+        for k in _MW_BLOCKS:
+            v = blocks.get(k)
+            if not isinstance(v, list):
+                continue
+            arr = []
+            for x in v[:40]:
+                tx = _wt_flat_item(x)
+                if tx and tx != '[object Object]' and tx not in arr:
+                    arr.append(tx[:3000])
+            if arr:
+                clean[k] = arr
+        # v5880（用户口径「AI整理过后，点位名称要跟着翻译」）：点位名中文映射单独存 BASEPTS
+        _bp = blocks.get('BASEPTS')
+        if isinstance(_bp, list):
+            _barr = []
+            for _it in _bp[:24]:
+                if not isinstance(_it, dict):
+                    continue
+                try:
+                    _x = float(_it.get('x'))
+                    _y = float(_it.get('y'))
+                except Exception:
+                    continue
+                _nm = str(_it.get('n') or '').strip()[:28]
+                if _nm and (0 <= _x <= 100) and (0 <= _y <= 100):
+                    _barr.append({'n': _nm, 'x': _x, 'y': _y})
+            if _barr:
+                clean['BASEPTS'] = _barr
+        if not clean:
+            return 0
+        clean['_ts'] = int(time.time())
+        clean['id'] = mid
+        try:
+            os.makedirs(WIKI_CACHE_DIR, exist_ok=True)
+            p = _mw_text_path(mid)
+            tmp = p + '.tmp'
+            with open(tmp, 'w', encoding='utf-8') as f:
+                f.write(json.dumps(clean, ensure_ascii=False, separators=(',', ':')))
+            os.replace(tmp, p)
+            return len(clean) - 2
+        except Exception as e:
+            print('[mapwiki] text write fail: ' + str(e)[:120])
+            return 0
 
 
 ASA_DATA = os.environ.get('ASA_DATA', os.path.join(DINO_DATA, 'asa-data'))
@@ -5979,8 +6829,9 @@ class Handler(BaseHTTPRequestHandler):
             _sl = (_qs.get('slug') or [''])[0].strip()
             _cl = (_qs.get('cls') or [''])[0].strip()
             _sg = _dodo_slug(_sl or _cl)
-            _d = _wt_read(_sg)
-            self._send(200, {'ok': True, 'slug': _sg, 'blocks': _d,
+            _ck = _cache_slug(_sl or _cl) or _sg   # v5871：按变体隔离的缓存键
+            _d = _wt_read(_ck)
+            self._send(200, {'ok': True, 'slug': _ck, 'dodoSlug': _sg, 'blocks': _d,
                              'ready': bool(_d), 'fields': list(_WT_BLOCKS)})
         elif path == '/api/dino/tips/zh':
             # v5740：已翻译缓存（{tipId: 中文}）。前端命中即直接渲染，未命中才调 AI 翻译
@@ -6014,6 +6865,23 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, _wiki_tipfix(_wiki_get(_rest[:-len('/progress')], start=False)))
             else:
                 self._send(200, _wiki_tipfix(_wiki_get(_rest, start=True)))
+        elif path.startswith('/api/mapwiki/'):
+            # v5873：地图 Wiki（ark.wiki.gg 主源）。
+            #   /api/mapwiki/index | .../probe | .../text | /api/mapwiki/<Id>
+            _mrest = path[len('/api/mapwiki/'):].strip('/')
+            _mqs = parse_qs(parsed.query)
+            _mfo = ((_mqs.get('force') or [''])[0].strip().lower() in ('1', 'true', 'yes'))
+            if _mrest == 'index':
+                self._send(200, _mw_index())
+            elif _mrest == 'probe':
+                self._send(200, _mw_probe((_mqs.get('id') or [''])[0].strip()))
+            elif _mrest == 'text':
+                _mid = str((_mqs.get('slug') or _mqs.get('id') or [''])[0]).strip()
+                _mtd = _mw_text_read(_mid)
+                self._send(200, {'ok': True, 'id': _mid, 'blocks': _mtd, 'ready': bool(_mtd),
+                                 'fields': list(_MW_BLOCKS)})
+            else:
+                self._send(200, _mw_get(_mrest, force=_mfo))
         elif path == '/api/bb_notes':
             # 2026-10-28：粑粑笔记（公开只读；内容由拥有者「导入 MD」覆盖）
             self._send(200, _bb_notes_read())
@@ -6110,6 +6978,16 @@ class Handler(BaseHTTPRequestHandler):
         # 配置规则：全服刷新（仅系统拥有者；后端自己读 11 台 ini → 落快照，全玩家共享）
         # 服务器域名：写（仅系统拥有者）
         # 2026-10-28：粑粑笔记导入（仅拥有者；整份覆盖）
+        if path == '/api/mapwiki/text':
+            # v5873：地图 Wiki AI 整理结果回写。body {slug|id, blocks:{ovIntro,ovTips,biome,res,cave,boss,creature,mech,tips,spawn}, force}
+            _mid2 = str(g('slug') or g('id') or body.get('id') or '').strip()
+            if _mid2 not in _MW_SLUGS:
+                self._send(400, {'ok': False, 'error': 'unknown map id'})
+                return
+            _mn = _mw_text_write(_mid2, body.get('blocks'), force=bool(body.get('force')))
+            self._send(200, {'ok': True, 'id': _mid2, 'added': _mn,
+                             'ready': bool(_mw_text_read(_mid2))})
+            return
         if path == '/api/dino/wikitext':
             # v5745：前端 AI 整理完回写。body {slug|cls, blocks:{ovIntro,ovTips,tameIntro,breedDesc,abil,spawnIntro}}
             #   **只写一次**（已有则不覆盖），全服共享同一份
@@ -6117,9 +6995,10 @@ class Handler(BaseHTTPRequestHandler):
             if not _sg:
                 self._send(400, {'ok': False, 'error': 'slug required'})
                 return
-            _n = _wt_write(_sg, body.get('blocks'), force=bool(body.get('force')))
-            self._send(200, {'ok': True, 'slug': _sg, 'added': _n,
-                             'ready': bool(_wt_read(_sg))})
+            _ck3 = _cache_slug(g('slug') or g('cls')) or _sg   # v5871：按变体隔离写入
+            _n = _wt_write(_ck3, body.get('blocks'), force=bool(body.get('force')))
+            self._send(200, {'ok': True, 'slug': _ck3, 'added': _n,
+                             'ready': bool(_wt_read(_ck3))})
             return
         if path == '/api/dino/tips/zh':
             # v5740：前端翻完回写中文。body {slug|cls, items:[{id, text}]}
