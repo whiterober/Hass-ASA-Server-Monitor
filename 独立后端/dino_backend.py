@@ -6613,6 +6613,312 @@ class _GuardedServer(ThreadingHTTPServer):
         print('[handler] error from {}'.format(client_address))
 
 
+
+# ===================== 资讯广场 News（v5926：后端直抓 Discord） =====================
+# 设计：计划/计划_资讯广场迁入搞事系统_v1_20261102.md
+#   · 凭据只读 <后端目录>/dino_backend.config.json —— 不读环境变量、不下发前端、不进 Git
+#   · 无定时器：客户端打开/切 Tab 才拉；全局 1 分钟冷却；after=<last_message_id> 增量
+#   · 图片不转存：增量新链接自带签名；过期由前端 img onerror → POST /api/news/imgfix 单条修复
+NEWS_CACHE_DIR = os.path.join(WIKI_CACHE_DIR, 'news_cache')
+_NEWS_CFG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dino_backend.config.json')
+NEWS_TABS = [('patch_pc', u'ASA PC版本', 'patch'),
+             ('news', u'方舟新闻', 'news'),
+             ('patch_channel', u'ADM版本', 'channel'),
+             ('adm', u'ADM预告', 'adm'),
+             ('tieba', u'汉化版本', 'tieba'),
+             ('asb', u'ASB版本', 'asb')]
+NEWS_COOL_SEC = 60          # 全局冷却：客户端打开/切 Tab 时的最小抓取间隔
+NEWS_IMG_COOL_SEC = 600     # 单条消息图片修复冷却
+NEWS_KEEP_MSGS = 20         # 每个 Tab 最多保留的消息条数
+_news_cfg_cache = {'mtime': 0, 'cfg': None}
+_news_lock = threading.Lock()
+_news_img_at = {}
+
+
+def _news_cfg():
+    """读后端本地配置文件；缺失/异常返回 None（不读环境变量、无兜底）"""
+    try:
+        st = os.stat(_NEWS_CFG_PATH)
+        if _news_cfg_cache['cfg'] is not None and _news_cfg_cache['mtime'] == st.st_mtime:
+            return _news_cfg_cache['cfg']
+        with open(_NEWS_CFG_PATH, 'r', encoding='utf-8') as f:
+            doc = json.load(f)
+        cfg = doc.get('discord') or {}
+        _news_cfg_cache['cfg'] = cfg
+        _news_cfg_cache['mtime'] = st.st_mtime
+        return cfg
+    except Exception:
+        return None
+
+
+def _news_tab(tab_id):
+    for t in NEWS_TABS:
+        if t[0] == tab_id:
+            return t
+    return None
+
+
+def _news_path(tab_id):
+    return os.path.join(NEWS_CACHE_DIR, tab_id + '.json')
+
+
+def _news_read(tab_id):
+    try:
+        with open(_news_path(tab_id), 'r', encoding='utf-8') as f:
+            d = json.load(f)
+        return d if isinstance(d, dict) else None
+    except Exception:
+        return None
+
+
+def _news_write(tab_id, obj):
+    try:
+        os.makedirs(NEWS_CACHE_DIR, exist_ok=True)
+        p = _news_path(tab_id)
+        tmp = p + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(obj, f, ensure_ascii=False)
+        os.replace(tmp, p)
+        return True
+    except Exception:
+        return False
+
+
+def _discord_api(path, cfg):
+    """Discord REST GET -> (ok, data|err)"""
+    import urllib.request as _u
+    import urllib.error as _ue
+    tok = str((cfg or {}).get('bot_token') or '').strip()
+    if not tok:
+        return False, 'bot_token 未配置'
+    req = _u.Request('https://discord.com/api/v10' + path, headers={
+        'Authorization': 'Bot ' + tok,
+        'User-Agent': 'dino-backend/1.0',
+    })
+    try:
+        with _u.urlopen(req, timeout=20) as r:
+            return True, json.loads(r.read().decode('utf-8', 'ignore'))
+    except _ue.HTTPError as e:
+        body = ''
+        try:
+            body = e.read().decode('utf-8', 'ignore')[:300]
+        except Exception:
+            pass
+        return False, 'HTTP %s %s' % (e.code, body)
+    except Exception as e:
+        return False, str(e)
+
+
+def _news_extract(m):
+    """Discord message JSON -> {text, images, youtube_links}（与 HA 侧 discord_patch_bot 同口径）"""
+    parts = []
+    c = (m.get('content') or '').strip()
+    if c:
+        parts.append(c)
+    for e in (m.get('embeds') or []):
+        if e.get('title'):
+            parts.append(str(e['title']))
+        if e.get('description'):
+            parts.append(str(e['description']))
+        for fd in (e.get('fields') or []):
+            if fd.get('name'):
+                parts.append(str(fd['name']))
+            if fd.get('value'):
+                parts.append(str(fd['value']))
+    text = '\n'.join(parts).strip()
+    imgs = []
+    for a in (m.get('attachments') or []):
+        u = str(a.get('url') or a.get('proxy_url') or '')
+        fn = str(a.get('filename') or '').lower()
+        ct = str(a.get('content_type') or '')
+        if u and (ct.startswith('image/') or fn.endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp'))):
+            imgs.append(u)
+    for e in (m.get('embeds') or []):
+        iu = str(((e.get('image') or {}).get('url')) or ((e.get('thumbnail') or {}).get('url')) or '')
+        if iu:
+            imgs.append(iu)
+    yt = re.findall(r'https://www\.youtube\.com/watch\?v=([A-Za-z0-9_\-]{11})', text)
+    return {'text': text, 'images': imgs,
+            'youtube_links': ['https://www.youtube.com/watch?v=' + v for v in yt]}
+
+
+def _news_process_links(text, ctype):
+    """原样搬自 asa_server_monitor_reliable.py 的 process_news/tieba/patch_links"""
+    if ctype == 'news':
+        pat = r'(https://survivetheark\.com/index\.php[^\s\)\]]*)'
+    elif ctype == 'tieba':
+        pat = r'(https?://[^\s\)\]]*)'
+    else:
+        pat = r'(https://[^\s\)\]]*)'
+    links = re.findall(pat, text)
+    return re.sub(pat, '', text).strip(), links
+
+
+def _news_cards(content_list, ctype='patch'):
+    """原样搬自 asa_server_monitor_reliable.py:1515 create_cards_from_content"""
+    cards = []
+    for item in content_list:
+        if isinstance(item, dict):
+            text = item.get('text', '')
+            images = item.get('images', []) or []
+            youtube_links = item.get('youtube_links', []) or []
+        else:
+            text = item
+            images = []
+            youtube_links = []
+        lines = text.splitlines() if text and text.strip() else []
+        if lines:
+            body_lines = ['<h3>%s</h3>' % lines[0]]
+            content_links = []
+            for line in lines[1:]:
+                cleaned, links = _news_process_links(line, ctype)
+                if cleaned:
+                    body_lines.append(cleaned)
+                content_links.extend(links)
+            body = '\n'.join(body_lines)
+        else:
+            body = ''
+            content_links = []
+        md = body.strip()
+        if md:
+            cards.append({'type': 'markdown', 'content': md})
+        imgs = [i for i in images if i and str(i).strip()]
+        if content_links and imgs:
+            for i, link in enumerate(content_links):
+                cards.append({'type': 'picture', 'image': imgs[i % len(imgs)],
+                              'tap_action': {'action': 'url', 'url_path': link},
+                              'aspect_ratio': '16:9'})
+        elif not content_links and imgs:
+            for image in [i for i in imgs if not i.startswith('https://i.ytimg.com')]:
+                cards.append({'type': 'picture', 'image': image,
+                              'tap_action': {'action': 'url', 'url_path': image},
+                              'aspect_ratio': '16:9'})
+        for y in youtube_links:
+            if 'watch?v=' in y:
+                vid = y.split('watch?v=')[1].split('&')[0]
+                if len(vid) == 11:
+                    cards.append({'type': 'iframe',
+                                  'url': 'https://www.youtube.com/embed/' + vid,
+                                  'aspect_ratio': '16:9'})
+    return cards
+
+
+def _news_refresh(tab_id):
+    """按需刷新（全局冷却 + after 增量）-> (cache, fetched:0|1, err)"""
+    tab = _news_tab(tab_id)
+    if not tab:
+        return None, 0, 'unknown tab'
+    cur = _news_read(tab_id) or {}
+    now = int(time.time())
+    if int(cur.get('fetched_at') or 0) and (now - int(cur.get('fetched_at') or 0)) < NEWS_COOL_SEC:
+        return cur, 0, None
+    cfg = _news_cfg()
+    if not cfg:
+        return cur, 0, 'news 未配置（缺 dino_backend.config.json）'
+    cid = str((cfg.get('channels') or {}).get(tab_id) or '').strip()
+    if not cid:
+        return cur, 0, 'news 未配置该 Tab 的频道 ID：' + tab_id
+    with _news_lock:
+        cur = _news_read(tab_id) or {}
+        now = int(time.time())
+        if int(cur.get('fetched_at') or 0) and (now - int(cur.get('fetched_at') or 0)) < NEWS_COOL_SEC:
+            return cur, 0, None
+        after = str(cur.get('last_message_id') or '').strip()
+        q = '?limit=50' + (('&after=' + after) if after else '')
+        ok, data = _discord_api('/channels/%s/messages%s' % (cid, q), cfg)
+        if not ok:
+            return cur, 0, 'Discord 拉取失败：' + str(data)
+        msgs = data if isinstance(data, list) else []
+        msgs = list(reversed(msgs))
+        if not msgs:
+            cur['fetched_at'] = now
+            _news_write(tab_id, cur)
+            return cur, 1, None
+        by_id = {str(m.get('id')): m for m in (cur.get('messages') or [])}
+        for m in msgs:
+            if isinstance(m, dict):
+                by_id[str(m.get('id'))] = m
+        allm = sorted(by_id.values(), key=lambda x: int(x.get('id') or 0))[-NEWS_KEEP_MSGS:]
+        _cards = []
+        for _m in allm:
+            for _c in _news_cards([_news_extract(_m)], tab[2]):
+                _c['mid'] = str(_m.get('id') or '')   # v5927：图片过期时按 mid 单条修复
+                _cards.append(_c)
+        new = {
+            'ok': True, 'tab': tab_id, 'name': tab[1],
+            'updated': time.strftime('%Y-%m-%d %H:%M:%S'),
+            'fetched_at': now,
+            'last_message_id': str(allm[-1].get('id') or '') if allm else '',
+            'messages': allm,
+            'cards': _cards,
+        }
+        _news_write(tab_id, new)
+        return new, 1, None
+
+
+def _news_imgfix(tab_id, mid):
+    """单条消息附件链接修复（Discord CDN 签名过期时用）-> (images|None, err)"""
+    tab = _news_tab(tab_id)
+    if not tab:
+        return None, 'unknown tab'
+    k = tab_id + '|' + str(mid)
+    now = int(time.time())
+    if _news_img_at.get(k) and (now - _news_img_at[k]) < NEWS_IMG_COOL_SEC:
+        return None, 'cooling'
+    cfg = _news_cfg()
+    if not cfg:
+        return None, 'news 未配置'
+    cid = str((cfg.get('channels') or {}).get(tab_id) or '').strip()
+    if not cid:
+        return None, 'news 未配置该 Tab 的频道 ID'
+    ok, data = _discord_api('/channels/%s/messages/%s' % (cid, mid), cfg)
+    _news_img_at[k] = now
+    if not ok or not isinstance(data, dict):
+        return None, str(data)
+    cur = _news_read(tab_id) or {}
+    msgs = cur.get('messages') or []
+    for i, m in enumerate(msgs):
+        if str(m.get('id')) == str(mid):
+            msgs[i] = data
+            break
+    cur['messages'] = msgs
+    _news_write(tab_id, cur)
+    return (_news_extract(data).get('images') or []), None
+
+
+def _news_zh_path(tab_id):
+    return os.path.join(NEWS_CACHE_DIR, tab_id + '_zh.json')
+
+
+def _news_zh_read(tab_id):
+    try:
+        with open(_news_zh_path(tab_id), 'r', encoding='utf-8') as f:
+            return (json.load(f) or {}).get('map') or {}
+    except Exception:
+        return {}
+
+
+def _news_zh_merge(tab_id, items):
+    """按 id 合并，已存在不覆盖（多客户端并发安全）"""
+    cur = _news_zh_read(tab_id)
+    added = 0
+    for it in (items or []):
+        if not isinstance(it, dict):
+            continue
+        k = str(it.get('id') or '').strip()
+        v = str(it.get('text') or it.get('zh') or '').strip()
+        if k and v and not cur.get(k):
+            cur[k] = v[:2000]
+            added += 1
+    try:
+        os.makedirs(NEWS_CACHE_DIR, exist_ok=True)
+        with open(_news_zh_path(tab_id), 'w', encoding='utf-8') as f:
+            json.dump({'map': cur, 'ts': int(time.time())}, f, ensure_ascii=False)
+    except Exception:
+        pass
+    return added, cur
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
 
@@ -6882,6 +7188,34 @@ class Handler(BaseHTTPRequestHandler):
                                  'fields': list(_MW_BLOCKS)})
             else:
                 self._send(200, _mw_get(_mrest, force=_mfo))
+        elif path.startswith('/api/news/'):
+            # v5926：资讯广场。index | zh | <tab>（后端内部按 1 分钟冷却 + after 增量）
+            _nrest = path[len('/api/news/'):].strip('/')
+            _nqs = parse_qs(parsed.query)
+            if _nrest == 'index':
+                _tabs = []
+                for _t in NEWS_TABS:
+                    _tc = _news_read(_t[0]) or {}
+                    _tabs.append({'id': _t[0], 'name': _t[1],
+                                  'updated': _tc.get('updated') or '',
+                                  'count': len(_tc.get('cards') or []),
+                                  'last_fetch': _tc.get('fetched_at') or 0})
+                self._send(200, {'ok': True, 'tabs': _tabs})
+            elif _nrest == 'zh':
+                _tid = (_nqs.get('tab') or [''])[0].strip()
+                _zm = _news_zh_read(_tid) if _news_tab(_tid) else {}
+                self._send(200, {'ok': True, 'tab': _tid, 'map': _zm, 'count': len(_zm)})
+            else:
+                _cur, _fetched, _err = _news_refresh(_nrest)
+                if _err and not (_cur and _cur.get('cards')):
+                    self._send(200, {'ok': False, 'tab': _nrest, 'error': _err, 'cards': []})
+                else:
+                    _d = dict(_cur or {})
+                    _d.pop('messages', None)
+                    _d['ok'] = True
+                    _d['fetched'] = _fetched
+                    self._send(200, _d)
+            return
         elif path == '/api/bb_notes':
             # 2026-10-28：粑粑笔记（公开只读；内容由拥有者「导入 MD」覆盖）
             self._send(200, _bb_notes_read())
@@ -7016,6 +7350,29 @@ class Handler(BaseHTTPRequestHandler):
             _n = _dodo_zh_merge(g('slug') or g('cls'), _arr, _mg, force=bool(body.get('force')))
             _m, _sg = _dodo_zh_map(g('slug') or g('cls'))
             self._send(200, {'ok': True, 'slug': _sg, 'added': _n, 'count': len(_m)})
+            return
+        if path == '/api/news/imgfix':
+            # v5926：单条消息附件链接修复（Discord CDN 签名过期）
+            _p_tid = g('tab')
+            _p_mid = g('mid')
+            if not _news_tab(_p_tid) or not _p_mid:
+                self._send(400, {'ok': False, 'error': 'tab/mid required'})
+                return
+            _p_imgs, _p_err = _news_imgfix(_p_tid, _p_mid)
+            if _p_err:
+                self._send(200, {'ok': False, 'error': _p_err})
+            else:
+                self._send(200, {'ok': True, 'images': _p_imgs or []})
+            return
+        if path == '/api/news/zh':
+            # v5926：前端 DS 翻译完回写（按 id 合并，已存在不覆盖）
+            _p_tid2 = g('tab')
+            if not _news_tab(_p_tid2):
+                self._send(400, {'ok': False, 'error': 'unknown tab'})
+                return
+            _p_items = body.get('items') or []
+            _p_n, _p_map = _news_zh_merge(_p_tid2, _p_items if isinstance(_p_items, list) else [])
+            self._send(200, {'ok': True, 'tab': _p_tid2, 'added': _p_n, 'count': len(_p_map)})
             return
         if path == '/api/item/tips':
             # v5819：物品指南 AI 整理回写。body {cls, merged:{points,secs,pv}, force}

@@ -1,0 +1,524 @@
+# 需求计划：服务器控制入口（二级管理员）
+
+> 状态：**待评审（v2 修订）**
+> 编制：2026-11-02　修订：2026-11-02（技术方案改为**后端直连 ASA Server Manager API，不依赖 HA**）
+> 修订 v2.1：补**服务器版本**显示（§2.7 `/server-status`）；明确 **8 按钮 + 8 快捷 RCON + 自定义 RCON 不可丢失**（§6.0）；**移除游戏内时间**（系统已有）
+> 修订 v2.2：定案二级管理员**初始名单**（现有 8 个普通用户，§4.1.1）、**授权 UI 本版不做**（§4.5）、ASA token 已提供（实施时写入后端配置）
+> 修订 v2.3：系统拥有者**无需写入名单**，代码硬编码判定为最高级（3），**自动包含二级管理员全部权限**（向下兼容）
+> 修订 v2.4：「系统管理」浮窗新增 **ASA API Token 配置项**（§5.4）；token 改存 `server_config.json`（即时生效免重启）+ 新增「测试连通」（§7.3）
+> 目标文件：`b:\项目\Hass ASA Server Monitor\dino-import.html`、`\\SERVER\dino_backend\dino_backend.py`、`accounts.json`
+> 参照视图：HA `/lovelace/asa-server-ops`（**仅作功能对齐参照，不作为运行时依赖**）
+
+---
+
+## 〇、v2 修订说明
+
+| 原（v1） | 现（v2） | 原因 |
+|---|---|---|
+| 前端 → 后端 → **HA REST API**（`script.execute_server_action_with_selection`） | 前端 → 后端 → **ASA Server Manager API** `https://asa.whiterober.com/{action}` | 用户要求：新入口必须与全站一致，**不依赖 HA** |
+| 需在 `dino_backend.config.json` 存 **HA Long-Lived Token** | 存 **ASA API token**（源自 AppDaemon `apps.yaml`） | 同上 |
+| Q1/Q2/Q3 待对齐 | **已全部解决**（见 §2.6） | 已读源码取证 |
+
+> 现状说明：dino-import 全站本就已脱离 HA（`LB_API` = `https://data.whiterober.ccwu.cc`），本次只是保证**新增的服务器控制入口不反向引入 HA 依赖**。
+
+---
+
+## 一、背景与目标
+
+### 1.1 用户原话
+1. 在生存者浮窗加一个入口：服务器控制
+2. 只有二级管理员（比系统拥有者低一级权限）有权限看到这个入口（二级管理员目前比普通玩家多的权限就只开放 服务器控制）
+3. 功能是 HA 里的 服务器操作 里的所有功能
+4. **迁移后，要完全脱离 HA**（新入口不依赖 HA）
+
+### 1.2 目标
+| # | 目标 | 判定 |
+|---|------|------|
+| G1 | 「生存者」浮窗新增「服务器控制」入口 | 二级管理员可见，其余人不可见 |
+| G2 | 引入「二级管理员」新权限层级 | 拥有者可授权/撤销，缺省无此权限 |
+| G3 | 覆盖「服务器操作」全部 19 项动作 | 逐项对齐（§六） |
+| G4 | **零侵入**：不改变现有权限行为 | `lbIsAdmin()` 与后端 3 处 admin 接口一行不改 |
+| G5 | **零 HA 依赖** | 新入口运行时不调用任何 HA 接口/实体 |
+
+### 1.3 明确不做
+- 不做通用 RBAC 权限引擎（避免波及现有 20+ 处 `lbIsAdmin()` 调用）
+- 不把任何服务端 token 下发到前端
+- 不修改 HA 现有视图（`asa-server-ops` 原样保留，仅作人工兜底）
+
+---
+
+## 二、现状调研（全部已实测/读源码确认）
+
+### 2.1 权限体系：目前只有 2 级，硬编码
+| 层级 | 前端判定 | 后端判定 |
+|------|---------|---------|
+| 系统拥有者 | `lbIsAdmin()` = `auth.user === 'whiterober'`（L5948） | `username != 'whiterober'` → 401 `admin required` |
+| 普通玩家 | 其余已登录用户 | 仅要求 `username` 非空 |
+
+- 登录态：`localStorage.dinoAuth = { user, nick, at }`（**无 role 字段**）
+- 账号存储：`accounts.json`，字段只有 `pwd` / `nick`
+- 后端 `admin required` 仅 3 处：`webp_check`、`move_death_bag`、`move_all_pendings`
+
+**结论**：二级管理员是全新概念，需从零建，但没有既有机制需要改造。
+
+### 2.2 生存者浮窗现状（`lbOpenRolePicker`，L8250）
+头部图标区现有 8 个入口：
+
+| 顺序 | 图标 | 点击 | 可见条件 |
+|---:|------|------|---------|
+| 1 | `mdi-shield-crown-outline` 系统管理 | `lbOpenServerAdminModal()` | **仅拥有者** |
+| 2 | `mdi-newspaper-variant-outline` 资讯广场 | `lbNewsEntry()` | 全部 |
+| 3 | `mdi-account-group-outline` 联盟成员位置 | `lbOpenAlliancePos()` | 全部 |
+| 4 | `mdi-gamepad-variant` 键位配置 | `lbRoleView('keys')` | 全部 |
+| 5 | `mdi-cog` 自助配置 | `lbOpenConfigModal()` | 全部 |
+| 6 | `mdi-clipboard-text-outline` 服务器规则 | `lbCfgOpenRules()` | 全部 |
+| 7 | `mdi-logout` 注销 | `lbLogout()` | 全部 |
+| 8 | `mdi-close` 关闭 | 关闭浮窗 | 全部 |
+
+### 2.3 HA「服务器操作」的**真实实现**（读 AppDaemon 源码确认）
+
+HA 那套 UI 只是转发壳，真正干活的是 **ASA Server Manager API**：
+
+```
+AppDaemon (asa_server_monitor_reliable.py)
+  → POST {base_url}/{action}
+    Authorization: Bearer <token>
+    {"profileName": "<中文服务器名>", "message": "<rcon 文本>"}
+```
+
+- `base_url` = **`https://asa.whiterober.com`**（appsd.yaml 已确认）
+- 端点：`/start` `/stop` `/kill` `/update` `/saveworld` `/fullbackup` `/destroy` `/rcon` `/players`
+- `destroy` 超时放宽到 **600s**（其余 60s），失败重试
+- AppDaemon 调用时**关闭了证书校验**（`verify_mode=CERT_NONE`）⇒ 后端对接需同样处理并标注风险
+
+**⇒ 后端直连该 API 即可等价实现全部动作，HA 完全不参与。**
+
+### 2.4 服务器映射（apps.yaml 原文）
+| ID | profileName | 端口 |
+|---|---|---:|
+| Isl | 孤岛 | 7777 |
+| Sco | 焦土 | 7779 |
+| Cen | 核心岛 | 7781 |
+| Abe | 畸变 | 7783 |
+| Ext | 灭绝 | 7785 |
+| Ast | 繁星 | 7787 |
+| Rag | 仙境 | 7789 |
+| Val | 瓦尔盖罗 | 7791 |
+| Bob | 俱乐部 | 7775 |
+| Los | 失落地 | 7793 |
+| Gen | 创世模拟 | 7795 |
+
+### 2.5 「服务器操作」全量动作（19 项，从 lovelace JSON 逐项提取）
+
+| # | 名称 | ACA action | 参数 | 二次确认 |
+|---:|---|---|---|---|
+| 1 | 启动 | `start` | — | ✔ 确定要启动服务器吗？ |
+| 2 | 停止 | `stop` | — | ✔ 确定要停止服务器吗？ |
+| 3 | 强制终止 | `kill` | — | ✔ **这可能导致数据丢失！** |
+| 4 | 保存世界 | `saveworld` | — | ✔ |
+| 5 | 更新 | `update` | — | ✔ |
+| 6 | 清理恐龙 | `destroy` | — | ✔ 确定要清理野生恐龙吗？ |
+| 7 | 完整备份 | `fullbackup` | — | ✔ 确定要进行完整备份吗？ |
+| 8 | 刷新状态 | （HA 内部 `input_button.refresh_server_status`） | — | — |
+| 9 | 执行RCON命令 | `rcon` | `message=<自定义>` | — |
+| 10 | RCON 命令区展开 | （HA 内部 `input_boolean.rcon_commands_expanded`） | — | — |
+| 11–18 | 8 个快捷 RCON | `rcon` | 见 §2.6 | — |
+| 19 | 部落基地速查 | （跳转链接） | — | — |
+
+### 2.6 8 条快捷 RCON 原文（已取证，Q3 解决）
+
+| 按钮 | `message` 原文 |
+|---|---|
+| 👢 踢出玩家 | `KickPlayer 点击在线玩家昵称替换此处` |
+| 📍 玩家位置 | `ListAllPlayerPos` |
+| 📢 重启提醒 | `broadcast 服务器即将重启，请及时保存进度！` |
+| 🌄 设置清晨 | `settimeofday 06:00` |
+| ⏰ 5分钟维护 | `broadcast 服务器将在5分钟后重启进行维护，请玩家提前做好准备。` |
+| 🌅 设置正午 | `settimeofday 12:00` |
+| 🔧 例行维护 | `broadcast 服务器正在进行例行维护，预计10分钟后恢复正常。` |
+| 🌆 设置傍晚 | `settimeofday 18:00` |
+
+> ⚠️ v1 勘误：`input_boolean.rcon_commands_expanded` 是「RCON 命令区展开」开关，**不是**自动刷新开关。
+
+### 2.7 服务器状态 / 版本端点（不依赖 HA，已取证）
+
+```
+GET https://asa.whiterober.com/server-status
+Authorization: Bearer <token>
+→ { "servers": [
+      { "ProfileName": "孤岛", "Status": "Running", "OfficialServerVersion": "..." },
+      ...
+   ] }
+```
+
+字段用途：
+| 字段 | 用途 |
+|---|---|
+| `ProfileName` | 中文服务器名（与 apps.yaml `profile_map` 一致，用于匹配 `server` 参数） |
+| `Status` | `Running` / 其他 ⇒ 显示「运行中 / 已停止」 |
+| `OfficialServerVersion` | **服务器版本**（AppDaemon 取就是用它，`extract_version_number()` 抽版本号） |
+
+> 结论：**「服务器版本」可由后端直接从此端点获取**，无需任何 HA 实体。
+> （对照：HA 侧 `sensor.dialog_server_version` / `sensor.official_server_version` 亦源自同一字段。）
+
+### 2.8 技术通道现状
+- `LB_API`（L3196）= `https://data.whiterober.ccwu.cc`（独立后端），**与 HA 无关**
+- 新入口只需新增**后端 → ASA API** 这一段，与现有架构同构
+
+---
+
+## 三、需求定义
+
+### 3.1 角色层级（三级）
+| 等级 | 名称 | 判定 | 可见「服务器控制」 |
+|:---:|---|---|:---:|
+| 3 | 系统拥有者 | `user === 'whiterober'` | ✔ |
+| 2 | 二级管理员 | `accounts[user].role === 'admin2'` | ✔ |
+| 1 | 普通玩家 | 其余已登录 | ✘ |
+
+> L2 除本入口外与 L1 **完全一致**（用户明确：目前只开放服务器控制）。
+
+### 3.2 功能点
+| ID | 功能 | 说明 |
+|---|------|------|
+| F1 | 入口显隐 | L2/L3 可见；前端不渲染 + 后端拒绝（双保险） |
+| F2 | 服务器选择 | 默认 = 当前地图 TAB 对应服务器 |
+| F3 | 开关控制 | 启动 / 停止 / 强制终止 / 更新 |
+| F4 | 数据操作 | 保存世界 / 完整备份 / 清理恐龙 / 刷新状态 |
+| F5 | RCON | 自定义输入 + 8 个快捷指令（§2.6 原文） |
+| F6 | 结果回执 | 每次操作明确显示成功/失败/超时 |
+| F7 | 兜底入口 | 可跳到 HA 原版视图（**仅链接，非依赖**） |
+
+### 3.3 非功能需求
+- N1：写操作必须有明确结果回执，不可静默
+- N2：高危动作二次确认（文案与 HA 一致）
+- N3：操作后自动刷新状态
+- N4：移动端可用（触控目标 ≥ 32px）
+- N5：界面禁 `✓`/`✗`，统一 MDI 图标 / 内联 SVG
+- N6：**零 HA 依赖** —— 不调用任何 HA 域、不读任何 `sensor.*`/`input_*`/`var.*`
+
+---
+
+## 四、权限体系设计（零侵入）
+
+### 4.1 数据结构（只加不改）
+```json
+{
+  "whiterober": { "pwd": "...", "nick": "板板" },            // 系统拥有者：**不写 role**，代码自动返回 3
+  "某玩家":     { "pwd": "...", "nick": "小明", "role": "admin2" },
+  "普通玩家":   { "pwd": "...", "nick": "小红" }              // 无 role ⇒ 普通玩家
+}
+```
+- `role` 缺省 ⇒ 视为 `player`（与现状完全等价）；老账号不写也照常登录
+- **系统拥有者不依赖 `role` 字段**：`_role_level()` 优先判 `username == 'whiterober'` → 3（§4.4）
+
+### 4.1.1 二级管理员初始名单（已定案）
+
+> 用户口径：「用具体账号的方式，初始名单就是当前所有的普通用户，**新增用户不要自动加入二级管理员**」
+
+当前 `accounts.json` 共 **9** 个账号（实测，全部无 `role` 字段）：
+
+| 账号 | nick | 初始 role |
+|---|---|---|
+| `whiterober` | whiter.rober | **无需写入**（代码硬编码返回 3，见 §4.4） |
+| `kanbujiandehai` | 咪 | **`admin2`** |
+| `tb` | 嘎巴菜 | **`admin2`** |
+| `hz` | JaronV5 | **`admin2`** |
+| `athka` | 蒜头 | **`admin2`** |
+| `asd` | Asdcent | **`admin2`** |
+| `ali` | Ali | **`admin2`** |
+| `suiyi` | 飞翔 | **`admin2`** |
+| `luan` | Luan Luan | **`admin2`** |
+
+- 落地方式：**只给 8 个普通用户批量写入** `role: "admin2"`；**`whiterober` 不写任何 role 字段**（系统拥有者靠代码判定，天然最高级）
+- **新增账号不写 `role` ⇒ 自动为普通玩家**（符合"新增用户不要自动加入"）
+- 本版**不做授权 UI**，留作未来扩展（§4.5 保留接口设计，不实现界面）
+
+### 4.2 前端（只加新函数）
+```js
+function lbRoleLevel(){ ... }        // 3=拥有者(硬编码 whiterober) 2=二级管理员 1=普通玩家
+function lbCanServerCtl(){ return lbRoleLevel() >= 2; }
+```
+- **`lbIsAdmin()` 一行不改**，现有 20+ 调用点零改动
+
+### 4.3 登录响应（只加字段）
+`/api/login`：`{ ok, nick }` → `{ ok, nick, role }`（追加）。老缓存无 `role` ⇒ 按 `player` 处理，无需迁移。
+
+### 4.4 后端校验（新接口专用）
+```python
+def _role_level(username):
+    if username == 'whiterober': return 3          # 系统拥有者：硬编码，不看 role 字段
+    return 2 if (_accounts().get(username, {}).get('role') or '') == 'admin2' else 1
+```
+- 新接口要求 `_role_level(username) >= 2`
+- **系统拥有者自动包含二级管理员全部权限**：等级 3 ≥ 2，同一判定天然满足，无需额外分支
+- 拥有者不写 `role` 也不受影响（第 1 行优先命中，不读字段）
+- **现有 3 处 `admin required` 保持原样**
+
+### 4.5 授权管理（**本版不实现，仅留接口位**）
+
+> 用户口径：「授权先不做（未来扩展）」
+
+- 本版：**不做 UI、不做 `/api/set_role`**，初始名单一次性写入 `accounts.json`（§4.1.1）
+- 未来扩展预留：入口放「系统管理」浮窗（仅 L3 可见）+ `POST /api/set_role` + `role_audit.log` 审计
+- 未来若要收紧，直接改 `accounts.json` 的 `role` 字段即可，无需改代码
+
+---
+
+## 五、入口设计
+
+### 5.1 位置
+`[系统管理(仅L3)] [服务器控制(仅L2/L3)] [资讯广场] [联盟成员位置] [键位配置] [自助配置] [服务器规则] [注销] [关闭]`
+
+### 5.2 规格
+| 项 | 值 |
+|---|---|
+| 图标 | `mdi-server-security`（先用字形探测，不可用则内联 SVG） |
+| title | `服务器控制`（走 `.lb-tipb` 自定义浮窗） |
+| 类名 | `lb-tipb lb-picker-close`（沿用现样式，零新增 CSS） |
+| 强调色 | L2 建议 `#f59e0b`（高危入口） |
+| 点击 | `lbSrvCtlOpen()` |
+| 显隐 | `lbCanServerCtl()` 为真才输出字符串 |
+
+### 5.3 浮窗分区（复用 `lbSheetBuild/lbSheetOpen`）
+1. 目标服务器选择条（11 项，横向可滑）
+2. 状态卡（**服务器状态 / 服务器版本 / 在线玩家数**）
+   - **不含「游戏内时间」**：系统内已有展示，此处不重复（用户明确）
+   - 版本取值：`GET /server-status` → `OfficialServerVersion`（§2.7）
+3. 开关控制：启动 / 停止 / 强制终止 / 更新
+4. 数据操作：保存世界 / 完整备份 / 清理恐龙 / 刷新状态
+5. RCON：输入框 + 发送 + 8 个快捷胶囊
+6. 结果回执区
+7. 底栏：HA 原版视图链接（兜底，仅跳转）
+
+### 5.4 系统管理浮窗新增「ASA API Token」配置项
+
+> 用户口径：「在系统管理浮窗里顺便要加一个配置 API token 的配置项」
+
+**位置**：`lbOpenServerAdminModal()`（系统管理，仅系统拥有者）内，紧跟现有「🌐 服务器域名」块之后 —— 与既有配置项同款布局，零新增样式。
+
+**界面**
+| 元素 | 规格 |
+|---|---|
+| 标题 | `🔑 ASA API Token` |
+| 说明 | 「服务器控制功能使用，保存后即时生效，无需重启后端」 |
+| 输入框 | `id="lbAsaToken"`，`type="password"`，`autocomplete="off"`，placeholder 显示当前掩码（如 `已配置 ****f12542d`；未配置显示 `未配置`） |
+| 按钮 1 | `保存 Token` → `lbAsaTokenSave(this)` |
+| 按钮 2 | `测试连通` → `lbAsaTokenTest(this)` |
+| 消息区 | `id="lbAsaTokenMsg"` |
+
+**行为**
+1. 打开浮窗 → `lbAsaTokenLoad()`：`GET /api/server_config` → 取 `asa_token_masked` 填 placeholder（**绝不回显明文**）
+2. 保存 → `POST /api/server_config {asa_token}` → 返回 `{ok, masked}` → 更新 placeholder + **清空输入框** + 提示「已保存」
+3. 测试 → `POST /api/asa_test` → 后端用当前 token 调一次 `GET /server-status` → 返回 `{ok, count, ms, err}` → 显示「✅ 连通 · 11 台 · 312ms」或「❌ 401 未授权」
+
+**安全**
+- 前端**只拿到掩码**（后 6 位），token 原文永不下发
+- 输入框密码型，保存后立即清空
+- 保存/测试接口均仅系统拥有者可用（后端 `CFG_OWNERS` 校验）
+- token 不入 git、不进前端产物、不进本计划文档
+
+---
+
+## 六、功能映射（后端直连）
+
+### 6.0 不可丢失功能清单（逐项钉死，验收时逐条勾）
+
+> 用户明确：「8个功能按钮、底部的各种 rcon 功能、自定义 rcon 功能，都不能丢。」
+
+**A. 8 个功能按钮（一个不能少）**
+
+| # | 按钮 | action | 备注 |
+|---:|---|---|---|
+| A1 | 启动 | `start` | 二次确认 |
+| A2 | 停止 | `stop` | 二次确认 |
+| A3 | 强制终止 | `kill` | 二次确认（含数据丢失警告） |
+| A4 | 保存世界 | `saveworld` | 二次确认 |
+| A5 | 更新 | `update` | 二次确认 |
+| A6 | 清理恐龙 | `destroy` | 二次确认；超时 ≥600s |
+| A7 | 完整备份 | `fullbackup` | 二次确认；可能较久 |
+| A8 | 刷新状态 | `GET /server-status` | 重拉状态与版本 |
+
+**B. 底部 8 个快捷 RCON（原文见 §2.6，一个字都不能改）**
+
+`KickPlayer …` / `ListAllPlayerPos` / `broadcast 服务器即将重启…` / `settimeofday 06:00` /
+`broadcast 服务器将在5分钟后重启…` / `settimeofday 12:00` / `broadcast 服务器正在进行例行维护…` / `settimeofday 18:00`
+
+**C. 自定义 RCON 输入**
+
+输入框 + 发送按钮 → `POST /rcon {message}`（任意文本，不限于预设）
+
+**D. 状态区必须显示「服务器版本」，且不显示「游戏内时间」**
+
+### 6.1 映射表
+
+| # | 动作 | 后端调用 | 前端行为 |
+|---:|---|---|---|
+| 1 | 启动 | `POST asa/start` | 确认 → 执行 → 回执 |
+| 2 | 停止 | `POST asa/stop` | 同上 |
+| 3 | 强制终止 | `POST asa/kill` | 确认含数据丢失警告 |
+| 4 | 更新 | `POST asa/update` | 确认 → 执行 → 回执 |
+| 5 | 保存世界 | `POST asa/saveworld` | 确认 → 执行 → 回执 |
+| 6 | 完整备份 | `POST asa/fullbackup` | 确认 → 执行（可能较久） |
+| 7 | 清理恐龙 | `POST asa/destroy` | 确认 → 执行（**超时 ≥600s**） |
+| 8 | 刷新状态 | `GET asa/status` | 重拉服务端数据 |
+| 9 | 自定义 RCON | `POST asa/rcon` `{message}` | 输入框发送 |
+| 10–17 | 8 快捷 RCON | `POST asa/rcon` `{message=<§2.6>}` | 胶囊点击即发（高危项二次确认） |
+| 18 | 命令区展开 | — | 纯前端折叠 |
+| 19 | 基地速查 | — | 新窗口打开 HA 链接（仅跳转） |
+
+> 所有 `asa/*` 均为 **dino 后端自身路由**，由后端持 token 转发至 `https://asa.whiterober.com/{action}`；前端永不接触 ASA token。
+
+---
+
+## 七、技术方案（后端直连 ASA API，零 HA）
+
+### 7.1 架构
+```
+dino 前端  ──(username 鉴权)──▶  dino_backend  ──(Bearer token)──▶  ASA Server Manager
+                                 /api/srvctl/*                        https://asa.whiterober.com
+                                                                      /start /stop /kill /update
+                                                                      /saveworld /fullbackup /destroy
+                                                                      /rcon /players
+```
+
+### 7.2 新增后端接口
+```
+POST /api/srvctl/action?username=<u>     body: {"server":"Isl","action":"start"}
+POST /api/srvctl/rcon?username=<u>       body: {"server":"Isl","message":"broadcast hi"}
+GET  /api/srvctl/status?username=<u>&server=Isl
+```
+统一逻辑：
+1. `_role_level(username) >= 2`，否则 `401 level2 required`（**唯一鉴权入口**）
+2. `server` → `profileName`（后端内置 §2.4 映射表）
+3. `action` → 白名单校验（仅 §六 允许值）
+4. 转发 `POST {asa_base}/{action}`，`{"profileName": profileName, "message": ...}`
+5. 超时：`destroy` 600s，其余 60s；失败重试次数可配
+6. 返回 `{ok, ha_status→asa_status, message}`；`destroy/backup` 等长任务可改为"先返回 jobId + 轮询"
+7. 审计：`srvctl.log`（时间/用户/服务器/动作/结果/耗时）
+
+### 7.3 配置项（token 改为**界面可配**，存 `server_config.json`）
+
+> 存放位置已定：复用现成 `_srv_cfg_read()` / `_srv_cfg_write(doc)`（`SRV_CONFIG_FILE` = `server_config.json`）
+> ⇒ **改 token 即时生效，无需重启后端**
+
+```json
+{
+  "server_domain": "...",
+  "asa_base": "https://asa.whiterober.com",
+  "asa_token": "<仅服务器本地，永不下发>",
+  "asa_timeout": 60,
+  "asa_timeout_destroy": 600,
+  "asa_verify_tls": false
+}
+```
+
+**接口**
+| 接口 | 权限 | 说明 |
+|---|---|---|
+| `GET /api/server_config` | 公开读 | **仅返回** `server_domain` + `asa_token_masked`（如 `****f12542d`）；**永不返回 `asa_token` 原文** |
+| `POST /api/server_config` | 仅 owner（`CFG_OWNERS`） | 可写 `asa_token` / `asa_base`；写入后 `_srv_cfg_write()` 落盘 |
+| `POST /api/asa_test` | 仅 owner | 用当前 token 调 `GET {asa_base}/server-status`，返回 `{ok, count, ms, err}` |
+
+- `asa_timeout*` / `verify_tls` 只由配置文件静态设定（不在界面暴露）
+- `verify_tls:false` 沿用 AppDaemon 现状（对方证书链不完整）；**在风险 R2 中标注**
+
+### 7.4 前端调用
+```js
+lbSrvCtlCall(action, extra)   // 内部拼 /api/srvctl/*?username=<dinoAuth.user>
+```
+- 统一 loading / 禁用按钮（防连点）
+- 错误中文化（可复用 `lbSrvResultZh()`）
+
+---
+
+## 八、分阶段实施
+
+| 阶段 | 内容 | 文件 | 验收 |
+|:---:|---|---|---|
+| **P1** | 权限骨架：`role` 字段、`_role_level()`、`/api/login` 追加 `role`、`/api/set_role`、`lbRoleLevel/lbCanServerCtl` | 后端+前端 | 老账号登录照常；现有 8 入口全正常 |
+| **P2** | 初始名单落地：`accounts.json` 批量写 `role`（8 个 `admin2` + 1 个 `owner`），**不做 UI** | 数据文件 | 8 个账号登录后可见入口；新建账号不可见 |
+| **P3** | 后端直连层：`/api/srvctl/action|rcon|status` + ASA 转发 + 审计；**+ Token 配置接口**（`/api/server_config` 掩码读/owner 写）+ `/api/asa_test` | 后端 | 用 `status` 与 `saveworld` 验证连通 |
+| **P3.5** | **系统管理浮窗加 Token 配置块**：输入框（密码型）+ 保存 + 测试连通 | 前端 | 拥有者能保存并测试；输入框不回显明文 |
+| **P4** | 入口+浮窗骨架：图标、`lbSrvCtlOpen()`、服务器选择、状态卡 | 前端 | L2 可见、能拉状态 |
+| **P5** | 动作对接：开关 4 + 数据 4 + RCON 9（含 8 快捷） | 前端 | 逐项实测 |
+| **P6** | 收尾：回执、防连点、长任务轮询、移动端、兜底链接、归档 | 前端 | 全量回归 |
+
+> P3 需**后端重启**（`restart_dino_backend.bat`，由你手动执行）；其余为前端部署。
+
+---
+
+## 九、验收标准
+
+| # | 场景 | 期望 |
+|---:|---|---|
+| 1 | 拥有者登录（`accounts.json` 中**无 role 字段**） | 看到「系统管理」+「服务器控制」全功能（自动包含 L2 权限） |
+| 2 | 二级管理员登录 | **只**看到「服务器控制」 |
+| 3 | **新增账号**（`accounts.json` 里无 `role`）登录 | 两个都看不到（**不会自动成为二级管理员**） |
+| 4 | 未登录直调 `/api/srvctl/action` | 401 `login required` |
+| 5 | 普通玩家伪造调用 | 401 `level2 required`，ASA 侧无动作 |
+| 6 | 启动 / 停止 / 更新 | 确认 → ASA 实际执行 → 回执成功 |
+| 7 | 强制终止 | 确认含数据丢失警告 |
+| 8 | 保存世界 / 完整备份 / 清理恐龙 | 回执正确；长任务不超时误判 |
+| 9 | 自定义 RCON `broadcast 测试` | 游戏内收到广播 |
+| 10 | 8 快捷指令逐个点 | 行为与 HA 原按钮一致 |
+| 10b | **功能完整性核对** | 8 个功能按钮 + 8 个快捷 RCON + 自定义 RCON 输入，逐项点一遍，**一项不能少** |
+| 10c | **版本显示** | 状态区显示服务器版本（来自 `/server-status` 的 `OfficialServerVersion`） |
+| 10d | **无游戏内时间** | 状态区**不出现**游戏内时间（系统已有，不重复显示） |
+| 10e | **Token 配置项存在** | 「系统管理」浮窗内可见「🔑 ASA API Token」块（**仅拥有者**可见） |
+| 10f | **保存后不回显** | 保存后输入框清空、placeholder 变掩码（如 `已配置 ****f12542d`） |
+| 10g | **测试连通可用** | 点「测试连通」返回服务器台数 + 耗时；故意填错 token ⇒ 明确报 401 |
+| 10h | **接口不泄露** | `GET /api/server_config` 响应体中**不含** token 原文（仅掩码） |
+| 11 | **零 HA 依赖** | 新入口全过程无任何 HA 域名/实体请求（DevTools 网络面板验证） |
+| 12 | 回归：现有 8 浮窗入口 | 全部照常 |
+| 13 | 回归：老账号无 `role` | 正常登录，等同普通玩家 |
+| 14 | 界面符号 | 无 `✓`/`✗` |
+| 15 | 移动端 | 可滚动、可点、无横向溢出 |
+
+---
+
+## 十、风险与回退
+
+| # | 风险 | 等级 | 缓解 |
+|---:|---|:---:|---|
+| R1 | 权限改造波及现有功能 | 高 | 零侵入三铁律；P1 后必须跑 §九 #12/#13 |
+| R2 | **ASA API token 泄露 / TLS 校验关闭** | 高 | token 仅存服务器 `server_config.json`；**接口只回掩码**；前端永不接触原文；写入/测试仅 owner；`verify_tls:false` 为既有现状，后续可换有效证书后开启 |
+| R3 | 长任务（destroy/backup）超时 | 中 | destroy 600s + 后台 job + 轮询；前端显示"处理中" |
+| R4 | 误触高危操作 | 中 | 二次确认（文案同 HA）+ 红色按钮 |
+| R5 | 后端重启影响现有接口 | 中 | 新路由纯增量；上线前整份备份 `dino_backend.py` |
+| R6 | 二级管理员滥用 | 中 | 仅 L3 可授权 + 审计日志 + 可撤销 |
+| R7 | ASA API 变更端点 | 低 | 端点表集中在后端映射，单点修改 |
+| **R8** | **初始名单覆盖全部现有普通用户**（8 个账号均可执行强杀/清理/备份） | **中高** | 用户明确要求；缓解：全部高危操作保留二次确认 + 后端审计日志 `srvctl.log`；未来可随时从 `accounts.json` 移除个别账号的 `admin2` |
+
+**回退**：入口处 `lbCanServerCtl()` 临时 `return false` 即可；后端路由注释即失效。**没有任何现有功能依赖新增代码**。
+
+---
+
+## 十一、待确认问题
+
+| # | 问题 | 状态 |
+|---:|---|---|
+| Q1 | 刷新状态的目标实体 | ✅ 已解决：HA 侧 `input_button.refresh_server_status`；**dino 改为直接重拉状态** |
+| Q2 | `input_boolean` 语义 | ✅ 已解决：是「RCON 命令区展开」，非自动刷新 |
+| Q3 | 8 条快捷 RCON 原文 | ✅ 已解决：见 §2.6 |
+| Q4 | 二级管理员初始名单 | ✅ 已定案：现有 8 个普通用户全部 `admin2`（见 §4.1.1）；新增账号不自动加入 |
+| Q5 | 授权是 UI 还是手工改 json | ✅ 已定案：**本版不做授权 UI**，未来扩展（§4.5 仅留接口位） |
+| Q6 | `mdi-server-security` 字形可用性 | ⏳ P4 前探测 |
+| Q7 | **ASA API token** | ✅ 已提供 + **改为界面可配**（§5.4 / §7.3）。初始值由我写入 `server_config.json` 的 `asa_token`；后续拥有者可在「系统管理」浮窗自行更换并测试；**不写入本计划、不写入前端、不打印明文** |
+
+---
+
+## 十二、工作量预估
+
+| 阶段 | 预估 |
+|:---:|---|
+| P1 权限骨架 | 1 轮 |
+| P2 授权 UI | 1 轮 |
+| P3 后端直连层 | 1 轮（+ 你手动重启后端） |
+| P4 入口+骨架 | 1~2 轮 |
+| P5 动作对接 | 2~3 轮 |
+| P6 收尾回归 | 1 轮 |
+
+---
+
+*本文档为计划，未对任何生产文件做修改。v2 已按「不依赖 HA」重写技术方案。*
