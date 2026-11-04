@@ -1670,7 +1670,12 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 <style id="lbWikiCss">
 /* ===== v72：Wiki 面板（视觉对齐项目：#16161f 面板 / #2a2a3a 边线 / #7c3aed 主色） ===== */
 #lbWikiOverlay{position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.9);display:none;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}
-#lbWikiOverlay.show{display:flex}#lbWikiItemOverlay, #lbNews, #lbSrvCtl{position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.9);display:none;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}#lbWikiItemOverlay.show, #lbNews.show, #lbSrvCtl.show{display:flex}   /* v5966：#lbSrvCtl 缺显示/隐藏规则 ⇒ 浮窗关不掉 */
+#lbWikiOverlay.show{display:flex}#lbWikiItemOverlay, #lbNews, #lbSrvCtl, #lbArkBk{position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.9);display:none;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}#lbWikiItemOverlay.show, #lbNews.show, #lbSrvCtl.show, #lbArkBk.show{display:flex}   /* ⚠ 新增 lbSheetBuild 浮窗必须同步加进上面两行白名单，否则 display:none 缺失 ⇒ 浮窗关不掉（v5966 lbSrvCtl / v6032 lbArkBk 各踩一次） */   /* v5966：#lbSrvCtl 缺显示/隐藏规则 ⇒ 浮窗关不掉 */
+/* v6030（用户口径「小标题为啥非要先渲染再隐藏，这就是脱裤子放屁」）：
+   紧跟置顶文案块(.tc-intro)的小标题直接用 :has() 在**样式计算阶段**隐藏 ——
+   浏览器第一次布局就按 display:none 算，不会出现「先画出来再藏掉」的可见中间态，
+   也不再需要 lbWikiLayoutFix 事后再改 DOM。 */
+#lbWikiOverlay .tc-h:has(+ .tc-intro), #lbWikiItemOverlay .tc-h:has(+ .tc-intro), #lbNews .tc-h:has(+ .tc-intro){display:none !important}
 /* v5875：地图 Wiki 不再新建面板 —— 直接渲染进 #lbWikiOverlay，样式全部复用现成规则。
    这里只保留入口按钮的定位（与 #lbBreedActions > #lbWikiBtn 同款 order:99） */
 #lbFuncBar > div > #lbMapWikiBtn{order:99}
@@ -1695,6 +1700,19 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 .lw-meta .lw-pgb.lw-pgb-indet i{width:35%;animation:lwprog 1.25s ease-in-out infinite}
 @keyframes lwprog{0%{transform:translateX(-100%)}100%{transform:translateX(320%)}}
 .lw-body{flex:1;overflow-y:auto;padding:12px 14px;min-height:0}
+/* v6050：浮窗底部固定栏（.lw-panel 是 flex column，footer 放在 body 之后即天然不随滚动） */
+.lw-foot{flex-shrink:0;padding:10px 14px;background:#12121a;border-top:1px solid #2a2a3a}
+.lw-foot[hidden]{display:none!important}
+#lbArkBk .arbk-ask{margin-top:9px;padding:9px 11px;border-radius:7px;
+  background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.28)}
+#lbArkBk .arbk-askh{display:flex;align-items:center;gap:6px;font-size:12px;color:#fca5a5;margin-bottom:7px}
+#lbArkBk .arbk-askh .mdi{font-size:14px}
+#lbArkBk .arbk-askr{display:flex;gap:6px;flex-wrap:wrap}
+#lbArkBk .arbk-askin{flex:1;min-width:120px;padding:6px 9px;border-radius:5px;border:1px solid #33334a;
+  background:#12121a;color:#e5e7eb;font-size:12px;outline:none}
+#lbArkBk .arbk-askin:focus{border-color:#7c3aed}
+#lbArkBk .arbk-asktip{font-size:11px;color:#9aa3b5;line-height:1.55;margin-bottom:7px;
+  padding:6px 8px;border-radius:5px;background:rgba(255,255,255,.03)}
 .lw-load{display:flex;align-items:center;justify-content:center;gap:10px;padding:40px 0;color:#8b8b9a;font-size:13px}
 .lw-spin{width:16px;height:16px;border:2px solid #33333d;border-top-color:#7c3aed;border-radius:50%;animation:lwspin .8s linear infinite}
 @keyframes lwspin{to{transform:rotate(360deg)}}
@@ -1718,7 +1736,7 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 .lw-ok{color:#4ade80;font-size:12.5px;line-height:1.9}
 /* v153（用户口径）：移动端整屏 —— 原仅 max-height，内容少时面板只占半屏，不是整屏 */
 @media (max-width:640px){
-  #lbWikiOverlay{padding:0;align-items:stretch;justify-content:stretch}#lbWikiItemOverlay, #lbNews, #lbSrvCtl{padding:0;align-items:stretch;justify-content:stretch}
+  #lbWikiOverlay{padding:0;align-items:stretch;justify-content:stretch}#lbWikiItemOverlay, #lbNews, #lbSrvCtl, #lbArkBk{padding:0;align-items:stretch;justify-content:stretch}
   .lw-panel{width:100%;max-width:100%;height:100vh;height:100dvh;max-height:100vh;max-height:100dvh;border-radius:0;border-left:none;border-right:none;border-top:none;border-bottom:none;box-shadow:none}
   /* v5736（用户口径）：繁殖 tab ④ 时间轴在移动端自动改**竖版** —— 节点「圆点+名称」横排，阶段改为左侧竖线+缩进文字 */
   #lbWikiOverlay .tc-tl-row{flex-direction:column;align-items:stretch}
@@ -2121,6 +2139,8 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 .server-tab-cnt .gene-ic{font-size:9px;line-height:1;font-style:normal}
 /* 物种选择按钮（更像按钮：hover 紫色高亮 + 下拉箭头） */
 .lb-class-btn{display:inline-flex;align-items:center;gap:6px;background:#1a1a24;border:1px solid #333;border-radius:8px;color:#ccc;font-size:12px;padding:5px 24px 5px 12px;max-width:280px;min-width:120px;cursor:pointer;text-align:left;overflow:visible;transition:all .15s;user-select:none;position:relative;margin-right:12px;height:28px;flex-shrink:0}
+/* v6089: badge digits vertical centering (Arial descent gap) */
+#lbWatchCnt,#lbTodoCnt,#lbMaintCnt{display:inline-flex;align-items:center;justify-content:center;height:14px;line-height:normal}
 .lb-class-btn:hover{background:#22223a;border-color:#7c3aed;color:#fff}
 .lb-class-btn:active{transform:scale(.97)}
 .lb-class-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:#a78bfa}
@@ -2305,6 +2325,7 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
 }
 .lb-picker-panel{background:#1a1a24;border:1px solid #333;border-radius:8px;width:90%;max-width:640px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden}
 .lb-picker-header{display:flex;gap:8px;padding:10px 12px;align-items:center;flex-shrink:0;border-bottom:1px solid #2a2a3a}
+.lb-picker-header.lb-rp-head{gap:5px}   /* v6082（用户口径「该行的入口图标间隔减1」）：只作用于「生存者」浮窗的入口图标行；v6083 7→6；v6084 6→5 */
 .lb-picker-header input{flex:1;margin:0;background:#15151f;border:1px solid #333;border-radius:6px;color:#ccc;font-size:12px;padding:0 10px;height:28px}
 .lb-picker-close{width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid #333;border-radius:4px;background:#15151f;color:#999;cursor:pointer;flex-shrink:0;font-size:13px}
 .lb-picker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:6px;padding:12px;overflow-y:auto}
@@ -2696,6 +2717,148 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
    原本 .lb-hf-aibtn 只有 .primary（紫底白字），**没有 :disabled 规则**
    ⇒ 逻辑上 disabled=true 但视觉仍是紫色按钮，看不出已禁用。这里补一条（全局，所有 AI 盒子按钮同步）。 */
 .lb-hf-aibtn.primary:disabled,.lb-hf-aibtn:disabled{background:#2a2a35;border-color:#3a3a46;color:#6b7280;cursor:not-allowed;opacity:.6}
+/* ===== P4（2026-11-04）：🗄 安全回档浮窗样式（全部新增，不改既有类）===== */
+/* v6035：服务器 Tab 右上角纯状态圆点（原为 MB 数字角标） */
+#lbArkBk .arbk-dot{position:absolute;top:-3px;right:-3px;width:8px;height:8px;border-radius:50%;border:1.5px solid #1a1a24;pointer-events:none;box-sizing:border-box}
+#lbArkBk .arbk-pickhead{display:flex;align-items:center;gap:8px;margin:2px 0 6px}
+#lbArkBk .arbk-dim{color:#8b8b9e;font-size:11px}
+#lbArkBk .arbk-cur{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:12px;
+  padding:6px 9px;margin:6px 0;border-radius:6px;background:rgba(124,58,237,.07);
+  border:1px solid rgba(124,58,237,.18)}
+#lbArkBk .arbk-sec{display:flex;align-items:center;gap:6px;margin:10px 0 5px;font-size:12px;
+  color:#a78bfa;font-weight:600}
+#lbArkBk .arbk-sec.ok{color:#4ade80}
+#lbArkBk .arbk-sec.warn{color:#fbbf24}
+#lbArkBk .arbk-sec.bad{color:#f87171}
+#lbArkBk .arbk-sec .arbk-dim{margin-left:auto;font-weight:400}
+/* v6066（用户口径「高度扩大1倍，但是要自适应窗口高度」）：
+   240px → min(480px, 60vh)：宽屏封顶翻倍，窗口变矮按 60vh 同比例收缩；
+   面板 .lw-body 本身可滚，列表再高也不会破版。 */
+#lbArkBk .arbk-list{display:flex;flex-direction:column;gap:3px;max-height:min(480px,60vh);overflow-y:auto;
+  padding:2px;border-radius:6px;background:rgba(255,255,255,.015)}
+/* v6067（用户口径「矮屏下不要出现双重滚动条」）：
+   外层 .lw-body 与 .tc 改成纵向 flex 链并 overflow:hidden ⇒ 外层永不自己滚；
+   溢出全部交给回档点列表（flex:1 吸收 + 自带 overflow-y:auto）⇒ 面板永远只有一条滚动条。
+   高屏：列表仍封顶 min(480px,60vh)；矮屏：列表按剩余空间收缩，
+   下方「怎么读这份列表」图例与各操作按钮始终可见，不会被挤出视口。 */
+#lbArkBk .lw-body{display:flex;flex-direction:column;overflow:hidden}
+#lbArkBk .lw-body>.tc{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+#lbArkBk .lw-body>.tc>*{flex:0 0 auto}
+/* v6068 修正：曾用 flex:1 1 0，其 flex-basis:0 在容器**没有确定高度**时会把列表压成 0
+   （线上实测列表只剩 4px）⇒ 改 flex:1 1 auto：按内容高度（受 max-height 封顶），
+   只有面板触碰 92vh 上限时才收缩，从而实现「矮屏把溢出让给列表内滚」。 */
+#lbArkBk .lw-body>.tc>.arbk-list{flex:1 1 auto;min-height:0}
+#lbArkBk .arbk-row{display:flex;align-items:center;gap:8px;padding:6px 9px;border-radius:5px;
+  cursor:pointer;font-size:12px;border:1px solid transparent;transition:background .12s}
+#lbArkBk .arbk-row:hover{background:rgba(124,58,237,.1)}
+#lbArkBk .arbk-row.sel{background:rgba(124,58,237,.18);border-color:rgba(124,58,237,.5)}
+#lbArkBk .arbk-ts{font-variant-numeric:tabular-nums;color:#e5e5f0;min-width:96px}
+#lbArkBk .arbk-mb{color:#8b8b9e;min-width:56px;font-variant-numeric:tabular-nums}
+#lbArkBk .arbk-lbl{color:#a78bfa;font-size:11px}
+/* v6037：回档点列表下方「怎么读这份列表」图例 */
+#lbArkBk .arbk-legend{margin-top:7px;padding:8px 10px;border-radius:6px;font-size:11px;
+  line-height:1.8;color:#a8b7d0;background:rgba(96,165,250,.06);
+  border:1px solid rgba(96,165,250,.18);display:flex;flex-direction:column;gap:1px}
+#lbArkBk .arbk-legend b{color:#c4b5fd;font-weight:600}
+/* v6041（用户口径）：安全回档浮窗复用 wiki 右上角问号（.lw-help + data-tip 气泡）。
+   原样式只对 Wiki/WikiItem/News/Route 四个浮窗定义，此处按同款补齐 #lbArkBk。
+   注意：**不能同时挂 .lb-tipb**（会叠加两个气泡，见 v6028 教训）。 */
+#lbArkBk .lw-help{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;
+  width:24px;height:24px;border-radius:50%;color:#8b93a7;font-size:17px;line-height:1;
+  cursor:help;position:relative;outline:none}
+#lbArkBk .lw-help[hidden]{display:none}
+#lbArkBk .lw-help:hover{color:#c4b5fd}
+#lbArkBk .lw-help::after{content:attr(data-tip);position:absolute;right:-6px;top:132%;
+  width:min(84vw,440px);max-height:54vh;overflow:auto;background:#262637;color:#d5dae6;
+  border:1px solid #3d3d55;border-radius:8px;padding:9px 12px;font-size:11.5px;font-weight:400;
+  line-height:1.8;white-space:pre-line;overflow-wrap:anywhere;box-shadow:0 12px 30px #000000a6;
+  opacity:0;pointer-events:none;transition:opacity .12s;z-index:60;text-align:left}
+#lbArkBk .lw-help:hover::after{opacity:1;pointer-events:auto}
+#lbArkBk .lw-help .mdi{pointer-events:none}
+/* v6041（用户口径）：安全名单折叠（🟡/🔴 名单不折叠 —— 那是风险，必须直接看到） */
+#lbArkBk .arbk-fold{margin:10px 0 5px}
+#lbArkBk .arbk-fold>summary{display:flex;align-items:center;gap:6px;font-size:12px;
+  font-weight:600;color:#4ade80;cursor:pointer;list-style:none;padding:2px 0}
+#lbArkBk .arbk-fold>summary::-webkit-details-marker{display:none}
+#lbArkBk .arbk-fold>summary::after{content:'展开';margin-left:auto;font-size:10.5px;
+  font-weight:400;color:#6b7280}
+#lbArkBk .arbk-fold[open]>summary::after{content:'收起'}
+#lbArkBk .arbk-nmwrap{margin-top:4px;max-height:220px;overflow-y:auto}
+/* v6043：玩家角色档案行 */
+/* v6061：角色档案区（折叠容器 / 行 / 名称 / 行内按钮）四条 CSS 随功能一并删除 */
+#lbArkBk .arbk-legend code{background:rgba(0,0,0,.38);padding:0 4px;border-radius:3px;
+  color:#fbbf24;font-size:10.5px;font-style:normal}
+/* v6036：原 `.arbk-job` 的「颜色 + margin-left:auto」规则与下方「回档进度块」同名规则
+   打架（把列表里的 jobId 撑成带边框方块）⇒ 已删除；进度块继续沿用 .arbk-job */
+#lbArkBk .arbk-actions{display:flex;gap:6px;flex-wrap:wrap;margin:9px 0 6px}
+/* v6049：补 justify-content:center —— 原缺此属性，一旦 flex 子项里有「宽度 0 的坏图标」，
+   gap 仍占位而内容靠左，视觉上就成了「左右内边距不等」（实测 mdi-account-restore 就是这类） */
+#lbArkBk .arbk-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:6px 12px;border-radius:6px;
+  border:1px solid rgba(124,58,237,.45);background:rgba(124,58,237,.16);color:#c4b5fd;
+  cursor:pointer;font-size:12px;transition:background .12s}
+#lbArkBk .arbk-btn:hover{background:rgba(124,58,237,.3)}
+#lbArkBk .arbk-btn.danger{border-color:rgba(239,68,68,.5);background:rgba(239,68,68,.14);color:#fca5a5}
+#lbArkBk .arbk-btn.danger:hover{background:rgba(239,68,68,.28)}
+#lbArkBk .arbk-btn.ghost{border-color:rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:#c9c9d6}
+/* v6054（用户口径「要有个取消选择的低可视化按钮」）：无边框、无底色、灰小字，弱于 ghost 按钮 */
+#lbArkBk .arbk-cancel{display:inline-flex;align-items:center;gap:4px;padding:4px 7px;border:0;
+  background:none;color:#7c7c90;font-size:11.5px;line-height:1;cursor:pointer;border-radius:5px;
+  transition:color .12s,background .12s}
+#lbArkBk .arbk-cancel:hover{color:#c9c9d6;background:rgba(255,255,255,.05)}
+#lbArkBk .arbk-cancel .mdi{font-size:12px}
+/* v6058：底栏失败条下方的「重试 / 清除」按钮行 */
+#lbArkBk .arbk-footbtns{display:flex;align-items:center;gap:8px;margin-top:6px}
+#lbArkBk .arbk-plan{margin-top:8px;padding:9px 11px;border-radius:7px;
+  background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07)}
+#lbArkBk .arbk-line{margin:2px 0}
+#lbArkBk .arbk-vd{display:inline-flex;align-items:center;gap:5px;font-weight:600;font-size:12.5px}
+#lbArkBk .arbk-vd.ok{color:#4ade80}
+#lbArkBk .arbk-vd.bad{color:#f87171}
+#lbArkBk .arbk-cnts{display:flex;gap:12px;flex-wrap:wrap;margin:7px 0}
+#lbArkBk .arbk-c{display:inline-flex;align-items:center;gap:4px;font-size:12px}
+#lbArkBk .arbk-c.ok{color:#4ade80}
+#lbArkBk .arbk-c.warn{color:#fbbf24}
+#lbArkBk .arbk-c.bad{color:#f87171}
+#lbArkBk .arbk-notice{margin:6px 0;padding:6px 9px;border-radius:5px;font-size:11.5px;
+  color:#fbbf24;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.22)}
+#lbArkBk .arbk-notice.bad{color:#f87171;background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.25)}
+#lbArkBk .arbk-nm{font-size:11.5px;padding:3px 0 3px 16px;color:#dcdce8}
+#lbArkBk .arbk-nmx{margin-left:7px;color:#8b8b9e;font-size:10.5px}
+#lbArkBk .arbk-tag{margin-left:6px;font-size:10px;padding:0 5px;border-radius:4px;line-height:15px;display:inline-block;vertical-align:1px}
+#lbArkBk .arbk-tag.warn{color:#fbbf24;background:rgba(251,191,36,.14)}
+#lbArkBk .arbk-tag.bad{color:#f87171;background:rgba(248,113,113,.14)}
+#lbArkBk .arbk-guide{margin:9px 0;padding:9px 11px 9px 12px;border-radius:6px;font-size:11.5px;
+  color:#c8d6ea;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.3);
+  border-left:3px solid #60a5fa;line-height:1.65}
+#lbArkBk .arbk-gh{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;
+  color:#93c5fd;margin-bottom:6px;letter-spacing:.3px}
+#lbArkBk .arbk-gh .mdi{font-size:14px}
+#lbArkBk .arbk-gl{margin:0;padding-left:20px;list-style:decimal}
+#lbArkBk .arbk-gl li{margin:3px 0;color:#dbe6f5}
+#lbArkBk .arbk-gl li::marker{color:#60a5fa;font-weight:600}
+#lbArkBk .arbk-gn{margin-top:7px;padding-top:7px;border-top:1px dashed rgba(96,165,250,.25);
+  color:#8b9bb5;font-size:11px;line-height:1.55}
+#lbArkBk .arbk-gn strong{color:#b9cae4}
+/* v6048：传服物品口径 —— 琥珀色警示块，与灰色常规说明区分 */
+#lbArkBk .arbk-gn.arbk-gn-tip{display:flex;gap:6px;align-items:flex-start;color:#d8c9a8;
+  background:rgba(251,191,36,.08);border-top:1px dashed rgba(251,191,36,.3);
+  border-radius:4px;padding:6px 8px;margin-top:7px}
+#lbArkBk .arbk-gn.arbk-gn-tip .mdi{font-size:13px;margin-top:1px;color:#fbbf24;flex:none}
+#lbArkBk .arbk-gn.arbk-gn-tip strong{color:#fcd34d}
+/* v6053（用户口径「附件是不是已经没用了」）：.arbk-ack / .arbk-chk / .arbk-conf 已废弃 ——
+   block 档改用与 clear 一致的单一「执行回档」按钮；确认流程交给「通用确认浮窗 + 内联放行词条」。
+   原输入框 #arbkConfirm 自 v6052 起不再参与校验，仅作预填，已一并删除。 */
+/* v6056（用户口径「附件是不是不需要了 毕竟有进度条了」）：
+   .arbk-job / .arbk-jobhead / .arbk-step / .arbk-sp / .arbk-sm 已全部删除 ——
+   回档进度只保留底栏固定进度条（.lw-foot + .lb-task-pg），正文不再重复列步骤。 */
+@media(max-width:560px){
+  #lbArkBk .arbk-ts{min-width:auto}
+  #lbArkBk .arbk-mb{min-width:auto}
+  /* v6066：同样翻倍并自适应（手机屏矮，按 50vh 收） */
+  /* v6076（用户口径「移动端附件下方为啥留了这么大空白」）：全屏后列表应交由 flex 链撑满 ——
+     原 400px 封顶在 390×844 下只占 400px、下方空出 148px ⇒ 移动端取消封顶（PC 仍 480/60vh） */
+  #lbArkBk .arbk-list{max-height:none}
+}
 /* v5963 P4：服务器控制浮窗（多选胶囊 + 3 统计卡）—— 全部新增，不改既有类 */
 .lb-srvctl-pickhead{display:flex;align-items:center;gap:8px;margin:2px 0 8px}
 .lb-srvctl-ts{font-size:11.5px;color:#8b93a7}
@@ -2727,6 +2890,51 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
 .lb-srvctl-online .ol-non{color:#5f6779}
 .lb-srvctl-online .ol-sum{color:#a78bfa;font-weight:600;margin-right:5px}
 .lb-srvctl-online .ol-sep{color:#3a4052;margin-right:8px}
+/* v6071（用户口径「方案B是浮窗，你这个是全屏遮罩」）：
+   地图信息 / 成员分布 / 公共设施位置 的内容包一层**面板外壳** —— 桌面是居中圆角浮窗
+   （#16161f + 边框 + 阴影 + max-height:82vh，内部滚动），≤640px 自动整屏
+   （与既有 .lw-panel / #lbRoutePanel 的移动端先例完全一致）。 */
+#lbBreedOverlayBody>.lb-ipp-panel{background:#16161f;border:1px solid #2a2a3a;border-radius:12px;
+  box-shadow:0 20px 60px rgba(0,0,0,.7);overflow:hidden;display:flex;flex-direction:column;
+  max-height:82vh;width:min(520px,100%)}
+/* v6073（两次踩坑后的正解）：
+   ① `#lbBreedOverlay` 的 padding 是内联 → 必须 !important；
+   ② 它的 display 被 JS 用 `ov.style.display='block'` 内联控制（显隐用）→ **不能**改成 flex，
+      否则关窗时 display:none 会被 CSS 抢先 ⇒ 居中改在 #lbBreedOverlayBody 这层用 flex。 */
+#lbBreedOverlay:has(>#lbBreedOverlayBody>.lb-ipp-panel){padding:0!important}
+#lbBreedOverlay:has(>#lbBreedOverlayBody>.lb-ipp-panel)>#lbBreedOverlayBody{
+  display:flex;align-items:center;justify-content:center;width:100%;max-width:none!important;
+  min-height:100vh;min-height:100dvh;padding:20px;box-sizing:border-box}
+/* v6074（用户口径「所有一级浮窗（除确认类型）移动端全屏」）：
+   断点沿用项目既有先例 640px（.lw-panel / #lbRoutePanel 都是 640）。
+   只对加了 .lb-fs 标记的面板生效 —— 选角色/登录/重命名/签名/无部落等小浮窗不加标记，保持居中；
+   确认类 .lb-ask-overlay / .lb-confirm-overlay 完全不受影响。 */
+@media(max-width:640px){
+  .lb-picker-overlay:has(>.lb-picker-panel.lb-fs),.lb-picker-overlay.lb-fs{padding:0!important;align-items:stretch!important;justify-content:stretch!important}
+  /* 裸 div / .lb-modal-scroll 面板（系统管理 / 自助配置 / 键位 / 基因）——按 overlay 标记整屏 */
+  .lb-picker-overlay.lb-fs>div{width:100%!important;max-width:100%!important;min-width:0!important;
+    height:100vh;height:100dvh;max-height:100vh!important;max-height:100dvh!important;
+    border-radius:0!important;border:none!important;box-shadow:none!important}
+  /* v6086：.lb-km-pickpanel 自带 max-width:min(440px,96vw)!important 且面板内有联 max-width ⇒
+     必须用更强规则覆盖，否则移动端只有 96vw 宽（非整屏）。 */
+  .lb-picker-overlay>.lb-picker-panel.lb-km-pickpanel.lb-fs{max-width:100%!important;width:100%!important}
+  .lb-picker-overlay>.lb-picker-panel.lb-fs{width:100%;max-width:100%;height:100vh;height:100dvh;
+    max-height:100vh;max-height:100dvh;border-radius:0;border:none}
+  .lb-maint-overlay.lb-fs>div,.lb-todo-overlay.lb-fs>div,.lb-watch-overlay.lb-fs>div{
+    width:100%!important;max-width:100%!important;height:100vh;height:100dvh;
+    max-height:100vh!important;max-height:100dvh!important;border-radius:0!important;border:none!important;box-shadow:none!important}
+  #lbBreedOverlay{padding:0!important}
+  #lbBreedOverlayBody{max-width:100%!important;width:100%}
+  #lbBreedOverlay:has(>#lbBreedOverlayBody>.lb-ipp-panel)>#lbBreedOverlayBody{
+    padding:0;align-items:stretch;min-height:100vh;min-height:100dvh}
+  #lbBreedOverlayBody>.lb-ipp-panel{max-height:none;height:100vh;height:100dvh;border-radius:0;border:none;box-shadow:none}
+  .lb-ipp-panel .lb-ipp-scroll{max-height:none}
+}
+/* v6063（用户口径）：管理员在线角色带 ✕ 踢人 —— 名字与 ✕ 成组，整块可换行 */
+.lb-srvctl-online .ol-kick{white-space:normal;align-items:flex-start;flex-wrap:wrap}
+.lb-srvctl-online .ol-r{display:inline-flex;align-items:center;gap:1px;margin-right:7px;white-space:nowrap}
+.lb-srvctl-online .ol-x{cursor:pointer;color:#f87171;font-size:11px;opacity:.7;line-height:1}
+.lb-srvctl-online .ol-x:hover{opacity:1}
 /* v6004（用户口径）：启动队列概览行 */
 .lb-srvctl-qline{margin-top:6px;padding:6px 9px;border-radius:6px;background:rgba(245,158,11,.05);border:1px solid rgba(245,158,11,.14);font-size:11px;color:#a89b86;line-height:1.85}
 .lb-srvctl-qline:empty{display:none}
@@ -2831,9 +3039,12 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
 .lb-km-prof.on{background:#3b2a5e;border-color:#a78bfa;color:#fff}
 .lb-km-prof em{font-style:normal;opacity:.65;font-size:11px;margin-left:1px}
 .lb-km-profadd{width:20px;height:20px;border-radius:50%;background:#2a2a36;color:#9a9ab0;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;line-height:1}
+/* v6079（用户口径「键位配置 浮窗 没有统一 标题栏样式」）：面板 padding 归零后，左右内边距下放到三区块
+   —— 标题行 .lw-head 自带 12px 14px 且保持通栏；设备行/滚动区/底栏各补 24px，视觉与原「整面板 padding:24px」一致 */
 .lb-km-fix-top{flex:0 0 auto}   /* v5382：标题行 + 设备行固定，不随滚动 */
-.lb-km-scroll{flex:1 1 auto;overflow-y:auto;overflow-x:hidden;min-height:0}   /* v5382：唯一滚动区（AI 行 / tab 行 / 列表）；min-height:0 是 flex 滚动生效的必要条件 */
-.lb-km-fix-bot{flex:0 0 auto}   /* v5382：底部功能栏固定，不随滚动 */
+.lb-km-devwrap{padding:12px 24px 0}   /* v6079：设备行左右内边距（标题栏通栏，不缩进）；v6080（用户口径「附件的上面没有间距」）：补 12px 上内边距（原靠标题行 margin-bottom:14px，换 .lw-head 后丢失） */
+.lb-km-scroll{flex:1 1 auto;overflow-y:auto;overflow-x:hidden;min-height:0;padding:8px 24px 10px}   /* v5382：唯一滚动区（AI 行 / tab 行 / 列表）；min-height:0 是 flex 滚动生效的必要条件；v6079 补左右 24px */
+.lb-km-fix-bot{flex:0 0 auto;padding:0 24px 24px}   /* v5382：底部功能栏固定，不随滚动；v6079 补外边距 */
 .lb-km-body{border-top:1px solid #202029}
 /* v5244（用户口径「键位行和标题行之间没有明显区隔」＋「tab 放在附件里不合适」）：
    四层区隔 —— 标题（下边线）→ 设备工具条（实线浅底）→ AI 虚线框 → 列表控制行（下边线）→ 表格 */
@@ -3275,9 +3486,9 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
         ontouchstart="lbClassPressStart(event)" ontouchend="lbClassPressEnd()" ontouchmove="lbClassPressEnd()"><span class="lb-class-label">全部</span></button>
       <!-- v4755（用户口径）：三个功能浮窗按钮包成一组 —— 窄屏整组换行，不被拆散 -->
       <div id="lbFuncBtnGroup" style="display:flex;align-items:center;flex:0 0 auto;flex-wrap:nowrap;margin-left:0">
-      <button id="lbWatchBtn" class="lb-tipb lb-class-btn" onclick="lbWatchOpen()" title="关注未成年（自动刷成长）" style="min-width:auto;width:auto;padding:5px 8px;margin-left:0;margin-right:8px;justify-content:center;text-align:center;color:#a78bfa"><svg viewBox="0 0 24 24" width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><path d="M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5Z"/></svg><span id="lbWatchCnt" style="font-size:10px;background:#f59e0b22;border-radius:8px;padding:0 5px;color:#f59e0b;margin-left:2px;line-height:14px"></span></button>
-      <button id="lbTodoBtn" class="lb-tipb lb-class-btn" onclick="lbTodoOpen()" title="待制作（蓝图材料汇总）" style="min-width:auto;width:auto;padding:5px 8px;margin-left:0;margin-right:8px;justify-content:center;text-align:center;color:#38bdf8"><svg viewBox="0 0 24 24" width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><path d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.67 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/></svg><span id="lbTodoCnt" style="font-size:10px;background:#38bdf822;border-radius:8px;padding:0 5px;color:#38bdf8;margin-left:2px;line-height:14px;display:none"></span></button>
-      <button id="lbMaintBtn" class="lb-tipb lb-class-btn" onclick="lbMaintOpen()" title="维护列表（血/食不满生物 + 被关注设施）" style="min-width:auto;width:auto;padding:5px 8px;margin-left:0;margin-right:8px;justify-content:center;text-align:center;color:#f59e0b"><svg viewBox="0 0 24 24" width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><path d="M22.7,19L13.6,9.9C14.5,7.6 14,4.9 12.1,3C10.1,1 7.1,0.6 4.7,1.7L9,6L6,9L1.6,4.7C0.4,7.1 0.9,10.1 2.9,12.1C4.8,14 7.5,14.5 9.8,13.6L18.9,22.7C19.3,23.1 19.9,23.1 20.3,22.7L22.6,20.4C23.1,20 23.1,19.4 22.7,19Z"/></svg><span id="lbMaintCnt" style="font-size:10px;background:#f59e0b22;border-radius:8px;padding:0 5px;color:#f59e0b;margin-left:2px;line-height:14px;display:none"></span></button>
+      <button id="lbWatchBtn" class="lb-tipb lb-class-btn" onclick="lbWatchOpen()" title="关注未成年（自动刷成长）" style="min-width:auto;width:auto;padding:5px 8px;margin-left:0;margin-right:8px;justify-content:center;text-align:center;color:#a78bfa"><svg viewBox="0 0 24 24" width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><path d="M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5Z"/></svg><span id="lbWatchCnt" style="font-size:9px;background:#f59e0b22;border-radius:8px;padding:0 5px;color:#f59e0b;margin-left:2px"></span></button>
+      <button id="lbTodoBtn" class="lb-tipb lb-class-btn" onclick="lbTodoOpen()" title="待制作（蓝图材料汇总）" style="min-width:auto;width:auto;padding:5px 8px;margin-left:0;margin-right:8px;justify-content:center;text-align:center;color:#38bdf8"><svg viewBox="0 0 24 24" width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><path d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.67 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/></svg><span id="lbTodoCnt" style="font-size:9px;background:#38bdf822;border-radius:8px;padding:0 5px;color:#38bdf8;margin-left:2px;display:none"></span></button>
+      <button id="lbMaintBtn" class="lb-tipb lb-class-btn" onclick="lbMaintOpen()" title="维护列表（血/食不满生物 + 被关注设施）" style="min-width:auto;width:auto;padding:5px 8px;margin-left:0;margin-right:8px;justify-content:center;text-align:center;color:#f59e0b"><svg viewBox="0 0 24 24" width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><path d="M22.7,19L13.6,9.9C14.5,7.6 14,4.9 12.1,3C10.1,1 7.1,0.6 4.7,1.7L9,6L6,9L1.6,4.7C0.4,7.1 0.9,10.1 2.9,12.1C4.8,14 7.5,14.5 9.8,13.6L18.9,22.7C19.3,23.1 19.9,23.1 20.3,22.7L22.6,20.4C23.1,20 23.1,19.4 22.7,19Z"/></svg><span id="lbMaintCnt" style="font-size:9px;background:#f59e0b22;border-radius:8px;padding:0 5px;color:#f59e0b;margin-left:2px;display:none"></span></button>
       </div>
       <div id="lbTabs" style="display:flex;flex-wrap:wrap;gap:6px;flex:1 0 auto;min-width:0"></div>
     </div>
@@ -3396,7 +3607,7 @@ var LB_API = LB_ARCH === 'new' ? 'https://data.whiterober.ccwu.cc' : '';
 // ⏳ **未部署** v3626（用户要求）：**对照表缺·建筑类 20 条落地** —— 将 t1「中文+图标已定稿」的 20 条并入 `汉化/item_zh.json`（键=短名、kind=structure、src=gap_table_t1）：`SpotLight` 聚光灯 ｜ `Ramp_Wood` 木制楼梯 ｜ `Ramp_Adobe` 黏土楼梯 ｜ `TriCeiling_Wood` 木制三角天花板 ｜ `WoodCage` 木制笼子 ｜ `WoodSpikeWall` 木制拒马 ｜ `Metal_OceanPlatform` / `Wood_OceanPlatform` 海洋平台 ｜ `Furniture_Rug` 粗毛地毯 ｜ `TekFenceFoundation` 泰克栅栏地基 ｜ `AdobePillar` 黏土柱子 ｜ `RopeLadder` 绳梯 ｜ `TriRoof_Adobe` / `TriRoof_Tek` 三角屋顶 ｜ `WoodElevatorPlatform_Small` / `_Medium` / `WoodElevatorTrack` 木制电梯 ｜ `AdobeGateDoor_Large` 黏土巨兽恐龙门 ｜ `Flag_KingKaiju` 君王泰坦旗帜 ｜ `LargeWall_Wood` 大型木制墙；词典 1790 → **1810 键**；缺口表 t1 **33 → 13 条**、总表 320 → **300 行**
 // ⏳ **未部署** v3627（用户要求）：**缺口表其余部分（t2/t3/t4）双就绪条目落地 105 条** —— 质控分档（`tmp/_v3689_qc.py`）后落地：A 档 91 + B 档中经用户确认/属关键词误判者（「新联邦靴子」「那里!」经用户确认正确）；**排除 2 条**：`PrimalItemConsumable_Egg`（中文为 `Egg!` 英文原文）、`PrimalItemArmor_PearlShirt`（t4，中文仅「珍珠」）；跳过 2 条 kind 无法确定（`PrimalItem_FishBasketFilled` / `PrimalItem_Spawner_HoverSail_Main`）与 1 条生物类（`Exosuit_Character_BP`）；t2 的 `PrimalItemRadio`/`PrimalItemRaft` 词典已有键（`Radio`/`Raft`）故仅调 kind：`Raft` weapon → **structure**（`Radio` 本已 weapon）；落地内容以蛋类 37、结构件 29、鞍具 5、弹药 2 为主；词典 **1810 → 1915 键**（kind 空 **0** / other **0**）｜ 缺口表 **300 → 196 行**（t3 215 → 111）
 // v4333（用户口径①）：区域行「前 X」改名「上一段：X」+ 与当前/基础名重复时隐藏（v4347 用户口径②：整条移除，不再显示）
-var LB_VERSION = 'v20261102-6028';   // v4280（根因修复）：① 退出物品模式恢复「选种」按钮（v1368 隐藏无恢复） ② 生物背包容器标题唯一源解析（BP_/_ASA 组件 token → 真实 dinoClass）   // v4231（用户实测「繁育栏把功能栏挡住」）：① 两栏同显繁育栏叠功能栏上方 ② 空繁育栏不显示 ③ 结果浮层/追踪钮偏移联动   // v4230（用户裁定）：皮肤类全链隐藏（词典 skin:1 标记并入判空链——Tileset 外观/Bounce 系列/节日建筑等 54 键）   // v4229（用户确认）：初始笔记全链隐藏（v4083 只滤浮窗，容器漏同步 ⇒ hideItems+硬编码双写入升级）   // v4228（用户口径）：容器 chip 染料补色点（v3593 只改了浮窗，容器漏同步）   // v4227（用户口径）：HotbarSkill_Base（快捷技能芯片，非真实物品）加入隐藏名单（hideItems+硬编码双写入）   // v4226（用户实测「黑曜石仙境没内容却显示tab」根因修复）：lbPickIdx 统计对齐渲染口径（+lbIsEmptyItem 判空）——q=0 空槽残留不再计入 tab/角标/聚落/总数   // v4225（v4224 实测补丁）：预热已走完但缓存被清（材质表到达等）→ 立即兜底冷建，不再干等 6s   // v4224（用户口径「空档期点击卡」）：① 物品栏未预热点击→占位+等预热填充（不再冻结 440ms 无反馈）② 预加载交互让路（600ms 窗口）③ 静默刷新收尾即触发预热（消 3s 空窗）   // v4223（性能优化·用户确认A+B2）：① 预加载热点——字典键数引用缓存（拥有索引 11,531ms 预计降至 1~2s）② 后台检查更新——批量 LM 接口（40+ 次 HEAD → 1 次请求）   // v4222（用户口径）：所有可点击徽章补 hover——① 设施芯片挂载条件扩为「可点即 hover」② 装备榜/选种行卡新增 hover   // v4221（用户实测「角标还显示了2」）：玩家背包同口径排除出服务器 tab 角标/聚落角标/总数（srv/setts/total），修角标与列表不一致   // v4220（用户实测）：「无聚落/离散」容器登记排除玩家背包（消除与「玩家携带」tab 重复的纯背包卡）   // v4219（实测根因）：伪容器 rec 补 server 字段（修「无聚落/离散」卡点进去详情空——lbRecHasPick 键查空导致）   // v4218（用户口径）：物品筛选类别扩至「物品浮窗全部类别」（lbItemIsPick 按浮窗归属类别对齐，修 建筑/资源等非装备类筛选全灭）   // v4217（用户要求）：① 别名表数据化（dino_rank_alias.json + 恐龙recs类名映射，零硬编码）② 物品模式玩家tab恢复位置卡/去平铺卡流 ③ 恐龙侧 mine 与恐龙列表同源（跨服龙鞍显示）   // v4216（实测根因修复）：ASB_DB 懒加载未就绪时缓存空表 ⇒ 词干表 0 条永久失效；改为「就绪才缓存」（lbRankStemMap + lbAsbNameMap）   // v4215（用户口径）：① 装备榜鞍键↔恐龙键同物异名归一（勘误+ASB词干表）② 选物种玩家背包只留该物种鞍/蓝图 ③ 选物品隐藏低温舱+去位置卡 ④ 非鞍剔除   // v4214（用户口径）：装备榜 TAB 角标只计「我的」——外部更高不参与计数   // v4213（用户口径·S7）：物种按钮显隐与物品侧同步——只看桶内容（有效条目）   // v4212：物种榜 qidx<=0 全排除 + 去重 >0 + 角标=实际显示数 + 恐龙背包显示具体龙名   // v4211（用户要求·单一代码源）：装备榜物种/物品渲染统一为 lbRankRenderPanel + 外部更高条目不显示区域名   // v4210（用户口径·位置唯一化）：容器显示接入「坐标→设施真身」统一解析（人台上的矛显示回「人台E」真名）   // v4209：物品模式装备榜=物种榜完整翻版（两 TAB 实物/蓝图 + qidx<=0 过滤 + 类别图标）   // v4208（用户需求）：物品模式装备榜——按钮按「存档有原始以上品质」动态显隐 + 面板细节对齐物种（分组/行卡/弹卡/过滤同源）   // v4207：离散「位置」组展开时数量位同样被按钮替换（对齐改名）   // v4206：离散卡容器组加「位置」按钮（复刻改名按钮 + 弹地图浮窗）   // v4205：物品模式 tab 显隐排除基因条件（Gen(0) 过滤根因）   // v4204：离散 chip 不响应重命名 + 物品模式隐藏基因设备段（基因存储器根因）   // v4203：修详情内部过滤缺口（物品模式详情逐成员对齐主列表 lbRecHasPick）   // v4202：对照表 11 项权威容量落地（容量表 +10 项数据键 + DisplayCase 归 HIDE）   // v4201（用户方案）：生物背包参与聚合——背包容器注入 ctn（byContainer 直接命中）+ 判定剔除背包点 + 容器组归属统一 + 删近邻兜底   // v4200：龙背包归属加「近邻唯一」兜底（帝蟒背包与龙坐标差 1749 也能归位）   // v4199：放出容器坐标键放开 + 物品索引接「生物背包→龙」关联链   // v4198：修 5 处容量别名反向空指（Fireplace/WaterTap/TurretCatapult/TurretBallista/TaxidermyBase_Small）   // v4197：龙背包并入归属过滤（离散/无聚落详情不再混入别人部落的生物背包）   // v4196：离散卡容器化（scatteredList 暴露 + 物品索引兜底 + 卡内容器注入）   // v4195：散置伪 rec 补 isEmpty 容器本体形态（v3452 同口径，防详情渲染崩溃）   // v4194：散置卡修复——伪容器 rec 直取（物品容器哈希与 rec 哈希两套，cid 不可跨查）   // v4193（用户口径）：物品模式隐藏「聚落命名/区域命名」入口 + 「散置容器」卡（无聚落卡，完全对齐物种）   // v4192（用户口径）：物品角标/数量对齐物种——只统计「当前角色拥有」（v3597 归属过滤接入 lbPickIdx）+ 物品模式聚落卡隐藏放出/低温仓/蛋段 + 角标图标按物品类型取 LB_INV_GRP;   // v4191：玩家 tab 自动切换补修（物品模式无该物品 ⇒ 内容区不再驻留空态）;   // v4190（用户要求）：单一物品主体页优化（玩家tab物品口径 / 物品索引双计修复 / 聚落角标武器类别图标 / 详情行隐藏容量角标）   // v4189（用户要求）：水雷迁入「器械>弹药」（Underwater Mine）;   // v4188（用户要求）：陷阱族迁入「器械>弹药」段（Y异种植物陷阱改名入族 + 大型捕兽夹/捕兽夹入族垫底；v4187 设施段位代码撤回）;   // v4186：泰克水壶补录（工具>水容器族末位）+ 巨石核实 + 对照表 5 项去重、恐龙外观表折叠;   // v4185：恐龙装备栏外观全组过滤（用户实锤鞍皮肤；hideItems 18 项）;   // v4184：译名（沙斯塔鱼龙）+ Cute Dino Helmet 过滤（玩家帽）+ lbEggIs 帽子豁免（Easter_Egg_Hat 归位模块栏）;   // v4183：物品浮窗接入 hideItems 过滤（Pepper Mask 修复）+ 恐龙外观 12 款落地（模块>生物外观）;   // v4182：恐龙装备栏外观 12 款图标全配（8 款本地实锤 + 4 款 wiki 补录；icons2 5204 / webp_map 5107）;   // v4181：B1 节日糖果全量入库（8 新键+圣诞糖果合并为节日恐龙糖+玉米糖换 HUD_Event_Halloween_BC）+ PepperMask 浮窗过滤 + 节日族词/类名规则;   // v4177：Air_Jar/Air_Bladder kind 修正（consumable→weapon，正式入器械>工具>水容器）+ 情人节/感恩节糖果补图（Valentines_Dino_Candy/Thanksgiving_Candy）;   // v4175：料理子序微调（鲨鲨小零食!紧挨吉利盛宴3.4后；虫胶19→5.3 紧挨饭团5.2后）;   // v4174：达科寿司/饭团（原稻米球改名）入料理族并紧挨海藻寿司（子序 5.1/5.2）;   // v4173：情人节巧克力正名+配图（Box o' Chocolates/盒装巧克力/VDay_icon）+ WormGum 补录（虫胶）+ Air_Jar/Air_Bladder 移工具·水容器族（族内最后）+ 食肉植物种子排植物种子R后 + 亚特兰汤/虫胶接料理子序18-19;   // v4170：消耗品补录 18 键（胡椒面具/空气罐/气囊/海龙汤/风干鱼肉×2/稻米球/感染系列×6/干海带/达科寿司/亚特兰汤/蓝莓汁 P+/情人节巧克力 ase）+ 新族「感染」（含感染藤壶 7 项）+ 泰克三叉戟归「矛」族;   // v4169：咒缚贴合全局兜底（跨块场景：咒缚火焰喷射器与本体被手炮块隔开 → 最终序列再贴一次）；v4168：咒缚武器贴合本体（16 对：本体在前、咒缚紧跟 — 武装 11 + 工具 3 + 键名兜底 1 +【火焰喷射器 v4169 修复】）+ 制导火箭弹图标→HomingMissileAmmo_Icon + 巡航导弹图标→Cruise_Missile（v4163 交接回调）;   // v4165：立式南瓜哨兵根因修复（facilityIconSpecial 置空 + 合并尊重空串哨兵）+ 圣诞糖果补录（consumable/节日）+ 鲍勃外观改名 + 蛋糕×3 归节日族;   // v4164：设施根因修正（标识归位/旗帜族+节日族垫底链）+ 节日补族（圣诞彩灯/万圣节墓碑）+ 新族「玩家外观」（TOF 卡尔配件，排生物外观前）;   // v4163：C4遥控起爆器→工具段（tool:1）+ 巡航导弹换图 HomingMissileAmmo_Icon + 塔拉萨麻醉弹药归「箭」族;   // v4162：生化皮肤/独木舟皮肤新族（骨架后/生物外观后）+ 设施栏标识族垫底（旗帜后）+ 咒缚电锯/喷火器图标对齐原版 + 弹药段「异种植物」词（W果实/Z手雷相邻）+ Netgun 归弹药;   // v4161：Radar_Rig 补录（雷达配件→跨步者配件族）+ 未组装的泰克跨步者改归「未组装」族;   // v4160：泰克悬停帆与塔拉萨悬停帆族内相邻（载具子序50.2/50.3）+ 6 条泰克跨步者配件补录（官方类名+官方中文，族=跨步者配件）;   // v4159：13 条骨架/幽灵/兔耳套装以**官方类名+官方中文**落地（长键=PrimalItemCostume_*、短键=图标名）+ 失落精灵龙套装补录 + 3 条旧骨骼条目同步官方名 + 全部归骨架皮肤/幽灵皮肤/生物外观族（排模块段最后）;   // v4158：外观族（骨架皮肤/幽灵皮肤/生物外观/尾巴/披风）整体移至模块段最后 + 独木舟3皮肤归生物外观 + 鱼竿族生效（两条相邻） + M.O.M.I.入模块段·机甲族 + 服装类豁免物种绑定过滤 + 跨步者配件族预留;   // v4157：Cryo医院/水下耕地/宠物展示台/绊线照明弹配方补录（材质档排序）+ 蛋糕ASE过滤 + 4服装隐藏 + 骨架皮肤族（3骨骼+生化，附件后） + 幽灵皮肤族（14条，骨骼后） + 战车族提前（附件前） + 立式南瓜清图标 + Plant W果实/Z手雷族内相邻;   // v4154：泰克光刃（TekClaws）换图 → HUD_TEKHandBlades_Icon_BC + 对照表"非皮肤·疑似"补齐后缀过滤;   // v4151：换图 2（巡航导弹→HUD_TEKCruiseMissile_Icon、泰克榴弹发射器→HUD_TEKGrenadeLauncher_Icon）+ 补录 4（绊线照明弹陷阱/泰克三叉戟/泰克长矛/C4遥控起爆器）+ 对照表区①移除 48 项;   // v4150：鱼竿族（FishingRod+Lovely_Fishing）+ 载具族补员（潜艇→木筏后、塔拉萨悬停帆→泰克悬停帆后）+ 生物外观族 26 项落地（模块段最末）+ 对照表无特征项全参数表;   // v4149：换图 3 组（GrapplingHook→GrappleHook_Icon、TribeTower→Tribe_Tower、TranqArrow→TranqArrow_Icon）+ 补录 11 键（Snowball/Carnivorous_Plant_Seed/Thalassian 系×4/ARK_Anniversary_Surprise_Cake/Birthday_Candle/CryoHospital×2/Netgun）;   // v4148：实时补全区无图标补「?」占位（lbWpRtHtml 与主浮窗一致）+ 图标替换 14 组（储物箱/镜子/油罐/电锯/登山镐/矿枪/鞭子/沙漠套×5/吉利面具/防护套×3/喷火器/潜水服）+ 英文补全（Ghillie Mask / Hazard Suit Hat / SCUBA×4）+ 补录 11 键（MachinedBow/宠物展示台/生日蛋糕/水下耕地/潜艇/塔拉萨悬停帆/收割渔线/周年蛋糕×2）+ TransGPS 打 ASE 过滤标记;   // v4147：Lovely_Fishing_Rod 补录（工具 tool:1）+ 次级解药/扎啤/血之灵药 归料理族（words 3.1/3.2/3.3 排在医疗药酒·能量药酒之后）；图标未录对照表 v4147（六分类 66+53 / skins 甄别 689）;   // v4146：RecipeCurry_Icon 挂菲拉咖喱配方（RecipeNote_FriaCurry / PrimalItem_RecipeNote_FriaCurry 两键 icon→RecipeCurry_Icon）+ HoneyLure 补录（蜂蜜诱饵，图标 HoneyLure_Icon）；对照表 v6 重生（待核 4 / 已处理 12 / 染色剂 22 移出主表入脚注）;   // v4145：W 果短名补规则（Plant_Species_W→手雷，浮窗枚举键带下划线）;   // v4144：族修正（Cucumis/Oryraise→蔬菜；Gilly/Oceans/Worm 短名 re: 规则→料理——修 v4143 短名下划线不命中问题）;   // v4143：Aquatica 消耗品补录 9 项（作物×2/料理×3/弹药×1/其它×3）+ 非凡饲料换图 + 族规则 4 条;   // v4142：Ecto Lantern 两键打 tool:1（进器械栏·工具段）;   // v4141：花粉图标换 High_Quality_Pollen（2 条）+ Ecto Lantern 补录（灵质提灯，工具类，2 键 + 节日族 2 规则）;   // v4140：刷新热区修复（仅标记触发）+ 节日族扩展 + 补录 5 项 + 强效麻醉镖图;   // v4139：item_zh 图标修正（麻醉镖→Tranquilizer_Dart；硅酸盐→SilicateCrystal）;   // v4138：公共设施实时区 39 格（WorldProbe 接线 + 刷新 CD 10s + 后端短时缓存共用）;   // v4137：巨齿鲨颚/生存者战利品移至 Cymathoa 之后（61/62 档）+ Dragon Horn 补录（龙之号角）;   // v4136：Aquatica 三战利品移至奖杯族最末（60 档）;   // v4135：焰鬃獠猪两种獠牙图标（Boaratos_Tusk / Flaming_Boaratos_Tusk）;   // v4134：Hydra/Kraken 归一 + 本体过滤 + AstralSoul/HexCoins 图标 + 克拉肯/莫德尔旗帜正名 + 格伦德尔档位修复;   // v4133（修复）：奖杯族修饰词截胡修正（水晶飞龙女王战利品回归奖杯族 9.5）；v4132：旗帜族录入+排序垫底
+var LB_VERSION = 'v20261104-6097';   // v4280（根因修复）：① 退出物品模式恢复「选种」按钮（v1368 隐藏无恢复） ② 生物背包容器标题唯一源解析（BP_/_ASA 组件 token → 真实 dinoClass）   // v4231（用户实测「繁育栏把功能栏挡住」）：① 两栏同显繁育栏叠功能栏上方 ② 空繁育栏不显示 ③ 结果浮层/追踪钮偏移联动   // v4230（用户裁定）：皮肤类全链隐藏（词典 skin:1 标记并入判空链——Tileset 外观/Bounce 系列/节日建筑等 54 键）   // v4229（用户确认）：初始笔记全链隐藏（v4083 只滤浮窗，容器漏同步 ⇒ hideItems+硬编码双写入升级）   // v4228（用户口径）：容器 chip 染料补色点（v3593 只改了浮窗，容器漏同步）   // v4227（用户口径）：HotbarSkill_Base（快捷技能芯片，非真实物品）加入隐藏名单（hideItems+硬编码双写入）   // v4226（用户实测「黑曜石仙境没内容却显示tab」根因修复）：lbPickIdx 统计对齐渲染口径（+lbIsEmptyItem 判空）——q=0 空槽残留不再计入 tab/角标/聚落/总数   // v4225（v4224 实测补丁）：预热已走完但缓存被清（材质表到达等）→ 立即兜底冷建，不再干等 6s   // v4224（用户口径「空档期点击卡」）：① 物品栏未预热点击→占位+等预热填充（不再冻结 440ms 无反馈）② 预加载交互让路（600ms 窗口）③ 静默刷新收尾即触发预热（消 3s 空窗）   // v4223（性能优化·用户确认A+B2）：① 预加载热点——字典键数引用缓存（拥有索引 11,531ms 预计降至 1~2s）② 后台检查更新——批量 LM 接口（40+ 次 HEAD → 1 次请求）   // v4222（用户口径）：所有可点击徽章补 hover——① 设施芯片挂载条件扩为「可点即 hover」② 装备榜/选种行卡新增 hover   // v4221（用户实测「角标还显示了2」）：玩家背包同口径排除出服务器 tab 角标/聚落角标/总数（srv/setts/total），修角标与列表不一致   // v4220（用户实测）：「无聚落/离散」容器登记排除玩家背包（消除与「玩家携带」tab 重复的纯背包卡）   // v4219（实测根因）：伪容器 rec 补 server 字段（修「无聚落/离散」卡点进去详情空——lbRecHasPick 键查空导致）   // v4218（用户口径）：物品筛选类别扩至「物品浮窗全部类别」（lbItemIsPick 按浮窗归属类别对齐，修 建筑/资源等非装备类筛选全灭）   // v4217（用户要求）：① 别名表数据化（dino_rank_alias.json + 恐龙recs类名映射，零硬编码）② 物品模式玩家tab恢复位置卡/去平铺卡流 ③ 恐龙侧 mine 与恐龙列表同源（跨服龙鞍显示）   // v4216（实测根因修复）：ASB_DB 懒加载未就绪时缓存空表 ⇒ 词干表 0 条永久失效；改为「就绪才缓存」（lbRankStemMap + lbAsbNameMap）   // v4215（用户口径）：① 装备榜鞍键↔恐龙键同物异名归一（勘误+ASB词干表）② 选物种玩家背包只留该物种鞍/蓝图 ③ 选物品隐藏低温舱+去位置卡 ④ 非鞍剔除   // v4214（用户口径）：装备榜 TAB 角标只计「我的」——外部更高不参与计数   // v4213（用户口径·S7）：物种按钮显隐与物品侧同步——只看桶内容（有效条目）   // v4212：物种榜 qidx<=0 全排除 + 去重 >0 + 角标=实际显示数 + 恐龙背包显示具体龙名   // v4211（用户要求·单一代码源）：装备榜物种/物品渲染统一为 lbRankRenderPanel + 外部更高条目不显示区域名   // v4210（用户口径·位置唯一化）：容器显示接入「坐标→设施真身」统一解析（人台上的矛显示回「人台E」真名）   // v4209：物品模式装备榜=物种榜完整翻版（两 TAB 实物/蓝图 + qidx<=0 过滤 + 类别图标）   // v4208（用户需求）：物品模式装备榜——按钮按「存档有原始以上品质」动态显隐 + 面板细节对齐物种（分组/行卡/弹卡/过滤同源）   // v4207：离散「位置」组展开时数量位同样被按钮替换（对齐改名）   // v4206：离散卡容器组加「位置」按钮（复刻改名按钮 + 弹地图浮窗）   // v4205：物品模式 tab 显隐排除基因条件（Gen(0) 过滤根因）   // v4204：离散 chip 不响应重命名 + 物品模式隐藏基因设备段（基因存储器根因）   // v4203：修详情内部过滤缺口（物品模式详情逐成员对齐主列表 lbRecHasPick）   // v4202：对照表 11 项权威容量落地（容量表 +10 项数据键 + DisplayCase 归 HIDE）   // v4201（用户方案）：生物背包参与聚合——背包容器注入 ctn（byContainer 直接命中）+ 判定剔除背包点 + 容器组归属统一 + 删近邻兜底   // v4200：龙背包归属加「近邻唯一」兜底（帝蟒背包与龙坐标差 1749 也能归位）   // v4199：放出容器坐标键放开 + 物品索引接「生物背包→龙」关联链   // v4198：修 5 处容量别名反向空指（Fireplace/WaterTap/TurretCatapult/TurretBallista/TaxidermyBase_Small）   // v4197：龙背包并入归属过滤（离散/无聚落详情不再混入别人部落的生物背包）   // v4196：离散卡容器化（scatteredList 暴露 + 物品索引兜底 + 卡内容器注入）   // v4195：散置伪 rec 补 isEmpty 容器本体形态（v3452 同口径，防详情渲染崩溃）   // v4194：散置卡修复——伪容器 rec 直取（物品容器哈希与 rec 哈希两套，cid 不可跨查）   // v4193（用户口径）：物品模式隐藏「聚落命名/区域命名」入口 + 「散置容器」卡（无聚落卡，完全对齐物种）   // v4192（用户口径）：物品角标/数量对齐物种——只统计「当前角色拥有」（v3597 归属过滤接入 lbPickIdx）+ 物品模式聚落卡隐藏放出/低温仓/蛋段 + 角标图标按物品类型取 LB_INV_GRP;   // v4191：玩家 tab 自动切换补修（物品模式无该物品 ⇒ 内容区不再驻留空态）;   // v4190（用户要求）：单一物品主体页优化（玩家tab物品口径 / 物品索引双计修复 / 聚落角标武器类别图标 / 详情行隐藏容量角标）   // v4189（用户要求）：水雷迁入「器械>弹药」（Underwater Mine）;   // v4188（用户要求）：陷阱族迁入「器械>弹药」段（Y异种植物陷阱改名入族 + 大型捕兽夹/捕兽夹入族垫底；v4187 设施段位代码撤回）;   // v4186：泰克水壶补录（工具>水容器族末位）+ 巨石核实 + 对照表 5 项去重、恐龙外观表折叠;   // v4185：恐龙装备栏外观全组过滤（用户实锤鞍皮肤；hideItems 18 项）;   // v4184：译名（沙斯塔鱼龙）+ Cute Dino Helmet 过滤（玩家帽）+ lbEggIs 帽子豁免（Easter_Egg_Hat 归位模块栏）;   // v4183：物品浮窗接入 hideItems 过滤（Pepper Mask 修复）+ 恐龙外观 12 款落地（模块>生物外观）;   // v4182：恐龙装备栏外观 12 款图标全配（8 款本地实锤 + 4 款 wiki 补录；icons2 5204 / webp_map 5107）;   // v4181：B1 节日糖果全量入库（8 新键+圣诞糖果合并为节日恐龙糖+玉米糖换 HUD_Event_Halloween_BC）+ PepperMask 浮窗过滤 + 节日族词/类名规则;   // v4177：Air_Jar/Air_Bladder kind 修正（consumable→weapon，正式入器械>工具>水容器）+ 情人节/感恩节糖果补图（Valentines_Dino_Candy/Thanksgiving_Candy）;   // v4175：料理子序微调（鲨鲨小零食!紧挨吉利盛宴3.4后；虫胶19→5.3 紧挨饭团5.2后）;   // v4174：达科寿司/饭团（原稻米球改名）入料理族并紧挨海藻寿司（子序 5.1/5.2）;   // v4173：情人节巧克力正名+配图（Box o' Chocolates/盒装巧克力/VDay_icon）+ WormGum 补录（虫胶）+ Air_Jar/Air_Bladder 移工具·水容器族（族内最后）+ 食肉植物种子排植物种子R后 + 亚特兰汤/虫胶接料理子序18-19;   // v4170：消耗品补录 18 键（胡椒面具/空气罐/气囊/海龙汤/风干鱼肉×2/稻米球/感染系列×6/干海带/达科寿司/亚特兰汤/蓝莓汁 P+/情人节巧克力 ase）+ 新族「感染」（含感染藤壶 7 项）+ 泰克三叉戟归「矛」族;   // v4169：咒缚贴合全局兜底（跨块场景：咒缚火焰喷射器与本体被手炮块隔开 → 最终序列再贴一次）；v4168：咒缚武器贴合本体（16 对：本体在前、咒缚紧跟 — 武装 11 + 工具 3 + 键名兜底 1 +【火焰喷射器 v4169 修复】）+ 制导火箭弹图标→HomingMissileAmmo_Icon + 巡航导弹图标→Cruise_Missile（v4163 交接回调）;   // v4165：立式南瓜哨兵根因修复（facilityIconSpecial 置空 + 合并尊重空串哨兵）+ 圣诞糖果补录（consumable/节日）+ 鲍勃外观改名 + 蛋糕×3 归节日族;   // v4164：设施根因修正（标识归位/旗帜族+节日族垫底链）+ 节日补族（圣诞彩灯/万圣节墓碑）+ 新族「玩家外观」（TOF 卡尔配件，排生物外观前）;   // v4163：C4遥控起爆器→工具段（tool:1）+ 巡航导弹换图 HomingMissileAmmo_Icon + 塔拉萨麻醉弹药归「箭」族;   // v4162：生化皮肤/独木舟皮肤新族（骨架后/生物外观后）+ 设施栏标识族垫底（旗帜后）+ 咒缚电锯/喷火器图标对齐原版 + 弹药段「异种植物」词（W果实/Z手雷相邻）+ Netgun 归弹药;   // v4161：Radar_Rig 补录（雷达配件→跨步者配件族）+ 未组装的泰克跨步者改归「未组装」族;   // v4160：泰克悬停帆与塔拉萨悬停帆族内相邻（载具子序50.2/50.3）+ 6 条泰克跨步者配件补录（官方类名+官方中文，族=跨步者配件）;   // v4159：13 条骨架/幽灵/兔耳套装以**官方类名+官方中文**落地（长键=PrimalItemCostume_*、短键=图标名）+ 失落精灵龙套装补录 + 3 条旧骨骼条目同步官方名 + 全部归骨架皮肤/幽灵皮肤/生物外观族（排模块段最后）;   // v4158：外观族（骨架皮肤/幽灵皮肤/生物外观/尾巴/披风）整体移至模块段最后 + 独木舟3皮肤归生物外观 + 鱼竿族生效（两条相邻） + M.O.M.I.入模块段·机甲族 + 服装类豁免物种绑定过滤 + 跨步者配件族预留;   // v4157：Cryo医院/水下耕地/宠物展示台/绊线照明弹配方补录（材质档排序）+ 蛋糕ASE过滤 + 4服装隐藏 + 骨架皮肤族（3骨骼+生化，附件后） + 幽灵皮肤族（14条，骨骼后） + 战车族提前（附件前） + 立式南瓜清图标 + Plant W果实/Z手雷族内相邻;   // v4154：泰克光刃（TekClaws）换图 → HUD_TEKHandBlades_Icon_BC + 对照表"非皮肤·疑似"补齐后缀过滤;   // v4151：换图 2（巡航导弹→HUD_TEKCruiseMissile_Icon、泰克榴弹发射器→HUD_TEKGrenadeLauncher_Icon）+ 补录 4（绊线照明弹陷阱/泰克三叉戟/泰克长矛/C4遥控起爆器）+ 对照表区①移除 48 项;   // v4150：鱼竿族（FishingRod+Lovely_Fishing）+ 载具族补员（潜艇→木筏后、塔拉萨悬停帆→泰克悬停帆后）+ 生物外观族 26 项落地（模块段最末）+ 对照表无特征项全参数表;   // v4149：换图 3 组（GrapplingHook→GrappleHook_Icon、TribeTower→Tribe_Tower、TranqArrow→TranqArrow_Icon）+ 补录 11 键（Snowball/Carnivorous_Plant_Seed/Thalassian 系×4/ARK_Anniversary_Surprise_Cake/Birthday_Candle/CryoHospital×2/Netgun）;   // v4148：实时补全区无图标补「?」占位（lbWpRtHtml 与主浮窗一致）+ 图标替换 14 组（储物箱/镜子/油罐/电锯/登山镐/矿枪/鞭子/沙漠套×5/吉利面具/防护套×3/喷火器/潜水服）+ 英文补全（Ghillie Mask / Hazard Suit Hat / SCUBA×4）+ 补录 11 键（MachinedBow/宠物展示台/生日蛋糕/水下耕地/潜艇/塔拉萨悬停帆/收割渔线/周年蛋糕×2）+ TransGPS 打 ASE 过滤标记;   // v4147：Lovely_Fishing_Rod 补录（工具 tool:1）+ 次级解药/扎啤/血之灵药 归料理族（words 3.1/3.2/3.3 排在医疗药酒·能量药酒之后）；图标未录对照表 v4147（六分类 66+53 / skins 甄别 689）;   // v4146：RecipeCurry_Icon 挂菲拉咖喱配方（RecipeNote_FriaCurry / PrimalItem_RecipeNote_FriaCurry 两键 icon→RecipeCurry_Icon）+ HoneyLure 补录（蜂蜜诱饵，图标 HoneyLure_Icon）；对照表 v6 重生（待核 4 / 已处理 12 / 染色剂 22 移出主表入脚注）;   // v4145：W 果短名补规则（Plant_Species_W→手雷，浮窗枚举键带下划线）;   // v4144：族修正（Cucumis/Oryraise→蔬菜；Gilly/Oceans/Worm 短名 re: 规则→料理——修 v4143 短名下划线不命中问题）;   // v4143：Aquatica 消耗品补录 9 项（作物×2/料理×3/弹药×1/其它×3）+ 非凡饲料换图 + 族规则 4 条;   // v4142：Ecto Lantern 两键打 tool:1（进器械栏·工具段）;   // v4141：花粉图标换 High_Quality_Pollen（2 条）+ Ecto Lantern 补录（灵质提灯，工具类，2 键 + 节日族 2 规则）;   // v4140：刷新热区修复（仅标记触发）+ 节日族扩展 + 补录 5 项 + 强效麻醉镖图;   // v4139：item_zh 图标修正（麻醉镖→Tranquilizer_Dart；硅酸盐→SilicateCrystal）;   // v4138：公共设施实时区 39 格（WorldProbe 接线 + 刷新 CD 10s + 后端短时缓存共用）;   // v4137：巨齿鲨颚/生存者战利品移至 Cymathoa 之后（61/62 档）+ Dragon Horn 补录（龙之号角）;   // v4136：Aquatica 三战利品移至奖杯族最末（60 档）;   // v4135：焰鬃獠猪两种獠牙图标（Boaratos_Tusk / Flaming_Boaratos_Tusk）;   // v4134：Hydra/Kraken 归一 + 本体过滤 + AstralSoul/HexCoins 图标 + 克拉肯/莫德尔旗帜正名 + 格伦德尔档位修复;   // v4133（修复）：奖杯族修饰词截胡修正（水晶飞龙女王战利品回归奖杯族 9.5）；v4132：旗帜族录入+排序垫底
 try{ if(document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', function(){ try{ lbMatLoad(); }catch(e){} try{ lbRulesLoad(); }catch(e){} try{ if(typeof lbRankAliasLoad === 'function') lbRankAliasLoad(); }catch(e){} }); } else { lbMatLoad(); try{ lbRulesLoad(); }catch(e){} try{ if(typeof lbRankAliasLoad === 'function') lbRankAliasLoad(); }catch(e){} } }catch(e){}
 try{ if(!window.LB_PERF) window.LB_PERF = {}; window.LB_PERF.t_main0 = Date.now(); }catch(ePerf0){}   // v4465（用户口径·D1）：启动分段计时——主脚本执行开始
 function lbPerfMark(k){ try{ if(!window.LB_PERF[k]) window.LB_PERF[k] = Date.now(); }catch(e){} }
@@ -3475,7 +3686,7 @@ function lbPerfDiagOpen(){
   ov.onclick = function(e){ if(e.target === ov) lbPerfDiagClose(); };
   var body = '';
   try{ body = lbPerfText(); }catch(eT){ body = '生成失败'; }
-  ov.innerHTML = '<div class="lb-picker-panel" onclick="event.stopPropagation()" style="max-width:96vw">'
+  ov.innerHTML = '<div class="lb-picker-panel lb-fs" onclick="event.stopPropagation()" style="max-width:96vw">'
     + '<div class="lb-picker-header"><span style="flex:1;font-weight:bold;color:#a78bfa;font-size:13px">\u23f1 启动耗时诊断</span><button class="lb-tipb lb-picker-close" onclick="lbPerfDiagClose()" title="\u5173\u95ed">\u2715</button></div>'
     + '<div class="lb-func-body" style="padding:12px;overflow-y:auto;min-height:0;flex:1 1 auto">'
     + '<pre id="lbPerfPre" style="margin:0;font-size:11.5px;color:#cbd5e1;white-space:pre-wrap;word-break:break-all;line-height:1.7">' + (typeof lbAttr === 'function' ? lbAttr(body) : body) + '</pre>'
@@ -6219,7 +6430,7 @@ function lbOpenServerAdminModal(){
   try{ auth = JSON.parse(localStorage.getItem('dinoAuth') || 'null'); }catch(e){}
   if(!auth || auth.user !== 'whiterober'){ lbToast('仅管理员可用'); return; }
   var old = document.querySelector('.lb-picker-overlay'); if(old) old.remove();
-  var overlay = document.createElement('div'); overlay.className='lb-picker-overlay';
+  var overlay = document.createElement('div'); overlay.className='lb-picker-overlay lb-fs';
   overlay.onclick = function(e){ if(e.target===overlay) overlay.remove(); };
   var inp = 'width:100%;box-sizing:border-box;padding:8px 10px;border-radius:6px;border:1px solid #333;background:#12121a;color:#ddd;margin-bottom:8px;font-size:13px';
   var selArrow = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")";
@@ -6229,8 +6440,12 @@ function lbOpenServerAdminModal(){
   // v458/v459：部落下拉默认按首个服务器生成（切换服务器时 lbSrvAdminFilterTribes 联动刷新，只列当前服部落）
   var _defSrv = (LB.SERVERS && LB.SERVERS.length) ? LB.SERVERS[0].abbr : '';
   var tribeOpts = lbServerAdminTribes(_defSrv).map(function(t){ return '<option value="'+t.id+'">'+t.name+'（'+t.id+'）</option>'; }).join('');
-  var html = '<div style="background:#1a1a24;border:1px solid #7c3aed55;border-radius:12px;padding:24px;width:420px;max-width:92vw;box-shadow:0 10px 40px rgba(0,0,0,.6);max-height:86vh;overflow-y:auto" class="lb-modal-scroll">'
-    + '<div style="font-size:16px;font-weight:bold;color:#a78bfa;margin-bottom:4px">🛠 系统管理</div>'
+  /* v6076（用户口径「关闭统一成右上角 + 服务器控制那种固定顶部标题栏」）：
+     面板改 flex 纵向 + 固定 .lw-head（标题左 / 关闭右上），内容进 .lw-body 单独滚动 ⇒ 头部不再随内容滚走 */
+  var html = '<div class="lb-modal-scroll" style="background:#1a1a24;border:1px solid #7c3aed55;border-radius:12px;width:420px;max-width:92vw;box-shadow:0 10px 40px rgba(0,0,0,.6);max-height:86vh;overflow:hidden;display:flex;flex-direction:column">'
+    + '<div class="lw-head"><span class="lw-title"><i class="mdi mdi-shield-crown-outline"></i> 系统管理</span>'
+    + '<button class="lw-x" onclick="this.closest(\'.lb-picker-overlay\').remove()" title="关闭" aria-label="关闭"><i class="mdi mdi-close"></i></button></div>'
+    + '<div class="lw-body" style="padding:16px 24px 24px">'
     + '<div style="font-size:12px;color:#888;margin-bottom:14px">管理员：<b style="color:#bbb">'+auth.user+'</b></div>'
     + (typeof lbGameChipsHtml === 'function' ? lbGameChipsHtml() : '')   // v5213（用户口径）：游戏切换放进系统管理，切换后整个项目切换游戏
     + '<div style="' + (lbGame() === 'scum' ? 'display:none' : '') + '">'   // v5213：方舟专属运维块（堕落玩偶下隐藏）
@@ -6283,8 +6498,8 @@ function lbOpenServerAdminModal(){
     + '<span id="lbPerfCopyMsg" style="font-size:11px;color:#888"></span>'
     + '</div>'
     + '</div>'
-    + '<div style="margin-top:14px;text-align:right"><button onclick="this.closest(\'.lb-picker-overlay\').remove()" style="padding:7px 16px;border-radius:6px;border:1px solid #333;background:transparent;color:#888;cursor:pointer;font-size:13px">关闭</button></div>'
-    + '</div>';   // v5554：原多一个 </div> 把面板提前闭合（关闭按钮跑到面板外）
+    + '</div>'   // v6076：收 .lw-body（底部「关闭」按钮已移入标题栏右上角）
+    + '</div>';  // v6076：收面板
   overlay.innerHTML = html;
   document.body.appendChild(overlay);
   lbSrvDomainLoad();
@@ -6812,7 +7027,7 @@ function lbBbNotesEdit(){
   ov.id = 'lbBbEditOv';
   ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#000000a8;display:flex;align-items:center;justify-content:center;padding:16px';
   ov.onclick = function(e){ if(e.target === ov) ov.remove(); };
-  ov.innerHTML = '<div class="lb-picker-panel" onclick="event.stopPropagation()" style="max-width:760px;width:100%;max-height:92vh;display:flex;flex-direction:column">'
+  ov.innerHTML = '<div class="lb-picker-panel lb-fs" onclick="event.stopPropagation()" style="max-width:760px;width:100%;max-height:92vh;display:flex;flex-direction:column">'
     + '<div class="lb-picker-header"><span style="flex:1;font-weight:bold;color:#a78bfa">✏️ 编辑粑粑笔记（Markdown 源码）</span>'
     + '<button class="lb-picker-close" onclick="document.getElementById(\'lbBbEditOv\').remove()" title="关闭"><i class="mdi mdi-close"></i></button></div>'
     // v5532（用户口径）：编辑区上方内嵌 AI 模块（复用流程 .lb-hf-ai* 样式，不做第二套皮肤）
@@ -7125,8 +7340,8 @@ function lbCfgOpenRules(srv, keep){
       + '</span>')
     : '';
   if(fullBtn) fullBtn = '<span id="lbCfgFullBtn" style="display:contents">' + fullBtn + '</span>';
-  var html = '<div class="lb-picker-panel" onclick="event.stopPropagation()" style="max-width:760px">'
-    + '<div class="lb-picker-header"><span style="flex:1;font-weight:bold;color:#a78bfa">📋 服务器规则</span>'
+  var html = '<div class="lb-picker-panel lb-fs" onclick="event.stopPropagation()" style="max-width:760px">'
+    + '<div class="lb-picker-header"><span style="flex:1;font-weight:bold;color:#a78bfa"><i class="mdi mdi-clipboard-text-outline"></i> 服务器规则</span>'
     + '<button class="lb-picker-close" onclick="this.closest(\'.lb-picker-overlay\').remove()" title="关闭"><i class="mdi mdi-close"></i></button></div>'
     + '<div style="padding:10px 12px 4px"><div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">' + srvChips + '</div>'
     + '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">'
@@ -8566,6 +8781,794 @@ function lbSrvCtlOpen(){
   try { lbSrvCtlQueueResume(1); } catch(e){}
 }
 function lbSrvCtlClose(){ lbSheetClose('lbSrvCtl'); }
+/* ===== P4（2026-11-04）：🗄 安全回档浮窗 =====
+   依据：plans\搞事系统_方舟安全回档_方案.md §7 / §5.5.7
+   复用：lbSheetBuild / lbSrvCtlFetchW（带 Bearer）/ lbSrvCtlApi / .server-tab / lbMdEsc / lbToast
+   禁止：不复用则新造（用户 2026-10-22 强令同一 UI 意图禁止两份实现） */
+var LB_ARKBK = {
+  srv: '',            /* 当前选中服 */
+  status: {},         /* {abbr: {running, activeFile, activeMB, activeMtime, busyJob}} */
+  list: null,         /* /api/arkbackup/list 原始返回 */
+  err: null, loading: false,
+  point: '',          /* 选中的 pointId */
+  plan: null,         /* /api/arkbackup/plan 返回 */
+  job: null,          /* 当前 job */
+  jobTimer: null,
+  confirmText: '',    /* v6053：已弃用（原 .arbk-ack 输入框的值，现由内联放行词条承担）；保留以避免连锁改动 */
+  ask: null,          /* v6050：页面内确认请求 {kind:'exec'|'dry'|'undo', word, text} */
+  jobEndAt: 0,        /* v6058：job 结束时刻（60 秒后自动隐藏进度条） */
+  jobObserved: false, /* v6058：本次会话是否见过 job 在跑 */
+  jobNotified: false, /* v6058：失败提示只弹一次 */
+  busy: ''
+};
+
+function lbArkBkOpen(){
+  var po = document.querySelector('.lb-picker-overlay');
+  if (po && po.parentNode) po.parentNode.removeChild(po);
+  LB_ARKBK.err = null; LB_ARKBK.loading = true;
+  LB_ARKBK.point = ''; LB_ARKBK.plan = null;
+  /* v6057（用户口径「重新打开安全回档，进度条就消失了」）：**不再清 job** ——
+     关浮窗 ≠ 丢弃上一次回档结果；只有切换服务器才清（见 lbArkBkPickSrv）。 */
+  LB_ARKBK.confirmText = ''; LB_ARKBK.busy = ''; LB_ARKBK.ask = null;
+  if (!LB_ARKBK.srv) LB_ARKBK.srv = '';
+  lbSheetBuild('lbArkBk', { onClose: 'lbArkBkClose()' });
+  lbSheetOpen('lbArkBk');
+  lbArkBkRender();
+  try { lbSrvCtlOnlineSync(); } catch (e) {}   /* v6055：在线栏数据与服务器控制共享（15s TTL） */
+  lbArkBkJobResume();                          /* v6057：恢复上一次回档进度/结果 */
+  lbArkBkFetch();
+}
+function lbArkBkClose(){
+  lbArkBkJobStop();
+  lbSheetClose('lbArkBk');
+}
+/* v6057：重开面板时恢复上一次回档进度 ——
+   ① 内存里还有本轮 job ⇒ 未结束就续上轮询
+   ② 内存没有（页面刷新过 / 换了浏览器）⇒ 问后端 /api/arkbackup/lastjob?server=X
+   数据源与「服务器控制·启动队列」同思路：**状态由后端持有**，前端只是渲染。 */
+function lbArkBkJobResume(){
+  var srv = LB_ARKBK.srv;
+  var j = LB_ARKBK.job;
+  if (j && j.id && (!srv || !j.server || j.server === srv)){
+    if (j.phase !== 'done' && j.phase !== 'failed') lbArkBkPoll(j.id);
+    return;
+  }
+  if (!srv) return;
+  lbSrvCtlFetchW(lbSrvCtlApi() + '/api/arkbackup/lastjob?server=' + encodeURIComponent(srv),
+                 { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (o) {
+      var jj = o && o.job;
+      if (!jj || !jj.id) return;
+      LB_ARKBK.job = jj;
+      LB_ARKBK.jobNotified = true;      /* 恢复的历史结果不重复弹提示 */
+      lbArkBkRender();
+      if (jj.phase !== 'done' && jj.phase !== 'failed') lbArkBkPoll(jj.id);
+    })
+    .catch(function () {});
+}
+function lbArkBkJobStop(){
+  if (LB_ARKBK.jobTimer){ clearTimeout(LB_ARKBK.jobTimer); LB_ARKBK.jobTimer = null; }
+}
+function lbArkBkPickSrv(abbr){
+  if (LB_ARKBK.busy) return;
+  LB_ARKBK.srv = abbr;
+  LB_ARKBK.list = null; LB_ARKBK.point = ''; LB_ARKBK.plan = null;
+  LB_ARKBK.job = null; LB_ARKBK.confirmText = '';
+  LB_ARKBK.ask = null;
+  lbArkBkJobStop();
+  lbArkBkRender();
+  lbArkBkFetch();
+}
+function lbArkBkFetch(){
+  var base = lbSrvCtlApi();
+  LB_ARKBK.loading = true;
+  try { lbSrvCtlOnlineSync(true); } catch (e) {}   /* v6055：点刷新时强制重拉在线角色 */
+  lbArkBkRender();
+  var p1 = lbSrvCtlFetchW(base + '/api/arkbackup/status', { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (j) { if (j && j.ok) LB_ARKBK.status = j.servers || {}; })
+    .catch(function () {});
+  var p2;
+  if (LB_ARKBK.srv){
+    p2 = lbSrvCtlFetchW(base + '/api/arkbackup/list?server=' + encodeURIComponent(LB_ARKBK.srv), { cache: 'no-store' })
+      .then(function (r) {
+        if (r.status === 401) throw new Error('无权限（需二级管理员）');
+        return r.json();
+      })
+      .then(function (j) { LB_ARKBK.list = j; LB_ARKBK.err = null; })
+      .catch(function (e) { LB_ARKBK.err = (e && e.message) || String(e); });
+  } else {
+    p2 = Promise.resolve();
+  }
+  Promise.all([p1, p2]).then(function () {
+    LB_ARKBK.loading = false;
+    LB_ARKBK.ts = Date.now();   /* v6040：状态/回档点的更新时间 */
+    lbArkBkRender();
+  });
+}
+/* v6061（用户口径）：**已下线**「玩家角色档案（可恢复）」整块。
+   原因：服务器启用官方存档行为（Store Behavior = Official）后，
+   `.arkprofile` 不由地图存档单独保存、也没有单独备份，只在「角色传服/新建」时
+   临时生成并保留到下一次 world-save；写回去基本不生效（角色数据以 .ark 为准）。
+   与其留着让人误以为能回滚角色进度，不如直接不提供入口。
+   后端 /api/arkbackup/restore_profile 与 /api/arkbackup/profiles 保留（不再被调用）。 */
+function lbArkBkFmtTs(ts){
+  if (!ts) return '';
+  var s = String(ts);
+  return s.length >= 16 ? (s.slice(5, 10).replace('-', '/') + ' ' + s.slice(11, 16)) : s;
+}
+/* v6039（用户口径）：标签用**相对时间**（「2 小时前」），比固定「约 3 小时」更有用 */
+function lbArkBkAgo(tsEpoch){
+  var t = Number(tsEpoch || 0);
+  if (!t) return '时间未知';
+  var d = Math.floor(Date.now() / 1000) - t;
+  if (d < 0) d = 0;
+  if (d < 60) return '刚刚';
+  var m = Math.floor(d / 60);
+  if (m < 60) return m + ' 分钟前';
+  var h = Math.floor(m / 60);
+  if (h < 24){
+    var mm = m % 60;
+    return mm ? (h + ' 小时 ' + mm + ' 分前') : (h + ' 小时前');
+  }
+  return Math.floor(h / 24) + ' 天前';
+}
+function lbArkBkServerChips(){
+  /* v6035（用户口径）：安全回档**不显示俱乐部（Bob）** */
+  return (LB.SERVERS || []).filter(function (s) { return s.abbr !== 'Bob'; }).map(function (s) {
+    var st = LB_ARKBK.status[s.abbr] || {};
+    var on = LB_ARKBK.srv === s.abbr;
+    var mdi = (LB_SERVER_MDI || {})[s.abbr] || '';
+    var dot = st.running ? '#22c55e' : '#ef4444';
+    /* v6035（用户口径）：角标改为**纯状态圆点** —— 原为当前档 MB，对回档决策无意义；
+       当前档大小移入悬停提示 */
+    var badge = '<em class="arbk-dot" style="background:' + dot + '"></em>';
+    var tip = (s.name || s.abbr) + '（' + (st.running ? '运行中' : '已停止')
+      + (st.activeMB ? (' · 当前档 ' + st.activeMB + ' MB') : '') + '）';
+    return '<span class="lb-tipb server-tab' + (on ? ' active' : '') + '"'
+      + ' onclick="lbArkBkPickSrv(\'' + s.abbr + '\')" title="' + lbMdEsc(tip) + '">'
+      + (mdi ? '<i class="mdi ' + mdi + '"></i>' : lbMdEsc(s.abbr)) + badge + '</span>';
+  }).join('');
+}
+function lbArkBkRowHtml(p){
+  var sel = (LB_ARKBK.point === p.id);
+  var isOwn = (p.kind === 'own_backup');
+  var isRbf = (p.kind === 'rollback_backup');   /* v6038：滚动备份 */
+  var icon = isRbf ? 'mdi-backup-restore' : (isOwn ? 'mdi-shield-check-outline' : 'mdi-history');
+  var color = isRbf ? '#f59e0b' : (isOwn ? '#22c55e' : '#a78bfa');
+  var label = isRbf ? ('滚动备份 · ' + lbArkBkAgo(p.tsEpoch))
+    : (isOwn ? (p.label || '回档前自动备份') : ('定时快照 · ' + lbArkBkAgo(p.tsEpoch)));
+  return '<div class="arbk-row' + (sel ? ' sel' : '') + '" onclick="lbArkBkPickPoint(\'' + lbMdEsc(p.id) + '\')">'
+    + '<i class="mdi ' + icon + '" style="color:' + color + ';font-size:16px;flex:none"></i>'
+    + '<span class="arbk-ts">' + lbMdEsc(lbArkBkFmtTs(p.ts)) + '</span>'
+    + '<span class="arbk-mb">' + (p.mb || 0) + ' MB</span>'
+    + '<span class="arbk-lbl">' + lbMdEsc(label) + '</span>'
+    + '</div>';
+}
+/* v6047（用户口径「要讲某个角色从哪个服传过来」）：
+   mode 区分场景 —— 'loss'（当前有/目标档没有）标「现在在本服，需先离开」；
+   'dup'（目标档有/当前没有）标「现在在【某服】，需传回本服」。
+   服务器缩写 → 中文全名走 LB.SERVERS，禁止在 UI 里裸显示 abbr。 */
+function lbArkBkNameList(arr, withTribe, mode){
+  if (!arr || !arr.length) return '';
+  var _cn = {};
+  (LB.SERVERS || []).forEach(function (s) { _cn[s.abbr] = s.name || s.abbr; });
+  return arr.map(function (x) {
+    var nm = x.characterName || x.accountName || ('pid=' + x.pid);
+    var extra = [];
+    if (withTribe && x.tribeName) extra.push('部落 ' + x.tribeName);
+    if (typeof x.cryoDinoCount === 'number' && x.cryoDinoCount > 0) extra.push('低温仓 ' + x.cryoDinoCount);
+    if (x.nowAt && x.nowAt.length){
+      extra.push('现在在【' + x.nowAt.map(function (a) { return _cn[a] || a; }).join('】【')
+        + '】→ 需传回本服');
+    } else if (mode === 'loss'){
+      extra.push('现在在本服 → 需先离开');
+    }
+    /* v6043：玩家进出流水（PlayerProfile）—— 让操作者知道这人是刚来的还是老玩家 */
+    if (x.presence && x.presence.lastConnect){
+      extra.push('上次进入 ' + lbArkBkAgo(x.presence.lastConnect));
+    }
+    return '<div class="arbk-nm">' + lbMdEsc(nm)
+      + (extra.length ? '<span class="arbk-nmx">' + lbMdEsc(extra.join(' · ')) + '</span>' : '') + '</div>';
+  }).join('');
+}
+/* v6045（用户口径）：列出「当前档 ↔ 目标档」之间进出过的角色。
+   数据源 = precheck.presenceRisk（后端按目标档时刻 T 切窗口，逐条 connect/disconnect 事件筛出）。
+   三档语义：
+     · newRole（T 之后才建角色，目标档里也没有）→ 回档后**角色消失**，判 block
+     · hasRoleInTarget（目标档里有角色）→ 角色保留，**进度回退**
+     · 其余（目标档无角色但首次进入早于 T）→ 记录不全，保守标红提示 */
+function lbArkBkPresList(pr){
+  var mv = pr.moved || [];
+  if (!mv.length) return '';
+  return mv.map(function (x) {
+    var nm = x.name || String(x.eosId || '').slice(0, 8);
+    var tag, cls;
+    if (x.newRole) { tag = '角色将消失'; cls = 'bad'; }
+    else if (x.hasRoleInTarget) { tag = '进度回退'; cls = 'warn'; }
+    else { tag = '目标档无角色'; cls = 'bad'; }
+    var bits = [];
+    if (x.winConnect) bits.push('进入 ' + x.winConnect + ' 次');
+    if (x.winDisconnect) bits.push('离开 ' + x.winDisconnect + ' 次');
+    if (x.lastConnect) bits.push('上次进入 ' + lbArkBkAgo(x.lastConnect));
+    return '<div class="arbk-nm">' + lbMdEsc(nm)
+      + (bits.length ? '<span class="arbk-nmx">' + lbMdEsc(bits.join(' · ')) + '</span>' : '')
+      + '<span class="arbk-tag ' + cls + '">' + tag + '</span></div>';
+  }).join('');
+}
+/* v6046（用户口径「怎么避免这一块要突出，并排版」）：统一的规避指引组件。
+   结构 = 标题（灯泡图标+蓝字） + 编号步骤列表 + 虚线分隔的补充说明。
+   取舍：steps/note 走 innerHTML（内容为源码内常量，允许 <strong> 强调）；
+   若将来接入动态数据必须自行 lbMdEsc。 */
+function lbArkBkGuide(title, steps, note, tip){
+  var h = '<div class="arbk-guide">'
+    + '<div class="arbk-gh"><i class="mdi mdi-lightbulb-on-outline"></i>' + lbMdEsc(title) + '</div>'
+    + '<ol class="arbk-gl">';
+  (steps || []).forEach(function (s) { h += '<li>' + s + '</li>'; });
+  h += '</ol>';
+  if (note) h += '<div class="arbk-gn">' + note + '</div>';
+  /* v6048（用户口径「要说清带物品还是脱光」）：传服物品口径独立一行，琥珀色警示。
+     依据：同一件物品（同 ItemID）不能同时存在两处，回档后相遇会**湮灭**。 */
+  if (tip) h += '<div class="arbk-gn arbk-gn-tip"><i class="mdi mdi-bag-personal-outline"></i>'
+    + '<span>' + tip + '</span></div>';
+  return h + '</div>';
+}
+function lbArkBkPlanHtml(pl){
+  if (!pl) return '';
+  var pc = pl.precheck || {};
+  var pr = pc.presenceRisk || {};   /* v6045：角色进出（后端按目标档时刻切窗口算） */
+  /* v6055（用户口径「同时风险要考虑在线用户」）：onlineRisk 由后端 precheck 返回，
+     数据源 = asa-data/<abbr>_online.json（RCON ListPlayers 快照）。onN = -1 表示「未知」。 */
+  var on = pc.onlineRisk || {};
+  var onN = on.ok ? (on.count || 0) : -1;
+  var vd = pl.verdict || pc.verdict || '';
+  /* 有人在线 ⇒ 无论后端 verdict 如何都按风险处理：回档会把人直接踢下线、进度退回目标档 */
+  var _riskNow = (vd !== 'clear') || (onN > 0);
+  var head = !_riskNow
+    ? '<span class="arbk-vd ok"><i class="mdi mdi-check-circle"></i> 全绿，可直接回档</span>'
+    : '<span class="arbk-vd bad"><i class="mdi mdi-alert-circle"></i> 存在风险，需确认后执行</span>';
+  var h = '<div class="arbk-plan">'
+    + '<div class="arbk-line">' + head + '</div>'
+    + '<div class="arbk-line arbk-dim">目标档 ' + (pl.targetMB || '?') + ' MB → 当前档 ' + (pl.activeMB || '?') + ' MB'
+    + '　预计 ' + (pl.etaSec || 0) + ' 秒</div>'
+    + '<div class="arbk-cnts">'
+    +   '<span class="arbk-c ok"><i class="mdi mdi-check-circle-outline"></i> 安全 ' + (pl.safe || 0) + '</span>'
+    +   '<span class="arbk-c warn"><i class="mdi mdi-alert-outline"></i> 物品丢失 ' + (pl.loss || 0) + '</span>'
+    +   '<span class="arbk-c bad"><i class="mdi mdi-content-duplicate"></i> 角色重复 ' + (pl.dup || 0) + '</span>'
+    +   '<span class="arbk-c ' + (pr.newRoleCount ? 'bad' : (pr.count ? 'warn' : 'ok')) + '">'
+    +     '<i class="mdi mdi-account-switch"></i> 角色进出 ' + (pr.count || 0) + '</span>'
+    +   '<span class="arbk-c ' + (onN > 0 ? 'bad' : (onN === 0 ? 'ok' : 'warn')) + '">'
+    +     '<i class="mdi mdi-account-multiple"></i> 在线 ' + (onN < 0 ? '未知' : onN) + '</span>'
+    + '</div>';
+  if (pl.notice) h += '<div class="arbk-notice">' + lbMdEsc(pl.notice) + '</div>';
+  /* v6055：在线玩家是「此刻立刻受影响」的一类，单独成块列出名字 */
+  if (onN > 0){
+    var _ons = (on.players || []).map(function (x) { return x.name || x.eosId || ''; })
+      .filter(function (s) { return s; });
+    h += '<div class="arbk-sec bad"><i class="mdi mdi-account-multiple"></i> 此刻在线（' + onN + ' 人）'
+      + '<span class="arbk-dim">回档会把这些人踢下线，进度退回目标档时刻</span></div>'
+      + '<div class="arbk-dim" style="padding:2px 0 6px">' + lbMdEsc(_ons.join(' · '))
+      + (on.fresh === false && on.ageSec
+          ? ('　（快照 ' + Math.max(1, Math.round(on.ageSec / 60)) + ' 分钟前）') : '')
+      + '</div>';
+  } else if (onN < 0){
+    h += '<div class="arbk-dim" style="padding:4px 0">在线状态未知（未拿到 ListPlayers 快照）'
+      + '—— 可先到「服务器控制」刷新一次在线状态，再点「重新检查」。</div>';
+  }
+  if ((pc.loss || []).length){
+    h += '<div class="arbk-sec warn"><i class="mdi mdi-alert-outline"></i> 物品将丢失（' + pc.loss.length + ' 名）</div>'
+      + lbArkBkNameList(pc.loss, 1, 'loss');
+    /* §5.5.7 规避指引（v6047：不限定「更晚」—— 角色被删的情况要选更早的档） */
+    h += lbArkBkGuide('怎么避免', [
+      '换<strong>其他回档点</strong> —— 选一个这些角色<strong>已存在</strong>的档（更早或更晚都行，看哪个档里有他们）',
+      '或让这些角色先<strong>离开本服</strong>（去任意其他服，回档后再回来）',
+      '接受重置（等级 / 背包 / 恐龙全部清空）'
+    ], '整图回档下「把东西存箱子 / 收低温仓」<strong>无效</strong> —— 箱子也会一起回到目标时刻；'
+      + '唯一有效的是让角色本身不在本服。',
+      '<strong>带物品走</strong> —— 目标档里没有这个角色，他的装备不会与档内物品撞 ID，'
+      + '带走、回档、再带回来都能保住。但<strong>回档点之前就放进过本服箱子 / 恐龙背包的东西别带</strong>：'
+      + '回档后箱子里会再出现一份，同 ID 相遇会湮灭。');
+  }
+  if ((pc.dup || []).length){
+    h += '<div class="arbk-sec bad"><i class="mdi mdi-content-duplicate"></i> 将出现重复（' + pc.dup.length + ' 名）</div>'
+      + lbArkBkNameList(pc.dup, 1, 'dup');
+    h += lbArkBkGuide('怎么避免', [
+      '让这些角色先<strong>回到本服</strong> —— 上面标了他们现在在哪台服，从那台服传回来',
+      '确认角色能在本服进游戏后，再执行回档'
+    ], '回档后他们退回目标档时刻的状态。<strong>回档后请勿立即跨服。</strong>',
+      '<strong>脱光再传回</strong> —— 目标档里他原本就有一份装备，带回来会与档内同 ID 物品湮灭。'
+      + '物品先留在原服，回档后从本服的背包 / 箱子里取。');
+  }
+  if ((pr.moved || []).length){
+    /* v6045（用户口径）：**不折叠** —— 用户要「列出哪些角色进出过」，
+       这是回档影响面的一等公民，藏起来等于没做。 */
+    h += '<div class="arbk-sec ' + (pr.newRoleCount ? 'bad' : 'warn') + '">'
+      + '<i class="mdi mdi-account-switch"></i> 期间进出（' + pr.moved.length + ' 名）'
+      + '<span class="arbk-dim">回档点 ' + lbMdEsc(pr.tTargetStr || '?') + ' → 现在</span></div>'
+      + '<div class="arbk-nmwrap">' + lbArkBkPresList(pr) + '</div>';
+    if (pr.newRoleCount){
+      h += lbArkBkGuide('这些角色会消失', [
+        '换<strong>其他回档点</strong> —— 选一个他们<strong>已创建角色</strong>的档',
+        '或回档后让他们重创角色，再用下方「玩家角色档案」单独恢复'
+      ], '这些账号在回档点之后才在本服创建角色，回档后目标档里没有他们 ⇒ 角色整只消失。');
+    }
+  }
+  if ((pc.safe || []).length){
+    /* v6041（用户口径）：安全名单**默认折叠**（十几人名单很占版面，且通常不需要逐条看）；
+       🟡/🔴 名单故意不折叠 —— 那是必须处理的风险，不能藏。 */
+    h += '<details class="arbk-fold"><summary>'
+      + '<i class="mdi mdi-check-circle-outline"></i> 安全（' + pc.safe.length + ' 名）</summary>'
+      + '<div class="arbk-nmwrap">' + lbArkBkNameList(pc.safe, 0) + '</div></details>';
+  }
+  h += '</div>';
+  return h;
+}
+/* v6056：原 lbArkBkJobHtml()（正文步骤明细块）已删除 —— 与底栏进度条重复，
+   完整错误信息改由底栏 title 提供（见 lbArkBkProgHtml）。 */
+function lbArkBkRender(){
+  var S = lbSheetBuild('lbArkBk', { onClose: 'lbArkBkClose()' });
+  if (!S || !S.body) return;
+  S.title.innerHTML = '<i class="mdi mdi-backup-restore"></i> 安全回档';
+  if (S.tabs) S.tabs.style.display = 'none';
+  if (S.meta) S.meta.style.display = 'none';
+  /* v6041（用户口径）：图例改放**右上角问号**（复用 wiki 的 .lw-help + data-tip 气泡），
+     不再单独占一块正文版面。注意 data-tip 走 CSS content:attr()，只能是纯文本。 */
+  if (S.help){
+    var _tipTxt = '怎么读这份列表：\n'
+      + '· 定时快照（.ark）= 游戏每约 3 小时自动存的一份完整世界档，可回档\n'
+      + '· 滚动备份（.arkrbf）= 服务器每次存盘时生成的另一份完整档，固定保留 4 份循环覆盖。'
+      + '比定时快照密得多（几十分钟级），已置顶列入；注意最旧那份最不易被新存盘冲掉\n'
+      + '· 回档前自动备份（pre_restore.ark）= 上次回档前那一份，不在此列表，'
+      + '用下方「撤销到上次回档前」按钮还原\n'
+      + '· 期间进出名单：进入记录一定会有；离开记录只在玩家「正常退出到主菜单」时才生成 ——'
+      + '掉线 / 闪退 / 服务器被 kill 都不生成，而且每服每人只留最近 10 份档案（更早的会被挤掉）。'
+      + '所以只看到「进入」没有「离开」是正常现象，不代表那个人还在服里';
+    S.help.removeAttribute('hidden');
+    S.help.setAttribute('data-tip', _tipTxt);
+    S.help.setAttribute('aria-label', _tipTxt);
+  }
+
+  var L = LB_ARKBK.list || {};
+  var st = LB_ARKBK.status[LB_ARKBK.srv] || {};
+  var h = '<div class="tc">';
+
+  /* ① 服务器行 */
+  /* v6035（用户口径）：去掉「选择服务器」小标题（Tab 本身即自解释） */
+  /* v6040（用户口径）：这一行要显示**数据更新时间**，不能只剩一个刷新图标 */
+  var _upTxt = LB_ARKBK.loading ? '正在刷新…'
+    : (LB_ARKBK.ts ? ('状态更新于 ' + new Date(LB_ARKBK.ts).toLocaleTimeString('zh-CN'))
+       : '尚未加载');
+  h += '<div class="arbk-pickhead">'
+    + '<span class="arbk-dim" style="color:' + (LB_ARKBK.loading ? '#f59e0b' : '#8b8b9e') + '">'
+    + lbMdEsc(_upTxt) + '</span>'
+    + '<span style="flex:1"></span>'
+    + '<button class="lb-srvctl-mini" title="刷新状态与回档点" onclick="lbArkBkFetch()"><i class="mdi mdi-refresh"></i></button>'
+    + '</div><div class="lb-srvctl-chips">' + lbArkBkServerChips() + '</div>';
+
+  /* v6055（用户口径）：直接复用服务器控制的「在线角色」栏 —— 同一个生成函数 +
+     同一个全局类 .lb-srvctl-online + 同一个点击跳地图行为，不是复制一份。 */
+  h += '<div class="lb-srvctl-online" id="lbArkBkOnline" onclick="lbSrvCtlOnlineGo()"'
+    + ' style="cursor:pointer" title="点击查看玩家位置（联盟成员分布地图）">'
+    + lbSrvCtlOnlineHtml() + '</div>'
+    /* v6065（用户口径）：在线栏带 ✕ 了，结果横幅也必须跟着有 ——
+       lbSrvCtlKickRes() 同时写 lbSrvCtlKickRes / lbArkBkKickRes 两个容器（哪个在页面上就更到哪个） */
+    + '<div id="lbArkBkKickRes" style="display:none;margin-top:6px;padding:6px 10px;border-radius:6px;'
+    + 'font-size:11.5px;text-align:center;line-height:1.6"></div>';
+
+  if (LB_ARKBK.err){
+    h += '<div class="arbk-notice bad">' + lbMdEsc(LB_ARKBK.err) + '</div>';
+  }
+
+  if (!LB_ARKBK.srv){
+    h += '<div class="arbk-dim" style="padding:22px 0;text-align:center">请先选择一台服务器</div>';
+  } else {
+    /* ② 当前档 */
+    h += '<div class="arbk-cur">'
+      + '<i class="mdi mdi-server' + (st.running ? '' : '-off') + '" style="color:' + (st.running ? '#22c55e' : '#ef4444') + '"></i>'
+      + '<b>' + lbMdEsc(st.activeFile || '—') + '</b>'
+      + '<span class="arbk-dim">' + (st.activeMB || 0) + ' MB</span>'
+      + '<span class="arbk-dim">写入 ' + lbMdEsc(lbArkBkFmtTs(st.activeMtime || '')) + '</span>'
+      + '<span style="color:' + (st.running ? '#22c55e' : '#ef4444') + '">' + (st.running ? '运行中' : '已停止') + '</span>'
+      + (st.busyJob ? '<span style="color:#f59e0b">任务进行中</span>' : '')
+      + '</div>';
+
+    /* ③ 回档点 */
+    /* v6036（用户口径）：不再把「回档前自动备份」列进回档点 —— 底部已有「撤销到上次回档前」按钮，
+       功能完全重复。 */
+    /* v6038（用户口径）：「滚动备份」(.arkrbf) 列入回档点，且**置顶** */
+    var rbfPts = (L.rbf || []).slice();
+    var pts = rbfPts.concat((L.points || []).slice());
+    h += '<div class="arbk-sec"><i class="mdi mdi-history"></i> 可选回档点（' + pts.length + '）'
+      + '<span class="arbk-dim">滚动备份 ' + rbfPts.length + ' · 定时快照 ' + (L.points || []).length
+      + ' · ' + (L.mapDir || '') + '</span></div>';
+    if (!pts.length){
+      h += '<div class="arbk-dim" style="padding:10px 0">该服没有可用回档点</div>';
+    } else {
+      h += '<div class="arbk-list">' + pts.slice(0, 40).map(lbArkBkRowHtml).join('') + '</div>';
+      if (pts.length > 40) h += '<div class="arbk-dim">仅显示最近 40 个</div>';
+      /* v6041（用户口径）：原先内嵌的 .arbk-legend 说明块已移到右上角问号气泡 */
+    }
+
+    /* ④ 详情/计划 */
+    if (LB_ARKBK.point){
+      /* v6039（用户口径）：选中档时已自动跑风险检查 ⇒ 去掉多余的大按钮 */
+      /* v6040（用户口径）：再删「演练（不改文件）」—— 它走 execute 的 dryRun，与 plan 结果**完全重复**，
+         却会真的 saveworld 一次，且 kill/换档/启动全不验证 ⇒ 既不多给信息又带副作用。
+         仅保留 ghost「重新检查」：方案 §5.5.7 要求名单处理完再查一次（有缓存，秒回） */
+      h += '<div class="arbk-actions">'
+        + '<button class="arbk-btn ghost" onclick="lbArkBkPlan()"'
+        + ' title="按下名单处理完（换档/传走/传回）后，再查一次"><i class="mdi mdi-refresh"></i> 重新检查</button>'
+        + '<span style="flex:1"></span>'
+        /* v6054（用户口径）：低可视化「取消选择」—— 清空当前档，回到未选档状态 */
+        + '<button class="arbk-cancel" onclick="lbArkBkClearPoint()" title="清空当前选择（不执行任何操作）">'
+        + '<i class="mdi mdi-close"></i> 取消选择</button>'
+        + '</div>';
+      if (LB_ARKBK.busy === 'plan'){
+        h += '<div class="arbk-dim" style="padding:8px 0">正在检查风险…'
+          + '（首次需解析存档，约 5~15 秒）</div>';
+      }
+      h += lbArkBkPlanHtml(LB_ARKBK.plan);
+
+      /* ⑤ 执行区：clear 直接可点；block 需 ackRisk + 中文名 */
+      var pl = LB_ARKBK.plan;
+      /* v6060（用户报「执行回档（）括号内为什么没内容」）：
+         回档点列表是 `rbf（滚动备份）+ points（定时快照）` 合并的，而这里原来**只查 L.points**
+         ⇒ 选中 rbf 点时取不到时间，按钮就成了「执行回档（）」。
+         统一走 lbArkBkPointObj()，取不到时间时干脆不显示括号（不再输出空括号）。 */
+      var _pt = lbArkBkPointObj();
+      var _ptTs = _pt ? lbArkBkFmtTs(_pt.ts) : '';
+      var _ptSuffix = _ptTs ? ('（' + lbMdEsc(_ptTs) + '）') : '';
+      if (pl && pl.verdict === 'clear'){
+        h += '<div class="arbk-actions"><button class="arbk-btn danger" onclick="lbArkBkExec(0)">'
+          + '<i class="mdi mdi-backup-restore"></i> 执行回档' + _ptSuffix
+          + '</button></div>';
+      } else if (pl && pl.verdict === 'block'){
+        /* v6053（用户口径「附件是不是已经没用了」）：整块 .arbk-ack 已冗余 ——
+           风险提示分别在 plan.notice / 通用确认浮窗 note / 内联放行词条 各有一份；
+           #arbkConfirm 自 v6052 起不再参与校验（lbArkBkExec 只负责弹浮窗）。
+           这里只保留入口按钮，与 clear 档完全一致。 */
+        h += '<div class="arbk-actions"><button class="arbk-btn danger" onclick="lbArkBkExec(0)">'
+          + '<i class="mdi mdi-backup-restore"></i> 执行回档' + _ptSuffix
+          + '</button></div>';
+      }
+    } else {
+      /* v6054（用户口径「撤销按钮应该只在没选存档时显示」）：
+         撤销是「整台服务器」层级的动作，与「挑某一档」互斥 —— 选中档时该位置留给「取消选择」，
+         未选档时才露出撤销入口。 */
+      if (L.ownBackup){
+        h += '<div class="arbk-actions" style="margin-top:6px">'
+          /* v6059（用户口径）：文案「撤销到上次回档前」+ 显示**当前这份备份档**已撤销次数
+             （不是历史累计；新回档生成新备份时后端会把它重置为 0） */
+          + '<button class="arbk-btn ghost" onclick="lbArkBkUndo()"><i class="mdi mdi-undo-variant"></i> 撤销到上次回档前'
+          + '（' + lbMdEsc(lbArkBkFmtTs(L.ownBackup.ts))
+          + (Number(L.ownBackup.undoCount) > 0 ? (' · 已撤销 ' + Number(L.ownBackup.undoCount) + ' 次') : '')
+          + '）</button></div>';
+      }
+    }
+
+    /* ⑥ v6061：玩家角色档案区已下线（见 lbArkBkFmtTs 上方说明） */
+
+    /* ⑦ v6056：正文不再列步骤明细 —— 进度统一走底栏固定进度条 */
+    /* v6050：页面内确认条（执行 / 演练 / 撤销通用） */
+    h += lbArkBkAskHtml();
+  }
+  h += '</div>';
+  S.body.innerHTML = h;
+  /* v6050（用户口径）：底栏固定进度条 —— 完全复用 srvctl 的 .lb-task-pg 结构
+     （底槽 + .lb-task-fill 填充 + 图标 + 主文 + 副文 + 百分比，文字叠在条内） */
+  if (S.foot){
+    var _pg = lbArkBkProgHtml();
+    if (_pg){ S.foot.innerHTML = _pg + lbArkBkFootBtns(); S.foot.removeAttribute('hidden'); }
+    else { S.foot.innerHTML = ''; S.foot.setAttribute('hidden', ''); }
+  }
+}
+/* v6050：回档 / 撤销进度（数据源 LB_ARKBK.job：phase + steps[]） */
+function lbArkBkProgHtml(){
+  var j = LB_ARKBK.job;
+  if (!j) return '';
+  /* v6057：job 可能属于别的服（切换服务器时已清，但恢复路径要保险）⇒ 不串台 */
+  if (j.server && LB_ARKBK.srv && j.server !== LB_ARKBK.srv) return '';
+  var steps = j.steps || [];
+  var ph = String(j.phase || '');
+  var failed = (ph === 'failed'), done = (ph === 'done');
+  /* v6058（按推荐补全）：进度改用**后端下发的阶段权重**（_ARKBK_STEP_PCT）。
+     原来前端 TOTAL=8 等权数步骤 —— restoring 花 40 秒与 saveworld 花 2 秒各算 1/8，
+     百分比是假的。 */
+  var pct = (typeof j.pct === 'number') ? j.pct : (done ? 100 : 0);
+  if (!done && !failed && pct > 99) pct = 99;
+  /* v6058：结束后 60 秒自动隐藏（照 srvctl 队列口径）—— 否则完成/失败条永远挂在底栏 */
+  if (done || failed){
+    if (!LB_ARKBK.jobEndAt) LB_ARKBK.jobEndAt = Date.now();
+    if ((Date.now() - LB_ARKBK.jobEndAt) > 60000) return '';
+  } else {
+    LB_ARKBK.jobObserved = true;
+    LB_ARKBK.jobEndAt = 0;
+  }
+  var color = failed ? '#f87171' : (done ? '#4ade80' : '#c4b5fd');
+  var barColor = failed ? '#ef4444' : (done ? '#22c55e' : '#7c3aed');
+  var icon = failed ? 'mdi-alert-circle' : (done ? 'mdi-check-circle' : 'mdi-loading mdi-spin');
+  var right = failed ? '失败' : (done ? '完成' : (pct + '%'));
+  var last = steps.length ? steps[steps.length - 1] : null;
+  var sub = (failed && j.error) ? j.error
+    : (last ? (String(last.phase || '') + (last.msg ? ' · ' + last.msg : '')) : (ph || '排队中…'));
+  sub = String(sub).replace(/\s+/g, ' ').slice(0, 64);
+  /* v6056：正文明细块删除后，完整错误信息靠 title 悬停查看（底栏副文只截 64 字） */
+  var _tip = '';
+  if (failed && j.error){
+    _tip = ' title="' + lbMdEsc(String(j.error).slice(0, 300)).replace(/"/g, '&quot;') + '"';
+  }
+  return '<div class="lb-task ' + (failed ? 'fail' : (done ? 'ok' : '')) + '"' + _tip + '>'
+    + '<div class="lb-task-pg">'
+    + '<i class="lb-task-fill" style="width:' + pct + '%;background:' + barColor + '"></i>'
+    + '<i class="mdi ' + icon + '" style="color:' + color + '"></i>'
+    + '<span class="lb-task-main">' + lbMdEsc(lbArkBkCn(LB_ARKBK.srv)) + ' · '
+    + lbMdEsc(j.dryRun ? '演练' : '回档') + (failed ? '（失败）' : '') + '</span>'
+    + '<span class="lb-task-sub">' + lbMdEsc(sub) + '</span>'
+    + '<span style="flex:1"></span>'
+    + '<span class="lb-task-pct" style="color:' + color + '">' + right + '</span>'
+    + '</div></div>';
+}
+/* v6058（按推荐补全）：失败条给「重试 / 清除」两个入口 ——
+   原实现失败红条会一直挂着，既不能重试也不能清掉（srvctl 队列那边两者都有）。 */
+function lbArkBkFootBtns(){
+  var j = LB_ARKBK.job;
+  if (!j || String(j.phase) !== 'failed') return '';
+  var h = '<div class="arbk-footbtns">';
+  if (LB_ARKBK.point){
+    h += '<button class="arbk-btn ghost" onclick="lbArkBkExec(0)"'
+      + ' title="用同一回档点再执行一次"><i class="mdi mdi-refresh"></i> 重试</button>';
+  }
+  h += '<button class="arbk-cancel" onclick="lbArkBkDismiss()"'
+    + ' title="从底栏清除这条记录（不影响服务器）"><i class="mdi mdi-close"></i> 清除</button>';
+  return h + '</div>';
+}
+function lbArkBkDismiss(){
+  var j = LB_ARKBK.job;
+  var url = lbSrvCtlApi() + '/api/arkbackup/dismiss?server='
+    + encodeURIComponent(LB_ARKBK.srv || '')
+    + (j && j.id ? ('&jobId=' + encodeURIComponent(j.id)) : '');
+  var local = function () {
+    LB_ARKBK.job = null; LB_ARKBK.jobEndAt = 0; LB_ARKBK.jobNotified = true;
+    lbArkBkRender();
+  };
+  lbSrvCtlFetchW(url, { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function () { local(); })
+    .catch(function () { local(); });   /* 后端未升级(404)也照样清本地 */
+}
+function lbArkBkPickPoint(id){
+  if (LB_ARKBK.busy) return;
+  LB_ARKBK.point = (LB_ARKBK.point === id) ? '' : id;
+  LB_ARKBK.plan = null; LB_ARKBK.job = null;
+  LB_ARKBK.confirmText = '';
+  lbArkBkJobStop();
+  lbArkBkRender();
+  if (LB_ARKBK.point) lbArkBkPlan();
+}
+/* v6054（用户口径）：低可视化「取消选择」—— 只清空当前选择，不发任何请求、不动服务器 */
+function lbArkBkClearPoint(){
+  if (LB_ARKBK.busy) return;
+  LB_ARKBK.point = ''; LB_ARKBK.plan = null; LB_ARKBK.job = null;
+  LB_ARKBK.confirmText = ''; LB_ARKBK.ask = null;
+  lbArkBkJobStop();
+  lbArkBkRender();
+}
+/* v6060：按 pointId 取回档点对象 —— **同时查 rbf 与 points**。
+   回档点列表是 `rbfPts.concat(points)`（滚动备份置顶），原来按钮只查 points
+   ⇒ 选 rbf 点取不到 ts，按钮显示「执行回档（）」。 */
+function lbArkBkPointObj(){
+  var id = LB_ARKBK.point;
+  if (!id) return null;
+  var L = LB_ARKBK.list || {};
+  var all = (L.rbf || []).concat(L.points || []);
+  for (var i = 0; i < all.length; i++){
+    if (all[i] && all[i].id === id) return all[i];
+  }
+  return null;
+}
+function lbArkBkPlan(){
+  if (!LB_ARKBK.srv || !LB_ARKBK.point) return;
+  var base = lbSrvCtlApi();
+  LB_ARKBK.busy = 'plan';
+  lbArkBkRender();
+  lbSrvCtlFetchW(base + '/api/arkbackup/plan', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ server: LB_ARKBK.srv, pointId: LB_ARKBK.point })
+  }).then(function (r) { return r.json(); })
+    .then(function (j) {
+      LB_ARKBK.busy = '';
+      if (j && j.ok) { LB_ARKBK.plan = j; }
+      else { LB_ARKBK.plan = null; try { lbToast('检查失败：' + ((j && j.error) || '未知')); } catch (e) {} }
+      lbArkBkRender();
+    })
+    .catch(function (e) { LB_ARKBK.busy = ''; try { lbToast('检查失败：' + e); } catch (e2) {} lbArkBkRender(); });
+}
+/* ===== v6050：页面内确认（替代 window.confirm / window.prompt） =====
+   根因（用户报「点撤销没反应」）：浏览器或沙箱环境会拦截原生弹窗，prompt/confirm 直接返回
+   null ⇒ 原代码 `if (txt === null) return;` 静默退出，表现为按钮点了毫无反应。
+   现在统一走页面内确认条（.arbk-ask），不依赖任何浏览器弹窗。 */
+function lbArkBkCn(abbr){
+  var s = (LB.SERVERS || []).filter(function (x) { return x.abbr === abbr; })[0];
+  return (s && (s.name || s.abbr)) || abbr || '';
+}
+/* ===== v6052（用户口径：「回档、撤销，就算有中文放行确认，也一定要有项目通用的确认浮窗」）
+   两层确认，缺一不可：
+     ① 本函数 → 项目通用控制类浮窗 lbAskCard（后果说明 + 服务器 chip + 流程步骤）
+     ② 用户点「继续」→ 内联放行词确认条（.arbk-ask，输入服务器中文名）
+   lbAskCard 创建失败（返回 false）时直接进第 ② 层，保证操作不被阻断。 */
+function lbArkBkAskCard(kind, extra){
+  var srv = LB_ARKBK.srv;
+  var cn = (LB_ARKBK.plan && LB_ARKBK.plan.confirmWord) || lbArkBkCn(srv);
+  extra = extra || {};
+  var go = function () {
+    /* v6062（用户口径「全绿情况下不用输入放行词」）：
+       verdict=clear 时后端本来就不校验 ackRisk / confirm，前端这一层输入纯属多余摩擦
+       ⇒ 直接在通用确认浮窗点按钮后执行。有风险（block）仍保留输入放行词。 */
+    var _vd = (LB_ARKBK.plan && LB_ARKBK.plan.verdict) || '';
+    if (kind === 'exec' && _vd === 'clear'){
+      lbArkBkExecGo(false, '');
+      return;
+    }
+    LB_ARKBK.ask = { kind: kind, word: cn,
+                     text: LB_ARKBK.confirmText || '',
+                     eos: extra.eos, zip: extra.zip, tip: extra.tip };
+    lbArkBkRender();
+    lbArkBkAskFocus();
+  };
+  var pl = LB_ARKBK.plan || {};
+  var o;
+  if (kind === 'undo'){
+    o = { tone: 'warn', badge: '撤销', title: '撤销到上次回档前', servers: [srv],
+          steps: ['校验备份', '停服', '还原 pre_restore.ark', '启动', '等 RCON 就绪'],
+          note: '用「回档前自动备份」把服务器还原到上一次回档之前的状态；执行后本次还原不可再回退。',
+          okText: '继续（下一步输入放行词）' };
+  } else if (kind === 'dry'){
+    o = { tone: 'info', badge: '演练', title: '演练回档（不改动任何文件）', servers: [srv],
+          steps: ['存档', '闸门校验', '备份当前档'],
+          note: '只演算不落地，用于确认风险判定与耗时估算是否正确。',
+          okText: '继续（下一步输入放行词）' };
+  } else {
+    o = { tone: 'danger', badge: '回档', title: '执行回档', servers: [srv],
+          steps: ['存档', '闸门校验', '备份当前档', '停服', '原子换档', '启动', '验证'],
+          note: '会强制终止服务器并重启，在线玩家全部掉线；回档后的进度不可恢复（可用撤销备份还原）。'
+              + (pl.notice ? ('\n风险判定：' + pl.notice) : ''),
+          /* v6062：全绿没有下一步输入，按钮文案要说实话 */
+          okText: (pl.verdict === 'clear') ? '确认执行' : '继续（下一步输入放行词）' };
+  }
+  o.onOk = go;
+  var ok = false;
+  try { ok = lbAskCard(o); } catch (e) { ok = false; }
+  if (!ok) go();
+}
+function lbArkBkAskFocus(){
+  setTimeout(function () {
+    var i = document.getElementById('lbArkBkAskIn');
+    if (i){ try { i.focus(); } catch (e) {} }
+  }, 70);
+}
+function lbArkBkAskCancel(){ LB_ARKBK.ask = null; lbArkBkRender(); }
+function lbArkBkAskGo(){
+  var a = LB_ARKBK.ask;
+  if (!a || LB_ARKBK.busy) return;
+  if (String(a.text || '').trim() !== a.word){
+    try { lbToast('确认词不一致，请输入「' + a.word + '」'); } catch (e) {}
+    return;
+  }
+  var kind = a.kind, word = a.word;
+  LB_ARKBK.ask = null;
+  if (kind === 'undo') lbArkBkUndoGo(word);
+  else lbArkBkExecGo(kind === 'dry', word);
+}
+function lbArkBkAskHtml(){
+  var a = LB_ARKBK.ask;
+  if (!a) return '';
+  var ttl = (a.kind === 'undo') ? '撤销到上次回档前'
+    : (a.kind === 'dry' ? '演练（不改动任何文件）' : '执行回档');
+  return '<div class="arbk-ask">'
+    + '<div class="arbk-askh"><i class="mdi mdi-alert-circle-outline"></i> ' + lbMdEsc(ttl)
+    + '<span class="arbk-dim">输入服务器中文名放行</span></div>'
+    + (a.tip ? '<div class="arbk-asktip">' + lbMdEsc(a.tip) + '</div>' : '')
+    + '<div class="arbk-askr">'
+    + '<input id="lbArkBkAskIn" class="arbk-askin" placeholder="' + lbMdEsc(a.word) + '"'
+    + ' value="' + lbMdEsc(a.text || '') + '"'
+    + ' oninput="LB_ARKBK.ask&&(LB_ARKBK.ask.text=this.value)"'
+    + ' onkeydown="if(event.keyCode===13)lbArkBkAskGo()">'
+    + '<button class="arbk-btn" onclick="lbArkBkAskGo()"><i class="mdi mdi-check"></i> 确认</button>'
+    + '<button class="arbk-btn ghost" onclick="lbArkBkAskCancel()"><i class="mdi mdi-close"></i> 取消</button>'
+    + '</div></div>';
+}
+function lbArkBkExec(dry){
+  if (!LB_ARKBK.srv || !LB_ARKBK.point) return;
+  if (LB_ARKBK.busy) return;
+  /* v6052：先项目通用确认浮窗，再放行词确认 */
+  lbArkBkAskCard(dry ? 'dry' : 'exec', null);
+}
+function lbArkBkExecGo(dry, word){
+  var pl = LB_ARKBK.plan || {};
+  var body = {
+    server: LB_ARKBK.srv, pointId: LB_ARKBK.point, dryRun: !!dry,
+    ackRisk: (pl.verdict && pl.verdict !== 'clear'), confirm: word || ''
+  };
+  var base = lbSrvCtlApi();
+  LB_ARKBK.busy = dry ? 'dry' : 'exec';
+  lbArkBkRender();
+  lbSrvCtlFetchW(base + '/api/arkbackup/execute', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  }).then(function (r) {
+    return r.json().then(function (j) { return { s: r.status, j: j }; });
+  }).then(function (x) {
+    LB_ARKBK.busy = '';
+    if (x.s === 200 && x.j && x.j.ok){
+      LB_ARKBK.job = { id: x.j.jobId, phase: x.j.phase || 'queued', dryRun: x.j.dryRun, steps: [] };
+      lbArkBkRender();
+      lbArkBkPoll(x.j.jobId);
+    } else {
+      var msg = (x.j && (x.j.error || x.j.code)) || ('HTTP ' + x.s);
+      if (x.j && x.j.missing) msg += '（缺少 ' + x.j.missing.join('/') + '）';
+      try { lbToast('执行被拒：' + msg); } catch (e) {}
+      lbArkBkRender();
+    }
+  }).catch(function (e) { LB_ARKBK.busy = ''; try { lbToast('执行失败：' + e); } catch (e2) {} lbArkBkRender(); });
+}
+function lbArkBkPoll(jobId){
+  lbArkBkJobStop();
+  LB_ARKBK.jobNotified = false;     /* v6057：新一轮 job，允许失败提示一次 */
+  LB_ARKBK.jobEndAt = 0; LB_ARKBK.jobObserved = true;   /* v6058：新一轮从头计时 */
+  var base = lbSrvCtlApi();
+  var tick = function () {
+    lbSrvCtlFetchW(base + '/api/arkbackup/job?id=' + encodeURIComponent(jobId), { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (!j || !j.id) return;
+        LB_ARKBK.job = j;
+        lbArkBkRender();
+        if (j.phase !== 'done' && j.phase !== 'failed'){
+          LB_ARKBK.jobTimer = setTimeout(tick, 3000);
+        } else {
+          LB_ARKBK.jobTimer = null;
+          LB_ARKBK.jobEndAt = Date.now();   /* v6058：60 秒后自动隐藏的起点 */
+          /* v6057（用户口径「没有触发启动，你怎么就没发现一直卡着」）：
+             失败必须有**主动**提示，不能只靠用户自己去盯底栏（弹一次，不刷屏） */
+          if (j.phase === 'failed' && !LB_ARKBK.jobNotified){
+            LB_ARKBK.jobNotified = true;
+            try { lbToast('回档失败：' + (j.error || '未知原因')); } catch (e) {}
+          }
+          lbArkBkFetch();   /* 结束后刷新列表/状态 */
+        }
+      })
+      .catch(function () { LB_ARKBK.jobTimer = setTimeout(tick, 5000); });
+  };
+  LB_ARKBK.jobTimer = setTimeout(tick, 1200);
+}
+function lbArkBkUndo(){
+  if (!LB_ARKBK.srv || LB_ARKBK.busy) return;
+  /* v6052：先项目通用确认浮窗，再放行词确认 */
+  lbArkBkAskCard('undo', null);
+}
+function lbArkBkUndoGo(cn){
+  if (!LB_ARKBK.srv || LB_ARKBK.busy) return;
+  var base = lbSrvCtlApi();
+  LB_ARKBK.busy = 'undo';
+  lbArkBkRender();
+  lbSrvCtlFetchW(base + '/api/arkbackup/rollback', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ server: LB_ARKBK.srv, confirm: cn })
+  }).then(function (r) { return r.json().then(function (j) { return { s: r.status, j: j }; }); })
+    .then(function (x) {
+      LB_ARKBK.busy = '';
+      if (x.s === 200 && x.j && x.j.ok){
+        LB_ARKBK.job = { id: x.j.jobId, phase: x.j.phase || 'queued', dryRun: false, steps: [] };
+        lbArkBkRender();
+        lbArkBkPoll(x.j.jobId);
+      } else {
+        try { lbToast('撤销被拒：' + ((x.j && (x.j.error || x.j.code)) || ('HTTP ' + x.s))); } catch (e) {}
+        lbArkBkRender();
+      }
+    })
+    .catch(function (e) { LB_ARKBK.busy = ''; try { lbToast('撤销失败：' + e); } catch (e2) {} lbArkBkRender(); });
+}
 function lbSrvCtlFetch(){
   var u = lbSrvCtlUser();
   if (!u){ LB_SRVCTL.err = '请先登录'; LB_SRVCTL.loading = false; lbSrvCtlRender(); return; }
@@ -8700,9 +9703,14 @@ function lbSrvCtlNames(){
 }
 
 /* ===== v6002（用户口径）：在线角色低可视化区 + 破坏性动作玩家闸门 ===== */
+/* v6065（用户口径「不是复用的么？为啥安全回档里的踢人没同步」）：
+   彻底去掉「是否可踢」开关 —— **复用组件的表现不允许因调用方不同而不同**。
+   所有者/二级管理员一律带 ✕（点击 → 确认浮窗 → 踢出）；其余保持原样（前 4 个 + 等 N 人）。
+   安全回档的开放条件是 lbRoleLevel()>=3，天然覆盖踢人所需的 >=2。 */
 function lbSrvCtlOnlineHtml(){
   /* v6003（用户口径）：全服在线角色 —— 只列有人的服 + 全服总人数；无人的服不占位 */
   var mdi = LB_SERVER_MDI || {};
+  var canKick = (typeof lbRoleLevel === 'function' ? lbRoleLevel() : 0) >= 2;
   var parts = [], total = 0, known = 0;
   (LB.SERVERS || []).forEach(function(s){
     var a = s.abbr;
@@ -8711,9 +9719,20 @@ function lbSrvCtlOnlineHtml(){
     known++;
     if (!roles.length) return;           /* 无人 -> 跳过 */
     total += roles.length;
-    var ns = roles.map(function(r){ return lbMdEsc(r.role); });
-    var show = ns.slice(0, 4).join('·') + (ns.length > 4 ? (' 等 ' + ns.length + ' 人') : '');
-    parts.push('<span class="ol-s"><i class="mdi ' + (mdi[a] || 'mdi-server') + '"></i>'
+    var show;
+    if (canKick){
+      /* v6063：管理员看全量（不截断），每个角色后一个 ✕；onclick 只传 服 + EOS ⇒ 无引号注入风险 */
+      show = roles.map(function(r){
+        var nm = lbMdEsc(r.role);
+        if (!r.eos) return nm;
+        return '<span class="ol-r">' + nm + '<i class="lb-tipb mdi mdi-close ol-x" title="踢出 ' + nm
+             + '" onclick="event.stopPropagation();lbSrvCtlKickGo(\'' + a + '\',\'' + r.eos + '\')"></i></span>';
+      }).join('');
+    } else {
+      var ns = roles.map(function(r){ return lbMdEsc(r.role); });
+      show = ns.slice(0, 4).join('·') + (ns.length > 4 ? (' 等 ' + ns.length + ' 人') : '');
+    }
+    parts.push('<span class="ol-s' + (canKick ? ' ol-kick' : '') + '"><i class="mdi ' + (mdi[a] || 'mdi-server') + '"></i>'
              + '<span class="ol-n">' + roles.length + '</span>' + show + '</span>');
   });
   if (!known) return '<span class="ol-ttl">在线角色</span><span class="ol-non">'
@@ -8725,9 +9744,16 @@ function lbSrvCtlOnlineHtml(){
        + parts.join('');
 }
 function lbSrvCtlOnlinePaint(){
-  var el = document.getElementById('lbSrvCtlOnline');
-  if (!el) return;
-  try { el.innerHTML = lbSrvCtlOnlineHtml(); } catch(e){}
+  /* v6055（用户口径「安全回档要复用服务器控制的在线栏」）：
+     内容是同一个 lbSrvCtlOnlineHtml()、样式是同一个全局 .lb-srvctl-online、
+     点击是同一个 lbSrvCtlOnlineGo() ⇒ 这里只需把同一份结果刷到两个容器，
+     不复制任何一份实现。容器不存在（面板未打开）时自动跳过。 */
+  ['lbSrvCtlOnline', 'lbArkBkOnline'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    /* v6065：两个面板内容完全一致（含 ✕ 踢人），不再有任何参数差异 */
+    try { el.innerHTML = lbSrvCtlOnlineHtml(); } catch (e) {}
+  });
 }
 /* v6025（用户口径）：「在线角色」整行点击 → 跳转玩家位置界面。
    #lbBreedOverlay 的 z-index 9999 高于 #lbSrvCtl 的 9998 ⇒ 直接盖在上面，
@@ -10241,6 +11267,9 @@ function lbSrvCtlRender(){
     /* v6025（用户口径）：整行可点 → 玩家位置界面（联盟成员分布地图） */
     + '<div class="lb-srvctl-online" id="lbSrvCtlOnline" onclick="lbSrvCtlOnlineGo()"'
     + ' style="cursor:pointer" title="点击查看玩家位置（联盟成员分布地图）">' + lbSrvCtlOnlineHtml() + '</div>'
+    /* v6063（用户口径）：踢人结果横幅 —— 随踢人功能从地图位置搬来（成功 8s 自动隐藏 / 失败常驻） */
+    + '<div id="lbSrvCtlKickRes" style="display:none;margin-top:6px;padding:6px 10px;border-radius:6px;'
+    + 'font-size:11.5px;text-align:center;line-height:1.6"></div>'
     + '<div class="lb-srvctl-qline" id="lbSrvCtlQLine">' + lbSrvCtlQueueLineHtml() + '</div>'
     /* v6024（用户口径）：管理员但缺 token ⇒ 常驻红条 + 一键重登（即使自动弹框的提示被关掉也能找回入口） */
     + ((lbRoleLevel() >= 2 && !lbSrvCtlToken())
@@ -10355,7 +11384,9 @@ function lbOpenRolePicker(){
   var html='<div class="lb-picker-panel" onclick="event.stopPropagation()" style="max-width:400px">';
   // v5404（用户口径「版本号放到该浮窗底栏，可以不要那么低可视化」「选择生存者 改叫 生存者」）
   //   标题改名；版本号移到底栏（见下方 footer），不再挤在标题右侧
-  html+='<div class="lb-picker-header">'+(lbIsAdmin()?'<button class="lb-tipb lb-picker-close" style="opacity:.55;font-size:14px;color:#f59e0b" onclick="lbOpenServerAdminModal()" title="系统管理"><i class="mdi mdi-shield-crown-outline"></i></button>':'')+(lbCanServerCtl()?'<button class="lb-tipb lb-picker-close" style="opacity:.6;font-size:14px;color:#a78bfa" onclick="lbSrvCtlOpen()" title="服务器控制"><i class="mdi mdi-server-security"></i></button>':'')+'<button class="lb-tipb lb-picker-close" style="opacity:.4;font-size:14px" onclick="lbNewsEntry()" title="资讯广场"><i class="mdi mdi-newspaper-variant-outline"></i></button>'+'<button class="lb-tipb lb-picker-close" style="opacity:.4;font-size:14px" onclick="lbOpenAlliancePos()" title="联盟成员位置"><i class="mdi mdi-account-group-outline"></i></button><button class="lb-tipb lb-picker-close" style="opacity:.4;font-size:14px" onclick="lbRoleView(\'keys\')" title="键位配置"><i class="mdi mdi-gamepad-variant"></i></button><button class="lb-tipb lb-picker-close" style="opacity:.4;font-size:14px" onclick="lbOpenConfigModal()" title="自助配置"><i class="mdi mdi-cog"></i></button>'+'<button class="lb-tipb lb-picker-close" style="opacity:.4;font-size:14px" onclick="lbCfgOpenRules()" title="服务器规则"><i class="mdi mdi-clipboard-text-outline"></i></button>'+'<button class="lb-tipb lb-picker-close" style="opacity:.4;font-size:14px" onclick="lbLogout()" title="注销登录"><i class="mdi mdi-logout"></i></button><span style="flex:1"></span><button class="lb-tipb lb-picker-close" onclick="this.closest(\'.lb-picker-overlay\').remove()" title="关闭"><i class="mdi mdi-close"></i></button></div>';
+  /* v6082（用户口径「附件2个透明度怎么不一样」→「全部全亮」）：本行各入口原先手写了 .4/.55/.6/.8 四档 opacity ⇒ 移除全部 opacity，统一全亮；
+     同时加专属 class .lb-rp-head（v6082「该行的入口图标间隔减1」），仅这一行 gap 8→7px，不动共享的 .lb-picker-header。 */
+  html+='<div class="lb-picker-header lb-rp-head">'+(lbIsAdmin()?'<button class="lb-tipb lb-picker-close" style="font-size:14px;color:#f59e0b" onclick="lbOpenServerAdminModal()" title="系统管理"><i class="mdi mdi-shield-crown-outline"></i></button>':'')+(lbRoleLevel()>=3?'<button class="lb-tipb lb-picker-close" style="font-size:14px;color:#f59e0b" onclick="lbArkBkOpen()" title="安全回档（主宰者）"><i class="mdi mdi-backup-restore"></i></button>':'')+(lbCanServerCtl()?'<button class="lb-tipb lb-picker-close" style="font-size:14px;color:#a78bfa" onclick="lbSrvCtlOpen()" title="服务器控制"><i class="mdi mdi-server-security"></i></button>':'')+'<button class="lb-tipb lb-picker-close" style="font-size:14px" onclick="lbNewsEntry()" title="资讯广场"><i class="mdi mdi-newspaper-variant-outline"></i></button>'+'<button class="lb-tipb lb-picker-close" style="font-size:14px" onclick="lbOpenAlliancePos()" title="联盟成员位置"><i class="mdi mdi-account-group-outline"></i></button><button class="lb-tipb lb-picker-close" style="font-size:14px" onclick="lbRoleView(\'keys\')" title="键位配置"><i class="mdi mdi-gamepad-variant"></i></button><button class="lb-tipb lb-picker-close" style="font-size:14px" onclick="lbOpenConfigModal()" title="自助配置"><i class="mdi mdi-cog"></i></button>'+'<button class="lb-tipb lb-picker-close" style="font-size:14px" onclick="lbCfgOpenRules()" title="服务器规则"><i class="mdi mdi-clipboard-text-outline"></i></button>'+'<button class="lb-tipb lb-picker-close" style="font-size:14px" onclick="lbLogout()" title="注销登录"><i class="mdi mdi-logout"></i></button><span style="flex:1"></span><button class="lb-tipb lb-picker-close" onclick="this.closest(\'.lb-picker-overlay\').remove()" title="关闭"><i class="mdi mdi-close"></i></button></div>';
   html+='<div class="lb-picker-grid" id="lbRoleGrid">';
   var huIcon=(LB_ICON_BY_NAME && LB_ICON_BY_NAME['Human_icon']) || '';
   LB.playerRoles.forEach(function(r, i){
@@ -10746,9 +11777,32 @@ function lbDoLogin(){
   _attempt();
 }
 // 注销登录（新架构）：清除 dinoAuth 回游客/登录态
+/* v6081（用户口径「注销要有统一的确认浮窗，别忘了排版」）：原先点一下即清登录态 + 刷新，无任何确认。
+   改为项目统一确认卡（.lb-ask-overlay 模板 lbAskCard）：warn 黄 / 注销图标 / 账号徽章 /
+   流程步骤「清除本机登录态 › 回到游客」/ 影响说明，确认后才执行。 */
 function lbLogout(){
-  try{ localStorage.removeItem('dinoAuth'); }catch(e){}
-  location.reload();
+  var _au = null;
+  try{ _au = JSON.parse(localStorage.getItem('dinoAuth') || 'null'); }catch(e){}
+  var _user = (_au && _au.user) ? String(_au.user) : '';
+  var _do = function(){
+    try{ localStorage.removeItem('dinoAuth'); }catch(e){}
+    location.reload();
+  };
+  var _ok = false;
+  try{
+    _ok = lbAskCard({
+      tone: 'warn',
+      icon: 'mdi-logout',
+      title: '注销登录',
+      badge: _user,
+      steps: ['清除本机登录态', '回到游客'],
+      note: '注销后回到游客身份；本机已保存的筛选 / 关注 / 本地缓存不受影响，下次登录仍然可用。',
+      okText: '注销',
+      cancelText: '取消',
+      onOk: _do
+    });
+  }catch(e){ _ok = false; }
+  if (!_ok) lbAsk('确定注销当前账号？', _do, '注销');   // 兜底：统一模板异常时不退回原生 confirm
 }
 // ===== 自助配置（新架构）：改密码 + 绑定 SteamID（玩家身份） =====
 function lbOpenConfigModal(){
@@ -10757,12 +11811,15 @@ function lbOpenConfigModal(){
   var username = (auth && auth.user) ? auth.user : '';
   if(!username){ lbToast('请先登录'); return; }
   var old = document.querySelector('.lb-picker-overlay'); if(old) old.remove();
-  var overlay = document.createElement('div'); overlay.className='lb-picker-overlay';
+  var overlay = document.createElement('div'); overlay.className='lb-picker-overlay lb-fs';
   overlay.onclick = function(e){ if(e.target===overlay) overlay.remove(); };
   var inp = 'width:100%;box-sizing:border-box;padding:8px 10px;border-radius:6px;border:1px solid #333;background:#12121a;color:#ddd;margin-bottom:8px;font-size:13px';
   var btn = 'padding:7px 14px;border-radius:6px;border:none;background:#7c3aed;color:#fff;cursor:pointer;font-size:13px';
-  var html = '<div style="background:#1a1a24;border:1px solid #7c3aed55;border-radius:12px;padding:24px;width:340px;max-width:92vw;box-shadow:0 10px 40px rgba(0,0,0,.6);max-height:86vh;overflow-y:auto" class="lb-modal-scroll">'
-    + '<div style="font-size:16px;font-weight:bold;color:#a78bfa;margin-bottom:4px">自助配置</div>'
+  /* v6076（用户口径）：同「系统管理」——固定 .lw-head + 右上 .lw-x，内容进 .lw-body 滚动 */
+  var html = '<div class="lb-modal-scroll" style="background:#1a1a24;border:1px solid #7c3aed55;border-radius:12px;width:508px;max-width:92vw;box-shadow:0 10px 40px rgba(0,0,0,.6);max-height:86vh;overflow:hidden;display:flex;flex-direction:column">'
+    + '<div class="lw-head"><span class="lw-title"><i class="mdi mdi-cog"></i> 自助配置</span>'
+    + '<button class="lw-x" onclick="this.closest(\'.lb-picker-overlay\').remove()" title="关闭" aria-label="关闭"><i class="mdi mdi-close"></i></button></div>'
+    + '<div class="lw-body" style="padding:16px 24px 24px">'
     + '<div style="font-size:12px;color:#888;margin-bottom:14px">当前账号：<b style="color:#bbb">'+username+'</b></div>'
     + '<div style="font-size:13px;font-weight:bold;color:#ddd;margin-bottom:8px">🔑 修改密码</div>'
     + '<input id="lbCfgOldPwd" type="password" placeholder="旧密码" style="'+inp+'">'
@@ -10845,8 +11902,8 @@ function lbOpenConfigModal(){
     + '<div style="font-size:11px;color:#666;margin-bottom:10px">清除本地生物缓存（保留登录/筛选），下次加载自动重新下载</div>'
     + '<button id="lbClearCacheBtn" onclick="lbClearLocalData()" style="padding:7px 14px;border-radius:6px;border:none;background:#ef4444;color:#fff;cursor:pointer;font-size:13px;font-weight:bold">清空缓存</button>'
     + '</div>'
-    + '<div style="margin-top:14px;text-align:right"><button onclick="this.closest(\'.lb-picker-overlay\').remove()" style="padding:7px 16px;border-radius:6px;border:1px solid #333;background:transparent;color:#888;cursor:pointer;font-size:13px">关闭</button></div>'
-    + '</div>';
+    + '</div>'   // v6076：收 .lw-body（底部「关闭」按钮已移入标题栏右上角）
+    + '</div>';  // v6076：收面板
   overlay.innerHTML = html;
   document.body.appendChild(overlay);
   lbRenderCfgOwnedMaps(); // v377：渲染已拥有地图多选
@@ -15964,13 +17021,13 @@ function lbMaintCnt(){
 function lbMaintOpen(){
   var old = document.querySelector('.lb-maint-overlay'); if(old) old.remove();
   var ov = document.createElement('div');
-  ov.className = 'lb-maint-overlay';
+  ov.className = 'lb-maint-overlay lb-fs';
   ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center';
   ov.onclick = function(e){ if(e.target === ov) lbMaintClose(); };
   ov.innerHTML = '<div onclick="event.stopPropagation()" style="background:#17171f;border:1px solid #f59e0b55;border-radius:12px;width:640px;max-width:94vw;max-height:86vh;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,.6)">'
-    + '<div style="display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid #2a2a3a"><b style="color:#f59e0b;font-size:15px;display:inline-flex;align-items:center;gap:5px">' + lbMdiSvg('mdi-wrench', 15) + ' 维护列表</b>'
+    + '<div class="lw-head"><b style="color:#f59e0b;font-size:15px;display:inline-flex;align-items:center;gap:5px">' + lbMdiSvg('mdi-wrench', 15) + ' 维护列表</b>'
     + '<span style="font-size:11px;color:#888">血/食不满生物 · 被关注设施</span>'
-    + '<span style="flex:1"></span><button onclick="lbMaintClose()" style="background:none;border:none;color:#999;font-size:18px;cursor:pointer"><i class="mdi mdi-close"></i></button></div>'
+    + '<span style="flex:1"></span><button class="lw-x" onclick="lbMaintClose()" title="关闭" aria-label="关闭"><i class="mdi mdi-close"></i></button></div>'
     + '<div class="lb-modal-scroll" style="flex:1;min-height:0;overflow-y:auto;padding:10px 12px 12px">'
     + '<div id="lbMaintBioSec"></div>'
     + '<div id="lbMaintFacSec" style="margin-top:14px"></div>'
@@ -17009,13 +18066,13 @@ function lbTodoSetQty(sv, base, inst, d){
 function lbTodoOpen(){
   var old = document.querySelector('.lb-todo-overlay'); if(old) old.remove();
   var ov = document.createElement('div');
-  ov.className = 'lb-todo-overlay';
+  ov.className = 'lb-todo-overlay lb-fs';
   ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center';
   ov.onclick = function(e){ if(e.target === ov) lbTodoClose(); };
   ov.innerHTML = '<div onclick="event.stopPropagation()" style="background:#17171f;border:1px solid #38bdf866;border-radius:12px;width:560px;max-width:94vw;max-height:86vh;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,.6)">'
-    + '<div style="display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid #2a2a3a"><b style="color:#38bdf8;font-size:15px;display:inline-flex;align-items:center;gap:5px">' + lbMdiSvg('mdi-cog', 15) + ' 待制作</b>'
+    + '<div class="lw-head"><b style="color:#38bdf8;font-size:15px;display:inline-flex;align-items:center;gap:5px">' + lbMdiSvg('mdi-cog', 15) + ' 待制作</b>'
     + '<span style="font-size:11px;color:#888">已关注蓝图</span>'
-    + '<span style="flex:1"></span><button onclick="lbTodoClose()" style="background:none;border:none;color:#999;font-size:18px;cursor:pointer"><i class="mdi mdi-close"></i></button></div>'
+    + '<span style="flex:1"></span><button class="lw-x" onclick="lbTodoClose()" title="关闭" aria-label="关闭"><i class="mdi mdi-close"></i></button></div>'
     + '<div id="lbTodoSum" style="padding:8px 12px 4px;border-bottom:1px solid #2a2a3a"></div>'
     + '<div id="lbTodoList" style="flex:1;min-height:0;overflow-y:auto;padding:8px 12px 0"></div>'
     + '</div>';
@@ -18189,6 +19246,7 @@ function lbItemOwnIndex(){
   var _ownCtx = lbItemOwnCtx(); // v4192：改用公共归属上下文（与 lbPickIdx 同源，行为不变）
   function _lbOwnKeep(x, sv){ return lbItemOwnKeep(x, sv, _ownCtx); }
   var map = {};
+  var _cidOwn = {};   // v6088：sv|cid → 该容器是否算「我的」（冠名口径），避免逐条物品重复查聚落
   if(D && D.itemsByServer){
     Object.keys(D.itemsByServer).forEach(function(sv){
       var ix = D.itemsByServer[sv] || {};
@@ -18197,6 +19255,24 @@ function lbItemOwnIndex(){
           if(!x) return;
           try{ if(lbIsEmptyItem(x)) return; }catch(e){}
           if(!_lbOwnKeep(x, sv)) return;   // v3597：只统计当前角色拥有（同物种规则）
+          /* v6088（用户口径「选择器里怎么还是 10」）：与 v6087 角标口径对齐 ——
+             容器所在聚落必须「冠名含我 / 无冠名则回退部落」（判定函数 lbPickOwnSettle 与列表侧 lbGeneIsMy 同构） */
+          var _ck2 = sv + '|' + cid;
+          if(_cidOwn[_ck2] === undefined){
+            var _sk2 = '';
+            try{
+              var _stl2 = (D && D._settlements) || {};
+              var _s2 = (_stl2.byContainer || {})[sv + '_' + cid];
+              if(!_s2){
+                var _px2 = Math.round(Number(x.containerX != null ? x.containerX : x.x) || 0);
+                var _py2 = Math.round(Number(x.containerY != null ? x.containerY : x.y) || 0);
+                _s2 = (_stl2.byCtnPos || {})[sv + '|' + _px2 + '|' + _py2];
+              }
+              _sk2 = !_s2 ? 'nosettle' : (_s2.scattered ? 'scattered' : (_s2.setId || 'nosettle'));
+            }catch(eS2){ _sk2 = 'nosettle'; }
+            _cidOwn[_ck2] = lbPickOwnSettle(_sk2, sv, (x.containerTribe || x.ownerTribeId || 0), _ownCtx) ? 1 : 0;
+          }
+          if(!_cidOwn[_ck2]) return;
           var cls = String(x['class'] || '');
           if(!cls) return;
           var k = ''; try{ k = lbItemAggKey(cls); }catch(e2){ k = cls; }
@@ -19639,7 +20715,6 @@ function lbPickIdx(){
       if(!n) return;
       out.cids[sv] = out.cids[sv] || {}; out.cids[sv][cid] = n;
       var _pc1 = String((list[0] || {}).containerType || '') === 'player';   // v4221（用户实测「角标还显示了2」）：玩家背包归「玩家携带」tab 独有——不计入服务器 tab 角标/聚落角标/总数
-      if(!_pc1) out.srv[sv] = (out.srv[sv] || 0) + n;
       var r0 = list[0] || {};
       var px = null, py = null;
       try{ px = Math.round(Number(r0.containerX != null ? r0.containerX : r0.x) || 0); py = Math.round(Number(r0.containerY != null ? r0.containerY : r0.y) || 0); }catch(e){ px = null; }
@@ -19659,13 +20734,15 @@ function lbPickIdx(){
       // v4220（用户实测「无聚落还在，重复去了玩家背包」根因）：玩家背包归「玩家携带」tab 独有——
       //   不进「无聚落/离散」容器登记（否则服务器 tab 会多出一个纯玩家背包构成的「无聚落」卡，与玩家位置卡重复）；
       //   真正的散置设施容器（非 player）不受影响。
+      var _mine1 = lbPickOwnSettle(sk, sv, (r0.containerTribe || r0.ownerTribeId || 0), _ownCtx);   // v6087：角标按聚落冠名口径
+      if(!_pc1 && _mine1) out.srv[sv] = (out.srv[sv] || 0) + n;
       var _isPCtn0 = String((r0 || {}).containerType || '') === 'player';
       if(!_isPCtn0 && sk === 'nosettle'){ out.noCids[sv] = out.noCids[sv] || {}; out.noCids[sv][cid] = 1; } // v4193：散置容器登记（供「无聚落」卡）
       if(!_isPCtn0 && sk === 'scattered'){ out.scatterCids[sv] = out.scatterCids[sv] || {}; out.scatterCids[sv][cid] = 1; } // v4196：离散容器登记（供「离散」卡容器注入）
-      if(!_pc1){ out.setts[sv] = out.setts[sv] || {}; out.setts[sv][sk] = (out.setts[sv][sk] || 0) + n; }   // v4221：玩家背包不计聚落角标
+      if(!_pc1 && _mine1){ out.setts[sv] = out.setts[sv] || {}; out.setts[sv][sk] = (out.setts[sv][sk] || 0) + n; }   // v4221：玩家背包不计聚落角标；v6087：只算冠名含我的聚落
       if(px !== null){ out.posHit[sv + '|' + px + '|' + py] = (out.posHit[sv + '|' + px + '|' + py] || 0) + n; }   // posHit 保留（玩家位置卡详情过滤需要）
       if(String(r0.containerType || '') === 'player'){ out.playerCids[sv] = out.playerCids[sv] || {}; out.playerCids[sv][cid] = n; }
-      if(!_pc1) out.total += n;   // v4221：总数同口径
+      if(!_pc1 && _mine1) out.total += n;   // v4221：总数同口径；v6087：同角标口径
     });
     Object.keys(ix.byPos || {}).forEach(function(pk){
       var list = ix.byPos[pk] || [], n = 0, hit = 0;
@@ -19677,7 +20754,6 @@ function lbPickIdx(){
       out.posHit[sv + '|' + px + '|' + py] = (out.posHit[sv + '|' + px + '|' + py] || 0) + hit;
       if(!n) return;
       var _pc2 = String((list[0] || {}).containerType || '') === 'player';   // v4221：同 byCid 轮——玩家背包不计服务器 tab 角标
-      if(!_pc2) out.srv[sv] = (out.srv[sv] || 0) + n;
       var sk2 = settleKeyOf(sv, '', px, py);
       // v4199：同 byCid 轮——坐标轮 miss 后同样接生物背包桥（用该坐标首条命中条目取其容器类）
       if(sk2 === 'nosettle'){
@@ -19690,12 +20766,32 @@ function lbPickIdx(){
           }
         }catch(e10){}
       }
-      if(!_pc2){ out.setts[sv] = out.setts[sv] || {}; out.setts[sv][sk2] = (out.setts[sv][sk2] || 0) + n; }   // v4221：同口径
-      if(!_pc2) out.total += n;   // v4221：同口径
+      var _mine2 = lbPickOwnSettle(sk2, sv, ((list[0] || {}).containerTribe || (list[0] || {}).ownerTribeId || 0), _ownCtx);   // v6087：同 byCid 轮口径
+      if(!_pc2 && _mine2) out.srv[sv] = (out.srv[sv] || 0) + n;
+      if(!_pc2 && _mine2){ out.setts[sv] = out.setts[sv] || {}; out.setts[sv][sk2] = (out.setts[sv][sk2] || 0) + n; }   // v4221：同口径；v6087：冠名口径
+      if(!_pc2 && _mine2) out.total += n;   // v4221：同口径；v6087：冠名口径
     });
   });
   LB._pickIdx = out; LB._pickIdxKey = ck;
   return out;
+}
+/* v6087（用户口径「角标收紧到聚落冠名口径」）：角标的聚落归属判定 —— 与列表侧 lbGeneIsMy 逐条同构：
+     · nosettle / scattered ⇒ 部落回退
+     · 有聚落：冠名 owners 含当前角色 ⇒ 算；有冠名但不含我 ⇒ 不算（不回退部落，与列表一致）；无冠名 ⇒ 部落回退
+     · 未登录 / 无部落集合 ⇒ 不过滤（与 lbItemOwnKeep 同口径，避免登录前全灭） */
+function lbPickOwnSettle(sk, sv, tribeId, ctx){
+  if(!ctx || !ctx.set) return true;
+  var tk = sv + ':' + String(tribeId || 0);
+  if(!sk || sk === 'nosettle' || sk === 'scattered') return !!ctx.set[tk];
+  var st = null;
+  try{ st = lbFindSettlementObj({ setId: sk, server: sv, scattered: false }); }catch(e){ st = null; }
+  if(st && Array.isArray(st.owners) && st.owners.length){
+    for(var i = 0; i < st.owners.length; i++){
+      if(String((st.owners[i] || {}).pid) === String(ctx.pid)) return true;
+    }
+    return false;
+  }
+  return !!ctx.set[tk];
 }
 function lbPickSrvCnt(sv){ var ix = lbPickIdx(); return (ix && ix.srv[sv]) || 0; }
 function lbPickSrvHas(sv){ return lbPickSrvCnt(sv) > 0; }
@@ -21275,13 +22371,13 @@ function lbWatchOpen(){
   if(!LB._watchList) LB._watchList = lbWatchLoad();
   var old = document.querySelector('.lb-watch-overlay'); if(old) old.remove();
   var ov = document.createElement('div');
-  ov.className = 'lb-watch-overlay';
+  ov.className = 'lb-watch-overlay lb-fs';
   ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center';
   ov.onclick = function(e){ if(e.target === ov) lbWatchClose(); };
   ov.innerHTML = '<div onclick="event.stopPropagation()" style="background:#17171f;border:1px solid #7c3aed55;border-radius:12px;width:560px;max-width:94vw;max-height:86vh;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,.6)">'
-    + '<div style="display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid #2a2a3a"><b style="color:#a78bfa;font-size:15px;display:inline-flex;align-items:center;gap:5px">'+lbMdiSvg('mdi-eye',15)+' 关注未成年</b>'
+    + '<div class="lw-head"><b style="color:#a78bfa;font-size:15px;display:inline-flex;align-items:center;gap:5px">'+lbMdiSvg('mdi-eye',15)+' 关注未成年</b>'
     + '<span style="font-size:11px;color:#888">点眼睛=关注/取消</span>'
-    + '<span style="flex:1"></span><button onclick="lbWatchClose()" style="background:none;border:none;color:#999;font-size:18px;cursor:pointer"><i class="mdi mdi-close"></i></button></div>'
+    + '<span style="flex:1"></span><button class="lw-x" onclick="lbWatchClose()" title="关闭" aria-label="关闭"><i class="mdi mdi-close"></i></button></div>'
     + '<div id="lbWatchFoodBar" style="display:none;padding:6px 12px;border-bottom:1px solid #2a2a3a;font-size:11px"></div>'
     + '<div id="lbWatchList" style="flex:1;min-height:0;overflow-y:auto;padding:8px 12px"></div>'
     + '<div style="padding:8px 12px;border-top:1px solid #2a2a3a;font-size:11px;color:#555" id="lbWatchHint">暂无关注 · 在未成年生物卡右上角点关注角标加入</div>'
@@ -25733,7 +26829,7 @@ function lbOpenSpeciesPicker(opts){
     function spSelOf(k){ return ((_curSp !== null ? (_curSp !== '' && _curSp === String(k)) : (LB.curClass === k)) ? ' selected' : ''); }
     var overlay=document.createElement('div'); overlay.className='lb-picker-overlay';
     overlay.onclick=function(e){ if(e.target===overlay) overlay.remove(); };
-    var html='<div class="lb-picker-panel" onclick="event.stopPropagation()">';
+    var html='<div class="lb-picker-panel lb-fs" onclick="event.stopPropagation()">';
     // v1368（用户需求）：顶部 TAB——物种 / 物品（物品页只列「非物种绑定且有品质」的装备）
     // v1371（用户要求）：① 提示语随 TAB 切换（搜物种 / 搜物品）；② TAB 高度与同行搜索框一致（28px）、
     //   间距统一走父级 .lb-picker-header 的 gap:8px（去掉各自 margin-left）
@@ -27970,11 +29066,11 @@ function lbCaveOpen(){
   function fin(){ try{ lbLoadBiomeZh().then(function(){ try{ lbFacPosRender('洞穴入口', lbCaveDots(), {}, [], {}, 'caveentrance'); }catch(e1b){} }); }catch(eK){ try{ lbFacPosRender('洞穴入口', lbCaveDots(), {}, [], {}, 'caveentrance'); }catch(e1c){} } }
   if(LB._caves){ fin(); return; }
   body.innerHTML = '<div onclick="event.stopPropagation()" style="display:flex;align-items:center;justify-content:center;min-height:52vh;text-align:center;color:#94a3b8;font-size:13px;gap:8px"><span class="lb-spin"></span>加载数据中…</div>'
-    + '<div onclick="event.stopPropagation()" style="position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:30">' + CLOSE + '</div>';
+    + '<div onclick="event.stopPropagation()" style="position:fixed;top:12px;right:12px;z-index:30">' + CLOSE + '</div>';
   ov.style.display = 'block';
   lbCaveFetch().then(fin).catch(function(){
     body.innerHTML = '<div onclick="event.stopPropagation()" style="display:flex;align-items:center;justify-content:center;min-height:52vh;text-align:center;color:#94a3b8;font-size:13px">数据加载失败，请稍后重试</div>'
-      + '<div onclick="event.stopPropagation()" style="position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:30">' + CLOSE + '</div>';
+      + '<div onclick="event.stopPropagation()" style="position:fixed;top:12px;right:12px;z-index:30">' + CLOSE + '</div>';
   });
 }
 // ===== v4705（用户口径）：公共设施「畸变毒菌」——静态数据集（全部植株 + 孢子云；点式标记 + 图例 + 点选/追踪完全对齐其他设施） =====
@@ -28000,7 +29096,7 @@ function lbAbeFungiOpen(cell){
   }
   if(LB._abeFungi){ fin(); return; }
   body.innerHTML = '<div onclick="event.stopPropagation()" style="display:flex;align-items:center;justify-content:center;min-height:52vh;text-align:center;color:#94a3b8;font-size:13px;gap:8px"><span class="lb-spin"></span>加载数据中…</div>'
-    + '<div onclick="event.stopPropagation()" style="position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:30">' + CLOSE_SVG + '</div>';
+    + '<div onclick="event.stopPropagation()" style="position:fixed;top:12px;right:12px;z-index:30">' + CLOSE_SVG + '</div>';
   ov.style.display = 'block';
   fetch(LB_ABEFUNGI.file + '?v=' + encodeURIComponent(typeof LB_VERSION !== 'undefined' ? LB_VERSION : ''), { cache:'no-cache' })
     .then(function(r){ return r.json(); })
@@ -28011,7 +29107,7 @@ function lbAbeFungiOpen(cell){
     })
     .catch(function(){
       body.innerHTML = '<div onclick="event.stopPropagation()" style="display:flex;align-items:center;justify-content:center;min-height:52vh;text-align:center;color:#94a3b8;font-size:13px">数据加载失败，请稍后重试</div>'
-        + '<div onclick="event.stopPropagation()" style="position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:30">' + CLOSE_SVG + '</div>';
+        + '<div onclick="event.stopPropagation()" style="position:fixed;top:12px;right:12px;z-index:30">' + CLOSE_SVG + '</div>';
     });
 }
 function lbAbeFungiToggle(){   // v4715（用户口径）：只看孢子云切换（对齐探险者笔记手法；零网络；保持滚动页）
@@ -28069,7 +29165,7 @@ function lbFacPosOpen(kind, key, cell){
   var CLOSE_SVG = '<span class="lb-tipb" onclick="event.stopPropagation();lbFacPosClose()" title="关闭" style="cursor:pointer;color:#aaa;font-size:22px;line-height:1;display:inline-flex;align-items:center;justify-content:center;height:22px;width:22px"><svg viewBox="5 5 14 14" style="width:22px;height:22px;display:block;fill:currentColor"><path d="M19,6.41L17.59,5 12,10.59 6.41,5 5,6.41 10.59,12 5,17.59 6.41,19 12,13.41 17.59,19 19,17.59 13.41,12z"/></svg></span>';
   function prog(t){
     body.innerHTML = '<div onclick="event.stopPropagation()" style="display:flex;align-items:center;justify-content:center;min-height:52vh;text-align:center;color:#94a3b8;font-size:13px;gap:8px"><span class="lb-spin"></span>'+t+'</div>'
-      + '<div onclick="event.stopPropagation()" style="position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:30">'+CLOSE_SVG+'</div>';
+      + '<div onclick="event.stopPropagation()" style="position:fixed;top:12px;right:12px;z-index:30">'+CLOSE_SVG+'</div>';
   }
   if(kind === 'sv' && _mg){   // v4247（用户口径）：合并格——聚合成员实例坐标（本地，零网络）；点位 d[4] 存成员类键（台座图标用）
     var odots = {}; var ocnt = 0;
@@ -28182,7 +29278,7 @@ function lbFacPosRender(name, dots, trunc, fail, skip, kind, totals){
     var body2 = document.getElementById('lbBreedOverlayBody');
     if(!ov2 || !body2) return;
     body2.innerHTML = '<div onclick="event.stopPropagation()" style="display:flex;align-items:center;justify-content:center;min-height:52vh;text-align:center;color:#94a3b8;font-size:13px">暂无可显示的位置</div>'
-      + '<div onclick="event.stopPropagation()" style="position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:30">'+closeBtn+'</div>'
+      + '<div onclick="event.stopPropagation()" style="position:fixed;top:12px;right:12px;z-index:30">'+closeBtn+'</div>'
       + foot;
     ov2.style.display = 'block';
     return;
@@ -30391,7 +31487,7 @@ function lbFuncPanelOpen(key, title, closeFn, bodyId){
   var overlay = document.createElement('div'); overlay.className = 'lb-picker-overlay'; overlay.setAttribute('data-func-panel', key);   // v4393：标记功能面板（供精确清理）
   overlay.onclick = function(e){ if(e.target === overlay){ try{ window[closeFn](); }catch(e0){} } };
   var bid = bodyId || ('lbFuncBody_' + key);
-  overlay.innerHTML = '<div class="lb-picker-panel" onclick="event.stopPropagation()">'
+  overlay.innerHTML = '<div class="lb-picker-panel lb-fs" onclick="event.stopPropagation()">'
     + '<div class="lb-picker-header"><span style="flex:1;font-weight:bold;color:#a78bfa;font-size:13px">' + title + '</span>'
     + (LB_PANEL_SRC[key] ? ('<span style="display:inline-flex;flex-direction:column;align-items:flex-end;flex-shrink:0;line-height:1.35"><span id="lbAge_' + key + '" style="font-size:11px;color:#8c93a5;white-space:nowrap"></span><span style="font-size:10px;color:#555;white-space:nowrap">' + LB_PANEL_SRC[key] + '</span></span>') : '')   // v4722/v4723（用户口径）：数据来源行——标题栏内「更新于」正下方（右侧两行堆叠；不撑高标题栏）
     + '<button class="lb-tipb lb-picker-close" onclick="' + closeFn + '()" title="关闭"><i class="mdi mdi-close"></i></button></div>' 
@@ -43045,10 +44141,13 @@ function lbKeymapActionsHtml(){
   var all = LB_KEYMAP_ACTIONS.slice();
   var cnt = {}, tot = 0;
   all.forEach(function(a){ cnt[a.g] = (cnt[a.g] || 0) + 1; tot++; });
-  var h = '<div class="lb-picker-panel lb-km-am" onclick="event.stopPropagation()">'
-    + '<div class="lb-km-am-head"><span>📋 动作管理</span>'
+  /* v6081（用户口径「动作管理 浮窗 没有统一 移动端也没有全屏」）：
+     ① 面板加 .lb-fs ⇒ ≤640px 整屏（桌面仍 max-width:min(540px,96vw) 居中）；
+     ② 头部换标准 .lw-head + .lw-title + 右上 .lw-x（标题 flex:1 自动把按钮推到右边，不再需要 .lb-km-x 的 margin-left:auto）。 */
+  var h = '<div class="lb-picker-panel lb-km-am lb-fs" onclick="event.stopPropagation()">'
+    + '<div class="lw-head"><span class="lw-title">📋 动作管理</span>'
     + '<span class="lb-hf-ai-meta" style="font-size:10.5px;color:#7f7f92">仅系统拥有者</span>'
-    + '<span class="lb-km-x" onclick="this.closest(\'.lb-picker-overlay\').remove()"><i class="mdi mdi-close"></i></span></div>';
+    + '<button class="lw-x" onclick="this.closest(\'.lb-picker-overlay\').remove()" title="关闭" aria-label="关闭"><i class="mdi mdi-close"></i></button></div>';
   // v5451（用户口径「物种/器械的操作浮窗的动作管理里也不需要显示分类标签组」）：
   //   只读作用域只有「作用域本身」一个分类 ⇒ 不渲染「全部 / 分类」chips，列表恒按全部展示
   var _spAM = false;
@@ -43258,10 +44357,12 @@ function lbKeymapActionEdit(aid, isNew){
 function lbKeymapActionEditHtml(){
   var d = LB_KM_AE.draft;
   // v5393：不再使用原生 select（去掉原 sel 内联样式变量），统一走 lbKeymapAeSelHtml 自建下拉
-  var h = '<div class="lb-picker-panel lb-km-ae" onclick="event.stopPropagation()">'
-    + '<div class="lb-km-ae-head"><span>' + (LB_KM_AE.isNew ? '新增动作' : '编辑动作') + '</span>'
+  /* v6085（用户口径「新增、编辑 键位 都统一吧 移动端也要全屏」）：面板加 .lb-fs ⇒ ≤640px 整屏；
+     头部换标准 .lw-head + .lw-title + 右上 .lw-x（aid 保留为 title 右侧的灰色 meta）。 */
+  var h = '<div class="lb-picker-panel lb-km-ae lb-fs" onclick="event.stopPropagation()">'
+    + '<div class="lw-head"><span class="lw-title">' + (LB_KM_AE.isNew ? '新增动作' : '编辑动作') + '</span>'
     + '<span class="lb-hf-ai-meta" style="font-size:10.5px;color:#7f7f92">' + escapeHtml(LB_KM_AE.aid || '') + '</span>'
-    + '<span class="lb-km-x" onclick="this.closest(\'.lb-picker-overlay\').remove()"><i class="mdi mdi-close"></i></span></div>'
+    + '<button class="lw-x" onclick="this.closest(\'.lb-picker-overlay\').remove()" title="关闭" aria-label="关闭"><i class="mdi mdi-close"></i></button></div>'
     + '<div class="lb-km-ae-body">';
   // 分组
   // v5450：物种/器械作用域的分类由「作用域本身」决定（每个物种/器械一个分类）⇒ 编辑表单不再提供分组
@@ -43501,10 +44602,11 @@ function lbKeymapActionKeyPick(field){
   var ov = document.createElement('div');
   ov.className = 'lb-picker-overlay lb-km-ak-wrap';
   ov.onclick = function(e){ if (e.target === ov) ov.remove(); };
-  var h = '<div class="lb-picker-panel lb-km-ak" onclick="event.stopPropagation()">'
-    + '<div class="lb-km-ak-head"><span>选择按键</span><span class="lb-hf-ai-meta" style="font-size:10.5px;color:#7f7f92">'
+  /* v6085（用户口径）：同上 —— 面板加 .lb-fs ⇒ ≤640px 整屏；头部换标准 .lw-head + .lw-x，键池说明保留为 meta。 */
+  var h = '<div class="lb-picker-panel lb-km-ak lb-fs" onclick="event.stopPropagation()">'
+    + '<div class="lw-head"><span class="lw-title">选择按键</span><span class="lb-hf-ai-meta" style="font-size:10.5px;color:#7f7f92">'
     + ((field === 'kbm' || field === 'kbmChord') ? '键盘 / 鼠标' : 'Xbox 基准') + '</span>'
-    + '<span class="lb-km-x" onclick="this.closest(\'.lb-picker-overlay\').remove()"><i class="mdi mdi-close"></i></span></div>'
+    + '<button class="lw-x" onclick="this.closest(\'.lb-picker-overlay\').remove()" title="关闭" aria-label="关闭"><i class="mdi mdi-close"></i></button></div>'
     + '<div class="lb-km-ak-body">';
   if (!groups.length) h += '<div class="lb-km-kmenu-none">没有可用按键</div>';
   groups.forEach(function(g){
@@ -44166,17 +45268,20 @@ function lbKeymapViewHtml(){
   // v5405：物种作用域下标题区分 + 只读态（.lb-km-ro 让 body/底栏不可点）
   var _isSp5405 = (LB_KM_SCOPE.mode === 'species');
   var _ro5405 = lbKeymapScopeReadOnly();
-  return '<div class="lb-modal-scroll' + (_ro5405 ? ' lb-km-ro' : '') + '" style="background:#1a1a24;border:1px solid #7c3aed55;border-radius:12px;padding:24px;width:560px;max-width:92vw;box-shadow:0 10px 40px rgba(0,0,0,.6);max-height:86vh;overflow:hidden;display:flex;flex-direction:column">'
+  /* v6079（用户口径「键位配置 浮窗 没有统一 标题栏样式」）：标题行改标准 .lw-head（标题左 / 关闭右上 / 带下边框）；
+     面板 padding 24px → 0，左右内边距下放到 设备行(.lb-km-devwrap) / 滚动区(.lb-km-scroll) / 底栏(.lb-km-fix-bot)，
+     标题栏保持通栏。滚动结构不变（fix-top 固定 / scroll 中滚 / fix-bot 固定）。 */
+  return '<div class="lb-modal-scroll' + (_ro5405 ? ' lb-km-ro' : '') + '" style="background:#1a1a24;border:1px solid #7c3aed55;border-radius:12px;padding:0;width:560px;max-width:92vw;box-shadow:0 10px 40px rgba(0,0,0,.6);max-height:86vh;overflow:hidden;display:flex;flex-direction:column">'
     + '<div class="lb-km-fix-top">'
-    + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">'
-    + '<span style="flex:1;font-size:16px;font-weight:bold;color:#a78bfa">'
-    + (_isSp5405 ? ('🎮 操作 · ' + escapeHtml(lbSpeciesCnName(LB_KM_SCOPE.cls))) : '🎮 键位配置')   // v5453（用户口径「只读 字样无需显示」）：标题不再附「只读」
+    + '<div class="lw-head">'
+    + '<span class="lw-title">'
+    + (_isSp5405 ? ('<i class="mdi mdi-gamepad-variant"></i> 操作 · ' + escapeHtml(lbSpeciesCnName(LB_KM_SCOPE.cls))) : '<i class="mdi mdi-gamepad-variant"></i> 键位配置')   // v5453（用户口径「只读 字样无需显示」）：标题不再附「只读」
     + '</span>'
     // v5391（用户口径「动作配置 要只开放给 系统拥有者」）：非拥有者**不渲染**入口
-    + (lbKeymapActionAdmin() ? '<button class="lb-tipb lb-picker-close" onclick="lbKeymapActionsOpen()" title="动作管理（仅系统拥有者）"><i class="mdi mdi-format-list-bulleted"></i></button>' : '')
-    + '<button class="lb-tipb lb-picker-close" onclick="lbKeymapViewClose(this)" title="关闭"><i class="mdi mdi-close"></i></button>'
+    + (lbKeymapActionAdmin() ? '<button class="lw-x" onclick="lbKeymapActionsOpen()" title="动作管理（仅系统拥有者）" aria-label="动作管理"><i class="mdi mdi-format-list-bulleted"></i></button>' : '')
+    + '<button class="lw-x" onclick="lbKeymapViewClose(this)" title="关闭" aria-label="关闭"><i class="mdi mdi-close"></i></button>'
     + '</div>'
-    + lbKeymapDevHtml()
+    + '<div class="lb-km-devwrap">' + lbKeymapDevHtml() + '</div>'
     + '</div>'
     + '<div class="lb-km-scroll">'
     // v5408（用户口径「物种的键位就不需要AI模块了」）：物种作用域不渲染 AI 改键块（全局面板保持不变）
@@ -44198,10 +45303,10 @@ function lbKeymapViewClose(el){
 function lbKeymapOpenView(){
   lbKeymapLoad();
   var old = document.querySelector('.lb-picker-overlay'); if (old) old.remove();
-  var overlay = document.createElement('div'); overlay.className = 'lb-picker-overlay';
+  var overlay = document.createElement('div'); overlay.className = 'lb-picker-overlay lb-fs';
   // v5378（用户口径「点浮窗以外不允许触发关闭浮窗 容易误操作」）：
   //   原先点遮罩层就会直接 remove（改键到一半误触就丢了现场）⇒ 取消该行为，
-  //   关闭只能用标题行右上角的 ×（.lb-picker-close）。
+  //   关闭只能用标题行右上角的 ×（v6079 起为 .lw-x）。
   overlay.innerHTML = lbKeymapViewHtml();
   var _box = overlay.firstElementChild;
   if (_box) _box.onclick = function(e){ e.stopPropagation(); };
@@ -44435,9 +45540,11 @@ function lbKeymapPick(aid, anchorEl){
   var old = document.querySelector('.lb-km-pickwrap'); if (old) old.remove();
   var overlay = document.createElement('div'); overlay.className = 'lb-picker-overlay lb-km-pickwrap';
   overlay.onclick = function(e){ if (e.target === overlay) overlay.remove(); };
-  var h = '<div class="lb-picker-panel lb-km-pickpanel" onclick="event.stopPropagation()" style="max-width:min(440px,96vw)">'
-    + '<div class="lb-km-pickhead"><span id="lbKmPickHeadTxt">' + lbKeymapPickHeadTxtHtml() + '</span>'
-    + '<span class="lb-km-x" onclick="this.closest(\'.lb-picker-overlay\').remove()"><i class="mdi mdi-close"></i></span></div>'
+  /* v6086（用户口径「附件这类浮窗为啥没统一」）：改键弹层同样加 .lb-fs（≤640px 整屏）+ 标准 .lw-head；
+     ⚠ #lbKmPickHeadTxt 必须保留 —— lbKeymapPickRefresh 会原地改它的 innerHTML。 */
+  var h = '<div class="lb-picker-panel lb-km-pickpanel lb-fs" onclick="event.stopPropagation()" style="max-width:min(440px,96vw)">'
+    + '<div class="lw-head"><span class="lw-title" id="lbKmPickHeadTxt">' + lbKeymapPickHeadTxtHtml() + '</span>'
+    + '<button class="lw-x" onclick="this.closest(\'.lb-picker-overlay\').remove()" title="关闭" aria-label="关闭"><i class="mdi mdi-close"></i></button></div>'
     + '<div class="lb-km-picksel" id="lbKmPickSel">' + lbKeymapPickSelHtml() + '</div>'
     + '<div id="lbKmPickBody" class="lb-km-pickbody">' + lbKeymapPickBody() + '</div>'
     + '<div class="lb-km-pickfoot" id="lbKmPickFoot">' + lbKeymapPickFootHtml() + '</div></div>';
@@ -44465,15 +45572,37 @@ function lbKeymapSet(key){
     if (k === key) clash.push(e.act);
   });
   var back = lbKeymapEff(aid)[col];
+  var _lbKmApply = function(){
+    _lbKmRawSet(aid, col, key);
+    lbKeymapSave();
+    var ov = document.querySelector('.lb-km-pickwrap'); if (ov) ov.remove();
+    lbKeymapRender();
+  };
   if (clash.length) {
     var names = clash.map(function(x){ return x.zh; }).join('、');
-    if (!confirm('「' + key + '」已被「' + names + '」使用。\n\n确定 = 与第一个交换键值\n取消 = 保持不变')) return;
-    _lbKmRawSet(clash[0].id, col, back || null);
+    /* v6086（用户口径「顺手把该弹层的 confirm 换成统一确认卡」）：原生 confirm → 项目统一 lbAskCard */
+    var _swap = function(){
+      _lbKmRawSet(clash[0].id, col, back || null);
+      _lbKmApply();
+    };
+    var _okC = false;
+    try{
+      _okC = lbAskCard({
+        tone: 'warn',
+        icon: 'mdi-swap-horizontal',
+        title: '按键已被占用',
+        badge: key,
+        steps: ['与「' + names + '」交换键值'],
+        note: '「' + names + '」会拿走你原来的键，两个动作互换；取消则保持不变。',
+        okText: '交换',
+        cancelText: '保持不变',
+        onOk: _swap
+      });
+    }catch(eC){ _okC = false; }
+    if (!_okC) lbAsk('「' + key + '」已被「' + names + '」使用。\n\n确定 = 与第一个交换键值\n取消 = 保持不变', _swap, '交换');
+    return;
   }
-  _lbKmRawSet(aid, col, key);
-  lbKeymapSave();
-  var ov = document.querySelector('.lb-km-pickwrap'); if (ov) ov.remove();
-  lbKeymapRender();
+  _lbKmApply();
 }
 function lbKeymapResetRow(aid){
   _lbKmRawSet(aid, 'pad', null); _lbKmRawSet(aid, 'kbm', null);
@@ -46054,6 +47183,21 @@ function lbRenderBreedBar(){
   // v162：入口判定也只读 LB.curClass（原 lbSpName/lbWikiKey 已基于它，此处保证不被 LB_WIKI.cur 污染）
   try { _wkKey = (LB.curClass && typeof lbWikiKey === 'function') ? String(lbWikiKey(String(LB.curClass))) : ''; } catch (eW1) {}
   try { _wkHas = !!(_wkKey && typeof lbWikiHas === 'function' && lbWikiHas(LB.curClass)); } catch (eW2) {}
+  /* v6030（用户口径「明明有该物种缓存，为啥附件还是虚线的」）：
+     wikily 索引没收录 ≠ 没资料 —— 「技巧」TAB 走独立链路（dododex → /api/dino/tips → 共享缓存）。
+     实测 Leech_Character：wikily 索引空（后端 slug 拼成 leech-character → 404），
+     但 /api/dino/tips/zh 返回 merged.secs = 5 ⇒ 面板有内容、入口却虚线。
+     ① 内存已有整理结果 ② 本会话已探到 ③ 主动探（见下方，每物种仅一次） */
+  try {
+    var _tipKey = String(_wkKey || '').toLowerCase();
+    if (!_wkHas && _tipKey && LB_TIPS_PROBE[_tipKey]) _wkHas = true;
+    if (!_wkHas && typeof lbTipsHasResult === 'function'){
+      var _tipSlug = String((LB_TIPS || {}).slug || '');
+      var _wikiCur0 = '';
+      try { _wikiCur0 = String((LB_WIKI || {}).cur || ''); } catch (eW6) {}
+      if (_tipSlug && (_tipSlug === _wikiCur0 || _tipSlug === _wkKey)) _wkHas = !!lbTipsHasResult();
+    }
+  } catch (eW5) {}
   /* v5862：入口仍为虚线时，对该物种**主动探一次**后端 AI 整理状态（每物种仅探一次，不轮询），
      ready 命中后重绘入口⇒ 实心。 */
   try {
@@ -46075,6 +47219,25 @@ function lbRenderBreedBar(){
       }
     }
   } catch (eP2) {}
+  /* v6030：主动探一次「技巧」共享缓存（每物种一次，不轮询）—— wikily 抓不到但 dododex/AI 整理有结果的
+     物种（如 Leech_Character）也能点亮实心入口。 */
+  try {
+    var _pbT = String((LB_WIKI && LB_WIKI.cur) || '') || String(_wkKey || '');
+    var _pkT = _pbT.toLowerCase();
+    if (show && _pbT && !_wkHas && !LB_TIPS_PROBE_TRY[_pkT] && typeof lbTipsApi === 'function'){
+      LB_TIPS_PROBE_TRY[_pkT] = 1;
+      fetch(lbTipsApi() + '/zh?slug=' + encodeURIComponent(_pbT), { cache: 'no-store' })
+        .then(function (r) { return r.json(); })
+        .then(function (jj) {
+          var m = (jj && jj.merged) || null;
+          if (jj && jj.ok && m && (((m.secs || []).length) || ((m.auth || []).length))){
+            LB_TIPS_PROBE[_pkT] = 1;
+            try { lbRenderBreedBar(); } catch (eTR) {}
+          }
+        })
+        .catch(function () {});
+    }
+  } catch (eW7) {}
   // v161：物种入口改用通用绘制（同一函数，物品入口共用）
   lbWikiBtnPaint(document.getElementById('lbWikiBtn'), {
     visible: !!show && !!LB.curClass && !!_wkKey,
@@ -46263,10 +47426,11 @@ function lbRenderTrackBtn(btn){
 function lbOpenGenePicker(ev){
   if(ev && ev.stopPropagation) ev.stopPropagation();
   var old=document.querySelector('.lb-picker-overlay'); if(old) old.remove();
-  var overlay=document.createElement('div'); overlay.className='lb-picker-overlay';
+  var overlay=document.createElement('div'); overlay.className='lb-picker-overlay lb-fs';
   overlay.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.9);z-index:9999;display:flex;align-items:center;justify-content:center';
   var box=document.createElement('div');
-  box.style.cssText='background:#1a1a24;border:1px solid #333;border-radius:8px;padding:16px;min-width:320px;max-width:90vw;max-height:80vh;display:flex;flex-direction:column';
+  /* v6076（用户口径）：标题行改标准固定头 .lw-head + 右上 .lw-x ⇒ 面板不再自留 padding，下放到 head/body */
+  box.style.cssText='background:#1a1a24;border:1px solid #333;border-radius:8px;min-width:320px;max-width:90vw;max-height:80vh;display:flex;flex-direction:column;overflow:hidden';
   // v142：大小写双键去重（按英文归一化只保留一个，避免翻译不同重复显示）
   var genes=[], seenNorm={};
   Object.keys(LB_GENE_ZH||{}).forEach(function(k){
@@ -46295,11 +47459,11 @@ function lbOpenGenePicker(ev){
     var fm0 = lbFilterLoadAll(); fm0[lbFilterKey()] = { attrs: LB.breedSel.slice(), genes: LB.breedGene.slice(), zero: !!LB._breedZeroMode }; lbFilterSaveAll(fm0);
   }
   var sel=(LB.breedGene||[]).slice();
-  var title=document.createElement('div'); title.style.cssText='margin-bottom:10px;font-size:14px;color:#fff;font-weight:bold;display:flex;justify-content:space-between;align-items:center';
-  title.innerHTML='<span>🧬 基因筛选</span><span style="cursor:pointer;color:#888;font-size:14px" onclick="this.closest(\'.lb-picker-overlay\').remove()"><i class="mdi mdi-close"></i></span>';
+  var title=document.createElement('div'); title.className='lw-head';
+  title.innerHTML='<span class="lw-title">🧬 基因筛选</span><button class="lw-x" onclick="this.closest(\'.lb-picker-overlay\').remove()" title="关闭" aria-label="关闭"><i class="mdi mdi-close"></i></button>';
   box.appendChild(title);
   var list=document.createElement('div');
-  list.style.cssText='flex:1;overflow-y:auto;display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start';
+  list.style.cssText='flex:1;overflow-y:auto;display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start;padding:12px 16px';
   box.appendChild(list);
   // v138：基因数量统计（我的=橙 / 外部=灰，与设备归属一致）
   // v142：只显示当前物种基因——设备基因 ∪ 野生龙基因；无基因显示提示
@@ -46320,7 +47484,7 @@ function lbOpenGenePicker(ev){
   // v148：我的 → 当前玩家名（lbPlayer，与生物一致）
   var _pn = lbPlayer() || '我的';
   var legend=document.createElement('div');
-  legend.style.cssText='margin-bottom:8px;font-size:11px;color:#888;display:flex;gap:6px;align-items:center;flex-wrap:wrap';
+  legend.style.cssText='margin:12px 16px 0;font-size:11px;color:#888;display:flex;gap:6px;align-items:center;flex-wrap:wrap';   // v6076：面板去 padding 后补外边距
   legend.innerHTML='<span style="color:#f59e0b"><b>'+_mySum+'</b> '+_pn+'</span>'
     +'<span style="color:#555">/</span>'
     +'<span style="color:#9ca3af"><b>'+_extSum+'</b> 外部</span>'
@@ -46360,7 +47524,7 @@ function lbOpenGenePicker(ev){
   }
   render();
   var foot=document.createElement('div');
-  foot.style.cssText='margin-top:10px;text-align:right';
+  foot.style.cssText='padding:0 16px 16px;text-align:right';   // v6076：面板去 padding 后补内边距
   foot.innerHTML='<button onclick="lbBreedGeneDone()" style="background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer">完成</button>';
   box.appendChild(foot);
   overlay.appendChild(box);
@@ -48852,7 +50016,7 @@ function lbWildDistMap(){
   // v427：箭头 fixed 屏幕两侧；外层容器 stopPropagation 防止点遮罩误关
   // v428：右上角关闭图标；箭头改线性（无圆圈）；点遮罩不关闭（lbBreedOverlayClick 已识别 _wildDistOpen）
   body.innerHTML = '<div onclick="event.stopPropagation()" style="font-weight:bold;font-size:14px;color:#fff;text-align:center;margin-bottom:8px">'+lbSpName(cls).zh+' 野生分布' // v431：去掉 padding-right（关闭图标 fixed 定位无需占位，文字真正居中）
-    + '<span class="lb-tipb" onclick="event.stopPropagation();lbWildDistClose()" title="关闭" style="position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:30;cursor:pointer;color:#aaa;font-size:22px;line-height:1"><i class="mdi mdi-close"></i></span>' // v436：关闭按钮移屏幕下方中间；v437：纯线性图标（去掉文字/背景）
+    + '<span class="lb-tipb" onclick="event.stopPropagation();lbWildDistClose()" title="关闭" style="position:fixed;top:12px;right:12px;z-index:30;cursor:pointer;color:#aaa;font-size:22px;line-height:1"><i class="mdi mdi-close"></i></span>' // v436：关闭按钮移屏幕下方中间；v437：纯线性图标（去掉文字/背景）
     + '</div>'
     + '<div onclick="event.stopPropagation()" style="position:relative">'
     + '<button class="lb-tipb" onclick="event.stopPropagation();lbWildDistScrollBy(-1)" data-nav="prev" title="上一张" style="position:fixed;left:0;top:0;bottom:0;width:44px;z-index:20;background:transparent;border:none;padding:0;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:30px;line-height:1;opacity:.5;transition:opacity .15s">‹</button>' // v432：热区整页高度；v436：宽度 60→44 更贴边
@@ -49723,9 +50887,9 @@ function lbOnlineRolesOf(abbr){
         });
       });
     }
-    /* 拿不到角色归属 -> 退化为账号名（不丢人，宁可多提示） */
-    if(!hit.length) out.push({ pid: '', role: (p.name || String(eos).slice(0, 8)), account: p.name || '' });
-    else hit.forEach(function(h){ out.push(h); });
+    /* v6063：带上 eos —— 服务器控制「在线角色」的 ✕ 踢人靠它定位玩家 */
+    if(!hit.length) out.push({ pid: '', role: (p.name || String(eos).slice(0, 8)), account: p.name || '', eos: eos });
+    else hit.forEach(function(h){ h.eos = eos; out.push(h); });
   });
   var seen = {};
   return out.filter(function(r){
@@ -49767,6 +50931,8 @@ function lbMapPagerRender(cfg){
   if(!ov || !body) return;
   var pageMeta = cfg.meta || [];
   var pageHtmls = cfg.pageHtmls || [];
+  /* v6095（用户口径「我不记得让你改成浮窗样式」）：撤销 v6071/v6076 的浮窗化 ——
+     恢复 v6071 之前的原样：标题居中（白 14px 加粗），操作按钮 position:fixed 贴屏幕底部居中。 */
   var head = '<div onclick="event.stopPropagation()" style="font-weight:bold;font-size:14px;color:#fff;text-align:center;margin-bottom:8px"><span id="lbAlliHeadTxt">'+(cfg.titleHtml || (pageMeta[0] && pageMeta[0].label) || '')+'</span>'
     + (cfg.headBtns ? ('<span onclick="event.stopPropagation()" style="position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:30;display:inline-flex;align-items:center;gap:32px;color:#aaa">'+cfg.headBtns+'</span>') : '')
     + '</div>';
@@ -49809,11 +50975,12 @@ function lbMapPagerRender(cfg){
 }
 // 渲染联盟成员位置（每服地图 + 成员点/名字标签 + 离线/无法定位列表）
 // v568：加 focusAbbr 进入自动滚动到点击服页；当前角色特殊标注
-/* ===== v5993（用户口径）：踢出玩家 合并进「联盟成员位置」=====
+/* ===== v6063（用户口径「地图位置中的踢人权限回归到服务器控制」）：
+   踢人入口从「联盟成员位置」整体搬回「服务器控制 · 在线角色」——
+   地图位置恢复纯查看定位，本段只保留 命令构造 / 结果横幅 / 执行 三件套。
    · 仅 系统所有者(3) / 二级管理员(2) 可见可操作（lbRoleLevel() >= 2）
-   · 命令对齐 HA build_player_rcon_command：KickPlayer <EOS ID>
-   · 结果显示在联盟列表页顶部横幅（非常驻 tips），成功 8s 自动隐藏，失败常驻 */
-function lbAlliKickCmd(action, eosId){
+   · 命令对齐 HA build_player_rcon_command：KickPlayer <EOS ID> ===== */
+function lbKickPlayerCmd(action, eosId){
   /* v5994 根因修复：HA 原实现 /config/scripts.yaml 的 kick_player 对非数字 ID（EOS 32位hex）
      必须双引号包裹：{% if p.isdigit() %} KickPlayer {{p}} {% else %} KickPlayer "{{p}}" {% endif %}
      裸 hex 会被 ASA 当作名字/数字去匹配 -> 匹配不到 -> 游戏内只回显黄字、不执行。
@@ -49825,27 +50992,43 @@ function lbAlliKickCmd(action, eosId){
   if (action === 'kick') id = /^\d+$/.test(id) ? id : ('"' + id + '"');
   return head + id;
 }
-function lbAlliKickRes(ok, text){
-  var el = document.getElementById('lbAlliKickRes');
-  if (!el) return;
-  el.style.display = 'block';
-  el.style.background = ok ? 'rgba(34,197,94,.13)' : 'rgba(239,68,68,.13)';
-  el.style.border = '1px solid ' + (ok ? 'rgba(34,197,94,.35)' : 'rgba(239,68,68,.35)');
-  el.style.color = ok ? '#4ade80' : '#f87171';
-  el.textContent = text;
-  try { clearTimeout(window.__lbAlliKickResT); } catch(e){}
+/* v6065（用户口径）：踢人可在「服务器控制」和「安全回档」两处发起 ⇒
+   结果横幅同时写两个容器（不存在的那侧自动跳过），成功 8s 自动隐藏、失败常驻。 */
+var LB_KICKRES_IDS = ['lbSrvCtlKickRes', 'lbArkBkKickRes'];
+function lbSrvCtlKickRes(ok, text){
+  var any = false;
+  LB_KICKRES_IDS.forEach(function(id){
+    var el = document.getElementById(id);
+    if (!el) return;
+    any = true;
+    el.style.display = 'block';
+    el.style.background = ok ? 'rgba(34,197,94,.13)' : 'rgba(239,68,68,.13)';
+    el.style.border = '1px solid ' + (ok ? 'rgba(34,197,94,.35)' : 'rgba(239,68,68,.35)');
+    el.style.color = ok ? '#4ade80' : '#f87171';
+    el.textContent = text;
+  });
+  if (!any) return;
+  try { clearTimeout(window.__lbSrvCtlKickResT); } catch(e){}
   if (ok){
-    window.__lbAlliKickResT = setTimeout(function(){
-      try { var e2 = document.getElementById('lbAlliKickRes'); if (e2) e2.style.display = 'none'; } catch(e){}
+    window.__lbSrvCtlKickResT = setTimeout(function(){
+      LB_KICKRES_IDS.forEach(function(id){
+        try { var e2 = document.getElementById(id); if (e2) e2.style.display = 'none'; } catch(e){}
+      });
     }, 8000);
   }
 }
-function lbAlliKick(srv, pname, eosId){
-  if (!eosId){ lbAlliKickRes(0, '缺少 EOS ID，无法踢出'); return; }
-  var cmd = lbAlliKickCmd('kick', eosId);
-  lbAsk('确定踢出「' + pname + '」？\n\n服务器：' + LB.servName(srv) + '\n命令：' + cmd, function(){
+function lbSrvCtlKickGo(srv, eosId){
+  if (!eosId){ lbSrvCtlKickRes(0, '缺少 EOS ID，无法踢出'); return; }
+  /* v6063：名字在本地反查（✕ 只传 服 + EOS，不把玩家名拼进 onclick） */
+  var pname = '', _rs = lbOnlineRolesOf(srv) || [];
+  for (var i = 0; i < _rs.length; i++){
+    if (String(_rs[i].eos || '') === String(eosId)){ pname = _rs[i].role || ''; break; }
+  }
+  if (!pname) pname = String(eosId).slice(0, 8);
+  var cmd = lbKickPlayerCmd('kick', eosId);
+  var doKick = function(){
     var t0 = Date.now();
-    lbAlliKickRes(1, '正在踢出 ' + pname + '…');
+    lbSrvCtlKickRes(1, '正在踢出 ' + pname + '…');
     fetch(LB_API + '/api/srvctl/rcon?t=' + Date.now(), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: lbSrvCtlUser(), servers: [srv], action: 'rcon', message: cmd })
@@ -49854,24 +51037,31 @@ function lbAlliKick(srv, pname, eosId){
         var res = (x.j && x.j.results && x.j.results[0]) || {};
         var ms = Date.now() - t0;
         if (x.s === 200 && res.ok){
-          lbAlliKickRes(1, '已踢出 ' + pname + '（' + LB.servName(srv) + '）· ' + ms + 'ms');
-          var chip = document.getElementById('lbAlliChip_' + eosId);
-          if (chip){ chip.style.opacity = '.35'; chip.style.textDecoration = 'line-through'; }
+          lbSrvCtlKickRes(1, '已踢出 ' + pname + '（' + LB.servName(srv) + '）· ' + ms + 'ms');
+          /* v6063：被踢的人会从在线列表消失 ⇒ 强制重探一次（替换旧的 chip 删除线） */
+          try { lbSrvCtlOnlineSync(true); } catch(e){}
         } else {
-          lbAlliKickRes(0, '踢出失败 ' + pname + '：' + (res.message || (x.j && x.j.error) || ('HTTP ' + x.s)));
+          lbSrvCtlKickRes(0, '踢出失败 ' + pname + '：' + (res.message || (x.j && x.j.error) || ('HTTP ' + x.s)));
         }
       })
-      .catch(function(e){ lbAlliKickRes(0, '踢出失败 ' + pname + '：' + e); });
-  }, '踢出');
-}
-function lbAlliKickChipHtml(srv, nm, eos, isMgr){
-  var safeN = escapeHtml(nm);
-  var h = '<span id="lbAlliChip_' + eos + '" style="display:inline-flex;align-items:center;gap:2px;padding:1px 6px;border-radius:10px;background:rgba(74,222,128,.10);border:1px solid rgba(74,222,128,.25);margin:2px 4px 2px 0">'
-        + safeN;
-  if (isMgr && eos){
-    h += '<i class="lb-tipb mdi mdi-close" title="踢出 ' + safeN + '" onclick="event.stopPropagation();lbAlliKick(\'' + srv + '\',\'' + safeN.replace(/'/g, "\\'") + '\',\'' + eos + '\')" style="cursor:pointer;color:#f87171;font-size:12px;line-height:1"></i>';
-  }
-  return h + '</span>';
+      .catch(function(e){ lbSrvCtlKickRes(0, '踢出失败 ' + pname + '：' + e); });
+  };
+  /* v6064（用户口径「附件你都不排版的么」）：踢人确认改用项目统一卡片模板 lbAskCard ——
+     图标 + 标题 / 服务器 chip（地图图标 + 中文名）/ 等宽命令块（break-all 不溢出）/
+     后果说明 / 红色「踢出」按钮。不再用 white-space:pre-line 大段纯文本
+     （标题下多一空行、命令被硬折成两行、无任何视觉层次）。 */
+  var _ok = lbAskCard({
+    tone: 'danger',
+    icon: 'mdi-account-remove-outline',
+    title: '踢出「' + pname + '」',
+    servers: [srv],
+    cmd: cmd,
+    note: '玩家会立即掉线；角色进度保留，重新连接后可继续。',
+    okText: '踢出',
+    onOk: doKick
+  });
+  /* 极端情况 lbAskCard 创建失败 ⇒ 回退纯文本确认，功能不丢 */
+  if (!_ok) lbAsk('确定踢出「' + pname + '」？\n\n服务器：' + LB.servName(srv) + '\n命令：' + cmd, doKick, '踢出');
 }
 function lbAlliancePosRender(alli, results, focusAbbr){
   var ov = document.getElementById('lbBreedOverlay');
@@ -49964,22 +51154,18 @@ async function lbOpenAlliancePos(){
   });
   // v534：按自助配置地图过滤（lbOwnedMaps）
   var srvList = lbOwnedMaps();
-  /* v5993：踢人权限（仅所有者/二级管理员）+ 我所有联盟成员的 EOS 集合（用于「其他在线」） */
-  var isKickMgr = (typeof lbRoleLevel === 'function' ? lbRoleLevel() : 0) >= 2;
-  var _mgAlliIds = {};
-  Object.keys(mine).forEach(function(k){
-    var _sp = k.split(':');
-    var _t = data && data.tribesByServer && data.tribesByServer[_sp[0]] && data.tribesByServer[_sp[0]][_sp[1]];
-    if(_t && Array.isArray(_t.alliances)) _t.alliances.forEach(function(a){ if(a && a.id!==undefined && a.id!==null && !lbAlliBlocked(a)) _mgAlliIds[String(a.id)] = 1; });
-  });
-  var _mgAlliEos = {};
-  Object.keys(_mgAlliIds).forEach(function(aid){
-    lbCollectAllianceMembers(aid).forEach(function(m){
-      var e = m.eosId || lbPidToEos(m.pid);
-      if (e) _mgAlliEos[String(e)] = 1;
-    });
-  });
-  var rows = srvList.map(function(abbr){
+  /* v6063：踢人已搬回「服务器控制」⇒ 这里不再需要 联盟 EOS 集合 / 「其他在线」行 */
+  /* v6070（用户口径「地图信息的界面要优化排版」；选定方案 B「分级卡片」+「无人服可点击展开」）：
+     · 内容用满浮窗宽度（旧版 width:fit-content 把 520px 浮窗的内容挤成 182px）
+     · 标题行右侧放 刷新 / 关闭（旧版 position:fixed 贴屏幕底部，离内容 400px+）
+     · 汇总行「N 服 · M 在线 · K 人」
+     · 有在线成员的服 = 大卡（左紫竖条 + 淡底 + 「N 人」徽章 + 在线名单 + 成员分布按钮）
+     · 无人的服 = 单行（图标 + 状态 + 联盟名 + chevron），点击展开看盟主
+     数据收集逻辑与旧版**完全一致**（含 v5995 的 EOS + pidSrv 双条件），只重排视觉。 */
+  /* v6092（用户口径「严格按服务器固定顺序」）：取消「有人服分组置顶」，
+     所有服按 lbOwnedMaps() 原顺序渲染；n>0 用大卡、n==0 用可展开单行。 */
+  var _recs = [];
+  srvList.forEach(function(abbr){
     var tbs = (data && data.tribesByServer && data.tribesByServer[abbr]) || {};
     // v635：多联盟支持（A 方案）——收集当前角色在该服全部部落所属的全部联盟（按 id 去重），不再只取 alliances[0]
     var alliMap = {};
@@ -49993,35 +51179,10 @@ async function lbOpenAlliancePos(){
     var srvOn = !!(online[abbr] && online[abbr].ok === true); // v570：服务器状态（后端 RCON 失败写 ok=false）
     var s = LB.SERVERS.find(function(x){ return x.abbr===abbr; });
     var sname = s ? s.name : abbr;
-    var mdi = LB_SERVER_MDI[abbr] || ''; // v556：地图图标复用选地图的 mdi（LB_SERVER_MDI）
+    var mdi = LB_SERVER_MDI[abbr] || 'mdi-server'; // v556/v615：只显示地图图标不显示服名（悬停看名字）
     var j = map[abbr];
-    /* v5995 修复：v5993 把「其他在线」的计算写在下面 alliList.map 内部，
-       而 h 在这之前就已拼好 otherLine（当时还是空串）-> 该行永远显示不出来。
-       这里提前算好，保证拼进服务服标题行。 */
-    var otherLine = '';
-    if (isKickMgr && srvOn){
-      var _onlP = (online[abbr] && online[abbr].players) || [];
-      var _othArr = [];
-      _onlP.forEach(function(p){
-        var _e = String(p.eosId || '');
-        if (!_e || _mgAlliEos[_e]) return;
-        _othArr.push({ name: p.name || _e, eosId: _e });
-      });
-      if (_othArr.length){
-        otherLine = '<div style="margin-top:4px;font-size:11px;color:#94a3b8">👤 其他在线：'
-          + _othArr.map(function(p){ return lbAlliKickChipHtml(abbr, p.name, p.eosId, true); }).join('')
-          + '</div>';
-      }
-    }
-    // v615：只显示地图图标不显示地图名（用户 2026-09-02）；无 mdi 图标时兜底显示服名文字
-    var h = '<div style="padding:8px 0' + (alliList.length ? ';border-bottom:1px solid #24243a' : '') + '">'
-      + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px;color:#fff;font-weight:bold">'+(mdi?'<i class="lb-tipb mdi '+mdi+'" style="font-size:15px;vertical-align:-2px" title="'+escapeHtml(sname)+'"></i>':' '+(s?escapeHtml(sname):''))
-      + '<span style="font-size:11px;font-weight:normal;color:'+(srvOn?'#4ade80':'#f87171')+'">'+(srvOn?'🟢 在线':'⭕ 离线')+'</span>' // v570：服务器状态
-      + '</div>' + otherLine;
-    // 无联盟：仅服状态行
-    if(!alliList.length){ h += '</div>'; return h; }
-    // v635：每联盟一个小节（盟名 + 盟主 + 本服在线成员 + 分布按钮）
-    h += alliList.map(function(alli){
+    var secs = [], _n = 0;
+    alliList.forEach(function(alli){
       // 盟主 = admins[0] 部落的所有者角色名
       var founderName = '';
       var aObj = null;
@@ -50031,56 +51192,100 @@ async function lbOpenAlliancePos(){
         var ft = tbs[String(admins[0])];
         if(ft && ft.ownerName) founderName = ft.ownerName;
       }
-      var onlineBtns = '';
+      var onNames = [];
       // v570：离线服不显示成员（联盟/盟主信息保留）
       if(srvOn){
-        // 该联盟「本服在线」成员（eosToSrv[eos]===abbr；v537：一个角色只在所在服出现）
-        var mems = lbCollectAllianceMembers(alli.id);
-        var btns = [];
         /* v5995 根因修复：同一 EOS 账号下可能有多个角色（如「板板」@Ext 与「人类」@Cen），
-           旧逻辑只按 EOS 判断在某服在线 -> 两个角色都被算作该服在线，出现重复 chip（DOM id 也重复）。
-           改为双条件：EOS 在该服在线 AND 该角色 pid 的所在服也是该服（pidSrv 缺失时回退旧逻辑）。 */
-        mems.forEach(function(m){
+           旧逻辑只按 EOS 判断在某服在线 -> 两个角色都被算作该服在线（重复 chip/DOM id 重复）。
+           双条件：EOS 在该服在线 AND 该角色 pid 的所在服也是该服（pidSrv 缺失时回退旧逻辑）。 */
+        lbCollectAllianceMembers(alli.id).forEach(function(m){
           var eos = m.eosId || lbPidToEos(m.pid);
           if(!eos || eosToSrv[eos] !== abbr) return;
           var _ps = lbPidServer(m.pid);
           if(_ps && _ps !== abbr) return;
-          btns.push(m);
+          onNames.push(m.name || m.pid);
         });
-        // v556：在线成员名单（写清谁在线）+ 地图按钮（点→该服全部在线成员标同一张图）
-        // v5993：管理员（所有者/二级）⇒ 每个名字后加 ✕ 踢出；普通玩家 ⇒ 保持纯文字
-        var _body;
-        if (isKickMgr){
-          _body = btns.map(function(m){
-            var _e = m.eosId || lbPidToEos(m.pid) || '';
-            return lbAlliKickChipHtml(abbr, (m.name || m.pid), _e, true);
-          }).join('');
-        } else {
-          _body = btns.map(function(m){ return escapeHtml(m.name||m.pid); }).join('、');
-        }
-        onlineBtns = (_body ? '<div style="margin-top:4px;font-size:11px;color:#4ade80">🟢 在线：'+_body+'</div>' : '')
-          + (btns.length ? '<button onclick="event.stopPropagation();lbAllianceServerMap(\''+abbr+'\',\''+String(alli.id)+'\',\''+(alli.name||('联盟#'+alli.id)).replace(/'/g,"\\'")+'\')" style="margin-top:4px;padding:4px 12px;border:none;border-radius:6px;background:#7c3aed;color:#fff;font-size:11px;cursor:pointer">🗺 成员分布</button>' : '');
       }
-      return '<div style="margin:4px 0 2px 16px;padding-left:10px;border-left:2px solid #2a2a3a">'
-        + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:#fff;font-weight:bold">'
-        + '<span style="color:#a78bfa">'+escapeHtml(alli.name||('联盟#'+alli.id))+'</span>'
-        + (founderName ? '<span style="font-size:11px;color:#888;font-weight:normal">盟主 '+escapeHtml(founderName)+'</span>' : '')
-        + '</div>'
-        + '<div style="margin-top:2px">'+onlineBtns+'</div>'
+      _n += onNames.length;
+      secs.push({ id: alli.id, name: alli.name || ('联盟#'+alli.id), founder: founderName, on: onNames,
+                  jsName: (alli.name||('联盟#'+alli.id)).replace(/'/g, "\\'") });
+    });
+    var rec = { abbr: abbr, name: sname, mdi: mdi, on: srvOn, secs: secs, n: _n };
+    _recs.push(rec);
+  });
+  var _onSrv = srvList.filter(function(a){ return !!(online[a] && online[a].ok === true); }).length;
+  var _allP = _recs.reduce(function(a, r){ return a + r.n; }, 0);
+  /* 单服内的联盟小节（有人服：联盟·盟主 + 在线名单 + 成员分布按钮；无人服展开：只有联盟·盟主） */
+  function _secHtml(rec, withBtn, withOn){
+    if(!rec.secs.length) return '<div style="margin-top:5px;font-size:11.5px;color:#5f6779">该服无联盟</div>';
+    return rec.secs.map(function(sec){
+      var h = '<div style="margin-top:6px">'
+        + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px">'
+        +   '<span style="color:#a78bfa">' + escapeHtml(sec.name) + '</span>'
+        +   (sec.founder ? '<span style="font-size:11px;color:#7b7f8e">盟主 ' + escapeHtml(sec.founder) + '</span>' : '')
         + '</div>';
+      if(withOn && sec.on.length){
+        h += '<div style="display:flex;align-items:center;gap:8px;margin-top:5px;flex-wrap:wrap">'
+          +  '<span style="font-size:11.5px;color:#4ade80"><i class="mdi mdi-circle" style="font-size:9px;vertical-align:1px"></i> 在线：' + sec.on.map(escapeHtml).join('、') + '</span>'
+          +  '<span style="flex:1"></span>'
+          +  (withBtn ? ('<button onclick="event.stopPropagation();lbAllianceServerMap(\'' + rec.abbr + '\',\'' + String(sec.id) + '\',\'' + sec.jsName + '\')" style="padding:3px 12px;border:none;border-radius:6px;background:#7c3aed;color:#fff;font-size:11px;cursor:pointer">\u{1F5FA} 成员分布</button>') : '')
+          + '</div>';
+      }
+      return h + '</div>';
     }).join('');
-    h += '</div>';
-    return h;
-  }).join('');
-  body.innerHTML = '<div onclick="event.stopPropagation()" style="font-weight:bold;font-size:14px;color:#fff;text-align:center;margin-bottom:8px">📌 地图信息'
-    + '<span onclick="event.stopPropagation()" style="position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:30;display:inline-flex;align-items:center;gap:32px;color:#aaa">' // v636/v638：刷新+关闭 作为整体水平居中（间距 10→32px）
-    + '<span class="lb-tipb" onclick="event.stopPropagation();lbMapInfoRefresh()" title="刷新地图状态" style="cursor:pointer;color:#aaa;font-size:22px;line-height:1;display:inline-flex;align-items:center;height:22px"><svg viewBox="3.5 3.5 17 17" style="width:22px;height:22px;display:block;fill:currentColor"><path d="M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z"/></svg></span>'
-    + '<span class="lb-tipb" onclick="event.stopPropagation();lbAllianceClose()" title="关闭" style="cursor:pointer;color:#aaa;font-size:22px;line-height:1;display:inline-flex;align-items:center;justify-content:center;height:22px;width:22px"><svg viewBox="5 5 14 14" style="width:22px;height:22px;display:block;fill:currentColor"><path d="M19,6.41L17.59,5 12,10.59 6.41,5 5,6.41 10.59,12 5,17.59 6.41,19 12,13.41 17.59,19 19,17.59 13.41,12z"/></svg></span>'
-    + '</span>'
+  }
+  var _rowsHtml = '';
+  _recs.forEach(function(rec){
+    if(rec.n > 0){
+      _rowsHtml += '<div style="padding:10px 14px;border-bottom:1px solid #1e1e2c;border-left:3px solid #7c3aed;background:rgba(124,58,237,.06)">'
+        + '<div style="display:flex;align-items:center;gap:8px">'
+        +   '<i class="lb-tipb mdi ' + rec.mdi + '" title="' + escapeHtml(rec.name) + '" style="font-size:17px;color:#a78bfa;flex:none"></i>'
+        +   '<span style="font-size:12px;color:#4ade80">在线</span><span style="flex:1"></span>'
+        +   '<span style="font-size:11px;color:#4ade80;background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.3);border-radius:9px;padding:1px 8px">' + rec.n + ' 人</span>'
+        + '</div>'
+        + '<div style="padding-left:25px">' + _secHtml(rec, true, true) + '</div>'
+        + '</div>';
+    } else {
+      var names = rec.secs.length
+        ? rec.secs.map(function(x){ return escapeHtml(x.name); }).join(' ／ ')
+        : '<span style="color:#4b5263">无联盟</span>';
+      _rowsHtml += '<div id="lbAlliPosRow_' + rec.abbr + '" onclick="lbAlliPosToggle(\'' + rec.abbr + '\')"'
+        + ' style="display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid #1a1a26;cursor:pointer;opacity:.8">'
+        +   '<i class="lb-tipb mdi ' + rec.mdi + '" title="' + escapeHtml(rec.name) + '" style="font-size:15px;color:#6b7280;flex:none"></i>'
+        +   '<span style="font-size:11.5px;color:' + (rec.on?'#4ade80':'#f87171') + ';flex:none">' + (rec.on?'在线':'离线') + '</span>'
+        +   '<span style="flex:1;font-size:11.5px;color:#9aa0b0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + names + '</span>'
+        +   '<i class="mdi mdi-chevron-down allipos-chev" style="font-size:15px;color:#4b5263;transition:transform .15s"></i>'
+        + '</div>'
+        + '<div id="lbAlliPosAlli_' + rec.abbr + '" style="display:none;padding:0 14px 10px 47px;border-bottom:1px solid #1a1a26">'
+        +   _secHtml(rec, false, false) + '</div>';
+    }
+  });
+  body.innerHTML = '<div class="lb-ipp-panel">'
+    + '<div class="lw-head" onclick="event.stopPropagation()">'
+    +   '<span class="lw-title"><i class="mdi mdi-account-group-outline"></i> 地图信息</span>'
+    +   '<button class="lw-x" onclick="event.stopPropagation();lbMapInfoRefresh()" title="刷新地图状态" aria-label="刷新"><i class="mdi mdi-refresh"></i></button>'
+    +   '<button class="lw-x" onclick="event.stopPropagation();lbAllianceClose()" title="关闭" aria-label="关闭"><i class="mdi mdi-close"></i></button>'
     + '</div>'
-    + '<div id="lbAlliKickRes" style="display:none;margin:0 auto 8px;padding:7px 12px;border-radius:7px;font-size:12.5px;text-align:center;max-width:520px"></div>'
-    + '<div onclick="event.stopPropagation()" style="padding:0 12px 20px;max-height:70vh;overflow-y:auto;width:fit-content;max-width:100%;margin:0 auto">'+rows+'</div>'; // v615：列表宽度自适应内容 + 整体横向居中
+    + '<div style="padding:7px 14px;border-bottom:1px solid #1e1e2c;font-size:11.5px;color:#8b8b9e">'
+    +   srvList.length + ' 服 · ' + _onSrv + ' 在线 · <b style="color:#a78bfa">' + _allP + '</b> 人</div>'
+    + '<div class="lb-ipp-scroll" style="flex:1;min-height:0;overflow-y:auto">' + _rowsHtml + '</div>'
+    + '</div>';
   ov.style.display = 'block';
+}
+/* v6071（用户口径「我要手风琴逻辑，无人服同时只允许展开一个」）：
+   展开某个无人服前先把所有行收起（chevron 一并复位），再单独展开目标行；
+   只动这几行局部 DOM，不整体重渲染 ⇒ 不闪、不丢滚动位置。 */
+function lbAlliPosToggle(abbr){
+  var box = document.getElementById('lbAlliPosAlli_' + abbr);
+  if(!box) return;
+  var wasOpen = (box.style.display === 'block');
+  document.querySelectorAll('[id^="lbAlliPosAlli_"]').forEach(function(b){ if(b) b.style.display = 'none'; });
+  document.querySelectorAll('[id^="lbAlliPosRow_"] .allipos-chev').forEach(function(ic){ if(ic) ic.style.transform = ''; });
+  if(wasOpen) return;   /* 点的是已展开的那行 ⇒ 纯收起 */
+  box.style.display = 'block';
+  var row = document.getElementById('lbAlliPosRow_' + abbr);
+  var ic = row ? row.querySelector('.allipos-chev') : null;
+  if(ic) ic.style.transform = 'rotate(180deg)';
 }
 
 // v556：单服地图——该服全部在线成员批量查位置，标在同一张图（复用 lbAlliancePosRender 多成员渲染）
@@ -50312,6 +51517,8 @@ function lbAllianceMemberPosRender(t, pos){
   if(!map){ body.innerHTML = '<div onclick="event.stopPropagation()" style="text-align:center;font-size:13px;color:#888;padding:16px">无地图数据</div>'; return; }
   var p = lbWorldToPx(Number(pos.x), Number(pos.y), map);
   var imgName = map.img.replace(/_s$/,'');
+  /* v6096（用户口径「一起还原」）：撤销 v6076 的浮窗化，回到 v6045 原样 ——
+     标题居中（白 14px 加粗），关闭按钮 position:fixed 贴屏幕底部居中，地图直接铺开。 */
   body.innerHTML = '<div onclick="event.stopPropagation()" style="font-weight:bold;font-size:14px;color:#fff;text-align:center;margin-bottom:8px">📌 '+escapeHtml(t.name)+' · '+LB.servName(t.abbr)+' · 实时追踪'
     + '<span class="lb-tipb" onclick="event.stopPropagation();lbAllianceClose()" title="关闭" style="position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:30;cursor:pointer;color:#aaa;font-size:22px;line-height:1"><i class="mdi mdi-close"></i></span>'
     + '</div>'
@@ -51977,7 +53184,7 @@ function lbRouteRender(preserve){
   var st = lbRouteStat(recs);
   // 标题
   var h = '';
-  h += '<div style="display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid #2a2a3a">';
+  h += '<div class="lw-head">';   // v6076（用户口径）：改用标准固定标题栏
   h += '<b style="color:#a78bfa;font-size:15px">🧬 路线 · '+lbAttr(spZh)+'</b>';
   if(attrs.length){
     var badgeCols = ['#22c55e','#a78bfa','#fbbf24','#60a5fa','#f472b6','#4ade80'];
@@ -51998,7 +53205,7 @@ function lbRouteRender(preserve){
   h += '<span class="lw-help" id="lbRouteHelp" onclick="lbRouteHelp()" aria-label="说明（超限/边界示例）"'
      + ' data-tip="说明（超限/边界示例）：这里展示按属性拆线的配种计划与边界情况。">'
      + '<i class="mdi mdi-help-circle-outline"></i></span>';
-  h += '<button onclick="lbRouteClose()" style="background:none;border:none;color:#999;font-size:18px;cursor:pointer;line-height:1"><i class="mdi mdi-close"></i></button>';
+  h += '<button class="lw-x" onclick="lbRouteClose()" title="关闭" aria-label="关闭"><i class="mdi mdi-close"></i></button>';   // v6076：统一 .lw-x
   h += '</div>';
   // 内容
   h += '<div id="lbRouteScroll" style="flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:10px 14px 14px">';
@@ -52127,7 +53334,7 @@ function lbRouteHelp(){
     + '<div onclick="event.stopPropagation()" style="display:grid;grid-template-columns:max-content 1fr;gap:8px 14px;font-size:12px;align-items:center">'+inner+'</div>'
     + '<div onclick="event.stopPropagation()" style="margin-top:12px;border-top:1px solid #2a2a3a;padding-top:8px;font-size:11px;color:#ccc;line-height:1.9"><b style="color:#fbbf24">🧬 变异次数怎么看（总计数规则）</b><br>每只龙 <b style="color:#e6e6ef">次 X/Y</b>：左=父系累计，右=母系累计，<b style="color:#fff">总次数 = X+Y</b><br>• 能不能再出新变异：看这只龙总次数 <b style="color:#4ade80">&lt;20</b> → 能产；<b style="color:#ef4444">≥20</b> → 它自己不再贡献（配 0/0 另一半仍可减半续）<br>• <b style="color:#fbbf24">总次数为负</b>（如 -2147483647）→ 永远 &lt;20，无限产（负变异∞）<br>• 仔的计数 = <b style="color:#e6e6ef">父本总 / 母本总</b>（例：父 0/2 × 母 1/0 → 仔 2/1）<br>• 繁殖主力 = 变异公 + 大量 <b style="color:#22c55e">0/0 母</b>（总0：资格无限 + 仔干净）</div>'
     + '<div style="height:56px"></div>'
-    + '<span class="lb-tipb" onclick="event.stopPropagation();lbRouteHelpClose()" title="关闭" style="position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:30;cursor:pointer;color:#aaa;font-size:22px;line-height:1;display:inline-flex;align-items:center;justify-content:center;height:24px;width:24px"><i class="mdi mdi-close"></i></span>';
+    + '<button class="lw-x" onclick="event.stopPropagation();lbRouteHelpClose()" title="关闭" aria-label="关闭" style="position:fixed;top:12px;right:12px;z-index:30"><i class="mdi mdi-close"></i></button>';
   ov.style.display = 'block';
 }
 function lbRouteHelpClose(){
@@ -52451,6 +53658,7 @@ function lbWikiOpen(){
   LB_WIKI.data = null;
   LB_WIKI.err = null;
   LB_WIKI.itemFB = null;   // v5848：切物种必须清掉上一个物种的物品回退缓存
+  try { LB_WT_TRIED = {}; } catch (eWTR) {}   /* v6029：打开/切物种时清空一次性标记，允许重新尝试拉取 AI 整理结果 */
   var ov = lbWikiEl('lbWikiOverlay');
   if (!ov) return;
   ov.classList.add('show');
@@ -55476,6 +56684,11 @@ function renderSpawn(){
 /* v5750：权威心得 prompt 版本戳 —— prompt/数据源升级时递增，后端据此覆盖旧 auth（其余情况仍"只写一次"） */
 var LB_TIPS_PV = 5;
 var LB_TIPS = { slug: '', cls: '', st: 'idle', items: [], summary: '', zh: {}, merged: null, err: null, busy: false, msg: '', needTok: false };
+/* v6030：技巧共享缓存探测 —— 与 LB_WT_AI_PROBE 同构。
+   入口虚线 bug 根因：wikily 索引（/api/wiki/index）没收录 ≠ 没资料，
+   「技巧」TAB 的 AI 整理结果走独立链路 /api/dino/tips/zh（dodo_<slug>_zh.json 的 merged.secs/auth）。 */
+var LB_TIPS_PROBE = {};     // slug(小写) -> 1 ：已确认有技巧整理结果
+var LB_TIPS_PROBE_TRY = {}; // slug(小写) -> 1 ：已发起过探测（防重入 / 防轮询）
 
 function lbTipsApi(){
   var b = (typeof LB_API === 'string' && LB_API) ? LB_API : 'https://data.whiterober.ccwu.cc';
@@ -56133,12 +57346,44 @@ function lbWtAbilDesc(zh, orig){
   LB_WT_LAST_AI = 0;
   return orig || '';
 }
+/* v6031（用户实测「菊石 甚至都不能骑，怎么你还在抓到了操作键？」）：
+   根因 —— 后端 88 个物种源缓存里**只有泰克悬浮艇 1 个**有 wiki.gg Controls 原文（HOME.abilKeys），
+   其余全无素材；而整理提示词里既写了「操作键必须逐条写成『按键 + 中文动作』短句」，
+   又给了**带具体键位的可抄示例**⇒ AI 没素材就照抄示例 + 补一套通用键位。
+   菊石实测输出 6 条全是通用模板，还把源缓存里**真实的**两条战斗说明（受伤倍率）整段丢了。
+   判定（不依赖「是否可骑」——没鞍不一定没操作）：AI 的 abilIntro **全部**都是键位行（0 条文字总述），
+   而源缓存里**有**真实文字内容 ⇒ 判定 AI 丢了原文换键位，回落源缓存原文。 */
+function lbWtAbilIntroDropped(fbArr){
+  var fb = (fbArr || []).filter(function (x) { return !!String(x == null ? '' : x).trim(); });
+  if (!fb.length) return false;
+  var ai = [];
+  try { ai = (LB_WT.data && LB_WT.data.abilIntro) || []; } catch (e) { return false; }
+  if (!ai.length) return false;
+  var txt = 0;
+  ai.forEach(function (s) {
+    var t = String(s == null ? '' : s).trim();
+    if (!t) return;
+    var r = null;
+    try { r = lbAbilParseKeys([t]); } catch (e) { r = null; }
+    if (!(r && r.length)) txt++;
+  });
+  return txt === 0;
+}
 
 /* 读某个物种的整理结果（切物种时调用） */
+/* v6029（用户实测「附件浮窗不断闪烁」/「90 次重渲染既吃性能也没必要」）：**防重复拉取** ——
+   原逻辑「ready||data 才复用，否则重置 LB_WT 再 fetch」：当该物种**没有 AI 整理结果**时
+   （后端返 ok=false 或 ready=false ⇒ data 恒为 null、ready 恒为 false），每次调用都会重新拉；
+   而 lbWikiRender 的 err 分支在回调里又调 lbWikiRender ⇒ fetch→render→fetch 死循环，
+   实测 4 次/秒重建整个 #lbWikiBody 并打后端接口 ⇒ 浮窗闪烁 + 白耗流量。
+   修法：按 slug 记一次性标记，试过且无数据就直接异步回调（不再 fetch）。切物种时由 lbWikiOpen 清空。 */
+var LB_WT_TRIED = {};
 function lbWtLoad(cb){
   var slug = lbWtSlug();
   if (!slug){ if (cb) cb(); return; }
   if (LB_WT.slug === slug && (LB_WT.ready || LB_WT.data)){ if (cb) cb(); return; }
+  if (LB_WT_TRIED[slug]){ if (cb) setTimeout(cb, 0); return; }   /* v6029：已试过且无数据 ⇒ 不再重复拉取（异步回调，防同步递归） */
+  LB_WT_TRIED[slug] = 1;
   LB_WT = { slug: slug, data: null, busy: false, msg: '', ready: false };
   fetch(lbWtApi() + '?slug=' + encodeURIComponent(slug), { cache: 'no-store' })
     .then(function(r){ return r.json(); })
@@ -56272,7 +57517,7 @@ function lbWtDigest(force){
     + '   · tameIntro（驯服）= 击晕手法、武器弹药、饲料与喂食节奏、麻醉与眩晕维持、驯服后等级\n'
     + '   · breedDesc（繁殖）= 交配、孵化、成长、留痕、变异\n'
     + '   · gatherIntro（采集）= 采集能力、可采资源、采集加成、采集工具；以及击杀/尸体可采资源、收割产物与工具对产量的影响（原「收割」页内容一律归这里，不再有独立「收割」位）\n'
-    + '   · abilIntro（技能）= 战斗方式与技能总述 + **载具/器械的操作键**（**逐个技能的作用放 abil，不要写这里**）；操作键必须逐条写成「按键 + 中文动作」短句（如「W/S 前进后退」「按住 Shift 冲刺」），一条一句\n'
+    + '   · abilIntro（技能）= 战斗方式与技能总述（**逐个技能的作用放 abil，不要写这里**）；**仅当用户消息里真的出现【操作键原文（wiki.gg Controls）】分组时**，才把该分组的按键逐条写成「按键 + 中文动作」短句追加在后面（一条一句）。分组不存在 ⇒ 这里只写文字总述，不写任何按键（见第 10、11 条）\n'
     + '   · expIntro（经验）= 经验获取方式与倍率相关说明\n'
     + '   · spawnIntro（生成）= 控制台/管理员命令相关说明\n'
     + '   · abil（技能）= 逐个技能的作用说明，**必须与给定技能名一一对应，不要新增、改名或合并**\n'
@@ -56286,11 +57531,15 @@ function lbWtDigest(force){
     + '7) **禁止照搬原文英文**：原文本身是机翻时，把英文术语原样抄进输出等同未完成；遇到「XX 伤害」「XX 抗性」「XX 攻击」这类结构，XX 必须换成中文术语。\n'
     + '8) **物种名一律用正式名（硬性）**：正文凡指代本物种，必须使用用户消息【物种表 · 正式中文名】给出的名字；原文中出现的一切其它叫法（第三方译名、俗称、旧译、简称）**全部改写为正式名**，既不保留也不并列写出。正文提到的其它物种，同样要能对上项目物种表的正式名。\n\n'
     + '9) **采集内容必须归入 gatherIntro（硬性，优先于第 4 条「宁缺勿滥」）**：凡涉及「这个物种能采什么资源、采集/采伐倍率、采集工具、采集范围、骑乘采集加成」的描述，**一律写入 gatherIntro**，不得只留在 ovIntro 或 abilIntro 里；写进 gatherIntro 之后，**原位置不得再保留同一句**（同义重复同样禁止）。若用户消息里给了【采集加成数据】，必须据此写出一条采集概述。\n\n'
-    + '10) **操作键必须保留并中文化（硬性）**：用户消息里【操作键原文（wiki.gg Controls）】给出的**每一条**都要写进 abilIntro，改写为中文「按键 + 中文动作」短句；'
+    + '10) **操作键只认素材（硬性）**：**仅当用户消息里出现【操作键原文（wiki.gg Controls）】分组时，本条才生效**。\n'
+    + '    该分组**存在**时：其中给出的**每一条**都要写进 abilIntro，改写为中文「按键 + 中文动作」短句；'
     + 'Hold/Tap/Press/Held 译成「按住/轻按/按下」；WS/AD 这类连写键拆成「W/S」「A/D」；Cursor 译成「鼠标」；键盘键用大写单字母或 Ctrl/Shift/Alt/空格/Tab 的通行中文写法。'
     + '**不得把按键改写成纯文字描述，不得漏条目，不得保留英文长句。**'
     + '每一条都必须明确写出按键（如「按住 鼠标左键 填充目标进度条」）；'
-    + '原文某条只写了手势没写按键时，按同一段 Controls 里该分组的按键补全；实在无法确定才省略该条。\n\n'
+    + '原文某条只写了手势没写按键时，按同一段 Controls 里该分组的按键补全；实在无法确定才省略该条。\n'
+    + '    该分组**不存在**时：abilIntro **一条操作键都不许出现**，只写战斗方式与技能总述的文字。\n'
+    + '    **严禁凭游戏常识、凭本提示词里的示例、凭其它物种的按键去编造键位**——W/A/S/D、Shift、空格、Ctrl、鼠标左键/右键这类「通用键位」尤其禁止：不同物种（尤其不可骑乘的野生生物）操作方式差异极大，编出来的按键就是错误信息。\n\n'
+    + '11) **不可骑乘物种不得有操作键（硬性）**：若该物种不能被玩家骑乘 / 驾驶 / 操控（例如只能被大型生物叼走或携带的菊石、三叶虫、水母、腔棘鱼这类野生小型生物），abilIntro 只能写战斗方式与技能总述的文字，**绝对不许出现任何「按键 + 动作」短句**。\n\n'
     + '输出严格 JSON（不要代码块）：\n'
     + '{"ovIntro":[],"ovTips":[],"tameIntro":[],"gatherIntro":[],"abilIntro":[],"expIntro":[],"breedDesc":[],"abil":[{"zh":"技能名","desc":"说明"}],"spawnIntro":[],"gearTips":[]}';
 
@@ -57382,6 +58631,11 @@ function lbAbilIntroRest(list){
 function lbAbilKeysHtml(){
   /* v5857：只读 AI 整理结果（LB_WT.data.abilIntro）做主干，
      不再用 lbWtPick 回落 wiki 英文原文（回落来的是英文长句，会污染表格）。 */
+  /* v6031：AI 丢了原文换键位（见 lbWtAbilIntroDropped）⇒ 这些键位是编造的，整表不渲染 */
+  try {
+    var _fbK = (lbAbilIntroPick().list) || [];
+    if (lbWtAbilIntroDropped(_fbK)) return '';
+  } catch (eG0) {}
   var arr = [];
   try { arr = (LB_WT.data && LB_WT.data.abilIntro) || []; } catch (eK0) { arr = []; }
   var rows = [], _en = 0;
@@ -57436,7 +58690,8 @@ function renderAbilTab(){
     try { _hk0 = lbAbilKeysHtml(); } catch (eK1) { _hk0 = ''; }
     if ((_ap0.list || []).length || _ap0.matLine || _hk0){
       /* v5859：有操作键表时，置顶文案剔除已覆盖行（防重复） */
-      var _ai0 = lbWtPick('abilIntro', _ap0.list || []);
+      var _ai0 = null;
+      try { _ai0 = lbWtAbilIntroDropped(_ap0.list || []) ? (LB_WT_LAST_AI = 0, (_ap0.list || [])) : lbWtPick('abilIntro', _ap0.list || []); } catch (eGD0) { _ai0 = lbWtPick('abilIntro', _ap0.list || []); }
       if (_hk0) { try { _ai0 = lbAbilIntroRest(_ai0); } catch (eR0) {} }
       var _h0 = '<div class="tc">' + wikiIntroHtml(_ai0) + _hk0 + '</div>';
       document.getElementById('lbWikiBody').innerHTML = _h0;
@@ -57459,7 +58714,8 @@ function renderAbilTab(){
      lbAbilKeysHtml / lbAbilIntroRest 都不调 lbWtPick ⇒ 不会污染 LB_WT_LAST_AI（.tc-ai 标记）。 */
   var _hkB = '';
   try { _hkB = lbAbilKeysHtml(); } catch (eK2) { _hkB = ''; }
-  var _aiB = lbWtPick('abilIntro', _introArr);
+  var _aiB = null;
+  try { _aiB = lbWtAbilIntroDropped(_introArr) ? (LB_WT_LAST_AI = 0, _introArr) : lbWtPick('abilIntro', _introArr); } catch (eGD) { _aiB = lbWtPick('abilIntro', _introArr); }
   if (_hkB) { try { _aiB = lbAbilIntroRest(_aiB); } catch (eR2) {} }
   h += wikiIntroHtml(_aiB);
   h += _hkB;
@@ -58033,6 +59289,7 @@ function lbSheetBuild(id, opts){
       + '<div class="lw-tabs" id="' + id + 'Tabs"></div>'
       + '<div class="lw-meta" id="' + id + 'Meta"></div>'
       + '<div class="lw-body" id="' + id + 'Body"></div>'
+      + '<div class="lw-foot" id="' + id + 'Foot" hidden></div>'
       + '</div>';
     document.body.appendChild(ov);
   }
@@ -58042,7 +59299,8 @@ function lbSheetBuild(id, opts){
     help:  document.getElementById(id + 'Help'),
     tabs:  document.getElementById(id + 'Tabs'),
     meta:  document.getElementById(id + 'Meta'),
-    body:  document.getElementById(id + 'Body')
+    body:  document.getElementById(id + 'Body'),
+    foot:  document.getElementById(id + 'Foot')   /* v6050：底部固定栏（无内容时 hidden） */
   };
 }
 function lbSheetOpen(id){ var o = document.getElementById(id); if (o) o.classList.add('show'); }
@@ -60130,6 +61388,13 @@ var LB_WIKI_LF_MO = null, LB_WIKI_LF_T = null;
 function lbWikiLayoutFix(){
   var body = document.getElementById('lbWikiBody');
   if (!body) return;
+  /* v6029（闪烁次因）：本函数自己会移动节点（② insertBefore）与替换文本（③④⑤ lbEnMark replaceChild），
+     这些改动会被 lbWikiLayoutWatch 自己的 observer 看到 ⇒ 60ms 后再跑一次，形成自我触发；
+     .tc-h 的 data-lf-hide 因此反复翻转 ⇒ 小标题 / 「鞍·附件」标题闪烁。
+     修法：修改期间断开自身 observer，结束在 finally 里重连。 */
+  var _lfMO = LB_WIKI_LF_MO;
+  if (_lfMO) { try { _lfMO.disconnect(); } catch (eLFD) {} }
+  try {
   // ① 隐藏无序号 .tc-h（保留 U+2460–U+2473 = ①…⑳）
   var hs = body.querySelectorAll('.tc-h');
   for (var i = 0; i < hs.length; i++){
@@ -60165,6 +61430,9 @@ function lbWikiLayoutFix(){
   try { lbZhFixDom(body); } catch (eZF) {}
   // v5762：术语中文化之后再补「英文小字」（中文→英文反查；命令块/徽章已在内层跳过）
   try { lbEnMark(body); } catch (eEM) {}
+  } finally {
+    if (_lfMO) { try { _lfMO.observe(body, { childList: true, subtree: true }); } catch (eLFR) {} }
+  }
 }
 
 function lbWikiLayoutWatch(){
@@ -60387,7 +61655,8 @@ function lbWikiRender(){
     if (!_hasWt && _curSlug){
       try { if (LB_WT_AI_PROBE[String(_curSlug).toLowerCase()]) _hasWt = true; } catch (eWH2) {}
     }
-    if (!_hasWt && _curSlug && typeof lbWtLoad === 'function'){
+    /* v6029：加一次性守卫 —— 无双保险时 fetch 失败会 callback 再 render，形成死循环 */
+    if (!_hasWt && _curSlug && typeof lbWtLoad === 'function' && !LB_WT_TRIED[_curSlug]){
       try { lbWtLoad(function () { try { lbWikiRender(); } catch (eWL0) {} }); } catch (eWL1) {}
     }
     var _fbB = '';
