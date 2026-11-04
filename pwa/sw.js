@@ -16,6 +16,9 @@ var SHELL = 'dino-import-shell-' + VER;
 var ASSETS = 'dino-import-assets';
 var ASSETS_MAX = 1200; // v20260912-1029：600→1200（实测预取需 717 张，600 上限导致缓存震荡：每写一张即淘汰一张）
 var CORE = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/icon-maskable-192.png', '/icons/icon-maskable-512.png', '/icons/apple-touch-icon-180.png'];   // v4465：maskable/iOS 图标入预缓存
+// 2026-11-05：历史遗留的单缓存（早期版本的图标/地图缓存，现已无人读写）
+//   只列精确名字，绝不写「非当前壳即删」的通用规则——否则以后新增的缓存名会被误杀
+var LEGACY_CACHES = ['dino-assets-v1'];
 // v984：网络与缓存都不可用时的「自动重试页」（避免用户看到 'offline' 白屏字样）
 var RETRY_HTML = '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>正在重试…</title></head><body style="background:#0f0f13;color:#ddd;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><div style="text-align:center"><div style="font-size:15px;margin-bottom:10px">网络暂时不可用，正在自动重试…</div><div id="t" style="font-size:12px;color:#888">3 秒后重试</div></div><script>var n=3;setInterval(function(){n--;var e=document.getElementById("t");if(e)e.textContent=n>0?(n+" 秒后重试"):"正在重试…";if(n<=0)location.reload();},1000);</script></body></html>';
 
@@ -61,7 +64,9 @@ self.addEventListener('activate', function (e) {
           return k !== SHELL && k.indexOf('dino-import-shell-') === 0;
         }).sort(); // 名字含日期-序号，字典序即时间序
         var drop = shells.slice(0, Math.max(0, shells.length - 2));
-        return Promise.all(drop.map(function (k) { return caches.delete(k); }));
+        // 2026-11-05：连同历史遗留单缓存一起清（白名单精确匹配，且仍在 hasDoc 保护分支内）
+        var legacy = keys.filter(function (k) { return LEGACY_CACHES.indexOf(k) >= 0; });
+        return Promise.all(drop.concat(legacy).map(function (k) { return caches.delete(k); }));
       });
     }).then(function () {
       return self.clients.claim();
