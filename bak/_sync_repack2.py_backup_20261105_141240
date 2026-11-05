@@ -1,0 +1,296 @@
+# -*- coding: utf-8 -*-
+# 精简打包：只部署 dino 实际用到的 WebP 缩略图（icons2.json URL ∩ webp_map）
+# 2026-09-20：静态表（9 表 + values/ASA-values）全部改为【本地供给】，不再连接 HA（不拉、不兜底）
+import shutil, os, zipfile, io, json, re, subprocess, hashlib
+
+BASE = r'b:\项目\Hass ASA Server Monitor'
+shutil.copy2(os.path.join(BASE, 'dino-import.html'), os.path.join(BASE, 'dino-import-new.html'))
+
+flat = os.path.join(BASE, r'tmp\dino-flat')
+if os.path.exists(flat):
+    shutil.rmtree(flat)
+os.makedirs(flat, exist_ok=True)
+shutil.copy2(os.path.join(BASE, 'dino-import-new.html'), os.path.join(flat, 'index.html'))
+# 2026-11-05 B1a：外置样式表（HTML 以 /app.css?v=LB_VERSION 引用 → 可长缓存）
+_app_css = os.path.join(BASE, 'app.css')
+if os.path.isfile(_app_css):
+    shutil.copy2(_app_css, os.path.join(flat, 'app.css'))
+    print('app.css copied: %d B' % os.path.getsize(_app_css))
+else:
+    raise SystemExit('ABORT: missing app.css (B1a 外置样式缺失)')
+# 2026-11-05 B1b：外置静态常量表（8 个大常量，含 LB_KEYSVG）
+_app_data = os.path.join(BASE, 'app_data.js')
+if os.path.isfile(_app_data):
+    shutil.copy2(_app_data, os.path.join(flat, 'app_data.js'))
+    print('app_data.js copied: %d B' % os.path.getsize(_app_data))
+else:
+    raise SystemExit('ABORT: missing app_data.js (B1b 外置常量缺失)')
+# 2026-11-05 B1c/B1d：外置 UI / 核心脚本 → terser 压缩后改名为 *.min.js
+#   设计（用户口径）：
+#     · 源文件（app_ui.js / app_core.js）保持带注释可读，永不上传
+#     · 上传的是产物 app_ui.min.js / app_core.min.js（去注释+重排版，**不混淆不压缩**）
+#     · 环境变量 DINO_NO_MINIFY=1 → 跳过压缩，直接把源文件按 .min.js 名部署（保留退路）
+#     · terser 不可用/失败 → 自动回退为原文部署并告警
+#     · 压缩产物 node --check 不过 → 中止部署
+_MANIFEST = {}
+
+def _sha(p):
+    h = hashlib.sha256()
+    with io.open(p, 'rb') as f:
+        for chunk in iter(lambda: f.read(1 << 20), b''):
+            h.update(chunk)
+    return h.hexdigest()
+
+def _build_js(src_name, out_name):
+    src = os.path.join(BASE, src_name)
+    if not os.path.isfile(src):
+        raise SystemExit('ABORT: missing %s' % src_name)
+    dst = os.path.join(flat, out_name)
+    minified = False
+    if os.environ.get('DINO_NO_MINIFY') == '1':
+        shutil.copy2(src, dst)
+        print('SKIP-MINIFY %s -> %s（DINO_NO_MINIFY=1）' % (src_name, out_name))
+    else:
+        npx = shutil.which('npx.cmd') or shutil.which('npx')
+        if not npx:
+            shutil.copy2(src, dst)
+            print('WARN: npx 不可用，%s 原文部署' % src_name)
+        else:
+            r = subprocess.run([npx, '--yes', 'terser@5', src, '--comments', 'false', '-o', dst],
+                               capture_output=True, timeout=300)
+            ok = (r.returncode == 0) and os.path.isfile(dst) and os.path.getsize(dst) > 1000
+            if not ok:
+                shutil.copy2(src, dst)
+                print('WARN: terser 失败（rc=%d），%s 原文部署：%s' % (
+                    r.returncode, src_name, (r.stderr or b'').decode('utf-8', 'replace')[:160]))
+            else:
+                chk = subprocess.run(['node', '--check', dst], capture_output=True)
+                if chk.returncode != 0:
+                    raise SystemExit('ABORT: %s 压缩后 node --check 未通过：%s' % (
+                        out_name, (chk.stderr or b'').decode('utf-8', 'replace')[:300]))
+                minified = True
+    s_sz, d_sz = os.path.getsize(src), os.path.getsize(dst)
+    print('%s -> %s  %d -> %d B（%.1f%%%s）' % (
+        src_name, out_name, s_sz, d_sz, (d_sz - s_sz) * 100.0 / max(1, s_sz),
+        '，已压缩' if minified else '，未压缩'))
+    _MANIFEST[out_name] = {
+        'source': src_name, 'source_sha256': _sha(src),
+        'output_sha256': _sha(dst), 'source_bytes': s_sz, 'output_bytes': d_sz,
+        'minified': minified,
+    }
+
+_build_js('app_ui.js', 'app_ui.min.js')
+_build_js('app_core.js', 'app_core.min.js')
+
+# 2026-11-05：外置资源 ?v= 自动对齐当前 LB_VERSION
+#   防坑：标签里的版本号若手工遗留在旧值，app_data.js 内容更新后客户端仍读旧缓存
+_html_p = os.path.join(flat, 'index.html')
+_h = io.open(_html_p, encoding='utf-8').read()
+_mv = re.search(r"var LB_VERSION = '(v[0-9]+-[0-9]+)'", _h)
+if _mv:
+    _ver = _mv.group(1)
+    _n = 0
+    for _f in ('app.css', 'app_data.js', 'app_ui.min.js', 'app_core.min.js'):
+        _h, _c = re.subn(r'(/' + re.escape(_f) + r'\?v=)[^"\']+', r'\g<1>' + _ver, _h)
+        _n += _c
+    io.open(_html_p, 'w', encoding='utf-8', newline='').write(_h)
+    print('asset ?v= -> %s（改写 %d 处）' % (_ver, _n))
+    # 构建清单：记录源/产物 sha256，便于追溯“线上这份对应哪个源”
+    _MANIFEST['version'] = _ver
+    _MANIFEST['built_at'] = __import__('time').strftime('%Y-%m-%d %H:%M:%S')
+    io.open(os.path.join(flat, 'build_manifest.json'), 'w', encoding='utf-8', newline='').write(
+        json.dumps(_MANIFEST, ensure_ascii=False, indent=2))
+    print('build_manifest.json 已生成（%d 项）' % len(_MANIFEST))
+else:
+    print('WARN: LB_VERSION 未找到，跳过 ?v= 对齐')
+
+# 2026-08-29 PWA 文件（manifest / sw.js / 图标 → flat 根目录 + icons/）
+_pwa = os.path.join(BASE, 'pwa')
+shutil.copy2(os.path.join(_pwa, 'manifest.webmanifest'), os.path.join(flat, 'manifest.webmanifest'))
+shutil.copy2(os.path.join(_pwa, 'sw.js'), os.path.join(flat, 'sw.js'))
+os.makedirs(os.path.join(flat, 'icons'), exist_ok=True)
+shutil.copy2(os.path.join(_pwa, 'icon-192.png'), os.path.join(flat, 'icons', 'icon-192.png'))
+shutil.copy2(os.path.join(_pwa, 'icon-512.png'), os.path.join(flat, 'icons', 'icon-512.png'))
+shutil.copy2(os.path.join(_pwa, 'icon-maskable-192.png'), os.path.join(flat, 'icons', 'icon-maskable-192.png'))   # v4465 maskable/apple icons
+shutil.copy2(os.path.join(_pwa, 'icon-maskable-512.png'), os.path.join(flat, 'icons', 'icon-maskable-512.png'))
+shutil.copy2(os.path.join(_pwa, 'apple-touch-icon-180.png'), os.path.join(flat, 'icons', 'apple-touch-icon-180.png'))
+# 2026-09-11 v978：MDI 图标字体本地化（消除 cdn.jsdelivr.net 外链 —— 该 CSS 阻塞渲染，链路抖动时整页 JS 不执行）
+_mdi = os.path.join(_pwa, 'mdi')
+if os.path.isdir(_mdi):
+    shutil.copytree(_mdi, os.path.join(flat, 'mdi'), dirs_exist_ok=True)
+    print('MDI files copied')
+else:
+    print('WARN: pwa/mdi missing')
+print('PWA files copied')
+
+# 2026-10-08 v4489-A（用户口径）：_headers 缓存头（Workers Static Assets 支持）——版本化/哈希资源长缓存
+_hdr = os.path.join(BASE, r'tmp\_headers')
+if os.path.isfile(_hdr):
+    shutil.copy2(_hdr, os.path.join(flat, '_headers'))
+    print('_headers copied')
+else:
+    print('WARN: tmp/_headers missing')
+
+# 2026-08-28 地图 WebP（新架构 maps/ 目录，随 CF Pages 打包）：缩略 *_s.webp + 高清 *.webp（坐标浮窗用，去掉 _s）
+# 源目录 tmp/dino-flat 会被 rmtree 重建，故每次打包前先由 _map_webp2.py + _map_hi2.py 生成到 tmp/dino-flat/maps，
+# 这里直接复制 tmp/_map_assets/（统一源）确保可重复
+_map_src = os.path.join(BASE, r'tmp\_map_assets')
+if os.path.isdir(_map_src):
+    shutil.copytree(_map_src, os.path.join(flat, 'maps'), dirs_exist_ok=True)
+    print('maps copied from _map_assets')
+else:
+    # 兼容旧路径：直接从已生成的 maps 复制
+    _map_existing = os.path.join(BASE, r'tmp\dino-flat\maps')
+    if os.path.isdir(_map_existing):
+        print('maps already in dino-flat')
+    else:
+        print('WARN: no maps source (_map_assets or dino-flat/maps)')
+
+# ----------------------------------------------------------------
+# 静态表：本地供给（2026-09-20 起，不再连 HA）
+# 规则：缺任何一个立刻中止（不静默、不从 HA 兜底）
+# 本地路径均已与 HA 现行版本核对 md5 一致；icon_anti_color.json 于 2026-09-20 从 HA 校准一次后本地为准
+STATIC_SRC = {
+    'icon_zh_map.json':     r'汉化\_upload\icon_zh_map.json',
+    'gene_traits_zh.json':  r'tmp\gene_traits_zh.json',
+    'dino_prefix_zh.json':  r'tmp\dino_prefix_zh.json',
+    'dino_colors.json':     r'tmp\dino_colors.json',
+    'icon_anti_color.json': r'icon_anti_color.json',
+    'icons2.json':          r'汉化\icons2.json',
+    'facility_zh.json':     r'汉化\facility_zh.json',
+    'facility_official.json': r'汉化\facility_official.json',   # v3556：容器自带官中名（PO InventoryNameOverride/DescriptiveName 溯源）
+    'item_zh.json':         r'汉化\item_zh.json',
+    'itemstats.json':       r'汉化\itemstats.json',
+    'values.json':          r'..\引用\ARKStatsExtractor-dev\values.json',
+    'ASA-values.json':      r'..\引用\ARKStatsExtractor-dev\ASA-values.json',
+    'lb_material.json':     r'lb_material.json',   # 2026-09-24 v3966：材质【唯一数据源】（332 项：材质/关键材料用量/来源/配方明细）
+    'abe_fungi.json':       r'abe_fungi.json',     # v4705（用户口径）：畸变毒菌静态数据集（2132 植株 + 149 云点）
+    'cave_entrances.json':  r'cave_entrances.json',   # v4842（用户口径）：洞穴入口静态数据集（Wiki 坐标；123 入口）
+    'dino_rules.json':      r'dino_rules.json',    # 2026-09-25 v3996：规则名单【唯一数据源】（设施图标特例 116 + 生物判定 10 名单）
+    'dino_rank_alias.json': r'dino_rank_alias.json',   # 2026-10-01 v4217：装备榜鞍类名词干别名【唯一数据源】（stemFix 20 组；用户要求数据化、HTML 零硬编码）
+    'biome_zh.json':        r'汉化\biome_zh.json',      # 2026-10-04 v4332：生物群落/地名中文【唯一数据源】
+    'weather_zh.json':      r'汉化\weather_zh.json',    # 2026-10-04 v4336：天气名/后缀/高危名单/各图不生效名单【唯一数据源】
+    'cfg_factory_baseline.json': r'tmp\cfg_factory_baseline.json',
+    'cfg_default_cost.json': r'cfg_default_cost.json',   # v5507：ConfigOverride 默认配方/堆叠上限（ARK Wiki 抓取）
+    'bb_notes.json':        r'bb_notes.json',   # v5526（用户口径）：粌粌笔记（服务器小提示，固定数据文件）
+    'cfg_zh.json':          r'汉化\cfg_zh.json',   # 2026-10-27：服务端配置项中文表（372 条）   # 2026-10-27：方舟配置出厂默认基线（客户端清空重生成实测：ServerSettings 111 + ShooterGameMode 128）
+    'wiki_dex.json':        r'wiki_dex.json',   # 2026-10-28 v66：Wiki 面板结构化数据（8 tab 数据源 + FOODS 图标走项目 CDN + OVERVIEW 属性表）
+}
+_missing = []
+for _f, _rel in STATIC_SRC.items():
+    _sp = os.path.join(BASE, _rel)
+    if not os.path.isfile(_sp):
+        _missing.append('%s <- %s' % (_f, _rel))
+        continue
+    shutil.copy2(_sp, os.path.join(flat, _f))
+    print('LOCAL %s <- %s' % (_f, _rel))
+if _missing:
+    raise SystemExit('ABORT: 缺少本地静态表（不兜底、不连 HA）: ' + '; '.join(_missing))
+print('static tables: %d/%d from LOCAL' % (len(STATIC_SRC), len(STATIC_SRC)))
+
+# v72b：Wiki 拆分数据（wiki/index.json + wiki/<物种>.json）—— 按需加载，点哪个下哪个
+_wiki_dir = os.path.join(BASE, 'wiki')
+if os.path.isdir(_wiki_dir):
+    _wdst = os.path.join(flat, 'wiki')
+    shutil.copytree(_wiki_dir, _wdst, dirs_exist_ok=True)
+    _n = len([x for x in os.listdir(_wdst) if x.endswith('.json')])
+    print('wiki/ copied: %d json' % _n)
+else:
+    raise SystemExit('ABORT: 缺少 wiki/ 目录（先跑 tmp/_v72_split.py 拆分数据）')
+
+# v5170：图标字体（Kenney Input Prompts 1.5, CC0）—— 4 个 woff2 → flat/fonts/
+_FONT_SRC = os.path.join(BASE, r'tmp\_keyfont2')
+_FONT_DST = os.path.join(flat, 'fonts')
+os.makedirs(_FONT_DST, exist_ok=True)
+_fonts = sorted(f for f in os.listdir(_FONT_SRC) if f.endswith('.woff2')) if os.path.isdir(_FONT_SRC) else []
+_ff = 0
+for _f in _fonts:
+    _sp = os.path.join(_FONT_SRC, _f)
+    if os.path.isfile(_sp):
+        _html0 = io.open(os.path.join(BASE, 'dino-import-new.html'), encoding='utf-8').read()
+        _i = _html0.find("var LB_VERSION = '")
+        _ver0 = _html0[_i + 18:_html0.find("'", _i + 18)] if _i >= 0 else 'v0'
+        # v5183：字体文件**不再按版本重命名**。wrangler 按内容 hash 去重，内容未变的字体不会上传，
+        #   改名会导致新路径 404（v5180 实测：7 套字体全部 404）。固定名 + CSS 侧 ?v=<版本> 破缓存。
+        _dst = _f
+        shutil.copy2(_sp, os.path.join(_FONT_DST, _dst))
+        _ff += 1
+    else:
+        print('WARN font missing: %s' % _f)
+print('fonts: %d/%d -> fonts/' % (_ff, len(_fonts)))
+
+# v5202：部分着色键的红臂 mask（Kenney PNG 提取的红色像素）→ flat/keys/redarm/
+_RA_SRC = os.path.join(BASE, r'tmp\keyredarm')
+_RA_DST = os.path.join(flat, 'keys', 'redarm')
+_ra = sorted(f for f in os.listdir(_RA_SRC) if f.lower().endswith('.png')) if os.path.isdir(_RA_SRC) else []
+if _ra:
+    os.makedirs(_RA_DST, exist_ok=True)
+    for _f in _ra:
+        shutil.copy2(os.path.join(_RA_SRC, _f), os.path.join(_RA_DST, _f))
+print('redarm masks: %d -> keys/redarm/' % len(_ra))
+
+# 版本自检文件：dino-import.version（内容 = 当前 LB_VERSION；部署时自动生成，前端对比发现新版提示刷新）
+import re
+html = io.open(os.path.join(BASE, 'dino-import-new.html'), encoding='utf-8').read()
+m = re.search(r"var LB_VERSION = '([^']+)'", html)
+ver = m.group(1) if m else 'unknown'
+io.open(os.path.join(flat, 'dino-import.version'), 'w', encoding='utf-8').write(ver)
+print('version file: %s' % ver)
+
+# 1. icons2.json URL 集合
+icons = json.load(io.open(os.path.join(flat, 'icons2.json'), encoding='utf-8'))
+urls = set()
+for it in icons:
+    if it.get('url'):
+        urls.add(it['url'])
+print('icons2 urls=%d' % len(urls))
+
+# 2. webp_map 交集
+webp_map = json.load(io.open(os.path.join(BASE, r'tmp\webp_map.json'), encoding='utf-8'))
+need = {u: v for u, v in webp_map.items() if u in urls}
+print('needed thumbs=%d' % len(need))
+
+# 3. 复制需要的缩略图（webp_map 回 CF Pages）
+thumb_src = os.path.join(BASE, r'tmp\webp96')
+thumb_dst = os.path.join(flat, 'thumbs', 'webp96')
+os.makedirs(thumb_dst, exist_ok=True)
+copied = 0
+for v in need.values():
+    fname = v.split('/')[-1]
+    sp = os.path.join(thumb_src, fname)
+    if os.path.exists(sp):
+        shutil.copy2(sp, os.path.join(thumb_dst, fname))
+        copied += 1
+print('copied=%d' % copied)
+
+# 4. 精简 webp_map.json
+io.open(os.path.join(flat, 'webp_map.json'), 'w', encoding='utf-8').write(json.dumps(need, ensure_ascii=False))
+
+# 4.5 v1119：按类型生成资源包（packs/*.bin + assets.idx）——必须在 zip 之前（flat 目录每次 rmtree 重建，所以每次都要重新生成）
+try:
+    import subprocess, sys
+    _pk = os.path.join(BASE, r'tmp\_pack_assets_v3.py')   # v1121：必拉集优先分包（thumbs part0=717、其余按需）
+    if os.path.exists(_pk):
+        _r = subprocess.run([sys.executable, _pk], capture_output=True, text=True, encoding='utf-8', errors='replace')
+        print('PACK rc=%d' % _r.returncode)
+        for _l in (('' + (_r.stdout or '')).splitlines()[:8]):
+            print('  ' + _l)
+        if _r.returncode != 0:
+            print('  ERR: ' + ('' + (_r.stderr or ''))[:300])
+    else:
+        print('WARN: _pack_assets_v3.py missing')
+except Exception as _e:
+    print('PACK failed: %s' % _e)
+
+# 5. 打包
+zp = os.path.join(BASE, r'tmp\dino-flat.zip')
+if os.path.exists(zp): os.remove(zp)
+z = zipfile.ZipFile(zp, 'w', zipfile.ZIP_DEFLATED)
+for root, dirs, files in os.walk(flat):
+    for f in files:
+        full = os.path.join(root, f)
+        rel = os.path.relpath(full, flat)
+        z.write(full, rel.replace('\\', '/'))
+z.close()
+io.open('b:/项目/Hass ASA Server Monitor/tmp/_repack_done.txt','w',encoding='utf-8').write('size=%d' % os.path.getsize(zp))
+print('DONE size=%d' % os.path.getsize(zp))

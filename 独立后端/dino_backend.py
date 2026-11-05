@@ -47,7 +47,406 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime
 
+# ================= 应用日志（2026-11-05 方案A：只增不改） =================
+# 原则：
+#   1) 旁路记录：不替换任何现有 print、不改任何 except 类型、不改任何返回值/控制流
+#   2) 初始化全程 try/except —— 日志不可用绝不能阻塞服务启动（降级 NullHandler）
+#   3) 独立文件 dino_backend.app.log，不碰 watchdog 的 dino_backend.log（stdout 重定向）
+#   4) 轮转 5MB x 3，UTF-8（Windows 默认 GBK 会把中文写日志写炸）
+import logging as _logging
+
+
+def _log_setup():
+    try:
+        from logging.handlers import RotatingFileHandler
+        lg = _logging.getLogger('dino')
+        if lg.handlers:
+            return lg
+        lg.setLevel(_logging.INFO)
+        lg.propagate = False
+        _p = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dino_backend.app.log')
+        h = RotatingFileHandler(_p, maxBytes=5 * 1024 * 1024, backupCount=3, encoding='utf-8', delay=True)
+        h.setFormatter(_logging.Formatter(
+            '[%(asctime)s] [%(levelname)s] [%(threadName)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
+        lg.addHandler(h)
+        return lg
+    except Exception:
+        try:
+            lg = _logging.getLogger('dino')
+            lg.addHandler(_logging.NullHandler())
+            return lg
+        except Exception:
+            return None
+
+
+_LOG = _log_setup()
+
+
+def _sexc(tag, msg=''):
+    """记录当前异常（含栈）；自身绝不抛错，也不改变控制流。"""
+    try:
+        if _LOG is not None:
+            _LOG.exception('[%s] %s' % (tag, msg))
+    except Exception:
+        pass
+
+
+def _sinfo(msg):
+    """普通信息日志；失败静默。"""
+    try:
+        if _LOG is not None:
+            _LOG.info(msg)
+    except Exception:
+        pass
+
 # ================= 配置 =================
+# P0（2026-11-04）：方舟安全回档 —— 只读能力模块（list / verify / audit）
+#   独立模块，加载失败不拖垮主服务（_arkbk=None 时相关路由返回 500）
+try:
+    import ark_backup as _arkbk
+except Exception as _e_arkbk:      # noqa: F841
+    _arkbk = None
+
+# ============ P3（2026-11-04）：安全回档引擎（job 编排 / 状态探测）============
+# 依据：plans\搞事系统_方舟安全回档_方案.md §5.5.3 / §6.3-§6.7 / §6.10
+# 设计：真正的文件级动作在 ark_backup（swap_ark / create_backup / precheck），
+#       本层只负责「调度 + 状态机 + 鉴权 + 串行互斥」。
+_ARKBK_JOBS = {}                 # jobId -> dict
+_ARKBK_JOB_LOCK = threading.Lock()
+_ARKBK_BUSY = {}                 # server -> jobId（同服互斥，防并发回档）
+# v6058（按推荐补全）：**服务器级互斥** —— 回档期间挡住外部对该服的 start/kill/restart。
+#   原 `_srvctl_acquire(server, action)` 是 **(服务器, 动作)** 粒度 ⇒ `('Cen','start')` 与
+#   `('Cen','kill')` 是两把不同的锁、互不排斥 ⇒ 回档 stopped→restoring 的无锁窗口里，
+#   别人点启动就会把进程拉起来读半截档。这里用独立字典做「整台服务器」级占用。
+_ARKBK_HOLD = {}                 # server -> jobId（回档进行中）
+_ARKBK_JOB_KEEP = 1800           # 已结束 job 保留 30 分钟，之后 GC 掉
+# v6058：阶段权重（原来的前端 TOTAL=8 是**等权**估算，restoring 花 40s 与 saveworld 花 2s
+#   各算 1/8，百分比是假的）。改为后端按真实耗时量级下发 pct。
+_ARKBK_STEP_PCT = {'saveworld': 6, 'precheck': 12, 'snapshot': 20, 'stopping': 30,
+                   'stopped': 38, 'restoring': 60, 'starting': 72, 'verifying': 92}
+_ARKBK_JOB_TTL = 7200            # 2 小时
+_ARKBK_POOL = __import__('concurrent.futures', fromlist=['ThreadPoolExecutor']).ThreadPoolExecutor(max_workers=1)
+# v6058：原顺序把 snapshot 排在 stopping **之后**，与实际实现（备份 → 停服 → 换档）相反，
+#   该常量全文件无使用点，纯误导（曾让进度条按错误顺序实现）⇒ 按真实执行顺序修正。
+_ARKBK_PHASES = ('queued', 'saveworld', 'precheck', 'snapshot', 'stopping', 'stopped',
+                 'restoring', 'starting', 'verifying', 'done', 'failed')
+
+
+def _arkbk_rcon_alive(server, timeout=3):
+    """RCON 端口 TCP 可达 ⇒ 视为在跑（方案 §6.10：不走 srvctl/status，那里要 10 分钟）"""
+    port = (SERVERS or {}).get(server)
+    if not port:
+        return {'rconPort': None, 'rconReachable': False, 'running': False}
+    try:
+        sk = socket.create_connection((RCON_HOST, port), timeout=timeout)
+        sk.close()
+        return {'rconPort': port, 'rconReachable': True, 'running': True}
+    except Exception:
+        return {'rconPort': port, 'rconReachable': False, 'running': False}
+
+
+def _arkbk_new_job(server, point_id, operator, dry_run, action='rollback'):
+    jid = 'ark%s' % (int(time.time() * 1000) % 10 ** 12)
+    job = {
+        'id': jid, 'server': server, 'pointId': point_id, 'operator': operator,
+        'action': action, 'dryRun': bool(dry_run),
+        'phase': 'queued', 'ok': None, 'error': '',
+        't0': time.time(), 't0str': time.strftime('%Y-%m-%dT%H:%M:%S'),
+        'steps': [], 'precheck': None, 'pct': 0, 'tEnd': 0,
+    }
+    with _ARKBK_JOB_LOCK:
+        # 清理过期 job
+        dead = [k for k, v in _ARKBK_JOBS.items() if time.time() - v['t0'] > _ARKBK_JOB_TTL]
+        for k in dead:
+            _ARKBK_JOBS.pop(k, None)
+        _ARKBK_JOBS[jid] = job
+        _ARKBK_BUSY[server] = jid
+    return job
+
+
+def _arkbk_step(job, phase, ok, msg='', extra=None):
+    """记一步（线程安全地原地更新 job）"""
+    with _ARKBK_JOB_LOCK:
+        job['phase'] = phase
+        # v6058：按阶段权重推进百分比（后端权威，前端不再自己数步骤）
+        try:
+            job['pct'] = int(_ARKBK_STEP_PCT.get(phase, job.get('pct') or 0))
+        except Exception:
+            pass
+        job['steps'].append({
+            'phase': phase, 'ok': bool(ok), 'msg': (msg or '')[:300],
+            'at': int((time.time() - job['t0']) * 1000),
+        })
+        if extra:
+            job.update(extra)
+    try:
+        if _arkbk:
+            _arkbk._log('job %s [%s] %s %s' % (job['id'], phase, 'OK' if ok else 'FAIL', (msg or '')[:200]))
+    except Exception:
+        pass
+
+
+def _arkbk_finish(job, ok, err=''):
+    with _ARKBK_JOB_LOCK:
+        job['ok'] = bool(ok)
+        job['phase'] = 'done' if ok else 'failed'
+        job['error'] = (err or '')[:500]
+        job['elapsedMs'] = int((time.time() - job['t0']) * 1000)
+        # v6058：完成置 100%、记结束时刻（GC 与 lastjob 的保留期判据）
+        job['pct'] = 100 if ok else int(job.get('pct') or 0)
+        job['tEnd'] = time.time()
+        if _ARKBK_BUSY.get(job['server']) == job['id']:
+            _ARKBK_BUSY.pop(job['server'], None)
+        # v6058：解除服务器级互斥 —— 所有出口都会走 finish，放这里最稳
+        if _ARKBK_HOLD.get(job['server']) == job['id']:
+            _ARKBK_HOLD.pop(job['server'], None)
+
+
+def _arkbk_do_rollback(job, argv, cfg):
+    """执行体（在线程池里跑）。argv = {server, pointId, confirm, ackRisk, dryRun, skipSaveworld}"""
+    server = argv['server']
+    point = argv['pointId']
+    dry = bool(argv.get('dryRun'))
+    try:
+        # ① 状态 + saveworld（§5.5.3 ②，§15 C2：必须在 precheck 之前）
+        st = _arkbk_rcon_alive(server)
+        job['running'] = st.get('running')
+        if st.get('running') and not argv.get('skipSaveworld'):
+            r = _srvctl_one(server, 'saveworld', None, cfg)
+            _arkbk_step(job, 'saveworld', r.get('ok'),
+                        ('已保存世界 %sms' % r.get('ms')) if r.get('ok') else str(r.get('message')))
+            if not r.get('ok'):
+                _arkbk_finish(job, False, 'saveworld 失败：' + str(r.get('message')))
+                return
+            _arkbk_wait_ark_mtime(server, budget=20)
+        else:
+            _arkbk_step(job, 'saveworld', True,
+                        '服已停，跳过 saveworld' if not st.get('running') else '调用方要求跳过 saveworld')
+
+        # ② 闸门：saveworld 之后**强制 exe 重解析当前档**（方案 §6.6 的 reparse 阶段）
+        #    ⚠ 不这样做会算错人：`_cryo.json.gz` 若刚导出（ageSec 仍 < 30 分钟）会被判
+        #      「新鲜」而直接复用，可它是 saveworld **之前**的名单 ⇒ 期间进出的角色
+        #      全部漏判（🟡 该拦的没拦、🔴 该报的没报）。max_age=0 强制走重解析分支。
+        _cur_p3 = _arkbk.current_players(server, max_age=0)
+        if not _cur_p3.get('ok'):
+            _arkbk_finish(job, False, '重解析当前档失败：' + str(_cur_p3.get('error')))
+            return
+        job['reparsed'] = bool(_cur_p3.get('reparsed'))
+        pc = _arkbk.precheck(server, point, current=_cur_p3)
+        _arkbk_step(job, 'precheck', pc.get('ok'), pc.get('notice') or pc.get('error') or '',
+                    extra={'precheck': pc})
+        if not pc.get('ok'):
+            _arkbk_finish(job, False, '闸门执行失败：' + str(pc.get('error')))
+            return
+
+        verdict = pc.get('verdict')
+        if verdict != 'clear':
+            if not argv.get('ackRisk'):
+                _arkbk_finish(job, False, '存在风险角色（%s），需 ackRisk:true' % verdict)
+                return
+            cn_need = _arkbk_server_cn(server)
+            if (argv.get('confirm') or '') != cn_need:
+                _arkbk_finish(job, False, '存在风险角色，需输入服务器中文名「%s」确认' % cn_need)
+                return
+
+        if dry:
+            _arkbk_step(job, 'stopping', True, '[dry-run] 不执行停服/换档/启动')
+            _arkbk_finish(job, True, '')
+            return
+
+        # v6058：从这里开始会真正动服务器 ⇒ 置**服务器级互斥**（挡住外部 start/kill/restart）。
+        #   解除在 _arkbk_finish（所有出口都经过它）。
+        with _ARKBK_JOB_LOCK:
+            _ARKBK_HOLD[server] = job['id']
+
+        # ③ 备份当前档（§9 每服恒 1 份）
+        # ⚠ 撤销回档（action=restore）时**不能**备份 —— 否则会把 pre_restore.ark 覆盖成
+        #    「当前档」，接着 swap 的又是刚备份的当前档 ⇒ 原地打转，撤销失效。
+        #    撤销的兵底由 swap_ark 内的 `<当前档>.pre_swap.ark` 保留。
+        if argv.get('skipBackup'):
+            _arkbk_step(job, 'snapshot', True, '撤销回档：跳过新建备份（现有 pre_restore.ark 即为还原源）')
+        else:
+            bk = _arkbk.create_backup(server, operator=job.get('operator', ''), job_id=job['id'])
+            _arkbk_step(job, 'snapshot', bk.get('ok'),
+                        ('已备份 %.1f MB' % bk.get('mb', 0)) if bk.get('ok') else str(bk.get('error')))
+            if not bk.get('ok'):
+                _arkbk_finish(job, False, '备份失败，已中止（未降级）')
+                return
+
+        # ④ 停服
+        if st.get('running'):
+            r = _srvctl_one(server, 'kill', None, cfg)
+            _arkbk_step(job, 'stopping', r.get('ok'),
+                        ('已强杀 %sms' % r.get('ms')) if r.get('ok') else str(r.get('message')))
+            if not r.get('ok'):
+                _arkbk_finish(job, False, '停服失败：' + str(r.get('message')))
+                return
+            gone = _arkbk_wait_port_closed(server, budget=90)
+            _arkbk_step(job, 'stopped', gone, '端口已关闭' if gone else '等待端口关闭超时')
+            if not gone:
+                _arkbk_finish(job, False, '进程可能仍在运行，未换档')
+                return
+        else:
+            _arkbk_step(job, 'stopping', True, '服已停，跳过停服')
+            _arkbk_step(job, 'stopped', True, '已在停止状态')
+
+        # ⑤ 换档
+        rp = _arkbk.resolve_point(server, point)
+        if not rp.get('ok'):
+            _arkbk_finish(job, False, '目标档解析失败：' + str(rp.get('error')))
+            return
+        sw = _arkbk.swap_ark(server, rp['abs'])
+        _arkbk_step(job, 'restoring', sw.get('ok'),
+                    ('已换档 %.1f MB' % sw.get('sourceMB', 0)) if sw.get('ok') else str(sw.get('error')),
+                    extra={'swap': sw})
+        if not sw.get('ok'):
+            _arkbk_finish(job, False, '换档失败：' + str(sw.get('error')))
+            return
+
+        # v6059（用户口径「要记录已执行撤销的次数，当前备份档」）：
+        #   只有撤销（action=restore）才计数；换档成功即已生效 ——
+        #   即使随后启动失败，这次撤销也算「执行过」。
+        if job.get('action') == 'restore':
+            try:
+                _bu = _arkbk.bump_undo(server)
+                if _bu.get('ok'):
+                    job['undoCount'] = _bu.get('undoCount')
+            except Exception:
+                pass
+
+        # ⑥ 启动
+        try:
+            _srvctl_startq_new(job.get('operator') or 'arkbackup', [server])
+            _arkbk_step(job, 'starting', True, '已下发启动队列')
+        except Exception as e:
+            _arkbk_step(job, 'starting', False, '%s: %s' % (type(e).__name__, e))
+            _arkbk_finish(job, False, '启动下发失败：' + str(e))
+            return
+
+        # ⑦ 等上线（v6057：同时盯启动队列；失败即判失败）
+        _t_up = time.time()
+        up, _why = _arkbk_wait_online(server, budget=600)
+        _arkbk_step(job, 'verifying', up,
+                    ('RCON 已可连（%ds）' % int(time.time() - _t_up)) if up else _why)
+        if up:
+            _arkbk_finish(job, True, '')
+        else:
+            # v6057：原来这里是 `_arkbk_finish(job, True, '已启动，但…')` ——
+            # 把「启动失败」当成「完成（带提示）」上报，前端进度条因此显示"完成"而非红条，
+            # 这是用户「一直卡着没人发现」的直接原因之一。
+            _arkbk_finish(job, False, _why)
+    except Exception as e:
+        _arkbk_finish(job, False, '%s: %s' % (type(e).__name__, e))
+
+
+def _arkbk_wait_ark_mtime(server, budget=20):
+    """saveworld 后等当前档 mtime 变化（最多 budget 秒）"""
+    try:
+        md = _arkbk.detect_map_dir(server)[0]
+        if not md:
+            return False
+        nm = _arkbk._active_name(server, md)
+        if not nm:
+            return False
+        p = os.path.join(_arkbk.ARK_ROOT, server, 'ShooterGame', 'Saved', 'SavedArks', md, nm)
+        base = os.path.getmtime(p)
+        t0 = time.time()
+        while time.time() - t0 < budget:
+            time.sleep(1)
+            try:
+                if os.path.getmtime(p) != base:
+                    return True
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return False
+
+
+def _arkbk_wait_port_closed(server, budget=90):
+    t0 = time.time()
+    while time.time() - t0 < budget:
+        if not _arkbk_rcon_alive(server, timeout=2).get('rconReachable'):
+            return True
+        time.sleep(2)
+    return False
+
+
+def _arkbk_wait_online(server, budget=600):
+    """等服务器上线；**同时**盯启动队列 —— 队列一报失败就立即返回真实原因。
+
+    v6057（用户口径「没有触发启动，你怎么就没发现一直卡着啊」）：
+      原 `_arkbk_wait_port_open` 只看 RCON 端口，而启动队列在 Cen 撤销回档时
+      **14 秒**（20:34:53 下发 → 20:35:08 报错）就已经记录了
+      「启动过程中进程已退出（ASA 状态 Stopped）｜…LogCFCore: Error querying server mods:
+        ApiError: Failed (serverUnreachable)」，
+      回档流程却继续干等到 20:39:54（满 300 秒）才报「等待上线超时（可稍后手动查看）」，
+      真实原因被完全吞掉，界面上也没有任何红色告警 ⇒ 用户直到自己去看才发现。
+      改为每 2 秒同时检查队列 `done[]`，队列有结论就立刻结束。
+
+    返回 (up: bool, reason: str)
+    """
+    t0 = time.time()
+    _seen_proc = False
+    while time.time() - t0 < budget:
+        if _arkbk_rcon_alive(server, timeout=2).get('rconReachable'):
+            return True, ''
+        try:
+            _q = _startq_view() or {}
+            for _d in (_q.get('done') or []):
+                if _d.get('server') != server:
+                    continue
+                try:
+                    _te = float(_d.get('t_end') or 0)
+                except Exception:
+                    _te = 0
+                if _te < t0:
+                    continue                    # 上一轮的旧记录，忽略
+                if _d.get('ok'):
+                    continue                    # 队列认为起成功，只是端口还没通 -> 继续等
+                _err = str(_d.get('err') or _d.get('msg') or '启动队列报错')
+                return False, '启动失败：' + _err
+        except Exception:
+            pass
+        # v6058（按推荐补全）：**进程状态硬判据** —— 队列没覆盖到的情形（队列被清空、
+        #   或启动不是本队列发起）由 ASA /server-status 兜底：先见 Starting/Running、
+        #   后变 Stopped ⇒ 进程起来过又退出，立即失败，不再等满预算。
+        try:
+            _pst = (_srvctl_proc_snapshot() or {}).get(server) or ''
+            if _pst in ('Starting', 'Running'):
+                _seen_proc = True
+            elif _pst == 'Stopped' and _seen_proc:
+                return False, ('启动失败：进程启动后又退出（ASA 状态 Stopped，%ds）'
+                               % int(time.time() - t0))
+        except Exception:
+            pass
+        time.sleep(2)
+    return False, '等待上线超时（%ds 内 RCON 未就绪，可到「服务器控制」看启动队列）' % int(budget)
+
+
+def _arkbk_job_gc():
+    """清理**已结束且超过保留期**的 job（v6058：原实现没有主动 GC，
+    只在新 job 创建时顺带清 2 小时以上的 ⇒ 失败条会一直挂着，重开面板还被 lastjob 恢复）。"""
+    now = time.time()
+    dead = []
+    with _ARKBK_JOB_LOCK:
+        for k, v in list(_ARKBK_JOBS.items()):
+            if v.get('phase') not in ('done', 'failed'):
+                continue
+            if now - float(v.get('tEnd') or v.get('t0') or 0) > _ARKBK_JOB_KEEP:
+                dead.append(k)
+        for k in dead:
+            _ARKBK_JOBS.pop(k, None)
+    return len(dead)
+
+
+def _arkbk_server_cn(server):
+    """服务器中文名（execute/rollback 的 confirm 用）"""
+    try:
+        return (SERVER_THEMES.get(server) or {}).get('name') or server
+    except Exception:
+        return server
+
 DINO_DATA = os.environ.get('DINO_DATA', r'D:\ARK Server\DinoData')
 
 # ============ Wiki 按需抓取（v72e）============
@@ -401,6 +800,12 @@ def _wk_forms(x):
 
 
 _UE_BP_RE = _re.compile(r'^(.*?)_character_bp(?:_([A-Za-z0-9_]+))?$', _re.I)
+# v6030：另有「Xxx_Character_C」这种**没有 _bp、没有变体**的写法（如 Leech_Character_C）。
+#   wiki 站上这类物种以主名收录（白名单 v20261029 明确含 'leech'），
+#   而旧正则只认 _character_bp ⇒ 候选退化成 'leech-character' ⇒ 404 ⇒
+#   概览/驯服/采集/繁殖 全空、AI 整理也因无原文而 ready=false。
+#   只放开「纯 _Character」这一种；带变体的 Xxx_Character_Y 仍返回 []（不超范围）。
+_UE_PLAIN_RE = _re.compile(r'^(.*?)_character$', _re.I)
 
 
 def _wk_ue_names(key):
@@ -422,7 +827,12 @@ def _wk_ue_names(key):
         s = s[:-2]
     m = _UE_BP_RE.match(s)
     if not m:
-        return []
+        # v6030：兼容纯 _Character 形态（Leech_Character_C -> Leech -> 候选 leech）
+        _m2 = _UE_PLAIN_RE.match(s)
+        if not _m2:
+            return []
+        _b2 = _re.sub(r'_+', ' ', (_m2.group(1) or '')).strip()
+        return [_b2] if _b2 else []
     base = _re.sub(r'_+', ' ', (m.group(1) or '')).strip()
     var = _re.sub(r'_+', ' ', (m.group(2) or '')).strip()
     out = []
@@ -1030,6 +1440,7 @@ def _wiki_log(msg):
             with open(p, 'w', encoding='utf-8') as f:
                 f.writelines(ls)
     except Exception:
+        _sexc('wiki_log')
         pass
 
 
@@ -1078,7 +1489,11 @@ def _wiki_worker(key):
                 url = WIKI_ROOT + '/' + _cand + (('/' + sub) if sub else '')
                 _wiki_log('start %s %s slug=%s' % (key, block, _cand))
                 try:
-                    raw = _wiki_fetch_page(url, 60 if block == 'HOME' else 18)
+                    # v6107（用户口径「雪鸮怎么会没取到 wikily 数据」）：
+                    #   实测雪鸮首页 741 KB，从本机读到 78.9s 才抛 The read operation timed out
+                    #   → 触发 ark 兜底 → 只得到 HOME/ABIL，前端 tabs/tabHtml/zh 全空。
+                    #   原值 60s(HOME)/18s(子页) 对大页面不够；改为 150s/45s。
+                    raw = _wiki_fetch_page(url, 150 if block == 'HOME' else 45)
                     _used = _cand
                     if _si > 0:
                         _wiki_log('slug hit %s -> %s' % (key, _cand))
@@ -1216,83 +1631,6 @@ def _wiki_worker(key):
             if t:
                 t['status'] = 'error'
                 t['err'] = str(e)[:160]
-
-
-def _wk_task_get(key, start, cfg):
-    """通用 wiki 任务状态机（物种 / 物品共用）。
-
-    流程：键校验 -> 进行中任务 -> 缓存就绪 -> （未启动）error / idle -> 起后台任务 -> fetching
-    cfg:
-      id_field    : 返回体主键字段名（'key' 物种 / 'cls' 物品）
-      tasks, lock : 任务表与锁
-      valid       : fn(key)->bool
-      load        : fn(key)->cached|None
-      is_ready    : fn(cached)->bool
-      ready_extra : fn(cached)->dict        额外字段（物种 _miss）
-      fail_err    : fn(cached)->str         缓存「全失败」时的错误文案；'' 表示非全失败
-      total       : int
-      meta        : fn(key)->dict           起任务时附加元数据（物品 slug）
-      worker      : fn(key)
-    """
-    key = str(key or '').strip()
-    idf = cfg.get('id_field') or 'key'
-    if not key or not (cfg.get('valid') or (lambda x: True))(key):
-        return {idf: key, 'status': 'error', 'err': 'bad key'}
-    tasks, lock = cfg['tasks'], cfg['lock']
-    total = cfg.get('total') or 1
-    ready_extra = cfg.get('ready_extra') or (lambda c: {})
-
-    with lock:
-        t = tasks.get(key)
-    if t and t.get('status') in ('fetching', 'partial'):
-        d = {idf: key, 'status': t['status'], 'done': t.get('done', 0),
-             'total': t.get('total', total), 'err': t.get('err'),
-             'data': (t.get('data') if t.get('data') else None)}
-        if t.get('slug'):
-            d['slug'] = t['slug']
-        return d
-
-    cached = cfg['load'](key)
-    miss = None
-    if cached and cfg['is_ready'](cached):
-        extra = ready_extra(cached) or {}
-        miss = extra.get('_miss')
-        # v5862（用户口径「战车 的 wiki 似乎没有和 泰克悬浮艇 走同样的解析逻辑」）：
-        #   ark 回退物种的 wiki.gg 页面可能本身就是 stub（BattleRig 只有 Equipment/Notes，
-        #   没有 HOME/ABIL/HARVEST/GATHER 段）⇒ _miss 永远非空 ⇒ 每次带 start 的请求都重新起抓取任务、
-        #   前端永远拿不到 ready（TAB 残缺 + 反复重抓 wiki.gg）。
-        #   只要 is_ready 已通过（_src=='ark' 且 _arkVer 达标），就按 ready 返回，_miss 照旧附带供调试。
-        _isArkCache = False
-        try:
-            _isArkCache = ((cached.get('DATA') or {}).get('_src') == 'ark')
-        except Exception:
-            _isArkCache = False
-        if not miss or not start or _isArkCache:
-            d = {idf: key, 'status': 'ready', 'done': total, 'total': total,
-                 'data': cached, '_from': 'cache'}
-            d.update(extra)
-            return d
-
-    if not start:
-        e = ''
-        if cached:
-            e = (cfg.get('fail_err') or (lambda c: ''))(cached) or ''
-        if e:
-            return {idf: key, 'status': 'error', 'done': 0, 'total': total, 'err': e}
-        return {idf: key, 'status': 'idle', 'done': 0, 'total': total}
-
-    meta = (cfg.get('meta') or (lambda k: {}))(key) or {}
-    tk = {'status': 'fetching', 'done': 0, 'total': total, 'err': None,
-          'data': cached, 'startedAt': int(time.time() * 1000)}
-    tk.update(meta)
-    with lock:
-        tasks[key] = tk
-    threading.Thread(target=cfg['worker'], args=(key,), daemon=True).start()
-    d = {idf: key, 'status': 'fetching', 'done': 0, 'total': total, 'data': cached}
-    d.update(meta)
-    if cached:
-        d['_miss'] = miss
-    return d
 
 
 def _wk_task_get(key, start, cfg):
@@ -3890,6 +4228,7 @@ def _bb_notes_read():
     except FileNotFoundError:
         return {'version': 1, 'updated': '', 'notes': [], 'missing': True}
     except Exception:
+        _sexc('bb_notes_read')
         pass
     return {'version': 1, 'updated': '', 'notes': [], 'missing': True}
 
@@ -4480,8 +4819,834 @@ def check_login(username, password):
     return acc.get('nick') or username
 
 
-# 写 accounts.json（线程锁 + .bak 备份 + 原子替换；写后刷新内存缓存）
-_ACCOUNTS_LOCK = threading.Lock()
+# ===== P1 新增：角色等级判定（零侵入；不被既有逻辑调用，仅新接口/登录响应用）=====
+def _role_level(username):
+    """3=系统拥有者　2=二级管理员(accounts.role=='admin2')　1=普通玩家。
+    拥有者硬编码判定（不依赖 accounts 里的 role 字段）。
+    异常一律回落 1，绝不抛错。"""
+    try:
+        if username == 'whiterober':
+            return 3
+        return 2 if ((_accounts().get(username, {}) or {}).get('role') or '') == 'admin2' else 1
+    except Exception:
+        return 1
+
+
+# ===== v6023（用户口径）：srvctl 会话 Token（HMAC 无状态签名）=====
+# 背景：/api/srvctl/action 等原先只校验前端自报的 username ⇒ 任何人只要知道管理员用户名，
+#       一句 curl 就能启停服务器 / 清空全图野龙 / 发任意 RCON，且 srvctl.log 记的是伪造的用户名，事后查不到真凶。
+# 设计：登录时发 token（username|expire + HMAC 签名），请求时验签。
+#       **完全无状态** ⇒ 重启后端 token 依然有效，绝不会把所有人踢出去重登。
+#       签名里带「密码指纹」⇒ 改密码即自动吊销该账号所有旧 token。
+# 强度：写接口（action / rcon）强制 token；读接口 token 优先、无 token 时兼容旧的 username 直报（保持探测与兼容）。
+import hashlib as _hashlib
+import hmac as _hmac
+import base64 as _b64
+
+_SRVCTL_SECRET_CACHE = None
+_SRVCTL_TOKEN_DAYS = 30
+
+
+def _srvctl_secret():
+    """签名密钥：环境变量 SRVCTL_SECRET 优先；否则读 accounts.json 同目录 srvctl_secret.txt；都没有则生成落盘。"""
+    global _SRVCTL_SECRET_CACHE
+    if _SRVCTL_SECRET_CACHE:
+        return _SRVCTL_SECRET_CACHE
+    v = (os.environ.get('SRVCTL_SECRET') or '').strip()
+    if not v:
+        p = os.path.join(os.path.dirname(ACCOUNTS_FILE), 'srvctl_secret.txt')
+        try:
+            if os.path.exists(p):
+                with open(p, 'r', encoding='utf-8') as f:
+                    v = (f.read() or '').strip()
+            if not v:
+                v = os.urandom(32).hex()
+                with open(p, 'w', encoding='utf-8') as f:
+                    f.write(v + '\n')
+        except Exception:
+            v = 'dino-srvctl-fallback-v6023'
+    _SRVCTL_SECRET_CACHE = v
+    return v
+
+
+def _srvctl_pwdtag(username):
+    """密码指纹：改密码 ⇒ 旧 token 验签失败（天然吊销开关）。"""
+    try:
+        pwd = str((_accounts().get(username, {}) or {}).get('pwd') or '')
+        return _hashlib.sha256(pwd.encode('utf-8')).hexdigest()[:10]
+    except Exception:
+        return 'x'
+
+
+def _srvctl_sign(username, expire, pwdtag):
+    msg = ('%s|%d|%s' % (username, int(expire), pwdtag)).encode('utf-8')
+    return _hmac.new(_srvctl_secret().encode('utf-8'), msg, _hashlib.sha256).hexdigest()
+
+
+def _srvctl_make_token(username, days=None):
+    exp = int(time.time()) + int(days or _SRVCTL_TOKEN_DAYS) * 86400
+    raw = _b64.urlsafe_b64encode(('%s|%d' % (username, exp)).encode('utf-8')).decode('ascii').rstrip('=')
+    return raw + '.' + _srvctl_sign(username, exp, _srvctl_pwdtag(username))
+
+
+def _srvctl_check_token(token):
+    """校验 token → 返回 username；失败返回 ''。"""
+    try:
+        t = str(token or '').strip()
+        if '.' not in t:
+            return ''
+        raw, sig = t.split('.', 1)
+        pad = '=' * (-len(raw) % 4)
+        dec = _b64.urlsafe_b64decode((raw + pad).encode('ascii')).decode('utf-8')
+        u, exp_s = dec.rsplit('|', 1)
+        exp = int(exp_s)
+        if exp < int(time.time()):
+            return ''
+        if not _hmac.compare_digest(sig, _srvctl_sign(u, exp, _srvctl_pwdtag(u))):
+            return ''
+        return u
+    except Exception:
+        return ''
+
+
+def _srvctl_tk_of(handler, qs=None):
+    tk = ''
+    try:
+        ah = handler.headers.get('Authorization') or ''
+        if ah.lower().startswith('bearer '):
+            tk = ah[7:].strip()
+    except Exception:
+        pass
+    if not tk and qs:
+        try:
+            tk = (qs.get('tk') or [''])[0].strip()
+        except Exception:
+            tk = ''
+    return tk
+
+
+def _srvctl_guard(handler, qs=None, need_token=False):
+    """统一鉴权：成功返回 username；失败已 _send 并返回 ''（调用方直接 return）。"""
+    u = _srvctl_check_token(_srvctl_tk_of(handler, qs))
+    if not u:
+        if need_token:
+            handler._send(401, {'ok': False, 'code': 'token_invalid',
+                                'error': u'会话已过期，请重新登录'})
+            return ''
+        u = ((qs.get('username') or [''])[0].strip() if qs else '')
+        if not u:
+            handler._send(401, {'ok': False, 'code': 'login_required', 'error': 'login required'})
+            return ''
+    if _role_level(u) < 2:
+        handler._send(401, {'ok': False, 'code': 'level2_required', 'error': 'level2 required'})
+        return ''
+    return u
+
+
+# ===== P3 新增：服务器控制（后端直连 ASA Server Manager，零 HA；前端永不接触 token）=====
+# 依据：计划\需求_服务器控制入口_二级管理员.md §6.2 / §7.2 / §7.3
+SRVCTL_LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'srvctl.log')
+SRVCTL_ACTIONS = ('start', 'stop', 'kill', 'update', 'saveworld', 'fullbackup', 'destroy', 'rcon')
+SRVCTL_T_TIMEOUT = 60            # 普通动作超时（秒）
+SRVCTL_T_DESTROY = 600           # destroy 超时（对齐 HA）
+SRVCTL_T_FULLBACKUP = 600        # fullbackup 超时（保守同档）
+SRVCTL_ASYNC_ACTIONS = ('destroy', 'fullbackup')   # 走异步 job
+_SRVCTL_POOL = __import__('concurrent.futures', fromlist=['ThreadPoolExecutor']).ThreadPoolExecutor(max_workers=4)
+_SRVCTL_JOB_POOL = __import__('concurrent.futures', fromlist=['ThreadPoolExecutor']).ThreadPoolExecutor(max_workers=1)
+_SRVCTL_BUSY = {}                # (server, action) -> 起始 ts（同服同动作互斥）
+_SRVCTL_BUSY_LOCK = threading.Lock()
+_SRVCTL_JOBS = {}                # jobId -> {...}
+_SRVCTL_JOBS_LOCK = threading.Lock()
+_SRVCTL_JOB_TTL = 3600           # job 结果保留 1 小时
+
+
+def _rcon_exec(server, command, timeout=15):
+    """v54（2026-11-03）：直连 Source RCON 执行命令——与 HA `send_rcon_command_sync` 同路径。
+
+    为什么必须直连：实测 ASA Server Manager 的 `/rcon` 对 `KickPlayer` 这类
+    「按玩家定位」的命令**只回显不执行**（游戏内可见黄字但人没被踢）；
+    RCON 协议直连由服务器以 admin 身份执行，行为与 HA 版完全一致。
+
+    与 `rcon_command()` 的差别：能区分「连接失败 / 认证失败 / 命令已下发」，
+    避免把认证失败误判成成功（rcon_command 认证失败与无响应都返回 b''）。
+    返回 (ok, text)。
+    """
+    port = SERVERS.get(server)
+    if not port:
+        return False, 'unknown server: %s' % server
+    s = None
+    try:
+        s = socket.create_connection((RCON_HOST, port), timeout=timeout)
+        s.sendall(_rcon_packet(1, 3, RCON_PASSWORD))
+        auth = _recv_stream(s, timeout)
+        if not auth:
+            return False, 'auth: no response on port %s' % port
+        if len(auth) >= 12 and struct.unpack('<i', auth[4:8])[0] == -1:
+            return False, 'auth failed (wrong RCON_PASSWORD) on port %s' % port
+        s.sendall(_rcon_packet(2, 2, command))
+        data = _recv_stream(s, timeout)
+        text = (data or b'').decode('utf-8', errors='ignore').replace('\x00', '').strip()
+        return True, (text or 'sent (no response)')
+    except Exception as e:
+        return False, '%s: %s' % (type(e).__name__, e)
+    finally:
+        if s is not None:
+            try:
+                s.close()
+            except Exception:
+                pass
+
+
+def _srvctl_cfg():
+    """现读 ASA 配置（改 token 即时生效，无需重启）。"""
+    d = _srv_cfg_read() or {}
+
+    def _i(k, dv):
+        try:
+            return int(d.get(k) or dv)
+        except Exception:
+            return dv
+
+    return {
+        'base': str(d.get('asa_base') or 'https://asa.whiterober.com').rstrip('/'),
+        'token': str(d.get('asa_token') or ''),
+        'timeout': _i('asa_timeout', SRVCTL_T_TIMEOUT),
+        'timeout_destroy': _i('asa_timeout_destroy', SRVCTL_T_DESTROY),
+        'verify': bool(d.get('asa_verify_tls') or False),
+        'dry': bool(d.get('asa_dry_run') or False),
+    }
+
+
+def _asa_mask(tok):
+    """全局统一掩码：'****' + 后 6 位；未配置返回空串。"""
+    tok = str(tok or '')
+    if not tok:
+        return ''
+    return ('****' + tok[-6:]) if len(tok) > 6 else '****'
+
+
+def _asa_http(method, url, token, payload=None, timeout=60, verify=False):
+    """最小 HTTPS 客户端（标准库）。返回 (http_code, text)；网络异常抛错。"""
+    import ssl as _ssl
+    import urllib.request as _ur
+    data = None
+    headers = {'User-Agent': 'dino-backend/srvctl', 'Accept': 'application/json'}
+    if token:
+        headers['Authorization'] = 'Bearer ' + token
+    if payload is not None:
+        data = json.dumps(payload).encode('utf-8')
+        headers['Content-Type'] = 'application/json'
+    ctx = None
+    if not verify:
+        try:
+            ctx = _ssl._create_unverified_context()
+        except Exception:
+            ctx = None
+    req = _ur.Request(url, data=data, headers=headers, method=method)
+    try:
+        with _ur.urlopen(req, timeout=timeout, context=ctx) as r:
+            return (getattr(r, 'status', 200), r.read().decode('utf-8', 'replace'))
+    except _ur.HTTPError as e:
+        try:
+            return (e.code, e.read().decode('utf-8', 'replace'))
+        except Exception:
+            return (e.code, '')
+
+
+def _srvctl_log(user, server, action, ok, ms, msg=''):
+    """审计：每服一行（时间/用户/服务器/动作/结果/耗时）。"""
+    try:
+        line = '%s\t%s\t%s\t%s\t%s\t%dms\t%s\n' % (
+            time.strftime('%Y-%m-%d %H:%M:%S'), user, server, action,
+            'OK' if ok else 'FAIL', int(ms), str(msg or '').replace('\n', ' ')[:200])
+        with open(SRVCTL_LOG_FILE, 'a', encoding='utf-8') as f:
+            f.write(line)
+    except Exception:
+        pass
+
+
+def _srvctl_one(server, action, message, cfg):
+    """单服单动作：返回 {server, profileName, ok, message, ms, retried}。"""
+    prof = (SERVER_THEMES.get(server) or {}).get('name') or server
+    t0 = time.time()
+    retried = False
+    last_msg = ''
+    # v54b：to 必须在下面的 rcon 直连分支之前定义（v54 把它留在 for 循环前，
+    # 导致 _rcon_exec(timeout=min(to, 20)) 抛 UnboundLocalError）
+    to = cfg['timeout_destroy'] if action in ('destroy', 'fullbackup') else cfg['timeout']
+    # v54（2026-11-03）：RCON 类命令一律直连 RCON，**不回落** ASA Server Manager。
+    # 根因：ASA Manager 的 /rcon 对 KickPlayer 只回显黄字、不执行（人踢不掉）；
+    # 直连 RCON 由游戏服务器以 admin 身份执行，与 HA send_rcon_command_sync 完全一致。
+    # 直连不依赖 asa_token，故本分支放在 token 校验之前。
+    if action == 'rcon' and message:
+        if cfg.get('dry'):
+            return {'server': server, 'profileName': prof, 'ok': True,
+                    'message': 'DRY-RUN 未实际下发（asa_dry_run=true）',
+                    'ms': 0, 'retried': False, 'dry': True, 'via': 'rcon'}
+        r_ok, r_text = _rcon_exec(server, message, timeout=min(to, 20))
+        ms = int((time.time() - t0) * 1000)
+        return {'server': server, 'profileName': prof, 'ok': bool(r_ok),
+                'message': (r_text or ('OK' if r_ok else 'rcon failed'))[:300],
+                'ms': ms, 'retried': False, 'via': 'rcon',
+                'code': 'rcon_ok' if r_ok else 'rcon_error'}
+    # v55（2026-11-03）：saveworld / destroy 也走直连 RCON —— 二者本质就是原生 RCON 命令，
+    #   saveworld → SaveWorld          （前端按钮「保存世界」）
+    #   destroy   → DestroyWildDinos   （前端按钮「清理恐龙」，清野生恐龙）
+    # 走 ASAM 要多跳公网 HTTPS 且依赖 token；直连更快更稳。
+    # kill（强制终止）/ start / savekill / fullbackup / update 属进程级操作，RCON 做不到，仍走 ASAM。
+    if action in ('saveworld', 'destroy') and not message:
+        if cfg.get('dry'):
+            return {'server': server, 'profileName': prof, 'ok': True,
+                    'message': 'DRY-RUN 未实际下发（asa_dry_run=true）',
+                    'ms': 0, 'retried': False, 'dry': True, 'via': 'rcon'}
+        _cmd = 'SaveWorld' if action == 'saveworld' else 'DestroyWildDinos'
+        _tmo = 180 if action == 'destroy' else 40
+        r_ok, r_text = _rcon_exec(server, _cmd, timeout=_tmo)
+        ms = int((time.time() - t0) * 1000)
+        return {'server': server, 'profileName': prof, 'ok': bool(r_ok),
+                'message': (r_text or ('OK' if r_ok else 'rcon failed'))[:300],
+                'ms': ms, 'retried': False, 'via': 'rcon', 'cmd': _cmd,
+                'code': 'rcon_ok' if r_ok else 'rcon_error'}
+    if not cfg.get('token'):
+        return {'server': server, 'profileName': prof, 'ok': False,
+                'message': 'asa_token 未配置', 'ms': 0, 'retried': False, 'code': 'asa_no_token'}
+    if cfg.get('dry'):
+        return {'server': server, 'profileName': prof, 'ok': True,
+                'message': 'DRY-RUN 未实际下发（asa_dry_run=true）',
+                'ms': 0, 'retried': False, 'dry': True}
+    for attempt in (0, 1):
+        if attempt == 1:
+            retried = True
+            time.sleep(1)
+        try:
+            # P3c（实测 2026-11-03）：ASA Server Manager **只接受英文 ID**（Bob），
+            # 传中文名（俱乐部）直接 404 Profile not found ⇒ 转发用 server ID
+            payload = {'profileName': server}
+            if message is not None:
+                payload['message'] = message
+            code, text = _asa_http('POST', cfg['base'] + '/' + action, cfg['token'],
+                                   payload, timeout=to, verify=cfg['verify'])
+            ms = int((time.time() - t0) * 1000)
+            snippet = (text or '').strip()[:300]
+            if 200 <= code < 300:
+                return {'server': server, 'profileName': prof, 'ok': True,
+                        'message': snippet or 'OK', 'ms': ms, 'retried': retried}
+            last_msg = 'HTTP %s %s' % (code, snippet)
+            if code in (401, 403):
+                return {'server': server, 'profileName': prof, 'ok': False,
+                        'message': 'ASA Token 无效或已过期', 'ms': ms,
+                        'retried': retried, 'code': 'asa_unauthorized'}
+        except Exception as e:
+            last_msg = '%s: %s' % (type(e).__name__, e)
+    return {'server': server, 'profileName': prof, 'ok': False, 'message': last_msg,
+            'ms': int((time.time() - t0) * 1000), 'retried': True, 'code': 'asa_error'}
+
+
+def _srvctl_acquire(server, action):
+    with _SRVCTL_BUSY_LOCK:
+        k = (server, action)
+        if k in _SRVCTL_BUSY:
+            return False
+        _SRVCTL_BUSY[k] = time.time()
+        return True
+
+
+def _srvctl_release(server, action):
+    with _SRVCTL_BUSY_LOCK:
+        _SRVCTL_BUSY.pop((server, action), None)
+
+
+def _srvctl_run(user, servers, action, message):
+    """并发执行（max_workers=4）；results[] 顺序与 servers 一致。失败自动重试 1 轮。"""
+    cfg = _srvctl_cfg()
+    results = [None] * len(servers)
+
+    def _job(idx, srv):
+        try:
+            results[idx] = _srvctl_one(srv, action, message, cfg)
+        except Exception as e:
+            results[idx] = {'server': srv,
+                            'profileName': (SERVER_THEMES.get(srv) or {}).get('name') or srv,
+                            'ok': False, 'message': repr(e), 'ms': 0,
+                            'retried': False, 'code': 'asa_error'}
+
+    futs = [_SRVCTL_POOL.submit(_job, i, s) for i, s in enumerate(servers)]
+    for f in futs:
+        try:
+            f.result()
+        except Exception:
+            _sexc('srvctl_run')
+            pass
+    for r in results:
+        if r:
+            _srvctl_log(user, r.get('server'), action, r.get('ok'), r.get('ms', 0), r.get('message', ''))
+    return [r for r in results if r]
+
+
+def _srvctl_job_new(user, action, servers):
+    """长任务（destroy / fullbackup）异步 job。"""
+    jid = 'j%d_%d' % (int(time.time() * 1000), len(_SRVCTL_JOBS))
+    with _SRVCTL_JOBS_LOCK:
+        now = time.time()
+        for k in [k for k, v in _SRVCTL_JOBS.items() if now - v.get('ts', 0) > _SRVCTL_JOB_TTL]:
+            _SRVCTL_JOBS.pop(k, None)
+        _SRVCTL_JOBS[jid] = {'ts': now, 'done': False, 'action': action,
+                             'servers': list(servers), 'user': user, 'results': []}
+
+    def _run():
+        try:
+            res = _srvctl_run(user, servers, action, None)
+        except Exception as e:
+            res = [{'server': s, 'profileName': (SERVER_THEMES.get(s) or {}).get('name') or s,
+                    'ok': False, 'message': repr(e), 'ms': 0, 'retried': False} for s in servers]
+        with _SRVCTL_JOBS_LOCK:
+            j = _SRVCTL_JOBS.get(jid)
+            if j:
+                j['results'] = res
+                j['done'] = True
+                j['ts'] = time.time()
+
+    _SRVCTL_JOB_POOL.submit(_run)
+    return jid
+
+
+def _srvctl_job_view(jid):
+    with _SRVCTL_JOBS_LOCK:
+        j = _SRVCTL_JOBS.get(jid)
+        if not j:
+            return None
+        return {'jobId': jid, 'done': bool(j.get('done')), 'action': j.get('action'),
+                'servers': j.get('servers') or [], 'results': j.get('results') or []}
+
+
+# ===== P1（v5983）：真实进度观测（只读，供前端进度条）=====
+#   日志：D:\ARK Server\Servers\<ID>\ShooterGame\Saved\Logs\ShooterGame.log（按进程重建，首行=本次启动时刻）
+#   存档：D:\ARK Server\Servers\<ID>\ShooterGame\Saved\SavedArks\<Map>\<Map>.ark（mtime=最近落盘时间）
+SRVCTL_LOG_REL = os.path.join('ShooterGame', 'Saved', 'Logs', 'ShooterGame.log')
+SRVCTL_ARKS_REL = os.path.join('ShooterGame', 'Saved', 'SavedArks')
+
+# 启动里程碑（顺序即进度顺序）；正则基于真实 Isl 日志实测标定
+SRVCTL_BOOT_MARKS = [
+    ('proc_open',    u'启动游戏进程', r'Log file open,'),
+    ('ark_version',  u'读取游戏版本', r'ARK Version:\s*[\d.]+'),
+    ('cfcore',       u'初始化模组框架', r'LogCFCore: InternalSettings called'),
+    ('mods_check',   u'校验模组文件', r'(No need to update existing mod|Mod valid)'),
+    ('mods_load',    u'加载模组资源', r'UShooterEngine::LoadGameMods'),
+    ('battleye',     u'启动反作弊', r'BattlEye successfully started'),
+    ('world_load',   u'加载世界存档', r'StructureHibernation:.*on this boot'),
+    ('started',      u'服务器已启动', r'has successfully started!'),
+    ('steam_eos',    u'Steam / EOS 验证', r'EOS ownership validation initialized: Success'),
+    ('full_startup', u'应用启动参数', r'Full Startup:\s*[\d.]+ seconds'),
+    ('advertising',  u'对外开放加入', r'advertising for join'),
+]
+
+
+def _srv_observe_log(server):
+    """读该服 ShooterGame.log -> {path,size,firstLineAt,arkVersion,map,fullStartupSec,marks,mtime,err}"""
+    p = os.path.join(CFG_SERVERS_DIR, server, SRVCTL_LOG_REL)
+    out = {'path': p, 'size': 0, 'mtime': 0, 'firstLineAt': '', 'arkVersion': '',
+           'map': '', 'fullStartupSec': None, 'marks': {}}
+    try:
+        st = os.stat(p)
+        out['size'] = st.st_size
+        out['mtime'] = int(st.st_mtime)
+        with open(p, 'r', encoding='utf-8', errors='replace') as f:
+            txt = f.read()
+    except Exception as e:
+        out['err'] = '%s: %s' % (type(e).__name__, e)
+        return out
+    try:
+        m = re.search(r'Log file open,\s*(\d{2}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})', txt)
+        if m:
+            out['firstLineAt'] = m.group(1)
+        m = re.search(r'ARK Version:\s*([\d.]+)', txt)
+        if m:
+            out['arkVersion'] = m.group(1)
+        m = re.search(r'Commandline:\s*"([^"]+)"', txt)
+        if m:
+            out['map'] = m.group(1)
+        m = re.search(r'Full Startup:\s*([\d.]+) seconds', txt)
+        if m:
+            out['fullStartupSec'] = float(m.group(1))
+        for k, _label, pat in SRVCTL_BOOT_MARKS:
+            out['marks'][k] = bool(re.search(pat, txt))
+    except Exception as e:
+        out['err'] = '%s: %s' % (type(e).__name__, e)
+    return out
+
+
+def _srv_observe_ark(server, map_name):
+    """主存档信息 -> {map,path,mtime,size,err}
+    v5984-fix：日志里的地图名（如 BobsMissions_WP）与存档**目录名**可能不一致
+    （Bob 的目录叫 BobsMissions 但文件名是 BobsMissions_WP.ark）⇒ 按**文件名**匹配优先，
+    并且一律排除 size<=0 的空占位文件（曾误选 LostColony_WP.ark 空文件）。"""
+    base = os.path.join(CFG_SERVERS_DIR, server, SRVCTL_ARKS_REL)
+    out = {'map': map_name or '', 'path': '', 'mtime': 0, 'size': 0}
+    try:
+        if not os.path.isdir(base):
+            out['err'] = 'SavedArks not found'
+            return out
+        want = ((map_name or '') + '.ark') if map_name else ''
+        cands = []
+        for d in os.listdir(base):
+            dp = os.path.join(base, d)
+            if not os.path.isdir(dp):
+                continue
+            try:
+                files = os.listdir(dp)
+            except Exception:
+                continue
+            if want:
+                for f in files:
+                    if f == want:
+                        cands.append((2, os.path.join(dp, f)))
+                        break
+            for f in files:
+                if f.lower().endswith('.ark'):
+                    cands.append((1, os.path.join(dp, f)))
+                    break
+        best = None
+        seen = set()
+        for pri, fp in cands:
+            if fp in seen:
+                continue
+            seen.add(fp)
+            try:
+                st = os.stat(fp)
+            except Exception:
+                continue
+            if st.st_size <= 0:
+                continue
+            score = (pri, st.st_mtime)
+            if best is None or score > best[0]:
+                best = (score, fp, st)
+        if best:
+            out['path'] = best[1]
+            out['mtime'] = int(best[2].st_mtime)
+            out['size'] = best[2].st_size
+            if not out['map']:
+                out['map'] = os.path.basename(best[1])[:-4]
+        else:
+            out['err'] = 'ark not found'
+    except Exception as e:
+        out['err'] = '%s: %s' % (type(e).__name__, e)
+    return out
+
+
+# ===== v6007（用户口径 2026-11-03）：存档完整性校验 =====
+def _srv_ark_quickcheck(server):
+    """在**服务器本地**（非 UNC）对主 .ark 跑 SQLite `PRAGMA quick_check`，只读。
+
+    背景：实测「存档后终止」写出过比旧档小 19%~56% 的存档（结构完整但内容陈旧）。
+    根因是旧实现把「.ark 的 mtime 变了」当成「存档写完」——mtime 在开始写时就变。
+    现在前端要求：mtime 变化 -> size+mtime 连续 20s 稳定 -> 本接口 quick_check == ok
+    -> 才允许下发 kill。
+    """
+    out = {'server': server, 'path': '', 'size': 0, 'mtime': 0,
+           'ok': False, 'detail': '', 'ms': 0}
+    try:
+        lg = _srv_observe_log(server) or {}
+        ak = _srv_observe_ark(server, lg.get('map') or '') or {}
+        p = ak.get('path') or ''
+        out['path'] = p
+        out['size'] = int(ak.get('size') or 0)
+        out['mtime'] = int(ak.get('mtime') or 0)
+        if not p or not os.path.isfile(p):
+            out['detail'] = 'ark not found'
+            return out
+        t0 = time.time()
+        con = None
+        try:
+            import sqlite3 as _sq
+            con = _sq.connect(p, timeout=30)
+            con.execute('PRAGMA query_only = ON')
+            rows = con.execute('PRAGMA quick_check').fetchmany(3)
+            vals = [str(r[0]) for r in rows]
+            out['detail'] = (' / '.join(vals))[:300]
+            out['ok'] = (len(vals) == 1 and vals[0].strip().lower() == 'ok')
+        finally:
+            if con is not None:
+                try:
+                    con.close()
+                except Exception:
+                    pass
+        out['ms'] = int((time.time() - t0) * 1000)
+    except Exception as e:
+        out['detail'] = '%s: %s' % (type(e).__name__, e)
+    return out
+
+
+# ===== v6004（用户口径 2026-11-03）：多服启动队列 =====
+# 目标：方案 C（快速接棒）+ 硬约束「任何时刻处于 world_load~started 重压期的服 ≤ 2」
+#   · 放行闸门：相邻两台下发间隔 ≥ 8 秒（只防「瞬间连起 11 台」）
+#   · 重压槽位：marks.world_load 已出现 且 marks.started 未出现 的服数上限 2
+#               ⇒ 永远不会出现 3 台同时 world_load
+#   · 兜底：重压期超 400 秒未到 started ⇒ 视为异常，释放槽位（防整队死锁）
+#   · 实际节奏：两台一组并行推进，11 台约 19~25 分钟（受磁盘 IO 争抢影响）
+SRVCTL_STARTQ_MIN_GAP = 8            # 相邻两台最小间隔（秒）
+SRVCTL_STARTQ_HEAVY_MAX = 2          # 重压期并发上限
+SRVCTL_STARTQ_HEAVY_TIMEOUT = 900    # 槽位占用超时（秒）；v6011：600->900（完成判据改 advertising，每台多等 ~30s）
+SRVCTL_STARTQ_ITEM_TIMEOUT = 900     # 单台总超时（秒）
+SRVCTL_STARTQ_TICK = 2               # 轮询间隔（秒）
+SRVCTL_STARTQ_FIRST_TIMEOUT = 180    # v6011：等「日志首行出现/变化」上限（原硬编码 90s；实测 Bob 67s 才出首行）
+_SRVCTL_STARTQ_LOCK = threading.Lock()   # v6004fix：与 9 处使用名保持一致（原缺前导下划线 -> NameError -> 请求断连）
+_SRVCTL_STARTQ = {
+    'running': False, 'user': '', 'ts': 0.0, 'total': 0,
+    'queue': [], 'active': {}, 'done': [], 'lastSent': 0.0,
+}
+_SRVCTL_STARTQ_THREAD = None
+_SRVCTL_BOOT_ORDER_BE = [k for k, _l, _p in SRVCTL_BOOT_MARKS]
+_SRVCTL_BOOT_PCT_BE = {'proc_open': 2, 'ark_version': 5, 'cfcore': 8, 'mods_check': 12,
+                       'mods_load': 18, 'battleye': 25, 'world_load': 45, 'started': 75,
+                       'steam_eos': 82, 'full_startup': 90, 'advertising': 100}
+_SRVCTL_BOOT_LABEL_BE = {k: l for k, l, _p in SRVCTL_BOOT_MARKS}
+
+
+def _startq_pct(marks):
+    """按已命中里程碑取最大进度与标签。"""
+    idx = -1
+    for i, k in enumerate(_SRVCTL_BOOT_ORDER_BE):
+        if marks.get(k):
+            idx = i
+    if idx < 0:
+        return 0, u'启动中'
+    k = _SRVCTL_BOOT_ORDER_BE[idx]
+    return _SRVCTL_BOOT_PCT_BE.get(k, 0), _SRVCTL_BOOT_LABEL_BE.get(k, k)
+
+
+# v6011：全服进程状态快照（转发 ASA /server-status，10s 缓存）
+_SRVCTL_PSNAP = {'ts': 0.0, 'map': {}, 'err': ''}
+
+
+def _srvctl_proc_snapshot(max_age=10):
+    """{server: 'Running'|'Starting'|'Stopped'}；失败/未配置返回 {}。
+
+    日志只能说明「有没有进展」，分不清「慢」与「死」；进程状态才是硬判据。
+    与 GET /api/srvctl/status 同源（转发 ASA /server-status），10s 缓存避免打爆 ASA。
+    """
+    now = time.time()
+    if _SRVCTL_PSNAP['map'] and (now - float(_SRVCTL_PSNAP['ts'] or 0)) < max_age:
+        return _SRVCTL_PSNAP['map']
+    mp = {}
+    try:
+        cfg = _srvctl_cfg()
+        if not cfg.get('token'):
+            _SRVCTL_PSNAP.update({'ts': now, 'map': {}, 'err': 'no_token'})
+            return {}
+        code, text = _asa_http('GET', cfg['base'] + '/server-status', cfg['token'],
+                               None, timeout=cfg['timeout'], verify=cfg['verify'])
+        if not (200 <= code < 300):
+            _SRVCTL_PSNAP.update({'ts': now, 'map': {}, 'err': 'HTTP %s' % code})
+            return {}
+        for it in (json.loads(text) or {}).get('servers') or []:
+            pn = str(it.get('ProfileName') or '')
+            if pn in SERVERS:
+                mp[pn] = str(it.get('Status') or '')
+    except Exception as e:
+        _SRVCTL_PSNAP.update({'ts': now, 'map': {},
+                              'err': '%s: %s' % (type(e).__name__, e)})
+        return {}
+    _SRVCTL_PSNAP.update({'ts': now, 'map': mp, 'err': ''})
+    return mp
+
+
+def _startq_logtail(server, n=1):
+    """取日志最后 n 行摘要（失败返回空串），用于失败原因里指出崩在哪一行。"""
+    try:
+        p = os.path.join(CFG_SERVERS_DIR, server, SRVCTL_LOG_REL)
+        with open(p, 'r', encoding='utf-8', errors='replace') as f:
+            lines = [x.strip() for x in f if x.strip()]
+        if not lines:
+            return u''
+        return u'｜日志尾：' + u' / '.join(x[:150] for x in lines[-n:])
+    except Exception:
+        return u''
+
+
+def _startq_heavy_count():
+    return sum(1 for v in _SRVCTL_STARTQ['active'].values() if v.get('heavy'))
+
+
+def _startq_view():
+    with _SRVCTL_STARTQ_LOCK:
+        q = _SRVCTL_STARTQ
+        act = []
+        now = time.time()
+        for srv, v in q['active'].items():
+            act.append({'server': srv, 'pct': v.get('pct', 0), 'label': v.get('label', ''),
+                        'el': int(now - float(v.get('t0') or now)),
+                        'heavy': bool(v.get('heavy')), 'msg': v.get('msg', '')})
+        return {'running': bool(q['running']), 'user': q['user'], 'ts': int(q['ts'] or 0),
+                'total': q.get('total', 0), 'doneCount': len(q['done']),
+                'done': list(q['done']), 'active': act,
+                'activeCount': len(act), 'heavyCount': _startq_heavy_count(),
+                'queued': list(q['queue']), 'queuedCount': len(q['queue']),
+                'heavyMax': SRVCTL_STARTQ_HEAVY_MAX}
+
+
+def _startq_worker():
+    """后台推进：轮询各服实际阶段 -> 收割完成的 -> 有空重压槽位就下发下一台。"""
+    try:
+        cfg = _srvctl_cfg()
+    except Exception:
+        cfg = {}
+    while True:
+        time.sleep(SRVCTL_STARTQ_TICK)
+        now = time.time()
+        with _SRVCTL_STARTQ_LOCK:
+            if not _SRVCTL_STARTQ['running']:
+                return
+            srv_list = list(_SRVCTL_STARTQ['active'].keys())
+        # ---- 采样各服实际阶段（读日志，放锁外）----
+        try:
+            _psnap = _srvctl_proc_snapshot() or {}
+        except Exception:
+            _psnap = {}
+        for srv in srv_list:
+            try:
+                lg = _srv_observe_log(srv) or {}
+            except Exception:
+                continue
+            marks = lg.get('marks') or {}
+            fl = str(lg.get('firstLineAt') or '')
+            pct, label = _startq_pct(marks)
+            with _SRVCTL_STARTQ_LOCK:
+                v = _SRVCTL_STARTQ['active'].get(srv)
+                if not v:
+                    continue
+                if v.get('phase') in ('ok', 'fail'):
+                    continue
+                base_first = v.get('baseFirst') or ''
+                # v6011 修复（v6010 根因）：baseFirst 为**空串**（下发时日志文件不存在）
+                #   时，原式 `fl and base_first and fl != base_first` 恒 False ⇒
+                #   「日志文件从无到有」这条最典型的首次启动路径 100% 误判
+                #   「未见新进程启动」（Rag 21:11:59 / Val 21:13:25 实测）。
+                #   改为：基线为空时，只要现在能读到首行就算新进程。
+                new_proc = bool(fl) and (not base_first or fl != base_first)
+                el = now - float(v.get('t0') or now)
+                # v6011：进程状态兜底 —— 日志只能证明「有进展」，证明不了「还活着」
+                pst = _psnap.get(srv) or ''
+                if pst in ('Starting', 'Running'):
+                    v['seenProc'] = True
+                if v.get('seenProc') and pst == 'Stopped':
+                    v.update({'ok': False, 'phase': 'fail', 'heavy': False,
+                              'err': u'启动过程中进程已退出（ASA 状态 %s）%s'
+                                     % (pst, _startq_logtail(srv))})
+                    continue
+                if ((not v.get('seenProc')) and pst == 'Stopped'
+                        and el > SRVCTL_STARTQ_FIRST_TIMEOUT):
+                    v.update({'ok': False, 'phase': 'fail', 'heavy': False,
+                              'err': u'进程未启动成功（%ds 后仍为 Stopped）%s'
+                                     % (int(el), _startq_logtail(srv))})
+                    continue
+                if not new_proc:
+                    v['msg'] = u'等待新进程启动…（%ds%s）' % (
+                        int(el), (u' · ' + pst) if pst else u'')
+                    if el > SRVCTL_STARTQ_FIRST_TIMEOUT:
+                        v.update({'ok': False, 'phase': 'fail', 'heavy': False,
+                                  'err': u'未见新进程启动（%ds 内日志首行未变）%s'
+                                         % (SRVCTL_STARTQ_FIRST_TIMEOUT,
+                                            _startq_logtail(srv))})
+                    continue
+                v['pct'] = pct
+                v['label'] = label
+                v['msg'] = u'%s…（%ds）' % (label, int(el))
+                # v6011（用户口径 2026-11-03）：**advertising 才算启动完成**。
+                #   原 `started or advertising` 在 started（实测 Isl 119s）就判完成并
+                #   交还重压槽位，而 advertising 在 149s ⇒ 中间 30s 可再下发一台，
+                #   出现「3 台同时启动」的窗口，违反重压上限 2。
+                done_boot = bool(marks.get('advertising'))
+                # v6006：槽位从「下发」即占用，直到 advertising（或超时）才释放。
+                if done_boot:
+                    v.update({'ok': True, 'phase': 'ok', 'pct': 100, 'heavy': False,
+                              'msg': u'已对外开放加入 · 全程 %ds' % int(el)})
+                elif (now - float(v.get('t0') or now)) > SRVCTL_STARTQ_HEAVY_TIMEOUT:
+                    v.update({'ok': False, 'phase': 'fail', 'heavy': False,
+                              'err': u'启动超时（%ds），已释放槽位' % SRVCTL_STARTQ_HEAVY_TIMEOUT})
+                elif el > SRVCTL_STARTQ_ITEM_TIMEOUT:
+                    v.update({'ok': False, 'phase': 'fail', 'heavy': False,
+                              'err': u'启动超时（%ds）' % SRVCTL_STARTQ_ITEM_TIMEOUT})
+                else:
+                    v['heavy'] = True
+        # ---- 收割 + 决定是否下发下一台 ----
+        srv_next = ''
+        with _SRVCTL_STARTQ_LOCK:
+            for srv in list(_SRVCTL_STARTQ['active'].keys()):
+                v = _SRVCTL_STARTQ['active'][srv]
+                if v.get('phase') in ('ok', 'fail'):
+                    _SRVCTL_STARTQ['active'].pop(srv, None)
+                    _SRVCTL_STARTQ['done'].append({
+                        'server': srv, 'ok': bool(v.get('ok')),
+                        'pct': 100 if v.get('ok') else v.get('pct', 0),
+                        'msg': v.get('msg', ''), 'err': v.get('err', ''),
+                        't_end': int(now)})
+            heavy = _startq_heavy_count()
+            if (heavy < SRVCTL_STARTQ_HEAVY_MAX and _SRVCTL_STARTQ['queue']
+                    and (now - float(_SRVCTL_STARTQ.get('lastSent') or 0)) >= SRVCTL_STARTQ_MIN_GAP):
+                srv_next = _SRVCTL_STARTQ['queue'].pop(0)
+                _SRVCTL_STARTQ['lastSent'] = now
+            if not srv_next and not _SRVCTL_STARTQ['queue'] and not _SRVCTL_STARTQ['active']:
+                _SRVCTL_STARTQ['running'] = False
+                return
+        if not srv_next:
+            continue
+        # ---- 下发（锁外，ASAM 调用可能耗时数秒）----
+        if not _srvctl_acquire(srv_next, 'start'):
+            with _SRVCTL_STARTQ_LOCK:
+                _SRVCTL_STARTQ['queue'].insert(0, srv_next)   # 撞车 -> 放回队首稍后再试
+            continue
+        try:
+            base_first = str((_srv_observe_log(srv_next) or {}).get('firstLineAt') or '')
+        except Exception:
+            base_first = ''
+        try:
+            r = _srvctl_one(srv_next, 'start', None, cfg)
+        except Exception as e:
+            r = {'ok': False, 'message': repr(e)}
+        with _SRVCTL_STARTQ_LOCK:
+            u0 = _SRVCTL_STARTQ.get('user') or ''
+            if r.get('ok'):
+                _SRVCTL_STARTQ['active'][srv_next] = {
+                    't0': now, 'baseFirst': base_first,
+                    # v6006：**下发即占槽位** —— 原实现等 world_load 日志出现才算重压，
+                    #   而该日志约 113s 才打印 ⇒ 前 113s 槽位恒空，8s 间隔把 11 台全推下去压垮机器
+                    'heavy': True, 't_heavy': now, 'seenProc': False,
+                    'pct': 2, 'label': u'启动游戏进程', 'phase': 'run',
+                    'msg': u'已下发，等待进程…', 'err': ''}
+            else:
+                _SRVCTL_STARTQ['done'].append({
+                    'server': srv_next, 'ok': False, 'pct': 0, 'msg': '',
+                    'err': str(r.get('message') or 'start failed'), 't_end': int(now)})
+        _srvctl_release(srv_next, 'start')
+        try:
+            _srvctl_log(u0, srv_next, 'start', bool(r.get('ok')), r.get('ms', 0),
+                        ('queued-sent' if r.get('ok') else str(r.get('message') or '')))
+        except Exception:
+            pass
+
+
+def _srvctl_startq_new(user, servers):
+    """建启动队列并起 worker；队列已在跑时把新服追加到队尾（自动去重）。"""
+    global _SRVCTL_STARTQ_THREAD
+    with _SRVCTL_STARTQ_LOCK:
+        q = _SRVCTL_STARTQ
+        if not q['running']:
+            q.update({'running': True, 'user': user, 'ts': time.time(), 'total': 0,
+                      'queue': [], 'active': {}, 'done': [], 'lastSent': 0.0})
+        # v6014：done 里只有「成功」的服算占用（防重复启动）；
+        #   「失败」的服不再占用 —— 否则任务条上的「重试」会被去重掉，根本不会重新下发。
+        busy = set(q['queue']) | set(q['active'].keys())
+        busy |= set(x.get('server') for x in q['done'] if x.get('ok'))
+        add = [s for s in servers if s not in busy]
+        if add:
+            q['done'] = [x for x in q['done'] if x.get('server') not in add]
+        q['queue'].extend(add)
+        q['total'] = len(q['queue']) + len(q['active']) + len(q['done'])
+        need_thread = (_SRVCTL_STARTQ_THREAD is None) or (not _SRVCTL_STARTQ_THREAD.is_alive())
+    if need_thread:
+        _SRVCTL_STARTQ_THREAD = threading.Thread(target=_startq_worker, daemon=True)
+        _SRVCTL_STARTQ_THREAD.start()
+    return _startq_view()
 
 
 def _save_accounts(acc):
@@ -4756,6 +5921,7 @@ def _player_names(force=False):
             except Exception:
                 pass
     except Exception:
+        _sexc('player_names')
         pass
     _PLAYER_NAMES_CACHE['ts'] = now
     _PLAYER_NAMES_CACHE['names'] = names
@@ -5164,6 +6330,7 @@ def rename_dino(server, dino_id1, dino_id2, new_name):
             if isinstance(j, dict):
                 detail = j
         except Exception:
+            _sexc('rename_dino')
             pass
     r = {'ok': bool(success), 'server': server, 'dino_id': '%s_%s' % (dino_id1, dino_id2),
          'dino_id1': dino_id1, 'dino_id2': dino_id2, 'name': new_name,
@@ -5205,6 +6372,7 @@ def rename_container(server, obj, new_name):
             if isinstance(j, dict):
                 detail = j
         except Exception:
+            _sexc('rename_container')
             pass
     if detail:
         out = dict(detail)
@@ -5253,6 +6421,7 @@ def set_sign_text(server, obj, text):
             if isinstance(j, dict):
                 detail = j
         except Exception:
+            _sexc('set_sign_text')
             pass
     if detail:
         out = dict(detail)
@@ -5302,6 +6471,7 @@ def set_bed_name(server, obj, new_name):
             if isinstance(j, dict):
                 detail = j
         except Exception:
+            _sexc('set_bed_name')
             pass
     if detail:
         out = dict(detail)
@@ -6495,6 +7665,7 @@ def read_saved_marker(server):
         if saved:
             return ('savedAt', str(saved))
     except Exception:
+        _sexc('saved_marker')
         pass
     try:
         return ('mtime', str(os.path.getmtime(path)))
@@ -6626,7 +7797,8 @@ NEWS_TABS = [('patch_pc', u'ASA PC版本', 'patch'),
              ('patch_channel', u'ADM版本', 'channel'),
              ('adm', u'ADM预告', 'adm'),
              ('tieba', u'汉化版本', 'tieba'),
-             ('asb', u'ASB版本', 'asb')]
+             ('api_ver', u'API版本', 'patch'),
+             ('api_cache', u'API缓存', 'patch')]
 NEWS_COOL_SEC = 60          # 全局冷却：客户端打开/切 Tab 时的最小抓取间隔
 NEWS_IMG_COOL_SEC = 600     # 单条消息图片修复冷却
 NEWS_KEEP_MSGS = 20         # 每个 Tab 最多保留的消息条数
@@ -6683,6 +7855,29 @@ def _news_write(tab_id, obj):
     except Exception:
         return False
 
+
+def _news_official_version():
+    """v5981：从资讯广场 patch_pc 缓存解析「官方服务器版本」。
+    口径（用户确认）：取 cards[].content 里 <h3> 标题**含 Server** 的 vX.Y 最大值
+    （"for Servers and Clients" 也算服务器版本；纯 "Clients" 条目排除）。"""
+    try:
+        d = _news_read('patch_pc') or {}
+        best = None
+        for c in (d.get('cards') or []):
+            txt = str(c.get('content') or '')
+            m = re.search(r'<h3>(.*?)</h3>', txt, re.S)
+            head = m.group(1) if m else ''
+            if not re.search(r'servers?\b', head, re.I):
+                continue
+            vm = re.search(r'(?<![\d.])v?(\d+)\.(\d+)', head, re.I)
+            if not vm:
+                continue
+            cur = (int(vm.group(1)), int(vm.group(2)))
+            if best is None or cur > best:
+                best = cur
+        return ('%d.%d' % best) if best else ''
+    except Exception:
+        return ''
 
 def _discord_api(path, cfg):
     """Discord REST GET -> (ok, data|err)"""
@@ -6803,6 +7998,56 @@ def _news_cards(content_list, ctype='patch'):
     return cards
 
 
+# v5949（用户口径「API 已转发，为啥 60s 后还是没取到」）：
+#   实测 Discord “转发”消息 = type=0 + content 空 + embeds 空 + 仅 message_reference，
+#   而计数器里还会有 type=12( CHANNEL_FOLLOW_ADD，关注频道系统提示 )。
+#   处理：① 过滤系统消息；② 对 message_reference 尝试读取被引用原消息（同服务器可读，跨服务器失败静默跳过）。
+_NEWS_KEEP_TYPES = (0, 19, 20, 21)   # DEFAULT / REPLY / 应用命令
+_NEWS_REF_BUDGET = 6                 # 单次刷新最多回溯 6 条引用，避免请求爆量
+
+
+def _news_keep_msg(m):
+    try:
+        return int(m.get('type') or 0) in _NEWS_KEEP_TYPES
+    except Exception:
+        return True
+
+
+def _news_fetch_ref(m, cfg, budget):
+    """转发/回复消息：尝试读被引用原消息（跨服务器会失败，返回 None）"""
+    try:
+        ref = m.get('message_reference') or {}
+        cid = str(ref.get('channel_id') or '').strip()
+        mid = str(ref.get('message_id') or '').strip()
+        if not cid or not mid:
+            return None
+        if budget.get('n', 0) >= _NEWS_REF_BUDGET:
+            return None
+        budget['n'] = budget.get('n', 0) + 1
+        ok, data = _discord_api('/channels/%s/messages/%s' % (cid, mid), cfg)
+        if ok and isinstance(data, dict):
+            return data
+        return None
+    except Exception:
+        return None
+
+
+def _news_merge_ref(ex, ref):
+    """把被引用原消息的文本/图片/视频合并进当前条目"""
+    try:
+        r = _news_extract(ref)
+        rt = (r.get('text') or '').strip()
+        if not rt:
+            return ex
+        head = (ex.get('text') or '').strip()
+        ex['text'] = (head + '\n' + rt) if head else rt
+        ex['images'] = list(ex.get('images') or []) + list(r.get('images') or [])
+        ex['youtube_links'] = list(ex.get('youtube_links') or []) + list(r.get('youtube_links') or [])
+    except Exception:
+        pass
+    return ex
+
+
 def _news_refresh(tab_id):
     """按需刷新（全局冷却 + after 增量）-> (cache, fetched:0|1, err)"""
     tab = _news_tab(tab_id)
@@ -6840,8 +8085,16 @@ def _news_refresh(tab_id):
                 by_id[str(m.get('id'))] = m
         allm = sorted(by_id.values(), key=lambda x: int(x.get('id') or 0))[-NEWS_KEEP_MSGS:]
         _cards = []
+        _refbudget = {'n': 0}
         for _m in allm:
-            for _c in _news_cards([_news_extract(_m)], tab[2]):
+            if not _news_keep_msg(_m):
+                continue                          # v5949：跳过「关注频道」等系统消息
+            _ex = _news_extract(_m)
+            if _m.get('message_reference'):
+                _refm = _news_fetch_ref(_m, cfg, _refbudget)
+                if _refm:
+                    _ex = _news_merge_ref(_ex, _refm)
+            for _c in _news_cards([_ex], tab[2]):
                 _c['mid'] = str(_m.get('id') or '')   # v5927：图片过期时按 mid 单条修复
                 _cards.append(_c)
         new = {
@@ -6959,6 +8212,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             return fn()
+        except Exception:
+            # 2026-11-05 方案A：记录被 handle_error 吞掉的栈（行为不变，仍原样抛出）
+            _sexc('route', '%s %s' % (getattr(self, 'command', ''), getattr(self, 'path', '')))
+            raise
         finally:
             _CONC.release()
 
@@ -7016,6 +8273,156 @@ class Handler(BaseHTTPRequestHandler):
         path = parsed.path
         if path == '/healthz':
             self._send(200, {'ok': True, 'service': 'dino-backend', 'servers': sorted(SERVERS.keys())})
+        elif path in ('/api/arkbackup/list', '/api/arkbackup/audit'):
+            # P0 只读：回档点清单 / 审计日志（方案 §6.1 / §6.8）
+            _qs_ab = parse_qs(parsed.query)
+            _u_ab = _srvctl_guard(self, _qs_ab, need_token=True)
+            if not _u_ab:
+                return
+            if _arkbk is None:
+                self._send(500, {'ok': False, 'error': 'ark_backup module not loaded'})
+                return
+            _ab_ab = (_qs_ab.get('server') or [''])[0].strip()
+            if not _ab_ab:
+                self._send(400, {'ok': False, 'error': 'server required'})
+                return
+            try:
+                if path.endswith('/list'):
+                    _r_ab = _arkbk.list_points(_ab_ab)
+                else:
+                    try:
+                        _lim_ab = int((_qs_ab.get('limit') or ['50'])[0])
+                    except Exception:
+                        _lim_ab = 50
+                    _r_ab = _arkbk.read_audit(_ab_ab, _lim_ab)
+            except Exception as _e_ab:
+                self._send(500, {'ok': False, 'error': '%s: %s' % (type(_e_ab).__name__, _e_ab)})
+                return
+            self._send(200, _r_ab)
+
+        elif path in ('/api/arkbackup/job', '/api/arkbackup/status'):
+            _qs_g = parse_qs(parsed.query)
+            _u_g = _srvctl_guard(self, _qs_g, need_token=True)
+            if not _u_g:
+                return
+            if _arkbk is None:
+                self._send(500, {'ok': False, 'error': 'ark_backup module not loaded'})
+                return
+            _one = lambda k: ((_qs_g.get(k) or ['']) or [''])[0].strip()
+
+            if path == '/api/arkbackup/job':
+                _jid = _one('id') or _one('jobId')
+                with _ARKBK_JOB_LOCK:
+                    _job = dict(_ARKBK_JOBS.get(_jid) or {})
+                if not _job:
+                    self._send(404, {'ok': False, 'code': 'job_not_found', 'id': _jid})
+                    return
+                _pc = _job.get('precheck') or {}
+                _job['loss'] = len(_pc.get('loss') or [])
+                _job['dup'] = len(_pc.get('dup') or [])
+                _job['safe'] = len(_pc.get('safe') or [])
+                _job['notice'] = _pc.get('notice')
+                _job['ageSec'] = int(time.time() - _job.get('t0', time.time()))
+                self._send(200, _job)
+                return
+
+            if path == '/api/arkbackup/lastjob':
+                # v6057（用户口径「重新打开安全回档，进度条就消失了」）：
+                # 前端 job 只存在内存里，关掉浮窗即丢 ⇒ 提供「该服最近一次 job」查询，
+                # 重开面板时可把进度（含失败原因）恢复出来。
+                _arkbk_job_gc()      # v6058：查询前先 GC，旧失败条不再被恢复出来
+                _ls = _one('server')
+                _best = None
+                _now_lj = time.time()
+                with _ARKBK_JOB_LOCK:
+                    for _v in _ARKBK_JOBS.values():
+                        if _ls and _v.get('server') != _ls:
+                            continue
+                        # v6058：超过保留期的不返回 —— 否则「上次失败」会永远挂在底栏
+                        if _now_lj - float(_v.get('tEnd') or _v.get('t0') or 0) > _ARKBK_JOB_KEEP:
+                            continue
+                        if _best is None or float(_v.get('t0') or 0) > float(_best.get('t0') or 0):
+                            _best = _v
+                    _best = dict(_best) if _best else None
+                if not _best:
+                    self._send(200, {'ok': True, 'job': None})
+                    return
+                _pc2 = _best.get('precheck') or {}
+                _best['loss'] = len(_pc2.get('loss') or [])
+                _best['dup'] = len(_pc2.get('dup') or [])
+                _best['safe'] = len(_pc2.get('safe') or [])
+                _best['notice'] = _pc2.get('notice')
+                _best['ageSec'] = int(time.time() - _best.get('t0', time.time()))
+                self._send(200, {'ok': True, 'job': _best})
+                return
+
+            if path == '/api/arkbackup/dismiss':
+                # v6058（按推荐补全）：手动清除已结束的 job 记录 —— 用户点「清除」把
+                # 失败/完成条从底栏抹掉，不必等 30 分钟 GC。跑着的 job 不允许清。
+                _ds = _one('server')
+                _dj = _one('jobId')
+                _rm = 0
+                with _ARKBK_JOB_LOCK:
+                    for _k in list(_ARKBK_JOBS.keys()):
+                        _v = _ARKBK_JOBS.get(_k) or {}
+                        if _dj and _v.get('id') != _dj:
+                            continue
+                        if _ds and _v.get('server') != _ds:
+                            continue
+                        if _v.get('phase') not in ('done', 'failed'):
+                            continue
+                        _ARKBK_JOBS.pop(_k, None)
+                        _rm += 1
+                self._send(200, {'ok': True, 'removed': _rm,
+                                 'server': _ds, 'jobId': _dj})
+                return
+
+            # /api/arkbackup/status
+            _srv_st = _one('server')
+            _servers_st = [_srv_st] if _srv_st else list(_arkbk._ALL_SERVERS)
+            _out_st = {}
+            for _s in _servers_st:
+                _r = _arkbk_rcon_alive(_s)
+                try:
+                    _md = _arkbk.detect_map_dir(_s)[0]
+                    _act = _arkbk._active_name(_s, _md) if _md else ''
+                    _p = os.path.join(_arkbk.ARK_ROOT, _s, 'ShooterGame', 'Saved',
+                                      'SavedArks', _md or '', _act) if _act else ''
+                    _stt = os.stat(_p) if (_p and os.path.isfile(_p)) else None
+                    _r['activeFile'] = _act
+                    _r['activeMB'] = round(_stt.st_size / 1048576.0, 1) if _stt else 0
+                    _r['activeMtime'] = time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(_stt.st_mtime)) if _stt else ''
+                except Exception as _e_st:
+                    _r['detectError'] = str(_e_st)
+                with _ARKBK_JOB_LOCK:
+                    _r['busyJob'] = _ARKBK_BUSY.get(_s)
+                _out_st[_s] = _r
+            self._send(200, {'ok': True, 'servers': _out_st, 'count': len(_out_st)})
+            return
+        elif path in ('/api/arkbackup/presence', '/api/arkbackup/profiles'):
+            # v6043：玩家进出流水 / 可恢复的角色档案（只读文件名，不解压）
+            _qs_p = parse_qs(parsed.query)
+            _u_p = _srvctl_guard(self, _qs_p, need_token=True)
+            if not _u_p:
+                return
+            if _arkbk is None:
+                self._send(500, {'ok': False, 'error': 'ark_backup module not loaded'})
+                return
+            _ab_p = ((_qs_p.get('server') or ['']) or [''])[0].strip()
+            if not _ab_p:
+                self._send(400, {'ok': False, 'error': 'server required'})
+                return
+            try:
+                if path.endswith('/presence'):
+                    _r_p = _arkbk.read_presence(_ab_p)
+                else:
+                    _eos_p = ((_qs_p.get('eos') or ['']) or [''])[0].strip() or None
+                    _r_p = _arkbk.list_profiles(_ab_p, _eos_p)
+            except Exception as _e_p:
+                self._send(500, {'ok': False, 'error': '%s: %s' % (type(_e_p).__name__, _e_p)})
+                return
+            self._send(200, _r_p)
+            return
         elif path == '/webp_map.json':
             # WebP 缩略图映射（前端省流；后端动态维护，一键增量后自动更新）
             self._send(200, _webp_map())
@@ -7107,10 +8514,113 @@ class Handler(BaseHTTPRequestHandler):
                 if not getattr(self, '_head_only', False):
                     self.wfile.write(_body)
             except Exception:
+                _sexc('get_static_send')
                 pass
         elif path == '/api/server_config':
-            # 公开读：全局服务器域名（不含任何密钥）
-            self._send(200, {'ok': True, 'server_domain': _srv_cfg_read().get('server_domain') or ''})
+            # P3：公开读域名 + ASA token 掩码（**永不返回明文**）
+            _sd = _srv_cfg_read()
+            self._send(200, {'ok': True,
+                             'server_domain': _sd.get('server_domain') or '',
+                             'asa_base': _sd.get('asa_base') or 'https://asa.whiterober.com',
+                             'asa_token_masked': _asa_mask(_sd.get('asa_token') or ''),
+                             'asa_configured': bool(_sd.get('asa_token'))})
+            return
+        elif path == '/api/srvctl/status':
+            # P3：转发 ASA GET /server-status（仅读）；仅二级管理员可读
+            _qs = parse_qs(parsed.query)
+            _u = _srvctl_guard(self, _qs)   # v6023：token 优先，无 token 时兼容 username 直报
+            if not _u:
+                return
+            _cfg = _srvctl_cfg()
+            if not _cfg['token']:
+                self._send(200, {'ok': False, 'code': 'asa_no_token',
+                                 'error': 'asa_token 未配置', 'servers': []})
+                return
+            _t0 = time.time()
+            try:
+                _code, _text = _asa_http('GET', _cfg['base'] + '/server-status', _cfg['token'],
+                                         None, timeout=_cfg['timeout'], verify=_cfg['verify'])
+            except Exception as _e:
+                self._send(504, {'ok': False, 'code': 'asa_timeout', 'error': str(_e)})
+                return
+            if not (200 <= _code < 300):
+                _cd = 'asa_unauthorized' if _code in (401, 403) else 'asa_error'
+                self._send(502, {'ok': False, 'code': _cd, 'error': 'ASA HTTP %s' % _code})
+                return
+            _arr = []
+            try:
+                _arr = (json.loads(_text) or {}).get('servers') or []
+            except Exception:
+                _arr = []
+            _want = (_qs.get('servers') or [''])[0].strip()
+            _sel = set(x.strip() for x in _want.split(',') if x.strip()) if _want else None
+            _rev = {}
+            for _k, _v in SERVER_THEMES.items():
+                _rev[(_v or {}).get('name') or ''] = _k
+            _out = []
+            for _it in _arr:
+                _pn = str(_it.get('ProfileName') or '')
+                # P3b：ASA /server-status 返回的 ProfileName 是**英文 ID**（Isl/Sco/…），
+                # 而转发 /start 等用的是**中文名**（对齐 AppDaemon）⇒ 两条路都要认
+                _sid = _pn if _pn in SERVERS else _rev.get(_pn, '')
+                if _sel and _sid not in _sel:
+                    continue
+                _out.append({'server': _sid, 'profileName': _pn,
+                             'status': str(_it.get('Status') or ''),
+                             'version': str(_it.get('OfficialServerVersion') or ''),
+                             # v5981：该服**实际运行**版本（前端角标显示用；OfficialServerVersion 是官方网络值，语义不同）
+                             'serverVersion': str(_it.get('ServerVersion') or '')})
+            # v5981：官方服务器版本 = 资讯广场 patch_pc 里 Server 补丁的最大版本号（96.9 这类）
+            self._send(200, {'ok': True, 'servers': _out, 'official': _news_official_version(),
+                             'ms': int((time.time() - _t0) * 1000)})
+            return
+        elif path == '/api/srvctl/observe':
+            # P1（v5983）：真实进度观测（只读；读服务器日志里程碑 + 主存档 mtime）
+            _qs = parse_qs(parsed.query)
+            _u = _srvctl_guard(self, _qs)   # v6023：token 优先，无 token 时兼容 username 直报
+            if not _u:
+                return
+            _srv = (_qs.get('server') or [''])[0].strip()
+            if _srv not in SERVERS:
+                self._send(400, {'ok': False, 'error': 'bad server', 'code': 'bad_server'})
+                return
+            _lg = _srv_observe_log(_srv)
+            _ak = _srv_observe_ark(_srv, _lg.get('map') or '')
+            self._send(200, {'ok': True, 'server': _srv, 'log': _lg, 'ark': _ak,
+                             'ts': int(time.time())})
+            return
+        elif path == '/api/srvctl/job':
+            # P3：长任务轮询
+            _qs = parse_qs(parsed.query)
+            _u = _srvctl_guard(self, _qs)   # v6023：token 优先，无 token 时兼容 username 直报
+            if not _u:
+                return
+            _jid = (_qs.get('id') or [''])[0].strip()
+            _v = _srvctl_job_view(_jid)
+            if not _v:
+                self._send(404, {'ok': False, 'code': 'no_job', 'error': 'job not found'})
+                return
+            self._send(200, {'ok': True, 'job': _v})
+            return
+        elif path == '/api/srvctl/arkcheck':
+            # v6007：存档完整性校验（服务器本地 SQLite quick_check，只读）
+            _qs = parse_qs(parsed.query)
+            _u = _srvctl_guard(self, _qs)   # v6023：token 优先，无 token 时兼容 username 直报
+            if not _u:
+                return
+            _srv = (_qs.get('server') or [''])[0].strip()
+            if _srv not in SERVERS:
+                self._send(400, {'ok': False, 'error': 'bad server', 'code': 'bad_server'})
+                return
+            self._send(200, {'ok': True, 'check': _srv_ark_quickcheck(_srv)})
+            return
+        elif path == '/api/srvctl/startq':
+            # v6004：多服启动队列状态（只读）
+            _qs = parse_qs(parsed.query)
+            _u = _srvctl_guard(self, _qs)   # v6023：token 优先，无 token 时兼容 username 直报
+            if not _u:
+                return
+            self._send(200, {'ok': True, 'queue': _startq_view()})
             return
         elif path == '/api/cfg_rules/refresh_status':
             self._send(200, {'ok': True, 'job': _cfg_job_view()})
@@ -7312,6 +8822,281 @@ class Handler(BaseHTTPRequestHandler):
         # 配置规则：全服刷新（仅系统拥有者；后端自己读 11 台 ini → 落快照，全玩家共享）
         # 服务器域名：写（仅系统拥有者）
         # 2026-10-28：粑粑笔记导入（仅拥有者；整份覆盖）
+        if path == '/api/arkbackup/verify':
+            # P0 只读：单档校验（sha256 + SQLite 头）。只在用户点「验证」时调用（方案 §6.2 / O4）
+            _u_av = _srvctl_guard(self, qs, need_token=True)
+            if not _u_av:
+                return
+            if _arkbk is None:
+                self._send(500, {'ok': False, 'error': 'ark_backup module not loaded'})
+                return
+            _ab_v = g('server')
+            _pt_v = g('pointId') or g('path')
+            if not _ab_v or not _pt_v:
+                self._send(400, {'ok': False, 'error': 'server + pointId required'})
+                return
+            try:
+                _r_v = _arkbk.verify_point(_ab_v, _pt_v)
+            except Exception as _e_v:
+                self._send(500, {'ok': False, 'error': '%s: %s' % (type(_e_v).__name__, _e_v)})
+                return
+            _arkbk.append_audit({'server': _ab_v, 'action': 'verify', 'pointId': _pt_v,
+                                 'ok': bool(_r_v.get('ok')), 'sha256': _r_v.get('sha256', ''),
+                                 'bytes': _r_v.get('bytes', 0), 'operator': _u_av})
+            self._send(200, _r_v)
+            return
+        if path == '/api/arkbackup/create':
+            # P2：备份当前档 → arkbackup\<服>\pre_restore.ark（固定名覆盖，方案 §9：每服恒 1 份）
+            _u_ac = _srvctl_guard(self, qs, need_token=True)
+            if not _u_ac:
+                return
+            if _arkbk is None:
+                self._send(500, {'ok': False, 'error': 'ark_backup module not loaded'})
+                return
+            _ab_c = g('server')
+            if not _ab_c:
+                self._send(400, {'ok': False, 'error': 'server required'})
+                return
+            try:
+                _r_c = _arkbk.create_backup(_ab_c, operator=_u_ac, job_id=g('jobId'))
+            except Exception as _e_c:
+                self._send(500, {'ok': False, 'error': '%s: %s' % (type(_e_c).__name__, _e_c)})
+                return
+            _code_map = {'disk_low': 507, 'mapdir_unknown': 400, 'no_active': 409,
+                         'read_error': 500, 'write_error': 500}
+            _code_c = 200 if _r_c.get('ok') else _code_map.get(_r_c.get('code'), 500)
+            self._send(_code_c, _r_c)
+            return
+
+        if path == '/api/arkbackup/precheck':
+            # §6.3 回档前置闸门（会写 .ark：saveworld；传 skipSaveworld:true 可严格只读）
+            _u_pc = _srvctl_guard(self, qs, need_token=True)
+            if not _u_pc:
+                return
+            if _arkbk is None:
+                self._send(500, {'ok': False, 'error': 'ark_backup module not loaded'})
+                return
+            _ab_pc = g('server')
+            _pt_pc = g('pointId') or g('path')
+            if not _ab_pc or not _pt_pc:
+                self._send(400, {'ok': False, 'error': 'server + pointId required'})
+                return
+            _sw_done = False
+            _skip_sw = bool(g('skipSaveworld'))
+            try:
+                _st_pc = _arkbk_rcon_alive(_ab_pc)
+                if _st_pc.get('running') and not _skip_sw:
+                    _rsw = _srvctl_one(_ab_pc, 'saveworld', None, _srvctl_cfg())
+                    _sw_done = bool(_rsw.get('ok'))
+                    if _sw_done:
+                        _arkbk_wait_ark_mtime(_ab_pc, budget=20)
+                _r_pc = _arkbk.precheck(_ab_pc, _pt_pc)
+                _r_pc['savedWorld'] = _sw_done
+                _r_pc['running'] = bool(_st_pc.get('running'))
+                _r_pc['operator'] = _u_pc
+                _arkbk.append_audit({'server': _ab_pc, 'action': 'precheck', 'pointId': _pt_pc,
+                                     'ok': bool(_r_pc.get('ok')), 'verdict': _r_pc.get('verdict', ''),
+                                     'loss': len(_r_pc.get('loss') or []),
+                                     'dup': len(_r_pc.get('dup') or []), 'operator': _u_pc})
+            except Exception as _e_pc:
+                self._send(500, {'ok': False, 'error': '%s: %s' % (type(_e_pc).__name__, _e_pc)})
+                return
+            self._send(200, _r_pc)
+            return
+
+        if path == '/api/arkbackup/plan':
+            # §6.4 执行计划（只读，不写任何文件）
+            _u_pl = _srvctl_guard(self, qs, need_token=True)
+            if not _u_pl:
+                return
+            if _arkbk is None:
+                self._send(500, {'ok': False, 'error': 'ark_backup module not loaded'})
+                return
+            _ab_pl = g('server')
+            _pt_pl = g('pointId') or g('path')
+            if not _ab_pl or not _pt_pl:
+                self._send(400, {'ok': False, 'error': 'server + pointId required'})
+                return
+            try:
+                _rp_pl = _arkbk.resolve_point(_ab_pl, _pt_pl)
+                if not _rp_pl.get('ok'):
+                    self._send(400, {'ok': False, 'code': _rp_pl.get('code'), 'error': _rp_pl.get('error')})
+                    return
+                _md_pl = _arkbk.detect_map_dir(_ab_pl)[0]
+                _act_pl = _arkbk._active_name(_ab_pl, _md_pl) if _md_pl else ''
+                _src_sz = os.path.getsize(_rp_pl['abs'])
+                _cur_sz = 0
+                _cur_abs = os.path.join(_arkbk.ARK_ROOT, _ab_pl, 'ShooterGame', 'Saved',
+                                        'SavedArks', _md_pl or '', _act_pl) if _act_pl else ''
+                if _cur_abs and os.path.isfile(_cur_abs):
+                    _cur_sz = os.path.getsize(_cur_abs)
+                _st_pl = _arkbk_rcon_alive(_ab_pl)
+                _pc_pl = _arkbk.precheck(_ab_pl, _pt_pl)
+                _plan = {
+                    'ok': True,
+                    'server': _ab_pl,
+                    'serverCn': _arkbk_server_cn(_ab_pl),
+                    'pointId': _pt_pl,
+                    'targetPath': _rp_pl['abs'],
+                    'targetMB': round(_src_sz / 1048576.0, 1),
+                    'activePath': _cur_abs,
+                    'activeMB': round(_cur_sz / 1048576.0, 1),
+                    'running': bool(_st_pl.get('running')),
+                    'rconPort': _st_pl.get('rconPort'),
+                    'impactFiles': [_cur_abs, os.path.join(_arkbk.BACKUP_ROOT, _ab_pl, 'pre_restore.ark'),
+                                    _cur_abs + '.pre_swap.ark'],
+                    'etaSec': (30 if _st_pl.get('running') else 5) + 5 + (10 if _st_pl.get('running') else 0)
+                               + 20 + 300,
+                    'confirmWord': _arkbk_server_cn(_ab_pl),
+                    'verdict': _pc_pl.get('verdict'),
+                    'notice': _pc_pl.get('notice'),
+                    'loss': len(_pc_pl.get('loss') or []),
+                    'dup': len(_pc_pl.get('dup') or []),
+                    'safe': len(_pc_pl.get('safe') or []),
+                    'precheck': _pc_pl,
+                    'steps': ['saveworld（在跑时）', 'precheck 闸门', '备份当前档 → pre_restore.ark',
+                              'kill 进程', '等 RCON 端口关闭', '原子换档', 'startq 启动', '等 RCON 就绪'],
+                }
+            except Exception as _e_pl:
+                self._send(500, {'ok': False, 'error': '%s: %s' % (type(_e_pl).__name__, _e_pl)})
+                return
+            self._send(200, _plan)
+            return
+
+        if path == '/api/arkbackup/execute':
+            # §6.5 执行回档（异步 job）；dryRun:true ⇒ 只跑到闸门，不动文件/不停服
+            _u_ex = _srvctl_guard(self, qs, need_token=True)
+            if not _u_ex:
+                return
+            if _arkbk is None:
+                self._send(500, {'ok': False, 'error': 'ark_backup module not loaded'})
+                return
+            _ab_ex = g('server')
+            _pt_ex = g('pointId') or g('path')
+            if not _ab_ex or not _pt_ex:
+                self._send(400, {'ok': False, 'error': 'server + pointId required'})
+                return
+            with _ARKBK_JOB_LOCK:
+                _busy_ex = _ARKBK_BUSY.get(_ab_ex)
+            if _busy_ex:
+                self._send(409, {'ok': False, 'code': 'busy',
+                                 'error': '该服已有回档任务在跑', 'jobId': _busy_ex})
+                return
+            _dry_ex = bool(g('dryRun'))
+            try:
+                _pc_ex = _arkbk.precheck(_ab_ex, _pt_ex)
+            except Exception as _e_ex:
+                self._send(500, {'ok': False, 'error': '%s: %s' % (type(_e_ex).__name__, _e_ex)})
+                return
+            if not _pc_ex.get('ok'):
+                self._send(400, {'ok': False, 'code': _pc_ex.get('code'),
+                                 'error': _pc_ex.get('error')})
+                return
+            _vd = _pc_ex.get('verdict')
+            _missing = []
+            if _vd != 'clear':
+                if not g('ackRisk'):
+                    _missing.append('ackRisk')
+                if (g('confirm') or '') != _arkbk_server_cn(_ab_ex):
+                    _missing.append('confirm')
+            if _missing:
+                self._send(400, {'ok': False, 'code': 'need_ack', 'verdict': _vd,
+                                 'notice': _pc_ex.get('notice'), 'missing': _missing,
+                                 'confirmWord': _arkbk_server_cn(_ab_ex),
+                                 'error': '存在风险角色，需确认后执行'})
+                return
+            _job_ex = _arkbk_new_job(_ab_ex, _pt_ex, _u_ex, _dry_ex, action='rollback')
+            _argv_ex = {'server': _ab_ex, 'pointId': _pt_ex, 'dryRun': _dry_ex,
+                        'ackRisk': bool(g('ackRisk')), 'confirm': g('confirm') or '',
+                        'skipSaveworld': bool(g('skipSaveworld'))}
+            _ARKBK_POOL.submit(_arkbk_do_rollback, _job_ex, _argv_ex, _srvctl_cfg())
+            _arkbk.append_audit({'server': _ab_ex, 'action': ('dryrun' if _dry_ex else 'execute'),
+                                 'pointId': _pt_ex, 'ok': True, 'jobId': _job_ex['id'],
+                                 'verdict': _vd, 'loss': len(_pc_ex.get('loss') or []),
+                                 'dup': len(_pc_ex.get('dup') or []), 'operator': _u_ex})
+            self._send(200, {'ok': True, 'jobId': _job_ex['id'], 'dryRun': _dry_ex,
+                             'verdict': _vd, 'notice': _pc_ex.get('notice'),
+                             'phase': _job_ex['phase']})
+            return
+
+        if path == '/api/arkbackup/rollback':
+            # §6.7 撤销回档：用 arkbackup\<服>\pre_restore.ark 还原
+            _u_rb = _srvctl_guard(self, qs, need_token=True)
+            if not _u_rb:
+                return
+            if _arkbk is None:
+                self._send(500, {'ok': False, 'error': 'ark_backup module not loaded'})
+                return
+            _ab_rb = g('server')
+            if not _ab_rb:
+                self._send(400, {'ok': False, 'error': 'server required'})
+                return
+            _cn_rb = _arkbk_server_cn(_ab_rb)
+            if (g('confirm') or '') != _cn_rb:
+                self._send(400, {'ok': False, 'code': 'confirm_required',
+                                 'error': '需输入服务器中文名确认', 'confirmWord': _cn_rb})
+                return
+            with _ARKBK_JOB_LOCK:
+                _busy_rb = _ARKBK_BUSY.get(_ab_rb)
+            if _busy_rb:
+                self._send(409, {'ok': False, 'code': 'busy', 'error': '该服已有回档任务在跑',
+                                 'jobId': _busy_rb})
+                return
+            _chk_rb = _arkbk.restore_pre(_ab_rb, expect_job=g('jobId'), force=bool(g('force')), dry_run=True)
+            if not _chk_rb.get('ok'):
+                _cm = {'no_backup': 404, 'stale': 409, 'job_mismatch': 409,
+                       'sha_mismatch': 409, 'size_mismatch': 409}
+                self._send(_cm.get(_chk_rb.get('code'), 400), _chk_rb)
+                return
+            _job_rb = _arkbk_new_job(_ab_rb, 'own:pre_restore', _u_rb, False, action='restore')
+            _argv_rb = {'server': _ab_rb, 'pointId': 'own:pre_restore', 'dryRun': False,
+                        'ackRisk': True, 'confirm': _cn_rb,
+                        'skipSaveworld': bool(g('skipSaveworld')), 'skipBackup': True}
+            _ARKBK_POOL.submit(_arkbk_do_rollback, _job_rb, _argv_rb, _srvctl_cfg())
+            _arkbk.append_audit({'server': _ab_rb, 'action': 'undo', 'pointId': 'own:pre_restore',
+                                 'ok': True, 'jobId': _job_rb['id'], 'operator': _u_rb})
+            self._send(200, {'ok': True, 'jobId': _job_rb['id'], 'phase': _job_rb['phase'],
+                             'backupMeta': _chk_rb.get('backupMeta')})
+            return
+
+        if path == '/api/arkbackup/restore_profile':
+            # v6043：角色档案恢复 —— 把 PlayerProfile 里 <eosId>.arkprofile 解压回地图存档目录
+            #   ⚠ 写操作：会覆盖 mapdir 下同名 .arkprofile（自动备份 .bak_<ts>）。
+            #   dryRun 默认 true，前端必须先预览再执行。
+            _u_rp = _srvctl_guard(self, qs, need_token=True)
+            if not _u_rp:
+                return
+            if _arkbk is None:
+                self._send(500, {'ok': False, 'error': 'ark_backup module not loaded'})
+                return
+            _ab_rp = g('server')
+            _eos_rp = g('eosId') or g('eos')
+            if not _ab_rp or not _eos_rp:
+                self._send(400, {'ok': False, 'error': 'server + eosId required'})
+                return
+            _dry_rp = g('dryRun')
+            _dry_rp = True if _dry_rp is None else bool(_dry_rp)
+            # 真正写入要求显式 confirm=服务器中文名（与回档同一套防呆）
+            if not _dry_rp:
+                _cn_rp = _arkbk_server_cn(_ab_rp)
+                if (g('confirm') or '') != _cn_rp:
+                    self._send(400, {'ok': False, 'code': 'confirm_required',
+                                     'error': '写入档案需输入服务器中文名确认',
+                                     'confirmWord': _cn_rp})
+                    return
+            try:
+                _r_rp = _arkbk.restore_profile(_ab_rp, _eos_rp, g('zip'), dry_run=_dry_rp)
+            except Exception as _e_rp:
+                self._send(500, {'ok': False, 'error': '%s: %s' % (type(_e_rp).__name__, _e_rp)})
+                return
+            if _r_rp.get('ok') and not _dry_rp:
+                try:
+                    _arkbk.append_audit({'server': _ab_rp, 'action': 'restore_profile',
+                                         'eosId': _eos_rp, 'ok': True, 'operator': _u_rp})
+                except Exception:
+                    pass
+            self._send(200 if _r_rp.get('ok') else 400, _r_rp)
+            return
         if path == '/api/mapwiki/text':
             # v5873：地图 Wiki AI 整理结果回写。body {slug|id, blocks:{ovIntro,ovTips,biome,res,cave,boss,creature,mech,tips,spawn}, force}
             _mid2 = str(g('slug') or g('id') or body.get('id') or '').strip()
@@ -7419,17 +9204,146 @@ class Handler(BaseHTTPRequestHandler):
             if _u not in CFG_OWNERS:
                 self._send(403, {'ok': False, 'error': 'owner only'})
                 return
-            _dom = _srv_domain_norm(body.get('server_domain', g('server_domain', '')))
+            # P3：除 server_domain 外，支持写 asa_token / asa_base（仅显式提供时才改，留空=不修改）
+            _has_dom = ('server_domain' in body) or ('server_domain' in qs)
+            _has_tok = ('asa_token' in body) or ('asa_token' in qs)
+            _has_base = ('asa_base' in body) or ('asa_base' in qs)
+            _clr_tok = bool(body.get('asa_token_clear'))
             try:
                 _d = _srv_cfg_read()
-                _d['server_domain'] = _dom
+                if _has_dom or not _d.get('server_domain'):
+                    _dom = _srv_domain_norm(body.get('server_domain', g('server_domain', '')))
+                    _d['server_domain'] = _dom
+                else:
+                    _dom = _d.get('server_domain') or ''
+                if _has_tok:
+                    _tk = str(body.get('asa_token', g('asa_token', '')) or '').strip()
+                    if _tk:
+                        _d['asa_token'] = _tk
+                    elif _clr_tok:
+                        _d.pop('asa_token', None)
+                if _has_base:
+                    _bb = str(body.get('asa_base', g('asa_base', '')) or '').strip().rstrip('/')
+                    if _bb:
+                        _d['asa_base'] = _bb
                 _d['updated_at'] = time.strftime('%Y-%m-%dT%H:%M:%S+08:00')
                 _d['updated_by'] = _u
                 _srv_cfg_write(_d)
             except Exception as e:
                 self._send(500, {'ok': False, 'error': repr(e)})
                 return
-            self._send(200, {'ok': True, 'server_domain': _dom})
+            self._send(200, {'ok': True, 'server_domain': _dom,
+                             'asa_base': _d.get('asa_base') or 'https://asa.whiterober.com',
+                             'asa_token_masked': _asa_mask(_d.get('asa_token') or ''),
+                             'asa_configured': bool(_d.get('asa_token'))})
+            return
+        # ===== P3：服务器控制（仅二级管理员；前端不接触 token）=====
+        if path == '/api/srvctl/action' or path == '/api/srvctl/rcon':
+            # v6023（用户口径）：写接口**强制** token —— 挡住「知道管理员用户名即可 curl 启停/清龙」
+            _u = _srvctl_guard(self, None, need_token=True)
+            if not _u:
+                return
+            _act = 'rcon' if path.endswith('/rcon') else g('action')
+            if _act not in SRVCTL_ACTIONS:
+                self._send(400, {'ok': False, 'error': 'bad action', 'code': 'bad_action',
+                                 'actions': list(SRVCTL_ACTIONS)})
+                return
+            _msgv = body.get('message')
+            _msg = None
+            if _act == 'rcon':
+                _msg = str(_msgv if _msgv is not None else g('message', '') or '').strip()
+                if not _msg:
+                    self._send(400, {'ok': False, 'error': 'empty message', 'code': 'bad_message'})
+                    return
+            _arr = body.get('servers')
+            if not isinstance(_arr, list):
+                _arr = [x.strip() for x in (g('servers', '') or '').split(',') if x.strip()]
+            _srvl = []
+            for _s in _arr:
+                _s2 = str(_s or '').strip()
+                if _s2 and (_s2 in SERVERS) and (_s2 not in _srvl):
+                    _srvl.append(_s2)
+            if not _srvl:
+                self._send(400, {'ok': False, 'error': 'no servers', 'code': 'no_servers',
+                                 'servers': sorted(SERVERS.keys())})
+                return
+            # v6058（按推荐补全）：**回档期间该服禁止任何外部动作**（含 start —— start 会进
+            #   启动队列，同样要在入口挡住）。原 `_srvctl_acquire(server, action)` 是按
+            #   (服务器, 动作) 分锁，start 与 kill 互不排斥，挡不住「换档窗口里被拉起来」。
+            _hold = [s for s in _srvl if _ARKBK_HOLD.get(s)]
+            if _hold:
+                self._send(409, {'ok': False, 'code': 'arkbackup_busy',
+                                 'error': '该服务器正在执行回档，请等待完成后再操作',
+                                 'servers': _hold, 'action': _act})
+                return
+            # v6014（用户口径）：**所有** start 一律走队列 —— 含单台启动与失败重试。
+            #   原实现只有「多台」入队、单台直通 ⇒ 任务条上的「重试」是单台请求，
+            #   可绕过重压池（同时 <= 2 台）导致并发超标；改为统一入队后重压池才真正成立。
+            if _act == 'start':
+                try:
+                    _q = _srvctl_startq_new(_u, _srvl)
+                except Exception as _e:
+                    self._send(500, {'ok': False, 'code': 'queue_error', 'error': repr(_e)})
+                    return
+                self._send(200, {'ok': True, 'queued': True, 'action': 'start',
+                                 'servers': _srvl, 'queue': _q})
+                return
+            _busy = [s for s in _srvl if not _srvctl_acquire(s, _act)]
+            if _busy:
+                for s in _srvl:
+                    if s not in _busy:
+                        _srvctl_release(s, _act)
+                self._send(409, {'ok': False, 'code': 'busy',
+                                 'error': '该服务器此操作正在执行中',
+                                 'servers': _busy})
+                return
+            try:
+                if _act in SRVCTL_ASYNC_ACTIONS:
+                    _jid = _srvctl_job_new(_u, _act, _srvl)
+                    self._send(200, {'ok': True, 'async': True, 'jobId': _jid,
+                                     'action': _act, 'servers': _srvl})
+                    return
+                _res = _srvctl_run(_u, _srvl, _act, _msg)
+                self._send(200, {'ok': all(bool(r.get('ok')) for r in _res),
+                                 'action': _act, 'results': _res})
+            finally:
+                for s in _srvl:
+                    _srvctl_release(s, _act)
+            return
+        if path == '/api/asa_test':
+            # P3：测试 ASA token 连通性（仅 owner）
+            _u = g('username')
+            _n = g('nick')
+            _ok, _err = _harvest_auth(_u, _n)
+            if not _ok:
+                self._send(401, {'ok': False, 'error': _err})
+                return
+            if _u not in CFG_OWNERS:
+                self._send(403, {'ok': False, 'error': 'owner only'})
+                return
+            _cfg = _srvctl_cfg()
+            if not _cfg['token']:
+                self._send(200, {'ok': False, 'code': 'asa_no_token', 'error': 'asa_token 未配置'})
+                return
+            _t0 = time.time()
+            try:
+                _code, _text = _asa_http('GET', _cfg['base'] + '/server-status', _cfg['token'],
+                                         None, timeout=_cfg['timeout'], verify=_cfg['verify'])
+                _ms = int((time.time() - _t0) * 1000)
+                if 200 <= _code < 300:
+                    _cnt = 0
+                    try:
+                        _cnt = len((json.loads(_text) or {}).get('servers') or [])
+                    except Exception:
+                        _cnt = 0
+                    self._send(200, {'ok': True, 'count': _cnt, 'ms': _ms})
+                else:
+                    self._send(200, {'ok': False,
+                                     'code': 'asa_unauthorized' if _code in (401, 403) else 'asa_error',
+                                     'error': 'ASA HTTP %s' % _code, 'ms': _ms})
+            except Exception as _e:
+                self._send(200, {'ok': False, 'code': 'asa_error', 'error': str(_e),
+                                 'ms': int((time.time() - _t0) * 1000)})
             return
         if path == '/api/cfg_rules/refresh':
             _u = g('username')
@@ -7549,7 +9463,9 @@ class Handler(BaseHTTPRequestHandler):
             if not nick:
                 self._send(401, {'ok': False, 'error': 'invalid credentials'})
                 return
-            self._send(200, {'ok': True, 'nick': nick})
+            # v6023：追加 token（HMAC 无状态签名；重启后端不失效；改密码即吊销）
+            self._send(200, {'ok': True, 'nick': nick, 'role': _role_level(username),
+                             'token': _srvctl_make_token(username)})
         # 自助改密：/api/change_password（校验旧密码 → 写 accounts.json）
         elif path.endswith('/api/change_password') or path.endswith('change_password'):
             username = g('username')
@@ -7907,6 +9823,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    _sinfo('dino_backend starting: port=%s DINO_DATA=%s' % (PORT, DINO_DATA))
     print('dino_backend listening on :{}'.format(PORT))
     print('  RCON_HOST={}  DINO_DATA={}'.format(RCON_HOST, DINO_DATA))
     print('  ASA_DATA={}  ALLOW_ORIGIN={}'.format(ASA_DATA, ALLOW_ORIGIN))
@@ -7915,6 +9832,7 @@ def main():
         srv.serve_forever()
     except Exception as e:  # v988：异常兑底（留日志后交由 watchdog 重启）
         print('[main] serve_forever exited: {}'.format(e))
+        _sexc('main', 'serve_forever exited')
         raise
 
 

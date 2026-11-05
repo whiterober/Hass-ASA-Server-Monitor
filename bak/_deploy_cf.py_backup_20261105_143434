@@ -1,0 +1,105 @@
+# -*- coding: utf-8 -*-
+"""
+_deply_cf.py — dino-import 前端固定部署脚本（CF Workers Assets）
+============================================================
+流程：1) 打包 tmp/dino-flat（调 _sync_repack2.py） 2) wrangler deploy 3) 线上验证
+用法：python tmp/_deploy_cf.py
+前置：wrangler 已登录（wrangler.cmd whoami 确认 whiter.rober@gmail.com）
+"""
+import io, os, subprocess, sys, json, urllib.request
+
+BASE = r'b:\项目\Hass ASA Server Monitor'
+OUT = r'C:\Users\white\AppData\Roaming\Code\User\workspaceStorage\_deploy_cf_out.txt'
+lines = []
+
+def log(s):
+    lines.append(s)
+    print(s)
+
+def run(cmd, cwd=None, timeout=180):
+    """运行命令并返回 (rc, stdout)"""
+    env = dict(os.environ)
+    env['PYTHONIOENCODING'] = 'utf-8'
+    r = subprocess.run(cmd, capture_output=True, cwd=cwd or BASE, env=env, timeout=timeout)
+    out = (r.stdout or b'').decode('utf-8', 'replace')
+    err = (r.stderr or b'').decode('utf-8', 'replace')
+    return r.returncode, out, err
+
+# ---- 1. 打包 ----
+log('== 1/3 打包 ==')
+rc, out, err = run([sys.executable, os.path.join(BASE, 'tmp', '_sync_repack2.py')])
+log('repack rc=%d' % rc)
+for ln in (out + err).splitlines():
+    if ln.strip():
+        log('  ' + ln.strip())
+if rc != 0:
+    log('打包失败，中止')
+    io.open(OUT, 'w', encoding='utf-8').write('\n'.join(lines))
+    sys.exit(1)
+
+# ---- 1.5 sw.js 语法卡口 ----
+# 2026-11-05：sw.js 曾因编码损坏吞掉代码行，带语法错误静默上线两周
+#   （浏览器不报错、旧 SW 继续跑，表现为「版本冻结」）。此处做最低门槛拦截。
+log('== 1.5 卡口 sw.js 语法 ==')
+import shutil as _shutil
+_flat_sw = os.path.join(BASE, 'tmp', 'dino-flat', 'sw.js')
+_node = _shutil.which('node')
+if not _node:
+    log('  WARN: 未找到 node，跳过 sw.js 语法校验（不中止）')
+elif not os.path.isfile(_flat_sw):
+    log('  FAIL: 缺少 tmp/dino-flat/sw.js，中止部署')
+    io.open(OUT, 'w', encoding='utf-8').write('\n'.join(lines))
+    sys.exit(1)
+else:
+    _nrc, _nout, _nerr = run([_node, '--check', _flat_sw], timeout=60)
+    if _nrc != 0:
+        log('  node --check rc=%d' % _nrc)
+        for _ln in (_nout + _nerr).splitlines()[:12]:
+            if _ln.strip():
+                log('    ' + _ln.strip())
+        log('  sw.js 语法错误，中止部署')
+        io.open(OUT, 'w', encoding='utf-8').write('\n'.join(lines))
+        sys.exit(1)
+    log('  node --check rc=0 OK')
+
+# ---- 2. wrangler 部署 ----
+log('== 2/3 wrangler deploy ==')
+rc, out, err = run(['wrangler.cmd', 'deploy', '--config', 'tmp/wrangler.dino.toml'], timeout=300)
+for ln in (out + err).splitlines():
+    if ln.strip():
+        log('  ' + ln.strip())
+if rc != 0:
+    log('部署失败 rc=%d' % rc)
+    io.open(OUT, 'w', encoding='utf-8').write('\n'.join(lines))
+    sys.exit(1)
+
+# ---- 3. 线上验证 ----
+log('== 3/3 线上验证 ==')
+try:
+    req = urllib.request.Request('https://dino.whiterober.ccwu.cc/?cb=' + str(int(__import__('time').time()*1000)),
+                                 headers={'User-Agent': 'Mozilla/5.0'})
+    r = urllib.request.urlopen(req, timeout=30)
+    html = r.read().decode('utf-8', 'replace')
+    log('线上 HTTP %d, 大小 %dB' % (r.status, len(html)))
+    ver = None
+    import re
+    m = re.search(r"var LB_VERSION = '([^']+)'", html)
+    if m:
+        ver = m.group(1)
+        log('线上 LB_VERSION = %s' % ver)
+    # 对比本地版本
+    local_html = io.open(os.path.join(BASE, 'dino-import.html'), encoding='utf-8').read()
+    m2 = re.search(r"var LB_VERSION = '([^']+)'", local_html)
+    log('本地 LB_VERSION = %s' % (m2.group(1) if m2 else '?'))
+    log('版本一致: %s' % (ver == (m2.group(1) if m2 else None)))
+    # 版本自检文件
+    try:
+        r2 = urllib.request.urlopen('https://dino.whiterober.ccwu.cc/dino-import.version', timeout=20)
+        log('dino-import.version = %s' % r2.read().decode('utf-8','replace').strip())
+    except Exception as e:
+        log('version 文件读取失败: %r' % e)
+except Exception as e:
+    log('验证失败: %r' % e)
+
+io.open(OUT, 'w', encoding='utf-8').write('\n'.join(lines))
+log('DONE')

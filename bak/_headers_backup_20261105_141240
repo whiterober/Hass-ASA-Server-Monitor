@@ -1,0 +1,80 @@
+# dino-import 缓存策略（2026-10-08 v4489-A，用户口径）
+# 原则：仅对「URL 自带版本号(?v=)或内容哈希命名」的资源加 immutable 长缓存；
+#       页面壳（index.html / sw.js / dino-import.version / manifest / icons）一律不加，保持可更新。
+# 注：Workers _headers 不支持后缀通配（如 *.json），故逐文件精确列；目录项用前缀通配。
+# 换新机制：所有列出资源的请求 URL 均带 ?v=LB_VERSION 或 ?v=<内容哈希>，发版即换 URL，自动绕过旧缓存。
+
+# ===== P2-1a（2026-11-05）：页面壳短缓存 =====
+# 背景：HTML 在 Workers Assets 下**没有 ETag / Last-Modified**，配合 max-age=0
+#       ⇒ 每次打开都要全量下载 1.43MB（brotli），无法走 304 协商。
+# 方案：给首页壳加 10 分钟浏览器 + 边缘缓存，窗口内重复打开 0 流量。
+#       版本自检（首检 5s、之后每 60s，no-store 拉 dino-import.version）仍能发现新版并弹窗；
+#       「立即刷新」走 location.reload()（强制重校验）可拿到新 HTML。
+# 代价：部署后最长约 10 分钟内，个别客户端可能仍是旧版（弹窗可提示刷新）。
+/
+  Cache-Control: public, max-age=600, must-revalidate
+/index.html
+  Cache-Control: public, max-age=600, must-revalidate
+
+# B1a（2026-11-05）：外置样式表 —— HTML 以 /app.css?v=LB_VERSION 引用，内容变即换 URL
+/app.css
+  Cache-Control: public, max-age=31536000, immutable
+
+# B1b（2026-11-05）：外置静态常量表 —— 同上，带 ?v= 长缓存
+/app_data.js
+  Cache-Control: public, max-age=31536000, immutable
+
+# B1c（2026-11-05）：外置 UI 脚本块（Wiki/物品/新闻等界面逻辑）—— 同上
+/app_ui.js
+  Cache-Control: public, max-age=31536000, immutable
+
+# B1d（2026-11-05）：外置核心脚本（3.3MB，主逻辑）—— 同上
+/app_core.js
+  Cache-Control: public, max-age=31536000, immutable
+
+# P2-1c（2026-11-05）：压缩产物名（去注释+重排版，不混淆）—— 同上
+/app_core.min.js
+  Cache-Control: public, max-age=31536000, immutable
+/app_ui.min.js
+  Cache-Control: public, max-age=31536000, immutable
+
+/item_zh.json
+  Cache-Control: public, max-age=31536000, immutable
+/itemstats.json
+  Cache-Control: public, max-age=31536000, immutable
+/facility_zh.json
+  Cache-Control: public, max-age=31536000, immutable
+/facility_official.json
+  Cache-Control: public, max-age=31536000, immutable
+/icon_anti_color.json
+  Cache-Control: public, max-age=31536000, immutable
+/dino_prefix_zh.json
+  Cache-Control: public, max-age=31536000, immutable
+/dino_colors.json
+  Cache-Control: public, max-age=31536000, immutable
+/webp_map.json
+  Cache-Control: public, max-age=31536000, immutable
+/icons2.json
+  Cache-Control: public, max-age=31536000, immutable
+/icon_zh_map.json
+  Cache-Control: public, max-age=31536000, immutable
+/gene_traits_zh.json
+  Cache-Control: public, max-age=31536000, immutable
+/biome_zh.json
+  Cache-Control: public, max-age=31536000, immutable
+/weather_zh.json
+  Cache-Control: public, max-age=31536000, immutable
+/lb_material.json
+  Cache-Control: public, max-age=31536000, immutable
+/dino_rules.json
+  Cache-Control: public, max-age=31536000, immutable
+/dino_rank_alias.json
+  Cache-Control: public, max-age=31536000, immutable
+/assets.idx
+  Cache-Control: public, max-age=31536000, immutable
+/assets.idx.json
+  Cache-Control: public, max-age=31536000, immutable
+/packs/*
+  Cache-Control: public, max-age=31536000, immutable
+/thumbs/*
+  Cache-Control: public, max-age=31536000, immutable
