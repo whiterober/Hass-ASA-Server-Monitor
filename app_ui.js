@@ -8731,9 +8731,11 @@ function lbWikiAgo(ts){
      术语/正名  lbWtGlossDom / lbZhFixDom / lbEnMark（已由 lbWikiLayoutFix 内部调用）
      AI 请求    lbAiCfgGet / lbAiNormModel / lbAiParseJson / lbAiErrText（与物种同一套）
    本文件只新增：数据拉取、把数据喂给上面这些现成函数的少量胶水代码。 */
-var LB_MW_API = 'https://data.whiterober.ccwu.cc/api/mapwiki/';
-var LB_MW_SLUGS = { Isl:'the-island', Sco:'scorched-earth', Cen:'the-center', Abe:'aberration', Ext:'extinction',
-                    Ast:'astraeos', Rag:'ragnarok', Val:'valguero', Los:'lost-colony', Gen:'genesis' };
+/* v6110（用户口径「为啥地图 wiki 入口不见了」）：
+   LB_MW_API / LB_MW_SLUGS 已**移到 app_data.js**（首屏必加载）。
+   原因：app_core.js 的 lbRenderFuncBar() 需要用 LB_MW_SLUGS 判断入口显隐，
+   而本文件自 v6105 起是**按需加载**的 ⇒ 首屏取不到，入口被永久判为不可见。
+   约定：**纯配置/纯数据放 app_data.js；本文件只留行为与运行时状态**（LB_MW / LB_MW_IDX / LB_MW_NAMES / LB_MW_TABS 仍留在此处）。 */
 var LB_MW_NAMES = { Isl:'孤岛', Sco:'焦土', Cen:'核心岛', Abe:'畸变', Ext:'灭绝',
                     Ast:'星耀', Rag:'仙境', Val:'瓦尔盖罗', Los:'失落地', Gen:'创世' };
 /* TAB：与物种侧同口径 —— 有原文或有 AI 整理才显示，空块不显示 */

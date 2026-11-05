@@ -21,10 +21,37 @@ function lbUIEnsure(){
     var s = document.createElement('script');
     s.src = '/app_ui.min.js?v=' + ((typeof LB_VERSION === 'string' && LB_VERSION) ? LB_VERSION : String(Date.now()));
     s.async = true;
-    s.onload = function(){ try{ if (typeof lbPerfMark === 'function') lbPerfMark('ui'); }catch(eP){} res(true); };
+    s.onload = function(){
+      try{ if (typeof lbPerfMark === 'function') lbPerfMark('ui'); }catch(eP){}
+      /* v6111：app_ui 到位后补一次功能条重绘 —— 功能条里的 lbMapWikiHas / lbMapWikiIndexLoad 等实现都在 app_ui，
+         首屏渲染时它们还不存在 ⇒ 地图 Wiki 入口提示会停在「该地图暂无 wiki 资料」且索引/AI 探测被跳过；
+         重绘一次即自愈（实测：重绘后提示变为「该地图 Wiki 速查（…）」、索引开始拉取）。 */
+      /* v6112（P1）：繁育栏同一族问题 —— 物种/物品 Wiki 入口的判定（lbWikiKey / lbWikiHas / lbWikiItemHas）
+         全在 app_ui，首屏绘制时判为「无数据」把入口藏掉（visible:false），且原代码无任何重绘钩子。
+         实测：仅加载 app_ui 不重绘 ⇒ #lbWikiBtn 仍 display:none；补一次 lbRenderBreedBar 即变 inline-flex。
+         v6113：lbRenderBreedBar 首行已同步功能条 ⇒ 不再重复调用 lbRenderFuncBar（避免双次渲染/多一次 RCON）。 */
+      try{
+        if (typeof lbRenderBreedBar === 'function') lbRenderBreedBar();
+        else if (typeof lbRenderFuncBar === 'function') lbRenderFuncBar();
+      }catch(eB){}
+      /* v6112（P2）：待制作面板的「N组」（lbStackGet）与 ini 自定义配方（lbIniCostEnsure）同样依赖 app_ui，
+         面板已开着时补一次：先预取 ini 成本索引，再按需重绘一份汇总。 */
+      try{ if (typeof lbIniCostEnsure === 'function') lbIniCostEnsure(function(){ try{ if (LB._todoOpen) lbTodoRender(); }catch(eT7){} }); }catch(eI5){}
+      try{ if (LB._todoOpen && typeof lbTodoRender === 'function') lbTodoRender(); }catch(eT8){}
+      res(true);
+    };
     s.onerror = function(){
       window.__lbUI = null;
-      try{ if (typeof lbToast === 'function') lbToast('功能模块加载失败，请检查网络后重试'); }catch(eT){}
+      /* v6113：失败清理 —— 移除已插入的 script（原实现不清理，反复失败会堆积多个 292KB 请求；
+         网络恢复时可能同时执行多份 app_ui ⇒ 顶层 var 被重新初始化、状态丢失） */
+      try{ if (s && s.parentNode) s.parentNode.removeChild(s); }catch(eRm){}
+      var _n = 0;
+      try{ _n = (window.__lbUIFail = (window.__lbUIFail || 0) + 1); }catch(eN){}
+      try{
+        if (typeof lbToast === 'function'){
+          lbToast(_n >= 3 ? '功能模块多次加载失败，请刷新页面重试' : '功能模块加载失败，请检查网络后重试');
+        }
+      }catch(eT){}
       rej(new Error('app_ui load fail'));
     };
     document.head.appendChild(s);
@@ -5143,7 +5170,8 @@ function lbSrvCtlOpen(){
   LB_SRVCTL.loading = true;
   lbSheetBuild('lbSrvCtl', { onClose: 'lbSrvCtlClose()' });
   lbSheetOpen('lbSrvCtl');
-  try { lbTaskLoad(); } catch(e){}   /* v5983：恢复历史任务（按用户隔离） */
+  try { lbTaskLoad(); } catch(e){}   /* v5983：恢复历史任务（v6122：改由后端 tasks_state.json 提供） */
+  try { lbTaskSyncStart(); } catch(e){}   /* v6122：启动服务端任务同步（全服共享一份） */
   lbSrvCtlRender();
   lbSrvCtlFetch();
   try { lbSrvCtlTipsWatch(); } catch(e){}   /* v5991：统一 tips 引擎挂载 */
@@ -5185,6 +5213,7 @@ function lbArkBkOpen(){
   if (!LB_ARKBK.srv) LB_ARKBK.srv = '';
   lbSheetBuild('lbArkBk', { onClose: 'lbArkBkClose()' });
   lbSheetOpen('lbArkBk');
+  try { lbTaskSyncStart(); } catch (e) {}   /* v6122：任务列表全服共享，回档浮窗同样同步 */
   lbArkBkRender();
   try { lbSrvCtlOnlineSync(); } catch (e) {}   /* v6055：在线栏数据与服务器控制共享（15s TTL） */
   lbArkBkJobResume();                          /* v6057：恢复上一次回档进度/结果 */
@@ -5633,8 +5662,10 @@ function lbArkBkRender(){
   /* v6050（用户口径）：底栏固定进度条 —— 完全复用 srvctl 的 .lb-task-pg 结构
      （底槽 + .lb-task-fill 填充 + 图标 + 主文 + 副文 + 百分比，文字叠在条内） */
   if (S.foot){
-    var _pg = lbArkBkProgHtml();
-    if (_pg){ S.foot.innerHTML = _pg + lbArkBkFootBtns(); S.foot.removeAttribute('hidden'); }
+    /* v6127（M2 用户口径）：回档进度已并入统一任务列表（action=rollback），
+       回档浮窗底栏不再自绘进度条，只保留失败时的「重试/清除」。 */
+    var _fb = lbArkBkFootBtns();
+    if (_fb){ S.foot.innerHTML = _fb; S.foot.removeAttribute('hidden'); }
     else { S.foot.innerHTML = ''; S.foot.setAttribute('hidden', ''); }
   }
 }
@@ -6482,41 +6513,55 @@ var LB_TASK_TTL = 10000;
 var LB_TASK_ACT_LABEL = { start:'启动', kill:'强制终止', saveworld:'保存世界', destroy:'清理恐龙', rcon:'RCON', refresh:'刷新状态' };
 
 function lbTaskLabel(a){ return LB_TASK_ACT_LABEL[a] || a; }
+/* ===== v6122：任务列表改为**服务端唯一真源**（原实现存 localStorage ⇒ 每人一份）=====
+   · GET /api/tasks?since=rev 增量拉取；LB_TASKS.items 退化为只读镜像
+   · 本地 put/update 仅保留兼容壳（不再写 localStorage），真实任务由后端执行器登记 */
+var LB_TASK_SRC = 'server';
+var LB_LOCKS = {};                 /* v6135：{server: {kind,label,user,owner}} */
+var LB_INTERRUPT_AT = 0;           /* v6135：软锁打断二次确认时间戳 */
+var LB_INTERRUPT_SRV = '';
+var LB_INTERRUPT_FORCE = false;
+var LB_TASK_REV = 0;
+var LB_TASK_SYNC_TIMER = null;
 function lbTaskStoreKey(){ return 'lbSrvTask:' + ((typeof lbSrvCtlUser === 'function' && lbSrvCtlUser()) || 'anon'); }
-
-function lbTaskLoad(){
-  var arr = [];
-  try { arr = JSON.parse(localStorage.getItem(lbTaskStoreKey()) || '[]') || []; } catch(e){ arr = []; }
-  var now = Date.now();
-  LB_TASKS.items = (Array.isArray(arr) ? arr : []).filter(function(t){
-    if (!t || !t.key || !t.phase) return false;
-    if (t.phase === 'run'){ t.phase = 'fail'; t.err = t.err || '页面刷新导致中断'; t.hideAt = 0; }
-    if (t.phase === 'ok' && t.hideAt && now > t.hideAt) return false;
-    return true;
-  });
-  LB_TASKS.seq = LB_TASKS.items.reduce(function(m, t){ return Math.max(m, Number(t.id) || 0); }, 0);
-  lbTaskSyncTimer();
+function lbTaskLoad(){ /* v6122：不再从 localStorage 恢复（改由后端 tasks_state.json） */ }
+function lbTaskSave(){ /* v6122：不再写 localStorage */ }
+function lbTaskSync(){
+  var base = (typeof lbSrvCtlApi === 'function') ? lbSrvCtlApi() : '';
+  var u = (typeof lbSrvCtlUser === 'function') ? lbSrvCtlUser() : '';
+  if (!base || !u) return;
+  try{
+    lbSrvCtlFetchW(base + '/api/tasks?since=' + LB_TASK_REV + '&username=' + encodeURIComponent(u) + '&t=' + Date.now(),
+                   { cache: 'no-store' })
+      .then(function(r){ return r.json(); })
+      .then(function(o){
+        if (!o || !o.ok) return;
+        if (o.changed === false){ LB_TASK_REV = Number(o.rev) || LB_TASK_REV; return; }
+        LB_TASK_REV = Number(o.rev) || 0;
+        LB_TASKS.items = Array.isArray(o.tasks) ? o.tasks : [];
+        LB_LOCKS = (o.locks && typeof o.locks === 'object') ? o.locks : {};   /* v6135：服务器锁表 */
+        LB_TASKS.seq = LB_TASKS.items.reduce(function(m,t){ return Math.max(m, Number(t.id)||0); }, 0);
+        try { lbTaskRender(); } catch(e){}
+      })
+      .catch(function(){});
+  }catch(e){}
 }
-function lbTaskSave(){
-  try { localStorage.setItem(lbTaskStoreKey(), JSON.stringify(LB_TASKS.items)); } catch(e){}
+function lbTaskSyncStart(ms){
+  /* v6123：无论计时器是否已在跑，都先补齐槽位并渲染一次
+     —— 浮窗可能是后打开的（服务器控制先开、安全回档后开） */
+  try { lbTaskEnsureSlots(); lbTaskRender(); } catch(e){}
+  if (LB_TASK_SYNC_TIMER) return;
+  lbTaskSync();
+  LB_TASK_SYNC_TIMER = setInterval(lbTaskSync, ms || 1500);
 }
 function lbTaskIdx(key){
   for (var i = 0; i < LB_TASKS.items.length; i++){ if (LB_TASKS.items[i].key === key) return i; }
   return -1;
 }
 function lbTaskPut(t){
-  var i = lbTaskIdx(t.key);
-  if (i >= 0){
-    var old = LB_TASKS.items[i];
-    if (old.phase === 'run' && t.phase === 'run') return old;   /* 运行中不重复入队 */
-    t.id = old.id;
-    LB_TASKS.items[i] = t;
-  } else {
-    t.id = ++LB_TASKS.seq;
-    LB_TASKS.items.push(t);
-  }
-  lbTaskSave(); lbTaskRender(); lbTaskSyncTimer();
-  return t;
+  /* v6122：任务由**后端**登记（/api/tasks），前端不再自建副本 */
+  try { lbTaskSync(); } catch(e){}
+  return { id: 0, key: (t && t.key) || '' };
 }
 function lbTaskQueue(action, sel, message){
   var names = {};
@@ -6531,13 +6576,36 @@ function lbTaskQueue(action, sel, message){
     });
   });
 }
+/* v6127（M2）：任务子步骤（回档 5 步等）—— 与主任务同一条列表渲染 */
+function lbTaskStepsHtml(t){
+  /* v6135（用户口径）：阶段不占额外行 —— 圆点链 + 当前阶段名 + n/N，完整步骤放 title */
+  var st = (t && t.steps) || [];
+  if (!st.length) return '';
+  var idx = -1, tips = [];
+  for (var i = 0; i < st.length; i++){
+    var s = st[i] || {};
+    var stt = String(s.state || 'wait');
+    if (stt === 'run' && idx < 0) idx = i;
+    tips.push((s.label || s.key || '') + (stt === 'ok' ? ' ✔' : stt === 'run' ? ' 进行中' : stt === 'fail' ? ' 失败' : stt === 'skip' ? ' 跳过' : ''));
+  }
+  if (idx < 0) idx = st.length;
+  var dots = '';
+  for (var j = 0; j < st.length; j++){
+    var sj = String((st[j] || {}).state || 'wait');
+    dots += '<i class="lb-task-dot ' + sj + '"></i>';
+  }
+  var curName = (idx < st.length) ? ((st[idx] || {}).label || (st[idx] || {}).key || '') : '完成';
+  return '<span class="lb-task-dots" title="' + lbMdEsc(tips.join(' / ')) + '">' + dots
+    + '<span class="lb-task-stage">' + lbMdEsc(curName) + '</span>'
+    + '<span class="lb-task-cnt2">' + Math.min(idx + 1, st.length) + '/' + st.length + '</span></span>';
+}
 function lbTaskHtml(t){
   var ph = t.phase;
   var cls = (ph === 'run' ? 'run' : ph === 'ok' ? 'ok' : ph === 'skip' ? 'skip' : ph === 'queue' ? 'queue' : 'fail');
   var pct = Math.max(0, Math.min(100, Number(t.pct) || 0));
   var icon = (ph === 'run' ? 'mdi-loading mdi-spin' : ph === 'ok' ? 'mdi-check-circle' : ph === 'skip' ? 'mdi-debug-step-over' : ph === 'queue' ? 'mdi-clock-outline' : 'mdi-alert-circle');
-  var color = (ph === 'run' ? '#c4b5fd' : ph === 'ok' ? '#4ade80' : ph === 'skip' ? '#9ca3af' : ph === 'queue' ? '#9ca3af' : '#f87171');
-  var barColor = (ph === 'fail' ? '#ef4444' : ph === 'ok' ? '#22c55e' : ph === 'skip' ? '#6b7280' : ph === 'queue' ? '#4b5563' : '#7c3aed');
+  var color = (ph === 'run' ? LB_PROG_C.runT : ph === 'ok' ? LB_PROG_C.okT : ph === 'skip' ? LB_PROG_C.muteT : ph === 'queue' ? LB_PROG_C.muteT : LB_PROG_C.failT);
+  var barColor = (ph === 'fail' ? LB_PROG_C.fail : ph === 'ok' ? LB_PROG_C.ok : ph === 'skip' ? LB_PROG_C.skipG : ph === 'queue' ? LB_PROG_C.queue : LB_PROG_C.run);
   var right = (ph === 'run' ? (pct + '%') : ph === 'ok' ? '完成' : ph === 'skip' ? '跳过' : ph === 'queue' ? '等待中' : '失败');
   var sub = (ph === 'run' ? (t.msg || '执行中…') : ph === 'ok' ? (t.msg || '完成') : ph === 'skip' ? (t.msg || '已跳过') : ph === 'queue' ? (t.msg || '等待中…') : (t.err || '失败'));
   var subTxt = String(sub).replace(/\s+/g, ' ').trim().slice(0, 70);
@@ -6547,18 +6615,34 @@ function lbTaskHtml(t){
     +   '<i class="lb-task-fill" style="width:' + pct + '%;background:' + barColor + '"></i>'
     +   '<i class="mdi ' + icon + '" style="color:' + color + '"></i>'
     +   '<span class="lb-task-main">' + lbMdEsc(t.srvName || t.server) + ' · ' + lbMdEsc(t.label || t.action) + '</span>'
+    +   lbTaskStepsHtml(t)
+    /* v6126（用户口径）：操作人改为独立镂空小徽章，不再拼进标题字符串 */
+    +   (t.operatorName ? ('<span class="lb-task-op">' + lbMdEsc(t.operatorName) + '</span>') : '')
     +   '<span class="lb-task-sub">' + lbMdEsc(subTxt) + '</span>'
-    +   '<span style="flex:1"></span>'
+    +   '<span class="lb-task-sp"></span>'
     +   (ph === 'fail' ? '<button class="lb-srvctl-mini" title="重试" onclick="lbTaskRetry(' + Number(t.id) + ')"><i class="mdi mdi-refresh"></i></button>' : '')
     +   '<span class="lb-task-pct" style="color:' + color + '">' + right + '</span>'
     + '</div>'
     + '</div>';
 }
+function lbTaskEnsureSlots(){
+  /* v6122：任务列表全项目唯一一份 —— 渲染到所有 .lb-task-slot（服务器控制 / 安全回档 …）*/
+  var sb = document.getElementById('lbSrvCtlRes');
+  if (sb && (sb.className || '').indexOf('lb-task-slot') < 0) sb.className = (sb.className || '') + ' lb-task-slot';
+  var ark = document.getElementById('lbArkBk');
+  if (ark && !ark.querySelector('.lb-task-slot')){
+    var body = ark.querySelector('.lw-body') || ark;
+    var d = document.createElement('div');
+    /* v6125：与 #lbSrvCtlRes 同结构同 class，保证两处样式一致 */
+    d.className = 'lb-srvctl-res lb-task-slot';
+    d.style.marginTop = '10px';
+    body.appendChild(d);
+  }
+}
 function lbTaskRender(){
-  var ov = document.getElementById('lbSrvCtl');
-  if (!ov) return;
-  var box = ov.querySelector('#lbSrvCtlRes');
-  if (!box) return;
+  try { lbTaskEnsureSlots(); } catch(e){}   /* v6123：渲染前自愈槽位（原确保函数从未被调用）*/
+  var slots = document.querySelectorAll('.lb-task-slot');
+  if (!slots.length) return;
   var items = LB_TASKS.items.slice();
   var actOrder = {};
   (LB_SRVCTL_ACTS || []).forEach(function(a, i){ actOrder[a.a] = i; });
@@ -6574,7 +6658,9 @@ function lbTaskRender(){
     return (Number(a.id) || 0) - (Number(b.id) || 0);
   });
   var failN = items.filter(function(t){ return t.phase === 'fail'; }).length;
-  var h = '<div class="lb-task-bar">'
+  /* v6125（用户口径）：标题「任务进度」由渲染函数统一输出 —— 任何 .lb-task-slot 结构与样式完全一致 */
+  var h = '<div class="lb-task-sec">任务进度</div>'
+        + '<div class="lb-task-bar">'
         +   '<span class="lb-task-cnt">' + (items.length ? (items.length + ' 条') : '') + '</span>'
         +   '<span style="flex:1"></span>'
         +   (failN ? '<button class="lb-srvctl-mini" title="清理全部失败（' + failN + '）" onclick="lbTaskClearFail()"><i class="mdi mdi-broom"></i></button>' : '')
@@ -6582,12 +6668,24 @@ function lbTaskRender(){
   h += items.length
      ? items.map(lbTaskHtml).join('')
      : '<div class="lb-srvctl-tip">尚未执行操作</div>';
-  box.innerHTML = h;
+  for (var _si = 0; _si < slots.length; _si++){ slots[_si].innerHTML = h; }
   try { lbSrvCtlTips(); } catch(e){}   /* v5991：任务条重建后补统一 tips */
 }
 function lbTaskClearFail(){
+  /* v6122：失败条清理走后端（全服同步消失）*/
+  var base = (typeof lbSrvCtlApi === 'function') ? lbSrvCtlApi() : '';
+  var u = (typeof lbSrvCtlUser === 'function') ? lbSrvCtlUser() : '';
+  if (base){
+    try{
+      lbSrvCtlFetchW(base + '/api/tasks/dismiss?username=' + encodeURIComponent(u), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ allFail: true, username: u })
+      }).then(function(){ try{ lbTaskSync(); }catch(e){} }).catch(function(){});
+      return;
+    }catch(e){}
+  }
   LB_TASKS.items = LB_TASKS.items.filter(function(t){ return t.phase !== 'fail'; });
-  lbTaskSave(); lbTaskRender();
+  lbTaskRender();
 }
 function lbTaskRetry(id){
   var t = null;
@@ -6608,11 +6706,9 @@ function lbTaskGet(id){
   return t;
 }
 function lbTaskUpdate(id, patch){
-  var t = lbTaskGet(id);
-  if (!t) return null;
-  for (var k in patch){ if (Object.prototype.hasOwnProperty.call(patch, k)) t[k] = patch[k]; }
-  lbTaskSave(); lbTaskRender(); lbTaskSyncTimer();
-  return t;
+  /* v6122：进度由后端推进；前端仅触发一次同步，让点击后尽快看到任务 */
+  try { lbTaskSync(); } catch(e){}
+  return null;
 }
 function lbObserve(server){
   var u = (typeof lbSrvCtlUser === 'function' ? lbSrvCtlUser() : '');
@@ -6718,9 +6814,22 @@ function lbFmtMB(n){
   if (n >= 1048576) return (n / 1048576).toFixed(1) + ' MB';
   return Math.round(n / 1024) + ' KB';
 }
-function lbTaskPollSave(id, server, baseMtime, timeoutSec, baseSize){
+function lbTaskPollSave(id, server, baseMtime, timeoutSec, baseSize, dataInfo){
   var t0 = Date.now();
   var lastSig = '', stableSince = 0, stage = 'wait_chg', chkBusy = false;
+  /* v6114：后端 saveworld 现在会等 DinoData 全部导出文件落盘稳定后才返回
+     （res.data = {ok, waited, files, updated, reason}）。原实现完全丢弃 res.message
+     ⇒ 界面只看到「文件稳定中」（那是 .ark 的稳定判定），看不到落盘屏障结果。 */
+  var _dd = (dataInfo && typeof dataInfo === 'object') ? dataInfo : null;
+  var _ddTxt = '';
+  if (_dd){
+    _ddTxt = _dd.ok
+      ? ('DinoData ' + Math.round(Number(_dd.waited) || 0) + 's（' + (Number(_dd.files) || 0) + ' 文件）')
+      : ('DinoData 未确认稳定（' + String(_dd.reason || 'unknown') + '）');
+    try {
+      lbTaskUpdate(id, { pct: 30, msg: (_dd.ok ? '已保存 · ' : '') + _ddTxt + '，正在复核 .ark…' });
+    } catch(e){}
+  }
   function alive(){ var t = lbTaskGet(id); return !!t && t.phase === 'run'; }
   function ok(msg){ lbTaskUpdate(id, { phase:'ok', pct:100, msg:msg, hideAt: Date.now() + LB_TASK_TTL, tEnd: Date.now() }); }
   function bad(err){ lbTaskUpdate(id, { phase:'fail', pct:0, err:err, hideAt:0, tEnd:Date.now() }); }
@@ -6787,7 +6896,7 @@ function lbTaskPollSave(id, server, baseMtime, timeoutSec, baseSize){
               }
               return;
             }
-            ok('存档已确认完整（' + lbFmtMB(_sz) + '，自检 ok，' + el + 's）');
+            ok('存档已确认完整（' + lbFmtMB(_sz) + '，自检 ok，' + el + 's）' + (_ddTxt ? ' · ' + _ddTxt : ''));
           })
           .catch(function(e){
             bad('完整性校验请求失败：' + String((e && e.message) || e) + '，已中止，未终止服务器');
@@ -6964,6 +7073,23 @@ function lbSrvCtlDo(action, sel, message, after){
   sel = _fst.ok;
   /* v6014（用户口径）：**所有** start 一律走后端队列 —— 含单台启动与失败重试。
      原实现只有多台入队、单台直通 ⇒ 任务条「重试」是单台请求，可绕过重压池。 */
+  /* v6135：服务器级锁 —— hard 直接拦；soft 需 5 秒内再点一次确认打断 */
+  var _lkHit = null, _lkSoft = null;
+  sel.forEach(function(sv){ var L = (LB_LOCKS || {})[sv]; if (!L) return; if (L.kind === 'rollback' || L.kind === 'restore') _lkHit = L; else _lkSoft = L; });
+  if (_lkHit){
+    if (typeof lbToast === 'function') lbToast('该服正在' + (_lkHit.label || '执行任务') + '，不可打断');
+    return;
+  }
+  if (_lkSoft){
+    var _now = Date.now();
+    if (!LB_INTERRUPT_AT || _now - LB_INTERRUPT_AT > 6000 || LB_INTERRUPT_SRV !== sel.join(',')){
+      LB_INTERRUPT_AT = _now; LB_INTERRUPT_SRV = sel.join(',');
+      if (typeof lbToast === 'function') lbToast('该服正在' + (_lkSoft.label || '自动任务') + '，再点一次将中止它');
+      return;
+    }
+    LB_INTERRUPT_AT = 0;
+    LB_INTERRUPT_FORCE = true;
+  }
   if (action === 'start'){ lbSrvCtlStartQueue(sel, after); return; }
   lbSrvCtlBusy(true);
   var u = lbSrvCtlUser();
@@ -7008,6 +7134,7 @@ function lbSrvCtlDo(action, sel, message, after){
     pre.then(function(preo){
       var body = { username: u, servers: [srv], action: action };
       if (message != null) body.message = message;
+      if (LB_INTERRUPT_FORCE){ body.interrupt = 1; LB_INTERRUPT_FORCE = false; }   /* v6135 */
       return lbSrvCtlFetchW(url + '?t=' + Date.now(), {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
       }).then(function(r){ return r.json().then(function(j){ return { s: r.status, j: j, pre: preo }; }); });
@@ -7031,7 +7158,7 @@ function lbSrvCtlDo(action, sel, message, after){
       anyOk = true;
       /* 下发成功 -> 进入真实轮询 */
       if (action === 'start'){ lbTaskPollBoot(id, srv, ((x.pre && x.pre.firstLineAt) || '')); }
-      else if (action === 'saveworld'){ lbTaskPollSave(id, srv, ((x.pre && x.pre.arkMtime) || 0), 180, ((x.pre && x.pre.arkSize) || 0)); }
+      else if (action === 'saveworld'){ lbTaskPollSave(id, srv, ((x.pre && x.pre.arkMtime) || 0), 180, ((x.pre && x.pre.arkSize) || 0), res.data); }
       else if (action === 'destroy'){
         /* v6005（用户口径）：该图存档不落盘（Bob）-> 以 RCON 回执为完成判据，不等存档刷新（否则白等 600s 判失败） */
         if (lbSrvCtlSaveBlocked(srv)){
@@ -7744,8 +7871,8 @@ function lbSrvCtlRender(){
       + '<div class="lb-srvctl-sec">设置时间</div>'
       + '<div id="lbSrvCtlTimeBox">' + lbSrvCtlTimeBlock() + '</div>'
       + '</div>'))
-    + '<div class="lb-srvctl-sec">结果</div>'
-    + '<div id="lbSrvCtlRes" class="lb-srvctl-res"><div class="lb-srvctl-tip">尚未执行操作</div></div>'
+    /* v6125：任务进度区标题/空态统一由 lbTaskRender 输出，两个浮窗逐字一致 */
+    + '<div id="lbSrvCtlRes" class="lb-srvctl-res lb-task-slot"></div>'
     + '</div>';
 
   S.body.innerHTML = h;
@@ -8545,32 +8672,32 @@ async function lbRefreshTamedEggs(abbr){
   LB._tamedRefreshingAt = Date.now();
   lbProgAutoCancel(); // v3569：新一轮刷新开始 → 清掉上一轮的「自动关窗」倒计时
   var ov = document.querySelector('.lb-confirm-overlay');
-  var progEl = null;
-  if(ov){ var all=ov.querySelectorAll('div'); for(var i=0;i<all.length;i++){ if(all[i].id==='lbProgBar'){ progEl=all[i].parentElement.parentElement; break; } } }
+  var progEl = document.getElementById('lbProgArea');   /* v6143：同 lbRefreshTamed，改为按 id 定位 */
+  if(!progEl && ov){ var all=ov.querySelectorAll('div'); for(var i=0;i<all.length;i++){ if(all[i].id==='lbProgBar'){ progEl=all[i].parentElement; break; } } }
   if(progEl) progEl.style.display='block';
   var bar=document.getElementById('lbProgBar'), txt=document.getElementById('lbProgText');
   function segCol(c){ if(bar && bar.firstChild) bar.firstChild.style.background=c; }
   try{
     var noToken = (LB_ARCH !== 'new') && !(await lbHaTokenRefresh());
-    if(bar) bar.innerHTML = '<div style="flex:1;border-radius:2px;background:#333;transition:background .3s"></div>'; // 单段进度
-    segCol('#7c3aed');
+    if(bar) bar.innerHTML = '<div style="flex:1;border-radius:2px;background:' + LB_PROG_C.idle + ';transition:background .3s"></div>'; // 单段进度
+    segCol(LB_PROG_C.tamed);   /* v6147：刷新已放出（洋红） */
     if(txt) txt.textContent = '正在刷新 '+LB.servName(abbr)+'（已放出）…'+(noToken?' [webhook]':'');
     // ① savedAt 基线（触发前）
     var oldMarker = await lbGetSavedAt(abbr);
     // ② RCON 重导 tamed（ArkTamedDinos）
     var r = await lbTrigger(abbr).catch(function(e){ return {ok:false, error:String(e)}; });
     var done = false;
-    if(r && !r.ok){ segCol('#ef4444'); if(txt) txt.textContent=' '+LB.servName(abbr)+' 触发失败'; }
-    else if(r && r.cooldown){ segCol('#f59e0b'); if(txt) txt.textContent='⏭ '+LB.servName(abbr)+' RCON 冷却中，稍后再试'; }
+    if(r && !r.ok){ segCol(LB_PROG_C.fail); if(txt) txt.textContent=' '+LB.servName(abbr)+' 触发失败'; }
+    else if(r && r.cooldown){ segCol(LB_PROG_C.skip); if(txt) txt.textContent='⏭ '+LB.servName(abbr)+' RCON 冷却中，稍后再试'; }
     else {
       done = await lbWaitTamed(abbr, oldMarker);
       if(done){
-        segCol('#22c55e');
+        segCol(LB_PROG_C.tamed);   /* v6149（用户口径）：绿留给最终完成，这里保持洋红 */
         if(txt) txt.textContent = ' '+LB.servName(abbr)+' 已放出已更新，增量加载…';
         // ③ 增量拉该服合并缓存并渲染（cryo 未变自动复用，只更新 tamed）
         await lbLoadOneServer(abbr).catch(function(){});
       } else {
-        segCol('#ef4444'); if(txt) txt.textContent=' '+LB.servName(abbr)+' tamed 落盘超时';
+        segCol(LB_PROG_C.fail); if(txt) txt.textContent=' '+LB.servName(abbr)+' tamed 落盘超时';
       }
     }
     // ④ 延迟 5s（v542：EggProbe 与 tamed 导出竞争会打断导出）→ 刷蛋并强制重拉 eggs
@@ -8579,10 +8706,11 @@ async function lbRefreshTamedEggs(abbr){
         if(txt) txt.textContent = '⏳ 等待导出稳定后扫蛋…';
         await new Promise(function(res){ setTimeout(res, 5000); });
         if(txt) txt.textContent = '正在刷新 '+LB.servName(abbr)+'（蛋）…';
+        segCol(LB_PROG_C.egg);   /* v6147：刷新蛋信息（青） */
         await lbEggProbe([abbr]);
-        segCol('#22c55e');
+        segCol(LB_PROG_C.ok);
         if(txt) txt.textContent = ' '+LB.servName(abbr)+' 已放出+蛋 已更新';
-      }catch(e){}
+      }catch(e){ segCol(LB_PROG_C.ok); }   /* v6149：异常也回到最终色，不留青色 */
     }
     // v3569：长按单服刷新也统一为「倒计时 + 5s 关浮窗」；非成功（超时/异常）保持原「4s 隐藏进度区 + 1.2s 关窗」
     var _done2 = (txt && txt.textContent) || '';
@@ -8590,7 +8718,7 @@ async function lbRefreshTamedEggs(abbr){
       lbProgAutoClose(_done2);
     } else {
       setTimeout(function(){ if(progEl) progEl.style.display='none'; }, 4000);
-      setTimeout(function(){ var o=document.querySelector('.lb-confirm-overlay'); if(o) o.remove(); }, 1200); // 完成后自动关浮窗
+      setTimeout(function(){ var o=document.querySelector('.lb-confirm-overlay'); if(o) o.remove(); }, 12000); // v6146：6s → 12s（与浮窗 20s 同步翻倍）
     }
   } finally {
     LB._tamedRefreshing = false;
@@ -17184,15 +17312,15 @@ function lbDlProgUpdate(done,total,active){
     bar.innerHTML='';
     for(var i=0;i<total;i++){
       var seg=document.createElement('div');
-      seg.style.cssText='flex:1;border-radius:2px;background:#333;transition:background .3s';
+      seg.style.cssText='flex:1;border-radius:2px;background:' + LB_PROG_C.idle + ';transition:background .3s';
       bar.appendChild(seg);
     }
   }
   var segs=bar.children;
   for(var i=0;i<total;i++){
-    if(i<done) segs[i].style.background='#22c55e';
-    else if(i===done && done<total) segs[i].style.background='#7c3aed';
-    else segs[i].style.background='#333';
+    if(i<done) segs[i].style.background=LB_PROG_C.ok;
+    else if(i===done && done<total) segs[i].style.background=LB_PROG_C.run;
+    else segs[i].style.background=LB_PROG_C.idle;
   }
   if(txt) txt.textContent = '下载数据 '+done+'/'+total+' ...';
   if(act) act.textContent = (active && active.length) ? '正在下载：'+active.map(function(a){ return LB.servName(a); }).join('、') : '';
@@ -21908,7 +22036,9 @@ function lbOpenRefreshModal(){
   overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);z-index:99999;display:flex;align-items:center;justify-content:center;overflow-y:auto';
   var box = document.createElement('div');
   box.className = 'lb-modal-box';
-  box.style.cssText = 'background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;min-width:320px;max-width:90vw;box-shadow:0 4px 24px rgba(0,0,0,0.18);max-height:90vh;overflow-y:auto';
+  /* v6139（用户实测「刷新过程中浮窗不断变宽变窄」根因修复）：原实现无 width，作为居中 flex 项 ⇒ 宽度=内容 max-content，
+     文案一变长浮窗就撑宽（实测 413→805px）。固定为 min(520px,92vw)：内容只换行，宽度纹丝不动。 */
+  box.style.cssText = 'background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;min-width:320px;width:min(520px,92vw);max-width:92vw;box-shadow:0 4px 24px rgba(0,0,0,0.18);max-height:90vh;overflow-y:auto';
   // 标题（无图标，纯文字）
   var title = document.createElement('div');
   title.style.cssText = 'margin-bottom:12px;font-size:0.95em;color:var(--text);font-weight:bold;display:flex;align-items:center;justify-content:space-between';
@@ -21941,9 +22071,20 @@ function lbOpenRefreshModal(){
   box.appendChild(sec);
   // 进度区（tamed 刷新用）
   var prog = document.createElement('div');
+  prog.id = 'lbProgArea';   /* v6143：进度容器固定 id —— 不再靠 parentElement 层级定位（v6139 去包装层后层级错位导致进度区永不显示） */
   prog.style.cssText = 'display:none;margin-top:10px';
-  prog.innerHTML = lbSegBarHtml('lbProgBar', 'lbProgText', 'margin-bottom:4px')   /* v5972：改用共用分段进度条，样式只此一处 */
-    + '<div id="lbProgLegend" style="display:flex;gap:12px;font-size:10px;color:#666;margin-top:2px"></div>';
+  /* v6139（用户口径「进度信息太乱」）：三段式重排 —— ①分段条 ②阶段+计时行 ③详情行（最多 3 行，超出省略，title 看全文）
+     ④圆点图例（可换行）⑤告警块（由 lbProgWarn 懒建）。全部为**展示层**，不参与任何刷新判断。 */
+  /* v6144：改回共用组件 lbSegBarHtml —— 条/底色/图例都由它生成，本浮窗特有部分通过 opts 传入 */
+  prog.innerHTML = lbSegBarHtml('lbProgBar', 'lbProgText', 'margin-bottom:4px', {
+    headHtml: '<div id="lbProgHead" style="display:none;align-items:baseline;gap:8px;margin-top:7px">'
+            +   '<span id="lbProgStage" style="font-size:11.5px;font-weight:700;color:' + LB_PROG_C.runT + ';white-space:nowrap"></span>'
+            +   '<span id="lbProgTimer" style="margin-left:auto;font-size:10.5px;color:#8b93a7;white-space:nowrap;font-variant-numeric:tabular-nums"></span>'
+            + '</div>',
+    txtStyle: 'display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;margin-top:3px;font-size:12px;color:#999;line-height:1.45;white-space:normal;word-break:break-word',
+    legendId: 'lbProgLegend',
+    detailId: 'lbProgDetail'
+  });
   box.appendChild(prog);
   overlay.appendChild(box);
   // v1073：防误触关闭——① 刷新进行中点遮罩**不再关闭**（仅提示，避免误触）；② 移动端「按下→抬起」位移 >14px 视为滑动/滚动，不计为点击
@@ -21956,6 +22097,8 @@ function lbOpenRefreshModal(){
     lbCloseRefreshModal();
   };
   document.body.appendChild(overlay);
+  /* v6148（用户口径）：打开浮窗即显示图例 —— 原来要等点「刷新」才由 lbRefreshTamed() 填充，期间图例行是空的 */
+  try{ var _lg0 = document.getElementById('lbProgLegend'); if(_lg0) _lg0.innerHTML = lbProgLegendHtml(); }catch(eL0){}
   // 渲染服务器多选（默认全不选）
   lbRenderServers();
 }
@@ -22198,6 +22341,97 @@ function lbCryoBaseUrl(abbr){ return DINO_JSON + abbr + '_cryo.json'; }
 function lbCryoLM(abbr){
   return lbHeadPick(lbCryoBaseUrl(abbr)).then(function(p){ return (p && p.lm) || null; }).catch(function(){ return null; });
 }
+/* ===== v6115：刷新数据接入后端「DinoData 落盘屏障」（后端 v6120）=====
+   后端 save_world() 现在会等该服 DinoData 全部导出文件「稳定 quiet 秒 + 无 .tmp/.part/.lock 标记 + gzip/JSON 可读」
+   之后，才把结论写进 save_world_status_<服>.json 的 attributes.data
+   （{ok, waited, files, updated, reason}）。
+   原实现（v629）只 HEAD {服}_cryo.json.gz 的 Last-Modified ⇒ 单文件判定，其它文件（tamed/item/players/eggs）
+   可能还在写就开始下载。现在：
+     ① 优先采信状态文件里本轮 ts 的 data.ok=true（最强判据，含多文件稳定性 + CRC 校验）
+     ② data.ok=false / 无 data 字段（旧后端）/ 状态文件不更新 / 基线读取失败 → 降级回 cryo 单文件判定，并给警示 */
+function lbSaveWorldStatusUrl(abbr){ return LB_STATUS + '/save_world_status_' + abbr + '.json?cb='; }
+async function lbSaveWorldStatusTs(abbr){
+  /* 返回 ''=上次没有该文件（本次写入必为新）｜ts 字符串=上次保存时间｜null=读取失败（不采信屏障） */
+  try{
+    var sf = await fetch(lbSaveWorldStatusUrl(abbr) + Date.now(), { cache: 'no-store' });
+    if(sf.status === 404) return '';
+    if(!sf.ok) return null;
+    var obj = lbParseStatusFile(await sf.text());
+    var at = (obj && obj.attributes) || {};
+    return (at.ts || '');
+  }catch(e){ return null; }
+}
+/* v6116：屏障优先 —— 屏障未给结论前**不做 cryo 判定**
+   （v6115 实测 10/10 台报「未确认稳定 unknown」：cryo 文件总在状态文件之前变化，
+     若每轮都查 cryo 就会抢先 return，屏障结论再也没机会读到）
+   降级（回 cryo 判定）只在这 4 种情况发生：
+     ① 后端明确 data.ok=false（no_files/writing/no_update/still_changing/unreadable）
+     ② 状态文件无 data 字段（旧版后端）
+     ③ 状态文件连续 404 超过 10s（后端根本没写）
+     ④ 总等待超过 LB_DD_MAX_MS（100s；后端屏障上限 90s） */
+var LB_DD_MAX_MS = 100000;
+function lbDdReasonText(r){
+  var s = String((r && r.reason) || '');
+  var map = { no_data:'后端无屏障字段（旧版）', no_status_file:'未收到状态文件', barrier_timeout:'等屏障超时',
+              no_files:'未发现导出文件', writing:'文件仍在写入', no_update:'本次未写出存档族文件',
+              still_changing:'文件仍在变化', unreadable:'文件校验未通过' };
+  return map[s] || s || '未收到屏障结论';
+}
+async function lbWaitDataStable(abbr, cryoOldLm, swOldTs, onTick){
+  var t0 = Date.now(), deadline = t0 + LB_CRYO_WAIT_MS;
+  var wait = LB.POLL_MS || 400, step = 0, last = null, _lastTick = 0, ddAsked = 0;
+  var baseTs = (swOldTs === undefined) ? null : swOldTs;   /* null=基线未知 → 首次读到的 ts 即作基线 */
+  var ddSeen = null, miss404 = 0;
+  var swUrl = lbSaveWorldStatusUrl(abbr);
+  while(Date.now() < deadline){
+    await new Promise(function(r){ setTimeout(r, wait); });
+    var _secs = Math.round((Date.now() - t0) / 1000);
+    if(onTick && (Date.now() - _lastTick) >= 1000){ _lastTick = Date.now(); try{ onTick(_secs); }catch(e){} }
+    /* ① 屏障结论：每 1.2s 最多查一次（状态文件很小，10 台并发约 3~8 次/秒） */
+    if(ddSeen === null && (Date.now() - ddAsked) >= 1200){
+      ddAsked = Date.now();
+      try{
+        var sf = await fetch(swUrl + Date.now(), { cache: 'no-store' });
+        if(sf.status === 404){
+          if(!miss404) miss404 = Date.now();
+          if(Date.now() - miss404 > 10000) ddSeen = { ok:false, reason:'no_status_file' };
+        } else if(sf.ok){
+          miss404 = 0;
+          var obj = lbParseStatusFile(await sf.text());
+          var at = (obj && obj.attributes) || {};
+          if(!at.ts){
+            ddSeen = { ok:false, reason:'no_data' };          /* 异常文件：无 ts */
+          } else if(baseTs === null){
+            baseTs = at.ts;                                    /* 基线缺失：以首次读到的为准（下一轮才算变化） */
+          } else if(at.ts !== baseTs){
+            var dd = at.data;
+            if(dd && typeof dd === 'object'){
+              ddSeen = dd;
+              if(dd.ok) return { done:true, via:'barrier', secs:_secs, waited:dd.waited, files:dd.files, dd:dd };
+              /* data.ok=false → 记录原因，下一轮起允许 cryo 兜底 */
+            } else {
+              ddSeen = { ok:false, reason:'no_data' };         /* 旧版后端：无 data 字段 */
+            }
+          }
+        }
+      }catch(e){}
+      if(ddSeen === null && (Date.now() - t0) > LB_DD_MAX_MS) ddSeen = { ok:false, reason:'barrier_timeout' };
+    }
+    /* ② 仅当屏障已给出「未确认」结论（或超时/无文件）才降级回 cryo 单文件判定 */
+    if(ddSeen === null){
+      step++;
+      wait = Math.min(3000, (LB.POLL_MS || 400) * Math.pow(2, Math.min(step, 3)));
+      continue;
+    }
+    var now = await lbCryoLM(abbr);
+    last = now;
+    if(now && now !== LB_LM_404 && now !== cryoOldLm) return { done:true, via:'cryo', secs:_secs, lm:now, dd:ddSeen };
+    if(cryoOldLm === LB_LM_404 && now && now !== LB_LM_404) return { done:true, via:'cryo', secs:_secs, lm:now, dd:ddSeen };
+    step++;
+    wait = Math.min(3000, (LB.POLL_MS || 400) * Math.pow(2, Math.min(step, 3)));
+  }
+  return { done:false, via:'timeout', secs: Math.round((Date.now() - t0) / 1000), lm:last, dd:ddSeen };
+}
 async function lbTriggerSaveWorld(abbr){
   try{
     var ac = new AbortController();
@@ -22212,11 +22446,43 @@ async function lbTriggerSaveWorld(abbr){
 /* ===== v5972：分段进度条（**唯一样式定义处**） =====
    刷新数据浮窗 / 存档后终止进度 共用同一套 HTML + 更新逻辑，禁止再各写一份内联样式。
    barId/txtId 由调用方指定，便于同一页多个进度条互不干扰。 */
-function lbSegBarHtml(barId, txtId, wrapStyle){
-  return '<div' + (wrapStyle ? ' style="' + wrapStyle + '"' : '') + '>'
-    + '<div id="' + barId + '" style="width:100%;height:8px;border-radius:4px;background:#22223a;overflow:hidden;display:flex;gap:2px;padding:0 1px"></div>'
-    + '<div id="' + txtId + '" style="display:block;margin-top:6px;font-size:12px;color:#999;line-height:1.45;white-space:normal;word-break:break-word"></div>'
-    + '</div>';
+/* ===== v6144（用户口径「不要重复造轮子」）：进度条颜色语义 + 图例 =====
+   唯一来源：刷新浮窗 / 总线任务条 / 野生搜索 / 收库进度 / lbSegBarUpdate 全部引用这里，禁止再写死十六进制。
+   两种「跳过」刻意区分：skip（橙 = 刷新浮窗的冷却/超时）、skipG（灰 = 总线的跳过）。 */
+var LB_PROG_C = {
+  run: '#7c3aed', land: '#38bdf8', ok: '#22c55e', fail: '#ef4444',
+  skip: '#f59e0b', skipG: '#6b7280', queue: '#4b5563', idle: '#333', barBg: '#22223a',
+  runT: '#c4b5fd', okT: '#4ade80', failT: '#f87171', muteT: '#9ca3af',
+  /* v6147（用户口径）：两个刷新阶段的专属色 —— 条上能看出每台走到哪一步 */
+  tamed: '#d946ef',   /* 刷新已放出（洋红） */
+  egg: '#06b6d4'      /* 刷新蛋信息（青） */
+};
+function lbProgLegendHtml(kinds){
+  /* 分段进度图例：默认 5 项；传 kinds 可只取子集（如野生搜索无「存档落盘」） */
+  var def = [[LB_PROG_C.run, 'run', '进行中'], [LB_PROG_C.land, 'land', '存档落盘'],
+             [LB_PROG_C.tamed, 'tamed', '刷新已放出'], [LB_PROG_C.egg, 'egg', '刷新蛋信息'],
+             [LB_PROG_C.ok, 'ok', '成功'], [LB_PROG_C.fail, 'fail', '失败'],
+             [LB_PROG_C.skip, 'skip', '跳过/冷却']];
+  var want = (kinds && kinds.length) ? kinds : null;
+  return def.filter(function(x){ return !want || want.indexOf(x[1]) >= 0; })
+            .map(function(x){ return '<span><span style="color:' + x[0] + '">■</span> ' + x[2] + '</span>'; })
+            .join('');
+}
+function lbSegBarHtml(barId, txtId, wrapStyle, opts){
+  /* v6144：新增可选 opts —— 「分段条 + 阶段行 + 详情行 + 图例」由同一处生成（刷新浮窗回归共用组件）
+     opts = { headHtml:'…', txtStyle:'…', legendId:'…' } */
+  opts = opts || {};
+  var h = '<div' + (wrapStyle ? ' style="' + wrapStyle + '"' : '') + '>'
+    + '<div id="' + barId + '" style="width:100%;height:8px;border-radius:4px;background:' + LB_PROG_C.barBg + ';overflow:hidden;display:flex;gap:2px;padding:0 1px"></div>'
+    + (opts.headHtml || '')
+    + '<div id="' + txtId + '" style="' + (opts.txtStyle || 'display:block;margin-top:6px;font-size:12px;color:#999;line-height:1.45;white-space:normal;word-break:break-word') + '"></div>';
+  if (opts.legendId){
+    h += '<div id="' + opts.legendId + '" style="display:flex;flex-wrap:wrap;gap:3px 10px;font-size:10px;color:#666;margin-top:6px"></div>';
+  }
+  if (opts.detailId){
+    h += '<div id="' + opts.detailId + '" style="display:none;flex-wrap:wrap;gap:4px 6px;margin-top:6px"></div>';
+  }
+  return h + '</div>';
 }
 function lbSegBarUpdate(barId, txtId, done, total, text, badMap){
   var bar = document.getElementById(barId), txt = document.getElementById(txtId);
@@ -22225,15 +22491,15 @@ function lbSegBarUpdate(barId, txtId, done, total, text, badMap){
     bar.innerHTML = '';
     for (var i = 0; i < total; i++){
       var seg = document.createElement('div');
-      seg.style.cssText = 'flex:1;border-radius:2px;background:#333;transition:background .3s';
+      seg.style.cssText = 'flex:1;border-radius:2px;background:' + LB_PROG_C.idle + ';transition:background .3s';
       bar.appendChild(seg);
     }
   }
   for (var j = 0; j < total; j++){
     /* v5973：badMap[j] 存在 ⇒ 该格失败（红）；否则按 已完成/进行中/待处理 着色 */
-    bar.children[j].style.background = (badMap && badMap[j]) ? '#ef4444'
-                                    : (j < done) ? '#22c55e'
-                                    : (j === done && done < total) ? '#7c3aed' : '#333';
+    bar.children[j].style.background = (badMap && badMap[j]) ? LB_PROG_C.fail
+                                    : (j < done) ? LB_PROG_C.ok
+                                    : (j === done && done < total) ? LB_PROG_C.run : LB_PROG_C.idle;
   }
   if (txt && text != null) txt.textContent = text;
 }
@@ -22245,7 +22511,8 @@ function lbProgWarn(msg){
     if(!w){
       var lg = document.getElementById('lbProgLegend');
       w = document.createElement('div'); w.id = 'lbProgWarn';
-      w.style.cssText = 'font-size:11px;color:#f59e0b;margin-top:4px;line-height:1.35;white-space:pre-wrap';
+      /* v6139：告警独立成块（用户口径「太乱」）—— 左侧色条 + 淡底，与正文分层 */
+      w.style.cssText = 'font-size:11px;color:#fbbf24;margin-top:7px;line-height:1.45;white-space:pre-wrap;background:rgba(245,158,11,.10);border-left:2px solid #f59e0b;padding:5px 7px;border-radius:4px';
       if(lg && lg.parentNode) lg.parentNode.insertBefore(w, lg.nextSibling); else ov.appendChild(w);
     }
     w.textContent = w.textContent ? (w.textContent + '\n' + msg) : msg;
@@ -22253,7 +22520,7 @@ function lbProgWarn(msg){
 }
 // v3569：成功终态**倒计时自动关浮窗**（默认 5s）——带 ⚠ 降级时不调用（保留浮窗让用户看完）
 //   取消点：① 打开浮窗 ② 手动关浮窗 ③ 新一轮刷新开始（避免旧定时器关掉新窗口）
-var LB_PROG_AUTOCLOSE_SECS = 5;
+var LB_PROG_AUTOCLOSE_SECS = 20;   /* v6146（用户口径）：10s 仍不够看结算 → 20s（要求至少翻倍） */
 function lbProgAutoCancel(){
   try{ if(LB._progAutoTimer){ clearInterval(LB._progAutoTimer); LB._progAutoTimer = null; } }catch(e){}
 }
@@ -22264,7 +22531,9 @@ function lbProgAutoClose(baseText){
     var paint = function(){
       var el = document.getElementById('lbProgText');
       if(!el) return false;                     // 浮窗已关：停表（由 tick 清理）
-      el.textContent = baseText + '　⏳ ' + n + 's 后自动关闭';
+      LB_PROG.text = String(baseText == null ? '' : baseText);
+      LB_PROG.ac = '　⏳ ' + n + 's 后自动关闭';
+      lbProgRender();
       return true;
     };
     if(!paint()) return;
@@ -22275,7 +22544,7 @@ function lbProgAutoClose(baseText){
       if(n <= 0){
         lbProgAutoCancel();
         if(LB._tamedRefreshing) return;         // 仍在刷新中 → 不误关（下轮终态会重新起倒计时）
-        el.textContent = baseText + '　⏳ 正在关闭…';
+        LB_PROG.text = String(baseText == null ? '' : baseText); LB_PROG.ac = '　⏳ 正在关闭…'; lbProgRender();
         var o = document.querySelector('.lb-confirm-overlay');
         if(o) o.remove();
         try{ lbToast(' 刷新完成，浮窗已自动关闭'); }catch(e){}
@@ -22382,29 +22651,201 @@ async function lbLoadOneServers(list, showProg){
 }
 // 兼容单台调用（长按单服刷新等旧调用点）
 async function lbLoadOneServer(abbr){ return lbLoadOneServers([abbr]); }
+/* ===== v6138（用户口径 F5）：刷新浮窗文案「单一真源 + 统一派生渲染」 =====
+   改动范围**仅限写文字这一段**：所有阶段文案先记进 LB_PROG，再由 lbProgRender() 唯一负责写 #lbProgText。
+   刷新执行逻辑（SaveWorld / 等落盘 / 屏障判定 / 加载 / 已放出 / 蛋 / 超时兜底 / 分段条颜色 / 自动关窗）
+   **一行未改** —— 原 12 处 `txt.textContent = …` 的语句本身也一字未动（txt 变成了写即入状态的代理）。 */
+var LB_PROG = { text: '', ac: '', sel: [], t0: 0 };
+function lbProgBadge(){
+  /* 任务徽章：从任务总线派生（action=refresh），纯展示，不参与任何刷新逻辑 */
+  var sel = LB_PROG.sel || [];
+  if (!sel.length) return '';
+  var items = (typeof LB_TASKS !== 'undefined' && LB_TASKS && LB_TASKS.items) ? LB_TASKS.items : [];
+  var who = [];
+  for (var i = 0; i < items.length; i++){
+    var t = items[i] || {};
+    if (t.action !== 'refresh') continue;
+    if (sel.indexOf(t.server) < 0) continue;
+    if (t.phase !== 'run' && t.phase !== 'queue') continue;
+    var nm = String(t.operatorName || t.operator || '');
+    if (nm && who.indexOf(nm) < 0) who.push(nm);
+  }
+  if (!who.length) return '';
+  return '　· 刷新数据 · ' + who.join('、');
+}
+function lbProgStageOf(t){
+  /* v6139：阶段名**纯派生**（按文案关键词映射），不改任何刷新语句 */
+  t = String(t || '');
+  if (!t) return '';
+  if (t.indexOf('全部完成') > -1) return '完成';
+  if (t.indexOf('蛋刷新异常') > -1) return '异常';
+  if (t.indexOf('正在刷新蛋信息') > -1) return '刷新蛋信息';
+  if (t.indexOf('开始刷新蛋信息') > -1) return '刷新蛋信息';   /* v6146：中间态「已放出完成 X/Y 台，开始刷新蛋信息…」 */
+  if (t.indexOf('正在保存世界') > -1) return '保存世界';
+  if (t.indexOf('等待存档导出落盘') > -1) return '等待存档落盘';
+  if (t.indexOf('存档已落盘') > -1) return '存档已落盘';
+  if (t.indexOf('存档等待超时') > -1) return '存档超时';
+  if (t.indexOf('正在加载') > -1) return '加载数据';
+  if (t.indexOf('存档完成') > -1) return '存档完成';
+  if (t.indexOf('正在刷新 ') > -1) return '刷新已放出';
+  if (t.indexOf('已刷新 ') > -1) return '刷新汇总';
+  return '';
+}
+function lbProgDetailRender(detail){
+  /* v6145（用户口径）：终态「存档确认：A 18s/10 文件、B 19s/13 文件…」一长串读不动 ⇒ 拆成每台一个 chip */
+  var detEl = document.getElementById('lbProgDetail');
+  if (!detEl) return;
+  if (!detail){ detEl.innerHTML = ''; detEl.style.display = 'none'; return; }
+  var parts = String(detail).split('、');
+  var html = '';
+  for (var i = 0; i < parts.length; i++){
+    var s = String(parts[i] || '').trim();
+    if (!s) continue;
+    var mm = s.match(/^(.*?)\s*DinoData\s*(\d+)s\s*\/\s*(\d+)\s*文件$/);
+    var inner = mm
+      ? (lbMdEsc(mm[1]) + ' <b style="color:' + LB_PROG_C.okT + ';font-weight:700">' + mm[2] + 's</b> · ' + mm[3] + ' 文件')
+      : lbMdEsc(s);
+    html += '<span style="display:inline-block;background:#20202c;border:1px solid #2a2a3a;border-radius:10px;'
+          + 'padding:1px 7px;font-size:10.5px;line-height:1.6;color:#b9c0d0;white-space:nowrap">' + inner + '</span>';
+  }
+  detEl.innerHTML = html;
+  detEl.style.display = html ? 'flex' : 'none';
+}
+function lbProgRender(){
+  var el = document.getElementById('lbProgText');
+  if (!el) return;
+  var body = String(LB_PROG.text || '');
+  var detail = null;
+  var _di = body.indexOf('\u3000存档确认：');   /* 全角空格 + 存档确认： */
+  if (_di > -1){ detail = body.slice(_di + 6); body = body.slice(0, _di); }
+  var timer = '';
+  var m = body.match(/已用\s*\d+s\s*\/\s*上限\s*\d+s/);
+  if (m){ timer = m[0]; body = body.replace(/（可点[\s\S]*$/, '').replace(/\s+$/, ''); }
+  var stEl = document.getElementById('lbProgStage'), tmEl = document.getElementById('lbProgTimer'), head = document.getElementById('lbProgHead');
+  var st = lbProgStageOf(body);
+  if (stEl && stEl.textContent !== st) stEl.textContent = st;
+  if (tmEl && tmEl.textContent !== timer) tmEl.textContent = timer;
+  if (head) head.style.display = (st || timer) ? 'flex' : 'none';
+  el.textContent = body + lbProgBadge() + String(LB_PROG.ac || '');
+  el.title = el.textContent;   /* 详情行最多 3 行，悬停看全文 */
+  try{ lbProgDetailRender(detail); }catch(eD){}   /* v6145：存档确认明细块 */
+}
+var LB_PROG_PCT = { '保存世界': 20, '等待存档落盘': 40, '存档已落盘': 55, '存档超时': 55,
+                  '加载数据': 65, '存档完成': 70, '刷新已放出': 80, '刷新蛋信息': 90,
+                  '刷新汇总': 95, '完成': 100, '异常': 0 };
+var LB_PROG_REP = { text: '', ts: 0 };
+function lbProgReport(text){
+  /* v6140（用户选「路径1」）：把刷新阶段上报到任务总线 —— **只写展示数据**
+     · fire-and-forget：不 await、不返回值、不参与任何刷新判断
+     · 只更新**已存在**的 refresh 任务行（后端 _utask_stage 不会新建行）
+     · 节流：同文案 2.5s、最快 0.7s 一次，避免心跳每秒刷 */
+  try {
+    var sel = LB_PROG.sel || [];
+    if (!sel.length) return;
+    if (typeof lbSrvCtlApi !== 'function' || typeof lbSrvCtlFetchW !== 'function') return;
+    var body = String(text || '');
+    var now = Date.now();
+    if (body === LB_PROG_REP.text && (now - LB_PROG_REP.ts) < 2500) return;
+    if ((now - LB_PROG_REP.ts) < 700) return;
+    var base = lbSrvCtlApi();
+    if (!base) return;
+    LB_PROG_REP.text = body; LB_PROG_REP.ts = now;
+    var u = (typeof lbSrvCtlUser === 'function') ? lbSrvCtlUser() : '';
+    var st = lbProgStageOf(body);
+    var pct = (LB_PROG_PCT[st] != null) ? LB_PROG_PCT[st] : 0;
+    var brief = body.replace(/（可点[\s\S]*$/, '').replace(/\s+/g, ' ').trim().slice(0, 140);
+    for (var i = 0; i < sel.length; i++){
+      try {
+        lbSrvCtlFetchW(base + '/api/tasks/stage?server=' + encodeURIComponent(sel[i])
+          + '&msg=' + encodeURIComponent(brief) + '&pct=' + pct
+          + '&username=' + encodeURIComponent(u), { method: 'POST' }).catch(function(){});
+      } catch (e2) {}
+    }
+  } catch (e3) {}
+}
+function lbProgSay(text){
+  LB_PROG.text = String(text == null ? '' : text);
+  LB_PROG.ac = '';          /* 新阶段文案 ⇒ 清掉上一轮倒计时后缀 */
+  lbProgReport(LB_PROG.text);   /* v6140：阶段上报总线（展示层，异常自吞） */
+  lbProgRender();
+}
 // tamed 刷新执行（从浮窗按钮调用）：多选服务器串行触发 RCON + 进度条
+function lbRefreshLock(sel, action){
+  /* v6141（用户口径「加软锁」）：刷新数据同服互斥 —— 抢锁 set / 释放 clear
+     返回被占用的服务器列表 [{server, holder}]；网络异常一律放行（不因锁服务故障挡正常刷新） */
+  var bad = [];
+  try{
+    var base = (typeof lbSrvCtlApi === 'function') ? lbSrvCtlApi() : '';
+    var u = (typeof lbSrvCtlUser === 'function') ? lbSrvCtlUser() : '';
+    if (!base || !sel || !sel.length) return Promise.resolve(bad);
+    return Promise.all(sel.map(function(srv){
+      return lbSrvCtlFetchW(base + '/api/refresh/lock?server=' + encodeURIComponent(srv)
+          + '&action=' + action + '&username=' + encodeURIComponent(u), { method: 'POST' })
+        .then(function(r){ return r.json(); })
+        .then(function(o){
+          if (action === 'set' && o && o.ok && o.acquired === false){
+            bad.push({ server: srv, holder: (o.holder && (o.holder.user || o.holder.label)) || '' });
+          }
+        })
+        .catch(function(){});
+    })).then(function(){ return bad; });
+  }catch(e){ return Promise.resolve(bad); }
+}
 async function lbRefreshTamed(btn){
   var sel=lbSelectedServers();
   if(!sel.length){ alert('请至少选择一个服务器（tamed 刷新需要指定范围）'); return; }
+  /* v6142（用户口径）：刷新支持多选 ⇒ 被占用的服务器**自动跳过**，其余照常刷（不再整体中止） */
+  try{
+    var _lkBad = await lbRefreshLock(sel, 'set');
+    if(_lkBad && _lkBad.length){
+      var _who = {};
+      _lkBad.forEach(function(x){ if(x.holder) _who[x.holder] = 1; });
+      var _skip = {};
+      _lkBad.forEach(function(x){ _skip[x.server] = 1; });
+      var _nm = _lkBad.map(function(x){ try{ return LB.servName(x.server); }catch(e){ return x.server; } }).join('、');
+      var _p = Object.keys(_who).join('、') || '其他玩家';
+      sel = sel.filter(function(s){ return !_skip[s]; });
+      try{ lbToast('已跳过 ' + _nm + '（' + _p + ' 正在操作）'); }catch(e0){}
+      if(!sel.length){ try{ lbToast('所选服务器都在被操作中，请稍后再刷'); }catch(e1){} return; }
+    }
+  }catch(e5){}
   LB._tamedRefreshing = true; // 刷新进行中：锁定浮窗禁止关闭
   LB._tamedRefreshingAt = Date.now(); // v602：记录开始时间（蛋刷新卡住超 15s 允许手动关闭）
   lbProgAutoCancel(); // v3569：新一轮刷新开始 → 清掉上一轮的「自动关窗」倒计时
   try{
-    // 定位浮窗内进度区（lbProgBar 的父容器的父容器 = 进度外层 div）
-    var all=btn.closest('.lb-confirm-overlay').querySelectorAll('div');
-    var progEl=null;
-    for(var i=0;i<all.length;i++){ if(all[i].id==='lbProgBar'){ progEl=all[i].parentElement.parentElement; break; } }
+    // 定位浮窗内进度区：v6143 首选固定 id（层级定位在 v6139 改结构后已不可靠）
+    var progEl = document.getElementById('lbProgArea');
+    if(!progEl){
+      var all=btn.closest('.lb-confirm-overlay').querySelectorAll('div');
+      for(var i=0;i<all.length;i++){ if(all[i].id==='lbProgBar'){ progEl=all[i].parentElement; break; } }
+    }
     if(progEl) progEl.style.display='block';
-    var bar=document.getElementById('lbProgBar'), txt=document.getElementById('lbProgText'), legend=document.getElementById('lbProgLegend');
+    var bar=document.getElementById('lbProgBar'), legend=document.getElementById('lbProgLegend');
+    /* v6138：txt 改为「写即入状态」的代理 —— 下面所有 `txt.textContent = X` 自动汇入 lbProgSay()，
+       真正写 DOM 的只有 lbProgRender() 一处（顺序/内容与原实现逐字一致） */
+    var txt = { get textContent(){ return LB_PROG.text; }, set textContent(v){ lbProgSay(v); } };
+    LB_PROG.sel = sel.slice(); LB_PROG.ac = ''; LB_PROG.t0 = Date.now();
     var noToken = (LB_ARCH !== 'new') && !(await lbHaTokenRefresh()); // 新架构直连后端，无需 webhook 标记
     btn.disabled=true;
+    /* v6145（用户口径）：刷新期间冻结浮窗内所有操作 —— 刷新按钮置灰、服务器多选区不可点（长按同样失效）。
+       注：清单一律在 finally 统一恢复（含蛋阶段），避免中途提前解冻。 */
+    try{
+      var _srvBox = document.getElementById('lbServers');
+      LB_PROG.lockUI = { btn: btn, srv: _srvBox };
+      try{ btn.style.opacity = '.45'; btn.style.cursor = 'not-allowed'; btn.style.filter = 'grayscale(.35)'; }catch(eB){}
+      if(_srvBox){ _srvBox.style.pointerEvents = 'none'; _srvBox.style.opacity = '.45'; }
+    }catch(eLock){}
     // 分段进度条：每台一格（进行中紫 / 成功绿 / 失败红 / 跳过橙）
     LB._cryoStale = [];   // v3564：本次刷新的「存档未等到落盘」服务器列表
     var _pw0 = document.getElementById('lbProgWarn'); if(_pw0) _pw0.textContent = '';
-    bar.innerHTML = sel.map(function(){ return '<div style="flex:1;border-radius:2px;background:#333;transition:background .3s"></div>'; }).join('');
+    bar.innerHTML = sel.map(function(){ return '<div style="flex:1;border-radius:2px;background:' + LB_PROG_C.idle + ';transition:background .3s"></div>'; }).join('');
     var segs = bar.children;
-    if(legend) legend.innerHTML = '<span><span style="color:#7c3aed">■</span> 进行中</span><span><span style="color:#38bdf8">■</span> 存档落盘</span><span><span style="color:#22c55e">■</span> 成功</span><span><span style="color:#ef4444">■</span> 失败</span><span><span style="color:#f59e0b">■</span> 跳过/冷却</span>'; // v629：蓝=SaveWorld 存档已落盘
+    if(legend) legend.innerHTML = lbProgLegendHtml(); // v6144：图例唯一来源（v629：蓝=SaveWorld 存档已落盘）
     var ok=0, fail=0;
+    /* v6117：收集每台的存档落盘结论（后端屏障结果）——原实现只写进滚动文案
+       `txt.textContent = nm+' 存档已落盘（…）'`，下一行就被「正在加载…」覆盖（单台时 0 帧）⇒ 用户看不到 */
+    var _ddList = [];
+    var _ddPush = function(o){ try{ _ddList.push(o); }catch(e0){} };
     // ===== v629：阶段0 SaveWorld → 等 cryo 落盘 → 先到先加载（仅新架构；旧架构跳过直接原流程）=====
     if(LB_ARCH === 'new'){
       txt.textContent = '正在保存世界（SaveWorld）…';
@@ -22412,12 +22853,16 @@ async function lbRefreshTamed(btn){
       // ④ v1072 修正：savedAt 预读**改为后台不阻塞**——lbGetSavedAt 是「下载完整 tamed.json（数 MB）再取 savedAt 字段」，
       //    v1071 把它并入本处 Promise.all 并 await ⇒ 多台/慢网时整个刷新卡在「正在保存世界（SaveWorld）…」（实测 45s 无进展）。
       //    现在只发起、不等待：阶段1 若已回填则复用（保留省时收益），否则按原逻辑补读。
-      var cryoLm = {}, _preMarkers = {};
+      var cryoLm = {}, swTs = {}, _preMarkers = {};
       sel.forEach(function(abbr){
         lbGetSavedAt(abbr).then(function(m){ _preMarkers[abbr] = m; }).catch(function(){});
       });
       await Promise.all(sel.map(function(abbr){
-        return lbCryoLM(abbr).then(function(lm){ cryoLm[abbr] = lm; }).catch(function(){ cryoLm[abbr] = null; });
+        return Promise.all([
+          lbCryoLM(abbr).then(function(lm){ cryoLm[abbr] = lm; }).catch(function(){ cryoLm[abbr] = null; }),
+          /* v6115：同时读 save_world_status_<服>.json 的基线 ts —— 屏障结论只在 ts 变化后才采信 */
+          lbSaveWorldStatusTs(abbr).then(function(ts){ swTs[abbr] = (ts === undefined ? null : ts); }).catch(function(){ swTs[abbr] = null; })
+        ]);
       }));
       // 0b. 并行触发 SaveWorld
       await Promise.all(sel.map(function(abbr){ return lbTriggerSaveWorld(abbr); }));
@@ -22434,32 +22879,46 @@ async function lbRefreshTamed(btn){
       var _hb = setInterval(function(){
         var el = document.getElementById('lbProgText');
         if(!el){ clearInterval(_hb); return; }
-        if((el.textContent || '').indexOf('等待') !== 0) return;   // 已进入后续阶段：不再改写
-        el.textContent = '等待存档导出落盘…' + (LB_CRYO_WAIT_WHO.length ? ('（' + LB_CRYO_WAIT_WHO.join('、') + '）') : '')
-          + ' 已用 ' + Math.round((Date.now() - _hbStart) / 1000) + 's / 上限 ' + Math.round(LB_CRYO_WAIT_MS / 1000) + 's（可点  关闭）';
+        if((LB_PROG.text || '').indexOf('等待') !== 0) return;   // 已进入后续阶段：不再改写
+        lbProgSay('等待存档导出落盘…' + (LB_CRYO_WAIT_WHO.length ? ('（' + LB_CRYO_WAIT_WHO.join('、') + '）') : '')
+          + ' 已用 ' + Math.round((Date.now() - _hbStart) / 1000) + 's / 上限 ' + Math.round(LB_CRYO_WAIT_MS / 1000) + 's（可点  关闭）');
       }, 1000);
       try{
         await Promise.all(sel.map(function(abbr, i){
-          return lbWaitCryoUpdated(abbr, cryoLm[abbr] || null, function(secs){
+          /* v6115：改为等后端 DinoData 屏障结论（不再只看 cryo 单文件 mtime），未确认则降级回 cryo 判定 */
+          return lbWaitDataStable(abbr, cryoLm[abbr] || null, swTs[abbr], function(secs){
             var _nm2 = LB.servName(abbr);
             if(LB_CRYO_WAIT_WHO.indexOf(_nm2) < 0) LB_CRYO_WAIT_WHO.push(_nm2);
-            try{ segs[i].style.background = '#7c3aed'; }catch(e0){}   // v3564：等待中=进行中紫（落盘后才转蓝）
-            var _el2 = document.getElementById('lbProgText');
-            if(_el2) _el2.textContent = '等待存档导出落盘…（' + LB_CRYO_WAIT_WHO.join('、') + '） 已用 '
-              + Math.round((Date.now() - _hbStart) / 1000) + 's / 上限 ' + Math.round(LB_CRYO_WAIT_MS / 1000) + 's（可点  关闭）';
+            try{ segs[i].style.background = LB_PROG_C.run; }catch(e0){}   // v3564：等待中=进行中紫（落盘后才转蓝）
+            if(document.getElementById('lbProgText')) lbProgSay('等待存档导出落盘…（' + LB_CRYO_WAIT_WHO.join('、') + '） 已用 '
+              + Math.round((Date.now() - _hbStart) / 1000) + 's / 上限 ' + Math.round(LB_CRYO_WAIT_MS / 1000) + 's（可点  关闭）');
           }).then(function(w){
             var nm = LB.servName(abbr);
             LB_CRYO_WAIT_WHO = LB_CRYO_WAIT_WHO.filter(function(x){ return x !== nm; });
             if(w && w.done){
-              segs[i].style.background = '#38bdf8'; // 存档已落盘
+              segs[i].style.background = LB_PROG_C.land; // 存档已落盘
               _svDone++;
               _loadPend.push(abbr);
-              txt.textContent = nm+' 存档已落盘（'+w.secs+'s）';
+              var _ddb = (w.dd && typeof w.dd === 'object') ? w.dd : null;
+              _ddPush({ nm:nm, ok:!!(_ddb && _ddb.ok), waited:Number(_ddb&&_ddb.waited)||0,
+                        files:Number(_ddb&&_ddb.files)||0, secs:Number(w.secs)||0,
+                        reason:String((_ddb&&_ddb.reason)||'') });
+              if(_ddb && _ddb.ok){
+                /* 屏障确认：多文件稳定 + 无写入标记 + gzip/JSON 可读 */
+                txt.textContent = nm+' 存档已落盘（'+w.secs+'s · DinoData '+Math.round(Number(_ddb.waited)||0)+'s/'+(Number(_ddb.files)||0)+' 文件）';
+              } else {
+                txt.textContent = nm+' 存档已落盘（'+w.secs+'s）';
+                /* 降级：只凭 cryo 变化判定，其它导出文件可能仍在写 */
+                lbProgWarn(' '+nm+'：DinoData 未确认稳定（'+lbDdReasonText(_ddb)+'），已按 cryo 文件变化判定落盘');
+              }
             } else {
               // ⭐ v3564 根因修复：超时**仍加载**（拿到现有文件总比什么都不做好）——只降级标注，不再静默跳过
-              segs[i].style.background = '#f59e0b'; // 超时：标记橙色
+              segs[i].style.background = LB_PROG_C.skip; // 超时：标记橙色
               _cryoStale.push(abbr); LB._cryoStale = _cryoStale.slice();
-              lbProgWarn(' '+nm+'：等待存档落盘超时（上限 '+Math.round(LB_CRYO_WAIT_MS/1000)+'s），已按服务器现有文件加载 —— 球/设施/物品可能不是本次存档');
+              var _ddx = (w && w.dd && typeof w.dd === 'object' && !w.dd.ok) ? ('；屏障：'+lbDdReasonText(w.dd)) : '';
+              _ddPush({ nm:nm, ok:false, waited:0, files:0, secs:Number((w&&w.secs)||0),
+                        reason:String((w && w.dd && w.dd.reason) || 'timeout') });
+              lbProgWarn(' '+nm+'：等待存档落盘超时（上限 '+Math.round(LB_CRYO_WAIT_MS/1000)+'s）'+_ddx+'，已按服务器现有文件加载 —— 球/设施/物品可能不是本次存档');
               txt.textContent = nm+' 存档等待超时（'+((w&&w.secs)||0)+'s），按现有文件加载…';
               _loadPend.push(abbr);
             }
@@ -22489,7 +22948,7 @@ async function lbRefreshTamed(btn){
     }));
     // ② 并行触发所有服务器（各自拿独立状态文件基线 ts + 触发 + 等 status）
     var results = await Promise.all(sel.map(function(abbr, i){
-      segs[i].style.background = '#7c3aed'; // 进行中
+      segs[i].style.background = LB_PROG_C.tamed; // v6147：刷新已放出（洋红），与「等待」紫区分
       txt.textContent = '正在刷新 '+LB.servName(abbr)+'（'+(i+1)+'/'+sel.length+'）'+(noToken?' [webhook]':'');
       return lbTrigger(abbr).then(function(r){ return {abbr:abbr, idx:i, r:r}; })
         .catch(function(e){ return {abbr:abbr, idx:i, r:{ok:false, error:String(e)}}; });
@@ -22503,16 +22962,25 @@ async function lbRefreshTamed(btn){
       return lbWaitTamed(abbr, oldMarker).then(function(done){ return {abbr:abbr, idx:item.idx, skipped:false, done:done}; });
     }));
     // ④ 汇总更新进度条
+    var _okIdx = [];   /* v6147：本轮到蛋阶段要转青的格子（已成功的那几台） */
     for(var i=0;i<waits.length;i++){
       var w = waits[i];
-      if(w.done){ ok++; segs[w.idx].style.background='#22c55e'; }
-      else if(w.skipped){ fail++; segs[w.idx].style.background='#f59e0b'; }
-      else { fail++; segs[w.idx].style.background='#ef4444'; }
+      /* v6149（用户口径）：已放出成功**不再立刻变绿** —— 绿=全流程完成（蛋也刷完），只在最后出现一次 */
+      if(w.done){ ok++; segs[w.idx].style.background=LB_PROG_C.tamed; _okIdx.push(w.idx); }
+      else if(w.skipped){ fail++; segs[w.idx].style.background=LB_PROG_C.skip; }
+      else { fail++; segs[w.idx].style.background=LB_PROG_C.fail; }
       txt.textContent=(w.done?' ':(w.skipped?'⏭ ':' '))+LB.servName(w.abbr)+'（'+(w.idx+1)+'/'+sel.length+'）';
     }
-    txt.textContent=' 已刷新 '+ok+' 台，失败/跳过 '+fail+' 台'+(noToken?'（webhook 模式）':'')+'（蛋刷新进行中…）'
+    /* v6117：终态摘要 —— 把屏障结论固定写进最终文案（不被后续阶段覆盖），并在未确认时不自动关窗 */
+    var _ddTxt = _ddList.length ? ('　存档确认：' + _ddList.map(function(x){
+      return x.ok ? (x.nm+' DinoData '+Math.round(x.waited)+'s/'+x.files+' 文件')
+                  : (x.nm+' 未确认（'+lbDdReasonText({ reason: x.reason })+')');
+    }).join('、')) : '';
+    /* v6146（用户口径）：结算**只在最后出现一次** —— 此处不再写「已刷新 X 台」，
+       改为普通阶段进度文案，消除「都结算完了怎么又开始刷蛋」的观感 */
+    txt.textContent=' 已放出完成 '+ok+'/'+sel.length+' 台'+(noToken?'（webhook 模式）':'')+'，开始刷新蛋信息…'
       + (((LB._cryoStale||[]).length) ? '　 '+LB._cryoStale.length+' 台存档未等到落盘（已按现有文件加载）' : '');
-    btn.disabled=false;
+    /* v6145：原此处 btn.disabled=false 会提前解冻（后面还有蛋阶段）→ 改到 finally 统一恢复 */
     // v1072③：**不再 1s 后自动关窗**——原实现关得太快，用户看不到/无法确认后续蛋阶段（lbEggProbe 在关窗后才跑）。
     //   改为保留浮窗，蛋阶段结束后在下方给出终态摘要（用户可随时点 ✕ 手动关闭）。
     //   （v602 原注释：不再依赖蛋刷新 finally，避免后端 EggProbe 卡住导致浮窗残留——现已由 ✕ 手动关闭兜底）
@@ -22525,16 +22993,34 @@ async function lbRefreshTamed(btn){
     try{
       await new Promise(function(res){ setTimeout(res, 5000); }); // 等 tamed 导出/重载稳定
       if(txt) txt.textContent = '正在刷新蛋信息…（EggProbe '+sel.length+' 台）'; // v1072③：让后续步骤可见，不再"莫名其妙关窗"
+      /* v6147（用户口径）：蛋阶段专属青色 —— 已成功的格子转青，表示「这批正在跑蛋」 */
+      try{ for(var _ei=0;_ei<_okIdx.length;_ei++) segs[_okIdx[_ei]].style.background = LB_PROG_C.egg; }catch(eE1){}
       await lbEggProbe(sel);
-      // v3569：干净成功（无 ⚠ 降级）→ 追加倒计时，5s 后自动关浮窗；带 ⚠ 时保留浮窗（不自动关）
-      var _doneTxt = ' 全部完成：存档 → 已放出 → 蛋（'+ok+'/'+sel.length+' 台）';
-      var _hasWarn = !!((LB._cryoStale||[]).length);
+      /* v6147：蛋阶段结束 —— 青色恢复成功绿（lbEggProbe 内部吞异常，故不分成败） */
+      try{ for(var _ei2=0;_ei2<_okIdx.length;_ei2++) segs[_okIdx[_ei2]].style.background = LB_PROG_C.ok; }catch(eE2){}
+      // v3569：干净成功（无 ⚠ 降级）→ 追加倒计时，超时自动关浮窗；带 ⚠ 时保留浮窗（不自动关）
+      /* v6146（用户口径）：结算合并到此处（全流程唯一一次）—— 台数与失败/跳过同句表达 */
+      var _doneTxt = ' 全部完成：存档 → 已放出 → 蛋（'+ok+'/'+sel.length+' 台）　失败/跳过 '+fail+' 台' + _ddTxt;
+      var _hasWarn = !!((LB._cryoStale||[]).length) || _ddList.some(function(x){ return !x.ok; });
       if(_hasWarn) _doneTxt += '　 '+(LB._cryoStale||[]).length+' 台存档未等到落盘（已按现有文件加载，见上方橙字）';
       if(txt) txt.textContent = _doneTxt;
       if(!_hasWarn) lbProgAutoClose(_doneTxt);
-    }catch(e){ if(txt) txt.textContent = ' 蛋刷新异常（存档与已放出已完成，可点  关闭）'; }
+    }catch(e){
+      /* v6146：蛋刷新异常也要给出结算（本次唯一一次），否则用户看不到刷了多少台 */
+      /* v6149：异常也把青色收回最终色，不让格子停在中间态 */
+      try{ for(var _ei3=0;_ei3<_okIdx.length;_ei3++) segs[_okIdx[_ei3]].style.background = LB_PROG_C.ok; }catch(eE3){}
+      if(txt) txt.textContent = ' 已刷新 '+ok+' 台，失败/跳过 '+fail+' 台（蛋刷新异常，可点右上角关闭）' + _ddTxt;
+    }
     setTimeout(function(){ if(progEl && txt && txt.textContent.indexOf(' 全部完成') < 0) progEl.style.display='none'; }, 4000);
   }finally{
+    try{ lbRefreshLock(sel, 'clear'); }catch(e8){}   /* v6141：释放刷新软锁 */
+    /* v6145：解除冻结（按钮恢复可用 + 去掉置灰，服务器多选区恢复可点） */
+    try{
+      var _lk = LB_PROG.lockUI || {};
+      if(_lk.btn){ try{ _lk.btn.disabled = false; _lk.btn.style.opacity = ''; _lk.btn.style.cursor = ''; _lk.btn.style.filter = ''; }catch(eB2){} }
+      if(_lk.srv){ try{ _lk.srv.style.pointerEvents = ''; _lk.srv.style.opacity = ''; }catch(eS2){} }
+      LB_PROG.lockUI = null;
+    }catch(eUnlock){}
     LB._tamedRefreshing = false; // 无论成功/异常，刷新结束都恢复可关闭浮窗
     // v602：蛋刷新（lbEggProbe）可能在后端卡住，不在此处依赖 finally 自动关闭（浮窗已由上方成功后 1s 调度关闭）
   }
@@ -26919,7 +27405,7 @@ async function lbTrigger(abbr){
       var ac = new AbortController();
       var _t = setTimeout(function(){ try{ ac.abort(); }catch(e){} }, 20000); // 20s 超时：后端 RCON 同步阻塞时不再永久挂起
       var hw;
-      try{ hw = await fetch(LB_API + '/api/webhook/refresh_tamed?server=' + encodeURIComponent(abbr), { method: 'POST', signal: ac.signal }); }
+      try{ hw = await fetch(LB_API + '/api/webhook/refresh_tamed?server=' + encodeURIComponent(abbr) + '&username=' + encodeURIComponent((typeof lbSrvCtlUser === 'function' ? lbSrvCtlUser() : '')), { method: 'POST', signal: ac.signal }); }
       catch(e){ return {ok:false, server:abbr, error:'timeout'}; }
       finally{ clearTimeout(_t); }
       if(!hw.ok) return {ok:false, server:abbr, error:'webhook HTTP '+hw.status};
@@ -26936,7 +27422,7 @@ async function lbTrigger(abbr){
     try{
       // 触发前记录静态状态文件基线 ts（时效判断：只接受本次触发后的新结果）
       var baseTs = await lbGetStatusFile(abbr);
-      var hw = await fetch(LB_API + '/api/webhook/refresh_tamed?server=' + encodeURIComponent(abbr), { method: 'POST' });
+      var hw = await fetch(LB_API + '/api/webhook/refresh_tamed?server=' + encodeURIComponent(abbr) + '&username=' + encodeURIComponent((typeof lbSrvCtlUser === 'function' ? lbSrvCtlUser() : '')), { method: 'POST' });
       if(!hw.ok) return {ok:false, server:abbr, error:'webhook HTTP '+hw.status};
       // 轮询免认证静态状态文件（AppDaemon 写入）：精确判断 ok/cooldown/error
       var st = await lbWaitStatusFile(abbr, baseTs);
@@ -27168,12 +27654,12 @@ function lbRenderFuncBar(){
        ③ 缓存清单**无条件**拉一次并在完成后重绘（照抄物种侧 v156：原写法「只拉不重绘」
           ⇒ 刷新页面后索引虽拉回来了，按钮却冻在虚线，要等下次重绘才变） */
   var _mwOn = false;
-  try { _mwOn = !_detailOpen && !!ab && !!(window.LB_MW_SLUGS && LB_MW_SLUGS[ab]); } catch (eMW) {}
+  try { _mwOn = !_detailOpen && !!ab && (typeof LB_MW_SLUGS !== 'undefined') && !!LB_MW_SLUGS && !!LB_MW_SLUGS[ab]; } catch (eMW) {}
   var _mwHas = false;
   try { _mwHas = (_mwOn && typeof lbMapWikiHas === 'function') ? !!lbMapWikiHas(ab) : false; } catch (eMWH) {}
   try {
     var _mwApi0 = (typeof LB_MW_API !== 'undefined') ? LB_MW_API : '';
-    var _mwSlug0 = (_mwOn && window.LB_MW_SLUGS) ? String(LB_MW_SLUGS[ab] || '') : '';
+    var _mwSlug0 = (_mwOn && (typeof LB_MW_SLUGS !== 'undefined') && LB_MW_SLUGS) ? String(LB_MW_SLUGS[ab] || '') : '';
     if (_mwApi0 && _mwSlug0 && !_mwHas && !LB_MW_AI_TRY[_mwSlug0]){
       LB_MW_AI_TRY[_mwSlug0] = 1;
       fetch(_mwApi0 + 'text?slug=' + encodeURIComponent(_mwSlug0) + '&t=' + Date.now(), { cache: 'no-store' })
@@ -43157,7 +43643,9 @@ function lbRenderBreedBar(){
      ① 内存已有整理结果 ② 本会话已探到 ③ 主动探（见下方，每物种仅一次） */
   try {
     var _tipKey = String(_wkKey || '').toLowerCase();
-    if (!_wkHas && _tipKey && LB_TIPS_PROBE[_tipKey]) _wkHas = true;
+    /* v6112（P3）：LB_TIPS_PROBE 是 app_ui 运行期状态，未加载时直接解引用会抛 ReferenceError（被本 try 吞掉后
+       连带跳过下面的 lbTipsHasResult 判定）⇒ 先做 typeof 安全判定 */
+    if (!_wkHas && _tipKey && (typeof LB_TIPS_PROBE !== 'undefined') && LB_TIPS_PROBE[_tipKey]) _wkHas = true;
     if (!_wkHas && typeof lbTipsHasResult === 'function'){
       var _tipSlug = String((LB_TIPS || {}).slug || '');
       var _wikiCur0 = '';
@@ -43169,7 +43657,10 @@ function lbRenderBreedBar(){
      ready 命中后重绘入口⇒ 实心。 */
   try {
     var _pb = String(_wkKey || '').toLowerCase();
-    if (show && _pb && !_wkHas && !LB_WT_AI_TRY[_pb] && typeof lbWtApi === 'function'){
+    /* v6112（P3）：LB_WT_AI_TRY 同属 app_ui 状态，原写法在 typeof 判定**之前**就解引用 ⇒ 未加载时抛错跳过探测 */
+    var _wtTried = false;
+    try { _wtTried = (typeof LB_WT_AI_TRY !== 'undefined') && !!LB_WT_AI_TRY[_pb]; } catch (eW8) {}
+    if (show && _pb && !_wkHas && !_wtTried && typeof lbWtApi === 'function'){
       LB_WT_AI_TRY[_pb] = 1;
       var _pApi = '';
       try { _pApi = lbWtApi(); } catch (eP0) { _pApi = ''; }
@@ -43189,7 +43680,10 @@ function lbRenderBreedBar(){
   /* v6030：主动探一次「技巧」共享缓存（每物种一次，不轮询）—— wikily 抓不到但 dododex/AI 整理有结果的
      物种（如 Leech_Character）也能点亮实心入口。 */
   try {
-    var _pbT = String((LB_WIKI && LB_WIKI.cur) || '') || String(_wkKey || '');
+    /* v6112（P3）：LB_WIKI 亦为 app_ui 状态，改用 typeof 安全读取（原写法靠外层 try 兜 ReferenceError） */
+    var _wikiCurM = '';
+    try { _wikiCurM = (typeof LB_WIKI !== 'undefined' && LB_WIKI) ? String(LB_WIKI.cur || '') : ''; } catch (eW9) {}
+    var _pbT = _wikiCurM || String(_wkKey || '');
     var _pkT = _pbT.toLowerCase();
     if (show && _pbT && !_wkHas && !LB_TIPS_PROBE_TRY[_pkT] && typeof lbTipsApi === 'function'){
       LB_TIPS_PROBE_TRY[_pkT] = 1;
@@ -43227,7 +43721,13 @@ function lbRenderBreedBar(){
     tipNone: '该物品暂无详细资料（点击查看）'
   });
   // 选物品后无条件拉一次物品缓存清单（与物种侧同构，避免刷新后入口恒虚线）
-  if (_itKey && !LB_WI.pIdx && typeof lbWikiItemIndexLoad === 'function') {
+  /* v6112（P0 崩溃修复）：LB_WI 是 **app_ui 的运行期状态**，首屏（app_ui 未加载）选物品时本行会抛
+     `ReferenceError: LB_WI is not defined`；而本行不在任何 try 内 ⇒ 异常抛到 lbRenderView 的
+     `lbRenderBreedBar();`（约 L17592，位于列表构建之前）⇒ **整段视图渲染中断、列表不刷新**
+     （与代码注释里 v5642 记录的老坑同一失效模式）。改 typeof 安全判定。 */
+  var _wiIdx0 = null;
+  try { _wiIdx0 = (typeof LB_WI !== 'undefined' && LB_WI) ? LB_WI.pIdx : null; } catch (eI4) { _wiIdx0 = null; }
+  if (_itKey && !_wiIdx0 && typeof lbWikiItemIndexLoad === 'function') {
     lbWikiItemIndexLoad().then(function () { try { lbRenderBreedBar(); } catch (eI3) {} }).catch(function () {});
   }
   // v156（用户口径）：**无条件**拉一次后端缓存清单并重绘（不轮询）
@@ -43667,9 +44167,9 @@ async function lbWildSearch(btn){
     var _distBtn418 = document.getElementById('lbWildDistBtn');
     if(_distBtn418) _distBtn418.style.display = 'none';
     // 分段进度条：每台一格（进行中紫 / 成功绿 / 失败红 / 跳过橙，照抄刷新）
-    bar.innerHTML = sel.map(function(){ return '<div style="flex:1;border-radius:2px;background:#333;transition:background .3s"></div>'; }).join('');
+    bar.innerHTML = sel.map(function(){ return '<div style="flex:1;border-radius:2px;background:' + LB_PROG_C.idle + ';transition:background .3s"></div>'; }).join('');
     var segs = bar.children;
-    if(legend) legend.innerHTML = '<span><span style="color:#7c3aed">■</span> 进行中</span><span><span style="color:#22c55e">■</span> 成功</span><span><span style="color:#ef4444">■</span> 失败</span><span><span style="color:#f59e0b">■</span> 跳过/冷却</span>';
+    if(legend) legend.innerHTML = lbProgLegendHtml(['run', 'ok', 'fail', 'skip']); // v6144：图例唯一来源（野生搜索无「存档落盘」段）
     var wild = LB._wildCache = LB._wildCache || {};
     if(!wild[LB.curClass]) wild[LB.curClass] = {};
     var ok=0, fail=0;
@@ -43683,7 +44183,7 @@ async function lbWildSearch(btn){
     }));
     // ② 并行触发所有服务器（各自拿独立状态文件基线 ts + 触发 + 等 status）
     var results = await Promise.all(sel.map(function(abbr, i){
-      segs[i].style.background = '#7c3aed'; // 进行中
+      segs[i].style.background = LB_PROG_C.run; // 进行中
       txt.textContent = '正在搜索 '+LB.servName(abbr)+'（'+(i+1)+'/'+sel.length+'）'+(noToken?' [webhook]':'');
       return lbWildTrigger(abbr, species).then(function(r){ return {abbr:abbr, idx:i, r:r}; })
         .catch(function(e){ return {abbr:abbr, idx:i, r:{ok:false, error:String(e)}}; });
@@ -43700,9 +44200,9 @@ async function lbWildSearch(btn){
     for(var i=0;i<waits.length;i++){
       var w = waits[i];
       var abbr = w.abbr, oldMarker = w.oldMarker || '';
-      if(w.done){ ok++; segs[w.idx].style.background='#22c55e'; }
-      else if(w.skipped){ fail++; segs[w.idx].style.background='#f59e0b'; }
-      else { fail++; segs[w.idx].style.background='#ef4444'; }
+      if(w.done){ ok++; segs[w.idx].style.background=LB_PROG_C.ok; }
+      else if(w.skipped){ fail++; segs[w.idx].style.background=LB_PROG_C.skip; }
+      else { fail++; segs[w.idx].style.background=LB_PROG_C.fail; }
       txt.textContent=(w.done?' ':(w.skipped?'⏭ ':' '))+LB.servName(abbr)+'（'+(w.idx+1)+'/'+sel.length+'）';
       // 拉取该服野生数据入缓存（savedAt 比旧新才替换，防搜索未完成/写文件延迟读到旧文件）
       try{

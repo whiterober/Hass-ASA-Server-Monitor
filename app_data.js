@@ -581,3 +581,10 @@ var LB_KEYMAP_ACTIONS = [
   {g:'镜头', id:'cam_selfie', toggle:1, zh:'自拍镜头',   pad:null,                               kbm:'keyboard_alt_right',              note:'右 Alt'},   // v5280 新增
   {g:'镜头', id:'nameplate',   zh:'名牌显示距离',   pad:null,                             kbm:'keyboard_end',              note:''}
 ];
+
+/* ===== v6110：地图 Wiki 配置（原在 app_ui.js，因该文件自 v6105 起按需加载，
+   app_core.js 的 lbRenderFuncBar() 首屏读不到 LB_MW_SLUGS ⇒ 地图 Wiki 入口被判不可见。
+   按「纯配置/纯数据放 app_data.js，行为与运行时状态留 app_ui.js」的约定迁到此处。 ===== */
+var LB_MW_API = 'https://data.whiterober.ccwu.cc/api/mapwiki/';
+var LB_MW_SLUGS = { Isl:'the-island', Sco:'scorched-earth', Cen:'the-center', Abe:'aberration', Ext:'extinction',
+                    Ast:'astraeos', Rag:'ragnarok', Val:'valguero', Los:'lost-colony', Gen:'genesis' };

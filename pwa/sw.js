@@ -9,13 +9,16 @@
  *   并保留历史单缓存（dino-import-v*）不删，让已下载资源继续命中
  * 策略：index.html 走 network-first（保证新版本刷新即生效），其他同源静态 cache-first。
  */
-var VER = 'v20261105-6109'; // v1145：随前端版本递增，强制移动端（PWA/Safari）拿到新壳并丢弃旧 shell 缓存
+var VER = 'v20261106-6149'; // v1145：随前端版本递增，强制移动端（PWA/Safari）拿到新壳并丢弃旧 shell 缓存
 //   背景：手机/iPad 曾长期停留在旧版前端（跑旧的逐台加载逻辑 ⇒ 卡在「存档已落盘」达 10 分钟）；
 //   index.html 虽为 network-first，但弱网/离线时仍回退旧缓存 ⇒ 每次部署同步递增本版本号可确保换壳生效。
 var SHELL = 'dino-import-shell-' + VER;
 var ASSETS = 'dino-import-assets';
 var ASSETS_MAX = 1200; // v20260912-1029：600→1200（实测预取需 717 张，600 上限导致缓存震荡：每写一张即淘汰一张）
 var CORE = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/icon-maskable-192.png', '/icons/icon-maskable-512.png', '/icons/apple-touch-icon-180.png'];   // v4465：maskable/iOS 图标入预缓存
+// v6113：外链硬依赖入预缓存（带当前 VER ⇒ 部署即换 URL）
+//   背景：JS/CSS 走 cache-first，未访问过的资源离线点 UI 会 504；这 3 个是首屏必需（app_ui 仍保持懒加载不入预缓存）
+['/app.css', '/app_data.js', '/app_core.min.js'].forEach(function (f) { CORE = CORE.concat(f + '?v=' + VER); });
 // 2026-11-05：历史遗留的单缓存（早期版本的图标/地图缓存，现已无人读写）
 //   只列精确名字，绝不写「非当前壳即删」的通用规则——否则以后新增的缓存名会被误杀
 var LEGACY_CACHES = ['dino-assets-v1'];
