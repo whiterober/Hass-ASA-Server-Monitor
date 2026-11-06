@@ -43,6 +43,7 @@ import struct
 import subprocess
 import threading
 import time
+import calendar as _cal   # v6176：日志时间戳为 UTC，需 timegm
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime
@@ -496,45 +497,73 @@ def _dinodata_files(server):
 
 
 def _dinodata_read_ok(server):
-    """抽检存档族文件完整性（gzip 尾 CRC / JSON 开头）-> 损坏列表。"""
+    """v6190（用户口径）：校验该服在 DinoData 下**全部产物**的完整性 -> 损坏列表。
+
+    原实现只抽检 4 个 gz + 3 个 json 固定后缀 —— 实测插件每轮还写
+    _notes.json.gz / _alliances.json / _cryo.json.db / _cryo.json.snap，全都没验。
+      · .gz        -> gzip 全量解压验尾 CRC（>30MB 只读头，避免阻塞）
+      · .json      -> 开头必须是 { 或 [
+      · .db        -> SQLite 文件头 'SQLite format 3'
+      · 其他(.snap/.cache等) -> 至少 size > 0（上面已判）
+    前缀过滤保持不变 ⇒ **仅涵盖当前目标服**，不跨服。"""
     bad = []
     try:
         import gzip
     except Exception:
         gzip = None
-    for sfx in ('_cryo.json.gz', '_players.json.gz', '_item.json.gz', '_eggs.json.gz'):
-        p = os.path.join(DINO_DATA, server + sfx)
+    try:
+        names = os.listdir(DINO_DATA)
+    except Exception:
+        return bad
+    prefix = (server + '_', server + '.')
+    for fn in names:
+        if not fn.startswith(prefix):
+            continue
+        p = os.path.join(DINO_DATA, fn)
         if not os.path.isfile(p):
             continue
         try:
             sz = os.path.getsize(p)
-            if sz <= 0:
-                bad.append(server + sfx + ' size=0')
-                continue
+        except Exception:
+            continue
+        low = fn.lower()
+        if sz <= 0:
+            bad.append(fn + ' size=0')
+            continue
+        if low.endswith(_DD_BUSY_SUFFIX):
+            continue
+        if low.endswith('.gz'):
             if gzip is None:
                 continue
-            with gzip.open(p, 'rb') as f:
-                if sz <= 30 * 1024 * 1024:
-                    f.read()      # 全量解压：尾部 CRC 校验（能拓到半截文件）
-                else:
-                    f.read(2)     # 超大文件只验头部，避免阻塞
-        except Exception as e:
-            bad.append('%s %s' % (server + sfx, type(e).__name__))
-    for sfx in ('_cryo.json', '_tamed.json', '_item.json'):
-        p = os.path.join(DINO_DATA, server + sfx)
-        if not os.path.isfile(p):
-            continue
-        try:
-            with open(p, 'rb') as f:
-                head = f.read(64).lstrip()
-            if not head or head[:1] not in (b'{', b'['):
-                bad.append(server + sfx + ' 非 JSON 开头')
-        except Exception as e:
-            bad.append('%s %s' % (server + sfx, type(e).__name__))
+            try:
+                with gzip.open(p, 'rb') as f:
+                    if sz <= 30 * 1024 * 1024:
+                        f.read()
+                    else:
+                        f.read(2)
+            except Exception as e:
+                bad.append('%s %s' % (fn, type(e).__name__))
+        elif low.endswith('.json'):
+            try:
+                with open(p, 'rb') as f:
+                    head = f.read(64).lstrip()
+                if not head or head[:1] not in (b'{', b'['):
+                    bad.append(fn + ' 非 JSON 开头')
+            except Exception as e:
+                bad.append('%s %s' % (fn, type(e).__name__))
+        elif low.endswith('.db'):
+            try:
+                with open(p, 'rb') as f:
+                    head = f.read(16)
+                if not head.startswith(b'SQLite format 3'):
+                    bad.append(fn + ' 非 SQLite 头')
+            except Exception as e:
+                bad.append('%s %s' % (fn, type(e).__name__))
     return bad
 
 
-def _dinodata_wait_stable(server, since_ts=None, budget=90, quiet=3.0, poll=0.5, require_update=True):
+def _dinodata_wait_stable(server, since_ts=None, budget=90, quiet=3.0, poll=0.5, require_update=True,
+                          progress=None):
     """等 DinoData 中该服存档族文件「落盘且稳定」。
 
     判据（三条全中才算 ok）：
@@ -550,10 +579,14 @@ def _dinodata_wait_stable(server, since_ts=None, budget=90, quiet=3.0, poll=0.5,
     prev = None
     last_change = t0
     updated = {}
+    _last_pub = -1   # v6181：progress 每秒最多回调一次（poll=0.5s 会重复触发）
     while True:
         cur = _dinodata_files(server)
         now = time.time()
-        fam = {k: v for k, v in cur.items() if any(k.endswith(s) for s in _DD_SAVE_FAMILIES)}
+        # v6190（用户口径）：**不再按后缀白名单过滤** —— 实测插件每轮还写
+        #   _notes.json.gz / _alliances.json / _cryo.json.db / _cryo.json.snap，白名单会漏掉
+        #   「仍在写」的信号（18MB 的 .db 尤其）。前缀过滤（本服）保持不变。
+        fam = dict(cur)
         for fn, meta in fam.items():
             if int(meta.get('mtime') or 0) >= since - 2 and fn not in updated:
                 updated[fn] = int(meta.get('mtime') or 0)
@@ -583,6 +616,15 @@ def _dinodata_wait_stable(server, since_ts=None, budget=90, quiet=3.0, poll=0.5,
             return {'ok': False, 'waited': round(now - t0, 1), 'files': len(cur),
                     'updated': sorted(updated)[:12], 'quiet': round(stable_for, 1),
                     'reason': reason, 'bad': _dinodata_read_ok(server), 'busy': busy}
+        # v6181（用户口径「稳定等待期看不出来」）：每秒回调一次进度，供任务条显示「已等 Ns」
+        if progress is not None:
+            try:
+                _wsec = int(now - t0)
+                if _wsec != _last_pub:
+                    _last_pub = _wsec
+                    progress(round(now - t0, 1), round(stable_for, 1), budget)
+            except Exception:
+                pass
         prev = fam
         time.sleep(poll)
 
@@ -4585,10 +4627,11 @@ def _cfg_baseline():
     return doc
 
 
-def _cfg_proc_start(server):
-    """该服 ArkAscendedServer.exe 的启动时间（epoch 秒）；取不到返回 None。60s 缓存。"""
+def _cfg_proc_start(server, force=False):
+    """该服 ArkAscendedServer.exe 的启动时间（epoch 秒）；取不到返回 None。60s 缓存。
+    v6182：force=True 时强制刷新（启动幂等检查用，避免刚启动 <60s 时命中旧空缓存）。"""
     now = time.time()
-    if _CFG_PROC['map'] is None or (now - _CFG_PROC['ts']) > 60:
+    if force or _CFG_PROC['map'] is None or (now - _CFG_PROC['ts']) > 60:
         m = {}
         try:
             ps = ("Get-CimInstance Win32_Process -Filter \"Name='ArkAscendedServer.exe'\" | "
@@ -5056,6 +5099,117 @@ def _role_level(username):
         return 1
 
 
+# ===== v6155（用户口径「不依赖计划任务」）：后端远程重启（两级 spawn）=====
+#   核心矛盾：后端退出后必须有人把它拉起；而后端 spawn 的子进程与后端同属一个 Job，
+#   进程退出 / Stop-ScheduledTask 会连带杀掉它 ⇒ 必须让子进程**脱离 Job**。
+#   两级策略（不新建任何计划任务）：
+#     ① CREATE_BREAKAWAY_FROM_JOB + DETACHED_PROCESS + CREATE_NEW_PROCESS_GROUP（纯 Python，约 10ms）
+#     ② 失败回退 WMI（Invoke-CimMethod Win32_Process.Create）—— 父进程是 WmiPrvSE，天然不在本 Job
+#   两者都失败 ⇒ 拒绝退出（绝不留下「点了就死」）。
+#   重启动作复用后端同目录现成的 restart_dino_backend.bat [等待秒数]。
+ADMIN_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'admin.log')
+_BOOT_TS = time.time()   # 供 /api/health 报运行时长
+
+
+def _admin_log(line):
+    try:
+        with open(ADMIN_LOG, 'a', encoding='utf-8') as f:
+            f.write('[%s] %s\n' % (time.strftime('%Y-%m-%d %H:%M:%S'), line))
+    except Exception:
+        pass
+
+
+def _admin_spawn_restart(wait_secs=3):
+    """启动「延迟 N 秒后执行 restart_dino_backend.bat」且**脱离本进程 Job** 的进程。
+    返回 (ok, how, err)；how ∈ {'breakaway','wmi',''}"""
+    bat = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'restart_dino_backend.bat')
+    if not os.path.isfile(bat):
+        return False, '', 'restart_dino_backend.bat not found'
+    try:
+        DETACHED = 0x00000008
+        NEW_GROUP = 0x00000200
+        BREAKAWAY = 0x01000000
+        subprocess.Popen(['cmd.exe', '/c', bat, str(int(wait_secs))], close_fds=True,
+                         creationflags=DETACHED | NEW_GROUP | BREAKAWAY)
+        return True, 'breakaway', ''
+    except Exception as e1:
+        err1 = 'breakaway: %r' % (e1,)
+    try:
+        cmdline = 'cmd.exe /c "%s" %d' % (bat, int(wait_secs))
+        ps = ('Invoke-CimMethod -ClassName Win32_Process -MethodName Create '
+              '-Arguments @{CommandLine=\'%s\'} | Select-Object -ExpandProperty ReturnValue'
+              % cmdline.replace("'", "''"))
+        r = subprocess.run(['powershell', '-NoProfile', '-NonInteractive', '-Command', ps],
+                           capture_output=True, timeout=25)
+        out = (r.stdout or b'').decode('utf-8', 'replace').strip()
+        if r.returncode == 0 and out.startswith('0'):
+            return True, 'wmi', ''
+        err2 = 'wmi rc=%d out=%s' % (r.returncode, out[:120])
+    except Exception as e2:
+        err2 = 'wmi: %r' % (e2,)
+    return False, '', err1 + ' | ' + err2
+
+
+def _admin_do_restart(user, how=''):
+    """重启进程已拉起 → 稍等后自杀式退出（由那个进程 Stop + Start）"""
+    _admin_log('RESTART exit by %s (spawn=%s)' % (user, how))
+    time.sleep(1.0)
+    os._exit(0)
+
+
+def _admin_rss_mb():
+    """当前进程工作集 MB（失败返回 None）"""
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class PMC(ctypes.Structure):
+            _fields_ = [('cb', wintypes.DWORD), ('PageFaultCount', wintypes.DWORD),
+                        ('PeakWorkingSetSize', ctypes.c_size_t), ('WorkingSetSize', ctypes.c_size_t),
+                        ('QuotaPeakPagedPoolUsage', ctypes.c_size_t), ('QuotaPagedPoolUsage', ctypes.c_size_t),
+                        ('QuotaPeakNonPagedPoolUsage', ctypes.c_size_t), ('QuotaNonPagedPoolUsage', ctypes.c_size_t),
+                        ('PagefileUsage', ctypes.c_size_t), ('PeakPagefileUsage', ctypes.c_size_t)]
+        pmc = PMC()
+        pmc.cb = ctypes.sizeof(PMC)
+        h = ctypes.windll.kernel32.GetCurrentProcess()
+        if ctypes.windll.psapi.GetProcessMemoryInfo(h, ctypes.byref(pmc), pmc.cb):
+            return round(pmc.WorkingSetSize / 1048576.0, 1)
+    except Exception:
+        pass
+    return None
+
+
+def _health_payload():
+    """GET /api/health 载荷（无鉴权、极轻）"""
+    now = time.time()
+    code = {}
+    try:
+        st = os.stat(os.path.abspath(__file__))
+        code = {'size': st.st_size,
+                'mtime': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(st.st_mtime))}
+    except Exception:
+        pass
+    rq = {}
+    try:
+        with _RESTART_LOCK:
+            rq = {'running': bool(_RESTART.get('running')), 'dry': bool(_RESTART.get('dry')),
+                  'current': _RESTART.get('current') or '', 'done': len(_RESTART.get('done') or [])}
+    except Exception:
+        pass
+    return {'ok': True,
+            'ts': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(now)),
+            'startedAt': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(_BOOT_TS)),
+            'uptimeSec': int(now - _BOOT_TS),
+            'threads': threading.active_count(),
+            'rssMB': _admin_rss_mb(),
+            'code': code,
+            'ipwatch': {'domain': _IPWATCH.get('domain') or '',
+                        'lastIp': _IPWATCH.get('lastIp') or '',
+                        'lastCheckAt': _IPWATCH.get('lastCheckAt') or '',
+                        'mode': _IPWATCH.get('mode') or 'notify'},
+            'restart': rq}
+
+
 # ===== v6023（用户口径）：srvctl 会话 Token（HMAC 无状态签名）=====
 # 背景：/api/srvctl/action 等原先只校验前端自报的 username ⇒ 任何人只要知道管理员用户名，
 #       一句 curl 就能启停服务器 / 清空全图野龙 / 发任意 RCON，且 srvctl.log 记的是伪造的用户名，事后查不到真凶。
@@ -5170,7 +5324,10 @@ def _srvctl_guard(handler, qs=None, need_token=False):
 # ===== P3 新增：服务器控制（后端直连 ASA Server Manager，零 HA；前端永不接触 token）=====
 # 依据：计划\需求_服务器控制入口_二级管理员.md §6.2 / §7.2 / §7.3
 SRVCTL_LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'srvctl.log')
-SRVCTL_ACTIONS = ('start', 'stop', 'kill', 'update', 'saveworld', 'fullbackup', 'destroy', 'rcon')
+# v6177（2026-11-06）：savekill 纳入白名单 —— 后端原子「存档 → DinoData 稳定 → 终止」，
+#   由 _srvctl_one 内部递归 saveworld+c kill 完成，不依赖浏览器轮询。
+SRVCTL_ACTIONS = ('start', 'stop', 'kill', 'update', 'saveworld', 'savekill',
+                  'fullbackup', 'destroy', 'rcon')
 SRVCTL_T_TIMEOUT = 60            # 普通动作超时（秒）
 SRVCTL_T_DESTROY = 600           # destroy 超时（对齐 HA）
 SRVCTL_T_FULLBACKUP = 600        # fullbackup 超时（保守同档）
@@ -5279,19 +5436,125 @@ def _asa_http(method, url, token, payload=None, timeout=60, verify=False):
             return (e.code, '')
 
 
-def _srvctl_log(user, server, action, ok, ms, msg=''):
+def _srvctl_reply_zh(msg):
+    """v6201（用户口径 2026-11-06「怎么还留有未翻译的？」）：RCON 回执中文化。
+
+    覆盖范围＝**只翻实际观测到的 4 类**（样本取自 srvctl.log 近 400 行统计 | 出现次数）：
+        destroy   '<ctrl>%All Wild Dinos Destroyed'                 | 67
+        destroy   '<ctrl>%All Wild Dinos Destroyed   Keep Alive'     | 17
+        saveworld 'World Saved'                                     | 42
+        saveworld '{"message":"World saved for Bob."}'              |  9（ASAM 旧路径）
+    未收录的回执**原样返回**（不猜、不乱翻）。
+
+    ⚠ ASA 的 destroy 回执在 '%' 前还带一个不可见控制字符（如 \x02）⇒ 一律用**子串**匹配，
+      绝不能用 startswith / 正则首锚，否则永远匹配不上。
+    ⚠ 'Keep Alive' 分支必须**先判**：它包含 'All Wild Dinos Destroyed'，顺序反了会被通用分支吃掉。"""
+    s = str(msg or u'')
+    if not s:
+        return s
+    if 'All Wild Dinos Destroyed' in s:
+        if 'Keep Alive' in s:
+            # Keep Alive：清野龙但保留存活个体（已驯服/已装载的不在清理范围）
+            return u'已清空全图野生恐龙（保留存活个体）'
+        return u'已清空全图野生恐龙'
+    if 'World Saved' in s or 'World saved' in s:
+        # ASAM 旧路径回执：{"message":"World saved for Bob."} —— 整条换成「世界已保存（Bob）」
+        _m = re.search(r'World saved for ([A-Za-z][A-Za-z0-9_ ]*)', s)
+        if _m and s.strip().startswith('{'):
+            return u'世界已保存（%s）' % _m.group(1).strip()
+        # 其余（'World Saved' / 'World Saved · DinoData 稳定 16s（11 文件）'）：
+        #   **只替换回执词**，后缀附加信息必须原样保留（否则日志丢关键排查数据）
+        return s.replace('World Saved', u'世界已保存').replace('World saved', u'世界已保存')
+    return s
+
+
+def _srvctl_src_tag(user, src=''):
+    """v6202（用户口径 2026-11-07「cen gen 刚才是谁启动的？能看到么？」）：
+    审计回执前加**来源标签** —— 原日志只有账号名，看不出这次操作是人工点的还是系统自动触发的。
+
+    | user 值                  | 标签         | 写入方                            |
+    |--------------------------|--------------|-----------------------------------|
+    | ipwatch                  | [自动重启]   | 自动重启编排 `_restart_exec_startq` |
+    | arkbackup / rollback     | [安全回档]   | 安全回档 job                       |
+    | (system) / srvctl / 空   | [系统]       | 跳过判定 / 护栏放行 / 内部兜底      |
+    | 其他（账号名）            | [人工]       | 前端按钮 / 批量启动 / 任务条重试    |
+
+    v6203（用户口径 2026-11-07「那就实施」）：前端 `lbTaskRetry` 现在会带 `src='retry'`
+      ⇒ 重试标 `[重试]`，与普通人工点击 `[人工]` 区分开；
+      未带 src 的仍按 user 推断（兼容旧前端 / 直接调 API 的场景）。"""
+    # v6203：前端显式来源优先（v6202 遗留盲区：人工点按钮 vs 任务条重试，payload 完全一致）
+    _s = str(src or '').strip().lower()
+    if _s == 'retry':
+        return u'[重试] '
+    u = str(user or '').strip()
+    if u == 'ipwatch':
+        return u'[自动重启] '
+    if u in ('arkbackup', 'rollback'):
+        return u'[安全回档] '
+    if u in ('', '(system)', 'system', 'srvctl'):
+        return u'[系统] '
+    return u'[人工] '
+
+
+def _srvctl_log(user, server, action, ok, ms, msg='', src=''):
     """审计：每服一行（时间/用户/服务器/动作/结果/耗时）。"""
     try:
+        # v6201：回执先中文化再落盘（未收录的回执原样保留，不影响排查）
         line = '%s\t%s\t%s\t%s\t%s\t%dms\t%s\n' % (
             time.strftime('%Y-%m-%d %H:%M:%S'), user, server, action,
-            'OK' if ok else 'FAIL', int(ms), str(msg or '').replace('\n', ' ')[:200])
+            'OK' if ok else 'FAIL', int(ms),
+            (_srvctl_src_tag(user, src) + _srvctl_reply_zh(msg)).replace('\n', ' ')[:200])
         with open(SRVCTL_LOG_FILE, 'a', encoding='utf-8') as f:
             f.write(line)
     except Exception:
         pass
 
 
-def _srvctl_one(server, action, message, cfg):
+def _srvctl_terminal_gate(server, force=False):
+    """v6179（用户口径）：所有「涉及终止」的动作（kill / savekill）复用自动重启的三重静默护栏。
+      L1 在线人数必须 0（Bob 按 RESTART_SKIP_EMPTY 跳过，其在线列表不刷新）
+      L3 集群目录 RESTART_CLUSTER_QUIET 秒内无写入
+    v6197（用户口径）：**删除 L2「变空静默」** —— 实测与 L1 起点几乎相同、从不拦截，纯冗余。
+    force=True ⇒ 不拦截（仍返回 blocked/reasons 供调用方记录日志）。"""
+    d = {'players': None, 'lq': None, 'cq': None, 'bobSkip': False}
+    reasons = []
+    try:
+        if server in RESTART_SKIP_EMPTY:
+            # v6180（2026-11-06 事故修正）：**绝不能**因为「在线列表不可信」就跳过 L1 ——
+            #   实测该豁免导致对**确有玩家在线**的 Bob 直接 kill（护栏零理由 ⇒ 放行）。
+            #   改为：一律列入拦截理由，必须用户二次确认（force）才放行。
+            # v6189（用户口径 2026-11-06）：Bob 在线列表不可信（只记录进服、不记录退服），
+            #   每次终止都弹「不可信，需人工确认」太烦 ⇒ **移除该拦截理由、不再弹窗**。
+            #   仅保留 L2 变空静默 + L3 集群目录静默作为保护。
+            d['bobSkip'] = True
+        else:
+            n = _restart_players(server)
+            d['players'] = n
+            if n is None:
+                reasons.append(u'在线人数探测失败（RCON 不可用）')
+            elif int(n) > 0:
+                reasons.append(u'仍有 %d 人在线' % int(n))
+    except Exception:
+        reasons.append(u'在线人数探测异常')
+    try:
+        st = (_RESTART.get('servers') or {}).get(server) or {}
+        es = float(st.get('emptySince') or 0)
+        if es > 0:
+            d['lq'] = max(0.0, time.time() - es)   # v6197：仅回传观测值，不再作为拦截理由
+    except Exception:
+        pass
+    try:
+        cq = _restart_cluster_quiet_sec()
+        d['cq'] = cq
+        if cq is not None and cq < RESTART_CLUSTER_QUIET:
+            reasons.append(u'集群目录 %ds 内有写入（需静默 %ds）' % (int(cq), RESTART_CLUSTER_QUIET))
+    except Exception:
+        pass
+    return {'ok': (not reasons) or bool(force), 'blocked': bool(reasons),
+            'force': bool(force), 'reasons': reasons, 'detail': d}
+
+
+def _srvctl_one(server, action, message, cfg, progress=None):
     """单服单动作：返回 {server, profileName, ok, message, ms, retried}。"""
     prof = (SERVER_THEMES.get(server) or {}).get('name') or server
     t0 = time.time()
@@ -5300,6 +5563,26 @@ def _srvctl_one(server, action, message, cfg):
     # v54b：to 必须在下面的 rcon 直连分支之前定义（v54 把它留在 for 循环前，
     # 导致 _rcon_exec(timeout=min(to, 20)) 抛 UnboundLocalError）
     to = cfg['timeout_destroy'] if action in ('destroy', 'fullbackup') else cfg['timeout']
+    # v6179（用户口径）：终止类动作统一走三重静默护栏；force=True 时仅记录不拦截。
+    #   _gate_passed 防止 savekill 内部递归调用 kill 时重复探测。
+    # v6189（用户口径）：savekill 的护栏移到「保存通过后、终止前」复检 ——
+    #   原来在入口判，而保存要 40 秒，期间玩家可以进服 ⇒ 护栏结论过期。
+    #   kill 单动作无保存过程，仍在入口判。
+    if action == 'kill' and not cfg.get('dry') and not cfg.get('_gate_passed'):
+        _gate = _srvctl_terminal_gate(server, force=bool(cfg.get('force')))
+        if _gate.get('blocked') and not _gate.get('force'):
+            return {'server': server, 'profileName': prof, 'ok': False,
+                    'message': (u'安全护栏拦截：' + u'；'.join(_gate.get('reasons') or []))[:300],
+                    'ms': int((time.time() - t0) * 1000), 'retried': False,
+                    'code': 'safety_blocked', 'gate': _gate}
+        if _gate.get('blocked'):
+            try:
+                _srvctl_log('(system)', server, action, True, 0,
+                            (u'护栏强制放行：' + u'；'.join(_gate.get('reasons') or []))[:200])
+            except Exception:
+                pass
+        _cfg2 = dict(cfg); _cfg2['_gate_passed'] = True
+        cfg = _cfg2
     # v54（2026-11-03）：RCON 类命令一律直连 RCON，**不回落** ASA Server Manager。
     # 根因：ASA Manager 的 /rcon 对 KickPlayer 只回显黄字、不执行（人踢不掉）；
     # 直连 RCON 由游戏服务器以 admin 身份执行，与 HA send_rcon_command_sync 完全一致。
@@ -5327,7 +5610,18 @@ def _srvctl_one(server, action, message, cfg):
                     'ms': 0, 'retried': False, 'dry': True, 'via': 'rcon'}
         _cmd = 'SaveWorld' if action == 'saveworld' else 'DestroyWildDinos'
         _tmo = 180 if action == 'destroy' else 40
+        # v6190：瘦档基线必须在 **SaveWorld 之前** 取 ——
+        #   原实现在 DinoData 稳定后才取，那时 .ark 已写完 ⇒ 基线 == 当前值
+        #   ⇒ 「新档 < 基线 x 0.95」恒不成立，瘦档保护形同虚设。
+        try:
+            _ak_base0 = int(((_srv_observe_ark(server, (_srv_observe_log(server) or {}).get('map') or '') or {}).get('size')) or 0)
+        except Exception:
+            _ak_base0 = 0
         _t_save = time.time()
+        # v6178：真进度上报（savekill 整合进度条用）
+        if progress:
+            try: progress(20, u'已下发，等待回执…')
+            except Exception: pass
         r_ok, r_text = _rcon_exec(server, _cmd, timeout=_tmo)
         ms = int((time.time() - t0) * 1000)
         _out = {'server': server, 'profileName': prof, 'ok': bool(r_ok),
@@ -5340,12 +5634,123 @@ def _srvctl_one(server, action, message, cfg):
                 _budget = int(cfg.get('save_data_budget') or 45)
             except Exception:
                 _budget = 45
-            _dw = _dinodata_wait_stable(server, since_ts=_t_save, budget=_budget)
+            if progress:
+                try: progress(35, u'存档中…')
+                except Exception: pass
+            # ---- v6190（用户口径）：**不再并行等 .ark** ----
+            #   磁盘实测：插件在 .ark 稳定后 14~36 秒才导出 DinoData ⇒
+            #   「DinoData 已稳定」即等价于「.ark 早已写完」，无需重复等 20 秒。
+            #   只在 DinoData 通过后做一次 quick_check + 瘦档判定（0.2~0.4s）。
+            def _dw_prog(_w, _sf, _bd, _p=progress):
+                try:
+                    _p(min(85, 35 + int(min(1.0, float(_w) / 25.0) * 50)),
+                       u'校验中 %ds' % int(_w))
+                except Exception:
+                    pass
+
+            # v6191（用户口径）：**仅 Bob**（RESTART_SKIP_EMPTY，该图存档不落盘、DinoData 恒为空）
+            #   跳过 DinoData 等待；否则会白等 budget 秒后判 no_files 失败。
+            #   ⚠ 绝不能用「文件数=0 就跳过」——手动清空产物时文件数也是 0，
+            #     那会放行一个正在从 0 重建的半截产物。
+            _dd_skip = (server in RESTART_SKIP_EMPTY)
+            if _dd_skip:
+                _dw = {'ok': True, 'waited': 0, 'files': 0, 'reason': 'skip_no_dinodata',
+                       'updated': [], 'quiet': 0, 'bad': [], 'busy': []}
+                if progress:
+                    try: progress(60, u'跳过校验…')
+                    except Exception: pass
+            else:
+                _dw = _dinodata_wait_stable(server, since_ts=_t_save, budget=_budget,
+                                            progress=(_dw_prog if progress else None))
+            if progress:
+                try:
+                    progress(86, (u'跳过校验…' if _dd_skip else
+                                  (u'复核中…' if _dw.get('ok') else
+                                   (u'校验未通过（%s）' % (_dw.get('reason') or 'unknown')))))
+                except Exception:
+                    pass
+            if _dw.get('ok'):
+                _ak = _srvctl_check_ark_after_dd(server, base_size=_ak_base0)
+            else:
+                _ak = {'ok': False, 'path': '', 'size': 0, 'mtime': 0, 'baseSize': _ak_base0,
+                       'thin': False, 'waited': 0, 'detail': '',
+                       'reason': 'skipped_dd_failed', 'mode': 'skipped'}
             _out['data'] = _dw
             _out['message'] = (_out['message'] + ' · DinoData ' + (
-                '稳定 %.0fs（%d 文件）' % (float(_dw.get('waited') or 0), int(_dw.get('files') or 0))
+                (u'该图不落盘，已跳过' if _dd_skip else
+                 ('稳定 %.0fs（%d 文件）' % (float(_dw.get('waited') or 0), int(_dw.get('files') or 0))))
                 if _dw.get('ok') else '未确认稳定（%s）' % (_dw.get('reason') or 'unknown')))[:300]
+            # v6184（用户口径「最重要的校验就是 ark」）：.ark 四重判据已在上方并行块内完成（参数与等待均已并入）
+            _out['ark'] = _ak
+            _out['message'] = (_out['message'] + ' · .ark ' + (
+                '完整 ok(%s, %.1fMB, quick_check)' % (
+                    os.path.basename(_ak.get('path') or ''),
+                    float(_ak.get('size') or 0) / 1048576.0)
+                if _ak.get('ok') else '校验失败（%s%s）' % (
+                    _ak.get('reason') or 'unknown',
+                    ('，疑似瘦档 %.1fMB < 基线 %.1fMB' % (
+                        float(_ak.get('size') or 0) / 1048576.0,
+                        float(_ak.get('baseSize') or 0) / 1048576.0)) if _ak.get('thin') else '')))[:300]
+            if progress:
+                try:
+                    progress(88, (u'准备终止' if _ak.get('ok')
+                                  else u'校验未通过，已取消'))
+                except Exception: pass
+            # v6184：DinoData 或 .ark 任一不过 ⇒ 整体判失败（savekill 据此取消终止）
+            if not _dw.get('ok') or not _ak.get('ok'):
+                _out['ok'] = False
+                _out['code'] = 'save_incomplete'
+                _out['stage'] = 'verify'
         return _out
+    # v6177（2026-11-06 用户实测「存档后终止只存档没终止」）：savekill 改为**后端原子编排** ——
+    #   先 SaveWorld（含 DinoData 落盘稳定确认），通过后再 kill，全程由后端负责。
+    #   原实现拆在浏览器里（saveworld + 前端轮询 phase 变 ok + 再发 kill），
+    #   页面一关/刷新/切走轮询就丢 ⇒ 9 台批量时一台都没终止（srvctl.log 零 kill 记录）。
+    if action == 'savekill' and not message:
+        if progress:
+            try: progress(10, u'开始存档…')
+            except Exception: pass
+        _r1 = _srvctl_one(server, 'saveworld', None, cfg, progress)
+        if not _r1.get('ok'):
+            return {'server': server, 'profileName': prof, 'ok': False,
+                    'message': (u'存档未通过，已取消终止：' + str(_r1.get('message') or ''))[:300],
+                    'ms': int(_r1.get('ms') or 0), 'retried': bool(_r1.get('retried')),
+                    'stage': 'saveworld', 'save': _r1.get('data'), 'via': 'backend'}
+        # v6189：终止前**复检**三重静默护栏（保存期间可能有人进服 / 集群写入）
+        if not cfg.get('dry'):
+            _gate = _srvctl_terminal_gate(server, force=bool(cfg.get('force')))
+            if _gate.get('blocked') and not _gate.get('force'):
+                return {'server': server, 'profileName': prof, 'ok': False,
+                        'message': (u'安全护栏拦截（终止前复检）：' + u'；'.join(_gate.get('reasons') or []))[:300],
+                        'ms': int(_r1.get('ms') or 0), 'retried': False,
+                        'code': 'safety_blocked', 'gate': _gate, 'stage': 'gate',
+                        'save': _r1.get('data'), 'ark': _r1.get('ark'), 'via': 'backend'}
+            if _gate.get('blocked'):
+                try:
+                    _srvctl_log('(system)', server, action, True, 0,
+                                (u'护栏强制放行：' + u'；'.join(_gate.get('reasons') or []))[:200])
+                except Exception:
+                    pass
+        if progress:
+            try: progress(90, u'正在终止…')
+            except Exception: pass
+        _r2 = _srvctl_one(server, 'kill', None, dict(cfg, _gate_passed=True))
+        # v6185：把 .ark 校验结果一并回传（成功路径也要让人看到校验过了什么）
+        _ak1 = _r1.get('ark') or {}
+        _ak_txt = ''
+        try:
+            if _ak1:
+                _ak_txt = u'[.ark %s %.1fMB 稳定%.0fs] ' % (
+                    'ok' if _ak1.get('ok') else 'FAIL',
+                    float(_ak1.get('size') or 0) / 1048576.0,
+                    float(_ak1.get('quiet') or 0))
+        except Exception:
+            _ak_txt = ''
+        return {'server': server, 'profileName': prof, 'ok': bool(_r2.get('ok')),
+                'message': (u'存档校验通过' + _ak_txt + u'→ 终止：' + str(_r2.get('message') or ''))[:300],
+                'ms': int(_r1.get('ms') or 0) + int(_r2.get('ms') or 0),
+                'retried': bool(_r2.get('retried')),
+                'stage': 'kill', 'save': _r1.get('data'), 'ark': _ak1, 'via': 'backend'}
     if not cfg.get('token'):
         return {'server': server, 'profileName': prof, 'ok': False,
                 'message': 'asa_token 未配置', 'ms': 0, 'retried': False, 'code': 'asa_no_token'}
@@ -5395,22 +5800,40 @@ def _srvctl_release(server, action):
         _SRVCTL_BUSY.pop((server, action), None)
 
 
-def _srvctl_run(user, servers, action, message):
-    """并发执行（max_workers=4）；results[] 顺序与 servers 一致。失败自动重试 1 轮。"""
+def _srvctl_run(user, servers, action, message, force=False, src=''):
+    """并发执行（max_workers=4）；results[] 顺序与 servers 一致。失败自动重试 1 轮。
+    v6179：force=True ⇒ 终止类动作跳过安全护栏（用户二次确认后放行）。
+    v6203：src 透传到审计日志（前端重试传 retry ⇒ 日志标 [重试]）。"""
     cfg = _srvctl_cfg()
+    if force:
+        cfg = dict(cfg); cfg['force'] = True
     results = [None] * len(servers)
-    # v6122：除 start（由 startq 驱动进度）外，先登记任务 → 全客户端共享
+    # v6179（用户口径修正）：「整合」指**每条任务内部**贯穿「存档 → 校验完整 → 终止」，
+    #   不是把多台合成一条 ⇒ 多选 N 台就建 N 条任务，各自独立进度 + 各自分步圆点。
     if action != 'start':
+        # v6122：除 start（由 startq 驱动进度）外，先登记任务 → 全客户端共享
         for _s in servers:
             try:
                 _utask_put('%s|%s' % (_s, action), _s, action, user,
-                           msg=u'已下发，等待回执…', pct=10, phase='run')
+                           msg=u'已下发，等待回执…', pct=10, phase='run',
+                           steps=(_savekill_steps_obj({}) if action == 'savekill' else None))
             except Exception:
                 pass
 
     def _job(idx, srv):
+        # v6179：savekill 把阶段进度写回**本台**任务（含分步圆点，复用自动重启 steps 机制）
+        _prog = None
+        if action == 'savekill':
+            def _prog(pct, msg, _s=srv):
+                try:
+                    _p = int(pct or 0)
+                    _utask_put('%s|%s' % (_s, action), _s, action, user,
+                               msg=_utask_clean_text(msg), pct=max(3, min(97, _p)), phase='run',
+                               steps=_savekill_steps_obj(_savekill_states_by_pct(_p)))
+                except Exception:
+                    pass
         try:
-            results[idx] = _srvctl_one(srv, action, message, cfg)
+            results[idx] = _srvctl_one(srv, action, message, cfg, _prog)
         except Exception as e:
             results[idx] = {'server': srv,
                             'profileName': (SERVER_THEMES.get(srv) or {}).get('name') or srv,
@@ -5426,33 +5849,46 @@ def _srvctl_run(user, servers, action, message):
             pass
     for r in results:
         if r:
-            _srvctl_log(user, r.get('server'), action, r.get('ok'), r.get('ms', 0), r.get('message', ''))
+            _srvctl_log(user, r.get('server'), action, r.get('ok'), r.get('ms', 0),
+                        r.get('message', ''), src=src)
             # v6122：收尾同步任务总线（start 由 startq 自己收尾）
             if action != 'start':
                 try:
                     _ok = bool(r.get('ok'))
+                    _extra = {}
+                    if action == 'savekill':
+                        # v6179：收尾把三步全置 ok；失败则把「存档」步标 fail
+                        if _ok:
+                            _extra['steps'] = _savekill_steps_obj(
+                                {'saveworld': 'ok', 'verify': 'ok', 'kill': 'ok'})
+                        else:
+                            _stx = _savekill_states_by_pct(0)
+                            _stx['saveworld'] = 'fail'
+                            _extra['steps'] = _savekill_steps_obj(_stx)
                     _utask_put('%s|%s' % (r.get('server'), action), r.get('server'), action, user,
                                msg=(r.get('message') or (u'完成' if _ok else u'失败'))[:150],
                                pct=100 if _ok else 0, phase='ok' if _ok else 'fail',
-                               err='' if _ok else (r.get('message') or u'失败'))
+                               err='' if _ok else (r.get('message') or u'失败'), **_extra)
                 except Exception:
                     pass
     return [r for r in results if r]
 
 
-def _srvctl_job_new(user, action, servers):
-    """长任务（destroy / fullbackup）异步 job。"""
+def _srvctl_job_new(user, action, servers, src=''):
+    """长任务（destroy / fullbackup）异步 job。
+    v6203：src 随 job 带入 _srvctl_run（否则 destroy 的审计永远拿不到来源）。"""
     jid = 'j%d_%d' % (int(time.time() * 1000), len(_SRVCTL_JOBS))
     with _SRVCTL_JOBS_LOCK:
         now = time.time()
         for k in [k for k, v in _SRVCTL_JOBS.items() if now - v.get('ts', 0) > _SRVCTL_JOB_TTL]:
             _SRVCTL_JOBS.pop(k, None)
         _SRVCTL_JOBS[jid] = {'ts': now, 'done': False, 'action': action,
-                             'servers': list(servers), 'user': user, 'results': []}
+                             'servers': list(servers), 'user': user, 'results': [],
+                             'src': (src or '')}
 
     def _run():
         try:
-            res = _srvctl_run(user, servers, action, None)
+            res = _srvctl_run(user, servers, action, None, src=src)
         except Exception as e:
             res = [{'server': s, 'profileName': (SERVER_THEMES.get(s) or {}).get('name') or s,
                     'ok': False, 'message': repr(e), 'ms': 0, 'retried': False} for s in servers]
@@ -5633,6 +6069,137 @@ def _srv_ark_quickcheck(server):
     return out
 
 
+def _srvctl_wait_ark_stable(server, since_ts, budget=120, quiet=20.0, poll=1.0,
+                            base_size=0, progress=None):
+    """v6184（用户口径「最重要的校验就是 ark」）：等主 .ark 真正写完。
+
+    v6007 前端 lbTaskPollSave() 的四条判据**整体搬进后端**（原来只在前端轮询里有效，
+    v6177/v6178 把 savekill 改成后端原子编排后前端不再轮询 ⇒ 四条全部失效）：
+      ① mtime 必须变（本轮确实写盘，不是旧档）
+      ② 之后 (size, mtime) 连续 quiet 秒完全不变（确认写完 —— mtime 在**开始写**时就变）
+      ③ PRAGMA quick_check == 'ok'（结构完整，能抓半截/损坏档）
+      ④ 新档 < 基线 x 0.95 -> thin=True（实测写出过比旧档小 19%~56% 的瘦档）
+    返回 {ok, waited, path, size, mtime, baseSize, thin, quiet, reason, detail}
+      reason: '' | ark_not_found | ark_not_written | ark_still_changing | ark_unreadable
+    """
+    t0 = time.time()
+    since = float(since_ts or t0)
+    try:
+        _lg = _srv_observe_log(server) or {}
+    except Exception:
+        _lg = {}
+    map_name = _lg.get('map') or ''
+    path = ''
+    sz = 0
+    mt = 0
+    changed = False
+    ark_ok = False
+    detail = ''
+    prev_sig = ''
+    last_change = t0
+    stable_for = 0.0
+    _last_pub = -1
+    while True:
+        now = time.time()
+        try:
+            ak = _srv_observe_ark(server, map_name) or {}
+        except Exception:
+            ak = {}
+        if ak.get('path'):
+            path = ak.get('path') or path
+        mt = int(ak.get('mtime') or 0)
+        sz = int(ak.get('size') or 0)
+        if mt and mt >= since - 2:
+            changed = True
+        sig = '%d|%d' % (sz, mt)
+        if prev_sig and sig == prev_sig:
+            stable_for = now - last_change
+        else:
+            last_change = now
+            stable_for = 0.0
+        prev_sig = sig
+        if changed and sz > 0 and stable_for >= quiet:
+            try:
+                ck = _srv_ark_quickcheck(server) or {}
+            except Exception as e:
+                ck = {'ok': False, 'detail': '%s: %s' % (type(e).__name__, e)}
+            detail = str(ck.get('detail') or '')
+            if ck.get('ok'):
+                ark_ok = True
+                break
+        if progress is not None:
+            try:
+                _w = int(now - t0)
+                if _w != _last_pub:
+                    _last_pub = _w
+                    progress(round(now - t0, 1), round(stable_for, 1), budget)
+            except Exception:
+                pass
+        if now - t0 >= budget:
+            break
+        time.sleep(poll)
+    _base = int(base_size or 0)
+    thin = bool(_base and sz and sz < int(_base * 0.95))
+    if not path:
+        reason = 'ark_not_found'
+    elif not changed:
+        reason = 'ark_not_written'
+    elif ark_ok:
+        reason = ''
+    elif stable_for < quiet:
+        reason = 'ark_still_changing'
+    else:
+        reason = 'ark_unreadable'
+    return {'ok': bool(ark_ok), 'waited': round(time.time() - t0, 1), 'path': path,
+            'size': sz, 'mtime': mt, 'baseSize': _base, 'thin': thin,
+            'quiet': round(stable_for, 1), 'reason': reason, 'detail': detail[:200]}
+
+
+def _srvctl_check_ark_after_dd(server, base_size=0):
+    """v6190（用户口径）：DinoData 稳定后的 .ark 快速校验（**不再等 20s**）。
+
+    依据（磁盘实测）：插件在 .ark 落盘稳定后 **14~36 秒**才开始导出 DinoData
+    （Gen +14s / Isl +30s / Sco +30s / Cen +33s / Rag +34s / Val +36s）。
+    所以「DinoData 已稳定」即等价于「.ark 早已写完」⇒ 只需一次
+    quick_check（0.2~0.4s）+ 瘦档判定，无需重复等待。
+
+    另：瘦档基线必须由调用方在 **SaveWorld 之前** 取（见 _ak_base0），
+    否则基线与当前值相同 ⇒ 瘦档判定恒不触发。"""
+    t0 = time.time()
+    try:
+        _lg = _srv_observe_log(server) or {}
+    except Exception:
+        _lg = {}
+    try:
+        ak = _srv_observe_ark(server, _lg.get('map') or '') or {}
+    except Exception:
+        ak = {}
+    path = ak.get('path') or ''
+    sz = int(ak.get('size') or 0)
+    mt = int(ak.get('mtime') or 0)
+    _base = int(base_size or 0)
+    thin = bool(_base and sz and sz < int(_base * 0.95))
+    if not path:
+        return {'ok': False, 'path': '', 'size': 0, 'mtime': 0, 'baseSize': _base,
+                'thin': False, 'waited': round(time.time() - t0, 1),
+                'reason': 'ark_not_found', 'detail': '', 'mode': 'after_dd'}
+    # v6198（用户口径）：**不再做 quick_check** —— 插件导出 DinoData 前已校验过 .ark 落盘完整性
+    #   （实测 .ark 稳定后 14~36 秒才导出），不必重复。此处只做**零成本**的瘦档比对，
+    #   用于抓住「结构能读但内容陈旧」（v6007 实测写出过比旧档小 19%~56% 的存档）。
+    if not path:
+        _why = 'ark_not_found'
+    elif sz <= 0:
+        _why = 'ark_empty'
+    elif thin:
+        _why = 'ark_thin'
+    else:
+        _why = ''
+    _ok = (_why == '')
+    return {'ok': _ok, 'path': path, 'size': sz, 'mtime': mt, 'baseSize': _base,
+            'thin': thin, 'waited': round(time.time() - t0, 1),
+            'reason': _why, 'detail': '', 'mode': 'size_only'}
+
+
 # ===== v6004（用户口径 2026-11-03）：多服启动队列 =====
 # 目标：方案 C（快速接棒）+ 硬约束「任何时刻处于 world_load~started 重压期的服 ≤ 2」
 #   · 放行闸门：相邻两台下发间隔 ≥ 8 秒（只防「瞬间连起 11 台」）
@@ -5733,8 +6300,12 @@ def _startq_view():
             act.append({'server': srv, 'pct': v.get('pct', 0), 'label': v.get('label', ''),
                         'el': int(now - float(v.get('t0') or now)),
                         'heavy': bool(v.get('heavy')), 'msg': v.get('msg', '')})
+        # v6186（用户口径）：「已完成」必须是**启动成功**的台数 ——
+        #   原 doneCount=len(done) 把 ok=False 也算完成，导致「已完成 3/3」但实际只起了 1 台。
+        _okcnt = sum(1 for x in q['done'] if x.get('ok'))
         return {'running': bool(q['running']), 'user': q['user'], 'ts': int(q['ts'] or 0),
                 'total': q.get('total', 0), 'doneCount': len(q['done']),
+                'okCount': _okcnt, 'failCount': len(q['done']) - _okcnt,
                 'done': list(q['done']), 'active': act,
                 'activeCount': len(act), 'heavyCount': _startq_heavy_count(),
                 'queued': list(q['queue']), 'queuedCount': len(q['queue']),
@@ -5754,12 +6325,45 @@ def _startq_worker():
             if not _SRVCTL_STARTQ['running']:
                 return
             srv_list = list(_SRVCTL_STARTQ['active'].keys())
+        # ---- v6186（用户口径「排队能在进度条上显示序号」）：刷新排队位次 ----
+        #   只在位次变化时写，避免每 tick 写盘
+        try:
+            with _SRVCTL_STARTQ_LOCK:
+                _qlist = list(_SRVCTL_STARTQ['queue'])
+                _quser = _SRVCTL_STARTQ.get('user') or ''
+            if _qlist:
+                _posmap = {}
+                try:
+                    for _t in _UTASK['items']:
+                        _k = str(_t.get('key') or '')
+                        if _k.endswith('|start'):
+                            _posmap[_k[:-6]] = (_t.get('meta') or {}).get('qpos')
+                except Exception:
+                    _posmap = {}
+                for _i, _s in enumerate(_qlist):
+                    _pos = _i + 1
+                    if _posmap.get(_s) == _pos:
+                        continue
+                    try:
+                        # v6194（用户口径）：排队位次已在右侧 `#N` 显示，
+                        #   副文不再重复「第 N 位（前面 N-1 台）」。
+                        _utask_put('%s|start' % _s, _s, 'start', _quser,
+                                   msg=u'排队中…', pct=0, phase='queue',
+                                   meta={'qpos': _pos})
+                    except Exception:
+                        pass
+        except Exception:
+            pass
         # ---- 采样各服实际阶段（读日志，放锁外）----
         try:
             _psnap = _srvctl_proc_snapshot() or {}
         except Exception:
             _psnap = {}
         for srv in srv_list:
+            # v6187：刚占位（sending=True）尚未真正拉起 ⇒ 跳过采样，避免读到上一轮旧日志
+            with _SRVCTL_STARTQ_LOCK:
+                if bool((_SRVCTL_STARTQ['active'].get(srv) or {}).get('sending')):
+                    continue
             try:
                 lg = _srv_observe_log(srv) or {}
             except Exception:
@@ -5834,7 +6438,10 @@ def _startq_worker():
                     v.update({'ok': False, 'phase': 'fail', 'heavy': False,
                               'err': u'启动超时（%ds）' % SRVCTL_STARTQ_ITEM_TIMEOUT})
                 else:
-                    v['heavy'] = True
+                    # v6187（用户口径）：名额在 **started** 即释放（世界已加载完、负载下降），
+                    #   但「完成」判定仍按 advertising（玩家真能搜到才算完成）。
+                    #   原来无条件置 True ⇒ started 后又被重置回占位，P 方案会失效。
+                    v['heavy'] = not bool(marks.get('started'))
         # ---- 收割 + 决定是否下发下一台 ----
         srv_next = ''
         with _SRVCTL_STARTQ_LOCK:
@@ -5847,6 +6454,19 @@ def _startq_worker():
                         'pct': 100 if v.get('ok') else v.get('pct', 0),
                         'msg': v.get('msg', ''), 'err': v.get('err', ''),
                         't_end': int(now)})
+                    # v6193（用户实测「队列完全不对」）：**失败必须同步任务总线** ——
+                    #   原来只有成功（advertising）分支写过 _utask_put，
+                    #   5 个失败分支（进程退出 / 未见新进程 / 未启动成功 / 重压超时 / 单台超时）
+                    #   全都只改内存里的 v ⇒ 任务条永远停在最后的 run pct（如 8%），
+                    #   而队列概览已判失败 ⇒ 「3 条还在跑 8%」+「已完成 1/4（失败 3）」自相矛盾。
+                    if not v.get('ok'):
+                        try:
+                            _utask_put('%s|start' % srv, srv, 'start',
+                                       v.get('user') or 'srvctl',
+                                       msg=u'启动失败', pct=0, phase='fail',
+                                       err=str(v.get('err') or u'启动失败')[:300])
+                        except Exception:
+                            pass
             heavy = _startq_heavy_count()
             if (heavy < SRVCTL_STARTQ_HEAVY_MAX and _SRVCTL_STARTQ['queue']
                     and (now - float(_SRVCTL_STARTQ.get('lastSent') or 0)) >= SRVCTL_STARTQ_MIN_GAP):
@@ -5857,10 +6477,47 @@ def _startq_worker():
                 return
         if not srv_next:
             continue
+        # ---- v6187：**出队即占名额**（锁内原子）——
+        #   原实现「出队 → _srvctl_one（5~10s）→ 才写入 active」，空窗期内
+        #   _startq_heavy_count() 看不到这台 ⇒ 若存在第二个 worker，会再放行一台。
+        #   这里先占位（sending=True），真正下发完成后再刷新字段。
+        with _SRVCTL_STARTQ_LOCK:
+            # v6202：**优先取该服自己的发起人** —— 队列级 user 只在「首次建队」时写，
+            #   人工批次与自动重启混队时，worker 原先把后来者记成建队者 ⇒ 来源误判。
+            _u0 = ((_SRVCTL_STARTQ.get('quser') or {}).pop(srv_next, '')
+                   or _SRVCTL_STARTQ.get('user') or '')
+            _s0 = (_SRVCTL_STARTQ.get('qsrc') or {}).pop(srv_next, '')   # v6203：该服来源
+            _SRVCTL_STARTQ['active'][srv_next] = {
+                't0': now, 'baseFirst': '', 'heavy': True, 't_heavy': now,
+                'seenProc': False, 'pct': 0, 'label': u'启动游戏进程',
+                'phase': 'run', 'msg': u'已下发，等待进程…', 'err': '',
+                'user': _u0, 'sending': True}
         # ---- 下发（锁外，ASAM 调用可能耗时数秒）----
         if not _srvctl_acquire(srv_next, 'start'):
             with _SRVCTL_STARTQ_LOCK:
+                _SRVCTL_STARTQ['active'].pop(srv_next, None)  # v6187：撞车 ⇒ 先撤销占位再放回队首
                 _SRVCTL_STARTQ['queue'].insert(0, srv_next)   # 撞车 -> 放回队首稍后再试
+                # v6202：发起人已在上方 pop 出来，必须**放回**，否则重新出队时丢失
+                if _u0:
+                    _qq = _SRVCTL_STARTQ.get('quser')
+                    if not isinstance(_qq, dict):
+                        _qq = {}
+                        _SRVCTL_STARTQ['quser'] = _qq
+                    _qq[srv_next] = _u0
+                if _s0:
+                    _qsg = _SRVCTL_STARTQ.get('qsrc')
+                    if not isinstance(_qsg, dict):
+                        _qsg = {}
+                        _SRVCTL_STARTQ['qsrc'] = _qsg
+                    _qsg[srv_next] = _s0
+                _quser0 = _u0 or _SRVCTL_STARTQ.get('user') or ''
+            # v6186：放回队首**必须归零任务** —— 否则 pct 保留上一轮的值
+            #   （如 cfcore=8），前端 queue 态仍按 pct 画进度条 ⇒ 「排队中却显示 8%」
+            try:
+                _utask_put('%s|start' % srv_next, srv_next, 'start', _quser0,
+                           msg=u'排队中…', pct=0, phase='queue', meta={'qpos': 1})
+            except Exception:
+                pass
             continue
         try:
             base_first = str((_srv_observe_log(srv_next) or {}).get('firstLineAt') or '')
@@ -5871,43 +6528,91 @@ def _startq_worker():
         except Exception as e:
             r = {'ok': False, 'message': repr(e)}
         with _SRVCTL_STARTQ_LOCK:
-            u0 = _SRVCTL_STARTQ.get('user') or ''
+            # v6202：沿用**占位时已确定**的发起人，别被队列级 user 覆盖（混队来源误判）
+            u0 = ((_SRVCTL_STARTQ['active'].get(srv_next) or {}).get('user')
+                  or _SRVCTL_STARTQ.get('user') or '')
             if r.get('ok'):
-                _SRVCTL_STARTQ['active'][srv_next] = {
-                    't0': now, 'baseFirst': base_first,
-                    # v6006：**下发即占槽位** —— 原实现等 world_load 日志出现才算重压，
-                    #   而该日志约 113s 才打印 ⇒ 前 113s 槽位恒空，8s 间隔把 11 台全推下去压垮机器
-                    'heavy': True, 't_heavy': now, 'seenProc': False,
-                    'pct': 2, 'label': u'启动游戏进程', 'phase': 'run',
-                    'msg': u'已下发，等待进程…', 'err': ''}
+                # v6187：占位记录已在出队时写入 ⇒ 这里**原地刷新**（不重建，保留 t0 含下发耗时）
+                _v0 = _SRVCTL_STARTQ['active'].get(srv_next)
+                if not isinstance(_v0, dict):
+                    _v0 = {}
+                    _SRVCTL_STARTQ['active'][srv_next] = _v0
+                _v0.update({'t0': now, 'baseFirst': base_first,
+                            'heavy': True, 't_heavy': now, 'seenProc': False,
+                            'pct': 2, 'label': u'启动游戏进程', 'phase': 'run',
+                            'msg': u'已下发，等待进程…', 'err': '',
+                            'user': u0, 'sending': False})
             else:
+                _SRVCTL_STARTQ['active'].pop(srv_next, None)   # v6187：下发失败 ⇒ 撤销占位
                 _SRVCTL_STARTQ['done'].append({
                     'server': srv_next, 'ok': False, 'pct': 0, 'msg': '',
                     'err': str(r.get('message') or 'start failed'), 't_end': int(now)})
         _srvctl_release(srv_next, 'start')
         try:
             _srvctl_log(u0, srv_next, 'start', bool(r.get('ok')), r.get('ms', 0),
-                        ('queued-sent' if r.get('ok') else str(r.get('message') or '')))
+                        ('queued-sent' if r.get('ok') else str(r.get('message') or '')),
+                        src=(_s0 or ''))
         except Exception:
             pass
 
 
-def _srvctl_startq_new(user, servers):
-    """建启动队列并起 worker；队列已在跑时把新服追加到队尾（自动去重）。"""
+def _srvctl_startq_new(user, servers, src=''):
+    """建启动队列并起 worker；队列已在跑时把新服追加到队尾（自动去重）。
+
+    v6182（用户口径「已经在启动的服，后端没记录，怎么避免重复启动」）：
+      内存队列（queue/active/done）在后端重启后会清空，此时对「正在启动」的服再点启动
+      就会重复下发 start。故增加**进程判据**：ArkAscendedServer.exe 已存在 ⇒ 直接跳过。
+      该判据来自机器上的真实进程，与内存状态无关，重启不失效。"""
     global _SRVCTL_STARTQ_THREAD
+    _skip_proc = {}
+    _keep = []
+    for _s in servers:
+        try:
+            _ts = _cfg_proc_start(_s, force=True)
+        except Exception:
+            _ts = None
+        if _ts:
+            _skip_proc[_s] = u'进程已存在（启动于 %s）' % time.strftime('%H:%M:%S', time.localtime(_ts))
+        else:
+            _keep.append(_s)
+    if _skip_proc:
+        try:
+            _srvctl_log('(system)', '/'.join(_skip_proc.keys()), 'start', True, 0,
+                        (u'start 跳过：' + u'；'.join('%s(%s)' % (k, v) for k, v in _skip_proc.items()))[:250])
+        except Exception:
+            pass
+    servers = _keep
+    if not servers:
+        return _startq_view()
     with _SRVCTL_STARTQ_LOCK:
         q = _SRVCTL_STARTQ
         if not q['running']:
             q.update({'running': True, 'user': user, 'ts': time.time(), 'total': 0,
-                      'queue': [], 'active': {}, 'done': [], 'lastSent': 0.0})
+                      'queue': [], 'active': {}, 'done': [], 'lastSent': 0.0,
+                      'quser': {}, 'qsrc': {}})   # v6202 每台发起人 / v6203 每台来源
         # v6014：done 里只有「成功」的服算占用（防重复启动）；
         #   「失败」的服不再占用 —— 否则任务条上的「重试」会被去重掉，根本不会重新下发。
+        # v6195（用户口径）：**去掉「 done(ok) 也算 busy」** ——
+        #   v6182 已用**真实进程**做幂等判据（进程存在即跳过），这里再按历史成功记录挡一次，
+        #   会导致「队列运行期间回档/自动重启要起服」被静默跳过
+        #   （回档只 stop 不 start，而 done 里仍留着旧的 ok 记录）。
         busy = set(q['queue']) | set(q['active'].keys())
-        busy |= set(x.get('server') for x in q['done'] if x.get('ok'))
         add = [s for s in servers if s not in busy]
         if add:
             q['done'] = [x for x in q['done'] if x.get('server') not in add]
         q['queue'].extend(add)
+        # v6202：**每台记自己的发起人** —— 混队（人工 + 自动重启）时各自准确
+        _qu = q.get('quser')
+        if not isinstance(_qu, dict):
+            _qu = {}
+            q['quser'] = _qu
+        _qs = q.get('qsrc')
+        if not isinstance(_qs, dict):
+            _qs = {}
+            q['qsrc'] = _qs
+        for _s in add:
+            _qu[_s] = user
+            _qs[_s] = src or ''
         # v6122：入队即登记任务（共享进度）
         for _s in add:
             try:
@@ -5916,10 +6621,12 @@ def _srvctl_startq_new(user, servers):
             except Exception:
                 pass
         q['total'] = len(q['queue']) + len(q['active']) + len(q['done'])
-        need_thread = (_SRVCTL_STARTQ_THREAD is None) or (not _SRVCTL_STARTQ_THREAD.is_alive())
-    if need_thread:
-        _SRVCTL_STARTQ_THREAD = threading.Thread(target=_startq_worker, daemon=True)
-        _SRVCTL_STARTQ_THREAD.start()
+        # v6187：判断 + 赋值 + start **全部在锁内** ——
+        #   原实现 if need_thread 在锁外，两个并发请求可能各起一个 worker（双 worker ⇒ 同时下发）。
+        _need = ((_SRVCTL_STARTQ_THREAD is None) or (not _SRVCTL_STARTQ_THREAD.is_alive()))
+        if _need:
+            _SRVCTL_STARTQ_THREAD = threading.Thread(target=_startq_worker, daemon=True)
+            _SRVCTL_STARTQ_THREAD.start()
     return _startq_view()
 
 
@@ -6396,6 +7103,11 @@ def save_world(server):
         mem_status('sensor.save_world_status', 'error', r)
         return r
     try:
+        # v6198（用户口径「统一」）：瘦档基线必须在 SaveWorld **之前** 取
+        try:
+            _ak_base0 = int(((_srv_observe_ark(server, (_srv_observe_log(server) or {}).get('map') or '') or {}).get('size')) or 0)
+        except Exception:
+            _ak_base0 = 0
         _t_save = time.time()
         raw = rcon_command(RCON_HOST, port, RCON_PASSWORD, CMD_SAVE_WORLD, timeout=30)
     except Exception as e:
@@ -6409,12 +7121,26 @@ def save_world(server):
     # v6120：补「DinoData 全部导出文件已落盘且稳定」确认（原实现只有 RCON 文本，
     #   实际文件是插件在存档事件后异步导出的；不等就会读到上一轮/半截文件）
     _dw = {}
+    _ak = {}
     if ok:
         try:
             _dw = _dinodata_wait_stable(server, since_ts=_t_save, budget=90)
         except Exception:
             _dw = {}
-    r = {'ok': ok, 'server': server, 'saved': ok, 'reply': text[:80], 'data': _dw, 'ts': now}
+        # v6198（用户口径「统一」）：与「保存世界 / 存档后终止」**同一套** .ark 瘦档判定
+        if _dw.get('ok'):
+            try:
+                _ak = _srvctl_check_ark_after_dd(server, base_size=_ak_base0)
+            except Exception as e:
+                _ak = {'ok': False, 'thin': False, 'reason': 'ark_error', 'detail': repr(e)[:160]}
+        else:
+            _ak = {'ok': False, 'thin': False, 'reason': 'skipped_dd_failed', 'path': '', 'size': 0,
+                   'baseSize': _ak_base0, 'waited': 0, 'mtime': 0, 'detail': '', 'mode': 'skipped'}
+    # 顶层 ok 保持「RCON 回执」语义不变（前端 / HA sensor 依赖）；
+    # 新增 okStrict（RCON & DinoData & .ark）供需要严格判定的一方使用。
+    _ok_strict = bool(ok) and bool(_dw.get('ok')) and bool(_ak.get('ok'))
+    r = {'ok': ok, 'server': server, 'saved': ok, 'reply': text[:80],
+         'data': _dw, 'ark': _ak, 'okStrict': _ok_strict, 'ts': now}
     write_status_file('save_world_status.json', 'ok' if ok else 'error', r)
     write_status_file('save_world_status_%s.json' % server, 'ok' if ok else 'error', r)
     mem_status('sensor.save_world_status', 'ok' if ok else 'error', r)
@@ -8038,6 +8764,7 @@ except Exception:
 IPWATCH_STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'public_ip_state.json')
 IPWATCH_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ipwatch.log')
 _IPWATCH = {'domain': _ipwatch_domain(), 'domainIp': '', 'lastIp': '', 'changedAt': '',
+            'initAt': '',   # v6161：首次建立监视的时刻（与 changedAt 严格区分，后者只表示「真发生过 IP 变化」）
             'mode': 'notify', 'checks': 0, 'errs': 0, 'lastCheckAt': '', 'lastErr': '',
             'history': []}
 _IPWATCH_LOCK = threading.Lock()
@@ -8123,9 +8850,19 @@ def _ipwatch_loop():
                 d = json.load(f) or {}
             with _IPWATCH_LOCK:
                 _IPWATCH['lastIp'] = str(d.get('lastIp') or '')
-                _IPWATCH['changedAt'] = str(d.get('changedAt') or '')
                 _IPWATCH['history'] = list(d.get('history') or [])[-20:]
                 _IPWATCH['mode'] = str(d.get('mode') or 'notify')
+                _IPWATCH['initAt'] = str(d.get('initAt') or '')
+                # v6161：兼容清洗 —— 旧版把「初始化时刻」也写进 changedAt。只有当历史里确实存在
+                #   event=changed 记录时，才承认 changedAt；否则视为「从未发生过 IP 变化」。
+                _chg = [x for x in _IPWATCH['history']
+                        if isinstance(x, dict) and x.get('event') == 'changed']
+                _IPWATCH['changedAt'] = (str(_chg[-1].get('at') or '') if _chg else '')
+                if not _IPWATCH['initAt']:
+                    _ini = [x for x in _IPWATCH['history']
+                            if isinstance(x, dict) and x.get('event') == 'init']
+                    if _ini:
+                        _IPWATCH['initAt'] = str(_ini[-1].get('at') or '')
     except Exception:
         _sexc('ipwatch_load')
     _ipwatch_log('ipwatch started: domain=%s interval=%ss lastIp=%s'
@@ -8154,7 +8891,9 @@ def _ipwatch_loop():
         elif not cur:
             with _IPWATCH_LOCK:
                 _IPWATCH['lastIp'] = ip
-                _IPWATCH['changedAt'] = now_s
+                # v6161：初始化**不再**写 changedAt —— 否则「ipwatch 首次启动时刻」会被前端当成
+                #   「IP 变化时刻」，导致所有服被误标 IP 失效（v6160 实测 11 台全亮）。
+                _IPWATCH['initAt'] = now_s
                 _IPWATCH['history'].append({'at': now_s, 'ip': ip, 'event': 'init'})
                 _IPWATCH['history'] = _IPWATCH['history'][-20:]
             _ipwatch_save()
@@ -8191,12 +8930,67 @@ RESTART_ANN_WINDOW = 60        # 每轮只公告前 1 分钟
 RESTART_ANN_OFFSETS = (0, 30)  # 00:00 中文，00:30 英文
 RESTART_EMPTY_SAMPLES = 3
 RESTART_EMPTY_SPAN = 180
-RESTART_LOG_QUIET = 180
+# v6177（用户 2026-11-06 决定）：这些服**不做在线人数判断**，公告后直接进入空置确认。
+#   原因：Bob（俱乐部）是独立区域（不通过集群传送进入），ASA 侧在线列表不刷新（游戏侧已知 BUG），
+#   永远读到「有人在线」⇒ 空置判断永不通过 ⇒ 自动重启永久卡在 announce 阶段。
+RESTART_SKIP_EMPTY = {'Bob'}
+
+# v6179（用户口径）：savekill 任务的分步圆点 —— 复用自动重启 steps 机制（{key,label,state}），
+#   前端 lbTaskStepsHtml() 直接渲染，不新增任何前端渲染代码。
+SAVEKILL_STEPS = (('saveworld', u'存档'), ('verify', u'校验完整'), ('kill', u'终止'))
+
+
+def _savekill_steps_obj(states):
+    _s = states or {}
+    return [{'key': k, 'label': lab, 'state': _s.get(k, 'wait')} for k, lab in SAVEKILL_STEPS]
+
+
+def _savekill_states_by_pct(pct):
+    """按进度阈值推断三步状态（与自动重启一致：wait/run/ok）"""
+    p = int(pct or 0)
+    if p >= 100:
+        return {'saveworld': 'ok', 'verify': 'ok', 'kill': 'ok'}
+    if p >= 90:
+        return {'saveworld': 'ok', 'verify': 'ok', 'kill': 'run'}
+    if p >= 58:
+        return {'saveworld': 'ok', 'verify': 'run'}
+    if p >= 10:
+        return {'saveworld': 'run'}
+    return {}
 RESTART_CLUSTER_QUIET = 180
 RESTART_MAX_ATTEMPTS = 2
+# v6164（计划 §16 第 6~7 项）
+RESTART_START_COOLDOWN = 600        # C7：同一批编排 10 分钟内不重复启动（只更新公告）；手动演练不拦
+# v6200（A+C，用户口径）：换 IP 后玩家会瞬间全掉线，但「掉线」≠「走光」。
+#   若在掉线空档里就判定空置通过 ⇒ 玩家随后陆续重连时正撞上停服/起服。
+#   A：宽限期内不计空置、不发「即将重启」公告（玩家还看不到）。
+#   C：宽限期内若从未见到玩家 ⇒ 宽限结束再确认 PROBE 秒仍无人
+#      ⇒ 判定「玩家进不来」，直接按空置推进；见到过玩家 ⇒ 走正常等空置。
+RESTART_IP_GRACE = 300              # A：换 IP 后宽限期（秒）
+RESTART_IP_GRACE_PROBE = 120        # C：宽限结束后「无回归」确认窗口（秒）
+RESTART_TOTAL_TIMEOUT = 21600       # C8 配套：整批编排最长 6 小时，超时自动收尾（防「某台一直有人在线」把 running 永久卡死，进而 skip 掉真实的 IP 变化重启）
+# v6152（计划 §16 第 1~3 项）：真执行链路的超时与判据
+RESTART_SAVEKILL_TIMEOUT = 300     # savekill 单步超时（秒）
+# v6173（用户反馈 2026-11-06「中文公告立刻被英文盖住」）：
+#   游戏广播提示条只保留最新一条 ⇒ 中英连发必然互盖；
+#   中文立即发，英文延后这么多秒再发。
+RESTART_ANN_GAP = 10               # 中→英 公告间隔（秒）
+RESTART_SAVEWORLD_TIMEOUT = 180    # v6157（C5）：saveworld + DinoData 落盘屏障超时（秒）
+RESTART_STARTQ_TIMEOUT = 1200      # 起服单步超时（秒）
+RESTART_VERIFY_TIMEOUT = 600       # 起服后等 advertising 的超时（秒）
+RESTART_VERIFY_NEEDLE = 'advertising for join'
 RESTART_SAMPLE_PER_TICK = 3          # 每 tick 最多采 3 台在线人数（避免 11 台 RCON 打满）
-RESTART_LOG_KEYWORDS = ('Join succeeded', 'joined this ARK', 'disconnected', 'transfer',
-                        'left this ARK', 'joined cluster')
+# v6201（用户口径 2026-11-06）：「公告里最好给出预估安全回到服务器的时间（动态）」
+#   各步骤耗时取自实测：SaveWorld+DinoData 落盘 12~32s、停服 <30s、起服 ~120s、verify ~30s。
+#   每次公告按该服**当前 phase** 重算一次 ⇒ 玩家看到的剩余时间会随时间递减（动态）。
+RESTART_ETA_SAVEWORLD = 30          # 存档 + DinoData 落盘屏障（实测 12~32s）
+RESTART_ETA_SAVEKILL = 30           # 停服（进程终止）
+RESTART_ETA_STARTQ = 120            # 起服到可连接
+RESTART_ETA_VERIFY = 30             # 起服后等 advertising for join
+RESTART_ETA_TAIL = (RESTART_ETA_SAVEWORLD + RESTART_ETA_SAVEKILL
+                    + RESTART_ETA_STARTQ + RESTART_ETA_VERIFY)   # 空置通过后仍需 ≈210s
+# v6197：`RESTART_LOG_KEYWORDS` 已随 L2（日志关键字版）删除 —— ASA 实测零命中，从未生效。
+# v6204：`RESTART_LOG_QUIET` 常量同批删除（0 引用）。
 RESTART_LOG_SCAN_LINES = 400
 # L3：集群目录（分号分隔），**留空 = 不启用 L3**
 RESTART_CLUSTER_DIRS = [x.strip() for x in (os.environ.get('IPWATCH_CLUSTER_DIRS') or '').split(';') if x.strip()]
@@ -8220,12 +9014,14 @@ def _restart_cluster_dirs():
             out = [d]
     return out
 RESTART_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'restart.log')
+RESTART_LOG_MAX = 2 * 1024 * 1024        # v6204：日志超过 2MB 转 .1（原无上限）
 RESTART_STEPS = (('ann', u'公告'), ('empty', u'等待空置'),
-                 ('quiet', u'静默校验'), ('savekill', u'存档停服'),
+                 ('quiet', u'静默校验'), ('saveworld', u'存档屏障'), ('savekill', u'存档停服'),
                  ('startq', u'起服'), ('verify', u'校验'))
 _RESTART_LOCK = threading.Lock()
-_RESTART = {'running': False, 'reason': '', 't0': 0, 'dry': RESTART_DRY,
-            'servers': {}, 'done': [], 'current': ''}
+_RESTART = {'running': False, 'pendingReason': '', 'reason': '', 't0': 0, 'dry': RESTART_DRY,
+            'servers': {}, 'done': [], 'current': '',
+            'lastStartAt': 0}   # v6164（C7）：上次真正启动编排的时刻，用于 10 分钟冷却
 
 
 def _restart_enable_now():
@@ -8247,6 +9043,16 @@ def _restart_dry_now():
         return bool(v)
     except Exception:
         return RESTART_DRY
+
+
+# v6217b：进程启动时以配置为准同步快照 —— _RESTART['dry'] 原先取模块常量 RESTART_DRY
+#   （环境变量 IPWATCH_RESTART_DRY 未设时为 True），所以配置里 dry=false 时，
+#   /api/ipwatch 的 restart.dry 与任务条 meta.dry 仍报 true；真跑时前端显示「演练」会误导验收。
+#   实际执行以 _restart_start 内的 _restart_dry_now() 为准，此处只修显示。
+try:
+    _RESTART['dry'] = bool(_restart_dry_now())
+except Exception:
+    pass
 
 
 # ===== v6135：服务器级独占锁 =====
@@ -8317,10 +9123,27 @@ def _srv_lock_snapshot():
         return dict((s, dict(v)) for s, v in _SRV_LOCK.items())
 
 
+_RESTART_LOG_LOCK = threading.Lock()
+
+
 def _restart_log(line):
+    """v6204：① 加锁（tick 主线程 + 执行器线程并发 append）
+              ② 按大小轮转（RESTART_LOG_MAX，转成 .1）—— 原来无上限，长期无限增长。"""
     try:
-        with open(RESTART_LOG, 'a', encoding='utf-8') as f:
-            f.write('[%s] %s\n' % (time.strftime('%Y-%m-%d %H:%M:%S'), line))
+        with _RESTART_LOG_LOCK:
+            try:
+                if os.path.getsize(RESTART_LOG) > RESTART_LOG_MAX:
+                    _bak = RESTART_LOG + '.1'
+                    try:
+                        if os.path.isfile(_bak):
+                            os.remove(_bak)
+                    except Exception:
+                        pass
+                    os.replace(RESTART_LOG, _bak)
+            except Exception:
+                pass
+            with open(RESTART_LOG, 'a', encoding='utf-8') as f:
+                f.write('[%s] %s\n' % (time.strftime('%Y-%m-%d %H:%M:%S'), line))
     except Exception:
         pass
 
@@ -8338,8 +9161,18 @@ def _restart_steps_obj(st):
 
 
 def _restart_push(srv):
-    """把单台重启状态镜像到统一任务总线（action=restart / operator=ipwatch ⇒ 「自动」）"""
+    """把单台重启状态镜像到统一任务总线（action=restart / operator=ipwatch ⇒ 「自动」）
+
+    v6204（复核 P1-5）：**状态指纹去重** —— 原来每台每 tick 无条件写，
+      11 台 x 4 次/分钟 = 44 次/分钟 频繁落盘 tasks_state.json。
+      指纹含 phase/pct/msg/attempts/err/steps，任一变化才写（宽限期倒计时在 msg 里，仍会实时更新）。"""
     st = (_RESTART.get('servers') or {}).get(srv) or {}
+    _sig = '%s|%s|%s|%s|%s|%s' % (
+        st.get('phase'), st.get('pct'), st.get('msg'), st.get('attempts'),
+        st.get('err'), u','.join(str((st.get('steps') or {}).get(_k, '')) for _k, _ in RESTART_STEPS))
+    if st.get('_pushSig') == _sig:
+        return
+    st['_pushSig'] = _sig
     ph = str(st.get('phase') or 'queue')
     phase = 'ok' if ph == 'done' else ('fail' if ph == 'fail' else 'run')
     _utask_put('restart|%s' % srv, srv, 'restart', 'ipwatch',
@@ -8351,36 +9184,156 @@ def _restart_push(srv):
                      'reason': _RESTART.get('reason') or ''})
 
 
+# v6171（计划 §16 第 8 项验收）：英文公告需用英文地图名
+#   （原先 _restart_targets() 返回中文名，直接拼进英文句 ⇒ Transfer targets: 孤岛 / 焦土）
+SRV_EN = {'Isl': 'The Island', 'Sco': 'Scorched Earth', 'Cen': 'The Center',
+          'Abe': 'Aberration', 'Ext': 'Extinction', 'Ast': 'Astraeos',
+          'Rag': 'Ragnarok', 'Val': 'Valguero', 'Bob': 'Club ARK',
+          'Los': 'Lost Colony', 'Gen': 'Genesis'}
+
+
 def _restart_targets():
-    return [_restart_cn(x) for x in (_RESTART.get('done') or [])]
+    """已重启完成的服务器 key 列表（v6171：原返回中文名，改为 key 以便按语言取名）"""
+    return list(_RESTART.get('done') or [])
 
 
-def _restart_ann_text(lang, players, targets):
-    tgt = u' / '.join(targets) if targets else ''
-    if lang == 'cn':
-        s = (u'【网络切换维护】检测到公网 IP 变动，'
-             u'本服将在「无人在线时」自动重启。当前在线 %d 人。' % players)
-        s += ((u'可传送至（已完成重启）：' + tgt) if targets
-              else u'暂无已重启的服务器，建议先下线等待，重启完成后即刻恢复。')
+def _restart_ann_names(lang, keys, limit=3):
+    """目标服名串：最多列 limit 台，余下折叠成「等 N 台」/ 「+N more」
+       —— 200 字节上限下 11 台全量中文名会超限（实测 274 字节）"""
+    ks = list(keys or [])
+    out = []
+    for k in ks[:limit]:
+        out.append(SRV_EN.get(k, k) if lang == 'en' else _restart_cn(k))
+    s = u' / '.join(out)
+    if len(ks) > limit:
+        s += (u' +%d more' % (len(ks) - limit)) if lang == 'en' else (u' 等 %d 台' % len(ks))
+    return s
+
+
+def _restart_eta_sec(srv):
+    """v6201（用户口径）：预估「该服重新可进」还需多少秒 —— 让公告能说「约 X 分钟后可回」。
+
+    按该服**各自**的 phase 独立计算（11 台并行推进，进度各不相同）。
+    返回 int 秒数；返回 None = 无法预估（已失败），此时公告不写时间。
+
+    | phase    | 剩余构成                                            |
+    |----------|-----------------------------------------------------|
+    | announce | 宽限期剩余 / 空置剩余 / 满额 180s，再 + 尾部 210s    |
+    | ready    | 尾部 210s（空置+静默已通过，即将存档停服）           |
+    | savekill | 停服 30 + 起服 120 + 校验 30 = 180s                  |
+    | startq   | 起服 120 + 校验 30 = 150s                            |
+    | verify   | 30s                                                 |
+    | done     | 0（已可进）                                          |
+
+    ⚠ 宽限期内按「之后仍满额等空置」保守估 —— 若玩家始终不回归会自动跳过空置（v6200 C 分支），
+      实际比预估更快，玩家看到的是**上界**，不会产生「说好了却还没好」的抱怨。"""
+    st = (_RESTART.get('servers') or {}).get(srv) or {}
+    ph = str(st.get('phase') or u'')
+    now = time.time()
+    if ph == 'done':
+        return 0
+    if ph == 'fail':
+        return None
+    if ph == 'verify':
+        return RESTART_ETA_VERIFY
+    if ph == 'startq':
+        return RESTART_ETA_STARTQ + RESTART_ETA_VERIFY
+    if ph == 'savekill':
+        return RESTART_ETA_SAVEKILL + RESTART_ETA_STARTQ + RESTART_ETA_VERIFY
+    # ---- announce / ready：还要先过「空置」这道关 ----
+    _wait = float(RESTART_EMPTY_SPAN)
+    if ph == 'ready':
+        _wait = 0.0
     else:
-        s = (u'[Maintenance] Public IP changed. This server will auto-restart once empty. '
-             u'Players online: %d. ' % players)
-        s += ((u'Transfer targets (already restarted): ' + tgt) if targets
-              else u'No restarted target available yet - please log off and wait; we will be back shortly.')
+        gu = float(st.get('graceUntil') or 0)
+        if gu and now < gu:
+            _wait = (gu - now) + RESTART_EMPTY_SPAN      # v6200 A：宽限期内保守估满额空置
+        else:
+            es = float(st.get('firstEmptyTs') or 0)
+            if es:
+                _wait = max(0.0, RESTART_EMPTY_SPAN - (now - es))
+    return int(_wait) + RESTART_ETA_TAIL
+
+
+def _restart_ann_text(lang, players, targets, eta=None):
+    """v6175（用户 2026-11-06「言简意赚，扫一眼就能了解」）：
+       按「发生什么 → 会怎样 → 你要做什么」三段式重写，删掉客套话。
+       旧版：中文 65 字 / 英文 143 字符；新版：约 28 字 / 70 字符。
+       v6201（用户口径）：插入**动态** ETA「预计约 X 分钟后可重新进入」（粗粒度取整到分钟）。
+         eta=None ⇒ 不写时间（phase=fail 时）；eta 由 _restart_eta_sec(srv) 每次公告重算。"""
+    tg = _restart_ann_names(lang, targets)
+    _m = 0
+    if eta is not None:
+        try:
+            # 四舍五入到分钟（+30s 再整除）；**不能用 round()** —— 它是银行家舍入，
+            #   round(150/60)=round(2.5)=2 ⇒ 150s 会报「约 2 分钟」，偏差明显。
+            _m = int((float(eta) + 30.0) // 60.0)
+        except Exception:
+            _m = 0
+        if _m < 1:
+            _m = 1                      # 已进入 verify 等尾段 ⇒ 至少报 1 分钟，不报 0
+    _ba_cn = (u'预计约 %d 分钟后可重新进入。' % _m) if _m else u''
+    _ba_en = (u'Back in ~%d min. ' % _m) if _m else u''
+    if lang == 'cn':
+        s = u'【维护】公网IP变更，玩家下线后自动重启。' + _ba_cn
+        s += ((u'可传送至：' + tg) if targets else u'请尽快下线。')
+        s += u'（在线%d人）' % players
+    else:
+        s = u'[Maintenance] IP changed. Restart when empty. ' + _ba_en
+        s += ((u'Transfer to: ' + tg) if targets else u'Please log off. ')
+        s += u'(online: %d)' % players
     return s[:200]
 
 
-def _restart_announce(srv, players):
+def _restart_announce_real_now():
+    """v6169（计划 §16 第 8 项验收）：dry 模式下**是否也真发广播**。
+       仅用于验收「公告文案 + 200 字符/字节上限」，默认关；
+       开启后 dry 仍不会停服/起服（savekill / startq 受 dry 保护不变）。"""
+    try:
+        v = (_srv_cfg_read() or {}).get('ipwatch_announce_real')
+        return bool(v)
+    except Exception:
+        return False
+
+
+def _restart_ann_send(srv, txt):
+    """v6173：单条广播发送（从 _restart_announce 抽出，供延时回调复用）"""
+    try:
+        _rcon_exec(srv, 'broadcast %s' % txt, timeout=8)
+    except Exception as e:
+        _restart_log('announce fail %s: %s' % (srv, e))
+
+
+def _restart_announce_done(srv):
+    """v6204（复核 P1-8）：该服重启完成 → 发一条「已恢复」公告。
+       原来只发「即将重启」，玩家不知道什么时候能进（尤其换 IP 场景等了几十分钟）。
+       dry 且未开 announce_real 时只记日志，不真发广播（与 _restart_announce 同口径）。"""
+    if bool(_RESTART.get('dry')):
+        _restart_log('DRY announce-done %s' % srv)
+        if not _restart_announce_real_now():
+            return
+    _restart_ann_send(srv, u'【维护】本服已完成重启，可重新进入。')
+
+
+def _restart_announce(srv, players, lang=None):
+    """v6174（用户 2026-11-06「中文很快被英文盖住」「10 秒不太够」）：
+       真因不是“连发”，而是 **_restart_announce() 每次都把中英两条全发**，
+       而上游 `_restart_tick()` 每轮会调它 **2 次**（cn 槽 + en 槽，见 RESTART_ANN_OFFSETS=(0,30)）
+       ⇒ 实际每轮每台发 **4 条**，中文自然被连续盖住。
+       现按槽只发单语言：cn 槽 → 只发中文，en 槽 → 只发英文，间隔天然 = 槽间距 30s。
+       参数 lang 为 None 时保持旧行为（中英都发），供其他调用方兼容。"""
     targets = _restart_targets()
-    for lang in ('cn', 'en'):
-        txt = _restart_ann_text(lang, players, targets)
-        if _RESTART.get('dry'):
-            _restart_log('DRY announce %s [%s] %s' % (srv, lang, txt))
-            continue
-        try:
-            _rcon_exec(srv, 'broadcast %s' % txt, timeout=8)
-        except Exception as e:
-            _restart_log('announce fail %s: %s' % (srv, e))
+    _eta = _restart_eta_sec(srv)      # v6201：动态 ETA（每台按自身阶段算，每次公告刷新）
+    _dry_an = bool(_RESTART.get('dry'))
+    _real_an = (not _dry_an) or _restart_announce_real_now()   # v6169
+    langs = (lang,) if lang in ('cn', 'en') else ('cn', 'en')
+    for lg in langs:
+        txt = _restart_ann_text(lg, players, targets, eta=_eta)
+        if _dry_an:
+            _restart_log('DRY announce %s [%s] %s' % (srv, lg, txt))
+            if not _real_an:
+                continue
+        _restart_ann_send(srv, txt)
 
 
 def _restart_players(srv):
@@ -8408,25 +9361,58 @@ def _restart_snapshot():
                 'dry': bool(_RESTART.get('dry')), 'enable': _restart_enable_now(),
                 'current': _RESTART.get('current') or '',
                 'done': list(_RESTART.get('done') or []),
+                # v6204（复核 P1-4）：补 steps / 宽限倒计时 / 动态 ETA / 在线人数 ——
+                #   原来只有 phase/pct/msg/attempts，前端拿不到宽限期剩余与预计可回时间
+                #   （任务条走 steps，/api/ipwatch 没有 ⇒ 两套数据源不一致）。
+                'pendingReason': _RESTART.get('pendingReason') or '',
+                'elapsed': (int(time.time() - float(_RESTART.get('t0') or 0))
+                            if _RESTART.get('t0') else 0),
                 'servers': dict((k, {'phase': v.get('phase'), 'pct': v.get('pct'),
-                                     'msg': v.get('msg'), 'attempts': v.get('attempts') or 0})
+                                     'msg': v.get('msg'), 'attempts': v.get('attempts') or 0,
+                                     'steps': _restart_steps_obj(v),
+                                     'ipMode': bool(v.get('ipMode')),
+                                     'sawPlayer': bool(v.get('sawPlayer')),
+                                     'players': v.get('players'),
+                                     'graceLeft': (max(0, int(float(v.get('graceUntil') or 0) - time.time()))
+                                                   if v.get('graceUntil') else 0),
+                                     'eta': _restart_eta_sec(k),
+                                     'err': v.get('err') or ''})
                                 for k, v in (_RESTART.get('servers') or {}).items())}
 
 
-def _restart_start(reason, dry_override=None):
+def _restart_start(reason, dry_override=None, force=False):
     _dry = _restart_dry_now() if dry_override is None else bool(dry_override)
     with _RESTART_LOCK:
         if _RESTART.get('running'):
-            _restart_log('skip start (%s): already running' % reason)
+            # v6204（复核 P0-2）：**不能静默丢弃** —— 公网 IP 抖动/重拨时会连发两次 CHANGED，
+            #   原实现第二次直接 return False，编排跑完就结束 ⇒ 服务器仍绑旧 IP。
+            #   改为记待处理，本轮收尾后自动再跑一轮（跳过冷却）。
+            _RESTART['pendingReason'] = str(reason or '')
+            _restart_log('skip start (%s): already running -> 记为待续跑' % reason)
+            return False
+        # v6164（C7）：10 分钟冷却 —— 自动 / 真触发才拦；手动演练（dry_override 非 None）不拦，方便反复演练
+        _last = float(_RESTART.get('lastStartAt') or 0)
+        if _last and dry_override is None and not force and (time.time() - _last) < RESTART_START_COOLDOWN:
+            _restart_log('skip start (cooldown %ds left): %s'
+                         % (int(RESTART_START_COOLDOWN - (time.time() - _last)), reason))
             return False
         _RESTART.update({'running': True, 'reason': str(reason or ''), 't0': time.time(),
-                         'dry': _dry, 'servers': {}, 'done': [], 'current': ''})
+                         'dry': _dry, 'servers': {}, 'done': [], 'current': '',
+                         'lastStartAt': time.time()})
         now = time.time()
+        # v6200（A）：换 IP 触发 ⇒ 开启宽限期（不计空置），并记录「是否见到过玩家」
+        _is_ip = ('ip-change' in str(reason or '').lower())
         for srv in sorted(SERVERS.keys()):
-            _RESTART['servers'][srv] = {'phase': 'announce', 'pct': 5, 'msg': u'公告期，等待空置',
+            _RESTART['servers'][srv] = {'phase': 'announce', 'pct': 5,
+                                        'msg': (u'线路切换宽限期，等待玩家回归' if _is_ip
+                                                else u'公告期，等待空置'),
                                         'attempts': 0, 'steps': {'ann': 'run'}, 'empty': [],
                                         'firstEmptyTs': 0, 'err': '', 'annStart': now,
-                                        'lastAnnRound': -1, 'annSlot': ''}
+                                        'lastAnnRound': -1, 'annSlot': '',
+                                        'ipMode': _is_ip,
+                                        'graceUntil': (now + RESTART_IP_GRACE) if _is_ip else 0,
+                                        'probeUntil': 0,
+                                        'sawPlayer': False}
     _restart_log('START reason=%s dry=%s servers=%d' % (reason, _dry, len(SERVERS)))
     for srv in list((_RESTART.get('servers') or {}).keys()):
         try:
@@ -8437,41 +9423,40 @@ def _restart_start(reason, dry_override=None):
 
 
 def _restart_line_ts(ln):
-    """从 ShooterGame.log 行首 `[YYYY.MM.DD-HH.MM.SS:mmm]` 取时间戳；失败返回 None"""
+    """从 ShooterGame.log 行首 `[YYYY.MM.DD-HH.MM.SS:mmm]` 取时间戳；失败返回 None
+       v6176（排查「用户退出却不被拦」时发现）：日志时间戳是 **UTC**，
+       而首行括号内 `MM/DD/YY HH:MM:SS` 才是本地（实测差 8h）。
+       原用 time.mktime（按本地时区解析 UTC 串）⇒ epoch 比真实时刻早 8 小时
+       ⇒ L2 的 lq 恒 ≥ 28800 秒、`_srv_boot_at` 同样偏 8h（前端「IP 失效」判定也受影响）。
+       改用 calendar.timegm 按 UTC 解析。"""
     try:
         if len(ln) < 19 or ln[0] != '[':
             return None
         s = ln[1:19]
-        return time.mktime((int(s[0:4]), int(s[5:7]), int(s[8:10]),
-                            int(s[11:13]), int(s[14:16]), int(s[17:19]), 0, 0, -1))
+        return _cal.timegm((int(s[0:4]), int(s[5:7]), int(s[8:10]),
+                            int(s[11:13]), int(s[14:16]), int(s[17:19]), 0, 0, 0))
     except Exception:
         return None
 
 
-def _restart_log_quiet_sec(server):
-    """L2：返回「最近一次进/出服关键字」距今秒数；无关键字或无日志返回 None（=静默）"""
+def _srv_boot_at(srv):
+    """v6160：该服**本次进程启动时刻**（ShooterGame.log 首行时间戳）；取不到返回 0。
+       用途：IP 失效判定 —— 启动时间早于「公网 IP 变化时间」⇒ 该服还跑在旧 IP 环境 ⇒ 玩家搜不到。"""
     try:
-        p = os.path.join(CFG_SERVERS_DIR, server, SRVCTL_LOG_REL)
+        p = os.path.join(CFG_SERVERS_DIR, srv, SRVCTL_LOG_REL)
         if not os.path.isfile(p):
-            return None
+            return 0
         with open(p, 'r', encoding='utf-8', errors='ignore') as f:
-            lines = f.readlines()[-RESTART_LOG_SCAN_LINES:]
+            for _i in range(3):
+                ln = f.readline()
+                if not ln:
+                    break
+                t = _restart_line_ts(ln)
+                if t:
+                    return int(t)
+        return 0
     except Exception:
-        return None
-    kws = [k.lower() for k in RESTART_LOG_KEYWORDS]
-    last = None
-    for ln in lines:
-        low = ln.lower()
-        if not any(k in low for k in kws):
-            continue
-        t = _restart_line_ts(ln)
-        if t is None:
-            continue
-        if last is None or t > last:
-            last = t
-    if last is None:
-        return None
-    return max(0.0, time.time() - last)
+        return 0
 
 
 def _restart_cluster_quiet_sec():
@@ -8506,11 +9491,202 @@ def _restart_sample(now, limit=None):
             continue
         items.append((float(st.get('lastSample') or 0), srv, st))
     items.sort()
+    # v6197（用户口径）：**并行采样** —— 原串行 3 台 x RCON timeout 8s = 最坏 24s > tick 15s，
+    #   会把 tick 拉长（公告时点漂移、起服/verify 判定延迟）。
+    #   `_rcon_exec` 每次新建 TCP 连接、无共享状态 ⇒ 并发安全。
+    _picks = [x[1] for x in items[:lim]]
+    _nmap = {}
+    if _picks:
+        try:
+            _Ex = __import__('concurrent.futures', fromlist=['ThreadPoolExecutor']).ThreadPoolExecutor
+            _ex = _Ex(max_workers=min(4, len(_picks)))
+            try:
+                _futs = [(_ex.submit(_restart_players, _s), _s) for _s in _picks]
+                for _f, _s in _futs:
+                    try:
+                        _nmap[_s] = _f.result(timeout=12)
+                    except Exception:
+                        _nmap[_s] = None
+            finally:
+                try:
+                    _ex.shutdown(wait=False)
+                except Exception:
+                    pass
+        except Exception:
+            # 兜底：线程池创建失败 -> 回退串行（行为与旧版一致）
+            for _s in _picks:
+                try:
+                    _nmap[_s] = _restart_players(_s)
+                except Exception:
+                    _nmap[_s] = None
     for _t, srv, st in items[:lim]:
-        n = _restart_players(srv)
+        _prev = st.get('players')
+        n = _nmap.get(srv)
         st['lastSample'] = now
         st['players'] = n
         st['sampled'] = (n is not None)   # v6133：区分「未采样」与「RCON 不可用」
+        # v6176：L2 改用「人数由 >0 变 0」的时刻（原日志关键字方案失效）
+        if n is not None:
+            _n = int(n)
+            _p = None if _prev is None else int(_prev)
+            if _n > 0:
+                st['emptySince'] = 0
+            elif _p is not None and _p > 0:
+                st['emptySince'] = now
+            elif not st.get('emptySince'):
+                st['emptySince'] = now
+
+
+def _restart_startq_state(srv):
+    """该服在启动队列中的状态：ok / fail / run / queue / idle"""
+    q = _SRVCTL_STARTQ or {}
+    # v6195（用户口径）：**先判「正在跑 / 排队中」，再判历史结果** ——
+    #   原来 done 优先，若该服既有历史记录又在 queue/active 里，
+    #   编排会立刻误判 ok（假成功）或 fail。
+    if srv in (q.get('active') or {}):
+        return 'run'
+    if srv in (q.get('queue') or []):
+        return 'queue'
+    for x in (q.get('done') or []):
+        if x.get('server') == srv:
+            return 'ok' if x.get('ok') else 'fail'
+    return 'idle'
+
+
+def _restart_log_has_after(server, needles, since_ts):
+    """ShooterGame.log 末 N 行里是否存在「含 needle 且行首时间戳 >= since_ts」的行"""
+    try:
+        p = os.path.join(CFG_SERVERS_DIR, server, SRVCTL_LOG_REL)
+        if not os.path.isfile(p):
+            return False
+        with open(p, 'r', encoding='utf-8', errors='ignore') as f:
+            lines = f.readlines()[-RESTART_LOG_SCAN_LINES:]
+    except Exception:
+        return False
+    nl = [str(n).lower() for n in needles]
+    for ln in lines:
+        low = ln.lower()
+        if not any(n in low for n in nl):
+            continue
+        t = _restart_line_ts(ln)
+        if t is not None and t >= float(since_ts or 0):
+            return True
+    return False
+
+
+def _restart_has_save(srv):
+    """C4（v6157）：该服是否存在**非空**主存档（.ark）—— 有存档的服优先重启"""
+    try:
+        base = os.path.join(CFG_SERVERS_DIR, srv, SRVCTL_ARKS_REL)
+        if not os.path.isdir(base):
+            return False
+        for d in os.listdir(base):
+            dp = os.path.join(base, d)
+            if not os.path.isdir(dp):
+                continue
+            try:
+                fns = os.listdir(dp)
+            except Exception:
+                continue
+            for f in fns:
+                if f.lower().endswith('.ark'):
+                    try:
+                        if os.path.getsize(os.path.join(dp, f)) > 0:
+                            return True
+                    except Exception:
+                        pass
+        return False
+    except Exception:
+        return False
+
+
+def _restart_exec_saveworld(srv):
+    """C5（v6157）：后台真执行 saveworld；_srvctl_run 自带 DinoData 落盘稳定屏障。
+       屏障未过（ok=False 或 data.ok=False）⇒ 调用方回 ready，**不重启**。"""
+    def _job():
+        ok, msg = False, ''
+        try:
+            res = _srvctl_run('ipwatch', [srv], 'saveworld', None)
+            r0 = (res[0] if res else {}) or {}
+            ok = bool(r0.get('ok'))
+            msg = (r0.get('message') or u'无回执')
+            dw = r0.get('data') or {}
+            if ok and dw and dw.get('ok') is False:
+                ok = False
+                msg = u'DinoData 未稳定：%s' % (dw.get('reason') or 'unknown')
+        except Exception as e:
+            ok, msg = False, repr(e)
+        st = (_RESTART.get('servers') or {}).get(srv)
+        if st:
+            st['swDone'] = True
+            st['swOk'] = bool(ok)
+            st['swMsg'] = msg
+        _restart_log('saveworld %s %s -> %s' % ('ok' if ok else 'FAIL', srv, str(msg)[:80]))
+    try:
+        _RCON_EXECUTOR.submit(_job)
+    except Exception:
+        threading.Thread(target=_job, daemon=True).start()
+
+
+def _restart_exec_savekill(srv):
+    """C1：后台真执行 settle 动作；完成后回填状态位（绝不在 tick 里同步等待）
+       C6（v6157）：Bob（俱乐部）该图不落盘 ⇒ 走 kill 而不是 savekill"""
+    act = 'kill' if srv == 'Bob' else 'savekill'
+    def _job():
+        ok, msg = False, ''
+        try:
+            # v6196（用户口径）：**去掉 force=True** ——
+            #   v6189 起 savekill 的护栏已改为「保存通过后、kill 前复检」，而 force 会**跳过这次复检**
+            #   ⇒ 编排在 T1（0 人）判静默通过后，保存的约 20 秒里若有玩家进服，仍会被 kill。
+            #   v6191 后 Bob 也不再拦截，v6180 留 force 的理由已消失。
+            #   ⇒ 交给正常护栏：有人就拦，按 RESTART_MAX_ATTEMPTS 重试（超限则该台判 fail）。
+            res = _srvctl_run('ipwatch', [srv], act, None)
+            ok = bool(res and res[0].get('ok'))
+            msg = (res[0].get('message') or '') if res else u'无回执'
+        except Exception as e:
+            ok, msg = False, repr(e)
+        st = (_RESTART.get('servers') or {}).get(srv)
+        if st:
+            st['execDone'] = True
+            st['execOk'] = bool(ok)
+            st['execMsg'] = msg
+        _restart_log('exec %s %s -> ok=%s %s' % (act, srv, ok, str(msg)[:80]))
+    try:
+        _RCON_EXECUTOR.submit(_job)
+    except Exception:
+        threading.Thread(target=_job, daemon=True).start()
+
+
+def _restart_step_fail(srv, st, why):
+    """C3：单步失败 -> attempts+1 -> 未超限回 ready 重排队；超限置 fail 并清锁"""
+    st['attempts'] = int(st.get('attempts') or 0) + 1
+    st['err'] = str(why or '')
+    st['execAt'] = 0
+    st['execDone'] = False
+    st['execOk'] = False
+    st['swAt'] = 0                        # v6157（C5）：存档屏障状态一并复位
+    st['swDone'] = False
+    st['swOk'] = False
+    st['skStage'] = ('savekill' if srv == 'Bob' else 'saveworld')
+    st['startqAt'] = 0
+    st['verifyAt'] = 0
+    for k in ('saveworld', 'savekill', 'startq', 'verify'):
+        if (st.get('steps') or {}).get(k) == 'run':
+            st['steps'][k] = 'wait'
+    if st['attempts'] > RESTART_MAX_ATTEMPTS:
+        st['phase'] = 'fail'
+        st['msg'] = u'重试 %d 次仍失败：%s' % (st['attempts'], why)
+        for k in ('saveworld', 'savekill', 'startq', 'verify'):
+            if (st.get('steps') or {}).get(k) in ('run', 'wait'):
+                st['steps'][k] = 'fail'
+        _srv_lock_clear(srv, 'restart|%s' % srv)
+        _restart_log('FAIL %s attempts=%d %s' % (srv, st['attempts'], why))
+    else:
+        st['phase'] = 'ready'
+        st['readyAt'] = time.time()
+        st['msg'] = u'第 %d 次重试（%s）' % (st['attempts'], why)
+        _restart_log('RETRY %s attempts=%d %s' % (srv, st['attempts'], why))
+    _restart_push(srv)
 
 
 def _restart_abort(server, by_user=''):
@@ -8527,7 +9703,7 @@ def _restart_abort(server, by_user=''):
             steps[k] = 'fail'
         elif steps[k] == 'wait':
             steps[k] = 'skip'
-    _srv_lock_clear(server, 'restart')
+    _srv_lock_clear(server, 'restart|%s' % server)   # v6152：owner 必须与 set 时一致，否则锁清不掉
     _restart_push(server)
     _restart_log('ABORT %s by %s' % (server, by_user))
     return True
@@ -8547,14 +9723,31 @@ def _restart_tick():
     for srv, st in servers.items():
         if st.get('phase') in ('done', 'fail'):
             continue
+        # v6200（A）：宽限期内不发「即将重启」公告 —— 玩家此刻多数还连不上，发了也看不到，
+        #   且会让「刚回来就看到即将重启」的玩家以为马上要关服。宽限结束后再正常发。
+        if st.get('graceUntil') and now < float(st.get('graceUntil') or 0):
+            continue
         el = now - float(st.get('annStart') or now)
         off = el % RESTART_ROUND
         if off < RESTART_ANN_WINDOW:
             slot = 'cn' if off < RESTART_ANN_OFFSETS[1] else 'en'
             tag = '%d:%s' % (int(el // RESTART_ROUND), slot)
             if st.get('annSlot') != tag:
-                pn = st.get('players')
-                _restart_announce(srv, 0 if pn is None else int(pn))
+                # v6173（用户反馈 2026-11-06「我在 Cen 里却报 0 人」）：
+                #   公告要报「当前在线 N 人」，不能直接用 _restart_sample 的缓存值
+                #   —— 它每 tick 只轮转采 3 台，编排刚起时多数服 players=None ⇒ 误报 0 人。
+                #   现场实时查一次；RCON 不可用时才回退到上次采样值。
+                # v6204（复核 P2-11）：**刚采过就复用**，省一次 RCON ——
+                #   原来每轮公告都现场查，而 _restart_sample 可能同 tick 刚采过同一台。
+                #   40s 时效判据保证「复用的一定是新鲜值」（v6173 的教训是「采样轮转导致值过期」）。
+                _ls = float(st.get('lastSample') or 0)
+                if st.get('sampled') and _ls and (now - _ls) < 40:
+                    pn = st.get('players')
+                else:
+                    pn = _restart_players(srv)
+                    if pn is None:
+                        pn = st.get('players')
+                _restart_announce(srv, 0 if pn is None else int(pn), slot)   # v6174：按槽只发单语言
                 st['annSlot'] = tag
 
     # ---- 3) 空置 + 静默校验 -> ready ----
@@ -8562,6 +9755,68 @@ def _restart_tick():
         if st.get('phase') != 'announce':
             continue
         n = st.get('players')
+        # v6177：RESTART_SKIP_EMPTY 中的服（Bob）不参与在线人数判断，直接视为 0 人
+        if srv in RESTART_SKIP_EMPTY:
+            n = 0
+        # ---- v6200（A+C）：换 IP 场景的宽限期与玩家回归信号 ----
+        if st.get('ipMode'):
+            if isinstance(n, int) and n > 0:
+                st['sawPlayer'] = True          # C：整个 announce 阶段记录是否见到过玩家
+            _gu = float(st.get('graceUntil') or 0)
+            if _gu and now < _gu:
+                st['steps']['empty'] = 'run'
+                st['pct'] = max(int(st.get('pct') or 0), 8)
+                st['msg'] = u'线路切换宽限期剩 %ds（等玩家回归）' % int(_gu - now)
+                _restart_push(srv)
+                continue                        # 宽限期内**不累计空置**
+            # v6204（复核 P0-1）：**宽限结束必须重置公告计时**。
+            #   公告段用 el = now - annStart，宽限 300s 内被 continue 跳过但 el 照常增长
+            #   ⇒ 宽限结束时 el=300、off=300%600=300 ∉ [0,60) ⇒ **再等 300s 才发第一条公告**。
+            #   玩家正好在这 5 分钟回归时完全看不到「即将重启」，与 v6200 的保护意图相反。
+            if _gu and not st.get('graceEnded'):
+                st['graceEnded'] = True
+                st['annStart'] = now
+                st['annSlot'] = ''
+                _restart_log('GRACE %s 宽限期结束 -> 公告计时重启' % srv)
+            if _gu and now >= _gu and not st.get('sawPlayer'):
+                # C：宽限结束仍从未见到玩家 ⇒ 再确认 PROBE 秒
+                _pu = float(st.get('probeUntil') or 0)
+                if not _pu:
+                    st['probeUntil'] = now + RESTART_IP_GRACE_PROBE
+                    _pu = st['probeUntil']
+                    _restart_log('GRACE %s 宽限结束仍无玩家，确认 %ds' % (srv, int(RESTART_IP_GRACE_PROBE)))
+                if now < _pu:
+                    st['msg'] = u'无玩家回归，确认中剩 %ds' % int(_pu - now)
+                    st['pct'] = max(int(st.get('pct') or 0), 12)
+                    _restart_push(srv)
+                    continue
+                # 确认完毕仍无人 ⇒ 判定「玩家进不来」⇒ 直接按空置推进
+                st['empty'] = [now] * RESTART_EMPTY_SAMPLES
+                st['firstEmptyTs'] = now - RESTART_EMPTY_SPAN
+                st['msg'] = u'无玩家回归（玩家无法接入），按空置推进'
+                _restart_log('GRACE %s 无回归 ⇒ 跳过空置等待' % srv)
+                _restart_push(srv)
+            elif st.get('sawPlayer'):
+                st['msg'] = u'玩家已回归，等待下线…'
+
+        # v6204（复核 P0-3）：**RCON 不可用要告警** —— 原来 n=None 走 n != 0 分支静默清零空置，
+        #   某台 RCON 挂掉时该服永远过不了空置，一路静默卡到 6 小时总超时，restart.log 零异常记录。
+        #   仍保持「None ⇒ 重置空置」的保守语义，但连续失败要留痕 + 通知。
+        if n is None and srv not in RESTART_SKIP_EMPTY:
+            _rf = int(st.get('rconFail') or 0) + 1
+            st['rconFail'] = _rf
+            if _rf in (1, 5):
+                _restart_log('WARN %s RCON 不可用，在线人数无法判定（连续 %d 次）' % (srv, _rf))
+            elif _rf % 20 == 0:
+                _restart_log('WARN %s RCON 仍不可用（连续 %d 次，约 %d 分钟）'
+                             % (srv, _rf, _rf))
+                try:
+                    _ipwatch_notify('[dino] 自动重启：%s 连续 %d 次探测在线人数失败（RCON 不可用），'
+                                    u'该服重启被阻塞' % (srv, _rf))
+                except Exception:
+                    pass
+        else:
+            st['rconFail'] = 0
         if n != 0:
             st['empty'] = []
             st['firstEmptyTs'] = 0
@@ -8584,14 +9839,17 @@ def _restart_tick():
                 int(now - float(st['firstEmptyTs'])))   # v6134：计数封顶，不再出现 6/3
             _restart_push(srv)
             continue
-        # L2 / L3
+        # v6197（用户口径）：**删除 L2「变空静默」** —— 测（步骤 207）实测它与 L1 空置判定起点几乎相同、
+        #   从不拦截，纯冗余。保留 L3（集群目录静默）作为跨服传送保护。
         bad = []
-        lq = _restart_log_quiet_sec(srv)
-        if lq is not None and lq < RESTART_LOG_QUIET:
-            bad.append(u'日志 %ds 内仍有进出服' % int(lq))
-        cq = _restart_cluster_quiet_sec()
+        cq = _restart_cluster_quiet_sec()          # v6204：lq 残留已删（L2 判定 v6197 移除）
         if cq is not None and cq < RESTART_CLUSTER_QUIET:
             bad.append(u'集群目录 %ds 内有写入' % int(cq))
+        # v6170（计划 §16 第 9 项 9a 验收）：把 L2/L3 的**输入**也记日志 ——
+        #   否则「为什么没拦住」只能猜（cq=None 表示目录未配/无文件）
+        _restart_log('QUIET %s cq=%s dirs=%s bad=%s'
+                     % (srv, ('-' if cq is None else int(cq)),
+                        '|'.join(_restart_cluster_dirs()), (';'.join(bad) or 'ok')))
         if bad:
             st['steps']['quiet'] = 'run'
             st['msg'] = u'静默校验未过：' + u' / '.join(bad)
@@ -8600,8 +9858,10 @@ def _restart_tick():
         st['phase'] = 'ready'
         st['readyAt'] = now
         st['pct'] = 45
+        st['hasSave'] = _restart_has_save(srv)          # v6157（C4）：排序依据，只算一次
         st['steps'].update({'ann': 'ok', 'empty': 'ok', 'quiet': 'ok'})
-        st['msg'] = u'三重静默通过，排队等待重启'
+        st['msg'] = (u'三重静默通过，排队等待重启' if st['hasSave']
+                     else u'三重静默通过，排队等待重启（无主存档，排后）')
         _restart_push(srv)
 
     # ---- 4) 串行门：同时只允许 1 台进入执行链 ----
@@ -8611,14 +9871,31 @@ def _restart_tick():
             busy = True
             break
     if not busy:
-        ready = sorted([(float(st.get('readyAt') or 0), srv) for srv, st in servers.items()
-                        if st.get('phase') == 'ready' and _srv_lock_get(srv).get('kind') not in SRV_LOCK_HARD])
-        if ready:
-            srv = ready[0][1]
+        # v6157（C4/C6）：锚点排序 = (Bob 永远最后, 有存档优先, 在线人数升序, readyAt 先到先得)
+        _cands = []
+        for srv, st in servers.items():
+            if st.get('phase') != 'ready':
+                continue
+            if _srv_lock_get(srv).get('kind') in SRV_LOCK_HARD:
+                continue
+            _pn = st.get('players')
+            _cands.append(((1 if srv == 'Bob' else 0,
+                            0 if st.get('hasSave') else 1,
+                            9999 if _pn is None else int(_pn),
+                            float(st.get('readyAt') or 0)), srv))
+        _cands.sort()
+        if _cands:
+            srv = _cands[0][1]
             st = servers[srv]
             st['phase'] = 'savekill'
             st['pct'] = 60
-            st['steps']['savekill'] = 'run'
+            # C6：Bob 不落盘 ⇒ 跳过存档屏障，直接走 kill
+            st['skStage'] = ('savekill' if srv == 'Bob' else 'saveworld')
+            st['steps']['saveworld'] = ('skip' if srv == 'Bob' else 'run')
+            st['steps']['savekill'] = ('run' if srv == 'Bob' else 'wait')
+            st['swAt'] = 0; st['swDone'] = False; st['swOk'] = False
+            st['execAt'] = 0; st['execDone'] = False; st['execOk'] = False   # v6152（C1）：真执行状态位
+            st['startqAt'] = 0; st['verifyAt'] = 0
             _RESTART['current'] = srv
             _srv_lock_set(srv, 'restart', 'restart|%s' % srv,
                           u'自动重启（IP 切换）', 'ipwatch')   # v6135：soft 锁
@@ -8629,35 +9906,603 @@ def _restart_tick():
                 st['msg'] = u'存档并停服（等待）'
             _restart_push(srv)
 
-    # ---- 5) 推进执行链（dry 下即时推进）----
+    # ---- 5) 推进执行链（dry：即时推进；真执行：按执行器回执 / 日志判据推进）----
+    #   v6152（计划 §16 第 1~3 项）：dry 分支与改造前**逐字等价**，真执行分支全新
     for srv, st in servers.items():
         ph = st.get('phase')
         if ph == 'savekill':
-            st['steps'].update({'savekill': 'ok', 'startq': 'run'})
-            st['phase'] = 'startq'
-            st['pct'] = 75
-            st['msg'] = (u'[演练] 跳过起服' if dry else u'排队起服（等待）')
-            _restart_push(srv)
+            if dry:
+                st['steps'].update({'saveworld': ('skip' if srv == 'Bob' else 'ok'),
+                                    'savekill': 'ok', 'startq': 'run'})
+                st['phase'] = 'startq'
+                st['pct'] = 75
+                st['msg'] = u'[演练] 跳过起服'          # v6204：此处已在 if dry 内，三元恒真
+                _restart_push(srv)
+            elif (st.get('skStage') or 'saveworld') == 'saveworld':
+                # v6157（C5）：savekill 前先 saveworld + DinoData 落盘屏障；未过 ⇒ 回 ready，不重启
+                if not st.get('swAt'):
+                    st['swAt'] = now
+                    st['swDone'] = False
+                    st['msg'] = u'存档并等待落盘（屏障）'
+                    _restart_log('saveworld start %s' % srv)
+                    _restart_exec_saveworld(srv)
+                    _restart_push(srv)
+                elif st.get('swDone'):
+                    if st.get('swOk'):
+                        st['steps']['saveworld'] = 'ok'
+                        st['steps']['savekill'] = 'run'
+                        st['skStage'] = 'savekill'
+                        st['swAt'] = 0
+                        st['swDone'] = False
+                        # v6204（复核 P1-6）：**同一 tick 直接下发** —— 原来只切 skStage，
+                        #   真正下发要等下一 tick（15s）⇒ 11 台累计白等约 3 分钟。
+                        st['execAt'] = now
+                        st['execDone'] = False
+                        st['msg'] = u'存档已落盘，开始停服（执行中）'
+                        _restart_log('exec savekill %s (same-tick)' % srv)
+                        _restart_exec_savekill(srv)
+                        _restart_push(srv)
+                    else:
+                        st['steps']['saveworld'] = 'fail'
+                        _restart_step_fail(srv, st, u'存档屏障未过：%s' % (st.get('swMsg') or u'无回执'))
+                elif now - float(st['swAt']) > RESTART_SAVEWORLD_TIMEOUT:
+                    _restart_step_fail(srv, st, u'存档屏障超时 %ds' % RESTART_SAVEWORLD_TIMEOUT)
+            elif not st.get('execAt'):
+                # C1：首次进入 —— 下发 savekill（丢线程池），本 tick 只记账
+                st['execAt'] = now
+                st['execDone'] = False
+                st['msg'] = u'存档并停服（执行中）'
+                _restart_log('exec savekill %s' % srv)          # C1 验收标志
+                _restart_exec_savekill(srv)
+                _restart_push(srv)
+            elif st.get('execDone'):
+                if st.get('execOk'):
+                    st['steps'].update({'savekill': 'ok', 'startq': 'run'})
+                    st['phase'] = 'startq'
+                    st['pct'] = 75
+                    st['execAt'] = 0
+                    st['execDone'] = False
+                    st['msg'] = u'已停服，准备起服'
+                    _restart_push(srv)
+                else:
+                    _restart_step_fail(srv, st, u'savekill 失败：%s' % (st.get('execMsg') or u'无回执'))
+            elif now - float(st['execAt']) > RESTART_SAVEKILL_TIMEOUT:
+                _restart_step_fail(srv, st, u'savekill 超时 %ds' % RESTART_SAVEKILL_TIMEOUT)
         elif ph == 'startq':
-            st['steps'].update({'startq': 'ok', 'verify': 'run'})
-            st['phase'] = 'verify'
-            st['pct'] = 90
-            st['msg'] = u'等待 advertising for join'
-            _restart_push(srv)
+            if dry:
+                st['steps'].update({'startq': 'ok', 'verify': 'run'})
+                st['phase'] = 'verify'
+                st['pct'] = 90
+                st['verifyAt'] = now
+                st['msg'] = u'等待服务器对外开放加入'
+                _restart_push(srv)
+            elif not st.get('startqAt'):
+                # C1：加入启动队列（_srvctl_startq_new 非阻塞，立即返回）
+                st['startqAt'] = now
+                st['msg'] = u'已入启动队列（等待起服）'
+                _restart_log('exec startq %s' % srv)            # C1 验收标志
+                try:
+                    _srvctl_startq_new('ipwatch', [srv])
+                    _restart_push(srv)
+                except Exception as e:
+                    _restart_step_fail(srv, st, u'startq 下发失败：%r' % e)
+            else:
+                qs = _restart_startq_state(srv)
+                if qs == 'ok':
+                    st['steps'].update({'startq': 'ok', 'verify': 'run'})
+                    st['phase'] = 'verify'
+                    st['pct'] = 90
+                    st['startqAt'] = 0
+                    st['verifyAt'] = now
+                    st['msg'] = u'等待服务器对外开放加入'
+                    _restart_push(srv)
+                elif qs == 'fail':
+                    _restart_step_fail(srv, st, u'启动队列报失败')
+                elif now - float(st['startqAt']) > RESTART_STARTQ_TIMEOUT:
+                    _restart_step_fail(srv, st, u'起服超时 %ds' % RESTART_STARTQ_TIMEOUT)
         elif ph == 'verify':
-            st['steps']['verify'] = 'ok'
-            st['phase'] = 'done'
-            st['pct'] = 100
-            st['msg'] = (u'[演练] 完成' if dry else u'重启完成')
-            _srv_lock_clear(srv, 'restart|%s' % srv)   # v6135：释放 soft 锁
-            if srv not in _RESTART['done']:
-                _RESTART['done'].append(srv)
+            if dry:
+                st['steps']['verify'] = 'ok'
+                st['phase'] = 'done'
+                st['pct'] = 100
+                st['msg'] = u'[演练] 完成'                # v6204：此处已在 if dry 内，三元恒真
+                _srv_lock_clear(srv, 'restart|%s' % srv)   # v6135：释放 soft 锁
+                if srv not in _RESTART['done']:
+                    _RESTART['done'].append(srv)
+                _restart_push(srv)
+            elif _restart_log_has_after(srv, (RESTART_VERIFY_NEEDLE,), st.get('verifyAt') or 0):
+                # C2：真 VERIFY —— 日志命中 advertising 才算真上线
+                st['steps']['verify'] = 'ok'
+                st['phase'] = 'done'
+                st['pct'] = 100
+                st['msg'] = u'重启完成（已上线）'
+                _srv_lock_clear(srv, 'restart|%s' % srv)
+                if srv not in _RESTART['done']:
+                    _RESTART['done'].append(srv)
+                _restart_log('advertising OK %s' % srv)        # C2 验收标志
+                try:
+                    _restart_announce_done(srv)                # v6204：告知玩家可以进了
+                except Exception:
+                    _sexc('announce_done')
+                _restart_push(srv)
+            elif now - float(st.get('verifyAt') or now) > RESTART_VERIFY_TIMEOUT:
+                _restart_step_fail(srv, st, u'起服后 %ds 未见 advertising' % RESTART_VERIFY_TIMEOUT)
+
+    # v6164（C8 配套）：整批总超时收尾 —— 防「某台一直有人在线」让 running 永远 true
+    _t0t = float(_RESTART.get('t0') or 0)
+    if _t0t and (now - _t0t) > RESTART_TOTAL_TIMEOUT:
+        _left = 0
+        for srv, st in servers.items():
+            if st.get('phase') in ('done', 'fail'):
+                continue
+            st['phase'] = 'fail'
+            st['err'] = u'编排超时（超过 %d 分钟）未完成' % (RESTART_TOTAL_TIMEOUT // 60)
+            st['msg'] = st['err']
+            _stps = st.get('steps') or {}
+            for _k in list(_stps.keys()):
+                if _stps[_k] == 'run':
+                    _stps[_k] = 'fail'
+                elif _stps[_k] == 'wait':
+                    _stps[_k] = 'skip'
+            try:
+                _srv_lock_clear(srv, 'restart|%s' % srv)
+            except Exception:
+                pass
             _restart_push(srv)
+            _left += 1
+        with _RESTART_LOCK:
+            _RESTART['running'] = False
+            _RESTART['current'] = ''
+        _restart_log('TIMEOUT reason=%s left=%d elapsed=%ds'
+                     % (_RESTART.get('reason'), _left, int(now - _t0t)))
+        _restart_rerun_pending()
+        return
 
     if servers and all(v.get('phase') in ('done', 'fail') for v in servers.values()):
         _RESTART['running'] = False
         _RESTART['current'] = ''
         _restart_log('ALL DONE reason=%s dry=%s' % (_RESTART.get('reason'), _RESTART.get('dry')))
+        _restart_rerun_pending()
+
+
+def _restart_rerun_pending():
+    """v6204（复核 P0-2）：本轮收尾后若期间又有 IP 变化，自动再跑一轮。
+       ⚠ 必须在**不持 _RESTART_LOCK** 的地方调用（_restart_start 内部要取同一把锁）。"""
+    try:
+        _pend = str(_RESTART.get('pendingReason') or '')
+        if not _pend:
+            return
+        with _RESTART_LOCK:
+            _RESTART['pendingReason'] = ''
+        _restart_log('RERUN pending: %s' % _pend)
+        _restart_start(_pend, force=True)      # force：跳过 10 分钟冷却
+    except Exception:
+        _sexc('restart_rerun_pending')
+
+
+# ===== v6206：SteamCMD Cache 接入（只读状态 + 一键分发）=====
+#   背景（2026-11-07 实测）：ASAM 的 `Cache Manager` 窗口 = WPF 原生，方法不暴露成 HTTP 端点，
+#     其内部结构（从程序集还原）：
+#       CacheUpdateManager.EnsureSteamCmdReadyAsync   -> 按钮「Reinstall SteamCMD」
+#       CacheUpdateManager.UpdateCacheAsync           -> 按钮「Update local cache from steam」
+#       CacheUpdateManager.ApplyCacheToProfileAsync   -> 按钮「Update the selected profile from the cache」
+#       CacheUpdateManager.DirectoryCopyAsync         -> 内部 EnumerateFiles + CopyFileWithProgress
+#     其「分发到 profile」的做法 = 复制文件 + **改写目标 appmanifest 的 manifest 值**
+#       （程序集字符串：`-app 2430930 -depot 2430931 -manifest <id>` /
+#         `Manifest updated successfully in appmanifest_2430930.acf to:`）
+#     这解释了为什么 11 台的 buildid 全同（26334129）—— 都是从缓存复制来的。
+#   → 本模块照它的做法**等价实现**，并补上它没有的：批量 / 在线护栏 / 任务总线 / 存档保障。
+UPDATE_CACHE_PATH = r'D:\Cache'
+UPDATE_APP_ID = '2430930'
+UPDATE_DEPOT_ID = '2430931'
+UPDATE_ACF_NAME = 'appmanifest_2430930.acf'
+UPDATE_SERVERS_ROOT = r'D:\ARK Server\Servers'
+# 复制时**不覆盖**的目标子目录（存档/配置/日志/备份/profile/Steam 自管）
+UPDATE_SKIP_DIRS = ('Saved', 'Config', 'Logs', 'ConfigBackups', 'Profile',
+                    'Cache', 'steamapps', 'steamcmd', 'dumps')
+
+
+def _upd_read_acf(fp):
+    """读 appmanifest 的关键字段（Steam 的 acf 是 Valve KeyValues 文本格式）"""
+    d = {'buildid': '', 'manifest': '', 'lastUpdated': '', 'sizeOnDisk': '',
+         'bytesToDownload': '', 'name': '', 'ok': False}
+    try:
+        # v6206b：后端**没有 import io**（只导入了 json/os/re/socket/...）⇒ 用内置 open
+        t = open(fp, encoding='utf-8', errors='replace').read()
+    except Exception:
+        return d
+    def _g(k):
+        m = re.search(r'"%s"\s*"([^"]*)"' % k, t)
+        return m.group(1) if m else ''
+    d['buildid'] = _g('buildid')
+    d['lastUpdated'] = _g('LastUpdated')
+    d['sizeOnDisk'] = _g('SizeOnDisk')
+    d['bytesToDownload'] = _g('BytesToDownload')
+    d['name'] = _g('name')
+    # 挂载的 depot manifest（形如 "2430931" { "manifest" "6604340029022292600" }）
+    m = re.search(r'"%s"\s*\{[^}]*?"manifest"\s*"([^"]*)"' % UPDATE_DEPOT_ID, t, re.S)
+    if m:
+        d['manifest'] = m.group(1)
+    d['ok'] = bool(d['buildid'])
+    return d
+
+
+def _upd_fmt_ts(v):
+    """Steam 的 LastUpdated 是 unix 秒 → 本地时间串"""
+    try:
+        iv = int(str(v or '').strip())
+        if iv > 0:
+            return time.strftime('%Y-%m-%d %H:%M', time.localtime(iv))
+    except Exception:
+        pass
+    return ''
+
+
+def _upd_dir_gb(d):
+    """目录占用（GB，仅一层文件累加，避免全盘遍历太慢）"""
+    tot = 0
+    try:
+        for root, dirs, files in os.walk(d):
+            for f in files:
+                try:
+                    tot += os.path.getsize(os.path.join(root, f))
+                except Exception:
+                    pass
+            if len(dirs) > 400:
+                break
+    except Exception:
+        pass
+    return round(tot / 1073741824.0, 2)
+
+
+def _upd_cache_status():
+    """缓存状态：ASAM 的 Cache Manager 顶部那一栏 + 「是否可以分发」"""
+    d = UPDATE_CACHE_PATH
+    acf = os.path.join(d, 'steamapps', UPDATE_ACF_NAME)
+    sg = os.path.join(d, 'ShooterGame')
+    paks = os.path.join(sg, 'Content', 'Paks')
+    a = _upd_read_acf(acf)
+    has_sg = os.path.isdir(sg)
+    # 光有 ShooterGame 目录不算有内容 —— 必须有 Paks 文件（Clear Cache 会留空壳）
+    has_paks = False
+    if os.path.isdir(paks):
+        try:
+            has_paks = any(x.lower().endswith(('.pak', '.ucas', '.utoc'))
+                           for x in os.listdir(paks))
+        except Exception:
+            has_paks = False
+    return {'path': d, 'appId': UPDATE_APP_ID, 'depotId': UPDATE_DEPOT_ID,
+            'exists': os.path.isdir(d), 'hasContent': bool(has_sg and has_paks),
+            'buildId': a.get('buildid') or '', 'manifest': a.get('manifest') or '',
+            'updatedAt': _upd_fmt_ts(a.get('lastUpdated')),
+            'sizeGB': (round(int(a['sizeOnDisk']) / 1073741824.0, 2)
+                       if str(a.get('sizeOnDisk') or '').isdigit() else 0),
+            'realGB': _upd_dir_gb(d) if os.path.isdir(d) else 0,
+            'name': a.get('name') or ''}
+
+
+# ===== v6212（用户口径「要能抓到 ASAM 正在从 steam 更新的所有进度」）=====
+#   ASAM 调 SteamCMD 更新缓存时，SteamCMD 自己写日志（实测样本 2026-10-31）：
+#     SteamCMDInstall/logs/console_log.txt
+#        [2026-10-31 08:21:17]  Update state (0x61) downloading, progress: 1.08 (132235281 / 12227543642)
+#     SteamCMDInstall/logs/content_log.txt
+#        Downloading 11017 chunks for depot 2430931 (6604340029022292600)
+#        AppID 2430930 App update changed : Running Update,Downloading,Staging,
+#        AppID 2430930 starting commit from "d:/cache/steamapps/downloading/2430930" to "d:/cache" : 248 updated
+#   状态机实测全集：0x3 reconfiguring -> 0x5 verifying install -> 0x61 downloading
+#                  -> 0x81 verifying update -> 0x0 unknown -> "Success! App '2430930' fully installed."
+#   **纯只读**：只 open(...).read()，不写 ASAM 任何文件。
+UPDATE_STEAM_LOG_DIRS = (
+    r'D:\ASADedicatedManager\SteamCMDInstall\logs',
+    r'C:\ASADedicatedManager\SteamCMDInstall\logs',
+    r'E:\ASADedicatedManager\SteamCMDInstall\logs',
+    r'\\localhost\ASADedicatedManager\SteamCMDInstall\logs',
+    r'\\127.0.0.1\ASADedicatedManager\SteamCMDInstall\logs',
+    r'\\SERVER\ASADedicatedManager\SteamCMDInstall\logs',
+)
+UPDATE_STEAM_IDLE_SEC = 120      # 最后一条状态行距今超过这么久 => 判定「没在更新」
+UPDATE_STEAM_OK_HOLD = 12        # 完成后在任务列表里再留多少秒
+_UPD_SPD = {'at': 0.0, 'done': 0}
+_UPD_STAGE_ZH = {'0x3': u'重配置', '0x5': u'校验已装',
+                 '0x61': u'下载', '0x81': u'校验下载', '0x0': u'收尾'}
+
+
+def _upd_steam_logdir():
+    # 依次探测候选目录（ASAM 与后端同机 192.168.199.3，正常情况下第一条即命中）
+    for _d in UPDATE_STEAM_LOG_DIRS:
+        try:
+            if os.path.isdir(_d):
+                return _d
+        except Exception:
+            pass
+    return ''
+
+
+def _upd_tail(fp, nbytes=32768):
+    # 读文件尾部（日志可能很大，只取尾部）；失败返回空串
+    try:
+        _sz = os.path.getsize(fp)
+        with open(fp, 'rb') as f:
+            if _sz > nbytes:
+                f.seek(_sz - nbytes)
+            return f.read().decode('utf-8', 'replace')
+    except Exception:
+        return ''
+
+
+def _upd_steam_steps(code, state):
+    # 把 Steam 的 Update state code 映射成任务子步骤（与前端 lbTaskStepsHtml 的 steps 结构一致）
+    order = ['0x3', '0x5', '0x61', '0x81', 'commit']
+    labels = [u'重配置', u'校验已装', u'下载', u'校验下载', u'落盘']
+    cur = code if code in order else ('commit' if state == 'commit' else '')
+    idx = order.index(cur) if cur in order else -1
+    out = []
+    for i, k in enumerate(order):
+        if idx < 0:
+            st = 'ok' if state == 'done' else 'wait'
+        elif i < idx:
+            st = 'ok'
+        elif i == idx:
+            st = 'run' if state == 'run' else ('ok' if state == 'done' else 'fail')
+        else:
+            st = 'wait'
+        out.append({'key': k, 'label': labels[i], 'state': st})
+    return out
+
+
+def _upd_steam_progress():
+    # 返回 SteamCMD 缓存更新进度摘要（**不含日志正文**）
+    # {found,phase,pct,done,total,speed,stage,stageZh,msg,chunks,idleSec,steps}
+    _d = _upd_steam_logdir()
+    r = {'found': bool(_d), 'phase': 'na', 'pct': 0, 'done': 0, 'total': 0, 'speed': 0,
+         'stage': '', 'stageZh': '', 'msg': u'', 'chunks': 0, 'idleSec': -1, 'steps': []}
+    if not _d:
+        r['msg'] = u'未找到 SteamCMD 日志目录'
+        return r
+    _con = _upd_tail(os.path.join(_d, 'console_log.txt'))
+    if not _con:
+        r['phase'] = 'idle'
+        r['msg'] = u'尚无 SteamCMD 日志'
+        return r
+
+    _pat = (r'\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]\s+Update state '
+            r'\((0x[0-9a-fA-F]+)\)\s*([^,]*),\s*progress:\s*([\d.]+)\s*\((\d+) / (\d+)\)')
+    _st = re.findall(_pat, _con)
+    _okpos = _con.rfind(u"Success! App '2430930' fully installed")
+    _lastpos = _con.rfind(u'Update state (%s)' % _st[-1][1]) if _st else -1
+    _errm = re.findall(r'(?i)(error|failed|failure)', _con[-4000:])
+
+    code = stage_en = tslast = ''
+    pct = 0.0
+    bdone = btotal = 0
+    if _st:
+        tslast, code, stage_en, _p, _bd, _bt = _st[-1]
+        try:
+            pct = float(_p)
+        except Exception:
+            pct = 0.0
+        try:
+            bdone, btotal = int(_bd), int(_bt)
+        except Exception:
+            bdone, btotal = 0, 0
+
+    _idle = -1
+    if tslast:
+        try:
+            _idle = int(max(0, time.time() - time.mktime(time.strptime(tslast, '%Y-%m-%d %H:%M:%S'))))
+        except Exception:
+            _idle = -1
+    r['idleSec'] = _idle
+
+    _cnt = _upd_tail(os.path.join(_d, 'content_log.txt'), 16384)
+    _m = re.search(r'Downloading (\d+) chunks for depot', _cnt)
+    if _m:
+        r['chunks'] = int(_m.group(1))
+    _tail_app = _cnt[_cnt.rfind(u'AppID 2430930'):] if _cnt else u''
+    _commit = u'starting commit from' in _tail_app
+
+    _sp = 0.0
+    _now = time.time()
+    if stage_en.startswith('download') and bdone > 0:
+        if _UPD_SPD['at'] > 0 and (_now - _UPD_SPD['at']) > 0.4:
+            _db = bdone - _UPD_SPD['done']
+            if _db > 0:
+                _sp = _db / (_now - _UPD_SPD['at'])
+        _UPD_SPD['at'] = _now
+        _UPD_SPD['done'] = bdone
+    else:
+        _UPD_SPD['at'] = 0.0
+        _UPD_SPD['done'] = 0
+    r['speed'] = int(_sp)
+
+    if _okpos > 0 and _okpos >= _lastpos:
+        r['phase'] = 'ok'
+        r['pct'] = 100
+        r['msg'] = u'缓存已更新到最新（SteamCMD: fully installed）'
+    elif _idle >= 0 and _idle > UPDATE_STEAM_IDLE_SEC:
+        r['phase'] = 'idle'
+        r['msg'] = u'空闲（上次活动 %d 分钟前）' % (_idle // 60)
+    elif _errm and _idle >= 0 and _idle <= UPDATE_STEAM_IDLE_SEC:
+        r['phase'] = 'fail'
+        r['msg'] = u'更新失败：' + (_errm[-1] or 'error')
+    elif _commit and (pct >= 99.0 or code == '0x0'):
+        r['phase'] = 'run'
+        r['pct'] = 99
+        r['stage'] = 'commit'
+        r['stageZh'] = u'落盘'
+        r['msg'] = u'落盘提交中（把下载内容写入 D:\\Cache）'
+    elif code and code != '0x0':
+        r['phase'] = 'run'
+        r['pct'] = int(round(pct))
+        r['stage'] = code
+        r['stageZh'] = _UPD_STAGE_ZH.get(code, stage_en)
+        if stage_en.startswith('download'):
+            r['msg'] = u'下载中 %.1f%% · %.1f MB/s · %.2f / %.2f GB' % (
+                pct, _sp / 1048576.0, bdone / 1073741824.0, btotal / 1073741824.0)
+        else:
+            r['msg'] = u'%s %.1f%%' % (r['stageZh'] or stage_en, pct)
+    else:
+        r['phase'] = 'idle'
+        r['msg'] = u'空闲'
+
+    r['done'] = bdone
+    r['total'] = btotal
+    r['stage'] = r['stage'] or code
+    r['stageZh'] = r['stageZh'] or _UPD_STAGE_ZH.get(code, '')
+    r['steps'] = _upd_steam_steps(code,
+                                  'done' if r['phase'] == 'ok'
+                                  else 'fail' if r['phase'] == 'fail'
+                                  else 'commit' if r['stage'] == 'commit' else 'run')
+    return r
+
+
+def _upd_server_status(srv):
+    """单台状态：自己的 acf + 是否落后于缓存"""
+    d = os.path.join(UPDATE_SERVERS_ROOT, srv)
+    acf = os.path.join(d, 'steamapps', UPDATE_ACF_NAME)
+    a = _upd_read_acf(acf)
+    return {'srv': srv, 'path': d, 'exists': os.path.isdir(d),
+            'hasAcf': os.path.isfile(acf),
+            'buildId': a.get('buildid') or '', 'manifest': a.get('manifest') or '',
+            'updatedAt': _upd_fmt_ts(a.get('lastUpdated')),
+            'sizeGB': (round(int(a['sizeOnDisk']) / 1073741824.0, 2)
+                       if str(a.get('sizeOnDisk') or '').isdigit() else 0)}
+
+
+def _upd_status(include_players=False):
+    """完整状态：缓存 + 11 台对比 + 落后清单
+    include_players=True 时逐台查在线人数（慢，仅前端点「刷新」时用）"""
+    cache = _upd_cache_status()
+    cbuild = cache.get('buildId') or ''
+    out = []
+    for srv in sorted(SERVERS.keys()):
+        s = _upd_server_status(srv)
+        s['same'] = bool(cbuild and s.get('buildId') == cbuild)
+        if include_players:
+            try:
+                s['players'] = _restart_players(srv)
+            except Exception:
+                s['players'] = None
+        out.append(s)
+    behind = [x['srv'] for x in out if not x['same']]
+    # 能不能分发：缓存必须有真实内容 + 必须能读到缓存的 buildid
+    can = bool(cache.get('hasContent') and cbuild)
+    return {'cache': cache, 'servers': out, 'behind': behind,
+            'canApply': can,
+            'applyBlockReason': (u'' if can else
+                                 (u'缓存没有实际文件（可能已被 ASAM 的 Clear Cache 清空），'
+                                  u'请先在 ASAM 的 Cache Manager 里点「Update local cache from steam」')),
+            'ts': time.strftime('%Y-%m-%d %H:%M:%S')}
+
+
+def _upd_status_snapshot():
+    """给前端用的轻量版（不含在线人数，秒回）"""
+    return _upd_status(include_players=False)
+
+
+def _upd_skip_set():
+    return set(x.lower() for x in UPDATE_SKIP_DIRS)
+
+
+def _upd_walk(base, skip_l):
+    """遍历目录（跳过存档/配置等），产出 (相对路径, 大小, mtime)"""
+    b = base.rstrip('\\')
+    for root, dirs, files in os.walk(b):
+        dirs[:] = [x for x in dirs if x.lower() not in skip_l]
+        for f in files:
+            fp = os.path.join(root, f)
+            try:
+                st = os.stat(fp)
+                yield fp[len(b) + 1:], st.st_size, int(st.st_mtime)
+            except Exception:
+                pass
+
+
+def _upd_make_plan(srv, cache=None, limit=25):
+    """生成单台分发计划（**纯只读**）：新增 / 变更 / 相同 / 目标端多余
+       —— 用于与 ASAM 的实操结果逐项对照，确认一致后才允许真跑。"""
+    cache = cache if isinstance(cache, dict) else _upd_cache_status()
+    src = cache.get('path') or UPDATE_CACHE_PATH
+    tgt = os.path.join(UPDATE_SERVERS_ROOT, srv)
+    plan = {'server': srv, 'src': src, 'tgt': tgt, 'ok': False, 'msg': '',
+            'add': 0, 'update': 0, 'same': 0, 'extra': 0, 'bytes': 0,
+            'samples': {'add': [], 'update': [], 'extra': []},
+            'acf': {}, 'skipDirs': list(UPDATE_SKIP_DIRS)}
+    if not cache.get('hasContent'):
+        plan['msg'] = u'缓存无实际文件（hasContent=false），无法生成计划'
+        return plan
+    if not os.path.isdir(tgt):
+        plan['msg'] = u'目标目录不存在：%s' % tgt
+        return plan
+    try:
+        skip_l = _upd_skip_set()
+        srcmap = {}
+        for rel, sz, mt in _upd_walk(src, skip_l):
+            srcmap[rel] = sz
+        tgtmap = {}
+        for rel, sz, mt in _upd_walk(tgt, skip_l):
+            tgtmap[rel] = sz
+        for rel, sz in srcmap.items():
+            if rel not in tgtmap:
+                plan['add'] += 1
+                plan['bytes'] += sz
+                if len(plan['samples']['add']) < limit:
+                    plan['samples']['add'].append(rel)
+            elif tgtmap[rel] != sz:
+                plan['update'] += 1
+                plan['bytes'] += sz
+                if len(plan['samples']['update']) < limit:
+                    plan['samples']['update'].append(rel)
+            else:
+                plan['same'] += 1
+        ex = [r for r in tgtmap.keys() if r not in srcmap]
+        plan['extra'] = len(ex)
+        plan['samples']['extra'] = ex[:limit]
+        plan['srcFiles'] = len(srcmap)
+        plan['tgtFiles'] = len(tgtmap)
+        # acf 预演：把目标 acf 改成与缓存一致（ASAM 的做法：buildid + depot manifest）
+        tacf = os.path.join(tgt, 'steamapps', UPDATE_ACF_NAME)
+        ta = _upd_read_acf(tacf)
+        plan['acf'] = {'path': tacf, 'exists': os.path.isfile(tacf),
+                       'nowBuildId': ta.get('buildid') or '',
+                       'nowManifest': ta.get('manifest') or '',
+                       'toBuildId': cache.get('buildId') or '',
+                       'toManifest': cache.get('manifest') or ''}
+        plan['ok'] = True
+        plan['msg'] = (u'新增 %d · 变更 %d · 相同 %d · 目标端多余 %d（不删）· 需复制 %.2f GB'
+                       % (plan['add'], plan['update'], plan['same'], plan['extra'],
+                          plan['bytes'] / 1073741824.0))
+    except Exception as e:
+        plan['msg'] = u'生成计划失败：%r' % e
+    return plan
+
+
+def _upd_patch_acf_text(t, buildid, manifest, sizeon, lastupd):
+    """把 appmanifest 文本改成与缓存一致（**纯函数，便于先预演后写盘**）
+       要改的字段（照 ASAM 的 `-app 2430930 -depot 2430931 -manifest <id>` 语义）：
+         buildid / LastUpdated / SizeOnDisk / BytesToDownload / BytesDownloaded
+         + depot <2430931> 的 manifest 号
+       ⚠ 只改值，不动结构；找不到的字段不在文件里凭空造（保持原样）。"""
+    out = t
+    def _set(key, val):
+        nonlocal out
+        if val is None or val == '':
+            return
+        pat = r'("%s"\s*")[^"]*(")' % key
+        if re.search(pat, out):
+            out = re.sub(pat, lambda m: m.group(1) + str(val) + m.group(2), out, count=1)
+    _set('buildid', buildid)
+    _set('LastUpdated', lastupd)
+    _set('SizeOnDisk', sizeon)
+    _set('BytesToDownload', sizeon)
+    _set('BytesDownloaded', sizeon)
+    # depot 段里的 manifest
+    if manifest:
+        pat = r'("%s"\s*\{[^}]*?"manifest"\s*")[^"]*(")' % UPDATE_DEPOT_ID
+        if re.search(pat, out, re.S):
+            out = re.sub(pat, lambda m: m.group(1) + str(manifest) + m.group(2),
+                         out, count=1, flags=re.S)
+    return out
 
 
 def _restart_loop():
@@ -8731,11 +10576,16 @@ def _utask_load():
         with open(UTASK_STATE_FILE, 'r', encoding='utf-8') as f:
             d = json.load(f) or {}
         items = [t for t in (d.get('items') or []) if isinstance(t, dict)]
+        _ldnow = time.time()
         for t in items:
             if t.get('phase') in ('run', 'queue'):
                 t['phase'] = 'fail'
                 t['err'] = u'后端重启导致中断'
                 t['hideAt'] = 0
+                # v6187b：补 tEnd、清 pct —— 原来 tEnd 恒为 0（前端算不出中断时刻）、
+                #   pct 残留（如 cfcore=8）⇒ 失败条画成 8% 红条，看着像「卡住」而非「已失败」。
+                t['tEnd'] = _ldnow
+                t['pct'] = 0
         with _UTASK_LOCK:
             _UTASK['items'] = items[-UTASK_MAX:]
             _UTASK['seq'] = int(d.get('seq') or 0)
@@ -8751,7 +10601,7 @@ def _utask_clean_text(s):
 
 
 def _utask_put(key, server, action, user, label=None, msg='', pct=0, phase='run',
-               steps=None, err='', meta=None):
+               steps=None, err='', meta=None, srv_name=None):
     """登记/更新一条任务（同 key 覆盖，保留 id）。返回任务 dict（副本）。"""
     now = time.time()
     with _UTASK_LOCK:
@@ -8767,7 +10617,8 @@ def _utask_put(key, server, action, user, label=None, msg='', pct=0, phase='run'
             t = {'id': _UTASK['seq'], 'key': key, 't0': now, 'steps': []}
             _UTASK['items'].append(t)
         t.update({'server': server,
-                  'srvName': (SERVER_THEMES.get(server) or {}).get('name') or server,
+                  # v6178：允许显式覆盖显示名（savekill 多台汇总任务显示「9 台」）
+                  'srvName': srv_name or (SERVER_THEMES.get(server) or {}).get('name') or server,
                   'action': action,
                   'label': label or _UTASK_ACT_LABEL.get(action) or action,
                   'phase': phase,
@@ -8824,7 +10675,52 @@ def _utask_stage(key, server, action, user, msg='', pct=0):
         return True
 
 
+# ===== v6212（用户口径「进度条并入总线」）：缓存更新进度伪装成一条任务 =====
+#   · 数据来自 SteamCMD 日志（只读推导），**不写 _UTASK / 不落盘**
+#   · 因此 服务器控制 / 安全回档 / 服务器更新 三处的任务列表会自动显示同一条进度条
+#     （前端 lbTaskRender 渲染同一份 /api/tasks 结果，零新增样式）
+_UPD_TASK_KEY = '__cache|steamupdate'
+_UPD_VIRT_SIG = ['']
+_UPD_VIRT_MEM = {'at': 0.0, 'val': None}
+
+
+def _utask_virtual_cache():
+    _now = time.time()
+    if _UPD_VIRT_MEM['val'] is not None and (_now - _UPD_VIRT_MEM['at']) < 1.2:
+        return _UPD_VIRT_MEM['val']
+    _v = None
+    try:
+        p = _upd_steam_progress()
+        _ph = str(p.get('phase') or '')
+        _idle_n = int(p.get('idleSec') or -1)
+        # v6212b：只注入「正在进行 / 刚结束」的状态 ——
+        #   实测 6.7 天前的 Success 也会被判成 phase=ok，若不加时间闸门会永久挂在任务列表里。
+        _keep = ((_ph == 'run')
+                 or (_ph == 'ok' and 0 <= _idle_n <= UPDATE_STEAM_OK_HOLD)
+                 or (_ph == 'fail' and 0 <= _idle_n <= 300))
+        if _ph in ('run', 'ok', 'fail') and _keep:
+            _pct = int(p.get('pct') or 0)
+            if _ph == 'run' and _pct <= 0:
+                _pct = 1
+            _v = {'id': -1, 'key': _UPD_TASK_KEY, 'server': '__cache',
+                  'srvName': u'Steam 缓存', 'action': 'cacheupdate', 'label': u'缓存更新',
+                  'phase': _ph, 'pct': max(0, min(100, _pct)),
+                  'msg': str(p.get('msg') or '')[:160],
+                  'err': (str(p.get('msg') or '')[:300] if _ph == 'fail' else ''),
+                  'operator': '', 'operatorName': '',
+                  't0': _now, 'tEnd': (0 if _ph == 'run' else _now),
+                  'hideAt': (0 if _ph == 'run' else (_now + UPDATE_STEAM_OK_HOLD)),
+                  'steps': p.get('steps') or []}
+    except Exception:
+        _sexc('utask_virtual_cache')
+        _v = None
+    _UPD_VIRT_MEM['at'] = _now
+    _UPD_VIRT_MEM['val'] = _v
+    return _v
+
+
 def _utask_list(since=0):
+    _virt = _utask_virtual_cache()
     with _UTASK_LOCK:
         # v6128：读取路径也做一次过期回收
         #   原实现 GC 只在写入时调用 ⇒ 带 hideAt 的「已完成」任务永远挂在列表里
@@ -8833,10 +10729,20 @@ def _utask_list(since=0):
         if len(_UTASK['items']) != _n_before:
             _UTASK['rev'] += 1
             _utask_save_locked()
+        # v6212：虚拟任务状态变化时推进 rev —— 否则 since==rev 的增量轮询永远收不到进度更新
+        try:
+            _vsig = ('%s|%s|%s' % (_virt.get('phase'), _virt.get('pct'), _virt.get('msg'))) if _virt else ''
+        except Exception:
+            _vsig = ''
+        if _vsig != _UPD_VIRT_SIG[0]:
+            _UPD_VIRT_SIG[0] = _vsig
+            _UTASK['rev'] += 1
         if since and int(since) == int(_UTASK['rev']):
             return {'rev': _UTASK['rev'], 'changed': False, 'tasks': []}
-        return {'rev': _UTASK['rev'], 'changed': True,
-                'tasks': [dict((k, v) for k, v in t.items()) for t in _UTASK['items']]}
+        _items = [dict((k, v) for k, v in t.items()) for t in _UTASK['items']]
+        if _virt:
+            _items.append(_virt)
+        return {'rev': _UTASK['rev'], 'changed': True, 'tasks': _items}
 
 
 def _utask_dismiss(ids=None, all_fail=False):
@@ -9673,12 +11579,19 @@ class Handler(BaseHTTPRequestHandler):
                 pass
         elif path == '/api/server_config':
             # P3：公开读域名 + ASA token 掩码（**永不返回明文**）
+            # v6218：追加 IP 切换三开关真值 —— 前端「切换演练」模块要用（均为非敏感 bool）。
+            #   注意 enable/dry 走 _restart_*_now()（配置优先，环境变量其次），
+            #   不能直接读 _srv_cfg_read()，否则环境变量锁定时显示与真实行为不一致。
             _sd = _srv_cfg_read()
             self._send(200, {'ok': True,
                              'server_domain': _sd.get('server_domain') or '',
                              'asa_base': _sd.get('asa_base') or 'https://asa.whiterober.com',
                              'asa_token_masked': _asa_mask(_sd.get('asa_token') or ''),
-                             'asa_configured': bool(_sd.get('asa_token'))})
+                             'asa_configured': bool(_sd.get('asa_token')),
+                             'ipwatch_restart': bool(_restart_enable_now()),
+                             'ipwatch_restart_dry': bool(_restart_dry_now()),
+                             'ipwatch_announce_real': bool(_restart_announce_real_now()),
+                             'ipwatch_env_locked': bool(RESTART_ENABLE or os.environ.get('IPWATCH_RESTART_DRY') is not None)})
             return
         elif path == '/api/ipwatch':
             # v6121：公网 IP 监视状态（只读；仅域名/IP 等非敏感信息）
@@ -9687,11 +11600,50 @@ class Handler(BaseHTTPRequestHandler):
                 _snap['history'] = list(_IPWATCH['history'])[-20:]
             _snap['ok'] = True
             _snap['stateFile'] = os.path.basename(IPWATCH_STATE_FILE)
+            # v6160：changedAt 转 epoch 秒，供前端做「服务器启动时间 < IP 变化时间」判定
+            _snap['changedAtTs'] = 0
+            try:
+                if _snap.get('changedAt'):
+                    _snap['changedAtTs'] = int(time.mktime(
+                        time.strptime(str(_snap['changedAt']), '%Y-%m-%d %H:%M:%S')))
+            except Exception:
+                _snap['changedAtTs'] = 0
+            # v6170（用户口径）：旧 IP —— 前端 tips 需显示「旧IP → 新IP」，
+            #   取 history 中最近一条 event=changed 的 prev；无变更记录时为空。
+            _snap['prevIp'] = ''
+            try:
+                for _h in reversed(_snap.get('history') or []):
+                    if isinstance(_h, dict) and _h.get('event') == 'changed':
+                        _snap['prevIp'] = str(_h.get('prev') or '')
+                        break
+            except Exception:
+                _snap['prevIp'] = ''
             try:
                 _snap['restart'] = _restart_snapshot()   # v6129（M3）：重启编排状态
             except Exception:
                 _snap['restart'] = {'running': False}
             self._send(200, _snap)
+            return
+        elif path == '/api/update/status':
+            # v6206：SteamCMD Cache 状态（只读）—— 缓存 buildid / 11 台对比 / 落后清单
+            #   ?players=1 才逐台查在线人数（慢接口，前端默认不传）
+            # v6206b：**必须本地 parse_qs** —— 本作用域没有 `qs`/`g()`（它们只存在于个别分支内部），
+            #   原写法导致 UnboundLocalError -> 每个请求都 502。
+            _qs_u = parse_qs(parsed.query)
+            _u_upd = _srvctl_guard(self, _qs_u)
+            if not _u_upd:
+                return
+            _with_p = str((_qs_u.get('players') or [''])[0]).lower() in ('1', 'true', 'yes')
+            _r_up = _upd_status(include_players=_with_p)
+            # v6212：附 SteamCMD 更新进度摘要（只读日志推导；**不含日志正文**，用户明确不要）
+            try:
+                _sp = _upd_steam_progress()
+                _sp.pop('steps', None)          # steps 只给任务总线用，status 里精简
+                _r_up['steam'] = _sp
+            except Exception:
+                _sexc('upd_status_steam')
+                _r_up['steam'] = {'found': False, 'phase': 'na', 'msg': u'日志解析失败'}
+            self._send(200, _r_up)
             return
         elif path == '/api/srvctl/status':
             # P3：转发 ASA GET /server-status（仅读）；仅二级管理员可读
@@ -9737,10 +11689,16 @@ class Handler(BaseHTTPRequestHandler):
                              'status': str(_it.get('Status') or ''),
                              'version': str(_it.get('OfficialServerVersion') or ''),
                              # v5981：该服**实际运行**版本（前端角标显示用；OfficialServerVersion 是官方网络值，语义不同）
-                             'serverVersion': str(_it.get('ServerVersion') or '')})
+                             'serverVersion': str(_it.get('ServerVersion') or ''),
+                             # v6160：本次进程启动时刻（epoch 秒）—— IP 失效判定用；0 = 取不到
+                             'bootAt': _srv_boot_at(_sid) if _sid else 0})
             # v5981：官方服务器版本 = 资讯广场 patch_pc 里 Server 补丁的最大版本号（96.9 这类）
             self._send(200, {'ok': True, 'servers': _out, 'official': _news_official_version(),
                              'ms': int((time.time() - _t0) * 1000)})
+            return
+        elif path == '/api/health':
+            # v6155：后端健康/状态（**无鉴权、极轻**）—— 前端「系统管理 → 后端服务」直读
+            self._send(200, _health_payload())
             return
         elif path == '/api/tasks':
             # v6122：统一任务列表（全服共享一份；权限跟随所在浮窗 = 同一 srvctl guard）
@@ -10008,6 +11966,54 @@ class Handler(BaseHTTPRequestHandler):
         # 配置规则：全服刷新（仅系统拥有者；后端自己读 11 台 ini → 落快照，全玩家共享）
         # 服务器域名：写（仅系统拥有者）
         # 2026-10-28：粑粑笔记导入（仅拥有者；整份覆盖）
+        if path == '/api/update/apply':
+            # v6207：一键分发（**默认 dry，只出计划不写任何文件**）
+            #   body: { servers: [...], dry: true(默认), confirm: 'APPLY' 才允许真跑 }
+            #   真跑会：在线检查 -> 存档 -> 停服 -> 逐文件复制 -> 改 acf -> 起服（v6207b 实装）
+            _u_ap = _srvctl_guard(self, qs, need_token=True)
+            if not _u_ap:
+                return
+            if _role_level(_u_ap) < 2:
+                self._send(403, {'ok': False, 'code': 'admin_only', 'error': u'仅二级管理员可用'})
+                return
+            _arr_a = body.get('servers')
+            if not isinstance(_arr_a, list):
+                _arr_a = [x.strip() for x in str(body.get('servers') or '').split(',') if x.strip()]
+            _srv_a = []
+            for _s in _arr_a:
+                _s2 = str(_s or '').strip()
+                if _s2 and (_s2 in SERVERS) and (_s2 not in _srv_a):
+                    _srv_a.append(_s2)
+            if not _srv_a:
+                self._send(400, {'ok': False, 'code': 'no_servers', 'error': u'未选择服务器'})
+                return
+            _dry_a = body.get('dry')
+            _dry_a = True if _dry_a is None else str(_dry_a).lower() in ('1', 'true', 'yes', 'on')
+            _cache_a = _upd_cache_status()
+            if not _cache_a.get('hasContent'):
+                self._send(200, {'ok': False, 'code': 'cache_empty', 'dry': _dry_a,
+                                 'error': _cache_a.get('path') and
+                                 (u'缓存没有实际文件，请先在 ASAM 的 Cache Manager 点'
+                                  u'「Update local cache from steam」'),
+                                 'cache': _cache_a})
+                return
+            _plans = [_upd_make_plan(_s3, _cache_a) for _s3 in _srv_a]
+            if _dry_a:
+                self._send(200, {'ok': True, 'dry': True, 'cache': _cache_a,
+                                 'plans': _plans,
+                                 'note': u'预演模式：未修改任何文件。确认计划与 ASAM 实操一致后，'
+                                         u'再传 dry=false 且 confirm=APPLY 才真跑'})
+                return
+            if str(body.get('confirm') or '') != 'APPLY':
+                self._send(400, {'ok': False, 'code': 'need_confirm',
+                                 'error': u'真跑需在 body 里传 confirm="APPLY"',
+                                 'plans': _plans})
+                return
+            self._send(501, {'ok': False, 'code': 'not_implemented',
+                             'error': u'v6207b 才实装真跑（等缓存有内容并与 ASAM 对照后再开）',
+                             'plans': _plans})
+            return
+
         if path == '/api/arkbackup/verify':
             # P0 只读：单档校验（sha256 + SQLite 头）。只在用户点「验证」时调用（方案 §6.2 / O4）
             _u_av = _srvctl_guard(self, qs, need_token=True)
@@ -10494,9 +12500,128 @@ class Handler(BaseHTTPRequestHandler):
             _n = _utask_dismiss(_idset, bool(body.get('allFail')))
             self._send(200, {'ok': True, 'removed': _n})
             return
+        if path == '/api/tasks/abort':
+            # v6164（计划 §16 第 7 项 / C8）：中止自动重启编排
+            #   {server:'Isl'} 中止单台（其余继续）；{all:true} 中止整批
+            _u_ab = _srvctl_guard(self, qs, need_token=True)
+            if not _u_ab:
+                return
+            if _role_level(_u_ab) < 2:
+                self._send(403, {'ok': False, 'code': 'admin_only', 'error': u'仅二级管理员可用'})
+                return
+            _all_ab = bool(body.get('all')) or str(g('all') or '').lower() in ('1', 'true', 'yes', 'on')
+            if _all_ab:
+                _nab = 0
+                for _s_ab in list((_RESTART.get('servers') or {}).keys()):
+                    try:
+                        if _restart_abort(_s_ab, _u_ab):
+                            _nab += 1
+                    except Exception:
+                        _sexc('abort_all')
+                with _RESTART_LOCK:
+                    _RESTART['running'] = False
+                    _RESTART['current'] = ''
+                _restart_log('ABORT ALL by %s (%d 台)' % (_u_ab, _nab))
+                self._send(200, {'ok': True, 'all': True, 'aborted': _nab, 'user': _u_ab})
+                return
+            _srv_ab = str(body.get('server') or g('server') or '').strip()
+            if not _srv_ab:
+                self._send(400, {'ok': False, 'code': 'bad_arg', 'error': u'缺少 server（或传 all:true）'})
+                return
+            _ok_ab = False
+            try:
+                _ok_ab = _restart_abort(_srv_ab, _u_ab)
+            except Exception:
+                _sexc('abort_one')
+            self._send(200 if _ok_ab else 404,
+                       {'ok': bool(_ok_ab), 'server': _srv_ab, 'user': _u_ab,
+                        'error': '' if _ok_ab else u'该服不在编排中（或已结束）'})
+            return
+        if path == '/api/admin/restart':
+            # v6155（用户口径「不依赖计划任务」）：仅系统拥有者；**两级 spawn 成功后**才回 200 并退出
+            # v6156：guard 传 qs（否则 ?tk= 被忽略，前端不带 Authorization 头时一律 401）
+            _u_rb = _srvctl_guard(self, qs, need_token=True)
+            if not _u_rb:
+                return
+            if _role_level(_u_rb) < 3:
+                self._send(403, {'ok': False, 'code': 'owner_only', 'error': u'仅系统拥有者可用'})
+                return
+            with _RESTART_LOCK:
+                _busy_rb = bool(_RESTART.get('running'))
+                _dry_rb = bool(_RESTART.get('dry'))
+            _sp_ok, _sp_how, _sp_err = _admin_spawn_restart(3)
+            _admin_log('RESTART request by %s -> spawn ok=%s how=%s err=%s'
+                       % (_u_rb, _sp_ok, _sp_how, (_sp_err or '')[:200]))
+            if not _sp_ok:
+                self._send(500, {'ok': False, 'code': 'spawn_failed',
+                                 'error': u'无法拉起重启进程，已放弃退出（后端保持运行）',
+                                 'detail': _sp_err[:300]})
+                return
+            self._send(200, {'ok': True, 'msg': u'后端将在 1 秒后退出，由脚本重新拉起',
+                             'how': _sp_how, 'restartRunning': _busy_rb, 'dry': _dry_rb, 'user': _u_rb})
+            threading.Timer(0.2, lambda: _admin_do_restart(_u_rb, _sp_how)).start()
+            return
+        if path == '/api/restart/enable':
+            # v6167（计划 §16 第 8 项，2026-11-06）：编排开关**热切** —— 仅系统拥有者
+            #   背景：ipwatch_restart / ipwatch_restart_dry 原先只能手工编辑 server_config.json，
+            #         没有文件通道时（Agent / 远程运维）无法开或关编排；本路由把它变成一次 HTTP 调用。
+            _u_re = _srvctl_guard(self, qs, need_token=True)
+            if not _u_re:
+                return
+            if _role_level(_u_re) < 3:
+                self._send(403, {'ok': False, 'code': 'owner_only', 'error': u'仅系统拥有者可用'})
+                return
+            _has_en = ('enable' in body) or ('enable' in qs)
+            _has_dry = ('dry' in body) or ('dry' in qs)
+            # v6169：可选「dry 下也真发广播」开关（验收公告用，不影响停服）
+            _has_ann = ('announceReal' in body) or ('announceReal' in qs)
+            if not _has_en and not _has_dry and not _has_ann:
+                self._send(400, {'ok': False, 'code': 'bad_arg', 'error': u'缺少 enable / dry / announceReal'})
+                return
+
+            def _bv_switch(_k):
+                _v = body.get(_k)
+                if _v is None:
+                    _v = g(_k)
+                if isinstance(_v, bool):
+                    return _v
+                return str(_v).strip().lower() in ('1', 'true', 'yes', 'on')
+
+            try:
+                _d_re = _srv_cfg_read()
+                if _has_en:
+                    _d_re['ipwatch_restart'] = _bv_switch('enable')
+                if _has_dry:
+                    _d_re['ipwatch_restart_dry'] = _bv_switch('dry')
+                if _has_ann:
+                    _d_re['ipwatch_announce_real'] = _bv_switch('announceReal')
+                _d_re['updated_at'] = time.strftime('%Y-%m-%dT%H:%M:%S+08:00')
+                _d_re['updated_by'] = _u_re
+                _srv_cfg_write(_d_re)
+            except Exception as e:
+                self._send(500, {'ok': False, 'error': repr(e)})
+                return
+            _en_re = _restart_enable_now()
+            _dr_re = _restart_dry_now()
+            # v6217：热切后同步快照 —— 否则 /api/ipwatch 的 restart.dry 与任务条 meta.dry
+            #   仍是上一轮的值（实测切 dry=false 后仍报 true），真跑时前端显示「演练」会误导验收。
+            #   编排运行中不动（本轮模式已定，改它只会让日志与实际行为不一致）。
+            try:
+                with _RESTART_LOCK:
+                    if not _RESTART.get('running'):
+                        _RESTART['dry'] = bool(_dr_re)
+            except Exception:
+                pass
+            _restart_log('ENABLE switch by %s -> enable=%s dry=%s' % (_u_re, _en_re, _dr_re))
+            self._send(200, {'ok': True, 'enable': _en_re, 'dry': _dr_re,
+                             'announceReal': _restart_announce_real_now(),
+                             'envEnableLocked': bool(RESTART_ENABLE),
+                             'envDryLocked': os.environ.get('IPWATCH_RESTART_DRY') is not None,
+                             'user': _u_re})
+            return
         if path == '/api/restart/dryrun':
             # v6132：人工触发演练（**强制 dry=true**，不会真停/真启），仅二级管理员
-            _u_rd = _srvctl_guard(self, None, need_token=True)
+            _u_rd = _srvctl_guard(self, qs, need_token=True)   # v6156：兼容 ?tk=
             if not _u_rd:
                 return
             with _RESTART_LOCK:
@@ -10518,6 +12643,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(400, {'ok': False, 'error': 'bad action', 'code': 'bad_action',
                                  'actions': list(SRVCTL_ACTIONS)})
                 return
+            # v6203（用户口径）：来源标记 —— 前端「任务条重试」传 retry，日志标 [重试]
+            _src = str(body.get('src') or g('src') or '').strip().lower()[:16]
             _msgv = body.get('message')
             _msg = None
             if _act == 'rcon':
@@ -10567,7 +12694,13 @@ class Handler(BaseHTTPRequestHandler):
                 if _soft and _intr:
                     for _s in _soft:
                         _restart_abort(_s, _u)
-                        _srv_lock_clear(_s, 'restart|%s' % _s)
+                        # v6168（计划 §16 第 9 项 9b 实测暴露）：原来清锁硬编码 'restart|<服>'，
+                        #   而 refresh 等其他 soft 锁的 owner 是 '<kind>|<服>' ⇒ 清错 owner，
+                        #   锁会一直留到 TTL(900s) 自然过期；用户表现是「打断一次后每次操作都要再点 interrupt」。
+                        #   改为按**实际 owner** 清（_restart_abort 内部已处理 restart 锁，这里补其余类型）。
+                        _lk_x = (_allk.get(_s) or {})
+                        _own_x = str(_lk_x.get('owner') or ('restart|%s' % _s))
+                        _srv_lock_clear(_s, _own_x)
             except Exception:
                 _sexc('srv_lock_gate')
             # v6014（用户口径）：**所有** start 一律走队列 —— 含单台启动与失败重试。
@@ -10575,7 +12708,7 @@ class Handler(BaseHTTPRequestHandler):
             #   可绕过重压池（同时 <= 2 台）导致并发超标；改为统一入队后重压池才真正成立。
             if _act == 'start':
                 try:
-                    _q = _srvctl_startq_new(_u, _srvl)
+                    _q = _srvctl_startq_new(_u, _srvl, src=_src)
                 except Exception as _e:
                     self._send(500, {'ok': False, 'code': 'queue_error', 'error': repr(_e)})
                     return
@@ -10593,11 +12726,12 @@ class Handler(BaseHTTPRequestHandler):
                 return
             try:
                 if _act in SRVCTL_ASYNC_ACTIONS:
-                    _jid = _srvctl_job_new(_u, _act, _srvl)
+                    _jid = _srvctl_job_new(_u, _act, _srvl, src=_src)
                     self._send(200, {'ok': True, 'async': True, 'jobId': _jid,
                                      'action': _act, 'servers': _srvl})
                     return
-                _res = _srvctl_run(_u, _srvl, _act, _msg)
+                _res = _srvctl_run(_u, _srvl, _act, _msg,
+                                   force=bool(body.get('force') or False), src=_src)
                 self._send(200, {'ok': all(bool(r.get('ok')) for r in _res),
                                  'action': _act, 'results': _res})
             finally:

@@ -5975,6 +5975,12 @@ function lbSheetBuild(id, opts){
       + '</div>';
     document.body.appendChild(ov);
   }
+  /* v6211（用户口径「在线玩家行的 tips 呢」）：**所有 lbSheet 浮窗在此统一挂 tips 引擎** ——
+     tips 引擎靠 .lb-tipb 标记类（closest('.lb-tipb')），原来只有 lbSrvCtl / lbNews 两份复制品
+     各自写死容器，新建浮窗默认没有 ⇒ 气泡全丢（#lbUpd 就这么中招的）。
+     这里建窗即挂，以后新增浮窗无需再记。lbTipsWatch 定义在 app_core.js（先加载），
+     延迟加载场景用 typeof 兜底。 */
+  try { if (typeof lbTipsWatch === 'function') lbTipsWatch(id, 60); } catch (eT) {}
   return {
     ov: ov,
     title: document.getElementById(id + 'Title'),
@@ -6370,39 +6376,15 @@ function lbNewsImgErr(img){
    做法：渲染后给 #lbNews 内所有带 title 的元素补 .lb-tipb，交给项目 tips 引擎 #lbTipBox。
    作用域仅 #lbNews（不动 lbSheet 共享模板，wiki 等其它浮窗不受影响）。
    注：.lb-tipb 在本项目无任何 CSS 定义（纯标记类）⇒ 补 class 不会改变外观。 */
+/* v6211（用户口径「复用非复制」）：本函数原是 lbSrvCtlTips 的**复制品（第 2 份）**，
+   现统一改调 app_core.js 的通用挂载器 lbTipsMark / lbTipsWatch（唯一实现），此处只留薄包装。
+   60ms 防抖沿用原行为（资讯内容是异步插入/展开重建的，合并高频重渲染）。 */
 function lbNewsTips(){
-  try{
-    var root = document.getElementById('lbNews');
-    if (!root) return 0;
-    var ss = root.querySelectorAll('[title]'), n = 0;
-    for (var i = 0; i < ss.length; i++){
-      var el = ss[i];
-      if (!el.getAttribute('title')) continue;                 // 空 title 无意义
-      if (el.classList && !el.classList.contains('lb-tipb')){ el.classList.add('lb-tipb'); n++; }
-    }
-    return n;
-  }catch(e){ return 0; }
+  if (typeof lbTipsMark === 'function') return lbTipsMark('lbNews');
+  return 0;   /* app_core 未加载时兜底：不补类，保持原生 title */
 }
-/* 本地内容是异步插入/展开重建的 ⇒ 加 MutationObserver 兜底；
-   只监听 childList+subtree（不监听 attributes）⇒ lbNewsTips 只改 class，不会自激循环 */
 function lbNewsTipsWatch(){
-  try{
-    var root = document.getElementById('lbNews');
-    if (!root) return;
-    var old = window.__lbNewsTipsMO;
-    if (old){
-      try{ if (old.__root === root && document.contains(root)) return; }catch(e0){}
-      try{ old.disconnect(); }catch(e1){}
-    }
-    var tm = null;
-    var mo = new MutationObserver(function(){
-      if (tm) return;
-      tm = setTimeout(function(){ tm = null; lbNewsTips(); }, 60);
-    });
-    mo.observe(root, { childList: true, subtree: true });
-    mo.__root = root;
-    window.__lbNewsTipsMO = mo;
-  }catch(e2){}
+  if (typeof lbTipsWatch === 'function'){ lbTipsWatch('lbNews', 60); return; }
 }
 /* v5959（用户口径「资讯广场要有 AI 模块（复用非复制 wiki 的 ai 模块，整理按钮改叫翻译）」）：
    复用 lbTipsAiBoxHtml（wiki 用的同一个盒子，零复制），只换 state 文案与按钮名。

@@ -1657,7 +1657,7 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 /* ===== 原 <style> 块 #3（外置于 2026-11-05 B1a） ===== */
 /* ===== v72：Wiki 面板（视觉对齐项目：#16161f 面板 / #2a2a3a 边线 / #7c3aed 主色） ===== */
 #lbWikiOverlay{position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.9);display:none;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}
-#lbWikiOverlay.show{display:flex}#lbWikiItemOverlay, #lbNews, #lbSrvCtl, #lbArkBk{position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.9);display:none;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}#lbWikiItemOverlay.show, #lbNews.show, #lbSrvCtl.show, #lbArkBk.show{display:flex}   /* ⚠ 新增 lbSheetBuild 浮窗必须同步加进上面两行白名单，否则 display:none 缺失 ⇒ 浮窗关不掉（v5966 lbSrvCtl / v6032 lbArkBk 各踩一次） */   /* v5966：#lbSrvCtl 缺显示/隐藏规则 ⇒ 浮窗关不掉 */
+#lbWikiOverlay.show{display:flex}#lbWikiItemOverlay, #lbNews, #lbSrvCtl, #lbArkBk, #lbUpd{position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.9);display:none;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}#lbWikiItemOverlay.show, #lbNews.show, #lbSrvCtl.show, #lbArkBk.show, #lbUpd.show{display:flex}   /* ⚠ 新增 lbSheetBuild 浮窗必须同步加进上面两行白名单，否则 display:none 缺失 ⇒ 浮窗关不掉（v5966 lbSrvCtl / v6032 lbArkBk / v6208 lbUpd 各踩一次） */   /* v5966：#lbSrvCtl 缺显示/隐藏规则 ⇒ 浮窗关不掉 */
 /* v6030（用户口径「小标题为啥非要先渲染再隐藏，这就是脱裤子放屁」）：
    紧跟置顶文案块(.tc-intro)的小标题直接用 :has() 在**样式计算阶段**隐藏 ——
    浏览器第一次布局就按 display:none 算，不会出现「先画出来再藏掉」的可见中间态，
@@ -1723,7 +1723,7 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 .lw-ok{color:#4ade80;font-size:12.5px;line-height:1.9}
 /* v153（用户口径）：移动端整屏 —— 原仅 max-height，内容少时面板只占半屏，不是整屏 */
 @media (max-width:640px){
-  #lbWikiOverlay{padding:0;align-items:stretch;justify-content:stretch}#lbWikiItemOverlay, #lbNews, #lbSrvCtl, #lbArkBk{padding:0;align-items:stretch;justify-content:stretch}
+  #lbWikiOverlay{padding:0;align-items:stretch;justify-content:stretch}#lbWikiItemOverlay, #lbNews, #lbSrvCtl, #lbArkBk, #lbUpd{padding:0;align-items:stretch;justify-content:stretch}
   .lw-panel{width:100%;max-width:100%;height:100vh;height:100dvh;max-height:100vh;max-height:100dvh;border-radius:0;border-left:none;border-right:none;border-top:none;border-bottom:none;box-shadow:none}
   /* v5736（用户口径）：繁殖 tab ④ 时间轴在移动端自动改**竖版** —— 节点「圆点+名称」横排，阶段改为左侧竖线+缩进文字 */
   #lbWikiOverlay .tc-tl-row{flex-direction:column;align-items:stretch}
@@ -2852,8 +2852,34 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
 /* v6026（用户口径）：「当前官服版本」改成可点链接 → 资讯广场「ASA PC版本」Tab */
 .lb-srvctl-official .lb-verlink{color:#a78bfa;border-bottom:1px dashed #a78bfa88;cursor:pointer;transition:color .12s,border-color .12s}
 .lb-srvctl-official .lb-verlink:hover{color:#c4b5fd;border-bottom-color:#c4b5fd}
+/* v6213（用户口径「注销入口 移到底栏（改成链接样式）」）：通用文字链接按钮 ——
+   无边框无底色，虚线底边提示可点，hover 变亮（与 .lb-verlink 同色系） */
+.lb-linkbtn{color:#a78bfa;cursor:pointer;border-bottom:1px dashed #a78bfa88;transition:color .12s,border-color .12s;user-select:none}
+.lb-linkbtn:hover{color:#c4b5fd;border-bottom-color:#c4b5fd}
 @keyframes lbBadgePulse{0%{box-shadow:0 0 0 0 rgba(245,158,11,.85)}70%{box-shadow:0 0 0 5px rgba(245,158,11,0)}100%{box-shadow:0 0 0 0 rgba(245,158,11,0)}}
 .server-tab-cnt.mis{animation:lbBadgePulse 1.4s ease-in-out infinite}
+/* v6158（用户口径·方案 B）：服务器 TAB 角标图例（横排 chip）+ IP 失效左上紫点脉冲 */
+.lb-srvctl-legend{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin:-7px 0 12px;font-size:11px;color:#9aa3b5}
+.lb-srvctl-legend .it{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+/* v6163b（用户口径「图例记得也改」）：mini 块跟随真实 TAB 改正方形（18×18，原 20×13），
+   图标示意线按「只加上内边距」的比例往下坐，与真实按钮形状一致。 */
+.lb-srvctl-legend .mini{position:relative;display:inline-block;width:18px;height:18px;border-radius:3px;
+  border:1px solid #45455a;background:#1a1a24;flex:0 0 auto}
+/* v6165（用户口径「是不是也要下沉一点」）：灰条 top 7 → 9 —— 真实 TAB 图标中心在 56% 处（padding-top 8 + 图标 15 在 32 高里居中），
+   mini 18px 对应约 10px，原来 7px 偏高约 2px，下沉后与实物位置对齐。 */
+.lb-srvctl-legend .mini .mline{position:absolute;left:5px;top:9px;width:7px;height:2px;border-radius:1px;background:#4b5563}
+.lb-srvctl-legend .mini .mc{position:absolute;top:-3px;right:-3px;width:9px;height:7px;border-radius:3px;background:#22c55e}
+.lb-srvctl-legend .mini.stop .mc{background:#ef4444}
+.lb-srvctl-legend .mini.mis .mc{animation:lbBadgePulse 1.4s ease-in-out infinite}
+/* v6163（用户口径）：**仅「服务器控制」浮窗内**的服务器 TAB 改为正方形 ——
+   宽度不动（保持内容自适应 ≈32px），高度 28 → 32；多出的高度**全部给上内边距**（8px），下内边距仍 4px，
+   等于图标往下坐、不与右上角标贴脸。其它地方的 .server-tab（如编辑浮窗地图选择）不受影响。 */
+#lbSrvCtl .lb-srvctl-chips .server-tab{height:32px;padding:8px 8px 4px}
+/* v6162（用户口径）：IP 失效由「左上紫点」改为「TAB 1px 紫色内描边」—— 不占空间、不与右上角标打架；
+   选中（紫底）时换淡紫，避免糊在一起。图例 mini 块同款处理。 */
+.server-tab.ipb{box-shadow:inset 0 0 0 1px #a855f7}
+.server-tab.ipb.active{box-shadow:inset 0 0 0 1px #ddd6fe}
+.lb-srvctl-legend .mini.ipx{box-shadow:inset 0 0 0 1px #a855f7}
 .lb-srvctl-chips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px}
 .lb-srvctl-chip{padding:5px 12px;border-radius:16px;border:1px solid #333;background:#1e1e28;color:#c8cede;font-size:12.5px;cursor:pointer;transition:all .12s}
 .lb-srvctl-chip:hover{border-color:#f59e0b;color:#fbbf24}
@@ -2865,6 +2891,16 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
 .lb-srvctl-online .ol-s{display:inline-flex;align-items:center;gap:3px;margin-right:11px;white-space:nowrap}
 .lb-srvctl-online .ol-s i{font-size:12px;opacity:.7}
 .lb-srvctl-online .ol-n{color:#a78bfa;font-weight:600;margin-right:1px}
+/* v6171：Bob（俱乐部）「仅进服」小标签 —— 3 字、9px、不换行、不撑高 */
+/* v6173（用户口径「徽章不允许撑高在线角色行」）：
+   徽章改**绝对定位** ⇒ 完全脱离文档流，行高只由名字决定，徽章浮在名字正下方。
+   左边缘靠 left:0 与名字严格对齐；与名字的上下间距由 margin-top 控制（想更紧可设负值）。 */
+.lb-srvctl-online .ol-bob{position:absolute;left:0;top:100%;margin-top:1px;z-index:2;
+  font-style:normal;font-size:9px;line-height:13px;padding:0 4px;
+  border-radius:7px;background:#3f2d1a;color:#fbbf24;border:1px solid #a16207;white-space:nowrap}
+/* v6173：首个名字的定位基准（relative），自身高度 = 名字高度 ⇒ 不被徽章撑高 */
+.lb-srvctl-online .ol-stack{position:relative;display:inline-flex;flex-direction:column;align-items:flex-start;
+  vertical-align:middle;margin-right:7px}
 .lb-srvctl-online .ol-g{color:#4b5263}
 .lb-srvctl-online .ol-non{color:#5f6779}
 .lb-srvctl-online .ol-sum{color:#a78bfa;font-weight:600;margin-right:5px}

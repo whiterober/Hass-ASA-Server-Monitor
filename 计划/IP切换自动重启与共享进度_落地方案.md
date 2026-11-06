@@ -427,13 +427,38 @@ No restarted target available yet — please log off and wait; we will be back s
 | **C17** | ⚪ P3 | `GET /api/tasks/stream`（SSE） | 方案标"可选" | 可长期不做（2s 轮询够用） |
 | **C18** | ⚪ P3 | G6 约束无门禁 | 仅文档约定 | 可选：pre-commit 或部署脚本里 grep「新增进度渲染」告警 |
 
+#### 14.1.1 收口状态（2026-11-06 复核）
+
+| ID | 状态 | 依据 / 待办 |
+|---|---|---|
+| C1 | ✅ 已解决 | v6152 真执行器接入；dry 演练全程 `exec*` 日志 **0 条** |
+| C2 | ✅ 已解决 | v6152 真 VERIFY（读 `ShooterGame.log` 命中 `advertising for join`） |
+| C3 | ✅ 已解决 | v6152 `attempts+1` → 回 ready / 超限 fail |
+| C4 | ✅ 已解决 | v6157 排序键 `(Bob 最后, 有存档优先, 在线升序, readyAt)`；**真跑才能区分优先级**（dry 演练同值无可区分） |
+| C5 | ✅ 已解决 | v6157 插 `saveworld` 步 + DinoData 落盘屏障；`saveworld ok` 日志待真跑 |
+| C6 | ✅ 已解决 | v6157 Bob `kill` 分支 + 排最后；真跑待验 |
+| C7 | ✅ 已解决 | v6164 `RESTART_START_COOLDOWN=600`；`skip start (cooldown)` 待真触发验证 |
+| C8 | ✅ **已解决并实测** | v6164 路由 + 前端按钮；2026-11-06 dry 编排实测单台/整批均通过（详见 §16 第 7 项） |
+| C9 | ✅ 已解决 | v6164 `LB_TASK_SRC !== 'server'` 时完全不请求 `/api/tasks`（止血开关） |
+| C10 | ⏳ 待验 | 需真实跨服传送写入（§16 第 9 项） |
+| C11 | ⏳ 待验 | 需空服真跑抓 broadcast 回显（§16 第 8 项） |
+| C12 | ⏳ 待验 | 需改 `public_ip_state.json.lastIp` 造假（§16 第 8 项） |
+| C13 | ⏳ 待验 | 需双设备并发比对（§16 第 10 项） |
+| C14 | ⏳ 待验 | 需同服连点两次「启动」（§16 第 10 项） |
+| C15 | ⏳ 待验 | 需空置达标后人为进服（§16 第 9 项） |
+| C16 | ⏳ 待验 | 需编排上锁期间点「存档」（§16 第 9 项） |
+| C17 | ⚪ 放弃 | SSE 可选；2s 轮询已够用 |
+| C18 | ⚪ 放弃 | G6 门禁：仅文档约定即可 |
+
+> **配置收口现状**：`GET /api/ipwatch` → `restart.dry: true`（演练态保持，符合"未真跑不得关演练"）、`restart.enable: false`（`ipwatch_restart` 仍关，属预期——第 4 项真跑时才临时打开，跑完立即回滚）
+
 ### 14.2 安全/环境遗留（与方案正交，但一直挂着）
 
 | ID | 优先级 | 事项 | 现状 |
 |---|:---:|---|---|
-| S1 | 🟠 P1 | `accounts.json` 9 个明文口令轮换 | 未做 |
-| S2 | ⚪ P3 | `kanbujiandehai` 的 nick「咪」不在真实玩家名集合 | 操作人徽章会显示错名 |
-| S3 | 🟡 P2 | **11 台 `-ServerIP` 已全关但结论未落档** | 只读核实：11 台 `serverip=false` / `autoserverip=false`，`serveripstring` 仍是旧 IP（不生效）。但"外网客户端能否从列表进服"的验证结论从未落档 —— 这是整个方案的前提，必须补一次外网进服确认 |
+| ~~S1~~ | ⚪ 不做 | `accounts.json` 9 个明文口令轮换 | **用户 2026-11-06 明确「口令轮换 不做」** |
+| ~~S2~~ | ✅ 无需处理 | `kanbujiandehai` 的 nick「咪」 | **用户 2026-11-06 明确：该账号不是游戏玩家，nick 无需与游戏内名一致，不做任何特殊处理**（曾试改为用户名，已按用户要求回滚） |
+| S3 | 🟡 P2 | **11 台 `-ServerIP` 已全关（配置层）但运行层仅 1 台生效** | 2026-11-06 实测（`tmp/_srv_matrix.txt`）：**Bob 无 `-ServerIP`（它 11-05 23:34 重启过）**，其余 **10 台仍带 `-ServerIP=101.204.225.51`（11-05 16:40~16:52 启动后从未重启）** ⇒ 配置层确已全关，**运行层只有 Bob 生效**。当前公网 IP 恰为 `101.204.225.51` 才使 BattleMetrics 能搜到 Cen ⇒ 属**「假通过」**。**要真验 S3 必须重启那 10 台**；重启后核对 `Commandline:` 无 `-ServerIP` + 外网仍能搜到/进服才算成立 |
 
 ---
 
@@ -493,3 +518,285 @@ flowchart LR
 | **最危险的不是没做完，是"以为做完了"** | 现在把 `ipwatch_restart_dry` 改 `false`，编排会一路报「重启完成 100%」，但服务器一动不动，玩家永远进不去 | 阶段 1 完成前，配置里必须保持 `ipwatch_restart_dry=true` |
 | 阶段 1 一次性改动大 | 状态机里塞执行器，易引入阻塞 | 执行器调用一律 `try/except` + 放线程池，禁止在 `_restart_tick()` 里同步等待 |
 | 真跑时无人看守 | 凌晨空服自动跑，出问题没人处理 | 首次真跑全程盯 `restart.log` + `GET /api/ipwatch`，且单台先跑 |
+
+---
+
+## 16. 待完成清单（可勾选 · 10 项）
+
+> 用法：做完一项就把 `- [ ]` 改成 `- [x]`。每项都带 **验收标志** —— 看不到标志就不算完成。
+> 顺序：阶段 1（P0 阻断）→ 阶段 2（P1 可靠性）→ 阶段 3（P2 验收）→ 收尾（P3）。
+> **需要真人配合的 4 项（第 4 / 8 / 9 / 10 条）已拆成步骤表**，标明「谁做 / 做什么 / 预期看到」。
+
+### 阶段 1 ｜ P0 真执行链路（4 项，**一次做完不可拆**）
+
+- [x] **1｜真执行器接入**（C1）—— 非 dry 真调执行器（v6152 已实现并上传）
+  - `savekill` 分支真调 `_srvctl_run('ipwatch', [srv], 'savekill', None)`
+  - `startq` 分支真调 `_srvctl_startq_new('ipwatch', [srv])`
+  - `dry=True` 分支**完全保持现状**（只写 `restart.log`，绝不调执行器）
+  - 执行器调用一律 `try/except` + 丢 `_RCON_EXECUTOR` 线程池，**禁止在 `_restart_tick()` 里同步等待**
+  - 涉及：`独立后端\dino_backend.py` → `_restart_tick()`（约 L8580–8660）
+  - **验收标志**：`restart.log` 出现 `exec savekill <服>` / `exec startq <服>`；dry 模式下这两个字符串**永不出现**（grep 应为 0）
+
+- [x] **2｜真 VERIFY**（C2）—— 读 ShooterGame.log 命中 `advertising for join` 才算上线（v6152）
+  - `verify` 阶段读 `D:\ARK Server\Servers\<ID>\ShooterGame\Saved\Logs\ShooterGame.log`
+  - 命中 `Server has completed startup and is now advertising for join` 才置 `done/100%`
+  - 超过 `RESTART_VERIFY_TIMEOUT`（建议 600s）未命中 → `fail('起服超时')`
+  - 复用 startq 已有的日志里程碑解析，**不要另写一套**
+  - **验收标志**：`restart.log` 出现 `advertising OK <服>`；人为把判据字符串改错时该台变红
+
+- [x] **3｜失败重试**（C3）—— `_restart_step_fail()` attempts+1 → 回 ready，超限置 fail（v6152）
+  - 单台异常 → `attempts+1` → 回 `ready` 重排队；`attempts > 2` → `fail` + `restart.log` 告警
+  - 重试不得重置其它服的进度
+  - **验收标志**：`GET /api/ipwatch` 的 `servers[<服>].attempts` 会递增；超限那台 `phase=fail`
+
+- [ ] **4｜阶段 1 回归 + 首次单台真跑**（需真人配合，⚠️ 真停服需**单独授权**）
+  - 先跑 `POST /api/restart/dryrun`：**只允许** `DRY announce`，出现任何 `exec` 日志即判回归失败
+  - 再按下表做一次**单台**真跑（选凌晨 0 人的服，建议 Ast）
+
+  | 步 | 谁做 | 做什么 | 预期看到 |
+  |:--:|---|---|---|
+  | 1 | 我 | RCON `ListPlayers` 确认目标服 0 人；备份 `server_config.json` | 在线 0 人 |
+  | 2 | 我 | 把 `server_config.json` 的 `ipwatch_restart=true`、`ipwatch_restart_dry=false` | `GET /api/ipwatch` → `restart.enable:true`、`dry:false` |
+  | 3 | 我 | 改 `public_ip_state.json` 的 `lastIp` 为假 IP 触发（或用 `POST /api/restart/dryrun` 后手动 open 真跑） | `restart.log` → `START reason=... dry=False` |
+  | 4 | 我 | 盯 `restart.log` 六步 | `exec savekill` → `exec startq` → `advertising OK` 依次出现 |
+  | 5 | 我 | 查 `GET /api/srvctl/startq` 与 `GET /api/tasks` | 出现 `重启（IP 切换）· 自动` 任务、6 步逐项点亮 |
+  | 6 | 你 | 游戏内看聊天框是否收到中英两条维护公告 | 中英各 1 条，无乱码 |
+  | 7 | 你 | 重启完成后搜服务器列表并进服 | 能搜到并成功进入 |
+  | 8 | 我 | **立刻**把 `ipwatch_restart_dry` 改回 `true`，`lastIp` 改回真实值 | `/api/ipwatch` → `dry:true` |
+
+### 阶段 2 ｜ P1 可靠性补齐（3 项）
+
+- [x] **5｜锚点 + SaveWorld 屏障 + Bob 特例**（C4 / C5 / C6）—— 代码完成（v6157），**验收待 dry 演练 + 真跑**
+  - 锚点排序键改为 `(有存档优先, players 升序, readyAt)`（现在是 `readyAt` 先到先得）
+  - `savekill` 前插一步 `saveworld`（`_srvctl_run('ipwatch',[srv],'saveworld')` 已自带 DinoData 落盘屏障）；屏障未过 → 回 `ready`，不重启
+  - `srv == 'Bob'` 走 `kill`（该图不落盘），且排序**永远排最后**
+  - **验收标志**：11 台演练里第一台进执行链的是"在线最少且有存档"；`restart.log` 有 `saveworld ok <服>`；Bob 走的是 `kill` 不是 `savekill`
+  - **v6157 实现要点**：排序键 `(Bob 永远最后, 有存档优先, 在线人数升序, readyAt)`；`_restart_has_save()` 在置 `ready` 时算一次并写进 `msg`；`_restart_exec_saveworld()` 复用 `_srvctl_run('saveworld')` 的 DinoData 落盘屏障，`data.ok=False` 也算屏障未过；`RESTART_STEPS` 增加 `('saveworld', '存档屏障')`；Bob `skStage` 直接进 `savekill` 且实际动作改 `kill`；重试复位时 Bob 不回到存档屏障
+  - **dry 等价**：dry 分支仍不调任何执行器，只把 `saveworld` 步标 `ok`（Bob 保持 `skip`）
+  - **dry 演练实测（2026-11-06）**：10 台依次 `done`（Abe→Ast→Cen→Ext→Gen→Isl→Los→Rag→Sco→Val，首台 184.6s），Bob 因 1 人在线停在 `announce`；`exec*` 日志 **0 条**、`DRY announce` 160 条 ⇒ 零副作用 ✅；串行门 ✅；7 步圆点链 ✅。**未实测**：有存档/在线少优先级（本次同值无可区分）、Bob 走 kill、`saveworld ok` 日志（需真跑）。
+
+- [x] **6｜10 分钟冷却 + 前端回退开关**（C7 / C9）—— v6164 已实现并部署
+  - 后端：`_RESTART['lastStartAt']`，< 600s 内再次触发**只更新公告**、不发新编排，日志 `skip start (cooldown)`
+  - 前端：`LB_TASKS_SRC` 开关，设 `local` 时退回本地 `LB_TASKS.items`（仅回滚用）
+  - **验收标志**：连续两次造假 IP，第二次日志出现 `skip start (cooldown)`；控制台设该开关后列表不再请求 `/api/tasks`
+  - **v6164 实现**：`RESTART_START_COOLDOWN=600`；`_restart_start()` 判 `lastStartAt`，冷却内记 `skip start (cooldown Ns left)` 并返回 False；**手动演练（`dry_override` 非 None）不拦**，方便反复演练
+  - **前端回退开关口径**：v6122 后本地任务列表已废弃，"退回本地"做不到 ⇒ 实际效果是 `LB_TASK_SRC !== 'server'` 时**完全不请求 `/api/tasks` 且不启轮询**（服务端故障时的止血开关）
+
+- [x] **7｜`POST /api/tasks/abort` + 前端中止按钮**（C8）—— v6164 已实现并实测；另补「编排总超时」
+  - 后端路由：`{server}` 中止单台（复用现有 `_restart_abort`）、`{all:true}` 中止整批；需 token + 二级管理员
+  - 前端：任务条在 `action=restart` 且 `phase in (run,queue)` 时显示「中止」按钮
+  - **验收标志**：点中止后该服 `fail('被 X 中止')`、其余服继续跑；整批中止后 `/api/ipwatch` 的 `running:false`
+  - **v6164 实现**：`POST /api/tasks/abort`（`_srvctl_guard(need_token=True)` + `_role_level>=2`）
+    - `{server:'Isl'}` → `_restart_abort()` 单台中止（返回 404 表示该服不在编排中）
+    - `{all:true}` → 遍历中止全部 + `running=false`，日志 `ABORT ALL by <user>`
+    - 实测：不带 token 401、缺参数 400、不在编排中 404，三条分支均符合预期
+  - **前端**：任务条在 `action==='restart'` 且 `phase in (run,queue)` 时显示中止按钮（`mdi-stop-circle-outline`），走 `lbAsk` 二次确认 → `lbTaskAbort(server)`
+  - **额外补的隐患收口（演练暴露）**：`RESTART_TOTAL_TIMEOUT=21600`（6 小时）——`_restart_tick()` 末尾检查，超时把剩余未完成服全部标 `fail('编排超时…')` 并 `running=false`。
+    根因：某台一直有人在线时 `running` 永远 true ⇒ `_restart_start()` 后续一律 `already running` skip ⇒ **真实 IP 变化的重启被无限期阻塞**
+  - **中止按钮端到端实测（2026-11-06，dry 编排零副作用）**：
+    - 起编排：`POST /api/restart/dryrun` → `{ok:true, dry:true, reason:'manual-dryrun by whiterober'}`，11 台全部进 `announce`
+    - 单台：浮窗任务条点「中止」→ 弹二次确认「确定中止「Ast」的自动重启吗？（只中止这一台，其它服继续）」→ 点「确定中止」→ toast「已中止 Ast 的自动重启」
+      **结果**：`Ast` → `phase=fail`、`msg='被 whiterober 手动操作中止'`；其余 **10 台仍 `announce`**、`running:true` ✅（符合「只中止这一台」）
+    - 整批：`POST /api/tasks/abort {all:true}` → 200 `{ok:true, aborted:10, user:'whiterober'}`（Ast 已是 fail 不重复计）→ **11 台全 `fail`、`running:false`** ✅
+    - 前端表现：失败条出现「重试」按钮 + 顶部「清理全部失败（N）」按钮 ✅
+  - ⚠️ **实测暴露 UI 缺陷（尚未修）**：`lbTaskStepsHtml()`（`app_core.js`）在「7 步里找不到任何 `run`」时执行 `idx = st.length` ⇒ 标题取「完成」、计数取 `min(idx+1, 7) = 7`，
+    **失败/中止的任务条会显示「完成 · 7/7」**，与同一行右侧的「失败」自相矛盾（中止时后端只把 `ann` 置 fail、其余步为 `wait`，正好命中该分支）
+
+### 阶段 3 ｜ P2 验收（2 项，均需真人配合）
+
+- [ ] **8｜假 IP 自动触发 + 公告真实下发 + 200 字符上限回填**（C11 / C12）
+  > ✅ **8a（步骤 1/2/3/8）已完成**（2026-11-06，dry 零副作用）：`CHANGED 1.2.3.4 -> 101.204.225.51` → `START reason=ip-change ... dry=True servers=11` → 248 条 `DRY announce`。
+  > **200 字符/字节上限已离线核完并修复**（2026-11-06，v6171）：实测 11 台全量目标时 CN **274 字节** / EN **249 字节** 超 200 ⇒ 改为目标列表最多列 3 台 + 折叠「等 N 台」/`+N more` + 文案压缩，**最坏 181 字节**。同时修掉「英文公告拼中文地图名」（`SRV_EN` 映射）
+  > ⏳ **剩 8b**：仅需**真人目视确认**。v6169 已加 `announceReal` 开关 ⇒ **dry 下也能真发广播**，**不再需要 `dry=false` / 不需真停服授权**
+
+  | 步 | 谁做 | 做什么 | 预期看到 |
+  |:--:|---|---|---|
+  | 1 | 我 | 保持 `dry=true`，直接改 `public_ip_state.json` 的 `lastIp` 为 `1.2.3.4` | 不要重启后端（改文件即可） |
+  | 2 | 我 | 等 2 个采样周期（~120s）观察 | `ipwatch.log` → `CHANGED x.x.x.x -> 1.2.3.4`；`restart.log` → `START reason=ip-change` |
+  | 3 | 我 | 确认是 ipwatch **自动**触发（不是我手动调接口） | `restart.log` 的 reason 以 `ip-change` 开头 |
+  | 4 | 你 | 进任意一张有人的服，等 00:00 那一轮公告 | 游戏内收到中文公告 1 条 |
+  | 5 | 你 | 等 30s | 收到英文公告 1 条 |
+  | 6 | 我 | 抓 `ShooterGame.log` 的 broadcast 回显，量单条字符数 | 记录实际长度，回填 §12「仍待实测」 |
+  | 7 | 我 | 若单条 > 200 字符被截断 → 缩短模板并复测 | 游戏内显示完整句子 |
+  | 8 | 我 | 还原 `lastIp` 为真实 IP | `ipwatch.log` 出现一次 `CHANGED` 再还原（还原本身也会触发一次，需 `dry` 下验证） |
+
+- [ ] **9｜L3 拦截 + 传送保护 + 软锁打断**（C10 / C15 / C16）
+  > ✅ **软锁打断（C16）已实测并修复**（2026-11-06）：`refresh` 软锁 → 无 `interrupt` 调 saveworld = **409 `will_interrupt`**；带 `interrupt:1` = **200**。实测发现「打断后锁未清」的 bug（清锁 owner 硬编码 `restart|` → refresh 锁清不掉），**v6168 已修**（按实际 owner 清）并回测通过（打断后再调 = 200、`lock:null`）。
+  > ✅ **9a（集群目录写入模拟 L3）已实测通过**（2026-11-06）：写 `clusters\9102` 后 6 台 `msg` = 「静默校验未过：集群目录 57s 内有写入」，不进 `ready`；并挖出配置级 bug——后端兜底 `Servers\csbbClusters\clusters\9102` 是 2025-03-11 的**死目录**，`server_config.json` 已改指 `D:\ARK Server\clusters\9102`
+  > ⏳ **剩**：9c（真实跨服传送 → L3 识别）。**用户 2026-11-06 口径「我只能自己进服 叫不到朋友」⇒ 9c 改单人；测试服先定 Bob，后因 Bob 存在「在线玩家不消失」BUG（待修）改定 Cen**：进 Cen → 看公告 → 退出到主菜单即可验 L2；跨服传送**已确认可用**（实测启动命令行 `-clusterid=9102 -ClusterDirOverride="D:\ARK Server" -NoTransferFromFiltering`；此前按 GUS ini / `start_server.bat` 判断「无 cluster」是**查错地方**，配置实际在启动命令行）
+
+  | 步 | 谁做 | 做什么 | 预期看到 |
+  |:--:|---|---|---|
+  | 1 | 我 | 造假 IP 启动 dry 编排，等某台进入 `ready` | `/api/ipwatch` 该服 `phase=ready` |
+  | 2 | 我 | 往集群目录 `clusters\9102` 写一个临时文件（模拟跨服传送） | 30s 内该服 `msg` 出现「集群目录 Ns 内有写入」，退回等待 |
+  | 3 | 我 | 删除临时文件，等静默 180s | 该服重新 `phase=ready` |
+  | 4 | 你（单人） | 进 **核心岛(Cen)** 并待 1~2 分钟，然后**退出到主菜单** | `ShooterGame.log` 出现进出服记录（单人即可，无需第二名玩家） |
+  | 5 | 我 | 传送瞬间观察编排 | 该服 `msg` 出现「日志 Ns 内仍有进出服」，**不放行** |
+  | 6 | 你 | 停止操作、全部下线并告知我 | — |
+  | 7 | 我 | 等 3 次采样 + 180s 跨度 | 该服 `phase=ready`（放行） |
+  | 8 | 我 | 编排进执行链后（有 soft 锁），用**另一账号**对同服点「存档」 | HTTP 409 `will_interrupt`，前端提示「再点一次将中止」 |
+  | 9 | 我 | 6 秒内**再点一次** | HTTP 200；该服任务显示「被 X 手动操作中止」，其余服继续 |
+
+### 收尾 ｜ P2/P3（1 项）
+
+- [ ] **10｜并发/去重 + 安全收尾**（C13 / C14 / S1 / S2 / S3）
+  > ✅ **10a 去重（C14）已实测通过**（2026-11-06）：并发连发两次 saveworld → 第 1 个 **200**、第 2 个 **409 `busy`**；服务端 `Abe|saveworld` 仅 **1 条**。
+  > ✅ **S1 口令轮换 / S2 nick 修正：用户 2026-11-06 决定不做**
+  > ⏳ **剩**：10c（双设备并发一致性，C13）、10d（外网搜服，S3）
+
+  | 步 | 谁做 | 做什么 | 预期看到 |
+  |:--:|---|---|---|
+  | 1 | 你 | 开两个浏览器（或手机+电脑）同开页面，各开一次「服务器控制」浮窗 | 两边任务列表条数、百分比、操作人**逐字一致** |
+  | 2 | 我 | 比对两边 `/api/tasks` 的 `rev` | 数值相同 |
+  | 3 | 我 | 同一服连点两次「启动」 | 任务列表**只有一条**（同 `key` 覆盖） |
+  | 4 | 你 | 用**外网设备**（手机 4G/5G）搜 `Chishibaba9102` | 能刷出服务器列表（S3 前提确认，结论回填本文件） |
+  | 5 | 你 | 尝试进入任一服 | 能进（`-ServerIP` 全关方案成立） |
+  | 6 | 我 | 把上述结论写进 §12 决策记录 | 文件更新 |
+  | ~~7~~ | — | ~~`accounts.json` 9 个明文口令轮换方案~~ | **用户 2026-11-06 决定：不做** |
+  | ~~8~~ | — | ~~修正 `kanbujiandehai` 的 nick「咪」~~ | **用户 2026-11-06 决定：不做**（该账号非游戏玩家，nick 无需与游戏内名一致） |
+
+### 运维入口（1 项）
+
+- [x] **11｜后端远程重启**（用户口径：**只做 A**，不做崩溃自拉起；入口放**系统管理浮窗**）—— v6155/v6156 上线，401 已修
+  - 后端新增 `POST /api/admin/restart`（**仅 level 3 系统拥有者**，需 token）：**先回 200**，再触发自重启
+  - 前端「系统管理」浮窗底部新增「🔌 后端服务 → 重启后端」按钮（仅 `whiterober` 可见，二次确认）
+  - 自重启实现：**两级 spawn 脱离 Job**（breakaway → WMI），启动现成 `restart_dino_backend.bat 3` → 后端 `os._exit(0)`
+    —— **不新建任何计划任务**；两级都失败则拒绝退出
+  - 状态面板：`GET /api/health`（无鉴权）→ 启动时间/运行时长/内存/线程/IP 监视/编排状态
+  - **验收标志**：点按钮 → 前端提示「后端重启中」→ 30s 内 `ipwatch.log` 出现新的 `ipwatch started`、`restart.log` 出现新的 `orchestrator started`，页面自动恢复可用
+
+---
+
+### 完成度自检（全部 10 项勾完后）
+
+- [ ] `grep -c "exec savekill" restart.log` 在 dry 模式下为 0
+- [ ] `ipwatch_restart_dry` 恢复为 `true`（配置收口）
+- [ ] §14 缺口清单 C1~C16 全部标记为已解决；C17/C18 明确放弃或排期
+- [ ] 计划头部状态行改为 `M1~M4 全部完成并实测`
+
+---
+
+### 16.1 第 8/9/10 项配合清单（2026-11-06 出）
+
+> **结论先行**：这 3 项里**大部分我自己能跑**，真正需要你的只有 4 个短动作（下表标 👤）。
+> 另有 **2 处计划本身的缺陷**必须先澄清（各自项内「⚠️」段）。
+
+#### 第 8 项 ｜ 假 IP 自动触发 + 公告实测 + 200 字符上限
+
+✅ **该缺陷已解决**（v6169，2026-11-06）：新增 `ipwatch_announce_real` 开关，`_restart_announce()` 在 dry 下**仍可真发 RCON 广播**（`savekill` / `startq` 仍严格受 `dry=true` 保护，**绝不会停服**）。
+接口：`POST /api/restart/enable {announceReal:true}`（level 3）。因此 8b 不再需 `dry=false`，也不需真停服授权：
+
+| 段 | 谁做 | 内容 | 风险 |
+|:--:|:--:|---|---|
+| **8a** | 我 | 打开 `ipwatch_restart`（dry 保持 `true`）→ 改 `public_ip_state.json` 的 `lastIp` 为假 IP → 等 2 个采样周期（~120s） | 无 |
+| | | **可验证**：`ipwatch.log` 出现 `CHANGED`；`restart.log` 出现 `START reason=ip-change ... dry=True`；`DRY announce` 中英两条文案齐全 | |
+| | | **顺带把 200 字符上限测掉**：`_restart_ann_text()` 末尾是 `s[:200]`，从 `DRY announce` 日志**直接量最终文本长度**，**不需要真发** | |
+| | | 做完立刻把 `lastIp` 还原（还原本身会再触发一次 `CHANGED`，dry 下无副作用） | |
+| **8b** 👤 | 你 | **仅这一段需要你**：开 `announceReal=true` 后 **dry 下也会真发广播**（v6169），站在 **Cen** 里不动，看中文公告 / 30s 后英文公告 | 无（`dry=true` **绝不停服**） |
+
+**你要做的（8b）**：进 **核心岛(Cen)** 站着别下线；看聊天框中文公告，约 30s 后看英文公告（v6171 后应是 `The Island / Scorched Earth` 等**英文地图名**，不再是中文名）；截图或口头确认。
+
+#### 第 9 项 ｜ L3 拦截 + 传送保护 + 软锁打断
+
+⚠️ **计划缺陷**：步骤 8-9 原文假设"等编排进执行链后才有 soft 锁"，但 `_srv_lock_set(srv,'restart',...)` 在 **dry 下也会设**，
+只是 dry 即时推进、几秒内就释放（L9050），窗口太窄难抓。改用**等价且稳定**的造锁方式：
+对某台服发起**「刷新数据」任务**（`kind='refresh'`，同属 `SRV_LOCK_SOFT`），锁窗口足够长。
+
+| 段 | 谁做 | 内容 |
+|:--:|:--:|---|
+| **9a** | 我 | 往集群目录 `clusters\9102` 写一个临时文件模拟跨服传送 → 验证该服**不被放行**、`msg` 出现「集群目录 Ns 内有写入」；删除后等静默 180s 恢复 `ready` |
+| **9b** | 我 | 用「刷新数据」造 soft 锁 → 对同服调 saveworld ⇒ 期望 **409 `will_interrupt`**；6s 内带 `interrupt=1` 再调 ⇒ 打断该软任务、操作放行 |
+| **9c** ⚪ | — | — | **已降为可选**：`clusters\9102` 有 23 个 hex 跨服数据文件（最新 `2026-11-05 07:35:35` / 20,701 B）且根目录无其他集群数据 ⇒ **游戏真写目录 = 后端监控目录**，L3 目录正确性已证；9a 已证监控逻辑。**无需真人传送**。L2（日志静默）仍由操作卡第 3 步「退出到主菜单」验证 |
+| **9d** | 我 | 等 3 次采样 + 180s 跨度，确认该服回 `ready`（放行）；结论写回本文件 |
+
+**你要做的（9c）**：单人进 **核心岛(Cen)** 待 1~2 分钟，看完公告后**退出到主菜单**（不是直接关游戏），跟我说一声。**不用叫朋友**。
+
+#### 第 10 项 ｜ 并发/去重 + 安全收尾
+
+| 段 | 谁做 | 内容 |
+|:--:|:--:|---|
+| **10a** | 我 | 同一服连点两次「启动」→ 验证任务列表**只留一条**（同 `key` 覆盖语义） |
+| **10b** | 我 | 修正 `accounts.json` 里 `kanbujiandehai` 的 nick「咪」（不在真实玩家名集合） |
+| **10c** 👤 | 你 | 开两个浏览器（或手机+电脑）各开一次「服务器控制」浮窗，**同时截一张图**给我 → 我比对两边条数/百分比/操作人与 `/api/tasks` 的 `rev` |
+| **10d** 👤 | 你 | 手机关 WiFi 用 4G/5G 搜 `Chishibaba9102`，看能否刷出服务器列表；能就点进去试一下（S3 前提确认：`-ServerIP` 全关方案是否成立） |
+| **10e** 👤 | 你 | 口令轮换：`accounts.json` 里 9 个明文口令要不要换？要换就给我新口令清单（或说"你自己生成"） |
+
+#### 排期建议
+
+| 顺序 | 段 | 前提 | 预计 |
+|:--:|---|---|---|
+| 1 | ~~8a + 9a + 9b + 10a + 10b~~ | **已完成**（2026-11-06） | — |
+| 2 | **8b + 9c + 10c + 10d** | **一次进 Cen 全测完**（`announceReal` 开关 ⇒ 零停服） | 合计约 15 分钟 |
+| 3 | ~~10e~~ | 用户 2026-11-06 决定不做 | — |
+
+---
+
+## 17. 后端远程重启方案（2026-11-06，**不依赖计划任务**）
+
+> 用户口径：「只写 A，不考虑崩溃重启，直接在系统管理浮窗加重启后端」→「能否不依赖计划任务 我不喜欢」
+
+### 17.1 现有基础设施（已核实）
+
+| 事实 | 出处 |
+|---|---|
+| 后端 = Windows 计划任务 `dino_backend`（`AtStartup`，`D:\dino_backend`） | `install_services.ps1`（**现状，本次不新增任何任务**） |
+| 重启脚本 = 后端同目录 `restart_dino_backend.bat [等待秒数]` | 本次给它加了可选参数 |
+| 权限分级 3=系统拥有者（硬编码 `whiterober`）/ 2 / 1 | `app_core.js:2672` |
+| 系统管理浮窗仅 `auth.user === 'whiterober'` | `lbOpenServerAdminModal()` |
+
+### 17.2 核心矛盾与解法（为什么不能"自己 spawn 自己退出"）
+
+- 后端退出后**必须有人把它拉起**；
+- 而后端 spawn 的子进程与后端**同属一个 Job**，进程退出 / `Stop-ScheduledTask` 会**连带杀掉它**
+  ⇒ 子进程走到 `Stop-ScheduledTask` 时自杀，`Start` 永远执行不到 = **永久停服**。
+
+**解法：两级 spawn —— 让子进程「脱离 Job」**
+
+| 级别 | 方式 | 开销 | 说明 |
+|---|---|---|---|
+| ① | `CREATE_BREAKAWAY_FROM_JOB | DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP`（纯 Python） | 约 10ms | 正常情况下走这条；Job 不允许 breakaway 时会抛错 |
+| ② | WMI `Invoke-CimMethod Win32_Process.Create` | 约 0.5~1.5s | 父进程是 `WmiPrvSE.exe`，天然不在本 Job |
+| — | 两级都失败 | — | 回 `500 spawn_failed` 并**拒绝退出**（绝不「点了就死」） |
+
+两只路都只做一件事：**启动后端同目录现成的 `restart_dino_backend.bat 3`**（不重复写 Stop/Start）。
+
+### 17.3 「崩溃自启动」为什么不在此方案内
+
+`WMI/breakaway` 解决的是「**我要重启时**子进程别被连带杀」，解决不了「**进程已经崩了**，没人执行任何代码」。
+崩溃自启动**必须有外部看护者**（计划任务 keeper / Windows 服务 / 常驻看护程序）——用户明确不要计划任务，故**本阶段不做**；
+若以后要做，推荐「改造成 Windows 服务」（SCM 自带失败重启，且可顺带废弃现有计划任务）。
+
+### 17.4 接口
+
+| 方法 | 路径 | 权限 | 说明 |
+|---|---|---|---|
+| POST | `/api/admin/restart` | token + `_role_level>=3` | 两级 spawn 成功才回 200（带 `how` = `breakaway`/`wmi`）→ 0.2s 后 `os._exit(0)`；失败回 `500 spawn_failed` 且**不退出** |
+| GET | `/api/health` | **无鉴权** | 极轻状态：`startedAt / uptimeSec / threads / rssMB / code{size,mtime} / ipwatch{domain,lastIp,mode} / restart{running,dry,current,done}` |
+
+**安全约束**：仅系统拥有者；接口内命令写死（`restart_dino_backend.bat` + 固定秒数），不接受任意参数。
+
+### 17.5 前端（系统管理浮窗 →「🔌 后端服务」）
+
+- 打开浮窗**自动拉一次** `/api/health`；按钮：`重启后端` / `刷新状态`
+- 状态面板（`#lbBackendInfo`）5 行：启动时间+运行时长 / 代码大小+mtime / 内存+线程 / IP 监视 / 重启编排状态
+- 重启交互：`lbAsk()` 二次确认 → POST → 显示走的是哪条路（`how`）→ 每 1.5s 轮询 `/api/health` 直到恢复（最多 60s）→ 刷新状态面板
+- 失败文案：`spawn_failed` → 「拉起重启进程失败，后端保持运行：<detail>」；`owner_only` → 「仅系统拥有者可用」
+
+### 17.6 落地清单
+
+| # | 项 | 状态 |
+|---|---|---|
+| 1 | 后端两级 spawn（breakaway → WMI）+ `POST /api/admin/restart` + `GET /api/health` | ✅ 已完成（523,880 B，已上传） |
+| 2 | 前端系统管理浮窗「🔌 后端服务」状态面板 + 重启按钮 | ✅ 已完成（v20261106-6155） |
+| 3 | `restart_dino_backend.bat` 加可选等待秒数参数 | ✅ 已完成 |
+| 4 | `install_services.ps1` **移除** `dino_backend_reload` 任务定义 | ✅ 已完成（回到只有 `dino_backend` + `dino_tunnel`） |
+| 5 | 物理机重新加载后端代码（跑一次 `restart_dino_backend.bat` 或重启任务） | **需用户执行** |
+
+### 17.7 风险
+
+| 风险 | 对策 |
+|---|---|
+| breakaway 被 Job 禁止 | 自动回退 WMI；WMI 也失败则拒绝退出 |
+| WMI 服务不可用 | 同上（不会退出） |
+| 重启后前端短暂请求失败 | 前端轮询 `/api/health` 重连，最多 60s |
+| 崩溃后无人拉起 | **已知边界**（本阶段不做；见 §17.3） |
