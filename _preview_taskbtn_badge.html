@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>服务器入口 · 数字徽章（A 内联胶囊）+ 改色候选</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0d0d12;color:#e0e0e0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:22px 24px 70px;line-height:1.55}
+h1{font-size:17px;color:#fff;margin-bottom:5px}
+h2{font-size:13px;color:#22d3ee;margin:26px 0 9px;border-left:3px solid #22d3ee;padding-left:8px}
+.hint{font-size:12px;color:#9ca3af;margin-bottom:14px}
+.row{display:flex;align-items:center;flex-wrap:wrap;gap:16px;background:#12121a;border:1px solid #22222e;border-radius:10px;padding:12px 14px;margin-bottom:9px}
+.tag{font-size:11px;color:#6b7280;flex:0 0 132px}
+.cell{display:flex;flex-direction:column;align-items:center;gap:5px}
+.cap{font-size:10px;color:#5b6472;white-space:nowrap}
+.lb-class-btn{display:inline-flex;align-items:center;gap:6px;background:#1a1a24;border:1px solid #333;border-radius:8px;color:#ccc;font-size:12px;padding:5px 8px;max-width:280px;min-width:auto;width:auto;cursor:pointer;text-align:center;justify-content:center;overflow:visible;transition:all .15s;user-select:none;position:relative;height:28px;flex-shrink:0;margin:0}
+.lb-class-btn:hover{background:#22223a;border-color:#7c3aed;color:#fff}
+.cnt{font-size:9px;border-radius:8px;padding:0 5px;margin-left:2px;font-weight:600;line-height:13px}
+.warn{font-size:11px;color:#fbbf24}
+.note{font-size:11px;color:#6b7280;margin-top:4px}
+code{background:#1a1a24;padding:1px 5px;border-radius:4px;font-size:11px;color:#a78bfa}
+.big{font-size:11px;color:#9ca3af;background:#12121a;border:1px solid #22222e;border-radius:8px;padding:10px 14px;margin-top:10px}
+.big b{color:#e0e0e0}
+</style>
+</head>
+<body>
+<svg style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true">
+<symbol id="i-taskpanel" viewBox="0 0 24 24"><path d="M7,5H21V7H7V5M7,13V11H21V13H7M4,4.5A1.5,1.5 0 0,1 5.5,6A1.5,1.5 0 0,1 4,7.5A1.5,1.5 0 0,1 2.5,6A1.5,1.5 0 0,1 4,4.5M4,10.5A1.5,1.5 0 0,1 5.5,12A1.5,1.5 0 0,1 4,13.5A1.5,1.5 0 0,1 2.5,12A1.5,1.5 0 0,1 4,10.5M7,19V17H21V19H7M4,16.5A1.5,1.5 0 0,1 5.5,18A1.5,1.5 0 0,1 4,19.5A1.5,1.5 0 0,1 2.5,18A1.5,1.5 0 0,1 4,16.5Z"/></symbol>
+<symbol id="i-watch" viewBox="0 0 24 24"><path d="M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5Z"/></symbol>
+<symbol id="i-todo" viewBox="0 0 24 24"><path d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.67 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/></symbol>
+<symbol id="i-maint" viewBox="0 0 24 24"><path d="M22.7,19L13.6,9.9C14.5,7.6 14,4.9 12.1,3C10.1,1 7.1,0.6 4.7,1.7L9,6L6,9L1.6,4.7C0.4,7.1 0.9,10.1 2.9,12.1C4.8,14 7.5,14.5 9.8,13.6L18.9,22.7C19.3,23.1 19.9,23.1 20.3,22.7L22.6,20.4C23.1,20 23.1,19.4 22.7,19Z"/></symbol>
+</svg>
+
+<h1>服务器入口按钮 · 数字徽章 A 方案（内联胶囊）+ 入口改色候选</h1>
+<div class="hint">真实尺寸：按钮 <code>height:28px</code> · 图标 <code>13px</code> · 胶囊 <code>font-size:9px / padding:0 5px / border-radius:8px</code> —— 与「关注未成年」「待制作」「维护列表」三个按钮<b style="color:#e0e0e0">完全同一套样式</b></div>
+
+<h2>① 撞色问题（现状）</h2>
+<div class="row">
+  <div class="tag">当前相邻两个</div>
+  <div class="cell">
+    <button class="lb-class-btn" style="color:#38bdf8"><svg width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><use href="#i-todo"/></svg></button>
+    <div class="cap">待制作 #38bdf8</div>
+  </div>
+  <div class="cell">
+    <button class="lb-class-btn" style="color:#22d3ee"><svg width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><use href="#i-taskpanel"/></svg></button>
+    <div class="cap">服务器 #22d3ee（现状）</div>
+  </div>
+  <div class="warn">← 同属蓝青色系，旁边并排几乎分不出，需要换色</div>
+</div>
+
+<h2>② A 方案：内联胶囊 × 改色候选</h2>
+<div class="hint">每行三态：<b style="color:#e0e0e0">空态</b>（胶囊隐藏） / <b style="color:#e0e0e0">在途 3 条</b>（胶囊=按钮色） / <b style="color:#e0e0e0">含失败 1</b>（胶囊固定红 #f87171）</div>
+
+<div class="row">
+  <div class="tag">候选 1 · 绿<br><span style="color:#4ade80">#4ade80</span></div>
+  <div class="cell"><button class="lb-class-btn" style="color:#4ade80"><svg width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><use href="#i-taskpanel"/></svg></button><div class="cap">空态 30px</div></div>
+  <div class="cell"><button class="lb-class-btn" style="color:#4ade80"><svg width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><use href="#i-taskpanel"/></svg><span class="cnt" style="background:#4ade8022;color:#4ade80">3</span></button><div class="cap">在途 3</div></div>
+  <div class="cell"><button class="lb-class-btn" style="color:#4ade80"><svg width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><use href="#i-taskpanel"/></svg><span class="cnt" style="background:#f8717122;color:#f87171">1</span></button><div class="cap">含失败 1</div></div>
+  <div class="note">语义最贴「服务器在线」；但绿已被「运行中」角标占用，可能混淆</div>
+</div>
+
+<div class="row">
+  <div class="tag">候选 2 · 黄绿<br><span style="color:#a3e635">#a3e635</span></div>
+  <div class="cell"><button class="lb-class-btn" style="color:#a3e635"><svg width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><use href="#i-taskpanel"/></svg></button><div class="cap">空态 30px</div></div>
+  <div class="cell"><button class="lb-class-btn" style="color:#a3e635"><svg width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><use href="#i-taskpanel"/></svg><span class="cnt" style="background:#a3e63522;color:#a3e635">3</span></button><div class="cap">在途 3</div></div>
+  <div class="cell"><button class="lb-class-btn" style="color:#a3e635"><svg width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><use href="#i-taskpanel"/></svg><span class="cnt" style="background:#f8717122;color:#f87171">1</span></button><div class="cap">含失败 1</div></div>
+  <div class="note">亮眼、与紫/天蓝/橙都拉开；亮度偏高</div>
+</div>
+
+<div class="row">
+  <div class="tag">候选 3 · 粉<br><span style="color:#f472b6">#f472b6</span></div>
+  <div class="cell"><button class="lb-class-btn" style="color:#f472b6"><svg width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><use href="#i-taskpanel"/></svg></button><div class="cap">空态 30px</div></div>
+  <div class="cell"><button class="lb-class-btn" style="color:#f472b6"><svg width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><use href="#i-taskpanel"/></svg><span class="cnt" style="background:#f472b622;color:#f472b6">3</span></button><div class="cap">在途 3</div></div>
+  <div class="cell"><button class="lb-class-btn" style="color:#f472b6"><svg width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><use href="#i-taskpanel"/></svg><span class="cnt" style="background:#f8717122;color:#f87171">1</span></button><div class="cap">含失败 1</div></div>
+  <div class="note">与紫 #a78bfa 同族但明度差够；粉色调偏"娱乐"</div>
+</div>
+
+<div class="row">
+  <div class="tag">候选 4 · 洋红<br><span style="color:#e879f9">#e879f9</span></div>
+  <div class="cell"><button class="lb-class-btn" style="color:#e879f9"><svg width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><use href="#i-taskpanel"/></svg></button><div class="cap">空态 30px</div></div>
+  <div class="cell"><button class="lb-class-btn" style="color:#e879f9"><svg width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><use href="#i-taskpanel"/></svg><span class="cnt" style="background:#e879f922;color:#e879f9">3</span></button><div class="cap">在途 3</div></div>
+  <div class="cell"><button class="lb-class-btn" style="color:#e879f9"><svg width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><use href="#i-taskpanel"/></svg><span class="cnt" style="background:#f8717122;color:#f87171">1</span></button><div class="cap">含失败 1</div></div>
+  <div class="note">饱和度高、辨识度最强；与紫色系略近</div>
+</div>
+
+<div class="row">
+  <div class="tag">候选 5 · 灰蓝<br><span style="color:#94a3b8">#94a3b8</span></div>
+  <div class="cell"><button class="lb-class-btn" style="color:#94a3b8"><svg width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><use href="#i-taskpanel"/></svg></button><div class="cap">空态 30px</div></div>
+  <div class="cell"><button class="lb-class-btn" style="color:#94a3b8"><svg width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><use href="#i-taskpanel"/></svg><span class="cnt" style="background:#94a3b822;color:#94a3b8">3</span></button><div class="cap">在途 3</div></div>
+  <div class="cell"><button class="lb-class-btn" style="color:#94a3b8"><svg width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><use href="#i-taskpanel"/></svg><span class="cnt" style="background:#f8717122;color:#f87171">1</span></button><div class="cap">含失败 1</div></div>
+  <div class="note">最不抢眼（"服务器"是工具入口）；但存在感弱，可能找不到</div>
+</div>
+
+<h2>③ 整组排布预览（看是否协调）</h2>
+<div class="row">
+  <div class="tag">候选 1 绿</div>
+  <button class="lb-class-btn" style="color:#a78bfa"><svg width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><use href="#i-watch"/></svg><span class="cnt" style="background:#f59e0b22;color:#f59e0b">2</span></button>
+  <button class="lb-class-btn" style="color:#38bdf8"><svg width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><use href="#i-todo"/></svg></button>
+  <button class="lb-class-btn" style="color:#f59e0b"><svg width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><use href="#i-maint"/></svg><span class="cnt" style="background:#f59e0b22;color:#f59e0b">5</span></button>
+  <button class="lb-class-btn" style="color:#4ade80"><svg width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><use href="#i-taskpanel"/></svg><span class="cnt" style="background:#4ade8022;color:#4ade80">3</span></button>
+</div>
+<div class="row">
+  <div class="tag">候选 3 粉</div>
+  <button class="lb-class-btn" style="color:#a78bfa"><svg width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><use href="#i-watch"/></svg><span class="cnt" style="background:#f59e0b22;color:#f59e0b">2</span></button>
+  <button class="lb-class-btn" style="color:#38bdf8"><svg width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><use href="#i-todo"/></svg></button>
+  <button class="lb-class-btn" style="color:#f59e0b"><svg width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><use href="#i-maint"/></svg><span class="cnt" style="background:#f59e0b22;color:#f59e0b">5</span></button>
+  <button class="lb-class-btn" style="color:#f472b6"><svg width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><use href="#i-taskpanel"/></svg><span class="cnt" style="background:#f472b622;color:#f472b6">3</span></button>
+</div>
+<div class="row">
+  <div class="tag">候选 5 灰蓝</div>
+  <button class="lb-class-btn" style="color:#a78bfa"><svg width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><use href="#i-watch"/></svg><span class="cnt" style="background:#f59e0b22;color:#f59e0b">2</span></button>
+  <button class="lb-class-btn" style="color:#38bdf8"><svg width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><use href="#i-todo"/></svg></button>
+  <button class="lb-class-btn" style="color:#f59e0b"><svg width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><use href="#i-maint"/></svg><span class="cnt" style="background:#f59e0b22;color:#f59e0b">5</span></button>
+  <button class="lb-class-btn" style="color:#94a3b8"><svg width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><use href="#i-taskpanel"/></svg><span class="cnt" style="background:#94a3b822;color:#94a3b8">3</span></button>
+</div>
+
+<h2>④ 数字口径（需你定）</h2>
+<div class="big">
+<b>方案甲 · 在途数</b>：只数 <code>phase=run / queue</code> 的条 → 任务全部结束就归零消失，按钮回归 30px<br>
+<b>方案乙 · 全部条数</b>：数所有未清理的条（含已完成/失败的残留）→ 会长期挂着数字<br>
+<b>建议甲</b>：与「任务进度」面板里"还剩几条在跑"一致，也符合"没任务时按钮不膨胀"
+</div>
+<div class="big">
+失败提示：<b>甲+失败标红</b> —— 有失败时徽章固定 <span style="color:#f87171">#f87171</span> 红底，数字=失败条数；在途与失败同时存在时<b>优先显示失败数</b>（有异常更需要被看见）
+</div>
+</body>
+</html>

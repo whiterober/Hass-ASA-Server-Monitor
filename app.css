@@ -1657,7 +1657,7 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 /* ===== 原 <style> 块 #3（外置于 2026-11-05 B1a） ===== */
 /* ===== v72：Wiki 面板（视觉对齐项目：#16161f 面板 / #2a2a3a 边线 / #7c3aed 主色） ===== */
 #lbWikiOverlay{position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.9);display:none;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}
-#lbWikiOverlay.show{display:flex}#lbWikiItemOverlay, #lbNews, #lbSrvCtl, #lbArkBk, #lbUpd{position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.9);display:none;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}#lbWikiItemOverlay.show, #lbNews.show, #lbSrvCtl.show, #lbArkBk.show, #lbUpd.show{display:flex}   /* ⚠ 新增 lbSheetBuild 浮窗必须同步加进上面两行白名单，否则 display:none 缺失 ⇒ 浮窗关不掉（v5966 lbSrvCtl / v6032 lbArkBk / v6208 lbUpd 各踩一次） */   /* v5966：#lbSrvCtl 缺显示/隐藏规则 ⇒ 浮窗关不掉 */
+#lbWikiOverlay.show{display:flex}#lbWikiItemOverlay, #lbNews, #lbSrvCtl, #lbArkBk, #lbUpd, #lbTaskPanel{position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.9);display:none;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}#lbWikiItemOverlay.show, #lbNews.show, #lbSrvCtl.show, #lbArkBk.show, #lbUpd.show, #lbTaskPanel.show{display:flex}   /* ⚠ 新增 lbSheetBuild 浮窗必须同步加进上面两行白名单，否则 display:none 缺失 ⇒ 浮窗关不掉（v5966 lbSrvCtl / v6032 lbArkBk / v6208 lbUpd 各踩一次） */   /* v5966：#lbSrvCtl 缺显示/隐藏规则 ⇒ 浮窗关不掉 */
 /* v6030（用户口径「小标题为啥非要先渲染再隐藏，这就是脱裤子放屁」）：
    紧跟置顶文案块(.tc-intro)的小标题直接用 :has() 在**样式计算阶段**隐藏 ——
    浏览器第一次布局就按 display:none 算，不会出现「先画出来再藏掉」的可见中间态，
@@ -1723,7 +1723,7 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 .lw-ok{color:#4ade80;font-size:12.5px;line-height:1.9}
 /* v153（用户口径）：移动端整屏 —— 原仅 max-height，内容少时面板只占半屏，不是整屏 */
 @media (max-width:640px){
-  #lbWikiOverlay{padding:0;align-items:stretch;justify-content:stretch}#lbWikiItemOverlay, #lbNews, #lbSrvCtl, #lbArkBk, #lbUpd{padding:0;align-items:stretch;justify-content:stretch}
+  #lbWikiOverlay{padding:0;align-items:stretch;justify-content:stretch}#lbWikiItemOverlay, #lbNews, #lbSrvCtl, #lbArkBk, #lbUpd, #lbTaskPanel{padding:0;align-items:stretch;justify-content:stretch}
   .lw-panel{width:100%;max-width:100%;height:100vh;height:100dvh;max-height:100vh;max-height:100dvh;border-radius:0;border-left:none;border-right:none;border-top:none;border-bottom:none;box-shadow:none}
   /* v5736（用户口径）：繁殖 tab ④ 时间轴在移动端自动改**竖版** —— 节点「圆点+名称」横排，阶段改为左侧竖线+缩进文字 */
   #lbWikiOverlay .tc-tl-row{flex-direction:column;align-items:stretch}
@@ -2118,6 +2118,8 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 .server-tab-cnt .gene-ic{font-size:9px;line-height:1;font-style:normal}
 /* 物种选择按钮（更像按钮：hover 紫色高亮 + 下拉箭头） */
 .lb-class-btn{display:inline-flex;align-items:center;gap:6px;background:#1a1a24;border:1px solid #333;border-radius:8px;color:#ccc;font-size:12px;padding:5px 24px 5px 12px;max-width:280px;min-width:120px;cursor:pointer;text-align:left;overflow:visible;transition:all .15s;user-select:none;position:relative;margin-right:12px;height:28px;flex-shrink:0}
+/* v6268：入口徽章改用**内联样式**（与三个兄弟按钮同模式），不再定义 .lb-task-cnt ——
+   该 class 名 app.css:3019 早已用于任务进度区「N 条」，重名会造成双向污染（v6267 教训）。 */
 /* v6089: badge digits vertical centering (Arial descent gap) */
 #lbWatchCnt,#lbTodoCnt,#lbMaintCnt{display:inline-flex;align-items:center;justify-content:center;height:14px;line-height:normal}
 .lb-class-btn:hover{background:#22223a;border-color:#7c3aed;color:#fff}
@@ -2852,12 +2854,18 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
 /* v6026（用户口径）：「当前官服版本」改成可点链接 → 资讯广场「ASA PC版本」Tab */
 .lb-srvctl-official .lb-verlink{color:#a78bfa;border-bottom:1px dashed #a78bfa88;cursor:pointer;transition:color .12s,border-color .12s}
 .lb-srvctl-official .lb-verlink:hover{color:#c4b5fd;border-bottom-color:#c4b5fd}
+/* v6247（用户口径「汉化包卡片里的补丁版本号改成链接样式」）：.lb-verlink 放宽为**全局可用**，
+   汉化包卡片直接复用同一套视觉，不再另造一份。 */
+.lb-verlink{color:#a78bfa;border-bottom:1px dashed #a78bfa88;cursor:pointer;transition:color .12s,border-color .12s}
+.lb-verlink:hover{color:#c4b5fd;border-bottom-color:#c4b5fd}
 /* v6213（用户口径「注销入口 移到底栏（改成链接样式）」）：通用文字链接按钮 ——
    无边框无底色，虚线底边提示可点，hover 变亮（与 .lb-verlink 同色系） */
 .lb-linkbtn{color:#a78bfa;cursor:pointer;border-bottom:1px dashed #a78bfa88;transition:color .12s,border-color .12s;user-select:none}
 .lb-linkbtn:hover{color:#c4b5fd;border-bottom-color:#c4b5fd}
 @keyframes lbBadgePulse{0%{box-shadow:0 0 0 0 rgba(245,158,11,.85)}70%{box-shadow:0 0 0 5px rgba(245,158,11,0)}100%{box-shadow:0 0 0 0 rgba(245,158,11,0)}}
-.server-tab-cnt.mis{animation:lbBadgePulse 1.4s ease-in-out infinite}
+/* v6225（用户口径）：mis = 「版本与基准不一致」—— 原来只有脉冲动画、没有颜色区分，
+   「服务器更新」里 11 台全落后时看不出橙色信号。补 1.5px 橙描边（不占布局空间）。 */
+.server-tab-cnt.mis{animation:lbBadgePulse 1.4s ease-in-out infinite;box-shadow:0 0 0 1.5px #f59e0b}
 /* v6158（用户口径·方案 B）：服务器 TAB 角标图例（横排 chip）+ IP 失效左上紫点脉冲 */
 .lb-srvctl-legend{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin:-7px 0 12px;font-size:11px;color:#9aa3b5}
 .lb-srvctl-legend .it{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
@@ -2874,12 +2882,30 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
 /* v6163（用户口径）：**仅「服务器控制」浮窗内**的服务器 TAB 改为正方形 ——
    宽度不动（保持内容自适应 ≈32px），高度 28 → 32；多出的高度**全部给上内边距**（8px），下内边距仍 4px，
    等于图标往下坐、不与右上角标贴脸。其它地方的 .server-tab（如编辑浮窗地图选择）不受影响。 */
-#lbSrvCtl .lb-srvctl-chips .server-tab{height:32px;padding:8px 8px 4px}
+#lbSrvCtl .lb-srvctl-chips .server-tab,
+#lbUpd .lb-srvctl-chips .server-tab, #lbTaskPanel .lb-srvctl-chips .server-tab{height:32px;padding:8px 8px 4px}
+/* v6261（用户口径「任务进度面板里地图TAB不可点」）：只读复用 —— 光标不是手型、去掉 hover 高亮 */
+/* v6265（用户口径「地图TAB 还是像能点的，也不是正方形」）：原选择器写成 #lbTaskPanel 匹配不到
+   （真实容器 class 是 .lb-taskpanel-overlay）⇒ 尺寸和 hover 都没生效。这里按真实容器重写：
+   · 尺寸对齐服务器控制/服务器更新的 chips（32px 高 + 上下内边距），保证正方形
+   · hover 不变色（不再有「能点」的视觉暗示）
+   · pointer-events:none 彻底禁点 */
+.lb-taskpanel-overlay .server-tab{height:32px;padding:8px 8px 4px;cursor:default;pointer-events:none}
+.lb-taskpanel-overlay .server-tab:hover{background:#1a1a24;border-color:#333}
+.lb-taskpanel-overlay .server-tab.active:hover{background:#7c3aed;border-color:#7c3aed}
 /* v6162（用户口径）：IP 失效由「左上紫点」改为「TAB 1px 紫色内描边」—— 不占空间、不与右上角标打架；
    选中（紫底）时换淡紫，避免糊在一起。图例 mini 块同款处理。 */
 .server-tab.ipb{box-shadow:inset 0 0 0 1px #a855f7}
 .server-tab.ipb.active{box-shadow:inset 0 0 0 1px #ddd6fe}
+/* v6247（用户口径「参考 IP失效 的样式，加一个旧版汉化，也用描边，换个颜色」）：
+   与 .ipb 完全同构的内描边，颜色改蓝 #60a5fa（IP失效=紫）；两者同时存在时紫在外、蓝在内。 */
+.server-tab.zhb{box-shadow:inset 0 0 0 1px #60a5fa}
+.server-tab.zhb.active{box-shadow:inset 0 0 0 1px #bfdbfe}
+.server-tab.ipb.zhb{box-shadow:inset 0 0 0 1px #a855f7, inset 0 0 0 3px #60a5fa}
+.server-tab.ipb.zhb.active{box-shadow:inset 0 0 0 1px #ddd6fe, inset 0 0 0 3px #bfdbfe}
 .lb-srvctl-legend .mini.ipx{box-shadow:inset 0 0 0 1px #a855f7}
+/* v6247：图例「汉化旧版」= 蓝色内描边（与按钮 .zhb 同色） */
+.lb-srvctl-legend .mini.zho{box-shadow:inset 0 0 0 1px #60a5fa}
 .lb-srvctl-chips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px}
 .lb-srvctl-chip{padding:5px 12px;border-radius:16px;border:1px solid #333;background:#1e1e28;color:#c8cede;font-size:12.5px;cursor:pointer;transition:all .12s}
 .lb-srvctl-chip:hover{border-color:#f59e0b;color:#fbbf24}
@@ -3000,6 +3026,8 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
 .lb-task-sub{font-size:11px;color:#9aa3b5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .lb-task.fail .lb-task-sub{color:#fca5a5}
 .lb-task-pct{font-size:11px;font-weight:600;white-space:nowrap;flex:none}
+/* v6270：移动端「第二行」容器 —— 桌面用 display:contents 保持原布局完全不变 */
+.lb-task-line2{display:contents}
 /* v6126：操作人镂空小徽章（用户口径：灰白描边、不填底）*/
 .lb-task-op{font-size:10px;line-height:1.6;padding:0 5px;border:1px solid #8b93a7;border-radius:9px;color:#c8cede;white-space:nowrap;flex:none}
 .lb-task-sp{flex:1}
@@ -3023,14 +3051,41 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
 .lb-step.skip{color:#6b7280;border-color:#3a3a4a;border-style:dashed}
 /* v6126（用户口径）：移动端灰字（World Saved / DinoData 这类）另起一行整行显示 */
 @media(max-width:560px){
-  .lb-task-pg{flex-wrap:wrap;height:auto;min-height:26px;padding:5px 9px 6px;row-gap:3px}
-  /* v6128（用户口径）：第一行保留撑杆 + 给百分比 margin-left:auto，保证「完成/百分比」始终贴右边 */
-  .lb-task-sp{flex:1 1 0;min-width:0}
-  .lb-task-pct{margin-left:auto}
+  .lb-task-pg{flex-wrap:wrap;height:auto;min-height:26px;padding:5px 9px 6px;row-gap:2px}
+  /* v6270（用户口径）：移动端**最多两行** ——
+     第一行：图标 + 名称·动作 + 步骤圆点 + 操作人 + 中止/重试按钮
+     第二行：消息（左，省略号） + 百分比（右对齐）—— 由 .lb-task-line2 承载
+     阶段名与 n/N 在窄屏隐藏（消息文本里已含当前阶段，重复且挤宽）。 */
+  .lb-task-stage, .lb-task-cnt2{display:none}
+  .lb-task-sp{display:none}
   .lb-task-main{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
-  .lb-task-sub{order:9;flex:0 0 100%;white-space:normal;overflow:visible;text-overflow:clip;line-height:1.4}
+  .lb-task-line2{display:flex;align-items:flex-start;gap:8px;order:10;flex:1 1 100%;min-width:0;margin-top:2px}
+  /* v6274（用户口径 2026-11-08「信息行经常被截断，超长要自动换行；这种情况移动端允许超过 2 行」）：
+     原来是 nowrap + ellipsis（强制单行截断）⇒ 长消息永远看不全。
+     现在改为自然换行；短消息仍是「第一行信息 + 第二行消息」两行结构，
+     只有**超长**时才自然撑到 3 行以上（属于用户允许的例外）。 */
+  .lb-task-sub{flex:1 1 0;min-width:0;white-space:normal;overflow:visible;text-overflow:clip;line-height:1.35;overflow-wrap:anywhere;word-break:break-word}
+  .lb-task-pct{flex:none;margin-left:auto;padding-top:1px}
+  /* v6276（用户口径 2026-11-08「中止按钮应该在右上角，移动端看到的跟着第一行，没在最右边」）：
+     窄屏把唯一的弹性元素 .lb-task-sp 设成 display:none 之后，第一行再没有任何 flex:1，
+     中止 / 重试按钮只能紧贴标题文字左对齐。用 margin-left:auto 把它推到第一行最右侧；
+     **不恢复 .lb-task-sp** —— 它一旦撑开会把独占第二行的 .lb-task-line2 挤出屏幕。 */
+  .lb-task-pg > .lb-srvctl-mini{margin-left:auto;order:0}
 }
 .lb-task-pg .lb-srvctl-mini{padding:0 3px;line-height:1}
+/* v6277（用户口径 2026-11-08「PC 端中止按钮放到进度数字右边（也就是最后一个）」）：
+   桌面 .lb-task-line2 是 display:contents ⇒ 其内的 .lb-task-sub / .lb-task-pct 直接参与
+   父级 flex 布局；给中止/重试按钮 order:99 即可排到 pct **之后**（整行最后）。
+   顶到右侧仍由前面的 .lb-task-sp{flex:1} 负责，不影响原布局。 */
+.lb-task-pg > .lb-srvctl-mini{order:99}
+/* v6269（用户口径）：服务器浮窗在移动端**全屏** —— 覆盖内联的 640px/94vw/86vh */
+@media(max-width:560px){
+  .lb-taskpanel-overlay > .lb-taskpanel-box{
+    width:100vw!important;max-width:100vw!important;
+    height:100vh!important;max-height:100vh!important;
+    border-radius:0!important;border-left:0!important;border-right:0!important;
+  }
+}
 /* v5991：踢人 / 设置时间 独立浮窗 */
 .lb-pk-grp{margin-bottom:10px}
 .lb-pk-gh{display:flex;align-items:center;gap:6px;font-size:12px;color:#a78bfa;margin-bottom:6px;padding-bottom:5px;border-bottom:1px solid #2a2a3a}
@@ -3513,3 +3568,36 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
 
 /* v6107（用户口径）：wiki 浮窗右上角「数据来源」tips —— data-tip 走 content:attr()，需 pre-wrap 才能保留换行与对齐空格 */
 #lbWikiOverlay .lw-help.lw-multi::after, #lbWikiItemOverlay .lw-help.lw-multi::after{white-space:pre-wrap}
+/* ===== v6244→v6247（用户口径）：服务器更新浮窗区块顺序 =====
+   v6247：独立「更新目标」卡片删除（勾选移入各卡片标题行）⇒ 只剩 更新缓存 → 汉化包
+   桌面与移动端顺序一致 */
+.lb-upd-stack{display:flex;flex-direction:column}
+.lb-upd-stack>.lb-upd-cache{order:1}
+.lb-upd-stack>.lb-upd-zh{order:2}
+
+/* v6248（用户口径「勾选太土，要一眼看出勾没勾」+ 选定方案 A）：
+   未勾 = 透明底 + 灰边灰字 + 空心框图标；已勾 = **整块紫底白字 + 白勾**（对比最强）。
+   原生 input 仍隐藏，整块 label 可点。 */
+.lb-upd-tgx{display:inline-flex;align-items:center;gap:5px;cursor:pointer;padding:2px 9px;
+  border-radius:5px;border:1px solid rgba(255,255,255,.14);background:transparent;
+  font-size:11px;color:#9ca3af;line-height:1.5;transition:all .12s}
+.lb-upd-tgx .mdi{font-size:13px;color:#6b7280;line-height:1}
+.lb-upd-tgx:hover{border-color:rgba(167,139,250,.45);color:#c4b5fd}
+.lb-upd-tgx.on{background:#7c3aed;border-color:#7c3aed;color:#fff;font-weight:600;
+  box-shadow:0 0 0 1px rgba(124,58,237,.45)}
+.lb-upd-tgx.on .mdi{color:#fff}
+.lb-upd-tgx.on:hover{border-color:#8b4bf0;color:#fff}
+/* v6249（用户口径）：没有需要更新的服 -> 该目标置灰不可点（.dis），hover 由 lb-tipb 气泡说明原因 */
+.lb-upd-tgx.dis{border-color:rgba(255,255,255,.07);background:transparent;color:#4b5563;
+  cursor:not-allowed;opacity:.6}
+.lb-upd-tgx.dis .mdi{color:#4b5563}
+.lb-upd-tgx.dis:hover{border-color:rgba(255,255,255,.07);color:#4b5563}
+/* v6251（用户口径）：游戏版本变更类型徽章 —— 胶囊样式，颜色由内联给出（强制=红/补丁=蓝/相同=灰） */
+.lb-vkbadge{display:inline-flex;align-items:center;padding:0 6px;border-radius:9px;
+  border:1px solid transparent;font-size:10px;line-height:15px;font-weight:700;letter-spacing:.2px;
+  margin-left:4px;cursor:help}   /* v6252：+4px（12->16px）；v6253：光标改「箭头带问号」，提示可悬停看说明 */
+/* v6245（用户口径）：汉化包「更新本地包」紫色可点链接 */
+.lb-upd-link{color:#a78bfa;cursor:pointer;font-size:11px;text-decoration:underline dotted;
+  text-underline-offset:2px;display:inline-flex;align-items:center;gap:3px;transition:color .12s}
+.lb-upd-link:hover{color:#c4b5fd}
+.lb-upd-link.dis{color:#6b7280;cursor:default;text-decoration:none}

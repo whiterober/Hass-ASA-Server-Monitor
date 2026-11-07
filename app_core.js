@@ -3004,10 +3004,17 @@ function lbIpDrillLoad(){
     if (a[1]) LB_IPDRILL.cfg = a[1];
     if (!LB_IPDRILL.ip && !LB_IPDRILL.cfg){
       if (box) box.innerHTML = '<div style="color:#f87171">读取失败（后端无响应）</div>';
-      return;
+    } else {
+      lbIpDrillPaint();
     }
-    lbIpDrillPaint();
+    /* v6219（P1-2）：面板打开时每 10s 自刷新；浮窗关闭（元素消失）后自动停 */
+    try { if (!LB_IPDRILL.timer) LB_IPDRILL.timer = setTimeout(lbIpDrillLoop, 10000); } catch(e){}
   });
+}
+function lbIpDrillLoop(){
+  LB_IPDRILL.timer = null;
+  if (!document.getElementById('lbIpDrillInfo')) return;   /* 浮窗已关 ⇒ 停止 */
+  try { lbIpDrillLoad(); } catch(e){}
 }
 function lbIpDrillCur(key){
   var ip = LB_IPDRILL.ip || {}, cfg = LB_IPDRILL.cfg || {}, r = ip.restart || {};
@@ -3205,6 +3212,43 @@ function lbOpenServerAdminModal(){
     + '<span id="lbIpDrillMsg" style="font-size:11px;color:#888"></span>'
     + '</div>'
     + '</div>'
+    /* v6233（用户口径「更新的预演模式也要做到系统管理里」）：服务器更新预演
+       —— 状态行 + 默认预演开关 + 一键预演（全 11 台），预演只出清单不动服务器 */
+    + '<div style="margin-top:18px;padding-top:14px;border-top:1px solid #2a2a3a">'
+    + '<div style="font-size:13px;font-weight:bold;color:#ddd;margin-bottom:6px">📦 服务器更新预演</div>'
+    + '<div style="font-size:11px;color:#666;margin-bottom:8px">从 Steam 缓存向各台分发更新。<b style="color:#f59e0b">预演只出清单：不复制文件、不改 acf、不停服</b>。<span style="color:#4b5563">（全 11 台实测约 2~3 分钟）</span></div>'
+    + '<div id="lbUpdDryInfo" style="margin-bottom:10px;padding:8px 10px;background:#12121a;border:1px solid #2a2a3a;border-radius:6px;font-size:11px;color:#6b7280">读取中…</div>'
+    + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">'
+    + '<button id="lbUpdDryBtnDefault" onclick="lbUpdDryToggle(this)" style="padding:6px 12px;border-radius:6px;border:1px solid #333;background:transparent;color:#6b7280;cursor:pointer;font-size:12px">默认预演：—</button>'
+    + '</div>'
+    + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+    + '<button id="lbUpdDryRunBtn" onclick="lbUpdDryRun(this)" style="' + btn + '"><i class="mdi mdi-playlist-check"></i> 立即预演一次（全部 11 台）</button>'
+    + '<button onclick="lbUpdDryLoad()" style="padding:5px 12px;border-radius:6px;border:1px solid #333;background:transparent;color:#bbb;cursor:pointer;font-size:12px">刷新状态</button>'
+    + '<span id="lbUpdDryMsg" style="font-size:11px;color:#888"></span>'
+    + '</div>'
+    + '<pre id="lbUpdDryOut" style="display:none;margin:8px 0 0;padding:8px 10px;border-radius:6px;background:#0b1020;border:1px solid rgba(255,255,255,.08);color:#a5f3fc;font-size:11px;line-height:1.65;max-height:240px;overflow:auto;white-space:pre-wrap;word-break:break-all"></pre>'
+    + '</div>'
+    /* v6241（B4，用户口径）：汉化补丁 —— 下载地址可配 + 变体 + 云端/本地/各服状态 + 下载解压
+       ⚠ 字體補丁（HLN-A/winhttp.dll）属玩家客户端，服务端不装，故此处不提供任何 DLL 开关 */
+    + '<div style="margin-top:18px;padding-top:14px;border-top:1px solid #2a2a3a">'
+    + '<div style="font-size:13px;font-weight:bold;color:#ddd;margin-bottom:6px">📥 汉化补丁</div>'
+    + '<div style="font-size:11px;color:#666;margin-bottom:8px">从作者 Google Drive 取「恐龙&amp;物品双语」包，<b style="color:#22d3ee">只解出 3 个 _P 文件</b>（包内 HLN-A/PDF/PNG 全部跳过）。<span style="color:#4b5563">下载约 124 MB，仅写 D:\Cache-zh</span></div>'
+    + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center">'
+    + '<input id="lbZhFolderUrl" type="text" placeholder="https://drive.google.com/drive/folders/&lt;id&gt;" style="flex:1;min-width:240px;padding:5px 8px;border-radius:6px;border:1px solid #333;background:#12121a;color:#ddd;font-size:11.5px">'
+    + '<select id="lbZhVariant" style="padding:5px 8px;border-radius:6px;border:1px solid #333;background:#12121a;color:#ddd;font-size:11.5px">'
+    + '<option value="dinoitem">恐龙&amp;物品双语（推荐）</option>'
+    + '<option value="item">物品双语</option>'
+    + '<option value="normal">常规</option></select>'
+    + '<button onclick="lbZhSaveCfg(this)" style="padding:5px 12px;border-radius:6px;border:1px solid #333;background:transparent;color:#bbb;cursor:pointer;font-size:12px">保存</button>'
+    + '</div>'
+    + '<div id="lbZhInfo" style="margin-bottom:10px;padding:8px 10px;background:#12121a;border:1px solid #2a2a3a;border-radius:6px;font-size:11px;color:#6b7280">读取中…</div>'
+    + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+    + '<button id="lbZhPrepareBtn" onclick="lbZhPrepare(this)" style="' + btn + '"><i class="mdi mdi-download"></i> 更新本地包</button>'
+    + '<button onclick="lbZhCheck(this)" style="padding:5px 12px;border-radius:6px;border:1px solid #333;background:transparent;color:#bbb;cursor:pointer;font-size:12px">重新检查云端</button>'
+    + '<button onclick="lbZhLoad()" style="padding:5px 12px;border-radius:6px;border:1px solid #333;background:transparent;color:#bbb;cursor:pointer;font-size:12px">刷新状态</button>'
+    + '<span id="lbZhMsg" style="font-size:11px;color:#888"></span>'
+    + '</div>'
+    + '</div>'
     + '</div>'   // v6076：收 .lw-body（底部「关闭」按钮已移入标题栏右上角）
     + '</div>';  // v6076：收面板
   overlay.innerHTML = html;
@@ -3212,6 +3256,8 @@ function lbOpenServerAdminModal(){
   lbSrvDomainLoad();
   try{ lbBackendProbe(); }catch(eB){ }   /* v6155：开窗即拉一次后端状态 */
   try{ lbIpDrillLoad(); }catch(eD){ }    /* v6218：IP 切换演练状态 */
+  try{ lbUpdDryLoad(); }catch(eU){ }     /* v6233：服务器更新预演状态 */
+  try{ lbZhLoad(); }catch(eZ){ }         /* v6241：汉化补丁状态 */
 }
 // ===== 2026-10-27：服务器规则（后端 /api/cfg_rules，逐服查询，绝不自动轮询）=====
 //   · 更新：仅系统拥有者（后端强制），前端串行/低并发逐服拉 GUS，真实进度条
@@ -5505,7 +5551,77 @@ function lbSrvCtlClose(){ if (typeof lbSheetClose !== 'function') return; lbShee
    样式/控件：**完全复用服务器控制浮窗**（lbSheetBuild 骨架 + lbSrvCtlChipsHtml + 
              lbSrvCtlLegendHtml + lbSrvCtlOnlineHtml + lbSrvPickIconsHtml），禁止复制 HTML。 */
 var LB_UPD = { data: null, sel: {}, loading: false, ts: 0, err: null, plan: null, out: '', busy: false,
-               srvData: null, official: '' };   /* v6208c：srvData/official 与服务器控制同源（/api/srvctl/status） */
+               srvData: null, official: '', tg: null };
+               /* v6208c：srvData/official 与服务器控制同源（/api/srvctl/status）
+                  v6241（B4）：tg = 更新目标 {server:bool, zh:bool}，localStorage 持久 */
+
+/* ===== v6252（用户口径）：「强制/补丁/相同/未知」的**唯一文案来源** =====
+   来源：项目既有权威口径（分发确认浮窗 v6228 定稿）——
+     forced  : 强制 · 服务器必须更新玩家才能进游戏
+     patch   : 补丁 · 玩家不更新也可以进游戏
+     same    : 相同 · 无需更新
+     unknown : 未知 · 请人工确认
+   ⚠ 此前该文案在 4 处各写一遍（确认浮窗长/短、系统管理预演行、更新缓存徽章），
+     导致 v6251 徽章 tips 一度写成「需完整分发本体文件」这种臆测说法。
+     现在一律调本函数，禁止再内联判断。 */
+function lbUpdKindText(kind){
+  var k = String(kind || 'unknown');
+  return (k === 'forced') ? '强制 · 服务器必须更新玩家才能进游戏'
+       : (k === 'patch')  ? '补丁 · 玩家不更新也可以进游戏'
+       : (k === 'same')   ? '相同 · 无需更新'
+       : '未知 · 请人工确认';
+}
+function lbUpdKindShort(kind){
+  var k = String(kind || 'unknown');
+  return (k === 'forced') ? '强制' : (k === 'patch') ? '补丁'
+       : (k === 'same') ? '相同' : '未知';
+}
+function lbUpdKindDesc(kind){
+  var t = lbUpdKindText(kind);
+  return t.split('· ')[1] || t;
+}
+/* ===== v6241（B4）：更新目标（服务器本体 / 汉化补丁）===== */
+function lbUpdTgGet(){
+  if (!LB_UPD.tg){
+    var t = null;
+    try { t = JSON.parse(localStorage.getItem('lbUpdTargets') || 'null'); } catch (e) { t = null; }
+    if (!t || (!t.server && !t.zh)) t = { server: true, zh: false };
+    LB_UPD.tg = { server: !!t.server, zh: !!t.zh };
+  }
+  return LB_UPD.tg;
+}
+function lbUpdTgSet(k, on){
+  var t = lbUpdTgGet();
+  t[k] = !!on;
+  if (!t.server && !t.zh){
+    t[k] = true;
+    if (typeof lbToast === 'function') lbToast('至少要选一项更新目标');
+  }
+  LB_UPD.tg = t;
+  try { localStorage.setItem('lbUpdTargets', JSON.stringify(t)); } catch (e) {}
+  lbUpdRender();
+}
+/* v6249（用户口径）：「没有需要更新的服」时该目标置灰、不计入 ——
+   本体：全部服 buildId 都与缓存一致（/api/update/status 的 behind 为空）⇒ 不可分发；
+   汉化：全部服汉化都是最新（/api/zh/status 的 behind 为空）⇒ 不可分发。
+   数据尚未加载时按「可用」处理，避免首屏未就绪就误置灰。 */
+function lbUpdTgUsable(){
+  var D0 = LB_UPD.data, Z0 = LB_ZH.st;
+  /* v6266（同根因）：数据**未就绪**时一律不可勾分发。
+     原来「servers 为空」被当成「全部需要更新」⇒ 打开浮窗头几秒分发勾选是亮的，会误导。
+     就绪判据：本体看 cache.buildId 是否已拿到；汉化看 servers 是否已扫到。 */
+  var _svReady = !!(D0 && D0.cache && D0.cache.buildId && D0.servers && D0.servers.length);
+  var _zhReady = !!(Z0 && Z0.servers && Z0.servers.length);
+  var svOk = _svReady ? (((D0.behind) || []).length > 0) : false;
+  var zhOk = _zhReady ? (((Z0.behind) || []).length > 0) : false;
+  return { server: svOk, zh: zhOk };
+}
+function lbUpdTgList(){
+  var t = lbUpdTgGet(), a = [], u = lbUpdTgUsable();
+  if (t.server && u.server) a.push('server');
+  if (t.zh && u.zh) a.push('zh');
+  return a;   /* v6249：可能为空 —— 调用方必须判空（不再兜底成 ['server']） */
+}
 
 function lbUpdOpen(){
   if (typeof lbSheetBuild !== 'function') { lbUIEnsure().then(lbUpdOpen, function(){}); return; }
@@ -5523,10 +5639,59 @@ function lbUpdOpen(){
   /* v6208d：在线角色数据与服务器控制同源（LB_SRVCTL.detail，15s TTL）——
      不先拉一次，在线栏会永远显示「暂无数据」（安全回档 lbArkBkOpen 早就这么做了） */
   try { lbSrvCtlOnlineSync(); } catch (e) {}
+  try { lbZhFetch(true); } catch (e) {}      /* v6241：本机扫描秒回 */
+  try { lbZhFetch(false); } catch (e) {}     /* v6241：云端探测回填（TTL 30 分钟） */
   lbUpdFetch();
 }
 
 function lbUpdClose(){ if (typeof lbSheetClose === 'function') lbSheetClose('lbUpd'); }
+
+/* v6263（用户口径）：清空版本更新缓存 —— **必须走项目通用确认浮窗**（lbAskCard danger） */
+function lbUpdCacheClear(){
+  var D = LB_UPD.data || {};
+  var C = D.cache || {};
+  var bh = (D.behind || []).length;
+  if (bh > 0){
+    try { lbToast('还有 ' + bh + ' 台服未与缓存一致，先完成分发'); } catch(e0){}
+    return;
+  }
+  var go = function(){
+    var base = (typeof lbSrvCtlApi === 'function') ? lbSrvCtlApi() : '';
+    var u = (typeof lbSrvCtlUser === 'function') ? lbSrvCtlUser() : '';
+    if (!base || !u) return;
+    lbSrvCtlFetchW(base + '/api/update/cache/clear?t=' + Date.now(), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: u, confirm: 'CLEAR' })
+    }).then(function(r){ return r.json().then(function(j){ return { s: r.status, j: j }; }); })
+      .then(function(x){
+        var j = x.j || {};
+        if (j.ok){
+          try { lbToast(j.msg || '缓存已清空'); } catch(e1){}
+        } else {
+          try { lbToast('清空失败：' + (j.error || ('HTTP ' + x.s))); } catch(e2){}
+        }
+        try { lbUpdFetch(); } catch(e3){}
+      })
+      .catch(function(e){
+        try { lbToast('清空异常：' + String((e && e.message) || e)); } catch(e4){}
+      });
+  };
+  var ok = false;
+  try {
+    ok = lbAskCard({
+      tone: 'danger', badge: '清空缓存',
+      title: '清空版本更新缓存',
+      servers: [],
+      steps: ['校验无落后服', '删除 D:\\Cache 内容', '刷新缓存状态'],
+      note: '会删除 D:\\Cache 下的**全部**缓存内容（实测 ' + (C.realGB || 0) + ' GB，'
+          + 'buildId ' + (C.buildId || '-') + '）。删除后需重新从 Steam 下载才能再次分发，此操作不可撤销。',
+      okText: '确认清空',
+      cancelText: '取消',
+      onOk: go
+    });
+  } catch (e5) { ok = false; }
+  if (!ok) go();   /* 浮窗创建失败时降级直执行（与项目其它确认一致） */
+}
 
 function lbUpdToggle(a){
   if (LB_UPD.sel[a]) delete LB_UPD.sel[a]; else LB_UPD.sel[a] = 1;
@@ -5598,6 +5763,768 @@ function lbUpdSmap(){
   return m;
 }
 
+/* v6223（用户口径）：角标显示 **buildId 后 3 位** —— buildId 是递增数字，新旧一眼可辨
+   （cache 26477280 -> 280 / 11 台旧版 26334129 -> 129）；manifest 是 19 位随机数，
+   后 3 位既不递增、也易撞车，只放 tips。与缓存一致=绿，落后=橙 + 呼吸外环。 */
+/* v6247（用户口径）：该服汉化包是否落后云端 —— 供 lbSrvCtlChipsHtml 第 7 参数判别 .zhb 蓝色内描边 */
+function lbUpdZhOld(s){
+  var b = ((LB_ZH.st || {}).behind) || [];
+  for (var i = 0; i < b.length; i++){ if (b[i] === (s && s.abbr)) return true; }
+  return false;
+}
+function lbUpdBadge(s, d){
+  var D = LB_UPD.data || {};
+  var arr = D.servers || [];
+  var it = null, i;
+  for (i = 0; i < arr.length; i++){ if (arr[i] && arr[i].srv === s.abbr){ it = arr[i]; break; } }
+  /* v6266（用户报「打开浮窗后几秒内角标显示版本号、之后才变后三位」）：
+     区分「数据未就绪」与「该服确无 acf 数据」——
+     未就绪时返回**占位角标**，绝不让 lbSrvCtlChipsHtml 回退成版本号。 */
+  if (!it){
+    var _rdy0 = !!(D && D.cache && D.cache.buildId);
+    if (!_rdy0) return { text: '·', color: '#374151', cls: '', title: '缓存数据加载中…' };
+    return null;
+  }
+  var C = D.cache || {};
+  var b = String(it.buildId || '');
+  var cb = String(C.buildId || '');
+  var txt = b ? (b.length > 3 ? b.slice(-3) : b) : '?';
+  var same = !!it.same;
+  /* v6225（用户口径）：**底色回归运行状态**（绿=运行中 / 红=已停止）——
+     版本落后不用底色表达（原来土黄整排会让人以为服务器异常），改用橙色描边 + 呼吸动画（mis）。 */
+  var running = !!(d && String(d.status || '').toLowerCase() === 'running');
+  var tip = 'buildId ' + (b || '-') + ' · manifest ' + (it.manifest || '-')
+          + ' · 更新于 ' + (it.updatedAt || '-')
+          + (same ? '（与缓存一致）' : ('（落后，缓存为 ' + (cb || '-') + '）'))
+          + ' · ' + (running ? '运行中' : (d ? '已停止' : '状态未知'));
+  return { text: txt, color: (running ? '#15803d' : '#b91c1c'),
+           cls: (same ? '' : ' mis'), title: tip };
+}
+/* ===== v6228（P2，用户口径）：**单一分发确认浮窗** =====
+   方案 §14.4：版本类型【1】+ AsaApi 缓存【2】+ 分发范围【3】三区块整合在**一个**浮窗内，
+   一次确认完成全部决策（不拆成多个串联弹窗）。
+   ⚠ 不新建顶层浮窗：复用 #lbUpd body 内的绝对定位覆盖层，
+     避免 app.css 浮窗白名单三处漏改（v6208 / v6032 各踩过一次）。
+   ⚠ 原文必须显示**英文原文**，不得翻译。 */
+var LB_UPD_CF = { open: false, sel: [], cb: null, data: null, news: null,
+                  busy: false, err: '', chk: false,
+                  /* v6236（用户口径「点附件没反应」）：点击「重新检查」必须**立刻有反馈** ——
+                     t0 记起点算耗时，chkAt/ms 让「检查过了」在界面上看得见。 */
+                  t0: 0, chkAt: 0, ms: 0 };
+
+function lbUpdApply(){
+  /* v6249：没有任何「需要更新」的目标时直接拦下（不打开确认浮窗、不发请求） */
+  if (!lbUpdTgList().length){
+    if (typeof lbToast === 'function') lbToast('没有需要更新的服务器（本体版本与缓存一致、汉化均为最新）');
+    return;
+  }
+  var sel = lbUpdSelList();
+  if (!sel.length) { if (typeof lbToast === 'function') lbToast('请先选择服务器'); return; }
+  LB_UPD_CF.open = true;
+  LB_UPD_CF.sel = sel.slice();
+  LB_UPD_CF.cb = function(){ lbUpdCall({ servers: sel.slice(), dry: false, confirm: 'APPLY',
+                                          targets: lbUpdTgList() }); };
+  LB_UPD_CF.chk = false;
+  LB_UPD_CF.data = null;
+  LB_UPD_CF.news = null;
+  LB_UPD_CF.err = '';
+  /* v6236：重开浮窗时清掉上一轮的 busy/检查戳，否则 lbUpdConfirmLoad 的防重入会直接 return */
+  LB_UPD_CF.busy = false;
+  LB_UPD_CF.chkAt = 0;
+  LB_UPD_CF.ms = 0;
+  lbUpdConfirmLoad();
+  lbUpdRender();
+}
+
+function lbUpdConfirmClose(){ LB_UPD_CF.open = false; lbUpdRender(); }
+
+function lbUpdConfirmLoad(){
+  /* v6236（用户口径「点附件没反应」）：原实现只设 busy=true 就等 fetch ——
+     实测点击后 **2992ms 内 DOM 零变化**（immediateHtmlDelta=0），完成后重绘的内容又完全相同
+     ⇒ 用户以为按钮没反应。现在：
+       ① 点击瞬间立即 lbUpdRender()（按钮变「检查中…」并禁用）
+       ② 重新检查时**保留原内容不闪白**（busy 只在首次无数据时才整块占位）
+       ③ 完成后显示「上次检查 hh:mm:ss（x.x 秒）」，让检查过看得见
+       ④ 12 秒超时保护（后端卡住时不会永久转圈）⑤ busy 期间忽略重复点击 */
+  if (LB_UPD_CF.busy) return;
+  LB_UPD_CF.busy = true;
+  LB_UPD_CF.err = '';
+  LB_UPD_CF.t0 = Date.now();
+  if (LB_UPD_CF.open) lbUpdRender();        /* ← v6236：立即反馈 */
+  var api = lbSrvCtlApi();
+  var p1 = lbSrvCtlFetchW(api + '/api/update/status?t=' + Date.now())
+             .then(function(r){ return r.json(); });
+  var p2 = Promise.resolve(null);
+  try {
+    var _nb = (typeof lbNewsApiBase === 'function') ? lbNewsApiBase() : api;
+    p2 = fetch(_nb + '/api/news/api_cache?t=' + Date.now(), { cache: 'no-store' })
+           .then(function(r){ return r.json(); })
+           .catch(function(){ return null; });
+  } catch (e) { p2 = Promise.resolve(null); }
+  /* 超时保护：任一请求卡住都不允许无限转圈 */
+  var pT = new Promise(function(_, rej){
+    setTimeout(function(){ rej(new Error('读取超时（12 秒）')); }, 12000);
+  });
+  Promise.race([Promise.all([p1, p2]), pT]).then(function(a){
+    LB_UPD_CF.data = a[0] || {};
+    LB_UPD_CF.news = a[1] || null;
+    LB_UPD_CF.busy = false;
+    LB_UPD_CF.chkAt = Date.now();
+    LB_UPD_CF.ms = LB_UPD_CF.t0 ? (LB_UPD_CF.chkAt - LB_UPD_CF.t0) : 0;
+    if (LB_UPD_CF.open) lbUpdRender();
+  }).catch(function(e){
+    LB_UPD_CF.busy = false;
+    LB_UPD_CF.err = String((e && e.message) || e);
+    LB_UPD_CF.chkAt = Date.now();
+    LB_UPD_CF.ms = LB_UPD_CF.t0 ? (LB_UPD_CF.chkAt - LB_UPD_CF.t0) : 0;
+    if (LB_UPD_CF.open) lbUpdRender();
+  });
+}
+
+/* AsaApi 缓存判定：优先用「强制重抓」的 api_cache 现算（后端 asaapi 可能是几秒前的快照）
+   判据（§14.3）：规范化后含 'automated cache build: success' 即就绪 —— **唯一精确串** */
+function lbUpdAsaApiState(){
+  var cards = ((LB_UPD_CF.news || {}).cards) || [];
+  if (cards.length) {
+    var raw = String((cards[cards.length - 1] || {}).content || '');
+    var t = raw.replace(/<[^>]+>/g, ' ').replace(/[*_`]+/g, '')
+               .replace(/\s+/g, ' ').trim().toLowerCase();
+    var hit = t.indexOf('automated cache build: success') >= 0;
+    return { state: (hit ? 'ready' : 'building'), hit: hit, raw: raw,
+             text: raw.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
+             updated: (LB_UPD_CF.news || {}).updated || '', total: cards.length };
+  }
+  return (LB_UPD_CF.data || {}).asaapi || { state: 'unknown', hit: false, raw: '', text: '', total: 0 };
+}
+
+function lbUpdConfirmChk(v){ LB_UPD_CF.chk = !!v; }
+
+function lbUpdConfirmGo(){
+  var aa = lbUpdAsaApiState();
+  var vk = String(((LB_UPD_CF.data || {}).verKind || {}).kind || 'unknown');
+  if (aa.state !== 'ready' && vk !== 'forced' && !LB_UPD_CF.chk) {
+    if (typeof lbToast === 'function') lbToast('缓存未就绪：请先勾选确认，或点【重新检查】');
+    return;
+  }
+  var cb = LB_UPD_CF.cb;
+  LB_UPD_CF.open = false;
+  if (typeof cb === 'function') cb();
+  else lbUpdRender();
+}
+
+function lbUpdConfirmHtml(){
+  var d = LB_UPD_CF.data || {};
+  var vk = d.verKind || {};
+  var aa = lbUpdAsaApiState();
+  var kind = String(vk.kind || 'unknown');
+  var ready = (aa.state === 'ready');
+  var sel = LB_UPD_CF.sel || [];
+  var arr = d.servers || [];
+  /* v6241（B4）：本次分发目标 */
+  var _tgL = (typeof lbUpdTgList === 'function') ? lbUpdTgList() : ['server'];
+  var _tgHasSv = (_tgL.indexOf('server') >= 0);
+  var _tgHasZh = (_tgL.indexOf('zh') >= 0);
+  var _tgTxt = (_tgHasSv && _tgHasZh) ? '服务器本体 + 汉化补丁'
+             : (_tgHasZh ? '仅汉化补丁' : '仅服务器本体');
+  var _zst1 = (typeof LB_ZH !== 'undefined' && LB_ZH.st) ? LB_ZH.st : {};
+  var _zv1 = String((_zst1.remote || {}).ver || (_zst1.pkg || {}).ver || '');
+  var _zpkg1 = _zst1.pkg || {};
+  /* v6229：**停服台数必须取 /api/srvctl/status 的运行状态**
+     —— /api/update/status 的 servers[] 只有 buildId/manifest/updatedAt，**没有 status 字段**，
+     用它会让所有台都被判成「停服」（v6228 首版实测 Bob 明明在跑却显示「1 台当前停服」）。
+     复用 lbUpdSmap()（= LB_UPD.srvData，由 lbUpdFetch 并行拉 srvctl/status 得到）。 */
+  var sm = {};
+  try { sm = lbUpdSmap() || {}; } catch (e) { sm = {}; }
+  var stoppedN = 0, i;
+  for (i = 0; i < sel.length; i++) {
+    var _sd = sm[sel[i]];
+    if (!_sd || String(_sd.status || '').toLowerCase() !== 'running') stoppedN++;
+  }
+  var _hasSt = false;
+  for (i = 0; i < sel.length; i++) { if (sm[sel[i]]) { _hasSt = true; break; } }
+  var kindTxt = lbUpdKindText(kind);      /* v6252：唯一来源 */
+  var kindCol = (kind === 'forced') ? '#f87171' : (kind === 'patch') ? '#60a5fa' : '#9ca3af';
+  var verLine = lbMdEsc(String(vk.from || '?')) + '  <span style="color:#6b7280">→</span>  '
+              + lbMdEsc(String(vk.to || '?'));
+  var stTxt = (aa.state === 'ready') ? '已就绪' : (aa.state === 'building') ? '未就绪' : '未知';
+  var stCol = (aa.state === 'ready') ? '#4ade80' : (aa.state === 'building') ? '#fbbf24' : '#9ca3af';
+  var hitTxt = aa.hit ? ('已命中 "' + lbMdEsc(String(d.asaapi && d.asaapi.readyStr || 'Automated Cache Build: SUCCESS')) + '"')
+                      : ('未命中 "Automated Cache Build: SUCCESS"');
+  var orig = String(aa.text || aa.raw || '').slice(0, 1600);
+  /* v6231（用户口径 2026-11-07）：显示**版本来源** —— 后端 _official_version_ex() 的 src 字段
+     ini     = 官方 CDN officialserverstatus.ini（与 ASAM 同源，最权威）
+     list    = 官方服务器列表众数（备源）
+     discord = 资讯广场（兜底，Discord 抓取不稳）
+     asam    = ASAM 缓存（最后；ASAM 每台各自缓存，必须手点验证才刷新） */
+  /* v6235（用户口径）：「（与 ASAM 同源）」不显示 —— 只留「官方 CDN」 */
+  var srcMap = { ini: '官方 CDN', list: '官方服务器列表',
+                 discord: '资讯广场（兜底）', asam: 'ASAM 缓存' };
+  var srcTxt = srcMap[String(vk.src || '')] || '';
+  var srcLine = srcTxt ? ('<div style="font-size:10.5px;color:#6b7280;margin-top:2px">版本来源：'
+                          + lbMdEsc(srcTxt) + '</div>') : '';
+
+  var h = '<div style="position:absolute;inset:0;background:rgba(3,7,18,.86);z-index:60;'
+        + 'display:flex;align-items:center;justify-content:center;padding:12px">'
+        + '<div style="width:min(680px,96%);max-height:92%;overflow:auto;background:#111827;'
+        + 'border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:14px 16px;'
+        + 'box-shadow:0 10px 40px rgba(0,0,0,.6)">';
+
+  h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'
+     + '<i class="mdi mdi-update" style="font-size:17px;color:#c4b5fd"></i>'
+     + '<b style="color:#e5e7eb;font-size:14px">服务器更新 · 分发确认</b>'
+     + '<span style="flex:1"></span>'
+     + '<button onclick="lbUpdConfirmClose()" style="background:none;border:none;color:#9ca3af;'
+     + 'cursor:pointer;font-size:16px"><i class="mdi mdi-close"></i></button></div>';
+
+  /* v6236：仅在**首次加载**（尚无数据）时用整块提示占位；
+     重新检查时保留原内容不闪白，反馈交给「检查中…」按钮 + 底部「上次检查」时刻。 */
+  if (LB_UPD_CF.busy && !LB_UPD_CF.data) {
+    h += '<div style="color:#a5f3fc;font-size:12.5px;padding:16px 0">正在读取版本与 AsaApi 缓存…</div>';
+  } else if (LB_UPD_CF.err && !LB_UPD_CF.data) {
+    h += '<div style="color:#f87171;font-size:12.5px;padding:12px 0">读取失败：'
+       + lbMdEsc(LB_UPD_CF.err) + '</div>';
+  } else {
+    /* 【1】本次更新 */
+    h += '<div style="padding:9px 11px;border-radius:7px;background:rgba(255,255,255,.04);'
+       + 'border:1px solid rgba(255,255,255,.08);margin-bottom:8px">'
+       + '<div style="font-size:11px;color:#9ca3af;margin-bottom:3px">【1】本次更新</div>'
+       + '<div style="font-size:13px;color:#e5e7eb">' + verLine
+       + ' <span style="color:' + kindCol + ';font-weight:700">['
+       + lbMdEsc(lbUpdKindShort(kind))
+       + ']</span>'
+       + ' <span style="color:#9ca3af;font-size:12px">' + lbMdEsc(lbUpdKindDesc(kind)) + '</span></div>'
+       + srcLine
+       + (vk.note ? ('<div style="font-size:11px;color:#fbbf24;margin-top:3px">' + lbMdEsc(vk.note) + '</div>') : '')
+       + '</div>';
+
+    /* 【2】AsaApi 缓存 */
+    h += '<div style="padding:9px 11px;border-radius:7px;background:rgba(255,255,255,.04);'
+       + 'border:1px solid rgba(255,255,255,.08);margin-bottom:8px">'
+       + '<div style="font-size:11px;color:#9ca3af;margin-bottom:3px">【2】AsaApi 缓存'
+       + (_tgHasSv ? '' : '（本次不涉及 · 仅更新汉化）') + '</div>'
+       + '<div style="font-size:13px;color:#e5e7eb">状态：<b style="color:' + stCol + '">' + lbMdEsc(stTxt) + '</b>'
+       + ' <span style="font-size:11.5px;color:#9ca3af">' + lbMdEsc(hitTxt) + '</span>'
+       + ' <button onclick="lbUpdConfirmLoad()"' + (LB_UPD_CF.busy ? ' disabled' : '')
+       + ' style="margin-left:6px;padding:2px 8px;border-radius:5px;'
+       + 'border:1px solid rgba(255,255,255,.16);background:transparent;'
+       + 'color:' + (LB_UPD_CF.busy ? '#6b7280' : '#c4b5fd') + ';'
+       + 'cursor:' + (LB_UPD_CF.busy ? 'default' : 'pointer') + ';font-size:11px">'
+       + (LB_UPD_CF.busy ? '检查中…' : '重新检查') + '</button></div>'
+       + '<div style="font-size:11px;color:#6b7280;margin:5px 0 3px">最新消息原文（非翻译）</div>'
+       + '<pre style="margin:0;padding:8px 10px;border-radius:6px;background:#0b1020;'
+       + 'border:1px solid rgba(255,255,255,.08);color:#a5f3fc;font-size:11px;line-height:1.6;'
+       + 'max-height:170px;overflow:auto;white-space:pre-wrap;word-break:break-word">'
+       + lbMdEsc(orig || '（无消息）') + '</pre>'
+       + '<div style="font-size:10.5px;color:#6b7280;margin-top:4px">消息时间 '
+       + lbMdEsc(String(aa.updated || '-')) + ' · 共 ' + (aa.total || 0) + ' 条</div>'
+       /* v6236：让「检查过」看得见 —— 原来检查完成后画面与之前一模一样，用户以为没反应 */
+       + (LB_UPD_CF.chkAt ? ('<div style="font-size:10.5px;color:#4ade80;margin-top:2px">'
+            + '<i class="mdi mdi-check-circle-outline" style="font-size:11px"></i> 上次检查 '
+            + lbMdEsc(new Date(LB_UPD_CF.chkAt).toLocaleTimeString('zh-CN'))
+            + (LB_UPD_CF.ms ? ('（耗时 ' + (LB_UPD_CF.ms / 1000).toFixed(1) + ' 秒）') : '')
+            + '</div>') : '')
+       + (LB_UPD_CF.err ? ('<div style="font-size:10.5px;color:#f87171;margin-top:2px">'
+            + '检查失败：' + lbMdEsc(LB_UPD_CF.err) + '</div>') : '')
+       + '</div>';
+
+    /* 【3】分发范围 */
+    var bytesGb = 0, k;
+    for (k = 0; k < arr.length; k++) {
+      if (arr[k] && sel.indexOf(arr[k].srv) >= 0) bytesGb += Number(arr[k].needCopyBytes || 0);
+    }
+    if (!bytesGb) bytesGb = sel.length * 11.30 * 1073741824;
+    /* v6230（用户质疑「合计约 22.6 GB · 预计 ≈ 2 分钟（串行）这明显不对，光是重启都不止」）：
+       原 `sel.length * 0.8` 是拍脑袋系数，与状态机真实阶段毫无关系。
+       按后端常量的**实际耗时下限**重算（每台，假设当前无人）：
+         公告期       ~0.5 分（RESTART_ROUND=600s 一轮，每轮前 60s 发）
+         空置确认      3   分（RESTART_EMPTY_SPAN=180s）
+         静默校验      1.5~3 分（RESTART_CLUSTER_QUIET=180s）
+         存档+停服     ~1   分（SAVEWORLD_TIMEOUT=180 / SAVEKILL_TIMEOUT=300）
+         复制 11.3GB   0.5~2 分（SSD 23s / HDD 96s）
+         起服+校验     1.5~3 分（STARTQ_TIMEOUT=1200 / VERIFY_TIMEOUT=600）
+       ⇒ 约 8~12 分钟/台；**若有玩家在线还要等其下线，可能几十分钟**
+         原本停服的台走 3 步快通道（仅复制），约 1~2 分钟/台 */
+    var _runN = sel.length - ((stoppedN && _hasSt) ? stoppedN : 0);
+    var _stopN = (stoppedN && _hasSt) ? stoppedN : 0;
+    var mins = Math.max(1, Math.round(_runN * 10 + _stopN * 2));
+    h += '<div style="padding:9px 11px;border-radius:7px;background:rgba(255,255,255,.04);'
+       + 'border:1px solid rgba(255,255,255,.08);margin-bottom:10px">'
+       + '<div style="font-size:11px;color:#9ca3af;margin-bottom:3px">【3】分发范围</div>'
+       + '<div style="font-size:12.5px;color:#e5e7eb">更新目标：<b style="color:#c4b5fd">'
+       + lbMdEsc(_tgTxt) + '</b></div>'
+       + (_tgHasZh ? ('<div style="font-size:11.5px;color:#9ca3af;margin-top:2px">汉化：云端 '
+            + lbMdEsc(_zv1 ? ('V' + _zv1) : '未知') + ' · 恐龙&amp;物品双语 · 本地包 '
+            + (_zpkg1.ready ? '<span style="color:#4ade80">已就绪</span>'
+                            : '<span style="color:#fbbf24">未就绪</span>') + '</div>') : '')
+       + '<div style="font-size:12.5px;color:#e5e7eb">已选 ' + sel.length + ' 台：'
+       + lbMdEsc(sel.join('、')) + '</div>'
+       + ((stoppedN && _hasSt) ? ('<div style="font-size:11.5px;color:#fbbf24;margin-top:2px">其中 '
+            + stoppedN + ' 台当前停服 → 分发后保持停服（仅 检查→复制→完成）</div>') : '')
+       + '<div style="font-size:11.5px;color:#9ca3af;margin-top:3px">合计约 '
+       + (bytesGb / 1073741824).toFixed(1) + ' GB · 预计 ≈ ' + mins + ' 分钟（串行'
+       + (_stopN ? '，其中 ' + _stopN + ' 台停服仅复制' : '') + '）</div>'
+       + '<div style="font-size:10.5px;color:#6b7280;margin-top:1px">'
+       + '按空置确认 3 分 + 静默 3 分 + 存档停服 1 分 + 复制 0.5~2 分 + 起服 1.5~3 分估算；'
+       + '若有玩家在线需等其下线，耗时会显著延长</div>'
+       + '<div style="font-size:11px;color:#6b7280;margin-top:2px">'
+       + '流程：公告 → 空置 → 静默 → 存档 → 停服 → 复制 → 起服 → 校验</div>'
+       + '</div>';
+  }
+
+  /* 按钮区 */
+  /* v6236：重新检查期间**保留按钮区**（避免 3 秒空白像卡死），只把「确认分发」置灰 */
+  if ((!LB_UPD_CF.busy && !LB_UPD_CF.err) || (LB_UPD_CF.busy && LB_UPD_CF.data)
+      || (LB_UPD_CF.err && LB_UPD_CF.data)) {
+    var needChk = (!ready && kind !== 'forced');
+    var canGo = (ready || kind === 'forced' || LB_UPD_CF.chk) && !LB_UPD_CF.busy;
+    h += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">';
+    if (needChk) {
+      h += '<label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:#fbbf24;cursor:pointer">'
+         + '<input type="checkbox" ' + (LB_UPD_CF.chk ? 'checked' : '')
+         + ' onchange="lbUpdConfirmChk(this.checked)" style="cursor:pointer">'
+         + '我已知悉插件可能失效</label>';
+    }
+    h += '<span style="flex:1"></span>'
+       + '<button onclick="lbUpdConfirmClose()" style="padding:7px 14px;border-radius:6px;'
+       + 'border:1px solid rgba(255,255,255,.16);background:transparent;color:#9ca3af;cursor:pointer;'
+       + 'font-size:12.5px">取消</button>';
+    var goTxt = ready ? '确认分发'
+              : (kind === 'forced' ? '仍要分发（推荐）' : '仍未就绪，仍要分发');
+    var goBg = canGo ? (kind === 'forced' && !ready ? '#b45309' : '#15803d') : '#374151';
+    var goCol = canGo ? '#fff' : '#6b7280';
+    h += '<button onclick="lbUpdConfirmGo()" style="padding:7px 16px;border-radius:6px;border:none;'
+       + 'background:' + goBg + ';color:' + goCol + ';cursor:pointer;font-size:12.5px;font-weight:600">'
+       + lbMdEsc(goTxt) + '</button></div>';
+  }
+
+  h += '</div></div>';
+  return h;
+}
+
+/* ===== v6233（用户口径）：系统管理 → 「服务器更新预演」 =====
+   背景：服务器更新面板的「预演（只出清单）」按钮已移除，预演统一收到系统管理，
+        并新增**持久开关**「默认预演」—— 开着时 /api/update/apply 由**后端强制 dry**（前端绕不过）。
+   数据：GET /api/update/status（缓存 buildId / 官服版本 / verKind / defaultDry）
+         + GET /api/server_config（update_dry 真值）
+   写：  POST /api/server_config {update_dry:bool}（owner only）
+   预演：POST /api/update/apply {servers:[全 11 台], dry:true} —— 不写文件 / 不改 acf / 不停服 */
+var LB_UPD_DRY = { st: null, cfg: null, busy: false };
+
+function lbUpdDryIsOn(){
+  var st = LB_UPD_DRY.st || {}, cfg = LB_UPD_DRY.cfg || {};
+  if (cfg.update_dry != null) return !!cfg.update_dry;
+  if (st.defaultDry != null) return !!st.defaultDry;
+  return true;
+}
+
+function lbUpdDryPaint(){
+  var box = document.getElementById('lbUpdDryInfo');
+  var sw = document.getElementById('lbUpdDryBtnDefault');
+  var dry = lbUpdDryIsOn();
+  var st = LB_UPD_DRY.st || {}, C = st.cache || {}, vk = st.verKind || {};
+  if (sw){
+    sw.textContent = '默认预演：' + (dry ? '开' : '关');
+    sw.style.borderColor = (dry ? '#f59e0b' : '#4ade80') + '88';
+    sw.style.color = (dry ? '#f59e0b' : '#4ade80');
+    sw.disabled = !!LB_UPD_DRY.busy;
+    sw.style.opacity = LB_UPD_DRY.busy ? '.55' : '';
+  }
+  if (!box) return;
+  var dot = function(txt, col){
+    return '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:' + col
+         + ';margin-right:5px;vertical-align:1px"></span>' + txt;
+  };
+  var row = function(k, v){
+    return '<div style="display:flex;gap:8px;line-height:1.75"><span style="color:#6b7280;min-width:64px;flex:0 0 auto">'
+         + k + '</span><span style="color:#b9c0d0;word-break:break-all">' + v + '</span></div>';
+  };
+  var okC = !!C.hasContent;
+  var kCol = (vk.kind === 'forced') ? '#f87171' : (vk.kind === 'patch' ? '#60a5fa' : '#9ca3af');
+  var kTxt = lbUpdKindShort(vk.kind);     /* v6252：唯一来源 */
+  box.innerHTML =
+      row('缓存', dot(okC ? '有内容' : '无实际文件', okC ? '#4ade80' : '#f87171')
+               + '　<span style="color:#9ca3af">buildId ' + lbMdEsc(String(C.buildId || '-')) + '</span>'
+               + (C.updatedAt ? ('　<span style="color:#6b7280">更新于 ' + lbMdEsc(String(C.updatedAt)) + '</span>') : ''))
+    + row('官服版本', (vk.to ? ('v' + lbMdEsc(String(vk.to))) : '<span style="color:#6b7280">未知</span>')
+               + (vk.from ? ('　<span style="color:#6b7280">本服 ' + lbMdEsc(String(vk.from)) + '</span>') : '')
+               + (vk.kind ? ('　<b style="color:' + kCol + '">' + kTxt + '</b>') : ''))
+    + row('模式', dry ? dot('默认预演（点「一键分发」也只出清单）', '#f59e0b')
+                     : dot('真跑（分发会停服复制文件）', '#f87171'));
+}
+
+function lbUpdDryLoad(){
+  var box = document.getElementById('lbUpdDryInfo');
+  if (box && !LB_UPD_DRY.st) box.innerHTML = '<div style="color:#6b7280">读取中…</div>';
+  var api = lbSrvCtlApi();
+  var p1 = lbSrvCtlFetchW(api + '/api/update/status?t=' + Date.now())
+             .then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; });
+  var p2 = fetch(api + '/api/server_config?t=' + Date.now(), { cache: 'no-store' })
+             .then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; });
+  return Promise.all([p1, p2]).then(function(a){
+    if (a[0]) LB_UPD_DRY.st = a[0];
+    if (a[1]) LB_UPD_DRY.cfg = a[1];
+    if (!LB_UPD_DRY.st && !LB_UPD_DRY.cfg){
+      if (box) box.innerHTML = '<div style="color:#f87171">读取失败（后端无响应）</div>';
+    } else {
+      lbUpdDryPaint();
+    }
+  });
+}
+
+function lbUpdDryToggle(){
+  if (LB_UPD_DRY.busy) return;
+  var next = !lbUpdDryIsOn();
+  var a = null; try{ a = JSON.parse(localStorage.getItem('dinoAuth') || 'null'); }catch(e){}
+  if (!a || !a.user){ if (typeof lbToast === 'function') lbToast('未登录'); return; }
+  var msg = document.getElementById('lbUpdDryMsg');
+  var warn = next
+    ? '开启「默认预演」后，服务器更新面板点「一键分发」也只会出清单，不会复制文件、不会停服。'
+    : '关闭「默认预演」后，服务器更新面板点「一键分发」会**真的停服并复制文件**（每台约 8~12 分钟）。';
+  var fly = function(){
+    LB_UPD_DRY.busy = true;
+    lbUpdDryPaint();
+    if (msg){ msg.style.color = '#888'; msg.textContent = '保存中…'; }
+    fetch(lbSrvCtlApi() + '/api/server_config?username=' + encodeURIComponent(a.user)
+          + '&nick=' + encodeURIComponent(a.nick || ''), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ update_dry: next })
+    }).then(function(r){ return r.json().then(function(j){ return { s: r.status, j: j }; }); })
+      .then(function(x){
+        LB_UPD_DRY.busy = false;
+        if (x.s !== 200){
+          if (msg){ msg.style.color = '#f87171'; msg.textContent = '保存失败：' + ((x.j && x.j.error) || ('HTTP ' + x.s)); }
+          lbUpdDryPaint();
+          return;
+        }
+        if (LB_UPD_DRY.cfg) LB_UPD_DRY.cfg.update_dry = next;
+        else LB_UPD_DRY.cfg = { update_dry: next };
+        if (LB_UPD_DRY.st) LB_UPD_DRY.st.defaultDry = next;
+        if (msg){ msg.style.color = '#4ade80'; msg.textContent = '已保存（所有人共享）'; }
+        lbUpdDryPaint();
+        try{ lbToast('默认预演已' + (next ? '开启' : '关闭')); }catch(e){}
+      }).catch(function(e){
+        LB_UPD_DRY.busy = false;
+        if (msg){ msg.style.color = '#f87171'; msg.textContent = '保存失败：' + String((e && e.message) || e); }
+        lbUpdDryPaint();
+      });
+  };
+  if (typeof lbAsk === 'function') lbAsk(warn, fly, next ? '确定开启' : '确定关闭');
+  else fly();
+}
+
+function lbUpdDryRun(btn){
+  if (LB_UPD_DRY.busy) return;
+  var all = (LB.SERVERS || []).map(function(s){ return s.abbr; });
+  if (!all.length){ if (typeof lbToast === 'function') lbToast('服务器列表为空'); return; }
+  LB_UPD_DRY.busy = true;
+  var msg = document.getElementById('lbUpdDryMsg');
+  var out = document.getElementById('lbUpdDryOut');
+  var old = btn ? btn.innerHTML : '';
+  /* v6243：预演跟随「服务器更新」浮窗的更新目标（勾了汉化就一并预演汉化） */
+  var _tgz = (typeof lbUpdTgList === 'function') ? lbUpdTgList() : ['server'];
+  /* v6249：无有效目标时不发请求（否则后端缺省会当成「仅本体」而白跑一轮） */
+  if (!_tgz.length){
+    LB_UPD_DRY.busy = false;
+    if (btn){ btn.disabled = false; btn.style.opacity = ''; }
+    if (msg){ msg.style.color = '#6b7280'; msg.textContent = '没有需要更新的服务器（本体版本与缓存一致、汉化均为最新）'; }
+    if (typeof lbToast === 'function') lbToast('没有需要更新的服务器，无需预演');
+    return;
+  }
+  var _tgTxt = ((_tgz.indexOf('server') >= 0 && _tgz.indexOf('zh') >= 0) ? '本体+汉化'
+              : (_tgz.indexOf('zh') >= 0 ? '仅汉化' : '仅本体'));
+  if (btn){ btn.disabled = true; btn.style.opacity = '.5'; btn.innerHTML = '⏳ 预演中…（' + _tgTxt + ' · 11 台，约 1~3 分钟）'; }
+  if (msg){ msg.style.color = '#888'; msg.textContent = ''; }
+  lbUpdDryPaint();
+  lbSrvCtlFetchW(lbSrvCtlApi() + '/api/update/apply?t=' + Date.now(), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ servers: all, dry: true, targets: _tgz })
+  }).then(function(r){ return r.json().then(function(j){ return { s: r.status, j: j }; }); })
+    .then(function(x){
+      LB_UPD_DRY.busy = false;
+      if (btn){ btn.disabled = false; btn.style.opacity = ''; btn.innerHTML = old; }
+      lbUpdDryPaint();
+      var j = x.j || {};
+      if (!j.ok){
+        if (msg){ msg.style.color = '#f87171'; msg.textContent = '预演失败：' + (j.error || ('HTTP ' + x.s)); }
+        if (out){ out.style.display = 'block'; out.textContent = String(j.error || ''); }
+        return;
+      }
+      var plans = j.plans || [], zplans = j.zhPlans || [], lines = [];
+      var tAdd = 0, tUpd = 0, tSame = 0, tBytes = 0;
+      plans.forEach(function(p){
+        /* v6233b：后端 _upd_make_plan 的字段名是 `server`（不是 srv），两者都兼容 */
+        lines.push(String(p.server || p.srv || '?') + '　' + String(p.msg || (p.ok === false ? '失败' : '')));
+        tAdd += Number(p.add || 0);
+        tUpd += Number(p.update || 0);
+        tSame += Number(p.same || 0);
+        tBytes += Number(p.bytes || 0);
+      });
+      if (plans.length){
+        lines.push('');
+        lines.push('合计：新增 ' + tAdd + ' · 变更 ' + tUpd + ' · 相同 ' + tSame
+                 + ' · 需复制 ' + (tBytes / 1073741824).toFixed(2) + ' GB');
+      } else if (zplans.length){
+        lines.push('（本次不涉及服务器本体）');
+      }
+      /* v6243：汉化补丁段落（勾了「汉化补丁」才有） */
+      if (zplans.length){
+        lines.push('');
+        lines.push('—— 汉化补丁（' + (j.targets || []).join('+') + '）——');
+        var zn = 0;
+        zplans.forEach(function(z){
+          var st = z.needUpd ? '需升级' : '已最新';
+          if (z.needUpd) zn++;
+          lines.push(String(z.srv || '?') + '　当前 ' + (z.curVer || '?')
+                   + ' → ' + (z.toVer || '?') + '　' + st
+                   + (z.ready ? '' : '　[本地包未就绪]')
+                   + (z.conflict ? '　[多包冲突]' : '')
+                   + (z.err ? '　[' + z.err + ']' : ''));
+        });
+        lines.push('汉化：' + zn + '/' + zplans.length + ' 台需升级');
+      }
+      lines.push('');
+      lines.push('（预演未修改任何文件；真跑请在服务器更新面板点「一键分发」）');
+      if (out){ out.style.display = 'block'; out.textContent = lines.join('\n'); }
+      if (msg){ msg.style.color = '#4ade80'; msg.textContent = '预演完成（未修改任何文件）'; }
+    }).catch(function(e){
+      LB_UPD_DRY.busy = false;
+      if (btn){ btn.disabled = false; btn.style.opacity = ''; btn.innerHTML = old; }
+      lbUpdDryPaint();
+      if (msg){ msg.style.color = '#f87171'; msg.textContent = '预演失败：' + String((e && e.message) || e); }
+    });
+}
+
+/* ===== v6241（B4）：汉化补丁（Google Drive 源）前端 =====
+   数据：GET /api/zh/status（?local=1 秒回；不带 local 含云端探测约 2~4 秒）
+   动作：POST /api/zh/prepare（后台下载+白名单解压，只写 D:\\Cache-zh）
+   配置：POST /api/server_config {zh_patch:{folder_url,variant}}（owner only）
+   ⚠ 字體補丁（HLN-A/winhttp.dll）属玩家客户端，服务端完全不装，前端不提供任何开关。 */
+var LB_ZH = { st: null, busy: false, msg: '', poll: 0 };
+
+function lbZhFetch(local){
+  var api = lbSrvCtlApi();
+  var p = lbSrvCtlFetchW(api + '/api/zh/status' + (local ? '?local=1&' : '?') + 't=' + Date.now(),
+                         { cache: 'no-store' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .catch(function () { return null; });
+  return p.then(function (j) {
+    if (j) {
+      /* v6243：local 请求只覆盖「本机段」—— 若它晚于全量请求返回，不能把已拿到的
+         remote.probe / items / asset 冲成空（否则界面误报「列目录失败」） */
+      if (local && LB_ZH.st && LB_ZH.st.remote) {
+        var pr = LB_ZH.st.remote || {};
+        var hasProbe = pr.probe && Object.keys(pr.probe).length > 0;
+        if (hasProbe) {
+          j.remote = j.remote || {};
+          j.remote.probe = pr.probe;
+          j.remote.items = pr.items || [];
+          if (pr.asset && Object.keys(pr.asset).length) j.remote.asset = pr.asset;
+          if (pr.ok) { j.remote.ok = true; j.remote.src = pr.src || ''; }
+          if (pr.ver) j.remote.ver = pr.ver;
+        }
+      }
+      LB_ZH.st = j;
+      try { lbUpdRender(); } catch (e) {}
+      try { lbZhPaintSys(); } catch (e) {}
+    }
+    return j;
+  });
+}
+
+function lbZhPaintSys(){
+  var box = document.getElementById('lbZhInfo');
+  var sw = document.getElementById('lbZhMsg');
+  var st = LB_ZH.st || {}, rem = st.remote || {}, pkg = st.pkg || {}, cfg = st.cfg || {};
+  var prep = st.prep || {};
+  var serv = st.servers || [];
+  if (!box) {
+    if (sw && LB_ZH.msg) sw.textContent = LB_ZH.msg;
+    return;
+  }
+  var row = function (k, v) {
+    return '<div style="display:flex;gap:8px;line-height:1.75"><span style="color:#6b7280;min-width:64px;flex:0 0 auto">'
+         + k + '</span><span style="color:#b9c0d0;word-break:break-all">' + v + '</span></div>';
+  };
+  var dot = function (txt, col) {
+    return '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:' + col
+         + ';margin-right:5px;vertical-align:1px"></span>' + txt;
+  };
+  var varMap = { dinoitem: '恐龙&物品双语', item: '物品双语', normal: '常规' };
+  var needN = (st.behind || []).length;
+  var confN = (st.conflict || []).length;
+  var probe = rem.probe || {};
+  var lsP = probe.ls || {}, dlP = probe.dl || {};
+  box.innerHTML =
+      row('下载地址', lbMdEsc(String(cfg.folder_url || '-')).slice(0, 96))
+    + row('版本变体', lbMdEsc(varMap[String(cfg.variant || '')] || String(cfg.variant || '-')))
+    + row(String(rem.src || '') === 'local_cache' ? '本地版本' : '云端最新',
+          (rem.ok ? dot('V' + lbMdEsc(String(rem.ver || '?')), '#4ade80') : dot('未获取', '#6b7280'))
+        + (rem.ok ? '　<span style="color:#6b7280">' + lbMdEsc(String((rem.asset || {}).name || '')) + '</span>' : '')
+        + (rem.err ? '　<span style="color:#f87171">' + lbMdEsc(String(rem.err)) + '</span>' : ''))
+    + row('连通性',
+          (lsP.ok ? dot('列目录 ' + lsP.ms + 'ms', '#4ade80')
+                  : (lsP.ok === undefined ? dot('列目录未检测', '#6b7280')
+                                          : dot('列目录失败', '#f87171')))
+        + '　' + (dlP.ok ? dot('下载域名 ' + dlP.ms + 'ms', '#4ade80')
+                            : (dlP.ok === undefined ? dot('下载域名未检测', '#6b7280')
+                                                    : dot('下载域名失败', '#f87171'))))
+    + row('本地包', (pkg.ready ? dot('已就绪 V' + lbMdEsc(String(pkg.ver || '')), '#4ade80')
+                     : (pkg.downloaded ? dot('已下载未解压', '#fbbf24') : dot('未下载', '#6b7280')))
+        + '　<span style="color:#6b7280">' + lbMdEsc(String(pkg.cacheRoot || 'D:\\Cache-zh')) + '</span>')
+    + row('各服', (needN ? '<b style="color:#fbbf24">' + needN + ' 台需升级</b>'
+                          : '<span style="color:#4ade80">均已最新</span>')
+        + (confN ? '　<b style="color:#f87171">' + confN + ' 台多包冲突</b>' : '')
+        + '　<span style="color:#6b7280">' + serv.length + ' 台均为 '
+        + lbMdEsc(String((serv[0] || {}).curVer || '?')) + '</span>')
+    + (prep.running || prep.phase === 'fail' || prep.phase === 'done'
+        ? row('任务', (prep.running ? dot(lbMdEsc(String(prep.msg || '处理中…')), '#22d3ee')
+                       : (prep.phase === 'fail'
+                          ? dot(lbMdEsc(String(prep.err || '失败')), '#f87171')
+                          : dot(lbMdEsc(String(prep.msg || '完成')), '#4ade80'))))
+        : '');
+  /* v6242：配置回填 —— 输入框为空时才填，避免覆盖用户正在编辑的内容 */
+  try {
+    var _ue = document.getElementById('lbZhFolderUrl');
+    if (_ue && !_ue.value && cfg.folder_url) _ue.value = String(cfg.folder_url);
+    var _vs = document.getElementById('lbZhVariant');
+    if (_vs && cfg.variant) _vs.value = String(cfg.variant);
+  } catch (e) {}
+  if (sw && LB_ZH.msg) sw.textContent = LB_ZH.msg;
+}
+
+function lbZhLoad(){
+  var a = lbZhFetch(true);
+  try { lbZhFetch(false); } catch (e) {}
+  return a;
+}
+
+function lbZhPrepare(btn){
+  if (LB_ZH.busy) return;
+  LB_ZH.busy = true;
+  LB_ZH.msg = '启动下载…';
+  var sw = document.getElementById('lbZhMsg');
+  if (sw) { sw.style.color = '#888'; }
+  if (btn) { btn.disabled = true; btn.style.opacity = '.5'; }
+  lbSrvCtlFetchW(lbSrvCtlApi() + '/api/zh/prepare?t=' + Date.now(), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+  }).then(function (r) { return r.json().then(function (j) { return { s: r.status, j: j }; }); })
+    .then(function (x) {
+      LB_ZH.busy = false;
+      if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+      var j = x.j || {};
+      if (!j.ok) {
+        LB_ZH.msg = '启动失败：' + (j.error || ('HTTP ' + x.s));
+        if (sw) { sw.style.color = '#f87171'; }
+        if (typeof lbToast === 'function') lbToast(LB_ZH.msg);
+      } else if (j.already) {
+        /* v6246（用户口径）：本地包已是最新 -> 只提示，不启动下载 */
+        LB_ZH.msg = String(j.msg || ('当前本地包已是最新（V' + (j.ver || '') + '），无需更新'));
+        if (sw) { sw.style.color = '#4ade80'; }
+        if (typeof lbToast === 'function') lbToast(LB_ZH.msg);
+      } else {
+        LB_ZH.msg = '已开始下载（可关闭窗口，后台继续）';
+        if (sw) { sw.style.color = '#4ade80'; }
+        if (typeof lbToast === 'function') lbToast(LB_ZH.msg);
+        lbZhPoll(0);
+      }
+      try { lbZhPaintSys(); } catch (e) {}
+    }).catch(function (e) {
+      LB_ZH.busy = false;
+      if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+      LB_ZH.msg = '请求异常：' + String((e && e.message) || e);
+      if (sw) { sw.style.color = '#f87171'; }
+      try { lbZhPaintSys(); } catch (e2) {}
+    });
+}
+
+function lbZhPoll(n){
+  n = n || 0;
+  if (n > 200) return;
+  setTimeout(function () {
+    lbSrvCtlFetchW(lbSrvCtlApi() + '/api/zh/status?local=1&t=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        if (j) {
+          LB_ZH.st = j;
+          try { lbZhPaintSys(); } catch (e) {}
+          try { lbUpdRender(); } catch (e) {}
+        }
+        var p = (j && j.prep) || {};
+        if (p.running) lbZhPoll(n + 1);
+        else if (p.phase === 'done') {
+          /* v6246：skipped = 本地包已是最新，msg 本身就是完整提示，不再加「已就绪：」前缀 */
+          LB_ZH.msg = (p.skipped ? '' : '已就绪：') + String(p.msg || '');
+          if (typeof lbToast === 'function') lbToast(LB_ZH.msg);
+          try { lbZhPaintSys(); } catch (e) {}
+        }
+      }).catch(function () { lbZhPoll(n + 1); });
+  }, 2500);
+}
+
+function lbZhCheck(btn){
+  if (LB_ZH.busy) return;
+  LB_ZH.busy = true;
+  LB_ZH.msg = '正在检查云端…';
+  var sw = document.getElementById('lbZhMsg');
+  var old = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '检查中…'; }
+  if (sw) { sw.style.color = '#888'; }
+  var t0 = Date.now();
+  lbSrvCtlFetchW(lbSrvCtlApi() + '/api/zh/check?t=' + Date.now(), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+  }).then(function (r) { return r.json(); })
+    .then(function (j) {
+      LB_ZH.busy = false;
+      if (btn) { btn.disabled = false; btn.innerHTML = old; }
+      var ok = !!(j && j.ok);
+      LB_ZH.msg = (ok ? '云端已刷新' : ('检查失败：' + ((j && j.remote && j.remote.err) || '未知')))
+                + '（' + ((Date.now() - t0) / 1000).toFixed(1) + ' 秒）';
+      if (sw) { sw.style.color = ok ? '#4ade80' : '#f87171'; }
+      lbZhFetch(false);
+    }).catch(function (e) {
+      LB_ZH.busy = false;
+      if (btn) { btn.disabled = false; btn.innerHTML = old; }
+      LB_ZH.msg = '检查异常：' + String((e && e.message) || e);
+      if (sw) { sw.style.color = '#f87171'; }
+      try { lbZhPaintSys(); } catch (e2) {}
+    });
+}
+
+function lbZhSaveCfg(btn){
+  var el = document.getElementById('lbZhFolderUrl');
+  var vv = document.getElementById('lbZhVariant');
+  if (!el) return;
+  var url = String(el.value || '').trim();
+  var var2 = vv ? String(vv.value || 'dinoitem') : 'dinoitem';
+  if (url.indexOf('/folders/') < 0) {
+    if (typeof lbToast === 'function') lbToast('下载地址必须包含 /folders/<id>');
+    return;
+  }
+  var a = null; try { a = JSON.parse(localStorage.getItem('dinoAuth') || 'null'); } catch (e) {}
+  if (!a || !a.user) { if (typeof lbToast === 'function') lbToast('未登录'); return; }
+  var sw = document.getElementById('lbZhMsg');
+  if (btn) { btn.disabled = true; btn.style.opacity = '.5'; }
+  if (sw) { sw.style.color = '#888'; sw.textContent = '保存中…'; }
+  fetch(lbSrvCtlApi() + '/api/server_config?username=' + encodeURIComponent(a.user)
+        + '&nick=' + encodeURIComponent(a.nick || ''), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ zh_patch: { folder_url: url, variant: var2 } })
+  }).then(function (r) { return r.json().then(function (j) { return { s: r.status, j: j }; }); })
+    .then(function (x) {
+      if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+      if (x.s !== 200 || !x.j || x.j.ok === false) {
+        if (sw) { sw.style.color = '#f87171'; sw.textContent = '保存失败：' + ((x.j && x.j.error) || ('HTTP ' + x.s)); }
+        return;
+      }
+      if (sw) { sw.style.color = '#4ade80'; sw.textContent = '已保存（所有人共享）'; }
+      LB_ZH.msg = '已保存（所有人共享）';
+      lbZhFetch(false);
+    }).catch(function (e) {
+      if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+      if (sw) { sw.style.color = '#f87171'; sw.textContent = '保存失败：' + String((e && e.message) || e); }
+    });
+}
+
 function lbUpdPreview(){
   var sel = lbUpdSelList();
   if (!sel.length) { if (typeof lbToast === 'function') lbToast('请先选择服务器'); return; }
@@ -5645,6 +6572,11 @@ function lbUpdRender(){
 
   var D = LB_UPD.data || {};
   var C = D.cache || {};
+  /* v6227（用户口径）：缓存 buildId 后三位单独着色 —— 与服务器角标（buildId 后 3 位）同一视觉语言，
+     前段保持原色，末 3 位用深绿 700 加粗。 */
+  var _cbAll = String(C.buildId || '-');
+  var _cbHead = _cbAll.length > 3 ? _cbAll.slice(0, -3) : '';
+  var _cbTail = _cbAll.length > 3 ? _cbAll.slice(-3) : _cbAll;
   var sel = lbUpdSelList();
   var smap = lbUpdSmap();
   var _official = lbSrvCtlVer(LB_UPD.official || '').replace(/^v/i, '');   /* v6208c：与服务器控制同源 */
@@ -5687,49 +6619,171 @@ function lbUpdRender(){
      +   lbSrvPickIconsHtml('lbUpdAll(1)', 'lbUpdAll(0)')
      + '</div>';
   h += '<div class="lb-srvctl-chips">'
-     + lbSrvCtlChipsHtml(LB_UPD.sel, 'lbUpdToggle', smap, _official, null)
+     + lbSrvCtlChipsHtml(LB_UPD.sel, 'lbUpdToggle', smap, _official, null, lbUpdBadge, lbUpdZhOld)
      + '</div>';
-  h += lbSrvCtlLegendHtml(!!(D.servers && D.servers.length));
+  /* v6232（用户口径）：本浮窗**不显示 IP失效 图例** —— 更新面板看的是 buildId 与缓存的差异，
+     IP 失效与更新决策无关；服务器控制浮窗仍保留完整 4 项。
+     v6247（用户口径）：本浮窗**增加「汉化旧版」图例**（蓝色内描边），对应 chips 的 .zhb。 */
+  h += lbSrvCtlLegendHtml(!!(D.servers && D.servers.length), true, true);
   /* v6208d（用户口径「在线角色行为啥不能点」）：与服务器控制**同一函数** ——
      官服版本行可点（→ 资讯广场 PC版本）、在线角色行可点（→ 玩家位置地图） */
-  h += lbSrvCtlOfficialHtml(_official);
-  h += lbSrvCtlOnlineWrapHtml('lbUpdOnline', LB_UPD.loading);
+  /* v6224（用户口径 2026-11-07）：本浮窗**不显示**「当前官服版本」行 ——
+     更新面板看的是各台 buildId 与缓存的差异，官服网络版本在这里没有决策价值。
+     服务器控制 / 安全回档仍保留该行（同一函数，未改动）。 */
+  h += lbSrvCtlOnlineWrapHtml('lbUpdOnline', LB_UPD.loading)
+    /* v6262（用户口径）：启动队列行 —— 与服务器控制同一来源 */
+    + '<div class="lb-srvctl-qline" id="lbUpdQLine">' + lbSrvCtlQueueLineHtml() + '</div>';
 
-  /* --- 缓存信息 --- */
+  /* ===== v6244（用户口径 2026-11-07）三块重排 =====
+     ① 「更新目标」移到「更新缓存」之上（桌面端；移动端由 app.css 的 order 把缓存提到最前）
+     ② 「更新目标」内部两列（本体 / 汉化），窄屏自动变一列
+     ③ 原挂在更新目标里的「本地包 / 各服」拆出成独立「汉化包」卡片
+     ④ 「缓存」改名「更新缓存」 */
   var _ok = !!C.hasContent;
   var _color = _ok ? '#4ade80' : '#f87171';
-  h += '<div style="margin-top:8px;padding:8px 10px;border-radius:7px;'
-     + 'background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);font-size:11.5px;line-height:1.8">'
+  var _tg = lbUpdTgGet();
+  var _tgL0 = lbUpdTgList();
+  var _needCache = (_tgL0.indexOf('server') >= 0);
+  var _zst = LB_ZH.st || {}, _zrem = _zst.remote || {}, _zpkg = _zst.pkg || {}, _zprep = _zst.prep || {};
+  var _zver = String(_zrem.ver || _zpkg.ver || '');
+  var _zneed = (_zst.behind || []).length;
+  var _zconf = (_zst.conflict || []).length;
+  /* v6249：两项各自是否「有东西可分发」—— 没有就置灰 */
+  var _tgU = lbUpdTgUsable();
+  /* v6251（用户口径「更新缓存卡片里还有游戏版本的对比，强制也要显示强制（徽章样式）」）：
+     本服实跑版本 -> 官服最新版本的对比 + 变更类型胶囊徽章（与系统管理 lbUpdDryPaint 同源同文案）。 */
+  var _vk = D.verKind || {};
+  var _vkK = String(_vk.kind || '');
+  var _vkCol = (_vkK === 'forced') ? '#f87171'
+             : ((_vkK === 'patch') ? '#60a5fa'
+             : ((_vkK === 'same') ? '#9ca3af' : '#6b7280'));
+  /* v6252：文案与 tips 一律走唯一来源 —— 强制 = 服务器不更新玩家就进不来 */
+  var _vkTxt = lbUpdKindShort(_vkK);
+  var _vkTip = lbUpdKindText(_vkK);
+  var _can = (_tgL0.length > 0) && (_needCache ? !!D.canApply : !!_zpkg.ready);
+  var _card = 'padding:8px 10px;border-radius:7px;background:rgba(255,255,255,.04);'
+            + 'border:1px solid rgba(255,255,255,.08);font-size:11.5px;';
+  /* v6247（用户口径「更新目标的勾选直接整合到对应卡片里」）：
+     原独立「更新目标」卡片**已删除**，勾选改为各卡片标题行右侧的紧凑胶囊（.lb-upd-tgx）——
+     更新缓存 ↔ 服务器本体、汉化包 ↔ 汉化补丁，勾了就作用在这张卡上，一眼对应。
+     仍隐藏原生 input（点击整块 label），状态由 .on 类驱动，样式全在 app.css。 */
+  /* v6249：dis=true 时渲染禁用态（灰、不可点、原生 disabled、hover 气泡说明原因） */
+  var _cbxMini = function (k, on, txt, dis, tip) {
+    var _on = !!on && !dis;
+    return '<label class="' + (dis ? 'lb-tipb ' : '') + 'lb-upd-tgx'
+      + (_on ? ' on' : '') + (dis ? ' dis' : '') + '"'
+      + (dis && tip ? (' title="' + lbMdEsc(tip) + '"') : '')
+      + ' style="position:relative;flex:0 0 auto">'
+      + '<input type="checkbox" ' + (_on ? 'checked ' : '') + (dis ? 'disabled ' : '')
+      + (dis ? '' : ('onchange="lbUpdTgSet(\'' + k + '\',this.checked)" '))
+      + 'style="position:absolute;opacity:0;width:0;height:0;pointer-events:none">'
+      + '<i class="mdi ' + (_on ? 'mdi-check' : 'mdi-checkbox-blank-outline') + '"></i>'
+      + '<span>' + txt + '</span></label>';
+  };
+
+  h += '<div class="lb-upd-stack">';
+
+  /* 【1】版本更新缓存（v6244「缓存」->「更新缓存」；v6254 再改为「版本更新缓存」；勾选=服务器本体） */
+  h += '<div class="lb-upd-cache" style="margin-top:8px;' + _card + 'line-height:1.8">'
      + '<div style="display:flex;align-items:center;gap:6px">'
      + '<i class="mdi mdi-archive-outline" style="font-size:15px;color:#a78bfa"></i>'
-     + '<b style="color:#c4b5fd">缓存</b>'
-     + '<span style="color:' + _color + ';font-weight:700">' + (_ok ? '有内容' : '无实际文件') + '</span>'
+     + '<b style="color:#c4b5fd">版本更新缓存</b>'
+     + '<span style="flex:1"></span>'
+     + _cbxMini('server', _tg.server, '分发', !_tgU.server,
+                '所有服的版本都与缓存一致，没有需要更新本体的服务器')
      + '</div>'
-     /* v6212：路径行按用户口径删除；manifest（= Steam depot 清单号）收进 hover tips，
-        版本号只留 buildId。 */
-     + '<div style="color:#9ca3af">版本：<span style="color:#e5e7eb">' + lbMdEsc(C.buildId || '-') + '</span>'
+     /* v6250（用户口径）：状态字（已就绪/未就绪）从标题行**移到版本行**，紧跟「版本：」之后。
+        v6212：路径行按用户口径删除；manifest（= Steam depot 清单号）收进 hover tips，版本号只留 buildId。 */
+     + '<div style="color:#9ca3af">版本：'
+     + '<span style="color:' + _color + ';font-weight:700">' + (_ok ? '已就绪' : '未就绪') + '</span>'
+     + '　<span style="color:#e5e7eb">' + lbMdEsc(_cbHead) + '</span>'
+     + '<span style="color:#15803d;font-weight:700">' + lbMdEsc(_cbTail) + '</span>'
      + '<span class="lb-tipb" style="margin-left:6px;color:#6b7280;cursor:help"'
      + ' title="Steam depot 清单号（manifest ID）：这个版本的内容快照指纹，同一 buildid 下必然相同，无需人工关心">'
      + '<i class="mdi mdi-information-outline" style="font-size:12px"></i></span></div>'
+     /* v6251：游戏版本对比行（本服 -> 官服）+ 变更类型徽章；两边都取不到时不渲染 */
+     + ((_vk.from || _vk.to)
+          ? ('<div style="color:#9ca3af">游戏版本：本服 '
+             + '<span style="color:#e5e7eb">v' + lbMdEsc(String(_vk.from || '?')) + '</span>'
+             + ' <span style="color:#4b5563">→</span> 官服 '
+             + '<span style="color:#e5e7eb">v' + lbMdEsc(String(_vk.to || '?')) + '</span>'
+             + (_vkK ? ('　<span class="lb-tipb lb-vkbadge" title="' + lbMdEsc(_vkTip) + '"'
+                        + ' style="color:' + _vkCol + ';border-color:' + _vkCol + '66;background:' + _vkCol + '1a">'
+                        + _vkTxt + '</span>') : '')
+             + '</div>')
+          : '')
      + '<div style="color:#9ca3af">更新于 ' + lbMdEsc(C.updatedAt || '-') + '</div>'
      + '<div style="color:#9ca3af">记录 ' + (C.sizeGB || 0) + ' GB / 实测 ' + (C.realGB || 0) + ' GB</div>'
+     /* v6263（用户口径）：右下角「清空缓存」；还有服与缓存不一致时**置灰**不可点 */
+     + (function(){
+          /* v6266：数据未就绪时**也置灰** —— 原来 behind=[] 被当成「全部一致」⇒ 前几秒可点。 */
+          var _rdy2 = !!(C && C.buildId);
+          var _bh2 = (D.behind || []).length;
+          var _dis2 = (_bh2 > 0) || !_rdy2;
+          var _tip2 = !_rdy2
+            ? '缓存数据加载中，请稍候…'
+            : ((_bh2 > 0)
+                ? ('还有 ' + _bh2 + ' 台服未与缓存一致，先完成分发才能清空缓存')
+                : ('删除 D:\\Cache 下的全部缓存内容（实测 ' + (C.realGB || 0) + ' GB），不可撤销'));
+          return '<div style="display:flex;justify-content:flex-end;margin-top:6px">'
+               + '<a class="lb-tipb lb-upd-link' + (_dis2 ? ' dis' : '') + '"'
+               + ' title="' + lbMdEsc(_tip2) + '"'
+               + (_dis2 ? '' : ' onclick="lbUpdCacheClear()"')
+               + '><i class="mdi mdi-delete-sweep-outline"></i>清空缓存</a></div>';
+        })()
      + '</div>';
 
-  /* v6212：原红框提示（缓存无实际文件→请去 ASAM 点 Update local cache from steam）按用户口径删除 */
-  if (D.behind && D.behind.length) {
-    h += '<div style="margin-top:6px;font-size:11px;color:#fbbf24">落后台：'
-       + lbMdEsc(D.behind.join('、')) + '</div>';
-  }
+  /* 【2】汉化包（独立卡片；勾选=汉化补丁） */
+  h += '<div class="lb-upd-zh" style="margin-top:8px;' + _card + '">'
+     + '<div style="display:flex;align-items:center;gap:6px">'
+     + '<i class="mdi mdi-translate" style="font-size:15px;color:#22d3ee"></i>'
+     + '<b style="color:#a5f3fc">汉化包</b>'
+     + '<span style="flex:1"></span>'
+     + _cbxMini('zh', _tg.zh, '分发', !_tgU.zh,
+                '所有服的汉化包都已是最新，没有需要升级汉化的服务器')
+     + '</div>'
+     + '<div style="color:#9ca3af;line-height:1.8;margin-top:3px">本地包：'
+     + (_zpkg.ready
+          /* v6247（用户口径）：版本号改链接样式，点了跳到 资讯广场 →「汉化版本」Tab */
+          /* v6253（用户口径「已就绪 V10.1 这里的间距」）：半角空格改全角，与「已就绪　26477280」同为 12px */
+          ? ('<span style="color:#4ade80">已就绪　<span class="lb-verlink" onclick="lbNewsGoTab(\'tieba\')"'
+             + ' title="查看汉化版本（资讯广场 → 汉化版本）">V' + lbMdEsc(String(_zpkg.ver || '')) + '</span></span>')
+          : (_zpkg.downloaded ? '<span style="color:#fbbf24">已下载未解压</span>'
+                              : '<span style="color:#6b7280">未下载</span>'))
+     + (_zprep.running && _zprep.msg ? ('　<span style="color:#22d3ee">' + lbMdEsc(String(_zprep.msg)) + '</span>') : '')
+     /* v6245（用户口径）：本地包已就绪时不再追加上次的失败信息，避免「已就绪 + 下载失败」同屏矛盾 */
+     + ((_zprep.phase === 'fail' && !_zpkg.ready)
+          ? ('　<span style="color:#f87171">' + lbMdEsc(String(_zprep.err || '失败')) + '</span>') : '')
+     + '</div>'
+     + '<div style="color:#9ca3af;line-height:1.8">各服：'
+     + (_zneed ? ('<b style="color:#fbbf24">' + _zneed + ' 台需升级</b>')
+               : '<span style="color:#4ade80">均已最新</span>')
+     + (_zconf ? ('　<b style="color:#f87171">' + _zconf + ' 台多包冲突</b>') : '')
+     /* v6250（用户口径）：各服行**不再显示「当前 旧版」**（末段整块删除） */
+     + '</div>'
+     /* v6248（用户口径）：**更新本地包移到卡片右下角**（原在标题行，与「分发」挤在一起） */
+     + '<div style="display:flex;justify-content:flex-end;margin-top:6px">'
+     + '<a class="lb-tipb lb-upd-link' + (_zprep.running ? ' dis' : '') + '" '
+     + (_zprep.running ? '' : 'onclick="lbZhPrepare(this)" ')
+     + 'title="从 Google Drive 下载最新汉化包（Dino &amp; Item 双语）并解压到 D:\\Cache-zh；'
+     + '约 130 MB，只写缓存目录，不改动任何服务器">'
+     + '<i class="mdi mdi-download" style="font-size:13px"></i>'
+     + (_zprep.running ? '更新中…' : '更新本地包') + '</a>'
+     + '</div></div>';
+
+  h += '</div>';   /* /lb-upd-stack */
 
   /* --- 操作 --- */
-  var _dis = (!D.canApply || LB_UPD.busy) ? 'disabled' : '';
+  var _dis = (!_can || LB_UPD.busy) ? 'disabled' : '';
+  /* v6233（用户口径）：原「预演（只出清单）」按钮**已移除** —— 预演统一收到
+     「系统管理 → 服务器更新预演」（含默认预演开关 + 全 11 台一键预演）。 */
   h += '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">'
-     + '<button onclick="lbUpdPreview()" ' + (LB_UPD.busy ? 'disabled' : '') + ' '
+     + '<button ' + _dis + ' onclick="lbUpdApply()" '
+     + 'title="' + (_can ? ('分配到选中台（' + (_needCache ? '本体' : '') + (_needCache && _tgL0.indexOf('zh') >= 0 ? '+' : '') + (_tgL0.indexOf('zh') >= 0 ? '汉化' : '') + '）')
+                            : (!_tgL0.length ? '没有需要更新的服务器（本体版本与缓存一致、汉化均为最新）'
+                               : (_needCache ? '缓存无内容，暂不可用' : '汉化包未就绪，请先点汉化包卡片的「更新本地包」'))) + '" '
      + 'style="padding:7px 14px;border-radius:6px;border:none;cursor:pointer;font-size:12.5px;'
-     + 'background:#7c3aed;color:#fff;font-weight:600">预演（只出清单）</button>'
-     + '<button ' + _dis + ' title="' + (_ok ? '真实复制到选中台' : '缓存无内容，暂不可用') + '" '
-     + 'style="padding:7px 14px;border-radius:6px;border:none;cursor:pointer;font-size:12.5px;'
-     + 'background:' + (_ok ? '#15803d' : '#374151') + ';color:' + (_ok ? '#fff' : '#9ca3af') + ';font-weight:600">'
+     + 'background:' + (_can ? '#15803d' : '#374151') + ';color:' + (_can ? '#fff' : '#9ca3af') + ';font-weight:600">'
      + '一键分发</button>'
      + '</div>';
 
@@ -5738,19 +6792,19 @@ function lbUpdRender(){
      「缓存更新」虚拟任务进度条）渲染进来，与服务器控制 / 安全回档 完全共用，零新增样式。 --- */
   h += '<div class="lb-srvctl-res lb-task-slot" id="lbUpdTasks" style="margin-top:10px"></div>';
 
-  /* --- 输出 --- */
-  h += '<div style="margin-top:8px">'
-     + '<div style="font-size:11px;color:#9ca3af;margin-bottom:4px">输出</div>'
-     + '<pre id="lbUpdOut" style="margin:0;padding:8px 10px;border-radius:6px;background:#0b1020;'
-     + 'border:1px solid rgba(255,255,255,.08);color:#a5f3fc;font-size:11px;line-height:1.65;'
-     + 'max-height:220px;overflow:auto;white-space:pre-wrap;word-break:break-all">'
-     + lbMdEsc(LB_UPD.out || '（点「预演」查看将复制哪些文件）') + '</pre>'
-     + '</div>';
+  /* v6248（用户口径）：「输出（预演）」区块与其输出框**已整块删除** ——
+     系统管理 → 服务器更新预演 里已有同样的预演输出，这里重复且占高度；
+     真跑进度看上面的任务列表。LB_UPD.out 字段保留（仅存值，无 UI 消费）。 */
 
   if (LB_UPD.err) {
     h += '<div class="lb-srvctl-tip" style="color:#f87171">' + lbMdEsc(LB_UPD.err) + '</div>';
   }
   h += '</div>';
+
+  /* v6228（P2）：分发确认覆盖层（单一浮窗，三区块） */
+  if (LB_UPD_CF.open) {
+    try { h += lbUpdConfirmHtml(); } catch (e) {}
+  }
 
   S.body.innerHTML = h;
   /* v6211：重渲染后立即补 .lb-tipb（不等 MutationObserver 防抖）——
@@ -6135,6 +7189,8 @@ function lbArkBkRender(){
 
   /* v6208d（用户口径「复用非复制」）：在线角色行 → 统一走共用函数（原手写 HTML 复制品已收掉） */
   h += lbSrvCtlOnlineWrapHtml('lbArkBkOnline')
+    /* v6262（用户口径）：启动队列行 —— 与服务器控制同一来源（lbSrvCtlQueueLineHtml） */
+    + '<div class="lb-srvctl-qline" id="lbArkBkQLine">' + lbSrvCtlQueueLineHtml() + '</div>'
     /* v6065（用户口径）：在线栏带 ✕ 了，结果横幅也必须跟着有 ——
        lbSrvCtlKickRes() 同时写 lbSrvCtlKickRes / lbArkBkKickRes 两个容器（哪个在页面上就更到哪个） */
     + '<div id="lbArkBkKickRes" style="display:none;margin-top:6px;padding:6px 10px;border-radius:6px;'
@@ -6644,7 +7700,7 @@ function lbSrvCtlIpFetch(){
       .catch(function(){});
   }catch(e){}
 }
-function lbSrvCtlLegendHtml(hasData){
+function lbSrvCtlLegendHtml(hasData, noIp, zhOld){
   /* v6208：hasData 可选 —— 其它浮窗（服务器更新）复用时传入；不传时沿用 LB_SRVCTL.data 判定 */
   var _has = (hasData === undefined) ? !!(LB_SRVCTL.data && LB_SRVCTL.data.length) : !!hasData;
   if (!_has) return '';
@@ -6657,7 +7713,9 @@ function lbSrvCtlLegendHtml(hasData){
     + '<span class="it">' + _m('') + '运行</span>'
     + '<span class="it">' + _m('stop') + '停止</span>'
     + '<span class="it">' + _m('mis') + '版本旧</span>'
-    + '<span class="it">' + _m('ipx') + 'IP失效</span>'   /* v6162：紫内描边由 .mini.ipx 提供 */
+    + (noIp ? '' : ('<span class="it">' + _m('ipx') + 'IP失效</span>'))   /* v6232（用户口径）：传 noIp=true 时不显示 IP失效 */
+    /* v6247（用户口径）：服务器更新浮窗传 zhOld=true -> 多一项「汉化旧版」（蓝色内描边） */
+    + (zhOld ? ('<span class="it">' + _m('zho') + '汉化旧版</span>') : '')
     + '</div>';
 }
 /* v6150（用户口径）：服务器多选「全选 / 清空」图标套件 —— **唯一来源**
@@ -6721,10 +7779,17 @@ function lbSrvCtlOnlineWrapHtml(id, onLoading){
    服务器图标 chips 生成的**唯一来源** —— 由 lbSrvCtlRender 原内联段抽出。
    参数：selObj 选中表 / toggleFn 点击函数名 / smap 状态表 / officialVer 官服版本 / ipBadFn 可选 IP 判定
    禁止在其它浮窗复制本函数内的 HTML。 */
-function lbSrvCtlChipsHtml(selObj, toggleFn, smap, officialVer, ipBadFn){
+function lbSrvCtlChipsHtml(selObj, toggleFn, smap, officialVer, ipBadFn, badgeFn, zhOldFn, roMode){
+  /* v6223：新增可选 badgeFn(s, d) -> {text, color, cls, title}
+     返回非空时**替代**默认的游戏版本角标（「服务器更新」用它显示 buildId 后 3 位）。
+     v6247（用户口径）：新增可选 zhOldFn(s) -> bool —— 返回 true 时按钮加 .zhb **蓝色内描边**
+     （样式与 .ipb 完全同构，只换颜色），表示「该服汉化包落后云端」。 */
   var sel = selObj || {}, mp = smap || {};
   var _official = officialVer || '';
   var _ipb = (ipBadFn === undefined) ? lbSrvCtlIpBad : ipBadFn;
+  /* v6261（用户口径）：roMode=true ⇒ **只读复用**（任务进度面板用）：
+     不输出 onclick、tip 去掉「点击切换选中」、加 .ro 让光标不是手型。 */
+  var _ro = !!roMode;
   return (LB.SERVERS || []).map(function(s){
     var on = !!sel[s.abbr];
     var mdi = (LB_SERVER_MDI || {})[s.abbr] || '';
@@ -6733,20 +7798,29 @@ function lbSrvCtlChipsHtml(selObj, toggleFn, smap, officialVer, ipBadFn){
     var ver = d ? lbSrvCtlVer(d.serverVersion || d.version).replace(/^v/i, '') : '';   /* v5981：角标显示该服**实际**版本（ServerVersion），非官方网络值 */
     var mis = !!(_official && ver && ver !== _official);   /* v5980：与官服版本不一致 -> 呼吸外环（底色不变） */
     /* v6162（用户口径·方案 B）：角标版本号看不清 —— 底色加深一号 + 白字 700 + 字号 9.5px + 内边距 4px */
-    var badge = ver
-      ? '<em class="server-tab-cnt' + (mis ? ' mis' : '') + '" style="background:' + (running ? '#15803d' : '#b91c1c')
-        + ';color:#fff;font-weight:700;font-size:9.5px;line-height:13px;padding:0 4px">' + lbMdEsc(ver) + '</em>'
-      : '';
+    var _bf = (typeof badgeFn === 'function') ? badgeFn(s, d) : null;
+    var badge = '';
+    if (_bf && _bf.text){
+      badge = '<em class="server-tab-cnt' + (_bf.cls || '') + '" style="background:' + (_bf.color || '#7c3aed')
+        + ';color:#fff;font-weight:700;font-size:9.5px;line-height:13px;padding:0 4px">' + lbMdEsc(_bf.text) + '</em>';
+    } else if (ver){
+      badge = '<em class="server-tab-cnt' + (mis ? ' mis' : '') + '" style="background:' + (running ? '#15803d' : '#b91c1c')
+        + ';color:#fff;font-weight:700;font-size:9.5px;line-height:13px;padding:0 4px">' + lbMdEsc(ver) + '</em>';
+    }
+    var zhOld = (typeof zhOldFn === 'function') ? !!zhOldFn(s) : false;
     var ipB = (_ipb ? _ipb(s.abbr, d) : null);
     /* v6170（用户口径）：明确显示「旧IP → 新IP」；旧 IP 缺失时退回「已变为 新IP」 */
     var _ipPair = ipB
       ? ((ipB.prevIp ? (ipB.prevIp + ' → ' + (ipB.curIp || '?')) : ('已变为 ' + (ipB.curIp || '新地址'))))
       : '';
     var ipTip = ipB ? (' · IP 已失效：公网 IP ' + _ipPair + '（' + (ipB.changedAt || '近期') + ' 变更），本服启动早于该变更，需重启后才能被搜到') : '';
+    var _bt = (_bf && _bf.title) ? (' · ' + _bf.title) : '';
+    var zhTip = zhOld ? (' · 汉化旧版（该服汉化包落后云端，需分发汉化补丁）') : '';
     var tipFull = (s.name || s.abbr) + '（' + (d ? (running ? '运行中' : '已停止') : '状态未知')
-                + (ver ? ' · ' + ver : '') + ipTip + '）— 点击切换选中';
-    return '<span class="lb-tipb server-tab' + (on ? ' active' : '') + (ipB ? ' ipb' : '') + '" data-abbr="' + s.abbr + '"'
-         + ' onclick="' + toggleFn + '(\'' + s.abbr + '\')"'
+                + (ver ? ' · ' + ver : '') + ipTip + zhTip + _bt + (_ro ? '）' : '）— 点击切换选中');
+    return '<span class="lb-tipb server-tab' + (on ? ' active' : '') + (ipB ? ' ipb' : '')
+         + (zhOld ? ' zhb' : '') + (_ro ? ' ro' : '') + '" data-abbr="' + s.abbr + '"'
+         + (_ro ? '' : (' onclick="' + toggleFn + '(\'' + s.abbr + '\')"'))
          + ' title="' + lbMdEsc(tipFull) + '">'
          + (mdi ? '<i class="mdi ' + mdi + '"></i>' : lbMdEsc(s.name || s.abbr))
          + badge
@@ -6945,21 +8019,26 @@ function lbSrvCtlOnlineGo(){
 /* v6026（用户口径）：「当前官服版本」点击 → 资讯广场「ASA PC版本」Tab。
    #lbNews 与 #lbSrvCtl 默认同为 z-index:9998（同层时按 DOM 顺序决定谁在上，不可靠）⇒
    这里把 #lbNews 提到 10001 保证盖上去；关掉资讯广场后服务器控制浮窗仍在，无需重开。 */
-function lbSrvCtlOfficialGo(){
+/* v6247（用户口径「补丁版本号点了跳到资讯的汉化那里，参考服务器控制里的游戏版本号」）：
+   **通用版跳转** —— 打开资讯广场并切到指定 Tab（唯一实现，禁止各处复制）。
+   tabId 常用值：'patch_pc'（ASA PC版本）、'tieba'（汉化版本）。 */
+function lbNewsGoTab(tabId){
+  var _id = String(tabId || '');
   try{
     /* 2026-11-05 B2：依赖 app_ui（lbNewsEntry/lbNewsTab）——未加载则先加载再重入 */
-    if (typeof lbNewsEntry !== 'function') { lbUIEnsure().then(lbSrvCtlOfficialGo, function(){}); return; }
+    if (typeof lbNewsEntry !== 'function') { lbUIEnsure().then(function(){ lbNewsGoTab(_id); }, function(){}); return; }
     lbNewsEntry();
     var n = document.getElementById('lbNews');
     if (n) n.style.zIndex = '10001';
-    /* 显式切到 patch_pc（不依赖 tab 顺序；当前它就是第 0 项，idx=0 时不重复拉） */
+    /* 显式切到目标 tab（不依赖 tab 顺序；idx=0 时 lbNewsEntry 已默认加载，不重复拉） */
     try{
       var idx = -1;
-      for (var i = 0; i < LB_NEWS.tabs.length; i++){ if (LB_NEWS.tabs[i].id === 'patch_pc'){ idx = i; break; } }
+      for (var i = 0; i < LB_NEWS.tabs.length; i++){ if (LB_NEWS.tabs[i].id === _id){ idx = i; break; } }
       if (idx > 0) lbNewsTab(idx);
     }catch(e){}
   }catch(e){}
 }
+function lbSrvCtlOfficialGo(){ lbNewsGoTab('patch_pc'); }
 /* v6003（用户口径）：探测**全服**在线角色；15 秒内复用，避免每次渲染都发请求
    force=true：跳过 TTL（「刷新状态」按钮用） */
 function lbSrvCtlOnlineSync(force){
@@ -6984,6 +8063,51 @@ function lbSrvCtlOnlineSync(force){
 /* v6020：doneSeen 记录已处理的完成数，变化时刷新服务器角标
    v6022：observed=本次会话是否亲眼见过队列在跑；endAt=看到它结束的时刻（60 秒后概览行自动消失） */
 var LB_STARTQ = { timer: null, t0: 0, doneSeen: -1, observed: 0, endAt: 0 };
+/* v6276（用户口径 2026-11-08）：启动队列行「三断点」修复的断点①——**没人去拉**。
+   编排（IP 切换 / 更新分发 / 回滚）由后端自动发起，前端从头到尾没有拉过一次
+   /api/srvctl/startq ⇒ LB_SRVCTL.q 恒为 null ⇒ 队列行整块不显示。
+   这里补一个「在途才探」的轻量探针：10 秒一次；连续 3 次彻底空闲（无 running /
+   无待启动 / 无批次）就自动停表 ⇒ **空闲时零请求**。
+   一旦探到真正在跑，立刻转交正式轮询 lbSrvCtlStartQueuePoll（2s 精度 + 任务条同步）。 */
+var LB_STARTQ_WATCH = null;
+var LB_STARTQ_WATCH_IDLE = 0;
+function lbSrvCtlQueueWatchStop(){
+  LB_STARTQ_WATCH_IDLE = 0;
+  if (LB_STARTQ_WATCH){ try { clearInterval(LB_STARTQ_WATCH); } catch(e){} LB_STARTQ_WATCH = null; }
+}
+function lbSrvCtlQueueWatchArm(){
+  if (LB_STARTQ_WATCH) return;
+  LB_STARTQ_WATCH_IDLE = 0;
+  LB_STARTQ_WATCH = setInterval(function(){
+    /* 已有正式轮询在跑（自己刚下发的批次）⇒ 无需重复拉 */
+    if (LB_STARTQ && LB_STARTQ.timer) { LB_STARTQ_WATCH_IDLE = 0; return; }
+    var u = (typeof lbSrvCtlUser === 'function') ? lbSrvCtlUser() : '';
+    if (!u) return;
+    lbSrvCtlFetchW(lbSrvCtlApi() + '/api/srvctl/startq?username=' + encodeURIComponent(u)
+                   + '&t=' + Date.now(), { cache: 'no-store' })
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        var q = (j && j.queue) || null;
+        if (!q) return;
+        LB_SRVCTL.q = q;
+        if (q.running){ LB_STARTQ.observed = 1; LB_STARTQ.endAt = 0; }
+        else if (LB_STARTQ.observed && !LB_STARTQ.endAt){ LB_STARTQ.endAt = Date.now(); }
+        try { lbSrvCtlQueueLinePaint(); } catch(eP){}
+        if (q.running && !LB_STARTQ.timer){
+          try { lbSrvCtlStartQueuePoll([], null); } catch(eS){}
+          try { lbSrvCtlQueueWatchStop(); } catch(eT){}
+          return;
+        }
+        if (!q.running && !Number(q.pendingCount || 0) && !q.batchRunning){
+          LB_STARTQ_WATCH_IDLE++;
+          if (LB_STARTQ_WATCH_IDLE >= 3) { try { lbSrvCtlQueueWatchStop(); } catch(eU){} }
+        } else {
+          LB_STARTQ_WATCH_IDLE = 0;
+        }
+      })
+      .catch(function(){});
+  }, 10000);
+}
 function lbTaskIdByKey(key){
   var i = (typeof lbTaskIdx === 'function') ? lbTaskIdx(key) : -1;
   return (i >= 0 && LB_TASKS.items[i]) ? LB_TASKS.items[i].id : 0;
@@ -6998,20 +8122,39 @@ function lbStartqDoneTxt(q){
 }
 function lbSrvCtlQueueLineHtml(){
   var q = LB_SRVCTL.q;
-  if (!q || !q.total) return '';
+  if (!q) return '';
+  /* v6276（用户口径 2026-11-08「只要批次涉及到启动的，从批次启动开始就常驻启动队列行」）：
+     原判据两道叠加会把整行藏掉 ——
+       ① `if (!q || !q.total) return '';`        ⇒ 批次刚开始（队列尚未下发第一台，total=0）整行不显示
+       ② `if (!LB_STARTQ.observed) return '';`   ⇒ 刷新页面后第一次拿到快照（本会话没见过 running）也不显示
+     本次事故正是这两道叠加：编排由后端自动发起，前端从未见过它 running ⇒ 队列行永远空白。
+     新判据：**有快照就显示**，只有「彻底空闲（无台数 / 无待启动 / 无批次）」才隐藏。 */
+  var _pend = Number(q.pendingCount || 0);
   if (!q.running){
-    /* v6022（用户口径）：只显示**本次会话内**跑过的队列。
-       后端 _SRVCTL_STARTQ 是常驻内存单例，队列结束后 total/done 永不清空，
-       旧逻辑会让「已完成 N/M」一直挂到后端进程重启 —— 用户以为它坏了。
-       规则：本次会话没见过 running ⇒ 不显示；见过则显示 60 秒后自动消失。 */
-    if (!LB_STARTQ.observed) return '';
-    if (LB_STARTQ.endAt && (Date.now() - LB_STARTQ.endAt) > 60000) return '';
-    return '<span class="ql-ttl">启动队列</span><span class="ql-done">已完成 ' + lbStartqDoneTxt(q) + '</span>';
+    var _tot0 = Number(q.total || 0);
+    /* v6278（用户口径「更稳定的判定」）：判据只看**后端数据** ——
+       running / 待启动台数 / 批次在跑 / 有 total，任一成立就显示。
+       不再依赖任何前端本地状态（LB_STARTQ.observed / endAt 是各端各自记的，
+       正是「不同客户端显隐不一致」的根因）。 */
+    if (!_pend && !_tot0 && !q.batchRunning) return '';
+    /* 「跑完 60 秒后消失」也改用后端 endTs（done 最后完成时刻）⇒ 各端同刻消失。 */
+    var _endMs = Number(q.endTs || 0) * 1000;
+    if (_endMs && (Date.now() - _endMs) > 60000 && !_pend) return '';
+    var _h0 = '<span class="ql-ttl">启动队列</span>';
+    if (_pend) _h0 += '<span class="ql-n">待启动 ' + _pend + ' 台</span>';
+    else _h0 += '<span class="ql-done">已完成 ' + lbStartqDoneTxt(q) + '</span>';
+    return _h0;
   }
   return '<span class="ql-ttl">启动队列</span>'
        + '<span class="ql-n">已完成 ' + lbStartqDoneTxt(q) + '</span>'
        + '<span class="ql-sep">·</span>启动中 ' + q.activeCount + ' 台'
        + '<span class="ql-sep">·</span>排队 ' + q.queuedCount + ' 台'
+       /* v6271（用户口径 2026-11-08「将要启动的也要算在启动队列里」）：
+          编排中处于 ready/savekill/sync 但尚未下发启动的服，后端已计入 pending ——
+          不显示的话用户会以为「一堆排队的没一个开始启动」。 */
+       + ((q.pendingCount || 0) > 0
+            ? ('<span class="ql-sep">·</span><span class="ql-pend" title="本批次中尚未下发启动的服（将要启动）">待启动 ' + q.pendingCount + ' 台</span>')
+            : '')
        /* v6186b（用户口径 2026-11-06）：「重压」改名「并发」 —— heavyCount 统计的是
           `_SRVCTL_STARTQ['active']` 中 `heavy=True` 的台数，而 heavy 自 v6006 起就是
           「**下发即占槽位**」（防 8s 间隔把 11 台全推下去压垮机器），
@@ -7023,9 +8166,16 @@ function lbSrvCtlQueueLineHtml(){
        + '<span class="ql-sep">·</span><span class="ql-heavy" title="待进入重压 + 正在重压的台数（上限 ' + (q.heavyMax || 2) + '）">重压 ' + q.heavyCount + '/' + (q.heavyMax || 2) + '</span>';
 }
 function lbSrvCtlQueueLinePaint(){
-  var el = document.getElementById('lbSrvCtlQLine');
-  if (!el) return;
-  try { el.innerHTML = lbSrvCtlQueueLineHtml(); } catch(e){}
+  /* v6262（用户口径「启动队列行在安全回档 / 服务器更新里也要显示」）：
+     队列行**唯一来源**，四个浮窗共用同一份 HTML —— 有哪个容器就刷哪个。 */
+  var _h = '';
+  try { _h = lbSrvCtlQueueLineHtml(); } catch (e0) { _h = ''; }
+  ['lbSrvCtlQLine', 'lbArkBkQLine', 'lbUpdQLine', 'lbTaskPanelQLine'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    if (el.innerHTML === _h) return;   /* v6278：内容未变不重建 DOM（现每 1.5s 随 /api/tasks 刷新） */
+    try { el.innerHTML = _h; } catch (e) {}
+  });
 }
 function lbSrvCtlStartQueue(sel, after, src){
   var u = lbSrvCtlUser();
@@ -7056,6 +8206,7 @@ function lbSrvCtlStartQueue(sel, after, src){
       }
       if (x.j.queue){ LB_SRVCTL.q = x.j.queue; lbSrvCtlQueueLinePaint(); }
       lbSrvCtlStartQueuePoll(sel, after);
+      try { if (typeof lbSrvCtlQueueWatchStop === 'function') lbSrvCtlQueueWatchStop(); } catch(eW){}
     })
     .catch(function(e){
       sel.forEach(function(srv){
@@ -7111,10 +8262,9 @@ function lbSrvCtlStartQueuePoll(sel, after){
           lbSrvCtlBusy(false);
           try { lbSrvCtlFetch(); } catch(e){}
           if (after) { try { after({ ok: true }); } catch(e){} }
-          /* v6022：给用户 60 秒看「已完成 N/M」，到点清空数据并重绘（真正消失） */
-          setTimeout(function(){
-            try { LB_SRVCTL.q = null; lbSrvCtlQueueLinePaint(); } catch(e){}
-          }, 60000);
+          /* v6278：删除「60 秒后本地清空 LB_SRVCTL.q」——
+             那是**各端各自计时**，同一批次在 A 端还显示、B 端已被清空（显隐不一致的根因之一）。
+             现统一由后端 q.endTs 判定（见 lbSrvCtlQueueLineHtml）。 */
         }
       })
       .catch(function(){});
@@ -7172,11 +8322,17 @@ function lbSrvCtlQueueResume(full){
       if (!full) restoreLocal();
       var q = (j && j.queue) || null;
       LB_SRVCTL.q = q;
-      if (!q || !q.total) return;
-      lbSrvCtlQueueApplyTasks(q);
+      /* v6276（断点②：拉一次就放弃）：原 `if (!q || !q.total) return;` ——
+         页面加载时编排往往还没开始（total=0）⇒ 直接返回、**永不启动轮询**
+         ⇒ 之后批次真正开始时前端没有任何通道能拿到队列（本次事故根因）。 */
+      if (!q) return;
+      if (q.total || Number(q.pendingCount || 0) || q.batchRunning) lbSrvCtlQueueApplyTasks(q);
       if (q.running){
         if (full){ try { lbSrvCtlBusy(true); } catch(e){} } else { LB_SRVCTL_BUSY_UI = true; }
         lbSrvCtlStartQueuePoll([], null);
+        try { lbSrvCtlQueueWatchStop(); } catch(eW0){}
+      } else {
+        try { lbSrvCtlQueueWatchArm(); } catch(eW1){}   /* v6276：断点①轮询桥 */
       }
       if (full){ try { lbSrvCtlQueueLinePaint(); } catch(e){} }
     })
@@ -7334,15 +8490,55 @@ function lbTaskSync(){
         if (!o || !o.ok) return;
         /* v6177：每轮检查刷新前遗留的「待终止」意图，自动恢复前端轮询 */
         try { lbSkPendingRestore(); } catch(e){}
+        /* v6278（用户口径 2026-11-08「启动队列在不同客户端显隐不一致，要求更稳定判定」）：
+           队列状态改由 /api/tasks 全量下发（后端 _startq_view 快照）⇒ 所有客户端同一来源、
+           同一时刻 ⇒ 显隐一致。**必须放在 changed===false 早退之前** —— 增量轮询命中时
+           tasks 数组没变化，但队列进度（pct/待启动数）可能已变。 */
+        try {
+          if (o.startq) { LB_SRVCTL.q = o.startq; lbSrvCtlQueueLinePaint(); }
+        } catch(eQ){}
         if (o.changed === false){ LB_TASK_REV = Number(o.rev) || LB_TASK_REV; return; }
         LB_TASK_REV = Number(o.rev) || 0;
         LB_TASKS.items = Array.isArray(o.tasks) ? o.tasks : [];
         LB_LOCKS = (o.locks && typeof o.locks === 'object') ? o.locks : {};   /* v6135：服务器锁表 */
         LB_TASKS.seq = LB_TASKS.items.reduce(function(m,t){ return Math.max(m, Number(t.id)||0); }, 0);
         try { lbTaskRender(); } catch(e){}
+        /* v6219（P0-3）：编排/队列在跑 ⇒ 提速服务器状态与演练面板刷新（原来只有任务条在动） */
+        try {
+          var _actv = (LB_TASKS.items || []).some(function(t){
+            return (t.phase === 'run' || t.phase === 'queue');
+          });
+          lbActivePoll(_actv);
+        } catch(e){}
       })
       .catch(function(){});
   }catch(e){}
+}
+/* v6219（P0-3 + P1-2）：活跃态轮询 —— 任务在跑时把「服务器状态 + IP 演练面板」提速到 8s，
+   空闲时停掉，避免常驻请求。服务器状态本来**完全没有轮询**（只在开窗/手动操作后拉），
+   所以编排把服停了/起了，角标不会变。 */
+var LB_ACTIVE_ON = false, LB_ACTIVE_TIMER = null;
+function lbActivePoll(on){
+  on = !!on;
+  if (on === LB_ACTIVE_ON) return;
+  LB_ACTIVE_ON = on;
+  if (LB_ACTIVE_TIMER){ try{ clearInterval(LB_ACTIVE_TIMER); }catch(e){} LB_ACTIVE_TIMER = null; }
+  if (!on) return;
+  LB_ACTIVE_TIMER = setInterval(function(){
+    if (!LB_ACTIVE_ON) return;
+    try { if (typeof lbSrvCtlFetch === 'function') lbSrvCtlFetch(); } catch(e){}
+    try { if (typeof lbIpDrillLoad === 'function' && document.getElementById('lbIpDrillInfo')) lbIpDrillLoad(); } catch(e){}
+    /* v6259（用户口径「任务过程中状态就没刷新过 / Bob 的角标没变过」）：
+       更新浮窗开着时，编排期间**同步刷新 chips** —— LB_UPD.srvData 原来只在开窗或点刷新时拉一次，
+       于是编排把服停了/起了，角标一直停在最初那一眼。勾选态存在 LB_UPD.sel（JS 对象）里，
+       重渲染不会丢；仅在无拉取进行中时触发，避免叠请求。 */
+    try {
+      if (document.getElementById('lbUpd') && typeof lbUpdFetch === 'function'
+          && !LB_UPD.loading) {
+        lbUpdFetch();
+      }
+    } catch(e){}
+  }, 8000);
 }
 function lbTaskSyncStart(ms){
   /* v6123：无论计时器是否已在跑，都先补齐槽位并渲染一次
@@ -7416,13 +8612,17 @@ function lbTaskHtml(t){
   /* v6187b：失败态同理 —— 后端可能残留 pct（如 cfcore=8），
      否则失败条会画一条 8% 红条，看起来像「卡在 8%」而不是「已失败」。 */
   if (ph === 'queue' || ph === 'fail') pct = 0;
+  /* v6219（O2）：区分「手动中止」与「真失败」—— 中止不是故障，别用红色吓人 */
+  var _aborted = (ph === 'fail' && /中止/.test(String(t.msg || '') + String(t.err || '')));
   var _qp = (t.meta && Number(t.meta.qpos)) || 0;
   var icon = (ph === 'run' ? 'mdi-loading mdi-spin' : ph === 'ok' ? 'mdi-check-circle' : ph === 'skip' ? 'mdi-debug-step-over' : ph === 'queue' ? 'mdi-clock-outline' : 'mdi-alert-circle');
   var color = (ph === 'run' ? LB_PROG_C.runT : ph === 'ok' ? LB_PROG_C.okT : ph === 'skip' ? LB_PROG_C.muteT : ph === 'queue' ? LB_PROG_C.muteT : LB_PROG_C.failT);
-  var barColor = (ph === 'fail' ? LB_PROG_C.fail : ph === 'ok' ? LB_PROG_C.ok : ph === 'skip' ? LB_PROG_C.skipG : ph === 'queue' ? LB_PROG_C.queue : LB_PROG_C.run);
+  if (_aborted){ icon = 'mdi-stop-circle-outline'; color = LB_PROG_C.muteT; }
+  var barColor = (ph === 'fail' ? (_aborted ? LB_PROG_C.queue : LB_PROG_C.fail) : ph === 'ok' ? LB_PROG_C.ok : ph === 'skip' ? LB_PROG_C.skipG : ph === 'queue' ? LB_PROG_C.queue : LB_PROG_C.run);
   /* v6186：排队中右侧改显示**排队序号**（#N），而非无意义的「等待中」 */
-  var right = (ph === 'run' ? (pct + '%') : ph === 'ok' ? '完成' : ph === 'skip' ? '跳过'
-             : ph === 'queue' ? (_qp ? ('#' + _qp) : '等待中') : '失败');
+  /* v6219（P1-1）：pct=0 时不显示「0%」（宽限期/等待态会被误读成卡住） */
+  var right = (ph === 'run' ? (pct > 0 ? (pct + '%') : '等待中') : ph === 'ok' ? '完成' : ph === 'skip' ? '跳过'
+             : ph === 'queue' ? (_qp ? ('#' + _qp) : '等待中') : (_aborted ? '已中止' : '失败'));
   var sub = (ph === 'run' ? (t.msg || '执行中…') : ph === 'ok' ? (t.msg || '完成') : ph === 'skip' ? (t.msg || '已跳过') : ph === 'queue' ? (t.msg || '等待中…') : (t.err || '失败'));
   var subTxt = String(sub).replace(/\s+/g, ' ').trim().slice(0, 70);
   /* v5988（用户口径）：只保留一条进度条，图标/名称/状态文字/百分比全部叠在条内 */
@@ -7430,17 +8630,25 @@ function lbTaskHtml(t){
     + '<div class="lb-task-pg">'
     +   '<i class="lb-task-fill" style="width:' + pct + '%;background:' + barColor + '"></i>'
     +   '<i class="mdi ' + icon + '" style="color:' + color + '"></i>'
-    +   '<span class="lb-task-main">' + lbMdEsc(t.srvName || t.server) + ' · ' + lbMdEsc(t.label || t.action) + '</span>'
+    +   '<span class="lb-task-main">' + lbMdEsc(t.srvName || t.server || ((t.meta && t.meta.batch) ? '全服' : '')) + ' · ' + lbMdEsc(t.label || t.action) + '</span>'
     +   lbTaskStepsHtml(t)
     /* v6126（用户口径）：操作人改为独立镂空小徽章，不再拼进标题字符串 */
     +   (t.operatorName ? ('<span class="lb-task-op">' + lbMdEsc(t.operatorName) + '</span>') : '')
-    +   '<span class="lb-task-sub">' + lbMdEsc(subTxt) + '</span>'
     +   '<span class="lb-task-sp"></span>'
     /* v6164（计划 §16 第 7 项 / C8）：自动重启任务在「进行中/排队」时给一个中止按钮 */
     +   ((t.action === 'restart' && (ph === 'run' || ph === 'queue'))
-          ? '<button class="lb-srvctl-mini" title="中止本台自动重启（其它服继续）" onclick="lbTaskAbort(\'' + lbMdEsc(t.server) + '\')"><i class="mdi mdi-stop-circle-outline"></i></button>' : '')
+          ? ((t.meta && t.meta.batch)
+              ? '<button class="lb-srvctl-mini" title="中止整批自动重启" onclick="lbTaskAbortAll()"><i class="mdi mdi-stop-circle-outline"></i></button>'
+              : '<button class="lb-srvctl-mini" title="中止本台自动重启（其它服继续）" onclick="lbTaskAbort(\'' + lbMdEsc(t.server) + '\')"><i class="mdi mdi-stop-circle-outline"></i></button>')
+          : '')
     +   (ph === 'fail' ? '<button class="lb-srvctl-mini" title="重试" onclick="lbTaskRetry(' + Number(t.id) + ')"><i class="mdi mdi-refresh"></i></button>' : '')
-    +   '<span class="lb-task-pct" style="color:' + color + '">' + right + '</span>'
+    /* v6270（用户口径「移动端百分比放第二行右对齐，最多两行」）：
+       纯 CSS 无法在 flex-wrap 下强制「sub + pct 一起换到第二行」（sub 会被压成 0 宽塞进第一行），
+       故用真实容器承载第二行：桌面 display:contents ⇒ 布局零变化；窄屏变 flex 独占一行。 */
+    +   '<span class="lb-task-line2">'
+    +     '<span class="lb-task-sub">' + lbMdEsc(subTxt) + '</span>'
+    +     '<span class="lb-task-pct" style="color:' + color + '">' + right + '</span>'
+    +   '</span>'
     + '</div>'
     + '</div>';
 }
@@ -7458,8 +8666,59 @@ function lbTaskEnsureSlots(){
     body.appendChild(d);
   }
 }
+/* v6267（用户口径）：入口按钮 #lbTaskPanelBtn 的「在途数」徽章。
+   口径=甲（只数 phase=run / queue）；无在途时隐藏 ⇒ 按钮回归 30px 不膨胀。
+   样式与 #lbWatchCnt / #lbTodoCnt / #lbMaintCnt 三个兄弟按钮同一套（.lb-task-cnt）。 */
+function lbTaskBadgeSet(n){
+  var el = document.getElementById('lbTaskCnt');
+  if (!el) return;
+  n = Number(n) || 0;
+  if (n > 0){ el.textContent = String(n); el.style.display = ''; }
+  else { el.textContent = ''; el.style.display = 'none'; }
+}
+/* v6267：页面一加载就探一次任务表 —— 原来 lbTaskSyncStart 只在打开浮窗时调用，
+   不打开浮窗时 LB_TASKS 永远为空，徽章永远不出现（刷新后任务仍在跑也看不到）。
+   只有**确实有在途任务**才转交正常轮询（lbTaskSyncStart），空闲则一轮都不多打。 */
+var LB_TASK_BOOT_TIMER = null;
+function lbTaskBadgeBoot(tries){
+  try {
+    if (LB_TASK_SRC !== 'server') return;
+    if (LB_TASK_SYNC_TIMER) return;
+    if (LB_TASK_BOOT_TIMER) return;
+    var base = (typeof lbSrvCtlApi === 'function') ? lbSrvCtlApi() : '';
+    var user = (typeof lbSrvCtlUser === 'function') ? lbSrvCtlUser() : '';
+    tries = Number(tries) || 0;
+    if (!base || !user){
+      if (tries < 5){
+        LB_TASK_BOOT_TIMER = setTimeout(function(){
+          LB_TASK_BOOT_TIMER = null;
+          try { lbTaskBadgeBoot(tries + 1); } catch(e){}
+        }, 2000);
+      }
+      return;
+    }
+    lbTaskSync();
+    LB_TASK_BOOT_TIMER = setTimeout(function(){
+      LB_TASK_BOOT_TIMER = null;
+      var _act = (LB_TASKS.items || []).some(function(t){ return t && (t.phase === 'run' || t.phase === 'queue'); });
+      if (_act){ try { lbTaskSyncStart(); } catch(e){} }
+      else { try { lbTaskBadgeSet(0); } catch(e){} }
+    }, 2500);
+  } catch(e){}
+}
 function lbTaskRender(){
   try { lbTaskEnsureSlots(); } catch(e){}   /* v6123：渲染前自愈槽位（原确保函数从未被调用）*/
+  /* v6267（用户口径）：入口徽章必须**在槽位检查之前**同步 ——
+     主页面（latestUI）没有任何 .lb-task-slot，原逻辑会在下一行提前 return，徽章将永不更新。 */
+  try {
+    var _bn = 0;
+    (LB_TASKS.items || []).forEach(function(t){
+      if (!t) return;
+      if (t.action === 'restart' && t.meta && t.meta.batch) return;   /* 批次汇总行前端不显示，不计入 */
+      if (t.phase === 'run' || t.phase === 'queue') _bn++;
+    });
+    lbTaskBadgeSet(_bn);
+  } catch(eB){}
   var slots = document.querySelectorAll('.lb-task-slot');
   if (!slots.length) return;
   var items = LB_TASKS.items.slice();
@@ -7476,12 +8735,23 @@ function lbTaskRender(){
     if (as !== bs) return as - bs;
     return (Number(a.id) || 0) - (Number(b.id) || 0);
   });
+  /* v6260（用户口径「一个服一个任务条 · 不同服不合并」）：**删除 v6219 的折叠逻辑**。
+     原逻辑「有 batch 汇总行就折叠单台明细」会把每台服合并成一条「全服」，
+     与用户口径相反。现在反过来：**隐藏批次汇总条，每台服各显示一条**。 */
+  var _hiddenN = 0;
+  items = items.filter(function(t){
+    if (t.action === 'restart' && t.meta && t.meta.batch){ _hiddenN++; return false; }
+    return true;
+  });
   var failN = items.filter(function(t){ return t.phase === 'fail'; }).length;
   /* v6125（用户口径）：标题「任务进度」由渲染函数统一输出 —— 任何 .lb-task-slot 结构与样式完全一致 */
   var h = '<div class="lb-task-sec">任务进度</div>'
         + '<div class="lb-task-bar">'
         +   '<span class="lb-task-cnt">' + (items.length ? (items.length + ' 条') : '') + '</span>'
         +   '<span style="flex:1"></span>'
+        /* v6276：原文案「已折叠 N 台明细」与实现不符 —— 折叠的是**批次汇总条**（1 条），
+           每台明细是照常显示的（v6260 口径「一个服一个任务条」）。 */
+        +   (_hiddenN ? ('<span style="font-size:11px;color:#6b7280;margin-right:8px">批次汇总已合并</span>') : '')
         +   (failN ? '<button class="lb-srvctl-mini" title="清理全部失败（' + failN + '）" onclick="lbTaskClearFail()"><i class="mdi mdi-broom"></i></button>' : '')
         + '</div>';
   h += items.length
@@ -7525,6 +8795,28 @@ function lbTaskAbort(server){
   };
   var msg = '确定中止「' + server + '」的自动重启吗？\n（只中止这一台，其它服继续）';
   if (typeof lbAsk === 'function' && lbAsk(msg, go, '确定中止')) return;
+  try { if (window.confirm(msg)) go(); } catch(e) {}
+}
+/* v6219（O1 配套）：中止**整批**自动重启 —— 明细行被折叠后单台中止按钮不可见，
+   必须有整批入口。后端 /api/tasks/abort {all:true} 早已支持。 */
+function lbTaskAbortAll(){
+  var go = function(){
+    var base = (typeof lbSrvCtlApi === 'function') ? lbSrvCtlApi() : '';
+    var tk = (typeof lbSrvCtlToken === 'function') ? lbSrvCtlToken() : '';
+    if (!base) return;
+    lbSrvCtlFetchW(base + '/api/tasks/abort?username=' + encodeURIComponent(
+                     (typeof lbSrvCtlUser === 'function') ? lbSrvCtlUser() : ''), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tk },
+      body: JSON.stringify({ all: true })
+    }).then(function(r){ return r.json(); }).then(function(j){
+      if (j && j.ok){ try { lbToast('已中止整批自动重启（' + (j.aborted || 0) + ' 台）'); } catch(e){} }
+      else { try { lbToast('中止失败：' + ((j && (j.error || j.code)) || '未知')); } catch(e){} }
+      try { lbTaskSync(); } catch(e){}
+    }).catch(function(e){ try { lbToast('中止失败：' + e); } catch(e2){} });
+  };
+  var msg = '确定中止整批自动重启吗？\n（所有未完成的服务器都会停下，已在运行的不受影响）';
+  if (typeof lbAsk === 'function' && lbAsk(msg, go, '确定中止整批')) return;
   try { if (window.confirm(msg)) go(); } catch(e) {}
 }
 function lbTaskRetry(id){
@@ -8473,7 +9765,7 @@ function lbSrvCtlSaveKill(){
     badge: sel.length + ' 台',
     servers: sel,
     warn: _warnMap,
-    steps: ['存档', '校验完整', '才终止'],
+    steps: ['存档', '存档校验', '才终止'],
     note: '存档失败或校验不通过的服务器将跳过终止',
     okText: '开始',
     onOk: function(){
@@ -8908,6 +10200,7 @@ function lbInit(){
   lbWatchCnt();
   lbBpCnt(); // v1082：恢复蓝图关注数（待制作按钮徽章）
   try{ lbMaintCnt(); }catch(e){} // v4674：维护列表角标
+  try{ lbTaskBadgeBoot(); }catch(e){} // v6267：服务器入口在途数徽章（页面一加载就探一次）
   // v4713（用户口径）：维护列表预加载——统一由 lbMaintWarmSchedule 调度
   //   （静态表 → 生物行 → 绿洲龙背包 → 聚落面包屑 → 设施数据；风机在最后一步按需拉，仍走 10 分钟 TTL + 失败不缓存）
   setTimeout(function(){ try{ lbMaintWarmSchedule(); }catch(e){} }, 1000);
@@ -14495,7 +15788,105 @@ function lbMaintOpen(){
   lbMaintRender();   // v4713：缓存命中即完整首帧（未预热则本次仍能出内容，随后预热完成自动补渲）
   try{ lbMaintWarmEnsure(); }catch(e){}
 }
-function lbMaintClose(){ LB._maintOpen = false; LB._maintWatchSnap = null; var o = document.querySelector('.lb-maint-overlay'); if(o) o.remove(); }   // v4696：关窗清快照（下次打开读最新关注列表）
+function lbMaintClose(){ LB._maintOpen = false; LB._maintWatchSnap = null; var o = document.querySelector('.lb-maint-overlay'); if(o) o.remove(); }
+/* v6261（用户口径）：**任务进度浮窗** —— 复用「维护列表」浮窗样式（青色主题，换色不复刻）。
+   内容只放两样：
+     ① 服务器控制顶部的「地图 TAB + 图例行」—— **不可点击**（容器 pointer-events:none，
+        且 toggleFn 传空函数双保险），纯展示
+     ② 任务进度板块（.lb-task-slot ⇒ lbTaskRender() 会自动渲染这个槽位）*/
+function lbTaskPanelNoop(){}
+/* v6263（用户口径「复用的元素哪去了」）：本函数是**唯一生效**的实现。
+   数据源统一改 LB_SRVCTL（与服务器控制同源、实时），角标继续用 lbUpdBadge（buildId 后三位）；
+   补齐：状态更新时间 / 图例行 / 官服版本链接 / 在线角色 / 启动队列行。
+   打开时同时拉 srvctl + upd 两份数据，之后每 8s 重绘（任务条由 lbTaskSync 自行刷新）。 */
+var LB_TASKPANEL_TIMER = null;
+function lbTaskPanelBodyHtml(){
+  var _smap = {};
+  try { (LB_SRVCTL.data || []).forEach(function(x){ if (x && x.server) _smap[x.server] = x; }); } catch(e0){}
+  var _official = '';
+  try { _official = lbSrvCtlVer(LB_SRVCTL.official || '').replace(/^v/i, ''); } catch(e2){}
+  var _tsTxt = LB_SRVCTL.loading ? '正在获取服务器状态…'
+             : (LB_SRVCTL.ts ? ('状态更新于 ' + new Date(LB_SRVCTL.ts).toLocaleTimeString('zh-CN')) : '尚未加载');
+  var _chips = '';
+  try {
+    /* v6265（用户口径「我让你复用的是服务器控制里的，你怎么复用了服务器更新里的」）：
+       **完全对齐「服务器控制」** ——
+         · badgeFn 传 null      ⇒ 角标 = 默认**游戏版本号**（96.9），不是 buildId 后三位
+         · zhOldFn 传 null      ⇒ 不要「汉化旧版」蓝色内描边
+         · ipBadFn 传 undefined ⇒ 走默认 lbSrvCtlIpBad，保留「IP失效」紫框
+       最后一个参数 true 只关掉 onclick / 光标手型（只读）。 */
+    _chips = lbSrvCtlChipsHtml({}, 'lbTaskPanelNoop', _smap, _official, undefined,
+                               null, null, true);
+  } catch(e3){}
+  var _legend = '';
+  /* v6265：图例也用服务器控制原样（运行 / 停止 / 版本旧 / IP失效）—— 不带「汉化旧版」 */
+  try { _legend = lbSrvCtlLegendHtml(); } catch(e4){}
+  return '<div class="lb-srvctl-pickhead" style="margin:0 0 8px">'
+    + '<span class="lb-srvctl-ts">' + lbMdEsc(_tsTxt) + '</span>'
+    + '<span class="lb-srvctl-pickcnt">共 <b>' + (LB.SERVERS || []).length + '</b> 台</span>'
+    + '<span style="flex:1"></span></div>'
+    + (_chips ? ('<div class="lb-srvctl-chips lb-taskpanel-ro" style="pointer-events:none;cursor:default;user-select:none">'
+                 + _chips + '</div>') : '')
+    + _legend
+    + (function(){ try { return lbSrvCtlOfficialHtml(_official); } catch(e5){ return ''; } })()
+    + (function(){ try { return lbSrvCtlOnlineWrapHtml('lbTaskPanelOnline'); } catch(e6){ return ''; } })()
+    + '<div class="lb-srvctl-qline" id="lbTaskPanelQLine">'
+    +   (function(){ try { return lbSrvCtlQueueLineHtml(); } catch(e7){ return ''; } })() + '</div>'
+    + '<div class="lb-task-slot" id="lbTaskPanelTasks" style="margin-top:14px"></div>';
+}
+function lbTaskPanelRepaint(){
+  var ov = document.querySelector('.lb-taskpanel-overlay');
+  if (!ov) return;
+  var body = ov.querySelector('.lb-modal-scroll');
+  if (!body) return;
+  body.innerHTML = lbTaskPanelBodyHtml();
+  try { lbTaskRender(); } catch(e){}
+  try { lbSrvCtlTips(); } catch(e){}
+}
+function lbTaskPanelOpen(){
+  var old = document.querySelector('.lb-taskpanel-overlay'); if (old) old.remove();
+  /* v6263c：首帧直接用 lbTaskPanelBodyHtml()（含 图例/官服版本/在线角色/队列行），
+     不再在这里另拼一份（原来 _legend 忘了赋值 ⇒ 图例等元素全缺）。 */
+  var _svg = '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-2px;fill:currentColor;flex-shrink:0">'
+           + '<path d="M7,5H21V7H7V5M7,13V11H21V13H7M4,4.5A1.5,1.5 0 0,1 5.5,6A1.5,1.5 0 0,1 4,7.5A1.5,1.5 0 0,1 2.5,6A1.5,1.5 0 0,1 4,4.5M4,10.5A1.5,1.5 0 0,1 5.5,12A1.5,1.5 0 0,1 4,13.5A1.5,1.5 0 0,1 2.5,12A1.5,1.5 0 0,1 4,10.5M7,19V17H21V19H7M4,16.5A1.5,1.5 0 0,1 5.5,18A1.5,1.5 0 0,1 4,19.5A1.5,1.5 0 0,1 2.5,18A1.5,1.5 0 0,1 4,16.5Z"/></svg>';
+  var ov = document.createElement('div');
+  ov.className = 'lb-taskpanel-overlay lb-fs';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center';
+  ov.onclick = function(e){ if (e.target === ov) lbTaskPanelClose(); };
+  ov.innerHTML = '<div class="lb-taskpanel-box" onclick="event.stopPropagation()" style="background:#17171f;border:1px solid #ffffff33;border-radius:12px;width:640px;max-width:94vw;max-height:86vh;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,.6)">'
+    + '<div class="lw-head"><b style="color:#ffffff;font-size:15px;display:inline-flex;align-items:center;gap:5px">'
+    + _svg + ' 服务器</b>'
+    + '<span style="font-size:11px;color:#888">服务器状态 · 任务进度</span>'
+    + '<span style="flex:1"></span><button class="lw-x" onclick="lbTaskPanelClose()" title="关闭" aria-label="关闭"><i class="mdi mdi-close"></i></button></div>'
+    + '<div class="lb-modal-scroll" style="flex:1;min-height:0;overflow-y:auto;padding:10px 12px 12px">'
+    +   (function(){ try { return lbTaskPanelBodyHtml(); } catch(eB){ return ''; } })()
+    + '</div>';
+  document.body.appendChild(ov);
+  try { lbTaskSyncStart(); } catch(e5){}
+  try { lbTaskRender(); } catch(e6){}
+  try { lbSrvCtlTips(); } catch(e7){}
+  /* v6263：拉数据 + 定时重绘 */
+  try { if (typeof lbSrvCtlFetch === 'function') lbSrvCtlFetch(); } catch(e8){}
+  try { if (typeof lbUpdFetch === 'function') lbUpdFetch(); } catch(e9){}
+  /* v6263c：数据回来立刻重绘，别让用户盯着空壳等 8 秒 */
+  try { setTimeout(function(){ try { lbTaskPanelRepaint(); } catch(eR1){} }, 1200); } catch(eR2){}
+  try { setTimeout(function(){ try { lbTaskPanelRepaint(); } catch(eR3){} }, 3200); } catch(eR4){}
+  if (LB_TASKPANEL_TIMER){ try{ clearInterval(LB_TASKPANEL_TIMER); }catch(e10){} }
+  LB_TASKPANEL_TIMER = setInterval(function(){
+    if (!document.querySelector('.lb-taskpanel-overlay')){
+      try{ clearInterval(LB_TASKPANEL_TIMER); }catch(e11){}
+      LB_TASKPANEL_TIMER = null;
+      return;
+    }
+    try { if (typeof lbSrvCtlFetch === 'function') lbSrvCtlFetch(); } catch(e12){}
+    try { if (typeof lbUpdFetch === 'function') lbUpdFetch(); } catch(e13){}
+    try { lbTaskPanelRepaint(); } catch(e14){}
+  }, 8000);
+}
+function lbTaskPanelClose(){
+  if (LB_TASKPANEL_TIMER){ try{ clearInterval(LB_TASKPANEL_TIMER); }catch(e){} LB_TASKPANEL_TIMER = null; }
+  var o = document.querySelector('.lb-taskpanel-overlay'); if (o) o.remove();
+}   // v4696：关窗清快照（下次打开读最新关注列表）
 // v4706（用户口径）：**血/食/耐久三类条共用本函数（唯一一套样式）**
 //   label=标签文字；pct=填充百分比；cur/max=数值；tc=类型色（缺省按血绿/食黄）；rowExtra=行内附加 style（含前导分号）；noHide=true 时不套用满值隐藏
 function lbMaintBar(label, pct, cur, max, tc, rowExtra, noHide){
@@ -23093,7 +24484,7 @@ function lbAsk(msg, onOk, okText){
      servers:['Sco',...] 服务器 chips（自动中文名 + 主题图标）,
      warn:{Bob:'存档不落盘'} 例外项 -> 服务器 chip 变黄 + 底部警示条,
      skipped:['Isl'] 已跳过（灰字一行）,
-     steps:['存档','校验完整','才终止'] 流程一行,
+     steps:['存档','存档校验','才终止'] 流程一行,
      cmd:'broadcast xxx' 等宽命令块,
      bigText:'07:30' 大字（设置时间用）,
      note 底部小字, okText, cancelText, onOk
@@ -50763,4 +52154,3 @@ function lbRouteHelpClose(){
   var ov = document.getElementById('lbBreedOverlay');
   if(ov) ov.style.display = 'none';
 }
-

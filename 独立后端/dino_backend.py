@@ -38,6 +38,8 @@ import json
 import os
 import re
 import re as _re
+import shutil            # v6228：更新分发用 copy2 / disk_usage
+import stat as _stat     # v6255：分发前清只读（S_IWRITE）
 import socket
 import struct
 import subprocess
@@ -177,11 +179,29 @@ def _arkbk_task_push(job):
         for s in (job.get('steps') or []):
             if s.get('msg'):
                 msg = str(s.get('msg'))
+        # v6276（用户口径「原本启动条要显示的信息，完整整合显示在融合任务条内」）：
+        #   回档的「⑥启动 → ⑦等上线」段原先只显示「已下发启动队列」并一停 600 秒，
+        #   而启动队列同时另生成一条独立 srv|start 条（同台服两条，且动态在另一条上）。
+        #   现由 _utask_boot_mirror 把启动进度写进 job 的 boot* 字段，这里注入：
+        #     · msg 用启动队列原生消息（如「加载世界存档…（45s）」）
+        #     · pct 按 starting(72) → verifying(92) 段用启动原生进度**映射满该段**
+        #   独立启动条已被抑制 ⇒ 同台服只保留回档这一条。
+        _pct_out = int(job.get('pct') or 0)
+        try:
+            if (ph in ('starting', 'verifying') and not bool(job.get('dryRun'))
+                    and job.get('bootMsg') is not None):
+                _bm = str(job.get('bootMsg') or '')
+                if _bm:
+                    msg = _bm
+                _bp = max(0, min(100, int(job.get('bootPct') or 0)))
+                _pct_out = 72 + int(round(_bp * 0.20))
+        except Exception:
+            _pct_out = int(job.get('pct') or 0)
         _utask_put('arkbk|%s' % str(job.get('server') or ''), job.get('server'),
                    'rollback_dry' if job.get('dryRun') else 'rollback',
                    job.get('operator') or '',
                    label=(u'回档演练' if job.get('dryRun') else u'安全回档'),
-                   msg=msg, pct=int(job.get('pct') or 0), phase=phase,
+                   msg=msg, pct=_pct_out, phase=phase,
                    steps=steps, err=(job.get('error') or ''),
                    meta={'jobId': job.get('id')})
     except Exception:
@@ -5334,6 +5354,45 @@ SRVCTL_T_FULLBACKUP = 600        # fullbackup 超时（保守同档）
 SRVCTL_ASYNC_ACTIONS = ('destroy', 'fullbackup')   # 走异步 job
 _SRVCTL_POOL = __import__('concurrent.futures', fromlist=['ThreadPoolExecutor']).ThreadPoolExecutor(max_workers=4)
 _SRVCTL_JOB_POOL = __import__('concurrent.futures', fromlist=['ThreadPoolExecutor']).ThreadPoolExecutor(max_workers=1)
+# ===== v6222（用户口径 2026-11-07）：**终止动作全局串行闸** =====
+#   背景：存档写各自的 Servers\<srv>\，并行安全；但多台同时**下发终止**会把
+#   「玩家跨服传送窗口」瞬间清零 ⇒ 传送被截断。手动脉冲原为 4 并发、编排放行 2 台，
+#   都存在该风险，且护栏只能保证「发起那一刻」无传送。
+#   本闸：同一时刻只放行一台下发终止，相邻两台间隔 >= KILL_SERIAL_GAP 秒；
+#   且闸在「终止前复检」**之前**生效 ⇒ 轮到自己时才复检，结论不会因等待而过期。
+KILL_SERIAL_GAP = 5
+_KILL_SERIAL = {'lock': __import__('threading').RLock(), 'lastAt': 0.0}
+
+
+def _kill_serial_wait():
+    u"""v6222：等终止串行闸（全局）。仅包住「排队 + 刷新时间」，真正下发在其后。"""
+    _lk = _KILL_SERIAL['lock']
+    _lk.acquire()
+    try:
+        _gap = float(KILL_SERIAL_GAP)
+        _w = float(_KILL_SERIAL.get('lastAt') or 0) + _gap - time.time()
+        if _w > 0:
+            time.sleep(min(_w, _gap))
+        _KILL_SERIAL['lastAt'] = time.time()
+    finally:
+        try:
+            _lk.release()
+        except Exception:
+            pass
+
+
+def _kill_serial_prepare(cfg):
+    u"""v6222：本台尚未过闸则等待并打标；savekill 等过之后，其内部递归调用的
+       kill（_gate_passed=True）不会重复等第二次。"""
+    try:
+        if cfg.get('_kill_serial_done'):
+            return cfg
+        _kill_serial_wait()
+        _c = dict(cfg)
+        _c['_kill_serial_done'] = True
+        return _c
+    except Exception:
+        return cfg
 _SRVCTL_BUSY = {}                # (server, action) -> 起始 ts（同服同动作互斥）
 _SRVCTL_BUSY_LOCK = threading.Lock()
 _SRVCTL_JOBS = {}                # jobId -> {...}
@@ -5569,6 +5628,8 @@ def _srvctl_one(server, action, message, cfg, progress=None):
     #   原来在入口判，而保存要 40 秒，期间玩家可以进服 ⇒ 护栏结论过期。
     #   kill 单动作无保存过程，仍在入口判。
     if action == 'kill' and not cfg.get('dry') and not cfg.get('_gate_passed'):
+        # v6222：先过终止串行闸，再复检护栏 —— 保证复检结论是「轮到自己那一刻」的
+        cfg = _kill_serial_prepare(cfg)
         _gate = _srvctl_terminal_gate(server, force=bool(cfg.get('force')))
         if _gate.get('blocked') and not _gate.get('force'):
             return {'server': server, 'profileName': prof, 'ok': False,
@@ -5640,7 +5701,7 @@ def _srvctl_one(server, action, message, cfg, progress=None):
             # ---- v6190（用户口径）：**不再并行等 .ark** ----
             #   磁盘实测：插件在 .ark 稳定后 14~36 秒才导出 DinoData ⇒
             #   「DinoData 已稳定」即等价于「.ark 早已写完」，无需重复等 20 秒。
-            #   只在 DinoData 通过后做一次 quick_check + 瘦档判定（0.2~0.4s）。
+            #   v6219（P1-3）：DinoData 通过后**只做瘦档比对**（v6198 起已去掉 quick_check），0.2~0.4s。
             def _dw_prog(_w, _sf, _bd, _p=progress):
                 try:
                     _p(min(85, 35 + int(min(1.0, float(_w) / 25.0) * 50)),
@@ -5683,7 +5744,7 @@ def _srvctl_one(server, action, message, cfg, progress=None):
             # v6184（用户口径「最重要的校验就是 ark」）：.ark 四重判据已在上方并行块内完成（参数与等待均已并入）
             _out['ark'] = _ak
             _out['message'] = (_out['message'] + ' · .ark ' + (
-                '完整 ok(%s, %.1fMB, quick_check)' % (
+                '落盘 ok(%s, %.1fMB, 瘦档比对)' % (
                     os.path.basename(_ak.get('path') or ''),
                     float(_ak.get('size') or 0) / 1048576.0)
                 if _ak.get('ok') else '校验失败（%s%s）' % (
@@ -5718,6 +5779,8 @@ def _srvctl_one(server, action, message, cfg, progress=None):
                     'stage': 'saveworld', 'save': _r1.get('data'), 'via': 'backend'}
         # v6189：终止前**复检**三重静默护栏（保存期间可能有人进服 / 集群写入）
         if not cfg.get('dry'):
+            # v6222：复检**之前**先排队（全局终止串行闸）—— 多台同时停服会瞬间清零传送窗口
+            cfg = _kill_serial_prepare(cfg)
             _gate = _srvctl_terminal_gate(server, force=bool(cfg.get('force')))
             if _gate.get('blocked') and not _gate.get('force'):
                 return {'server': server, 'profileName': prof, 'ok': False,
@@ -5800,18 +5863,21 @@ def _srvctl_release(server, action):
         _SRVCTL_BUSY.pop((server, action), None)
 
 
-def _srvctl_run(user, servers, action, message, force=False, src=''):
+def _srvctl_run(user, servers, action, message, force=False, src='', silent=False):
     """并发执行（max_workers=4）；results[] 顺序与 servers 一致。失败自动重试 1 轮。
     v6179：force=True ⇒ 终止类动作跳过安全护栏（用户二次确认后放行）。
-    v6203：src 透传到审计日志（前端重试传 retry ⇒ 日志标 [重试]）。"""
+    v6203：src 透传到审计日志（前端重试传 retry ⇒ 日志标 [重试]）。
+    v6219（P0-2）：silent=True ⇒ **不建/不写任务行**（编排内部动作由编排行统一表达）。
+      注意三处 _utask_put 必须**同时**跳过，漏一处就会残留任务条。"""
     cfg = _srvctl_cfg()
     if force:
         cfg = dict(cfg); cfg['force'] = True
     results = [None] * len(servers)
     # v6179（用户口径修正）：「整合」指**每条任务内部**贯穿「存档 → 校验完整 → 终止」，
     #   不是把多台合成一条 ⇒ 多选 N 台就建 N 条任务，各自独立进度 + 各自分步圆点。
-    if action != 'start':
+    if action != 'start' and not silent:
         # v6122：除 start（由 startq 驱动进度）外，先登记任务 → 全客户端共享
+        # v6219（P0-2）：silent 时跳过（编排内部动作）
         for _s in servers:
             try:
                 _utask_put('%s|%s' % (_s, action), _s, action, user,
@@ -5823,7 +5889,7 @@ def _srvctl_run(user, servers, action, message, force=False, src=''):
     def _job(idx, srv):
         # v6179：savekill 把阶段进度写回**本台**任务（含分步圆点，复用自动重启 steps 机制）
         _prog = None
-        if action == 'savekill':
+        if action == 'savekill' and not silent:
             def _prog(pct, msg, _s=srv):
                 try:
                     _p = int(pct or 0)
@@ -5852,7 +5918,7 @@ def _srvctl_run(user, servers, action, message, force=False, src=''):
             _srvctl_log(user, r.get('server'), action, r.get('ok'), r.get('ms', 0),
                         r.get('message', ''), src=src)
             # v6122：收尾同步任务总线（start 由 startq 自己收尾）
-            if action != 'start':
+            if action != 'start' and not silent:
                 try:
                     _ok = bool(r.get('ok'))
                     _extra = {}
@@ -6069,92 +6135,6 @@ def _srv_ark_quickcheck(server):
     return out
 
 
-def _srvctl_wait_ark_stable(server, since_ts, budget=120, quiet=20.0, poll=1.0,
-                            base_size=0, progress=None):
-    """v6184（用户口径「最重要的校验就是 ark」）：等主 .ark 真正写完。
-
-    v6007 前端 lbTaskPollSave() 的四条判据**整体搬进后端**（原来只在前端轮询里有效，
-    v6177/v6178 把 savekill 改成后端原子编排后前端不再轮询 ⇒ 四条全部失效）：
-      ① mtime 必须变（本轮确实写盘，不是旧档）
-      ② 之后 (size, mtime) 连续 quiet 秒完全不变（确认写完 —— mtime 在**开始写**时就变）
-      ③ PRAGMA quick_check == 'ok'（结构完整，能抓半截/损坏档）
-      ④ 新档 < 基线 x 0.95 -> thin=True（实测写出过比旧档小 19%~56% 的瘦档）
-    返回 {ok, waited, path, size, mtime, baseSize, thin, quiet, reason, detail}
-      reason: '' | ark_not_found | ark_not_written | ark_still_changing | ark_unreadable
-    """
-    t0 = time.time()
-    since = float(since_ts or t0)
-    try:
-        _lg = _srv_observe_log(server) or {}
-    except Exception:
-        _lg = {}
-    map_name = _lg.get('map') or ''
-    path = ''
-    sz = 0
-    mt = 0
-    changed = False
-    ark_ok = False
-    detail = ''
-    prev_sig = ''
-    last_change = t0
-    stable_for = 0.0
-    _last_pub = -1
-    while True:
-        now = time.time()
-        try:
-            ak = _srv_observe_ark(server, map_name) or {}
-        except Exception:
-            ak = {}
-        if ak.get('path'):
-            path = ak.get('path') or path
-        mt = int(ak.get('mtime') or 0)
-        sz = int(ak.get('size') or 0)
-        if mt and mt >= since - 2:
-            changed = True
-        sig = '%d|%d' % (sz, mt)
-        if prev_sig and sig == prev_sig:
-            stable_for = now - last_change
-        else:
-            last_change = now
-            stable_for = 0.0
-        prev_sig = sig
-        if changed and sz > 0 and stable_for >= quiet:
-            try:
-                ck = _srv_ark_quickcheck(server) or {}
-            except Exception as e:
-                ck = {'ok': False, 'detail': '%s: %s' % (type(e).__name__, e)}
-            detail = str(ck.get('detail') or '')
-            if ck.get('ok'):
-                ark_ok = True
-                break
-        if progress is not None:
-            try:
-                _w = int(now - t0)
-                if _w != _last_pub:
-                    _last_pub = _w
-                    progress(round(now - t0, 1), round(stable_for, 1), budget)
-            except Exception:
-                pass
-        if now - t0 >= budget:
-            break
-        time.sleep(poll)
-    _base = int(base_size or 0)
-    thin = bool(_base and sz and sz < int(_base * 0.95))
-    if not path:
-        reason = 'ark_not_found'
-    elif not changed:
-        reason = 'ark_not_written'
-    elif ark_ok:
-        reason = ''
-    elif stable_for < quiet:
-        reason = 'ark_still_changing'
-    else:
-        reason = 'ark_unreadable'
-    return {'ok': bool(ark_ok), 'waited': round(time.time() - t0, 1), 'path': path,
-            'size': sz, 'mtime': mt, 'baseSize': _base, 'thin': thin,
-            'quiet': round(stable_for, 1), 'reason': reason, 'detail': detail[:200]}
-
-
 def _srvctl_check_ark_after_dd(server, base_size=0):
     """v6190（用户口径）：DinoData 稳定后的 .ark 快速校验（**不再等 20s**）。
 
@@ -6292,6 +6272,37 @@ def _startq_heavy_count():
 
 
 def _startq_view():
+    # v6271（用户口径 2026-11-08「将要启动的也要算在启动队列里 · 一个批次只允许一个结算」）：
+    #   原视图只统计**真正下发过 startq** 的台，编排里另外 N 台处于 ready 的完全不可见
+    #   ⇒ 面板显示「已完成 0/2 · 排队 0 台」，用户以为「一堆排队的没一个开始」。
+    #   这里先把编排中尚未下发启动的服取成快照（锁外读 _RESTART，避免与 _SRVCTL_STARTQ_LOCK 嵌套）。
+    _pend_snap, _batch_total = [], 0
+    _batch_run = False
+    try:
+        if _RESTART.get('running'):
+            _batch_run = True
+            _sv0 = _RESTART.get('servers') or {}
+            # v6277（用户实测 2026-11-08「明明批次中仅 4 台，为啥启动队列显示 11 台」）：
+            #   原 `_batch_total = len(_sv0)` 把**保持停服**的 7 台（v6272 hold-stopped）也算进来，
+            #   再经 `_tot = max(q.total, _batch_total)` 抬到 11 ⇒ 队列行显示「已完成 x/11」，
+            #   而实际进队列的只有 4 台。改为只数「原本在运行」的台。
+            _batch_total = sum(1 for _v0 in _sv0.values()
+                               if bool(_v0.get('wasRunning', True)))
+            for _s0, _st0 in _sv0.items():
+                # v6276（用户口径「只要批次涉及到启动的，从批次启动开始就常驻启动队列行」）：
+                #   原只收 ready/savekill/sync（尚未进起服段）⇒ 批次刚开始时若全部台还在公告/空置，
+                #   pending 为空、total=0 ⇒ 前端队列行整块不显示。
+                #   现扩到「起服段(startq)」并排除**原本停服**的台
+                #   （v6272 原则：原本停服的台直接 done，不进启动队列，不该算进待启动）。
+                if not bool(_st0.get('wasRunning', True)):
+                    continue
+                # v6276b：判据再放宽一档 —— 批次刚开始时台还停在 announce/empty/quiet/saveworld，
+                #   若只认 ready/savekill/sync/startq，pending 恒为 0 ⇒ 队列行照样整块不显示，
+                #   违反「从批次启动开始就常驻」。改为「本批次内、原本在跑、且尚未完成」全部计入。
+                if str(_st0.get('phase') or '') not in ('done', 'fail', 'verify'):
+                    _pend_snap.append(_s0)
+    except Exception:
+        _pend_snap, _batch_total, _batch_run = [], 0, False
     with _SRVCTL_STARTQ_LOCK:
         q = _SRVCTL_STARTQ
         act = []
@@ -6303,12 +6314,35 @@ def _startq_view():
         # v6186（用户口径）：「已完成」必须是**启动成功**的台数 ——
         #   原 doneCount=len(done) 把 ok=False 也算完成，导致「已完成 3/3」但实际只起了 1 台。
         _okcnt = sum(1 for x in q['done'] if x.get('ok'))
+        # v6271：「将要启动的」= 编排中 ready/savekill/sync 且尚未入队/未在启动的台
+        _pend = [x for x in _pend_snap
+                 if x not in q['queue'] and x not in q['active']]
+        # v6271：total 固定为**批次总数** —— 原来每 tick 用 len(queue)+len(active)+len(done)
+        #   重算，是个滑动值（批次跑到一半 total 只有 2）⇒ 出现「2 台一成功一失败就结算」的错觉。
+        _tot = max(int(q.get('total') or 0), int(_batch_total or 0))
+        # v6278（用户口径 2026-11-08「启动队列在不同客户端显隐不一致，要求更稳定判定」）：
+        #   前端原先用**各端本地**的 LB_STARTQ.endAt 计时「跑完 60 秒后消失」⇒ 各端打开时间不同
+        #   ⇒ 同一批次在 A 端还显示、B 端已消失。改为后端下发统一时间戳 endTs（最后完成时刻）。
+        _endts = 0
+        try:
+            for _x in q['done']:
+                _te = int(_x.get('t_end') or 0)
+                if _te > _endts:
+                    _endts = _te
+        except Exception:
+            _endts = 0
         return {'running': bool(q['running']), 'user': q['user'], 'ts': int(q['ts'] or 0),
-                'total': q.get('total', 0), 'doneCount': len(q['done']),
+                'endTs': _endts,
+                'total': _tot, 'doneCount': len(q['done']),
                 'okCount': _okcnt, 'failCount': len(q['done']) - _okcnt,
                 'done': list(q['done']), 'active': act,
                 'activeCount': len(act), 'heavyCount': _startq_heavy_count(),
                 'queued': list(q['queue']), 'queuedCount': len(q['queue']),
+                'pending': _pend, 'pendingCount': len(_pend),
+                # v6276：批次视角（前端「批次含启动 ⇒ 从批次开始就常驻队列行」用）
+                'batchRunning': bool(_batch_run),
+                'batchTotal': int(_batch_total or 0),
+                'external': list(_SRVCTL_STARTQ.get('external') or []),
                 'heavyMax': SRVCTL_STARTQ_HEAVY_MAX}
 
 
@@ -6325,6 +6359,24 @@ def _startq_worker():
             if not _SRVCTL_STARTQ['running']:
                 return
             srv_list = list(_SRVCTL_STARTQ['active'].keys())
+        # v6219（P2-3）：外部启动检测（**fail-open**）—— ASAM 界面直接点启动会绕过本队列，
+        #   重压池统计不到 ⇒ 可能与队列内启动同时进入 world_load（实际并发 >2）。
+        #   每 30s 用 ASA /server-status 快照比对一次；快照失败则保持上次结果，绝不阻断队列。
+        try:
+            if (now - float(_SRVCTL_STARTQ.get('extTs') or 0)) > 30:
+                _SRVCTL_STARTQ['extTs'] = now
+                _ps2 = _srvctl_proc_snapshot() or {}
+                if _ps2:
+                    with _SRVCTL_STARTQ_LOCK:
+                        _act2 = set(_SRVCTL_STARTQ['active'].keys())
+                        _que2 = set(_SRVCTL_STARTQ['queue'])
+                    _ex2 = [_s3 for _s3, _st3 in _ps2.items()
+                            if str(_st3) == 'Starting' and _s3 not in _act2 and _s3 not in _que2]
+                    _SRVCTL_STARTQ['external'] = _ex2
+                    if _ex2:
+                        _restart_log('EXTERNAL start: %s（ASAM 侧启动，重压池已让路）' % ','.join(_ex2))
+        except Exception:
+            pass
         # ---- v6186（用户口径「排队能在进度条上显示序号」）：刷新排队位次 ----
         #   只在位次变化时写，避免每 tick 写盘
         try:
@@ -6403,6 +6455,18 @@ def _startq_worker():
                 if not new_proc:
                     v['msg'] = u'等待新进程启动…（%ds%s）' % (
                         int(el), (u' · ' + pst) if pst else u'')
+                    # v6277（用户实测 2026-11-08「重压池释放时没有立即激活排队，
+                    #   一直等到某台启动完成后才激活」——核验：调度逻辑本身是对的
+                    #   （restart.log 实测 Gen 比 Ext 完成早 42s 下发），问题在这里）：
+                    #   本分支只改内存 v、**不推任务总线** ⇒ 融合条 msg 停在上一状态
+                    #   「排队中（第 N 位）」，直到新进程日志出现（约 40~60s）才跳变，
+                    #   界面上看起来就像"槽位一直没释放"。此刻该台**已下发启动**，必须推送。
+                    try:
+                        _utask_put('%s|start' % srv, srv, 'start',
+                                   v.get('user') or 'srvctl',
+                                   msg=v['msg'], pct=int(v.get('pct') or 0), phase='run')
+                    except Exception:
+                        pass
                     if el > SRVCTL_STARTQ_FIRST_TIMEOUT:
                         v.update({'ok': False, 'phase': 'fail', 'heavy': False,
                                   'err': u'未见新进程启动（%ds 内日志首行未变）%s'
@@ -6454,6 +6518,11 @@ def _startq_worker():
                         'pct': 100 if v.get('ok') else v.get('pct', 0),
                         'msg': v.get('msg', ''), 'err': v.get('err', ''),
                         't_end': int(now)})
+                    # v6219（一致性 E）：收割即释放 queue 软锁
+                    try:
+                        _srv_lock_clear(srv, 'queue|%s' % srv)
+                    except Exception:
+                        pass
                     # v6193（用户实测「队列完全不对」）：**失败必须同步任务总线** ——
                     #   原来只有成功（advertising）分支写过 _utask_put，
                     #   5 个失败分支（进程退出 / 未见新进程 / 未启动成功 / 重压超时 / 单台超时）
@@ -6467,7 +6536,8 @@ def _startq_worker():
                                        err=str(v.get('err') or u'启动失败')[:300])
                         except Exception:
                             pass
-            heavy = _startq_heavy_count()
+            # v6219（P2-3）：外部启动也计入重压占用 ⇒ 队列自动让路
+            heavy = _startq_heavy_count() + len(_SRVCTL_STARTQ.get('external') or [])
             if (heavy < SRVCTL_STARTQ_HEAVY_MAX and _SRVCTL_STARTQ['queue']
                     and (now - float(_SRVCTL_STARTQ.get('lastSent') or 0)) >= SRVCTL_STARTQ_MIN_GAP):
                 srv_next = _SRVCTL_STARTQ['queue'].pop(0)
@@ -6582,6 +6652,30 @@ def _srvctl_startq_new(user, servers, src=''):
         except Exception:
             pass
     servers = _keep
+    # v6219（一致性 A）：**起服前守门下沉到这里** —— 原来只有 /api/srvctl/action 路由入口检查
+    #   `_ARKBK_HOLD` + `_srv_lock`，而编排（_restart_exec_* -> startq）与回档（L422）**直接调用**
+    #   本函数会完全绕过那两道门。下沉后三条路径（手动/回档/编排）自然统一。
+    _blocked = {}
+    _keep2 = []
+    for _s in servers:
+        if _ARKBK_HOLD.get(_s):
+            _blocked[_s] = u'该服正在执行回档'
+            continue
+        try:
+            _lk = _srv_lock_snapshot().get(_s) or {}
+        except Exception:
+            _lk = {}
+        if _lk.get('kind') in SRV_LOCK_HARD:
+            _blocked[_s] = u'该服被 %s 占用' % (_lk.get('kind') or '')
+            continue
+        _keep2.append(_s)
+    if _blocked:
+        try:
+            _srvctl_log('(system)', '/'.join(_blocked.keys()), 'start', False, 0,
+                        (u'start 拒绝：' + u'；'.join('%s(%s)' % (k, v) for k, v in _blocked.items()))[:250])
+        except Exception:
+            pass
+    servers = _keep2
     if not servers:
         return _startq_view()
     with _SRVCTL_STARTQ_LOCK:
@@ -6613,6 +6707,12 @@ def _srvctl_startq_new(user, servers, src=''):
         for _s in add:
             _qu[_s] = user
             _qs[_s] = src or ''
+            # v6219（一致性 E）：入队即加 queue 软锁 —— 锁表能反映「该服在启动队列里」，
+            #   与编排的 restart|<srv> 一起构成完整的可见性。收割时释放。
+            try:
+                _srv_lock_set(_s, 'queue', 'queue|%s' % _s, u'启动队列', user=user, ttl=SRV_LOCK_TTL)
+            except Exception:
+                pass
         # v6122：入队即登记任务（共享进度）
         for _s in add:
             try:
@@ -8788,6 +8888,13 @@ def _ipwatch_resolve():
         _e1 = 'doh empty'
     except Exception as e:
         _e1 = 'doh %s: %s' % (type(e).__name__, e)
+        # v6219（P2-2）：DoH 失败**必须留痕** —— 原来 _e1 只在系统 DNS 也失败时才被用到，
+        #   只要系统 DNS 成功返回就没任何记录 ⇒ 2026-11-07 排查「IP 变了 9 分钟才识别」时
+        #   无法判断到底走的是 DoH 还是系统 DNS（openclash + AdGuard 环境下尤其需要）。
+        try:
+            _ipwatch_log('DoH failed -> fallback system DNS: %s' % _e1[:200])
+        except Exception:
+            pass
     try:
         import socket as _s
         infos = _s.getaddrinfo(_dom, None, _s.AF_INET)
@@ -8937,7 +9044,7 @@ RESTART_SKIP_EMPTY = {'Bob'}
 
 # v6179（用户口径）：savekill 任务的分步圆点 —— 复用自动重启 steps 机制（{key,label,state}），
 #   前端 lbTaskStepsHtml() 直接渲染，不新增任何前端渲染代码。
-SAVEKILL_STEPS = (('saveworld', u'存档'), ('verify', u'校验完整'), ('kill', u'终止'))
+SAVEKILL_STEPS = (('saveworld', u'存档'), ('verify', u'存档校验'), ('kill', u'终止'))
 
 
 def _savekill_steps_obj(states):
@@ -8968,7 +9075,13 @@ RESTART_START_COOLDOWN = 600        # C7：同一批编排 10 分钟内不重复
 #      ⇒ 判定「玩家进不来」，直接按空置推进；见到过玩家 ⇒ 走正常等空置。
 RESTART_IP_GRACE = 300              # A：换 IP 后宽限期（秒）
 RESTART_IP_GRACE_PROBE = 120        # C：宽限结束后「无回归」确认窗口（秒）
-RESTART_TOTAL_TIMEOUT = 21600       # C8 配套：整批编排最长 6 小时，超时自动收尾（防「某台一直有人在线」把 running 永久卡死，进而 skip 掉真实的 IP 变化重启）
+RESTART_TOTAL_TIMEOUT = 28800       # v6219（O4）：6h -> 8h。最坏单台 saveworld180+savekill300+
+                                    #   startq1200+verify600=2280s，×11 台≈7h > 6h 会被总超时误杀。
+RESTART_STARTQ_IDLE_RETRY = 45      # v6219（R1）：入队后 N 秒仍 idle ⇒ 判为「被跳过/未登记」并重入队
+RESTART_PARALLEL = 2                # v6221（P2-1，用户 2026-11-07 拍板）：存档→校验→停服段并发上限。
+                                    #   依据：存档写 Servers\<srv>\，不写共用集群目录（clusters\9102），
+                                    #   多台并行存档不会互相破坏 L3 静默判定；风险仅在「停服窗口重叠」。
+                                    #   静默窗口 RESTART_CLUSTER_QUIET 保持 180s 不变。
 # v6152（计划 §16 第 1~3 项）：真执行链路的超时与判据
 RESTART_SAVEKILL_TIMEOUT = 300     # savekill 单步超时（秒）
 # v6173（用户反馈 2026-11-06「中文公告立刻被英文盖住」）：
@@ -9018,10 +9131,22 @@ RESTART_LOG_MAX = 2 * 1024 * 1024        # v6204：日志超过 2MB 转 .1（原
 RESTART_STEPS = (('ann', u'公告'), ('empty', u'等待空置'),
                  ('quiet', u'静默校验'), ('saveworld', u'存档屏障'), ('savekill', u'存档停服'),
                  ('startq', u'起服'), ('verify', u'校验'))
+# ===== v6228（P1）：服务器更新模式 =====
+#   方案：计划\服务器更新_任务总线复用_实施方案_v1_20261107.md §1.1 / §17.1
+#   运行中的服走 8 步（含 sync）；原本停服的服走 3 步（检查->复制->完成，不启动）
+UPDATE_STEPS = (('ann', u'公告'), ('empty', u'等待空置'), ('quiet', u'静默校验'),
+                ('saveworld', u'存档屏障'), ('savekill', u'停服'),
+                ('sync', u'复制差异'), ('startq', u'起服'), ('verify', u'校验'))
+UPDATE_STEPS_STOPPED = (('check', u'检查'), ('sync', u'复制差异'), ('done', u'完成'))
+UPDATE_SYNC_TIMEOUT = 900        # 单台复制差异超时（秒）：HDD 96s x 3 倍余量 + 停服开销
 _RESTART_LOCK = threading.Lock()
 _RESTART = {'running': False, 'pendingReason': '', 'reason': '', 't0': 0, 'dry': RESTART_DRY,
             'servers': {}, 'done': [], 'current': '',
-            'lastStartAt': 0}   # v6164（C7）：上次真正启动编排的时刻，用于 10 分钟冷却
+            'lastStartAt': 0,   # v6164（C7）：上次真正启动编排的时刻，用于 10 分钟冷却
+            # v6228（P1）：编排模式与更新相关上下文
+            'mode': 'restart',  # restart | update | rollback
+            'verKind': '',      # forced | patch | same | unknown（仅 update/rollback 有意义）
+            'srcRoot': ''}      # rollback 时的回滚包目录（空=用 UPDATE_CACHE_PATH）
 
 
 def _restart_enable_now():
@@ -9155,9 +9280,44 @@ def _restart_cn(srv):
         return srv
 
 
+def _restart_steps_def(st):
+    """v6228：按编排模式与「进入时是否在运行」选步骤集
+       · restart                    -> RESTART_STEPS（7 步）
+       · update/rollback + 在运行    -> UPDATE_STEPS（8 步，含 sync）
+       · update/rollback + 原本停服  -> UPDATE_STEPS_STOPPED（3 步：检查->复制->完成）"""
+    _mode = str(_RESTART.get('mode') or 'restart')
+    if _mode in ('update', 'rollback'):
+        # v6239（B3）：按 targets 动态改 sync 步骤标签（实现上仍是单阶段内串行两项，
+        #   故无需新增 sync_zh 独立阶段 —— 方案 §4 的 9 步在此收敛为「sync 标签变化」）
+        _tg = _RESTART.get('targets') or ['server']
+        _has_sv = ('server' in _tg)
+        _has_zh = ('zh' in _tg)
+        _labsync = (u'复制本体+汉化' if (_has_sv and _has_zh)
+                    else (u'复制汉化' if _has_zh else u'复制差异'))
+        _steps = list(UPDATE_STEPS if st.get('wasRunning', True) else UPDATE_STEPS_STOPPED)
+        return tuple([((k, _labsync) if k == 'sync' else (k, lab)) for k, lab in _steps])
+    return RESTART_STEPS
+
+
 def _restart_steps_obj(st):
     phases = st.get('steps') or {}
-    return [{'key': k, 'label': lab, 'state': phases.get(k, 'wait')} for k, lab in RESTART_STEPS]
+    return [{'key': k, 'label': lab, 'state': phases.get(k, 'wait')}
+            for k, lab in _restart_steps_def(st)]
+
+
+def _restart_label(dry=None):
+    """v6228：任务标签按 mode（+verKind）生成"""
+    _mode = str(_RESTART.get('mode') or 'restart')
+    _d = bool(_RESTART.get('dry')) if dry is None else bool(dry)
+    if _mode in ('update', 'rollback'):
+        _vk = str(_RESTART.get('verKind') or '')
+        _suf = u'·强制' if _vk == 'forced' else (u'·补丁' if _vk == 'patch' else '')
+        _base = (u'回滚（分发）' if _mode == 'rollback' else u'更新（分发）')
+        _tg = _RESTART.get('targets') or ['server']
+        _zsuf = (u'·本体+汉化' if ('server' in _tg and 'zh' in _tg)
+                 else (u'·汉化' if 'zh' in _tg else ''))
+        return _base + _suf + _zsuf + (u'·演练' if _d else '')
+    return (u'重启（IP 切换·演练）' if _d else u'重启（IP 切换）')
 
 
 def _restart_push(srv):
@@ -9166,22 +9326,86 @@ def _restart_push(srv):
     v6204（复核 P1-5）：**状态指纹去重** —— 原来每台每 tick 无条件写，
       11 台 x 4 次/分钟 = 44 次/分钟 频繁落盘 tasks_state.json。
       指纹含 phase/pct/msg/attempts/err/steps，任一变化才写（宽限期倒计时在 msg 里，仍会实时更新）。"""
+    # v6260（用户口径「一个服一个任务条 · 不同服不合并」）：**恢复登记 restart|<srv> 单台条**。
+    #   v6259 曾误删此条、只留 restart|__batch 汇总条 ⇒ 界面把每台服合并成「全服」，
+    #   与用户口径相反。现每台服各写一条，批次汇总条由前端隐藏（见 app_core.js lbTaskRender v6260）。
     st = (_RESTART.get('servers') or {}).get(srv) or {}
+    _steps_def = _restart_steps_def(st)
     _sig = '%s|%s|%s|%s|%s|%s' % (
         st.get('phase'), st.get('pct'), st.get('msg'), st.get('attempts'),
-        st.get('err'), u','.join(str((st.get('steps') or {}).get(_k, '')) for _k, _ in RESTART_STEPS))
+        st.get('err'), u','.join(str((st.get('steps') or {}).get(_k, '')) for _k, _ in _steps_def))
     if st.get('_pushSig') == _sig:
         return
     st['_pushSig'] = _sig
     ph = str(st.get('phase') or 'queue')
     phase = 'ok' if ph == 'done' else ('fail' if ph == 'fail' else 'run')
     _utask_put('restart|%s' % srv, srv, 'restart', 'ipwatch',
-               label=(u'重启（IP 切换·演练）' if _RESTART.get('dry')
-                      else u'重启（IP 切换）'),
+               label=_restart_label(),
                msg=(st.get('msg') or ''), pct=int(st.get('pct') or 0), phase=phase,
                steps=_restart_steps_obj(st), err=(st.get('err') or ''),
                meta={'attempts': int(st.get('attempts') or 0), 'dry': bool(_RESTART.get('dry')),
-                     'reason': _RESTART.get('reason') or ''})
+                     'reason': _RESTART.get('reason') or '',
+                     'mode': str(_RESTART.get('mode') or 'restart'),
+                     'wasRunning': bool(st.get('wasRunning', True)),
+                     'finalStatus': (st.get('finalStatus') or '')})
+    _restart_push_batch()
+
+
+def _restart_push_batch():
+    """v6219（O1）：编排**汇总行** —— 原来 11 台各一条 restart|<srv>，一次编排最多 33 条任务行
+       （11 重启 + N 存档 + N 启动）。这里额外维护一条 restart|__batch 表达整体进度，
+       单台明细仍保留（前端默认折叠）。指纹化，只在变化时写盘。"""
+    try:
+        svs = _RESTART.get('servers') or {}
+        if not svs:
+            return
+        tot = len(svs)
+        dn = sum(1 for v in svs.values() if v.get('phase') == 'done')
+        fl = sum(1 for v in svs.values() if v.get('phase') == 'fail')
+        run = bool(_RESTART.get('running'))
+        cur = _RESTART.get('current') or ''
+        dry = bool(_RESTART.get('dry'))
+        if not run and (dn + fl) >= tot:
+            phase = 'fail' if fl else 'ok'
+        else:
+            phase = 'run'
+        # v6259（用户口径「进度条一直看不到进度」）：pct 按每台**真实进度**加权。
+        #   原来 pct = 已完成台数/总数 ⇒ 单台分发时恒为 0 ⇒ 前端 (pct>0?pct%:'等待中') 永远「等待中」。
+        _acc = 0.0
+        for _v in svs.values():
+            if str(_v.get('phase') or '') in ('done', 'fail'):
+                _acc += 100.0
+            else:
+                _acc += float(_v.get('pct') or 0)
+        pct = int(round(_acc / max(1, tot)))
+        msg = u'已完成 %d/%d 台' % (dn + fl, tot)
+        if fl:
+            msg += u'（失败 %d）' % fl
+        _sk_now = [k for k, v in svs.items() if v.get('phase') == 'savekill']
+        if _sk_now and run:
+            msg += u' · 处理中 %s' % u','.join(_sk_now)
+        elif cur and run:
+            msg += u' · 当前 %s' % cur
+        _stopped_n = sum(1 for v in svs.values()
+                         if not bool(v.get('wasRunning', True)))
+        if _stopped_n and str(_RESTART.get('mode') or '') in ('update', 'rollback'):
+            msg += u'（其中 %d 台保持停服）' % _stopped_n
+        # v6259（用户口径「任务过程中状态就没有刷新过」）：指纹**必须含 pct + msg**。
+        #   原指纹只含 tot/dn/fl/cur/run/dry —— 单台分发时 dn+fl 恒 0、cur 只在进入 savekill 时才变，
+        #   于是指纹长时间不变 ⇒ 批次条永不更新 ⇒ 前端永远停在最初那一眼（「等待中 / 0/1 台」）。
+        _sig2 = '%d|%d|%d|%s|%s|%s|%d|%s' % (tot, dn, fl, cur, run, dry, pct, msg)
+        if _RESTART.get('_batchSig') == _sig2:
+            return
+        _RESTART['_batchSig'] = _sig2
+        _utask_put('restart|__batch', '', 'restart', 'ipwatch',
+                   label=_restart_label(dry),
+                   msg=msg, pct=pct, phase=phase,
+                   meta={'batch': True, 'done': dn, 'fail': fl, 'total': tot,
+                         'dry': dry, 'reason': _RESTART.get('reason') or '',
+                         'mode': str(_RESTART.get('mode') or 'restart'),
+                         'stopped': _stopped_n})
+    except Exception:
+        pass
 
 
 # v6171（计划 §16 第 8 项验收）：英文公告需用英文地图名
@@ -9380,8 +9604,82 @@ def _restart_snapshot():
                                 for k, v in (_RESTART.get('servers') or {}).items())}
 
 
-def _restart_start(reason, dry_override=None, force=False):
+def _batch_busy_probe():
+    """v6276（用户口径 2026-11-08「同时只允许一个批次在运行（防止混乱）」）：
+    探测当前是否有批次占用。返回 (busy, owner, remaining, kind)。
+
+    优先级：编排（restart）> 启动队列（startq）。
+    · kind='restart' → owner 恒为 'ipwatch'
+    · kind='startq'  → owner 为发起人（_SRVCTL_STARTQ['user']）
+    """
+    try:
+        if bool(_RESTART.get('running')):
+            _sv = _RESTART.get('servers') or {}
+            _left = sum(1 for _v in _sv.values()
+                        if str(_v.get('phase') or '') not in ('done', 'fail'))
+            return True, 'ipwatch', _left, 'restart'
+    except Exception:
+        pass
+    try:
+        _q = _SRVCTL_STARTQ or {}
+        if bool(_q.get('running')):
+            _left = len(_q.get('queue') or []) + len(_q.get('active') or {})
+            return True, str(_q.get('user') or ''), _left, 'startq'
+    except Exception:
+        pass
+    return False, '', 0, ''
+
+
+def _batch_busy_error(busy, owner, left, kind):
+    """v6276：互斥拒绝时返回给前端的统一文案（前端已有透出逻辑，无需改渲染）。"""
+    _k = u'重启编排' if kind == 'restart' else u'启动队列'
+    return (u'当前有批次正在进行中（%s · 发起人 %s · 剩余 %d 台），'
+            u'请等它跑完再启动' % (_k, owner or u'未知', int(left or 0)))
+
+
+def _restart_start(reason, dry_override=None, force=False, mode='restart',
+                   servers=None, ver_kind='', src_root='', targets=None):
+    """v6228（P1）：支持 mode / servers
+       · servers=None   => 全部 11 台（restart 原行为完全不变）
+       · servers=[...]  => **只调度这些台**（需求 ①：只对选中服分发）
+       · mode='update'  => savekill 段走 stop -> sync（见 _restart_tick）
+       · mode='rollback'=> 同上，但 src_root 指向回滚包目录
+       · 每台记录 wasRunning（进入时是否在运行）=> 停服批走 3 步快速通道（§17.1）"""
     _dry = _restart_dry_now() if dry_override is None else bool(dry_override)
+    _mode = str(mode or 'restart')
+    # v6276（用户口径「同时只允许一个批次在运行」）：已有**别人**的启动队列在跑时，不允许再起编排。
+    #   编排自己的 startq 调用不走这里（走 _srvctl_startq_new），故不会自锁。
+    #   演练（dry）不受限，方便反复验证流程。
+    if not _dry:
+        try:
+            _bb, _bo, _bl, _bk = _batch_busy_probe()
+            if _bb and _bk == 'startq' and str(_bo or '') != 'ipwatch':
+                _restart_log('start REJECTED mode=%s: 启动队列占用中（发起人 %s · 剩余 %d 台）'
+                             % (_mode, _bo or '?', _bl))
+                return False
+        except Exception:
+            _sexc('restart_busy_probe')
+    _picked = None
+    if servers is not None:
+        _picked = []
+        for _s in servers:
+            _s2 = str(_s or '').strip()
+            if _s2 and (_s2 in SERVERS) and (_s2 not in _picked):
+                _picked.append(_s2)
+        if not _picked:
+            _restart_log('start REJECTED mode=%s: servers 列表为空或全部无效 %r'
+                         % (_mode, servers))
+            return False
+    # 运行状态快照：**在锁外取**（内部有 HTTP，不能持 _RESTART_LOCK）
+    # v6272（用户原则 2026-11-08「本来就是停服状态的，任务后也必须是停服状态」）：
+    #   原来只在 update/rollback 取快照 ⇒ restart 模式完全不知道谁在跑，
+    #   已停服的服仍去 saveworld（RCON 10061）⇒ 必然报「存档屏障失败」（2026-11-08 实测 6 台）。
+    #   现改为**所有 mode 都取**，供下方统一的 `if not wasRunning` 判定使用。
+    _psnap = {}
+    try:
+        _psnap = _srvctl_proc_snapshot(10) or {}
+    except Exception:
+        _psnap = {}
     with _RESTART_LOCK:
         if _RESTART.get('running'):
             # v6204（复核 P0-2）：**不能静默丢弃** —— 公网 IP 抖动/重拨时会连发两次 CHANGED，
@@ -9396,13 +9694,36 @@ def _restart_start(reason, dry_override=None, force=False):
             _restart_log('skip start (cooldown %ds left): %s'
                          % (int(RESTART_START_COOLDOWN - (time.time() - _last)), reason))
             return False
+        _tg_list = []
+        for _t in (targets if isinstance(targets, (list, tuple)) else ['server']):
+            _t2 = str(_t or '').strip().lower()
+            if _t2 in ('server', 'zh') and (_t2 not in _tg_list):
+                _tg_list.append(_t2)
+        if not _tg_list:
+            _tg_list = ['server']
         _RESTART.update({'running': True, 'reason': str(reason or ''), 't0': time.time(),
                          'dry': _dry, 'servers': {}, 'done': [], 'current': '',
-                         'lastStartAt': time.time()})
+                         'lastStartAt': time.time(),
+                         'mode': _mode, 'verKind': str(ver_kind or ''),
+                         'srcRoot': str(src_root or ''), 'targets': _tg_list,
+                         '_batchSig': None})
         now = time.time()
         # v6200（A）：换 IP 触发 ⇒ 开启宽限期（不计空置），并记录「是否见到过玩家」
         _is_ip = ('ip-change' in str(reason or '').lower())
-        for srv in sorted(SERVERS.keys()):
+        _targets = _picked if _picked is not None else sorted(SERVERS.keys())
+        for srv in _targets:
+            # v6272（用户原则 + 保守判定）：
+            #   快照明确 running/starting ⇒ 在运行
+            #   快照明确返回其它值（stopped 等）⇒ 已停服
+            #   快照查不到该服 / 快照失败（_psnap 为空）⇒ **当作在运行**
+            #     —— 宁可按完整流程慢一点，也绝不误判「已停服」而跳过存档导致丢档。
+            _raw_run = str(_psnap.get(srv) or '').strip().lower()
+            if _raw_run in ('running', 'starting'):
+                _was_run = True
+            elif _raw_run:
+                _was_run = False
+            else:
+                _was_run = True
             _RESTART['servers'][srv] = {'phase': 'announce', 'pct': 5,
                                         'msg': (u'线路切换宽限期，等待玩家回归' if _is_ip
                                                 else u'公告期，等待空置'),
@@ -9412,8 +9733,24 @@ def _restart_start(reason, dry_override=None, force=False):
                                         'ipMode': _is_ip,
                                         'graceUntil': (now + RESTART_IP_GRACE) if _is_ip else 0,
                                         'probeUntil': 0,
-                                        'sawPlayer': False}
-    _restart_log('START reason=%s dry=%s servers=%d' % (reason, _dry, len(SERVERS)))
+                                        'sawPlayer': False,
+                                        'wasRunning': bool(_was_run),
+                                        'finalStatus': '',
+                                        'syncDone': False, 'syncOk': False, 'syncMsg': '',
+                                        'syncAt': 0, 'syncBytes': 0, 'syncFiles': 0}
+    _restart_log('START mode=%s reason=%s dry=%s servers=%d/%d%s'
+                 % (_mode, reason, _dry, len(_RESTART.get('servers') or {}), len(SERVERS),
+                    (u' picked=%s' % u','.join(_picked)) if _picked else ''))
+    # v6274（用户口径 2026-11-08「原本停服状态的基点是启动批次任务时为准」）：
+    #   基点即为**批次开始那一刻**的进程快照（servers 每次 start 都重建，不跨批次继承）。
+    #   这里把每台的判定落盘，便于事后核对「谁被当成原本停服」。
+    try:
+        _wr_txt = ', '.join(
+            '%s=%d' % (_s5, 1 if (_RESTART['servers'][_s5].get('wasRunning')) else 0)
+            for _s5 in (_targets or []) if _s5 in (_RESTART.get('servers') or {}))
+        _restart_log('START wasRunning@batch-start: %s' % _wr_txt)
+    except Exception:
+        pass
     for srv in list((_RESTART.get('servers') or {}).keys()):
         try:
             _restart_push(srv)
@@ -9606,7 +9943,7 @@ def _restart_exec_saveworld(srv):
     def _job():
         ok, msg = False, ''
         try:
-            res = _srvctl_run('ipwatch', [srv], 'saveworld', None)
+            res = _srvctl_run('ipwatch', [srv], 'saveworld', None, silent=True)
             r0 = (res[0] if res else {}) or {}
             ok = bool(r0.get('ok'))
             msg = (r0.get('message') or u'无回执')
@@ -9640,7 +9977,7 @@ def _restart_exec_savekill(srv):
             #   ⇒ 编排在 T1（0 人）判静默通过后，保存的约 20 秒里若有玩家进服，仍会被 kill。
             #   v6191 后 Bob 也不再拦截，v6180 留 force 的理由已消失。
             #   ⇒ 交给正常护栏：有人就拦，按 RESTART_MAX_ATTEMPTS 重试（超限则该台判 fail）。
-            res = _srvctl_run('ipwatch', [srv], act, None)
+            res = _srvctl_run('ipwatch', [srv], act, None, silent=True)
             ok = bool(res and res[0].get('ok'))
             msg = (res[0].get('message') or '') if res else u'无回执'
         except Exception as e:
@@ -9657,20 +9994,413 @@ def _restart_exec_savekill(srv):
         threading.Thread(target=_job, daemon=True).start()
 
 
+def _sync_finish(srv, st, now):
+    """v6228（§17.1）：sync 成功后的收尾分流
+       · 运行中的服 -> startq（起服）
+       · 原本停服的服 -> done（**保持停服**，finalStatus='stopped'，不走 startq/verify）"""
+    if st.get('wasRunning', True):
+        st['steps']['startq'] = 'run'
+        st['phase'] = 'startq'
+        st['pct'] = 85
+        st['msg'] = u'复制完成，准备起服'
+    else:
+        st['steps']['done'] = 'ok'
+        st['phase'] = 'done'
+        st['pct'] = 100
+        st['finalStatus'] = 'stopped'
+        st['msg'] = u'复制完成（本服原本停服，保持停服）'
+        try:
+            _srv_lock_clear(srv, 'restart|%s' % srv)
+        except Exception:
+            pass
+        if srv not in _RESTART['done']:
+            _RESTART['done'].append(srv)
+    _restart_push(srv)
+
+
+def _zh_local_ver():
+    """扫描 D:\\Cache-zh 下的版本目录，返回版本号最大者（不依赖远端）"""
+    best, bt = '', None
+    try:
+        with os.scandir(ZH_CACHE_ROOT) as it:
+            for e in it:
+                try:
+                    if not e.is_dir():
+                        continue
+                except Exception:
+                    continue
+                vt = _zh_ver_tuple(e.name)
+                if not vt:
+                    continue
+                if bt is None or vt > bt:
+                    best, bt = e.name, vt
+    except Exception:
+        return ''
+    return best
+
+
+def _zh_cache_ready():
+    """读本地缓存 manifest -> (ok, ver, man, paks_dir, err)"""
+    try:
+        rem = _zh_remote()
+        ver = rem.get('ver') or ''
+        if not ver:
+            return False, '', {}, '', u'云端版本未知（需先刷新清单）'
+        base = os.path.join(ZH_CACHE_ROOT, ver)
+        paks_dir = os.path.join(base, 'paks')
+        manp = os.path.join(base, 'manifest.json')
+        if not os.path.isfile(manp):
+            return False, ver, {}, paks_dir, u'本地包未就绪（请先「下载并解压」）'
+        with open(manp, encoding='utf-8') as f:
+            man = json.load(f) or {}
+        if not (man.get('paks') or []):
+            return False, ver, man, paks_dir, u'manifest 无文件清单'
+        return True, ver, man, paks_dir, ''
+    except Exception as e:
+        return False, '', {}, '', ('%s: %s' % (type(e).__name__, e))[:200]
+
+
+def _zh_prewrite(srv):
+    """停服前预写 <目标>.dinozh.tmp（游戏不加载该后缀，可在服务器运行时安全写）
+       -> (ok, msg)；失败不影响主流程（停服后会退化为直接复制）"""
+    ok, ver, man, paks_dir, err = _zh_cache_ready()
+    if not ok:
+        return False, err
+    try:
+        tgt_paks = _zh_paks_dir(srv)
+        if not os.path.isdir(tgt_paks):
+            return False, u'目标 Paks 目录不存在'
+        scan = _zh_scan_paks(srv)
+        base_name = 'ShooterGame-Windows_P'
+        for b in (scan.get('bases') or []):
+            if 'WindowsServer' in b:
+                base_name = b
+                break
+        n = 0
+        for it in (man.get('paks') or []):
+            srcn = it.get('name') or ''
+            sp = os.path.join(paks_dir, srcn)
+            if not os.path.isfile(sp):
+                continue
+            dstn = srcn
+            if base_name != 'ShooterGame-Windows_P':
+                dstn = base_name + srcn[len('ShooterGame-Windows_P'):]
+            tmp = os.path.join(tgt_paks, dstn + '.dinozh.tmp')
+            if os.path.isfile(tmp) and os.path.getsize(tmp) == int(it.get('size') or 0):
+                n += 1
+                continue
+            shutil.copy2(sp, tmp)
+            n += 1
+        return True, u'预写 %d 个文件' % n
+    except Exception as e:
+        return False, ('%s: %s' % (type(e).__name__, e))[:160]
+
+
+def _zh_exec_apply(srv, st=None):
+    """把缓存里的 3 个 _P 落到目标服（停服后调用）-> (ok, msg)
+       方案 §3.7 / §14 B1 B2 C4 C6：优先用预写 .tmp 只做 rename；备份到 D:\\Cache-zh\\backup；
+       sidecar 写服务器根；不改 acf/buildId；不删任何目标端额外文件。"""
+    try:
+        ok, ver, man, paks_dir, err = _zh_cache_ready()
+        if not ok:
+            return False, err
+        tgt_paks = _zh_paks_dir(srv)
+        if not os.path.isdir(tgt_paks):
+            return False, u'目标 Paks 目录不存在'
+        # 磁盘余量（只做汉化时阈值 1 GB）
+        try:
+            freeb = shutil.disk_usage(UPDATE_SERVERS_ROOT).free
+            if freeb < 1 * 2 ** 30:
+                return False, u'磁盘剩余 %.1f GB < 1 GB' % (freeb / 2 ** 30)
+        except Exception:
+            pass
+        scan = _zh_scan_paks(srv)
+        base_name = 'ShooterGame-Windows_P'
+        for b in (scan.get('bases') or []):
+            if 'WindowsServer' in b:
+                base_name = b
+                break
+        paks_list = man.get('paks') or []
+        tot = len(paks_list)
+        # 备份现有文件（回滚用，保留最近 3 份）
+        bkroot = os.path.join(ZH_CACHE_ROOT, 'backup', srv)
+        bkdir = os.path.join(bkroot, time.strftime('%Y%m%d_%H%M%S'))
+        n_bk = 0
+        try:
+            olds = sorted([d for d in os.listdir(bkroot) if os.path.isdir(os.path.join(bkroot, d))]) \
+                if os.path.isdir(bkroot) else []
+            for old in olds[:-2]:
+                shutil.rmtree(os.path.join(bkroot, old), True)
+        except Exception:
+            pass
+        for it in paks_list:
+            srcn = it.get('name') or ''
+            cur = os.path.join(tgt_paks, srcn)
+            if os.path.isfile(cur):
+                try:
+                    os.makedirs(bkdir, exist_ok=True)
+                    shutil.copy2(cur, os.path.join(bkdir, srcn))
+                    n_bk += 1
+                except Exception:
+                    _sexc('zh_backup')
+        # 落盘
+        n_ok = 0
+        for i, it in enumerate(paks_list):
+            srcn = it.get('name') or ''
+            sp = os.path.join(paks_dir, srcn)
+            if not os.path.isfile(sp):
+                return False, u'缓存缺文件 %s' % srcn
+            dstn = srcn
+            if base_name != 'ShooterGame-Windows_P':
+                dstn = base_name + srcn[len('ShooterGame-Windows_P'):]
+            dp = os.path.join(tgt_paks, dstn)
+            tmp = dp + '.dinozh.tmp'
+            need = int(it.get('size') or 0)
+            if not (os.path.isfile(tmp) and os.path.getsize(tmp) == need):
+                try:
+                    shutil.copy2(sp, tmp)
+                except Exception as e:
+                    return False, u'写入失败 %s：%s' % (dstn, e)
+            # v6255：清只读 + 重试 3 次 × 500ms（与本体分发同一套加固）
+            try:
+                if os.path.exists(dp):
+                    try:
+                        os.chmod(dp, _stat.S_IWRITE)
+                    except Exception:
+                        pass
+                _le = None
+                for _t3 in range(3):
+                    try:
+                        os.replace(tmp, dp)
+                        _le = None
+                        break
+                    except (PermissionError, OSError) as _e3:
+                        _le = _e3
+                        if _t3 < 2:
+                            time.sleep(0.5)
+                if _le is not None:
+                    raise _le
+            except Exception as e:
+                return False, u'覆盖失败 %s：%s' % (dstn, e)
+            if os.path.getsize(dp) != need:
+                return False, u'校验失败 %s（%d != %d）' % (dstn, os.path.getsize(dp), need)
+            n_ok += 1
+            if st is not None:
+                st['msg'] = u'复制汉化 %d/%d：%s' % (i + 1, tot, dstn[-52:])
+                st['pct'] = 88 + int(2.0 * (i + 1) / max(1, tot))
+        # sidecar（§14 C6：放服务器根）
+        try:
+            sc = {'ver': ver, 'variant': man.get('variant') or '',
+                  'asset': (man.get('source') or {}).get('name') or '',
+                  'at': time.strftime('%Y-%m-%d %H:%M:%S'),
+                  'paksBase': base_name,
+                  'files': [{'name': it.get('name') or '', 'size': it.get('size') or 0,
+                             'sha256': it.get('sha256') or ''} for it in paks_list]}
+            with open(os.path.join(UPDATE_SERVERS_ROOT, srv, ZH_SIDECAR_NAME),
+                      'w', encoding='utf-8') as f:
+                json.dump(sc, f, ensure_ascii=False, indent=1)
+        except Exception:
+            _sexc('zh_sidecar')
+        return True, u'%d 个文件，备份 %d 份，版本 %s' % (n_ok, n_bk, ver)
+    except Exception as e:
+        return False, ('%s: %s' % (type(e).__name__, e))[:200]
+
+
+def _restart_exec_sync(srv, src_root=None):
+    """v6228（P1 核心）：后台真执行「复制差异 + 改 acf」
+       方案 §5.2 / §13 O2 O3 O8 / §11.3：
+         · 只复制 add/update，**绝不删除目标端额外文件**（AsaApi/PDB/白名单/汉化包自动安全）
+         · 复制顺序：先小文件（<100MB）再大文件按大小降序（O8）
+         · shutil.copy2 拿 Windows 文件系统级优化（CopyFileExW）；进度按文件推进（O2 折中）
+         · acf 原子写 .tmp + os.replace（O3）"""
+    _mode = str(_RESTART.get('mode') or 'update')
+    _src = src_root or str(_RESTART.get('srcRoot') or '') or UPDATE_CACHE_PATH
+    st = (_RESTART.get('servers') or {}).get(srv) or {}
+    _cur = {'rel': ''}
+
+    def _prog():
+        # O2：旁路轮询「当前正在复制的目标文件大小」，让大文件复制期间进度也动
+        try:
+            if not _cur['rel']:
+                return
+            tp = os.path.join(UPDATE_SERVERS_ROOT, srv, _cur['rel'])
+            sz = os.stat(tp).st_size
+            _cur['cur'] = sz
+        except Exception:
+            pass
+    def _job():
+        ok, msg = False, ''
+        n_ok = n_total = 0
+        bytes_tot = 0
+        _tg = _RESTART.get('targets') or ['server']
+        _do_sv = ('server' in _tg)
+        _do_zh = ('zh' in _tg)
+        _msgs = []
+        _fail_files = []      # v6255：失败文件清单 [{rel, err}]
+        try:
+            tgt = os.path.join(UPDATE_SERVERS_ROOT, srv)
+            if not os.path.isdir(tgt):
+                raise RuntimeError(u'目标目录不存在：%s' % tgt)
+            if _do_sv:
+                skip_l = _upd_skip_set()
+                # 1) 磁盘预检（§6：全盘一次判定，阈值 13 GB）
+                try:
+                    freeb = shutil.disk_usage(UPDATE_SERVERS_ROOT).free
+                except Exception:
+                    freeb = None
+                if freeb is not None and freeb < 13 * 2 ** 30:
+                    raise RuntimeError(u'磁盘剩余 %.1f GB < 13 GB，拒绝复制' % (freeb / 2 ** 30))
+                # 1.5) v6255（权限加固·步骤 260.7 第 1 条）：**探针写测**
+                #   目标目录 ACL 常见为 Users:(RX)（只读），覆盖已存在文件会 WinError 5。
+                #   这里在目标根先写一个探针再删，失败立刻整批中止 ——
+                #   绝不出现「11 台已停服、复制才报没权限」的半路翻车。
+                _probe = os.path.join(tgt, '.dino_write_probe')
+                try:
+                    with open(_probe, 'wb') as _pf:
+                        _pf.write(b'dino')
+                    os.remove(_probe)
+                except Exception as _pe:
+                    raise RuntimeError(
+                        u'目标目录不可写（权限不足）：%s —— 探针写入失败 %s；'
+                        u'请把 dino_backend 计划任务改为「以最高权限运行」'
+                        u'（RunLevel Highest），或给该目录授予写权限后重试'
+                        % (tgt, repr(_pe)[:120]))
+                # 2) 差异清单
+                plan = []
+                for rel, sz, _mt in _upd_walk(_src, skip_l):
+                    tp = os.path.join(tgt, rel)
+                    try:
+                        tsz = os.stat(tp).st_size
+                    except Exception:
+                        tsz = -1
+                    if tsz == sz:
+                        continue
+                    plan.append((rel, sz))
+                n_total = len(plan)
+                bytes_tot = sum(p[1] for p in plan)
+                st['syncFiles'] = n_total
+                st['syncBytes'] = bytes_tot
+                _restart_log('sync %s src=%s files=%d bytes=%d'
+                             % (srv, _src, n_total, bytes_tot))
+                # 3) 排序：小文件先（快速验证路径/权限），大文件按大小降序
+                small = [p for p in plan if p[1] < 100 * 2 ** 20]
+                large = sorted([p for p in plan if p[1] >= 100 * 2 ** 20],
+                               key=lambda x: -x[1])
+                ordered = small + large
+                # 4) 逐个复制（copy2 不删任何东西）
+                for i, (rel, _sz) in enumerate(ordered):
+                    _cur['rel'] = rel
+                    sp = os.path.join(_src, rel)
+                    tp = os.path.join(tgt, rel)
+                    _d = os.path.dirname(tp)
+                    if _d and not os.path.isdir(_d):
+                        os.makedirs(_d, exist_ok=True)
+                    # v6255：覆盖前清只读（目标带 ReadOnly 会 WinError 5）
+                    if os.path.exists(tp):
+                        try:
+                            os.chmod(tp, _stat.S_IWRITE)
+                        except Exception:
+                            pass
+                    # v6255：单文件重试 3 次 × 500ms（覆盖杀软扫描 / 句柄未释放窗口）
+                    _last_e = None
+                    for _try in range(3):
+                        try:
+                            shutil.copy2(sp, tp)
+                            _last_e = None
+                            break
+                        except (PermissionError, OSError) as _ce:
+                            _last_e = _ce
+                            if _try < 2:
+                                time.sleep(0.5)
+                    if _last_e is not None:
+                        _fail_files.append({'rel': rel,
+                                            'err': '%s: %s' % (type(_last_e).__name__, _last_e)})
+                        raise RuntimeError(u'复制失败 %s（%s）' % (rel, _last_e))
+                    n_ok += 1
+                    st['pct'] = (55 + int(30.0 * (i + 1) / max(1, len(ordered))) if _do_zh
+                                 else 55 + int(35.0 * (i + 1) / max(1, len(ordered))))
+                    st['msg'] = (u'复制本体 %d/%d：%s' if _do_zh else u'复制 %d/%d：%s') \
+                        % (i + 1, len(ordered), rel[-54:])
+                _cur['rel'] = ''
+                # 5) acf 原子改写
+                _aok, _amsg = _upd_apply_acf_from_src(tgt)
+                if not _aok:
+                    raise RuntimeError(u'acf 改写失败：%s' % _amsg)
+                # 6) 清理 ASAM 残留临时文件（O6）
+                try:
+                    _w64 = os.path.join(tgt, 'ShooterGame', 'Binaries', 'Win64')
+                    if os.path.isdir(_w64):
+                        for _f in os.listdir(_w64):
+                            if '~RF' in _f or _f.upper().endswith('.TMP'):
+                                try:
+                                    os.remove(os.path.join(_w64, _f))
+                                except Exception:
+                                    pass       # 被进程占用就跳过，不中断
+                except Exception:
+                    pass
+                _msgs.append(u'本体 %d 个文件 / %.2f GB，acf 已更新'
+                             % (n_ok, bytes_tot / 2 ** 30))
+            # v6239（B3）：汉化补丁 —— 只复制 3 个 _P + 写 sidecar，不碰 acf / buildId
+            if _do_zh:
+                st['msg'] = u'准备复制汉化…'
+                st['pct'] = 88
+                _zok, _zmsg = _zh_exec_apply(srv, st)
+                _msgs.append(u'汉化 %s' % _zmsg)
+                if not _zok:
+                    raise RuntimeError(u'汉化失败：%s' % _zmsg)
+            ok = True
+            msg = u'；'.join([x for x in _msgs if x]) or u'无变更'
+        except Exception as e:
+            ok, msg = False, repr(e)
+            # v6255：带上失败文件清单（不再只说"失败"）
+            if _fail_files:
+                st['syncFails'] = _fail_files[:50]
+                msg = (u'%s；失败 %d 个文件：%s'
+                       % (msg, len(_fail_files),
+                          '、'.join(x['rel'] for x in _fail_files[:5])))
+        st['syncDone'] = True
+        st['syncOk'] = bool(ok)
+        st['syncMsg'] = msg
+        _restart_log('exec sync %s mode=%s -> ok=%s %d/%d %s'
+                     % (srv, _mode, ok, n_ok, n_total, str(msg)[:140]))
+    try:
+        _RCON_EXECUTOR.submit(_job)
+    except Exception:
+        threading.Thread(target=_job, daemon=True).start()
+
+
 def _restart_step_fail(srv, st, why):
     """C3：单步失败 -> attempts+1 -> 未超限回 ready 重排队；超限置 fail 并清锁"""
     st['attempts'] = int(st.get('attempts') or 0) + 1
     st['err'] = str(why or '')
+    # v6273（用户口径 2026-11-08）：**任务中途已停服的服，重试时跳过存档屏障直接起服** ——
+    #   场景：本台初始在运行（wasRunning=True）、savekill 已成功（steps.savekill=='ok'），
+    #         但 startq/verify 失败 ⇒ 服务器当前是**停的**。
+    #   原逻辑重试会退回 saveworld → RCON 10061（端口无人监听）⇒ 必然失败 ⇒ 3 次后判死。
+    #   2026-11-08 实测六台（Isl/Sco/Abe/Rag/Val/Los）全部卡死于此。
+    #   ⚠️ 与 v6272「原本停服 ⇒ 保持停服」不冲突：那条针对**初始**状态，这条针对**任务中途**。
+    try:
+        if bool(st.get('wasRunning', True)) and str((st.get('steps') or {}).get('savekill')) == 'ok':
+            st['skipSaveOnRetry'] = True
+    except Exception:
+        pass
     st['execAt'] = 0
     st['execDone'] = False
     st['execOk'] = False
     st['swAt'] = 0                        # v6157（C5）：存档屏障状态一并复位
     st['swDone'] = False
     st['swOk'] = False
-    st['skStage'] = ('savekill' if srv == 'Bob' else 'saveworld')
+    # v6228：停服批（skipToSync）重试时仍直达 sync，不要退回 saveworld
+    if (str(_RESTART.get('mode') or 'restart') in ('update', 'rollback')
+            and st.get('skipToSync')):
+        st['skStage'] = 'sync'
+        st['syncAt'] = 0
+        st['syncDone'] = False
+    else:
+        st['skStage'] = ('savekill' if srv == 'Bob' else 'saveworld')
     st['startqAt'] = 0
     st['verifyAt'] = 0
-    for k in ('saveworld', 'savekill', 'startq', 'verify'):
+    for k in ('saveworld', 'savekill', 'sync', 'startq', 'verify'):
         if (st.get('steps') or {}).get(k) == 'run':
             st['steps'][k] = 'wait'
     if st['attempts'] > RESTART_MAX_ATTEMPTS:
@@ -9684,6 +10414,9 @@ def _restart_step_fail(srv, st, why):
     else:
         st['phase'] = 'ready'
         st['readyAt'] = time.time()
+        # v6270：退回 ready 时进度回落到 45 —— 原残留 75 让人误以为「还在起服」，
+        #   与「第 N 次重试（等待重新调度）」自相矛盾。
+        st['pct'] = 45
         st['msg'] = u'第 %d 次重试（%s）' % (st['attempts'], why)
         _restart_log('RETRY %s attempts=%d %s' % (srv, st['attempts'], why))
     _restart_push(srv)
@@ -9754,6 +10487,38 @@ def _restart_tick():
     for srv, st in servers.items():
         if st.get('phase') != 'announce':
             continue
+        # ---- v6272（用户原则 2026-11-08）：**统一「进入时已停服」判定，目的地按 mode 分叉** ----
+        #   原则：「本来就是停服状态的，任务后也必须是停服状态 ——
+        #          可以做其他启动前能做的一切，但绝不允许改变当前状态」。
+        #   · update / rollback：跳过存档/停服 → 直接排队**复制差异**（复制后不起服，见 _sync_finish）
+        #   · restart          ：重启对它无意义 → 直接判**完成并保持停服**，绝不进 startq
+        #   判定**只有这一处** —— 以后修 wasRunning，两条通道同时受益。
+        if not st.get('wasRunning', True):
+            if str(_RESTART.get('mode') or 'restart') in ('update', 'rollback'):
+                st['phase'] = 'ready'
+                st['readyAt'] = now
+                st['pct'] = 45
+                st['hasSave'] = False
+                st['skipToSync'] = True
+                st['steps'].update({'check': 'ok', 'sync': 'wait'})
+                st['msg'] = u'本服已停服，直接排队复制'
+            else:
+                st['phase'] = 'done'
+                st['pct'] = 100
+                st['steps'].update({'ann': 'skip', 'empty': 'skip', 'quiet': 'skip',
+                                    'saveworld': 'skip', 'savekill': 'skip',
+                                    'startq': 'skip', 'verify': 'skip'})
+                st['msg'] = u'原本停服，保持停服（未做任何启停）'
+                st['skippedStopped'] = True
+                try:
+                    _srv_lock_clear(srv, 'restart|%s' % srv)
+                except Exception:
+                    pass
+                if srv not in _RESTART['done']:
+                    _RESTART['done'].append(srv)
+                _restart_log('HOLD-STOPPED %s 保持停服（wasRunning=False，未做任何启停）' % srv)
+            _restart_push(srv)
+            continue
         n = st.get('players')
         # v6177：RESTART_SKIP_EMPTY 中的服（Bob）不参与在线人数判断，直接视为 0 人
         if srv in RESTART_SKIP_EMPTY:
@@ -9765,7 +10530,8 @@ def _restart_tick():
             _gu = float(st.get('graceUntil') or 0)
             if _gu and now < _gu:
                 st['steps']['empty'] = 'run'
-                st['pct'] = max(int(st.get('pct') or 0), 8)
+                # v6219（P1-1）：宽限期内**不抬进度** —— 原来 max(...,8) 让人误以为已在重启。
+                st['pct'] = 0
                 st['msg'] = u'线路切换宽限期剩 %ds（等玩家回归）' % int(_gu - now)
                 _restart_push(srv)
                 continue                        # 宽限期内**不累计空置**
@@ -9864,12 +10630,19 @@ def _restart_tick():
                      else u'三重静默通过，排队等待重启（无主存档，排后）')
         _restart_push(srv)
 
-    # ---- 4) 串行门：同时只允许 1 台进入执行链 ----
-    busy = False
-    for st in servers.values():
-        if st.get('phase') in ('savekill', 'startq', 'verify'):
-            busy = True
-            break
+    # ---- 4) 并发门：最多 RESTART_PARALLEL 台同时在**整条执行链**内 ----
+    #   v6270（用户口径 2026-11-07「重压到 0/2，一堆排队的一个都没开始启动」「启动失败后不会自动重试」）：
+    #   原实现 `busy` 只要**任意一台**处于 savekill/sync/startq/verify 就整体停止调度，
+    #   而名额 `_in_sk` 只统计 savekill/sync ⇒ 两个判据不一致。
+    #   后果：某台进入 startq（等起服 + MOD 自动更新，常 10~20 分钟）时，全场停止调度 ——
+    #     · 界面显示「0/2 有空位却没人启动」
+    #     · _restart_step_fail 退回 ready 的失败台永远等不到重试
+    #   修法：名额按整条链统计，两个判据统一；不再有「全局 busy」这个门。
+    _CHAIN_PH = ('savekill', 'sync', 'startq', 'verify')
+    _in_chain = [k for k, v in servers.items() if v.get('phase') in _CHAIN_PH]
+    _par_now = (1 if str(_RESTART.get('mode') or 'restart') in ('update', 'rollback')
+                else int(RESTART_PARALLEL))
+    busy = len(_in_chain) >= _par_now
     if not busy:
         # v6157（C4/C6）：锚点排序 = (Bob 永远最后, 有存档优先, 在线人数升序, readyAt 先到先得)
         _cands = []
@@ -9884,15 +10657,49 @@ def _restart_tick():
                             9999 if _pn is None else int(_pn),
                             float(st.get('readyAt') or 0)), srv))
         _cands.sort()
-        if _cands:
-            srv = _cands[0][1]
+        # v6221（P2-1）：允许最多 RESTART_PARALLEL 台**同时**进入 savekill 段。
+        #   原实现每 tick 只取 _cands[0] ⇒ 11 台严格串行（45~60 分钟）。
+        #   并发安全性依据：存档写 Servers\<srv>\，不写共用集群目录 ⇒ 两台并行存档
+        #   不会互相破坏 L3 静默判定；且每台在「保存通过后、终止前」仍会**复检**
+        #   _srvctl_terminal_gate（v6189），停服前那一刻的静默状态依然有效。
+        # v6228（O5 / §15.1）：更新/回滚是**纯磁盘 IO**，强制串行（与 ASAM 一致且极快）
+        _is_upd_m = str(_RESTART.get('mode') or 'restart') in ('update', 'rollback')
+        _par = 1 if _is_upd_m else int(RESTART_PARALLEL)
+        _in_sk = [k for k, v in servers.items()
+                  if v.get('phase') in ('savekill', 'sync')]
+        # v6270：名额按**整条执行链**（含 startq/verify）统计，与上面的 busy 判据保持一致
+        _free_slots = max(0, _par_now - len(_in_chain))
+        for _pick in (_cands[:_free_slots] if _free_slots > 0 else []):
+            srv = _pick[1]
             st = servers[srv]
+            # v6273（用户口径）：任务中途已停服的服 —— 跳过存档/停服，**直接重新起服**
+            #   否则重试必然撞 RCON 10061（见 _restart_step_fail 注释）。
+            if (not _is_upd_m) and st.get('skipSaveOnRetry'):
+                st['phase'] = 'startq'
+                st['pct'] = 75
+                st['startqAt'] = 0
+                st['skipSaveOnRetry'] = False      # 用一次即清，避免「永远跳过存档」
+                st['steps'].update({'saveworld': 'ok', 'savekill': 'ok', 'startq': 'run'})
+                st['msg'] = u'已停服（上次启动失败），直接重新起服'
+                try:
+                    _srv_lock_set(srv, 'restart', 'restart|%s' % srv,
+                                  u'自动重启（IP 切换）', 'ipwatch')
+                except Exception:
+                    pass
+                _restart_log('RETRY-STARTQ %s 跳过存档屏障直接起服（savekill 已完成）' % srv)
+                _restart_push(srv)
+                continue
             st['phase'] = 'savekill'
             st['pct'] = 60
             # C6：Bob 不落盘 ⇒ 跳过存档屏障，直接走 kill
-            st['skStage'] = ('savekill' if srv == 'Bob' else 'saveworld')
-            st['steps']['saveworld'] = ('skip' if srv == 'Bob' else 'run')
-            st['steps']['savekill'] = ('run' if srv == 'Bob' else 'wait')
+            if _is_upd_m and st.get('skipToSync'):
+                # 停服批：直接进 sync（不存档 / 不停服 / 不起服）
+                st['skStage'] = 'sync'
+                st['steps']['sync'] = 'run'
+            else:
+                st['skStage'] = ('savekill' if srv == 'Bob' else 'saveworld')
+                st['steps']['saveworld'] = ('skip' if srv == 'Bob' else 'run')
+                st['steps']['savekill'] = ('run' if srv == 'Bob' else 'wait')
             st['swAt'] = 0; st['swDone'] = False; st['swOk'] = False
             st['execAt'] = 0; st['execDone'] = False; st['execOk'] = False   # v6152（C1）：真执行状态位
             st['startqAt'] = 0; st['verifyAt'] = 0
@@ -9904,6 +10711,8 @@ def _restart_tick():
                              else u'[演练] 跳过停服（本图不落盘）')
             else:
                 st['msg'] = u'存档并停服（等待）'
+            _restart_log('enter savekill %s (parallel %d/%d)'
+                         % (srv, len(_in_sk) + 1, int(RESTART_PARALLEL)))
             _restart_push(srv)
 
     # ---- 5) 推进执行链（dry：即时推进；真执行：按执行器回执 / 日志判据推进）----
@@ -9911,9 +10720,25 @@ def _restart_tick():
     for srv, st in servers.items():
         ph = st.get('phase')
         if ph == 'savekill':
-            if dry:
-                st['steps'].update({'saveworld': ('skip' if srv == 'Bob' else 'ok'),
-                                    'savekill': 'ok', 'startq': 'run'})
+            if (st.get('skStage') == 'sync'
+                    and str(_RESTART.get('mode') or 'restart') in ('update', 'rollback')):
+                # v6228：停服批直通复制（跳过存档/停服）
+                st['phase'] = 'sync'
+                st['pct'] = 80
+                st['syncAt'] = 0
+                st['steps']['sync'] = 'run'
+                st['msg'] = u'准备复制差异（本服原本停服）'
+                _restart_push(srv)
+            elif dry:
+                # v6228：演练模式下 update/rollback 把 sync 也标 ok（不复制任何文件）
+                if str(_RESTART.get('mode') or 'restart') in ('update', 'rollback'):
+                    _wr = bool(st.get('wasRunning', True))
+                    st['steps'].update({'saveworld': ('ok' if _wr else 'skip'),
+                                        'savekill': ('ok' if _wr else 'skip'),
+                                        'sync': 'ok'})
+                else:
+                    st['steps'].update({'saveworld': ('skip' if srv == 'Bob' else 'ok'),
+                                        'savekill': 'ok', 'startq': 'run'})
                 st['phase'] = 'startq'
                 st['pct'] = 75
                 st['msg'] = u'[演练] 跳过起服'          # v6204：此处已在 if dry 内，三元恒真
@@ -9957,17 +10782,49 @@ def _restart_tick():
                 _restart_push(srv)
             elif st.get('execDone'):
                 if st.get('execOk'):
-                    st['steps'].update({'savekill': 'ok', 'startq': 'run'})
-                    st['phase'] = 'startq'
-                    st['pct'] = 75
+                    st['steps']['savekill'] = 'ok'
                     st['execAt'] = 0
                     st['execDone'] = False
-                    st['msg'] = u'已停服，准备起服'
+                    if str(_RESTART.get('mode') or 'restart') in ('update', 'rollback'):
+                        st['steps']['sync'] = 'run'
+                        st['phase'] = 'sync'
+                        st['pct'] = 80
+                        st['syncAt'] = 0
+                        st['msg'] = u'已停服，准备复制差异'
+                    else:
+                        st['steps']['startq'] = 'run'
+                        st['phase'] = 'startq'
+                        st['pct'] = 75
+                        st['msg'] = u'已停服，准备起服'
                     _restart_push(srv)
                 else:
                     _restart_step_fail(srv, st, u'savekill 失败：%s' % (st.get('execMsg') or u'无回执'))
             elif now - float(st['execAt']) > RESTART_SAVEKILL_TIMEOUT:
                 _restart_step_fail(srv, st, u'savekill 超时 %ds' % RESTART_SAVEKILL_TIMEOUT)
+        elif ph == 'sync':
+            # v6228：复制差异 + 改 acf（后台线程，回填 syncDone/syncOk/syncMsg）
+            if dry:
+                st['steps']['sync'] = 'ok'
+                _sync_finish(srv, st, now)
+            elif not st.get('syncAt'):
+                st['syncAt'] = now
+                st['syncDone'] = False
+                st['msg'] = u'正在复制差异…'
+                _restart_log('exec sync %s mode=%s' % (srv, _RESTART.get('mode')))
+                _restart_exec_sync(srv)
+                _restart_push(srv)
+            elif st.get('syncDone'):
+                if st.get('syncOk'):
+                    st['steps']['sync'] = 'ok'
+                    st['syncAt'] = 0
+                    st['syncDone'] = False
+                    _sync_finish(srv, st, now)
+                else:
+                    st['steps']['sync'] = 'fail'
+                    _restart_step_fail(srv, st,
+                                       u'复制差异失败：%s' % (st.get('syncMsg') or u'无回执'))
+            elif now - float(st['syncAt']) > UPDATE_SYNC_TIMEOUT:
+                _restart_step_fail(srv, st, u'复制差异超时 %ds' % UPDATE_SYNC_TIMEOUT)
         elif ph == 'startq':
             if dry:
                 st['steps'].update({'startq': 'ok', 'verify': 'run'})
@@ -9997,7 +10854,36 @@ def _restart_tick():
                     st['msg'] = u'等待服务器对外开放加入'
                     _restart_push(srv)
                 elif qs == 'fail':
-                    _restart_step_fail(srv, st, u'启动队列报失败')
+                    # v6274（用户口径 2026-11-08「把真实原因透出来」）：
+                    #   原来这里写死「启动队列报失败」⇒ 真正的崩溃原因被丢掉。
+                    #   实际原因（含 ShooterGame.log 尾部，如 `Failed to load package ...`）
+                    #   存在 _SRVCTL_STARTQ['done'][].err 里 —— 完整透出，不截断。
+                    _qerr = ''
+                    try:
+                        for _xq in (_SRVCTL_STARTQ.get('done') or []):
+                            if _xq.get('server') == srv and not _xq.get('ok'):
+                                _qerr = str(_xq.get('err') or '')
+                                break
+                    except Exception:
+                        _qerr = ''
+                    _restart_step_fail(srv, st,
+                                       u'启动队列报失败：%s' % (_qerr.strip() or u'（队列无详情）'))
+                elif qs == 'idle' and (now - float(st['startqAt'])) > RESTART_STARTQ_IDLE_RETRY:
+                    # v6219（R1）：队列里查不到该服 —— 最常见原因是入队时「进程已存在」被静默跳过
+                    #   （_srvctl_startq_new 的幂等判据）。不处理会永远等不到 ok ⇒ 卡满超时。
+                    if int(st.get('bootReqs') or 0) < 2:
+                        st['bootReqs'] = int(st.get('bootReqs') or 0) + 1
+                        st['startqAt'] = now
+                        st['msg'] = u'队列未登记，重新入队（第 %d 次）' % st['bootReqs']
+                        _restart_log('startq idle -> re-enqueue %s (#%d)' % (srv, st['bootReqs']))
+                        try:
+                            _srvctl_startq_new('ipwatch', [srv])
+                        except Exception as _e:
+                            _restart_step_fail(srv, st, u'重新入队失败：%r' % _e)
+                        _restart_push(srv)
+                    else:
+                        _restart_step_fail(srv, st, u'队列始终未登记该服（疑似进程残留），已重试 %d 次'
+                                           % int(st.get('bootReqs') or 0))
                 elif now - float(st['startqAt']) > RESTART_STARTQ_TIMEOUT:
                     _restart_step_fail(srv, st, u'起服超时 %ds' % RESTART_STARTQ_TIMEOUT)
         elif ph == 'verify':
@@ -10010,8 +10896,10 @@ def _restart_tick():
                 if srv not in _RESTART['done']:
                     _RESTART['done'].append(srv)
                 _restart_push(srv)
-            elif _restart_log_has_after(srv, (RESTART_VERIFY_NEEDLE,), st.get('verifyAt') or 0):
-                # C2：真 VERIFY —— 日志命中 advertising 才算真上线
+            elif _restart_startq_state(srv) == 'ok':
+                # v6219（P0-1 方案 B）：**不再自己扫日志** —— 直接信任启动队列的 advertising 判定。
+                #   原实现用「日志行时间戳 >= verifyAt」，而 verifyAt 是队列收割时刻（天然晚于
+                #   advertising 那一行）⇒ 判定恒不成立 ⇒ 每台必卡 600s（2026-11-07 实测 Abe）。
                 st['steps']['verify'] = 'ok'
                 st['phase'] = 'done'
                 st['pct'] = 100
@@ -10025,8 +10913,12 @@ def _restart_tick():
                 except Exception:
                     _sexc('announce_done')
                 _restart_push(srv)
+            elif _restart_startq_state(srv) == 'fail':
+                # v6219（R1）：队列已判死 ⇒ 立即失败，不必空等到超时
+                _restart_step_fail(srv, st, u'起服后启动队列判失败')
             elif now - float(st.get('verifyAt') or now) > RESTART_VERIFY_TIMEOUT:
-                _restart_step_fail(srv, st, u'起服后 %ds 未见 advertising' % RESTART_VERIFY_TIMEOUT)
+                _restart_step_fail(srv, st, u'起服后 %ds 未见 advertising（队列=%s）'
+                                   % (RESTART_VERIFY_TIMEOUT, _restart_startq_state(srv)))
 
     # v6164（C8 配套）：整批总超时收尾 —— 防「某台一直有人在线」让 running 永远 true
     _t0t = float(_RESTART.get('t0') or 0)
@@ -10057,6 +10949,11 @@ def _restart_tick():
                      % (_RESTART.get('reason'), _left, int(now - _t0t)))
         _restart_rerun_pending()
         return
+
+    try:
+        _restart_push_batch()
+    except Exception:
+        pass
 
     if servers and all(v.get('phase') in ('done', 'fail') for v in servers.values()):
         _RESTART['running'] = False
@@ -10400,6 +11297,713 @@ def _upd_status_snapshot():
     return _upd_status(include_players=False)
 
 
+# ===== v6228（P1.5）：版本档位判定 + AsaApi 缓存就绪判定 =====
+#   方案 §16（版本号是「档位」不是小数）/ §14.3（精确串判据）
+# v6230（用户纠正口径）：版本号可能**没有小数部分**（`v97` = 97.0）
+_VER_RE = re.compile(r'^(\d+)(?:\.(\d+))?$')
+_AS_TAG = re.compile(r'<[^>]+>')
+_AS_MD = re.compile(r'[*_`]+')
+_AS_WS = re.compile(r'\s+')
+_AS_READY = 'automated cache build: success'
+_OFF_VER_RE = re.compile(r'(\d+\.\d+)')
+
+
+def _extract_ver(s):
+    """从 ASAM 原始串里抽版本号：'Official Server Network Status: Online (v96.6)' -> '96.6'"""
+    m = _OFF_VER_RE.search(str(s or ''))
+    return m.group(1) if m else ''
+
+
+def _ver_seg(v):
+    m = _VER_RE.match(str(v or '').strip().lstrip('vV'))
+    if not m:
+        return None
+    return (int(m.group(1)), m.group(2) or '0')      # v97 -> (97, '0')
+
+
+def _vnum(s):
+    try:
+        return int(str(s))
+    except Exception:
+        return 0
+
+
+def _ver_kind(old, new):
+    """v6230（**用户纠正后的最终口径，只从版本号判断**）
+       · **主版本整数部分**变化：96.x -> 97.x  => forced（强制，不更新玩家进不来）
+       · **仅小数部分**变化：96.9 -> 96.13     => patch （非强制，客户端仍可进）
+       · 完全一致                              => same
+       · 无法解析                              => unknown
+       ⚠ 已废除两版旧规则：
+         ① v6228「小数点后首字符」判据 —— 用户明确说「小数变化全是非强制」，
+            故 96.8 -> 96.9 也是 patch，不再算 forced
+         ② buildId 兜底 —— 用户明确「只从版本号判断」，不再拿 acf buildId 反推"""
+    a, b = _ver_seg(old), _ver_seg(new)
+    if not a or not b:
+        return 'unknown'
+    if a[0] != b[0]:
+        return 'forced'
+    if a[1] == b[1]:
+        return 'same'
+    return 'patch'
+
+
+def _asaapi_state(cards=None):
+    """v6228（§14.3）：AsaApi 缓存就绪判定 —— **唯一精确判据**
+       规范化（剥 HTML -> 去 markdown -> 小写 -> 压空白）后文本包含
+       `automated cache build: success` 即就绪；其余一律 building/unknown。
+       ⚠ 不做任何关键词猜测（旧方案在 'once completed' / 'cache-ready message' 上踩过 2 次坑）。
+       返回 (state, raw, meta)；raw 是**英文原文**，前端浮窗必须原样展示不翻译。"""
+    try:
+        meta = {'updated': '', 'fetchedAt': 0, 'total': 0, 'hit': False}
+        if cards is None:
+            doc = {}
+            try:
+                with open(_news_path('api_cache'), encoding='utf-8') as f:
+                    doc = json.load(f) or {}
+            except Exception:
+                doc = {}
+            cards = doc.get('cards') or []
+            meta['updated'] = doc.get('updated') or ''
+            try:
+                meta['fetchedAt'] = int(doc.get('fetched_at') or 0)
+            except Exception:
+                meta['fetchedAt'] = 0
+        meta['total'] = len(cards)
+        if not cards:
+            return 'unknown', '', meta
+        raw = cards[-1].get('content') or ''
+        t = _AS_TAG.sub(' ', raw)
+        t = _AS_MD.sub('', t)
+        t = _AS_WS.sub(' ', t).strip().lower()
+        meta['hit'] = (_AS_READY in t)
+        return ('ready' if meta['hit'] else 'building'), raw, meta
+    except Exception:
+        return 'unknown', '', {'updated': '', 'fetchedAt': 0, 'total': 0, 'hit': False}
+
+
+def _upd_ver_info(picked=None):
+    """v6228（§16.3）：新版本(官方) vs 旧版本(各服实跑) -> verKind
+       · 新版本：优先 `_news_official_version()`（资讯广场 patch_pc 的 Server 最大版本号），
+                 取不到则回退 ASA `OfficialServerVersion` 众数
+       · 旧版本：各服 `ServerVersion`（实际运行版本），多台不一致时取**最旧**
+       · 任一缺失 => kind='unknown'（前端浮窗提示人工确认）"""
+    out = {'kind': 'unknown', 'from': '', 'to': '', 'src': '', 'err': ''}
+    _to, _from = '', ''
+    try:
+        try:
+            # v6231：改走权威取数链（官方 CDN ini 主源），不再只用资讯广场
+            _oe = _official_version_ex()
+            _to = str(_oe.get('ver') or '')
+            out['src'] = str(_oe.get('src') or '')
+        except Exception:
+            _to = ''
+        try:
+            _cfg = _srvctl_cfg()
+            if _cfg.get('token'):
+                _code, _text = _asa_http('GET', _cfg['base'] + '/server-status',
+                                         _cfg['token'], None,
+                                         timeout=_cfg['timeout'], verify=_cfg['verify'])
+                if 200 <= _code < 300:
+                    _doc = json.loads(_text) or {}
+                    _rev = {}
+                    for _k, _v in SERVER_THEMES.items():
+                        _rev[(_v or {}).get('name') or ''] = _k
+                    _vs, _offs = [], []
+                    for _it in (_doc.get('servers') or []):
+                        _pn = str(_it.get('ProfileName') or '')
+                        _sid = _pn if _pn in SERVERS else _rev.get(_pn, '')
+                        if picked and _sid not in picked:
+                            continue
+                        _sv = str(_it.get('ServerVersion') or '')
+                        if _sv:
+                            _vs.append(_sv)
+                        _ov = str(_it.get('OfficialServerVersion') or '')
+                        if _ov:
+                            _offs.append(_ov)
+                    if not _to and _offs:
+                        # v6231：**取最大版本**，不能取众数 —— 实测 11 台里手点过验证的
+                        #   Gen 是 v97.5，其余 10 台仍缓存 v96.9；众数必然是旧的 96.9。
+                        _cand = [(x, _ver_seg(_extract_ver(x))) for x in _offs]
+                        _cand = [t for t in _cand if t[1]]
+                        if _cand:
+                            _cand.sort(key=lambda t: (t[1][0], _vnum(t[1][1])))
+                            _to = _cand[-1][0]
+                            out['src'] = 'asam'
+                    if _vs:
+                        _seg = [(x, _ver_seg(_extract_ver(x))) for x in _vs]
+                        _seg = [t for t in _seg if t[1]]
+                        if _seg:
+                            _seg.sort(key=lambda t: (t[1][0], _vnum(t[1][1])))
+                            _from = _seg[0][0]
+        except Exception:
+            pass
+        out['from'] = _extract_ver(_from) or _from
+        out['to'] = _extract_ver(_to) or _to
+        out['kind'] = _ver_kind(out['from'], out['to'])
+    except Exception as e:
+        out['err'] = repr(e)
+    return out
+
+
+def _upd_dry_default():
+    """v6233（用户口径 2026-11-07）：服务器更新「默认预演」开关 —— server_config.json 的 update_dry。
+       为真时 `/api/update/apply` **一律强制 dry**（只出清单，不复制文件/不改 acf/不停服）。
+       缺省视为 True（与接口本身 dry 默认 true 一致：宁可不跑，不可误跑）。"""
+    try:
+        d = _srv_cfg_read() or {}
+        v = d.get('update_dry')
+        if v is None:
+            return True
+        return str(v).lower() in ('1', 'true', 'yes', 'on')
+    except Exception:
+        return True
+
+
+# ===== v6237（B1）：汉化补丁（Google Drive 源）—— 只读探测 =====
+# 方案 §3 / §14。要点：
+#   · 云端版本只认 zip 文件名里的 V<n>.<n>；Drive embeddedfolderview 的 mtime 是 "1:08 am" 无日期，不参与比较（§14 A4）
+#   · 变体匹配用规范化比较，防作者改名（§14 B4）
+#   · 各服扫描用 os.scandir 一次拿全（§14 B6）
+#   · sidecar 放服务器根而非 Paks 内（§14 C6）
+#   · 字體補丁（HLN-A/winhttp.dll）属玩家客户端，服务端完全不管（2026-11-07 用户裁决）
+ZH_CACHE_ROOT = r'D:\Cache-zh'
+ZH_PAKS_REL = os.path.join('ShooterGame', 'Content', 'Paks')
+ZH_SIDECAR_NAME = '.dino_zh.json'
+ZH_PKG_WHITELIST = ('ShooterGame-Windows_P.pak',
+                    'ShooterGame-Windows_P.ucas',
+                    'ShooterGame-Windows_P.utoc')
+ZH_FOLDER_DEFAULT = 'https://drive.google.com/drive/folders/1SarH6KgkuQp4uev2wHf3mX-kS5xsL37S'
+ZH_LS_URL = 'https://drive.google.com/embeddedfolderview?id=%s#list'
+ZH_DL_URL = 'https://drive.usercontent.google.com/download?id=%s&export=download&confirm=t'
+ZH_VARIANTS = ('dinoitem', 'item', 'normal')
+ZH_TTL = 1800
+ZH_PROBE_TIMEOUT = 3
+_ZH_UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+          '(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36')
+# 2026-11-07 实测基线（11 台 size+mtime 完全一致，2026-10-16 装机）—— 用于「已知旧版」判定
+ZH_BASELINE_SIZES = {'ShooterGame-Windows_P.pak': 63112850,
+                     'ShooterGame-Windows_P.ucas': 57328256,
+                     'ShooterGame-Windows_P.utoc': 28379}
+_ZH_CACHE = {'at': 0.0, 'ok': False, 'folder': '', 'ver': '', 'variant': '',
+             'asset': {}, 'items': [], 'err': '', 'probe': {}}
+_ZH_LOCK = threading.Lock()
+# v6238（B2）：下载/解压后台任务状态（供 /api/zh/status 轮询）
+_ZH_PREP = {'running': False, 'ver': '', 'phase': '', 'got': 0, 'total': 0,
+            'err': '', 'at': 0.0, 'msg': '', 'skipped': False}
+_ZH_PREP_LOCK = threading.Lock()
+_ZH_DL = {'got': 0, 'total': 0}
+
+
+def _zh_cfg_of(doc):
+    """从 server_config dict 解析 zh_patch（不读盘，便于 GET 复用同一个 _sd）"""
+    z = (doc or {}).get('zh_patch')
+    z = z if isinstance(z, dict) else {}
+    url = str(z.get('folder_url') or '').strip() or ZH_FOLDER_DEFAULT
+    var = str(z.get('variant') or '').strip().lower()
+    if var not in ZH_VARIANTS:
+        var = 'dinoitem'
+    ac = z.get('auto_check')
+    return {'folder_url': url, 'variant': var,
+            'auto_check': True if ac is None else (str(ac).lower() in ('1', 'true', 'yes', 'on'))}
+
+
+def _zh_cfg():
+    try:
+        return _zh_cfg_of(_srv_cfg_read())
+    except Exception:
+        return _zh_cfg_of({})
+
+
+def _zh_folder_id(url):
+    m = re.search(r'/folders/([A-Za-z0-9_-]{10,})', str(url or ''))
+    return m.group(1) if m else ''
+
+
+def _zh_norm(s):
+    return re.sub(r'[^a-z0-9]+', '', str(s or '').lower())
+
+
+def _zh_variant_of(name):
+    n = _zh_norm(name)
+    if 'dinoitembilingual' in n:
+        return 'dinoitem'
+    if 'itembilingual' in n:
+        return 'item'
+    return 'normal'
+
+
+def _zh_ver_of(name):
+    m = re.search(r'[Vv](\d+(?:\.\d+)?)', str(name or ''))
+    return m.group(1) if m else ''
+
+
+def _zh_ver_tuple(v):
+    m = re.match(r'^(\d+)(?:\.(\d+))?$', str(v or '').strip().lstrip('vV'))
+    return (int(m.group(1)), int(m.group(2) or 0)) if m else None
+
+
+def _zh_get(url, timeout=15, rng=None, maxb=4 * 1024 * 1024):
+    """只读 GET -> {ok,code,ms,err,ctype,body}（不抛异常）"""
+    import urllib.request as _ur
+    t0 = time.time()
+    hdr = {'User-Agent': _ZH_UA, 'Accept': '*/*'}
+    if rng:
+        hdr['Range'] = rng
+    try:
+        rq = _ur.Request(url, headers=hdr)
+        with _ur.urlopen(rq, timeout=timeout) as r:
+            b = r.read(maxb)
+            return {'ok': True, 'code': int(getattr(r, 'status', 0) or 0),
+                    'ms': int((time.time() - t0) * 1000), 'err': '',
+                    'ctype': str(r.headers.get('Content-Type') or ''), 'body': b}
+    except Exception as e:
+        return {'ok': False, 'code': 0, 'ms': int((time.time() - t0) * 1000),
+                'err': ('%s: %s' % (type(e).__name__, e))[:200], 'ctype': '', 'body': b''}
+
+
+def _zh_html_unescape(s):
+    return (str(s or '').replace('&amp;', '&').replace('&lt;', '<')
+            .replace('&gt;', '>').replace('&quot;', '"').replace('&#39;', "'"))
+
+
+def _zh_parse_ls(html):
+    """embeddedfolderview HTML -> [{id,name}]"""
+    out = []
+    for m in re.finditer(r'id="entry-([A-Za-z0-9_-]{10,})"[\s\S]{0,900}?'
+                         r'flip-entry-title">([^<]*)<', str(html or '')):
+        out.append({'id': m.group(1), 'name': _zh_html_unescape(m.group(2)).strip()})
+    return out
+
+
+def _zh_pick(items, variant):
+    """按变体挑包（多个命中取版本号最大者）"""
+    cand = []
+    for it in (items or []):
+        if _zh_variant_of(it.get('name')) != variant:
+            continue
+        vt = _zh_ver_tuple(_zh_ver_of(it.get('name')))
+        if vt:
+            cand.append((vt, it))
+    if not cand:
+        return None
+    cand.sort(key=lambda t: t[0])
+    return cand[-1][1]
+
+
+def _zh_probe_meta(r):
+    return {'ok': bool(r.get('ok')), 'code': int(r.get('code') or 0),
+            'ms': int(r.get('ms') or 0), 'err': r.get('err') or '',
+            'ctype': r.get('ctype') or ''}
+
+
+def _zh_remote(force=False):
+    """列 Google Drive 文件夹（embeddedfolderview，无需 API key/OAuth）"""
+    now = time.time()
+    with _ZH_LOCK:
+        if (not force) and _ZH_CACHE.get('at') and (now - float(_ZH_CACHE['at']) < ZH_TTL):
+            return dict(_ZH_CACHE)
+    cfg = _zh_cfg()
+    fid = _zh_folder_id(cfg['folder_url'])
+    out = {'at': now, 'ok': False, 'folder': fid, 'ver': '', 'variant': cfg['variant'],
+           'asset': {}, 'items': [], 'err': '', 'probe': {}}
+    if not fid:
+        out['err'] = u'下载地址里找不到 /folders/<id>'
+        with _ZH_LOCK:
+            _ZH_CACHE.clear(); _ZH_CACHE.update(out)
+        return dict(out)
+    ls_url = ZH_LS_URL % fid
+    lr = _zh_get(ls_url, timeout=15)
+    out['probe']['ls'] = _zh_probe_meta(lr)
+    if not lr['ok']:
+        out['err'] = u'无法访问 Google Drive（列目录失败）：%s' % (lr['err'] or '')
+        with _ZH_LOCK:
+            _ZH_CACHE.clear(); _ZH_CACHE.update(out)
+        return dict(out)
+    try:
+        items = _zh_parse_ls(lr['body'].decode('utf-8', 'replace'))
+    except Exception as e:
+        items = []
+        out['err'] = (u'列表解析异常：%s: %s' % (type(e).__name__, e))[:200]
+    out['items'] = items
+    if not items:
+        if not out['err']:
+            out['err'] = u'目录列表解析为空（可能被限流或页面结构变化）'
+    else:
+        pick = _zh_pick(items, cfg['variant'])
+        if not pick:
+            out['err'] = u'目录里没有匹配变体 %s 的包（共 %d 项）' % (cfg['variant'], len(items))
+        else:
+            out['ok'] = True
+            out['ver'] = _zh_ver_of(pick['name'])
+            out['asset'] = {'id': pick['id'], 'name': pick['name'],
+                            'ver': out['ver'], 'variant': cfg['variant']}
+            # 下载域名连通性（只取 1 KB，不下载整包）
+            dr = _zh_get(ZH_DL_URL % pick['id'], timeout=ZH_PROBE_TIMEOUT,
+                         rng='bytes=0-1023', maxb=4096)
+            out['probe']['dl'] = _zh_probe_meta(dr)
+            if dr['ok'] and dr['body'][:4] != b'PK\x03\x04':
+                out['probe']['dl']['err'] = u'响应不是 zip（首 4 字节不符）'
+    with _ZH_LOCK:
+        _ZH_CACHE.clear(); _ZH_CACHE.update(out)
+    return dict(out)
+
+
+def _zh_paks_dir(srv):
+    return os.path.join(UPDATE_SERVERS_ROOT, srv, ZH_PAKS_REL)
+
+
+def _zh_scan_paks(srv):
+    """各服 Paks 下 ShooterGame-* 文件（scandir 一次拿全）"""
+    d = _zh_paks_dir(srv)
+    r = {'exists': False, 'files': {}, 'bases': [], 'conflict': False, 'err': ''}
+    try:
+        with os.scandir(d) as it:
+            r['exists'] = True
+            for e in it:
+                try:
+                    if not e.is_file():
+                        continue
+                except Exception:
+                    continue
+                if not e.name.lower().startswith('shootergame-'):
+                    continue
+                try:
+                    r['files'][e.name] = e.stat().st_size
+                except Exception:
+                    r['files'][e.name] = -1
+    except Exception as e:
+        r['err'] = ('%s: %s' % (type(e).__name__, e))[:160]
+        return r
+    bases = set()
+    for n in r['files']:
+        low = n.lower()
+        for ext in ('.pak', '.ucas', '.utoc'):
+            if low.endswith(ext):
+                bases.add(n[:-len(ext)])
+                break
+    r['bases'] = sorted(bases)
+    r['conflict'] = len(bases) > 1
+    return r
+
+
+def _zh_read_sidecar(srv):
+    p = os.path.join(UPDATE_SERVERS_ROOT, srv, ZH_SIDECAR_NAME)
+    try:
+        with open(p, encoding='utf-8') as f:
+            d = json.load(f) or {}
+        return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
+
+
+def _zh_server_status(srv, remote=None):
+    """单台汉化状态（B1：纯本地判定）"""
+    scan = _zh_scan_paks(srv)
+    sc = _zh_read_sidecar(srv)
+    out = {'srv': srv, 'exists': bool(scan['exists']), 'bases': scan['bases'],
+           'conflict': bool(scan['conflict']), 'files': [], 'err': scan['err'],
+           'curVer': '', 'curSrc': '', 'needUpd': False, 'reason': ''}
+    if (not scan['exists']) or (not scan['files']):
+        out['curSrc'] = 'none'
+        out['reason'] = u'未安装汉化'
+    elif sc.get('ver'):
+        out['curVer'] = str(sc.get('ver') or '')
+        out['curSrc'] = 'sidecar'
+    else:
+        hit = all(scan['files'].get(k) == v for k, v in ZH_BASELINE_SIZES.items())
+        if hit:
+            out['curVer'] = u'旧版'
+            out['curSrc'] = 'baseline'
+            out['reason'] = u'2026-10-16 装机旧版（size 指纹匹配）'
+        else:
+            out['curVer'] = u'?'
+            out['curSrc'] = 'unknown'
+            out['reason'] = u'无版本标记且与已知基线不符'
+    for k in ZH_PKG_WHITELIST:
+        out['files'].append({'name': k, 'size': scan['files'].get(k, -1)})
+    rv = (remote or {}).get('ver') or ''
+    if scan['exists'] and scan['files'] and (remote or {}).get('ok') and rv:
+        if out['curSrc'] in ('none', 'baseline', 'unknown'):
+            out['needUpd'] = True
+            if not out['reason']:
+                out['reason'] = u'云端有 %s' % rv
+        elif out['curSrc'] == 'sidecar':
+            a, b = _zh_ver_tuple(out['curVer']), _zh_ver_tuple(rv)
+            if a and b and b > a:
+                out['needUpd'] = True
+                out['reason'] = u'云端 %s 高于本地 %s' % (rv, out['curVer'])
+    return out
+
+
+def _zh_human(n):
+    try:
+        n = float(n or 0)
+    except Exception:
+        return '0 B'
+    if n < 1024:
+        return '%d B' % int(n)
+    for unit in ('KB', 'MB', 'GB'):
+        n /= 1024.0
+        if n < 1024 or unit == 'GB':
+            return '%.1f %s' % (n, unit)
+    return '0 B'
+
+
+def _zh_sha256(path):
+    import hashlib as _hl
+    h = _hl.sha256()
+    with open(path, 'rb') as f:
+        while True:
+            b = f.read(1 << 20)
+            if not b:
+                break
+            h.update(b)
+    return h.hexdigest()
+
+
+def _zh_download_file(fid, dest, timeout=120):
+    """断点续传下载（串行，总尝试 2 次；§14 A5 校验 zip 魔数 + 大小）"""
+    import urllib.request as _ur
+    url = ZH_DL_URL % fid
+    last = ''
+    for attempt in (1, 2):
+        have = os.path.getsize(dest) if os.path.isfile(dest) else 0
+        try:
+            hdr = {'User-Agent': _ZH_UA, 'Accept': '*/*'}
+            if have > 0:
+                hdr['Range'] = 'bytes=%d-' % have
+            rq = _ur.Request(url, headers=hdr)
+            with _ur.urlopen(rq, timeout=timeout) as r:
+                code = int(getattr(r, 'status', 200) or 200)
+                total = 0
+                cr = str(r.headers.get('Content-Range') or '')
+                if '/' in cr:
+                    try:
+                        total = int(cr.rsplit('/', 1)[-1])
+                    except Exception:
+                        total = 0
+                if not total:
+                    try:
+                        total = int(r.headers.get('Content-Length') or 0) + (have if code == 206 else 0)
+                    except Exception:
+                        total = 0
+                if code != 206:
+                    have = 0
+                _ZH_DL.update({'got': have, 'total': total})
+                with open(dest, 'ab' if have else 'wb') as f:
+                    while True:
+                        b = r.read(1 << 20)
+                        if not b:
+                            break
+                        f.write(b)
+                        have += len(b)
+                        _ZH_DL['got'] = have
+                        _ZH_PREP['got'] = have
+                        if total:
+                            _ZH_PREP['total'] = total
+                            _ZH_PREP['msg'] = (u'下载中 %s / %s（%.1f%%）'
+                                               % (_zh_human(have), _zh_human(total),
+                                                  100.0 * have / total))
+            sz = os.path.getsize(dest) if os.path.isfile(dest) else 0
+            if total and sz != total:
+                last = u'大小不符 %d/%d' % (sz, total)
+                if attempt < 2:
+                    time.sleep(5)
+                continue
+            with open(dest, 'rb') as f:
+                magic = f.read(4)
+            if magic != b'PK\x03\x04':
+                last = u'下载结果不是 zip（首 4 字节 %r）' % magic
+                try:
+                    os.remove(dest)
+                except Exception:
+                    pass
+                if attempt < 2:
+                    time.sleep(5)
+                continue
+            return {'ok': True, 'bytes': sz, 'total': total or sz, 'attempts': attempt}
+        except Exception as e:
+            # v6246：416 = 本地残留文件已达/超过服务端大小（Range 起点越界）
+            #         -> 删掉残留，下一次 attempt 从 0 开始重下
+            _c416 = (int(getattr(e, 'code', 0) or 0) == 416)
+            if _c416:
+                try:
+                    os.remove(dest)
+                except Exception:
+                    pass
+                last = u'HTTP 416（本地残留已达/超过服务端大小），已删除残留并重新下载'
+            else:
+                last = ('%s: %s' % (type(e).__name__, e))[:200]
+            if attempt < 2:
+                time.sleep(2 if _c416 else 5)
+    return {'ok': False, 'err': last,
+            'bytes': os.path.getsize(dest) if os.path.isfile(dest) else 0}
+
+
+def _zh_unpack(zipp, paks_dir, ver, asset):
+    """白名单取件：只解 3 个 _P 文件；HLN-A(客户端 DLL)/PDF/PNG 一律跳过（§3.5）"""
+    import zipfile
+    try:
+        os.makedirs(paks_dir, exist_ok=True)
+        out = []
+        with zipfile.ZipFile(zipp) as zf:
+            allnames = list(zf.namelist())
+            for want in ZH_PKG_WHITELIST:
+                hit = None
+                for n in allnames:
+                    if n == want or n.replace('\\', '/') == want:
+                        hit = n
+                        break
+                if not hit:
+                    return {'ok': False, 'err': u'包内缺少 %s' % want, 'names': allnames[:30]}
+                dst = os.path.join(paks_dir, want)
+                tmp = dst + '.dinozh.tmp'
+                with zf.open(hit) as src, open(tmp, 'wb') as f:
+                    shutil.copyfileobj(src, f, 1 << 20)
+                os.replace(tmp, dst)
+                out.append({'name': want, 'size': os.path.getsize(dst)})
+        skipped = [n for n in allnames if n not in ZH_PKG_WHITELIST]
+        man = {'ver': ver, 'variant': (asset or {}).get('variant') or '',
+               'builtAt': time.strftime('%Y-%m-%d %H:%M:%S'),
+               'source': {'assetId': (asset or {}).get('id') or '',
+                          'name': (asset or {}).get('name') or '',
+                          'bytes': os.path.getsize(zipp)},
+               'paks': out, 'skipped': skipped[:30], 'skippedCount': len(skipped)}
+        return {'ok': True, 'paks': out, 'manifest': man,
+                'skipped': len(skipped), 'skippedNames': skipped[:10]}
+    except Exception as e:
+        return {'ok': False, 'err': ('%s: %s' % (type(e).__name__, e))[:220]}
+
+
+def _zh_prepare_start(force=False):
+    """异步：读云端清单 -> 下载 -> 白名单解压 -> 写 manifest（只写 D:\\Cache-zh）
+
+    v6246（用户口径「本地包就是最新的，点更新本地包要提示已是最新」）：
+    在启动后台任务**之前**做一次零网络快判 —— 仅当云端清单缓存仍新鲜（TTL 内）时生效，
+    命中则直接返回 already，不启动下载（同版本重复下载还会触发 Google 的 416）。
+    """
+    try:
+        if (not force) and _ZH_CACHE.get('ok') and _ZH_CACHE.get('ver') \
+                and (time.time() - float(_ZH_CACHE.get('at') or 0)) < ZH_TTL:
+            _lv0 = _zh_local_ver()
+            if _lv0 and str(_lv0) == str(_ZH_CACHE.get('ver')):
+                return {'ok': True, 'already': True, 'ver': _lv0,
+                        'msg': u'当前本地包已是最新（V%s），无需更新' % _lv0,
+                        'prep': dict(_ZH_PREP)}
+    except Exception:
+        pass
+    with _ZH_PREP_LOCK:
+        if _ZH_PREP.get('running'):
+            return {'ok': False, 'code': 'busy',
+                    'error': u'已有下载任务在执行', 'prep': dict(_ZH_PREP)}
+        _ZH_PREP.update({'running': True, 'ver': '', 'phase': 'remote', 'got': 0,
+                         'total': 0, 'err': '', 'at': time.time(),
+                         'msg': u'读取云端清单…', 'skipped': False})
+
+    def _job():
+        try:
+            rem = _zh_remote(force=force)
+            if not rem.get('ok'):
+                raise RuntimeError(rem.get('err') or u'云端清单读取失败')
+            ver = rem.get('ver') or ''
+            asset = rem.get('asset') or {}
+            fid = asset.get('id') or ''
+            if not (ver and fid):
+                raise RuntimeError(u'云端版本或文件 ID 缺失')
+            # v6246：本地包已是最新 -> 不重复下载，直接完成并给出提示
+            try:
+                _lvz = _zh_local_ver()
+            except Exception:
+                _lvz = ''
+            if _lvz and str(_lvz) == str(ver):
+                _ZH_PREP.update({'phase': 'done', 'ver': ver, 'skipped': True,
+                                 'msg': u'当前本地包已是最新（V%s），无需更新' % ver})
+                return
+            base = os.path.join(ZH_CACHE_ROOT, ver)
+            paks_dir = os.path.join(base, 'paks')
+            zipp = os.path.join(base, 'pkg.zip')
+            try:
+                os.makedirs(base, exist_ok=True)
+            except Exception as e:
+                raise RuntimeError(u'创建缓存目录失败：%s' % e)
+            _ZH_PREP.update({'ver': ver, 'phase': 'download',
+                             'msg': u'开始下载 %s …' % (asset.get('name') or ver)})
+            dl = _zh_download_file(fid, zipp)
+            if not dl.get('ok'):
+                raise RuntimeError(u'下载失败：%s' % (dl.get('err') or ''))
+            _ZH_PREP.update({'phase': 'unpack', 'msg': u'解压中（白名单取 3 个文件）…'})
+            up = _zh_unpack(zipp, paks_dir, ver, asset)
+            if not up.get('ok'):
+                raise RuntimeError(u'解压失败：%s' % (up.get('err') or ''))
+            man = up.get('manifest') or {}
+            for it in (man.get('paks') or []):
+                try:
+                    it['sha256'] = _zh_sha256(os.path.join(paks_dir, it.get('name') or ''))
+                except Exception:
+                    it['sha256'] = ''
+            try:
+                with open(os.path.join(base, 'manifest.json'), 'w', encoding='utf-8') as f:
+                    json.dump(man, f, ensure_ascii=False, indent=1)
+            except Exception as e:
+                raise RuntimeError(u'写 manifest 失败：%s' % e)
+            _ZH_PREP.update({'phase': 'done',
+                             'msg': u'已就绪：%s（3 个文件，跳过 %d 项客户端内容）'
+                                    % (ver, up.get('skipped') or 0)})
+        except Exception as e:
+            _ZH_PREP.update({'phase': 'fail',
+                             'err': ('%s: %s' % (type(e).__name__, e))[:220],
+                             'msg': u'准备失败'})
+        finally:
+            _ZH_PREP['running'] = False
+            _ZH_PREP['at'] = time.time()
+
+    try:
+        threading.Thread(target=_job, daemon=True).start()
+    except Exception as e:
+        _ZH_PREP.update({'running': False, 'phase': 'fail', 'err': repr(e)[:160]})
+        return {'ok': False, 'error': repr(e)[:160], 'prep': dict(_ZH_PREP)}
+    return {'ok': True, 'started': True, 'prep': dict(_ZH_PREP)}
+
+
+def _zh_status(include_remote=True, force=False):
+    """B1 完整状态：cfg + servers[] + remote（远端可跳过，供首屏快速渲染 §14 B3）"""
+    cfg = _zh_cfg()
+    if include_remote:
+        remote = _zh_remote(force=force)
+    else:
+        # v6240：本地模式也带上「已下载版本」，让 needUpd / pkg 仍可判断（不触发网络）
+        _lv0 = _zh_local_ver()
+        remote = ({'ok': True, 'ver': _lv0, 'src': 'local_cache', 'err': '',
+                   'asset': {}, 'items': [], 'probe': {}} if _lv0 else {})
+    servers = []
+    for srv in sorted(SERVERS.keys()):
+        try:
+            servers.append(_zh_server_status(srv, remote))
+        except Exception:
+            _sexc('zh_server_status')
+            servers.append({'srv': srv, 'err': 'calc_fail', 'needUpd': False})
+    need = [x.get('srv') for x in servers if x.get('needUpd')]
+    conf = [x.get('srv') for x in servers if x.get('conflict')]
+    pkg = {'ver': '', 'downloaded': False, 'unpacked': False, 'ready': False}
+    try:
+        _lv = _zh_local_ver() or (remote.get('ver') or '')
+        if _lv:
+            zp = os.path.join(ZH_CACHE_ROOT, _lv)
+            pkg['ver'] = _lv
+            pkg['downloaded'] = os.path.isfile(os.path.join(zp, 'pkg.zip'))
+            pkg['unpacked'] = os.path.isfile(os.path.join(zp, 'manifest.json'))
+            pkg['ready'] = bool(pkg['unpacked'])
+    except Exception:
+        pass
+    pkg['cacheRoot'] = ZH_CACHE_ROOT
+    return {'ok': True, 'cfg': cfg, 'remote': remote, 'servers': servers,
+            'behind': need, 'conflict': conf, 'needAny': bool(need), 'pkg': pkg,
+            'prep': dict(_ZH_PREP), 'dl': dict(_ZH_DL),
+            'remoteSkipped': (not include_remote),
+            'ts': time.strftime('%Y-%m-%d %H:%M:%S')}
+
+
 def _upd_skip_set():
     return set(x.lower() for x in UPDATE_SKIP_DIRS)
 
@@ -10505,6 +12109,195 @@ def _upd_patch_acf_text(t, buildid, manifest, sizeon, lastupd):
     return out
 
 
+def _upd_apply_acf_from_src(tgt):
+    """v6228（O3 + §12.6）：把目标 acf 改成与源缓存一致（**原子写**）
+       · 取**源 acf** 的原始值逐项写入（不能用 cache_status 的 sizeGB 近似值）：
+           buildid / SizeOnDisk / BytesToDownload / BytesDownloaded / depot manifest
+           LastUpdated <- 当前 unix 秒
+       · 写 .tmp 再 os.replace：半截 acf 会让 ASAM 判定安装损坏（比文件没复制更糟）
+       · StateFlags 保持原值不动"""
+    tmp = ''
+    try:
+        src_acf = os.path.join(UPDATE_CACHE_PATH, 'steamapps', UPDATE_ACF_NAME)
+        sa = _upd_read_acf(src_acf)
+        if not sa.get('ok'):
+            return False, u'源 acf 不可读：%s' % src_acf
+        tacf = os.path.join(tgt, 'steamapps', UPDATE_ACF_NAME)
+        if not os.path.isfile(tacf):
+            return False, u'目标 acf 不存在：%s' % tacf
+        t = open(tacf, encoding='utf-8', errors='replace').read()
+        new = _upd_patch_acf_text(t, sa.get('buildid') or '',
+                                  sa.get('manifest') or '',
+                                  sa.get('sizeOnDisk') or '',
+                                  str(int(time.time())))
+        # BytesToDownload / BytesDownloaded 用源 acf 的独立值（§12.6 与 SizeOnDisk 不同）
+        _btd = sa.get('bytesToDownload') or ''
+        if _btd:
+            for _k in ('BytesToDownload', 'BytesDownloaded'):
+                _pat = r'("%s"\s*")[^"]*(")' % _k
+                if re.search(_pat, new):
+                    new = re.sub(_pat, lambda m: m.group(1) + str(_btd) + m.group(2),
+                                 new, count=1)
+        tmp = tacf + '.tmp_' + str(int(time.time()))
+        with open(tmp, 'w', encoding='utf-8', newline='') as f:
+            f.write(new)
+        # v6255：os.replace 覆盖前清只读（只读时 replace 会 WinError 5）
+        try:
+            os.chmod(tacf, _stat.S_IWRITE)
+        except Exception:
+            pass
+        os.replace(tmp, tacf)
+        return True, u'ok'
+    except Exception as e:
+        try:
+            if tmp and os.path.isfile(tmp):
+                os.remove(tmp)
+        except Exception:
+            pass
+        return False, repr(e)
+
+
+def _upd_cache_clear():
+    """v6263（用户口径）：清空版本更新缓存。
+       · **前置校验**：任何服与缓存不一致 ⇒ 直接拒绝（否则清完就没法分发）
+       · 只删 UPDATE_CACHE_PATH 下的内容，**保留目录本身**
+       · 统计删除项数与字节数，部分失败也如实回报"""
+    try:
+        try:
+            _st = _upd_status(include_players=False)
+        except Exception:
+            _st = {}
+        _behind = _st.get('behind') or []
+        if _behind:
+            return {'ok': False, 'code': 'behind_exists',
+                    'error': (u'还有 %d 台服未与缓存一致（%s），先完成分发才能清空缓存'
+                              % (len(_behind), u'、'.join(_behind[:8])))}
+        root = UPDATE_CACHE_PATH
+        if not os.path.isdir(root):
+            return {'ok': False, 'code': 'no_cache',
+                    'error': u'缓存目录不存在：%s' % root}
+        n = 0
+        nbytes = 0
+        errs = []
+        for name in os.listdir(root):
+            p = os.path.join(root, name)
+            try:
+                if os.path.isdir(p):
+                    for _r, _d, _f in os.walk(p):
+                        for _x in _f:
+                            try:
+                                nbytes += os.path.getsize(os.path.join(_r, _x))
+                            except Exception:
+                                pass
+                    shutil.rmtree(p)
+                else:
+                    try:
+                        nbytes += os.path.getsize(p)
+                    except Exception:
+                        pass
+                    os.remove(p)
+                n += 1
+            except Exception as e:
+                errs.append('%s: %s' % (name, e))
+        try:
+            _admin_log('UPDATE cache CLEAR n=%d bytes=%d errs=%s'
+                       % (n, nbytes, ','.join(errs[:5])))
+        except Exception:
+            pass
+        return {'ok': (not errs), 'code': ('partial' if errs else 'ok'),
+                'removed': n, 'bytes': nbytes, 'errors': errs[:10],
+                'msg': (u'已清空 %d 项 / %.2f GB%s'
+                        % (n, nbytes / 2 ** 30, (u'（%d 项失败）' % len(errs)) if errs else u''))}
+    except Exception as e:
+        return {'ok': False, 'code': 'err', 'error': (repr(e))[:200]}
+
+
+def _upd_perm_check(srv):
+    """v6255b（权限加固·诊断）：在**后端进程自己的身份**下实测目标目录能力
+       · write     = 新建文件（Users 的 CreateFiles）
+       · overwrite = 覆写同一文件（shutil.copy2 的真实需求，WriteData）
+       · replace   = os.replace 覆盖已存在文件（acf 改写 / 汉化落盘的真实需求，DELETE）
+       · delete    = 删除自建文件（清理能力）
+       只操作 .dino_perm_probe*，finally 必清理，**不碰任何真实游戏文件**。"""
+    tgt = os.path.join(UPDATE_SERVERS_ROOT, srv)
+    r = {'ok': True, 'server': srv, 'tgt': tgt, 'exists': os.path.isdir(tgt),
+         'pid': os.getpid(), 'user': '', 'write': False, 'overwrite': False,
+         'replace': False, 'delete': False, 'err': {}, 'verdict': '', 'msg': ''}
+    if not r['exists']:
+        r['ok'] = False
+        r['verdict'] = 'target_missing'
+        r['err']['dir'] = 'target_missing'
+        r['msg'] = u'目标目录不存在：%s' % tgt
+        return r
+    try:
+        import getpass
+        r['user'] = getpass.getuser()
+    except Exception:
+        pass
+    p1 = os.path.join(tgt, '.dino_perm_probe')
+    p2 = os.path.join(tgt, '.dino_perm_probe2')
+    ps = os.path.join(tgt, '.dino_perm_src')
+    _PAY = b'SOURCE-PAYLOAD-v6255c'      # v6255c：长度用 len() 比对，禁止硬编码
+    try:
+        # ① 新建
+        try:
+            with open(p1, 'wb') as f:
+                f.write(b'dino-perm-probe')
+            r['write'] = True
+        except Exception as e:
+            r['err']['write'] = '%s: %s' % (type(e).__name__, e)
+        # ② 覆写已存在文件（**与真实分发同一个 API**：shutil.copy2）
+        if r['write']:
+            try:
+                with open(ps, 'wb') as f:
+                    f.write(_PAY)
+                try:
+                    os.chmod(p1, _stat.S_IWRITE)
+                except Exception:
+                    pass
+                shutil.copy2(ps, p1)
+                r['overwrite'] = (os.path.getsize(p1) == len(_PAY))
+            except Exception as e:
+                r['err']['overwrite'] = '%s: %s' % (type(e).__name__, e)
+        # ③ os.replace 覆盖（对应 acf 原子写 / 汉化落盘）
+        try:
+            with open(p2, 'wb') as f:
+                f.write(b'x')
+            os.replace(p2, p1)
+            r['replace'] = True
+        except Exception as e:
+            r['err']['replace'] = '%s: %s' % (type(e).__name__, e)
+        # ④ 删除
+        try:
+            if os.path.isfile(p1):
+                os.remove(p1)
+                r['delete'] = True
+        except Exception as e:
+            r['err']['delete'] = '%s: %s' % (type(e).__name__, e)
+    finally:
+        for _p in (p1, p2, ps):
+            try:
+                if os.path.isfile(_p):
+                    os.remove(_p)
+            except Exception:
+                pass
+    if not r['overwrite']:
+        r['verdict'] = 'copy_fail'
+    elif not r['replace']:
+        r['verdict'] = 'replace_fail'
+    else:
+        r['verdict'] = 'ok'
+    r['msg'] = {
+        'ok': u'权限正常：可覆盖文件、可原子替换、可清理',
+        'copy_fail': u'目标目录不可写：连覆盖文件都失败，一键分发会在复制阶段中止（安全）',
+        'replace_fail': u'可覆盖文件，但无法原子替换（缺 DELETE 权限）：'
+                        u'acf 改写与汉化落盘会失败',
+        'target_missing': u'目标目录不存在',
+    }.get(r['verdict'], '')
+    r['ok'] = (r['verdict'] == 'ok')
+    return r
+
+
 def _restart_loop():
     _restart_log('orchestrator started: enable=%s dry=%s round=%ss' % (RESTART_ENABLE, RESTART_DRY, RESTART_ROUND))
     while True:
@@ -10600,9 +12393,129 @@ def _utask_clean_text(s):
     return ''.join(ch for ch in s if ch >= ' ' or ch in '\n\t')
 
 
+def _utask_master_of(server):
+    """v6276（用户口径「原本启动条要显示的信息，完整整合显示在融合任务条内」）：
+    该服当前是否存在「主任务」（融合条）。存在 → 启动单任务不再单独成条，信息**改投递**给它。
+
+    优先级：编排（restart）> 安全回档（arkbk）。
+    返回 'restart' / 'rollback' / 'rollback_dry' / None。
+    """
+    try:
+        if bool(_RESTART.get('running')) and server in (_RESTART.get('servers') or {}):
+            return 'restart'
+    except Exception:
+        pass
+    try:
+        for _jid, _j in (_ARKBK_JOBS or {}).items():
+            if not isinstance(_j, dict):
+                continue
+            if _j.get('server') != server:
+                continue
+            if _j.get('ok') is not None:      # 已结束的 job 不接管
+                continue
+            return ('rollback_dry' if _j.get('dryRun') else 'rollback')
+    except Exception:
+        pass
+    return None
+
+
+def _utask_boot_mirror(server, master, msg, pct, phase, meta):
+    """v6276：被主任务接管的「启动」单任务进度 → **转投**到主任务上（不新建条）。
+
+    · master='restart'   → 写编排状态 _RESTART['servers'][srv]，进度按 **75 → 88** 映射
+                           （编排 startq 段；verify 起点 90）
+    · master='rollback*' → 写回档 job 的 bootPct/bootMsg，_arkbk_task_push 按 **72 → 92** 映射
+    """
+    _ph = str(phase or '')
+    if master == 'restart':
+        try:
+            with _RESTART_LOCK:
+                st = (_RESTART.get('servers') or {}).get(server)
+                if not st:
+                    return
+                if str(st.get('phase') or '') != 'startq':
+                    return                     # 不在起服阶段：交给正常流程
+                if _ph == 'fail':
+                    return                     # 失败由 _restart_tick 的 fail 分支统一处理
+                _pos = 0
+                try:
+                    _pos = int((meta or {}).get('qpos') or 0)
+                except Exception:
+                    _pos = 0
+                if _ph == 'queue':
+                    st['pct'] = 75
+                    st['msg'] = (u'排队中（第 %d 位）' % _pos) if _pos else u'排队中…'
+                elif _ph == 'ok':
+                    st['pct'] = 88
+                    st['msg'] = str(msg or u'已对外开放加入')
+                else:
+                    _bp = max(0, min(100, int(pct or 0)))
+                    st['pct'] = 75 + int(round(_bp * 0.13))
+                    st['msg'] = str(msg or u'启动中…')
+                # 节流：msg 里的耗时秒数每 2s 变一次 ⇒ 指纹去掉「（Ns）」并把 pct 量化成档位，
+                #   只有**阶段或档位**变化才 push，避免每 2 秒落盘一次。
+                try:
+                    _core = re.sub(u'（\\d+s）', u'', str(st.get('msg') or ''))
+                except Exception:
+                    _core = str(st.get('msg') or '')
+                _sig = '%d|%s|%s' % (int(st.get('pct') or 0) // 3, _core, _ph)
+                _nowb = time.time()
+                # v6277：纯指纹去重会让「（45s）」这类秒数**永远不刷新**（核心 msg 未变）。
+                #   改为「指纹相同也最多每 5 秒推一次」——既保留节流，又让倒计时可见。
+                if (st.get('_bmSig') == _sig
+                        and (_nowb - float(st.get('_bmAt') or 0)) < 5.0):
+                    return
+                st['_bmSig'] = _sig
+                st['_bmAt'] = _nowb
+            _restart_push(server)
+        except Exception:
+            _sexc('utask_boot_mirror_restart')
+        return
+    # ---- 回档：写 job 的 boot* 字段，由 _arkbk_task_push 注入 ----
+    try:
+        for _jid, _j in (_ARKBK_JOBS or {}).items():
+            if not isinstance(_j, dict):
+                continue
+            if _j.get('server') != server or _j.get('ok') is not None:
+                continue
+            _j['bootPct'] = (100 if _ph == 'ok' else max(0, min(100, int(pct or 0))))
+            _j['bootMsg'] = str(msg or '')
+            _j['bootPhase'] = _ph
+            try:
+                _arkbk_task_push(_j)
+            except Exception:
+                pass
+            return
+    except Exception:
+        _sexc('utask_boot_mirror_arkbk')
+
+
 def _utask_put(key, server, action, user, label=None, msg='', pct=0, phase='run',
                steps=None, err='', meta=None, srv_name=None):
     """登记/更新一条任务（同 key 覆盖，保留 id）。返回任务 dict（副本）。"""
+    # v6259（用户口径「一个完整任务就一个条 · 同服不合并」）：编排（更新分发/回滚）在跑时，
+    #   它内部驱动的启动队列**不再单独登记 start 条** —— 否则同一台服会多出「启动」条。
+    try:
+        # v6270（用户口径 2026-11-07「启动条还是额外生成了」）：
+        #   原条件把 mode 限死为 ('update','rollback')，而**切IP 编排 mode='restart'** ⇒ 抑制失效，
+        #   启动阶段照旧多出 start 条（实测任务条 n=12 → n=14）。
+        #   现口径：只要**编排在跑**且该服在本次编排内，就不单独登记 start 条 —— 一种任务一条。
+        # v6276（用户口径 2026-11-08「原本启动条要显示的信息，也要完整整合显示在融合任务条内」）：
+        #   v6270 只做到了「不登记」，启动的实时动态（pct / 启动阶段 / 重压 / 排队位）因此**全部丢失**
+        #   ⇒ 融合条在起服段长时间停在「已入启动队列（等待起服）」，整台服的启动过程看起来卡住。
+        #   现把抑制点从「丢弃」改为「**改投递**」：信息转给该服的主任务
+        #   （编排 restart / 安全回档 arkbk），由主任务条自己显示 —— 一条任务一条，但信息不丢。
+        #   该点也是所有单任务信息的总入口 ⇒ 今后任何被接管的动作自动走同一条路。
+        if str(action) == 'start' and server:
+            _mst = _utask_master_of(server)
+            if _mst:
+                try:
+                    _utask_boot_mirror(server, _mst, msg, pct, phase, meta)
+                except Exception:
+                    _sexc('utask_boot_mirror')
+                return None
+    except Exception:
+        pass
     now = time.time()
     with _UTASK_LOCK:
         i = -1
@@ -10626,7 +12539,9 @@ def _utask_put(key, server, action, user, label=None, msg='', pct=0, phase='run'
                   'msg': _utask_clean_text(msg)[:160],
                   'operator': str(user or ''),
                   'operatorName': _utask_opname(user),
-                  'err': _utask_clean_text(err)[:300]})
+                  # v6274（用户口径）：err 上限 300 → 4000 —— 错误详情要能完整看到
+                  #   （前端已支持超长自动换行，不再靠截断防撑爆）。
+                  'err': _utask_clean_text(err)[:4000]})
         if phase in ('run', 'queue'):
             t['tEnd'] = 0
             t['hideAt'] = 0
@@ -10921,6 +12836,13 @@ def _news_official_version():
     """v5981：从资讯广场 patch_pc 缓存解析「官方服务器版本」。
     口径（用户确认）：取 cards[].content 里 <h3> 标题**含 Server** 的 vX.Y 最大值
     （"for Servers and Clients" 也算服务器版本；纯 "Clients" 条目排除）。"""
+    # v6230 修正（2026-11-07 实测：官服已到 97.x，系统仍报 96.9 的两条根因）
+    #   ① `## v97 - Major version for Servers and Clients` —— 标题**只有 v97 没有小数**，
+    #      老正则 `v?(\d+)\.(\d+)` 匹配不到 ⇒ 整个 97.0 被跳过
+    #   ② `**v97.13 - Minor version for Steam**` —— **不含 server**（只有 Steam），
+    #      而老规则要求含 server ⇒ 97.13 被过滤掉。但 **Steam 就是我们服务器的发行版本**
+    #   ⇒ 现在：标题含 server **或 steam** 都算；版本号支持无小数（v97 = 97.0）；
+    #      仍排除纯 Xbox / Playstation / Windows Clients 条目。
     try:
         d = _news_read('patch_pc') or {}
         best = None
@@ -10928,17 +12850,88 @@ def _news_official_version():
             txt = str(c.get('content') or '')
             m = re.search(r'<h3>(.*?)</h3>', txt, re.S)
             head = m.group(1) if m else ''
-            if not re.search(r'servers?\b', head, re.I):
+            if not head:
                 continue
-            vm = re.search(r'(?<![\d.])v?(\d+)\.(\d+)', head, re.I)
+            _low = head.lower()
+            if not (re.search(r'servers?\b', _low) or re.search(r'\bsteam\b', _low)):
+                continue
+            vm = re.search(r'(?<![\d.])v?(\d+)(?:\.(\d+))?', head, re.I)
             if not vm:
                 continue
-            cur = (int(vm.group(1)), int(vm.group(2)))
+            cur = (int(vm.group(1)), int(vm.group(2) or 0))
             if best is None or cur > best:
                 best = cur
         return ('%d.%d' % best) if best else ''
     except Exception:
         return ''
+
+# ===== v6231（用户口径 2026-11-07）：官方版本号**权威取数链** =====
+# 依据（ASAM 程序实证）：ASADedicatedManager.exe v3.8.2.5 的字符串表里有
+#   `https://cdn2.arkdedicated.com/asa/officialserverstatus.ini`
+#   + `GetOfficialServerStatusAsync` / `ParseOfficialServerStatus` / `set_OfficialServerVersion`
+# ⇒ ASAM 的 `OfficialServerVersion` 就是拉这个 ini 得来的；但它是**每台各自缓存**，
+#   只有手点「验证」才刷新（2026-11-07 实测：11 台里 10 台还是陈旧 v96.9，只有点过的 Gen 是 v97.5）。
+# ⇒ 我们直接读官方源，不再依赖 ASAM 缓存，也不再依赖资讯广场（Discord 抓取不稳且滞后）。
+OFFI_INI_URL = 'https://cdn2.arkdedicated.com/asa/officialserverstatus.ini'
+OFFI_TTL = 300                     # 5 分钟缓存（官方版本不会秒变）
+_OFFI_CACHE = {'at': 0.0, 'ver': '', 'src': '', 'err': ''}
+_OFFI_LOCK = threading.Lock()
+
+
+def _offi_get(url, timeout=12):
+    """极简 GET（标准库）。先做证书校验，失败再降级为不校验。"""
+    import ssl as _ssl
+    import urllib.request as _ur
+    _hdr = {'User-Agent': 'dino-backend/offi-ver', 'Accept': '*/*'}
+    _last = None
+    for _ctx in (None, _ssl._create_unverified_context()):
+        try:
+            _rq = _ur.Request(url, headers=_hdr)
+            with _ur.urlopen(_rq, timeout=timeout, context=_ctx) as _r:
+                return _r.read().decode('utf-8', 'replace')
+        except Exception as _e:
+            _last = _e
+            continue
+    raise _last if _last else RuntimeError('offi_get failed')
+
+
+def _offi_parse_ini(txt):
+    """`ARK Official Server Network Status: <RichColor ...>Online (v97.5)</>` -> '97.5'
+       · 必须含 online（离线/Unknown 一律返回 ''，宁缺勿错）
+       · 兼容无小数写法（v97 -> '97.0'）"""
+    t = _AS_TAG.sub(' ', str(txt or ''))
+    if 'online' not in t.lower():
+        return ''
+    m = re.search(r'\(\s*v?(\d+)(?:\.(\d+))?\s*\)', t, re.I)
+    if not m:
+        return ''
+    return '%d.%s' % (int(m.group(1)), m.group(2) or '0')
+
+
+def _offi_from_ini():
+    return _offi_parse_ini(_offi_get(OFFI_INI_URL, timeout=12))
+
+
+def _official_version_ex(force=False):
+    """v6232（用户口径 2026-11-07）：官方版本号统一入口 -> {'ver','src','err','at'}
+       **只认官方 CDN ini 一个源，不做任何降级**
+       —— v6231 曾有「官方服务器列表众数」与「Discord 资讯广场」两级兜底，
+          用户明确「这两个降级都不需要，多余了」，故删除。
+       取不到就返回空（前端浮窗显示「未知」，由人工确认）。"""
+    now = time.time()
+    with _OFFI_LOCK:
+        if (not force) and _OFFI_CACHE.get('ver') and (now - float(_OFFI_CACHE.get('at') or 0) < OFFI_TTL):
+            return dict(_OFFI_CACHE)
+        _err = []
+        ver, src = '', ''
+        try:
+            ver = _offi_from_ini()
+            if ver:
+                src = 'ini'
+        except Exception as e:
+            _err.append('ini:' + type(e).__name__)
+        _OFFI_CACHE.update({'at': now, 'ver': ver, 'src': src, 'err': ';'.join(_err)})
+        return dict(_OFFI_CACHE)
 
 def _discord_api(path, cfg):
     """Discord REST GET -> (ok, data|err)"""
@@ -11240,11 +13233,24 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
     def _cors(self):
-        self.send_header('Access-Control-Allow-Origin', ALLOW_ORIGIN)
+        # v6275（2026-11-08）：CORS 加固 + 诊断
+        #   现象：/api/tasks、/api/ipwatch 返回 200 但无任何 CORS 头 ⇒ 浏览器 fetch 被拒。
+        #   ① ALLOW_ORIGIN 为空/空白时用正式域名兜底（防环境变量被设成空串）
+        #   ② 请求带 Origin 且在**白名单**内 ⇒ 回显该 Origin（兼容多前端/本地调试）
+        #   ③ X-Dino-Trace 用于区分「后端没发」与「被 Cloudflare 剥离」
+        _ao = str(ALLOW_ORIGIN or '').strip() or 'https://dino.whiterober.ccwu.cc'
+        try:
+            _org = str(self.headers.get('Origin') or '').strip()
+        except Exception:
+            _org = ''
+        _wl = (_ao, 'https://dino.whiterober.ccwu.cc',
+               'http://localhost:8080', 'http://127.0.0.1:8080')
+        self.send_header('Access-Control-Allow-Origin', _org if (_org and _org in _wl) else _ao)
         self.send_header('Access-Control-Allow-Credentials', 'true')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, HEAD')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
         self.send_header('Access-Control-Max-Age', '86400')
+        self.send_header('X-Dino-Trace', 'cors-v6275')
 
     # ⭐ 2026-09-22（方案A）：并发令牌改为**按请求粒度**持有 —— 只包住「一次请求的处理（含响应写入）」，
     #   连接空闲等待下一请求时不占令牌（原先包在 finish_request 外层 = 占整条连接生命周期）。
@@ -11591,7 +13597,9 @@ class Handler(BaseHTTPRequestHandler):
                              'ipwatch_restart': bool(_restart_enable_now()),
                              'ipwatch_restart_dry': bool(_restart_dry_now()),
                              'ipwatch_announce_real': bool(_restart_announce_real_now()),
-                             'ipwatch_env_locked': bool(RESTART_ENABLE or os.environ.get('IPWATCH_RESTART_DRY') is not None)})
+                             'ipwatch_env_locked': bool(RESTART_ENABLE or os.environ.get('IPWATCH_RESTART_DRY') is not None),
+                             'update_dry': bool(_upd_dry_default()),
+                             'zh_patch': _zh_cfg_of(_sd)})
             return
         elif path == '/api/ipwatch':
             # v6121：公网 IP 监视状态（只读；仅域名/IP 等非敏感信息）
@@ -11624,6 +13632,25 @@ class Handler(BaseHTTPRequestHandler):
                 _snap['restart'] = {'running': False}
             self._send(200, _snap)
             return
+        elif path == '/api/update/permcheck':
+            # v6255b（权限加固·诊断）：在**后端进程自己的身份**下实测目标目录写/覆盖/替换能力。
+            #   只碰探针临时文件，不动任何真实游戏文件 —— 真跑前用它确认会不会翻车。
+            _qs_pc = parse_qs(parsed.query)
+            _u_pc = _srvctl_guard(self, _qs_pc)
+            if not _u_pc:
+                return
+            _srv_pc = str((_qs_pc.get('server') or ['Isl'])[0]).strip() or 'Isl'
+            if _srv_pc not in SERVERS:
+                self._send(400, {'ok': False, 'code': 'bad_server',
+                                 'error': u'未知服务器：%s' % _srv_pc})
+                return
+            try:
+                _r_pc = _upd_perm_check(_srv_pc)
+            except Exception:
+                _sexc('upd_permcheck')
+                _r_pc = {'ok': False, 'verdict': 'error', 'error': 'permcheck_fail'}
+            self._send(200, _r_pc)
+            return
         elif path == '/api/update/status':
             # v6206：SteamCMD Cache 状态（只读）—— 缓存 buildid / 11 台对比 / 落后清单
             #   ?players=1 才逐台查在线人数（慢接口，前端默认不传）
@@ -11635,6 +13662,35 @@ class Handler(BaseHTTPRequestHandler):
                 return
             _with_p = str((_qs_u.get('players') or [''])[0]).lower() in ('1', 'true', 'yes')
             _r_up = _upd_status(include_players=_with_p)
+            # v6228（P1.5）：版本档位判定 + AsaApi 缓存状态（供 §14 分发确认浮窗）
+            try:
+                _r_up['verKind'] = _upd_ver_info()
+            except Exception:
+                _sexc('upd_verkind')
+                _r_up['verKind'] = {'kind': 'unknown', 'from': '', 'to': '', 'err': 'calc_fail'}
+            # v6233：默认预演开关（系统管理「服务器更新预演」区块展示用）
+            try:
+                _r_up['defaultDry'] = bool(_upd_dry_default())
+            except Exception:
+                _r_up['defaultDry'] = True
+            # v6230（用户口径「**只从版本号判断**」）：**删除 v6228 的 buildId 兜底**。
+            #   原兜底会把「版本号没变但 buildId 变了」判成 forced；
+            #   但那属于「同版本重打包」，按用户规则仍是非强制（只认版本号）。
+            try:
+                _as_st, _as_raw, _as_meta = _asaapi_state()
+                _r_up['asaapi'] = {'state': _as_st, 'raw': _as_raw,
+                                   # v6228：text = 剥 HTML 后的**英文原文**（前端浮窗直接展示，不翻译）
+                                   'text': _AS_WS.sub(' ', _AS_TAG.sub(' ', _as_raw or '')).strip(),
+                                   'hit': bool(_as_meta.get('hit')),
+                                   'updated': _as_meta.get('updated') or '',
+                                   'fetchedAt': int(_as_meta.get('fetchedAt') or 0),
+                                   'total': int(_as_meta.get('total') or 0),
+                                   'readyStr': 'Automated Cache Build: SUCCESS',
+                                   'source': 'api_cache'}
+            except Exception:
+                _sexc('upd_asaapi')
+                _r_up['asaapi'] = {'state': 'unknown', 'raw': '', 'hit': False,
+                                   'total': 0, 'source': 'api_cache'}
             # v6212：附 SteamCMD 更新进度摘要（只读日志推导；**不含日志正文**，用户明确不要）
             try:
                 _sp = _upd_steam_progress()
@@ -11644,6 +13700,22 @@ class Handler(BaseHTTPRequestHandler):
                 _sexc('upd_status_steam')
                 _r_up['steam'] = {'found': False, 'phase': 'na', 'msg': u'日志解析失败'}
             self._send(200, _r_up)
+            return
+        elif path == '/api/zh/status':
+            # v6237（B1）：汉化补丁只读状态。?local=1 只跑本机扫描（秒回，首屏用）；
+            #   不传则含远端 Google Drive 探测（首次约 2~3 秒，TTL 30 分钟）。?force=1 强刷远端。
+            _qs_z = parse_qs(parsed.query)
+            _u_z = _srvctl_guard(self, _qs_z)
+            if not _u_z:
+                return
+            _loc_z = str((_qs_z.get('local') or [''])[0]).lower() in ('1', 'true', 'yes')
+            _frc_z = str((_qs_z.get('force') or [''])[0]).lower() in ('1', 'true', 'yes')
+            try:
+                _r_z = _zh_status(include_remote=(not _loc_z), force=_frc_z)
+            except Exception:
+                _sexc('zh_status')
+                _r_z = {'ok': False, 'error': 'status_fail'}
+            self._send(200, _r_z)
             return
         elif path == '/api/srvctl/status':
             # P3：转发 ASA GET /server-status（仅读）；仅二级管理员可读
@@ -11692,8 +13764,16 @@ class Handler(BaseHTTPRequestHandler):
                              'serverVersion': str(_it.get('ServerVersion') or ''),
                              # v6160：本次进程启动时刻（epoch 秒）—— IP 失效判定用；0 = 取不到
                              'bootAt': _srv_boot_at(_sid) if _sid else 0})
-            # v5981：官方服务器版本 = 资讯广场 patch_pc 里 Server 补丁的最大版本号（96.9 这类）
-            self._send(200, {'ok': True, 'servers': _out, 'official': _news_official_version(),
+            # v6231：官方服务器版本改走**权威取数链**（官方 CDN ini > 官方服务器列表众数 > 资讯广场）
+            #   原先是纯资讯广场 patch_pc（Discord 抓取不稳，实测滞后：官服已 v97.5 而它只到 97.13）
+            try:
+                _oe2 = _official_version_ex()
+            except Exception:
+                _oe2 = {'ver': '', 'src': '', 'err': 'chain_fail'}
+            self._send(200, {'ok': True, 'servers': _out,
+                             'official': _oe2.get('ver') or '',
+                             'officialSrc': _oe2.get('src') or '',
+                             'officialErr': _oe2.get('err') or '',
                              'ms': int((time.time() - _t0) * 1000)})
             return
         elif path == '/api/health':
@@ -11716,6 +13796,14 @@ class Handler(BaseHTTPRequestHandler):
                 _r['locks'] = _srv_lock_snapshot()   # v6135：锁表供前端置灰/提示
             except Exception:
                 _r['locks'] = {}
+            # v6278（用户口径 2026-11-08「启动队列在不同客户端显隐不一致」）：
+            #   队列状态随 **/api/tasks 一起下发**（全量快照，与 changed 无关）。
+            #   前端本来就在轮询 /api/tasks（1.5s），这样每个客户端拿到的队列数据
+            #   完全同源、同一时刻 ⇒ 显隐一致；不再依赖各端自己额外拉 /api/srvctl/startq。
+            try:
+                _r['startq'] = _startq_view()
+            except Exception:
+                _r['startq'] = None
             self._send(200, _r)
             return
         elif path == '/api/srvctl/observe':
@@ -11966,6 +14054,40 @@ class Handler(BaseHTTPRequestHandler):
         # 配置规则：全服刷新（仅系统拥有者；后端自己读 11 台 ini → 落快照，全玩家共享）
         # 服务器域名：写（仅系统拥有者）
         # 2026-10-28：粑粑笔记导入（仅拥有者；整份覆盖）
+        if path == '/api/zh/prepare':
+            # v6238（B2）：后台下载 + 白名单解压（只写 D:\\Cache-zh，不碰游戏目录）
+            _u_zp = _srvctl_guard(self, qs)
+            if not _u_zp:
+                return
+            _fr_zp = str(g('force') or '').lower() in ('1', 'true', 'yes')
+            self._send(200, _zh_prepare_start(force=_fr_zp))
+            return
+        if path == '/api/zh/check':
+            # v6237（B1）：强制刷新云端清单（只读，不下载）
+            _u_zc = _srvctl_guard(self, qs)
+            if not _u_zc:
+                return
+            try:
+                _rem_zc = _zh_remote(force=True)
+            except Exception as e:
+                _rem_zc = {'ok': False, 'err': repr(e)[:200]}
+            self._send(200, {'ok': bool(_rem_zc.get('ok')), 'remote': _rem_zc})
+            return
+        if path == '/api/update/cache/clear':
+            # v6263（用户口径）：清空版本更新缓存（危险操作）—— 需 token + 二级管理员 + confirm=CLEAR
+            _u_cc = _srvctl_guard(self, qs, need_token=True)
+            if not _u_cc:
+                return
+            if _role_level(_u_cc) < 2:
+                self._send(403, {'ok': False, 'code': 'admin_only', 'error': u'仅二级管理员可用'})
+                return
+            if str(body.get('confirm') or '') != 'CLEAR':
+                self._send(400, {'ok': False, 'code': 'need_confirm',
+                                 'error': u'清空缓存需在 body 里传 confirm="CLEAR"'})
+                return
+            _r_cc = _upd_cache_clear()
+            self._send(200 if _r_cc.get('ok') else 400, _r_cc)
+            return
         if path == '/api/update/apply':
             # v6207：一键分发（**默认 dry，只出计划不写任何文件**）
             #   body: { servers: [...], dry: true(默认), confirm: 'APPLY' 才允许真跑 }
@@ -11987,31 +14109,176 @@ class Handler(BaseHTTPRequestHandler):
             if not _srv_a:
                 self._send(400, {'ok': False, 'code': 'no_servers', 'error': u'未选择服务器'})
                 return
+            # v6239（B3）：更新目标 —— server=游戏本体（Cache 分发）/ zh=汉化补丁
+            _tgs_a = body.get('targets')
+            if not isinstance(_tgs_a, list):
+                _tgs_a = [x.strip() for x in str(body.get('targets') or '').split(',') if x.strip()]
+            _tg_a = []
+            for _t in _tgs_a:
+                _t2 = str(_t or '').strip().lower()
+                if _t2 in ('server', 'zh') and (_t2 not in _tg_a):
+                    _tg_a.append(_t2)
+            if not _tg_a:
+                _tg_a = ['server']          # 缺省向后兼容：老页面不传 targets 时行为不变
+            _do_sv_a = ('server' in _tg_a)
+            _do_zh_a = ('zh' in _tg_a)
             _dry_a = body.get('dry')
             _dry_a = True if _dry_a is None else str(_dry_a).lower() in ('1', 'true', 'yes', 'on')
+            # v6233（用户口径）：系统管理「默认预演」为开时**一律强制预演**（后端强制，前端绕不过）
+            _forced_a = False
+            try:
+                if (not _dry_a) and _upd_dry_default():
+                    _dry_a = True
+                    _forced_a = True
+            except Exception:
+                _forced_a = False
             _cache_a = _upd_cache_status()
-            if not _cache_a.get('hasContent'):
+            # v6239：只有含「服务器本体」时才要求 Cache 有内容；纯汉化分发与 Cache 无关
+            if _do_sv_a and not _cache_a.get('hasContent'):
                 self._send(200, {'ok': False, 'code': 'cache_empty', 'dry': _dry_a,
                                  'error': _cache_a.get('path') and
                                  (u'缓存没有实际文件，请先在 ASAM 的 Cache Manager 点'
                                   u'「Update local cache from steam」'),
                                  'cache': _cache_a})
                 return
-            _plans = [_upd_make_plan(_s3, _cache_a) for _s3 in _srv_a]
+            # v6239（§14 A2）：纯汉化预演不遍历 11.3 GB 本体差异（否则要干等 40~60 秒）
+            _plans = ([_upd_make_plan(_s3, _cache_a) for _s3 in _srv_a] if _do_sv_a else [])
+            _zplans_a = []
+            if _do_zh_a:
+                try:
+                    _zok_a, _zver_a, _zman_a, _zpaks_a, _zerr_a = _zh_cache_ready()
+                except Exception:
+                    _zok_a, _zver_a, _zman_a, _zpaks_a, _zerr_a = False, '', {}, '', 'calc_fail'
+                try:
+                    _zrem_a = _zh_remote()
+                except Exception:
+                    _zrem_a = {}
+                for _s3 in _srv_a:
+                    try:
+                        _zs3 = _zh_server_status(_s3, _zrem_a)
+                    except Exception:
+                        _zs3 = {'srv': _s3}
+                    _bases3 = (_zs3.get('bases') or ['ShooterGame-Windows_P'])
+                    _zplans_a.append({'srv': _s3,
+                                      'curVer': _zs3.get('curVer') or '',
+                                      'curSrc': _zs3.get('curSrc') or '',
+                                      'toVer': _zver_a or (_zrem_a.get('ver') or ''),
+                                      'ready': bool(_zok_a),
+                                      'needUpd': bool(_zs3.get('needUpd')),
+                                      'conflict': bool(_zs3.get('conflict')),
+                                      'paksBase': _bases3[0],
+                                      'files': [{'name': it.get('name'), 'bytes': it.get('size')}
+                                                for it in ((_zman_a or {}).get('paks') or [])],
+                                      'backupTo': os.path.join(ZH_CACHE_ROOT, 'backup', _s3),
+                                      'err': _zerr_a})
+            # v6249（用户口径「分发只分发需要更新的服」）：给每台本体计划补 needUpd，
+            #   判定口径 = 该服相对缓存有「新增」或「变更」文件；相同则视为不需要。
+            for _p7 in _plans:
+                try:
+                    _p7['needUpd'] = bool((int(_p7.get('add') or 0) + int(_p7.get('update') or 0)) > 0)
+                except Exception:
+                    _p7['needUpd'] = False
             if _dry_a:
-                self._send(200, {'ok': True, 'dry': True, 'cache': _cache_a,
-                                 'plans': _plans,
-                                 'note': u'预演模式：未修改任何文件。确认计划与 ASAM 实操一致后，'
-                                         u'再传 dry=false 且 confirm=APPLY 才真跑'})
+                _note_a = (u'预演模式（系统管理「默认预演」为开，已强制拦截）：未修改任何文件。'
+                           u'要真跑请先到「系统管理 → 服务器更新预演」把默认预演关掉。'
+                           if _forced_a else
+                           u'预演模式：未修改任何文件。确认计划与 ASAM 实操一致后，'
+                           u'再传 dry=false 且 confirm=APPLY 才真跑')
+                self._send(200, {'ok': True, 'dry': True, 'forcedDry': bool(_forced_a),
+                                 'cache': _cache_a, 'plans': _plans,
+                                 'zhPlans': _zplans_a, 'targets': _tg_a, 'note': _note_a})
                 return
             if str(body.get('confirm') or '') != 'APPLY':
                 self._send(400, {'ok': False, 'code': 'need_confirm',
                                  'error': u'真跑需在 body 里传 confirm="APPLY"',
                                  'plans': _plans})
                 return
-            self._send(501, {'ok': False, 'code': 'not_implemented',
-                             'error': u'v6207b 才实装真跑（等缓存有内容并与 ASAM 对照后再开）',
-                             'plans': _plans})
+            # ===== v6249（用户口径）：真跑**只投「需要更新」的服** =====
+            #   本体：该服 plan.needUpd（有新增/变更文件）
+            #   汉化：该服 zPlan.needUpd（汉化落后云端）
+            #   两项同勾时，只要**任一**目标需要就保留该服（只做需要的那一部分）。
+            _eff_a, _skip_a = [], []
+            for _s6 in _srv_a:
+                _need6 = False
+                if _do_sv_a:
+                    for _p6 in _plans:
+                        if _p6.get('server') == _s6 and bool(_p6.get('needUpd')):
+                            _need6 = True
+                            break
+                if (not _need6) and _do_zh_a:
+                    for _z6 in _zplans_a:
+                        if _z6.get('srv') == _s6 and bool(_z6.get('needUpd')):
+                            _need6 = True
+                            break
+                if _need6:
+                    _eff_a.append(_s6)
+                else:
+                    _skip_a.append(_s6)
+            _admin_log('UPDATE apply eff=%s skip=%s tg=%s'
+                       % (','.join(_eff_a), ','.join(_skip_a), ','.join(_tg_a)))
+            if not _eff_a:
+                self._send(200, {'ok': True, 'dry': False, 'noop': True,
+                                 'code': 'nothing_to_do',
+                                 'error': (u'所选服务器都不需要更新'
+                                           u'（本体版本与缓存一致、汉化均为最新），本次未做任何改动'),
+                                 'servers': [], 'skipped': _srv_a, 'targets': _tg_a,
+                                 'cache': _cache_a, 'plans': _plans, 'zhPlans': _zplans_a})
+                return
+            # ===== v6228（P1）：真跑 —— 复用自动重启状态机（mode='update'）=====
+            #   方案 §1.1：不做新的复制流程，走同一条 7 阶段状态机，savekill 段改为 stop -> sync
+            #   §14.5：**后端不做 AsaApi 拦截** —— 用户已在前端分发确认浮窗里看过原文并确认
+            #   §16：verKind 一并写入编排，任务行标注「强制/补丁」
+            _vk_a = ''
+            try:
+                _vk_a = str((_upd_ver_info(_srv_a) or {}).get('kind') or '')
+            except Exception:
+                _vic = 0       # 仅供下方 except 缩进用（无实际语义）
+                _vk_a = ''
+            try:
+                _as_st_a, _as_raw_a, _as_meta_a = _asaapi_state()
+            except Exception:
+                _as_st_a, _as_raw_a, _as_meta_a = 'unknown', '', {}
+            # v6239：纯汉化分发前必须本地包已就绪（避免停服后才失败）
+            if _do_zh_a and not _do_sv_a:
+                _zok_p, _zver_p, _zman_p, _zpaks_p, _zerr_p = _zh_cache_ready()
+                if not _zok_p:
+                    self._send(400, {'ok': False, 'code': 'zh_not_ready',
+                                     'error': _zerr_p or u'汉化包未就绪（请先下载并解压）',
+                                     'zhPlans': _zplans_a})
+                    return
+            # v6239（§14 B1）：停服前后台预写 .dinozh.tmp（best-effort，失败不影响分发）
+            if _do_zh_a:
+                def _prewarm_zh():
+                    for _s4 in _srv_a:
+                        try:
+                            _zh_prewrite(_s4)
+                        except Exception:
+                            _sexc('zh_prewrite')
+                try:
+                    threading.Thread(target=_prewarm_zh, daemon=True).start()
+                except Exception:
+                    _sexc('zh_prewrite_start')
+            _started_a = _restart_start(
+                'update-apply by %s (%d tai, skip %d) tg=%s vk=%s asaapi=%s'
+                % (_u_ap, len(_eff_a), len(_skip_a), ','.join(_tg_a), _vk_a or 'na', _as_st_a or 'na'),
+                dry_override=False, force=True,
+                mode='update', servers=_eff_a, ver_kind=_vk_a,
+                targets=_tg_a)
+            if not _started_a:
+                self._send(409, {'ok': False, 'code': 'orchestrator_busy',
+                                 'error': u'已有编排在运行，本次分发已记为待续跑',
+                                 'asaapi': {'state': _as_st_a},
+                                 'verKind': _vk_a,
+                                 'restart': _restart_snapshot()})
+                return
+            self._send(200, {'ok': True, 'dry': False, 'started': True,
+                             'mode': 'update', 'servers': _eff_a, 'skipped': _skip_a,
+                             'targets': _tg_a, 'verKind': _vk_a,
+                             'asaapi': {'state': _as_st_a,
+                                        'hit': bool((_as_meta_a or {}).get('hit'))},
+                             'cache': _cache_a, 'plans': _plans,
+                             'note': (u'已进入更新编排：公告→空置→静默→存档→停服→复制→起服→校验'
+                                      u'（原本停服的台跳过前 5 步且分发后保持停服）')})
             return
 
         if path == '/api/arkbackup/verify':
@@ -12400,6 +14667,10 @@ class Handler(BaseHTTPRequestHandler):
             _has_dom = ('server_domain' in body) or ('server_domain' in qs)
             _has_tok = ('asa_token' in body) or ('asa_token' in qs)
             _has_base = ('asa_base' in body) or ('asa_base' in qs)
+            _has_udry = ('update_dry' in body) or ('update_dry' in qs)
+            # v6237：汉化补丁配置（folder_url / variant / auto_check）
+            _bzp = body.get('zh_patch') if isinstance(body.get('zh_patch'), dict) else {}
+            _has_zhp = bool(_bzp) or ('zh_folder_url' in body) or ('zh_variant' in body)
             _clr_tok = bool(body.get('asa_token_clear'))
             try:
                 _d = _srv_cfg_read()
@@ -12418,6 +14689,31 @@ class Handler(BaseHTTPRequestHandler):
                     _bb = str(body.get('asa_base', g('asa_base', '')) or '').strip().rstrip('/')
                     if _bb:
                         _d['asa_base'] = _bb
+                if _has_udry:
+                    # v6233：服务器更新「默认预演」开关（true=只出清单）
+                    _udv = body.get('update_dry', g('update_dry', ''))
+                    _d['update_dry'] = str(_udv).lower() in ('1', 'true', 'yes', 'on')
+                if _has_zhp:
+                    # v6237（B1）：汉化补丁配置 —— 地址必须含 /folders/<id>，变体必须在枚举内
+                    _zp = _d.get('zh_patch')
+                    _zp = dict(_zp) if isinstance(_zp, dict) else {}
+                    _fu = str(_bzp.get('folder_url', body.get('zh_folder_url', '')) or '').strip()
+                    if _fu:
+                        if not _zh_folder_id(_fu):
+                            self._send(400, {'ok': False, 'code': 'bad_folder_url',
+                                             'error': u'下载地址必须包含 /folders/<id>'})
+                            return
+                        _zp['folder_url'] = _fu
+                    _vr = str(_bzp.get('variant', body.get('zh_variant', '')) or '').strip().lower()
+                    if _vr:
+                        if _vr not in ZH_VARIANTS:
+                            self._send(400, {'ok': False, 'code': 'bad_variant',
+                                             'error': u'variant 只能是 %s' % ' / '.join(ZH_VARIANTS)})
+                            return
+                        _zp['variant'] = _vr
+                    if 'auto_check' in _bzp:
+                        _zp['auto_check'] = str(_bzp.get('auto_check')).lower() in ('1', 'true', 'yes', 'on')
+                    _d['zh_patch'] = _zp
                 _d['updated_at'] = time.strftime('%Y-%m-%dT%H:%M:%S+08:00')
                 _d['updated_by'] = _u
                 _srv_cfg_write(_d)
@@ -12427,7 +14723,9 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, {'ok': True, 'server_domain': _dom,
                              'asa_base': _d.get('asa_base') or 'https://asa.whiterober.com',
                              'asa_token_masked': _asa_mask(_d.get('asa_token') or ''),
-                             'asa_configured': bool(_d.get('asa_token'))})
+                             'asa_configured': bool(_d.get('asa_token')),
+                             'update_dry': bool(_upd_dry_default()),
+                             'zh_patch': _zh_cfg_of(_d)})
             return
         # ===== P3：服务器控制（仅二级管理员；前端不接触 token）=====
         if path == '/api/tasks/stage':
@@ -12707,6 +15005,29 @@ class Handler(BaseHTTPRequestHandler):
             #   原实现只有「多台」入队、单台直通 ⇒ 任务条上的「重试」是单台请求，
             #   可绕过重压池（同时 <= 2 台）导致并发超标；改为统一入队后重压池才真正成立。
             if _act == 'start':
+                # v6276（用户口径 2026-11-08「同时只允许一个批次在运行（防止混乱）。
+                #   其他人执行批次时，提示当前有批次正在进行中」）：
+                #   判据 = 编排在跑，或启动队列在跑且**发起人不是自己**。
+                #   同一发起人允许继续追加（前端「重试失败项」语义 = 同一批次的续加，不算新批次）。
+                #   编排内部调用不走此路由（直接调 _srvctl_startq_new），天然不受限。
+                try:
+                    _bb, _bo, _bl, _bk = _batch_busy_probe()
+                    _src_lc = str(_src or '').strip().lower()
+                    _same_owner = (str(_u or '') != '' and str(_u or '') == str(_bo or ''))
+                    if _bb and _src_lc != 'ipwatch' and not _same_owner:
+                        _emsg = _batch_busy_error(_bb, _bo, _bl, _bk)
+                        try:
+                            _srvctl_log('(system)', '/'.join(_srvl), 'start', False, 0,
+                                        (u'start 拒绝（批次互斥）：' + _emsg)[:250])
+                        except Exception:
+                            pass
+                        self._send(409, {'ok': False, 'code': 'batch_busy', 'error': _emsg,
+                                         'batch': {'kind': _bk, 'owner': _bo,
+                                                   'remaining': int(_bl or 0)},
+                                         'servers': _srvl, 'action': 'start'})
+                        return
+                except Exception:
+                    _sexc('srvctl_start_batch_gate')
                 try:
                     _q = _srvctl_startq_new(_u, _srvl, src=_src)
                 except Exception as _e:
