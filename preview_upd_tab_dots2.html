@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>服务器更新 · 地图 TAB 左上竖排标记 v2（非圆点）</title>
+<style>
+  body{margin:0;padding:22px 24px 40px;background:#0f0f13;color:#e0e0e0;
+       font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+  h1{font-size:14px;color:#c4b5fd;margin:0 0 4px}
+  .sub{font-size:11px;color:#6b7280;margin-bottom:18px;line-height:1.75}
+  .sub code{color:#ffc44f;background:rgba(255,196,79,.10);padding:1px 4px;border-radius:3px}
+  h2{font-size:12.5px;color:#ffc44f;margin:22px 0 4px;font-weight:600}
+  .note{font-size:10.5px;color:#8b93a3;margin:0 0 10px;line-height:1.7}
+  .band{display:flex;gap:18px;align-items:flex-end;background:rgba(255,255,255,.03);
+        border:1px solid rgba(255,255,255,.08);border-radius:9px;padding:14px 16px 20px;flex-wrap:wrap}
+  .band.big{align-items:center;padding:20px 16px}
+  .cell{text-align:center}
+  .cap{font-size:9.5px;color:#6b7280;margin-top:9px;white-space:nowrap}
+  /* ===== 线上真实 TAB（#lbUpd .lb-srvctl-chips .server-tab）===== */
+  .server-tab{position:relative;display:inline-flex;align-items:center;justify-content:center;
+      box-sizing:border-box;height:32px;padding:8px 8px 4px;border-radius:6px;border:1px solid #333;
+      background:#1a1a24;color:#ccc;font-size:14px;line-height:1;cursor:pointer;user-select:none}
+  .server-tab.active{background:#7c3aed;border-color:#7c3aed;color:#fff}
+  .server-tab .ic{display:inline-flex;align-items:center;justify-content:center;
+      width:15px;height:15px;font-size:13px;line-height:1}
+  .server-tab-cnt{position:absolute;top:-5px;right:-5px;background:#15803d;color:#fff;
+      font-weight:700;font-size:9.5px;line-height:13px;padding:0 4px;border-radius:8px;
+      min-width:13px;text-align:center;font-style:normal;pointer-events:none;white-space:nowrap}
+  .server-tab.active .server-tab-cnt{background:#fff;color:#7c3aed}
+  /* 通用：左上角竖排容器 */
+  .ud{position:absolute;left:3px;top:3px;display:flex;flex-direction:column;align-items:flex-start;gap:1px}
+  .ud i{display:block;flex:0 0 auto;font-style:normal}
+  .c-m{background:#f59e0b}
+  .c-a{background:#a78bfa}
+  .c-v{background:#f87171}
+  /* --- 1 圆角方块 --- */
+  .s1 i{width:4px;height:4px;border-radius:1px}
+  /* --- 2 短横杆 --- */
+  .s2{left:2px;top:4px;gap:2px}
+  .s2 i{width:6px;height:2px;border-radius:1px}
+  /* --- 3 分段竖条（连成一条）--- */
+  .s3{left:3px;top:3px;gap:0}
+  .s3 i{width:2.5px;height:4.5px}
+  /* --- 4 竖向小三角（朝右）--- */
+  .s4{left:2px;top:3px;gap:1.5px}
+  .s4 i{width:0;height:0;border-top:2px solid transparent;border-bottom:2px solid transparent;
+        border-left-width:4px;border-left-style:solid;background:none}
+  .s4 i.m{border-left-color:#f59e0b}
+  .s4 i.a{border-left-color:#a78bfa}
+  .s4 i.v{border-left-color:#f87171}
+  /* --- 5 竖向细胶囊 --- */
+  .s5{left:3px;top:3px;gap:1.5px}
+  .s5 i{width:2.5px;height:6px;border-radius:1.5px}
+  /* --- 6 一体双色竖条 --- */
+  .s6{left:3px;top:3px;gap:0}
+  .s6 i{width:3px;height:5px}
+  /* --- 7 左缘书签（贴左边整高细条，分段）--- */
+  .s7{left:1px;top:5px;gap:0}
+  .s7 i{width:2px;height:6.5px;border-radius:1px}
+  /* ===== 3× 放大 ===== */
+  .big .server-tab{transform:scale(3);transform-origin:center;margin:30px 34px 22px}
+  /* ===== 图例（沿用线上 .lb-srvctl-legend 规格）===== */
+  .lb-srvctl-legend{display:flex;flex-wrap:wrap;align-items:center;gap:14px;
+      background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);
+      border-radius:7px;padding:10px 13px;font-size:11px;color:#9aa3b5;margin-top:10px}
+  .lb-srvctl-legend .it{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+  .lb-srvctl-legend .mini{position:relative;display:inline-block;width:18px;height:18px;
+      border-radius:3px;border:1px solid #45455a;background:#1a1a24;flex:0 0 auto}
+  .lb-srvctl-legend .mini .mline{position:absolute;left:5px;top:9px;width:7px;height:2px;
+      border-radius:1px;background:#4b5563}
+  .lb-srvctl-legend .mini .mc{position:absolute;top:-3px;right:-3px;width:9px;height:7px;
+      border-radius:3px;background:#22c55e}
+  .lb-srvctl-legend .mini .ud{left:2px;top:2px}
+  .lb-srvctl-legend .mini.s2 i{width:5px;height:1.8px}
+  .lb-srvctl-legend .mini.s3 i,.lb-srvctl-legend .mini.s6 i{width:2.2px;height:3.6px}
+  .lb-srvctl-legend .mini.s5 i{width:2.2px;height:5px}
+  .lb-srvctl-legend .mini.s7 i{width:1.8px;height:5.2px}
+  .lb-srvctl-legend .mini.s2{--own:1}
+  .rec{font-size:11px;color:#4ade80;margin-top:12px;line-height:1.75}
+  .rec b{color:#fbbf24}
+</style>
+</head>
+<body>
+<h1>服务器更新 · 地图 TAB 左上角竖排标记 v2（非圆点）</h1>
+<div class="sub">TAB 尺寸仍与线上一致：<code>height 32px</code> · <code>padding 8px 8px 4px</code> · <code>border 1px #333</code> · <code>radius 6px</code> · 图标 <code>15px</code> · 版本角标右上 <code>-5/-5</code>。橙=<b>MOD 待升级</b>、紫=<b>API 待升级</b>、红=<b>本体待更新</b>。全部为「左上角竖排」，只换形状。</div>
+<h2>方案 1 · 竖排圆角方块（4×4，radius 1px）</h2>
+<div class="note">把圆点换成小方块 —— 比圆点更"硬"，在 32px 小尺寸下边缘不发虚，也不需要描边就够清楚。</div>
+<div class="band">
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em></div><div class="cap">正常</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s1"><i class="c-m"></i></div></div><div class="cap">MOD</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s1"><i class="c-a"></i></div></div><div class="cap">API</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s1"><i class="c-m"></i><i class="c-a"></i></div></div><div class="cap">MOD + API</div></div>
+  <div class="cell"><div class="server-tab active"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s1"><i class="c-m"></i><i class="c-a"></i></div></div><div class="cap">选中 + 两项</div></div>
+</div>
+<h2>方案 2 · 竖排短横杆（6×2，右端到图标左侧）</h2>
+<div class="note">横向小杆有方向感，像"待处理条目"；最长 6px，右侧正好停在图标左缘，不与图标打架。</div>
+<div class="band">
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em></div><div class="cap">正常</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s2"><i class="c-m"></i></div></div><div class="cap">MOD</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s2"><i class="c-a"></i></div></div><div class="cap">API</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s2"><i class="c-m"></i><i class="c-a"></i></div></div><div class="cap">MOD + API</div></div>
+  <div class="cell"><div class="server-tab active"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s2"><i class="c-m"></i><i class="c-a"></i></div></div><div class="cap">选中 + 两项</div></div>
+</div>
+<h2>方案 3 · 分段竖条（2.5×4.5 无间隙，连成一条）</h2>
+<div class="note">两段紧贴成一条短竖条，颜色分段 —— 看起来像一条"侧边刻度"，比两个独立形状更整体。</div>
+<div class="band">
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em></div><div class="cap">正常</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s3"><i class="c-m"></i></div></div><div class="cap">MOD</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s3"><i class="c-a"></i></div></div><div class="cap">API</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s3"><i class="c-m"></i><i class="c-a"></i></div></div><div class="cap">MOD + API</div></div>
+  <div class="cell"><div class="server-tab active"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s3"><i class="c-m"></i><i class="c-a"></i></div></div><div class="cap">选中 + 两项</div></div>
+</div>
+<h2>方案 4 · 竖排小三角（朝右，4×4）</h2>
+<div class="note">尖角朝右的小三角，语义像"有待办往里走"；体感最轻，几乎不看形状也能读出"有标记"。</div>
+<div class="band">
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em></div><div class="cap">正常</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s4"><i class="m"></i></div></div><div class="cap">MOD</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s4"><i class="a"></i></div></div><div class="cap">API</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s4"><i class="m"></i><i class="a"></i></div></div><div class="cap">MOD + API</div></div>
+  <div class="cell"><div class="server-tab active"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s4"><i class="m"></i><i class="a"></i></div></div><div class="cap">选中 + 两项</div></div>
+</div>
+<h2>方案 5 · 竖向细胶囊（2.5×6，radius 1.5px）</h2>
+<div class="note">细长竖棒，像两枚迷你"书签条"；比方块更细长，视觉安静，选中紫底时也不抢图标。</div>
+<div class="band">
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em></div><div class="cap">正常</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s5"><i class="c-m"></i></div></div><div class="cap">MOD</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s5"><i class="c-a"></i></div></div><div class="cap">API</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s5"><i class="c-m"></i><i class="c-a"></i></div></div><div class="cap">MOD + API</div></div>
+  <div class="cell"><div class="server-tab active"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s5"><i class="c-m"></i><i class="c-a"></i></div></div><div class="cap">选中 + 两项</div></div>
+</div>
+<h2>方案 6 · 一体双色竖条（3×5 两段，无间隙）</h2>
+<div class="note">两段等高、上下紧贴，读作一根被分成两色的竖条 —— 需要同时表达"两项都不符"时最紧凑。</div>
+<div class="band">
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em></div><div class="cap">正常</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s6"><i class="c-m"></i></div></div><div class="cap">MOD</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s6"><i class="c-a"></i></div></div><div class="cap">API</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s6"><i class="c-m"></i><i class="c-a"></i></div></div><div class="cap">MOD + API</div></div>
+  <div class="cell"><div class="server-tab active"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s6"><i class="c-m"></i><i class="c-a"></i></div></div><div class="cap">选中 + 两项</div></div>
+</div>
+<h2>方案 7 · 左缘书签条（贴左边 2×6.5，分段）</h2>
+<div class="note">几乎贴在 TAB 左边缘，像书签刻度；离图标最远，干扰最小，但"左上角"的定位感也最弱。</div>
+<div class="band">
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em></div><div class="cap">正常</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s7"><i class="c-m"></i></div></div><div class="cap">MOD</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s7"><i class="c-a"></i></div></div><div class="cap">API</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s7"><i class="c-m"></i><i class="c-a"></i></div></div><div class="cap">MOD + API</div></div>
+  <div class="cell"><div class="server-tab active"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s7"><i class="c-m"></i><i class="c-a"></i></div></div><div class="cap">选中 + 两项</div></div>
+</div>
+<h2>图例（以方案 1 为例，mini 块 18×18 与现有图例同规格）</h2>
+<div class="lb-srvctl-legend">
+  <span class="it"><span class="mini"><span class="mline"></span><span class="mc"></span></span>运行中</span>
+  <span class="it"><span class="mini"><span class="mline"></span></span>已停止</span>
+  <span class="it"><span class="mini"><div class="ud s1"><i class="c-m"></i></div></span>MOD 待升级</span>
+  <span class="it"><span class="mini"><div class="ud s1"><i class="c-a"></i></div></span>API 待升级</span>
+  <span class="it"><span class="mini"><div class="ud s1"><i class="c-m"></i><i class="c-a"></i></div></span>两项都待升级</span>
+</div>
+<h2>3× 放大排（只为看清细节，线上不会这么大）</h2>
+<div class="band big">
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s1"><i class="c-m"></i><i class="c-a"></i></div></div><div class="cap">1 方块</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s2"><i class="c-m"></i><i class="c-a"></i></div></div><div class="cap">2 横杆</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s3"><i class="c-m"></i><i class="c-a"></i></div></div><div class="cap">3 分段条</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s4"><i class="m"></i><i class="a"></i></div></div><div class="cap">4 三角</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s5"><i class="c-m"></i><i class="c-a"></i></div></div><div class="cap">5 细胶囊</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s6"><i class="c-m"></i><i class="c-a"></i></div></div><div class="cap">6 一体条</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud s7"><i class="c-m"></i><i class="c-a"></i></div></div><div class="cap">7 贴边</div></div>
+</div>
+<div class="rec">我的倾向：<b>方案 6（一体双色竖条）</b> 或 <b>方案 3（分段竖条）</b> —— 形状是一个整体的"竖条"，不是两个物件，32px 下最不像脏点；若你想让"两项"更分明，选 <b>方案 2（横杆）</b>；若只求存在感弱一点，选 <b>方案 5（细胶囊）</b>。</div>
+</body>
+</html>

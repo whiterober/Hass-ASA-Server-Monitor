@@ -5075,6 +5075,7 @@ CMD_VOLCANO = 'TransferIdentityFix.Volcano'  # 2026-09-14：火山喷发权威�
 CMD_WORLDPROBE = 'TransferIdentityFix.WorldProbe'  # 2026-09-30：公共设施实时查询（插件 v9；只读、无副作用）
 CRAFTING_COST_SERVERS = set(SERVERS.keys())  # 2026-09-15：全服放开（用户确认所有地图均已部署 CraftingCost 命令；原阶段一白名单 {'Abe'}）
 CMD_LIST_PLAYERS = 'ListPlayers'  # v532：原生 RCON 在线玩家列表（联盟位置只查在线成员）
+CMD_INGAME_TIME = 'TransferIdentityFix.GetInGameTime'  # 2026-11-08：我们插件自带（可让 ExtendedRcon 退役）
 CMD_SAVE_WORLD = 'SaveWorld'  # v17：原生 RCON 保存世界（强制存档，cryo.json.gz 落地后前端拉最新球数据）
 
 # 内存状态缓存（供 /api/states/sensor.* 兼容轮询）：key = sensor 名，value = {state, attributes}
@@ -6192,7 +6193,10 @@ SRVCTL_STARTQ_HEAVY_MAX = 2          # 重压期并发上限
 SRVCTL_STARTQ_HEAVY_TIMEOUT = 900    # 槽位占用超时（秒）；v6011：600->900（完成判据改 advertising，每台多等 ~30s）
 SRVCTL_STARTQ_ITEM_TIMEOUT = 900     # 单台总超时（秒）
 SRVCTL_STARTQ_TICK = 2               # 轮询间隔（秒）
-SRVCTL_STARTQ_FIRST_TIMEOUT = 180    # v6011：等「日志首行出现/变化」上限（原硬编码 90s；实测 Bob 67s 才出首行）
+SRVCTL_STARTQ_FIRST_TIMEOUT = 180
+# v6343（用户实测「启动失败后没有自动重试」）：启动队列失败自动重新入队的次数上限
+#   （实测失败原因多为瞬时性：Error querying server mods: ApiError serverUnreachable / CF 超时）
+STARTQ_AUTO_RETRY = 3   # v6344（用户口径）：自动重试上限 2 -> 3    # v6011：等「日志首行出现/变化」上限（原硬编码 90s；实测 Bob 67s 才出首行）
 _SRVCTL_STARTQ_LOCK = threading.Lock()   # v6004fix：与 9 处使用名保持一致（原缺前导下划线 -> NameError -> 请求断连）
 _SRVCTL_STARTQ = {
     'running': False, 'user': '', 'ts': 0.0, 'total': 0,
@@ -6392,8 +6396,11 @@ def _startq_worker():
                             _posmap[_k[:-6]] = (_t.get('meta') or {}).get('qpos')
                 except Exception:
                     _posmap = {}
+                _qsrc2 = _SRVCTL_STARTQ.get('qsrc') or {}
                 for _i, _s in enumerate(_qlist):
                     _pos = _i + 1
+                    if str(_qsrc2.get(_s) or '') in DEPLOY_SRCS:   # v6339：分发条不写 start 任务
+                        continue
                     if _posmap.get(_s) == _pos:
                         continue
                     try:
@@ -6529,11 +6536,65 @@ def _startq_worker():
                     #   全都只改内存里的 v ⇒ 任务条永远停在最后的 run pct（如 8%），
                     #   而队列概览已判失败 ⇒ 「3 条还在跑 8%」+「已完成 1/4（失败 3）」自相矛盾。
                     if not v.get('ok'):
+                        _why = str(v.get('err') or u'启动失败')[:300]
+                        _trs = _SRVCTL_STARTQ.get('tries')
+                        if not isinstance(_trs, dict):
+                            _trs = {}
+                            _SRVCTL_STARTQ['tries'] = _trs
+                        _tn = int(_trs.get(srv) or 0) + 1
+                        if _tn <= STARTQ_AUTO_RETRY:
+                            # v6343（用户实测「启动失败后没有自动重试」）：
+                            #   瞬时性失败（启动时 CF 查 mods 超时 / 进程退出）自动重新入队，
+                            #   上限 STARTQ_AUTO_RETRY 次；重试仍失败才置 fail（仍可手动「重试」）。
+                            _trs[srv] = _tn
+                            _SRVCTL_STARTQ['queue'].append(srv)
+                            try:
+                                _qu = _SRVCTL_STARTQ.get('quser')
+                                if not isinstance(_qu, dict):
+                                    _qu = {}
+                                    _SRVCTL_STARTQ['quser'] = _qu
+                                _qu[srv] = v.get('user') or _SRVCTL_STARTQ.get('user') or ''
+                                _qs2 = _SRVCTL_STARTQ.get('qsrc')
+                                if not isinstance(_qs2, dict):
+                                    _qs2 = {}
+                                    _SRVCTL_STARTQ['qsrc'] = _qs2
+                                _qs2[srv] = str(v.get('src') or '')
+                                _srv_lock_set(srv, 'queue', 'queue|%s' % srv, u'启动队列',
+                                              user=v.get('user') or '', ttl=SRV_LOCK_TTL)
+                            except Exception:
+                                _sexc('startq_retry_meta')
+                            if str(v.get('src') or '') not in DEPLOY_SRCS:
+                                try:
+                                    _utask_put('%s|start' % srv, srv, 'start',
+                                               v.get('user') or 'srvctl',
+                                               msg=u'第 %d 次自动重试（%s）'
+                                                   % (_tn, _why[:80]),
+                                               pct=0, phase='queue')
+                                except Exception:
+                                    pass
+                            try:
+                                _srvctl_log(v.get('user') or '', srv, 'start', False, 0,
+                                            (u'RETRY %d/%d：%s' % (_tn, STARTQ_AUTO_RETRY, _why))[:250],
+                                            src=str(v.get('src') or 'auto'))
+                            except Exception:
+                                pass
+                        else:
+                            _trs.pop(srv, None)
+                            if str(v.get('src') or '') not in DEPLOY_SRCS:
+                                try:
+                                    _utask_put('%s|start' % srv, srv, 'start',
+                                               v.get('user') or 'srvctl',
+                                               msg=(u'启动失败（已自动重试 %d 次）'
+                                                    % STARTQ_AUTO_RETRY),
+                                               pct=0, phase='fail',
+                                               err=_why)
+                                except Exception:
+                                    pass
+                    else:
                         try:
-                            _utask_put('%s|start' % srv, srv, 'start',
-                                       v.get('user') or 'srvctl',
-                                       msg=u'启动失败', pct=0, phase='fail',
-                                       err=str(v.get('err') or u'启动失败')[:300])
+                            _trs_ok = _SRVCTL_STARTQ.get('tries')
+                            if isinstance(_trs_ok, dict):
+                                _trs_ok.pop(srv, None)
                         except Exception:
                             pass
             # v6219（P2-3）：外部启动也计入重压占用 ⇒ 队列自动让路
@@ -6561,7 +6622,9 @@ def _startq_worker():
                 't0': now, 'baseFirst': '', 'heavy': True, 't_heavy': now,
                 'seenProc': False, 'pct': 0, 'label': u'启动游戏进程',
                 'phase': 'run', 'msg': u'已下发，等待进程…', 'err': '',
-                'user': _u0, 'sending': True}
+                'user': _u0, 'sending': True,
+                'src': _s0,   # v6343：分发来源不写 srv|start 条
+                'tries': int((_SRVCTL_STARTQ.get('tries') or {}).get(srv_next) or 0)}
         # ---- 下发（锁外，ASAM 调用可能耗时数秒）----
         if not _srvctl_acquire(srv_next, 'start'):
             with _SRVCTL_STARTQ_LOCK:
@@ -6624,6 +6687,61 @@ def _startq_worker():
                         src=(_s0 or ''))
         except Exception:
             pass
+
+
+# ===== v6339（用户口径）：分发融合任务条 =====
+#   · 一台服一条 `deploy|<srv>`（MOD/API 共用，同服多次分发覆盖同一条）
+#   · 起服阶段不再另开 `srv|start` 独立条（该服的 src 在 DEPLOY_SRCS 里即跳过登记）
+#   · 起服失败复用启动队列 + ASA 进程状态判定重试（最多 DEPLOY_START_TRY 次）
+DEPLOY_SRCS = ('apideploy', 'moddeploy', 'deploy')
+DEPLOY_START_TRY = 3
+DEPLOY_START_WAIT = 150
+
+
+def _deploy_start_retry(srv, user, src=u'deploy', note=None):
+    """分发后的起服（含失败重试）。复用启动队列 + ASA 进程状态。
+       返回 (ok, err)。"""
+    def _n(t):
+        try:
+            if note:
+                note(t)
+        except Exception:
+            pass
+    last = u''
+    for att in range(1, DEPLOY_START_TRY + 1):
+        _n(u'起服中…（第 %d/%d 次）' % (att, DEPLOY_START_TRY))
+        try:
+            _srvctl_startq_new(user, [srv], src)
+        except Exception as e:
+            last = u'起服下发失败：%s' % repr(e)[:160]
+            time.sleep(3)
+            continue
+        t0 = time.time()
+        seen = False
+        while (time.time() - t0) < DEPLOY_START_WAIT:
+            time.sleep(3)
+            try:
+                ps = str((_srvctl_proc_snapshot() or {}).get(srv) or '')
+            except Exception:
+                ps = ''
+            if ps in ('Starting', 'Running'):
+                seen = True
+            if seen and ps == 'Running':
+                return True, u''
+            if seen and ps == 'Stopped':
+                last = u'起服过程中进程退出'
+                break
+            if not ps:
+                try:
+                    if _cfg_proc_start(srv, force=True):
+                        return True, u''
+                except Exception:
+                    pass
+        if not last:
+            last = u'起服超时（%d 秒内未见 Running）' % DEPLOY_START_WAIT
+        _n(u'第 %d 次起服未成功：%s' % (att, last))
+        time.sleep(5)
+    return False, last
 
 
 def _srvctl_startq_new(user, servers, src=''):
@@ -6714,7 +6832,11 @@ def _srvctl_startq_new(user, servers, src=''):
             except Exception:
                 pass
         # v6122：入队即登记任务（共享进度）
+        # v6339（用户口径）：分发（API/MOD）自身的融合条已含「起服」步骤
+        #   ⇒ 不再另开 `srv|start` 独立条（否则用户看到两条）
         for _s in add:
+            if str(_qs.get(_s) or '') in DEPLOY_SRCS:
+                continue
             try:
                 _utask_put('%s|start' % _s, _s, 'start', user,
                            msg=u'排队中…', pct=0, phase='queue')
@@ -8064,7 +8186,7 @@ def ingame_time(server, fresh=False):
             d['serverNowMs'] = now_ms
             return d
         try:
-            raw = rcon_command(RCON_HOST, port, RCON_PASSWORD, 'GetInGameTime')
+            raw = rcon_command(RCON_HOST, port, RCON_PASSWORD, CMD_INGAME_TIME)
         except Exception as e:
             return {'ok': False, 'server': server, 'error': 'rcon: ' + str(e), 'serverNowMs': now_ms}
         text = (raw or b'').decode('utf-8', errors='ignore')
@@ -9047,6 +9169,70 @@ RESTART_SKIP_EMPTY = {'Bob'}
 SAVEKILL_STEPS = (('saveworld', u'存档'), ('verify', u'存档校验'), ('kill', u'终止'))
 
 
+# ===== v6338（用户口径「5 个步骤点的 tips 都是 ////」）：分步圆点真正着色 =====
+#   背景：MOD/API 分发、MOD/API 清理、本地包下载共 5 处 steps 原本是**纯字符串**，
+#   前端只认 {key,label,state} ⇒ 名字丢失（tips 成 " /  /  / "）、圆点恒灰。
+#   统一改为 _steps_apply() 生成带 state 的数组，零调用点改动（按 pct + phase + msg 自动推断）。
+STEP_5_DEPLOY = (('stop', u'停服'), ('bak', u'备份'), ('copy', u'复制'),
+                 ('verify', u'校验'), ('start', u'起服'))
+STEP_3_CLEAN = (('scan', u'扫差异'), ('move', u'移入备份'), ('refresh', u'刷新状态'))
+STEP_4_PKG = (('query', u'查询最新版本'), ('dl', u'下载'),
+              ('unpack', u'解压'), ('verify', u'校验入库'))
+STEP_4_ZH = (('remote', u'读云端清单'), ('dl', u'下载'),
+             ('unpack', u'解压'), ('manifest', u'写清单'))
+
+# pct 阈值 -> 「前 N 步已 ok、第 N+1 步进行中」
+_STEP_PCT_TABLE = {
+    'deploy': ((100, 5), (90, 4), (70, 3), (45, 2), (20, 1), (0, 0)),
+    'clean': ((100, 3), (6, 1), (0, 0)),
+    'pkg': ((100, 4), (90, 3), (70, 2), (10, 1), (0, 0)),
+    'zh': ((100, 4), (70, 3), (10, 1), (0, 0)),
+}
+
+
+def _steps_apply(defs, pct, phase, msg, kind):
+    """按进度算出 [{'key','label','state'}]。
+       · phase ok/done ⇒ 全 ok
+       · phase fail ⇒ 用 msg 关键词定位失败步（该步 fail、之前 ok、之后 wait），
+         找不到关键词就用 pct 推断的当前步标 fail
+       · 其余 ⇒ 前 N 步 ok、第 N+1 步 run、余 wait"""
+    its = [{'key': str(k), 'label': str(lab), 'state': 'wait'} for k, lab in (defs or ())]
+    n = len(its)
+    if not n:
+        return its
+    if phase in ('ok', 'done'):
+        for x in its:
+            x['state'] = 'ok'
+        return its
+    p = int(pct or 0)
+    tab = _STEP_PCT_TABLE.get(kind) or ((100, n), (0, 0))
+    done_n = 0
+    for lim, k2 in tab:
+        if p >= lim:
+            done_n = k2
+            break
+    done_n = max(0, min(n, done_n))
+    if phase == 'fail':
+        M = msg or u''
+        idx = -1
+        for i, x in enumerate(its):
+            lab = x['label']
+            if not lab:
+                continue
+            if (lab in M) or (len(lab) > 2 and lab[:2] in M):
+                idx = i
+                break
+        if idx < 0:
+            idx = min(n - 1, done_n)
+        for i, x in enumerate(its):
+            x['state'] = 'fail' if i == idx else ('ok' if i < idx else 'wait')
+        return its
+    for i, x in enumerate(its):
+        x['state'] = 'ok' if i < done_n else ('run' if i == done_n else 'wait')
+    return its
+
+
+
 def _savekill_steps_obj(states):
     _s = states or {}
     return [{'key': k, 'label': lab, 'state': _s.get(k, 'wait')} for k, lab in SAVEKILL_STEPS]
@@ -9065,7 +9251,7 @@ def _savekill_states_by_pct(pct):
         return {'saveworld': 'run'}
     return {}
 RESTART_CLUSTER_QUIET = 180
-RESTART_MAX_ATTEMPTS = 2
+RESTART_MAX_ATTEMPTS = 3   # v6345（用户口径）：与启动队列口径一致，最多重试 3 次
 # v6164（计划 §16 第 6~7 项）
 RESTART_START_COOLDOWN = 600        # C7：同一批编排 10 分钟内不重复启动（只更新公告）；手动演练不拦
 # v6200（A+C，用户口径）：换 IP 后玩家会瞬间全掉线，但「掉线」≠「走光」。
@@ -9311,11 +9497,16 @@ def _restart_label(dry=None):
     _d = bool(_RESTART.get('dry')) if dry is None else bool(dry)
     if _mode in ('update', 'rollback'):
         _vk = str(_RESTART.get('verKind') or '')
-        _suf = u'·强制' if _vk == 'forced' else (u'·补丁' if _vk == 'patch' else '')
-        _base = (u'回滚（分发）' if _mode == 'rollback' else u'更新（分发）')
         _tg = _RESTART.get('targets') or ['server']
-        _zsuf = (u'·本体+汉化' if ('server' in _tg and 'zh' in _tg)
-                 else (u'·汉化' if 'zh' in _tg else ''))
+        # v6335（用户口径）：只有本次真的分发了服务器本体，才谈得上「强制更新」——
+        #   原实现只看 verKind，没勾本体也会写「·强制」，与自动重启「按实际动作取名」不一致。
+        _suf = ((u'·强制' if _vk == 'forced' else (u'·补丁' if _vk == 'patch' else ''))
+                if ('server' in _tg) else '')
+        _base = (u'回滚（分发）' if _mode == 'rollback' else u'更新（分发）')
+        # v6340（方案 A）：四类目标全部列出（本体/汉化/MOD/API）
+        _pname = {'server': u'本体', 'zh': u'汉化', 'mod': u'MOD', 'api': u'API'}
+        _parts = [_pname[k] for k in ('server', 'zh', 'mod', 'api') if k in _tg]
+        _zsuf = (u'·' + u'+'.join(_parts)) if _parts else u''
         return _base + _suf + _zsuf + (u'·演练' if _d else '')
     return (u'重启（IP 切换·演练）' if _d else u'重启（IP 切换）')
 
@@ -9397,8 +9588,11 @@ def _restart_push_batch():
         if _RESTART.get('_batchSig') == _sig2:
             return
         _RESTART['_batchSig'] = _sig2
+        # v6335（用户口径）：批次条也要带实际服务器名 —— 原 server/srvName 都空，
+        #   前端 fallback 成「全服」，单台分发时被读成「全服在更新」。
+        _bnm = u'、'.join(_restart_cn(k) for k in sorted(svs.keys()))
         _utask_put('restart|__batch', '', 'restart', 'ipwatch',
-                   label=_restart_label(dry),
+                   label=_restart_label(dry), srv_name=_bnm[:60],
                    msg=msg, pct=pct, phase=phase,
                    meta={'batch': True, 'done': dn, 'fail': fl, 'total': tot,
                          'dry': dry, 'reason': _RESTART.get('reason') or '',
@@ -9638,7 +9832,7 @@ def _batch_busy_error(busy, owner, left, kind):
 
 
 def _restart_start(reason, dry_override=None, force=False, mode='restart',
-                   servers=None, ver_kind='', src_root='', targets=None):
+                   servers=None, ver_kind='', src_root='', targets=None, deploy_plans=None):
     """v6228（P1）：支持 mode / servers
        · servers=None   => 全部 11 台（restart 原行为完全不变）
        · servers=[...]  => **只调度这些台**（需求 ①：只对选中服分发）
@@ -9697,7 +9891,8 @@ def _restart_start(reason, dry_override=None, force=False, mode='restart',
         _tg_list = []
         for _t in (targets if isinstance(targets, (list, tuple)) else ['server']):
             _t2 = str(_t or '').strip().lower()
-            if _t2 in ('server', 'zh') and (_t2 not in _tg_list):
+            # v6340：MOD / API 也是合法目标（方案 A）
+            if _t2 in ('server', 'zh', 'mod', 'api') and (_t2 not in _tg_list):
                 _tg_list.append(_t2)
         if not _tg_list:
             _tg_list = ['server']
@@ -9706,6 +9901,7 @@ def _restart_start(reason, dry_override=None, force=False, mode='restart',
                          'lastStartAt': time.time(),
                          'mode': _mode, 'verKind': str(ver_kind or ''),
                          'srcRoot': str(src_root or ''), 'targets': _tg_list,
+                         'deployPlans': dict(deploy_plans or {}),
                          '_batchSig': None})
         now = time.time()
         # v6200（A）：换 IP 触发 ⇒ 开启宽限期（不计空置），并记录「是否见到过玩家」
@@ -10235,6 +10431,8 @@ def _restart_exec_sync(srv, src_root=None):
         _tg = _RESTART.get('targets') or ['server']
         _do_sv = ('server' in _tg)
         _do_zh = ('zh' in _tg)
+        _do_mod = ('mod' in _tg)      # v6340：MOD / API 分发并入本编排
+        _do_api = ('api' in _tg)
         _msgs = []
         _fail_files = []      # v6255：失败文件清单 [{rel, err}]
         try:
@@ -10348,6 +10546,21 @@ def _restart_exec_sync(srv, src_root=None):
                 _msgs.append(u'汉化 %s' % _zmsg)
                 if not _zok:
                     raise RuntimeError(u'汉化失败：%s' % _zmsg)
+            # v6340：MOD / API 分发（同一条融合任务条内完成，失败走 _restart_step_fail 重试）
+            if _do_mod:
+                st['msg'] = u'准备复制 MOD…'
+                st['pct'] = 92
+                _mok, _mmsg = _deploy_mod_apply(srv, st)
+                _msgs.append(u'MOD %s' % _mmsg)
+                if not _mok:
+                    raise RuntimeError(u'MOD 分发失败：%s' % _mmsg)
+            if _do_api:
+                st['msg'] = u'准备复制 API…'
+                st['pct'] = 94
+                _aok2, _amsg2 = _deploy_api_apply(srv, st)
+                _msgs.append(u'API %s' % _amsg2)
+                if not _aok2:
+                    raise RuntimeError(u'API 分发失败：%s' % _amsg2)
             ok = True
             msg = u'；'.join([x for x in _msgs if x]) or u'无变更'
         except Exception as e:
@@ -10367,6 +10580,108 @@ def _restart_exec_sync(srv, src_root=None):
         _RCON_EXECUTOR.submit(_job)
     except Exception:
         threading.Thread(target=_job, daemon=True).start()
+
+
+# ===== v6340（用户口径「改走方案 A」）：MOD / API 分发并入编排 ----------
+#   目标：游戏本体 / 汉化 / MOD / API 四类分发全部走同一条 `restart|<srv>` 融合任务条，
+#   共享公告→空置→存档→停服→复制→起服→校验 + 失败重试。
+#   计划由 /api/update/apply 预先算好存入 _RESTART['deployPlans']。
+def _deploy_mod_apply(srv, st=None):
+    """把该服待分发的 MOD 复制进服（备份旧目录 -> copytree -> 文件数校验）。
+       计划元素：{srv, pid, want, src, cur}。返回 (ok, msg)。"""
+    pl = [x for x in ((_RESTART.get('deployPlans') or {}).get('mod') or []) if x.get('srv') == srv]
+    if not pl:
+        return True, u'无待分发 MOD'
+    ts = time.strftime('%Y%m%d_%H%M%S')
+    bak_root = os.path.join(_upd_cache_dir(), '_modbak', ts, srv)
+    tgt_base = _mods_dir_of(srv)
+    done, fails = 0, []
+    for p in pl:
+        pid = str(p.get('pid') or '')
+        want = str(p.get('want') or '')
+        src = str(p.get('src') or '')
+        nm = u'%s_%s' % (pid, want)
+        try:
+            if not src or not os.path.isdir(src):
+                fails.append(u'%s：源不存在' % nm)
+                continue
+            if not os.path.isdir(tgt_base):
+                os.makedirs(tgt_base)
+            # 备份同 pid 的旧目录
+            for x in os.scandir(tgt_base):
+                if x.is_dir() and x.name.split('_')[0] == pid:
+                    if not os.path.isdir(bak_root):
+                        os.makedirs(bak_root)
+                    try:
+                        _mods_strip_ls(x.path)
+                    except Exception:
+                        pass
+                    shutil.move(x.path, os.path.join(bak_root, x.name))
+            dst = os.path.join(tgt_base, nm)
+            if os.path.isdir(dst):
+                shutil.rmtree(dst, ignore_errors=True)
+            shutil.copytree(src, dst)
+            src_n = sum(len(fs) for _, _, fs in os.walk(src))
+            dst_n = sum(len(fs) for _, _, fs in os.walk(dst))
+            if src_n != dst_n or src_n <= 0:
+                fails.append(u'%s：校验失败 %d/%d' % (nm, dst_n, src_n))
+            else:
+                done += 1
+        except Exception as e:
+            fails.append(u'%s：%s' % (nm, repr(e)[:120]))
+    if fails:
+        return False, u'；'.join(fails[:3])
+    return True, (u'%d 个 MOD 已复制' % done)
+
+
+def _deploy_api_apply(srv, st=None):
+    """把该服待分发的 API 文件复制进服（备份 -> copy2 -> md5 校验，失败回滚）。
+       计划元素来自 _api_deploy_plan3：{srv,name,rel,src,wantMd5}。返回 (ok, msg)。"""
+    pl = [x for x in ((_RESTART.get('deployPlans') or {}).get('api') or []) if x.get('srv') == srv]
+    if not pl:
+        return True, u'无待分发 API'
+    ts = time.strftime('%Y%m%d_%H%M%S')
+    bdir = os.path.join(_upd_cache_dir(), '_apibak', ts, srv)
+    win = _srv_win64(srv)
+    fails, n_ok = [], 0
+    for it in pl:
+        try:
+            dp = os.path.join(win, it['rel'])
+            d2 = os.path.dirname(dp)
+            if d2 and not os.path.isdir(d2):
+                os.makedirs(d2)
+            if os.path.isfile(dp):
+                bp = os.path.join(bdir, it['rel'])
+                bd = os.path.dirname(bp)
+                if bd and not os.path.isdir(bd):
+                    os.makedirs(bd)
+                shutil.copy2(dp, bp)
+            try:
+                os.chmod(dp, _stat.S_IWRITE)
+            except Exception:
+                pass
+            shutil.copy2(it['src'], dp)
+            if it.get('wantMd5') and _md5_of(dp) != it['wantMd5']:
+                fails.append(u'%s：md5 不一致' % (it.get('name') or it['rel']))
+            else:
+                n_ok += 1
+        except Exception as e:
+            fails.append(u'%s：%s' % (it.get('name') or it.get('rel'), repr(e)[:120]))
+    if fails:
+        try:
+            for it in pl:
+                dp = os.path.join(win, it['rel'])
+                bp = os.path.join(bdir, it['rel'])
+                if os.path.isfile(bp):
+                    try:
+                        os.chmod(dp, _stat.S_IWRITE)
+                    except Exception:
+                        pass
+                    shutil.copy2(bp, dp)
+        except Exception:
+            _sexc('deploy_api_rollback')
+        return False, u'；'.join(fails[:3]) + u'（已回滚）'
+    return True, (u'%d 项已更新' % n_ok)
 
 
 def _restart_step_fail(srv, st, why):
@@ -10959,6 +11274,13 @@ def _restart_tick():
         _RESTART['running'] = False
         _RESTART['current'] = ''
         _restart_log('ALL DONE reason=%s dry=%s' % (_RESTART.get('reason'), _RESTART.get('dry')))
+        # v6335（用户口径）：收尾后**再**推一次批次条 ——
+        #   原顺序是「先 push 再 running=False」，push 时 running 仍 True ⇒ 批次条永远 phase=run
+        #   ⇒ 永不消失；后端重启时还会被 _utask_load 判成「中断失败」。
+        try:
+            _restart_push_batch()
+        except Exception:
+            pass
         _restart_rerun_pending()
 
 
@@ -11380,6 +11702,2065 @@ def _asaapi_state(cards=None):
         return ('ready' if meta['hit'] else 'building'), raw, meta
     except Exception:
         return 'unknown', '', {'updated': '', 'fetchedAt': 0, 'total': 0, 'hit': False}
+
+
+# ===== v6283（用户口径 Round 1）：MOD / API 只读状态（服务器更新浮窗两张卡）=====
+MODS_GAMEID = '83374'          # CurseForge gameId（ARK: Survival Ascended，固定）
+# v6284（用户口径）：MOD 策略 —— Bob 固定自己那套；其他 10 服用「统一列表」（默认为空，由系统管理配置）
+MODS_POLICY_DEFAULT = {'bob': '1005639', 'common': []}
+# v6284（用户口径）：API 只保留这三样，其余一律判为「多余 · 应清理」
+API_REQUIRED_LIB = 'AsaApi'                      # 库本体
+API_REQUIRED_PLUGINS = ('Permissions', 'ServerOpsKitAPI')
+# v6298（用户口径）：AsaApi.dll 没有 PE 版本资源（GetFileVersionInfo 返回空），
+#   用**文件大小指纹**映射版本号；新增版本时在此补一行即可（人工核对官方 release 的 dll 大小）。
+ASA_API_VER_BY_SIZE = {
+    7308288: '2.03',
+    7335424: '2.1',   # 2026-11-08 官方 2.1 包（_apipkg/2.1/ArkApi/AsaApi.dll 同指纹）
+}
+_MODS_CACHE = {'at': 0.0, 'data': None}
+_API_CACHE = {'at': 0.0, 'data': None}
+MODS_TTL = 30.0
+API_TTL = 30.0
+
+
+def _mods_policy():
+    """MOD 策略：{bob: str, common: [str]}；Bob 固定，其余服共用 common 列表"""
+    out = {'bob': MODS_POLICY_DEFAULT['bob'], 'common': list(MODS_POLICY_DEFAULT['common'])}
+    try:
+        d = _srv_cfg_read()
+        raw = d.get('mods_policy')
+        if isinstance(raw, dict):
+            bob = str(raw.get('bob') or '').strip()
+            if bob:
+                out['bob'] = bob
+            cm = raw.get('common')
+            if isinstance(cm, list):
+                out['common'] = [str(x).strip() for x in cm if str(x).strip()]
+            elif isinstance(cm, str):
+                out['common'] = [x.strip() for x in cm.replace(u'，', ',').split(',') if x.strip()]
+    except Exception:
+        pass
+    return out
+
+
+def _mods_expect_of(srv, policy=None):
+    """该服「应该装哪些 ProjectId」——Bob 只认 bob，其他服认 common"""
+    po = policy or _mods_policy()
+    if srv == 'Bob':
+        return ([po['bob']] if po.get('bob') else [])
+    return list(po.get('common') or [])
+
+
+def _read_text(p, enc='utf-8-sig'):
+    """安全读文本（后端无 import io，统一走内置 open）"""
+    try:
+        with open(p, encoding=enc, errors='replace') as fh:
+            return fh.read()
+    except Exception:
+        return ''
+
+
+def _srv_win64(srv):
+    return os.path.join(CFG_SERVERS_DIR, srv, 'ShooterGame', 'Binaries', 'Win64')
+
+
+def _dir_size(p):
+    t = 0
+    try:
+        for root, ds, fs in os.walk(p):
+            for x in fs:
+                try:
+                    t += os.path.getsize(os.path.join(root, x))
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    return t
+
+
+def _mt_str(p):
+    try:
+        return time.strftime('%Y-%m-%d %H:%M', time.localtime(os.stat(p).st_mtime))
+    except Exception:
+        return ''
+
+
+def _mt_epoch(p):
+    try:
+        return os.stat(p).st_mtime
+    except Exception:
+        return 0.0
+
+
+def _mod_infos_of(srv):
+    """Profile\\modInfos.json → {pid: dict}（仅展示补充；实测滞后，不作判定依据）"""
+    p = os.path.join(CFG_SERVERS_DIR, srv, 'Profile', 'modInfos.json')
+    out = {}
+    try:
+        arr = json.loads(_read_text(p) or '[]')
+        for it in (arr or []):
+            if not isinstance(it, dict):
+                continue
+            pid = str(it.get('ProjectId') or '').strip()
+            if pid:
+                out[pid] = it
+    except Exception:
+        pass
+    return out
+
+
+def mods_status():
+    """MOD 卡数据：以磁盘 83374\\<pid>_<fid> 为唯一判定源（纯只读）"""
+    now = time.time()
+    if _MODS_CACHE['data'] is not None and (now - _MODS_CACHE['at']) < MODS_TTL:
+        return _MODS_CACHE['data']
+    t0 = time.time()
+    servers, groups = {}, {}
+    policy = _mods_policy()
+    total = 0
+    ls_cnt, ls_size = 0, 0
+    for srv in SERVERS.keys():
+        base = os.path.join(_srv_win64(srv), 'ShooterGame', 'Mods', MODS_GAMEID)
+        infos = _mod_infos_of(srv)
+        items = []
+        if os.path.isdir(base):
+            try:
+                # v6352（用户口径「怎么还残留 .temp 这行」）：CFCore 下载残留的 .temp 等**点目录不是 MOD**，
+                #   扫进来会变成一条假的「MOD 版本组」（界面显示：.temp　1 台）。
+                keys = sorted([x.name for x in os.scandir(base)
+                               if x.is_dir() and not x.name.startswith(u'.')])
+            except Exception:
+                keys = []
+            for k in keys:
+                kp = os.path.join(base, k)
+                roots = []
+                try:
+                    roots = sorted([x.name for x in os.scandir(kp) if x.is_dir()])
+                except Exception:
+                    pass
+                rt = roots[0] if roots else ''
+                name, desc, murl = rt, '', ''
+                if rt:
+                    try:
+                        j = json.loads(_read_text(os.path.join(kp, rt, rt + '.uplugin')) or '{}')
+                        name = str(j.get('FriendlyName') or rt)
+                        desc = str(j.get('Description') or '')
+                        murl = str(j.get('MarketplaceURL') or '')
+                    except Exception:
+                        pass
+                pid, _, fid = k.partition('_')
+                info = infos.get(pid) or {}
+                sz = _dir_size(kp)
+                lsb = 0
+                if rt:
+                    lsp = os.path.join(kp, rt, 'Content', 'Movies', 'LoadingScreen.bk2')
+                    if os.path.isfile(lsp):
+                        try:
+                            lsb = os.path.getsize(lsp)
+                        except Exception:
+                            lsb = 0
+                if lsb:
+                    ls_cnt += 1
+                    ls_size = max(ls_size, lsb)
+                items.append({'dir': k, 'pid': pid, 'fid': fid, 'root': rt,
+                              'name': name, 'desc': desc[:200], 'url': murl,
+                              'size': sz, 'mtime': _mt_str(kp), 'lsSize': lsb,
+                              'summary': str(info.get('Summary') or '')[:200],
+                              'author': str(info.get('AuthorName') or ''),
+                              'downloads': int(info.get('DownloadCount') or 0),
+                              'image': str(info.get('ImageUrl') or ''),
+                              'registeredFileId': str(info.get('FileId') or '')})
+                total += sz
+                # v6284（用户口径）：分组按「前段 ProjectId」——后段 FileId 只是版本，不算不同 MOD
+                groups.setdefault(pid, {}).setdefault(fid, []).append(srv)
+        # 期望 vs 实际（策略判定）
+        expect = _mods_expect_of(srv, policy)
+        actual = dict((it['pid'], it['fid']) for it in items)
+        missing = [x for x in expect if x not in actual]
+        extra = [x for x in actual.keys() if x not in expect]
+        servers[srv] = {'exists': os.path.isdir(base), 'items': items,
+                        'expect': expect, 'actual': actual,
+                        'missing': missing, 'extra': extra,
+                        'conform': (not missing) and (not extra)}
+    reclaim = (ls_size * (ls_cnt - 1)) if (ls_cnt > 1 and ls_size) else 0
+    # 基准版本（每个 pid 取「最新 fid」，判据=目录 mtime 最新者）——分发时用
+    base_fid = {}
+    for pid, fmap in groups.items():
+        best, best_ts = '', -1
+        for fid, svs in fmap.items():
+            for sv in svs:
+                for it in (servers.get(sv, {}).get('items') or []):
+                    if it['pid'] == pid:
+                        kp = os.path.join(_srv_win64(sv), 'ShooterGame', 'Mods', MODS_GAMEID, it['dir'])
+                        tsv = _mt_epoch(kp)
+                        if tsv > best_ts:
+                            best_ts, best = tsv, fid
+        base_fid[pid] = best
+    conform_n = sum(1 for sv in servers.values() if sv.get('conform'))
+    data = {'ok': True, 'gameId': MODS_GAMEID, 'servers': servers, 'groups': groups,
+            'policy': policy, 'baseFid': base_fid,
+            'localPack': _mods_local_pack(),
+            'conformCount': conform_n, 'serverCount': len(SERVERS),
+            'totalBytes': total, 'reclaimableBytes': reclaim,
+            'loadingScreen': {'count': ls_cnt, 'size': ls_size},
+            'ms': int((time.time() - t0) * 1000)}
+    _MODS_CACHE['at'] = now
+    _MODS_CACHE['data'] = data
+    return data
+
+
+def _plugin_scan(dirp):
+    """扫一个插件目录 → [{name, version, minApi, dll, dllSize, dllMtime}]"""
+    out = []
+    try:
+        names = sorted([x.name for x in os.scandir(dirp) if x.is_dir()], key=lambda s: s.lower())
+    except Exception:
+        return out
+    for nm in names:
+        dp = os.path.join(dirp, nm)
+        info, ierr = {}, ''
+        ip = os.path.join(dp, 'PluginInfo.json')
+        try:
+            info = json.loads(_read_text(ip) or '{}')
+        except Exception as _e:
+            ierr = '%s: %s' % (type(_e).__name__, _e)
+            info = {}
+        dll, dsz, dmt, derr = '', 0, '', ''
+        try:
+            for f in os.scandir(dp):
+                if f.is_file() and f.name.lower().endswith('.dll'):
+                    dll = f.name
+                    dsz = f.stat().st_size
+                    dmt = _mt_str(f.path)
+                    break
+            if not dll:
+                derr = 'no_dll'
+        except Exception as _e2:
+            derr = '%s: %s' % (type(_e2).__name__, _e2)
+        out.append({'name': nm, 'version': str(info.get('Version') or ''),
+                    'minApi': str(info.get('MinApiVersion') or ''),
+                    'fullName': str(info.get('FullName') or ''),
+                    'dll': dll, 'dllSize': dsz, 'dllMtime': dmt,
+                    'err': ierr, 'derr': derr, 'dp': dp})
+    return out
+
+
+def _dc_ts_local(ts):
+    """Discord ISO 时间（UTC）-> 本地 'YYYY-MM-DD HH:MM'"""
+    try:
+        e = _cal.timegm(time.strptime(str(ts)[:19], '%Y-%m-%dT%H:%M:%S'))
+        return time.strftime('%Y-%m-%d %H:%M', time.localtime(e))
+    except Exception:
+        return ''
+
+
+def _dc_msg_text(m):
+    """Discord message -> 纯文本（content + embeds.title/description/fields）"""
+    parts = []
+    try:
+        c = (m.get('content') or '').strip()
+        if c:
+            parts.append(c)
+        for e in (m.get('embeds') or []):
+            if not isinstance(e, dict):
+                continue
+            au = ((e.get('author') or {}).get('name') or '').strip()
+            if au:
+                parts.append(au)
+            for k in ('title', 'description'):
+                v = (e.get(k) or '').strip()
+                if v:
+                    parts.append(v)
+            for fld in (e.get('fields') or []):
+                nm = (fld.get('name') or '').strip()
+                vl = (fld.get('value') or '').strip()
+                if nm or vl:
+                    parts.append((nm + ': ' + vl).strip())
+    except Exception:
+        pass
+    return '\n'.join(parts)
+
+
+def _api_discord_latest():
+    """v6288（用户口径）：最新 API 信息取自 Discord 接口抓取缓存（api_ver / api_cache），零网络"""
+    out = {}
+    try:
+        d = _news_read('api_ver') or {}
+        ms = [x for x in (d.get('messages') or []) if isinstance(x, dict)]
+        if ms:
+            t = _dc_msg_text(ms[-1])
+            out['verAt'] = _dc_ts_local(ms[-1].get('timestamp'))
+            out['verText'] = t[:600]
+            mv = re.search(r'(?i)AsaApi\s*v?([0-9]+(?:\.[0-9]+)+)', t)
+            out['verNum'] = mv.group(1) if mv else ''
+    except Exception as e:
+        out['verErr'] = repr(e)
+    try:
+        d2 = _news_read('api_cache') or {}
+        ms2 = [x for x in (d2.get('messages') or []) if isinstance(x, dict)]
+        if ms2:
+            t2 = _dc_msg_text(ms2[-1])
+            low = t2.lower()
+            out['cacheAt'] = _dc_ts_local(ms2[-1].get('timestamp'))
+            out['cacheText'] = t2[:600]
+            if 'success' in low:
+                out['cacheState'] = 'ready'
+            elif ('longer than usual' in low) or ('running' in low):
+                out['cacheState'] = 'building'
+            elif 'detected' in low:
+                out['cacheState'] = 'detected'
+            else:
+                out['cacheState'] = 'unknown'
+    except Exception as e:
+        out['cacheErr'] = repr(e)
+    return out
+
+
+def _lib_needs_upgrade(_dc, lib):
+    """v6297：本地 AsaApi.dll 是否落后于官方最新版本（用 dll 文件时间 vs Discord 发布公告时间判定）"""
+    try:
+        _va = str((_dc or {}).get('verAt') or '')
+        if not _va:
+            return False
+        for _sv in lib.values():
+            _dm = str(_sv.get('dllMtime') or '')
+            if not _dm:
+                return False            # 有服没装 dll -> 不标"需升级"（属缺库，另有展示）
+            if _dm < _va:
+                return True
+        return False
+    except Exception:
+        return False
+
+
+def api_status():
+    """API 卡数据：库一致性 + 缓存就绪 + 插件矩阵（纯只读）"""
+    now = time.time()
+    if _API_CACHE['data'] is not None and (now - _API_CACHE['at']) < API_TTL:
+        return _API_CACHE['data']
+    t0 = time.time()
+    lib, cache, plugs = {}, {}, {}
+    lib_sig = {}
+    _diag2 = {}
+    for srv in SERVERS.keys():
+        win = _srv_win64(srv)
+        dll = os.path.join(win, 'ArkApi', 'AsaApi.dll')
+        ld = os.path.join(win, 'AsaApiLoader.exe')
+        cfg = os.path.join(win, 'config.json')
+        dsz, dmt = 0, ''
+        if os.path.isfile(dll):
+            dsz = os.path.getsize(dll)
+            dmt = _mt_str(dll)
+        lib[srv] = {'dllExists': os.path.isfile(dll), 'dllSize': dsz, 'dllMtime': dmt,
+                    'dllVer': ASA_API_VER_BY_SIZE.get(dsz, ''),
+                    'loaderSize': (os.path.getsize(ld) if os.path.isfile(ld) else 0),
+                    'loaderMtime': _mt_str(ld), 'hasCfg': os.path.isfile(cfg)}
+        lib_sig.setdefault('%s|%s' % (dsz, dmt), []).append(srv)
+        exe = os.path.join(win, 'ArkAscendedServer.exe')
+        co = os.path.join(win, 'ArkApi', 'Cache', 'cached_offsets.cache')
+        ck = os.path.join(win, 'ArkApi', 'Cache', 'cached_key.cache')
+        gen, gen_at = '', 0.0
+        try:
+            gd = os.path.join(win, 'ArkApi', 'Cache', 'generations')
+            gens = [(os.stat(os.path.join(gd, x.name)).st_mtime, x.name)
+                    for x in os.scandir(gd) if x.is_dir()]
+            if gens:
+                gens.sort(reverse=True)
+                gen_at, gen = gens[0][0], gens[0][1]
+        except Exception:
+            gen, gen_at = '', 0.0
+        exe_at, co_at, ck_at = _mt_epoch(exe), _mt_epoch(co), _mt_epoch(ck)
+        # v6289（用户实测口径）：AsaApi 2.x 把偏移缓存写进 Cache\generations\<分代>\，
+        #   根目录 cached_offsets.cache 停在旧版（2026-07-04）不再更新 ⇒ 老判据永远 0/11。
+        #   新判据：根目录 offsets 或最新分代 任一 >= 服务端 exe 即视为就绪。
+        _best_at = max(co_at or 0.0, gen_at or 0.0)
+        cache[srv] = {'offsetsSize': (os.path.getsize(co) if os.path.isfile(co) else 0),
+                      'offsetsAt': _mt_str(co), 'keyAt': _mt_str(ck), 'generation': gen,
+                      'genAt': (time.strftime('%Y-%m-%d %H:%M', time.localtime(gen_at)) if gen_at else ''),
+                      'exeAt': _mt_str(exe),
+                      'ready': bool(_best_at and exe_at and _best_at >= exe_at)}
+        act = _plugin_scan(os.path.join(win, 'ArkApi', 'Plugins'))
+        dis = _plugin_scan(os.path.join(win, '_disabled_plugins'))
+        if srv == list(SERVERS.keys())[0]:
+            _diag2['pluginsRaw'] = act
+            _diag2['pluginsDisabledRaw'] = dis
+        for p in act:
+            _pe = plugs.get(p['name'])
+            if _pe is None:
+                _pe = {'version': p['version'], 'minApi': p['minApi'],
+                       'dllSize': p['dllSize'], 'dllMtime': p['dllMtime'],
+                       'servers': [], 'missing': [], 'disabled': [], 'vers': {}}
+                plugs[p['name']] = _pe
+            # v6334（用户口径）：原 setdefault 只保留首个服的版本，
+            #   Bob \u5347\u5230 0.8 \u540e\u4ecd\u663e\u793a v0.7\uff08\u53d6\u5230 Isl\uff09\u3002\u8fd9\u91cc\u6309 PluginInfo \u5206\u7ec4\u3002
+            _pv = str(p['version'] or '')
+            _pe['vers'].setdefault(_pv, []).append(srv)
+            _pe['servers'].append(srv)
+        for p in dis:
+            key = p['name'].split('_')[0] if '_' in p['name'] else p['name']
+            # v6286（用户口径）：启用目录里没有的插件**不登记** —— _disabled_plugins 只是历史残留，
+            #   不能因为它存在就把「0/11 台」的插件列进卡片（用户：明明一台都没有为什么显示）
+            if key not in plugs:
+                continue
+            plugs[key]['disabled'].append({'srv': srv, 'dir': p['name']})
+    all_srv = list(SERVERS.keys())
+    for nm, p in plugs.items():
+        p['missing'] = [s for s in all_srv if s not in p['servers']]
+        # v6334：版本取「台数最多的非空版本」（缺 PluginInfo 的空值不参与）
+        _cand = [(len(v), k) for k, v in (p.get('vers') or {}).items() if k]
+        if _cand:
+            _cand.sort(reverse=True)
+            p['version'] = _cand[0][1]
+        else:
+            p['version'] = ''
+        p['required'] = (nm in API_REQUIRED_PLUGINS)   # v6284：只保留 Permissions / ServerOpsKitAPI
+    lib_consistent = (len(lib_sig) == 1)
+    ready_cnt = sum(1 for s in all_srv if (cache.get(s) or {}).get('ready'))
+    _extras = sorted([nm for nm in plugs.keys() if nm not in API_REQUIRED_PLUGINS])
+    # v6287：自研源目录只读探测；v6312（用户口径）改用 UNC 网络地址
+    try:
+        _ps_p = SOK_SRC_UNC
+        _ps_e = os.path.isdir(_ps_p)
+        _diag2['pluginSrc'] = {'path': _ps_p, 'exists': _ps_e,
+                               'items': (sorted(os.listdir(_ps_p))[:40] if _ps_e else None)}
+    except Exception as _e_ps:
+        _diag2['pluginSrc'] = {'path': SOK_SRC_UNC, 'err': repr(_e_ps)}
+    _dc = _api_discord_latest()
+    _oc_state = str(_dc.get('cacheState') or 'unknown')
+    # v6301：自研源版本兜底 —— 插件 dll 本身不含任何版本信息（实测无 FileVersion/PluginInfo 资源），
+    #   版本号只在同目录 PluginInfo.json。源目录常只放了 dll ⇒ 用「dll 大小与已装插件比对」给出判断。
+    _lp_fix = _api_local_pack()
+    _sok = plugs.get('ServerOpsKitAPI') or {}
+    _inst_ver = str(_sok.get('version') or '')
+    _inst_sz = int(_sok.get('dllSize') or 0)
+    _src_sz = int(_lp_fix.get('srcDllSize') or 0)
+    _lp_fix['srcInstalledVer'] = _inst_ver
+    _lp_fix['srcSameAsInstalled'] = bool(_inst_sz and _src_sz and _inst_sz == _src_sz)
+    if not _lp_fix.get('srcVer') and _lp_fix['srcSameAsInstalled'] and _inst_ver:
+        _lp_fix['srcVer'] = _inst_ver
+        _lp_fix['srcVerSrc'] = 'same_size_as_installed'
+    try:
+        _need_map = _api_need_by_srv(_asa_targets())
+    except Exception:
+        _sexc('api_need_by_srv')
+        _need_map = {}
+    data = {'ok': True,
+            'apiNeed': _need_map,          # v6349：每服插件是否需要分发（与分发同源）
+            'requiredPlugins': list(API_REQUIRED_PLUGINS),
+            'latest': _dc,
+            'officialCacheState': _oc_state,
+            'officialCacheAt': _dc.get('cacheAt') or '',
+            'officialCacheText': _dc.get('cacheText') or '',
+            # v6290（用户口径）：就绪/分发门控 = 官方针对「最新游戏版本」的缓存是否已构建完成
+            #   （Discord api_cache 出 SUCCESS）；同时要求各服本地当前版本分代缓存齐备，
+            #   否则换 dll 会 offsets 不匹配、服务器起不来。
+            'deployReady': bool(_oc_state == 'ready' and ready_cnt >= len(all_srv)),
+            'localPack': _lp_fix,
+            # v6297（用户口径）：库是否需要升级 —— 本地 dll 文件时间早于官方最新版本发布公告时间
+            'libNeedsUpgrade': _lib_needs_upgrade(_dc, lib),
+            'extras': _extras,
+            'lib': lib, 'libConsistent': lib_consistent,
+            'libGroups': dict((k, v) for k, v in lib_sig.items()),
+            'cache': cache, 'cacheReadyCount': ready_cnt, 'serverCount': len(all_srv),
+            'plugins': plugs,
+            'diag': _diag2,
+            'ms': int((time.time() - t0) * 1000)}
+    _API_CACHE['at'] = now
+    _API_CACHE['data'] = data
+    return data
+
+
+# ===== v6284（用户口径）：MOD / API 分发（Round 2/3） =====
+def _upd_cache_dir():
+    """批次共享缓存根：<ARK Server>\\_upd_cache\\<batchId>\\..."""
+    return os.path.join(os.path.dirname(CFG_SERVERS_DIR), '_upd_cache')
+
+
+def _mods_new_batch():
+    return 'mb' + time.strftime('%Y%m%d%H%M%S') + ('%03d' % int((time.time() * 1000) % 1000))
+
+
+def _mods_local_pack():
+    """v6293（用户口径）：MOD 本地包 = _upd_cache 下 批次/mods/ 已缓存的版本（pid_fid）
+    v6353（方案 A）：把 _upd_cache/_modpkg/ 下的「真·本地包」（CurseForge 下载）一并统计"""
+    root = _upd_cache_dir()
+    items, tot, bat = [], 0, ''
+    _pkg_root = os.path.join(root, MODS_PKG_ROOT_NAME)
+    try:
+        if os.path.isdir(_pkg_root):
+            for y in os.scandir(_pkg_root):
+                if not y.is_dir() or y.name.endswith('.tmp'):
+                    continue
+                sz = _dir_size(y.path)
+                tot += sz
+                items.append({'key': y.name, 'bytes': sz, 'at': _mt_str(y.path), 'src': 'pkg'})
+    except Exception:
+        _sexc('mods_local_pack_pkg')
+    try:
+        cands = []
+        for x in os.scandir(root):
+            if not x.is_dir() or not x.name.startswith('mb'):
+                continue
+            md = os.path.join(x.path, 'mods')
+            if os.path.isdir(md):
+                cands.append((os.path.getmtime(x.path), x.name, md))
+        cands.sort(reverse=True)
+        if cands:
+            bat = cands[0][1]
+            md = cands[0][2]
+            for y in os.scandir(md):
+                if not y.is_dir():
+                    continue
+                sz = _dir_size(y.path)
+                tot += sz
+                items.append({'key': y.name, 'bytes': sz, 'at': _mt_str(y.path)})
+        items.sort(key=lambda z: z['key'])
+    except Exception:
+        _sexc('mods_local_pack')
+    return {'batchId': bat, 'count': len(items), 'bytes': tot, 'items': items}
+
+
+def _mods_prefetch_plan():
+    """v6293：把策略基准版本从现有服复制进新批次缓存（=更新本地包），纯只读计算"""
+    st = mods_status()
+    base = st.get('baseFid') or {}
+    svmap = st.get('servers') or {}
+    out, seen = [], set()
+    for pid in sorted(base.keys()):
+        want = str(base.get(pid) or '')
+        if not want or pid in seen:
+            continue
+        seen.add(pid)
+        src_srv, src_dir, nb = '', '', 0
+        for cand, ci in svmap.items():
+            if str((ci.get('actual') or {}).get(pid) or '') != want:
+                continue
+            for it in (ci.get('items') or []):
+                if it.get('pid') == pid and it.get('fid') == want:
+                    src_srv = cand
+                    src_dir = os.path.join(_srv_win64(cand), 'ShooterGame', 'Mods',
+                                           MODS_GAMEID, it.get('dir') or '')
+                    nb = int(it.get('size') or 0)
+                    break
+            if src_srv:
+                break
+        out.append({'pid': pid, 'fid': want, 'key': '%s_%s' % (pid, want),
+                    'srcSrv': src_srv, 'srcDir': src_dir, 'bytes': nb,
+                    'ok': bool(src_dir and os.path.isdir(src_dir))})
+    return out
+
+
+# v6305（用户口径·无感回收）：MOD 开场视频 Content/Movies/LoadingScreen.bk2 服务端根本不读
+#   （不在 Manifest_NonUFS/UFS 清单里；dedicated 无渲染设备）⇒ 分发与更新本地包一律跳过，
+#   分发前把目标旧目录里已有的删掉，用户无感、不用任何按钮。
+MODS_LS_NAME = 'LoadingScreen.bk2'
+
+
+def _mods_strip_ls(dirp):
+    """删除 <ModRoot>/Content/Movies/LoadingScreen.bk2；返回 (删除个数, 释放字节)"""
+    n, tot = 0, 0
+    try:
+        if not os.path.isdir(dirp):
+            return 0, 0
+        for root, _ds, _fs in os.walk(dirp):
+            if os.path.basename(root).lower() != 'movies':
+                continue
+            if os.path.basename(os.path.dirname(root)).lower() != 'content':
+                continue
+            p = os.path.join(root, MODS_LS_NAME)
+            if os.path.isfile(p):
+                try:
+                    sz = os.path.getsize(p)
+                    os.remove(p)
+                    n += 1
+                    tot += sz
+                except Exception:
+                    _sexc('mods_strip_ls')
+    except Exception:
+        _sexc('mods_strip_ls_walk')
+    return n, tot
+
+
+def _mods_prefetch_run(user, batch_id, plans):
+    """v6293：复制到 _upd_cache/新批次/mods/（只写缓存，不动任何服务器）
+    v6323（用户口径）：接入任务总线 —— 一个实例一条（key 固定，重复点击复用同一条）"""
+    cache_base = os.path.join(_upd_cache_dir(), batch_id, 'mods')
+    ok_n, bad_n, tot = 0, 0, 0
+    _pk = u'modprefetch|' + str(batch_id)
+    _ps = [u'扫描基准版本', u'复制到缓存', u'校验']
+    _pn = max(1, len(plans))
+
+    def _pt(msg, pct, phase='run', err=''):
+        try:
+            _utask_put(_pk, '', 'update', user, label=u'更新本地包',
+                       msg=msg, pct=pct, phase=phase, steps=_ps, err=err,
+                       srv_name=u'%d 个 MOD' % _pn)
+        except Exception:
+            _sexc('mods_prefetch_utask')
+    _pt(u'准备复制 %d 个基准 MOD…' % _pn, 5)
+    try:
+        if not os.path.isdir(cache_base):
+            os.makedirs(cache_base)
+    except Exception:
+        _sexc('mods_prefetch_mkdir')
+    _pi = 0
+    for p in plans:
+        _pi += 1
+        dst = os.path.join(cache_base, p['key'])
+        try:
+            if os.path.isdir(dst):
+                ok_n += 1
+                _pt(u'第 %d/%d 个：%s 已在缓存，跳过' % (_pi, _pn, p.get('key') or u''),
+                    5 + int(85.0 * _pi / _pn))
+                continue
+            _pt(u'第 %d/%d 个：复制 %s …' % (_pi, _pn, p.get('key') or u''),
+                5 + int(85.0 * _pi / _pn))
+            shutil.copytree(p['srcDir'], dst, ignore=shutil.ignore_patterns(MODS_LS_NAME))
+            ok_n += 1
+            tot += int(p.get('bytes') or 0)
+        except Exception:
+            _sexc('mods_prefetch_copy')
+            bad_n += 1
+    try:
+        _admin_log('MODS prefetch by %s batch=%s ok=%d bad=%d bytes=%d'
+                   % (user, batch_id, ok_n, bad_n, tot))
+    except Exception:
+        pass
+    try:
+        if bad_n:
+            _pt(u'完成：成功 %d 个，失败 %d 个' % (ok_n, bad_n), 100, 'fail', u'部分复制失败')
+        else:
+            _pt(u'完成：%d 个 MOD 已进缓存（%.1f MB）· 批次 %s'
+                % (ok_n, tot / 1048576.0, batch_id), 100, 'ok')
+    except Exception:
+        pass
+    return {'ok': ok_n, 'bad': bad_n, 'bytes': tot, 'batchId': batch_id}
+
+
+def _pe_file_version(p):
+    """v6299：从 dll 版本资源里抠 FileVersion 字符串（无资源返回空；AsaApi 插件 dll 一般带版本资源）"""
+    try:
+        if os.path.getsize(p) > 32 * 1024 * 1024:
+            return ''
+        with open(p, 'rb') as f:
+            b = f.read()
+        key = 'FileVersion'.encode('utf-16-le')
+        i = b.find(key)
+        if i < 0:
+            return ''
+        txt = b[i + len(key): i + len(key) + 240].decode('utf-16-le', 'ignore')
+        m = re.search(r'([0-9]+(?:\.[0-9]+){1,3})', txt)
+        return m.group(1) if m else ''
+    except Exception:
+        return ''
+
+
+def _api_local_pack():
+    """v6293（用户口径）：API 本地包 = _upd_cache/_apipkg/版本/（官方 AsaApi 包 + 自研插件源）"""
+    root = os.path.join(_upd_cache_dir(), '_apipkg')
+    items, tot, cur = [], 0, ''
+    try:
+        if os.path.isdir(root):
+            for x in os.scandir(root):
+                if not x.is_dir():
+                    continue
+                sz = _dir_size(x.path)
+                tot += sz
+                items.append({'ver': x.name, 'bytes': sz, 'at': _mt_str(x.path)})
+                if (not cur) or (x.name > cur):
+                    cur = x.name
+            items.sort(key=lambda z: z['ver'])
+    except Exception:
+        _sexc('api_local_pack')
+    _sp = SOK_SRC_UNC
+    _sf, _sa = [], ''
+    try:
+        if os.path.isdir(_sp):
+            _sf = sorted(os.listdir(_sp))[:20]
+            _mt = 0.0
+            for _x in os.scandir(_sp):
+                try:
+                    _v = os.path.getmtime(_x.path)
+                except Exception:
+                    continue
+                if _v > _mt:
+                    _mt = _v
+            _sa = time.strftime('%Y-%m-%d %H:%M', time.localtime(_mt)) if _mt else ''
+    except Exception:
+        _sf, _sa = [], ''
+    # v6299（用户口径）：自研源也要显示版本号 —— 读源目录 dll 的版本资源，其次读 PluginInfo.json
+    _sver, _sdll, _ssz = '', '', 0
+    try:
+        if os.path.isdir(_sp):
+            for _f in os.scandir(_sp):
+                if _f.is_file() and _f.name.lower().endswith('.dll'):
+                    _sdll = _f.name
+                    try:
+                        _ssz = _f.stat().st_size
+                    except Exception:
+                        _ssz = 0
+                    _sver = _pe_file_version(_f.path)
+                    break
+            if not _sver:
+                _pj = os.path.join(_sp, 'PluginInfo.json')
+                if os.path.isfile(_pj):
+                    _sver = str((json.loads(_read_text(_pj) or '{}') or {}).get('Version') or '')
+    except Exception:
+        _sver = ''
+    return {'ver': cur, 'count': len(items), 'bytes': tot, 'items': items,
+            'srcPath': _sp, 'srcOk': bool(_sf), 'srcFiles': _sf, 'srcAt': _sa,
+            'srcVer': _sver, 'srcDll': _sdll, 'srcDllSize': _ssz}
+
+
+# ===== v6353（用户口径·方案 A）：MOD 「真·本地包」—— 直接从 CurseForge 官方下载 =====
+#   背景：原「本地包」只是**从某台服 copytree 出来的副本**（_mods_prefetch_run），
+#         没有源服就彻底没源；且文案写「请配置 CurseForge API Key 后再下载」但**下载功能从未实现**。
+#   实测（2026-11-09）：
+#     · GET /v1/mods/{id}/files  → 200，可列出该 mod 全部文件（筛 fileName 含 windowsserver = 服务端包）
+#     · GET /v1/mods/{id}/files/{fid}/download-url → **403**（第三方 key 不给直链）
+#     · CDN 直链必须自己拼：https://mediafilez.forgecdn.net/files/<fid 前4>/<fid 其余>/<fileName> → 206 / zip
+#     · 746 MB 包 76 秒下完；解压后 <root>/<root>.uplugin + Content/Paks/WindowsServer/*.{pak,ucas,utoc}
+MODS_PKG_ROOT_NAME = '_modpkg'
+MODS_CF_TTL = 600.0
+_MODS_CF = {'files': {}}
+
+
+def _cf_key():
+    try:
+        return str((_srv_cfg_read() or {}).get('cf_key') or '').strip()
+    except Exception:
+        return ''
+
+
+def _cf_api(path):
+    """CurseForge API（cf_key + 浏览器 UA）。返回 (status, json)"""
+    k = _cf_key()
+    if not k:
+        return 0, {'_error': u'未配置 CurseForge API Key'}
+    try:
+        import urllib.request as _ur
+        req = _ur.Request('https://api.curseforge.com' + path,
+                          headers={'Accept': 'application/json',
+                                   'User-Agent': ASA_HTTP_UA,
+                                   'x-api-key': k})
+        with _ur.urlopen(req, timeout=30) as r:
+            return r.status, json.loads(r.read().decode('utf-8', 'replace'))
+    except Exception as e:
+        return -1, {'_error': repr(e)[:200]}
+
+
+def _mods_cf_files(pid, force=False):
+    """该 MOD 的文件列表（发布时间倒序；缓存 10 分钟）"""
+    pid = str(pid or '')
+    now = time.time()
+    cc = _MODS_CF['files'].get(pid)
+    if cc and not force and (now - cc['at']) < MODS_CF_TTL:
+        return cc['data']
+    s, j = _cf_api('/v1/mods/%s/files?pageSize=50&sort=datePublished&sortOrder=desc' % pid)
+    data = (j.get('data') or []) if s == 200 else []
+    _MODS_CF['files'][pid] = {'at': now, 'data': data}
+    return data
+
+
+def _mods_cf_name(pid):
+    """v6360：MOD 展示名（CurseForge name，如 Fear Ascended）—— 任务条不能拿 projectId 当名字"""
+    pid = str(pid or '')
+    cc = _MODS_CF.setdefault('names', {}).get(pid)
+    if cc:
+        return cc
+    s, j = _cf_api('/v1/mods/%s' % pid)
+    nm = u''
+    if s == 200:
+        nm = str(((j.get('data') or {}).get('name') or u'')).strip()
+    if nm:
+        _MODS_CF['names'][pid] = nm
+    return nm
+
+
+def _mods_cf_server_file(pid):
+    """挑「服务端包」：fileName 含 windowsserver（不是 windows/ps5/xboxxs），取最新"""
+    for f in _mods_cf_files(pid):
+        if u'windowsserver' in str(f.get('fileName') or '').lower():
+            return f
+    return None
+
+
+MODS_CF_HOSTS = (u'mediafilez.forgecdn.net', u'edge.forgecdn.net', u'mediafiles.forgecdn.net')
+
+
+def _mods_cf_cdn_urls(pid):
+    """v6364：CDN 候选直链（多主机）→ (urls, fid)
+       实测（2026-11-09）：**同一文件不是所有主机都有** ——
+         Club ARK 9418028：mediafilez=403 / mediafiles=403 / edge=200（真 zip 118,557,863 B）
+         Fear Ascended 9411569：mediafilez=200 / edge=200
+       ⇒ 必须按主机顺序挨个试，任一成功即停（原来写死 mediafilez ⇒ Club ARK 必然 403，
+         误判成「作者不允许公开直连」）
+       ⚠ edge 不支持 Range 分段（带 Range 返回 404），下载必须整包 GET。"""
+    f = _mods_cf_server_file(pid)
+    if not f:
+        return [], u''
+    fid = str(f.get('id') or '')
+    fn = str(f.get('fileName') or '')
+    if not fid or not fn:
+        return [], fid
+    return ([u'https://%s/files/%s/%s/%s' % (h, fid[:4], fid[4:], fn)
+             for h in MODS_CF_HOSTS], fid)
+
+
+def _mods_cf_cdn_url(pid):
+    """CDN 直链（首个候选；兼容旧调用）→ (url, fid)"""
+    _us, fid = _mods_cf_cdn_urls(pid)
+    return (_us[0] if _us else u''), fid
+
+
+def _mods_pkg_dir(pid, fid):
+    return os.path.join(_upd_cache_dir(), MODS_PKG_ROOT_NAME, '%s_%s' % (pid, fid))
+
+
+def _mods_pkg_fetch(pid, on_prog=None, force=False):
+    """下载并解压「真·本地包」→ _upd_cache/_modpkg/<pid>_<fid>/
+       · 跳过开场视频 LoadingScreen.bk2（服务端不读，与分发同策略）
+       · 原子性：先下 .zip 校验大小，再解压到临时目录后改名
+       返回 (ok, msg, fid, dir)"""
+    import zipfile
+    pid = str(pid or '')
+    f = _mods_cf_server_file(pid)
+    if not f:
+        return False, u'CurseForge 上没有该 MOD 的服务端包（windowsserver）', u'', u''
+    fid = str(f.get('id') or '')
+    _urls = _mods_cf_cdn_urls(pid)[0]      # v6365：返回 (urls, fid)，必须取 [0]
+    if not _urls:
+        return False, u'拿不到 CDN 直链', fid, u''
+    dst = _mods_pkg_dir(pid, fid)
+    if os.path.isdir(dst) and not force:
+        n0 = sum(len(fs) for _r, _d, fs in os.walk(dst))
+        if n0 > 0:
+            return True, u'已存在本地包（%d 文件，跳过下载）' % n0, fid, dst
+    root = os.path.join(_upd_cache_dir(), MODS_PKG_ROOT_NAME)
+    try:
+        if not os.path.isdir(root):
+            os.makedirs(root)
+    except Exception as e:
+        return False, u'建目录失败：%r' % (e,), fid, u''
+    zpath = os.path.join(root, '%s_%s.zip' % (pid, fid))
+    tot = int(f.get('fileLength') or 0)
+    import urllib.request as _ur
+    _errmap = []
+    _okdl = False
+    for _ui, _u in enumerate(_urls):
+        try:
+            if os.path.isfile(zpath):
+                os.remove(zpath)
+        except Exception:
+            pass
+        try:
+            _host = str(_u).split('//')[-1].split('/')[0]
+        except Exception:
+            _host = u'?'
+        try:
+            if on_prog:
+                on_prog(u'下载 %s（%.1f MB）…%s'
+                        % (f.get('fileName') or u'', tot / 1048576.0,
+                           (u'' if _ui == 0 else u' 换主机 %s' % _host)), 'dl', 0.0)
+            req = _ur.Request(_u, headers={'User-Agent': ASA_HTTP_UA})
+            got = 0
+            last = 0
+            # v6374（用户口径「进度平滑」）：上报粒度 8MB → 约 1%（小文件 1MB 兑底）
+            #   配合前端 1.4s 线性过渡，条子视觉上连续上涨
+            _step = max(1048576, int(tot / 100)) if tot else 1048576
+            with _ur.urlopen(req, timeout=300) as r, open(zpath, 'wb') as fh:
+                while True:
+                    b = r.read(512 * 1024)
+                    if not b:
+                        break
+                    fh.write(b)
+                    got += len(b)
+                    if on_prog and tot > 0 and (got - last) >= _step:
+                        last = got
+                        on_prog(u'下载中 %.1f / %.1f MB'
+                                % (got / 1048576.0, tot / 1048576.0), 'dl',
+                                float(got) / float(tot))
+            if tot and got != tot:
+                raise IOError(u'size mismatch %d/%d' % (got, tot))
+            _okdl = True
+            break
+        except Exception as _e1:
+            # v6364（实测）：CDN 各主机内容不同 —— Club ARK 9418028 在 mediafilez=403 / edge=200
+            #   ⇒ 逐个主机回退，任一成功即停；全失败才报错（不再误称「不允许公开直连」）
+            _errmap.append(u'%s %s' % (_host, repr(_e1)[:50]))
+            continue
+    if not _okdl:
+        try:
+            if os.path.isfile(zpath):
+                os.remove(zpath)
+        except Exception:
+            pass
+        return (False, u'下载失败（%d 个 CDN 主机都取不到）：%s'
+                % (len(_urls), u'；'.join(_errmap)[:200]), fid, u'')
+    tmpd = dst + '.tmp'
+    try:
+        if on_prog:
+            on_prog(u'解压中…', 'unzip')
+        if os.path.isdir(tmpd):
+            shutil.rmtree(tmpd, ignore_errors=True)
+        os.makedirs(tmpd)
+        n = 0
+        _keep = 0
+        _skip = 0
+        with zipfile.ZipFile(zpath) as z:
+            for _zi in z.infolist():
+                if _zi.filename.endswith('/'):
+                    continue
+                if _zi.filename.split('/')[-1].lower() == MODS_LS_NAME.lower():
+                    # v6362：开场视频占包体积的 95%（实测 Fear Ascended：
+                    #   整包 746 MB，其中 LoadingScreen.bk2 709 MB，真正 MOD 内容只有 ~5 MB）
+                    _skip += int(getattr(_zi, 'file_size', 0) or 0)
+                    continue
+                z.extract(_zi, tmpd)
+                n += 1
+                _keep += int(getattr(_zi, 'file_size', 0) or 0)
+        if n <= 0:
+            raise IOError(u'解压后 0 文件')
+        if os.path.isdir(dst):
+            shutil.rmtree(dst, ignore_errors=True)
+        os.replace(tmpd, dst)
+    except Exception as e:
+        try:
+            shutil.rmtree(tmpd, ignore_errors=True)
+        except Exception:
+            pass
+        return False, u'解压失败：%r' % (e,), fid, u''
+    try:
+        os.remove(zpath)
+    except Exception:
+        pass
+    _msg = u'已下载并解压 %d 文件（%.1f MB，fid %s）' % (n, _keep / 1048576.0, fid)
+    if _skip:
+        _msg += u'；跳过开场视频 %.0f MB（服务端不读）' % (_skip / 1048576.0)
+    return True, _msg, fid, dst
+
+
+def _mods_deploy_plan(servers, policy=None):
+    """MOD 分发计划：[{srv, pid, cur, want, srcSrv, srcDir, reason, ok}]（纯只读计算）"""
+    po = policy or _mods_policy()
+    st = mods_status()
+    base = st.get('baseFid') or {}
+    svmap = st.get('servers') or {}
+    out = []
+    for srv in servers:
+        info = svmap.get(srv) or {}
+        actual = info.get('actual') or {}
+        for pid in _mods_expect_of(srv, po):
+            want = str(base.get(pid) or '')
+            cur = str(actual.get(pid) or '')
+            if want and cur == want:
+                continue
+            src_srv, src_dir, src_kind = '', '', ''
+            if want:
+                for cand, ci in svmap.items():
+                    if cand == srv:
+                        continue
+                    if str((ci.get('actual') or {}).get(pid) or '') == want:
+                        for it in (ci.get('items') or []):
+                            if it.get('pid') == pid and it.get('fid') == want:
+                                src_srv = cand
+                                src_dir = os.path.join(_srv_win64(cand), 'ShooterGame', 'Mods',
+                                                       MODS_GAMEID, it.get('dir') or '')
+                                src_kind = 'srv'
+                                break
+                    if src_srv:
+                        break
+                # v6353（方案 A）：**服上都没有该版本时，回落「真·本地包」**
+                #   原实现直接判 ok=False ⇒ 任务条「无可用源」，本地包形同摆设
+                if not src_dir:
+                    _pkg = _mods_pkg_dir(pid, want)
+                    if os.path.isdir(_pkg):
+                        src_dir = _pkg
+                        src_kind = 'pkg'
+            out.append({'srv': srv, 'pid': pid, 'cur': cur, 'want': want,
+                        'srcSrv': src_srv, 'srcDir': src_dir, 'srcKind': src_kind,
+                        'reason': ('missing' if not cur else 'old'),
+                        'ok': bool(want and src_dir)})
+    return out
+
+
+def _mods_dir_of(srv):
+    return os.path.join(_srv_win64(srv), 'ShooterGame', 'Mods', MODS_GAMEID)
+
+
+# ===== v6356（方案 A·最后一步）：CFCore library.json 条目「自建」 =====
+#   实测（Los 2026-11-09）：CFCore 条目就是 CurseForge API 响应的**改名版**
+#     API id / url / fileName  ->  CFCore iD / uRL / filename
+#     API fileStatus 4         ->  CFCore "Approved"（数字转词）
+#     API releaseType 1        ->  CFCore "Release"
+#     API 2026-11-02T22:01:58.393Z  ->  CFCore 2026.11.02-22.01.58（点分）
+_CF_RELEASE = {1: u'Release', 2: u'Beta', 3: u'Alpha'}
+_CF_STATUS = {1: u'Processing', 2: u'ChangesRequired', 3: u'UnderReview', 4: u'Approved',
+              5: u'Rejected', 6: u'DistributionDenied', 7: u'PendingRelease'}
+_CF_REN = {'id': 'iD', 'url': 'uRL', 'fileName': 'filename'}
+_CF_DATE_KEYS = ('dateCreated', 'dateModified', 'dateReleased', 'fileDate',
+                 'gameVersionReleaseDate')
+
+
+def _cf_date(v):
+    """ISO → CFCore 点分格式；已是点分则原样返回"""
+    s = str(v or u'')
+    if not s or re.match(r'^\d{4}\.\d{2}\.\d{2}-', s):
+        return s
+    m = re.match(r'^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})', s)
+    return (u'%s.%s.%s-%s.%s.%s' % m.groups()) if m else s
+
+
+def _cf_rename(o):
+    """递归把 API 键名改成 CFCore 的怪命名，并把日期/状态/类型转成 CFCore 表示"""
+    if isinstance(o, dict):
+        out = {}
+        for k, v in o.items():
+            kk = _CF_REN.get(k, k)
+            vv = _cf_rename(v)
+            if kk in _CF_DATE_KEYS and not isinstance(vv, (dict, list)):
+                vv = _cf_date(vv)
+            elif kk in ('fileStatus', 'status') and isinstance(v, int):
+                vv = _CF_STATUS.get(v, v)
+            elif kk == 'releaseType' and isinstance(v, int):
+                vv = _CF_RELEASE.get(v, v)
+            out[kk] = vv
+        return out
+    if isinstance(o, list):
+        return [_cf_rename(v) for v in o]
+    return o
+
+
+_MODS_LIB_DEF = {'at': 0.0, 'data': None}
+
+
+def _mods_lib_defaults():
+    """v6357：从任一台服的 library.json 借出 CFCore 自己写的默认子对象
+       （premiumDetails / ratingDetails / videos / screenshots）—— 这些字段 API 不返回，
+       硬编码结构有风险；借真品最安全。"""
+    now = time.time()
+    if _MODS_LIB_DEF['data'] is not None and (now - _MODS_LIB_DEF['at']) < 300:
+        return _MODS_LIB_DEF['data']
+    out = {}
+    for srv in SERVERS.keys():
+        p = os.path.join(_srv_win64(srv), 'ShooterGame', 'ModsUserData', MODS_GAMEID, 'library.json')
+        if not os.path.isfile(p):
+            continue
+        try:
+            j = json.loads(_read_text(p) or '{}')
+        except Exception:
+            continue
+        for it in (j.get('installedMods') or []):
+            d = it.get('details') or {}
+            if d.get('premiumDetails') is not None:
+                out = {'premiumDetails': d.get('premiumDetails'),
+                       'ratingDetails': d.get('ratingDetails') or {},
+                       'videos': d.get('videos') or [],
+                       'screenshots': d.get('screenshots') or []}
+                break
+        if out:
+            break
+    _MODS_LIB_DEF['at'] = now
+    _MODS_LIB_DEF['data'] = out
+    return out
+
+
+def _mods_cf_file_cc(pid, fid):
+    """单文件详情（API）→ CFCore installedFile 结构；失败返回 {}"""
+    s, j = _cf_api('/v1/mods/%s/files/%s' % (pid, fid))
+    if s != 200:
+        return {}
+    f = (j.get('data') or {})
+    if not f:
+        return {}
+    o = _cf_rename(f)
+    for k in ('favoriteCount', 'isEarlyAccess', 'licenseType', 'featuredProjectTag',
+              'hasCommentsEnabled', 'premiumDetails', 'platformFileSizesOnDisk'):
+        o.pop(k, None)
+    # v6357：实测 diff —— 这三项 CFCore 有、API 单文件接口不返回，按默认补
+    o.setdefault('exposeAsAlternative', False)
+    o.setdefault('parentProjectFileId', 0)
+    o.setdefault('serverPackFileId', 0)
+    if not o.get('downloadUrl'):
+        # CFCore 自己存的是 edge 域名直链（我们下载用 mediafilez，两者存在差异）
+        _fn = str(o.get('filename') or '')
+        _fid = str(o.get('iD') or '')
+        if _fn and _fid:
+            o['downloadUrl'] = u'https://edge.forgecdn.net/files/%s/%s/%s' % (_fid[:4], _fid[4:], _fn)
+    return o
+
+
+def _mods_lib_entry_build(pid, fid):
+    """用 CurseForge 元数据构造一个 CFCore `installedMods[]` 条目（不需要任何服有旧记录）"""
+    import hashlib as _h2
+    pid, fid = str(pid or ''), str(fid or '')
+    if not pid or not fid or not _cf_key():
+        return None
+    s, j = _cf_api('/v1/mods/%s' % pid)
+    if s != 200:
+        return None
+    mod = (j.get('data') or {})
+    if not mod:
+        return None
+    fcc = _mods_cf_file_cc(pid, fid)
+    if not fcc:
+        return None
+    det = _cf_rename(mod)
+    for k in ('favoriteCount', 'featuredProjectTag', 'hasCommentsEnabled',
+              'latestEarlyAccessFilesIndexes', 'licenseType',
+              'supportedPlatform', 'supportsCrossPlatform', 'thumbsUpCount'):
+        det.pop(k, None)
+    det['mainFileId'] = int(fid)
+    _def = _mods_lib_defaults()
+    for _k in ('premiumDetails', 'ratingDetails', 'videos', 'screenshots'):
+        if _k not in det and _k in _def:
+            det[_k] = _def[_k]
+    # latestFiles / latestFilesIndexes 至少要含目标 fid（CFCore 用它判断「有无更新」）
+    lf = det.get('latestFiles') or []
+    if not any(str((x or {}).get('iD') or '') == fid for x in lf):
+        det['latestFiles'] = [fcc] + list(lf)
+    lfi = det.get('latestFilesIndexes') or []
+    if not any(str((x or {}).get('fileId') or '') == fid for x in lfi):
+        _gvs = fcc.get('gameVersions') or [u'1.0']
+        det['latestFilesIndexes'] = [{'fileId': int(fid),
+                                      'filename': fcc.get('filename') or u'',
+                                      'gameVersion': _gvs[0],
+                                      'gameVersionTypeId': 76367,
+                                      'modLoader': 'Any',
+                                      'releaseType': fcc.get('releaseType') or u'Release'}] + list(lfi)
+    _pod = u'%s/%s_%s' % (MODS_GAMEID, pid, fid)
+    _now = time.strftime('%Y.%m.%d-%H.%M.%S')
+    return {'iD': _h2.md5(_pod.encode('utf-8')).hexdigest().upper(),
+            'dateInstalled': _now,
+            'dateUpdated': _now,
+            'details': det,
+            'downloadInfo': {'canResume': False, 'downloaded': [], 'fileId': 0,
+                             'fileSizeInBytes': 0,
+                             'lastModified': '0001.01.01-00.00.00', 'tempFile': u''},
+            'dynamicContent': False,
+            'enabled': True,
+            'installedFile': fcc,
+            'latestUpdatedFile': fcc,
+            'loadOrder': 0,
+            'pathOnDisk': _pod,
+            'status': 'Normal',
+            'unmanaged': False,
+            'users': ['local']}   # v6357：实测真品就是 ["local"]
+
+
+def _mods_lib_sync(srv, pid, src_srv, fid=u''):
+    """v6351（用户口径·方案 A）：把源服 ModsUserData/<gid>/library.json 里该 pid 的安装记录
+       **合并**进目标服同名文件 —— CFCore 以这份记录判定「是否已安装 / 需不需要升级」：
+       · 只换目录不改记录 ⇒ 起服时 `LogCFCore: Deleting mods dir ...` → `status invalid - Missing module`
+         → `requires upgrade/downgrade (old -> new)` → **重新下载**（Los 2026-11-08 实测）
+       · 合并粒度 = modId（各服 MOD 集合可能不同，如 Bob 是 ClubARK），**不整文件覆盖**"""
+    if src_srv and src_srv == srv:
+        return False, u'源服即目标服（跳过）'
+    gid = MODS_GAMEID
+
+    def _lib(s):
+        return os.path.join(_srv_win64(s), 'ShooterGame', 'ModsUserData', gid, 'library.json')
+
+    tp = _lib(srv)
+    item = None
+    if src_srv:
+        sp = _lib(src_srv)
+        if os.path.isfile(sp):
+            try:
+                sj = json.loads(_read_text(sp) or '{}')
+            except Exception as e:
+                return False, u'源 library.json 解析失败：%r' % (e,)
+            for it in (sj.get('installedMods') or []):
+                if str((it.get('details') or {}).get('iD') or '') == str(pid):
+                    item = it
+                    break
+    if not item:
+        # v6356（方案 A·最后一步）：源服没有该记录（或压根没源服）⇒ 用 CurseForge 元数据**自建**
+        try:
+            item = _mods_lib_entry_build(pid, fid)
+        except Exception as _e_b:
+            item = None
+        if not item:
+            return False, u'源记录里没有 pid=%s，CurseForge 也构造不出（检查 API Key / 网络）' % pid
+    tj = {'installedMods': []}
+    if os.path.isfile(tp):
+        try:
+            tj = json.loads(_read_text(tp) or '{}') or {'installedMods': []}
+        except Exception:
+            tj = {'installedMods': []}
+    arr = tj.get('installedMods')
+    if not isinstance(arr, list):
+        arr = []
+    out, done = [], False
+    for it in arr:
+        if str((it.get('details') or {}).get('iD') or '') == str(pid):
+            out.append(item)
+            done = True
+        else:
+            out.append(it)
+    if not done:
+        out.append(item)
+    tj['installedMods'] = out
+    try:
+        d = os.path.dirname(tp)
+        if not os.path.isdir(d):
+            os.makedirs(d)
+        tmp = tp + '.tmp_' + str(int(time.time()))
+        with open(tmp, 'w', encoding='utf-8-sig', newline='') as f:
+            f.write(json.dumps(tj, ensure_ascii=False))
+        try:
+            os.chmod(tp, _stat.S_IWRITE)
+        except Exception:
+            pass
+        os.replace(tmp, tp)
+        return True, u'pid %s 记录已同步（%s）' % (pid, (item.get('pathOnDisk') or u''))
+    except Exception as e:
+        return False, repr(e)[:200]
+
+
+def _mods_deploy_run(user, batch_id, plans):
+    """逐台执行：停服 → 备份旧目录 → 从批次缓存复制 → 校验 → 按原状态起服"""
+    cfg = _srvctl_cfg()
+    ts = time.strftime('%Y%m%d_%H%M%S')
+    cache_base = os.path.join(_upd_cache_dir(), batch_id, 'mods')
+    bak_root = os.path.join(_upd_cache_dir(), '_modbak', ts)
+    # ① 预热：每个 <pid>_<fid> 只从源服取一次（用户口径：同批次共用缓存）
+    pre = {}
+    for p in plans:
+        k = '%s_%s' % (p['pid'], p['want'])
+        if k in pre:
+            continue
+        src = p.get('srcDir') or ''
+        if not src:
+            pre[k] = ''
+            continue
+        dst = os.path.join(cache_base, k)
+        try:
+            if not os.path.isdir(dst):
+                if not os.path.isdir(cache_base):
+                    os.makedirs(cache_base)
+                shutil.copytree(src, dst, ignore=shutil.ignore_patterns(MODS_LS_NAME))
+            pre[k] = dst
+        except Exception:
+            _sexc('mods_prewarm')
+            pre[k] = ''
+    # ② 逐台执行
+    for p in plans:
+        srv, pid, want = p['srv'], p['pid'], p['want']
+        key = '%s_%s' % (pid, want)
+        # v6339（用户口径）：同服一条融合分发条（不再按版本分条）
+        tkey = 'deploy|%s' % srv
+        sname = (SERVER_THEMES.get(srv) or {}).get('name') or srv
+        def _t(msg, pct, phase='run', err=''):
+            try:
+                _utask_put(tkey, srv, 'mods', user, label=u'MOD 分发 · ' + sname,
+                           msg=msg, pct=pct, phase=phase,
+                           steps=_steps_apply(STEP_5_DEPLOY, pct, phase, msg, 'deploy'),
+                           err=err, srv_name=sname)
+            except Exception:
+                _sexc('mods_utask')
+        src_cache = pre.get(key) or ''
+        if not src_cache:
+            _t(u'无可用源（该版本所有服都没有）—— 请先在系统管理配置 CurseForge API Key 后再下载',
+               100, 'fail', u'no_source')
+            continue
+        was_run = False
+        try:
+            was_run = bool(_cfg_proc_start(srv, force=True))
+        except Exception:
+            was_run = False
+        # 停服
+        if was_run:
+            _t(u'停服中…', 10)
+            try:
+                _srvctl_one(srv, 'kill', '', cfg)
+            except Exception as e:
+                _t(u'停服失败：%s' % e, 100, 'fail', repr(e))
+                continue
+            _t(u'已停服，等待进程退出', 20)
+        # 备份旧目录
+        tgt_base = _mods_dir_of(srv)
+        bdir = os.path.join(bak_root, srv)
+        backup = []
+        ls_n, ls_b = 0, 0          # v6305：无感回收统计（开场视频）
+        try:
+            if os.path.isdir(tgt_base):
+                for x in os.scandir(tgt_base):
+                    if x.is_dir() and x.name.split('_')[0] == pid:
+                        if not os.path.isdir(bdir):
+                            os.makedirs(bdir)
+                        _an_ls, _ab_ls = _mods_strip_ls(x.path)   # v6305：备份前先删开场
+                        ls_n += _an_ls
+                        ls_b += _ab_ls
+                        shutil.move(x.path, os.path.join(bdir, x.name))
+                        backup.append(x.name)
+            _t(u'已备份 %d 个旧目录%s' % (len(backup),
+                                          (u'，无感回收 %d 份开场（%.0f MB）'
+                                           % (ls_n, ls_b / 1048576.0)) if ls_n else u''), 35)
+        except Exception as e:
+            _t(u'备份失败：%s' % e, 100, 'fail', repr(e))
+            if was_run:
+                try:
+                    _srvctl_startq_new(user, [srv], 'moddeploy')
+                except Exception:
+                    pass
+            continue
+        # 复制
+        _t(u'复制中…', 45)
+        try:
+            if not os.path.isdir(tgt_base):
+                os.makedirs(tgt_base)
+            dst = os.path.join(tgt_base, key)
+            shutil.copytree(src_cache, dst)
+        except Exception as e:
+            _t(u'复制失败：%s（回滚）' % e, 100, 'fail', repr(e))
+            try:
+                for nm in backup:
+                    shutil.move(os.path.join(bdir, nm), os.path.join(tgt_base, nm))
+            except Exception:
+                _sexc('mods_rollback')
+            if was_run:
+                try:
+                    _srvctl_startq_new(user, [srv], 'moddeploy')
+                except Exception:
+                    pass
+            continue
+        # 校验
+        _t(u'校验中…', 75)
+        ok, detail = True, ''
+        try:
+            src_n = sum(len(fs) for _, _, fs in os.walk(src_cache))
+            dst_n = sum(len(fs) for _, _, fs in os.walk(os.path.join(tgt_base, key)))
+            ok = (src_n == dst_n and src_n > 0)
+            detail = u'%d/%d 文件' % (dst_n, src_n)
+        except Exception as e:
+            ok, detail = False, repr(e)
+        if not ok:
+            _t(u'校验失败（%s）—— 已回滚' % detail, 100, 'fail', 'verify_failed')
+            try:
+                shutil.rmtree(os.path.join(tgt_base, key), ignore_errors=True)
+                for nm in backup:
+                    shutil.move(os.path.join(bdir, nm), os.path.join(tgt_base, nm))
+            except Exception:
+                _sexc('mods_rollback2')
+            if was_run:
+                try:
+                    _srvctl_startq_new(user, [srv], 'moddeploy')
+                except Exception:
+                    pass
+            continue
+        # v6351（用户口径·方案 A）：同步 CFCore 安装记录
+        #   否则起服时 ASA 会先删掉我们复制的目录、再自己重下一份（Los 2026-11-08 实测）
+        try:
+            _lib_ok, _lib_msg = _mods_lib_sync(srv, pid, p.get('srcSrv') or '', want)
+        except Exception as _e_lib:
+            _lib_ok, _lib_msg = False, repr(_e_lib)[:200]
+        if _lib_ok:
+            _t(u'已同步 CFCore 安装记录…', 82)
+        else:
+            _t(u'⚠ CFCore 安装记录未同步：%s' % _lib_msg, 82)
+        # 起服
+        _startErr = u''
+        if was_run:
+            _t(u'校验通过（%s），起服中…' % detail, 90)
+            # v6339：起服失败自动重试（最多 3 次）
+            _ok2, _startErr = _deploy_start_retry(srv, user, 'moddeploy', lambda t: _t(t, 90))
+        _utask_put(tkey, srv, 'mods', user, label=u'MOD 分发 · ' + sname,
+                   msg=((u'完成（%s，%s → %s）' % (detail, p.get('cur') or u'无', want))
+                        + ((u' · 起服失败：' + _startErr) if _startErr else u'')),
+                   pct=100, phase=('fail' if _startErr else 'done'),
+                   steps=_steps_apply(STEP_5_DEPLOY, 100, 'done', '', 'deploy'), srv_name=sname,
+                   meta={'pid': pid, 'fid': want, 'wasRunning': was_run, 'batch': batch_id})
+    try:
+        mods_status_cache_clear()
+    except Exception:
+        pass
+
+
+# ===== v6307（用户口径）：AsaApi 官方包（GitHub ArkServerApi/AsaApi）=====
+#   实测：https://api.github.com/repos/ArkServerApi/AsaApi/releases/latest → tag 2.1 / AsaApi_2.1.zip
+#   包内结构（实测）：ArkApi/AsaApi.dll、ArkApi/Plugins/Permissions/{Permissions.dll,PluginInfo.json,config.json,...}
+#   ==> Permissions 属于库包的一部分，分发库时一并更新（但仍单独展示版本）。
+#   安全红线：Plugins/Permissions/config.json（用户配置）与 ArkDB.db*（玩家权限数据）**一律不动**。
+ASA_API_GH_REPO = u'ArkServerApi/AsaApi'
+ASA_HTTP_UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+               '(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36')
+ASA_GH_TTL = 300.0
+_ASA_GH = {'at': 0.0, 'data': None}
+ASA_ZIP_SKIP_EXT = (u'.pdb', u'.lib')
+ASA_ZIP_SKIP_DIR = (u'only for developers', u'lib', u'__macosx')
+# 分发时**只更新**这些（包内相对路径 -> 相对 Win64 路径）
+ASA_DEPLOY_FILES = (
+    (u'ArkApi/AsaApi.dll', u'ArkApi\\AsaApi.dll', u'AsaApi', u'lib'),
+    (u'ArkApi/Plugins/Permissions/Permissions.dll',
+     u'ArkApi\\Plugins\\Permissions\\Permissions.dll', u'Permissions', u'plugin'),
+    (u'ArkApi/Plugins/Permissions/PluginInfo.json',
+     u'ArkApi\\Plugins\\Permissions\\PluginInfo.json', u'Permissions', u'plugin'),
+)
+
+
+def _asa_pkg_root():
+    return os.path.join(_upd_cache_dir(), '_apipkg')
+
+
+def _asa_pkg_vers():
+    root = _asa_pkg_root()
+    out = []
+    try:
+        if os.path.isdir(root):
+            for x in os.scandir(root):
+                if x.is_dir() and os.path.isfile(os.path.join(x.path, 'ArkApi', 'AsaApi.dll')):
+                    out.append(x.name)
+    except Exception:
+        _sexc('asa_pkg_vers')
+    out.sort()
+    return out
+
+
+def _asa_pkg_cur():
+    v = _asa_pkg_vers()
+    return v[-1] if v else u''
+
+
+def _md5_of(p):
+    try:
+        if not os.path.isfile(p):
+            return u''
+        h = _hashlib.md5()
+        with open(p, 'rb') as f:
+            while True:
+                b = f.read(1024 * 1024)
+                if not b:
+                    break
+                h.update(b)
+        return h.hexdigest()
+    except Exception:
+        return u''
+
+
+def _gh_latest_asaapi():
+    """GitHub 最新 release（缓存 5 分钟）"""
+    now = time.time()
+    if _ASA_GH['data'] is not None and (now - _ASA_GH['at']) < ASA_GH_TTL:
+        return _ASA_GH['data']
+    res = {'ok': False, 'error': u'unknown'}
+    try:
+        import urllib.request as _ur
+        req = _ur.Request('https://api.github.com/repos/%s/releases/latest' % ASA_API_GH_REPO,
+                          headers={'User-Agent': ASA_HTTP_UA, 'Accept': 'application/vnd.github+json'})
+        with _ur.urlopen(req, timeout=25) as r:
+            j = json.loads(r.read().decode('utf-8', 'replace'))
+        res = {'ok': True, 'tag': str(j.get('tag_name') or ''),
+               'published': str(j.get('published_at') or ''),
+               'htmlUrl': str(j.get('html_url') or ''),
+               'assets': [{'name': a.get('name'), 'size': a.get('size'),
+                           'url': a.get('browser_download_url')} for a in (j.get('assets') or [])]}
+    except Exception as e:
+        res = {'ok': False, 'error': repr(e)[:300]}
+    _ASA_GH['at'] = now
+    _ASA_GH['data'] = res
+    return res
+
+
+def _asa_pkg_download(user):
+    """下载最新 AsaApi 官方包到 _upd_cache/_apipkg/<tag>/（任务总线可见）"""
+    import urllib.request as _ur
+    key = u'apipkg|latest'
+    # v6374（用户口径）：卡片条只表示下载 —— 同样下发 meta.items（官方包一条）
+    _its = [{'key': u'asaapi', 'fid': '', 'name': u'AsaApi 官方包', 'bytes': 0,
+             'state': 'wait', 'pct': 0, 'msg': u'等待中'}]
+
+    def _t(msg, pct, phase='run', err=''):
+        try:
+            if phase == 'ok':
+                _its[0].update({'state': 'ok', 'pct': 100, 'msg': msg})
+            elif phase == 'fail':
+                _its[0].update({'state': 'fail', 'msg': (err or msg)})
+        except Exception:
+            pass
+        try:
+            _utask_put(key, '', 'update', user, label=u'更新本地包',
+                       msg=msg, pct=pct, phase=phase,
+                       steps=_steps_apply(STEP_4_PKG, pct, phase, msg, 'pkg'), err=err,
+                       meta={'items': _its},
+                       srv_name=u'AsaApi')
+        except Exception:
+            _sexc('asa_pkg_utask')
+
+    _t(u'查询 GitHub 最新版本…', 3)
+    rel = _gh_latest_asaapi()
+    if not rel.get('ok'):
+        _t(u'查询 GitHub 失败', 100, 'fail', rel.get('error') or u'github_error')
+        return {'ok': False, 'error': rel.get('error') or u'查询 GitHub 失败'}
+    tag = rel.get('tag') or u''
+    z = None
+    for a in (rel.get('assets') or []):
+        if str(a.get('name') or '').lower().endswith(u'.zip'):
+            z = a
+            break
+    if not tag or not z:
+        _t(u'该 release 没有 zip 资产', 100, 'fail', u'no_zip_asset')
+        return {'ok': False, 'error': u'release %s 无 zip 资产' % (tag or u'?')}
+    dst = os.path.join(_asa_pkg_root(), tag)
+    if os.path.isfile(os.path.join(dst, 'ArkApi', 'AsaApi.dll')):
+        _t(u'本地包 %s 已存在，跳过' % tag, 100, 'ok')
+        return {'ok': True, 'ver': tag, 'skipped': True, 'dir': dst}
+    tmpd = os.path.join(_upd_cache_dir(), '_apipkg_dl')
+    zpath = os.path.join(tmpd, str(z.get('name') or 'asaapi.zip'))
+    try:
+        if not os.path.isdir(tmpd):
+            os.makedirs(tmpd)
+    except Exception:
+        _sexc('asa_pkg_mkdl')
+    _t(u'下载 %s（%.1f MB）…' % (z.get('name'), (int(z.get('size') or 0)) / 1048576.0), 10)
+    try:
+        req = _ur.Request(str(z.get('url')), headers={'User-Agent': ASA_HTTP_UA})
+        total = int(z.get('size') or 0)
+        got = 0
+        with _ur.urlopen(req, timeout=180) as r, open(zpath, 'wb') as f:
+            while True:
+                b = r.read(256 * 1024)
+                if not b:
+                    break
+                f.write(b)
+                got += len(b)
+                if total > 0:
+                    try:
+                        _its[0].update({'state': 'dl',
+                                        'pct': int(round(100.0 * got / total)),
+                                        'msg': u'下载中 %.1f / %.1f MB'
+                                               % (got / 1048576.0, total / 1048576.0)})
+                    except Exception:
+                        pass
+                    _t(u'下载中 %.1f / %.1f MB' % (got / 1048576.0, total / 1048576.0),
+                       10 + int(55.0 * got / total))
+    except Exception as e:
+        _t(u'下载失败', 100, 'fail', repr(e)[:300])
+        return {'ok': False, 'error': repr(e)[:300]}
+    try:
+        _its[0].update({'state': 'unzip', 'pct': 100, 'msg': u'解压中…'})
+    except Exception:
+        pass
+    _t(u'解压中…', 70)
+    n_ok, n_skip = 0, 0
+    try:
+        import zipfile
+        if not os.path.isdir(dst):
+            os.makedirs(dst)
+        with zipfile.ZipFile(zpath) as zf:
+            for nm in zf.namelist():
+                low = nm.lower()
+                if low.endswith(u'/'):
+                    continue
+                if any(low.endswith(e) for e in ASA_ZIP_SKIP_EXT):
+                    n_skip += 1
+                    continue
+                if any((u'/' + d + u'/') in (u'/' + low) for d in ASA_ZIP_SKIP_DIR):
+                    n_skip += 1
+                    continue
+                tgt = os.path.join(dst, nm.replace(u'/', os.sep))
+                try:
+                    d2 = os.path.dirname(tgt)
+                    if d2 and not os.path.isdir(d2):
+                        os.makedirs(d2)
+                    with zf.open(nm) as src, open(tgt, 'wb') as out:
+                        shutil.copyfileobj(src, out)
+                    n_ok += 1
+                except Exception:
+                    _sexc('asa_pkg_unzip_one')
+    except Exception as e:
+        _t(u'解压失败', 100, 'fail', repr(e)[:300])
+        return {'ok': False, 'error': repr(e)[:300]}
+    _t(u'校验入库…', 90)
+    dll = os.path.join(dst, 'ArkApi', 'AsaApi.dll')
+    perm = os.path.join(dst, 'ArkApi', 'Plugins', 'Permissions', 'Permissions.dll')
+    if not os.path.isfile(dll):
+        _t(u'包内缺少 ArkApi/AsaApi.dll', 100, 'fail', u'no_dll')
+        return {'ok': False, 'error': u'包内缺少 ArkApi/AsaApi.dll'}
+    try:
+        os.remove(zpath)
+    except Exception:
+        pass
+    try:
+        mods_status_cache_clear()
+    except Exception:
+        pass
+    sz = os.path.getsize(dll)
+    perm_sz = (os.path.getsize(perm) if os.path.isfile(perm) else 0)
+    _t(u'完成：v%s（AsaApi.dll %.2f MB%s）' %
+       (tag, sz / 1048576.0, (u'，Permissions %.2f MB' % (perm_sz / 1048576.0)) if perm_sz else u''),
+       100, 'ok')
+    return {'ok': True, 'ver': tag, 'dir': dst, 'files': n_ok, 'skipped': n_skip,
+            'dllSize': sz, 'permSize': perm_sz}
+
+
+# v6312（用户口径）：自研插件源改用 UNC 网络地址（后端服务器上的 Z: 映射不稳定）
+SOK_SRC_UNC = r'\\Tnas\public\ServerOpsKitAPI'
+
+
+def _asa_targets():
+    """目标文件表：本地包（库 + Permissions）+ 自研源插件（\\\\Tnas\\public\\ServerOpsKitAPI/*.dll）"""
+    ver = _asa_pkg_cur()
+    files = []
+    if ver:
+        pdir = os.path.join(_asa_pkg_root(), ver)
+        for rel, winrel, nm, kind in ASA_DEPLOY_FILES:
+            src = os.path.join(pdir, rel.replace(u'/', os.sep))
+            if os.path.isfile(src):
+                files.append({'rel': winrel, 'src': src, 'md5': _md5_of(src),
+                              'size': os.path.getsize(src), 'kind': kind, 'name': nm})
+    try:
+        zdir = SOK_SRC_UNC
+        if os.path.isdir(zdir):
+            _ents = list(os.scandir(zdir))
+            _dlls = [y for y in _ents if y.is_file() and y.name.lower().endswith(u'.dll')]
+            _pis = [y for y in _ents if y.is_file() and y.name.lower() == u'plugininfo.json']
+            for x in _dlls:
+                nm = os.path.splitext(x.name)[0]
+                files.append({'rel': u'ArkApi\\Plugins\\%s\\%s' % (nm, x.name),
+                              'src': x.path, 'md5': _md5_of(x.path),
+                              'size': os.path.getsize(x.path), 'kind': u'plugin', 'name': nm})
+            # v6342（用户口径：最新 SOK 是 0.81 而 Bob 显示 0.8）：
+            #   版本号来自 PluginInfo.json。原实现只分发 *.dll ⇒ dll 已是最新但 PluginInfo 永远不更新
+            #   ⇒ 界面永远显示旧版本（且「无需分发」）。此处把同级 PluginInfo.json 一并纳入。
+            #   仅当源目录只有**单个** dll 时才配对，避免多插件时错配。
+            if len(_dlls) == 1 and _pis:
+                nm = os.path.splitext(_dlls[0].name)[0]
+                for p in _pis:
+                    files.append({'rel': u'ArkApi\\Plugins\\%s\\%s' % (nm, p.name),
+                                  'src': p.path, 'md5': _md5_of(p.path),
+                                  'size': os.path.getsize(p.path),
+                                  'kind': u'plugin', 'name': nm})
+    except Exception:
+        _sexc('asa_plugin_src')
+    return {'ver': ver, 'vers': _asa_pkg_vers(), 'files': files,
+            'latest': _gh_latest_asaapi()}
+
+
+# ===== v6310（用户口径）：清理备份统一挪到 NAS；v6312：改用 UNC 网络地址 =====
+ASA_BAK_UNC = r'\\Tnas\public\备份\ASA'
+ASA_BAK_FALLBACK = True
+
+
+def _asa_bak_root(kind):
+    """返回 (备份目录, 来源标记)。优先 \\\\Tnas\\public\\备份\\ASA/<kind>/<ts>，不可写则回退 _upd_cache/_bk_<kind>/<ts>"""
+    ts = time.strftime('%Y%m%d_%H%M%S')
+    try:
+        base = os.path.join(ASA_BAK_UNC, kind)
+        if not os.path.isdir(base):
+            os.makedirs(base)
+        _t = os.path.join(base, u'.wtest_' + ts)
+        with open(_t, 'w') as _f:
+            _f.write('1')
+        os.remove(_t)
+        return os.path.join(base, ts), u'UNC'
+    except Exception:
+        _sexc('asa_bak_unc')
+        return os.path.join(_upd_cache_dir(), '_%s_bak' % kind, ts), u'local'
+
+
+def _asa_mv(src, dst):
+    """跨盘安全搬移：同盘 shutil.move；跨盘 复制 -> 校验存在 -> 删源"""
+    d1 = os.path.splitdrive(os.path.abspath(src))[0].lower()
+    d2 = os.path.splitdrive(os.path.abspath(dst))[0].lower()
+    if os.path.isdir(src):
+        if d1 == d2 and d1:
+            shutil.move(src, dst)
+        else:
+            shutil.copytree(src, dst)
+            if not os.path.isdir(dst):
+                raise IOError('copy failed: %s' % dst)
+            shutil.rmtree(src, ignore_errors=True)
+    else:
+        if d1 == d2 and d1:
+            shutil.move(src, dst)
+        else:
+            shutil.copy2(src, dst)
+            if not os.path.isfile(dst):
+                raise IOError('copy failed: %s' % dst)
+            try:
+                os.remove(src)
+            except Exception:
+                pass
+
+
+# ===== v6309（用户口径）：MOD 多余清理（不在策略内的 MOD）=====
+def _mods_cleanup_plan():
+    """MOD 多余清理计划（只读）：[{srv, pid, fid, dir, path, size, name}]
+    只针对 servers[srv].extra（实际存在但不在策略 expect 内），基准/策略内一律不动。"""
+    st = mods_status()
+    out = []
+    for srv, info in (st.get('servers') or {}).items():
+        ex = info.get('extra') or []
+        if not ex:
+            continue
+        for it in (info.get('items') or []):
+            if it.get('pid') not in ex:
+                continue
+            p = os.path.join(_mods_dir_of(srv), it.get('dir') or u'')
+            if not os.path.isdir(p):
+                continue
+            out.append({'srv': srv, 'pid': it.get('pid'), 'fid': it.get('fid'),
+                        'dir': it.get('dir'), 'path': p,
+                        'size': int(it.get('size') or 0),
+                        'name': it.get('name') or it.get('pid')})
+    return out
+
+
+def _mods_cleanup_run(user, plans):
+    """安全清理：把多余 MOD 目录 **move** 到 _upd_cache/_modcleanbak/<ts>/<srv>/（可随时移回）"""
+    ts = time.strftime('%Y%m%d_%H%M%S')
+    bak_root, bak_src = _asa_bak_root(u'mods')
+    # v6324（用户口径）：key 不带时间戳 —— 同一功能复用同一条任务条
+    key = u'modcleanup|latest'
+    n = max(1, len(plans))
+
+    def _t(msg, pct, phase='run', err=''):
+        try:
+            _utask_put(key, '', 'update', user, label=u'安全清理 · 多余 MOD',
+                       msg=msg, pct=pct, phase=phase,
+                       steps=_steps_apply(STEP_3_CLEAN, pct, phase, msg, 'clean'), err=err,
+                       srv_name=u'%d 个目录' % n)
+        except Exception:
+            _sexc('mods_cleanup_utask')
+    _t(u'准备清理 %d 个多余 MOD 目录…' % n, 5)
+    ok_n, bad_n, tot = 0, 0, 0
+    moved = []
+    i = 0
+    for p in plans:
+        i += 1
+        tdir = os.path.join(bak_root, p['srv'])
+        try:
+            _t(u'第 %d/%d：%s · %s' % (i, n, p['srv'], p['dir']), 5 + int(85.0 * i / n))
+            if not os.path.isdir(tdir):
+                os.makedirs(tdir)
+            dst = os.path.join(tdir, p['dir'])
+            if os.path.exists(dst):
+                dst = dst + u'_' + str(int(time.time()))
+            _asa_mv(p['path'], dst)
+            ok_n += 1
+            tot += int(p.get('size') or 0)
+            moved.append({'srv': p['srv'], 'dir': p['dir'], 'to': dst})
+        except Exception:
+            _sexc('mods_cleanup_move')
+            bad_n += 1
+    try:
+        _admin_log('MODS cleanup-extra by %s ok=%d bad=%d bytes=%d bak=%s'
+                   % (user, ok_n, bad_n, tot, bak_root))
+    except Exception:
+        pass
+    try:
+        mods_status_cache_clear()
+    except Exception:
+        pass
+    try:
+        if bad_n:
+            _t(u'完成：移入备份 %d 个，失败 %d 个' % (ok_n, bad_n), 100, 'fail', u'部分失败')
+        else:
+            _t(u'完成：已把 %d 个多余 MOD 移入备份（%.1f MB）→ %s'
+               % (ok_n, tot / 1048576.0, bak_root), 100, 'ok')
+    except Exception:
+        pass
+    return {'ok': ok_n, 'bad': bad_n, 'bytes': tot, 'backupDir': bak_root, 'moved': moved[:60]}
+
+
+def _api_deploy_plan3(servers):
+    """API 分发差异表：只列「当前 md5 != 目标 md5」的项（已最新自动跳过）"""
+    tgt = _asa_targets()
+    out = []
+    for srv in servers:
+        win = _srv_win64(srv)
+        for f in tgt['files']:
+            p = os.path.join(win, f['rel'])
+            cur = _md5_of(p) if os.path.isfile(p) else u''
+            if cur and cur == f['md5']:
+                continue
+            out.append({'srv': srv, 'name': f['name'], 'kind': f['kind'], 'rel': f['rel'],
+                        'src': f['src'], 'wantMd5': f['md5'], 'curMd5': cur,
+                        'size': f['size'], 'ver': tgt['ver'],
+                        'reason': (u'missing' if not cur else u'old'),
+                        'ok': bool(f['md5'])})
+    return out
+
+
+def _api_need_by_srv(tgt=None):
+    """v6349（用户口径）：每服是否需要分发 **插件** —— 与 _api_deploy_plan3 同源（比 size，不读 md5）
+       · 原前端拿「插件版本 = 台数最多的那个」当基准 ⇒ Bob 升到 0.82 后，10 台旧 0.7 成多数，
+         Bob 反被判成「待升级」（v6348 紫点误报）。此处以后端目标文件表为准，前端直接取结果。
+       · 只看 kind == 'plugin' 的文件；库（AsaApi.dll, kind='lib'）落后由 libNeedsUpgrade 单独表达，不污染 TAB 点。"""
+    _t0 = tgt if tgt else _asa_targets()
+    out = {}
+    fl = [f for f in (_t0.get('files') or []) if str(f.get('kind') or '') == 'plugin']
+    for srv in SERVERS.keys():
+        win = _srv_win64(srv)
+        need = False
+        for f in fl:
+            p = os.path.join(win, f['rel'])
+            if not os.path.isfile(p):
+                need = True
+                break
+            try:
+                if int(os.path.getsize(p)) != int(f.get('size') or 0):
+                    need = True
+                    break
+            except Exception:
+                pass
+        out[srv] = need
+    return out
+
+
+def _api_deploy_run2(user, plans):
+    """逐台：记状态 -> 停服 -> 备份 -> 复制 -> 校验 -> 失败回滚 -> 按原状态起服（任务总线）"""
+    cfg = _srvctl_cfg()
+    ts = time.strftime('%Y%m%d_%H%M%S')
+    bak_root = os.path.join(_upd_cache_dir(), '_apibak', ts)
+    bysrv = {}
+    for p in plans:
+        bysrv.setdefault(p['srv'], []).append(p)
+    for srv, items in bysrv.items():
+        # v6339（用户口径「每个服一条融合分发条」）：key 不再带时间戳
+        key = u'deploy|%s' % srv
+        sname = (SERVER_THEMES.get(srv) or {}).get('name') or srv
+        def _t(msg, pct, phase='run', err='', _k=key, _s=srv, _n=sname):
+            try:
+                _utask_put(_k, _s, 'update', user, label=u'API 分发 · ' + _n,
+                           msg=msg, pct=pct, phase=phase,
+                           steps=_steps_apply(STEP_5_DEPLOY, pct, phase, msg, 'deploy'),
+                           err=err, srv_name=_n)
+            except Exception:
+                _sexc('api_deploy_utask')
+
+        was_run = False
+        try:
+            was_run = bool(_cfg_proc_start(srv, force=True))
+        except Exception:
+            was_run = False
+        if was_run:
+            _t(u'停服中…', 8)
+            try:
+                _srvctl_one(srv, 'kill', '', cfg)
+            except Exception as e:
+                _t(u'停服失败：%s' % e, 100, 'fail', repr(e)[:400])
+                continue
+            _t(u'已停服', 18)
+        bdir = os.path.join(bak_root, srv)
+        try:
+            for it in items:
+                sp = os.path.join(_srv_win64(srv), it['rel'])
+                if os.path.isfile(sp):
+                    bp = os.path.join(bdir, it['rel'])
+                    d2 = os.path.dirname(bp)
+                    if d2 and not os.path.isdir(d2):
+                        os.makedirs(d2)
+                    shutil.copy2(sp, bp)
+            _t(u'已备份 %d 项' % len(items), 32)
+        except Exception as e:
+            _t(u'备份失败：%s' % e, 100, 'fail', repr(e)[:400])
+            if was_run:
+                try:
+                    _srvctl_startq_new(user, [srv], 'apideploy')
+                except Exception:
+                    pass
+            continue
+        _t(u'复制中…', 48)
+        err = u''
+        _stage = u''   # v6338：失败阶段（复制/校验），供分步圆点定位
+        try:
+            for it in items:
+                dp = os.path.join(_srv_win64(srv), it['rel'])
+                d2 = os.path.dirname(dp)
+                if d2 and not os.path.isdir(d2):
+                    os.makedirs(d2)
+                try:
+                    os.chmod(dp, _stat.S_IWRITE)
+                except Exception:
+                    pass
+                shutil.copy2(it['src'], dp)
+        except Exception as e:
+            err = repr(e)[:400]
+            _stage = u'复制'
+        if not err:
+            _t(u'校验中…', 74)
+            bad = []
+            for it in items:
+                dp = os.path.join(_srv_win64(srv), it['rel'])
+                if _md5_of(dp) != it['wantMd5']:
+                    bad.append(it['name'])
+            if bad:
+                err = u'md5 不一致：' + u'、'.join(bad)
+                _stage = u'校验'
+        if err:
+            try:
+                for it in items:
+                    dp = os.path.join(_srv_win64(srv), it['rel'])
+                    bp = os.path.join(bdir, it['rel'])
+                    if os.path.isfile(bp):
+                        try:
+                            os.chmod(dp, _stat.S_IWRITE)
+                        except Exception:
+                            pass
+                        shutil.copy2(bp, dp)
+                    elif not it.get('curMd5'):
+                        try:
+                            os.remove(dp)
+                        except Exception:
+                            pass
+            except Exception:
+                _sexc('api_rollback')
+            _t(u'%s失败（%s）—— 已回滚' % (_stage or u'校验', err), 100, 'fail', err)
+            if was_run:
+                try:
+                    _srvctl_startq_new(user, [srv], 'apideploy')
+                except Exception:
+                    pass
+            continue
+        _startErr = u''
+        if was_run:
+            _t(u'校验通过，起服中…', 90)
+            # v6339：起服失败自动重试（最多 3 次）—— 原实现丢给启动队列后不管结果
+            _ok2, _startErr = _deploy_start_retry(srv, user, 'apideploy', lambda t: _t(t, 90))
+        try:
+            _admin_log('API deploy srv=%s files=%s bak=%s' %
+                       (srv, u','.join(x['name'] for x in items), bdir))
+        except Exception:
+            pass
+        _utask_put(key, srv, 'update', user, label=u'API 分发 · ' + sname,
+                   msg=(u'完成（更新 %d 项）' % len(items))
+                       + ((u' · 起服失败：' + _startErr) if _startErr else u''),
+                   pct=100, phase=('fail' if _startErr else 'ok'),
+                   steps=_steps_apply(STEP_5_DEPLOY, 100, 'ok', '', 'deploy'), srv_name=sname,
+                   meta={'files': [x['name'] for x in items], 'wasRunning': was_run,
+                         'bak': bdir})
+    try:
+        mods_status_cache_clear()
+    except Exception:
+        pass
+
+
+# ===== v6306（用户口径）：「多余插件」安全清理 =====
+def _api_cleanup_plan():
+    """多余插件清理计划（纯只读）：[{srv, name, path, bytes, disabled:[{dir,path,bytes}]}]
+    只针对 api_status().extras（不在必需清单内的插件），必需插件绝不入列。"""
+    st = api_status()
+    ex = list(st.get('extras') or [])
+    out = []
+    if not ex:
+        return out
+    for srv in SERVERS.keys():
+        win = _srv_win64(srv)
+        dp = os.path.join(win, '_disabled_plugins')
+        for nm in ex:
+            p = os.path.join(win, 'ArkApi', 'Plugins', nm)
+            dis = []
+            try:
+                if os.path.isdir(dp):
+                    for x in os.scandir(dp):
+                        if not x.is_dir():
+                            continue
+                        k = x.name.split('_')[0] if '_' in x.name else x.name
+                        if k == nm:
+                            dis.append({'dir': x.name, 'path': x.path, 'bytes': _dir_size(x.path)})
+            except Exception:
+                _sexc('api_cleanup_disabled')
+            if (not os.path.isdir(p)) and (not dis):
+                continue
+            out.append({'srv': srv, 'name': nm, 'path': p,
+                        'bytes': (_dir_size(p) if os.path.isdir(p) else 0),
+                        'disabled': dis})
+    return out
+
+
+def _api_cleanup_run(user, plans):
+    """安全清理：把插件目录 **move** 到 _upd_cache/_pluginbak/<ts>/<srv>/（同盘秒级，可随时移回）"""
+    ts = time.strftime('%Y%m%d_%H%M%S')
+    bak_root, bak_src = _asa_bak_root(u'plugins')
+    ok_n, bad_n, tot = 0, 0, 0
+    moved = []
+    # v6307（用户口径）：接入任务总线 —— 单条汇总，与「存档后终止」多台汇总条同款
+    # v6324（用户口径）：key 不带时间戳 —— 同一功能复用同一条任务条
+    _ckey = u'apicleanup|latest'
+    _cn = max(1, len(plans))
+
+    def _ct(msg, pct, phase='run', err=''):
+        try:
+            _utask_put(_ckey, '', 'update', user, label=u'安全清理 · 多余插件',
+                       msg=msg, pct=pct, phase=phase,
+                       steps=_steps_apply(STEP_3_CLEAN, pct, phase, msg, 'clean'), err=err,
+                       srv_name=u'%d 项' % _cn)
+        except Exception:
+            _sexc('api_cleanup_utask')
+    _ct(u'准备清理 %d 项…' % _cn, 5)
+    _ci = 0
+
+    for p in plans:
+        _ci += 1
+        try:
+            _ct(u'第 %d/%d 项：%s · %s' % (_ci, _cn, p.get('srv') or u'', p.get('name') or u''),
+                5 + int(85.0 * _ci / _cn))
+        except Exception:
+            pass
+        tdir = os.path.join(bak_root, p['srv'])
+        try:
+            if not os.path.isdir(tdir):
+                os.makedirs(tdir)
+            srcs = []
+            if os.path.isdir(p['path']):
+                srcs.append((p['path'], p['name'], int(p.get('bytes') or 0)))
+            for d in (p.get('disabled') or []):
+                srcs.append((d['path'], d['dir'], int(d.get('bytes') or 0)))
+            for sp, nm, sz in srcs:
+                dst = os.path.join(tdir, nm)
+                if os.path.exists(dst):
+                    dst = dst + '_' + str(int(time.time()))
+                _asa_mv(sp, dst)
+                ok_n += 1
+                tot += sz
+                moved.append({'srv': p['srv'], 'name': nm, 'to': dst})
+        except Exception:
+            _sexc('api_cleanup_move')
+            bad_n += 1
+    try:
+        _admin_log('API cleanup-extras by %s ok=%d bad=%d bytes=%d bak=%s'
+                   % (user, ok_n, bad_n, tot, bak_root))
+    except Exception:
+        pass
+    try:
+        if bad_n:
+            _ct(u'完成：移入备份 %d 项，失败 %d 项' % (ok_n, bad_n), 100, 'fail',
+                u'部分失败，详见 _pluginbak')
+        else:
+            _ct(u'完成：已把 %d 个目录移入备份（%.1f MB）→ %s'
+                % (ok_n, tot / 1048576.0, bak_root), 100, 'ok')
+    except Exception:
+        pass
+    try:
+        mods_status_cache_clear()
+    except Exception:
+        pass
+    return {'ok': ok_n, 'bad': bad_n, 'bytes': tot,
+            'backupDir': bak_root, 'moved': moved[:60]}
+
+
+def mods_status_cache_clear():
+    _MODS_CACHE['at'] = 0.0
+    _MODS_CACHE['data'] = None
+    _API_CACHE['at'] = 0.0
+    _API_CACHE['data'] = None
+
+
+def _api_deploy_plan(servers):
+    """API 分发计划（当前实现：库 + Permissions；ServerOpsKitAPI 取本地源）"""
+    st = api_status()
+    out = []
+    lib0 = None
+    for srv in servers:
+        lp = (st.get('lib') or {}).get(srv) or {}
+        out.append({'srv': srv, 'libSize': lp.get('dllSize') or 0,
+                    'plugin': 'ServerOpsKitAPI',
+                    'pluginInstalled': bool((st.get('plugins') or {}).get('ServerOpsKitAPI', {})
+                                            .get('servers') and srv in
+                                            (st['plugins']['ServerOpsKitAPI']['servers'] or []))})
+    return out
 
 
 def _upd_ver_info(picked=None):
@@ -11876,7 +14257,7 @@ def _zh_unpack(zipp, paks_dir, ver, asset):
         return {'ok': False, 'err': ('%s: %s' % (type(e).__name__, e))[:220]}
 
 
-def _zh_prepare_start(force=False):
+def _zh_prepare_start(force=False, user=''):
     """异步：读云端清单 -> 下载 -> 白名单解压 -> 写 manifest（只写 D:\\Cache-zh）
 
     v6246（用户口径「本地包就是最新的，点更新本地包要提示已是最新」）：
@@ -11902,6 +14283,18 @@ def _zh_prepare_start(force=False):
                          'msg': u'读取云端清单…', 'skipped': False})
 
     def _job():
+        # v6323（用户口径）：接入任务总线 —— 一个实例一条
+        _zk = u'zhprepare|latest'
+
+        def _zt(msg, pct, phase='run', err=''):
+            try:
+                _utask_put(_zk, '', 'update', user, label=u'更新本地包',
+                           msg=msg, pct=pct, phase=phase,
+                           steps=_steps_apply(STEP_4_ZH, pct, phase, msg, 'zh'), err=err,
+                           srv_name=u'汉化包')
+            except Exception:
+                _sexc('zh_prepare_utask')
+        _zt(u'读取云端清单…', 5)
         try:
             rem = _zh_remote(force=force)
             if not rem.get('ok'):
@@ -11919,6 +14312,7 @@ def _zh_prepare_start(force=False):
             if _lvz and str(_lvz) == str(ver):
                 _ZH_PREP.update({'phase': 'done', 'ver': ver, 'skipped': True,
                                  'msg': u'当前本地包已是最新（V%s），无需更新' % ver})
+                _zt(u'当前本地包已是最新（V%s），无需更新' % ver, 100, 'skip')
                 return
             base = os.path.join(ZH_CACHE_ROOT, ver)
             paks_dir = os.path.join(base, 'paks')
@@ -11929,10 +14323,12 @@ def _zh_prepare_start(force=False):
                 raise RuntimeError(u'创建缓存目录失败：%s' % e)
             _ZH_PREP.update({'ver': ver, 'phase': 'download',
                              'msg': u'开始下载 %s …' % (asset.get('name') or ver)})
+            _zt(u'下载 %s（V%s）…' % (asset.get('name') or ver, ver), 30)
             dl = _zh_download_file(fid, zipp)
             if not dl.get('ok'):
                 raise RuntimeError(u'下载失败：%s' % (dl.get('err') or ''))
             _ZH_PREP.update({'phase': 'unpack', 'msg': u'解压中（白名单取 3 个文件）…'})
+            _zt(u'解压中（白名单取 3 个文件）…', 65)
             up = _zh_unpack(zipp, paks_dir, ver, asset)
             if not up.get('ok'):
                 raise RuntimeError(u'解压失败：%s' % (up.get('err') or ''))
@@ -11950,10 +14346,15 @@ def _zh_prepare_start(force=False):
             _ZH_PREP.update({'phase': 'done',
                              'msg': u'已就绪：%s（3 个文件，跳过 %d 项客户端内容）'
                                     % (ver, up.get('skipped') or 0)})
+            _zt(u'已就绪：V%s（3 个 pak 已解压到缓存）' % ver, 100, 'ok')
         except Exception as e:
             _ZH_PREP.update({'phase': 'fail',
                              'err': ('%s: %s' % (type(e).__name__, e))[:220],
                              'msg': u'准备失败'})
+            try:
+                _zt(u'准备失败：%s' % (u'%s: %s' % (type(e).__name__, e))[:160], 100, 'fail', repr(e)[:200])
+            except Exception:
+                pass
         finally:
             _ZH_PREP['running'] = False
             _ZH_PREP['at'] = time.time()
@@ -12210,6 +14611,124 @@ def _upd_cache_clear():
                         % (n, nbytes / 2 ** 30, (u'（%d 项失败）' % len(errs)) if errs else u''))}
     except Exception as e:
         return {'ok': False, 'code': 'err', 'error': (repr(e))[:200]}
+
+
+def _utask_busy_prefix(pref_list):
+    """v6366：任务表里是否有指定前缀的进行中任务（run/queue）"""
+    try:
+        with _UTASK_LOCK:
+            for t in _UTASK['items']:
+                if str(t.get('phase') or '') not in ('run', 'queue'):
+                    continue
+                k = str(t.get('key') or '')
+                for p in pref_list:
+                    if k.startswith(p):
+                        return True
+    except Exception:
+        pass
+    return False
+
+
+def _pkg_clear(kind):
+    """v6366（用户口径）：清空本地包 —— 汉化包 / MOD / API 三卡右下角「清空本地包」。
+       · 只删缓存目录**内容**，保留目录本身；不碰任何服务器、不碰 \\\\Tnas 自研源
+       · zh  = D:\\Cache-zh 全部内容（含 backup 分发前备份 —— 用户 2026-11-09 明确要求一并清）
+       · mods= _upd_cache/_modpkg 全部内容
+       · api = _upd_cache/_apipkg + _apipkg_dl 全部内容
+       · 相关任务在跑 ⇒ 直接拒绝（避免删到正在写的包）"""
+    kind = str(kind or '').strip().lower()
+    try:
+        if kind == 'zh':
+            roots = [ZH_CACHE_ROOT]
+            label = u'汉化包本地包'
+            pref = (u'zhprepare|',)
+            extra_busy = bool((_ZH_PREP or {}).get('running'))
+        elif kind == 'mods':
+            # v6367（实测根因）：`_mods_local_pack()` 的「本地包」统计 **两处** ——
+            #   ① `_modpkg/*`（CurseForge 真·本地包）
+            #   ② **最新批次** `_upd_cache/mb<ts>/mods/*`
+            #   原来只删 ① ⇒ count/bytes 不归零，用户点完看起来「无效」
+            #   （日志实测：PKG clear kind=mods n=2 bytes=137248255 真删了，但界面仍显示 130.9 MB）
+            roots = [os.path.join(_upd_cache_dir(), MODS_PKG_ROOT_NAME)]
+            try:
+                for _mx in os.scandir(_upd_cache_dir()):
+                    if not _mx.is_dir() or not _mx.name.startswith('mb'):
+                        continue
+                    _mdx = os.path.join(_mx.path, 'mods')
+                    if os.path.isdir(_mdx):
+                        roots.append(_mdx)
+            except Exception:
+                _sexc('pkg_clear_mods_batches')
+            label = u'MOD 本地包'
+            pref = (u'modpkg|',)
+            extra_busy = False
+        elif kind == 'api':
+            roots = [os.path.join(_upd_cache_dir(), '_apipkg'),
+                     os.path.join(_upd_cache_dir(), '_apipkg_dl')]
+            label = u'API 本地包'
+            pref = (u'apipkg|',)
+            extra_busy = False
+        else:
+            return {'ok': False, 'code': 'bad_kind',
+                    'error': u'未知的本地包类型：%s' % kind}
+    except Exception as e:
+        return {'ok': False, 'code': 'err', 'error': repr(e)[:200]}
+    if extra_busy or _utask_busy_prefix(pref):
+        return {'ok': False, 'code': 'busy',
+                'error': u'%s正在下载/解压中，等它结束再清空' % label}
+    n = 0
+    nbytes = 0
+    errs = []
+    seen = 0
+    for root in roots:
+        if not os.path.isdir(root):
+            continue
+        seen += 1
+        try:
+            names = os.listdir(root)
+        except Exception as e:
+            errs.append(u'%s 列目录失败：%s' % (root, e))
+            continue
+        for name in names:
+            p = os.path.join(root, name)
+            try:
+                if os.path.isdir(p) and not os.path.islink(p):
+                    try:
+                        nbytes += _dir_size(p)
+                    except Exception:
+                        pass
+                    shutil.rmtree(p)
+                else:
+                    try:
+                        nbytes += os.path.getsize(p)
+                    except Exception:
+                        pass
+                    os.remove(p)
+                n += 1
+            except Exception as e:
+                errs.append(u'%s：%s' % (name, e))
+    if not seen:
+        return {'ok': False, 'code': 'no_pkg',
+                'error': u'%s目录不存在' % label, 'roots': roots}
+    # v6368（实测根因）：清完必须**失效状态缓存** ——
+    #   `_MODS_CACHE` / `_API_CACHE` TTL = 30s，不清的话前端刷新拿到的还是旧值
+    #   ⇒ 卡片数字不变 ⇒ 用户以为「清空无效」（日志证实已真删）
+    try:
+        mods_status_cache_clear()
+    except Exception:
+        _sexc('pkg_clear_cache')
+    try:
+        _admin_log('PKG clear kind=%s n=%d bytes=%d errs=%s'
+                   % (kind, n, nbytes, ','.join(errs[:5])))
+    except Exception:
+        pass
+    return {'ok': (not errs),
+            'code': ('partial' if errs else 'ok'),
+            'kind': kind, 'label': label, 'roots': roots,
+            'removed': n, 'bytes': nbytes, 'errors': errs[:10],
+            'msg': (u'已清空%s：%d 项 / %.1f MB%s'
+                    % (label, n, nbytes / 1048576.0,
+                       (u'（%d 项失败）' % len(errs)) if errs else u''))}
 
 
 def _upd_perm_check(srv):
@@ -12874,7 +15393,7 @@ def _news_official_version():
 # ⇒ 我们直接读官方源，不再依赖 ASAM 缓存，也不再依赖资讯广场（Discord 抓取不稳且滞后）。
 OFFI_INI_URL = 'https://cdn2.arkdedicated.com/asa/officialserverstatus.ini'
 OFFI_TTL = 300                     # 5 分钟缓存（官方版本不会秒变）
-_OFFI_CACHE = {'at': 0.0, 'ver': '', 'src': '', 'err': ''}
+_OFFI_CACHE = {'at': 0.0, 'ver': '', 'src': '', 'state': 'unknown', 'err': ''}
 _OFFI_LOCK = threading.Lock()
 
 
@@ -12897,18 +15416,40 @@ def _offi_get(url, timeout=12):
 
 def _offi_parse_ini(txt):
     """`ARK Official Server Network Status: <RichColor ...>Online (v97.5)</>` -> '97.5'
-       · 必须含 online（离线/Unknown 一律返回 ''，宁缺勿错）
-       · 兼容无小数写法（v97 -> '97.0'）"""
+       · 必须含 online **或 deploying**（离线/Unknown 一律返回 ''，宁缺勿错）
+       · 兼容无小数写法（v97 -> '97.0'）
+
+    v6279（2026-11-08 实测根因）：官方状态词**不只有 Online**。
+       实测 04:4x 官方 ini 内容为
+         `ARK Official Server Network Status: <RichColor ...>Deploying (v97.17)</>`
+       而原判据 `if 'online' not in t.lower(): return ''` ⇒ 只要官方在推新版本，
+       就永远解析出空 ⇒ `/api/srvctl/status.official` 为空
+       ⇒ 前端 `lbSrvCtlOfficialHtml('')` 直接 return ''
+       ⇒ **「当前官服版本 vX」整行消失（版本号链接一起没了）**，
+         服务器控制 / 服务器更新 两个浮窗同时中招。
+       Deploying 时括号里的版本号就是**即将上线的新版本**，语义上正是用户要看的，故一并接受；
+       Down / Unknown 等仍返回空（宁缺勿错）。"""
     t = _AS_TAG.sub(' ', str(txt or ''))
-    if 'online' not in t.lower():
-        return ''
+    _tl = t.lower()
+    # v6280（用户口径 2026-11-08「这 4 种状态都要用中文标识出来」）：
+    #   改为返回 **(版本号, 状态词)**，状态词供前端做中文标识：
+    #     online → 在线 / deploying → 部署中 / down → 离线 / unknown → 未知
+    #   落在这 4 个之外的一律按 unknown 处理（宁标未知，不猜）。
+    _state = 'unknown'
+    for _k in ('online', 'deploying', 'down'):
+        if _k in _tl:
+            _state = _k
+            break
+    if _state in ('down', 'unknown'):
+        return '', _state          # 离线/未知：不给版本号（宁缺勿错）
     m = re.search(r'\(\s*v?(\d+)(?:\.(\d+))?\s*\)', t, re.I)
     if not m:
-        return ''
-    return '%d.%s' % (int(m.group(1)), m.group(2) or '0')
+        return '', _state
+    return ('%d.%s' % (int(m.group(1)), m.group(2) or '0')), _state
 
 
 def _offi_from_ini():
+    """-> (ver, state)；state ∈ online / deploying / down / unknown"""
     return _offi_parse_ini(_offi_get(OFFI_INI_URL, timeout=12))
 
 
@@ -12923,14 +15464,20 @@ def _official_version_ex(force=False):
         if (not force) and _OFFI_CACHE.get('ver') and (now - float(_OFFI_CACHE.get('at') or 0) < OFFI_TTL):
             return dict(_OFFI_CACHE)
         _err = []
-        ver, src = '', ''
+        ver, src, state = '', '', 'unknown'
         try:
-            ver = _offi_from_ini()
+            ver, state = _offi_from_ini()
             if ver:
                 src = 'ini'
+            else:
+                # v6279：解析为空也要留痕 —— 原来 err 为空串，接口看上去"既没失败也没数据"，
+                #   排查时无法区分「网络不通」与「状态词不认识」。
+                _err.append('ini:empty:' + str(state or 'unknown'))
         except Exception as e:
             _err.append('ini:' + type(e).__name__)
-        _OFFI_CACHE.update({'at': now, 'ver': ver, 'src': src, 'err': ';'.join(_err)})
+            state = 'unknown'
+        _OFFI_CACHE.update({'at': now, 'ver': ver, 'src': src,
+                            'state': state, 'err': ';'.join(_err)})
         return dict(_OFFI_CACHE)
 
 def _discord_api(path, cfg):
@@ -13594,6 +16141,9 @@ class Handler(BaseHTTPRequestHandler):
                              'asa_base': _sd.get('asa_base') or 'https://asa.whiterober.com',
                              'asa_token_masked': _asa_mask(_sd.get('asa_token') or ''),
                              'asa_configured': bool(_sd.get('asa_token')),
+                             'cf_key_masked': _asa_mask(_sd.get('cf_key') or ''),
+                             'cf_key_configured': bool(_sd.get('cf_key')),
+                             'mods_policy': _mods_policy(),
                              'ipwatch_restart': bool(_restart_enable_now()),
                              'ipwatch_restart_dry': bool(_restart_dry_now()),
                              'ipwatch_announce_real': bool(_restart_announce_real_now()),
@@ -13651,6 +16201,20 @@ class Handler(BaseHTTPRequestHandler):
                 _r_pc = {'ok': False, 'verdict': 'error', 'error': 'permcheck_fail'}
             self._send(200, _r_pc)
             return
+        elif path == '/api/mods/status':
+            # v6283（Round 1 只读）：MOD 卡 —— 磁盘扫描 83374/<pid>_<fid>，不写任何文件
+            _qs2 = parse_qs(parsed.query)
+            if not _srvctl_guard(self, _qs2):
+                return
+            self._send(200, mods_status())
+            return
+        elif path == '/api/api/status':
+            # v6283（Round 1 只读）：API 卡 —— 库一致性 + 缓存就绪 + 插件矩阵
+            _qs3 = parse_qs(parsed.query)
+            if not _srvctl_guard(self, _qs3):
+                return
+            self._send(200, api_status())
+            return
         elif path == '/api/update/status':
             # v6206：SteamCMD Cache 状态（只读）—— 缓存 buildid / 11 台对比 / 落后清单
             #   ?players=1 才逐台查在线人数（慢接口，前端默认不传）
@@ -13673,6 +16237,9 @@ class Handler(BaseHTTPRequestHandler):
                 _r_up['defaultDry'] = bool(_upd_dry_default())
             except Exception:
                 _r_up['defaultDry'] = True
+            # v6296（用户口径）：下发 Steam 标识 —— 前端把 buildId 链到 SteamDB 的 depot manifest 页
+            _r_up['depotId'] = UPDATE_DEPOT_ID
+            _r_up['appId'] = UPDATE_APP_ID
             # v6230（用户口径「**只从版本号判断**」）：**删除 v6228 的 buildId 兜底**。
             #   原兜底会把「版本号没变但 buildId 变了」判成 forced；
             #   但那属于「同版本重打包」，按用户规则仍是非强制（只认版本号）。
@@ -13772,6 +16339,8 @@ class Handler(BaseHTTPRequestHandler):
                 _oe2 = {'ver': '', 'src': '', 'err': 'chain_fail'}
             self._send(200, {'ok': True, 'servers': _out,
                              'official': _oe2.get('ver') or '',
+                             # v6280：状态词（online/deploying/down/unknown），前端做中文标识
+                             'officialState': _oe2.get('state') or 'unknown',
                              'officialSrc': _oe2.get('src') or '',
                              'officialErr': _oe2.get('err') or '',
                              'ms': int((time.time() - _t0) * 1000)})
@@ -14060,7 +16629,7 @@ class Handler(BaseHTTPRequestHandler):
             if not _u_zp:
                 return
             _fr_zp = str(g('force') or '').lower() in ('1', 'true', 'yes')
-            self._send(200, _zh_prepare_start(force=_fr_zp))
+            self._send(200, _zh_prepare_start(force=_fr_zp, user=_u_zp))
             return
         if path == '/api/zh/check':
             # v6237（B1）：强制刷新云端清单（只读，不下载）
@@ -14087,6 +16656,431 @@ class Handler(BaseHTTPRequestHandler):
                 return
             _r_cc = _upd_cache_clear()
             self._send(200 if _r_cc.get('ok') else 400, _r_cc)
+            return
+        if path == '/api/pkg/clear':
+            # v6366（用户口径）：清空本地包（汉化包 / MOD / API）
+            #   —— token + 二级管理员 + body confirm='CLEARPKG'，三卡右下角「清空本地包」共用
+            _u_pc = _srvctl_guard(self, qs, need_token=True)
+            if not _u_pc:
+                return
+            if _role_level(_u_pc) < 2:
+                self._send(403, {'ok': False, 'code': 'admin_only', 'error': u'仅二级管理员可用'})
+                return
+            if str(body.get('confirm') or '') != 'CLEARPKG':
+                self._send(400, {'ok': False, 'code': 'need_confirm',
+                                 'error': u'清空本地包需在 body 里传 confirm="CLEARPKG"'})
+                return
+            _r_pc = _pkg_clear(body.get('kind'))
+            self._send(200 if _r_pc.get('ok') else 400, _r_pc)
+            return
+        if path == '/api/mods/prefetch':
+            # v6293（用户口径）：更新本地包 —— 只把基准版本复制进新批次缓存，不动任何服务器
+            _u_pf = _srvctl_guard(self, qs, need_token=True)
+            if not _u_pf:
+                return
+            if _role_level(_u_pf) < 2:
+                self._send(403, {'ok': False, 'code': 'admin_only', 'error': u'仅二级管理员可用'})
+                return
+            _pl_pf = _mods_prefetch_plan()
+            _dry_pf = bool(body.get('dry', True))
+            _bid_pf = _mods_new_batch()
+            if _dry_pf or str(body.get('confirm') or '') != 'PREFETCH':
+                self._send(200, {'ok': True, 'dry': True, 'batchId': _bid_pf,
+                                 'plans': _pl_pf,
+                                 'needConfirm': u"真跑需 body {'dry': false, 'confirm': 'PREFETCH'}"})
+                return
+            _good_pf = [x for x in _pl_pf if x.get('ok')]
+            if not _good_pf:
+                self._send(400, {'ok': False, 'code': 'no_source', 'error': u'没有可用源（各服磁盘都缺目标版本）'})
+                return
+            _res_pf = _mods_prefetch_run(_u_pf, _bid_pf, _good_pf)
+            self._send(200, {'ok': True, 'dry': False, 'batchId': _bid_pf, 'result': _res_pf,
+                             'plans': _pl_pf,
+                             'note': u'已更新本地包（只写缓存），可再点分发下发到各服'})
+            return
+        if path == '/api/mods/pkg/fetch':
+            # v6354（用户口径·方案 A）：从 CurseForge **下载真·本地包** —— 只写 _upd_cache，不动任何服务器
+            #   原「更新本地包」只从现有服 copytree（无源服就废）；这个是真下载，不依赖任何服
+            _u_pk = _srvctl_guard(self, qs, need_token=True)
+            if not _u_pk:
+                return
+            if _role_level(_u_pk) < 2:
+                self._send(403, {'ok': False, 'code': 'admin_only', 'error': u'仅二级管理员可用'})
+                return
+            if not _cf_key():
+                self._send(400, {'ok': False, 'code': 'no_cf_key',
+                                 'error': u'未配置 CurseForge API Key（系统管理 → CurseForge API Key）'})
+                return
+            _dry_pk = body.get('dry')
+            _dry_pk = True if _dry_pk is None else str(_dry_pk).lower() in ('1', 'true', 'yes', 'on')
+            _pids_pk = body.get('mods')
+            if not isinstance(_pids_pk, list):
+                _pids_pk = []
+            _pids_pk = [str(x).strip() for x in _pids_pk if str(x).strip()]
+            if not _pids_pk:
+                _po_pk = _mods_policy()
+                _pids_pk = [x for x in ([_po_pk.get('bob')] + list(_po_pk.get('common') or [])) if x]
+            _seen_pk, _pl_pk = set(), []
+            for _p in _pids_pk:
+                if _p in _seen_pk:
+                    continue
+                _seen_pk.add(_p)
+                _f = _mods_cf_server_file(_p)
+                _fid = str((_f or {}).get('id') or '')
+                _have = bool(_fid and os.path.isdir(_mods_pkg_dir(_p, _fid)))
+                _pl_pk.append({'pid': _p,
+                               'fid': _fid,
+                               'fileName': str((_f or {}).get('fileName') or ''),
+                               'bytes': int((_f or {}).get('fileLength') or 0),
+                               'cached': _have,
+                               'ok': bool(_f)})
+            if _dry_pk or str(body.get('confirm') or '') != 'PKG':
+                _n_pk = sum(1 for x in _pl_pk if x['ok'] and not x['cached'])
+                self._send(200, {'ok': True, 'dry': True, 'plans': _pl_pk,
+                                 'needDownload': _n_pk,
+                                 'needConfirm': u"真跑需 body {'dry': false, 'confirm': 'PKG'}",
+                                 'note': (u'预演：未下载任何文件。%d 项需下载' % _n_pk)})
+                return
+            def _pk_run():
+                # v6358（用户口径「点了没出现任务条」）：**必须接入任务总线** ——
+                #   原实现只写 _admin_log，界面上完全看不到进度。
+                _pk_key = u'modpkg|fetch'
+                _todo = [x for x in _pl_pk if x['ok']]
+                _tot = max(1, len(_todo))
+                # v6373（用户口径「一个 MOD 一条」）：任务 meta.items 携带每个 MOD 自己的
+                #   state/pct/msg，前端按行渲染「一个 MOD 一条进度条」，不再只有一个总百分比。
+                _items = []
+                for _x0 in _todo:
+                    try:
+                        _nm0 = (_mods_cf_name(_x0['pid']) or _x0['pid'])
+                    except Exception:
+                        _nm0 = str(_x0['pid'])
+                    _items.append({'key': str(_x0['pid']), 'fid': str(_x0['fid'] or u''),
+                                   'name': _nm0, 'bytes': int(_x0['bytes'] or 0),
+                                   'state': 'wait', 'pct': 0, 'msg': u'等待中'})
+
+                def _put(msg, pct, phase='run', err=u'', nm=u''):
+                    try:
+                        _utask_put(_pk_key, '', 'update', _u_pk,
+                                   label=u'更新本地包（CurseForge）',
+                                   msg=msg, pct=int(pct), phase=phase,
+                                   steps=_steps_apply(STEP_4_PKG, int(pct), phase, msg, 'pkg'),
+                                   err=err, meta={'items': _items},
+                                   srv_name=(nm or (u'%d 个 MOD' % len(_todo))))
+                    except Exception:
+                        _sexc('mods_pkg_utask')
+
+                _put(u'查询 CurseForge 文件列表…', 3)
+                _i = 0
+                _badn = 0
+                _why = []
+                _fail_name = u''
+                for _x in _todo:
+                    _i += 1
+                    _lo = 5 + int(88.0 * (_i - 1) / _tot)
+                    _span = 88.0 / _tot
+                    _nmx = (_mods_cf_name(_x['pid']) or _x['pid'])
+                    _mbx = (u'%.0f MB' % ((_x['bytes'] or 0) / 1048576.0))
+                    _it = _items[_i - 1] if 0 <= (_i - 1) < len(_items) else {}
+                    try:
+                        _it.update({'state': 'query', 'pct': 0, 'msg': u'查询文件列表…'})
+                    except Exception:
+                        pass
+
+                    def _pg(msg, stage, frac=None, _lo=_lo, _span=_span, _nm=_nmx, _it=_it):
+                        # v6372（实测）：原来下载阶段 pct 固定为 0.45 ⇒
+                        #   进度条一直卡在 44%（msg 在变、条不动），看起来像卡住。
+                        #   现按**真实字节比例**推进：下载段占本项 5%~65%，解压占 80%。
+                        if stage == 'dl':
+                            _r = 0.05 + 0.60 * max(0.0, min(1.0, float(frac or 0.0)))
+                        elif stage == 'unzip':
+                            _r = 0.80
+                        else:
+                            _r = 0.45
+                        # v6373：同步**该 MOD 自己**的 pct/state（下载段映射到 3~75%）
+                        try:
+                            # v6374（用户口径）：**卡片条只表示下载** ——
+                            #   0~100% 就是下载 0~100%；解压/校验**不占百分比**（条停在满格变绿）
+                            if stage == 'dl':
+                                _it.update({'state': 'dl',
+                                            'pct': int(round(100.0 * max(0.0, min(1.0, float(frac or 0.0))))) })
+                            elif stage == 'unzip':
+                                _it.update({'state': 'unzip', 'pct': 100})
+                            _it['msg'] = msg
+                        except Exception:
+                            pass
+                        _put(u'%s（%s）' % (msg, _mbx), _lo + _span * _r, 'run', u'', _nm)
+
+                    try:
+                        _ok2, _msg2, _fid2, _dd2 = _mods_pkg_fetch(_x['pid'], on_prog=_pg)
+                        _admin_log('MODS pkg fetch pid=%s fid=%s ok=%s %s'
+                                   % (_x['pid'], _fid2, _ok2, _msg2))
+                        if not _ok2:
+                            _badn += 1
+                            _why.append(u'%s：%s' % (_nmx, str(_msg2 or u'')[:120]))
+                            _fail_name = _nmx
+                            try:
+                                _it.update({'state': 'fail', 'pct': 100,
+                                            'msg': str(_msg2 or u'')[:120]})
+                            except Exception:
+                                pass
+                        else:
+                            try:
+                                _it.update({'state': 'ok', 'pct': 100, 'msg': u'已入本地包'})
+                            except Exception:
+                                pass
+                    except Exception as _e2:
+                        _sexc('mods_pkg_fetch')
+                        _badn += 1
+                        _why.append(u'%s：%s' % (_nmx, repr(_e2)[:120]))
+                        _fail_name = _nmx
+                        try:
+                            _it.update({'state': 'fail', 'pct': 100,
+                                        'msg': repr(_e2)[:120]})
+                        except Exception:
+                            pass
+                try:
+                    mods_status_cache_clear()
+                except Exception:
+                    pass
+                # v6361：完成态标题也带 MOD 名（单条时）—— 否则会回落到「N 个 MOD」跳一下
+                _nmfin = (u'%d 个 MOD' % len(_todo))
+                if len(_todo) == 1:
+                    try:
+                        _nmfin = _mods_cf_name(_todo[0]['pid']) or _todo[0]['pid']
+                    except Exception:
+                        pass
+                elif _badn == 1 and _fail_name:
+                    _nmfin = _fail_name + u' 失败'      # v6363：多选时标题直接点出失败的那个
+                if _badn:
+                    # v6363（用户口径「为啥报错」）：fail 态前端显示的是 **err 字段**（app_core.js L9810），
+                    #   原来传 'partial' ⇒ 界面只看到一个词「partial」。现在传具体原因（截断 160）。
+                    _errfin = ((_why[0] if _why else u'') or u'下载失败')[:160]
+                    _put(u'完成：成功 %d 个，失败 %d 个 · %s'
+                         % (len(_todo) - _badn, _badn, _errfin),
+                         100, 'fail', _errfin, _nmfin)
+                else:
+                    _put(u'完成：已进本地包（CurseForge）', 100, 'ok', u'', _nmfin)
+            try:
+                threading.Thread(target=_pk_run, daemon=True).start()
+            except Exception as e:
+                self._send(500, {'ok': False, 'error': repr(e)})
+                return
+            self._send(200, {'ok': True, 'dry': False, 'started': True, 'plans': _pl_pk,
+                             'note': u'已开始从 CurseForge 下载本地包（后台）；完成后分发会优先用它'})
+            return
+        if path == '/api/mods/cleanup-extra':
+            # v6309（用户口径）：MOD 多余清理 —— dry 默认；confirm='CLEANUP' 才真跑
+            #   安全点：移动不是删除（-> _upd_cache/_modcleanbak/<ts>/<srv>/），可随时移回；不停服
+            _u_mc = _srvctl_guard(self, qs, need_token=True)
+            if not _u_mc:
+                return
+            if _role_level(_u_mc) < 2:
+                self._send(403, {'ok': False, 'code': 'admin_only', 'error': u'仅二级管理员可用'})
+                return
+            _pl_mc = _mods_cleanup_plan()
+            _tot_mc = sum(int(x.get('size') or 0) for x in _pl_mc)
+            _dry_mc = body.get('dry')
+            _dry_mc = True if _dry_mc is None else str(_dry_mc).lower() in ('1', 'true', 'yes', 'on')
+            if _dry_mc or str(body.get('confirm') or '') != 'CLEANUP':
+                self._send(200, {'ok': True, 'dry': True, 'plans': _pl_mc,
+                                 'totalBytes': _tot_mc, 'itemCount': len(_pl_mc),
+                                 'needConfirm': u"真跑需 body {'dry': false, 'confirm': 'CLEANUP'}",
+                                 'note': (u'预演：未改动任何文件。共 %d 个多余 MOD 目录待移入备份，可释放 %.1f MB'
+                                          % (len(_pl_mc), _tot_mc / 1048576.0))})
+                return
+            if not _pl_mc:
+                self._send(200, {'ok': True, 'noop': True, 'code': 'nothing_to_do',
+                                 'error': u'没有需要清理的多余 MOD（全部符合策略）'})
+                return
+            _res_mc = _mods_cleanup_run(_u_mc, _pl_mc)
+            self._send(200, {'ok': True, 'dry': False, 'result': _res_mc, 'plans': _pl_mc,
+                             'note': (u'已把 %d 个目录移入备份（%s），可随时移回回滚'
+                                      % (_res_mc.get('ok') or 0, _res_mc.get('backupDir') or u'-')),
+                             'backupSrc': 'UNC' if u'Tnas' in str(_res_mc.get('backupDir') or '') else 'local'})
+            return
+        if path == '/api/mods/deploy':
+            # v6284（用户口径）：MOD 分发 —— dry 默认；confirm='DEPLOY' 才真跑
+            _u_md = _srvctl_guard(self, qs, need_token=True)
+            if not _u_md:
+                return
+            if _role_level(_u_md) < 2:
+                self._send(403, {'ok': False, 'code': 'admin_only', 'error': u'仅二级管理员可用'})
+                return
+            _arr_md = body.get('servers')
+            if not isinstance(_arr_md, list):
+                _arr_md = [x.strip() for x in str(body.get('servers') or '').split(',') if x.strip()]
+            _sv_md = []
+            for _s in _arr_md:
+                _s2 = str(_s or '').strip()
+                if _s2 in SERVERS and _s2 not in _sv_md:
+                    _sv_md.append(_s2)
+            if not _sv_md:
+                self._send(400, {'ok': False, 'code': 'no_servers', 'error': u'未选择服务器'})
+                return
+            _dry_md = body.get('dry')
+            _dry_md = True if _dry_md is None else str(_dry_md).lower() in ('1', 'true', 'yes', 'on')
+            _plans_md = _mods_deploy_plan(_sv_md)
+            _bad_md = [x for x in _plans_md if not x.get('ok')]
+            if _dry_md:
+                self._send(200, {'ok': True, 'dry': True, 'plans': _plans_md,
+                                 'blocked': _bad_md,
+                                 'policy': _mods_policy(),
+                                 'note': (u'预演：未修改任何文件。有 %d 项无可用源（需 CurseForge API Key 下载）'
+                                          % len(_bad_md)) if _bad_md else
+                                         u'预演：未修改任何文件。确认后传 dry=false 且 confirm=DEPLOY'})
+                return
+            if str(body.get('confirm') or '') != 'DEPLOY':
+                self._send(400, {'ok': False, 'code': 'need_confirm',
+                                 'error': u'真跑需在 body 里传 confirm="DEPLOY"', 'plans': _plans_md})
+                return
+            if not _plans_md:
+                self._send(200, {'ok': True, 'noop': True, 'code': 'nothing_to_do',
+                                 'error': u'所选服务器的 MOD 已符合策略，无需分发'})
+                return
+            if len(_bad_md) == len(_plans_md):
+                self._send(400, {'ok': False, 'code': 'no_source',
+                                 'error': (u'所有待分发项都没有可用源：请先在「系统管理 → CurseForge API Key」'
+                                           u'配置 Key，或先让任意一台服拥有该版本 MOD'),
+                                 'plans': _plans_md})
+                return
+            _bid = str(body.get('batchId') or '') or _mods_new_batch()
+            _eff_md = [x for x in _plans_md if x.get('ok')]
+            _admin_log('MODS deploy by %s batch=%s eff=%d bad=%d'
+                       % (_u_md, _bid, len(_eff_md), len(_bad_md)))
+            try:
+                threading.Thread(target=_mods_deploy_run,
+                                 args=(_u_md, _bid, _eff_md), daemon=True).start()
+            except Exception as e:
+                self._send(500, {'ok': False, 'error': repr(e)})
+                return
+            self._send(200, {'ok': True, 'dry': False, 'started': True, 'batchId': _bid,
+                             'plans': _plans_md, 'skipped': _bad_md,
+                             'note': u'已开始分发：逐台 停服→备份→复制→校验→起服（原本停服的保持停服）'})
+            return
+        if path == '/api/api/pkg/download':
+            # v6307（用户口径）：更新本地包 = 从 GitHub 下载最新 AsaApi 官方包（库 + Permissions）
+            _u_pd = _srvctl_guard(self, qs, need_token=True)
+            if not _u_pd:
+                return
+            if _role_level(_u_pd) < 2:
+                self._send(403, {'ok': False, 'code': 'admin_only', 'error': u'仅二级管理员可用'})
+                return
+            try:
+                threading.Thread(target=_asa_pkg_download, args=(_u_pd,), daemon=True).start()
+            except Exception as e:
+                self._send(500, {'ok': False, 'error': repr(e)})
+                return
+            self._send(200, {'ok': True, 'started': True,
+                             'note': u'已开始下载 AsaApi 官方包（进度见任务列表）'})
+            return
+        if path == '/api/api/cleanup-extras':
+            # v6306（用户口径）：多余插件「安全清理」—— dry 默认；confirm='CLEANUP' 才真跑
+            #   安全点：**移动不是删除** —— 移到 _upd_cache/_pluginbak/<ts>/<srv>/，同盘秒级、可随时移回回滚；
+            #   只碰 extras（不在必需清单内的插件），不停服、不动游戏本体/MOD/库。
+            _u_ce = _srvctl_guard(self, qs, need_token=True)
+            if not _u_ce:
+                return
+            if _role_level(_u_ce) < 2:
+                self._send(403, {'ok': False, 'code': 'admin_only', 'error': u'仅二级管理员可用'})
+                return
+            _pl_ce = _api_cleanup_plan()
+            _n_ce = sum(1 + len(x.get('disabled') or []) for x in _pl_ce)
+            _tot_ce = sum(int(x.get('bytes') or 0)
+                          + sum(int(d.get('bytes') or 0) for d in (x.get('disabled') or []))
+                          for x in _pl_ce)
+            _dry_ce = body.get('dry')
+            _dry_ce = True if _dry_ce is None else str(_dry_ce).lower() in ('1', 'true', 'yes', 'on')
+            if _dry_ce or str(body.get('confirm') or '') != 'CLEANUP':
+                self._send(200, {'ok': True, 'dry': True, 'plans': _pl_ce,
+                                 'totalBytes': _tot_ce, 'itemCount': _n_ce,
+                                 'needConfirm': u"真跑需 body {'dry': false, 'confirm': 'CLEANUP'}",
+                                 'note': (u'预演：未改动任何文件。共 %d 个目录待移入备份，可释放 %.1f MB'
+                                          % (_n_ce, _tot_ce / 1048576.0))})
+                return
+            if not _pl_ce:
+                self._send(200, {'ok': True, 'noop': True, 'code': 'nothing_to_do',
+                                 'error': u'没有需要清理的多余插件'})
+                return
+            _res_ce = _api_cleanup_run(_u_ce, _pl_ce)
+            self._send(200, {'ok': True, 'dry': False, 'result': _res_ce, 'plans': _pl_ce,
+                             'note': (u'已把 %d 个目录移入备份（%s），可随时移回回滚；'
+                                      u'被清理的插件在该服下次重启后不再加载')
+                                     % (_res_ce.get('ok') or 0, _res_ce.get('backupDir') or u'-')})
+            return
+        if path == '/api/api/deploy':
+            # v6284：API 分发 —— **硬门控**：缓存未就绪一律拒绝（否则插件加载失败导致起不来）
+            _u_ad = _srvctl_guard(self, qs, need_token=True)
+            if not _u_ad:
+                return
+            if _role_level(_u_ad) < 2:
+                self._send(403, {'ok': False, 'code': 'admin_only', 'error': u'仅二级管理员可用'})
+                return
+            # v6307（用户口径）：真分发 —— 只对选中服、只补「非最新」项（md5 比对）
+            _arr_ad = body.get('servers')
+            if not isinstance(_arr_ad, list):
+                _arr_ad = [x.strip() for x in str(_arr_ad or '').split(',') if x.strip()]
+            _sv_ad = []
+            for _s in _arr_ad:
+                _s2 = str(_s or '').strip()
+                if _s2 in SERVERS and _s2 not in _sv_ad:
+                    _sv_ad.append(_s2)
+            if not _sv_ad:
+                self._send(400, {'ok': False, 'code': 'no_servers', 'error': u'未选择服务器'})
+                return
+            _st_ad = api_status()
+            _force_ad = str(body.get('force') or '').lower() in ('1', 'true', 'yes', 'on')
+            _dry_ad = body.get('dry')
+            _dry_ad = True if _dry_ad is None else str(_dry_ad).lower() in ('1', 'true', 'yes', 'on')
+            _tgt_ad = _asa_targets()
+            _pl_ad = _api_deploy_plan3(_sv_ad)
+            _gate_ad = []
+            if not _st_ad.get('deployReady'):
+                _oc = str(_st_ad.get('officialCacheState') or '')
+                _ocm = {'building': u'官方正在为最新游戏版本构建缓存（Discord：构建中）',
+                        'detected': u'已检测到新游戏版本，官方缓存尚未开始构建',
+                        'ready': u'官方缓存已就绪，但部分服本地分代缓存缺失（%d/%d）'
+                                 % (int(_st_ad.get('cacheReadyCount') or 0), int(_st_ad.get('serverCount') or 11))}
+                _gate_ad.append({'code': 'cache_not_ready',
+                                 'text': _ocm.get(_oc, u'官方缓存状态未知')
+                                         + (u'（%s）⇒ 此时替换 dll 可能因 offsets 不匹配导致服务器起不来'
+                                            % (_st_ad.get('officialCacheAt') or u'时间未知'))})
+            if not _tgt_ad.get('files'):
+                _gate_ad.append({'code': 'no_source',
+                                 'text': u'没有可用源：请先点「更新本地包」从 GitHub 下载 AsaApi 官方包'
+                                         u'（或把插件 dll 放进 ' + SOK_SRC_UNC + u'）'})
+            if _dry_ad:
+                self._send(200, {'ok': True, 'dry': True, 'servers': _sv_ad, 'plans': _pl_ad,
+                                 'targets': {'ver': _tgt_ad.get('ver'), 'vers': _tgt_ad.get('vers'),
+                                             'latest': _tgt_ad.get('latest'),
+                                             'files': [{'name': f['name'], 'kind': f['kind'],
+                                                        'rel': f['rel'], 'size': f['size']}
+                                                       for f in _tgt_ad['files']]},
+                                 'gate': _gate_ad, 'deployReady': bool(_st_ad.get('deployReady')),
+                                 'needForce': bool(_gate_ad),
+                                 'note': (u'预演：未改动任何文件。%d 项待更新'
+                                          % len(_pl_ad)) if _pl_ad else u'预演：所选服的库/插件均已是目标版本'})
+                return
+            if _gate_ad and not _force_ad:
+                self._send(400, {'ok': False, 'code': 'gate_blocked', 'gate': _gate_ad,
+                                 'error': u'存在阻断项，需勾选「强制分发」后才能提交',
+                                 'plans': _pl_ad, 'deployReady': bool(_st_ad.get('deployReady'))})
+                return
+            if not _pl_ad:
+                self._send(200, {'ok': True, 'noop': True, 'code': 'nothing_to_do',
+                                 'error': u'所选服的库/插件均已是目标版本，无需分发'})
+                return
+            _admin_log('API deploy by %s force=%s servers=%s items=%d ver=%s'
+                       % (_u_ad, _force_ad, u','.join(_sv_ad), len(_pl_ad), _tgt_ad.get('ver') or u'-'))
+            try:
+                threading.Thread(target=_api_deploy_run2, args=(_u_ad, _pl_ad), daemon=True).start()
+            except Exception as e:
+                self._send(500, {'ok': False, 'error': repr(e)})
+                return
+            self._send(200, {'ok': True, 'dry': False, 'started': True,
+                             'servers': _sv_ad, 'plans': _pl_ad, 'forced': _force_ad,
+                             'gate': _gate_ad, 'ver': _tgt_ad.get('ver'),
+                             'note': u'已开始分发：逐台 停服→备份→复制→校验→起服（原本停服的保持停服）'})
             return
         if path == '/api/update/apply':
             # v6207：一键分发（**默认 dry，只出计划不写任何文件**）
@@ -14116,12 +17110,15 @@ class Handler(BaseHTTPRequestHandler):
             _tg_a = []
             for _t in _tgs_a:
                 _t2 = str(_t or '').strip().lower()
-                if _t2 in ('server', 'zh') and (_t2 not in _tg_a):
+                # v6340（方案 A）：四类目标全走本编排
+                if _t2 in ('server', 'zh', 'mod', 'api') and (_t2 not in _tg_a):
                     _tg_a.append(_t2)
             if not _tg_a:
                 _tg_a = ['server']          # 缺省向后兼容：老页面不传 targets 时行为不变
             _do_sv_a = ('server' in _tg_a)
             _do_zh_a = ('zh' in _tg_a)
+            _do_mod_a = ('mod' in _tg_a)
+            _do_api_a = ('api' in _tg_a)
             _dry_a = body.get('dry')
             _dry_a = True if _dry_a is None else str(_dry_a).lower() in ('1', 'true', 'yes', 'on')
             # v6233（用户口径）：系统管理「默认预演」为开时**一律强制预演**（后端强制，前端绕不过）
@@ -14171,6 +17168,29 @@ class Handler(BaseHTTPRequestHandler):
                                                 for it in ((_zman_a or {}).get('paks') or [])],
                                       'backupTo': os.path.join(ZH_CACHE_ROOT, 'backup', _s3),
                                       'err': _zerr_a})
+            # ===== v6340（方案 A）：MOD / API 计划——由本编排执行复制 ----------
+            _modplans_a, _apiplans_a = [], []
+            if _do_mod_a:
+                try:
+                    for _p8 in (_mods_deploy_plan(_srv_a) or []):
+                        if not _p8.get('ok'):
+                            continue
+                        _modplans_a.append({'srv': _p8.get('srv'), 'pid': _p8.get('pid'),
+                                            'want': _p8.get('want') or '',
+                                            'src': _p8.get('srcDir') or '',
+                                            'cur': _p8.get('cur') or ''})
+                except Exception:
+                    _sexc('apply_mod_plan')
+                    _modplans_a = []
+            if _do_api_a:
+                try:
+                    for _p9 in (_api_deploy_plan3(_srv_a) or []):
+                        if not _p9.get('ok', True):
+                            continue
+                        _apiplans_a.append(_p9)
+                except Exception:
+                    _sexc('apply_api_plan')
+                    _apiplans_a = []
             # v6249（用户口径「分发只分发需要更新的服」）：给每台本体计划补 needUpd，
             #   判定口径 = 该服相对缓存有「新增」或「变更」文件；相同则视为不需要。
             for _p7 in _plans:
@@ -14186,7 +17206,11 @@ class Handler(BaseHTTPRequestHandler):
                            u'再传 dry=false 且 confirm=APPLY 才真跑')
                 self._send(200, {'ok': True, 'dry': True, 'forcedDry': bool(_forced_a),
                                  'cache': _cache_a, 'plans': _plans,
-                                 'zhPlans': _zplans_a, 'targets': _tg_a, 'note': _note_a})
+                                 'zhPlans': _zplans_a, 'modPlans': _modplans_a,
+                                 'apiPlans': [{'srv': x.get('srv'), 'name': x.get('name'),
+                                               'rel': x.get('rel'), 'reason': x.get('reason')}
+                                              for x in _apiplans_a],
+                                 'targets': _tg_a, 'note': _note_a})
                 return
             if str(body.get('confirm') or '') != 'APPLY':
                 self._send(400, {'ok': False, 'code': 'need_confirm',
@@ -14210,6 +17234,16 @@ class Handler(BaseHTTPRequestHandler):
                         if _z6.get('srv') == _s6 and bool(_z6.get('needUpd')):
                             _need6 = True
                             break
+                if (not _need6) and _do_mod_a:
+                    for _p10 in _modplans_a:
+                        if _p10.get('srv') == _s6:
+                            _need6 = True
+                            break
+                if (not _need6) and _do_api_a:
+                    for _p11 in _apiplans_a:
+                        if _p11.get('srv') == _s6:
+                            _need6 = True
+                            break
                 if _need6:
                     _eff_a.append(_s6)
                 else:
@@ -14220,7 +17254,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, {'ok': True, 'dry': False, 'noop': True,
                                  'code': 'nothing_to_do',
                                  'error': (u'所选服务器都不需要更新'
-                                           u'（本体版本与缓存一致、汉化均为最新），本次未做任何改动'),
+                                           u'（本体版本与缓存一致、汉化均为最新、'
+                                           u'MOD/API 均已符合目标版本），本次未做任何改动'),
                                  'servers': [], 'skipped': _srv_a, 'targets': _tg_a,
                                  'cache': _cache_a, 'plans': _plans, 'zhPlans': _zplans_a})
                 return
@@ -14263,7 +17298,8 @@ class Handler(BaseHTTPRequestHandler):
                 % (_u_ap, len(_eff_a), len(_skip_a), ','.join(_tg_a), _vk_a or 'na', _as_st_a or 'na'),
                 dry_override=False, force=True,
                 mode='update', servers=_eff_a, ver_kind=_vk_a,
-                targets=_tg_a)
+                targets=_tg_a,
+                deploy_plans={'mod': _modplans_a, 'api': _apiplans_a})
             if not _started_a:
                 self._send(409, {'ok': False, 'code': 'orchestrator_busy',
                                  'error': u'已有编排在运行，本次分发已记为待续跑',
@@ -14668,10 +17704,13 @@ class Handler(BaseHTTPRequestHandler):
             _has_tok = ('asa_token' in body) or ('asa_token' in qs)
             _has_base = ('asa_base' in body) or ('asa_base' in qs)
             _has_udry = ('update_dry' in body) or ('update_dry' in qs)
+            _has_cf = ('cf_key' in body) or ('cf_key' in qs)   # v6282: CurseForge API Key
+            _has_mp = ('mods_policy' in body) or ('mods_policy' in qs)   # v6284: MOD 策略
             # v6237：汉化补丁配置（folder_url / variant / auto_check）
             _bzp = body.get('zh_patch') if isinstance(body.get('zh_patch'), dict) else {}
             _has_zhp = bool(_bzp) or ('zh_folder_url' in body) or ('zh_variant' in body)
             _clr_tok = bool(body.get('asa_token_clear'))
+            _clr_cf = bool(body.get('cf_key_clear'))
             try:
                 _d = _srv_cfg_read()
                 if _has_dom or not _d.get('server_domain'):
@@ -14693,6 +17732,35 @@ class Handler(BaseHTTPRequestHandler):
                     # v6233：服务器更新「默认预演」开关（true=只出清单）
                     _udv = body.get('update_dry', g('update_dry', ''))
                     _d['update_dry'] = str(_udv).lower() in ('1', 'true', 'yes', 'on')
+                if _has_mp:
+                    # v6284（用户口径）：MOD 策略 —— Bob 固定 MOD + 其他服统一 MOD 列表
+                    _mp = body.get('mods_policy')
+                    if not isinstance(_mp, dict):
+                        try:
+                            _mp = json.loads(str(qs.get('mods_policy', [''])[0] or body.get('mods_policy') or '{}'))
+                        except Exception:
+                            _mp = {}
+                    if isinstance(_mp, dict):
+                        _cur = _d.get('mods_policy')
+                        _cur = dict(_cur) if isinstance(_cur, dict) else {}
+                        if 'bob' in _mp:
+                            _b = str(_mp.get('bob') or '').strip()
+                            if _b:
+                                _cur['bob'] = _b
+                        if 'common' in _mp:
+                            _cv = _mp.get('common')
+                            if isinstance(_cv, list):
+                                _cur['common'] = [str(x).strip() for x in _cv if str(x).strip()]
+                            else:
+                                _cur['common'] = [x.strip() for x in str(_cv or '').replace(u'，', ',').split(',') if x.strip()]
+                        _d['mods_policy'] = _cur
+                if _has_cf:
+                    # v6282：CurseForge API Key（仅存服务器本地；留空=不修改）
+                    _ck = str(body.get('cf_key', g('cf_key', '')) or '').strip()
+                    if _ck:
+                        _d['cf_key'] = _ck
+                    elif _clr_cf:
+                        _d.pop('cf_key', None)
                 if _has_zhp:
                     # v6237（B1）：汉化补丁配置 —— 地址必须含 /folders/<id>，变体必须在枚举内
                     _zp = _d.get('zh_patch')
@@ -14725,6 +17793,9 @@ class Handler(BaseHTTPRequestHandler):
                              'asa_token_masked': _asa_mask(_d.get('asa_token') or ''),
                              'asa_configured': bool(_d.get('asa_token')),
                              'update_dry': bool(_upd_dry_default()),
+                             'cf_key_masked': _asa_mask(_d.get('cf_key') or ''),
+                             'cf_key_configured': bool(_d.get('cf_key')),
+                             'mods_policy': _mods_policy(),
                              'zh_patch': _zh_cfg_of(_d)})
             return
         # ===== P3：服务器控制（仅二级管理员；前端不接触 token）=====

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>服务器更新 · 地图 TAB 左上竖排小圆点（真实尺寸）</title>
+<style>
+  body{margin:0;padding:22px 24px 40px;background:#0f0f13;color:#e0e0e0;
+       font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+  h1{font-size:14px;color:#c4b5fd;margin:0 0 4px}
+  .sub{font-size:11px;color:#6b7280;margin-bottom:18px;line-height:1.75}
+  .sub code{color:#ffc44f;background:rgba(255,196,79,.10);padding:1px 4px;border-radius:3px}
+  h2{font-size:12.5px;color:#ffc44f;margin:22px 0 4px;font-weight:600}
+  .note{font-size:10.5px;color:#8b93a3;margin:0 0 10px;line-height:1.7}
+  .note code{color:#a5b4fc;background:rgba(165,180,252,.10);padding:1px 3px;border-radius:3px}
+  .band{display:flex;gap:18px;align-items:flex-end;background:rgba(255,255,255,.03);
+        border:1px solid rgba(255,255,255,.08);border-radius:9px;padding:14px 16px 20px;flex-wrap:wrap}
+  .band.big{align-items:center;padding:18px 16px}
+  .cell{text-align:center}
+  .cap{font-size:9.5px;color:#6b7280;margin-top:9px;white-space:nowrap}
+  /* ===== 线上真实 TAB（#lbUpd .lb-srvctl-chips .server-tab）===== */
+  .server-tab{position:relative;display:inline-flex;align-items:center;justify-content:center;
+      box-sizing:border-box;height:32px;padding:8px 8px 4px;border-radius:6px;border:1px solid #333;
+      background:#1a1a24;color:#ccc;font-size:14px;line-height:1;cursor:pointer;user-select:none}
+  .server-tab.active{background:#7c3aed;border-color:#7c3aed;color:#fff}
+  .server-tab .ic{display:inline-flex;align-items:center;justify-content:center;
+      width:15px;height:15px;font-size:13px;line-height:1}
+  .server-tab-cnt{position:absolute;top:-5px;right:-5px;background:#15803d;color:#fff;
+      font-weight:700;font-size:9.5px;line-height:13px;padding:0 4px;border-radius:8px;
+      min-width:13px;text-align:center;font-style:normal;pointer-events:none;white-space:nowrap}
+  .server-tab.active .server-tab-cnt{background:#fff;color:#7c3aed}
+  .lb-srvctl-chips{display:flex;flex-wrap:wrap;gap:7px}
+  /* 左上竖排小圆点容器 */
+  .ud{position:absolute;display:flex;flex-direction:column;align-items:center}
+  .ud i{display:block;border-radius:50%;flex:0 0 auto}
+  .ud i.m{background:#f59e0b}
+  .ud i.a{background:#a78bfa}
+  .ud i.v{background:#f87171}
+  /* --- 方案 A：4px 实心，内缩 2px，间隙 1px --- */
+  .udA{left:2px;top:2px;gap:1px}
+  .udA i{width:4px;height:4px}
+  /* --- 方案 B：5px 实心 + 1px 深色光环（紫底也清楚）--- */
+  .udB{left:2px;top:2px;gap:1.5px}
+  .udB i{width:5px;height:5px;box-shadow:0 0 0 1px #0f0f13,0 0 0 2px rgba(15,15,19,.35)}
+  /* --- 方案 C：4px + 浅色细描边（任何底色都跳出来）--- */
+  .udC{left:2px;top:2px;gap:1px}
+  .udC i{width:4px;height:4px;box-shadow:0 0 0 1px rgba(255,255,255,.62)}
+  /* --- 方案 D：3 点竖排（本体红 / MOD 橙 / API 紫），4px --- */
+  .udD{left:2px;top:2px;gap:1px}
+  .udD i{width:4px;height:4px}
+  /* --- 方案 E：4px + 间隙 2px（更松，点数再多也不糊）--- */
+  .udE{left:2px;top:2px;gap:2px}
+  .udE i{width:4px;height:4px}
+  /* ===== 3× 放大排 ===== */
+  .big .server-tab{transform:scale(3);transform-origin:center;margin:30px 30px 22px}
+  /* ===== 图例（沿用线上 .lb-srvctl-legend 规格）===== */
+  .lb-srvctl-legend{display:flex;flex-wrap:wrap;align-items:center;gap:14px;
+      background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);
+      border-radius:7px;padding:10px 13px;font-size:11px;color:#9aa3b5;margin-top:10px}
+  .lb-srvctl-legend .it{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+  .lb-srvctl-legend .mini{position:relative;display:inline-block;width:18px;height:18px;
+      border-radius:3px;border:1px solid #45455a;background:#1a1a24;flex:0 0 auto}
+  .lb-srvctl-legend .mini .mline{position:absolute;left:5px;top:9px;width:7px;height:2px;
+      border-radius:1px;background:#4b5563}
+  .lb-srvctl-legend .mini .mc{position:absolute;top:-3px;right:-3px;width:9px;height:7px;
+      border-radius:3px;background:#22c55e}
+  .lb-srvctl-legend .mini .ud{margin:0}
+  .lb-srvctl-legend .mini i.dot{display:inline-block;width:7px;height:7px;border-radius:50%}
+  .rec{font-size:11px;color:#4ade80;margin-top:12px;line-height:1.75}
+  .rec b{color:#fbbf24}
+</style>
+</head>
+<body>
+<h1>服务器更新 · 地图 TAB 左上角竖排小圆点 · 真实尺寸</h1>
+<div class="sub">尺寸照抄线上：<code>height 32px</code> · <code>padding 8px 8px 4px</code> · <code>border 1px #333</code> · <code>radius 6px</code> · 图标 <code>15px</code> · 版本角标 <code>9.5px/13px</code>（右上 -5/-5）。每个方案都额外给一格 <b>选中态（紫底）</b> 检验对比度。橙=<b>MOD 需升级</b>、紫=<b>API 需升级</b>、红（仅方案 D）=<b>本体需更新</b>。</div>
+<h2>方案 A · 4px 实心点，内缩 2px，间隙 1px</h2>
+<div class="note">最朴实：贴着左上圆角内侧排，两项都不符时上下两点。渲染开销最小，但点在紫底选中态时略发灰。</div>
+<div class="band">
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em></div><div class="cap">正常</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud udA"><i class="m"></i></div></div><div class="cap">MOD</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud udA"><i class="a"></i></div></div><div class="cap">API</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud udA"><i class="m"></i><i class="a"></i></div></div><div class="cap">MOD + API</div></div>
+  <div class="cell"><div class="server-tab active"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud udA"><i class="m"></i><i class="a"></i></div></div><div class="cap">选中 + 两项</div></div>
+</div>
+<h2>方案 B · 5px 实心点 + 1px 深色光环</h2>
+<div class="note">点大一号并加一圈深底光环，<b>在紫底（选中）上依然分明</b>；代价是左上角视觉重量略重。</div>
+<div class="band">
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em></div><div class="cap">正常</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud udB"><i class="m"></i></div></div><div class="cap">MOD</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud udB"><i class="a"></i></div></div><div class="cap">API</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud udB"><i class="m"></i><i class="a"></i></div></div><div class="cap">MOD + API</div></div>
+  <div class="cell"><div class="server-tab active"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud udB"><i class="m"></i><i class="a"></i></div></div><div class="cap">选中 + 两项</div></div>
+</div>
+<h2>方案 C · 4px 实心点 + 浅色细描边</h2>
+<div class="note">点外加 1px 半透明白圈，<b>深底 / 紫底都能看清</b>，体积只比方案 A 大一点点，是我最推荐的一档。</div>
+<div class="band">
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em></div><div class="cap">正常</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud udC"><i class="m"></i></div></div><div class="cap">MOD</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud udC"><i class="a"></i></div></div><div class="cap">API</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud udC"><i class="m"></i><i class="a"></i></div></div><div class="cap">MOD + API</div></div>
+  <div class="cell"><div class="server-tab active"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud udC"><i class="m"></i><i class="a"></i></div></div><div class="cap">选中 + 两项</div></div>
+</div>
+<h2>方案 D · 三点竖排（本体红 / MOD 橙 / API 紫），4px</h2>
+<div class="note">把「本体待更新」也纳入同一竖排，一列看全三项；缺点：最坏情况三点占掉左上 14px 高，接近 TAB 一半高度。</div>
+<div class="band">
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em></div><div class="cap">正常</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud udD"><i class="m"></i></div></div><div class="cap">MOD</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud udD"><i class="a"></i></div></div><div class="cap">API</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud udD"><i class="m"></i><i class="a"></i></div></div><div class="cap">MOD + API</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud udD"><i class="v"></i><i class="m"></i><i class="a"></i></div></div><div class="cap">全部三项</div></div>
+  <div class="cell"><div class="server-tab active"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud udD"><i class="v"></i><i class="m"></i><i class="a"></i></div></div><div class="cap">选中 + 三项</div></div>
+</div>
+<h2>方案 E · 4px 实心点，间隙 2px（稀疏版）</h2>
+<div class="note">与 A 同尺寸的点，只把上下间隙拉开到 2px —— 两点之间不粘连，眼睛更容易数清是 1 个还是 2 个。</div>
+<div class="band">
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em></div><div class="cap">正常</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud udE"><i class="m"></i></div></div><div class="cap">MOD</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud udE"><i class="a"></i></div></div><div class="cap">API</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud udE"><i class="m"></i><i class="a"></i></div></div><div class="cap">MOD + API</div></div>
+  <div class="cell"><div class="server-tab active"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud udE"><i class="m"></i><i class="a"></i></div></div><div class="cap">选中 + 两项</div></div>
+</div>
+<h2>图例 · 变体 1（mini 块，与 TAB 完全同构）</h2>
+<div class="note">接在现有「运行 / 停止 / 版本旧 / IP失效 / 汉化旧版」之后，尺寸 18×18 与现有图例一致，左上角直接画出竖排点。</div>
+<div class="lb-srvctl-legend">
+  <span class="it"><span class="mini"><span class="mline"></span><span class="mc"></span></span>运行中</span>
+  <span class="it"><span class="mini"><span class="mline"></span></span>已停止</span>
+  <span class="it"><span class="mini"><div class="ud udC"><i class="m"></i></div></span>MOD 待升级</span>
+  <span class="it"><span class="mini"><div class="ud udC"><i class="a"></i></div></span>API 待升级</span>
+  <span class="it"><span class="mini"><div class="ud udC"><i class="m"></i><i class="a"></i></div></span>两项都待升级</span>
+</div>
+<h2>图例 · 变体 2（纯色点 + 文字，最省空间）</h2>
+<div class="note">不画 mini 块，只用 7px 色点配文字；一行能塞下更多项，但少了「位置提示（左上角）」。</div>
+<div class="lb-srvctl-legend">
+  <span class="it"><i class="dot" style="background:#f59e0b"></i>MOD 待升级</span>
+  <span class="it"><i class="dot" style="background:#a78bfa"></i>API 待升级</span>
+  <span class="it"><i class="dot" style="background:#f87171"></i>本体待更新（方案 D）</span>
+</div>
+<h2>3× 放大排（只为看清细节，线上不会这么大）</h2>
+<div class="band big">
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud udA"><i class="m"></i><i class="a"></i></div></div><div class="cap">A · 双点</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud udB"><i class="m"></i><i class="a"></i></div></div><div class="cap">B · 光环</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud udC"><i class="m"></i><i class="a"></i></div></div><div class="cap">C · 白描边</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud udD"><i class="v"></i><i class="m"></i><i class="a"></i></div></div><div class="cap">D · 三点</div></div>
+  <div class="cell"><div class="server-tab"><span class="ic">🏝</span><em class="server-tab-cnt">035</em><div class="ud udE"><i class="m"></i><i class="a"></i></div></div><div class="cap">E · 稀疏</div></div>
+</div>
+<div class="rec">我的建议：<b>方案 C（4px + 浅色细描边）配图例变体 1</b> —— 竖排点只占左上 9px 高，选中紫底时靠白描边仍能认出颜色；图例用 mini 块与 TAB 同构，不容易和底部版本角标的颜色混淆。若你希望「一眼数得清几项」，选 <b>方案 E</b>；若要把本体更新也并进来，选 <b>方案 D</b>。</div>
+</body>
+</html>

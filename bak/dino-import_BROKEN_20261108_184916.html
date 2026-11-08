@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"> <!-- v801锛氱绉诲姩绔暣椤电缉鏀撅紙鍒嗗竷鍦板浘宸?touch-action:none锛?-->
+<!-- PWA 澹版槑锛?026-08-29锛夛細绉诲姩绔彲瀹夎涓哄簲鐢?-->
+<meta name="theme-color" content="#7c3aed">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+<title>绮戠矐鏈嶆悶浜嬬郴缁?/title>
+<!-- v978锛歁DI 瀛椾綋鏈湴鍖栵紙鍘?jsDelivr 澶栭摼浼氶樆濉炴覆鏌撯€斺€旈摼璺姈鍔ㄦ椂鏁撮〉 JS 涓嶆墽琛岋級锛汣DN 浠呬綔鍏靛簳 -->
+<link rel="stylesheet" href="/mdi/materialdesignicons.min.css" onerror="(function(){var l=document.createElement('link');l.rel='stylesheet';l.href='https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css';document.head.appendChild(l);})()">
+<link rel="stylesheet" href="/app.css?v=v20261105-6100">
+<script>
+/* v6113锛氬閾剧‖渚濊禆澶辫触鍏滃簳 鈥斺€?app_data / app_core 浠讳竴鍔犺浇澶辫触鏃讹紝涓嶅啀鏄剧ず銆岃浆 20s 鍚庣┖鐧介〉銆?*/
+window.lbAssetFail = function(name){
+  try{
+    var b = document.getElementById('lbBoot');
+    if(!b){ b = document.createElement('div'); b.id = 'lbBoot'; document.body.appendChild(b); }
+    b.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:#0f0f13;color:#e5e7eb;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;font-family:system-ui,sans-serif;padding:24px;text-align:center';
+    b.innerHTML = '<div style="font-size:15px;color:#f87171">鏍稿績璧勬簮鍔犺浇澶辫触锛? + String(name || '') + '</div>'
+      + '<div style="font-size:12px;color:#94a3b8;max-width:34em;line-height:1.6">鍙兘鏄綉缁滄尝鍔ㄦ垨姝ｅ湪鏇存柊鐗堟湰銆傜偣涓嬫柟鎸夐挳閲嶈瘯锛涘娆″け璐ヨ妫€鏌ョ綉缁滃悗閲嶆柊鎵撳紑椤甸潰銆?/div>'
+      + '<button onclick="location.reload()" style="margin-top:6px;padding:8px 18px;border-radius:8px;border:1px solid #7c3aed;background:#7c3aed;color:#fff;font-size:13px;cursor:pointer">閲嶈瘯</button>';
+  }catch(e){}
+};
+</script>
+<script src="/app_data.js?v=v20261105-6101" onerror="lbAssetFail('app_data.js')"></script>
+
+
+</head>
+<body>
+
+<!-- v1256锛堢敤鎴疯姹傦級锛氶灞忓姞杞藉姩鐢烩€斺€旂函 CSS 鍐呰仈锛圚TML 瑙ｆ瀽鍒版鍗虫覆鏌擄紝瑕嗙洊 1MB HTML 涓嬭浇鏈熺櫧灞忥級锛汮S 灏辩华鍚?lbBootHide() 娣″嚭绉婚櫎锛屽彟鍚?20s CSS 鍏滃簳鑷姩娣″嚭 -->
+<div id="lbBoot"><img id="lbBootIc" src="/icons/icon-192.png" alt="" style="width:64px;height:64px;border-radius:14px;box-shadow:0 4px 18px rgba(124,58,237,.35);visibility:hidden;opacity:0;transform:scale(.92);transition:opacity .45s ease,transform .45s ease"><script>(function(){var e=document.getElementById("lbBootIc");if(!e)return;function reveal(){e.classList.add("lb-img-ok");e.style.visibility="visible";requestAnimationFrame(function(){requestAnimationFrame(function(){e.style.opacity=1;e.style.transform="scale(1)";});});}e.addEventListener("error",function(){e.style.visibility="hidden";});if(e.complete&&e.naturalWidth)reveal();else e.addEventListener("load",reveal);})();</script><div class="lbd-wrap"><i class="lbd"></i><i class="lbd"></i><i class="lbd"></i></div><div class="lb-boot-t">姝ｅ湪鍔犺浇绮戠矐鏈嶆悶浜嬬郴缁熲€?/div><div class="lb-boot-s">寮辩綉/棣栨鍔犺浇绾﹂渶 1 鍒嗛挓锛岃绋嶅€?/div></div>
+
+
+<!-- 鐧诲綍寮曞鏉★紙鏃?token 鏃犳硶鑷姩璇嗗埆璐﹀彿鏃舵樉绀猴級 -->
+<div id="lbLoginBar" style="display:none;margin-bottom:10px;padding:8px 12px;border-radius:8px;background:#1a1a24;border:1px solid #7c3aed55;color:#ccc;font-size:12px;align-items:center;flex-wrap:wrap"></div>
+
+
+<!-- 鍏ㄥ師鐢熻璇侊細娴忚鍣ㄨ嚜鍔ㄧ鐞?HTTP Basic Auth -->
+<div id="mainUI" style="display:none">
+  <div id="leftCol">
+    <div class="card" id="fileCard">
+      <h2>馃搨 鍙敤鏂囦欢 <button onclick="refreshFiles()" style="float:right;background:none;border:none;color:#999;padding:2px 4px;border-radius:6px;cursor:pointer;font-size:12px;line-height:1"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg></button></h2>
+      <div class="file-list" id="fileList"><div style="text-align:center;padding:20px;color:#555">鍔犺浇涓?..</div></div>
+    </div>
+  </div>
+  <div id="rightCol">
+    <div id="rightPlaceholder" style="flex:1;display:none;align-items:center;justify-content:center;opacity:0.06">
+      <svg width="96" height="96" viewBox="0 0 24 24" fill="currentColor" style="color:#fff"><path d="M13 2V3H12V9H11V10H9V11H8V12H7V13H5V12H4V11H3V9H2V15H3V16H4V17H5V18H6V22H8V21H7V20H8V19H9V18H10V19H11V22H13V21H12V17H13V16H14V15H15V12H16V13H17V11H15V9H20V8H17V7H22V3H21V2M14 3H15V4H14Z"/></svg>
+    </div>
+    <div id="statusArea"></div>
+    <div class="card" id="teCard" style="display:none">
+      <h2>鈿欙笍 椹湇鏈夋晥鎬?(TE)</h2>
+      <div id="teInputs" style="display:flex;gap:8px;align-items:center">
+        <div style="flex:1;display:flex;align-items:center;gap:6px;background:#111;border:1px solid #333;border-radius:8px;padding:8px 12px">
+          <span style="color:#666;font-size:12px">TE</span>
+          <input type="number" id="teMin" placeholder="鏈€灏? min="0" max="100" step="0.1" value="95" style="flex:1;background:none;border:none;color:#e0e0e0;font-size:14px;outline:none;-moz-appearance:textfield;text-align:center">
+          <span style="color:#555">%</span>
+        </div>
+        <span style="color:#666">~</span>
+        <div style="flex:1;display:flex;align-items:center;gap:6px;background:#111;border:1px solid #333;border-radius:8px;padding:8px 12px">
+          <span style="color:#666;font-size:12px">TE</span>
+          <input type="number" id="teMax" placeholder="鏈€澶? min="0" max="100" step="0.1" value="100" style="flex:1;background:none;border:none;color:#e0e0e0;font-size:14px;outline:none;-moz-appearance:textfield;text-align:center">
+          <span style="color:#555">%</span>
+        </div>
+      </div>
+      <div class="hint">宸查┋鏈嶇敓鐗╃敤 TE 涓婇檺鍙嶆帹锛堝睘鎬х敱鏈€缁?TE 鍐冲畾锛夈€?/div>
+    </div>
+    <div class="card" id="mutCard" style="display:none">
+      <h2 id="mutTitle">馃К 鍙樺紓 (Mutations)</h2>
+      <div id="mutGrid" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center"></div>
+      <div class="hint">鐐瑰嚮灞炴€ц緭鍏ュ彉寮傜偣鏁帮紝娓告垙涓?TEK 鏈涜繙闀滃彲鏌ョ湅</div>
+    </div>
+    <div class="card" id="candCard" style="display:none">
+      <h2>馃幆 鍊欓€夊垎閰嶆柟妗?<span id="candCount" style="font-size:11px;color:#999"></span>
+        <span style="float:right;font-size:11px;border:1px solid #333;border-radius:4px;overflow:hidden">
+          <span class="lb-tipb" id="btTamed" onclick="setBioType('tamed')" style="cursor:pointer;padding:1px 6px;display:inline-block" title="璁紙椹湇锛?><img id="btTamedIc" src="" style="width:11px;height:11px;object-fit:contain;vertical-align:-1px"></span>
+          <span class="lb-tipb" id="btBred" onclick="setBioType('bred')" style="cursor:pointer;padding:1px 6px;display:inline-block" title="绻侊紙绻佽偛锛?><img id="btBredIc" src="" style="width:11px;height:11px;object-fit:contain;vertical-align:-1px"></span>
+        </span>
+      </h2>
+      <div id="candList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Tab鈶?鏈€鏂扮敓鐗?-->
+<div id="latestUI" style="display:flex;flex:1;flex-direction:column;min-height:0;gap:12px;overflow:hidden">
+  <div class="card" style="position:relative;margin-bottom:0">
+    <button class="lb-tipb" id="lbRefreshBtn2" onclick="lbConfirmRefresh()" title="鍒锋柊鏁版嵁" style="position:absolute;top:10px;right:10px;background:none;border:none;color:#999;padding:2px 4px;border-radius:6px;cursor:pointer;font-size:12px;line-height:1;opacity:.65"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg></button>
+    <button class="lb-tipb" id="lbIdSearchBtn" onclick="lbSearchFromClipboard()" title="鎼淚D锛氳嚜鍔ㄨ鍙栧壀璐存澘涓殑鐢熺墿ID骞舵樉绀哄崱鐗? style="position:absolute;bottom:8px;right:10px;width:22px;height:22px;background:none;border:none;color:#999;padding:0;border-radius:4px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;opacity:.65;z-index:30"><svg viewBox="2.5 2.5 17 17" width="14" height="14" style="fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round"><circle cx="10" cy="10" r="6.5"/><path d="M15.2 15.2 19 19"/></svg></button>
+    <div class="lb-filter-bar" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding-right:44px">
+      <button id="lbRoleBtn" class="lb-tipb lb-class-btn" onclick="lbOpenRolePicker()" title="鐢熷瓨鑰? style="display:none;margin-right:0;min-width:80px;padding:5px 10px;max-width:140px"><span class="lb-class-label">瑙掕壊</span></button>
+      <button id="lbClassBtn" class="lb-tipb lb-class-btn" onclick="if(LB._classPressed){LB._classPressed=false;return;}lbOpenSpeciesPicker()" title="閫夋嫨鐗╃銆佺墿鍝侊紙闀挎寜=鍒囧埌鍏ㄩ儴锛? style="margin-right:0"
+        onmousedown="lbClassPressStart(event)" onmouseup="lbClassPressEnd()" onmouseleave="lbClassPressEnd()"
+        ontouchstart="lbClassPressStart(event)" ontouchend="lbClassPressEnd()" ontouchmove="lbClassPressEnd()"><span class="lb-class-label">鍏ㄩ儴</span></button>
+      <!-- v4755锛堢敤鎴峰彛寰勶級锛氫笁涓姛鑳芥诞绐楁寜閽寘鎴愪竴缁?鈥斺€?绐勫睆鏁寸粍鎹㈣锛屼笉琚媶鏁?-->
+      <div id="lbFuncBtnGroup" style="display:flex;align-items:center;flex:0 0 auto;flex-wrap:nowrap;margin-left:0">
+      <button id="lbTaskPanelBtn" class="lb-tipb lb-class-btn" onclick="lbTaskPanelOpen()" title="鏈嶅姟鍣紙鐘舵€佹€昏 + 浠诲姟杩涘害锛? style="min-width:auto;width:auto;padding:5px 8px;margin-left:0;margin-right:8px;justify-content:center;text-align:center;color:#ffffff"><svg viewBox="0 0 24 24" width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><path d="M7,5H21V7H7V5M7,13V11H21V13H7M4,4.5A1.5,1.5 0 0,1 5.5,6A1.5,1.5 0 0,1 4,7.5A1.5,1.5 0 0,1 2.5,6A1.5,1.5 0 0,1 4,4.5M4,10.5A1.5,1.5 0 0,1 5.5,12A1.5,1.5 0 0,1 4,13.5A1.5,1.5 0 0,1 2.5,12A1.5,1.5 0 0,1 4,10.5M7,19V17H21V19H7M4,16.5A1.5,1.5 0 0,1 5.5,18A1.5,1.5 0 0,1 4,19.5A1.5,1.5 0 0,1 2.5,18A1.5,1.5 0 0,1 4,16.5Z"/></svg><span id="lbTaskCnt" style="font-size:9px;background:#ffffff22;border-radius:8px;padding:0 5px;color:#ffffff;margin-left:2px;font-weight:600;line-height:13px;display:none"></span></button>
+      <button id="lbWatchBtn" class="lb-tipb lb-class-btn" onclick="lbWatchOpen()" title="鍏虫敞鏈垚骞达紙鑷姩鍒锋垚闀匡級" style="min-width:auto;width:auto;padding:5px 8px;margin-left:0;margin-right:8px;justify-content:center;text-align:center;color:#a78bfa"><svg viewBox="0 0 24 24" width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><path d="M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5Z"/></svg><span id="lbWatchCnt" style="font-size:9px;background:#f59e0b22;border-radius:8px;padding:0 5px;color:#f59e0b;margin-left:2px"></span></button>
+      <button id="lbTodoBtn" class="lb-tipb lb-class-btn" onclick="lbTodoOpen()" title="寰呭埗浣滐紙钃濆浘鏉愭枡姹囨€伙級" style="min-width:auto;width:auto;padding:5px 8px;margin-left:0;margin-right:8px;justify-content:center;text-align:center;color:#38bdf8"><svg viewBox="0 0 24 24" width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><path d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.67 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/></svg><span id="lbTodoCnt" style="font-size:9px;background:#38bdf822;border-radius:8px;padding:0 5px;color:#38bdf8;margin-left:2px;display:none"></span></button>
+      <button id="lbMaintBtn" class="lb-tipb lb-class-btn" onclick="lbMaintOpen()" title="缁存姢鍒楄〃锛堣/椋熶笉婊＄敓鐗?+ 琚叧娉ㄨ鏂斤級" style="min-width:auto;width:auto;padding:5px 8px;margin-left:0;margin-right:0;justify-content:center;text-align:center;color:#f59e0b"><svg viewBox="0 0 24 24" width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><path d="M22.7,19L13.6,9.9C14.5,7.6 14,4.9 12.1,3C10.1,1 7.1,0.6 4.7,1.7L9,6L6,9L1.6,4.7C0.4,7.1 0.9,10.1 2.9,12.1C4.8,14 7.5,14.5 9.8,13.6L18.9,22.7C19.3,23.1 19.9,23.1 20.3,22.7L22.6,20.4C23.1,20 23.1,19.4 22.7,19Z"/></svg><span id="lbMaintCnt" style="font-size:9px;background:#f59e0b22;border-radius:8px;padding:0 5px;color:#f59e0b;margin-left:2px;display:none"></span></button>
+      </div>
+      <div id="lbTabs" style="display:flex;flex-wrap:wrap;gap:6px;flex:1 0 auto;min-width:0"></div>
+    </div>
+  </div>
+  <div id="lbStatus" style="display:none;padding:8px 12px;border-radius:8px;font-size:12px;background:#1a1a3a;color:#7c3aed"></div>
+  <div id="lbList" style="flex:1;overflow-y:auto;min-height:0;scrollbar-width:none;padding-bottom:12px"></div>
+</div>
+
+<div id="settingsUI" style="display:none;flex:1;flex-direction:column;min-height:0;gap:12px;overflow:hidden">
+  <div class="card">
+    <div style="text-align:center;color:#666;font-size:13px;padding:24px 0;line-height:1.8">
+      鈿欙笍 鍒锋柊鍔熻兘宸茬Щ鑷?b style="color:#a78bfa">鐢熺墿閫熸煡椤靛彸涓婅鍒锋柊鎸夐挳</b><br>
+      <span style="font-size:12px;color:#555">鏀寔鍒锋柊浣庢俯浠撴暟鎹紙鍏ㄩ儴鏈嶅姟鍣級涓庡埛鏂?tamed 鏀惧嚭鐢熺墿锛堝閫夋湇鍔″櫒锛?/span>
+    </div>
+  </div>
+  <!-- v359锛氭竻绌虹紦瀛樻寜閽凡绉昏嚦銆岃嚜鍔╅厤缃€嶅脊绐楋紙settingsUI 鏃犲叆鍙ｏ紝鍘熷崱鐗囩Щ闄わ級 -->
+</div>
+
+<script>
+var LB_VERSION = 'v20261108-6325';   // v6145锛堢敤鎴峰彛寰勪笁鏉★級锛氣憼 鍒锋柊鏈熼棿鍐荤粨娴獥鎿嶄綔 鈥斺€?鍒锋柊鎸夐挳缃伆锛坥pacity/.45+not-allowed+grayscale锛夈€佹湇鍔″櫒澶氶€夊尯 pointer-events:none锛堥暱鎸夊悓鏃跺け鏁堬級锛宖inally 缁熶竴瑙ｅ喕锛堝師涓€?btn.disabled=false 鎻愬墠瑙ｅ喕宸茬Щ闄わ紝铔嬮樁娈典篃淇濇寔鍐荤粨锛夆憽 缁堟€併€屽瓨妗ｇ‘璁わ細A 18s/10 鏂囦欢銆丅鈥︺€嶉暱涓插墺绂讳负鐙珛鏄庣粏鍧?#lbProgDetail锛堟瘡鍙颁竴涓?chip锛岀豢瀛楃鏁?鏂囦欢鏁帮級鈶?鑷姩鍏崇獥 5s鈫?0s銆侀暱鎸夊崟鏈嶈交鍒峰け璐ヨ矾寰?1.2s鈫?s   // v6144锛氳繘搴︽潯棰滆壊/鍥句緥/缁撴瀯涓夊鍘婚噸   // v6143锛氫慨鍒锋柊杩涘害鍖轰笉鏄剧ず   // v6142锛氬埛鏂版挒閿佽嚜鍔ㄨ烦杩?  // v6141锛歩pwatch 鍩熷悕璇婚厤缃?+ 鍒锋柊杞攣   // v6118锛圡1锛夛細浠诲姟鍒楄〃鏀逛负鏈嶅姟绔敮涓€鐪熸簮锛?api/tasks锛夛紝鍚屾椂娓叉煋鍦ㄦ湇鍔″櫒鎺у埗涓庡畨鍏ㄥ洖妗ｆ诞绐楀熬閮紝骞舵爣娉ㄦ搷浣滀汉锛堢帺瀹跺悕/鑷姩锛夛紙v6115 瀹炴祴 10/10 鍙拌 cryo 鍏?return 鎶㈡柇 鈫?鍏ㄦ姤 unknown锛涙敼涓哄睆闅滄湭缁欑粨璁哄墠涓嶅仛 cryo 鍒ゅ畾锛屼粎鏃у悗绔?鏄庣‘鏈ǔ瀹?404瓒?0s/瓒?00s 鎵嶉檷绾э級锛泇6115锛氬埛鏂版暟鎹帴鍏ュ悗绔?DinoData 钀界洏灞忛殰锛泇6114锛氫繚瀛樹换鍔℃潯灞曠ず鍚庣 DinoData 钀界洏缁撴灉锛堝師閫昏緫涓㈠純 res.message锛岀晫闈㈠彧鐪嬪埌 .ark 鐨勩€屾枃浠剁ǔ瀹氫腑銆嶏級锛泇6113锛氬彂甯冮摼鎶ゆ爮锛堟墦鍖呴椄闂? ?v=/terser 鍏ㄥ眬鍚?app_ui 鍙橀噺瑁歌鎵弿锛涢儴缃查椄闂? 鐗堟湰閫掑 + 绾夸笂 ?v= 鏍″锛涘墠绔? 澶栭摼鍔犺浇澶辫触鎻愮ず + lbUIEnsure 澶辫触娓呯悊/鍘绘姈 + SW 棰勭紦瀛?3 涓閾捐祫婧愶級锛泇6112锛氭噿鍔犺浇鍙橀噺渚濊禆鍏ㄩ潰澶嶆牳淇锛圥0 LB_WI.pIdx 瑁歌鑷?lbRenderView 涓柇 + P1 绻佽偛鏍?app_ui 鍒颁綅鍚庨噸缁?+ P2 寰呭埗浣?N缁?ini 鎴愭湰鑷剤 + P3 LB_TIPS_PROBE/LB_WT_AI_TRY/LB_WIKI 璇诲彇椤哄簭鍔犲浐锛夛紱v6111锛歛pp_ui 鍒颁綅鍚庤ˉ涓€娆?lbRenderFuncBar 閲嶇粯锛堝湴鍥?Wiki 鍏ュ彛鎻愮ず銆屾殏鏃?wiki 璧勬枡銆嶆畫鐣欒嚜鎰堬級锛泇6110锛氫慨澶嶅湴鍥?Wiki 鍏ュ彛娑堝け锛圠B_MW_API/LB_MW_SLUGS 浠庢寜闇€鍔犺浇鐨?app_ui.js 杩佸洖棣栧睆 app_data.js锛宑ore 璇诲彇鍔?typeof 鍏滃簳锛夛紱v6109锛氭妧鑳藉悕/璇存槑鑻辨枃鍏滃簳缈昏瘧锛坵ikily 涓枃绔欐紡缈绘椂鑷姩璋?AI 琛ヨ瘧 + localStorage 缂撳瓨锛屽悓涓€鏉″彧缈讳竴娆★級锛泇6108锛氫慨姝ｃ€屾暟鎹潵婧愩€峵ips 璇樉绀轰负銆屸€斻€嶏紙鎷艰鍚?DATA 鎸夌墿绉嶉敭鍒嗙粍锛岄渶鍏堟寜閿彇锛夛紱v6107锛歸iki 娴獥銆屽崱鍦?0/5銆嶆牴娌伙紙閿欒鍒嗙被鍨?缃戠粶閿欒甯﹂噸璇曟寜閽?杞澶辫触閫€閬?鎬绘椂闀?80s鈫?80s/鐗╁搧鍥為€€ fetch 鍔?15s 瓒呮椂锛? 鍙充笂瑙掓柊澧炪€屾暟鎹潵婧愩€峵ips锛坵ikily / wiki.gg / dododex锛夛紱v6106锛歸iki 姒傝灏忔爣棰樸€屾覆鏌撳悗鍐嶉殣钘忋€嶆牴娌伙紙涓嶅啀鐢熸垚鎭掍笉鍙鏍囬 + 闅愯棌鍒ゅ畾鍓嶇Щ鍒扮粯鍒跺墠 + 杞鏁版嵁鏈彉涓嶉噸缁橈級锛涢儴缃茶剼鏈嚜鍔ㄥ悓姝?sw.js VER锛泇6105锛歛pp_ui 鎸夐渶鍔犺浇锛堥灞?鈭?5 KB br锛夆€斺€?璇﹁ app_core.js 椤堕儴 lbUIEnsure 娉ㄩ噴锛泇4280锛堟牴鍥犱慨澶嶏級锛氣憼 閫€鍑虹墿鍝佹ā寮忔仮澶嶃€岄€夌銆嶆寜閽紙v1368 闅愯棌鏃犳仮澶嶏級 鈶?鐢熺墿鑳屽寘瀹瑰櫒鏍囬鍞竴婧愯В鏋愶紙BP_/_ASA 缁勪欢 token 鈫?鐪熷疄 dinoClass锛?  // v4231锛堢敤鎴峰疄娴嬨€岀箒鑲叉爮鎶婂姛鑳芥爮鎸′綇銆嶏級锛氣憼 涓ゆ爮鍚屾樉绻佽偛鏍忓彔鍔熻兘鏍忎笂鏂?鈶?绌虹箒鑲叉爮涓嶆樉绀?鈶?缁撴灉娴眰/杩借釜閽亸绉昏仈鍔?  // v4230锛堢敤鎴疯瀹氾級锛氱毊鑲ょ被鍏ㄩ摼闅愯棌锛堣瘝鍏?skin:1 鏍囪骞跺叆鍒ょ┖閾锯€斺€擳ileset 澶栬/Bounce 绯诲垪/鑺傛棩寤虹瓚绛?54 閿級   // v4229锛堢敤鎴风‘璁わ級锛氬垵濮嬬瑪璁板叏閾鹃殣钘忥紙v4083 鍙护娴獥锛屽鍣ㄦ紡鍚屾 鈬?hideItems+纭紪鐮佸弻鍐欏叆鍗囩骇锛?  // v4228锛堢敤鎴峰彛寰勶級锛氬鍣?chip 鏌撴枡琛ヨ壊鐐癸紙v3593 鍙敼浜嗘诞绐楋紝瀹瑰櫒婕忓悓姝ワ級   // v4227锛堢敤鎴峰彛寰勶級锛欻otbarSkill_Base锛堝揩鎹锋妧鑳借姱鐗囷紝闈炵湡瀹炵墿鍝侊級鍔犲叆闅愯棌鍚嶅崟锛坔ideItems+纭紪鐮佸弻鍐欏叆锛?  // v4226锛堢敤鎴峰疄娴嬨€岄粦鏇滅煶浠欏娌″唴瀹瑰嵈鏄剧ずtab銆嶆牴鍥犱慨澶嶏級锛歭bPickIdx 缁熻瀵归綈娓叉煋鍙ｅ緞锛?lbIsEmptyItem 鍒ょ┖锛夆€斺€攓=0 绌烘Ы娈嬬暀涓嶅啀璁″叆 tab/瑙掓爣/鑱氳惤/鎬绘暟   // v4225锛坴4224 瀹炴祴琛ヤ竵锛夛細棰勭儹宸茶蛋瀹屼絾缂撳瓨琚竻锛堟潗璐ㄨ〃鍒拌揪绛夛級鈫?绔嬪嵆鍏滃簳鍐峰缓锛屼笉鍐嶅共绛?6s   // v4224锛堢敤鎴峰彛寰勩€岀┖妗ｆ湡鐐瑰嚮鍗°€嶏級锛氣憼 鐗╁搧鏍忔湭棰勭儹鐐瑰嚮鈫掑崰浣?绛夐鐑～鍏咃紙涓嶅啀鍐荤粨 440ms 鏃犲弽棣堬級鈶?棰勫姞杞戒氦浜掕璺紙600ms 绐楀彛锛夆憿 闈欓粯鍒锋柊鏀跺熬鍗宠Е鍙戦鐑紙娑?3s 绌虹獥锛?  // v4223锛堟€ц兘浼樺寲路鐢ㄦ埛纭A+B2锛夛細鈶?棰勫姞杞界儹鐐光€斺€斿瓧鍏搁敭鏁板紩鐢ㄧ紦瀛橈紙鎷ユ湁绱㈠紩 11,531ms 棰勮闄嶈嚦 1~2s锛夆憽 鍚庡彴妫€鏌ユ洿鏂扳€斺€旀壒閲?LM 鎺ュ彛锛?0+ 娆?HEAD 鈫?1 娆¤姹傦級   // v4222锛堢敤鎴峰彛寰勶級锛氭墍鏈夊彲鐐瑰嚮寰界珷琛?hover鈥斺€斺憼 璁炬柦鑺墖鎸傝浇鏉′欢鎵╀负銆屽彲鐐瑰嵆 hover銆嶁憽 瑁呭姒?閫夌琛屽崱鏂板 hover   // v4221锛堢敤鎴峰疄娴嬨€岃鏍囪繕鏄剧ず浜?銆嶏級锛氱帺瀹惰儗鍖呭悓鍙ｅ緞鎺掗櫎鍑烘湇鍔″櫒 tab 瑙掓爣/鑱氳惤瑙掓爣/鎬绘暟锛坰rv/setts/total锛夛紝淇鏍囦笌鍒楄〃涓嶄竴鑷?  // v4220锛堢敤鎴峰疄娴嬶級锛氥€屾棤鑱氳惤/绂绘暎銆嶅鍣ㄧ櫥璁版帓闄ょ帺瀹惰儗鍖咃紙娑堥櫎涓庛€岀帺瀹舵惡甯︺€峵ab 閲嶅鐨勭函鑳屽寘鍗★級   // v4219锛堝疄娴嬫牴鍥狅級锛氫吉瀹瑰櫒 rec 琛?server 瀛楁锛堜慨銆屾棤鑱氳惤/绂绘暎銆嶅崱鐐硅繘鍘昏鎯呯┖鈥斺€攍bRecHasPick 閿煡绌哄鑷达級   // v4218锛堢敤鎴峰彛寰勶級锛氱墿鍝佺瓫閫夌被鍒墿鑷炽€岀墿鍝佹诞绐楀叏閮ㄧ被鍒€嶏紙lbItemIsPick 鎸夋诞绐楀綊灞炵被鍒榻愶紝淇?寤虹瓚/璧勬簮绛夐潪瑁呭绫荤瓫閫夊叏鐏級   // v4217锛堢敤鎴疯姹傦級锛氣憼 鍒悕琛ㄦ暟鎹寲锛坉ino_rank_alias.json + 鎭愰緳recs绫诲悕鏄犲皠锛岄浂纭紪鐮侊級鈶?鐗╁搧妯″紡鐜╁tab鎭㈠浣嶇疆鍗?鍘诲钩閾哄崱娴?鈶?鎭愰緳渚?mine 涓庢亹榫欏垪琛ㄥ悓婧愶紙璺ㄦ湇榫欓瀺鏄剧ず锛?  // v4216锛堝疄娴嬫牴鍥犱慨澶嶏級锛欰SB_DB 鎳掑姞杞芥湭灏辩华鏃剁紦瀛樼┖琛?鈬?璇嶅共琛?0 鏉℃案涔呭け鏁堬紱鏀逛负銆屽氨缁墠缂撳瓨銆嶏紙lbRankStemMap + lbAsbNameMap锛?  // v4215锛堢敤鎴峰彛寰勶級锛氣憼 瑁呭姒滈瀺閿啍鎭愰緳閿悓鐗╁紓鍚嶅綊涓€锛堝嫎璇?ASB璇嶅共琛級鈶?閫夌墿绉嶇帺瀹惰儗鍖呭彧鐣欒鐗╃闉?钃濆浘 鈶?閫夌墿鍝侀殣钘忎綆娓╄埍+鍘讳綅缃崱 鈶?闈為瀺鍓旈櫎   // v4214锛堢敤鎴峰彛寰勶級锛氳澶囨 TAB 瑙掓爣鍙銆屾垜鐨勩€嶁€斺€斿閮ㄦ洿楂樹笉鍙備笌璁℃暟   // v4213锛堢敤鎴峰彛寰劼稴7锛夛細鐗╃鎸夐挳鏄鹃殣涓庣墿鍝佷晶鍚屾鈥斺€斿彧鐪嬫《鍐呭锛堟湁鏁堟潯鐩級   // v4212锛氱墿绉嶆 qidx<=0 鍏ㄦ帓闄?+ 鍘婚噸 >0 + 瑙掓爣=瀹為檯鏄剧ず鏁?+ 鎭愰緳鑳屽寘鏄剧ず鍏蜂綋榫欏悕   // v4211锛堢敤鎴疯姹偮峰崟涓€浠ｇ爜婧愶級锛氳澶囨鐗╃/鐗╁搧娓叉煋缁熶竴涓?lbRankRenderPanel + 澶栭儴鏇撮珮鏉＄洰涓嶆樉绀哄尯鍩熷悕   // v4210锛堢敤鎴峰彛寰劼蜂綅缃敮涓€鍖栵級锛氬鍣ㄦ樉绀烘帴鍏ャ€屽潗鏍団啋璁炬柦鐪熻韩銆嶇粺涓€瑙ｆ瀽锛堜汉鍙颁笂鐨勭煕鏄剧ず鍥炪€屼汉鍙癊銆嶇湡鍚嶏級   // v4209锛氱墿鍝佹ā寮忚澶囨=鐗╃姒滃畬鏁寸炕鐗堬紙涓?TAB 瀹炵墿/钃濆浘 + qidx<=0 杩囨护 + 绫诲埆鍥炬爣锛?  // v4208锛堢敤鎴烽渶姹傦級锛氱墿鍝佹ā寮忚澶囨鈥斺€旀寜閽寜銆屽瓨妗ｆ湁鍘熷浠ヤ笂鍝佽川銆嶅姩鎬佹樉闅?+ 闈㈡澘缁嗚妭瀵归綈鐗╃锛堝垎缁?琛屽崱/寮瑰崱/杩囨护鍚屾簮锛?  // v4207锛氱鏁ｃ€屼綅缃€嶇粍灞曞紑鏃舵暟閲忎綅鍚屾牱琚寜閽浛鎹紙瀵归綈鏀瑰悕锛?  // v4206锛氱鏁ｅ崱瀹瑰櫒缁勫姞銆屼綅缃€嶆寜閽紙澶嶅埢鏀瑰悕鎸夐挳 + 寮瑰湴鍥炬诞绐楋級   // v4205锛氱墿鍝佹ā寮?tab 鏄鹃殣鎺掗櫎鍩哄洜鏉′欢锛圙en(0) 杩囨护鏍瑰洜锛?  // v4204锛氱鏁?chip 涓嶅搷搴旈噸鍛藉悕 + 鐗╁搧妯″紡闅愯棌鍩哄洜璁惧娈碉紙鍩哄洜瀛樺偍鍣ㄦ牴鍥狅級   // v4203锛氫慨璇︽儏鍐呴儴杩囨护缂哄彛锛堢墿鍝佹ā寮忚鎯呴€愭垚鍛樺榻愪富鍒楄〃 lbRecHasPick锛?  // v4202锛氬鐓ц〃 11 椤规潈濞佸閲忚惤鍦帮紙瀹归噺琛?+10 椤规暟鎹敭 + DisplayCase 褰?HIDE锛?  // v4201锛堢敤鎴锋柟妗堬級锛氱敓鐗╄儗鍖呭弬涓庤仛鍚堚€斺€旇儗鍖呭鍣ㄦ敞鍏?ctn锛坆yContainer 鐩存帴鍛戒腑锛? 鍒ゅ畾鍓旈櫎鑳屽寘鐐?+ 瀹瑰櫒缁勫綊灞炵粺涓€ + 鍒犺繎閭诲厹搴?  // v4200锛氶緳鑳屽寘褰掑睘鍔犮€岃繎閭诲敮涓€銆嶅厹搴曪紙甯濊煉鑳屽寘涓庨緳鍧愭爣宸?1749 涔熻兘褰掍綅锛?  // v4199锛氭斁鍑哄鍣ㄥ潗鏍囬敭鏀惧紑 + 鐗╁搧绱㈠紩鎺ャ€岀敓鐗╄儗鍖呪啋榫欍€嶅叧鑱旈摼   // v4198锛氫慨 5 澶勫閲忓埆鍚嶅弽鍚戠┖鎸囷紙Fireplace/WaterTap/TurretCatapult/TurretBallista/TaxidermyBase_Small锛?  // v4197锛氶緳鑳屽寘骞跺叆褰掑睘杩囨护锛堢鏁?鏃犺仛钀借鎯呬笉鍐嶆贩鍏ュ埆浜洪儴钀界殑鐢熺墿鑳屽寘锛?  // v4196锛氱鏁ｅ崱瀹瑰櫒鍖栵紙scatteredList 鏆撮湶 + 鐗╁搧绱㈠紩鍏滃簳 + 鍗″唴瀹瑰櫒娉ㄥ叆锛?  // v4195锛氭暎缃吉 rec 琛?isEmpty 瀹瑰櫒鏈綋褰㈡€侊紙v3452 鍚屽彛寰勶紝闃茶鎯呮覆鏌撳穿婧冿級   // v4194锛氭暎缃崱淇鈥斺€斾吉瀹瑰櫒 rec 鐩村彇锛堢墿鍝佸鍣ㄥ搱甯屼笌 rec 鍝堝笇涓ゅ锛宑id 涓嶅彲璺ㄦ煡锛?  // v4193锛堢敤鎴峰彛寰勶級锛氱墿鍝佹ā寮忛殣钘忋€岃仛钀藉懡鍚?鍖哄煙鍛藉悕銆嶅叆鍙?+ 銆屾暎缃鍣ㄣ€嶅崱锛堟棤鑱氳惤鍗★紝瀹屽叏瀵归綈鐗╃锛?  // v4192锛堢敤鎴峰彛寰勶級锛氱墿鍝佽鏍?鏁伴噺瀵归綈鐗╃鈥斺€斿彧缁熻銆屽綋鍓嶈鑹叉嫢鏈夈€嶏紙v3597 褰掑睘杩囨护鎺ュ叆 lbPickIdx锛? 鐗╁搧妯″紡鑱氳惤鍗￠殣钘忔斁鍑?浣庢俯浠?铔嬫 + 瑙掓爣鍥炬爣鎸夌墿鍝佺被鍨嬪彇 LB_INV_GRP;   // v4191锛氱帺瀹?tab 鑷姩鍒囨崲琛ヤ慨锛堢墿鍝佹ā寮忔棤璇ョ墿鍝?鈬?鍐呭鍖轰笉鍐嶉┗鐣欑┖鎬侊級;   // v4190锛堢敤鎴疯姹傦級锛氬崟涓€鐗╁搧涓讳綋椤典紭鍖栵紙鐜╁tab鐗╁搧鍙ｅ緞 / 鐗╁搧绱㈠紩鍙岃淇 / 鑱氳惤瑙掓爣姝﹀櫒绫诲埆鍥炬爣 / 璇︽儏琛岄殣钘忓閲忚鏍囷級   // v4189锛堢敤鎴疯姹傦級锛氭按闆疯縼鍏ャ€屽櫒姊?寮硅嵂銆嶏紙Underwater Mine锛?   // v4188锛堢敤鎴疯姹傦級锛氶櫡闃辨棌杩佸叆銆屽櫒姊?寮硅嵂銆嶆锛圷寮傜妞嶇墿闄烽槺鏀瑰悕鍏ユ棌 + 澶у瀷鎹曞吔澶?鎹曞吔澶瑰叆鏃忓灚搴曪紱v4187 璁炬柦娈典綅浠ｇ爜鎾ゅ洖锛?   // v4186锛氭嘲鍏嬫按澹惰ˉ褰曪紙宸ュ叿>姘村鍣ㄦ棌鏈綅锛? 宸ㄧ煶鏍稿疄 + 瀵圭収琛?5 椤瑰幓閲嶃€佹亹榫欏瑙傝〃鎶樺彔;   // v4185锛氭亹榫欒澶囨爮澶栬鍏ㄧ粍杩囨护锛堢敤鎴峰疄閿ら瀺鐨偆锛沨ideItems 18 椤癸級;   // v4184锛氳瘧鍚嶏紙娌欐柉濉旈奔榫欙級+ Cute Dino Helmet 杩囨护锛堢帺瀹跺附锛? lbEggIs 甯藉瓙璞佸厤锛圗aster_Egg_Hat 褰掍綅妯″潡鏍忥級;   // v4183锛氱墿鍝佹诞绐楁帴鍏?hideItems 杩囨护锛圥epper Mask 淇锛? 鎭愰緳澶栬 12 娆捐惤鍦帮紙妯″潡>鐢熺墿澶栬锛?   // v4182锛氭亹榫欒澶囨爮澶栬 12 娆惧浘鏍囧叏閰嶏紙8 娆炬湰鍦板疄閿?+ 4 娆?wiki 琛ュ綍锛沬cons2 5204 / webp_map 5107锛?   // v4181锛欱1 鑺傛棩绯栨灉鍏ㄩ噺鍏ュ簱锛? 鏂伴敭+鍦ｈ癁绯栨灉鍚堝苟涓鸿妭鏃ユ亹榫欑硸+鐜夌背绯栨崲 HUD_Event_Halloween_BC锛? PepperMask 娴獥杩囨护 + 鑺傛棩鏃忚瘝/绫诲悕瑙勫垯;   // v4177锛欰ir_Jar/Air_Bladder kind 淇锛坈onsumable鈫抴eapon锛屾寮忓叆鍣ㄦ>宸ュ叿>姘村鍣級+ 鎯呬汉鑺?鎰熸仼鑺傜硸鏋滆ˉ鍥撅紙Valentines_Dino_Candy/Thanksgiving_Candy锛?   // v4175锛氭枡鐞嗗瓙搴忓井璋冿紙椴ㄩ波灏忛浂椋?绱ф尐鍚夊埄鐩涘3.4鍚庯紱铏兌19鈫?.3 绱ф尐楗洟5.2鍚庯級;   // v4174锛氳揪绉戝鍙?楗洟锛堝師绋荤背鐞冩敼鍚嶏級鍏ユ枡鐞嗘棌骞剁揣鎸ㄦ捣钘诲鍙革紙瀛愬簭 5.1/5.2锛?   // v4173锛氭儏浜鸿妭宸у厠鍔涙鍚?閰嶅浘锛圔ox o' Chocolates/鐩掕宸у厠鍔?VDay_icon锛? WormGum 琛ュ綍锛堣櫕鑳讹級+ Air_Jar/Air_Bladder 绉诲伐鍏仿锋按瀹瑰櫒鏃忥紙鏃忓唴鏈€鍚庯級+ 椋熻倝妞嶇墿绉嶅瓙鎺掓鐗╃瀛怰鍚?+ 浜氱壒鍏版堡/铏兌鎺ユ枡鐞嗗瓙搴?8-19;   // v4170锛氭秷鑰楀搧琛ュ綍 18 閿紙鑳℃闈㈠叿/绌烘皵缃?姘斿泭/娴烽緳姹?椋庡共楸艰倝脳2/绋荤背鐞?鎰熸煋绯诲垪脳6/骞叉捣甯?杈剧瀵垮徃/浜氱壒鍏版堡/钃濊帗姹?P+/鎯呬汉鑺傚阀鍏嬪姏 ase锛? 鏂版棌銆屾劅鏌撱€嶏紙鍚劅鏌撹棨澹?7 椤癸級+ 娉板厠涓夊弶鎴熷綊銆岀煕銆嶆棌;   // v4169锛氬拻缂氳创鍚堝叏灞€鍏滃簳锛堣法鍧楀満鏅細鍜掔細鐏劙鍠峰皠鍣ㄤ笌鏈綋琚墜鐐潡闅斿紑 鈫?鏈€缁堝簭鍒楀啀璐翠竴娆★級锛泇4168锛氬拻缂氭鍣ㄨ创鍚堟湰浣擄紙16 瀵癸細鏈綋鍦ㄥ墠銆佸拻缂氱揣璺?鈥?姝﹁ 11 + 宸ュ叿 3 + 閿悕鍏滃簳 1 +銆愮伀鐒板柗灏勫櫒 v4169 淇銆戯級+ 鍒跺鐏寮瑰浘鏍団啋HomingMissileAmmo_Icon + 宸¤埅瀵煎脊鍥炬爣鈫扖ruise_Missile锛坴4163 浜ゆ帴鍥炶皟锛?   // v4165锛氱珛寮忓崡鐡滃摠鍏垫牴鍥犱慨澶嶏紙facilityIconSpecial 缃┖ + 鍚堝苟灏婇噸绌轰覆鍝ㄥ叺锛? 鍦ｈ癁绯栨灉琛ュ綍锛坈onsumable/鑺傛棩锛? 椴嶅媰澶栬鏀瑰悕 + 铔嬬硶脳3 褰掕妭鏃ユ棌;   // v4164锛氳鏂芥牴鍥犱慨姝ｏ紙鏍囪瘑褰掍綅/鏃楀笢鏃?鑺傛棩鏃忓灚搴曢摼锛? 鑺傛棩琛ユ棌锛堝湥璇炲僵鐏?涓囧湥鑺傚纰戯級+ 鏂版棌銆岀帺瀹跺瑙傘€嶏紙TOF 鍗″皵閰嶄欢锛屾帓鐢熺墿澶栬鍓嶏級;   // v4163锛欳4閬ユ帶璧风垎鍣ㄢ啋宸ュ叿娈碉紙tool:1锛? 宸¤埅瀵煎脊鎹㈠浘 HomingMissileAmmo_Icon + 濉旀媺钀ㄩ夯閱夊脊鑽綊銆岀銆嶆棌;   // v4162锛氱敓鍖栫毊鑲?鐙湪鑸熺毊鑲ゆ柊鏃忥紙楠ㄦ灦鍚?鐢熺墿澶栬鍚庯級+ 璁炬柦鏍忔爣璇嗘棌鍨簳锛堟棗甯滃悗锛? 鍜掔細鐢甸敮/鍠风伀鍣ㄥ浘鏍囧榻愬師鐗?+ 寮硅嵂娈点€屽紓绉嶆鐗┿€嶈瘝锛圵鏋滃疄/Z鎵嬮浄鐩搁偦锛? Netgun 褰掑脊鑽?   // v4161锛歊adar_Rig 琛ュ綍锛堥浄杈鹃厤浠垛啋璺ㄦ鑰呴厤浠舵棌锛? 鏈粍瑁呯殑娉板厠璺ㄦ鑰呮敼褰掋€屾湭缁勮銆嶆棌;   // v4160锛氭嘲鍏嬫偓鍋滃竼涓庡鎷夎惃鎮仠甯嗘棌鍐呯浉閭伙紙杞藉叿瀛愬簭50.2/50.3锛? 6 鏉℃嘲鍏嬭法姝ヨ€呴厤浠惰ˉ褰曪紙瀹樻柟绫诲悕+瀹樻柟涓枃锛屾棌=璺ㄦ鑰呴厤浠讹級;   // v4159锛?3 鏉￠鏋?骞界伒/鍏旇€冲瑁呬互**瀹樻柟绫诲悕+瀹樻柟涓枃**钀藉湴锛堥暱閿?PrimalItemCostume_*銆佺煭閿?鍥炬爣鍚嶏級+ 澶辫惤绮剧伒榫欏瑁呰ˉ褰?+ 3 鏉℃棫楠ㄩ鏉＄洰鍚屾瀹樻柟鍚?+ 鍏ㄩ儴褰掗鏋剁毊鑲?骞界伒鐨偆/鐢熺墿澶栬鏃忥紙鎺掓ā鍧楁鏈€鍚庯級;   // v4158锛氬瑙傛棌锛堥鏋剁毊鑲?骞界伒鐨偆/鐢熺墿澶栬/灏惧反/鎶锛夋暣浣撶Щ鑷虫ā鍧楁鏈€鍚?+ 鐙湪鑸?鐨偆褰掔敓鐗╁瑙?+ 楸肩鏃忕敓鏁堬紙涓ゆ潯鐩搁偦锛?+ M.O.M.I.鍏ユā鍧楁路鏈虹敳鏃?+ 鏈嶈绫昏眮鍏嶇墿绉嶇粦瀹氳繃婊?+ 璺ㄦ鑰呴厤浠舵棌棰勭暀;   // v4157锛欳ryo鍖婚櫌/姘翠笅鑰曞湴/瀹犵墿灞曠ず鍙?缁婄嚎鐓ф槑寮归厤鏂硅ˉ褰曪紙鏉愯川妗ｆ帓搴忥級+ 铔嬬硶ASE杩囨护 + 4鏈嶈闅愯棌 + 楠ㄦ灦鐨偆鏃忥紙3楠ㄩ+鐢熷寲锛岄檮浠跺悗锛?+ 骞界伒鐨偆鏃忥紙14鏉★紝楠ㄩ鍚庯級 + 鎴樿溅鏃忔彁鍓嶏紙闄勪欢鍓嶏級 + 绔嬪紡鍗楃摐娓呭浘鏍?+ Plant W鏋滃疄/Z鎵嬮浄鏃忓唴鐩搁偦;   // v4154锛氭嘲鍏嬪厜鍒冿紙TekClaws锛夋崲鍥?鈫?HUD_TEKHandBlades_Icon_BC + 瀵圭収琛?闈炵毊鑲ぢ风枒浼?琛ラ綈鍚庣紑杩囨护;   // v4151锛氭崲鍥?2锛堝贰鑸寮光啋HUD_TEKCruiseMissile_Icon銆佹嘲鍏嬫Υ寮瑰彂灏勫櫒鈫扝UD_TEKGrenadeLauncher_Icon锛? 琛ュ綍 4锛堢粖绾跨収鏄庡脊闄烽槺/娉板厠涓夊弶鎴?娉板厠闀跨煕/C4閬ユ帶璧风垎鍣級+ 瀵圭収琛ㄥ尯鈶犵Щ闄?48 椤?   // v4150锛氶奔绔挎棌锛團ishingRod+Lovely_Fishing锛? 杞藉叿鏃忚ˉ鍛橈紙娼滆墖鈫掓湪绛忓悗銆佸鎷夎惃鎮仠甯嗏啋娉板厠鎮仠甯嗗悗锛? 鐢熺墿澶栬鏃?26 椤硅惤鍦帮紙妯″潡娈垫渶鏈級+ 瀵圭収琛ㄦ棤鐗瑰緛椤瑰叏鍙傛暟琛?   // v4149锛氭崲鍥?3 缁勶紙GrapplingHook鈫扜rappleHook_Icon銆乀ribeTower鈫扵ribe_Tower銆乀ranqArrow鈫扵ranqArrow_Icon锛? 琛ュ綍 11 閿紙Snowball/Carnivorous_Plant_Seed/Thalassian 绯幻?/ARK_Anniversary_Surprise_Cake/Birthday_Candle/CryoHospital脳2/Netgun锛?   // v4148锛氬疄鏃惰ˉ鍏ㄥ尯鏃犲浘鏍囪ˉ銆?銆嶅崰浣嶏紙lbWpRtHtml 涓庝富娴獥涓€鑷达級+ 鍥炬爣鏇挎崲 14 缁勶紙鍌ㄧ墿绠?闀滃瓙/娌圭綈/鐢甸敮/鐧诲北闀?鐭挎灙/闉瓙/娌欐紶濂椕?/鍚夊埄闈㈠叿/闃叉姢濂椕?/鍠风伀鍣?娼滄按鏈嶏級+ 鑻辨枃琛ュ叏锛圙hillie Mask / Hazard Suit Hat / SCUBA脳4锛? 琛ュ綍 11 閿紙MachinedBow/瀹犵墿灞曠ず鍙?鐢熸棩铔嬬硶/姘翠笅鑰曞湴/娼滆墖/濉旀媺钀ㄦ偓鍋滃竼/鏀跺壊娓旂嚎/鍛ㄥ勾铔嬬硶脳2锛? TransGPS 鎵?ASE 杩囨护鏍囪;   // v4147锛歀ovely_Fishing_Rod 琛ュ綍锛堝伐鍏?tool:1锛? 娆＄骇瑙ｈ嵂/鎵庡暏/琛€涔嬬伒鑽?褰掓枡鐞嗘棌锛坵ords 3.1/3.2/3.3 鎺掑湪鍖荤枟鑽厭路鑳介噺鑽厭涔嬪悗锛夛紱鍥炬爣鏈綍瀵圭収琛?v4147锛堝叚鍒嗙被 66+53 / skins 鐢勫埆 689锛?   // v4146锛歊ecipeCurry_Icon 鎸傝彶鎷夊挅鍠遍厤鏂癸紙RecipeNote_FriaCurry / PrimalItem_RecipeNote_FriaCurry 涓ら敭 icon鈫扲ecipeCurry_Icon锛? HoneyLure 琛ュ綍锛堣渹铚滆楗碉紝鍥炬爣 HoneyLure_Icon锛夛紱瀵圭収琛?v6 閲嶇敓锛堝緟鏍?4 / 宸插鐞?12 / 鏌撹壊鍓?22 绉诲嚭涓昏〃鍏ヨ剼娉級;   // v4145锛歐 鏋滅煭鍚嶈ˉ瑙勫垯锛圥lant_Species_W鈫掓墜闆凤紝娴獥鏋氫妇閿甫涓嬪垝绾匡級;   // v4144锛氭棌淇锛圕ucumis/Oryraise鈫掕敩鑿滐紱Gilly/Oceans/Worm 鐭悕 re: 瑙勫垯鈫掓枡鐞嗏€斺€斾慨 v4143 鐭悕涓嬪垝绾夸笉鍛戒腑闂锛?   // v4143锛欰quatica 娑堣€楀搧琛ュ綍 9 椤癸紙浣滅墿脳2/鏂欑悊脳3/寮硅嵂脳1/鍏跺畠脳3锛? 闈炲嚒楗叉枡鎹㈠浘 + 鏃忚鍒?4 鏉?   // v4142锛欵cto Lantern 涓ら敭鎵?tool:1锛堣繘鍣ㄦ鏍徛峰伐鍏锋锛?   // v4141锛氳姳绮夊浘鏍囨崲 High_Quality_Pollen锛? 鏉★級+ Ecto Lantern 琛ュ綍锛堢伒璐ㄦ彁鐏紝宸ュ叿绫伙紝2 閿?+ 鑺傛棩鏃?2 瑙勫垯锛?   // v4140锛氬埛鏂扮儹鍖轰慨澶嶏紙浠呮爣璁拌Е鍙戯級+ 鑺傛棩鏃忔墿灞?+ 琛ュ綍 5 椤?+ 寮烘晥楹婚唹闀栧浘;   // v4139锛歩tem_zh 鍥炬爣淇锛堥夯閱夐晼鈫扵ranquilizer_Dart锛涚閰哥洂鈫扴ilicateCrystal锛?   // v4138锛氬叕鍏辫鏂藉疄鏃跺尯 39 鏍硷紙WorldProbe 鎺ョ嚎 + 鍒锋柊 CD 10s + 鍚庣鐭椂缂撳瓨鍏辩敤锛?   // v4137锛氬法榻块波棰?鐢熷瓨鑰呮垬鍒╁搧绉昏嚦 Cymathoa 涔嬪悗锛?1/62 妗ｏ級+ Dragon Horn 琛ュ綍锛堥緳涔嬪彿瑙掞級;   // v4136锛欰quatica 涓夋垬鍒╁搧绉昏嚦濂栨澂鏃忔渶鏈紙60 妗ｏ級;   // v4135锛氱劙楝冪崰鐚袱绉嶇崰鐗欏浘鏍囷紙Boaratos_Tusk / Flaming_Boaratos_Tusk锛?   // v4134锛欻ydra/Kraken 褰掍竴 + 鏈綋杩囨护 + AstralSoul/HexCoins 鍥炬爣 + 鍏嬫媺鑲?鑾痉灏旀棗甯滄鍚?+ 鏍间鸡寰峰皵妗ｄ綅淇;   // v4133锛堜慨澶嶏級锛氬鏉棌淇グ璇嶆埅鑳′慨姝ｏ紙姘存櫠椋為緳濂崇帇鎴樺埄鍝佸洖褰掑鏉棌 9.5锛夛紱v4132锛氭棗甯滄棌褰曞叆+鎺掑簭鍨簳
+var LB_DEBUG = /[?&]debug=1/.test(location.search);   // 2026-11-05 P2-4锛氳瘖鏂棩蹇楀紑鍏筹紝榛樿鍏抽棴锛涢渶瑕佹帓鏌ユ椂缁欓〉闈㈠姞 ?debug=1
+</script>
+<script src="/app_core.min.js?v=v20261105-6104" onerror="lbAssetFail('app_core.min.js')"></script>
+<!-- 瑙ｆ瀽缁撴灉娴獥 -->
+<div id="previewOverlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.9)" onclick="if(event.target===this)closePreviewOverlay()">
+  <div id="previewPopup" style="position:absolute;inset:16px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:12px;display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 16px 0">
+      <h2 style="font-size:14px;color:#999;margin:0">馃搵 瑙ｆ瀽缁撴灉 <span id="parseStatus"></span> <span id="solverTag" style="font-size:11px;color:#7c3aed"></span></h2>
+      <svg onclick="closePreviewOverlay()" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" style="cursor:pointer;flex-shrink:0"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </div>
+    <div id="previewPopupContent" style="flex:1;overflow-y:auto;padding:12px 16px 16px;font-size:13px"></div>
+  </div>
+</div>
+<!-- 绻佽偛缁撴灉閬僵锛氬睍寮€鏃惰鐩栧叾浠栧尯鍩燂紙绾瑙夛級锛岀偣鍑婚伄缃?鍙栨秷锛堜簨浠跺啋娉″埌 document 鐩戝惉锛夛紱灞傜骇 996<缁撴灉997<绻佽偛鏍?98<鍊欓€夋诞绐?999 -->
+<div id="lbBreedMask" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:996"></div>
+<!-- 绻佽偛鏍忥細閫変腑鍏蜂綋鐗╃鏃舵樉绀猴紙搴曢儴鍥哄畾鍗曡锛? 灞炴€ч『搴忛€夌锛?-->
+<div id="lbBreedBar" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#16161f;border-top:1px solid #2a2a3a;padding:10px 10px;z-index:998">
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <div id="lbBreedAttrs" style="display:flex;gap:4px;flex-shrink:0;flex-wrap:wrap"></div>
+    <span id="lbBreedGeneBtn" class="lb-tipb mut-chip" onclick="lbOpenGenePicker(event)" title="鎸夊熀鍥犵瓫閫? style="font-size:11px;padding:4px 8px;cursor:pointer;flex-shrink:0">馃К鍩哄洜</span>
+    <span style="flex:1"></span>
+    <!-- v166锛氭搷浣滄寜閽粍锛堢Щ鍔ㄧ鍙﹁捣涓€琛屽眳涓級 -->
+    <div id="lbBreedActions" style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+      <!-- v5401锛氬洓涓富鎸夐挳缁熶竴 .lb-bar-btn锛?5px锛夛紝涓嶅啀鐢ㄥ唴鑱?padding/font-size -->
+      <!-- v5403锛堢敤鎴峰彛寰勩€岃拷韪渶杩戠Щ鍒板垎甯冨湴鍥惧乏杈广€嶏級锛氳鎸夐挳宸茬Щ鍏ラ€夌缁撴灉 #lbWildInline锛屽簳鏍忎笉鍐嶆斁 -->
+      <!-- v5405锛堢敤鎴峰彛寰勶級锛氱墿绉嶃€屾搷浣溿€嶉敭浣嶅叆鍙ｏ紙浠呯墿绉嶏紱瀹屽叏澶嶇敤閿綅閰嶇疆娴獥锛?-->
+      <button class="lb-tipb lb-bar-btn" id="lbSpeciesOpsBtn" onclick="lbSpeciesOpsOpen()" style="display:none;background:#f59e0b" title="璇ョ墿绉?/ 鍣ㄦ鐨勬搷浣滈敭浣嶏紙姣忎釜浣滅敤鍩熶粠 0 閰嶏級"><i class="mdi mdi-gamepad-variant" style="font-size:15px"></i> 鎿嶄綔</button>
+      <!-- v72锛氳鐗╃ Wiki 閫熸煡鍏ュ彛锛堝鐢ㄣ€屾搷浣溿€嶆寜閽牱寮忎笌 LB.curClass 閫昏緫锛?-->
+      <button class="lb-tipb lb-bar-btn" id="lbWikiBtn" onclick="lbWikiOpen()" style="display:none;background:#6366f1" title="璇ョ墿绉?Wiki 閫熸煡锛堟瑙?椹湇/绻佹畺/閲囬泦/鏀跺壊/鎶€鑳?缁忛獙/鎶€宸?鐢熸垚锛?><i class="mdi mdi-package-variant" style="font-size:17px"></i></button>
+      <!-- v161锛氱墿鍝?Wiki 鍏ュ彛锛堜笌鐗╃鍏ュ彛瀹屽叏鍚屾瀯锛屽叡鐢?lbWikiBtnPaint锛?-->
+      <button class="lb-tipb lb-bar-btn" id="lbWikiItemBtn" onclick="lbWikiItemOpen()" style="display:none;background:#6366f1" title="璇ョ墿鍝?Wiki 閫熸煡"><i class="mdi mdi-package-variant" style="font-size:17px"></i></button>
+      <button class="lb-tipb lb-bar-btn" id="lbRouteBtn" onclick="lbRouteOpen()" style="background:#0ea5e9" title="绻佽偛璺嚎鑷姩鐪嬫澘锛氳嚜鍔ㄦ媶绾?閰嶇璁″垝/棰滆壊绻佽偛">馃К 璺嚎</button>
+      <button class="lb-tipb lb-bar-btn" id="lbRankBtn" onclick="lbRankToggle()" title="瑁呭姒滐細閫変腑鐗╃鐨勯瀺 / 鍥剧焊鎺掕" style="background:#33333d;color:#ddd"></button>
+      <button class="lb-bar-btn" id="lbBreedBtn" onclick="event.stopPropagation();lbBreedToggle()" style="background:#7c3aed">閫夌</button>
+    </div>
+  </div>
+</div>
+<!-- v1096锛氬簳閮ㄥ姛鑳芥潯锛堜笌绻佽偛鏉″悓灏哄/鍚屾寮忥紱浠呮湁鍔熻兘鐨勬湇鎵嶆樉绀猴紝鏃犲姛鑳芥暣鏉￠殣钘忥級涓婂眰闃讹細绻佽偛鏉?998 / 鍔熻兘鏉?997 -->
+<div id="lbFuncBar" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#16161f;border-top:1px solid #2a2a3a;padding:10px 10px;z-index:997">
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <span class="lb-tipb lb-bar-btn" id="lbFuncClock" onclick="lbWeatherClick()" style="display:none;margin-right:8px;color:#cbd5e1;background:transparent;font-variant-numeric:tabular-nums;padding:0 10px" onmouseenter="this.style.background='#23232f'" onmouseleave="this.style.background='transparent'"></span><!-- v4293锛氭父鎴忓唴鏃堕棿锛堝乏瀵归綈鐩存樉锛夛紱v4304锛氱偣鍑诲脊銆屽ぉ姘旀煡璇€嶆诞绐楋紱v5401锛氶珮搴﹀苟鍏?35px -->
+    <span id="lbFuncTitle" style="font-size:11px;color:#888"></span>
+    <span style="flex:1"></span>
+    <div id="lbFuncActions" style="display:flex;align-items:center;gap:8px;flex-shrink:0"></div>
+    <button class="lb-tipb lb-bar-btn" id="lbMapWikiBtn" onclick="lbMapWikiOpen()" style="display:none;background:#6366f1" title="璇ュ湴鍥?Wiki 閫熸煡"><i class="mdi mdi-package-variant" style="font-size:17px"></i></button><!-- v5874锛氬湴鍥?Wiki 鍏ュ彛锛坢arkup 涓?#lbWikiBtn 閫愬瓧鑺傚悓娆撅紱order:99 鎭掓渶鍙筹級 -->
+  </div>
+</div>
+<!-- v331锛氳拷韪偓娴寜閽紙绻佽偛鏍忎笂鏂瑰彸涓婅锛涜拷韪湡闂村父椹伙紝鏃犵箒鑲叉爮涔熷湪搴曢儴瀵瑰簲浣嶇疆锛涙潵婧?杩借釜鏈€杩戔啋鍒囨崲+鍋滄锛屽崱鐗囪拷韪啋浠呭仠姝級锛坴778 鑷?v767 鍒犻櫎鎭㈠锛?-->
+<div id="lbTrackFloat" style="display:none;position:fixed;right:10px;bottom:12px;z-index:996;align-items:center;gap:8px">
+  <span id="lbFloatSrv" style="color:#e0e0e0;font-size:12px;background:#1a1a24;border:none;border-radius:6px;height:26px;display:inline-flex;align-items:center;padding:0 10px"></span> <!-- v344锛氬浐瀹氶珮搴?26px 涓庢寜閽榻?-->
+  <button id="lbFloatSwitch" onclick="lbTrackNext()" style="display:none;background:#f59e0b;color:#fff;border:none;border-radius:6px;padding:5px 14px;font-size:12px;cursor:pointer">鍒囨崲</button>
+  <button id="lbFloatStop" onclick="lbTrackStop(false)" style="background:#ef4444;color:#fff;border:none;border-radius:6px;padding:5px 14px;font-size:12px;cursor:pointer">鍋滄杩借釜</button>
+</div>
+<!-- 绻佽偛缁撴灉娴眰锛堢箒鑲叉爮涓婃柟锛?-->
+<div id="lbBreedResult" style="display:none;position:fixed;bottom:40px;left:0;right:0;max-height:60vh;overflow-y:auto;background:#16161f;border-top:1px solid #2a2a3a;z-index:997;padding:8px 10px"></div>
+<!-- v1278锛氳澶囨锛堜笌閫夌銆屽崐灞忛伄缃┿€嶅悓娆撅細閬僵 996 / 搴曢儴闈㈡澘 997 / 60vh锛?-->
+<div id="lbRankMask" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:996" onclick="lbRankClose()"></div>
+<div id="lbRankResult" style="display:none;position:fixed;bottom:40px;left:0;right:0;max-height:60vh;overflow-y:auto;background:#16161f;border-top:1px solid #2a2a3a;z-index:997;padding:8px 10px"></div><!-- v354锛氬乏鍙?padding 12px鈫?0px 涓庣箒鑲叉爮瀵归綈 -->
+<!-- 绻佽偛鍊欓€夎鎯呮诞绐楋紙鐐瑰嚮绻佽偛鍗＄墖寮瑰嚭锛屽彧鏄剧ず瀹屾暣鐢熺墿鍗＄墖鏈綋锛涚偣鍗＄墖澶栬嚜鍔ㄥ叧闂級 -->
+<div id="lbBreedOverlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.9);overflow-y:auto;padding:80px 20px 20px" onclick="lbBreedOverlayClick(event)">
+  <div id="lbBreedOverlayBody" style="max-width:520px;margin:0 auto"></div>
+</div>
+<!-- v658锛氱箒鑲茶矾绾挎诞绐楋紙馃К 璺嚎鎸夐挳锛涚粨鏋勭収 棰勮蹇収 20260903锛涘眰绾?99990锛屾煡鐪嬪崱澶嶇敤 #lbBreedOverlay 鎶崌 100000锛?--><div id="lbRouteOverlay" style="display:none;position:fixed;inset:0;z-index:99990;background:rgba(0,0,0,.7);align-items:center;justify-content:center"><!-- v6025锛堢敤鎴峰彛寰勶級锛氳矾绾挎诞绐?*鍙厑璁哥偣鍙充笂瑙?鉁?鍏抽棴**锛屽凡绉婚櫎閬僵鐐瑰嚮鍏抽棴 -->
+  <div id="lbRoutePanel" style="background:#17171f;border:1px solid #7c3aed66;border-radius:12px;width:940px;max-width:97vw;max-height:94vh;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,.65)">
+    <div id="lbRouteOverlayBody" style="flex:1;min-height:0;display:flex;flex-direction:column"></div>
+  </div>
+</div>
+<script>
+// v1299锛氳瘖鏂叆鍙ｏ紙iPad/Safari 鏃犳硶鎵ц javascript: 涔︾鏃剁殑鏇夸唬鏂规锛?//   鑷姩锛氭暟鎹氨缁悗妫€娴嬨€岀帺瀹舵惡甯?宸茶鐞?鍚?dinoId 閲嶅銆嶏紝鏈夐噸澶嶆墠寮规锛堟棤閲嶅涓嶆墦鎵帮級
+//   鎵嬪姩锛?diag=dup / ?diag=rec 寮哄埗寮规锛?diag=off 鍏抽棴鑷姩妫€娴?(function(){
+  try{
+    var q = '';
+    try{ q = String(location.search || ''); }catch(e){}
+    var mm = /[?&]diag=([a-z]+)/i.exec(q);
+    var mode = mm ? mm[1].toLowerCase() : 'auto';
+    if(mode === 'off') return;
+
+    var box = null;
+    function ensureBox(){
+      if(box && box.parentNode) return box;
+      box = document.createElement('div');
+      box.id = 'lbDiagBox';
+      box.style.cssText = 'position:fixed;left:8px;right:8px;top:8px;z-index:2147483647;background:#0b0b0b;color:#22ff88;border:1px solid #22ff88;border-radius:10px;padding:10px 12px;font-size:11px;line-height:1.5;white-space:pre-wrap;word-break:break-all;max-height:78vh;overflow:auto;font-family:ui-monospace,Menlo,monospace';
+      box.onclick = function(){ try{ box.remove(); box = null; }catch(e){} };
+      try{ document.body.appendChild(box); }catch(e){}
+      return box;
+    }
+
+    var t0 = Date.now();
+    var timer = setInterval(function(){
+      var d = (window.LB && LB._cache) ? LB._cache.data : null;
+      if(!d || !Array.isArray(d.recs) || !d.recs.length){
+        if(Date.now() - t0 > 180000){
+          clearInterval(timer);
+          if(mode !== 'auto'){ ensureBox().textContent = '璇婃柇瓒呮椂锛氭暟鎹湭灏辩华'; }
+        }
+        return;
+      }
+      clearInterval(timer);
+
+      var all = d.recs || [];
+      var pl = all.filter(function(r){ return String(r.containerType || '') === 'player'; });
+      var pf = pl.filter(function(r){ return !r.isEmpty; });
+      var c = {}, order = [];
+      pf.forEach(function(r){
+        var k = String(r.dinoId1 == null ? '' : r.dinoId1) + '_' + String(r.dinoId2 == null ? '' : r.dinoId2);
+        if(!c[k]){ c[k] = []; order.push(k); }
+        c[k].push(r);
+      });
+      var dup = order.filter(function(k){ return c[k].length > 1; });
+
+      if(mode === 'auto' && !dup.length) return;   // 鏃犻噸澶嶄笉鎵撴壈
+
+      var out = [];
+      out.push('璇婃柇 ver=' + (window.LB_VERSION || '?') + '  recs=' + all.length);
+      out.push('player 鍏ㄩ儴=' + pl.length + '  宸茶鐞?' + pf.length + '  绌虹悆=' + (pl.length - pf.length));
+      out.push('鍚?dinoId 閲嶅缁?' + dup.length + '  (0 = 鏃犻噸澶?');
+      dup.slice(0, 8).forEach(function(k){
+        out.push('鈻?' + k + '  x' + c[k].length);
+        c[k].forEach(function(r, i){
+          out.push('   [' + i + '] src=' + (r.src || '?') + ' sv=' + (r.server || '?') + ' lv=' + (r.level || 0)
+            + ' w=' + (r.sortWorldSec || 0) + ' cid=' + String(r.containerId || '').slice(0, 12)
+            + ' cls=' + String(r.dinoClass || '').slice(0, 24) + ' pod=' + (r.podId || ''));
+        });
+      });
+      var c2 = {}, o2 = [];
+      pf.forEach(function(r){
+        var k2 = String(r.dinoClass || '') + '|' + String(r.level || 0) + '|' + String(r.podId || '');
+        if(!c2[k2]){ c2[k2] = []; o2.push(k2); }
+        c2[k2].push(r);
+      });
+      var dup2 = o2.filter(function(k){ return c2[k].length > 1; });
+      out.push('');
+      out.push('鍚?绉峾绛夌骇|pod) 閲嶅缁?' + dup2.length);
+      dup2.slice(0, 5).forEach(function(k){
+        out.push('鈻?' + k + '  x' + c2[k].length + '  dinoIds=' + c2[k].map(function(r){ return r.dinoId1 + '_' + r.dinoId2; }).slice(0, 5).join(','));
+      });
+      if(mode === 'rec'){
+        var byType = {};
+        all.forEach(function(r){ var tt = String(r.containerType || '鈭?); byType[tt] = (byType[tt] || 0) + 1; });
+        out.push('');
+        out.push('containerType 鍒嗗竷锛?);
+        Object.keys(byType).sort(function(a, b){ return byType[b] - byType[a]; }).slice(0, 12).forEach(function(k){ out.push('   ' + k + ' = ' + byType[k]); });
+      }
+      out.push('');
+      out.push('锛堢偣鍑绘湰妗嗗叧闂級');
+      ensureBox().textContent = out.join('\n');
+    }, 400);
+  }catch(e){}
+})();
+</script>
+<script>try{ window.LB_PERF && (window.LB_PERF.t_main1 = Date.now()); }catch(e){}</script>
+<!-- v155锛堢敤鎴峰彛寰勶級锛氬彧鍏佽鍙充笂瑙掓寜閽叧闂?鈥斺€?宸茬Щ闄ら伄缃╃偣鍑诲叧闂?-->
+<div id="lbWikiOverlay">
+  <div class="lw-panel">
+    <div class="lw-head">
+      <span class="lw-title" id="lbWikiTitle">馃摉 Wiki</span>
+      <span class="lw-help lw-multi" id="lbWikiSrcHelp" hidden aria-label="鏁版嵁鏉ユ簮"><i class="mdi mdi-database-outline"></i></span>
+      <span class="lw-help" id="lbWikiHelp" hidden aria-label="鏈〉璇存槑"><i class="mdi mdi-help-circle-outline"></i></span>
+      <button class="lw-x" onclick="lbWikiClose()" title="鍏抽棴" aria-label="鍏抽棴"><i class="mdi mdi-close"></i></button>
+    </div>
+    <div class="lw-tabs" id="lbWikiTabs"></div>
+    <div class="lw-meta" id="lbWikiMeta"></div>
+    <div class="lw-body" id="lbWikiBody"></div>
+  </div>
+</div>
+<!-- v161锛氱墿鍝?Wiki 娴獥锛堜笌鐗╃娴獥瀹屽叏鍚屾瀯锛屽鐢?.lw-* 鏍峰紡锛涘彧鍏佽鍙充笂瑙掓寜閽叧闂級 -->
+<div id="lbWikiItemOverlay">
+  <div class="lw-panel">
+    <div class="lw-head">
+      <span class="lw-title" id="lbWikiItemTitle">馃摝 鐗╁搧</span>
+      <span class="lw-help" id="lbWikiItemHelp" hidden aria-label="鏈〉璇存槑"><i class="mdi mdi-help-circle-outline"></i></span>
+      <button class="lw-x" id="lbWikiItemWatch" onclick="lbCraftWatchToggle()" style="display:none;width:auto;padding:0 9px;font-size:12px;color:#c4b5fd;border-color:#7c3aed66;background:#7c3aed1f" title="鍒朵綔鍏虫敞锛堝姞鍏ュ緟鍒朵綔锛?><i class="mdi mdi-eye"></i> 鍒朵綔鍏虫敞</button>
+      <button class="lw-x" onclick="lbWikiItemClose()" title="鍏抽棴" aria-label="鍏抽棴"><i class="mdi mdi-close"></i></button>
+    </div>
+    <div class="lw-tabs" id="lbWikiItemTabs"></div>
+    <div class="lw-meta" id="lbWikiItemMeta"></div>
+    <div class="lw-body" id="lbWikiItemBody"></div>
+  </div>
+</div>
+<!-- 2026-11-05 B2锛歛pp_ui锛堚増285 KB min / 95 KB br锛夋敼涓?*鎸夐渶鍔犺浇** 鈥斺€?涓嶅啀鍦ㄦ闈欐€佸紩鍏ャ€?     鍔犺浇鍏ュ彛锛歛pp_core.js 鐨?lbUIEnsure()锛堥娆＄偣鏈嶅姟鍣ㄦ帶鍒?瀹夊叏鍥炴。/璧勮骞垮満/Wiki 鍏ュ彛鏃舵敞鍏ワ級銆?     鍥炴粴锛氭妸涓嬮潰杩欒娉ㄩ噴鏀惧紑鍗冲彲鎭㈠"棣栧睆鍚屾鍔犺浇"琛屼负锛堝叾浣欏畧鍗笌鍗犱綅灞傜暀鐫€鏃犲锛夛細
+     <script id="lbWikiJs" src="/app_ui.min.js?v=v20261105-6104"></script> -->
+</body>
+</html>
