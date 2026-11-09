@@ -1657,7 +1657,7 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 /* ===== 原 <style> 块 #3（外置于 2026-11-05 B1a） ===== */
 /* ===== v72：Wiki 面板（视觉对齐项目：#16161f 面板 / #2a2a3a 边线 / #7c3aed 主色） ===== */
 #lbWikiOverlay{position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.9);display:none;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}
-#lbWikiOverlay.show{display:flex}#lbWikiItemOverlay, #lbNews, #lbSrvCtl, #lbArkBk, #lbUpd, #lbTaskPanel{position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.9);display:none;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}#lbWikiItemOverlay.show, #lbNews.show, #lbSrvCtl.show, #lbArkBk.show, #lbUpd.show, #lbTaskPanel.show{display:flex}   /* ⚠ 新增 lbSheetBuild 浮窗必须同步加进上面两行白名单，否则 display:none 缺失 ⇒ 浮窗关不掉（v5966 lbSrvCtl / v6032 lbArkBk / v6208 lbUpd 各踩一次） */   /* v5966：#lbSrvCtl 缺显示/隐藏规则 ⇒ 浮窗关不掉 */
+/* v6403（根治）：lbSheetBuild 造出的浮窗自动带 .lb-sheet 类 —— 默认显隐/遮罩在此，**新增浮窗不必再改下面两行 id 白名单**。id 选择器优先级高于 class ⇒ 既有浮窗定制样式不受影响。 历史踩坑 4 次：v5966 lbSrvCtl / v6032 lbArkBk / v6208 lbUpd / v6402 lbUpdVer。 */.lb-sheet{position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.9);display:none;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}.lb-sheet.show{display:flex}#lbWikiOverlay.show{display:flex}#lbWikiItemOverlay, #lbNews, #lbSrvCtl, #lbArkBk, #lbUpd, #lbTaskPanel{position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.9);display:none;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}#lbWikiItemOverlay.show, #lbNews.show, #lbSrvCtl.show, #lbArkBk.show, #lbUpd.show, #lbTaskPanel.show{display:flex}   /* v6403：上面两行 id 白名单**仍保留**（既有浮窗兼容），但新增浮窗已由 .lb-sheet 兜底，不必再往这里加名字 */   /* v5966：#lbSrvCtl 缺显示/隐藏规则 ⇒ 浮窗关不掉 */
 /* v6030（用户口径「小标题为啥非要先渲染再隐藏，这就是脱裤子放屁」）：
    紧跟置顶文案块(.tc-intro)的小标题直接用 :has() 在**样式计算阶段**隐藏 ——
    浏览器第一次布局就按 display:none 算，不会出现「先画出来再藏掉」的可见中间态，
@@ -1672,6 +1672,9 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 /* v155（用户口径）：关闭按钮完全对齐项目标准浮窗按钮 .lb-picker-close（L2067） */
 .lw-x{width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid #333;border-radius:4px;background:#15151f;color:#999;cursor:pointer;flex-shrink:0;font-size:13px}
 .lw-x:hover{background:#1d1d28;border-color:#3a3a4a;color:#e0e0e0}
+/* v6450（用户口径「附件左边加一个低可视的服务器控制入口」）：标题栏低可视入口 —— 平时半透明深灰，悬停亮紫 */
+.lb-upd-srvctl{width:24px;height:24px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid transparent;border-radius:5px;background:transparent;color:#5d5e6e;cursor:pointer;flex-shrink:0;font-size:15px;opacity:.6;transition:opacity .15s,color .15s,border-color .15s,background .15s}
+.lb-upd-srvctl:hover{opacity:1;color:#a78bfa}
 .lw-tabs{display:flex;gap:6px;overflow-x:auto;padding:8px 14px;border-bottom:1px solid #2a2a3a;flex-shrink:0;scrollbar-width:none}
 .lw-tabs::-webkit-scrollbar{display:none}
 .lw-tab{flex:0 0 auto;padding:5px 12px;border-radius:7px;font-size:12.5px;color:#9aa0b5;background:#22222c;border:1px solid transparent;cursor:pointer;white-space:nowrap}
@@ -1687,6 +1690,8 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 .lw-meta .lw-pgb.lw-pgb-indet i{width:35%;animation:lwprog 1.25s ease-in-out infinite}
 @keyframes lwprog{0%{transform:translateX(-100%)}100%{transform:translateX(320%)}}
 .lw-body{flex:1;overflow-y:auto;padding:12px 14px;min-height:0}
+/* v6403（用户口径「这里面的字号怎么这么大」）：.lw-body 原来没设 font-size ⇒ 继承 body 16px；新浮窗正文统一 12.5px（与项目 .tc-intro 12.8px 同档） */
+#lbUpdVer .lw-body{font-size:12.5px}
 /* v6050：浮窗底部固定栏（.lw-panel 是 flex column，footer 放在 body 之后即天然不随滚动） */
 .lw-foot{flex-shrink:0;padding:10px 14px;background:#12121a;border-top:1px solid #2a2a3a}
 .lw-foot[hidden]{display:none!important}
@@ -1723,7 +1728,7 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 .lw-ok{color:#4ade80;font-size:12.5px;line-height:1.9}
 /* v153（用户口径）：移动端整屏 —— 原仅 max-height，内容少时面板只占半屏，不是整屏 */
 @media (max-width:640px){
-  #lbWikiOverlay{padding:0;align-items:stretch;justify-content:stretch}#lbWikiItemOverlay, #lbNews, #lbSrvCtl, #lbArkBk, #lbUpd, #lbTaskPanel{padding:0;align-items:stretch;justify-content:stretch}
+  #lbWikiOverlay{padding:0;align-items:stretch;justify-content:stretch}#lbWikiItemOverlay, #lbNews, #lbSrvCtl, #lbArkBk, #lbUpd, #lbTaskPanel{padding:0;align-items:stretch;justify-content:stretch}.lb-sheet{padding:0;align-items:stretch;justify-content:stretch}
   .lw-panel{width:100%;max-width:100%;height:100vh;height:100dvh;max-height:100vh;max-height:100dvh;border-radius:0;border-left:none;border-right:none;border-top:none;border-bottom:none;box-shadow:none}
   /* v5736（用户口径）：繁殖 tab ④ 时间轴在移动端自动改**竖版** —— 节点「圆点+名称」横排，阶段改为左侧竖线+缩进文字 */
   #lbWikiOverlay .tc-tl-row{flex-direction:column;align-items:stretch}
@@ -2878,6 +2883,8 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
 .lb-srvctl-legend .mini .mline{position:absolute;left:5px;top:9px;width:7px;height:2px;border-radius:1px;background:#4b5563}
 .lb-srvctl-legend .mini .mc{position:absolute;top:-3px;right:-3px;width:9px;height:7px;border-radius:3px;background:#22c55e}
 .lb-srvctl-legend .mini.stop .mc{background:#ef4444}
+/* v6400（用户口径）：启动中 = 角标黄，与 chips 的 starting 态一致 */
+.lb-srvctl-legend .mini.start .mc{background:#fbbf24}
 .lb-srvctl-legend .mini.mis .mc{animation:lbBadgePulse 1.4s ease-in-out infinite}
 /* v6163（用户口径）：**仅「服务器控制」浮窗内**的服务器 TAB 改为正方形 ——
    宽度不动（保持内容自适应 ≈32px），高度 28 → 32；多出的高度**全部给上内边距**（8px），下内边距仍 4px，
@@ -2988,7 +2995,7 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
 .lb-srvctl-online .ol-x{cursor:pointer;color:#f87171;font-size:11px;opacity:.7;line-height:1}
 .lb-srvctl-online .ol-x:hover{opacity:1}
 /* v6004（用户口径）：启动队列概览行 */
-.lb-srvctl-qline{margin-top:6px;padding:6px 9px;border-radius:6px;background:rgba(245,158,11,.05);border:1px solid rgba(245,158,11,.14);font-size:11px;color:#a89b86;line-height:1.85}
+.lb-srvctl-qline{margin-top:6px;padding:6px 9px;border-radius:6px;background:rgba(245,158,11,.05);border:1px solid rgba(245,158,11,.14);font-size:11px;color:#a89b86;line-height:1.6;display:flex;align-items:center;flex-wrap:wrap;row-gap:2px}
 .lb-srvctl-qline:empty{display:none}
 .lb-srvctl-qline .ql-ttl{color:#c9a86a;margin-right:6px}
 .lb-srvctl-qline .ql-n{color:#f59e0b;font-weight:600}
@@ -3614,3 +3621,16 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
   text-underline-offset:2px;display:inline-flex;align-items:center;gap:3px;transition:color .12s}
 .lb-upd-link:hover{color:#c4b5fd}
 .lb-upd-link.dis{color:#6b7280;cursor:default;text-decoration:none}
+/* v6451（用户口径「4 个卡片的底栏高度为啥不一致」）：底栏抽成统一类 ——
+   原先底栏靠内容撑高，而三处 line-height 不一致：
+     · 缓存卡 继承 20.7px（11.5px×1.8）→ 底栏 32.94px
+     · 汉化卡 继承 normal          → 底栏 30.29px
+     · MOD/API 图标 13px 继承 1.8  → 图标行盒 23.4px → 底栏 36.54px
+   改为固定 height + line-height:1 ⇒ 四卡恒等 34px，图标与文字不再撑高。 */
+.lb-upd-foot{display:flex;justify-content:flex-end;align-items:center;gap:10px;
+  margin:8px -10px -8px;padding:0 12px;height:34px;
+  border-top:1px solid rgba(255,255,255,.09);background:rgba(0,0,0,.20);
+  border-radius:0 0 7px 7px;line-height:1;font-size:11px}
+.lb-upd-foot>.lb-upd-link{height:16px;line-height:1;font-size:11px}
+.lb-upd-foot>.lb-upd-link>i{line-height:1;font-size:13px}
+.lb-upd-foot>.lb-upd-link.lb-foot-left{margin-right:auto}   /* v6452：底栏左侧项（部署到本机）贴左，其余仍在右 */

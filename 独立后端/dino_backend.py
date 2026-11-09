@@ -6210,6 +6210,65 @@ _SRVCTL_BOOT_PCT_BE = {'proc_open': 2, 'ark_version': 5, 'cfcore': 8, 'mods_chec
 _SRVCTL_BOOT_LABEL_BE = {k: l for k, l, _p in SRVCTL_BOOT_MARKS}
 
 
+def _startq_drop(srv, user=''):
+    """v6439：把该服从「启动队列」彻底剔除，并**清零自动重试计数**。
+
+    背景（Bob 2026-11-09 实测）：只发 kill 杀进程时，`_startq_loop` 下一轮会看到
+      `pst == 'Stopped'` 且 `seenProc == True` ⇒ 判「启动过程中进程已退出」= 失败
+      ⇒ 走 `STARTQ_AUTO_RETRY`（3 次）自动重新入队并拉起 ⇒ 用户点中止 = 杀了又拉。
+    本函数让「人工终止」成为**明确的不再启动**。
+
+    返回 True 表示确实从队列里移除了东西（active 或 queue 命中）。
+    """
+    srv = str(srv or '').strip()
+    if not srv:
+        return False
+    removed = False
+    with _SRVCTL_STARTQ_LOCK:
+        _v = _SRVCTL_STARTQ['active'].pop(srv, None)
+        try:
+            while srv in _SRVCTL_STARTQ['queue']:
+                _SRVCTL_STARTQ['queue'].remove(srv)
+                removed = True
+        except Exception:
+            pass
+        # 关键：清零 tries，否则下次启动会被历史计数拖累（少几次重试机会）
+        try:
+            _trs = _SRVCTL_STARTQ.get('tries')
+            if isinstance(_trs, dict):
+                _trs.pop(srv, None)
+        except Exception:
+            pass
+        if _v is not None:
+            removed = True
+            try:
+                _SRVCTL_STARTQ['done'].append({
+                    'server': srv, 'ok': False,
+                    'pct': int(_v.get('pct') or 0),
+                    'msg': u'已中止',
+                    'err': u'已由 %s 手动中止启动' % (user or u'系统'),
+                    't_end': int(time.time())})
+            except Exception:
+                pass
+    if not removed:
+        return False
+    try:
+        _srv_lock_clear(srv, 'queue|%s' % srv)
+    except Exception:
+        pass
+    try:
+        _utask_put('%s|start' % srv, srv, 'start', user or 'srvctl',
+                   msg=u'已中止启动', pct=0, phase='fail',
+                   err=u'已手动中止启动（操作人 %s）—— 不会自动重试' % (user or u'系统'))
+    except Exception:
+        _sexc('startq_drop_task')
+    try:
+        _restart_log('STARTQ DROP %s by %s（人工终止 ⇒ 禁止自动重试）' % (srv, user or '?'))
+    except Exception:
+        pass
+    return True
+
+
 def _startq_pct(marks):
     """按已命中里程碑取最大进度与标签。"""
     idx = -1
@@ -6317,7 +6376,14 @@ def _startq_view():
                         'heavy': bool(v.get('heavy')), 'msg': v.get('msg', '')})
         # v6186（用户口径）：「已完成」必须是**启动成功**的台数 ——
         #   原 doneCount=len(done) 把 ok=False 也算完成，导致「已完成 3/3」但实际只起了 1 台。
-        _okcnt = sum(1 for x in q['done'] if x.get('ok'))
+        # v6444：按 server 去重（后写覆盖先写）—— 兜底历史 done 里的重复失败记录
+        _done_uq = {}
+        try:
+            for _xq in (q['done'] or []):
+                _done_uq[str(_xq.get('server') or '')] = _xq
+        except Exception:
+            _done_uq = {}
+        _okcnt = sum(1 for _xq in _done_uq.values() if _xq.get('ok'))
         # v6271：「将要启动的」= 编排中 ready/savekill/sync 且尚未入队/未在启动的台
         _pend = [x for x in _pend_snap
                  if x not in q['queue'] and x not in q['active']]
@@ -6337,8 +6403,8 @@ def _startq_view():
             _endts = 0
         return {'running': bool(q['running']), 'user': q['user'], 'ts': int(q['ts'] or 0),
                 'endTs': _endts,
-                'total': _tot, 'doneCount': len(q['done']),
-                'okCount': _okcnt, 'failCount': len(q['done']) - _okcnt,
+                'total': _tot, 'doneCount': len(_done_uq),
+                'okCount': _okcnt, 'failCount': len(_done_uq) - _okcnt,
                 'done': list(q['done']), 'active': act,
                 'activeCount': len(act), 'heavyCount': _startq_heavy_count(),
                 'queued': list(q['queue']), 'queuedCount': len(q['queue']),
@@ -6520,11 +6586,14 @@ def _startq_worker():
                 v = _SRVCTL_STARTQ['active'][srv]
                 if v.get('phase') in ('ok', 'fail'):
                     _SRVCTL_STARTQ['active'].pop(srv, None)
-                    _SRVCTL_STARTQ['done'].append({
-                        'server': srv, 'ok': bool(v.get('ok')),
-                        'pct': 100 if v.get('ok') else v.get('pct', 0),
-                        'msg': v.get('msg', ''), 'err': v.get('err', ''),
-                        't_end': int(now)})
+                    # v6444（用户口径「失败口径不对；应该重试全失败才算失败」）：
+                    #   原 done.append 在**重试判定之前** ⇒ 同一台失败 3 次就写 3 条
+                    #   done(ok=False) ⇒ 面板「已完成 5/6（失败 4）」虚高。
+                    #   改为先构造记录，重试分支里置 None，只有**最终结果**才落 done。
+                    _final_rec = {'server': srv, 'ok': bool(v.get('ok')),
+                                  'pct': 100 if v.get('ok') else v.get('pct', 0),
+                                  'msg': v.get('msg', ''), 'err': v.get('err', ''),
+                                  't_end': int(now)}
                     # v6219（一致性 E）：收割即释放 queue 软锁
                     try:
                         _srv_lock_clear(srv, 'queue|%s' % srv)
@@ -6548,6 +6617,7 @@ def _startq_worker():
                             #   上限 STARTQ_AUTO_RETRY 次；重试仍失败才置 fail（仍可手动「重试」）。
                             _trs[srv] = _tn
                             _SRVCTL_STARTQ['queue'].append(srv)
+                            _final_rec = None      # v6444：还在自动重试 ⇒ 不记最终结果
                             try:
                                 _qu = _SRVCTL_STARTQ.get('quser')
                                 if not isinstance(_qu, dict):
@@ -6595,6 +6665,12 @@ def _startq_worker():
                             _trs_ok = _SRVCTL_STARTQ.get('tries')
                             if isinstance(_trs_ok, dict):
                                 _trs_ok.pop(srv, None)
+                        except Exception:
+                            pass
+                    # v6444：只有最终结果（成功 / 重试用尽 / 人工中止）才写入 done
+                    if _final_rec:
+                        try:
+                            _SRVCTL_STARTQ['done'].append(_final_rec)
                         except Exception:
                             pass
             # v6219（P2-3）：外部启动也计入重压占用 ⇒ 队列自动让路
@@ -9155,6 +9231,10 @@ def _ipwatch_loop():
 RESTART_ENABLE = str(os.environ.get('IPWATCH_RESTART') or '0').strip() == '1'
 RESTART_DRY = str(os.environ.get('IPWATCH_RESTART_DRY') or '1').strip() == '1'
 RESTART_ROUND = 600            # 每 10 分钟一轮公告
+# v6440（用户口径「更新一次只能一台 仅限于 缓存覆盖文件的步骤，别的步骤正常放行」）：
+#   更新/回滚批次的**复制（sync）步骤**严格串行（避免两台各 11 GB 抢磁盘 IO），
+#   但 savekill / startq / verify 正常按 RESTART_PARALLEL 并行。
+_RESTART_SYNC_SERIAL = threading.Lock()
 RESTART_ANN_WINDOW = 60        # 每轮只公告前 1 分钟
 RESTART_ANN_OFFSETS = (0, 30)  # 00:00 中文，00:30 英文
 RESTART_EMPTY_SAMPLES = 3
@@ -10424,7 +10504,7 @@ def _restart_exec_sync(srv, src_root=None):
             _cur['cur'] = sz
         except Exception:
             pass
-    def _job():
+    def _job_inner():
         ok, msg = False, ''
         n_ok = n_total = 0
         bytes_tot = 0
@@ -10464,14 +10544,23 @@ def _restart_exec_sync(srv, src_root=None):
                         u'（RunLevel Highest），或给该目录授予写权限后重试'
                         % (tgt, repr(_pe)[:120]))
                 # 2) 差异清单
+                # v6438（Bob 2026-11-09 事故）：**不能只比 size** ——
+                #   97.17 与 97.16 的 35 个 paks 字节数完全相同（实测 35/35），
+                #   但内容不同（sha256：global.utoc / pakchunk11.utoc/.ucas 全不同）。
+                #   只比 size ⇒ paks 全判「无变化」⇒ 只复制了 exe（差 17,920 字节）
+                #   ⇒ 「新 exe + 旧 paks」= AsyncLoading2.cpp:8438 Assert 启动崩溃。
+                #   ⇒ 加 mtime 判据（copy2 保留源 mtime；容差 2 秒防 FS 粒度差异）。
                 plan = []
-                for rel, sz, _mt in _upd_walk(_src, skip_l):
+                for rel, sz, mt in _upd_walk(_src, skip_l):
                     tp = os.path.join(tgt, rel)
                     try:
-                        tsz = os.stat(tp).st_size
+                        _tst = os.stat(tp)
+                        tsz = _tst.st_size
+                        tmt = int(_tst.st_mtime)
                     except Exception:
                         tsz = -1
-                    if tsz == sz:
+                        tmt = -1
+                    if tsz == sz and abs(tmt - mt) <= 2:
                         continue
                     plan.append((rel, sz))
                 n_total = len(plan)
@@ -10576,6 +10665,34 @@ def _restart_exec_sync(srv, src_root=None):
         st['syncMsg'] = msg
         _restart_log('exec sync %s mode=%s -> ok=%s %d/%d %s'
                      % (srv, _mode, ok, n_ok, n_total, str(msg)[:140]))
+
+    def _job():
+        # v6440：更新/回滚的**复制步骤串行** —— 抢不到锁就本轮让路，下个 tick 再来
+        _lk = (_RESTART_SYNC_SERIAL
+               if str(_mode or '').lower() in ('update', 'rollback') else None)
+        if _lk is not None:
+            if not _lk.acquire(blocking=False):
+                try:
+                    st['syncAt'] = 0            # 重置 => 下个 tick 重新进 sync 分支
+                    st['syncDone'] = False
+                    st['msg'] = u'等待其它服完成缓存复制（复制步骤严格串行）'
+                    st['pct'] = 80
+                except Exception:
+                    pass
+                try:
+                    _restart_log('SYNC WAIT %s（其它服正在复制，本 tick 让路）' % srv)
+                except Exception:
+                    pass
+                return
+        try:
+            _job_inner()
+        finally:
+            if _lk is not None:
+                try:
+                    _lk.release()
+                except Exception:
+                    pass
+
     try:
         _RCON_EXECUTOR.submit(_job)
     except Exception:
@@ -10681,6 +10798,15 @@ def _deploy_api_apply(srv, st=None):
         except Exception:
             _sexc('deploy_api_rollback')
         return False, u'；'.join(fails[:3]) + u'（已回滚）'
+    # v6441（用户口径「config version 分发 API 后没有改啊？」）：
+    #   v6400 只在旧独立路径 `_api_deploy_run2` 里同步了 config.json 的 version，
+    #   而 v6340 把 API 分发并入本编排后走的是这里 —— 只复制 dll/PluginInfo + md5 校验，
+    #   **从未同步 config.json** ⇒ 插件自报仍旧版（如 Bob 卡在 0.8.2 而 dll 已是 0.84）。
+    #   失败不影响分发结果（dll/PluginInfo 已就位）。
+    try:
+        _sync_sok_cfg_ver(srv, pl)
+    except Exception:
+        _sexc('deploy_api_sync_cfg_ver')
     return True, (u'%d 项已更新' % n_ok)
 
 
@@ -10955,8 +11081,12 @@ def _restart_tick():
     #   修法：名额按整条链统计，两个判据统一；不再有「全局 busy」这个门。
     _CHAIN_PH = ('savekill', 'sync', 'startq', 'verify')
     _in_chain = [k for k, v in servers.items() if v.get('phase') in _CHAIN_PH]
-    _par_now = (1 if str(_RESTART.get('mode') or 'restart') in ('update', 'rollback')
-                else int(RESTART_PARALLEL))
+    # v6440（用户口径「更新一次只能一台 仅限于 缓存覆盖文件的步骤」）：
+    #   原来 update/rollback 把 _par_now 压成 1 ⇒ savekill→sync→startq→verify
+    #   整条链只能 1 台（实测 Cen 走完 5 分 19 秒，Los 全程 ready 干等）。
+    #   现统一按 RESTART_PARALLEL；真正的串行只由 _RESTART_SYNC_SERIAL 在
+    #   复制（sync）这一步把住。
+    _par_now = int(RESTART_PARALLEL)
     busy = len(_in_chain) >= _par_now
     if not busy:
         # v6157（C4/C6）：锚点排序 = (Bob 永远最后, 有存档优先, 在线人数升序, readyAt 先到先得)
@@ -11374,6 +11504,1320 @@ def _upd_dir_gb(d):
     return round(tot / 1073741824.0, 2)
 
 
+# ===== v6402（用户口径 2026-11-09）：版本更新缓存 → **可拉取指定版本** =====
+#   需求：卡片上给下拉选历史版本；按时间新→旧；只列当前主版本（如 97.x）
+#   下载：走用户已验证的命令
+#         steamcmd +login <账号> <密码> +download_depot 2430930 2430931 <manifestGID> +quit
+#   数据源（不碰外站）：
+#     ① Steam 官方 public 分支实时值（保证「最新版」一定在列表里）
+#     ② 本机扫描：各服 / 缓存 的 appmanifest_2430930.acf（Steam 自己写的 buildid+manifest）
+#        + SteamCMD 的 depotcache\2430931_<GID>.manifest（每下载过一个版本就留一份档）
+#     ③ 手工补录库 depot_history.json（SteamDB 上抄到的 GID 录一次，永久复用）
+#   凭据：按账号缓存，密码用 _srvctl_secret() 派生密钥加密落盘；读取接口**永不回明文**
+DEPOT_HIST_FILE = os.path.join(os.path.dirname(ACCOUNTS_FILE), 'depot_history.json')
+STEAM_CRED_FILE = os.path.join(os.path.dirname(ACCOUNTS_FILE), 'steam_creds.json')
+STEAMCMD_EXE = r'D:\ASADedicatedManager\SteamCMDInstall\steamcmd.exe'
+STEAMCMD_CONTENT = os.path.join(r'D:\ASADedicatedManager\SteamCMDInstall', 'steamapps',
+                                'content', 'app_' + UPDATE_APP_ID,
+                                'depot_' + UPDATE_DEPOT_ID)
+DEPOT_SAME_GEN_GAP = 120000   # 无版本号时的兜底：buildId 与最新相差小于此值 ⇒ 同大版本
+
+
+def _depot_hist_load():
+    try:
+        with open(DEPOT_HIST_FILE, 'r', encoding='utf-8') as f:
+            d = json.load(f)
+        return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
+
+
+def _depot_hist_save(d):
+    try:
+        with open(DEPOT_HIST_FILE + '.tmp', 'w', encoding='utf-8') as f:
+            json.dump(d, f, ensure_ascii=False, indent=1)
+        os.replace(DEPOT_HIST_FILE + '.tmp', DEPOT_HIST_FILE)
+        return True
+    except Exception:
+        _sexc('depot_hist_save')
+        return False
+
+
+def _depot_put(out, man, bid, at, size, src, srv):
+    """往版本池里并入一条（按 manifest 去重，字段取并集）"""
+    man = str(man or '').strip()
+    if not man:
+        return
+    k = man
+    it = out.get(k) or {'manifest': man, 'buildId': '', 'at': 0, 'size': 0,
+                        'src': [], 'srv': [], 'ver': ''}
+    if bid and not it.get('buildId'):
+        it['buildId'] = str(bid)
+    try:
+        it['at'] = max(int(it.get('at') or 0), int(at or 0))
+    except Exception:
+        pass
+    try:
+        it['size'] = max(int(it.get('size') or 0), int(size or 0))
+    except Exception:
+        pass
+    if src and src not in it['src']:
+        it['src'].append(src)
+    if srv and srv not in it['srv']:
+        it['srv'].append(srv)
+    out[k] = it
+
+
+def _depot_scan_local():
+    """本机已存在的 depot manifest（各服 acf + 缓存 acf + SteamCMD depotcache）"""
+    out = {}
+    _roots = [(UPDATE_CACHE_PATH, 'cache')]
+    for _s in sorted(SERVERS.keys()):
+        try:
+            _roots.append((os.path.normpath(os.path.join(_srv_win64(_s), '..', '..', '..')), _s))
+        except Exception:
+            pass
+    for _root, _tag in _roots:
+        _fp = os.path.join(_root, 'steamapps', UPDATE_ACF_NAME)
+        if not os.path.isfile(_fp):
+            continue
+        _a = _upd_read_acf(_fp)
+        if not _a.get('manifest'):
+            continue
+        try:
+            _at = int(_a.get('lastUpdated') or 0)
+        except Exception:
+            _at = 0
+        try:
+            _sz = int(_a.get('sizeOnDisk') or 0)
+        except Exception:
+            _sz = 0
+        _depot_put(out, _a['manifest'], _a.get('buildid'), _at, _sz, 'acf',
+                   ('' if _tag == 'cache' else _tag))
+    for _dc in (os.path.join(os.path.dirname(STEAMCMD_EXE), 'depotcache'),
+                os.path.join(UPDATE_CACHE_PATH, 'steamapps', 'depotcache')):
+        try:
+            if not os.path.isdir(_dc):
+                continue
+            _pre = UPDATE_DEPOT_ID + '_'
+            for _fn in os.listdir(_dc):
+                _low = _fn.lower()
+                if not _low.startswith(_pre) or not _low.endswith('.manifest'):
+                    continue
+                _gid = _fn[len(_pre):-len('.manifest')]
+                try:
+                    _mt = int(os.path.getmtime(os.path.join(_dc, _fn)))
+                except Exception:
+                    _mt = 0
+                _depot_put(out, _gid, '', _mt, 0, 'depotcache', '')
+        except Exception:
+            _sexc('depot_scan_cache')
+    return out
+
+
+def _discord_ver_timeline():
+    """v6406（用户口径「通过 Discord 的 PC 版本 来对照判定」）：
+       从资讯广场 `patch_pc` 缓存解析「游戏版本号 + 公告时间」时间线。
+       · 版本号：卡片 `<h3>` 标题（`v97.16 - …` / `## v97 - …`），口径与 _news_official_version 一致
+       · 时间：`cards[].mid` 反查 `messages[]` 里对应 Discord 消息的 `timestamp`（UTC）
+       返回按时间升序的 [{'ver': '97.16', 'ts': 1794xxxxxx}, …]"""
+    out = []
+    try:
+        d = _news_read('patch_pc') or {}
+        _mt = {}
+        for _m in (d.get('messages') or []):
+            try:
+                _mt[str(_m.get('id') or '')] = str(_m.get('timestamp') or '')
+            except Exception:
+                pass
+        for _c in (d.get('cards') or []):
+            _txt = str(_c.get('content') or '')
+            _mh = re.search(r'<h3>(.*?)</h3>', _txt, re.S)
+            if not _mh:
+                continue
+            _head = _mh.group(1)
+            _low = _head.lower()
+            if not (re.search(r'servers?\b', _low) or re.search(r'\bsteam\b', _low)):
+                continue
+            _vm = re.search(r'(?<![\d.])v?(\d+)(?:\.(\d+))?', _head, re.I)
+            if not _vm:
+                continue
+            _ver = '%d.%d' % (int(_vm.group(1)), int(_vm.group(2) or 0))
+            _ts = 0
+            _tstr = _mt.get(str(_c.get('mid') or ''), '')
+            if _tstr:
+                try:
+                    _ts = int(_cal.timegm(time.strptime(_tstr[:19], '%Y-%m-%dT%H:%M:%S')))
+                except Exception:
+                    _ts = 0
+            out.append({'ver': _ver, 'ts': _ts})
+        out.sort(key=lambda x: (int(x.get('ts') or 0), _ver_seg(x.get('ver')) or (0, '0')))
+    except Exception:
+        _sexc('discord_ver_timeline')
+    return out
+
+
+STEAMDB_RSS_URL = 'https://steamdb.info/api/PatchnotesRSS/?appid=2430930'
+STEAMDB_BUILDS_FILE = os.path.join(os.path.dirname(ACCOUNTS_FILE), 'steamdb_builds.json')
+STEAMDB_RSS_TTL = 3600          # RSS 自带 <ttl>3600</ttl>
+_STEAMDB_CACHE = {'ts': 0.0, 'list': []}
+
+
+def _steamdb_builds():
+    """v6407（用户口径「从 SteamDB 取列表」）：走 **SteamDB 官方 RSS**（站点自带订阅接口，
+    不是猜端点/爬页面）。返回 [{buildId, at}]，按 buildId 降序。
+
+    · RSS 只给最近 10 条 ⇒ **持久累积**到 steamdb_builds.json，跑得越久列表越全
+    · 时间戳不解析 pubDate 文本（受系统 locale 影响），改用
+      `<media:thumbnail ... ?_=<epoch>>` 里的 epoch 秒，稳定可靠
+    """
+    now = time.time()
+    if _STEAMDB_CACHE['list'] and (now - float(_STEAMDB_CACHE['ts'] or 0)) < STEAMDB_RSS_TTL:
+        return _STEAMDB_CACHE['list']
+    store = {}
+    try:
+        with open(STEAMDB_BUILDS_FILE, 'r', encoding='utf-8') as f:
+            d = json.load(f)
+        if isinstance(d, dict):
+            # v6409：结构升级为 {buildId: {'at': ts, 'man': gid}}；兼容旧的纯时间戳写法
+            # v6415：再留 auto 字段 —— 区分「官方自动配对」与「人工手填」
+            for _k, _v in (d.get('builds') or {}).items():
+                if isinstance(_v, dict):
+                    store[str(_k)] = {'at': int(_v.get('at') or 0),
+                                      'man': str(_v.get('man') or ''),
+                                      'auto': bool(_v.get('auto')),
+                                      'verified': bool(_v.get('verified'))}
+                else:
+                    store[str(_k)] = {'at': int(_v or 0), 'man': '',
+                                      'auto': False, 'verified': False}
+    except Exception:
+        store = {}
+    try:
+        import urllib.request as _u2
+        req = _u2.Request(STEAMDB_RSS_URL, headers={
+            'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+                           '(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'),
+            'Accept': 'application/rss+xml, application/xml, text/xml, */*'})
+        raw_xml = _u2.urlopen(req, timeout=25).read().decode('utf-8', 'replace')
+        for m in re.finditer(r'<item>(.*?)</item>', raw_xml, re.S):
+            it = m.group(1)
+            g = re.search(r'<guid[^>]*>\s*build#(\d+)', it)
+            if not g:
+                continue
+            bid = g.group(1)
+            ts = 0
+            mt = re.search(r'patchnotes/\d+\.png\?_=(\d+)', it)
+            if mt:
+                ts = int(mt.group(1))
+            _old = store.get(bid) or {}
+            store[bid] = {'at': ts or int(_old.get('at') or 0),
+                          'man': str(_old.get('man') or ''),
+                          'auto': bool(_old.get('auto')),
+                          'verified': bool(_old.get('verified'))}
+    except Exception:
+        _sexc('steamdb_rss')
+    try:
+        if store:
+            with open(STEAMDB_BUILDS_FILE + '.tmp', 'w', encoding='utf-8') as f:
+                json.dump({'builds': store,
+                           'updated': time.strftime('%Y-%m-%d %H:%M:%S')},
+                          f, ensure_ascii=False, indent=1)
+            os.replace(STEAMDB_BUILDS_FILE + '.tmp', STEAMDB_BUILDS_FILE)
+    except Exception:
+        _sexc('steamdb_save')
+    lst = []
+    for bid, rec in store.items():
+        try:
+            rec = rec if isinstance(rec, dict) else {'at': int(rec or 0), 'man': ''}
+            lst.append({'buildId': str(bid), 'at': int(rec.get('at') or 0),
+                        'man': str(rec.get('man') or ''),
+                        'auto': bool(rec.get('auto')),
+                        'verified': bool(rec.get('verified'))})
+        except Exception:
+            pass
+    lst.sort(key=lambda x: -int(x['buildId']))
+    _STEAMDB_CACHE['ts'] = now
+    _STEAMDB_CACHE['list'] = lst
+    return lst
+
+
+def _steamdb_set_manifest(bid, man):
+    """v6409（用户口径）：按 buildId **永久记录** depot manifest —— 用户从 SteamDB
+    详情页抄一次，之后该版本一直可拉，永不过期、无需再填。"""
+    bid = str(bid or '').strip()
+    man = str(man or '').strip()
+    if not bid.isdigit():
+        return {'ok': False, 'code': 'bad_buildid', 'error': u'buildId 需为纯数字'}
+    if not man.isdigit() or len(man) < 8:
+        return {'ok': False, 'code': 'bad_manifest',
+                'error': u'manifest GID 需为纯数字（通常 19 位）'}
+    store = {}
+    try:
+        with open(STEAMDB_BUILDS_FILE, 'r', encoding='utf-8') as f:
+            d = json.load(f)
+        if isinstance(d, dict):
+            for _k, _v in (d.get('builds') or {}).items():
+                if isinstance(_v, dict):
+                    store[str(_k)] = {'at': int(_v.get('at') or 0),
+                                      'man': str(_v.get('man') or '')}
+                else:
+                    store[str(_k)] = {'at': int(_v or 0), 'man': ''}
+    except Exception:
+        store = {}
+    rec = store.get(bid) or {'at': 0, 'man': ''}
+    rec['man'] = man
+    store[bid] = rec
+    try:
+        with open(STEAMDB_BUILDS_FILE + '.tmp', 'w', encoding='utf-8') as f:
+            json.dump({'builds': store,
+                       'updated': time.strftime('%Y-%m-%d %H:%M:%S')},
+                      f, ensure_ascii=False, indent=1)
+        os.replace(STEAMDB_BUILDS_FILE + '.tmp', STEAMDB_BUILDS_FILE)
+    except Exception as e:
+        _sexc('steamdb_set_man')
+        return {'ok': False, 'code': 'save_failed', 'error': repr(e)[:200]}
+    # 让下一次查询立刻生效
+    _STEAMDB_CACHE['list'] = []
+    _STEAMDB_CACHE['ts'] = 0.0
+    try:
+        _depot_ver_cache_clear()
+    except Exception:
+        pass
+    return {'ok': True, 'buildId': bid, 'manifest': man}
+
+
+# ===== v6415（用户口径「97 的历史版本你直接给配上，反正后续的新版本都能对应上，无需手动了」）=====
+#   结论：**不需要跑 steamcmd**。`_steam_latest_build()`（v6397 已有）走 api.steamcmd.net，
+#   一次 1.2 秒就同时返回
+#       depots.branches.public.buildid            = 26528593
+#       depots.2430931.manifests.public.gid       = 1403008564163147406
+#   与 `steamcmd +app_info_print`（19.5 秒起进程）结果逐位一致 —— 实测交叉验证过。
+#   ⇒ 只要把这对值**落库**，之后每个新版本都会自动有 manifest，不用再手填。
+STEAMDB_PAIR_INTERVAL = 1800      # 30 分钟一轮（Steam 不会 30 分钟内连发两个 build）
+STEAMDB_PAIR_FIRST_DELAY = 45     # 启动后 45 秒先跑一次
+_STEAMDB_PAIR_LAST = {'at': 0.0, 'bid': '', 'man': '', 'err': ''}
+
+
+DEPOT_VER_TTL = 30.0          # v6425：版本池短缓存（并发时只算一次；拉取/改库后主动清）
+_DEPOT_VER_CACHE = {'ts': 0.0, 'data': None}
+
+
+def _depot_ver_cache_clear():
+    _DEPOT_VER_CACHE['ts'] = 0.0
+    _DEPOT_VER_CACHE['data'] = None
+
+
+def _steamdb_remember(bid, man, at=0, verified=False):
+    """把**官方来源**的 buildId + depot manifest 配对落库。
+       · `verified=True`（SteamCMD 官方日志）⇒ **权威**，可覆盖库中非权威值
+       · `verified=False`（api.steamcmd.net 的 latest）⇒ 只填空，不覆盖已有值
+       · 就地更新 _STEAMDB_CACHE，**不清空缓存**（避免下一次调用重复拉 RSS）
+    """
+    bid = str(bid or '').strip()
+    man = str(man or '').strip()
+    if not bid.isdigit():
+        return {'ok': False, 'code': 'bad_buildid'}
+    if not man.isdigit() or len(man) < 8:
+        return {'ok': False, 'code': 'bad_manifest'}
+    store = {}
+    try:
+        with open(STEAMDB_BUILDS_FILE, 'r', encoding='utf-8') as f:
+            d = json.load(f)
+        if isinstance(d, dict):
+            for _k, _v in (d.get('builds') or {}).items():
+                if isinstance(_v, dict):
+                    store[str(_k)] = {'at': int(_v.get('at') or 0),
+                                      'man': str(_v.get('man') or ''),
+                                      'auto': bool(_v.get('auto')),
+                                      'verified': bool(_v.get('verified'))}
+                else:
+                    store[str(_k)] = {'at': int(_v or 0), 'man': '',
+                                      'auto': False, 'verified': False}
+    except Exception:
+        store = {}
+    rec = store.get(bid) or {}
+    _cur = str(rec.get('man') or '')
+    if _cur and _cur == man:
+        if verified and not rec.get('verified'):
+            rec['verified'] = True
+            store[bid] = rec
+            try:
+                with open(STEAMDB_BUILDS_FILE + '.tmp', 'w', encoding='utf-8') as f:
+                    json.dump({'builds': store,
+                               'updated': time.strftime('%Y-%m-%d %H:%M:%S')},
+                              f, ensure_ascii=False, indent=1)
+                os.replace(STEAMDB_BUILDS_FILE + '.tmp', STEAMDB_BUILDS_FILE)
+            except Exception:
+                _sexc('steamdb_remember_verify_save')
+        return {'ok': True, 'buildId': bid, 'skipped': 'same'}
+    if _cur and not verified:
+        return {'ok': True, 'buildId': bid, 'skipped': 'already'}
+    store[bid] = {'at': int(rec.get('at') or 0) or int(at or 0),
+                  'man': man, 'auto': True, 'verified': bool(verified)}
+    try:
+        with open(STEAMDB_BUILDS_FILE + '.tmp', 'w', encoding='utf-8') as f:
+            json.dump({'builds': store,
+                       'updated': time.strftime('%Y-%m-%d %H:%M:%S')},
+                      f, ensure_ascii=False, indent=1)
+        os.replace(STEAMDB_BUILDS_FILE + '.tmp', STEAMDB_BUILDS_FILE)
+    except Exception as e:
+        _sexc('steamdb_remember_save')
+        return {'ok': False, 'code': 'save_failed', 'error': repr(e)[:200]}
+    try:
+        for _r in (_STEAMDB_CACHE.get('list') or []):
+            if str(_r.get('buildId')) == bid:
+                if not _r.get('man'):
+                    _r['man'] = man
+                _r['auto'] = True
+                break
+    except Exception:
+        pass
+    return {'ok': True, 'buildId': bid, 'manifest': man, 'auto': True}
+
+
+STEAMCMD_LOG_FILE = os.path.join(os.path.dirname(STEAMCMD_EXE), 'logs', 'content_log.txt')
+_STEAMDB_LOG_CACHE = {'ts': 0.0, 'map': {}, 'err': ''}
+
+
+def _steamdb_scan_content_log():
+    """v6416（用户口径「如果要去除推断风险 有别的方案么」）：
+    从 **SteamCMD 官方日志** `logs/content_log.txt` 提取 `BuildID -> depot manifest` **权威配对**。
+    Steam 落盘时自己打印这一行，不存在任何推断：
+        AppID 2430930 finished update, 2 mounted depots (BuildID 26515168) :
+              1004 (7604377918839582995),2430931 (3083367148300701914),
+    ⚠ 局限：只覆盖本机实际更新过的版本（且受日志轮转限制）。
+    """
+    now = time.time()
+    if (now - float(_STEAMDB_LOG_CACHE.get('ts') or 0)) < 300 and _STEAMDB_LOG_CACHE.get('map'):
+        return dict(_STEAMDB_LOG_CACHE['map'])
+    out = {}
+    try:
+        with open(STEAMCMD_LOG_FILE, 'r', encoding='utf-8', errors='replace') as f:
+            txt = f.read()
+        _pat = re.compile(r'\(BuildID\s+(\d{5,})\)\s*:\s*([^\n]*)')
+        _dpat = re.compile(r'(?<![\d])' + str(UPDATE_DEPOT_ID) + r'\s*\((\d{10,})\)')
+        for m in _pat.finditer(txt):
+            _bid, _seg = m.group(1), m.group(2)
+            _dm = _dpat.search(_seg)
+            if _dm:
+                out[_bid] = _dm.group(1)
+        _STEAMDB_LOG_CACHE['err'] = ''
+    except Exception as e:
+        _STEAMDB_LOG_CACHE['err'] = '%s:%s' % (type(e).__name__, str(e)[:120])
+        out = {}
+    _STEAMDB_LOG_CACHE['ts'] = now
+    if out:
+        _STEAMDB_LOG_CACHE['map'] = dict(out)
+    return out
+
+
+def _steamdb_sync_content_log():
+    """把日志里的权威配对同步进库（verified=True），并顺手校验已有值是否一致。"""
+    res = {'ok': True, 'n': 0, 'fixed': 0, 'confirmed': 0}
+    try:
+        pairs = _steamdb_scan_content_log()
+    except Exception:
+        _sexc('steamdb_log_scan')
+        return res
+    for _bid, _man in (pairs or {}).items():
+        try:
+            r = _steamdb_remember(_bid, _man, 0, verified=True)
+            res['n'] += 1
+            if r.get('skipped') == 'same':
+                res['confirmed'] += 1
+            elif r.get('ok'):
+                res['fixed'] += 1
+        except Exception:
+            _sexc('steamdb_log_remember')
+    return res
+
+
+def _steamdb_pair_loop():
+    """后台守护：定时把「当前最新 buildId ↔ manifest」配对落库。
+       只在新版本发布时才会有新 buildId，30 分钟一轮足够；单轮开销 = 1 次 HTTP（约 1.2 秒）。
+    """
+    time.sleep(STEAMDB_PAIR_FIRST_DELAY)
+    while True:
+        try:
+            st = _steam_latest_build(force=True)
+            bid = str(st.get('buildid') or '')
+            man = str(st.get('manifest') or '')
+            _STEAMDB_PAIR_LAST.update({'at': time.time(), 'bid': bid, 'man': man,
+                                       'err': str(st.get('err') or '')})
+            if bid.isdigit() and man.isdigit():
+                _steamdb_remember(bid, man, st.get('timeupdated'))
+            # v6416：顺手把 SteamCMD 日志里的权威配对同步进来
+            _steamdb_sync_content_log()
+        except Exception:
+            _sexc('steamdb_pair_loop')
+        time.sleep(STEAMDB_PAIR_INTERVAL)
+
+
+def _depot_versions(force=False):
+    """版本池（v6407）：
+       · **主列表 = SteamDB 官方 RSS 的 buildId 序列**（不再以本机 acf 为主）
+       · 合并本机事实：manifest / 在用服 / 大小（各服 acf + SteamCMD depotcache）
+       · **大版本过滤 = 纯 buildId 数值**：`最新 buildId - 该 buildId <= 120000`
+       · `v97.x` 版本号**只用于显示**，不参与过滤与排序
+    """
+    # v6425：30 秒短缓存 —— 原来每次调用都重扫全部服务器 acf，6 并发时 1.7s -> 4.6s
+    _now0 = time.time()
+    if (not force) and _DEPOT_VER_CACHE['data'] is not None \
+            and (_now0 - float(_DEPOT_VER_CACHE['ts'] or 0)) < DEPOT_VER_TTL:
+        return _DEPOT_VER_CACHE['data']
+    out = {'ok': True, 'major': '', 'items': [], 'latest': {}, 'err': '',
+           'rssCount': 0, 'maxBuildId': ''}
+    # ① 本机事实
+    local = {}
+    try:
+        local = _depot_scan_local()
+    except Exception:
+        _sexc('depot_local')
+    latest_bid, latest_man, latest_at = '', '', 0
+    try:
+        _st = _steam_latest_build()
+        latest_bid = str(_st.get('buildid') or '')
+        latest_man = str(_st.get('manifest') or '')
+        latest_at = int(_st.get('timeupdated') or 0)
+    except Exception as e:
+        out['err'] = '%s:%s' % (type(e).__name__, str(e)[:100])
+    # ② SteamDB RSS
+    rss = []
+    try:
+        rss = _steamdb_builds()
+    except Exception:
+        _sexc('steamdb_rss2')
+    out['rssCount'] = len(rss)
+    # ②b v6415：官方 latest 配对自动落库（放在 RSS 之后，就地更新缓存，不重复拉 RSS）
+    if str(latest_bid).isdigit() and str(latest_man).isdigit():
+        try:
+            _steamdb_remember(latest_bid, latest_man, latest_at)
+        except Exception:
+            _sexc('steamdb_remember_caller')
+    # ②c v6416：SteamCMD 官方日志的权威配对（零推断）同步进库
+    try:
+        _steamdb_sync_content_log()
+        for _e6 in rss:
+            _b6 = str(_e6.get('buildId') or '')
+            _m6 = (_STEAMDB_LOG_CACHE.get('map') or {}).get(_b6)
+            if _m6 and not _e6.get('man'):
+                _e6['man'] = _m6
+                _e6['auto'] = True
+                _e6['verified'] = True
+            elif _m6 and str(_e6.get('man')) == _m6:
+                _e6['verified'] = True
+    except Exception:
+        _sexc('steamdb_log_sync_caller')
+    # ③ 版本号来源（仅显示）
+    _srvver = {}
+    try:
+        _cfg_sv = _srvctl_cfg()
+        if _cfg_sv.get('token'):
+            _c_sv, _t_sv = _asa_http('GET', _cfg_sv['base'] + '/server-status',
+                                     _cfg_sv['token'], None,
+                                     timeout=min(8, int(_cfg_sv.get('timeout') or 8)),
+                                     verify=_cfg_sv.get('verify'))
+            if 200 <= _c_sv < 300:
+                _doc_sv = json.loads(_t_sv) or {}
+                _rev_sv = {}
+                for _k_sv, _v_sv in SERVER_THEMES.items():
+                    _rev_sv[(_v_sv or {}).get('name') or ''] = _k_sv
+                for _it_sv in (_doc_sv.get('servers') or []):
+                    _pn_sv = str(_it_sv.get('ProfileName') or '')
+                    _sid_sv = _pn_sv if _pn_sv in SERVERS else _rev_sv.get(_pn_sv, '')
+                    _sv_sv = _extract_ver(str(_it_sv.get('ServerVersion') or ''))
+                    if _sid_sv and _sv_sv:
+                        _srvver[_sid_sv] = _sv_sv
+    except Exception:
+        _sexc('depot_srvver')
+    _offver = ''
+    try:
+        _offver = str(_official_version_ex().get('ver') or '')
+    except Exception:
+        _offver = ''
+    # ④ 组装（buildId 为唯一键）
+    items_map = {}
+
+    def _mk(bid, at, at_rss=False):
+        k = str(bid)
+        it = items_map.get(k)
+        if not it:
+            it = {'buildId': k, 'at': 0, 'atRss': 0, 'manifest': '', 'inferred': False,
+                  'sizeGB': 0, 'srv': [], 'ver': '', 'major': '',
+                  'latest': False, 'hasManifest': False}
+            items_map[k] = it
+        try:
+            it['at'] = max(int(it['at'] or 0), int(at or 0))
+        except Exception:
+            pass
+        # v6407b：显示的「日期」优先用 **SteamDB/Steam 官方发布时间**，
+        #   本机 acf 的 LastUpdated（= 实际下载时间）放 tips，避免两个时间混排看起来乱序
+        if at_rss:
+            try:
+                it['atRss'] = max(int(it.get('atRss') or 0), int(at or 0))
+            except Exception:
+                pass
+        return it
+
+    for e in rss:
+        if str(e.get('buildId') or '').isdigit():
+            _e = _mk(e['buildId'], e.get('at'), True)
+            if e.get('man') and not _e.get('manifest'):
+                _e['manifest'] = str(e['man'])
+                if e.get('verified'):
+                    _e['verified'] = True
+                elif e.get('auto'):
+                    _e['autoMan'] = True
+                else:
+                    _e['manual'] = True
+    if latest_bid.isdigit():
+        _x = _mk(latest_bid, latest_at, True)
+        _x['latest'] = True
+        if latest_man:
+            _x['manifest'] = latest_man
+    _orphan = []
+    for man, lit in local.items():
+        bid = str(lit.get('buildId') or '')
+        if bid.isdigit():
+            _x = _mk(bid, lit.get('at'))
+            if man and not _x.get('manifest'):
+                _x['manifest'] = man
+            for s in (lit.get('srv') or []):
+                if s and s not in _x['srv']:
+                    _x['srv'].append(s)
+            try:
+                _x['sizeGB'] = max(float(_x.get('sizeGB') or 0),
+                                   round(int(lit.get('size') or 0) / 1073741824.0, 2))
+            except Exception:
+                pass
+        else:
+            _orphan.append((man, lit))
+    # 孤立留档（无 buildId）：按时间就近推断（±6 小时），标 inferred（用户口径 A）
+    for man, lit in _orphan:
+        _at = int(lit.get('at') or 0)
+        if not _at or not rss:
+            continue
+        best, bestd = '', None
+        for e in rss:
+            _ea = int(e.get('at') or 0)
+            if not _ea:
+                continue
+            d = abs(_at - _ea)
+            if bestd is None or d < bestd:
+                best, bestd = str(e.get('buildId') or ''), d
+        if not best or bestd is None or bestd > 6 * 3600:
+            continue
+        _x = items_map.get(best)
+        if not _x or _x.get('manifest'):
+            continue
+        _x['manifest'] = man
+        _x['inferred'] = True
+        try:
+            _x['sizeGB'] = max(float(_x.get('sizeGB') or 0),
+                               round(int(lit.get('size') or 0) / 1073741824.0, 2))
+        except Exception:
+            pass
+    # ⑤ 版本号（仅显示）
+    for k, it in items_map.items():
+        _v = ''
+        for s in (it.get('srv') or []):
+            if _srvver.get(s):
+                _v = _srvver[s]
+                break
+        if not _v and it.get('latest') and _offver:
+            _v = _offver
+        it['ver'] = _v
+        _sg = _ver_seg(_v) if _v else None
+        it['major'] = str(_sg[0]) if _sg else ''
+    # ⑤b v6410（用户口径「buildId 26515168 对应的 v 应该也能推断吧？」）：
+    #     版本号**夹逼推断** —— buildId 与版本号同序递增，若两个已知版本号之间
+    #     恰好夹着 gap 个未知点且版本号差正好 gap+1 ⇒ 依次填中间值。
+    #     例：26509035=97.16（Cen/Los 实跑）、26528593=97.18（官方实时），
+    #         中间 26515168 唯一 ⇒ 必为 97.17。
+    #     ⚠ 仅用于**显示**，不参与任何过滤（过滤仍纯 buildId）。
+    try:
+        _seq = sorted(items_map.keys(), key=lambda k: int(k))
+        _known = []
+        for _i4 in range(len(_seq)):
+            _v4 = str(items_map[_seq[_i4]].get('ver') or '')
+            if _v4:
+                _g4 = _ver_seg(_v4)
+                if _g4:
+                    _known.append((_i4, _g4))
+        for _j4 in range(len(_known) - 1):
+            _ia, _ga = _known[_j4]
+            _ib, _gb = _known[_j4 + 1]
+            if str(_ga[0]) != str(_gb[0]):
+                continue
+            _na, _nb2 = int(_ga[1]), int(_gb[1])
+            _gap = _ib - _ia - 1
+            if _gap <= 0 or _gap > 3:
+                continue
+            if _nb2 - _na == _gap + 1:
+                for _m4 in range(_gap):
+                    _k4 = _seq[_ia + 1 + _m4]
+                    items_map[_k4]['ver'] = '%s.%d' % (_ga[0], _na + 1 + _m4)
+                    items_map[_k4]['verGuess'] = True
+    except Exception:
+        _sexc('depot_verguess')
+    # ⑥ **纯 buildId 数值过滤**（主版本窗口）
+    _bids = []
+    for k in items_map.keys():
+        try:
+            _bids.append(int(k))
+        except Exception:
+            pass
+    _maxb = max(_bids) if _bids else 0
+    items = []
+    for k, it in items_map.items():
+        try:
+            _b = int(k)
+        except Exception:
+            continue
+        if _maxb and (_maxb - _b) > DEPOT_SAME_GEN_GAP:
+            continue
+        _show_at = int(it.get('atRss') or 0) or int(it['at'] or 0)
+        it['atTxt'] = (time.strftime('%Y-%m-%d %H:%M', time.localtime(_show_at))
+                       if _show_at else '')
+        it['atLocalTxt'] = (time.strftime('%Y-%m-%d %H:%M', time.localtime(int(it['at'])))
+                            if int(it['at'] or 0) else '')
+        it['hasManifest'] = bool(it.get('manifest'))
+        items.append(it)
+    items.sort(key=lambda x: -int(x.get('buildId') or 0))
+    out['items'] = items
+    out['maxBuildId'] = str(_maxb or '')
+    for it in items:
+        if it.get('major'):
+            out['major'] = it['major']
+            break
+    out['latest'] = {'buildId': latest_bid, 'manifest': latest_man, 'at': latest_at}
+    out['cacheBuildId'] = ''
+    try:
+        out['cacheBuildId'] = str(_upd_cache_status().get('buildId') or '')
+    except Exception:
+        pass
+    _DEPOT_VER_CACHE['ts'] = time.time()
+    _DEPOT_VER_CACHE['data'] = out
+    return out
+
+
+def _steam_cred_key():
+    return _hashlib.pbkdf2_hmac('sha256', _srvctl_secret().encode('utf-8'),
+                                b'dino-steam-cred-v1', 120000, 32)
+
+
+def _steam_cred_enc(pwd):
+    """加密：随机 IV + HMAC-SHA256 密钥流 XOR + 16B MAC（encrypt-then-MAC）"""
+    try:
+        key = _steam_cred_key()
+        iv = os.urandom(16)
+        data = str(pwd).encode('utf-8')
+        ks = b''
+        ctr = 0
+        while len(ks) < len(data):
+            ks += _hmac.new(key, iv + struct.pack('>I', ctr), _hashlib.sha256).digest()
+            ctr += 1
+        ct = bytes(a ^ b for a, b in zip(data, ks))
+        mac = _hmac.new(key, iv + ct, _hashlib.sha256).digest()[:16]
+        return _b64.b64encode(iv + ct + mac).decode('ascii')
+    except Exception:
+        _sexc('steam_cred_enc')
+        return ''
+
+
+def _steam_cred_dec(tok):
+    try:
+        raw = _b64.b64decode(str(tok or '').encode('ascii'))
+        if len(raw) < 33:
+            return ''
+        iv, rest = raw[:16], raw[16:]
+        ct, mac = rest[:-16], rest[-16:]
+        key = _steam_cred_key()
+        if not _hmac.compare_digest(
+                mac, _hmac.new(key, iv + ct, _hashlib.sha256).digest()[:16]):
+            return ''
+        ks = b''
+        ctr = 0
+        while len(ks) < len(ct):
+            ks += _hmac.new(key, iv + struct.pack('>I', ctr), _hashlib.sha256).digest()
+            ctr += 1
+        return bytes(a ^ b for a, b in zip(ct, ks)).decode('utf-8', 'replace')
+    except Exception:
+        return ''
+
+
+def _steam_cred_load():
+    try:
+        with open(STEAM_CRED_FILE, 'r', encoding='utf-8') as f:
+            d = json.load(f)
+        return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
+
+
+def _steam_cred_save(d):
+    try:
+        with open(STEAM_CRED_FILE + '.tmp', 'w', encoding='utf-8') as f:
+            json.dump(d, f, ensure_ascii=False, indent=1)
+        os.replace(STEAM_CRED_FILE + '.tmp', STEAM_CRED_FILE)
+        return True
+    except Exception:
+        _sexc('steam_cred_save')
+        return False
+
+
+def _steam_cred_list():
+    d = _steam_cred_load()
+    out = []
+    for u, it in (d.get('accounts') or {}).items():
+        it = it or {}
+        out.append({'user': u, 'hasPwd': bool(it.get('enc')), 'at': it.get('at') or ''})
+    out.sort(key=lambda x: str(x.get('user') or '').lower())
+    return out
+
+
+def _steam_cred_set(user, pwd):
+    u = str(user or '').strip()
+    if not u:
+        return {'ok': False, 'error': 'need user'}
+    d = _steam_cred_load()
+    acc = d.get('accounts')
+    if not isinstance(acc, dict):
+        acc = {}
+    it = acc.get(u) or {}
+    if pwd:
+        it['enc'] = _steam_cred_enc(pwd)
+        if not it['enc']:
+            return {'ok': False, 'error': 'encrypt failed'}
+    it['at'] = time.strftime('%Y-%m-%d %H:%M:%S')
+    acc[u] = it
+    d['accounts'] = acc
+    if not _steam_cred_save(d):
+        return {'ok': False, 'error': 'save failed'}
+    return {'ok': True, 'accounts': _steam_cred_list()}
+
+
+def _steam_cred_get(user):
+    d = _steam_cred_load()
+    it = (d.get('accounts') or {}).get(str(user or '')) or {}
+    return _steam_cred_dec(it.get('enc') or '')
+
+
+def _cache_force_rm(p):
+    """Windows 下强制删除（先摘只读再删）"""
+    def _onerr(func, path, exc):
+        try:
+            os.chmod(path, _stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+    if os.path.isdir(p) and not os.path.islink(p):
+        shutil.rmtree(p, onerror=_onerr)
+    else:
+        try:
+            os.chmod(p, _stat.S_IWRITE)
+        except Exception:
+            pass
+        os.remove(p)
+
+
+def _cache_purge_dir(path, keep=()):
+    r"""清空目录内容（`keep` 内名字大小写不敏感保留）。返回 (删除数, 失败名列表)。
+    v6417（用户口径「先备份 acf → 清空 D:\Cache → 再复制」）：只覆盖不删除会让旧版本
+    **多出来的文件**残留（如降级时新版新增的 pak/utoc），这里做彻底清理。
+    """
+    n, fail = 0, []
+    if not os.path.isdir(path):
+        return n, fail
+    keep_l = set(str(k).lower() for k in keep)
+    try:
+        names = os.listdir(path)
+    except Exception:
+        return n, [path]
+    for _name in names:
+        if _name.lower() in keep_l:
+            continue
+        try:
+            _cache_force_rm(os.path.join(path, _name))
+            n += 1
+        except Exception as e:
+            fail.append(u'%s(%s)' % (_name, type(e).__name__))
+    return n, fail
+
+
+def _cache_count_files(root):
+    n = 0
+    try:
+        for _r, _ds, _fs in os.walk(root):
+            n += len(_fs)
+    except Exception:
+        pass
+    return n
+
+
+def _cache_copy_tree(src, dst, skip=('steamapps',)):
+    """把 depot 目录内容复制进缓存目录（跳过 steamapps，保留原 acf）"""
+    n = 0
+    for _name in os.listdir(src):
+        if _name.lower() in skip:
+            continue
+        _sp = os.path.join(src, _name)
+        _dp = os.path.join(dst, _name)
+        if os.path.isdir(_sp):
+            for _r, _ds, _fs in os.walk(_sp):
+                _rel = os.path.relpath(_r, _sp)
+                _t = os.path.join(_dp, _rel) if _rel != '.' else _dp
+                if not os.path.isdir(_t):
+                    os.makedirs(_t)
+                for _f in _fs:
+                    _sf = os.path.join(_r, _f)
+                    _tf = os.path.join(_t, _f)
+                    try:
+                        shutil.copy2(_sf, _tf)
+                        n += 1
+                    except Exception:
+                        try:
+                            os.chmod(_tf, _stat.S_IWRITE)
+                            shutil.copy2(_sf, _tf)
+                            n += 1
+                        except Exception:
+                            pass
+        else:
+            try:
+                shutil.copy2(_sp, _dp)
+                n += 1
+            except Exception:
+                pass
+    return n
+
+
+def _sc_dl_ok(buf):
+    """v6429（用户实测取证）：判定 steamcmd 是否**真的已完成 depot 下载**。
+
+    成功日志实证：
+        Waiting for user info...OK
+        Downloading depot 2430931 (221 files, 8946 MB) ...
+        Depot download complete : ".../depot_2430931" (manifest 3083367148300701914)
+        Unloading Steam API...OK
+        Redirecting stderr to '.../logs/stderr.txt'
+        Logging directory: '.../logs'
+        [ 0%] 正在检查            <-- steamcmd 自更新，可能卡住 / 非零退出
+    ⇒ 只要出现 `Depot download complete`，说明下载早已完成，
+      后续自更新阶段的非零退出码**不能**当作失败。
+    """
+    try:
+        low = u'\n'.join(buf).lower()
+    except Exception:
+        return False
+    return ('depot download complete' in low) or ('download complete :' in low)
+
+
+def _sc_noise_lines():
+    """v6429：steamcmd 自更新 / 日志重定向产生的噪声行关键词（不得当错误行展示）"""
+    return (u'redirecting stderr', u'logging directory', u'正在检查',
+            u'正在验证', u'正在安装更新', u'unloading steam api',
+            u'update state', u'[----]')
+
+
+def _sc_err_lines(buf, n=10):
+    """v6421：从 SteamCMD 输出里挑出**关键错误行**。
+    背景：steamcmd 每次启动都会刷 6 行「正在安装更新...」自更新提示，
+    原来只截尾部 8 行 ⇒ 真正的 `ERROR (Timeout)` 被挤出窗口，用户只看到无意义的自更新。
+    v6429：额外剔除自更新 / 日志重定向噪声（如 `[ 0%] 正在检查`）。
+    """
+    keys = ('error', 'failed', 'timeout', 'invalid', 'denied', 'guard',
+            'logging in', 'logged in', 'unable', 'cannot', 'no subscription',
+            'not logged', 'no app', 'missing', 'expired', 'rate limit')
+    _noise = _sc_noise_lines()
+
+    def _is_noise(_x):
+        _l = _x.lower()
+        return any(_k in _l for _k in _noise)
+
+    hit = [x for x in buf if (not _is_noise(x)) and any(k in x.lower() for k in keys)]
+    if not hit:
+        _clean = [x for x in buf if not _is_noise(x)]
+        hit = _clean[-n:] if _clean else buf[-n:]
+    return u'\n'.join(hit[-n:])
+
+
+def _sc_wait_auth(buf):
+    """v6425（用户口径「等待授权不要报失败而是等待才对啊」）：
+    判断这次失败是不是**在等 Steam 设备批准**（手机 App 里点批准那种）。
+    明确的密码错 / 被拒 / 限流 才算真失败，其余一律视为「还在等待授权」。
+    """
+    low = u'\n'.join(buf).lower()
+    for k in ('invalid password', 'logon denied', 'account disabled',
+              'rate limit exceeded', 'no subscription'):
+        if k in low:
+            return False
+    # v6430（用户实测取证「这次又报错，并且报错后手机反而弹批准了」）：
+    #   steamcmd 走**设备批准模式时根本不打印 Guard 字样**，只会
+    #     Logging in user ... -> Retrying... -> Retrying... -> ERROR (Timeout) -> Unloading
+    #   而 Steam App 的推送取决于手机网络（开代理常延迟数分钟）⇒ 常出现
+    #   「后端已判失败退出，手机才弹批准」的时序倒挂。
+    #   ⇒ 只要登录行已出现、且没有明确的密码/权限错误，Timeout/Retrying 一律
+    #     视为**仍在等批准**，保持任务 run 并继续重试（用户口径：等待不报错）。
+    if (('error (timeout)' in low) or ('retrying' in low)) \
+            and (('logging in' in low) or ('logged in' in low) or ('logging in user' in low)):
+        return True
+    for k in ('steam guard', 'waiting for', 'auth code', 'two-factor',
+              'please enter the auth code', 'confirmation'):
+        if k in low:
+            return True
+    return False
+
+
+def _sc_login_failed(buf):
+    low = u'\n'.join(buf).lower()
+    for k in ('error (timeout)', 'logging in', 'logged in', 'invalid password',
+              'steam guard', 'rate limit', 'denied'):
+        if k in low:
+            return True
+    return False
+
+
+def _cache_pull_run(srvuser, manifest, buildid, cred_user):
+    """后台：steamcmd download_depot → 落 D:\\Cache → 写 acf"""
+    key = 'cachepull|%s' % manifest
+
+    def _t(msg, pct, phase='run', err=''):
+        try:
+            _utask_put(key, 'Cache', 'update', srvuser,
+                       label=(u'拉取缓存 · ' + (u'v' + str(buildid) if buildid else str(manifest)[-8:])),
+                       msg=msg, pct=pct, phase=phase, err=err)
+        except Exception:
+            pass
+
+    try:
+        _pwd = _steam_cred_get(cred_user)
+        if not _pwd:
+            _t(u'缺少 Steam 密码', 100, 'fail',
+               u'账号 %s 没有缓存密码，请先在浮窗里填写并保存' % cred_user)
+            return
+        if not os.path.isfile(STEAMCMD_EXE):
+            _t(u'SteamCMD 不存在', 100, 'fail', STEAMCMD_EXE)
+            return
+        _t(u'正在请求 Steam…', 3)
+        # v6417：下载前先清空 SteamCMD 暂存区（download_depot 只增量补，不删旧文件）
+        try:
+            _pn0, _ = _cache_purge_dir(STEAMCMD_CONTENT)
+            if _pn0:
+                _t(u'已清理下载暂存区 %d 项' % _pn0, 4)
+        except Exception:
+            _sexc('cache_pull_purge_staging')
+        _last = [0.0]
+        _SCLOG = os.path.join(os.path.dirname(STEAMCMD_EXE), 'logs', 'console_log.txt')
+
+        def _run_sc(login_args):
+            """跑一次 steamcmd download_depot，返回 (rc, 输出行list)
+
+            v6428（用户口径「我点了好几次批准，任务条还在等待」）实测根因：
+              **steamcmd 把 stdout 写进管道时是块缓冲**，readline() 长时间拿不到新行
+              ⇒ 任务条文案停更在「等批准」，而实际早已登录成功并在下载 3.8 GB。
+              ⇒ 改为读 `logs/console_log.txt` 增量（steamcmd 自己实时落盘，不受管道缓冲影响）。
+            """
+            _cmd = [STEAMCMD_EXE] + list(login_args) + [
+                '+download_depot', UPDATE_APP_ID, UPDATE_DEPOT_ID, str(manifest), '+quit']
+            try:
+                _pos = os.path.getsize(_SCLOG) if os.path.isfile(_SCLOG) else 0
+            except Exception:
+                _pos = 0
+            _p = subprocess.Popen(_cmd, cwd=os.path.dirname(STEAMCMD_EXE),
+                                  stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+            _t1 = time.time()
+            _login_t = [0.0]
+            _dl_on = [False]
+            _ok_at = [0.0]          # v6429：记录「Depot download complete」出现时刻
+            _dep_tot = [0]          # v6432：depot 声明总字节（用于磁盘占用推算进度）
+            _b = []
+
+            def _feed(_s):
+                # v6424：把 steamcmd 每个阶段翻译成任务条可见的中文提示
+                _b.append(_s)
+                if len(_b) > 400:
+                    del _b[:-200]
+                _low = _s.lower()
+                _pm = re.search(r'progress:\s*[\d.]+ \((\d+)/(\d+)\)', _s)
+                if _pm:
+                    try:
+                        _a, _bt = int(_pm.group(1)), max(1, int(_pm.group(2)))
+                        _pc = 40 + int(45.0 * _a / _bt)
+                        if _pc > 85:
+                            _pc = 85
+                        _dl_on[0] = True
+                        if time.time() - _last[0] > 2.0:
+                            _last[0] = time.time()
+                            _t(u'下载中 %d%%（%.1f / %.1f GB）'
+                               % (_pc, _a / 1073741824.0, _bt / 1073741824.0), _pc)
+                        return
+                    except Exception:
+                        pass
+                if 'logging in user' in _low:
+                    _login_t[0] = time.time()
+                    _t(u'正在登录 Steam…（若账号开了 Steam Guard，请先关闭手机代理/VPN，'
+                       u'再到 Steam App 点「批准」）', 8)
+                elif ('steam guard' in _low) or ('auth code' in _low):
+                    _login_t[0] = _login_t[0] or time.time()
+                    _t(u'需要 Steam Guard 验证 —— 请先关闭手机代理/VPN，'
+                       u'再在 Steam App「确认」列表点「批准」', 10)
+                elif ('waiting for' in _low) or ('confirmation' in _low):
+                    _login_t[0] = _login_t[0] or time.time()
+                    _t(u'等待 Steam 确认 —— 请先关闭手机代理/VPN，再点「批准」', 12)
+                elif 'retrying' in _low:
+                    _login_t[0] = _login_t[0] or time.time()
+                    _t(u'Steam 登录重试中…（手机若开着代理请先关闭，再去 App 批准）', 14)
+                elif 'error (timeout)' in _low:
+                    _t(u'Steam 登录超时 —— 手机请先关闭代理/VPN，再到 App「确认」列表批准', 14)
+                elif ('logged in ok' in _low) or ('logged in user' in _low):
+                    _t(u'Steam 登录成功，准备下载…', 20)
+                elif 'depot download complete' in _low:
+                    # v6429：下载完成标记 —— 此后 steamcmd 只剩自更新/退出，不能再算失败
+                    _ok_at[0] = time.time()
+                    _t(u'下载完成，正在收尾…', 86)
+                elif 'missing license' in _low:
+                    _t(u'该 depot 需要账号订阅权限 —— 请确认登录账号拥有 ARK: Survival Ascended', 22)
+                elif 'downloading' in _low:
+                    _dl_on[0] = True
+                    # v6432：解析 `Downloading depot 2430931 (221 files, 8946 MB)` 的声明总大小
+                    try:
+                        # v6435：_low 已 lower() ⇒ 单位是 'mb'/'gb'，不能写大写 MB（v6432 因此永不命中）
+                        _dm = re.search(r'downloading depot \d+ \(\d+ files,\s*([\d.]+)\s*(mb|gb)\)', _low)
+                        if _dm:
+                            _uv = float(_dm.group(1))
+                            _uu = _dm.group(2)
+                            _dep_tot[0] = int(_uv * (1073741824.0 if _uu == 'gb' else 1048576.0))
+                    except Exception:
+                        pass
+                    if time.time() - _last[0] > 2.0:
+                        _last[0] = time.time()
+                        _t(u'下载中… ' + _s[:110], 40)
+
+            while True:
+                _chunk = u''
+                try:
+                    _sz = os.path.getsize(_SCLOG) if os.path.isfile(_SCLOG) else 0
+                    if _sz < _pos:
+                        _pos = 0                     # 文件被重写
+                    if _sz > _pos:
+                        with open(_SCLOG, 'rb') as _f:
+                            _f.seek(_pos)
+                            _raw = _f.read()
+                        _pos += len(_raw)
+                        _chunk = _raw.decode('utf-8', 'replace')
+                except Exception:
+                    _chunk = u''
+                for _s in _chunk.splitlines():
+                    _s = _s.strip()
+                    if _s:
+                        _feed(_s)
+                if _p.poll() is not None:
+                    break
+                # v6432（用户口径「下载阶段进度条完全不跑」）：
+                #   steamcmd 的 `progress: x (a/b)` 只写 stdout（且 \r 原地刷新，块缓冲读不到），
+                #   console_log.txt 只有阶段里程碑 ⇒ 进度卡死 40%。改用**磁盘真实占用**推算。
+                if _dl_on[0] and _dep_tot[0] > 0:
+                    try:
+                        _cur = 0
+                        for _rr, _dd, _ff in os.walk(STEAMCMD_CONTENT):
+                            for _fn in _ff:
+                                try:
+                                    _cur += os.path.getsize(os.path.join(_rr, _fn))
+                                except Exception:
+                                    pass
+                        if time.time() - _last[0] > 2.0:
+                            _last[0] = time.time()
+                            _pc = 40 + int(45.0 * _cur / _dep_tot[0])
+                            if _pc > 85:
+                                _pc = 85
+                            _t(u'下载中 %d%%（%.1f / %.1f GB）'
+                               % (_pc, _cur / 1073741824.0,
+                                  _dep_tot[0] / 1073741824.0), _pc)
+                    except Exception:
+                        pass
+                # v6429：出现「Depot download complete」后 steamcmd 只剩自更新（`[ 0%] 正在检查`），
+                #   该阶段可能长时间不动 / 非零退出 ⇒ 再给 15 秒收尾即主动结束，避免误判失败。
+                if _ok_at[0] and (time.time() - _ok_at[0] > 15):
+                    try:
+                        _p.kill()
+                    except Exception:
+                        pass
+                    _b.append(u'[完成] 下载已完成，跳过自更新阶段')
+                    break
+                if time.time() - _t1 > 5400:
+                    try:
+                        _p.kill()
+                    except Exception:
+                        pass
+                    _b.append(u'[超时] 已终止（90 分钟）')
+                    break
+                time.sleep(2)
+            _rc = _p.wait()
+            # v6429：只要取到「Depot download complete」，无论退出码如何一律判成功
+            try:
+                if _rc != 0 and _sc_dl_ok(_b):
+                    _b.append(u'[已修正] 下载已完成，忽略 steamcmd 退出码 %d' % _rc)
+                    _rc = 0
+            except Exception:
+                pass
+            return _rc, _b
+
+        # v6429（用户口径「anonymous 优先逻辑要去掉」）：
+        #   一律用**自己的账号**登录 —— anonymous 对本 depot 无订阅权限，
+        #   还会把真实的登录问题掩盖成「权限不足」。
+        _t(u'⚠ 即将登录 Steam —— 若账号开了 Steam Guard：请**先关闭手机的代理/VPN**，'
+           u'再打开手机 Steam App，在「确认 / 批准」列表里点「批准」登录（约 60 秒内有效）', 10)
+        _rc, _buf = _run_sc(['+login', str(cred_user), _pwd])
+        # v6425（用户口径「等待授权不要报失败而是等待才对啊」）：
+        #   steamcmd 登录超时通常是「在等手机 App 批准」。这不是失败，是**还没批**。
+        #   ⇒ 保持任务 run（不写 fail），自动重新拉起 steamcmd 再等一轮。
+        _guard_round = 0
+        _GUARD_MAX = 6          # 最多 6 轮（每轮约 105 秒 ≈ 总计 11 分钟等待窗）
+        # v6430（用户实测「报错后手机才弹批准」）：手机推送常晚于单轮 105 秒，
+        #   轮间距缩短到 10 秒 —— 让批准弹窗到达时尽快有一轮 steamcmd 在线接住。
+        _GUARD_GAP = 10
+        while (_rc != 0 and _guard_round < _GUARD_MAX and _sc_wait_auth(_buf)):
+            _guard_round += 1
+            # 倒计时（每 5 秒刷一次任务条，让用户看到确实在等而不是卡死）
+            _seg = _GUARD_GAP // 5
+            for _k in range(_seg):
+                _left = _GUARD_GAP - _k * 5
+                _t(u'等待设备批准 —— %d 秒后发起第 %d/%d 次登录。'
+                   u'手机请**先关闭代理/VPN**，再打开 Steam App 底部「确认」列表找待批记录点「批准」'
+                   u'（没弹推送时列表里通常仍有记录）'
+                   % (_left, _guard_round, _GUARD_MAX), 15)
+                time.sleep(5)
+            _t(u'正在发起第 %d/%d 次 Steam 登录 —— 手机先关闭代理/VPN，'
+               u'再立刻在 Steam App 点「批准」' % (_guard_round, _GUARD_MAX), 16)
+            _rc, _buf = _run_sc(['+login', str(cred_user), _pwd])
+            if _rc == 0:
+                _t(u'设备批准通过，Steam 登录成功', 20)
+                break
+        _tail = u'\n'.join(_buf[-8:])
+        if _rc != 0:
+            # v6424：登录类失败一律附「用 Steam 客户端/手机 App 批准」的具体指引
+            _hint = u''
+            _lowf = u'\n'.join(_buf).lower()
+            if ('error (timeout)' in _lowf) and (not _sc_wait_auth(_buf)) \
+                    and ('invalid password' not in _lowf) and ('logon denied' not in _lowf):
+                _hint = (u'【判断】登录请求发出后 Steam 长时间无回应（每轮约 105 秒 × 多轮）。\n'
+                         u'最常见原因是**手机端的批准弹窗来得太晚**（推送要过手机网络；'
+                         u'手机开着代理/VPN 时常常延迟数分钟，甚至后端已放弃才到）。\n'
+                         u'请这样做：① 手机**先关掉代理/VPN**（系统代理 / Clash / Shadowrocket 等）；\n'
+                         u'② 打开 Steam App 底部「确认」->「登录请求」列表，找待批记录点「批准」；\n'
+                         u'③ 批准后**立刻**再点一次「开始拉取」（新开一轮 105 秒窗口），'
+                         u'不要等弹窗提示再点。\n\n')
+            elif _sc_login_failed(_buf):
+                _hint = (u'【需要你做什么】账号开启了 Steam Guard，需要你在手机上批准这次登录：\n'
+                         u'  1) 打开手机 Steam App -> 底部「确认」（盾牌）图标 -> 「登录请求」列表\n'
+                         u'  2) 找到本次登录并点「批准」（**手机没弹推送时，列表里通常仍有记录**）\n'
+                         u'  3) 批准后立刻回到本页再点一次「开始拉取」—— 全程只有这次登录需要批准\n'
+                         u'  4) 一旦成功登录过一次，steamcmd 会把授权缓存到本机（ConnectCache），\n'
+                         u'     之后拉取就不会再要求批准了\n'
+                         u'注意：批准只在 steamcmd 登录的那个 60 秒窗口内有效，'
+                         u'错过了就要重新点一次「开始拉取」再批。\n\n')
+            _t(u'Steam 登录/下载失败', 100, 'fail', _hint + _sc_err_lines(_buf, 10)[:900])
+            return
+        if not os.path.isdir(STEAMCMD_CONTENT):
+            _t(u'下载目录不存在', 100, 'fail', STEAMCMD_CONTENT + u'\n' + _tail[:300])
+            return
+        # v6417：清空缓存前先校验下载内容，避免「rc=0 但目录空」把缓存清成空
+        # v6431（用户实测 2026-11-09）：steamcmd 报 `221 files` 是**下载条目数**，
+        #   落盘实际只有 152 个（条目合并/共享），但 11.41 GB 内容完全正确、日志有
+        #   `Depot download complete`。硬编码 500 会把好数据判成坏数据 ⇒ 缓存永远落不了地。
+        #   ⇒ 权威判据改为 steamcmd 自己的完成标记；文件数/大小只做兜底底线。
+        _got = _cache_count_files(STEAMCMD_CONTENT)
+        _size_gb = 0.0
+        try:
+            _tb = 0
+            for _r2, _d2, _f2 in os.walk(STEAMCMD_CONTENT):
+                for _fn2 in _f2:
+                    try:
+                        _tb += os.path.getsize(os.path.join(_r2, _fn2))
+                    except Exception:
+                        pass
+            _size_gb = _tb / 1073741824.0
+        except Exception:
+            pass
+        _dl_done = False
+        try:
+            _dl_done = _sc_dl_ok(_buf)
+        except Exception:
+            _dl_done = False
+        _ok_content = (_dl_done and _got >= 20 and _size_gb >= 1.0) or (_got >= 500)
+        if not _ok_content:
+            _t(u'下载内容异常（%d 个文件 / %.2f GB），已中止 —— 缓存未做任何改动'
+               % (_got, _size_gb), 100, 'fail',
+               (u'steamcmd 完成标记=%s\n' % (u'有' if _dl_done else u'无')) + _tail[:400])
+            return
+        _acf = os.path.join(UPDATE_CACHE_PATH, 'steamapps', UPDATE_ACF_NAME)
+        # ① 备份 acf
+        _bak = ''
+        try:
+            if os.path.isfile(_acf):
+                _bak = _acf + '.bak_' + time.strftime('%Y%m%d_%H%M%S')
+                shutil.copy2(_acf, _bak)
+                _t(u'已备份 acf → ' + os.path.basename(_bak), 82)
+        except Exception as e:
+            _sexc('cache_pull_acf_bak')
+            _t(u'acf 备份失败，已中止（缓存未清空）', 100, 'fail', repr(e)[:300])
+            return
+        # ② 清空 D:\Cache（保留 steamapps 与其中 acf）
+        _t(u'清空缓存目录…', 84)
+        try:
+            _dn1, _df1 = _cache_purge_dir(UPDATE_CACHE_PATH, keep=('steamapps',))
+            _dn2, _df2 = _cache_purge_dir(
+                os.path.join(UPDATE_CACHE_PATH, 'steamapps', 'downloading'))
+            _t(u'已清空缓存 %d 项（暂存 %d 项）' % (_dn1, _dn2), 86)
+            if _df1 or _df2:
+                _sexc('cache_pull_purge_cache',
+                      u'部分残留: ' + u','.join((_df1 + _df2)[:6]))
+        except Exception as e:
+            _sexc('cache_pull_purge_cache')
+            _t(u'缓存清空失败，已中止（acf 已备份：%s）'
+               % (os.path.basename(_bak) or '-'), 100, 'fail', repr(e)[:300])
+            return
+        # ③ 再复制
+        _t(u'回写缓存目录…（复制文件）', 88)
+        _n = _cache_copy_tree(STEAMCMD_CONTENT, UPDATE_CACHE_PATH)
+        _t(u'回写完成，正在写 acf…（%d 个文件）' % _n, 94)
+        try:
+            _t2 = open(_acf, encoding='utf-8', errors='replace').read()
+            _t3 = _upd_patch_acf_text(_t2, buildid or '', str(manifest), '', int(time.time()))
+            open(_acf + '.tmp', 'w', encoding='utf-8').write(_t3)
+            os.replace(_acf + '.tmp', _acf)
+        except Exception as e:
+            _sexc('cachepull_acf')
+            _t(u'文件已落，但 acf 写入失败', 95, 'fail', repr(e)[:300])
+            return
+        try:
+            _depot_ver_cache_clear()      # v6425：拉完立刻让版本池反映新缓存
+        except Exception:
+            pass
+        _t(u'完成：已拉到该版本（复制 %d 个文件）' % _n, 100, 'ok')
+    except Exception as e:
+        _sexc('cachepull')
+        try:
+            _t(u'异常', 100, 'fail', repr(e)[:400])
+        except Exception:
+            pass
+
+
+def _cache_pull_start(srvuser, manifest, buildid, cred_user):
+    key = 'cachepull|%s' % manifest
+    try:
+        _utask_put(key, 'Cache', 'update', srvuser,
+                   label=u'拉取缓存 · ' + (u'v' + str(buildid) if buildid else str(manifest)[-8:]),
+                   msg=u'排队中…', pct=1)
+    except Exception:
+        pass
+    th = threading.Thread(target=_cache_pull_run,
+                          args=(srvuser, str(manifest), str(buildid or ''), str(cred_user)),
+                          daemon=True)
+    th.start()
+    return {'ok': True, 'key': key}
+
+
 def _upd_cache_status():
     """缓存状态：ASAM 的 Cache Manager 顶部那一栏 + 「是否可以分发」"""
     d = UPDATE_CACHE_PATH
@@ -11588,11 +13032,61 @@ def _upd_server_status(srv):
                        if str(a.get('sizeOnDisk') or '').isdigit() else 0)}
 
 
+# ===== v6397（用户口径「4 个卡片的本地包要加一个 待升级状态，只跟权威线上最新版本号对比」）=====
+#   缓存卡的「权威线上最新版本号」= Steam 官方最新 buildId。
+#   数据源 api.steamcmd.net（公开、免 key、实测可用）：
+#     data.<appid>.depots.branches.public.buildid
+#     data.<appid>.depots.<depotid>.manifests.public.gid
+#   ⚠ Steam 官方 ISteamApps/UpToDateCheck 对 ASA(2430930) 直接返回
+#     {"success":false,"error":"Couldn't get app info for the app specified."} —— 已实测不可用。
+STEAM_INFO_URL = 'https://api.steamcmd.net/v1/info/%s' % UPDATE_APP_ID
+STEAM_INFO_TTL = 600.0
+_STEAM_INFO = {'at': 0.0, 'buildid': '', 'manifest': '', 'timeupdated': 0, 'err': ''}
+
+
+def _steam_latest_build(force=False):
+    """Steam 官方最新 buildId / depot manifest（10 分钟缓存；失败保留旧值不抛）"""
+    now = time.time()
+    if (not force) and _STEAM_INFO.get('buildid') \
+            and (now - float(_STEAM_INFO.get('at') or 0) < STEAM_INFO_TTL):
+        return dict(_STEAM_INFO)
+    try:
+        # v6397c：模块级没有 _ur（那是 _offi_get 里的局部 import），照抄会 NameError。
+        #   直接复用 _offi_get —— 它已内置 UA 头 + 证书校验失败时降级不校验。
+        j = json.loads(_offi_get(STEAM_INFO_URL, timeout=15))
+        d = ((j.get('data') or {}).get(UPDATE_APP_ID) or {})
+        br = ((d.get('depots') or {}).get('branches') or {}).get('public') or {}
+        dp = (d.get('depots') or {}).get(UPDATE_DEPOT_ID) or {}
+        _STEAM_INFO.update({'at': now,
+                            'buildid': str(br.get('buildid') or ''),
+                            'manifest': str((((dp.get('manifests') or {}).get('public')) or {}).get('gid') or ''),
+                            'timeupdated': int(br.get('timeupdated') or 0),
+                            'err': ''})
+    except Exception as e:
+        _STEAM_INFO.update({'at': now,
+                            'err': '%s:%s' % (type(e).__name__, str(e)[:120])})
+    return dict(_STEAM_INFO)
+
+
 def _upd_status(include_players=False):
     """完整状态：缓存 + 11 台对比 + 落后清单
     include_players=True 时逐台查在线人数（慢，仅前端点「刷新」时用）"""
     cache = _upd_cache_status()
     cbuild = cache.get('buildId') or ''
+    # v6397：缓存卡的「本地包待升级」判据 —— 本地缓存 buildId vs Steam 官方最新 buildId
+    try:
+        _st = _steam_latest_build()
+        _lb = str(_st.get('buildid') or '')
+        cache['latestBuildId'] = _lb
+        cache['latestManifest'] = str(_st.get('manifest') or '')
+        cache['latestAt'] = (time.strftime('%Y-%m-%d %H:%M', time.localtime(int(_st.get('timeupdated') or 0)))
+                             if int(_st.get('timeupdated') or 0) else '')
+        cache['latestErr'] = str(_st.get('err') or '')
+        cache['needUpgrade'] = bool(_lb and cbuild and _lb != str(cbuild))
+    except Exception as e:
+        cache['latestBuildId'] = ''
+        cache['latestErr'] = '%s:%s' % (type(e).__name__, str(e)[:120])
+        cache['needUpgrade'] = False
     out = []
     for srv in sorted(SERVERS.keys()):
         s = _upd_server_status(srv)
@@ -11652,8 +13146,10 @@ def _vnum(s):
 
 def _ver_kind(old, new):
     """v6230（**用户纠正后的最终口径，只从版本号判断**）
-       · **主版本整数部分**变化：96.x -> 97.x  => forced（强制，不更新玩家进不来）
-       · **仅小数部分**变化：96.9 -> 96.13     => patch （非强制，客户端仍可进）
+       · **主版本整数部分**变化：96.x -> 97.x  => forced（强制：**服务器不更新，玩家就进不来**）
+       · **仅小数部分**变化：96.9 -> 96.13     => patch （非强制：**服务器不更新，玩家也能进**）
+         v6453（用户纠正·主体搞反）：客户端由 Steam 自动更新、永远是新版
+         ⇒ 本函数判的始终是「**服务器**要不要更新」，不是玩家要不要更新
        · 完全一致                              => same
        · 无法解析                              => unknown
        ⚠ 已废除两版旧规则：
@@ -11679,6 +13175,17 @@ def _asaapi_state(cards=None):
     try:
         meta = {'updated': '', 'fetchedAt': 0, 'total': 0, 'hit': False}
         if cards is None:
+            # v6395（真根因收尾 · 用户口径「补上」）：
+            #   api_cache 缓存只有资讯广场前端按需请求时才刷新，本函数却**直接 open 文件**、
+            #   绕开 _news_read ⇒ 不开资讯就永远读旧内容（分发确认浮窗的
+            #   「Automated Cache Build」原文与 officialCacheState 一起滞后）。
+            #   lbUpdFetch 并发打 /api/update/status 与 /api/api/status，谁先返回不确定，
+            #   光靠 _api_discord_latest 刷新会出现首帧读旧值。这里补一次按需刷新，
+            #   _news_refresh 自带 60s 全局冷却 + 全局锁，冷却期内零网络开销、失败不抛。
+            try:
+                _news_refresh('api_cache')
+            except Exception:
+                pass
             doc = {}
             try:
                 with open(_news_path('api_cache'), encoding='utf-8') as f:
@@ -11897,8 +13404,25 @@ def mods_status():
                             best_ts, best = tsv, fid
         base_fid[pid] = best
     conform_n = sum(1 for sv in servers.values() if sv.get('conform'))
+    # v6397（用户口径「不光要加进面板，还要影响对于最新版的判断」）：
+    #   每个 pid 查 **CurseForge 最新文件**（走 _mods_cf_files，10 分钟缓存；未配 cf_key 时为空）。
+    #   前端「最新版」判定与「本地包待升级」都以它为准，不再拿「已装服里 mtime 最新的 fid」当最新。
+    cf_latest = {}
+    for _pid in groups.keys():
+        try:
+            _fl = _mods_cf_files(_pid)
+            if _fl:
+                _f0 = _fl[0]
+                cf_latest[_pid] = {
+                    'fid': str(_f0.get('id') or ''),
+                    'name': str(_f0.get('displayName') or _f0.get('fileName') or ''),
+                    'at': str(_f0.get('fileDate') or '')[:19].replace('T', ' '),
+                    'dl': int(_f0.get('downloadCount') or 0),
+                }
+        except Exception:
+            _sexc('mods_cf_latest')
     data = {'ok': True, 'gameId': MODS_GAMEID, 'servers': servers, 'groups': groups,
-            'policy': policy, 'baseFid': base_fid,
+            'policy': policy, 'baseFid': base_fid, 'cfLatest': cf_latest,
             'localPack': _mods_local_pack(),
             'conformCount': conform_n, 'serverCount': len(SERVERS),
             'totalBytes': total, 'reclaimableBytes': reclaim,
@@ -11984,6 +13508,19 @@ def _dc_msg_text(m):
 def _api_discord_latest():
     """v6288（用户口径）：最新 API 信息取自 Discord 接口抓取缓存（api_ver / api_cache），零网络"""
     out = {}
+    # v6393（真根因 · 用户口径「不是应该找到为啥你拉到的 Discord 官方公告号是旧的么」
+    #        「官方缓存 后面的 已就绪，也滞后，应该也是同一个根因」「我发现我必须手动打开过资讯 你才更新」）：
+    #   api_ver / api_cache 两份缓存**只有资讯广场前端按需请求时**才会调 _news_refresh 去 Discord 抓，
+    #   不开资讯就永远读旧文件 ⇒「库」最新版（latest.verNum）与「官方缓存」状态（officialCacheState）
+    #   一起滞后（用户本地包已 2.11，这里还返回 2.1）。
+    #   ⇒ 读数前先按需刷新一次。_news_refresh 自带全局冷却（NEWS_COOL_SEC=60s）与全局锁，
+    #     冷却期内零网络开销；抓取失败不抛（保留旧缓存，行为与原来一致）。
+    #   成本上界：api_status() 自身 _API_CACHE TTL=30s ⇒ 最多每 60s 打 2 个频道各一次。
+    for _tid in ('api_ver', 'api_cache'):
+        try:
+            _news_refresh(_tid)
+        except Exception:
+            pass
     try:
         d = _news_read('api_ver') or {}
         ms = [x for x in (d.get('messages') or []) if isinstance(x, dict)]
@@ -11991,7 +13528,11 @@ def _api_discord_latest():
             t = _dc_msg_text(ms[-1])
             out['verAt'] = _dc_ts_local(ms[-1].get('timestamp'))
             out['verText'] = t[:600]
-            mv = re.search(r'(?i)AsaApi\s*v?([0-9]+(?:\.[0-9]+)+)', t)
+            # v6393（真根因 · 第二层）：Discord 公告标题格式已从「AsaApi v2.1 released」
+            #   变成「[ASA: Server API v2.11] released」—— 只认 AsaApi 的老正则抓不到 ⇒ verNum 为空，
+            #   前端「库」行变 v?、库需升级判定全失效。放宽为三种常见写法，再兜底取首个 vX.Y+。
+            mv = (re.search(r'(?i)(?:AsaApi|Server\s*API|ASA[:\s\-]*API)\s*[:\-]?\s*v?([0-9]+(?:\.[0-9]+)+)', t)
+                  or re.search(r'(?i)\bv([0-9]+(?:\.[0-9]+)+)', t))
             out['verNum'] = mv.group(1) if mv else ''
     except Exception as e:
         out['verErr'] = repr(e)
@@ -12033,6 +13574,31 @@ def _lib_needs_upgrade(_dc, lib):
         return False
 
 
+def _asa_lib_ver_map():
+    """v6399（真根因）：dll size -> AsaApi 版本号。
+       **以本地包目录名（_upd_cache/_apipkg/<版本>/ArkApi/AsaApi.dll）为准动态生成**，
+       硬编码 ASA_API_VER_BY_SIZE 仅作兜底。
+       根因：Bob 分发 2.11 后 dll=7351808 字节，硬编码表没有这一项 ⇒ dllVer='' ⇒
+             前端 `_libGrp` 把它归进「未检测到 dll」灰段（用户报「AsaApi 显示 Bob 未检测到 dll」）。
+       以后本地包一升级就会自动识别，不再需要人工补表。"""
+    m = dict(ASA_API_VER_BY_SIZE)
+    try:
+        root = _asa_pkg_root()
+        if os.path.isdir(root):
+            for x in os.scandir(root):
+                if not x.is_dir():
+                    continue
+                p = os.path.join(x.path, 'ArkApi', 'AsaApi.dll')
+                if os.path.isfile(p):
+                    try:
+                        m[os.path.getsize(p)] = x.name      # 目录名即版本号（如 2.11）
+                    except Exception:
+                        pass
+    except Exception:
+        _sexc('asa_lib_ver_map')
+    return m
+
+
 def api_status():
     """API 卡数据：库一致性 + 缓存就绪 + 插件矩阵（纯只读）"""
     now = time.time()
@@ -12042,6 +13608,7 @@ def api_status():
     lib, cache, plugs = {}, {}, {}
     lib_sig = {}
     _diag2 = {}
+    _lib_vermap = _asa_lib_ver_map()          # v6399：本地包优先，硬编码兜底
     for srv in SERVERS.keys():
         win = _srv_win64(srv)
         dll = os.path.join(win, 'ArkApi', 'AsaApi.dll')
@@ -12052,7 +13619,7 @@ def api_status():
             dsz = os.path.getsize(dll)
             dmt = _mt_str(dll)
         lib[srv] = {'dllExists': os.path.isfile(dll), 'dllSize': dsz, 'dllMtime': dmt,
-                    'dllVer': ASA_API_VER_BY_SIZE.get(dsz, ''),
+                    'dllVer': _lib_vermap.get(dsz, ''),
                     'loaderSize': (os.path.getsize(ld) if os.path.isfile(ld) else 0),
                     'loaderMtime': _mt_str(ld), 'hasCfg': os.path.isfile(cfg)}
         lib_sig.setdefault('%s|%s' % (dsz, dmt), []).append(srv)
@@ -12144,6 +13711,18 @@ def api_status():
     except Exception:
         _sexc('api_need_by_srv')
         _need_map = {}
+    # v6397（用户口径「4 个卡片的本地包要加一个 待升级状态，只跟权威线上最新版本号对比」）：
+    #   API 卡本地包 —— 只与**权威线上最新**（Discord 公告 latest.verNum）比，
+    #   不与「SOK 自研源版本」或「各服已装版本」比（那两个是分发源 / 现状，不是线上最新）。
+    try:
+        _nv = lambda x: str(x or '').strip().lstrip('vV')
+        _alp_v = str(_lp_fix.get('ver') or '')
+        _lat_v = str(_dc.get('verNum') or '')
+        _lp_fix['latestVer'] = _lat_v
+        _lp_fix['needUpgrade'] = bool(_alp_v and _lat_v and _nv(_alp_v) != _nv(_lat_v))
+    except Exception:
+        _lp_fix['latestVer'] = ''
+        _lp_fix['needUpgrade'] = False
     data = {'ok': True,
             'apiNeed': _need_map,          # v6349：每服插件是否需要分发（与分发同源）
             'requiredPlugins': list(API_REQUIRED_PLUGINS),
@@ -12422,7 +14001,7 @@ def _api_local_pack():
 #     · 746 MB 包 76 秒下完；解压后 <root>/<root>.uplugin + Content/Paks/WindowsServer/*.{pak,ucas,utoc}
 MODS_PKG_ROOT_NAME = '_modpkg'
 MODS_CF_TTL = 600.0
-_MODS_CF = {'files': {}}
+_MODS_CF = {'files': {}, 'meta': {}}
 
 
 def _cf_key():
@@ -12430,6 +14009,31 @@ def _cf_key():
         return str((_srv_cfg_read() or {}).get('cf_key') or '').strip()
     except Exception:
         return ''
+
+
+def _gkey():
+    """v6457：Google API Key（Drive v3 用）—— 浏览器直连源站必需；仅存服务器本地"""
+    try:
+        return str((_srv_cfg_read() or {}).get('google_api_key') or '').strip()
+    except Exception:
+        return ''
+
+
+def _drive_v3_url(fid):
+    """v6457：Drive v3 直链（带 key）—— www.googleapis.com 有 CORS，浏览器可直接下载
+       实测：drive.usercontent / drive.google.com/uc 都**无** Access-Control-Allow-Origin，
+            只有 www.googleapis.com/drive/v3 有 ⇒ 前端只能走这条。"""
+    fid = str(fid or '').strip()
+    k = _gkey()
+    if not fid:
+        return u''
+    if not k:
+        return u''
+    try:
+        from urllib.parse import quote as _q
+    except Exception:
+        _q = lambda s, safe='': str(s)
+    return u'https://www.googleapis.com/drive/v3/files/%s?alt=media&key=%s' % (fid, _q(k, safe=''))
 
 
 def _cf_api(path):
@@ -12462,18 +14066,34 @@ def _mods_cf_files(pid, force=False):
     return data
 
 
-def _mods_cf_name(pid):
-    """v6360：MOD 展示名（CurseForge name，如 Fear Ascended）—— 任务条不能拿 projectId 当名字"""
+def _mods_cf_meta(pid):
+    """v6470：MOD 元信息（name / slug / CurseForge 页面地址）。
+       「作者限制第三方分发」的 MOD（官方 CDN 返回 403）必须引导用户去网页手动下载，
+       而页面地址要靠 slug 拼（projectId 拼不出来）⇒ 这里缓存一份，供
+       /api/mods/client/file 直接下发；同一次 /v1/mods/<pid> 请求顺带拿展示名。"""
     pid = str(pid or '')
-    cc = _MODS_CF.setdefault('names', {}).get(pid)
+    cc = _MODS_CF.setdefault('meta', {}).get(pid)
     if cc:
         return cc
     s, j = _cf_api('/v1/mods/%s' % pid)
-    nm = u''
-    if s == 200:
-        nm = str(((j.get('data') or {}).get('name') or u'')).strip()
+    d = (j.get('data') or {}) if s == 200 else {}
+    slug = str(d.get('slug') or u'').strip()
+    page = str(((d.get('links') or {}) or {}).get('websiteUrl') or u'').strip()
+    if not page and slug:
+        page = u'https://www.curseforge.com/ark-survival-ascended/mods/' + slug
+    m = {'name': str(d.get('name') or u'').strip(), 'slug': slug, 'page': page}
+    if m['name'] or m['page']:
+        _MODS_CF.setdefault('meta', {})[pid] = m
+    return m
+
+
+def _mods_cf_name(pid):
+    """v6360：MOD 展示名（CurseForge name，如 Fear Ascended）—— 任务条不能拿 projectId 当名字
+       v6470：改为复用 _mods_cf_meta（同一次 /v1/mods/<pid> 请求，省一次 API 调用）"""
+    pid = str(pid or '')
+    nm = str((_mods_cf_meta(pid) or {}).get('name') or u'')
     if nm:
-        _MODS_CF['names'][pid] = nm
+        _MODS_CF.setdefault('names', {})[pid] = nm
     return nm
 
 
@@ -12483,6 +14103,40 @@ def _mods_cf_server_file(pid):
         if u'windowsserver' in str(f.get('fileName') or '').lower():
             return f
     return None
+
+
+# v6464（用户口径「MOD 部署到本机 给个不经过服务器的方案」）：浏览器直连 CurseForge CDN
+#   实测（2026-11-09）：只有 **mediafiles.forgecdn.net** 给 Access-Control-Allow-Origin，
+#     edge.forgecdn.net / mediafilez.forgecdn.net 均被 CORS 挡住。
+#   所以候选主机必须 **mediafiles 在最前**，且不一定每个文件都在该主机上（Club ARK 9418028 在 mediafiles 上是 403）
+#     ⇒ 返回**多个候选 URL**，前端一个个试，全失败再回落「从服务器拷贝」
+MODS_CF_CLIENT_HOSTS = (u'mediafiles.forgecdn.net', u'edge.forgecdn.net', u'mediafilez.forgecdn.net')
+
+
+def _mods_cf_client_file(pid):
+    """挑「客户端包」：windows 平台（排除 windowsserver / ps5 / xbox），取最新"""
+    for f in _mods_cf_files(pid):
+        fn = str(f.get('fileName') or '').lower()
+        if not fn.endswith(u'.zip'):
+            continue
+        if u'windowsserver' in fn or u'ps5' in fn or u'xbox' in fn:
+            continue
+        if u'windows' in fn:
+            return f
+    return None
+
+
+def _mods_cf_client_urls(pid):
+    """客户端包 CDN 候选直链（mediafiles 优先）→ (urls, fid, fileName)"""
+    f = _mods_cf_client_file(pid)
+    if not f:
+        return [], u'', u''
+    fid = str(f.get('id') or '')
+    fn = str(f.get('fileName') or '')
+    if not fid or not fn:
+        return [], fid, fn
+    return ([u'https://%s/files/%s/%s/%s' % (h, fid[:4], fid[4:], fn)
+             for h in MODS_CF_CLIENT_HOSTS], fid, fn)
 
 
 MODS_CF_HOSTS = (u'mediafilez.forgecdn.net', u'edge.forgecdn.net', u'mediafiles.forgecdn.net')
@@ -12515,6 +14169,137 @@ def _mods_cf_cdn_url(pid):
 
 def _mods_pkg_dir(pid, fid):
     return os.path.join(_upd_cache_dir(), MODS_PKG_ROOT_NAME, '%s_%s' % (pid, fid))
+
+
+# ===== v6452（用户口径「汉化包/MOD 底栏左侧加部署到本机」）=====
+#   浏览器用 File System Access API 直写用户 PC 的游戏目录，这里只负责**提供文件**。
+#   · zh   → D:\Cache-zh\<ver>\ 仅白名单 3 个文件（与服务端分发同源）
+#   · mods → _upd_cache\_modpkg\<pid>_<fid>\ 整目录
+def _pkg_local_zh_root():
+    """汉化包当前版本目录 —— v6453：pak 实际在 <ver>/paks/ 下（_zh_cache_ready 同口径）"""
+    try:
+        v = str(_zh_local_ver() or '')
+    except Exception:
+        v = ''
+    if not v:
+        return u'', u''
+    base = os.path.join(ZH_CACHE_ROOT, v)
+    for sub in ('paks', ''):
+        d = os.path.join(base, sub) if sub else base
+        if not os.path.isdir(d):
+            continue
+        try:
+            names = set(os.listdir(d))
+        except Exception:
+            names = set()
+        if names & set(ZH_PKG_WHITELIST):
+            return d, v
+    d = os.path.join(base, 'paks')
+    if os.path.isdir(d):
+        return d, v
+    return (base, v) if os.path.isdir(base) else (u'', u'')
+
+
+def _pkg_local_walk(root):
+    """递归列文件 → [{rel, size}]（rel 用 / 分隔）"""
+    out = []
+    for r, ds, fs in os.walk(root):
+        for f in fs:
+            fp = os.path.join(r, f)
+            try:
+                sz = os.path.getsize(fp)
+            except Exception:
+                continue
+            out.append({'rel': os.path.relpath(fp, root).replace(os.sep, '/'), 'size': sz})
+    out.sort(key=lambda x: x['rel'])
+    return out
+
+
+def _pkg_local_list(kind, pid=u''):
+    """kind=zh → 单组；kind=mods → 每组一个 <pid>_<fid> 目录"""
+    kind = str(kind or u'').lower()
+    if kind == u'zh':
+        root, ver = _pkg_local_zh_root()
+        if not root:
+            return {'ok': False, 'code': 'no_local_pkg',
+                    'error': u'本地汉化包不存在，请先点「更新本地包」'}
+        allow = set(ZH_PKG_WHITELIST)
+        files = [x for x in _pkg_local_walk(root) if x['rel'] in allow]
+        if not files:
+            return {'ok': False, 'code': 'no_local_pkg',
+                    'error': u'本地汉化包缺少 %s' % u' / '.join(ZH_PKG_WHITELIST)}
+        return {'ok': True, 'kind': u'zh', 'ver': ver, 'root': root,
+                'files': files, 'total': sum(x['size'] for x in files),
+                'count': len(files)}
+    if kind == u'mods':
+        base = os.path.join(_upd_cache_dir(), MODS_PKG_ROOT_NAME)
+        if not os.path.isdir(base):
+            return {'ok': False, 'code': 'no_local_pkg',
+                    'error': u'本地 MOD 包不存在，请先点「更新本地包」'}
+        want = str(pid or u'').strip()
+        groups = []
+        try:
+            for x in sorted(os.scandir(base), key=lambda y: y.name):
+                if not x.is_dir():
+                    continue
+                nm = x.name
+                p0 = nm.split(u'_')[0]
+                if want and p0 != want:
+                    continue
+                files = _pkg_local_walk(x.path)
+                if not files:
+                    continue
+                groups.append({'pid': p0, 'fid': nm.split(u'_', 1)[1] if u'_' in nm else u'',
+                               'name': nm, 'files': files,
+                               'total': sum(y['size'] for y in files),
+                               'count': len(files)})
+        except Exception:
+            _sexc('pkg_local_list')
+        if not groups:
+            return {'ok': False, 'code': 'no_local_pkg',
+                    'error': (u'有本地包但目录为空，请重新「更新本地包」'
+                              if os.path.isdir(base) else u'本地 MOD 包不存在')}
+        return {'ok': True, 'kind': u'mods', 'root': base, 'groups': groups,
+                'total': sum(g['total'] for g in groups)}
+    return {'ok': False, 'code': 'bad_kind', 'error': u'kind 只能是 zh / mods'}
+
+
+def _pkg_local_resolve(kind, pid, rel):
+    """(绝对路径, 错误) —— 严格限制在本地包根内，防目录穿越"""
+    kind = str(kind or u'').lower()
+    rel = str(rel or u'').replace('\\', '/').strip()
+    if not rel or '..' in rel.split('/'):
+        return u'', u'bad_rel'
+    if kind == u'zh':
+        root, _v = _pkg_local_zh_root()
+        if not root:
+            return u'', u'no_local_pkg'
+        if rel not in set(ZH_PKG_WHITELIST):
+            return u'', u'not_in_whitelist'
+    elif kind == u'mods':
+        pid = str(pid or u'').strip()
+        if not pid:
+            return u'', u'pid_required'
+        base = os.path.join(_upd_cache_dir(), MODS_PKG_ROOT_NAME)
+        cands = []
+        try:
+            for x in os.scandir(base):
+                if x.is_dir() and x.name.split(u'_')[0] == pid:
+                    cands.append(x.path)
+        except Exception:
+            return u'', u'no_local_pkg'
+        if not cands:
+            return u'', u'no_local_pkg'
+        cands.sort()
+        root = cands[-1]
+    else:
+        return u'', u'bad_kind'
+    ab = os.path.abspath(os.path.join(root, *[x for x in rel.split('/') if x]))
+    rootab = os.path.abspath(root)
+    if not ab.startswith(rootab + os.sep) or not os.path.isfile(ab):
+        return u'', u'not_found'
+    return ab, u''
+
 
 
 def _mods_pkg_fetch(pid, on_prog=None, force=False):
@@ -13490,7 +15275,15 @@ def _api_need_by_srv(tgt=None):
        · 只看 kind == 'plugin' 的文件；库（AsaApi.dll, kind='lib'）落后由 libNeedsUpgrade 单独表达，不污染 TAB 点。"""
     _t0 = tgt if tgt else _asa_targets()
     out = {}
-    fl = [f for f in (_t0.get('files') or []) if str(f.get('kind') or '') == 'plugin']
+    # v6396（用户口径「附件还是没显示 api 待升级的点」）：
+    #   Bob 的库是 2.1、本地包已 2.11，却因这里只比 plugin 而被判「无需升级」⇒ TAB 无紫点。
+    #   v6349 当年排除 lib 是为规避「前端按多数派判版本」的误报（Bob 升了反被报紫点）；
+    #   现在判据已换成后端目标文件表（本地包 / 自研源的真实 dll size），不存在多数派问题 ——
+    #   库 size 与本地包不一致就是真落后，一并纳入。
+    #   防护：size 为 0（文件缺失 / 读不到）的条目跳过，避免「目标 size=0 ⇒ 全服误报」。
+    fl = [f for f in (_t0.get('files') or [])
+          if str(f.get('kind') or '') in ('plugin', 'lib')
+          and int(f.get('size') or 0) > 0]
     for srv in SERVERS.keys():
         win = _srv_win64(srv)
         need = False
@@ -13507,6 +15300,96 @@ def _api_need_by_srv(tgt=None):
                 pass
         out[srv] = need
     return out
+
+
+def _sok_ver_key(v):
+    """版本等价键：只留数字并去掉尾部 0。
+       '0.84' -> '084'；'0.8.4' -> '084'（等价）；'0.7' -> '07'；'0.7.0' -> '07'（等价）"""
+    try:
+        s = re.sub(r'[^0-9]', '', str(v or ''))
+        return (s.rstrip('0') or '0')
+    except Exception:
+        return str(v or '')
+
+
+def _sok_ver3(v):
+    """把 PluginInfo 的版本规范成 SOK config 惯用的三段式：
+       '0.84' -> '0.8.4'；'0.7' -> '0.7.0'；'0.8.4' 原样；'1' -> '1.0.0'"""
+    s = str(v or '').strip()
+    if not s:
+        return ''
+    parts = [p for p in s.split('.') if p != '']
+    try:
+        if len(parts) >= 3:
+            return s
+        if len(parts) == 2:
+            _mj, _mn = parts[0], parts[1]
+            if len(_mn) >= 2:
+                return u'%s.%s.%s' % (_mj, _mn[0], _mn[1:])
+            return u'%s.%s.0' % (_mj, _mn)
+        if len(parts) == 1:
+            return u'%s.0.0' % parts[0]
+    except Exception:
+        pass
+    return s
+
+
+def _sync_sok_cfg_ver(srv, items):
+    """v6400（用户口径「分发时 config.json 的 version 也要跟着改，不然会误判」）：
+       把该服 SOK 的 config.json 里 `version` 同步为本次分发目标的 PluginInfo Version。
+       根因：分发只替换 dll + PluginInfo.json，SOK 启动时**不会**回写 config 的 version
+             ⇒ 插件自报仍旧版（实测 Bob 卡在 0.8.2，而 dll/PluginInfo 都已是 0.84）。
+       ⚠ 只改 version 一个键：dino_data_dir / auto_parse_server_id 等每服个性化配置原样保留，
+         绝不整份覆盖（源目录里也没有 config.json）。
+       返回 True=已一致或已改正 / False=无法处理（不影响分发主流程）。"""
+    want = ''
+    for it in (items or []):
+        try:
+            if str(it.get('rel') or '').lower().endswith(u'plugininfo.json') \
+                    and 'serveropskitapi' in str(it.get('rel') or '').lower():
+                j = json.loads(_read_text(it.get('src') or '') or '{}')
+                want = str((j or {}).get('Version') or '')
+                break
+        except Exception:
+            want = ''
+    if not want:
+        return False
+    # v6442（用户口径「version 应该写成 0.8.4」）：PluginInfo 是两段（0.84），
+    #   而 SOK config 惯用三段（0.8.4）。这里先规范化，再做**等价判定** ——
+    #   `0.84` 与 `0.8.4` 视为同一版本，不改写（避免把已有的 0.8.4 改成 0.84）。
+    want = _sok_ver3(want)
+    cfgp = os.path.join(_srv_win64(srv), 'ArkApi', 'Plugins', 'ServerOpsKitAPI', 'config.json')
+    if not os.path.isfile(cfgp):
+        return False
+    try:
+        doc = json.loads(_read_text(cfgp) or '{}')
+    except Exception:
+        return False
+    if not isinstance(doc, dict):
+        return False
+    _cur_ver = str(doc.get('version') or '')
+    # v6443（用户口径「config 里也不对：Sco/Rag 是 0.84，Bob/Cen/Los 是 0.8.4」）：
+    #   原「等价即返回」会把 '0.84' 一直留着 ⇒ 格式长期不一致。
+    #   改为**仅字符串完全相同**才跳过；写法不规范的一律统一成三段（'0.84' -> '0.8.4'）。
+    if _cur_ver == want:
+        return True
+    doc['version'] = want
+    try:
+        os.chmod(cfgp, _stat.S_IWRITE)
+    except Exception:
+        pass
+    tmp = cfgp + '.tmp'
+    try:
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(doc, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, cfgp)
+        return True
+    except Exception:
+        try:
+            os.remove(tmp)
+        except Exception:
+            pass
+        return False
 
 
 def _api_deploy_run2(user, plans):
@@ -13589,6 +15472,13 @@ def _api_deploy_run2(user, plans):
             if bad:
                 err = u'md5 不一致：' + u'、'.join(bad)
                 _stage = u'校验'
+        if not err:
+            # v6400：dll/PluginInfo 已就位后，把 config.json 的 version 也同步过去，
+            #   否则插件自报仍是旧版（用户实测 Bob 卡在 0.8.2）。失败不影响分发结果。
+            try:
+                _sync_sok_cfg_ver(srv, items)
+            except Exception:
+                _sexc('api_sync_cfg_ver')
         if err:
             try:
                 for it in items:
@@ -14441,25 +16331,30 @@ def _upd_make_plan(srv, cache=None, limit=25):
         return plan
     try:
         skip_l = _upd_skip_set()
+        # v6438：预演同样改为 (size, mtime) 双判据 —— 否则预演报「无需更新 N 项」
+        #   而真跑却复制，用户无法通过预演判断本次到底会不会补 paks。
         srcmap = {}
         for rel, sz, mt in _upd_walk(src, skip_l):
-            srcmap[rel] = sz
+            srcmap[rel] = (sz, mt)
         tgtmap = {}
         for rel, sz, mt in _upd_walk(tgt, skip_l):
-            tgtmap[rel] = sz
-        for rel, sz in srcmap.items():
+            tgtmap[rel] = (sz, mt)
+        for rel, _sv in srcmap.items():
+            sz, mt = _sv
             if rel not in tgtmap:
                 plan['add'] += 1
                 plan['bytes'] += sz
                 if len(plan['samples']['add']) < limit:
                     plan['samples']['add'].append(rel)
-            elif tgtmap[rel] != sz:
-                plan['update'] += 1
-                plan['bytes'] += sz
-                if len(plan['samples']['update']) < limit:
-                    plan['samples']['update'].append(rel)
             else:
-                plan['same'] += 1
+                _tsz, _tmt = tgtmap[rel]
+                if _tsz != sz or abs(_tmt - mt) > 2:
+                    plan['update'] += 1
+                    plan['bytes'] += sz
+                    if len(plan['samples']['update']) < limit:
+                        plan['samples']['update'].append(rel)
+                else:
+                    plan['same'] += 1
         ex = [r for r in tgtmap.keys() if r not in srcmap]
         plan['extra'] = len(ex)
         plan['samples']['extra'] = ex[:limit]
@@ -15847,6 +17742,32 @@ class Handler(BaseHTTPRequestHandler):
             return
         self.wfile.write(body)
 
+    def _send_bin(self, path, filename=''):
+        """v6452（用户口径「部署到本机」）：流式下载本地包文件（大文件不整块读内存）"""
+        try:
+            sz = os.path.getsize(path)
+            self.send_response(200)
+            self._cors()
+            self.send_header('Content-Type', 'application/octet-stream')
+            self.send_header('Content-Length', str(sz))
+            if filename:
+                self.send_header('Content-Disposition',
+                                 'attachment; filename="%s"' % str(filename).replace('"', ''))
+            self.send_header('Cache-Control', 'no-cache')
+            self.end_headers()
+            if getattr(self, '_head_only', False):
+                return
+            with open(path, 'rb') as f:
+                shutil.copyfileobj(f, self.wfile, 1024 * 1024)
+        except FileNotFoundError:
+            self._send(404, {'ok': False, 'error': 'not found'})
+        except Exception as _e:
+            _sexc('send_bin')
+            try:
+                self._send(500, {'ok': False, 'error': repr(_e)[:120]})
+            except Exception:
+                pass
+
     def _send_file(self, path, ctype):
         try:
             with open(path, 'rb') as f:
@@ -16143,6 +18064,8 @@ class Handler(BaseHTTPRequestHandler):
                              'asa_configured': bool(_sd.get('asa_token')),
                              'cf_key_masked': _asa_mask(_sd.get('cf_key') or ''),
                              'cf_key_configured': bool(_sd.get('cf_key')),
+                             'google_api_key_masked': _asa_mask(_sd.get('google_api_key') or ''),
+                             'google_api_key_configured': bool(_sd.get('google_api_key')),
                              'mods_policy': _mods_policy(),
                              'ipwatch_restart': bool(_restart_enable_now()),
                              'ipwatch_restart_dry': bool(_restart_dry_now()),
@@ -16182,6 +18105,27 @@ class Handler(BaseHTTPRequestHandler):
                 _snap['restart'] = {'running': False}
             self._send(200, _snap)
             return
+        elif path == '/api/update/cache/versions':
+            # v6402（用户口径）：版本更新缓存 → **可选历史版本**（时间新→旧；只列当前主版本）
+            _qs_v = parse_qs(parsed.query)
+            _u_v = _srvctl_guard(self, _qs_v)
+            if not _u_v:
+                return
+            try:
+                _rv = _depot_versions()
+                self._send(200, _rv)
+            except Exception as e:
+                self._send(500, {'ok': False, 'code': 'versions_err', 'error': repr(e)[:300]})
+            return
+        elif path == '/api/update/steam/cred':
+            # v6402（用户口径「密码按账号级别缓存，越久越好」）：**只回账号名与是否已存密码**
+            _qs_c = parse_qs(parsed.query)
+            _u_c = _srvctl_guard(self, _qs_c)
+            if not _u_c:
+                return
+            self._send(200, {'ok': True, 'accounts': _steam_cred_list(),
+                             'path': STEAM_CRED_FILE})
+            return
         elif path == '/api/update/permcheck':
             # v6255b（权限加固·诊断）：在**后端进程自己的身份**下实测目标目录写/覆盖/替换能力。
             #   只碰探针临时文件，不动任何真实游戏文件 —— 真跑前用它确认会不会翻车。
@@ -16200,6 +18144,48 @@ class Handler(BaseHTTPRequestHandler):
                 _sexc('upd_permcheck')
                 _r_pc = {'ok': False, 'verdict': 'error', 'error': 'permcheck_fail'}
             self._send(200, _r_pc)
+            return
+        elif path == '/api/mods/client/file':
+            # v6464：给浏览器「客户端 MOD 包」的 CDN 直链（**只回元数据，不传文件字节**）
+            _qs_cf = parse_qs(parsed.query)
+            _u_cf = _srvctl_guard(self, _qs_cf, need_token=True)
+            if not _u_cf:
+                return
+            _pid_cf = str((_qs_cf.get('pid') or [''])[0]).strip()
+            if not _pid_cf.isdigit():
+                self._send(400, {'ok': False, 'code': 'bad_pid', 'error': u'pid 非法'})
+                return
+            # v6470：先拿元信息（name/slug/页面地址）—— 404 分支也要下发页面地址，
+            #   否则「作者限制第三方分发」的 MOD 前端无从引导用户去网页手动下载。
+            try:
+                _mc_cf = _mods_cf_meta(_pid_cf)
+            except Exception:
+                _sexc('mods_cf_meta')
+                _mc_cf = {'name': u'', 'slug': u'', 'page': u''}
+            _page_cf = str(_mc_cf.get('page') or u'')
+            try:
+                _urls_cf, _fid_cf, _fn_cf = _mods_cf_client_urls(_pid_cf)
+            except Exception:
+                _sexc('mods_client_urls')
+                _urls_cf, _fid_cf, _fn_cf = [], u'', u''
+            if not _urls_cf:
+                self._send(404, {'ok': False, 'code': 'no_client_pkg', 'pid': _pid_cf,
+                                 'name': _mc_cf.get('name') or u'',
+                                 'slug': _mc_cf.get('slug') or u'',
+                                 'page': _page_cf, 'filePage': _page_cf,
+                                 'error': u'CurseForge 上没有该 MOD 的客户端包（windows）'})
+                return
+            _f_cf = _mods_cf_client_file(_pid_cf) or {}
+            _sf_cf = _mods_cf_server_file(_pid_cf) or {}
+            self._send(200, {'ok': True, 'pid': _pid_cf, 'fid': _fid_cf, 'fileName': _fn_cf,
+                             'size': int(_f_cf.get('fileLength') or 0), 'urls': _urls_cf,
+                             'serverFid': str(_sf_cf.get('id') or ''),
+                             'name': _mc_cf.get('name') or _mods_cf_name(_pid_cf),
+                             'slug': _mc_cf.get('slug') or u'',
+                             'page': _page_cf,
+                             'filePage': ((_page_cf.rstrip('/') + '/files/' + str(_fid_cf))
+                                          if (_page_cf and _fid_cf) else _page_cf),
+                             'note': u'浏览器直连下载，不经过服务器'})
             return
         elif path == '/api/mods/status':
             # v6283（Round 1 只读）：MOD 卡 —— 磁盘扫描 83374/<pid>_<fid>，不写任何文件
@@ -16344,6 +18330,43 @@ class Handler(BaseHTTPRequestHandler):
                              'officialSrc': _oe2.get('src') or '',
                              'officialErr': _oe2.get('err') or '',
                              'ms': int((time.time() - _t0) * 1000)})
+            return
+        elif path in ('/api/pkg/local/list', '/api/pkg/local/get'):
+            # v6452（用户口径「部署到本机」）：把本地包文件供给浏览器（File System Access 直写游戏目录）
+            _qs_p = parse_qs(parsed.query)
+            _u_p = _srvctl_guard(self, _qs_p, need_token=True)
+            if not _u_p:
+                return
+            _kind_p = str((_qs_p.get('kind') or [''])[0]).lower()
+            _pid_p = str((_qs_p.get('pid') or [''])[0]).strip()
+            if path.endswith('/list'):
+                _r_p = _pkg_local_list(_kind_p, _pid_p)
+                self._send(200 if _r_p.get('ok') else 400, _r_p)
+                return
+            _ab_p, _err_p = _pkg_local_resolve(
+                _kind_p, _pid_p, (_qs_p.get('rel') or [''])[0])
+            if _err_p:
+                self._send(404, {'ok': False, 'code': _err_p, 'error': _err_p})
+                return
+            _admin_log('PKG local get %s %s by %s' % (_kind_p, os.path.basename(_ab_p), _u_p))
+            self._send_bin(_ab_p, os.path.basename(_ab_p))
+            return
+        elif path == '/api/zh/drive/url':
+            # v6457（用户口径·方案 H1）：给浏览器一个**可直连**的 Drive v3 下载 URL（带 key）
+            #   前端拿去 fetch → 解压 zip → 直写本机游戏目录，全程不经过服务器
+            _qs_g = parse_qs(parsed.query)
+            _u_g = _srvctl_guard(self, _qs_g, need_token=True)
+            if not _u_g:
+                return
+            _fid_g = str((_qs_g.get('id') or [''])[0]).strip()
+            if not re.match(r'^[A-Za-z0-9_-]{10,}$', _fid_g):
+                self._send(400, {'ok': False, 'code': 'bad_id', 'error': u'文件 id 非法'})
+                return
+            if not _gkey():
+                self._send(400, {'ok': False, 'code': 'no_gkey',
+                                 'error': u'未配置 Google API Key（系统管理 → Google API Key）'})
+                return
+            self._send(200, {'ok': True, 'id': _fid_g, 'url': _drive_v3_url(_fid_g)})
             return
         elif path == '/api/health':
             # v6155：后端健康/状态（**无鉴权、极轻**）—— 前端「系统管理 → 后端服务」直读
@@ -16641,6 +18664,88 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 _rem_zc = {'ok': False, 'err': repr(e)[:200]}
             self._send(200, {'ok': bool(_rem_zc.get('ok')), 'remote': _rem_zc})
+            return
+        if path == '/api/update/cache/manifest':
+            # v6409（用户口径）：填/改某 buildId 的 depot manifest（永久存储）
+            _u_mf = _srvctl_guard(self, qs, need_token=True)
+            if not _u_mf:
+                return
+            if _role_level(_u_mf) < 2:
+                self._send(403, {'ok': False, 'code': 'admin_only',
+                                 'error': u'仅二级管理员可用'})
+                return
+            _r_mf = _steamdb_set_manifest(body.get('buildId'), body.get('manifest'))
+            self._send(200 if _r_mf.get('ok') else 400, _r_mf)
+            return
+        if path == '/api/update/cache/version/add':
+            # v6402：手工补录一条 depot 版本（SteamDB 上抄到的 GID 录一次，永久复用）
+            _u_va = _srvctl_guard(self, qs, need_token=True)
+            if not _u_va:
+                return
+            if _role_level(_u_va) < 2:
+                self._send(403, {'ok': False, 'code': 'admin_only', 'error': u'仅二级管理员可用'})
+                return
+            _man = str(body.get('manifest') or '').strip()
+            _bid = str(body.get('buildId') or '').strip()
+            _ver = str(body.get('ver') or '').strip().lstrip('vV')
+            if not _man.isdigit() or len(_man) < 8:
+                self._send(400, {'ok': False, 'code': 'bad_manifest',
+                                 'error': u'manifest 需为 Steam depot 清单号（纯数字，通常 19 位）'})
+                return
+            _h = _depot_hist_load()
+            _its = _h.get('items')
+            if not isinstance(_its, dict):
+                _its = {}
+            _cur = _its.get(_man) or {}
+            _cur['manifest'] = _man
+            if _bid:
+                _cur['buildId'] = _bid
+            if _ver:
+                _cur['ver'] = _ver
+            _cur['at'] = int(time.time())
+            _cur['by'] = _u_va
+            _its[_man] = _cur
+            _h['items'] = _its
+            _ok_s = _depot_hist_save(_h)
+            self._send(200 if _ok_s else 500,
+                       {'ok': _ok_s, 'manifest': _man,
+                        'error': ('' if _ok_s else u'写入 depot_history.json 失败')})
+            return
+        if path == '/api/update/steam/cred':
+            # v6402：保存/更新账号密码（密码加密落盘，永不回传）
+            _u_sc = _srvctl_guard(self, qs, need_token=True)
+            if not _u_sc:
+                return
+            _r_sc = _steam_cred_set(str(body.get('user') or '').strip(),
+                                    str(body.get('pwd') or ''))
+            self._send(200 if _r_sc.get('ok') else 400, _r_sc)
+            return
+        if path == '/api/update/cache/pull':
+            # v6402（危险）：按指定 manifest 拉取缓存 → 覆盖 D:\\Cache → 写 acf
+            _u_cp = _srvctl_guard(self, qs, need_token=True)
+            if not _u_cp:
+                return
+            if _role_level(_u_cp) < 2:
+                self._send(403, {'ok': False, 'code': 'admin_only', 'error': u'仅二级管理员可用'})
+                return
+            if str(body.get('confirm') or '') != 'PULL':
+                self._send(400, {'ok': False, 'code': 'need_confirm',
+                                 'error': u'拉取会覆盖 D:\\Cache，需在 body 里传 confirm="PULL"'})
+                return
+            _man_p = str(body.get('manifest') or '').strip()
+            if not _man_p.isdigit() or len(_man_p) < 8:
+                self._send(400, {'ok': False, 'code': 'bad_manifest', 'error': u'manifest 无效'})
+                return
+            _cu = str(body.get('user') or '').strip()
+            if not _cu:
+                self._send(400, {'ok': False, 'code': 'need_user', 'error': u'需指定 Steam 账号'})
+                return
+            if not _steam_cred_get(_cu):
+                self._send(400, {'ok': False, 'code': 'no_cred',
+                                 'error': u'该账号没有缓存密码，请先保存一次'})
+                return
+            _r_cp = _cache_pull_start(_u_cp, _man_p, str(body.get('buildId') or ''), _cu)
+            self._send(200, _r_cp)
             return
         if path == '/api/update/cache/clear':
             # v6263（用户口径）：清空版本更新缓存（危险操作）—— 需 token + 二级管理员 + confirm=CLEAR
@@ -17711,6 +19816,9 @@ class Handler(BaseHTTPRequestHandler):
             _has_zhp = bool(_bzp) or ('zh_folder_url' in body) or ('zh_variant' in body)
             _clr_tok = bool(body.get('asa_token_clear'))
             _clr_cf = bool(body.get('cf_key_clear'))
+            # v6457：Google API Key（Drive v3 直连用）
+            _has_gk = ('google_api_key' in body) or ('google_api_key' in qs)
+            _clr_gk = bool(body.get('google_api_key_clear'))
             try:
                 _d = _srv_cfg_read()
                 if _has_dom or not _d.get('server_domain'):
@@ -17761,6 +19869,13 @@ class Handler(BaseHTTPRequestHandler):
                         _d['cf_key'] = _ck
                     elif _clr_cf:
                         _d.pop('cf_key', None)
+                if _has_gk:
+                    # v6457：Google API Key（仅存服务器本地；留空=不修改）
+                    _gk = str(body.get('google_api_key', g('google_api_key', '')) or '').strip()
+                    if _gk:
+                        _d['google_api_key'] = _gk
+                    elif _clr_gk:
+                        _d.pop('google_api_key', None)
                 if _has_zhp:
                     # v6237（B1）：汉化补丁配置 —— 地址必须含 /folders/<id>，变体必须在枚举内
                     _zp = _d.get('zh_patch')
@@ -17795,6 +19910,8 @@ class Handler(BaseHTTPRequestHandler):
                              'update_dry': bool(_upd_dry_default()),
                              'cf_key_masked': _asa_mask(_d.get('cf_key') or ''),
                              'cf_key_configured': bool(_d.get('cf_key')),
+                             'google_api_key_masked': _asa_mask(_d.get('google_api_key') or ''),
+                             'google_api_key_configured': bool(_d.get('google_api_key')),
                              'mods_policy': _mods_policy(),
                              'zh_patch': _zh_cfg_of(_d)})
             return
@@ -17868,6 +19985,43 @@ class Handler(BaseHTTPRequestHandler):
             _idset = set(int(x) for x in _ids) if isinstance(_ids, list) else None
             _n = _utask_dismiss(_idset, bool(body.get('allFail')))
             self._send(200, {'ok': True, 'removed': _n})
+            return
+        if path == '/api/srvctl/startq/abort':
+            # v6437（用户实测「点了无数次中止；启动条为啥还在？」）：
+            #   根因 —— 旧中止只发 kill 杀进程，**从不清 _SRVCTL_STARTQ['active']**，
+            #   而 _startq_loop 每 2 秒都会给 active 里的服重推 `srv|start` run 任务条
+            #   ⇒ 进程被杀、任务条每 2 秒重建，点多少次都一样。
+            #   本接口把目标服从 active/queue 移除并置 fail，任务条才会真正消失。
+            _u_sa = _srvctl_guard(self, qs, need_token=True)
+            if not _u_sa:
+                return
+            if _role_level(_u_sa) < 2:
+                self._send(403, {'ok': False, 'code': 'admin_only', 'error': u'仅二级管理员可用'})
+                return
+            _sa_list = body.get('servers')
+            if not isinstance(_sa_list, list) or not _sa_list:
+                _sa_one = str(body.get('server') or g('server') or '').strip()
+                _sa_list = [_sa_one] if _sa_one else []
+            _sa_all = bool(body.get('all'))
+            # v6439：统一走 _startq_drop（内含 tries 清零 + 任务条置中止），
+            #   避免与 kill 分支两处逻辑不一致。
+            _sa_removed = []
+            if _sa_all:
+                with _SRVCTL_STARTQ_LOCK:
+                    _sa_list = list(_SRVCTL_STARTQ['active'].keys()) + list(_SRVCTL_STARTQ['queue'])
+                    _SRVCTL_STARTQ['queue'] = []
+                    _SRVCTL_STARTQ['running'] = False
+            for _sa in _sa_list:
+                _sa = str(_sa or '').strip()
+                if _sa not in SERVERS:
+                    continue
+                try:
+                    if _startq_drop(_sa, _u_sa):
+                        _sa_removed.append(_sa)
+                except Exception:
+                    _sexc('startq_abort_drop')
+            self._send(200, {'ok': True, 'user': _u_sa,
+                             'removed': _sa_removed, 'all': _sa_all})
             return
         if path == '/api/tasks/abort':
             # v6164（计划 §16 第 7 项 / C8）：中止自动重启编排
@@ -18107,6 +20261,17 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, {'ok': True, 'queued': True, 'action': 'start',
                                  'servers': _srvl, 'queue': _q})
                 return
+            # v6439（户实测「中止了好几次 Bob 都自动重启」）：
+            #   人工终止必须先把该服从启动队列剔除并清零重试计数，否则
+            #   `_startq_loop` 会把「进程退出」判成启动失败 ⇒
+            #   STARTQ_AUTO_RETRY 自动重新入队再拉起 ⇒ 杀了又拉、点了也没用。
+            #   排除编排来源（ipwatch 是"先杀后起"的正常流程）。
+            try:
+                if (_act in ('kill', 'savekill')) and (str(_src or '').lower() != 'ipwatch'):
+                    for _s_dp in _srvl:
+                        _startq_drop(_s_dp, _u)
+            except Exception:
+                _sexc('srvctl_kill_drop_startq')
             _busy = [s for s in _srvl if not _srvctl_acquire(s, _act)]
             if _busy:
                 for s in _srvl:
@@ -18662,6 +20827,12 @@ def main():
         _sinfo('ipwatch thread started: domain=%s interval=%ss' % (_ipwatch_domain(), IPWATCH_INTERVAL))
     except Exception:
         _sexc('ipwatch_start')
+    # v6415：SteamDB/Steam 官方 latest buildId↔manifest 自动配对（每 30 分钟）
+    try:
+        threading.Thread(target=_steamdb_pair_loop, daemon=True, name='steamdb-pair').start()
+        _sinfo('steamdb-pair thread started: interval=%ss' % STEAMDB_PAIR_INTERVAL)
+    except Exception:
+        _sexc('steamdb_pair_start')
     print('dino_backend listening on :{}'.format(PORT))
     print('  RCON_HOST={}  DINO_DATA={}'.format(RCON_HOST, DINO_DATA))
     print('  ASA_DATA={}  ALLOW_ORIGIN={}'.format(ASA_DATA, ALLOW_ORIGIN))

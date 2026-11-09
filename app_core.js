@@ -2729,7 +2729,8 @@ function lbSrvDomainLoad(){
   var el = document.getElementById('lbSrvDomain');
   var tk = document.getElementById('lbAsaToken');
   var ck = document.getElementById('lbCfKey');
-  if(!el && !tk && !ck) return;   /* P3.5：输入框任一存在就拉（同一接口，零额外请求） */
+  var gk = document.getElementById('lbGKey');   /* v6458：Google API Key（Drive v3） */
+  if(!el && !tk && !ck && !gk) return;   /* P3.5：输入框任一存在就拉（同一接口，零额外请求） */
   fetch(lbSrvDomainApiBase() + '/api/server_config?t=' + Date.now(), { cache: 'no-store' })
     .then(function(r){ return r.ok ? r.json() : null; })
     .then(function(d){
@@ -2747,6 +2748,15 @@ function lbSrvDomainLoad(){
         if(cp) cp.placeholder = d.cf_key_configured ? ('已保存 ' + (d.cf_key_masked || '') + '（留空＝不修改）') : 'CurseForge API Key（未配置）';
         if(cm) cm.innerHTML = d.cf_key_configured
           ? ('<span style="color:#22c55e">已配置 ' + escapeHtml(d.cf_key_masked || '') + '</span>')
+          : '<span style="color:#f59e0b">未配置</span>';
+        /* v6458：Google API Key（Drive v3）掩码回填 */
+        var gp2 = document.getElementById('lbGKey');
+        var gm2 = document.getElementById('lbGKeyMsg');
+        if(gp2) gp2.placeholder = d.google_api_key_configured
+          ? ('已保存 ' + (d.google_api_key_masked || '') + '（留空＝不修改）')
+          : 'Google API Key（未配置）';
+        if(gm2) gm2.innerHTML = d.google_api_key_configured
+          ? ('<span style="color:#22c55e">已配置 ' + escapeHtml(d.google_api_key_masked || '') + '</span>')
           : '<span style="color:#f59e0b">未配置</span>';
         /* v6284：MOD 策略回填 */
         var mpb = document.getElementById('lbMpBob');
@@ -2837,6 +2847,75 @@ function lbCfKeySave(btn){
     if(btn){ btn.disabled = false; btn.style.opacity = ''; btn.innerHTML = old; }
     if(msg) msg.innerHTML = '<span style="color:#ef4444">' + escapeHtml(String((e && e.message) || e)) + '</span>';
   });
+}
+/* v6458（用户口径）：Google API Key（Drive API v3）—— 「部署到本机」浏览器直连 Drive 用
+   · 仅存服务器本地配置；明文永不回显，只显示掩码
+   · 留空 ⇒ 不修改 */
+function lbGKeySave(btn){
+  var el = document.getElementById('lbGKey');
+  var msg = document.getElementById('lbGKeyMsg');
+  var a = null; try{ a = JSON.parse(localStorage.getItem('dinoAuth') || 'null'); }catch(e){}
+  if(!a || !a.user){ if(msg) msg.innerHTML = '<span style="color:#ef4444">未登录</span>'; return; }
+  var v = (el && el.value || '').trim();
+  if(!v){ if(msg) msg.innerHTML = '<span style="color:#f59e0b">请输入 API Key（留空＝不修改）</span>'; return; }
+  if(!/^AIza[0-9A-Za-z_-]{20,}$/.test(v)){
+    if(msg) msg.innerHTML = '<span style="color:#f59e0b">格式不像 Google API Key（应以 AIza 开头）</span>';
+    return;
+  }
+  var old = btn ? btn.innerHTML : '';
+  if(btn){ btn.disabled = true; btn.style.opacity = '.5'; btn.innerHTML = '⏳ 保存中…'; }
+  fetch(lbSrvDomainApiBase() + '/api/server_config?username=' + encodeURIComponent(a.user) + '&nick=' + encodeURIComponent(a.nick || ''), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ google_api_key: v })
+  }).then(function(r){ return r.json().then(function(j){ return { s: r.status, j: j }; }); }).then(function(x){
+    if(btn){ btn.disabled = false; btn.style.opacity = ''; btn.innerHTML = old; }
+    if(x.s === 401){ if(msg) msg.innerHTML = '<span style="color:#ef4444">未登录或账号不匹配</span>'; return; }
+    if(x.s === 403){ if(msg) msg.innerHTML = '<span style="color:#ef4444">仅系统拥有者可用</span>'; return; }
+    if(x.s !== 200){ if(msg) msg.innerHTML = '<span style="color:#ef4444">保存失败：' + escapeHtml((x.j && x.j.error) || ('HTTP ' + x.s)) + '</span>'; return; }
+    if(el) el.value = '';
+    if(el) el.placeholder = '已保存 ' + (x.j.google_api_key_masked || '') + '（留空＝不修改）';
+    if(msg) msg.innerHTML = '<span style="color:#22c55e">已保存 ' + escapeHtml(x.j.google_api_key_masked || '') + '（即时生效，无需重启）</span>';
+    if(typeof lbToast === 'function') lbToast('Google API Key 已保存');
+  }).catch(function(e){
+    if(btn){ btn.disabled = false; btn.style.opacity = ''; btn.innerHTML = old; }
+    if(msg) msg.innerHTML = '<span style="color:#ef4444">' + escapeHtml(String((e && e.message) || e)) + '</span>';
+  });
+}
+/* v6458：「测试直连」—— 后端给出带 key 的 Drive v3 URL，浏览器实际拉 64 字节验证 CORS+权限 */
+function lbGKeyTest(btn){
+  var msg = document.getElementById('lbGKeyMsg');
+  var old = btn ? btn.innerHTML : '';
+  if(btn){ btn.disabled = true; btn.style.opacity = '.5'; btn.innerHTML = '⏳ 测试中…'; }
+  var done = function(html){
+    if(btn){ btn.disabled = false; btn.style.opacity = ''; btn.innerHTML = old; }
+    if(msg) msg.innerHTML = html;
+  };
+  (async function(){
+    try{
+      var items = ((((window.LB_ZH || {}).st || {}).remote || {}).items) || [];
+      var fid = '';
+      for(var i=0;i<items.length;i++){ if(/zip$/i.test(String(items[i].name||''))){ fid = String(items[i].id||''); break; } }
+      if(!fid){ done('<span style="color:#f59e0b">拿不到云端 zip 清单，请先打开「服务器更新」刷新一次</span>'); return; }
+      var base = lbSrvDomainApiBase();
+      var tk = (typeof lbSrvCtlToken === 'function') ? lbSrvCtlToken() : '';
+      var hd = {}; if(tk) hd['Authorization'] = 'Bearer ' + tk;
+      var r = await fetch(base + '/api/zh/drive/url?id=' + encodeURIComponent(fid) + '&t=' + Date.now(), { headers: hd, cache: 'no-store' });
+      var j = await r.json();
+      if(!j.ok){ done('<span style="color:#ef4444">' + escapeHtml(j.error || ('HTTP ' + r.status)) + '</span>'); return; }
+      var res = await fetch(j.url, { method: 'GET', mode: 'cors' });
+      if(!res.ok){
+        var txt = '';
+        try { txt = (await res.text()).slice(0, 220); } catch(e) {}
+        done('<span style="color:#ef4444">直连失败 HTTP ' + res.status + '：' + escapeHtml(txt) + '</span>');
+        return;
+      }
+      var rd = res.body.getReader();
+      var ch = await rd.read();
+      await rd.cancel();
+      done('<span style="color:#22c55e">直连成功（CORS 放行，已读到 ' + (ch.value ? ch.value.length : 0) + ' 字节）</span>');
+    }catch(e){
+      done('<span style="color:#ef4444">直连异常：' + escapeHtml(String((e && e.message) || e)) + '（多为 CORS 或 key 未生效）</span>');
+    }
+  })();
 }
 /* P3.5（计划 §7.3）：ASA Token 配置（仅系统拥有者；后端强制 owner only）
    · 留空 ⇒ 不修改（不会误清空）
@@ -3255,6 +3334,18 @@ function lbOpenServerAdminModal(){
     + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
     + '<button onclick="lbCfKeySave(this)" style="'+btn+'">保存 Key</button>'
     + '<span id="lbCfKeyMsg" style="font-size:11px;color:#888"></span>'
+    + '</div>'
+    + '</div>'
+    /* v6458（用户口径）：Google API Key —— Drive API v3，浏览器「部署到本机」直连源站用 */
+    + '<div style="margin-top:18px;padding-top:14px;border-top:1px solid #2a2a3a">'
+    + '<div style="font-size:13px;font-weight:bold;color:#ddd;margin-bottom:6px">🔑 Google API Key（Drive v3）</div>'
+    + '<div style="font-size:11px;color:#666;margin-bottom:6px">「部署到本机」直连 Google Drive 下载汉化包用（仅存服务器本地，前端只显示尾号）'
+    + ' · 获取：console.cloud.google.com → 启用 Drive API → 创建 API 密钥 → 限制网站 ' + 'dino.whiterober.ccwu.cc/*' + '</div>'
+    + '<input id="lbGKey" type="password" style="'+inp+'" placeholder="Google API Key（AIza...）" autocomplete="new-password">'
+    + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+    + '<button onclick="lbGKeySave(this)" style="'+btn+'">保存 Key</button>'
+    + '<button onclick="lbGKeyTest(this)" style="padding:7px 14px;border-radius:6px;border:1px solid #333;background:transparent;color:#bbb;cursor:pointer;font-size:13px">测试直连</button>'
+    + '<span id="lbGKeyMsg" style="font-size:11px;color:#888"></span>'
     + '</div>'
     + '</div>'
     + '<div style="margin-top:18px;padding-top:14px;border-top:1px solid #2a2a3a">'
@@ -5650,17 +5741,19 @@ var LB_UPD = { data: null, sel: {}, loading: false, ts: 0, err: null, plan: null
 
 /* ===== v6252（用户口径）：「强制/补丁/相同/未知」的**唯一文案来源** =====
    来源：项目既有权威口径（分发确认浮窗 v6228 定稿）——
-     forced  : 强制 · 服务器必须更新玩家才能进游戏
-     patch   : 补丁 · 玩家不更新也可以进游戏
+     forced  : 强制 · 服务器必须更新，否则玩家进不来（主版本号变化 96.x → 97.x）
+     patch   : 补丁 · 服务器不更新，玩家也可以进游戏（仅小数变化 96.9 → 96.13）
      same    : 相同 · 无需更新
      unknown : 未知 · 请人工确认
+   ⚠ v6453（用户纠正·主体搞反）：**客户端由 Steam 自动更新，永远是最新版，不存在旧客户端**
+   ⇒ 本判定说的永远是「**服务器**要不要更新」；v6252 曾误写成「玩家不更新也可以进游戏」。
    ⚠ 此前该文案在 4 处各写一遍（确认浮窗长/短、系统管理预演行、更新缓存徽章），
      导致 v6251 徽章 tips 一度写成「需完整分发本体文件」这种臆测说法。
      现在一律调本函数，禁止再内联判断。 */
 function lbUpdKindText(kind){
   var k = String(kind || 'unknown');
-  return (k === 'forced') ? '强制 · 服务器必须更新玩家才能进游戏'
-       : (k === 'patch')  ? '补丁 · 玩家不更新也可以进游戏'
+  return (k === 'forced') ? '强制 · 服务器必须更新，否则玩家进不来'
+       : (k === 'patch')  ? '补丁 · 服务器不更新，玩家也可以进游戏'
        : (k === 'same')   ? '相同 · 无需更新'
        : '未知 · 请人工确认';
 }
@@ -5736,6 +5829,8 @@ function lbUpdOpen(){
   lbSheetOpen('lbUpd');
   /* v6211：tips 引擎挂载 —— 建窗即挂（lbSheetBuild 内部也会挂，这里显式兜一次） */
   try { lbTipsWatch('lbUpd', 60); } catch (e) {}
+  /* v6450（用户口径「附件左边加一个低可视的服务器控制入口」）：标题栏同步一次入口按钮 */
+  try { lbUpdSrvCtlEntrySync(); } catch (e) {}
   /* v6212（用户口径「服务器更新 加入 任务列表块（共用）」）：起任务总线轮询 */
   try { lbTaskSyncStart(); } catch (e) {}
   lbUpdRender();
@@ -5947,12 +6042,15 @@ function lbUpdBadge(s, d){
   var same = !!it.same;
   /* v6225（用户口径）：**底色回归运行状态**（绿=运行中 / 红=已停止）——
      版本落后不用底色表达（原来土黄整排会让人以为服务器异常），改用橙色描边 + 呼吸动画（mis）。 */
-  var running = !!(d && String(d.status || '').toLowerCase() === 'running');
+  /* v6400：三态 —— running 绿 / starting 黄（启动中）/ 其它红 */
+  var _stL = (d && String(d.status || '').toLowerCase()) || '';
+  var running = (_stL === 'running');
+  var starting = (_stL === 'starting');
   var tip = 'buildId ' + (b || '-') + ' · manifest ' + (it.manifest || '-')
           + ' · 更新于 ' + (it.updatedAt || '-')
           + (same ? '（与缓存一致）' : ('（落后，缓存为 ' + (cb || '-') + '）'))
-          + ' · ' + (running ? '运行中' : (d ? '已停止' : '状态未知'));
-  return { text: txt, color: (running ? '#15803d' : '#b91c1c'),
+          + ' · ' + (starting ? '启动中' : (running ? '运行中' : (d ? '已停止' : '状态未知')));
+  return { text: txt, color: (starting ? '#fbbf24' : (running ? '#15803d' : '#b91c1c')),
            cls: (same ? '' : ' mis'), title: tip };
 }
 /* ===== v6228（P2，用户口径）：**单一分发确认浮窗** =====
@@ -6357,8 +6455,8 @@ function lbUpdConfirmHtml(){
     if (_tgHasSv && kind === 'forced') {
       _warns.push({ ic: 'mdi-alert-octagon-outline',
         t: '强制更新：' + String(vk.from || '?') + ' → ' + String(vk.to || '?'),
-        why: '这是大版本更新，客户端与服务端必须同版本',
-        risk: '玩家不更新到 ' + String(vk.to || '?') + ' 就进不来；本次会走 公告→空置→静默→存档→停服→替换→起服，'
+        why: '这是大版本更新（主版本号变化）；客户端由 Steam 自动更新，服务器必须跟随，否则版本对不上',
+        risk: '服务器不更新到 ' + String(vk.to || '?') + '，玩家就进不来；本次会走 公告→空置→静默→存档→停服→替换→起服，'
             + '在线玩家会被请下线，若有玩家不配合会长时间卡在等待阶段' });
     }
     if (_tgApi2 && !ready) {
@@ -7163,15 +7261,26 @@ function lbUpdModsCardHtml(_card){
     + '\n【用途】分发 MOD 时从这里取文件；各服都没有目标版本时也用它兜底'
     + '\n【说明】本地包含哪些最新版本，看的就是这里；缺的点「更新本地包」补齐'
     + '\n只写 D:\\ARK Server\\_upd_cache，不动任何服务器';
+  /* v6397（用户口径「4 个卡片的本地包要加一个 待升级状态，只跟权威线上最新版本号对比」）：
+     MOD 本地包「待升级」= 本地包版本集合里，是否有 pid 缺 CurseForge 线上最新 fid。
+     只与 CF 最新比，不与「各服已装 / 策略基准」比。 */
+  var _mPkgLatest = '', _mPkgNeed = false;
+  Object.keys(M.cfLatest || {}).forEach(function(p){
+    var _fid = String(((M.cfLatest || {})[p] || {}).fid || '');
+    if (!_fid) return;
+    if (!_mPkgLatest) _mPkgLatest = _fid;
+    if (_mver.indexOf(p + '_' + _fid) < 0) _mPkgNeed = true;
+  });
   h += '<div style="color:#9ca3af">本地包：'
+     /* 覆盖率数字保留（2/2 有用），但不再写「已就绪」—— 状态统一由状态机输出 */
      + (_mtot
-          ? (_mAll
-              ? ('<span style="color:#4ade80">已就绪 ' + _mhav + '/' + _mtot + '</span>')
-              : ('<span style="color:#fbbf24">' + _mhav + '/' + _mtot + '（缺 '
+          ? ('<b style="color:' + (_mAll ? '#4ade80' : '#fbbf24') + '">' + _mhav + '/' + _mtot + '</b>'
+             + (_mAll ? '' : ('<span style="color:#fbbf24">（缺 '
                  + lbMdEsc(_mmissNm.length <= 2 ? _mmissNm.join('、') : (_mmissNm.length + ' 个'))
-                 + '）</span>'))
-          : (_mlp.count ? '<span style="color:#4ade80">已就绪</span>'
-                        : '<span style="color:#6b7280">未下载</span>'))
+                 + '）</span>')))
+          : '')
+     /* v6398（用户口径「已就绪、已最新 不能放到同一个状态机里么？」）：单一状态机 */
+     + lbUpdPkgState(!!_mlp.count, _mPkgNeed, _mPkgLatest, { cur: _mver.join(' / ') })
      + '　<span class="lb-tipb" style="color:#6b7280;cursor:help" title="' + lbMdEsc(_mTip) + '">'
      + '<i class="mdi mdi-information-outline" style="font-size:12px"></i></span>'
      + '</div>'
@@ -7179,7 +7288,18 @@ function lbUpdModsCardHtml(_card){
      + '<div id="lbPkgBar_mods"></div>';
   /* v6320（用户口径）：与 API 卡一致，区块之间用虚线分割 */
   h += '<div style="border-top:1px dashed #33334a;margin:7px 0 5px"></div>';
-  var g = M.groups || {}, pids = Object.keys(g).sort(), base = M.baseFid || {};
+  var g = M.groups || {}, pids = Object.keys(g).sort();
+  /* v6397（用户口径「不只加进面板，还要影响对于最新版的判断」）：
+     MOD「最新版」基准改用 **CurseForge 线上最新 fid**（M.cfLatest），
+     没有 CF 数据（未配 cf_key / 拉取失败）时回退原来的 baseFid（已装里 mtime 最新者）。
+     ⇒ 各服都没升到 CF 最新时会正确判黄，而不是拿"已装的最新"自我安慰。 */
+  var base = {};
+  Object.keys(M.baseFid || {}).forEach(function(p){ base[p] = M.baseFid[p]; });
+  var _cfL = M.cfLatest || {};
+  Object.keys(_cfL).forEach(function(p){
+    var _f = String((_cfL[p] || {}).fid || '');
+    if (_f) base[p] = _f;
+  });
   /* v6321（用户口径）：版本 tips 里要显示具体地图中文名，不是 abbr */
   var _nmOf = function(a){
     var nm = String(a || '');
@@ -7217,6 +7337,15 @@ function lbUpdModsCardHtml(_card){
       _fids.forEach(function(fid){ _vg[String(fid)] = (fmap[fid] || []).slice(); });
       _vdet = lbUpdVerDet(String((base[pid] === undefined || base[pid] === null) ? '' : base[pid]), _vg, []);
     }
+    /* v6445（用户口径「附件应该显示在 色条 tips内」）：把 CurseForge 最新版本
+       并入右侧覆盖色条的 tips（原来 v6397 在行内单列了一个 `CF xxxxxxx` 徽章）。 */
+    var _cfTip = '';
+    if (_cfL[pid] && _cfL[pid].fid){
+      _cfTip = '【CurseForge 最新】\n版本：' + String(_cfL[pid].fid)
+             + (_cfL[pid].name ? ('\n文件：' + _cfL[pid].name) : '')
+             + (_cfL[pid].at ? ('\n发布：' + _cfL[pid].at) : '')
+             + '\n线上最新版本 —— 「最新版」判定与分发目标都以它为准';
+    }
     var miss = [];
     Object.keys(M.servers || {}).forEach(function(sv){
       if (((M.servers[sv] || {}).missing || []).indexOf(pid) >= 0) miss.push(sv);
@@ -7238,7 +7367,8 @@ function lbUpdModsCardHtml(_card){
                 + '· 绿：已是最新版 ' + _mgreen + ' 服\n'
                 + '· 黄：仍是旧版 ' + _myel + ' 服（分发后升级）\n'
                 + '· 灰：未安装 ' + _mgray + ' 服'
-                + (_vdet ? ('\n\n' + _vdet) : '')) + '">'
+                + (_vdet ? ('\n\n' + _vdet) : '')
+                + (_cfTip ? ('\n\n' + _cfTip) : '')) + '">'
             + (_mgreen ? ('<span style="display:inline-block;height:100%;width:'
                           + (100 * _mgreen / _mexp) + '%;background:#4ade80"></span>') : '')
             + (_myel ? ('<span style="display:inline-block;height:100%;width:'
@@ -7251,6 +7381,7 @@ function lbUpdModsCardHtml(_card){
        /* v6377：「N 台」颜色判据由 total >= sc(11) 改为 total >= 策略应装台数，
           否则 Bob 专属 MOD（应装 1 台）会被误判成黄色 */
        + '　<span style="color:' + (total >= _mexp ? '#4ade80' : '#fbbf24') + '">' + total + ' 服</span>'
+       /* v6445：行内不再单列 `CF xxxxxxx` —— 已并入右侧覆盖色条 tips（_cfTip） */
        + '　' + _mbar
        + (miss.length ? ('　<b style="color:#f87171">缺 ' + miss.length + ' 服</b>') : '')
        + '</div>';
@@ -7266,7 +7397,36 @@ function lbUpdModsCardHtml(_card){
   /* v6305（用户口径）：删除「可回收」行 —— 开场视频改为**无感回收**：
      分发/更新本地包时自动跳过 LoadingScreen.bk2，分发前把目标旧目录里已有的删掉，
      用户不需要任何按钮，界面上也不再显示回收信息。 */
-  h += '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:6px">'
+  /* v6448（用户口径「附件这种 要做成底栏形式」）：统一底栏 */
+  h += '<div class="lb-upd-foot">'
+     /* v6452（用户口径「部署到本机」）
+        v6453（用户实测纠正）：客户端 MOD 不在 Content\\Mods，而在
+        ShooterGame\\Binaries\\Win64\\ShooterGame\\Mods\\83374\\<pid>_<fid>\\（与服务端同构） */
+     + '<a class="lb-tipb lb-upd-link lb-foot-left" onclick="lbDeployLocal(\'mods\',this)"'
+     + ' title="' + lbMdEsc(
+          '【部署到本机】\n从 CurseForge 直连下载「客户端包」\n解压写入本机游戏目录，不经过服务器\n\n'
+        + '【写入位置】\nARK Survival Ascended\\ShooterGame\\Binaries\\Win64\\\n'
+        + '　　ShooterGame\\Mods\\83374\\<pid>_<fid>\\\n\n'
+        + '【首次要点】\n· 选 ASA 所在 Steam 库根目录（如 B:\\SteamLibrary）\n'
+        + '· 之后自动记住，不用再选\n'
+        + '· 换目录：按住 Shift 再点本按钮\n'
+        + '· 记住的目录失效会自动重弹\n\n'
+        + '【注意】\n· 客户端包 ≠ 服务端包，体积大得多\n'
+        + '　Fear Ascended 约 800 MB\n'
+        + '　Club ARK 约 2.2 GB\n'
+        + '· 自动跳过开场视频，再省约 740 MB\n'
+        + '· 不做服务器回落：直连不了就报错\n'
+        + '· 旧 <pid>_* 目录不会自动删除\n\n'
+        + '【已装会拦截】\n· 本机已有 <pid>_<当前版本> 且含 .pak 时\n'
+        + '　判定已是最新，直接跳过、不重复下载\n'
+        + '· 全部 MOD 都已是本机最新时整批拦截，\n'
+        + '　不下载任何文件、不写盘\n\n'
+        + '【限制分发的 MOD】\n· 先把能直连的全部装完\n'
+        + '· 再逐个给下载页链接，去网页下载 zip\n'
+        + '· 回来点「选择 zip 文件」，网页内解压\n'
+        + '· 全部处理完提示重启游戏\n\n'
+        + '【说明】\n只写本机游戏目录，不动任何服务器') + '">'
+     + '<i class="mdi mdi-folder-download-outline"></i>部署到本机</a>'
      /* v6293（用户口径）：MOD 也要有本地包系统 */
      /* v6294（用户口径）：去掉「更新 MOD」按钮，只留「更新本地包」 */
      /* v6366（用户口径）：右下角「清空本地包」—— 未下载时置灰 */
@@ -7574,20 +7734,35 @@ function lbUpdApiCardHtml(_card){
     if (!v2) _libGray.push(k2);
     else (_libGrp[v2] = _libGrp[v2] || []).push(k2);
   });
-  /* 归一化去 v 前缀 + trim：官方 latest.verNum 与各服 dllVer 可能带/不带 v */
+  /* 归一化去 v 前缀 + trim：官方 latest.verNum 与各服 dllVer 可能带/不带 v。
+     v6393（用户口径「不是应该找到为啥你拉到的 Discord 官方公告号是旧的么？要真根因，而不是换方式」）：
+     已回滚 v6392 的「本地包版本兜底」—— 官方公告号之所以旧，根因在后端：
+       ① _api_discord_latest 只读缓存、不开资讯就不刷新（已修：读数前按需 _news_refresh）
+       ② 公告标题格式由「AsaApi v2.1」变成「ASA: Server API v2.11」，老正则失配致 verNum 为空（已修）
+     现在 LT.verNum 能拿到真实的官方最新版。 */
   var _lnk = String(LT.verNum || '').replace(/^v/i, '').trim();
   var _lisNew = function (k2) {
     return !!_lnk && String(k2 === undefined || k2 === null ? '' : k2)
                       .replace(/^v/i, '').trim() === _lnk;
   };
+  /* v6392：版本段**右补零对齐**再比 —— 纯 parseInt 会把 2.03 当成 2.3（比 2.1 大）。
+     对齐后：2.03（段 '03'）vs 2.1（段补成 '10'）⇒ 3 < 10 ⇒ 2.03 < 2.1 ✓；
+     0.83（'83'）vs 0.7（补成 '70'）⇒ 83 > 70 ⇒ 0.83 > 0.7 ✓。 */
   var _lnum = function (x) {
-    return String(x).replace(/^v/i, '').split('.').map(function (y) { return parseInt(y, 10) || 0; });
+    return String(x).replace(/^v/i, '').split('.').map(function (y) { return String(y).trim(); });
   };
   var _lncmp = function (a, b) {
     var A2 = _lnum(a), B2 = _lnum(b), n2 = Math.max(A2.length, B2.length);
     for (var i2 = 0; i2 < n2; i2++) {
-      var x2 = A2[i2] || 0, y2 = B2[i2] || 0;
-      if (x2 !== y2) return x2 - y2;
+      var x2 = (A2[i2] === undefined ? '0' : A2[i2]);
+      var y2 = (B2[i2] === undefined ? '0' : B2[i2]);
+      var m2 = Math.max(x2.length, y2.length);
+      var z2 = function (v2) {
+        while (v2.length < m2) v2 += '0';
+        return parseInt(v2, 10) || 0;
+      };
+      var X2 = z2(x2), Y2 = z2(y2);
+      if (X2 !== Y2) return X2 - Y2;
     }
     return 0;
   };
@@ -7621,11 +7796,14 @@ function lbUpdApiCardHtml(_card){
     + '· 绿：已是官方最新 v' + (_lnk || '?') + ' —— ' + _lGreen + ' 服\n'
     + '· 黄：旧版 —— ' + _lYellow + ' 服\n'
     + '· 灰：未检测到 dll —— ' + _libGray.length + ' 服'
+    + (LT.verAt ? ('\n\n【官方公告】v' + (_lnk || '?') + '（' + String(LT.verAt) + '）') : '')
     + (_libDet ? ('\n\n' + _libDet) : '');
   var _libRow = '<div style="color:#9ca3af">'
+     /* v6455（用户口径）：「库」徽章移到 AsaApi **之后**（原 v6389 在前） */
+     + '<span style="color:#e5e7eb;font-weight:600">AsaApi</span>'
      + '<span style="color:#c4b5fd;font-weight:700;border:1px solid #c4b5fd66;background:#c4b5fd1a;'
-     + 'border-radius:4px;padding:0 5px;font-size:10.5px;line-height:16px;display:inline-block;vertical-align:middle">库</span>'
-     + '<span style="color:#e5e7eb;font-weight:600;margin-left:5px">AsaApi</span>'
+     + 'border-radius:4px;padding:0 5px;font-size:10.5px;line-height:16px;display:inline-block;vertical-align:middle;'
+     + 'margin-left:5px">库</span>'
      + (_lVersHtml ? ('　' + _lVersHtml) : '')
      + '　<span class="lb-tipb" style="display:inline-block;width:54px;height:4px;border-radius:2px;background:#374151;'
      + 'overflow:hidden;vertical-align:middle;font-size:0;cursor:help"'
@@ -7647,9 +7825,11 @@ function lbUpdApiCardHtml(_card){
     + '\n状态：' + (_alp.srcOk ? '已就绪' : '缺失（目录不存在或为空）')
     + '\n\n【用途】\nAPI 分发时的插件来源，直接读该目录';
   h += '<div style="color:#9ca3af">本地包：'
-     + (_alp.count ? ('<span style="color:#4ade80">已就绪</span>'
-                      + '<b style="color:#e5e7eb;margin-left:4px">' + lbMdEsc(String(_alp.ver || '-')) + '</b>')
-                   : '<span style="color:#6b7280">未下载</span>')
+     + (_alp.count ? ('<b style="color:#e5e7eb">' + lbMdEsc(String(_alp.ver || '-')) + '</b>') : '')
+     /* v6398（用户口径「已就绪、已最新 不能放到同一个状态机里么？」）：单一状态机
+        权威线上最新 = Discord 公告 latest.verNum */
+     + lbUpdPkgState(!!_alp.count, _alp.needUpgrade, _alp.latestVer,
+                     { prefix: 'v', cur: _alp.ver })
      + '　<span style="color:#374151">|</span>　SOK自研源 '
      + (_alp.srcOk ? ('<span style="color:#4ade80">已就绪</span>')
                    : '<span style="color:#f87171">缺失</span>')
@@ -7811,7 +7991,8 @@ function lbUpdApiCardHtml(_card){
   });
   /* v6315（用户口径）：删掉「多余 · 应清理（N）」标题行与插件明细 —— 与 MOD 卡一致，
      清单只放在底部「安全清理」按钮的 tips 里，不重复占版面。 */
-  h += '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:6px">'
+  /* v6448：统一底栏 */
+  h += '<div class="lb-upd-foot">'
      /* v6293（用户口径）：API 也要有本地包系统（官方包下载 + 自研源） */
      /* v6294（用户口径）：去掉「更新 API」按钮，只留「更新本地包」 */
      /* v6366（用户口径）：右下角「清空本地包」—— 未下载时置灰 */
@@ -7964,7 +8145,8 @@ function lbUpdRender(){
   var _vkCol = (_vkK === 'forced') ? '#f87171'
              : ((_vkK === 'patch') ? '#60a5fa'
              : ((_vkK === 'same') ? '#9ca3af' : '#6b7280'));
-  /* v6252：文案与 tips 一律走唯一来源 —— 强制 = 服务器不更新玩家就进不来 */
+  /* v6252：文案与 tips 一律走唯一来源
+     v6453（用户纠正）：强制 = 服务器不更新，玩家进不来；补丁 = 服务器不更新，玩家也能进 */
   var _vkTxt = lbUpdKindShort(_vkK);
   var _vkTip = '【变更类型】\n' + lbUpdKindText(_vkK).replace(' · ', '\n');
   var _can = (_tgL0.length > 0) && (_needCache ? !!D.canApply : !!_zpkg.ready);
@@ -8051,15 +8233,22 @@ function lbUpdRender(){
      /* v6250（用户口径）：状态字（已就绪/未就绪）从标题行**移到版本行**，紧跟「版本：」之后。
         v6212：路径行按用户口径删除；manifest（= Steam depot 清单号）收进 hover tips，版本号只留 buildId。 */
      + '<div style="color:#9ca3af">版本：'
-     + '<span style="color:' + _color + ';font-weight:700">' + (_ok ? '已就绪' : '未就绪') + '</span>'
      /* v6296（用户口径）：buildId 链到 SteamDB 的 depot manifest 页（后三位保持深绿） */
-     + '<span class="lb-tipb lb-verlink" style="margin-left:4px" onclick="lbUpdOpenDepot()" '
+     + '<span class="lb-tipb lb-verlink" onclick="lbUpdOpenDepot()" '
      + 'title="【点击打开 SteamDB】\n列出该 depot 的全部 manifest\n本版本 buildId 就是对应的 manifest 号">'
      + '<span style="color:#e5e7eb">' + lbMdEsc(_cbHead) + '</span>'
      + '<span style="color:#15803d;font-weight:700">' + lbMdEsc(_cbTail) + '</span></span>'
      + '<span class="lb-tipb" style="margin-left:6px;color:#6b7280;cursor:help"'
      + ' title="【depot 清单号】\n即 manifest ID，该版本的内容快照指纹\n同一 buildId 下必然相同\n\n无需人工关心，仅供核对">'
-     + '<i class="mdi mdi-information-outline" style="font-size:12px"></i></span></div>'
+     + '<i class="mdi mdi-information-outline" style="font-size:12px"></i></span>'
+     /* v6398（用户口径「已就绪、已最新 不能放到同一个状态机里么？」）：
+        单一状态机 —— 未就绪 / 已最新 / 待升级（最新 X）三选一，不再并列「已就绪 + 已最新」。
+        权威线上最新 = Steam 官方 buildId（api.steamcmd.net）。 */
+     + lbUpdPkgState(_ok, C.needUpgrade, C.latestBuildId,
+                     { cur: C.buildId, emptyTxt: '未就绪' })
+     /* v6446（用户口径「附件应该放在卡片右下角」）：拉取指定版本已移到右下角，
+        与「清空缓存」并排（见下方 return 块）。 */
+     + '</div>'
      /* v6251：游戏版本对比行（本服 -> 官服）+ 变更类型徽章；两边都取不到时不渲染 */
      + ((_vk.from || _vk.to)
           ? ('<div style="color:#9ca3af">游戏版本：本服 '
@@ -8096,7 +8285,16 @@ function lbUpdRender(){
             : ((_bh2 > 0)
                 ? ('【暂不可清空】\n还有 ' + _bh2 + ' 服未与缓存一致\n先完成分发才能清空缓存')
                 : ('【清空缓存】\n删除 D:\\Cache 下的全部缓存内容\n实测 ' + (C.realGB || 0) + ' GB\n\n不可撤销'));
-          return '<div style="display:flex;justify-content:flex-end;margin-top:6px">'
+          /* v6447（用户口径「附件这种 要做成底栏形式」）：通栏底栏 ——
+             用负 margin 抵消卡片 padding(8px 10px)，上边框分隔 + 浅底 + 跟随底部圆角。 */
+          return '<div class="lb-upd-foot">'
+               /* v6446（用户口径「附件应该放在卡片右下角」）：拉取指定版本与清空缓存并排 */
+               + '<a class="lb-tipb lb-upd-link" onclick="lbUpdVerOpen()"'
+               + ' title="' + lbMdEsc(
+                    '【拉取指定版本】\n把 D:\\Cache 的 Steam 缓存拉到某个历史版本\n'
+                  + '（用于回滚，例如游戏更新后 AsaApi 未跟上时退回上一版）\n\n'
+                  + '只改缓存目录，不动任何服务器\n拉取完需要再走「分发」才会装到各服') + '">'
+               + '<i class="mdi mdi-cloud-download-outline"></i>拉取指定版本</a>'
                + '<a class="lb-tipb lb-upd-link' + (_dis2 ? ' dis' : '') + '"'
                + ' title="' + lbMdEsc(_tip2) + '"'
                + (_dis2 ? '' : ' onclick="lbUpdCacheClear()"')
@@ -8125,11 +8323,15 @@ function lbUpdRender(){
      + '<div style="color:#9ca3af;line-height:1.8;margin-top:3px">本地包：'
      + (_zpkg.ready
           /* v6247（用户口径）：版本号改链接样式，点了跳到 资讯广场 →「汉化版本」Tab */
-          /* v6253（用户口径「已就绪 V10.1 这里的间距」）：半角空格改全角，与「已就绪　26477280」同为 12px */
-          ? ('<span style="color:#4ade80">已就绪<span class="lb-verlink" style="margin-left:4px" onclick="lbNewsGoTab(\'tieba\')"'
-             + ' title="查看汉化版本（资讯广场 → 汉化版本）">V' + lbMdEsc(String(_zpkg.ver || '')) + '</span></span>')
-          : (_zpkg.downloaded ? '<span style="color:#fbbf24">已下载未解压</span>'
-                              : '<span style="color:#6b7280">未下载</span>'))
+          ? ('<span class="lb-verlink" onclick="lbNewsGoTab(\'tieba\')"'
+             + ' title="查看汉化版本（资讯广场 → 汉化版本）">V' + lbMdEsc(String(_zpkg.ver || '')) + '</span>')
+          : '')
+     /* v6398（用户口径「已就绪、已最新 不能放到同一个状态机里么？」）：单一状态机 */
+     + lbUpdPkgState(!!_zpkg.ready,
+          !!(String(_zrem.ver || '') && String(_zrem.ver).replace(/^v/i, '').trim()
+             !== String(_zpkg.ver || '').replace(/^v/i, '').trim()),
+          String(_zrem.ver || ''),
+          { prefix: 'V', pending: !!_zpkg.downloaded, cur: _zpkg.ver })
      + (_zprep.running && _zprep.msg ? ('　<span style="color:#22d3ee">' + lbMdEsc(String(_zprep.msg)) + '</span>') : '')
      /* v6245（用户口径）：本地包已就绪时不再追加上次的失败信息，避免「已就绪 + 下载失败」同屏矛盾 */
      + ((_zprep.phase === 'fail' && !_zpkg.ready)
@@ -8144,7 +8346,21 @@ function lbUpdRender(){
      /* v6250（用户口径）：各服行**不再显示「当前 旧版」**（末段整块删除） */
      + '</div>'
      /* v6248（用户口径）：**更新本地包移到卡片右下角**（原在标题行，与「分发」挤在一起） */
-     + '<div style="display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:6px">'
+     /* v6448：统一底栏 */
+     + '<div class="lb-upd-foot">'
+     /* v6452（用户口径「汉化包、MOD 的底栏 左侧要加两个功能：部署到本机」） */
+     + '<a class="lb-tipb lb-upd-link lb-foot-left" onclick="lbDeployLocal(\'zh\',this)"'
+     + ' title="' + lbMdEsc(
+          '【部署到本机】\n从 Google Drive 直连下载，写入本机游戏目录\n\n'
+        + '【写入位置】\nARK Survival Ascended\\ShooterGame\\Content\\Paks\n'
+        + '　　只覆盖 pak / ucas / utoc 三个文件\n\n'
+        + '【首次要点】\n· 选 ASA 所在 Steam 库根目录（如 B:\\SteamLibrary）\n'
+        + '· 之后自动记住，不用再选\n'
+        + '· 换目录：按住 Shift 再点本按钮\n'
+        + '· 记住的目录失效会自动重弹\n\n'
+        + '【前置条件】\n先在「系统管理 → Google API Key」配好密钥\n\n'
+        + '【说明】\n已是最新版会拦截不下载\n需重开游戏生效') + '">'
+     + '<i class="mdi mdi-folder-download-outline"></i>部署到本机</a>'
      /* v6366（用户口径）：右下角「清空本地包」—— 参考「清空缓存」，未就绪/下载中置灰 */
      + lbUpdPkgClearLink('zh', !!_zpkg.ready, _zprep.running,
           '【清空本地包】\n删除 ' + String(_zpkg.cacheRoot || 'D:\\Cache-zh') + ' 下全部内容\n'
@@ -9106,6 +9322,8 @@ function lbSrvCtlLegendHtml(hasData, noIp, zhOld, modApi){
   };
   return '<div class="lb-srvctl-legend">'
     + '<span class="it">' + _m('') + '运行</span>'
+    /* v6400（用户口径「图例也要跟上」）：启动中 —— 角标黄 */
+    + '<span class="it">' + _m('start') + '启动中</span>'
     + '<span class="it">' + _m('stop') + '停止</span>'
     + '<span class="it">' + _m('mis') + '版本旧</span>'
     + (noIp ? '' : ('<span class="it">' + _m('ipx') + 'IP失效</span>'))   /* v6232（用户口径）：传 noIp=true 时不显示 IP失效 */
@@ -9215,7 +9433,12 @@ function lbSrvCtlChipsHtml(selObj, toggleFn, smap, officialVer, ipBadFn, badgeFn
     var on = !!sel[s.abbr];
     var mdi = (LB_SERVER_MDI || {})[s.abbr] || '';
     var d = smap[s.abbr];
-    var running = !!(d && String(d.status || '').toLowerCase() === 'running');
+    /* v6400（用户口径「地图TAB的角标要有正在启动的状态，就是角标变黄色」）：
+       原来只有 running / 非 running 两态 ⇒ 「启动中」被判成红（像挂了）。
+       现在拆三态：running 绿 / starting 黄 / 其它红。 */
+    var _stLow = (d && String(d.status || '').toLowerCase()) || '';
+    var running = (_stLow === 'running');
+    var starting = (_stLow === 'starting');
     var ver = d ? lbSrvCtlVer(d.serverVersion || d.version).replace(/^v/i, '') : '';   /* v5981：角标显示该服**实际**版本（ServerVersion），非官方网络值 */
     var mis = !!(_official && ver && ver !== _official);   /* v5980：与官服版本不一致 -> 呼吸外环（底色不变） */
     /* v6162（用户口径·方案 B）：角标版本号看不清 —— 底色加深一号 + 白字 700 + 字号 9.5px + 内边距 4px */
@@ -9225,7 +9448,7 @@ function lbSrvCtlChipsHtml(selObj, toggleFn, smap, officialVer, ipBadFn, badgeFn
       badge = '<em class="server-tab-cnt' + (_bf.cls || '') + '" style="background:' + (_bf.color || '#7c3aed')
         + ';color:#fff;font-weight:700;font-size:9.5px;line-height:13px;padding:0 4px">' + lbMdEsc(_bf.text) + '</em>';
     } else if (ver){
-      badge = '<em class="server-tab-cnt' + (mis ? ' mis' : '') + '" style="background:' + (running ? '#15803d' : '#b91c1c')
+      badge = '<em class="server-tab-cnt' + (mis ? ' mis' : '') + '" style="background:' + (starting ? '#fbbf24' : (running ? '#15803d' : '#b91c1c'))
         + ';color:#fff;font-weight:700;font-size:9.5px;line-height:13px;padding:0 4px">' + lbMdEsc(ver) + '</em>';
     }
     var zhOld = (typeof zhOldFn === 'function') ? !!zhOldFn(s) : false;
@@ -9250,7 +9473,7 @@ function lbSrvCtlChipsHtml(selObj, toggleFn, smap, officialVer, ipBadFn, badgeFn
          才能看出「已下载更新但还没重启」（Bob: buildId 035 / 运行 96.9）。 */
     var _useBf = !!(_bf && _bf.text);
     var tipFull = (s.name || s.abbr)
-                + '\n【状态】' + (d ? (running ? '运行中' : '已停止') : '状态未知')
+                + '\n【状态】' + (starting ? '启动中' : (d ? (running ? '运行中' : '已停止') : '状态未知'))
                 + (ver ? ('\n【运行版本】' + ver) : '')
                 + (_useBf && _bf.title ? ('\n【更新】' + _bf.title) : '')
                 + (ipB ? ('\n【IP】公网 IP ' + _ipPair + '（' + (ipB.changedAt || '近期') + ' 变更）\n本服启动早于该变更，需重启后才能被搜到') : '')
@@ -9581,7 +9804,9 @@ function lbSrvCtlQueueLineHtml(){
     /* 「跑完 60 秒后消失」也改用后端 endTs（done 最后完成时刻）⇒ 各端同刻消失。 */
     var _endMs = Number(q.endTs || 0) * 1000;
     if (_endMs && (Date.now() - _endMs) > 60000 && !_pend) return '';
-    var _h0 = '<span class="ql-ttl">启动队列</span>';
+    /* v6402（用户口径「启动任务条 补上终止 mdi 图标按钮」）：复用 lb-srvctl-mini 样式
+       与现有 /api/srvctl/action 的 kill+interrupt 通道（不新造中止机制）。 */
+    var _h0 = '<span class="ql-ttl">启动队列</span>' + lbStartqAbortBtnHtml();
     if (_pend) _h0 += '<span class="ql-n">待启动 ' + _pend + ' 台</span>';
     else _h0 += '<span class="ql-done">已完成 ' + lbStartqDoneTxt(q) + '</span>';
     return _h0;
@@ -9604,7 +9829,8 @@ function lbSrvCtlQueueLineHtml(){
        /* v6188（用户口径）：改回「重压」—— heavyCount 统计的就是
           `[下发, started)` 区间内的台数，即「**待进入重压 + 正在重压**」，
           它本身就是重压限制的载体（不存在独立的「并发」概念）。 */
-       + '<span class="ql-sep">·</span><span class="ql-heavy" title="待进入重压 + 正在重压的台数（上限 ' + (q.heavyMax || 2) + '）">重压 ' + q.heavyCount + '/' + (q.heavyMax || 2) + '</span>';
+       + '<span class="ql-sep">·</span><span class="ql-heavy" title="待进入重压 + 正在重压的台数（上限 ' + (q.heavyMax || 2) + '）">重压 ' + q.heavyCount + '/' + (q.heavyMax || 2) + '</span>'
+       + lbStartqAbortBtnHtml();
 }
 function lbSrvCtlQueueLinePaint(){
   /* v6262（用户口径「启动队列行在安全回档 / 服务器更新里也要显示」）：
@@ -10105,10 +10331,14 @@ function lbTaskHtml(t){
     +   (t.operatorName ? ('<span class="lb-task-op">' + lbMdEsc(t.operatorName) + '</span>') : '')
     +   '<span class="lb-task-sp"></span>'
     /* v6164（计划 §16 第 7 项 / C8）：自动重启任务在「进行中/排队」时给一个中止按钮 */
-    +   ((t.action === 'restart' && (ph === 'run' || ph === 'queue'))
-          ? ((t.meta && t.meta.batch)
-              ? '<button class="lb-srvctl-mini" title="中止整批自动重启" onclick="lbTaskAbortAll()"><i class="mdi mdi-stop-circle-outline"></i></button>'
-              : '<button class="lb-srvctl-mini" title="中止本台自动重启（其它服继续）" onclick="lbTaskAbort(\'' + lbMdEsc(t.server) + '\')"><i class="mdi mdi-stop-circle-outline"></i></button>')
+    /* v6436（用户口径「启动任务条也要有终止 mdi」）：`start` 任务同样给中止按钮 ——
+       动作走 kill+interrupt（与 lbStartqAbort 同一后端通道），不再只限 restart。 */
+    +   (((t.action === 'restart' || t.action === 'start') && (ph === 'run' || ph === 'queue'))
+          ? (t.action === 'start'
+              ? '<button class="lb-srvctl-mini" title="终止本台启动（强制结束正在启动的进程）" onclick="lbTaskAbortStart(\'' + lbMdEsc(t.server) + '\')"><i class="mdi mdi-stop-circle-outline"></i></button>'
+              : ((t.meta && t.meta.batch)
+                  ? '<button class="lb-srvctl-mini" title="中止整批自动重启" onclick="lbTaskAbortAll()"><i class="mdi mdi-stop-circle-outline"></i></button>'
+                  : '<button class="lb-srvctl-mini" title="中止本台自动重启（其它服继续）" onclick="lbTaskAbort(\'' + lbMdEsc(t.server) + '\')"><i class="mdi mdi-stop-circle-outline"></i></button>'))
           : '')
     +   ((ph === 'fail' && LB_TASK_RETRYABLE.indexOf(String(t.action || '')) >= 0)
           ? '<button class="lb-srvctl-mini" title="重试" onclick="lbTaskRetry(' + Number(t.id) + ')"><i class="mdi mdi-refresh"></i></button>'
@@ -10282,6 +10512,62 @@ function lbTaskClearFail(){
   lbTaskRender();
 }
 /* v6164（计划 §16 第 7 项 / C8）：中止某台的自动重启（只影响这一台，其余继续跑） */
+/* v6436（用户口径「启动任务条也要有终止 mdi」）：终止单台「启动」任务
+   与 lbStartqAbort 完全同一套后端通道（/api/srvctl/action kill + interrupt:true），
+   样式复用 .lb-srvctl-mini + mdi-stop-circle-outline */
+/* v6437：统一「先清启动队列后杀进程」——后端 startq/abort 会清 _SRVCTL_STARTQ['active']
+   并置任务条 fail；只发 kill 是杀不掉任务条的（队列会每 2 秒重推 run 条）。 */
+function lbStartqAbortPost(servers, doneCb){
+  var list = (servers || []).filter(function(x, i, a){ return x && a.indexOf(x) === i; });
+  if (!list.length){ if (doneCb) doneCb(false); return; }
+  var base = (typeof lbSrvCtlApi === 'function') ? lbSrvCtlApi() : '';
+  var tk = (typeof lbSrvCtlToken === 'function') ? lbSrvCtlToken() : '';
+  if (!base){ if (doneCb) doneCb(false); return; }
+  lbSrvCtlFetchW(base + '/api/srvctl/startq/abort', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tk },
+    body: JSON.stringify({ servers: list })
+  }).then(function(r){ return r.json(); }).then(function(j){
+    var ok = !!(j && j.ok);
+    try {
+      var rm = (j && j.removed) || [];
+      lbToast(ok ? ('已中止启动：' + (rm.length ? rm.join('、') : list.join('、')))
+                 : ('清理队列失败：' + ((j && (j.error || j.code)) || '未知')));
+    } catch(e){}
+    try { lbTaskSync(); } catch(e){}
+    try { lbSrvCtlQueueLinePaint(); } catch(e){}
+    if (doneCb) doneCb(ok);
+  }).catch(function(e){
+    try { lbToast('清理队列失败：' + e); } catch(e2){}
+    if (doneCb) doneCb(false);
+  });
+}
+function lbTaskAbortStart(server){
+  var s = String(server || '').trim();
+  if (!s) return;
+  var go = function(){
+    /* v6437：必须**先清启动队列**（否则 _startq_loop 每 2 秒重建 run 任务条），再杀进程 */
+    lbStartqAbortPost([s], function(){
+      var base = (typeof lbSrvCtlApi === 'function') ? lbSrvCtlApi() : '';
+      var tk = (typeof lbSrvCtlToken === 'function') ? lbSrvCtlToken() : '';
+      if (!base) return;
+      lbSrvCtlFetchW(base + '/api/srvctl/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tk },
+        body: JSON.stringify({ action: 'kill', servers: [s], interrupt: true, src: 'agent' })
+      }).then(function(r){ return r.json(); }).then(function(j){
+        var okN = ((j && j.results) || []).filter(function(x){ return x && x.ok; }).length;
+        try { lbToast((j && j.ok) ? ('已终止 ' + s + ' 启动（' + okN + ' 项）')
+                                 : ('进程终止失败：' + ((j && (j.error || j.code)) || '未知'))); } catch(e){}
+        try { lbTaskSync(); } catch(e){}
+        try { lbSrvCtlQueueLinePaint(); } catch(e){}
+      }).catch(function(e){ try { lbToast('进程终止失败：' + e); } catch(e2){} });
+    });
+  };
+  var msg = '确定终止「' + s + '」的启动吗？\n\n将强制结束该服正在启动的进程（不会自动重启）。';
+  if (typeof lbAsk === 'function' && lbAsk(msg, go, '确定终止启动')) return;
+  try { if (window.confirm(msg)) go(); } catch(e){}
+}
 function lbTaskAbort(server){
   if (!server) return;
   var go = function(){
@@ -11647,17 +11933,19 @@ function lbOpenRolePicker(){
     +'<span class="lb-tipb" style="user-select:none;display:inline-flex;align-items:center;gap:4px;font-size:11px;color:'+_rlMap.c+';line-height:1" title="当前登录角色">'
     +   '<i class="mdi '+_rlMap.i+'"></i>' + _rlMap.t
     +'</span>'
-    +'<span class="lb-tipb" style="user-select:none;display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#9a9aae;line-height:1;cursor:help"'
+    +'<span class="lb-tipb" style="user-select:none;display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#9a9aae;line-height:1;cursor:help;min-width:0;overflow:hidden;white-space:nowrap"'
     +   ' title="'+(_acct ? ('【账号】\n'+escapeHtml(_acct)+'\n【Steam 昵称】\n'+escapeHtml(_nick || '—')) : '未登录')+'">'
     +   '<i class="mdi mdi-account-circle-outline" style="font-size:13px"></i>' + escapeHtml(_disp)
     +'</span>'
     +'<span class="lb-linkbtn" onclick="lbLogout()" title="注销登录" style="font-size:11px;line-height:1">注销</span>'
     +'<span style="flex:1"></span>'
-    +'<span class="lb-tipb" style="user-select:none;font-size:11px;color:#9a9aae;line-height:1" title="前端版本">'+LB_VERSION+'</span>'
+    +'<span class="lb-tipb" style="user-select:none;font-size:11px;color:#9a9aae;line-height:1;white-space:nowrap;flex:none" title="前端版本">'+LB_VERSION+'</span>'
+    +'<span class="lb-tipb" id="lbBeVer" style="user-select:none;font-size:11px;color:#6b7280;line-height:1;margin-left:6px;cursor:help;white-space:nowrap;flex:none" title="后端版本（读取 /api/health）">be …</span>'
     +'</div>';
   html+='</div>';
   overlay.innerHTML=html;
   document.body.appendChild(overlay);
+  try{ lbBeVerLoad(); }catch(e){}
 }
 function lbRolePick(el){
   var pid = el ? el.getAttribute('data-pid') : '';
@@ -21679,6 +21967,9 @@ function lbRenderView(data, player, classFilter){
     var badge=(cnt?cnt:'');   // v1235：角标只显示数量（去掉基因标记 ✦；tooltip 仍保留「基因N」）
     tabH+='<span class="lb-tipb server-tab'+(LB.tab===s.abbr?' active':'')+'" onclick="lbSetTab(\''+s.abbr+'\')" title="'+s.name+' ('+cnt+')">'+(mdi?'<i class="mdi '+mdi+'"></i>':(s.icon||''))+(badge?'<em class="server-tab-cnt">'+badge+'</em>':'')+'</span>';
   });
+  /* v6392（用户口径「我是说服务器更新面板的地图TAB的角标 不是总的」「要撤掉」）：
+     v6391 给这条总 TAB 加的 .upd-mk 标记已撤销，恢复原样 ——
+     待升级标记只在「服务器更新」面板的 chips（lbSrvCtlChipsHtml）上。 */
   var tabEl=document.getElementById('lbTabs');
   if(tabEl) tabEl.innerHTML=tabH;
 
@@ -51471,6 +51762,11 @@ async function lbOpenAlliancePos(){
   if(!ov || !body) return;
   // v537：先显示 loading，再异步拉联盟/在线数据
   body.innerHTML = '<div onclick="event.stopPropagation()" style="display:flex;align-items:center;justify-content:center;min-height:52vh;text-align:center" id="lbAlliProg"><span class="lb-spin"></span></div>';
+  /* v6466（用户实报「点在线角色出的浮窗被盖住」）：
+     #lbBreedOverlay 原 z-index 写死 9999，而 lbSheetOpen() 每次打开浮窗都 **递增**（9998,9999,10000…）
+     ⇒ 开过两个浮窗后 #lbSrvCtl 就超过 9999，把地图模态盖住。
+     这里把地图抬到所有 sheet 之上的固定高层（仍低于 #lbTipBox 的 2147483000）。 */
+  try { ov.style.zIndex = '100000'; } catch (eZ) {}
   ov.style.display = 'block';
   LB._alliModal = true; // v617：地图信息=联盟地图模态（点遮罩不关闭，点  才关）
   var map = await lbLoadAlliances();
@@ -53884,14 +54180,19 @@ function lbUpdVerDet(newKey, map, miss, opt){
   });
   if (!keys.length) return '';
   var nk = norm(newKey);
+  /* v6392：段右补零对齐再比（2.03 < 2.1、0.83 > 0.7 都成立），避免把 2.03 当成 2.3 */
   var vnum = function (x) {
-    return norm(x).split('.').map(function (y) { return parseInt(y, 10) || 0; });
+    return norm(x).split('.').map(function (y) { return String(y).trim(); });
   };
   var vcmp = function (a, b) {
     var A = vnum(a), B = vnum(b), n = Math.max(A.length, B.length);
     for (var i = 0; i < n; i++) {
-      var x = A[i] || 0, y = B[i] || 0;
-      if (x !== y) return x - y;
+      var x = (A[i] === undefined ? '0' : A[i]);
+      var y = (B[i] === undefined ? '0' : B[i]);
+      var m = Math.max(x.length, y.length);
+      var pad = function (v) { while (v.length < m) v += '0'; return parseInt(v, 10) || 0; };
+      var X = pad(x), Y = pad(y);
+      if (X !== Y) return X - Y;
     }
     return 0;
   };
@@ -53921,4 +54222,2481 @@ function lbUpdVerDet(newKey, map, miss, opt){
              + '\n· ' + missArr.map(nmOf).join('、'));
   }
   return lines.join('\n');
+}
+
+/* ===== v6398（用户口径「已就绪、已最新 不能放到同一个状态机里么？」）=====
+   四张卡的「本地包」统一为**单一状态机**，一行只出一个状态词，按优先级：
+     ① 未下载           灰   （ready=false）
+     ② 已下载未解压     黄   （ready=false 且 opt.pending=true）
+     ③ 待升级（最新 X） 黄   （ready + 落后权威线上最新）
+     ④ 已最新           绿   （ready + 等于权威线上最新）
+     ⑤ 已就绪           绿   （ready 但该源暂取不到权威线上版本，退化为可分发）
+   口径：只与**权威线上最新版本号**比，不与「各服已装 / SOK 自研源 / 策略基准」比。
+     · 缓存卡：本地缓存 buildId   vs Steam 官方最新 buildId（api.steamcmd.net）
+     · 汉化卡：本地包 V 版本       vs 云端最新（remote.ver）
+     · MOD 卡：本地包里的 pid_fid  vs CurseForge 线上最新 fid
+     · API 卡：本地包版本          vs Discord 公告 latest.verNum
+   参数：ready / need / latest + opt{prefix, cur, pending, emptyTxt, pendingTxt} */
+function lbUpdPkgState(ready, need, latest, opt){
+  var o = opt || {};
+  if (!ready){
+    if (o.pending) return '　<span style="color:#fbbf24">' + (o.pendingTxt || '已下载未解压') + '</span>';
+    return '　<span style="color:#6b7280">' + (o.emptyTxt || '未下载') + '</span>';
+  }
+  var L = String(latest === undefined || latest === null ? '' : latest).trim();
+  if (!L) return '　<span style="color:#4ade80">已就绪</span>';
+  var P = o.prefix || '';
+  var C = String(o.cur === undefined || o.cur === null ? '' : o.cur).trim();
+  if (need){
+    return '　<b style="color:#fbbf24" title="' + lbMdEsc(
+        '【本地包待升级】\n本地包：' + (C || '—') + '\n线上最新：' + L
+      + '\n\n只与权威线上最新版本号比对'
+      + '\n（不看各服已装 / 自研源 / 策略基准）') + '">待升级（最新 ' + P + lbMdEsc(L) + '）</b>';
+  }
+  return '　<span style="color:#4ade80">已最新</span>';
+}
+
+/* ===== v6402（用户口径 2026-11-09）：版本更新缓存 —— 拉取指定版本 =====
+   数据源：GET /api/update/cache/versions（后端已做「时间新→旧 + 只留当前主版本 97.x」）
+   下载：POST /api/update/cache/pull（后端跑 steamcmd download_depot）
+   凭据：按账号缓存，密码由后端加密落盘，前端永不回读明文 */
+var LB_UPDPULL = { items: [], major: '', latestMan: '', cacheBuild: '', creds: [],
+                   sel: '', user: '', busy: false, err: '', msg: '', loaded: false };
+
+function lbUpdVerOpen(){
+  /* v6402c：app_ui.js 是延迟加载的（lbSheetBuild 在其中）—— 与 lbUpdOpen 同款兜底，
+     否则从控制台/深链直接调用会报「lbSheetBuild is not defined」 */
+  if (typeof lbSheetBuild !== 'function'){ lbUIEnsure().then(lbUpdVerOpen, function(){}); return; }
+  var S = lbSheetBuild('lbUpdVer', { onClose: 'lbUpdVerClose()' });
+  if (!S || !S.ov) return;
+  S.title.innerHTML = '<i class="mdi mdi-cloud-download-outline"></i> 拉取指定版本';
+  if (S.tabs) S.tabs.style.display = 'none';
+  if (S.meta){ S.meta.innerHTML = ''; S.meta.style.display = 'none'; }
+  if (S.foot) S.foot.hidden = true;
+  lbSheetOpen('lbUpdVer');
+  LB_UPDPULL.loaded = false;
+  lbUpdVerRender();
+  lbUpdVerLoad();
+  /* v6418：重开浮窗时若拉取仍在跑，恢复任务条轮询 */
+  try { if (lbUpdVerActive()) lbUpdVerTaskStart(); } catch (e) {}
+}
+function lbUpdVerClose(){
+  lbSheetClose('lbUpdVer');
+  try { lbUpdVerTaskStop(); } catch (e) {}   /* v6418 */
+}
+
+function lbUpdVerLoad(){
+  var base = (typeof lbSrvCtlApi === 'function') ? lbSrvCtlApi() : '';
+  var tk = (typeof lbSrvCtlToken === 'function') ? lbSrvCtlToken() : '';
+  if (!base) return;
+  /* v6418（用户口径「点刷新列表 没反应」）：原来无任何即时反馈 —— 数据没变化时界面纹丝不动。
+     现在先切到 loading 态 + 提示，完成后再给「已刷新（N 个版本）」回执。 */
+  LB_UPDPULL.loaded = false;
+  LB_UPDPULL.err = '';
+  LB_UPDPULL.msg = '正在重新读取版本列表…';
+  lbUpdVerRender();
+  var H = { 'Authorization': 'Bearer ' + tk };
+  var p1 = lbSrvCtlFetchW(base + '/api/update/cache/versions?t=' + Date.now(), { headers: H })
+    .then(function(r){ return r.json(); });
+  var p2 = lbSrvCtlFetchW(base + '/api/update/steam/cred?t=' + Date.now(), { headers: H })
+    .then(function(r){ return r.json(); }).catch(function(){ return { ok: false }; });
+  Promise.all([p1, p2]).then(function(a){
+    var j1 = a[0] || {}, j2 = a[1] || {};
+    /* v6405（用户口径「用 buildId 作主键」）：没有 buildId 的条目（depotcache 遗留）不列出 */
+    LB_UPDPULL.items = (j1.items || []).filter(function(x){ return !!(x && x.buildId); });
+    LB_UPDPULL.major = String(j1.major || '');
+    LB_UPDPULL.latestMan = String((j1.latest || {}).manifest || '');
+    LB_UPDPULL.cacheBuild = String(j1.cacheBuildId || '');
+    LB_UPDPULL.err = String(j1.err || '');
+    LB_UPDPULL.creds = (j2.accounts || []);
+    LB_UPDPULL.loaded = true;
+    /* v6405：主键 = buildId；刷新后若原选中项已不在列表里则回落第一条 */
+    var _hasSel = false;
+    for (var _i2 = 0; _i2 < LB_UPDPULL.items.length; _i2++){
+      if (String(LB_UPDPULL.items[_i2].buildId) === String(LB_UPDPULL.sel)){ _hasSel = true; break; }
+    }
+    if (!_hasSel){
+      LB_UPDPULL.sel = LB_UPDPULL.items.length ? String(LB_UPDPULL.items[0].buildId) : '';
+    }
+    if (!LB_UPDPULL.user && LB_UPDPULL.creds.length) LB_UPDPULL.user = LB_UPDPULL.creds[0].user;
+    /* v6418：刷新回执（时间戳保证每次点多能看到变化） */
+    LB_UPDPULL.msg = '已刷新：' + LB_UPDPULL.items.length + ' 个版本（'
+                   + new Date().toTimeString().slice(0, 8) + '）';
+    lbUpdVerRender();
+    try { lbUpdVerTaskStart(); } catch (eT) {}
+  }).catch(function(e){
+    LB_UPDPULL.err = String(e);
+    LB_UPDPULL.loaded = true;
+    lbUpdVerRender();
+  });
+}
+
+function lbUpdVerRender(){
+  var S = { body: document.getElementById('lbUpdVerBody') };
+  if (!S.body) return;
+  var B = LB_UPDPULL;
+  var h = '<div class="tc">';
+  h += '<div style="color:#9ca3af;line-height:1.8">'
+     + '<b style="color:#ffffff">选择要拉取的版本</b>'
+     + '　<span style="color:#6b7280">按 buildId 由新到旧' + (B.major ? ('（当前主版本 v' + lbMdEsc(B.major) + '）') : '') + '</span>'
+     + '</div>';
+  if (!B.loaded){
+    h += '<div style="color:#6b7280;padding:10px 0">正在读取版本列表…</div>';
+  } else if (!B.items.length){
+    h += '<div style="color:#f87171;padding:10px 0">没有可用版本'
+       + (B.err ? ('（' + lbMdEsc(B.err) + '）') : '') + '</div>';
+  } else {
+    h += '<div style="margin-top:6px">';
+    B.items.forEach(function(it){
+      var on = (String(it.buildId) === String(B.sel));
+      var isCache = (String(it.buildId) === String(B.cacheBuild));
+      var isLatest = !!it.latest;
+      var col = on ? '#a78bfa' : '#33334a';
+      var bg = on ? '#a78bfa1a' : 'transparent';
+      h += '<div onclick="lbUpdVerPick(\'' + lbMdEsc(String(it.buildId)) + '\')"'
+         + ' style="cursor:pointer;border:1px solid ' + col + ';background:' + bg
+         + ';border-radius:8px;padding:7px 9px;margin-bottom:6px;line-height:1.7">';
+      h += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">';
+      h += '<i class="mdi ' + (on ? 'mdi-radiobox-marked' : 'mdi-radiobox-blank')
+         + '" style="font-size:15px;color:' + (on ? '#a78bfa' : '#6b7280') + '"></i>';
+      /* v6405（用户口径「用 buildId 作主键；能对应到游戏版本 再显示游戏版本」） */
+      h += '<span style="color:#e5e7eb;font-weight:700">buildId ' + lbMdEsc(it.buildId) + '</span>';
+      if (it.ver){
+        h += '<span class="lb-tipb" style="color:#c4b5fd"'
+           + ' title="' + lbMdEsc(it.verGuess
+               ? '【按相邻已知版本推断】\nbuildId 与版本号同序递增，两侧已知版本夹出此值'
+               : '【服务器实跑版本 / 官方实时版本】') + '">'
+           + 'v' + lbMdEsc(it.ver) + (it.verGuess ? '<span style="color:#6b7280">?</span>' : '')
+           + '</span>';
+      }
+      if (isLatest) h += '<span style="color:#22d3ee;border:1px solid #22d3ee66;background:#22d3ee1a;border-radius:4px;padding:0 4px;font-size:11px">Steam 最新</span>';
+      if (isCache)  h += '<span style="color:#4ade80;border:1px solid #4ade8066;background:#4ade801a;border-radius:4px;padding:0 4px;font-size:11px">当前缓存</span>';
+      h += '<span style="flex:1"></span>';
+      h += '<span style="color:#6b7280" title="' + lbMdEsc('SteamDB 发布时间')
+         + (it.atLocalTxt ? ('\n本机下载时间 ' + it.atLocalTxt) : '') + '">'
+         + lbMdEsc(it.atTxt || '-') + (it.sizeGB ? (' ・ ' + it.sizeGB + ' GB') : '') + '</span>';
+      h += '</div>';
+      if ((it.srv || []).length){
+        h += '<div style="color:#9ca3af;margin-left:21px">在用：' + lbMdEsc((it.srv || []).join('、')) + '</div>';
+      }
+      h += '<div style="margin-left:21px;font-size:11px;display:flex;align-items:center;'
+         + 'gap:8px;flex-wrap:wrap">';
+      if (it.hasManifest){
+        h += '<span style="color:#6b7280">manifest ' + lbMdEsc(it.manifest) + '</span>';
+        if (it.verified){
+          /* v6416：SteamCMD 官方日志 content_log.txt 里的权威配对（零推断） */
+          h += '<span class="lb-tipb"'
+             + ' title="' + lbMdEsc('【已验证】\nSteamCMD 官方日志 content_log.txt 实证：\n'
+                                    + 'finished update ... (BuildID X) :\n'
+                                    + '    2430931 (manifest GID)\n'
+                                    + 'Steam 落盘时自己打印的配对，零推断') + '"'
+             + ' style="color:#4ade80;border:1px solid #4ade8066;background:#4ade801a;'
+             + 'border-radius:4px;padding:0 4px">'
+             + '<i class="mdi mdi-shield-check"></i>已验证</span>';
+        } else if (it.autoMan){
+          /* v6415：api.steamcmd.net 官方 latest buildId↔manifest 自动配对落库 */
+          h += '<span class="lb-tipb"'
+             + ' title="' + lbMdEsc('【官方自动】\n后端定时读 Valve 官方 appinfo：\n'
+                                    + 'depots.branches.public.buildid  与\n'
+                                    + 'depots.2430931.manifests.public.gid\n'
+                                    + '同一响应内配对，自动入库，无需人工') + '"'
+             + ' style="color:#4ade80;border:1px solid #4ade8066;background:#4ade801a;'
+             + 'border-radius:4px;padding:0 4px">官方自动</span>';
+        } else if (it.manual){
+          h += '<span style="color:#22d3ee;border:1px solid #22d3ee66;background:#22d3ee1a;'
+             + 'border-radius:4px;padding:0 4px">手工登记</span>';
+        } else if (it.inferred){
+          h += '<span style="color:#fbbf24;border:1px solid #fbbf2466;background:#fbbf241a;'
+             + 'border-radius:4px;padding:0 4px">清单推断</span>';
+        }
+      } else {
+        h += '<span style="color:#f87171">清单缺失</span>';
+      }
+      /* v6409（用户口径）：每个版本都给「查看清单」（SteamDB 详情页含各 depot manifest）；
+         缺清单时再加「填清单」—— 填一次永久保存 */
+      h += '<a class="lb-tipb lb-upd-link"'
+         + ' title="' + lbMdEsc('【查看清单】\n在 SteamDB 打开该 build 的详情页\n\n'
+                       + '① 往下滚到「Changed files in this update」列表最底部\n'
+                       + '② 找这一行：Manifest ID changed - 旧 › 新\n'
+                       + '③ › 右边那串 19 位数字就是 manifest\n\n'
+                       + '也可点列表右上角 Depot 2430931 链接，URL 里带同一串') + '"'
+         + ' onclick="event.stopPropagation();lbUpdVerOpenSteamDB(\'' + lbMdEsc(it.buildId) + '\')">'
+         + '<i class="mdi mdi-open-in-new"></i>查看清单</a>';
+      if (!it.hasManifest){
+        h += '<a class="lb-tipb lb-upd-link"'
+           + ' title="' + lbMdEsc('【填清单】\n先点左边「查看清单」→ 滚到列表最底部\n把「Manifest ID changed - 旧 › 新」右侧那串数字粘进来\n保存后永久有效，以后不用再填') + '"'
+           + ' onclick="event.stopPropagation();lbUpdVerFillManifest(\'' + lbMdEsc(it.buildId) + '\')">'
+           + '<i class="mdi mdi-pencil-plus-outline"></i>填清单</a>';
+      }
+      h += '</div>';
+      h += '</div>';
+    });
+    h += '</div>';
+  }
+  /* v6405（用户口径「手动加版本的功能不需要」）：整块已移除 */
+  /* Steam 账号 */
+  h += '<div style="border-top:1px dashed #33334a;margin:8px 0"></div>';
+  h += '<div style="color:#9ca3af;line-height:1.9">'
+     + '<b style="color:#ffffff">Steam 账号</b>'
+     + '　<span style="color:#6b7280">密码加密存服务器，永不回显</span></div>';
+  if (B.creds.length){
+    h += '<div style="color:#9ca3af;margin-bottom:4px">已缓存：';
+    B.creds.forEach(function(c2){
+      h += '<span class="lb-tipb" title="' + lbMdEsc('保存于 ' + (c2.at || '-')) + '"'
+         + ' style="color:#4ade80;margin-right:8px">' + lbMdEsc(c2.user)
+         + (c2.hasPwd ? '' : '（无密码）') + '</span>';
+    });
+    h += '</div>';
+  }
+  h += '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
+     + '<input id="lbUpdVerUser" class="lb-ask-inp" value="' + lbMdEsc(B.user || '') + '" placeholder="Steam 账号" style="' + _lbUpdVerInpStyle('width:160px') + '">'
+     + '<input id="lbUpdVerPwd" class="lb-ask-inp" type="password" placeholder="密码（留空=沿用已存）" style="' + _lbUpdVerInpStyle('flex:1;min-width:180px') + '">'
+     + '<button class="lb-srvctl-mini" onclick="lbUpdVerSaveCred()" title="保存账号密码"><i class="mdi mdi-content-save-outline"></i></button>'
+     + '</div>';
+  /* 状态 + 执行 */
+  if (B.msg) h += '<div style="color:#4ade80;margin-top:8px">' + lbMdEsc(B.msg) + '</div>';
+  if (B.err) h += '<div style="color:#f87171;margin-top:8px">' + lbMdEsc(B.err) + '</div>';
+  /* v6419（用户口径「不是浮窗内出现进度条；我是说要走总线任务条」）：
+     拉取任务由后端登记进**任务总线**，进度统一交给 lbTaskRender() 渲染到 .lb-task-slot /
+     任务面板 / 入口徽章 —— 本浮窗**不再自造进度条**，只给一个「任务条」入口按钮。 */
+  var _act = false;
+  try { _act = lbUpdVerActive(); } catch (eA) {}
+  var _dis = (B.busy || !B.sel || _act);
+  h += '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">'
+     + (_act ? ('<button class="lb-upd-btn2" title="打开任务总线，查看拉取进度条" '
+                + 'onclick="lbUpdVerOpenTasks()"'
+                + ' style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;'
+                + 'border-radius:8px;border:1px solid #a78bfa66;background:#a78bfa1a;color:#c4b5fd;'
+                + 'cursor:pointer;font-size:13px;font-family:inherit">'
+                + '<i class="mdi mdi-progress-download"></i>任务条</button>') : '')
+     + '<button class="lb-upd-btn2" title="重新读取版本列表（实时查 Steam 最新）" onclick="lbUpdVerLoad()"'
+     + ' style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;'
+     + 'border:1px solid #3a3a4a;background:transparent;color:#cfd2dc;cursor:pointer;'
+     + 'font-size:13px;font-family:inherit">'
+     + '<i class="mdi mdi-refresh"></i>刷新列表</button>'
+     + '<button class="lb-upd-btn1" onclick="lbUpdVerGo()"' + (_dis ? ' disabled' : '')
+     + ' title="' + lbMdEsc('【开始拉取】\n备份 acf → 清空 D:\\Cache → 回写所选版本\n不动任何服务器') + '"'
+     + ' style="display:inline-flex;align-items:center;gap:6px;padding:8px 18px;border-radius:8px;'
+     + 'border:1px solid ' + (_dis ? '#3a3a4a' : '#7c3aed') + ';'
+     + 'background:' + (_dis ? 'transparent' : 'var(--accent,#7c3aed)') + ';'
+     + 'color:' + (_dis ? '#6b7280' : '#ffffff') + ';'
+     + 'cursor:' + (_dis ? 'not-allowed' : 'pointer') + ';'
+     + 'font-size:13px;font-weight:bold;font-family:inherit">'
+     + '<i class="mdi ' + (_act ? 'mdi-progress-download' : 'mdi-download') + '"></i>'
+     + (_act ? '拉取中…' : '开始拉取') + '</button>'
+     + '</div>';
+  h += '</div>';
+  S.body.innerHTML = h;
+}
+
+/* ===== v6418：拉取任务条（复用后端 /api/tasks 的 cachepull|* 任务）===== */
+var LB_UPDTASK_TIMER = null;
+var LB_UPDTASK_DONE = {};      /* v6422：已完成任务的去重标记（key|phase），防重复触发刷新 */
+function _lbUpdTaskFind(){
+  var its = (typeof LB_TASKS !== 'undefined' && LB_TASKS && LB_TASKS.items) || [];
+  for (var i = 0; i < its.length; i++){
+    if (String((its[i] || {}).key || '').indexOf('cachepull|') === 0) return its[i];
+  }
+  return null;
+}
+function lbUpdVerActive(){
+  var t = _lbUpdTaskFind();
+  if (!t) return false;
+  var ph = String(t.phase || '');
+  return (ph !== 'ok' && ph !== 'fail');
+}
+function lbUpdVerOpenTasks(){
+  try { if (typeof lbTaskPanelOpen === 'function') lbTaskPanelOpen(); } catch (e) {}
+}
+function lbUpdVerTaskStop(){
+  if (LB_UPDTASK_TIMER){ try { clearInterval(LB_UPDTASK_TIMER); } catch (e) {} LB_UPDTASK_TIMER = null; }
+}
+function lbUpdVerTaskStart(){
+  /* v6419：**走任务总线** —— 只负责把总线轮询拉起来 + 侦测任务完成，
+     进度条本体由 lbTaskRender() 统一渲染（.lb-task-slot / 任务面板 / 入口徽章）。
+     v6422（用户口径「浮窗在不断重复拉数据重新渲染」）：
+       ① **只在确有待处理任务时**才装检测定时器；
+       ② 同一任务同一终态**只触发一次**（LB_UPDTASK_DONE 去重）。
+     原实现不管有没有在途任务都装定时器，而任务总线里残留的 phase=fail 旧任务会被
+     每 1.2 秒判定为「刚完成」⇒ 刷新列表 ⇒ 刷新成功又重启检测 ⇒ **无限循环**。 */
+  try { if (typeof lbTaskSyncStart === 'function') lbTaskSyncStart(1200); } catch (e0) {}
+  try { lbTaskSync(); } catch (e1) {}
+  try { if (typeof lbTaskRender === 'function') lbTaskRender(); } catch (e2) {}
+  if (LB_UPDTASK_TIMER) return;
+  if (!lbUpdVerActive()) return;                 /* ① 没有在途拉取 ⇒ 不装定时器 */
+  LB_UPDTASK_TIMER = setInterval(function(){
+    var t = _lbUpdTaskFind();
+    if (!t || !lbUpdVerActive()){ lbUpdVerTaskStop(); return; }
+    var ph = String(t.phase || '');
+    if (ph !== 'ok' && ph !== 'fail') return;
+    var mark = String(t.key || '') + '|' + ph;
+    LB_UPDTASK_DONE[mark] = 1;                   /* ② 先记再判，防重入 */
+    lbUpdVerTaskStop();
+    try { lbUpdVerRender(); } catch (e5) {}
+    setTimeout(function () { try { lbUpdVerLoad(); } catch (e3) {} }, 900);
+  }, 1200);
+}
+
+function lbUpdVerPick(bid){
+  /* v6405：参数改为 buildId（主键） */
+  LB_UPDPULL.sel = String(bid || '');
+  LB_UPDPULL.msg = '';
+  lbUpdVerRender();
+}
+
+/* v6405（用户口径「附件输入框 样式似乎没复用」）：复用项目标准输入框样式 ——
+   与 lbAskInput() 的 _ipStyle 同款（深底 #111119 / 边框 #3a3a4a / 13px / 8×10 内距），
+   不再自造 #1f2937 那套。 */
+function _lbUpdVerInpStyle(extra){
+  return 'box-sizing:border-box;padding:8px 10px;border-radius:6px;border:1px solid #3a3a4a;'
+       + 'background:#111119;color:#e0e0e0;font-size:13px;line-height:1.5;outline:none;'
+       + 'font-family:inherit' + (extra ? (';' + extra) : '');
+}
+
+function _lbUpdVerPost(path, payload, cb){
+  var base = (typeof lbSrvCtlApi === 'function') ? lbSrvCtlApi() : '';
+  var tk = (typeof lbSrvCtlToken === 'function') ? lbSrvCtlToken() : '';
+  if (!base) return;
+  lbSrvCtlFetchW(base + path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tk },
+    body: JSON.stringify(payload || {})
+  }).then(function(r){ return r.json(); }).then(function(j){ cb(j || {}); })
+    .catch(function(e){ cb({ ok: false, error: String(e) }); });
+}
+
+function lbUpdVerSaveCred(){
+  var u = (document.getElementById('lbUpdVerUser') || {}).value || '';
+  var p = (document.getElementById('lbUpdVerPwd') || {}).value || '';
+  u = String(u).trim();
+  if (!u){
+    LB_UPDPULL.err = '请填 Steam 账号';
+    lbUpdVerRender();
+    return;
+  }
+  _lbUpdVerPost('/api/update/steam/cred', { user: u, pwd: String(p) }, function(j){
+    if (j.ok){
+      LB_UPDPULL.err = '';
+      LB_UPDPULL.msg = (p ? '账号密码已保存（加密）' : '账号已保存');
+      LB_UPDPULL.user = u;
+      var el = document.getElementById('lbUpdVerPwd');
+      if (el) el.value = '';
+      LB_UPDPULL.creds = (j.accounts || []);
+      lbUpdVerRender();
+    } else {
+      LB_UPDPULL.err = '保存失败：' + (j.error || j.code || '未知');
+      lbUpdVerRender();
+    }
+  });
+}
+
+function lbUpdVerGo(){
+  var B = LB_UPDPULL;
+  if (!B.sel) return;
+  var it = null;
+  B.items.forEach(function(x){ if (String(x.buildId) === String(B.sel)) it = x; });
+  if (!it){ B.err = '请先选择一个版本'; lbUpdVerRender(); return; }
+  if (!it.hasManifest || !it.manifest){
+    B.err = 'buildId ' + it.buildId + ' 的 depot 清单本机没有留档，无法直接拉取';
+    B.msg = '';
+    lbUpdVerRender();
+    return;
+  }
+  var u = (document.getElementById('lbUpdVerUser') || {}).value || B.user;
+  u = String(u).trim();
+  if (!u){
+    B.err = '请先填 Steam 账号并保存';
+    lbUpdVerRender();
+    return;
+  }
+  var lbl = 'buildId ' + it.buildId + (it.ver ? ('（v' + it.ver + '）') : '');
+  var go = function(){
+    B.busy = true; B.err = ''; B.msg = '';
+    lbUpdVerRender();
+    _lbUpdVerPost('/api/update/cache/pull',
+                  { manifest: it.manifest, buildId: it.buildId,
+                    user: u, confirm: 'PULL' }, function(j){
+      B.busy = false;
+      if (j.ok){
+        B.msg = '已开始拉取 ' + lbl + '，进度见任务总线';
+        /* v6424（用户口径「点了拉取版本后应该打开服务器更新浮窗」）：
+           起总线轮询 → 关版本浮窗 → 打开「服务器更新」浮窗（总线任务条在那里）。 */
+        try { if (typeof lbTaskSyncStart === 'function') lbTaskSyncStart(1200); } catch (eS) {}
+        try { if (typeof lbTaskSync === 'function') lbTaskSync(); } catch (eT) {}
+        try { lbUpdVerClose(); } catch (eC) {}
+        setTimeout(function () {
+          try { if (typeof lbUpdOpen === 'function') lbUpdOpen(); } catch (eO) {}
+          setTimeout(function () {
+            try { if (typeof lbTaskSync === 'function') lbTaskSync(); } catch (eT2) {}
+          }, 500);
+        }, 260);
+      } else {
+        B.err = '拉取失败：' + (j.error || j.code || '未知');
+      }
+      lbUpdVerRender();
+      try { if (typeof lbTaskSync === 'function') lbTaskSync(); } catch(e){}
+    });
+  };
+  /* v6418（用户口径「点了要复用确认浮窗」）：改用项目统一的卡片式确认浮窗 lbAskCard */
+  var _sz = (it.sizeGB ? (it.sizeGB + ' GB') : '约 11.5 GB');
+  /* v6423（用户口径「如果选的是当前缓存，点开始拉取，里面要有提醒」） */
+  var _isCache = (String(it.buildId) === String(B.cacheBuild || ''));
+  var _warn = _isCache
+      ? ('当前选中的就是「当前缓存」版本 —— D:\\Cache 已经是 buildId ' + String(it.buildId)
+         + '，拉取后内容不会有任何变化，通常无需重复拉取。\n'
+         + '（若只是想确认缓存完整，建议改用「分发」里的校验，而不是重拉 11 GB。）\n\n')
+      : '';
+  var _ok = false;
+  if (typeof lbAskCard === 'function'){
+    _ok = lbAskCard({
+      tone: 'warn',
+      icon: _isCache ? 'mdi-alert-outline' : 'mdi-cloud-download-outline',
+      title: '拉取缓存到 ' + (it.ver ? ('v' + it.ver) : ('buildId ' + it.buildId)),
+      badge: _isCache ? ('当前缓存 · buildId ' + it.buildId) : ('buildId ' + it.buildId),
+      steps: ['校验清单', '下载 ' + _sz, '备份 acf', '清空 D:\\Cache', '回写新版本'],
+      note: _warn
+          + '会清空并重写 D:\\Cache（约 ' + _sz + '），不动任何服务器。\n'
+          + 'manifest ' + it.manifest + (it.verified ? '（已验证）' : (it.manual ? '（手工登记）' : '')) + '\n'
+          + '拉取完成后仍需手动「分发」才会装到各服。',
+      okText: _isCache ? '仍要重新拉取' : '开始拉取',
+      cancelText: '取消',
+      onOk: go
+    });
+  }
+  if (!_ok && typeof lbAsk === 'function'){
+    _ok = lbAsk('确定把缓存拉取到「' + lbl + '」吗？\n\n'
+              + '会清空并重写 D:\\Cache 里的游戏文件（约 ' + _sz + '），不动任何服务器。\n'
+              + '拉取完成后仍需手动「分发」才会装到各服。', go, '确定拉取');
+  }
+  if (!_ok){
+    try { if (window.confirm('确定拉取 ' + lbl + ' 吗？')) go(); } catch(e){}
+  }
+}
+
+/* ===== v6402：启动队列行的「终止」按钮（复用 lb-srvctl-mini + kill/interrupt 通道）===== */
+function lbStartqAbortBtnHtml(){
+  var q = (typeof LB_SRVCTL !== 'undefined' && LB_SRVCTL && LB_SRVCTL.q) || null;
+  if (!q) return '';
+  var n = ((q.active || []).length) + ((q.pending || []).length) + ((q.queued || []).length);
+  if (!n) return '';
+  return '<span class="ql-sep">·</span>'
+       + '<button class="lb-srvctl-mini" style="margin-left:2px;vertical-align:middle"'
+       + ' title="中止启动队列（强制终止正在启动的服；已在运行的不受影响）"'
+       + ' onclick="lbStartqAbort()"><i class="mdi mdi-stop-circle-outline"></i></button>';
+}
+
+function lbStartqAbort(){
+  var q = (typeof LB_SRVCTL !== 'undefined' && LB_SRVCTL && LB_SRVCTL.q) || {};
+  var list = [];
+  (q.active || []).forEach(function(x){ if (x && x.server && list.indexOf(x.server) < 0) list.push(x.server); });
+  (q.pending || []).forEach(function(x){
+    var s = (typeof x === 'string') ? x : ((x && x.server) || '');
+    if (s && list.indexOf(s) < 0) list.push(s);
+  });
+  (q.queued || []).forEach(function(x){
+    var s = (typeof x === 'string') ? x : ((x && x.server) || '');
+    if (s && list.indexOf(s) < 0) list.push(s);
+  });
+  if (!list.length){
+    try { lbToast('启动队列里没有可终止的服'); } catch(e){}
+    return;
+  }
+  var go = function(){
+    /* v6437：必须先清启动队列（清 active/queue），否则任务条每 2 秒被重建 */
+    lbStartqAbortPost(list, function(){
+      var base = (typeof lbSrvCtlApi === 'function') ? lbSrvCtlApi() : '';
+      var tk = (typeof lbSrvCtlToken === 'function') ? lbSrvCtlToken() : '';
+      if (!base) return;
+      lbSrvCtlFetchW(base + '/api/srvctl/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tk },
+        body: JSON.stringify({ action: 'kill', servers: list, interrupt: true, src: 'agent' })
+      }).then(function(r){ return r.json(); }).then(function(j){
+        var okN = ((j && j.results) || []).filter(function(x){ return x && x.ok; }).length;
+        try { lbToast(j && j.ok ? ('已强杀 ' + okN + ' 台进程') : ('强杀失败：' + ((j && (j.error || j.code)) || '未知'))); } catch(e){}
+        try { lbTaskSync(); } catch(e){}
+        try { lbSrvCtlQueueLinePaint(); } catch(e){}
+      }).catch(function(e){ try { lbToast('强杀失败：' + e); } catch(e2){} });
+    });
+  };
+  var msg = '确定中止启动队列吗？\n\n将强制终止：' + list.join('、')
+          + '\n（已在运行的不受影响）';
+  if (typeof lbAsk === 'function' && lbAsk(msg, go, '确定中止队列')) return;
+  try { if (window.confirm(msg)) go(); } catch(e){}
+}
+
+/* ===== v6409（用户口径）：查看清单 / 填清单 ===== */
+function lbUpdVerOpenSteamDB(bid){
+  var b = String(bid || '').replace(/[^0-9]/g, '');
+  if (!b) return;
+  try {
+    window.open('https://steamdb.info/patchnotes/' + b + '/', '_blank', 'noopener');
+  } catch (e) {
+    try { lbToast('打开失败：' + e); } catch (e2) {}
+  }
+}
+
+function lbUpdVerFillManifest(bid){
+  var b = String(bid || '').replace(/[^0-9]/g, '');
+  if (!b) return;
+  var msg = '填 buildId ' + b + ' 的 depot manifest GID\n\n'
+          + '获取方式：点该行的「查看清单」→ 在 SteamDB 详情页找到 depot 2430931 的 manifest 号\n'
+          + '填一次永久保存，之后该版本直接可拉，无需再填。';
+  var onOk = function(v){
+    var man = String(v || '').replace(/\s+/g, '');
+    if (!/^\d{8,}$/.test(man)){
+      LB_UPDPULL.err = 'manifest GID 需为纯数字（通常 19 位）';
+      LB_UPDPULL.msg = '';
+      lbUpdVerRender();
+      return;
+    }
+    _lbUpdVerPost('/api/update/cache/manifest',
+                  { buildId: b, manifest: man }, function(j){
+      if (j.ok){
+        LB_UPDPULL.err = '';
+        LB_UPDPULL.msg = 'buildId ' + b + ' 的清单已保存（永久）';
+        lbUpdVerLoad();
+      } else {
+        LB_UPDPULL.err = '保存失败：' + (j.error || j.code || '未知');
+        lbUpdVerRender();
+      }
+    });
+  };
+  if (typeof lbAskInput === 'function'){
+    lbAskInput(msg, '', onOk, { placeholder: '例如 3083367148300701914', okText: '保存清单' });
+    return;
+  }
+  try {
+    var v = window.prompt(msg, '');
+    if (v !== null) onOk(v);
+  } catch (e) {}
+}
+
+/* v6433（用户口径「补后端版本」）：角色浮窗底部显示**后端版本**，一眼核对后端是否真更新
+   原因：底部那个 v2026xxxx-xxxx 是**前端**版本；后端几次修复（阈值/进度/等批准）都只改
+        dino_backend.py，前端版本号不会动 ⇒ 容易误以为"没更新"。
+   数据源：GET /api/health 的 code.size（后端文件字节数）+ code.mtime（文件修改时间）
+        + startedAt / uptimeSec（本进程启动时间与已运行秒数） */
+function lbBeVerLoad(){
+  var el = document.getElementById('lbBeVer');
+  if(!el) return;
+  var base = (typeof LB_API === 'string' && LB_API) ? LB_API : 'https://data.whiterober.ccwu.cc';
+  fetch(base + '/api/health?t=' + Date.now(), { cache:'no-store' })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var c = (d && d.code) || {};
+      if(!c.size){ el.textContent = 'be ?'; return; }
+      var hm = String(c.mtime || '');
+      el.textContent = 'be ' + c.size;
+      el.title = '后端版本\n文件大小: ' + c.size + ' B\n修改时间: ' + hm +
+                 '\n启动时间: ' + (d.startedAt || '') +
+                 '\n已运行: ' + Math.floor((d.uptimeSec || 0) / 60) + ' 分钟';
+    })
+    .catch(function(){ el.textContent = 'be 离线'; el.style.color = '#f87171'; });
+}
+
+/* v6450（用户口径「附件左边加一个低可视的服务器控制入口」）：
+   在「服务器更新」浮窗标题栏 .lw-x（关闭）**左侧**插入「服务器控制」入口。
+   · 低可视：默认半透明深灰描边透明底，悬停才亮紫（不与标题、关闭按钮抢注意力）
+   · 权限：lbCanServerCtl()（role>=2）不可用 ⇒ 不插入；已插入则移除
+   · 幂等：lbSheetBuild 只在**首次建窗**时生成 .lw-head，重复打开不会重建 ⇒
+     每次 lbUpdOpen 都 synchronize 一次，保证老会话（页面已存在 #lbUpd）也能补上 */
+function lbUpdSrvCtlBtnHtml(){
+  return '<button class="lb-tipb lb-upd-srvctl" id="lbUpdSrvBtn" onclick="lbSrvCtlOpen()"'
+    + ' aria-label="服务器控制" data-tip="服务器控制" title="服务器控制">'
+    + '<i class="mdi mdi-server-security"></i></button>';
+}
+function lbUpdSrvCtlEntrySync(){
+  var ov = document.getElementById('lbUpd');
+  if (!ov) return;
+  var head = ov.querySelector('.lw-head');
+  if (!head) return;
+  var btn = document.getElementById('lbUpdSrvBtn');
+  var ok = false;
+  try { ok = (typeof lbCanServerCtl === 'function') && !!lbCanServerCtl(); } catch (e) { ok = false; }
+  if (!ok) {
+    if (btn && btn.parentNode) btn.parentNode.removeChild(btn);
+    return;
+  }
+  if (btn) return;
+  var tmp = document.createElement('div');
+  tmp.innerHTML = lbUpdSrvCtlBtnHtml();
+  var el = tmp.firstChild;
+  if (!el) return;
+  var x = head.querySelector('.lw-x');
+  if (x && x.parentNode === head) head.insertBefore(el, x);
+  else head.appendChild(el);
+}
+
+/* ===== v6452（用户口径「汉化包、MOD 的底栏 左侧加两个功能：部署到本机」）=====
+   把服务器上的**本地包**（汉化 D:\Cache-zh / MOD _upd_cache\_modpkg）写到用户 PC 的 ASA 目录。
+   浏览器硬限制：网页读不到 Steam 库路径（注册表/steamapps 都在磁盘上）
+   ⇒ 首次点一次 showDirectoryPicker 选 Steam 库根，handle 存 IndexedDB，之后免选（权限失效再点一次）。
+   MOD 侧载依据（社区一致口径）：ShooterGame\Content\Mods\<项目ID>\ + <项目ID>.mod 两件套；
+   官方社区指南明确 ASA 没有手动侧载机制，故这里**不覆盖已有 .mod**，只补文件内容。 */
+var LB_LOCAL = { handle: null, game: null, busy: false, msg: '' };
+
+function lbLocalIdb(){
+  return new Promise(function(res, rej){
+    var r = indexedDB.open('lbLocalDeploy', 1);
+    r.onupgradeneeded = function(){ try { r.result.createObjectStore('kv'); } catch(e){} };
+    r.onsuccess = function(){ res(r.result); };
+    r.onerror = function(){ rej(r.error); };
+  });
+}
+function lbLocalIdbGet(k){
+  return lbLocalIdb().then(function(db){
+    return new Promise(function(res, rej){
+      var q = db.transaction('kv', 'readonly').objectStore('kv').get(k);
+      q.onsuccess = function(){ res(q.result); };
+      q.onerror = function(){ rej(q.error); };
+    });
+  });
+}
+function lbLocalIdbSet(k, v){
+  return lbLocalIdb().then(function(db){
+    return new Promise(function(res, rej){
+      var tr = db.transaction('kv', 'readwrite');
+      tr.objectStore('kv').put(v, k);
+      tr.oncomplete = function(){ res(true); };
+      tr.onerror = function(){ rej(tr.error); };
+    });
+  });
+}
+/* v6462（用户口径「选过一次后 下次点居然就不用选了？万一改了目录了？」）
+   记住的 handle 必须可以主动丢弃：换盘 / 搬 Steam 库 / 删了游戏都要能重选 */
+function lbLocalForget(){
+  LB_LOCAL.handle = null;
+  LB_LOCAL.game = null;
+  try { lbLocalIdbSet('asaLib', null); } catch (e) {}
+}
+/* 大小写不敏感取子目录（Steam 库/游戏目录命名不统一） */
+function lbLocalDir(parent, name){
+  return parent.getDirectoryHandle(name).catch(function(){
+    var low = String(name).toLowerCase();
+    var it = parent.entries();
+    function step(){
+      return it.next().then(function(r){
+        if (r.done) throw new Error('缺少目录：' + name);
+        var nm = r.value[0], h = r.value[1];
+        if (h.kind === 'directory' && String(nm).toLowerCase() === low) return h;
+        return step();
+      });
+    }
+    return step();
+  });
+}
+/* 从所选目录向下探测 ASA 根（支持选 Steam 库根 / common / ASA 根本身）
+   v6453（用户实测）：MOD 不在 Content\Mods，而在 ShooterGame\Binaries\Win64\ShooterGame\Mods\83374 */
+function lbLocalLocate(dir){
+  var chains = [
+    ['steamapps', 'common', 'ARK Survival Ascended'],
+    ['common', 'ARK Survival Ascended'],
+    ['ARK Survival Ascended'],
+    []
+  ];
+  var i = 0;
+  function next(){
+    if (i >= chains.length) return Promise.resolve(null);
+    var ch = chains[i++], cur = Promise.resolve(dir), parts = [];
+    ch.forEach(function(nm){
+      cur = cur.then(function(h){ parts.push(nm); return lbLocalDir(h, nm); });
+    });
+    return cur.then(function(h){
+      /* 校验是 ASA 根：需有 ShooterGame\Content 与 ShooterGame\Binaries\Win64 */
+      return lbLocalDir(h, 'ShooterGame').then(function(sg){
+        return sg.getDirectoryHandle('Content').then(function(){
+          return lbLocalDir(sg, 'Binaries').then(function(b){
+            return lbLocalDir(b, 'Win64').then(function(){
+              return { handle: h, sg: sg, path: (parts.length ? parts.join('/') : h.name) };
+            });
+          });
+        });
+      });
+    }).catch(function(){ return next(); });
+  }
+  return next();
+}
+function lbLocalStat(h){
+  return { name: (h && h.name) || '' };
+}
+async function lbLocalEnsure(notify, force, _retry){
+  var h = null, reused = false;
+  if (force) lbLocalForget();
+  if (!force) {
+    h = LB_LOCAL.handle;
+    if (!h) {
+      try { h = await lbLocalIdbGet('asaLib'); } catch (e) { h = null; }
+      if (h) LB_LOCAL.handle = h;
+    }
+    if (h) {
+      try {
+        var p = await h.queryPermission({ mode: 'readwrite' });
+        if (p !== 'granted') p = await h.requestPermission({ mode: 'readwrite' });
+        if (p !== 'granted') { lbLocalForget(); h = null; } else { reused = true; }
+      } catch (e) { lbLocalForget(); h = null; }
+    }
+  }
+  if (!h) {
+    if (notify) notify('请选择 ASA 所在的 Steam 库根目录（例如 B:\\SteamLibrary）');
+    if (typeof window.showDirectoryPicker !== 'function') {
+      throw new Error('当前浏览器不支持目录写入，请用 Chrome / Edge 打开本页');
+    }
+    h = await window.showDirectoryPicker({ id: 'asaSteamLib', mode: 'readwrite' });
+    LB_LOCAL.handle = h;
+    try { await lbLocalIdbSet('asaLib', h); } catch (e) {}
+  }
+  var g = await lbLocalLocate(h);
+  if (!g) {
+    /* v6462：记住的目录已经对不上（换盘 / 搬 Steam 库 / 删了游戏）
+       → 清掉记忆并重新弹一次选择器（只重试 1 次，避免死循环） */
+    lbLocalForget();
+    if (!_retry) return lbLocalEnsure(notify, true, true);
+    throw new Error('所选目录不是 ASA 根（缺 ShooterGame\\Content 或 Binaries\\Win64）—— 请选 Steam 库根目录');
+  }
+  LB_LOCAL.game = g;
+  if (reused && notify) notify('使用已记住的游戏目录：' + g.path + '（要更换请按住 Shift 再点）');
+  return g;
+}
+async function lbLocalWrite(dirHandle, rel, blob){
+  var parts = String(rel).split('/').filter(function(x){ return x; });
+  var cur = dirHandle, i;
+  for (i = 0; i < parts.length - 1; i++) cur = await cur.getDirectoryHandle(parts[i], { create: true });
+  var fh = await cur.getFileHandle(parts[parts.length - 1], { create: true });
+  var w = await fh.createWritable();
+  await w.write(blob);
+  await w.close();
+}
+async function lbLocalPull(base, hd, kind, pid, rel, dirHandle){
+  var u = base + '/api/pkg/local/get?kind=' + encodeURIComponent(kind)
+        + (pid ? ('&pid=' + encodeURIComponent(pid)) : '')
+        + '&rel=' + encodeURIComponent(rel) + '&t=' + Date.now();
+  var r = await fetch(u, { headers: hd, cache: 'no-store' });
+  if (!r.ok) throw new Error(rel + ' 下载失败 HTTP ' + r.status);
+  var blob = await r.blob();
+  await lbLocalWrite(dirHandle, rel, blob);
+  return blob.size;
+}
+function lbLocalFmt(n){
+  n = Number(n || 0);
+  if (n >= 1073741824) return (n / 1073741824).toFixed(2) + ' GB';
+  if (n >= 1048576) return (n / 1048576).toFixed(1) + ' MB';
+  if (n >= 1024) return (n / 1024).toFixed(0) + ' KB';
+  return n + ' B';
+}
+async function lbDeployLocal(kind, btn){
+  /* v6462（用户口径）：按住 Shift 点 = 强制更换游戏目录（丢掉已记住的 handle 重新选） */
+  var force = false;
+  try { force = !!(window.event && window.event.shiftKey); } catch (e) { force = false; }
+  if (LB_LOCAL.busy) { if (typeof lbToast === 'function') lbToast('正在部署中，请稍候…'); return; }
+  LB_LOCAL.busy = true;
+  if (btn) { btn.style.opacity = '.5'; btn.style.pointerEvents = 'none'; }
+  var say = function(m){ LB_LOCAL.msg = m; try { if (typeof lbToast === 'function') lbToast(m); } catch (e) {} };
+  var tk = (typeof lbSrvCtlToken === 'function') ? lbSrvCtlToken() : '';
+  var hd = { 'Content-Type': 'application/json' };
+  if (tk) hd['Authorization'] = 'Bearer ' + tk;
+  var base = (typeof lbUpdApiBase === 'function') ? lbUpdApiBase() : lbSrvCtlApi();
+  try {
+    say('正在定位游戏目录…');
+    var g = await lbLocalEnsure(say, force);
+    /* v6460（用户口径「切成 Drive 直连」）：汉化改走 Google Drive API v3 ——
+       浏览器直接从源站下 zip → 网页内解压 → 只写白名单 3 个文件，全程不经过服务器缓存。
+       MOD 仍按原样从服务器拷贝（用户 2026-11-09 裁决）。 */
+    if (kind === 'zh') {
+      await lbLocalDeployZhByDrive(g, say, base, hd);
+      return;
+    }
+    /* v6464（用户口径「MOD 部署到本机 给个不经过服务器的方案」）：先试浏览器直连 CurseForge CDN，失败才回落服务器拷贝 */
+    if (kind === 'mods') {
+      await lbLocalDeployModsByCDN(g, say, base, hd);
+      return;
+    }
+    var lr = await fetch(base + '/api/pkg/local/list?kind=' + encodeURIComponent(kind) + '&t=' + Date.now(),
+                          { headers: hd, cache: 'no-store' });
+    var lj = await lr.json();
+    if (!lj.ok) throw new Error(lj.error || '本地包不可用');
+    var sg = g.sg;                       /* ShooterGame 句柄 */
+    var n = 0, bytes = 0, where = '';
+    {
+      /* MOD → ShooterGame\Binaries\Win64\ShooterGame\Mods\83374\<pid>_<fid>（v6453 用户实测） */
+      var bin = await lbLocalDir(sg, 'Binaries');
+      var w64 = await lbLocalDir(bin, 'Win64');
+      var inner = await w64.getDirectoryHandle('ShooterGame', { create: true });
+      var mods = await inner.getDirectoryHandle('Mods', { create: true });
+      var gid = await mods.getDirectoryHandle('83374', { create: true });
+      where = g.path + '\\ShooterGame\\Binaries\\Win64\\ShooterGame\\Mods\\83374';
+      for (var gi = 0; gi < lj.groups.length; gi++) {
+        var gp = lj.groups[gi];
+        var dirName = (gp.name || (gp.pid + '_' + gp.fid));
+        var pd = await gid.getDirectoryHandle(dirName, { create: true });
+        for (var k = 0; k < gp.files.length; k++) {
+          var mf = gp.files[k];
+          say('部署 MOD ' + gp.pid + ' ' + (k + 1) + '/' + gp.files.length + '：' + mf.rel);
+          bytes += await lbLocalPull(base, hd, 'mods', gp.pid, mf.rel, pd);
+          n++;
+        }
+        say('MOD ' + gp.pid + ' 已写入 ' + dirName + '（若客户端存在旧的 ' + gp.pid + '_* 目录，游戏按新版本加载，旧目录不会自动删）');
+      }
+      say('MOD 已部署 ' + lj.groups.length + ' 组 / ' + n + ' 个文件（' + lbLocalFmt(bytes) + '）→ ' + where);
+    }
+    try { console.log('[deploy-local]', kind, n, bytes, where); } catch (e) {}
+  } catch (e) {
+    var m = String((e && e.message) || e);
+    if (m.indexOf('The user aborted') >= 0 || m.indexOf('AbortError') >= 0) m = '已取消目录选择';
+    say('部署失败：' + m);
+    /* v6472：失败原因必须留得住（用户实报"提示消失的太快没时间复制"） */
+    try { lbErrBar('部署失败：' + m); } catch (eB) {}
+    try { console.error('[deploy-local] failed', e); } catch (eC) {}
+  } finally {
+    LB_LOCAL.busy = false;
+    if (btn) { btn.style.opacity = ''; btn.style.pointerEvents = ''; }
+  }
+}
+
+/* ===== v6460（用户口径「切成 Drive 直连」）：汉化包 Drive API v3 直连 + 网页内解压 =====
+   数据源与「更新本地包」一致（同一个 Drive 文件夹 / 同一份云端清单），但**不经过服务器**：
+     浏览器 fetch(www.googleapis.com/drive/v3/files/<id>?alt=media&key=…) → ArrayBuffer
+     → 解析 zip 中央目录 → 只解压白名单 3 个文件 → 写入 ShooterGame\Content\Paks
+   注意：Drive 只有 www.googleapis.com 给 CORS（usercontent / uc 都没有），所以必须用 v3 + key。 */
+var LB_ZH_PKG_NAMES = ['ShooterGame-Windows_P.pak',
+                       'ShooterGame-Windows_P.ucas',
+                       'ShooterGame-Windows_P.utoc'];
+
+/* 找 EOCD → 遍历中央目录 → 取出目标条目的压缩数据（不解压） */
+function lbZipPick(buf, targets){
+  var dv = new DataView(buf), u8 = new Uint8Array(buf);
+  var eocd = -1, lo = Math.max(0, u8.length - 65558);
+  for (var i = u8.length - 22; i >= lo; i--) {
+    if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) {
+    throw new Error('不是有效的 zip（未找到目录尾）：实际 ' + u8.length + ' 字节'
+                    + (u8.length < 4096 ? '，疑似空包 / 下载中断' : '，可能下载不完整'));
+  }
+  var total = dv.getUint16(eocd + 10, true);
+  var cdOff = dv.getUint32(eocd + 16, true);
+  if (cdOff === 0xffffffff || total === 0xffff) throw new Error('暂不支持 ZIP64 格式的 zip');
+  var want = {};
+  targets.forEach(function(n){ want[String(n).toLowerCase()] = 1; });
+  var out = {}, p = cdOff;
+  var dec = new TextDecoder('utf-8');
+  for (var k = 0; k < total; k++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    var method = dv.getUint16(p + 10, true);
+    var csize = dv.getUint32(p + 20, true);
+    var usize = dv.getUint32(p + 24, true);
+    var nlen = dv.getUint16(p + 28, true);
+    var elen = dv.getUint16(p + 30, true);
+    var clen = dv.getUint16(p + 32, true);
+    var lho = dv.getUint32(p + 42, true);
+    var name = dec.decode(u8.subarray(p + 46, p + 46 + nlen));
+    var base = name.split('/').pop().toLowerCase();
+    if (want[base]) {
+      if (dv.getUint32(lho, true) !== 0x04034b50) throw new Error('zip 结构异常：' + name);
+      var lnlen = dv.getUint16(lho + 26, true);
+      var lelen = dv.getUint16(lho + 28, true);
+      var ds = lho + 30 + lnlen + lelen;
+      out[base] = { method: method, data: u8.subarray(ds, ds + csize), usize: usize, name: name };
+    }
+    p += 46 + nlen + elen + clen;
+  }
+  return out;
+}
+
+/* 解压单个条目（0=store / 8=deflate-raw） */
+async function lbZipInflate(entry){
+  if (entry.method === 0) return entry.data;
+  if (entry.method !== 8) throw new Error('不支持的压缩方式 ' + entry.method);
+  if (typeof DecompressionStream !== 'function') throw new Error('当前浏览器不支持 DecompressionStream，请用 Chrome/Edge');
+  var st = new Blob([entry.data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  return new Uint8Array(await new Response(st).arrayBuffer());
+}
+
+/* 按 variant 从云端清单里挑 zip */
+function lbZhPickCloudZip(items){
+  var zips = (items || []).filter(function(x){ return /\.zip$/i.test(String(x.name || '')); });
+  if (!zips.length) return null;
+  var cfg = ((window.LB_ZH || {}).st || {}).cfg || {};
+  var v = String(cfg.variant || 'dinoitem').toLowerCase();
+  var pick = null;
+  if (v === 'dinoitem') {
+    pick = zips.filter(function(z){ return /dino\s*&\s*item/i.test(z.name) && /bilingual/i.test(z.name); })[0];
+  } else if (v === 'item') {
+    pick = zips.filter(function(z){ return /bilingual/i.test(z.name) && !/dino/i.test(z.name); })[0];
+  }
+  if (!pick) pick = zips.filter(function(z){ return !/bilingual/i.test(z.name); })[0] || zips[0];
+  return pick;
+}
+
+/* 主流程：Drive 直连 → 解压 → 写 Paks */
+async function lbLocalDeployZhByDrive(g, say, base, hd){
+  /* v6461（用户口径 2026-11-09）：「选了目录后，应该先检查是否和本地包一致，如果一致就提示并拦截部署」
+     用户修正：只有「当前本地包本身是最新版」时才能当基准比对；
+     本地包落后于云端时不比（旧版不能代表最新），直接继续部署。 */
+  try {
+    var _plr = await fetch(base + '/api/pkg/local/list?kind=zh&t=' + Date.now(),
+                            { headers: hd, cache: 'no-store' });
+    var _plj = await _plr.json();
+    if (_plj && _plj.ok && (_plj.files || []).length){
+      var _pkgVer = lbLocalZhVerNorm(_plj.ver);
+      var _remVer = lbLocalZhVerNorm((((window.LB_ZH || {}).st || {}).remote || {}).ver);
+      if (!_pkgVer || !_remVer){
+        say('本地包 V' + (_pkgVer || '?') + ' / 云端 V' + (_remVer || '?') + '：版本号缺失，跳过一致性检查');
+      } else if (_pkgVer !== _remVer){
+        var _zmsg2 = '本地包 V' + _pkgVer + ' 非最新（云端 V' + _remVer + '），已跳过一致性检查，继续部署';
+        say(_zmsg2);
+        try { lbNoteBar(_zmsg2, 'warn'); } catch (_eNB2) {}
+      } else {
+        say('正在比对本机汉化包（V' + _pkgVer + '）…');
+        var _ck = await lbLocalZhPaksSame(g, _plj.files);
+        if (_ck.ok && _ck.same){
+          var _zmsg = '本机汉化包已是最新版（V' + _pkgVer + ' · '
+                    + lbLocalFmt(_ck.bytes) + '，与服务端一致），已拦截部署';
+          say(_zmsg);
+          /* v6473：拦截结论常驻（toast 1.6s 看不清） */
+          try { lbNoteBar(_zmsg, 'warn'); } catch (_eNB) {}
+          return;
+        }
+        if (_ck.ok){
+          var _d = [];
+          if (_ck.missing.length) _d.push('缺 ' + _ck.missing.length + ' 件');
+          if (_ck.diff.length) _d.push('大小不同 ' + _ck.diff.length + ' 件');
+          say('本机汉化包与本地包不一致（' + (_d.join('·') || '异常') + '），继续部署…');
+        }
+      }
+    }
+  } catch (e) {
+    try { console.log('[deploy-local] precheck skip', e && e.message); } catch (e2) {}
+  }
+  var items = ((((window.LB_ZH || {}).st || {}).remote || {}).items) || [];
+  var pick = lbZhPickCloudZip(items);
+  if (!pick) {
+    say('云端清单为空，正在刷新…');
+    try { await lbZhFetch(true); } catch (e) {}
+    items = ((((window.LB_ZH || {}).st || {}).remote || {}).items) || [];
+    pick = lbZhPickCloudZip(items);
+  }
+  if (!pick) throw new Error('拿不到云端 zip 清单（请先打开「服务器更新」刷新一次，或检查汉化包下载地址）');
+  say('获取直连地址：' + String(pick.name || ''));
+  var r1 = await fetch(base + '/api/zh/drive/url?id=' + encodeURIComponent(pick.id) + '&t=' + Date.now(),
+                       { headers: hd, cache: 'no-store' });
+  var j1 = await r1.json();
+  if (!j1 || !j1.ok) throw new Error((j1 && j1.error) || ('取直连地址失败 HTTP ' + r1.status));
+  say('获取汉化包…（' + String(pick.name || '') + '）');
+  /* v6477：汉化包同样走本机缓存（约 130MB，同版本不重复下载） */
+  var _zkey = lbPkgKey('zh', String(pick.id || ''), '', String(pick.name || ''));
+  var buf = null;
+  try {
+    buf = await lbFetchCached(j1.url, function(g, tot){
+      say('  下载汉化包：' + lbLocalFmt(g) + (tot ? (' / ' + lbLocalFmt(tot)) : '') + ' …');
+    }, Number(pick.size || 0), _zkey, say);
+  } catch (eDl) {
+    throw new Error('Drive 下载失败（key 未生效 / 文件未公开）：' + String((eDl && eDl.message) || eDl));
+  }
+  if (!buf || !buf.byteLength) throw new Error('Drive 下载得到空文件（请检查下载地址是否仍可公开访问）');
+  say('已就绪 ' + lbLocalFmt(buf.byteLength) + '，正在解压…');
+  var found = lbZipPick(buf, LB_ZH_PKG_NAMES);
+  var content = await g.sg.getDirectoryHandle('Content');
+  var paks = await content.getDirectoryHandle('Paks');
+  var n = 0, bytes = 0;
+  for (var i = 0; i < LB_ZH_PKG_NAMES.length; i++) {
+    var nm = LB_ZH_PKG_NAMES[i];
+    var e = found[nm.toLowerCase()];
+    if (!e) { say('⚠ zip 里没有 ' + nm + '（跳过）'); continue; }
+    say('解压写入 ' + (i + 1) + '/' + LB_ZH_PKG_NAMES.length + '：' + nm);
+    var data = await lbZipInflate(e);
+    await lbLocalWrite(paks, nm, new Blob([data]));
+    bytes += data.byteLength; n++;
+  }
+  if (!n) throw new Error('zip 里没找到汉化白名单文件（' + LB_ZH_PKG_NAMES.join(' / ') + '）');
+  say('汉化已部署 ' + n + ' 个文件（直连 Google Drive，' + lbLocalFmt(bytes) + '）→ '
+      + g.path + '\\ShooterGame\\Content\\Paks，重启游戏后生效');
+}
+
+
+/* ===== v6461（用户口径 2026-11-09）：部署到本机前的一致性预检 =====
+   规则：**当前本地包为最新版**（本地包 ver == 云端最新 ver）才拿它当基准；
+   基准有效时逐件比对本机 ShooterGame\Content\Paks 的 3 个汉化文件大小：
+     全等 → 提示并拦截部署（不下载、不写盘）
+     有差异/缺失 → 照常部署
+   本地包落后于云端 → 不比对，直接继续。 */
+function lbLocalZhVerNorm(s){
+  return String((s === undefined || s === null) ? '' : s).replace(/^v/i, '').trim();
+}
+
+/* 逐级取句柄（rel 用 / 分隔）；不存在返回 null */
+async function lbLocalHandleOf(rootHandle, rel){
+  var parts = String(rel || '').split('/').filter(function(x){ return !!x; });
+  var cur = rootHandle, i;
+  for (i = 0; i < parts.length - 1; i++){
+    try { cur = await cur.getDirectoryHandle(parts[i]); } catch (e) { return null; }
+  }
+  try { return await cur.getFileHandle(parts[parts.length - 1]); } catch (e) { return null; }
+}
+
+/* 本机 Paks 与本地包文件清单比对（只比大小）
+   → {ok:true, same, same_n, bytes, diff:[{name,local,pkg}], missing:[name], total}
+      {ok:false, why} ← 连 Paks 目录都取不到 */
+async function lbLocalZhPaksSame(g, files){
+  var paks = null;
+  try {
+    var content = await g.sg.getDirectoryHandle('Content');
+    paks = await content.getDirectoryHandle('Paks');
+  } catch (e) {
+    return { ok: false, why: 'no_paks_dir' };
+  }
+  var same = 0, bytes = 0, diff = [], missing = [], total = 0;
+  for (var i = 0; i < (files || []).length; i++){
+    var f = files[i] || {};
+    var rel = String(f.rel || '');
+    if (!rel) continue;
+    total++;
+    var want = Number(f.size || 0);
+    var fh = await lbLocalHandleOf(paks, rel);
+    if (!fh) { missing.push(rel); continue; }
+    try {
+      var bl = await fh.getFile();
+      var got = Number(bl.size || 0);
+      if (got === want) { same++; bytes += want; }
+      else diff.push({ name: rel, local: got, pkg: want });
+    } catch (e) { missing.push(rel); }
+  }
+  return { ok: true, same: (total > 0 && same === total && !missing.length && !diff.length),
+           same_n: same, bytes: bytes, diff: diff, missing: missing, total: total };
+}
+
+
+/* ===== v6464（用户口径）：MOD「部署到本机」走 CurseForge CDN 直连（不经过服务器字节流） =====
+   实测：只有 mediafiles.forgecdn.net 给 CORS；edge / mediafilez 均被挡。
+   后端只出「地址 + 一些元数据」（几百字节），文件字节全走浏览器直连。
+   失败自动回落「从服务器拷贝」（原有路径）。 */
+
+/* ===== v6472（用户实报「到解压这一步部署失败」「提示消失的太快没时间复制」）=====
+   失败信息改用**常驻错误条**：不自动消失、可全选复制、带关闭按钮。
+   toast 仍保留（1.6s）用于过程提示，但失败原因一律用错误条兜底。 */
+var LB_NOTEBAR = null;
+/* v6473（用户口径）：常驻提示条覆盖**两个**「部署到本机」（汉化包 / MOD）
+   kind='err' 红（失败）/ 'warn' 黄（拦截、需要人工处理）；
+   不自动消失、可选中复制、带关闭 —— toast 只有 1.6s，结论类信息必须留得住。 */
+var LB_NOTE_UI = {
+  err:  { bg: '#3b0d10', bd: '#f87171', fg: '#fecaca', sub: '#fca5a5',
+          ic: 'mdi-alert-circle-outline', icf: '#f87171', tag: '错误' },
+  warn: { bg: '#3a2a08', bd: '#fbbf24', fg: '#fde68a', sub: '#fcd34d',
+          ic: 'mdi-alert-outline', icf: '#fbbf24', tag: '提示' }
+};
+function lbNoteBar(msg, kind){
+  try {
+    var k = (kind === 'warn') ? 'warn' : 'err';
+    var u = LB_NOTE_UI[k];
+    var d = LB_NOTEBAR;
+    if (!d) {
+      d = document.createElement('div');
+      d.id = 'lbNoteBar';
+      document.body.appendChild(d);
+      LB_NOTEBAR = d;
+    }
+    d.style.cssText = 'position:fixed;left:12px;right:12px;bottom:12px;z-index:1000050;'
+                    + 'background:' + u.bg + ';border:1px solid ' + u.bd + ';border-radius:10px;'
+                    + 'padding:10px 12px;color:' + u.fg + ';font-size:12px;line-height:1.65;'
+                    + 'box-shadow:0 10px 30px rgba(0,0,0,.5);display:block';
+    d.innerHTML = '<div style="display:flex;gap:8px;align-items:flex-start">'
+      + '<i class="mdi ' + u.ic + '" style="color:' + u.icf + ';font-size:17px;margin-top:1px"></i>'
+      + '<div style="flex:1;white-space:pre-wrap;word-break:break-word;user-select:text;'
+      + '-webkit-user-select:text"><span style="color:' + u.icf + ';font-weight:700">'
+      + u.tag + '：</span>' + lbMdEsc(String(msg || '')) + '</div>'
+      + '<button type="button" onclick="lbNoteBarClose()" style="flex:none;border:0;background:transparent;'
+      + 'color:' + u.sub + ';cursor:pointer;font-size:16px;line-height:1;padding:0 2px">'
+      + '<i class="mdi mdi-close"></i></button>'
+      + '</div>'
+      + '<div style="margin-top:6px;font-size:11px;color:' + u.sub + ';opacity:.75">'
+      + '此提示不会自动消失，可选中文字复制</div>';
+  } catch (e) {}
+}
+function lbNoteBarClose(){
+  try { if (LB_NOTEBAR) LB_NOTEBAR.style.display = 'none'; } catch (e) {}
+}
+/* 兼容旧调用名 */
+function lbErrBar(msg){ lbNoteBar(msg, 'err'); }
+function lbErrBarClose(){ lbNoteBarClose(); }
+
+/* v6472：大包流式下载（原来直接 rs.arrayBuffer()：838MB 包易静默截断，且内存峰值翻倍）
+   · total 已知时**预分配**整块缓冲区，边读边写（峰值≈文件大小，不分块再合并）
+   · 每 8MB 回报一次进度，长下载不再像卡死
+   · 返回 ArrayBuffer；实际字节数以 byteLength 为准，由调用方与元信息 size 比对 */
+async function lbFetchBuf(url, onProgress, expectSize){
+  var rs = await fetch(url, { cache: 'no-store' });
+  if (!rs.ok) throw new Error('HTTP ' + rs.status);
+  var total = Number(expectSize || 0);
+  if (!total) {
+    var cl = Number(rs.headers.get('content-length') || 0);
+    if (cl > 0) total = cl;
+  }
+  if (!rs.body || typeof rs.body.getReader !== 'function') {
+    return await rs.arrayBuffer();
+  }
+  var reader = rs.body.getReader();
+  var pre = total > 0 ? new Uint8Array(total) : null;
+  var chunks = [], got = 0, lastRep = 0;
+  while (true) {
+    var r = await reader.read();
+    if (r.done) break;
+    var v = r.value;
+    if (pre && (got + v.length) <= pre.length) {
+      pre.set(v, got);
+    } else {
+      if (pre) { chunks.push(pre.subarray(0, got)); pre = null; }
+      chunks.push(v);
+    }
+    got += v.length;
+    if (onProgress && (got - lastRep) >= (8 * 1024 * 1024)) {
+      lastRep = got;
+      onProgress(got, total);
+    }
+  }
+  if (onProgress) onProgress(got, total);
+  if (pre) return (got === pre.length) ? pre.buffer : pre.buffer.slice(0, got);
+  var out = new Uint8Array(got), off = 0;
+  for (var i = 0; i < chunks.length; i++) { out.set(chunks[i], off); off += chunks[i].length; }
+  return out.buffer;
+}
+
+/* ===== v6477（用户口径 2026-11-10）：「MOD 都挺大的，前面下载过了，难道没有本机缓存么？」=====
+   把下载好的客户端包 / 汉化包存进浏览器 **Cache Storage**，同版本再来就不再重下。
+   · 独立缓存名 dino-pkg-cache-v1 —— PWA 的 SW 只清 dino-import-shell-* 与白名单（dino-assets-v1），
+     不会误删本缓存
+   · key 用伪地址 https://pkg-cache.invalid/...（页面的 fetch 永远不会命中，与 SW 彻底隔离）
+   · key 内含「客户端 fid / Drive 文件 id」，包一更新 key 就变 ⇒ 天然版本隔离，不会读到旧包
+   · 下载走 ReadableStream.tee()：一条流拼内存、一条流直接落缓存 ⇒ 内存不翻倍
+   · 写缓存失败（配额不足等）只提示，**绝不阻断部署** */
+var LB_PKG_CACHE = 'dino-pkg-cache-v1';
+
+function lbPkgKey(kind, a, b, name){
+  return 'https://pkg-cache.invalid/' + encodeURIComponent(String(kind || 'pkg'))
+       + '/' + encodeURIComponent(String(a || ''))
+       + '_' + encodeURIComponent(String(b || ''))
+       + '_' + encodeURIComponent(String(name || ''));
+}
+
+/* 取缓存；want>0 时校验字节数，不符视为损坏并删除 */
+async function lbPkgCacheGet(key, want){
+  try {
+    if (!key || typeof caches === 'undefined') return null;
+    var c = await caches.open(LB_PKG_CACHE);
+    var r = await c.match(key);
+    if (!r) return null;
+    var buf = await r.arrayBuffer();
+    var n = Number(want || 0);
+    if (n && buf.byteLength !== n) {
+      try { await c.delete(key); } catch (e1) {}
+      return null;
+    }
+    if (!buf.byteLength) {
+      try { await c.delete(key); } catch (e1b) {}
+      return null;
+    }
+    return buf;
+  } catch (e) { return null; }
+}
+
+async function lbPkgCacheDel(key){
+  try {
+    if (!key || typeof caches === 'undefined') return false;
+    var c = await caches.open(LB_PKG_CACHE);
+    await c.delete(key);
+    return true;
+  } catch (e) { return false; }
+}
+
+/* 清空全部包缓存（暂无界面入口，后续要加按钮直接调它即可） */
+async function lbPkgCacheClear(){
+  try {
+    if (typeof caches === 'undefined') return false;
+    await caches.delete(LB_PKG_CACHE);
+    return true;
+  } catch (e) { return false; }
+}
+
+/* 缓存概况（暂无界面入口）：{n, bytes, items:[{key,size}]} */
+async function lbPkgCacheStat(){
+  var out = { n: 0, bytes: 0, items: [] };
+  try {
+    if (typeof caches === 'undefined') return out;
+    var c = await caches.open(LB_PKG_CACHE);
+    var ks = await c.keys();
+    out.n = ks.length;
+    for (var i = 0; i < ks.length; i++) {
+      try {
+        var r = await c.match(ks[i]);
+        if (!r) continue;
+        var bl = await r.blob();
+        out.bytes += bl.size;
+        out.items.push({ key: ks[i].url, size: bl.size });
+      } catch (e2) {}
+    }
+  } catch (e) {}
+  return out;
+}
+
+/* 清掉某组（kind + id）下**非当前版本**的旧缓存，避免 MOD 迭代后无限堆积 */
+async function lbPkgCachePruneGroup(kind, id, keepFid){
+  try {
+    if (typeof caches === 'undefined') return 0;
+    var c = await caches.open(LB_PKG_CACHE);
+    var ks = await c.keys();
+    var pre = 'https://pkg-cache.invalid/' + encodeURIComponent(String(kind)) + '/'
+            + encodeURIComponent(String(id)) + '_';
+    /* v6480：保留项改成**精确前缀**比较 —— 以前用 indexOf(keep) 任意位置匹配，
+       万一包名里恰好含「_<fid>_」就会把旧包误判成当前包而漏清。 */
+    var keepPre = String(keepFid || '')
+                ? (pre + encodeURIComponent(String(keepFid)) + '_') : '';
+    var dropped = 0;
+    for (var i = 0; i < ks.length; i++) {
+      var u = ks[i].url;
+      if (u.indexOf(pre) !== 0) continue;
+      if (keepPre && u.indexOf(keepPre) === 0) continue;
+      try { await c.delete(ks[i]); dropped++; } catch (e1) {}
+    }
+    return dropped;
+  } catch (e) { return 0; }
+}
+
+/* ===== v6480：包缓存可用性/配额预检 =====
+   诊断结论（实测本机）：quota≈103GB、put 100MB 流 OK ⇒ Cache Storage 本身没问题。
+   但有两个真实隐患，这里补掉：
+     ① persisted=false —— 浏览器可能在空间紧张时**回收**缓存，主动申请持久化（失败无害）
+     ② 写之前不检查剩余配额 —— 838MB 写到一半失败，等于白等，先 estimate() 预判
+   返回 {ok, why}；ok=false 时调用方**照常下载部署**，只是不写缓存。 */
+var _lbPersistTried = false;
+async function lbPkgCacheEnsure(needBytes){
+  var out = { ok: true, why: '', quota: 0, usage: 0 };
+  try {
+    if (typeof caches === 'undefined') { out.ok = false; out.why = '当前环境无 Cache Storage'; return out; }
+    if (!_lbPersistTried) {
+      _lbPersistTried = true;
+      try { await navigator.storage.persist(); } catch (e0) {}
+    }
+    try {
+      var est = await navigator.storage.estimate();
+      out.quota = Number(est.quota || 0);
+      out.usage = Number(est.usage || 0);
+      var left = out.quota - out.usage;
+      var need = Number(needBytes || 0);
+      if (need > 0 && out.quota > 0 && left < need * 1.2) {
+        out.ok = false;
+        out.why = '剩余配额不足（需 ' + lbLocalFmt(need) + '，仅剩 ' + lbLocalFmt(left > 0 ? left : 0) + '）';
+      }
+    } catch (e1) {}
+  } catch (e) { out.ok = false; out.why = String((e && e.message) || e); }
+  return out;
+}
+
+/* 带缓存的大文件下载：命中缓存直接返回 ArrayBuffer；否则边下边存（tee） */
+async function lbFetchCached(url, onProgress, expectSize, cacheKey, say){
+  var want = Number(expectSize || 0);
+  if (cacheKey) {
+    var hit = await lbPkgCacheGet(cacheKey, want);
+    if (hit) {
+      try { if (say) say('命中本机缓存（' + lbLocalFmt(hit.byteLength) + '），已跳过下载'); } catch (eS) {}
+      if (onProgress) onProgress(hit.byteLength, hit.byteLength);
+      return hit;
+    }
+    /* v6480：写缓存前先确认环境可用 + 配额够 —— 不够就别等写到一半才失败 */
+    var _ce = await lbPkgCacheEnsure(want);
+    if (!_ce.ok) {
+      cacheKey = null;
+      try { if (say) say('本机缓存已跳过：' + _ce.why); } catch (eS1) {}
+      try {
+        lbNoteBar('本机缓存已跳过（' + _ce.why + '）：本次仍会正常下载并部署，但下次会重新下载', 'warn');
+      } catch (eNB1) {}
+    }
+  }
+  var rs = await fetch(url, { cache: 'no-store' });
+  if (!rs.ok) throw new Error('HTTP ' + rs.status);
+  var total = want;
+  if (!total) {
+    var cl = Number(rs.headers.get('content-length') || 0);
+    if (cl > 0) total = cl;
+  }
+  if (!rs.body || typeof rs.body.getReader !== 'function') {
+    var ab = await rs.arrayBuffer();
+    if (cacheKey) {
+      try {
+        var c0 = await caches.open(LB_PKG_CACHE);
+        await c0.put(cacheKey, new Response(ab));
+      } catch (e0) { try { if (say) say('本机缓存写入失败（可能空间不足），下次仍会重新下载'); } catch (e0b) {} }
+    }
+    return ab;
+  }
+
+  /* tee：一条流给内存，一条流写缓存（并行，避免整包再复制一份导致内存翻倍） */
+  var readStream = rs.body, cachePut = null;
+  if (cacheKey && typeof caches !== 'undefined' && typeof rs.body.tee === 'function') {
+    try {
+      var pair = rs.body.tee();
+      readStream = pair[0];
+      var cacheBody = pair[1];
+      cachePut = caches.open(LB_PKG_CACHE).then(function (c) {
+        return c.put(cacheKey, new Response(cacheBody));
+      }).catch(function (eP) { return 'err'; });
+    } catch (eT) { readStream = rs.body; cachePut = null; }
+  }
+
+  var reader = readStream.getReader();
+  var pre = total > 0 ? new Uint8Array(total) : null;
+  var chunks = [], got = 0, lastRep = 0;
+  while (true) {
+    var r = await reader.read();
+    if (r.done) break;
+    var v = r.value;
+    if (pre && (got + v.length) <= pre.length) {
+      pre.set(v, got);
+    } else {
+      if (pre) { chunks.push(pre.subarray(0, got)); pre = null; }
+      chunks.push(v);
+    }
+    got += v.length;
+    if (onProgress && (got - lastRep) >= (8 * 1024 * 1024)) {
+      lastRep = got;
+      onProgress(got, total);
+    }
+  }
+  if (onProgress) onProgress(got, total);
+
+  var out = null;
+  if (pre) {
+    out = (got === pre.length) ? pre.buffer : pre.buffer.slice(0, got);
+  } else {
+    var u8 = new Uint8Array(got), off = 0;
+    for (var i = 0; i < chunks.length; i++) { u8.set(chunks[i], off); off += chunks[i].length; }
+    out = u8.buffer;
+  }
+
+  if (cachePut) {
+    var cr = null;
+    try { cr = await cachePut; } catch (eC) { cr = 'err'; }
+    /* 下载不完整时 tee 可能已把半截数据写进缓存 ⇒ 立刻删掉，避免下次命中坏包 */
+    if ((want && out.byteLength !== want) || cr === 'err') {
+      if (cacheKey) await lbPkgCacheDel(cacheKey);
+      if (cr === 'err') {
+        try { if (say) say('本机缓存写入失败（可能空间不足），下次仍会重新下载'); } catch (eQ) {}
+      }
+    }
+  }
+  return out;
+}
+
+/* 列出 zip 全部条目（不指定白名单）—— 与 lbZipPick 同一套 EOCD/中央目录解析 */
+function lbZipList(buf){
+  var dv = new DataView(buf), u8 = new Uint8Array(buf);
+  var eocd = -1, lo = Math.max(0, u8.length - 65558);
+  for (var i = u8.length - 22; i >= lo; i--) {
+    if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) {
+    /* v6472：把实际字节数带出去 —— 「下载被截断」和「真不是 zip」一眼可分 */
+    throw new Error('不是有效的 zip（未找到目录尾）：实际 ' + u8.length + ' 字节'
+                    + (u8.length < 4096 ? '，疑似空包 / 下载中断' : '，可能下载不完整'));
+  }
+  var total = dv.getUint16(eocd + 10, true);
+  var cdOff = dv.getUint32(eocd + 16, true);
+  if (cdOff === 0xffffffff || total === 0xffff) throw new Error('暂不支持 ZIP64 格式的 zip');
+  var dec = new TextDecoder('utf-8'), out = [], p = cdOff;
+  for (var k = 0; k < total; k++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    var method = dv.getUint16(p + 10, true);
+    var csize = dv.getUint32(p + 20, true);
+    var usize = dv.getUint32(p + 24, true);
+    var nlen = dv.getUint16(p + 28, true);
+    var elen = dv.getUint16(p + 30, true);
+    var clen = dv.getUint16(p + 32, true);
+    var lho = dv.getUint32(p + 42, true);
+    var name = dec.decode(u8.subarray(p + 46, p + 46 + nlen));
+    var isDir = /\/$/.test(name);
+    var ent = { name: name, method: method, usize: usize, isDir: isDir };
+    if (!isDir) {
+      if (dv.getUint32(lho, true) !== 0x04034b50) throw new Error('zip 结构异常：' + name);
+      var lnlen = dv.getUint16(lho + 26, true);
+      var lelen = dv.getUint16(lho + 28, true);
+      var ds = lho + 30 + lnlen + lelen;
+      ent.data = u8.subarray(ds, ds + csize);
+    }
+    out.push(ent);
+    p += 46 + nlen + elen + clen;
+  }
+  return out;
+}
+
+/* ===== v6483（用户实报手动解压 2.2GB MOD 包报 NotReadableError）=====
+   根因：手动选 zip 时先 file.arrayBuffer() 把**整包**读进内存，2.2GB 一次性分配极易失败
+   （NotReadableError / 内存不足）。而 MOD 包里最大的文件往往是被 skip 的开场视频，
+   整包读进来完全是浪费。
+   方案：Blob/File 走**按需分块读取** ——
+     ① 只读文件尾部 64KB 找 EOCD
+     ② 只读中央目录（通常几百 KB）
+     ③ 解压哪个条目才 slice 该条目的压缩数据，读完即弃
+   内存峰值从「整包 2.2GB」降到「单个条目」，且被 skip 的开场视频**完全不会被读取**。
+   自动下载路径仍传 ArrayBuffer（数据已在内存），走原同步逻辑，零改动。 */
+
+/* 从 Blob 读一段（失败重试 1 次 —— 文件可能被杀毒/下载器短暂占用） */
+async function lbReadSlice(blob, start, end){
+  var last = null;
+  for (var t = 0; t < 2; t++) {
+    try {
+      return await blob.slice(start, end).arrayBuffer();
+    } catch (e) {
+      last = e;
+      if (t === 0) { try { await new Promise(function(r){ setTimeout(r, 700); }); } catch (e2) {} }
+    }
+  }
+  throw (last || new Error('读取 zip 失败'));
+}
+
+/* 从 Blob 按需解析中央目录 —— 条目只记偏移，不取数据 */
+async function lbZipListBlob(blob){
+  var size = Number((blob && blob.size) || 0);
+  if (!size) throw new Error('zip 为空（0 字节）');
+  var tailLen = Math.min(size, 65580);
+  var tailStart = size - tailLen;
+  var tailBuf = await lbReadSlice(blob, tailStart, size);
+  var dv = new DataView(tailBuf), u8 = new Uint8Array(tailBuf);
+  var eocd = -1;
+  for (var i = u8.length - 22; i >= 0; i--) {
+    if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) {
+    throw new Error('不是有效的 zip（未找到目录尾）：文件 ' + size + ' 字节'
+                    + (size < 4096 ? '，疑似空包 / 下载中断' : '，可能下载不完整'));
+  }
+  var total = dv.getUint16(eocd + 10, true);
+  var cdSize = dv.getUint32(eocd + 12, true);
+  var cdOff = dv.getUint32(eocd + 16, true);
+  if (cdOff === 0xffffffff || total === 0xffff) throw new Error('暂不支持 ZIP64 格式的 zip');
+  /* 中央目录可能正好在尾部那块里，也可能不在 —— 不在就单独读 */
+  var cd = null;
+  if (cdOff >= tailStart) {
+    var rel = cdOff - tailStart;
+    if (rel >= 0 && rel + cdSize <= u8.length) cd = tailBuf.slice(rel, rel + cdSize);
+  }
+  if (!cd) cd = await lbReadSlice(blob, cdOff, cdOff + cdSize);
+  var cdv = new DataView(cd), cdu8 = new Uint8Array(cd);
+  var dec = new TextDecoder('utf-8'), out = [], p = 0;
+  for (var k = 0; k < total; k++) {
+    if (p + 46 > cdu8.length) break;
+    if (cdv.getUint32(p, true) !== 0x02014b50) break;
+    var method = cdv.getUint16(p + 10, true);
+    var csize = cdv.getUint32(p + 20, true);
+    var usize = cdv.getUint32(p + 24, true);
+    var nlen = cdv.getUint16(p + 28, true);
+    var elen = cdv.getUint16(p + 30, true);
+    var clen = cdv.getUint16(p + 32, true);
+    var lho = cdv.getUint32(p + 42, true);
+    var name = dec.decode(cdu8.subarray(p + 46, p + 46 + nlen));
+    out.push({ name: name, method: method, usize: usize, isDir: /\/$/.test(name),
+               csize: csize, lho: lho, blob: blob });   /* 只记偏移，不取 data */
+    p += 46 + nlen + elen + clen;
+  }
+  return out;
+}
+
+/* ===== v6484（用户实报 2.17GB 单文件仍 NotReadableError）=====
+   根因升级：v6483 解决了「整包读入」，但**单个条目**解压后可能 > 2GiB
+   （实测 club-ark 的 `BobsMissionspakchunk0-Windows.ucas` = 2,326,578,720 字节），
+   超过 ArrayBuffer 单次上限 2^31=2,147,483,648，`slice().arrayBuffer()` 与
+   `Response.arrayBuffer()` 都会失败。`.ucas` 几乎不可压缩 ⇒ 压缩后大小同样超限。
+   方案：**全流式** —— 读压缩数据用 Blob.stream()，解压用 pipeThrough(DecompressionStream)，
+   写盘用 pipeTo(createWritable())，全程内存不落地（块大小几十 KB）。
+   返回 {stream, usize}；usize 用于写入统计与校验。 */
+async function lbZipStreamBlob(e){
+  var blob = e.blob;
+  if (!blob) throw new Error('缺少 zip 数据源：' + e.name);
+  var lh = await lbReadSlice(blob, e.lho, e.lho + 30);
+  var ldv = new DataView(lh);
+  if (ldv.getUint32(0, true) !== 0x04034b50) throw new Error('zip 结构异常：' + e.name);
+  var lnlen = ldv.getUint16(26, true);
+  var lelen = ldv.getUint16(28, true);
+  var ds = e.lho + 30 + lnlen + lelen;
+  var cs = Number(e.csize || 0);
+  var part = blob.slice(ds, ds + cs);          /* Blob 切片不读数据，只是个引用 */
+  var st = part.stream();                      /* 流式读，块大小由浏览器决定 */
+  if (e.method === 0) return { stream: st, usize: cs };
+  if (e.method !== 8) throw new Error('不支持的压缩方式 ' + e.method);
+  if (typeof DecompressionStream !== 'function') throw new Error('当前浏览器不支持 DecompressionStream，请用 Chrome/Edge');
+  return { stream: st.pipeThrough(new DecompressionStream('deflate-raw')),
+           usize: Number(e.usize || 0) };
+}
+
+/* ===== v6474（用户实报 getFileHandle 报 "Name is not allowed"）=====
+   文件系统 API 对名字极严：禁止 \ / : * ? " < > | 与控制字符，且**不许以空格或点结尾**；
+   zip 条目名来自第三方包，必须先归一化再用。 */
+function lbSafeSeg(s){
+  var t = String((s === undefined || s === null) ? '' : s);
+  t = t.replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g, '_');
+  t = t.replace(/[. ]+$/, '');
+  if (!t || t === '.' || t === '..') t = '_';
+  return t;
+}
+
+/* 原始名的 UTF-16 码点（排查隐藏字符用，最多 40 个） */
+function lbNameHex(s){
+  var t = String((s === undefined || s === null) ? '' : s), out = [];
+  for (var i = 0; i < t.length && i < 40; i++) {
+    out.push(('0000' + t.charCodeAt(i).toString(16)).slice(-4));
+  }
+  return out.join(' ');
+}
+
+/* ===== v6479（用户实报两个 MOD 都卡在 Preview/mod_settings.ini）=====
+   根因（已闭环）：Chromium 自 M131 起，出于安全策略**禁止 File System Access API
+   创建「危险扩展名」文件**（.ini / .cfg / .dll / .grp / .url / .local …），直接抛
+   `TypeError: Failed to execute 'getFileHandle' on 'FileSystemDirectoryHandle':
+    Name is not allowed.`
+   官方 issue 380857453 状态 Won't Fix (Intended Behavior) —— 浏览器层硬限制，绕不过。
+   证据链：① OPFS 虚拟文件系统里建同名文件**成功**；
+           ② 本机磁盘上就有同名文件（Steam 写的），Windows 本身完全支持；
+           ③ .txt/.png/.pak/.uplugin 全部正常写入，唯独 .ini 被拒。
+   策略（v6482 最终版，用户口径「直接不部署这个 ini 了」）：
+     ① 已知禁止扩展名**预判**，不做无效尝试
+     ② **直接跳过**，不写 `<原名>.lbblocked` 保底（目录不留残留）
+     ③ 不再尝试 move() —— 实测它走同一套扩展名检查（报 TypeError），必失败
+     ④ 这类文件**永不阻断部署**，汇总时只提示一句
+   附带修掉隐患：以前只对 Preview/ 降级，若 MOD 根目录带 .dll 会被误判成
+   「关键文件失败」而整批装不上。 */
+var LB_FSA_BLOCKED_EXT = ('ini,cfg,dll,grp,url,local,lnk,ocx,sys,drv,cpl,scr,reg,inf,msi')
+  .split(',').reduce(function (m, x) { m[x] = 1; return m; }, {});
+
+/* 该文件名是否属于 Chromium 禁止写入的危险扩展名 */
+function lbFsaBlockedName(nm){
+  var m = String(nm || '').toLowerCase().match(/\.([a-z0-9]+)$/);
+  return !!(m && LB_FSA_BLOCKED_EXT[m[1]]);
+}
+
+/* 是否为「名字被判危险扩展名」的专用报错 */
+function lbIsNameNotAllowed(e){
+  return String((e && e.message) || e || '').indexOf('Name is not allowed') >= 0;
+}
+
+/* 写入单个 zip 条目：
+   成功 → {blocked:false}；被扩展名策略拒 → {blocked:true, alt, moved, why}
+   其它异常（磁盘/配额/权限）原样抛出，由调用方记「写盘失败」 */
+async function lbWriteEntry(cur, bn, src){
+  /* v6484：src 可以是 ArrayBuffer/Uint8Array（自动下载路径，数据已在内存）
+     或 ReadableStream（手动 zip 流式路径）—— 流式时边解压边写盘，内存不落地。 */
+  var isStream = !!(src && typeof src.getReader === 'function');
+  var blob = isStream ? null : new Blob([src]);
+  var fh = null, lastErr = null;
+  if (!lbFsaBlockedName(bn)) {
+    try {
+      fh = await cur.getFileHandle(bn, { create: true });
+    } catch (eF1) {
+      lastErr = eF1;
+      if (!lbIsNameNotAllowed(eF1)) {
+        /* 二次尝试：不带 create（文件可能已存在） */
+        try { fh = await cur.getFileHandle(bn); } catch (eF2) { lastErr = eF2; }
+      }
+    }
+  }
+  if (!fh) {
+    var banned = lbFsaBlockedName(bn) || lbIsNameNotAllowed(lastErr);
+    /* v6482（用户口径「直接不部署这个 ini 了」）：禁写扩展名**直接跳过**，
+       既不写 .lbblocked 保底、也不再试 move()（实测 move 走同一套扩展名检查，必失败），
+       目录里不留任何残留文件。 */
+    if (banned) return { blocked: true };
+    throw (lastErr || new Error('建文件失败：' + bn));
+  }
+  var w = await fh.createWritable();
+  if (isStream) {
+    /* pipeTo 正常结束会自动 close（提交写入）；中途失败则 abort 丢弃临时文件 */
+    try {
+      await src.pipeTo(w);
+    } catch (eP) {
+      try { await w.abort(); } catch (eA) {}
+      throw eP;
+    }
+    return { blocked: false };
+  }
+  await w.write(blob);
+  await w.close();
+  return { blocked: false };
+}
+
+/* v6478：判断 MOD 里的文件是否「运行必需」——
+   **只有 Preview/ 算非必需**（游戏内 MOD 浏览器的说明文字/预览图/mod_settings.ini），
+   其余（.uplugin / Manifest_*.txt / Content 下所有 pak/ucas/utoc 等）一律按关键处理，
+   宁可报错也不让用户装出一个「看起来装好了但游戏加载不出来」的 MOD。
+   用户实测：Preview/mod_settings.ini 会被浏览器拒绝（Name is not allowed），
+   同目录 diff.txt / preview_image.png 却正常 ⇒ 单个名字被拒不该让整批失败。 */
+function lbModFileCritical(pth){
+  var p = String(pth || '').toLowerCase().replace(/\\/g, '/');
+  if (p.indexOf('/preview/') >= 0) return false;
+  return true;
+}
+
+/* 把失败清单拆成「浏览器禁止 / 关键 / 非关键」 */
+function lbModSplitFailed(list){
+  var crit = [], soft = [], blocked = [];
+  for (var i = 0; i < (list || []).length; i++) {
+    var x = list[i] || {};
+    if (x.blocked) { blocked.push(x); continue; }
+    if (lbModFileCritical(x.pth)) crit.push(x); else soft.push(x);
+  }
+  return { crit: crit, soft: soft, blocked: blocked };
+}
+
+/* v6482：浏览器禁写类文件（已直接跳过，不产生任何文件）的提示文本 */
+function lbModBlockedText(list){
+  var out = [];
+  for (var i = 0; i < (list || []).length; i++) {
+    out.push(String((list[i] || {}).pth || ''));
+  }
+  return out.join('、');
+}
+
+/* 失败清单拼成多行文本 */
+function lbModFailedText(list){
+  var out = [];
+  for (var i = 0; i < (list || []).length; i++) {
+    out.push((list[i] || {}).pth + ' → ' + ((list[i] || {}).why || '未知原因'));
+  }
+  return out.join('\n  ');
+}
+
+/* v6476：错误对象转一行文本 */
+function lbErrTxt(e){
+  if (!e) return 'unknown';
+  return ((e.name || 'Error') + ': ' + String(e.message || e));
+}
+
+/* v6475：列出目录下已有条目名（目录带尾斜杠），用于失败诊断 */
+async function lbListNames(dirH, limit){
+  var out = [], n = limit || 20;
+  try {
+    var it = dirH.entries();
+    while (out.length < n) {
+      var r = await it.next();
+      if (r.done) break;
+      var h = r.value[1];
+      out.push(String(r.value[0]) + (h && h.kind === 'directory' ? '/' : ''));
+    }
+  } catch (e) {}
+  return out;
+}
+
+/* 按 zip 内部目录树整包解压到 rootHandle。
+   opt.skipBk2 为 true 时跳过开场视频 Content/Movies/LoadingScreen.bk2 ——
+   **仅供服务端分发场景**使用；客户端「部署到本机」必须完整写入（v6485 起不再传该参数）。 */
+async function lbZipExtractAll(rootHandle, buf, opt){
+  var o = opt || {};
+  /* v6483：buf 可以是 ArrayBuffer（自动下载，数据已在内存）或 Blob/File（手动选 zip）——
+     Blob 走按需分块读取，不把整包读进内存，2GB+ 包也能解。 */
+  var _isBlob = !!(buf && typeof buf.slice === 'function' && typeof buf.size === 'number');
+  var _blob = _isBlob ? buf : null;
+  /* v6475：先自检目标目录能不能建/删文件 ——
+     能建 ⇒ 问题出在具体名字；不能建 ⇒ 是目录本身（权限/锁定/类型）的问题。
+     两种原因的处理方式完全不同，先分清再动手。 */
+  var _tn = '.lbtest_' + Date.now();
+  try {
+    await rootHandle.getFileHandle(_tn, { create: true });
+    try { await rootHandle.removeEntry(_tn); } catch (eR) {}
+  } catch (eT) {
+    var _dn0 = await lbListNames(rootHandle, 20);
+    throw new Error('目标目录无法创建文件（' + (rootHandle && rootHandle.name ? rootHandle.name : '?') + '）'
+                    + '\n  该目录已有 ' + _dn0.length + ' 项：' + (_dn0.join(', ') || '（空）')
+                    + '\n  错误=' + ((eT && eT.name) || '?') + ': ' + String((eT && eT.message) || eT));
+  }
+  var ents = _isBlob ? await lbZipListBlob(_blob) : lbZipList(buf);
+  var files = 0, bytes = 0, skipped = 0, failedList = [], movedRename = 0;
+  /* v6486（用户口径 2026-11-10「解压要进度条」）：进度回调。
+     先预扫总文件数与总字节（usize 就在中央目录里，无需读数据），
+     之后每处理完一个条目 _tick 一次 ⇒ 界面可显示「已完成/总数 + 字节 + 百分比」。 */
+  var _onp = (typeof o.onProgress === 'function') ? o.onProgress : null;
+  var _tf = 0, _tb = 0, _doneN = 0;
+  if (_onp) {
+    for (var _pi = 0; _pi < ents.length; _pi++) {
+      if (ents[_pi].isDir) continue;
+      _tf++;
+      _tb += Number(ents[_pi].usize || 0);
+    }
+    try { _onp(0, _tf, 0, _tb); } catch (_eP0) {}
+  }
+  var _tick = function () {
+    if (!_onp) return;
+    _doneN++;
+    try { _onp(_doneN, _tf, bytes, _tb); } catch (_eP1) {}
+  };
+  for (var i = 0; i < ents.length; i++) {
+    var e = ents[i];
+    if (e.isDir) continue;
+    var pth = String(e.name || '').replace(/\\/g, '/').replace(/^\/+/, '');
+    var parts = pth.split('/').filter(function (x) { return !!x; });
+    if (!parts.length) continue;
+    var bnRaw = parts[parts.length - 1];
+    if (o.skipBk2 && String(bnRaw).toLowerCase() === 'loadingscreen.bk2') { skipped++; _tick(); continue; }
+    var bn = lbSafeSeg(bnRaw);
+    var segs = [];
+    for (var sg = 0; sg < parts.length - 1; sg++) segs.push(lbSafeSeg(parts[sg]));
+
+    /* v6476（用户实报第 9/10 条 mod_settings.ini 报 Name is not allowed）：
+       **每个文件都从 rootHandle 重新走一遍目录链**，不再复用上一轮的目录句柄 ——
+       实测同目录 diff.txt（第 8 条）成功、紧接着的第二、三个文件失败，
+       且该名字在本机 OS 层可正常创建、码点全是普通 ASCII ⇒ 高度怀疑句柄复用后的内部状态。
+       同时改为**单文件失败不中断**：整批跑完再汇总，避免一条失败全盘皆输。 */
+    var cur = rootHandle, dirWhy = '';
+    for (var d = 0; d < segs.length; d++) {
+      try {
+        cur = await cur.getDirectoryHandle(segs[d], { create: true });
+      } catch (eD) {
+        var _sibD = await lbListNames(cur, 10);
+        dirWhy = '建目录「' + segs[d] + '」失败（所在 ' + (cur && cur.name ? cur.name : '?')
+               + '，该目录已有：' + (_sibD.join(', ') || '空') + '）→ ' + lbErrTxt(eD);
+        break;
+      }
+    }
+    if (dirWhy) { failedList.push({ pth: pth, why: dirWhy }); _tick(); continue; }
+
+    /* v6484：Blob 路径改为拿「流」而不是解压到内存 —— 单条目 >2GiB 也能写 */
+    var data = null, srcStream = null, uSize = 0;
+    try {
+      if (_isBlob) {
+        var _sr = await lbZipStreamBlob(e);
+        srcStream = _sr.stream;
+        uSize = Number(_sr.usize || 0);
+      } else {
+        data = await lbZipInflate(e);
+        uSize = (data && data.byteLength) || 0;
+      }
+    } catch (eI) {
+      failedList.push({ pth: pth, why: '解压失败（方式 ' + e.method + '，解压后 ' + e.usize
+                                      + ' 字节）→ ' + lbErrTxt(eI) });
+      _tick();
+      continue;
+    }
+
+    /* v6482：统一走 lbWriteEntry —— 浏览器禁止的扩展名（.ini/.cfg/.dll…）**直接跳过**，
+       不写任何文件、不试 move()，汇总时只提示一句。 */
+    var wr = null;
+    try {
+      wr = await lbWriteEntry(cur, bn, srcStream || data);
+    } catch (eW) {
+      var _sibW = await lbListNames(cur, 8);
+      failedList.push({ pth: pth, why: '写盘失败（' + uSize + ' 字节，所在 '
+                                      + (cur && cur.name ? cur.name : '?')
+                                      + '，该目录已有：' + (_sibW.join(', ') || '空')
+                                      + '）→ ' + lbErrTxt(eW) });
+      _tick();
+      continue;
+    }
+    if (wr && wr.moved) movedRename++;
+    if (wr && wr.blocked) {
+      failedList.push({ pth: pth, blocked: true });
+      _tick();
+      continue;
+    }
+    files++;
+    bytes += uSize;
+    _tick();
+  }
+  return { files: files, bytes: bytes, skipped: skipped, total: ents.length,
+           failed: failedList, movedRename: movedRename };
+}
+
+/* ===== v6468（用户口径 2026-11-09）：MOD「部署到本机」对齐汉化包的体验 =====
+   对齐点：
+     1) 一致性预检 —— 本机 Mods\83374\<pid>_<客户端fid>\ 已存在且含 .pak ⇒ 该版本已装，拦截不下载
+        （目录名带客户端 fid，MOD 一更新 fid 就变 ⇒ 目录在即代表「这一版装过了」，无需比大小）
+     2) 逐组独立处理 —— 某组失败不中断其余组，最后统一汇总
+     3) 失败按原因分类 —— 403 = 作者关闭第三方分发；其他 = 网络 / CDN 未放行 CORS
+     4) 不做服务器回落（v6465 用户口径「不允许回落服务器」）
+   写入位置：ARK Survival Ascended\ShooterGame\Binaries\Win64\ShooterGame\Mods\83374\<pid>_<fid>\ */
+
+/* 递归找 dirHandle 下任一 .pak（句柄异常一律当"没有"）
+   v6486 修正：深度上限 3 → 6。
+   真实路径是 5 层 —— `<pid>_<fid>`(0) / `FearEvolved`(1) / `Content`(2) / `Paks`(3) / `Windows`(4)，
+   `.pak` 在 depth=4，旧上限 3 导致**永远找不到 .pak**：
+     ① 旧版目录被误判「未见 .pak」→ 干跑清理时全部跳过，一个都删不掉
+     ② 「本机已安装就拦截部署」形同失效 → 每次点部署都在重新下载 + 重新解压 */
+async function lbLocalAnyPak(dirHandle, depth){
+  if ((depth || 0) > 6) return false;
+  try {
+    var it = dirHandle.entries();
+    while (true) {
+      var r = await it.next();
+      if (r.done) break;
+      var nm = String(r.value[0] || ''), h = r.value[1];
+      if (!h) continue;
+      if (h.kind === 'file') { if (/\.pak$/i.test(nm)) return true; }
+      else if (await lbLocalAnyPak(h, (depth || 0) + 1)) return true;
+    }
+  } catch (e) {}
+  return false;
+}
+
+/* 本机 Mods\83374 下某 pid 的全部版本目录（<pid>_*） */
+async function lbLocalModDirs(gid, pid){
+  var out = [];
+  try {
+    var it = gid.entries();
+    while (true) {
+      var r = await it.next();
+      if (r.done) break;
+      var nm = String(r.value[0] || ''), h = r.value[1];
+      if (h && h.kind === 'directory' && nm.indexOf(pid + '_') === 0) out.push(nm);
+    }
+  } catch (e) {}
+  return out;
+}
+
+/* ===== v6481（用户口径 2026-11-10「清理前能否固化干跑流程？」）=====
+   旧版目录清理改为**两阶段**：① 干跑预演（只扫描不删）→ ② 用户在浮层点「确认清理」才真删。
+   用户特别强调「路径很有可能有中文，千万千万删除不要因为编码或别的问题搞错了」
+   ⇒ 干跑与执行共用同一套五重防护：
+     ① 目录名**只取 gid.entries() 返回的原始字符串**（UTF-16 原样传递），
+        绝不重建 / 拼接 / encodeURIComponent / decode —— 中文名全程不经任何编码转换
+     ② 格式白名单 /^<pid>_\d+$/：只认「纯数字_纯数字」，中文名或其他名字直接跳过
+     ③ 与保留目录名做**严格 === 比较**，不用 indexOf / 正则 / 前缀模糊
+     ④ 必须 kind === 'directory'，且目录内**确实存在 .pak**（确认是 MOD 目录才删）
+     ⑤ keepDn 为空 ⇒ 一个都不处理
+   ⚠ 浏览器隐藏的扩展名（.ini / .cfg / .dll）连列举都禁止，无法检测、无法自动搬运。 */
+
+/* 递归统计目录（文件数 + 总字节）。被浏览器隐藏的扩展名不会计入，统计值会略小 */
+async function lbLocalDirStat(dirH, depth){
+  var o = { n: 0, bytes: 0 };
+  if ((depth || 0) > 6) return o;
+  try {
+    var it = dirH.entries();
+    while (true) {
+      var r = await it.next();
+      if (r.done) break;
+      var hh = r.value[1];
+      if (!hh) continue;
+      if (hh.kind === 'file') {
+        o.n++;
+        try { var f = await hh.getFile(); o.bytes += Number(f.size || 0); } catch (eF) {}
+      } else {
+        var sub = await lbLocalDirStat(hh, (depth || 0) + 1);
+        o.n += sub.n; o.bytes += sub.bytes;
+      }
+    }
+  } catch (e) {}
+  return o;
+}
+
+/* 干跑：只扫描旧版本目录并统计，**不删除任何东西** */
+async function lbLocalScanOldModDirs(gid, pid, keepDn){
+  var out = [];
+  var keep = String(keepDn || '');
+  if (!keep) return out;                              /* ⑤ */
+  var p = String(pid || '');
+  if (!/^\d+$/.test(p)) return out;                   /* pid 必须纯数字 */
+  var reOk = new RegExp('^' + p + '_\\d+$');          /* ② 格式白名单 */
+  var names = [];
+  try {
+    var it = gid.entries();
+    while (true) {
+      var r = await it.next();
+      if (r.done) break;
+      var nm = String(r.value[0] || '');              /* ① 原始名字，绝不重建 */
+      var hh = r.value[1];
+      if (!hh || hh.kind !== 'directory') continue;   /* ④ 只要目录 */
+      if (nm === keep) continue;                      /* ③ 严格相等：当前版保留 */
+      if (!reOk.test(nm)) continue;                   /* ② 只认 <pid>_<数字> */
+      names.push(nm);
+    }
+  } catch (e) { return out; }
+  for (var i = 0; i < names.length; i++) {
+    var nm2 = names[i];
+    var dh = null;
+    try { dh = await gid.getDirectoryHandle(nm2); } catch (eG) { continue; }
+    var hasPak = await lbLocalAnyPak(dh, 0);          /* ④ 必须含 .pak */
+    var st = await lbLocalDirStat(dh, 0);
+    out.push({ name: nm2, pid: p, size: st.bytes, files: st.n, hasPak: hasPak });
+  }
+  return out;
+}
+
+/* ===== v6481：干跑结果确认浮层（旧版目录清理）===== */
+var LB_MODS_PRUNE = { list: [], gid: null, say: null, busy: false };
+
+function lbModsPruneOpen(list, gid, say){
+  LB_MODS_PRUNE = { list: (list || []), gid: gid, say: say || null, busy: false };
+  var ov = document.getElementById('lbModsPruneOv');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'lbModsPruneOv';
+    ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:100002;display:none;'
+                     + 'background:rgba(0,0,0,.62);align-items:center;justify-content:center;padding:16px';
+    document.body.appendChild(ov);
+  }
+  var totB = 0, totN = 0;
+  (list || []).forEach(function(x){
+    totB += Number(x.size || 0); totN += Number(x.files || 0);
+  });
+  var hh2 = '<div style="background:#1b1b22;border:1px solid #333;border-radius:14px;max-width:620px;'
+          + 'width:100%;max-height:82vh;overflow:auto;padding:16px;box-shadow:0 18px 48px rgba(0,0,0,.55)">'
+          + '<div style="font-size:15px;font-weight:700;color:#a78bfa;margin-bottom:6px">'
+          + '<i class="mdi mdi-broom"></i> 清理旧版 MOD 目录 · 干跑预演</div>'
+          + '<div style="font-size:12px;color:#fbbf24;margin-bottom:10px">'
+          + '以下 ' + (list || []).length + ' 个目录将被<b>永久删除</b>（浏览器删除不进回收站）</div>'
+          + '<div style="font-size:12px;color:#9ca3af;line-height:1.7;margin-bottom:12px">'
+          + '这些是同一个 MOD 的旧版本目录，游戏只按最新版本加载，旧版留着白占空间。'
+          + '注意：<b>.ini / .cfg / .dll</b> 这类文件被浏览器隐藏（连列举都禁止），'
+          + '无法检测也无法自动搬运，<b>删除后不可恢复</b>。</div>';
+  (list || []).forEach(function(it, idx){
+    var warn = it.hasPak ? ''
+      : '　<span style="color:#f87171">（目录内未见 .pak，执行时会自动跳过）</span>';
+    hh2 += '<div style="border:1px solid #2b2b33;border-radius:10px;padding:10px;margin-bottom:8px">'
+         + '<div style="font-size:13px;color:#e5e7eb">' + (idx + 1) + '. ' + lbMdEsc(it.name) + '</div>'
+         + '<div style="font-size:11px;color:#9ca3af;margin-top:3px">'
+         + lbLocalFmt(it.size) + ' · ' + it.files + ' 个文件' + warn + '</div>'
+         + '</div>';
+  });
+  hh2 += '<div style="font-size:12px;color:#a78bfa;margin:10px 0 12px">'
+       + '合计释放：' + lbLocalFmt(totB) + '（' + totN + ' 个文件）</div>'
+       + '<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">'
+       + '<button type="button" onclick="lbModsPruneClose()"'
+       + ' style="padding:8px 14px;border-radius:8px;border:1px solid #4b5563;background:#26262e;'
+       + 'color:#e5e7eb;font-size:12px;cursor:pointer">暂不清理</button>'
+       + '<button type="button" id="lbModsPruneGoBtn" onclick="lbModsPruneGo()"'
+       + ' style="padding:8px 14px;border-radius:8px;border:0;background:#dc2626;'
+       + 'color:#fff;font-size:12px;cursor:pointer">'
+       + '<i class="mdi mdi-delete-sweep"></i> 确认清理</button>'
+       + '</div>'
+       + '<div id="lbModsPruneSt" style="font-size:11px;color:#9ca3af;margin-top:8px"></div>'
+       + '</div>';
+  ov.innerHTML = hh2;
+  ov.style.display = 'flex';
+}
+
+function lbModsPruneClose(){
+  var ov = document.getElementById('lbModsPruneOv');
+  if (ov) ov.style.display = 'none';
+  if (typeof LB_MODS_PRUNE.say === 'function') {
+    try { LB_MODS_PRUNE.say('已暂不清理旧版目录（旧版仍占空间，下次部署会再次提示）'); } catch (e) {}
+  }
+}
+
+function lbModsPruneSetSt(s, c){
+  var el = document.getElementById('lbModsPruneSt');
+  if (el) { el.textContent = s; el.style.color = c || '#9ca3af'; }
+}
+
+/* 确认后才真正删除 —— 删前**再验一次含 .pak**（防干跑之后目录被改动） */
+async function lbModsPruneGo(){
+  if (LB_MODS_PRUNE.busy) return;
+  LB_MODS_PRUNE.busy = true;
+  var btn = document.getElementById('lbModsPruneGoBtn');
+  if (btn) { btn.disabled = true; btn.style.opacity = '.6'; }
+  var gid = LB_MODS_PRUNE.gid;
+  var list = LB_MODS_PRUNE.list || [];
+  var okN = 0, okB = 0, fail = [], skip = [];
+  if (!gid) {
+    lbModsPruneSetSt('目录句柄已失效，请重新点「部署到本机」', '#f87171');
+    LB_MODS_PRUNE.busy = false;
+    return;
+  }
+  for (var i = 0; i < list.length; i++) {
+    var it = list[i];
+    lbModsPruneSetSt('正在清理 ' + (i + 1) + '/' + list.length + '：' + it.name + ' …', '#fbbf24');
+    try {
+      var dh = await gid.getDirectoryHandle(it.name);      /* ① 原始名字 */
+      var still = await lbLocalAnyPak(dh, 0);              /* ④ 删前再验一次 */
+      if (!still) { skip.push(it.name); continue; }
+      await gid.removeEntry(it.name, { recursive: true }); /* ① 原始名字 */
+      okN++; okB += Number(it.size || 0);
+    } catch (e) {
+      fail.push(it.name + '（' + lbErrTxt(e) + '）');
+    }
+  }
+  var msg = '已清理 ' + okN + ' 个旧版本目录（释放 ' + lbLocalFmt(okB) + '）';
+  if (skip.length) msg += '；跳过 ' + skip.length + ' 个（目录内已无 .pak）：' + skip.join('、');
+  if (fail.length) msg += '；失败 ' + fail.length + ' 个：' + fail.join('；');
+  lbModsPruneSetSt(msg, fail.length ? '#f87171' : '#4ade80');
+  if (btn) btn.style.display = 'none';
+  try { if (typeof LB_MODS_PRUNE.say === 'function') LB_MODS_PRUNE.say(msg); } catch (e1) {}
+  try { lbNoteBar(msg, fail.length ? 'err' : 'warn'); } catch (e2) {}
+  LB_MODS_PRUNE.busy = false;
+}
+
+/* ===== v6470（用户口径 2026-11-10）：MOD「部署到本机」两处调整 =====
+   ① 清单来源换成 /api/mods/status 的「**所有服务器策略内 MOD 并集**」（expect），
+      **不再读服务端本地包** —— 本地包下没下、是否最新，与「部署到本机」无关。
+   ② 「作者限制第三方分发」（官方 CDN 返回 403）不再只弹一句文字提示：
+      先把能直连的 MOD 全部装完 → 汇总成一个可交互浮层（打开 CurseForge 下载页 + 选择已下载的 zip）
+      → 网页内解压写盘 → 继续，直到全部处理完。
+      判据是 CDN 403，**不针对任何具体 MOD**（Club ARK 只是其中一个例子）。 */
+
+/* 所有服务器「策略内 MOD」的并集（去重排序的 pid 数组） */
+async function lbLocalModsPolicyPids(base, hd){
+  var u = '';
+  try { u = (typeof lbSrvCtlUser === 'function') ? (lbSrvCtlUser() || '') : ''; } catch (e) { u = ''; }
+  var r = await fetch(base + '/api/mods/status?username=' + encodeURIComponent(u) + '&t=' + Date.now(),
+                      { headers: hd, cache: 'no-store' });
+  var j = null;
+  try { j = await r.json(); } catch (e) { j = null; }
+  if (!j || j.ok === false) throw new Error((j && j.error) || ('MOD 状态接口不可用 HTTP ' + r.status));
+  var set = {};
+  Object.keys(j.servers || {}).forEach(function(sv){
+    ((j.servers[sv] || {}).expect || []).forEach(function(p){ if (p) set[String(p)] = 1; });
+  });
+  return Object.keys(set).sort();
+}
+
+/* MOD 直连部署（文件字节不走服务器，只取几百字节的地址元数据）
+   v6471（用户口径 2026-11-10）：「本机已经是最新 MOD 就阻断并提示部署」——
+   改成**先体检、后部署**两段式：
+     ① 先逐组取客户端包元信息 + 判本机是否已装（目录 <pid>_<客户端fid> 存在且含 .pak）
+     ② 若**全部**都已是最新 ⇒ 整批阻断，直接提示，不下载任何文件、不写盘、不弹手动窗口
+        只有部分已装 ⇒ 只装缺的那几个（已装的仍逐组拦截） */
+async function lbLocalDeployModsByCDN(g, say, base, hd){
+  var pids = await lbLocalModsPolicyPids(base, hd);
+  if (!pids.length) throw new Error('策略里没有任何 MOD（请先在该卡的「部署策略」里配置）');
+
+  var bin = await lbLocalDir(g.sg, 'Binaries');
+  var w64 = await lbLocalDir(bin, 'Win64');
+  var inner = await w64.getDirectoryHandle('ShooterGame', { create: true });
+  var mods = await inner.getDirectoryHandle('Mods', { create: true });
+  var gid = await mods.getDirectoryHandle('83374', { create: true });
+  var where = g.path + '\\ShooterGame\\Binaries\\Win64\\ShooterGame\\Mods\\83374';
+
+  var nopkg = [], failed = [], stale = [], plan = [];
+
+  /* ===== ① 体检：逐组取元信息 + 判本机是否已装 ===== */
+  /* v6480：先报一次本机包缓存现状 —— 用户要能「看见」缓存到底在不在工作 */
+  try {
+    var _cs0 = await lbPkgCacheStat();
+    if (_cs0.n) say('本机包缓存：' + _cs0.n + ' 个包 / ' + lbLocalFmt(_cs0.bytes));
+    else say('本机包缓存：暂无（首次下载后会写入，同版本再部署不再重下）');
+  } catch (eC0) {}
+  say('检查 ' + pids.length + ' 个策略内 MOD…');
+  for (var ci = 0; ci < pids.length; ci++) {
+    var cpid = pids[ci];
+    var cmeta = null, craw = null;
+    try {
+      var r0 = await fetch(base + '/api/mods/client/file?pid=' + encodeURIComponent(cpid) + '&t=' + Date.now(),
+                           { headers: hd, cache: 'no-store' });
+      var j0 = await r0.json();
+      craw = j0;
+      if (j0 && j0.ok) cmeta = j0;
+    } catch (e0) {}
+
+    if (!cmeta) {
+      if (craw && craw.code === 'no_client_pkg') {
+        nopkg.push(cpid + (craw.name ? ('（' + craw.name + '）') : ''));
+      } else {
+        failed.push(cpid + '（取不到客户端包信息）');
+      }
+      continue;
+    }
+
+    var cdn = cpid + '_' + String(cmeta.fid || '');
+    var chave = false;
+    if (cmeta.fid) {
+      try {
+        var cexist = await gid.getDirectoryHandle(cdn);
+        chave = await lbLocalAnyPak(cexist, 0);
+      } catch (e2) { chave = false; }
+    }
+    /* v6480：把同 pid 的版本目录记下来 —— 后面既用于「是否要清旧版」，也用于阻断判断 */
+    var olds = [];
+    if (cmeta.fid) {
+      try { olds = await lbLocalModDirs(gid, cpid); } catch (e3) {}
+    }
+    var staleN = 0;
+    for (var oi = 0; oi < olds.length; oi++) { if (olds[oi] !== cdn) staleN++; }
+    if (staleN) stale.push(cpid + ' 有 ' + staleN + ' 个旧版本目录（将自动清理）');
+    plan.push({ pid: cpid, meta: cmeta, have: chave, dn: cdn, olds: olds });
+  }
+
+  /* ===== ② 整批阻断：全部已是最新就不动任何文件 ===== */
+  var allHave = plan.length > 0, allClean = true;
+  for (var xi = 0; xi < plan.length; xi++) {
+    if (!plan[xi].have) allHave = false;
+    /* v6480：只要还残留旧版本目录，就不能整批阻断 —— 要放行去把它们清掉 */
+    var _os = plan[xi].olds || [];
+    for (var xj = 0; xj < _os.length; xj++) {
+      if (_os[xj] !== plan[xi].dn) { allClean = false; break; }
+    }
+  }
+  if (allHave && allClean && !nopkg.length && !failed.length) {
+    var names = [];
+    for (var ni = 0; ni < plan.length; ni++) {
+      var pm = plan[ni].meta || {};
+      names.push(pm.name ? (pm.name + '(' + plan[ni].dn + ')') : plan[ni].dn);
+    }
+    var _mmsg = '本机 MOD 已是最新版（' + plan.length + ' 组：' + names.join('、') + '），已拦截部署';
+    say(_mmsg);
+    /* v6473：拦截结论常驻 */
+    try { lbNoteBar(_mmsg, 'warn'); } catch (_eNB3) {}
+    if (stale.length) say('提示：' + stale.join('；') + '（旧版本目录不会自动删，游戏按新版本加载）');
+    return;
+  }
+
+  /* ===== ③ 部署缺的那些 ===== */
+  var n = 0, bytes = 0, cdnN = 0, skipN = 0;
+  var manual = [];
+  var pruneCand = [];       /* v6481：干跑收集到的旧版目录候选（确认后才删） */
+
+  for (var gi = 0; gi < plan.length; gi++) {
+    var it = plan[gi];
+    var meta = it.meta;
+    var pid = it.pid;
+    var dn = it.dn;
+
+    if (it.have) {
+      skipN++;
+      say('MOD ' + pid + (meta.name ? ('（' + meta.name + '）') : '')
+          + ' 本机已安装 ' + dn + '，已拦截部署');
+      /* v6481：旧版目录改「干跑预演 → 用户确认才删」——这里只收集候选，不删任何东西 */
+      try {
+        var _sc0 = await lbLocalScanOldModDirs(gid, pid, dn);
+        for (var _k0 = 0; _k0 < _sc0.length; _k0++) pruneCand.push(_sc0[_k0]);
+      } catch (_e0) {}
+      continue;
+    }
+
+    /* 直连下载（逐个试 CDN 主机）
+       v6472：改流式下载 + 字节数校验 —— 以前 rs.arrayBuffer() 对大包可能静默截断，
+       结果把一个不完整的 zip 喂给解析器，报错还看不出是"没下完"。 */
+    var buf = null, got403 = false, lastErr = '';
+    for (var ui = 0; ui < (meta.urls || []).length; ui++) {
+      var u = String(meta.urls[ui] || '');
+      var host = '';
+      try { host = u.split('/')[2] || ''; } catch (eH) {}
+      try {
+        var _nm = String(meta.fileName || '');
+        /* v6477：同版本第二次部署直接命中本机缓存，不再重下 838MB */
+        var _ckey = lbPkgKey('mods', pid, String(meta.fid || ''), _nm);
+        say('获取 ' + String(meta.name || pid) + ' ' + _nm
+            + '（' + lbLocalFmt(meta.size) + '）@' + host + ' …');
+        var _got = await lbFetchCached(u, function(g, tot){
+          say('  下载 ' + _nm + '：' + lbLocalFmt(g) + (tot ? (' / ' + lbLocalFmt(tot)) : '') + ' …');
+        }, meta.size, _ckey, say);
+        var _want = Number(meta.size || 0);
+        if (_want && _got.byteLength !== _want) {
+          lastErr = '下载不完整：' + _got.byteLength + ' / ' + _want + ' 字节（缺 '
+                    + lbLocalFmt(Math.max(0, _want - _got.byteLength)) + '）@' + host;
+          say('  ' + lastErr);
+          continue;
+        }
+        buf = _got;
+        break;
+      } catch (eF) {
+        lastErr = host + '：' + String((eF && eF.message) || eF);
+        say('  ' + host + ' 不可直连，换下一个');
+      }
+    }
+
+    if (!buf) {
+      /* v6472：「下载不完整」不属于"作者限制分发"，必须显式报错（可重试），
+         不能混进手动下载列表让人以为要自己去下。 */
+      if (lastErr && lastErr.indexOf('下载不完整') === 0) {
+        throw new Error(String(meta.name || pid) + ' ' + lastErr + ' —— 请重试；若反复失败请检查网络');
+      }
+      manual.push({ pid: pid, name: String(meta.name || ''), fid: String(meta.fid || ''),
+                    fileName: String(meta.fileName || ''), size: Number(meta.size || 0),
+                    page: String(meta.filePage || meta.page || ''),
+                    why: got403 ? '作者限制第三方分发' : ('CDN 不可直连' + (lastErr ? ('（' + lastErr + '）') : '')) });
+      continue;
+    }
+
+    var pd = await gid.getDirectoryHandle(dn, { create: true });
+    say('解压 MOD ' + pid + '（' + lbLocalFmt(buf.byteLength) + '）…');
+    var ex = null;
+    try {
+      /* v6485（用户口径 2026-11-10）：客户端就是**完整写入所有文件**，
+         不再跳过开场视频 Content/Movies/LoadingScreen.bk2（那是 MOD 自带的加载画面）。
+         服务端分发那边的跳过是另一套逻辑，与此无关。
+         v6486：接进度 —— 自动路径没有浮层，就在操作日志里逐个报进度。 */
+      ex = await lbZipExtractAll(pd, buf, {
+        onProgress: function (done, total, b, tb) {
+          if (!done) return;
+          say('  解压 ' + done + '/' + total + '（' + lbLocalFmt(b || 0)
+              + (tb ? (' / ' + lbLocalFmt(tb)) : '') + '）');
+        }
+      });
+    } catch (eX) {
+      throw new Error('解压 ' + pid + (meta.name ? ('（' + meta.name + '）') : '') + ' 失败：'
+                      + String((eX && eX.message) || eX)
+                      + '\n包大小 ' + buf.byteLength + ' 字节，目标目录 ' + dn);
+    }
+    if (ex && ex.failed && ex.failed.length) {
+      /* v6478：分关键 / 非关键 —— 关键文件失败才阻断，Preview 类只警告
+         v6479：新增「浏览器禁止扩展名」类（.ini/.cfg/.dll…），永不阻断 */
+      var _sp = lbModSplitFailed(ex.failed);
+      var _msgs = [];
+      if (_sp.blocked.length) {
+        _msgs.push(_sp.blocked.length + ' 个文件被浏览器禁止写入（.ini 等扩展名），已跳过'
+                   + '（不影响运行）：' + lbModBlockedText(_sp.blocked));
+        say('注意：' + _sp.blocked.length + ' 个文件因浏览器限制被跳过');
+      }
+      if (_sp.soft.length) {
+        _msgs.push(_sp.soft.length + ' 个预览类文件未写入（不影响 MOD 运行）：\n  '
+                   + lbModFailedText(_sp.soft));
+        say('注意：' + _sp.soft.length + ' 个预览类文件未写入，不影响 MOD 运行');
+      }
+      if (_msgs.length) {
+        try {
+          lbNoteBar('MOD ' + pid + (meta.name ? ('（' + meta.name + '）') : '') + '：\n'
+                    + _msgs.join('\n'), 'warn');
+        } catch (_eS) {}
+      }
+      if (_sp.crit.length) {
+        throw new Error('解压 ' + pid + (meta.name ? ('（' + meta.name + '）') : '') + ' 关键文件写入失败 '
+                        + _sp.crit.length + '/' + ex.total + ' 个（已成功 ' + ex.files + ' 个）：\n  '
+                        + lbModFailedText(_sp.crit)
+                        + '\n目标目录 ' + dn);
+      }
+    }
+    n += ex.files; bytes += ex.bytes; cdnN++;
+    say('MOD ' + pid + ' 部署完成：' + ex.files + ' 个文件（' + lbLocalFmt(ex.bytes)
+        + '）→ ' + dn);
+    /* v6477：同 pid 只留当前版本缓存，旧 fid 的包自动清掉（防无限堆积占空间） */
+    try { await lbPkgCachePruneGroup('mods', pid, String(meta.fid || '')); } catch (eP2) {}
+    /* v6481：旧版目录改「干跑预演 → 用户确认才删」——这里只收集候选，不删任何东西 */
+    try {
+      var _sc1 = await lbLocalScanOldModDirs(gid, pid, dn);
+      for (var _k1 = 0; _k1 < _sc1.length; _k1++) pruneCand.push(_sc1[_k1]);
+    } catch (_e1) {}
+  }
+
+  /* ---- 汇总 ---- */
+  var done = [];
+  if (cdnN) done.push('新装 ' + cdnN + ' 组 / ' + n + ' 个文件（' + lbLocalFmt(bytes) + '）');
+  if (skipN) done.push('已是最新 ' + skipN + ' 组（已拦截、未下载）');
+  if (done.length) say('MOD 部署完成：' + done.join('；') + ' → ' + where);
+  if (stale.length) say('提示：' + stale.join('；'));
+  /* v6481：干跑汇总 —— 只列清单，等用户在浮层里点「确认清理」才真删 */
+  if (pruneCand.length) {
+    var _pcB = 0, _pcN = 0;
+    for (var _pci = 0; _pci < pruneCand.length; _pci++) {
+      _pcB += Number(pruneCand[_pci].size || 0); _pcN += Number(pruneCand[_pci].files || 0);
+    }
+    say('干跑：发现 ' + pruneCand.length + ' 个旧版本目录待清理（合计 ' + lbLocalFmt(_pcB)
+        + ' / ' + _pcN + ' 个文件），请在弹出的清单里确认后才删除');
+    for (var _pcj = 0; _pcj < pruneCand.length; _pcj++) {
+      say('  · ' + pruneCand[_pcj].name + '　' + lbLocalFmt(pruneCand[_pcj].size)
+          + ' · ' + pruneCand[_pcj].files + ' 个文件'
+          + (pruneCand[_pcj].hasPak ? '' : '（未见 .pak，执行时会跳过）'));
+    }
+  }
+  /* v6473：把「无客户端包 / 取不到元信息 / 需手动下载」合并成**一条常驻**提示，
+     不再靠 1.6s toast（多句还会互相覆盖）。 */
+  var _nb = [], _nkind = 'warn';
+  if (nopkg.length) {
+    _nb.push('CurseForge 上没有 Windows 客户端包，无法部署：' + nopkg.join('、'));
+    _nkind = 'err';
+  }
+  if (failed.length) {
+    _nb.push('取不到客户端包信息（网络或鉴权问题）：' + failed.join('、'));
+    _nkind = 'err';
+  }
+  if (manual.length) {
+    _nb.push('有 ' + manual.length + ' 个 MOD 需要手动下载，已在处理窗口里逐个引导');
+  }
+  if (_nb.length) {
+    var _nbs = _nb.join('\n');
+    say(_nb.join('；'));
+    try { lbNoteBar(_nbs, _nkind); } catch (_eNB4) {}
+  }
+  if (manual.length) {
+    say('已打开手动处理窗口…');
+    lbLocalModsManualOpen(manual, gid, where, say);
+  } else if (cdnN || skipN) {
+    say('全部 MOD 已就绪（' + cdnN + ' 组新装 / ' + skipN + ' 组已是最新），重启游戏后生效');
+  }
+  /* v6481：干跑确认浮层（z-index 低于「需手动下载」浮层，用户先处理完那个再见这个） */
+  if (pruneCand.length) {
+    try { lbModsPruneOpen(pruneCand, gid, say); } catch (eP3) {
+      try { console.error('[prune] open fail', eP3); } catch (eP4) {}
+    }
+  }
+}
+
+/* ===== v6470：需手动下载的 MOD —— 浮层（下载页链接 + 选 zip 解压） ===== */
+var LB_MODS_MANUAL = { list: [], gid: null, where: '', say: null, done: {} };
+
+function lbLocalModsManualOpen(list, gid, where, say){
+  LB_MODS_MANUAL = { list: (list || []), gid: gid, where: where || '', say: say || null, done: {} };
+  var ov = document.getElementById('lbModsManualOv');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'lbModsManualOv';
+    ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:100003;display:none;'
+                     + 'background:rgba(0,0,0,.62);align-items:center;justify-content:center;padding:16px';
+    document.body.appendChild(ov);
+  }
+  var h = '<div style="background:#1b1b22;border:1px solid #333;border-radius:14px;max-width:600px;'
+        + 'width:100%;max-height:82vh;overflow:auto;padding:16px;box-shadow:0 18px 48px rgba(0,0,0,.55)">'
+        + '<div style="font-size:15px;font-weight:700;color:#a78bfa;margin-bottom:6px">'
+        + '<i class="mdi mdi-cloud-off-outline"></i> 需要手动下载的 MOD</div>'
+        + '<div id="lbModsManualHead" style="font-size:12px;color:#fbbf24;margin-bottom:10px">'
+        + ('还需手动处理 ' + LB_MODS_MANUAL.list.length + ' 个') + '</div>'
+        + '<div style="font-size:12px;color:#9ca3af;line-height:1.7;margin-bottom:12px">'
+        + '这些 MOD 的作者关闭了第三方分发，浏览器无法直连。点「打开下载页」手动下载 zip，'
+        + '再点「选择 zip 文件」解压到本机（跳过开场视频）。</div>';
+  LB_MODS_MANUAL.list.forEach(function(it){
+    var sub = [];
+    if (it.fileName) sub.push(it.fileName);
+    if (it.size) sub.push(lbLocalFmt(it.size));
+    if (it.why) sub.push(it.why);
+    var btnA = it.page
+      ? ('<a href="' + String(it.page) + '" target="_blank" rel="noopener"'
+         + ' style="display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:8px;'
+         + 'background:#7c3aed;color:#fff;font-size:12px;text-decoration:none">'
+         + '<i class="mdi mdi-open-in-new"></i>打开下载页</a>')
+      : '<span style="font-size:12px;color:#6b7280">无页面地址</span>';
+    h += '<div style="border:1px solid #2b2b33;border-radius:10px;padding:10px;margin-bottom:8px">'
+       + '<div style="font-size:13px;color:#e5e7eb">' + lbMdEsc(it.name || ('MOD ' + it.pid)) + '</div>'
+       + '<div style="font-size:11px;color:#9ca3af;margin-top:3px">' + lbMdEsc(sub.join(' · ')) + '</div>'
+       + '<div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap">' + btnA
+       + '<button type="button" onclick="lbLocalModsPickZip(\'' + it.pid + '\')"'
+       + ' style="padding:6px 12px;border-radius:8px;border:1px solid #4b5563;background:#26262e;'
+       + 'color:#e5e7eb;font-size:12px;cursor:pointer"><i class="mdi mdi-file-find"></i> 选择 zip 文件</button>'
+       + '</div>'
+       + '<div id="lbModsPgWrap_' + it.pid + '" style="display:none;margin-top:6px;height:6px;'
+       + 'background:#2b2b33;border-radius:3px;overflow:hidden">'
+       + '<div id="lbModsPg_' + it.pid + '" style="width:0%;height:100%;background:#7c3aed;'
+       + 'transition:width .15s ease"></div></div>'
+       + '<div id="lbModsSt_' + it.pid + '" style="font-size:11px;color:#9ca3af;margin-top:7px">未处理</div>'
+       + '</div>';
+  });
+  h += '<div style="display:flex;justify-content:flex-end;margin-top:12px">'
+     + '<button type="button" onclick="lbLocalModsManualClose()"'
+     + ' style="padding:6px 14px;border-radius:8px;border:1px solid #4b5563;background:#26262e;'
+     + 'color:#e5e7eb;font-size:12px;cursor:pointer">关闭</button></div></div>';
+  ov.innerHTML = h;
+  ov.style.display = 'flex';
+}
+
+function lbLocalModsManualClose(){
+  var ov = document.getElementById('lbModsManualOv');
+  if (ov) ov.style.display = 'none';
+}
+
+function lbLocalModsFind(pid){
+  var hit = null;
+  (LB_MODS_MANUAL.list || []).forEach(function(x){ if (String(x.pid) === String(pid)) hit = x; });
+  return hit;
+}
+
+/* 选 zip → 解压写盘（网页内完成，不经服务器） */
+function lbLocalModsPickZip(pid){
+  var it = lbLocalModsFind(pid);
+  if (!it) return;
+  if (!it.fid) {
+    lbLocalModsSetSt(pid, '缺少客户端包版本号，无法确定目录名 —— 请重新点「部署到本机」', '#f87171');
+    return;
+  }
+  var inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = '.zip,application/zip';
+  inp.style.display = 'none';
+  document.body.appendChild(inp);
+  inp.onchange = function(){
+    var f = (inp.files || [])[0];
+    try { document.body.removeChild(inp); } catch (e) {}
+    if (f) lbLocalModsDeployZip(pid, f);
+  };
+  inp.click();
+}
+
+function lbLocalModsSetSt(pid, s, c){
+  var el = document.getElementById('lbModsSt_' + pid);
+  if (el) { el.textContent = s; el.style.color = c || '#9ca3af'; }
+}
+
+/* v6486：浮层里的解压进度条 */
+function lbLocalModsSetProg(pid, done, total, b, tb){
+  var w = document.getElementById('lbModsPgWrap_' + pid);
+  var d = document.getElementById('lbModsPg_' + pid);
+  var n = Number(total || 0);
+  var pct = n ? Math.min(100, Math.round(Number(done || 0) * 100 / n)) : 0;
+  if (w) w.style.display = '';
+  if (d) d.style.width = pct + '%';
+  lbLocalModsSetSt(pid, '解压中… ' + (done || 0) + '/' + n
+                   + '（' + lbLocalFmt(b || 0) + (tb ? (' / ' + lbLocalFmt(tb)) : '')
+                   + '，' + pct + '%）', '#fbbf24');
+}
+
+/* v6486：重新开始时把进度条清零并隐藏 */
+function lbLocalModsProgReset(pid){
+  var w = document.getElementById('lbModsPgWrap_' + pid);
+  var d = document.getElementById('lbModsPg_' + pid);
+  if (w) w.style.display = 'none';
+  if (d) d.style.width = '0%';
+}
+
+async function lbLocalModsDeployZip(pid, file){
+  var it = lbLocalModsFind(pid);
+  if (!it) return;
+  if (!LB_MODS_MANUAL.gid) {
+    lbLocalModsSetSt(pid, '游戏目录句柄已失效，请重新点「部署到本机」', '#f87171');
+    return;
+  }
+  var dn = String(pid) + '_' + String(it.fid || '');
+  try {
+    /* v6483：不再 file.arrayBuffer() 整包读入 —— 直接把 File 交给 lbZipExtractAll
+       走按需分块读取（2GB+ 包内存峰值从「整包」降到「单个条目」） */
+    try { lbLocalModsProgReset(pid); } catch (_eR0) {}
+    lbLocalModsSetSt(pid, '解压中…（' + file.name + '，' + lbLocalFmt(file.size) + '）', '#fbbf24');
+    var pd = await LB_MODS_MANUAL.gid.getDirectoryHandle(dn, { create: true });
+    var ex = null;
+    try {
+      /* v6485（用户口径 2026-11-10）：手动 zip 同样**完整写入**，不跳过开场视频
+         v6486：接进度条 —— 每写完一个文件刷新一次 */
+      ex = await lbZipExtractAll(pd, file, {
+        onProgress: function (done, total, b, tb) {
+          try { lbLocalModsSetProg(pid, done, total, b, tb); } catch (_ePg) {}
+        }
+      });
+    } catch (eX) {
+      throw new Error('解压失败（' + file.name + '，' + lbLocalFmt(file.size) + '）：'
+                      + String((eX && eX.message) || eX));
+    }
+    if (ex && ex.failed && ex.failed.length) {
+      var _sp2 = lbModSplitFailed(ex.failed);
+      var _msgs2 = [];
+      if (_sp2.blocked.length) {
+        _msgs2.push(_sp2.blocked.length + ' 个文件被浏览器禁止写入（.ini 等扩展名），已跳过：'
+                    + lbModBlockedText(_sp2.blocked));
+      }
+      if (_sp2.soft.length) {
+        _msgs2.push(_sp2.soft.length + ' 个预览类文件未写入（不影响运行）：\n  '
+                    + lbModFailedText(_sp2.soft));
+      }
+      if (_msgs2.length) { try { lbNoteBar(_msgs2.join('\n'), 'warn'); } catch (_eS2) {} }
+      if (_sp2.crit.length) {
+        throw new Error('关键文件写入失败 ' + _sp2.crit.length + '/' + ex.total + ' 个（已成功 '
+                        + ex.files + ' 个）：\n  ' + lbModFailedText(_sp2.crit));
+      }
+    }
+    LB_MODS_MANUAL.done[String(pid)] = 1;
+    lbLocalModsSetSt(pid, '已部署 ' + ex.files + ' 个文件（' + lbLocalFmt(ex.bytes)
+                        + '）→ ' + dn, '#4ade80');
+    lbLocalModsManualCheck();
+  } catch (e) {
+    /* v6483：带上文件名 / 大小 / 错误类型 + 排查建议（原来只有一句英文，没法定位） */
+    var mm = '手动解压失败（' + (file && file.name ? file.name : '?')
+           + '，' + (file && file.size ? lbLocalFmt(file.size) : '?') + '）：'
+           + lbErrTxt(e)
+           + '\n排查：①确认文件已下载完（大小不再变化）②资源管理器能否正常打开该 zip'
+           + '③是否 OneDrive 占位（图标带云朵）④关闭可能占用它的下载器/杀毒后重试';
+    lbLocalModsSetSt(pid, mm, '#f87171');
+    try { lbErrBar(mm); } catch (eB) {}
+    try { console.error('[deploy-local] manual fail', e); } catch (eC) {}
+  }
+}
+
+function lbLocalModsManualCheck(){
+  var list = LB_MODS_MANUAL.list || [];
+  var left = list.filter(function(x){ return !LB_MODS_MANUAL.done[String(x.pid)]; });
+  var head = document.getElementById('lbModsManualHead');
+  if (head) {
+    head.textContent = left.length
+      ? ('还需手动处理 ' + left.length + ' 个（已完成 ' + (list.length - left.length) + '/' + list.length + '）')
+      : ('全部处理完成（' + list.length + '/' + list.length + '），重启游戏后生效');
+    head.style.color = left.length ? '#fbbf24' : '#4ade80';
+  }
+  if (!left.length && typeof LB_MODS_MANUAL.say === 'function') {
+    try { LB_MODS_MANUAL.say('需手动下载的 MOD 已全部部署完成，重启游戏后生效'); } catch (e) {}
+  }
 }

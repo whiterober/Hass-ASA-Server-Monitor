@@ -5975,6 +5975,10 @@ function lbSheetBuild(id, opts){
       + '</div>';
     document.body.appendChild(ov);
   }
+  /* v6403（根治）：所有 lbSheet 浮窗统一带 .lb-sheet 类 —— 默认显隐/遮罩由 app.css 的
+     .lb-sheet / .lb-sheet.show 提供，**新增浮窗不必再往 id 白名单里加名字**。
+     （历史踩坑：v5966 / v6032 / v6208 / v6402 各因漏加白名单导致「浮窗关不掉」） */
+  try { if (ov.classList && !ov.classList.contains('lb-sheet')) ov.classList.add('lb-sheet'); } catch (eC) {}
   /* v6211（用户口径「在线玩家行的 tips 呢」）：**所有 lbSheet 浮窗在此统一挂 tips 引擎** ——
      tips 引擎靠 .lb-tipb 标记类（closest('.lb-tipb')），原来只有 lbSrvCtl / lbNews 两份复制品
      各自写死容器，新建浮窗默认没有 ⇒ 气泡全丢（#lbUpd 就这么中招的）。
@@ -5991,7 +5995,17 @@ function lbSheetBuild(id, opts){
     foot:  document.getElementById(id + 'Foot')   /* v6050：底部固定栏（无内容时 hidden） */
   };
 }
-function lbSheetOpen(id){ var o = document.getElementById(id); if (o) o.classList.add('show'); }
+/* v6405（用户口径「拉取指定版本 浮窗层级不对 被覆盖了」）：打开时把 z-index 抬到最上层。
+   根因：所有浮窗的 z-index 都是 9998（.lb-sheet / id 白名单同值）⇒ 谁在 DOM 后面谁在上；
+   「先建过 A、后建 B，再打开 A」时 A 会被 B 盖住（lbUpdVer 被 lbUpd 盖住即此）。
+   递增 z-index 不改 DOM 结构、不影响滚动位置与 iframe，最安全。 */
+var _LB_SHEET_Z = 9998;
+function lbSheetOpen(id){
+  var o = document.getElementById(id);
+  if (!o) return;
+  try { _LB_SHEET_Z += 1; o.style.zIndex = String(_LB_SHEET_Z); } catch (e) {}
+  o.classList.add('show');
+}
 function lbSheetClose(id){ var o = document.getElementById(id); if (o) o.classList.remove('show'); }
 /* 布局修正（原 lbWikiItemLayoutFix 主体参数化）：隐藏「紧邻 .tc-intro 的无序号小标题」 */
 function lbSheetLayoutFix(body){
