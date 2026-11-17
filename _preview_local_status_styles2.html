@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>本机状态显示 · 6 种样式候选</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 20px 16px 80px; background: #121218; color: #e5e7eb;
+         font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+         font-size: 13px; line-height: 1.6; }
+  .wrap { max-width: 700px; margin: 0 auto; }
+  h1 { font-size: 17px; color: #a78bfa; margin: 0 0 4px; }
+  .sub { font-size: 12px; color: #6b7280; margin-bottom: 20px; }
+  h2 { font-size: 14px; color: #e5e7eb; margin: 28px 0 6px; padding-bottom: 6px;
+       border-bottom: 1px solid #2b2b33; display: flex; align-items: center; gap: 8px; }
+  h2 .k { font-size: 11px; color: #7c3aed; background: #241a3d; border-radius: 5px;
+          padding: 1px 8px; font-weight: 700; }
+  h2 .d { font-size: 11px; color: #6b7280; font-weight: 400; }
+  .card { background: #1b1b22; border: 1px solid #333; border-radius: 12px;
+          padding: 12px 14px; margin-bottom: 6px; }
+  .card-title { font-size: 13px; font-weight: 700; color: #a78bfa; display: flex;
+                align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+  .card-tip { font-size: 11px; color: #6b7280; font-weight: 400; }
+  .card-body { font-size: 12px; color: #9ca3af; margin-bottom: 10px; }
+  .foot { display: flex; justify-content: flex-end; align-items: center; gap: 10px;
+          border-top: 1px solid #26262e; padding-top: 9px; margin-top: 10px; }
+  .foot .link { height: 16px; line-height: 1; font-size: 11px; display: inline-flex;
+                align-items: center; gap: 4px; color: #7c3aed; }
+  .foot .link.left { margin-right: auto; }
+  .ok { color: #4ade80; }
+  .warn { color: #fbbf24; }
+  .gray { color: #6b7280; }
+  .dim { color: #6b7280; font-size: 11px; }
+  .mono { font-family: ui-monospace, Consolas, monospace; color: #d1d5db; }
+
+  /* ===== A 底部整行 ===== */
+  .vA { border-top: 1px solid #26262e; margin-top: 10px; padding-top: 9px; }
+  .vA .hd { display: flex; align-items: center; gap: 8px; font-size: 11px;
+            color: #6b7280; margin-bottom: 6px; }
+  .vA .hd .rf { margin-left: auto; color: #7c3aed; }
+  .vA .r { display: flex; align-items: baseline; gap: 8px; font-size: 12px; padding: 2px 0; }
+
+  /* ===== B 标题胶囊 + 展开 ===== */
+  .pill { font-size: 11px; border-radius: 999px; padding: 2px 9px; display: inline-flex;
+          align-items: center; gap: 5px; border: 1px solid transparent; }
+  .pill.good { color: #4ade80; background: #12261a; border-color: #1e4029; }
+  .pill.warn2 { color: #fbbf24; background: #2a2108; border-color: #4a3a0d; }
+  .pill.gray2 { color: #9ca3af; background: #232329; border-color: #33333c; }
+  .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .pop { margin-top: 8px; border: 1px solid #2b2b33; border-radius: 8px; padding: 8px 10px;
+         background: #17171d; font-size: 12px; color: #9ca3af; }
+  .pop .r { display: flex; align-items: baseline; gap: 8px; padding: 2px 0; }
+
+  /* ===== C 底部单行横排 ===== */
+  .vC { border-top: 1px solid #26262e; margin-top: 10px; padding-top: 9px;
+        display: flex; align-items: center; gap: 10px; font-size: 12px; flex-wrap: wrap; }
+  .vC .lb { font-size: 11px; color: #6b7280; }
+  .vC .it { display: inline-flex; align-items: baseline; gap: 5px; }
+  .vC .sep { color: #3a3a44; }
+  .vC .rf { margin-left: auto; font-size: 11px; color: #7c3aed; }
+
+  /* ===== D 两列表格 ===== */
+  .vD { border-top: 1px solid #26262e; margin-top: 10px; padding-top: 9px; }
+  .vD .hd { display: flex; align-items: center; font-size: 11px; color: #6b7280; margin-bottom: 6px; }
+  .vD .hd .rf { margin-left: auto; color: #7c3aed; }
+  .vD table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .vD td { padding: 3px 0; border-bottom: 1px dashed #24242c; }
+  .vD tr:last-child td { border-bottom: 0; }
+  .vD td:first-child { width: 96px; }
+  .vD td:last-child { text-align: right; color: #9ca3af; }
+
+  /* ===== E 徽章组 ===== */
+  .vE { border-top: 1px solid #26262e; margin-top: 10px; padding-top: 9px;
+        display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .vE .lb { font-size: 11px; color: #6b7280; }
+  .badge { font-size: 11px; border-radius: 6px; padding: 3px 8px; display: inline-flex;
+           align-items: center; gap: 5px; background: #232329; color: #9ca3af;
+           border: 1px solid #33333c; }
+  .badge.g { color: #4ade80; border-color: #1e4029; background: #12261a; }
+  .badge.y { color: #fbbf24; border-color: #4a3a0d; background: #2a2108; }
+  .badge .n { font-family: ui-monospace, Consolas, monospace; }
+
+  /* ===== F 底栏内联 ===== */
+  .vF .link .st { color: #6b7280; font-size: 11px; }
+  .vF .link .st b { color: #4ade80; font-weight: 400; }
+
+  /* ===== 状态枚举 ===== */
+  .states { display: grid; gap: 7px; font-size: 12px; }
+  .states .row { display: flex; gap: 10px; }
+  .states .k2 { flex: 0 0 88px; color: #6b7280; }
+  .states .v2 { flex: 1; color: #9ca3af; }
+
+  .tipbox { margin-top: 26px; padding: 10px 12px; background: #1a1a22; border: 1px solid #2b2b33;
+            border-radius: 10px; font-size: 12px; color: #9ca3af; }
+  .tipbox b { color: #fbbf24; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>本机状态显示 · 6 种样式候选</h1>
+  <div class="sub">同一份示例数据（2 个 MOD，其中 1 个有旧版）套在不同样式上，直接对比。纯静态，无交互。</div>
+
+  <!-- A -->
+  <h2><span class="k">A</span>底部整行 <span class="d">每条 MOD 一行，信息全展开</span></h2>
+  <div class="card">
+    <div class="card-title">分发 MOD <span class="card-tip">策略内 2 个 MOD</span></div>
+    <div class="card-body">各服：孤岛 需更新 · 灭绝 需更新　<b class="warn">2 服需升级</b></div>
+    <div class="vA">
+      <div class="hd"><span>本机状态</span><span class="ok">已授权 B:\SteamLibrary\...</span>
+        <span class="rf">重新检测</span></div>
+      <div class="r"><span class="mono">877752</span><span class="ok">已装 9411566</span>
+        <span class="dim">62.4 MB</span><span class="warn">· 另有旧版 1 个（774.4 MB）</span></div>
+      <div class="r"><span class="mono">1005639</span><span class="ok">已装 9418025</span>
+        <span class="dim">115.8 MB</span></div>
+    </div>
+    <div class="foot"><span class="link left">部署到本机</span><span class="link">更新本地包</span></div>
+  </div>
+
+  <!-- B -->
+  <h2><span class="k">B</span>标题行胶囊 <span class="d">点标签展开明细，卡片不变高</span></h2>
+  <div class="card">
+    <div class="card-title">分发 MOD
+      <span class="pill warn2"><span class="dot"></span>本机 2/2 · 1 个旧版</span>
+      <span class="card-tip">策略内 2 个 MOD</span></div>
+    <div class="card-body">各服：孤岛 需更新 · 灭绝 需更新　<b class="warn">2 服需升级</b></div>
+    <div class="pop">
+      <div class="r"><span class="mono">877752</span><span class="ok">已装 9411566</span>
+        <span class="dim">62.4 MB</span><span class="warn">· 旧版 1 个（774.4 MB）</span></div>
+      <div class="r"><span class="mono">1005639</span><span class="ok">已装 9418025</span>
+        <span class="dim">115.8 MB</span></div>
+      <div class="r dim" style="margin-top:4px">已授权 B:\SteamLibrary\... · 重新检测</div>
+    </div>
+    <div class="foot"><span class="link left">部署到本机</span><span class="link">更新本地包</span></div>
+  </div>
+
+  <!-- C -->
+  <h2><span class="k">C</span>底部单行横排 <span class="d">最省高度，MOD 多时靠折叠省略</span></h2>
+  <div class="card">
+    <div class="card-title">分发 MOD <span class="card-tip">策略内 2 个 MOD</span></div>
+    <div class="card-body">各服：孤岛 需更新 · 灭绝 需更新　<b class="warn">2 服需升级</b></div>
+    <div class="vC">
+      <span class="lb">本机</span>
+      <span class="it"><span class="mono">877752</span><span class="ok">装</span><span class="dim">62.4M</span><span class="warn">+旧774M</span></span>
+      <span class="sep">|</span>
+      <span class="it"><span class="mono">1005639</span><span class="ok">装</span><span class="dim">115.8M</span></span>
+      <span class="rf">重新检测</span>
+    </div>
+    <div class="foot"><span class="link left">部署到本机</span><span class="link">更新本地包</span></div>
+  </div>
+
+  <!-- D -->
+  <h2><span class="k">D</span>两列表格 <span class="d">对齐最整齐，宽屏好看</span></h2>
+  <div class="card">
+    <div class="card-title">分发 MOD <span class="card-tip">策略内 2 个 MOD</span></div>
+    <div class="card-body">各服：孤岛 需更新 · 灭绝 需更新　<b class="warn">2 服需升级</b></div>
+    <div class="vD">
+      <div class="hd"><span>本机状态</span><span class="rf">重新检测</span></div>
+      <table>
+        <tr><td><span class="mono">877752</span></td>
+            <td><span class="ok">已装 9411566 · 62.4 MB</span><br><span class="warn" style="font-size:11px">另有旧版 1 个 · 774.4 MB</span></td></tr>
+        <tr><td><span class="mono">1005639</span></td>
+            <td><span class="ok">已装 9418025 · 115.8 MB</span></td></tr>
+      </table>
+    </div>
+    <div class="foot"><span class="link left">部署到本机</span><span class="link">更新本地包</span></div>
+  </div>
+
+  <!-- E -->
+  <h2><span class="k">E</span>徽章组 <span class="d">每个 MOD 一个小徽章，最紧凑</span></h2>
+  <div class="card">
+    <div class="card-title">分发 MOD <span class="card-tip">策略内 2 个 MOD</span></div>
+    <div class="card-body">各服：孤岛 需更新 · 灭绝 需更新　<b class="warn">2 服需升级</b></div>
+    <div class="vE">
+      <span class="lb">本机</span>
+      <span class="badge g"><span class="n">877752</span> 已装</span>
+      <span class="badge y"><span class="n">旧版 1</span> 774.4 MB</span>
+      <span class="badge g"><span class="n">1005639</span> 已装</span>
+      <span class="badge">未授权</span>
+    </div>
+    <div class="foot"><span class="link left">部署到本机</span><span class="link">更新本地包</span></div>
+  </div>
+
+  <!-- F -->
+  <h2><span class="k">F</span>底栏内联 <span class="d">不新增任何行，状态挤在「部署到本机」后面</span></h2>
+  <div class="card">
+    <div class="card-title">分发 MOD <span class="card-tip">策略内 2 个 MOD</span></div>
+    <div class="card-body">各服：孤岛 需更新 · 灭绝 需更新　<b class="warn">2 服需升级</b></div>
+    <div class="foot vF">
+      <span class="link left">部署到本机 <span class="st">· 本机 <b>2/2</b> 已装，旧版 1 个（774.4 MB）</span></span>
+      <span class="link">更新本地包</span>
+    </div>
+  </div>
+
+  <!-- 汉化包示例 -->
+  <h2><span class="k">A</span>汉化包卡示例 <span class="d">同一套样式复用到汉化卡</span></h2>
+  <div class="card">
+    <div class="card-title">汉化包 <span class="card-tip">Dino &amp; Item 双语</span></div>
+    <div class="card-body">各服：均已最新</div>
+    <div class="vA">
+      <div class="hd"><span>本机状态</span><span class="ok">已装 3/3 件（129.6 MB，与服务端一致）</span>
+        <span class="rf">重新检测</span></div>
+    </div>
+    <div class="foot"><span class="link left">部署到本机</span><span class="link">更新本地包</span></div>
+  </div>
+
+  <!-- 状态枚举 -->
+  <h2><span class="k">※</span>各状态文案 <span class="d">所有样式共用这套措辞</span></h2>
+  <div class="card">
+    <div class="states">
+      <div class="row"><span class="k2">已授权</span><span class="v2 ok">已装 9411566（62.4 MB）· 另有旧版 1 个（774.4 MB）</span></div>
+      <div class="row"><span class="k2">未安装</span><span class="v2 gray">本机未安装</span></div>
+      <div class="row"><span class="k2">从未授权</span><span class="v2 gray">点一次「部署到本机」后可显示本机状态</span></div>
+      <div class="row"><span class="k2">权限已失效</span><span class="v2 warn">权限已失效，点一次「部署到本机」重新授权</span></div>
+      <div class="row"><span class="k2">目录已失效</span><span class="v2 warn">记住的目录已失效，按住 Shift 点「部署到本机」重新选择</span></div>
+      <div class="row"><span class="k2">网络异常</span><span class="v2 warn">无法获取策略清单（网络问题），点「重新检测」重试</span></div>
+      <div class="row"><span class="k2">检测超时</span><span class="v2 warn">检测超时，点「重新检测」重试</span></div>
+      <div class="row"><span class="k2">不支持 ASA</span><span class="v2 gray">当前设备不支持 ASA，已隐藏「部署到本机」</span></div>
+    </div>
+  </div>
+
+  <div class="tipbox">
+    <b>选型提示：</b>如果你希望「一打开就全看见」→ 选 <b>A</b> 或 <b>D</b>；
+    想尽量不改变卡片高度 → 选 <b>B</b>、<b>E</b> 或 <b>F</b>；
+    MOD 数量可能变多（5 个以上）时，<b>A</b>、<b>D</b> 更耐挤，<b>C</b>、<b>F</b> 会显得拥挤。
+  </div>
+
+</div>
+</body>
+</html>

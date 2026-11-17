@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>安全回档 · 风险检查（新版预览）</title>
+<style>
+:root{--red:#f87171;--amber:#fbbf24;--green:#4ade80;--purple:#7c3aed;--dim:#8b8b9e;--txt:#e5e5f0;--line:rgba(255,255,255,.08);--card:rgba(255,255,255,.035)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a10;color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:16px;display:flex;justify-content:center}
+.sheet{width:900px;background:#14141c;border:1px solid #2a2a38;border-radius:14px;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,.6)}
+.shead{display:flex;align-items:center;gap:8px;padding:11px 16px;border-bottom:1px solid var(--line);font-size:13px;font-weight:700}
+.shead .sub{margin-left:auto;font-size:11px;font-weight:400;color:var(--dim)}
+.body{padding:12px 16px 16px;display:flex;flex-direction:column;gap:10px}
+svg.i{width:1em;height:1em;fill:currentColor;flex:none}
+/* ① 角色主体条 */
+.hero{display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:11px;background:linear-gradient(100deg,rgba(124,58,237,.20),rgba(124,58,237,.04));border:1px solid rgba(124,58,237,.42)}
+.ava{width:34px;height:34px;border-radius:50%;background:linear-gradient(140deg,#7c3aed,#a78bfa);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;flex:none}
+.hero .who{display:flex;flex-direction:column;gap:2px;min-width:0}
+.hero .nm{font-size:14px;font-weight:700;display:flex;align-items:center;gap:7px}
+.hero .acc{font-size:11px;color:var(--dim)}
+.tag{font-size:10px;font-weight:600;padding:1px 7px;border-radius:20px;line-height:16px}
+.tag.warn{color:var(--amber);background:rgba(251,191,36,.14);border:1px solid rgba(251,191,36,.35)}
+.hero .right{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:11.5px;color:#b9b9cf}
+.hero .cell{display:flex;align-items:center;gap:5px}
+/* ② 风险等级横幅 */
+.lv{display:flex;gap:11px;padding:12px 14px;border-radius:11px;background:rgba(251,191,36,.07);border:1px solid rgba(251,191,36,.32);border-left:4px solid var(--amber)}
+.lv .ico{font-size:20px;color:var(--amber);line-height:1;margin-top:1px}
+.lv .ttl{font-size:13.5px;font-weight:700;color:var(--amber);display:flex;align-items:center;gap:8px}
+.lv .cnt{font-size:10.5px;font-weight:600;color:#1a1a24;background:var(--amber);border-radius:20px;padding:1px 8px}
+.lv .msg{font-size:12px;color:#e2d7bd;margin-top:4px;line-height:1.55}
+.lv .meta{font-size:11px;color:var(--dim);margin-top:5px;display:flex;align-items:center;gap:14px}
+/* ③ 风险卡 */
+.rk{border-radius:10px;background:var(--card);border:1px solid var(--line);border-left:3px solid var(--amber);padding:9px 12px}
+.rk .top{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:700;color:var(--amber)}
+.rk .scope{margin-left:auto;font-size:10.5px;font-weight:400;color:var(--dim)}
+.rk .desc{font-size:11.5px;color:#b9b9cf;margin-top:4px;line-height:1.55}
+.rk .fold{margin-top:6px;font-size:11px;color:#7c8ba1;display:flex;align-items:center;gap:4px}
+.rk .foldbody{margin-top:5px;border-top:1px dashed var(--line);padding-top:6px;font-size:11px;color:#9aa0b4;line-height:1.6}
+.ok-line{font-size:11px;color:var(--green);display:flex;align-items:center;gap:5px;padding:2px 2px 0}
+/* ④ 步骤时间线 */
+.steps{position:relative;padding:4px 2px 0}
+.step{display:flex;gap:11px;padding:0 0 12px;position:relative}
+.step:last-child{padding-bottom:0}
+.step::before{content:'';position:absolute;left:11px;top:24px;bottom:0;width:1px;background:rgba(255,255,255,.10)}
+.step:last-child::before{display:none}
+.num{width:23px;height:23px;border-radius:50%;border:1px solid #3a3a4c;background:#1b1b26;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--dim);flex:none;z-index:1}
+.step.done .num{background:rgba(74,222,128,.15);border-color:rgba(74,222,128,.5);color:var(--green)}
+.step.todo .num{background:rgba(251,191,36,.12);border-color:rgba(251,191,36,.45);color:var(--amber)}
+.step .st{font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:6px}
+.step .sd{font-size:11px;color:var(--dim);margin-top:3px;line-height:1.5}
+.step.done .st{color:#b7f5cd}
+.step .badge{font-size:10px;font-weight:600;padding:1px 7px;border-radius:20px}
+.step.done .badge{color:var(--green);background:rgba(74,222,128,.13)}
+.step.todo .badge{color:var(--amber);background:rgba(251,191,36,.13)}
+.sec-t{font-size:11px;font-weight:700;color:var(--dim);letter-spacing:.4px;margin:2px 0 -2px}
+/* 折叠块 + 按钮 */
+.foldrow{display:flex;gap:8px;flex-wrap:wrap}
+.foldrow .f{flex:1;min-width:180px;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--green);background:rgba(255,255,255,.03);border-radius:8px;padding:6px 10px}
+.foldrow .f.red{color:var(--red)}
+.btn{width:100%;margin-top:2px;padding:11px;border:0;border-radius:10px;background:#b91c1c;color:#fff;font-size:13.5px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+.foot-note{font-size:11px;color:var(--dim);text-align:center;margin-top:-2px}
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="shead">
+    <svg class="i" style="font-size:16px;color:#a78bfa" viewBox="0 0 24 24"><path d="M12,3A9,9 0 0,0 3,12H0L4,16L8,12H5A7,7 0 0,1 12,5A7,7 0 0,1 19,12A7,7 0 0,1 12,19C10.5,19 9.1,18.5 8,17.6L6.6,19C8.1,20.3 10,21 12,21A9,9 0 0,0 21,12A9,9 0 0,0 12,3M11,7V13L16.2,16.2L17,14.9L12.5,12.3V7H11Z"/></svg>
+    安全回档
+    <span class="sub">新版预览 · Ast（繁星）· 真实档数据</span>
+  </div>
+  <div class="body">
+    <!-- ① 角色主体条 -->
+    <div class="hero">
+      <div class="ava">J</div>
+      <div class="who">
+        <div class="nm">JaronV5 <span class="tag warn">角色在别服</span></div>
+        <div class="acc">账号 JaronV5 · 本服角色 pid 561160448</div>
+      </div>
+      <div class="right">
+        <span class="cell"><svg class="i" style="font-size:13px;color:#84cc16" viewBox="0 0 24 24"><path d="M10,21V18H3L8,13H5L10,8H7L12,3L17,8H14L19,13H16L21,18H14V21H10Z"/></svg>最后在 瓦尔盖罗</span>
+        <span class="cell"><svg class="i" style="font-size:13px;color:#a78bfa" viewBox="0 0 24 24"><path d="M16,5V4A2,2 0 0,0 14,2H10A2,2 0 0,0 8,4V5A4,4 0 0,0 4,9V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V9A4,4 0 0,0 16,5M10,4H14V5H10V4Z"/></svg>背包 334 格</span>
+      </div>
+    </div>
+
+    <!-- ② 风险等级横幅 -->
+    <div class="lv">
+      <div class="ico"><svg class="i" viewBox="0 0 24 24"><path d="M13,14H11V9H13M13,18H11V16H13M1,21H23L12,2L1,21Z"/></svg></div>
+      <div style="flex:1">
+        <div class="ttl">需确认 · 1 项 <span class="cnt">回档前请处理</span></div>
+        <div class="msg">你的角色现在不在本服 —— 回档后本服会出现目标档那一份角色，而你在别服的那个仍然保留，两个服会同时存在同一个角色。</div>
+        <div class="meta">
+          <span>当前档 169.1 MB → 目标档 129.9 MB</span>
+          <span>预计 6 分 5 秒</span>
+          <span>回档点 11/12 03:12</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ③ 风险点 -->
+    <div class="sec-t">风险点</div>
+
+    <div class="rk">
+      <div class="top">
+        <svg class="i" style="font-size:15px" viewBox="0 0 24 24"><path d="M10,4A4,4 0 0,1 14,8A4,4 0 0,1 10,12A4,4 0 0,1 6,8A4,4 0 0,1 10,4M10,14C11.11,14 12.17,14.25 13.14,14.69C12.43,15.36 12,16.34 12,17.5V19H2V17C2,14.79 5.58,13 10,13V14M22,17V19H14V17H22M22,13V15H14V13H22M22,21V23H14V21H22Z"/></svg>
+        角色重复：JaronV5 会在两个服同时存在
+        <span class="scope">影响：你</span>
+      </div>
+      <div class="desc">目标档里有一份 JaronV5（389 格背包），你在别服带着的也是他。回档后两份都会在 —— 谁先进服谁覆盖，容易出「角色丢失 / 装备湮灭」。</div>
+      <div class="fold"><svg class="i" style="font-size:12px" viewBox="0 0 24 24"><path d="M8,5V19L19,12L8,5Z"/></svg>怎么避免</div>
+      <div class="foldbody">先把角色传回 繁星（Ast），确认能在本服进游戏后再回档；传回前把身上装备收进恐龙或箱子带不走的部分留空，避免与目标档同 ID 物品湮灭。</div>
+    </div>
+
+    <div class="rk">
+      <div class="top">
+        <svg class="i" style="font-size:15px" viewBox="0 0 24 24"><path d="M16,5V4A2,2 0 0,0 14,2H10A2,2 0 0,0 8,4V5A4,4 0 0,0 4,9V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V9A4,4 0 0,0 16,5M10,4H14V5H10V4Z"/></svg>
+        背包差异：会多出一套背包物品
+        <span class="scope">影响：你</span>
+      </div>
+      <div class="desc">角色重复的情况下，回档后目标档那套背包会恢复，你带在别服的这套也还在 —— 相当于多出一整套物品。</div>
+      <div class="fold"><svg class="i" style="font-size:12px" viewBox="0 0 24 24"><path d="M8,5V19L19,12L8,5Z"/></svg>明细账目</div>
+      <div class="foldbody">目标档 389 条 · 当前档 334 条 · 差异 55 条（逐条清单见下方「背包差异」折叠块）</div>
+    </div>
+
+    <div class="ok-line"><svg class="i" style="font-size:13px" viewBox="0 0 24 24"><path d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"/></svg>本次回档不影响其他玩家（无人在线、其他角色物品不会丢）</div>
+
+    <!-- ④ 操作步骤 -->
+    <div class="sec-t">怎么操作</div>
+    <div class="steps">
+      <div class="step done">
+        <div class="num"><svg class="i" style="font-size:13px" viewBox="0 0 24 24"><path d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"/></svg></div>
+        <div>
+          <div class="st">确认角色位置 <span class="badge">已完成</span></div>
+          <div class="sd">JaronV5 最后在 瓦尔盖罗，本服当前没有这个角色。</div>
+        </div>
+      </div>
+      <div class="step todo">
+        <div class="num">2</div>
+        <div>
+          <div class="st">把角色传回 繁星（Ast）<span class="badge">待做</span></div>
+          <div class="sd">传回后进一次游戏确认角色正常，再回档；这样不会出现两份角色。</div>
+        </div>
+      </div>
+      <div class="step todo">
+        <div class="num">3</div>
+        <div>
+          <div class="st">执行回档 <span class="badge">待做</span></div>
+          <div class="sd">点下方「执行回档（11/12 03:12）」，预计 6 分 5 秒，期间服务器会停服。</div>
+        </div>
+      </div>
+      <div class="step todo">
+        <div class="num">4</div>
+        <div>
+          <div class="st">回档后上线验证 <span class="badge">待做</span></div>
+          <div class="sd">看角色、等级、背包与恐龙是否为目标档时刻的状态；确认后再通知其他人进服。</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 折叠块 -->
+    <div class="foldrow">
+      <div class="f red"><svg class="i" style="font-size:13px" viewBox="0 0 24 24"><path d="M8,5V19L19,12L8,5Z"/></svg>角色重复（1 名）</div>
+      <div class="f"><svg class="i" style="font-size:13px" viewBox="0 0 24 24"><path d="M8,5V19L19,12L8,5Z"/></svg>角色进出（0 名）</div>
+      <div class="f"><svg class="i" style="font-size:13px" viewBox="0 0 24 24"><path d="M8,5V19L19,12L8,5Z"/></svg>背包差异</div>
+    </div>
+
+    <button class="btn">
+      <svg class="i" style="font-size:16px" viewBox="0 0 24 24"><path d="M12,3A9,9 0 0,0 3,12H0L4,16L8,12H5A7,7 0 0,1 12,5A7,7 0 0,1 19,12A7,7 0 0,1 12,19C10.5,19 9.1,18.5 8,17.6L6.6,19C8.1,20.3 10,21 12,21A9,9 0 0,0 21,12A9,9 0 0,0 12,3M11,7V13L16.2,16.2L17,14.9L12.5,12.3V7H11Z"/></svg>
+      执行回档（11/12 03:12）
+    </button>
+    <div class="foot-note">这是静态预览（未接线上逻辑），确认样式与文案后我再落进 app_core.js</div>
+  </div>
+</div>
+</body>
+</html>

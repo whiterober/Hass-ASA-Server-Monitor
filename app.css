@@ -1662,7 +1662,11 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
    紧跟置顶文案块(.tc-intro)的小标题直接用 :has() 在**样式计算阶段**隐藏 ——
    浏览器第一次布局就按 display:none 算，不会出现「先画出来再藏掉」的可见中间态，
    也不再需要 lbWikiLayoutFix 事后再改 DOM。 */
-#lbWikiOverlay .tc-h:has(+ .tc-intro), #lbWikiItemOverlay .tc-h:has(+ .tc-intro), #lbNews .tc-h:has(+ .tc-intro){display:none !important}
+/* v6532（用户口径「更新说明全都没取到版本号行」）：本规则原意是隐藏「紧跟置顶文案块」的**冗余**小标题（Wiki 用），
+   但资讯广场每条的结构是 tc-h（版本号）紧跟 .tc-intro（修复内容块）⇒ 20/20 条版本号标题被一起打掉。
+   L1907 给资讯标题加的 [data-keep="1"] 只调了 margin，**没解除本行的 display:none !important**，标记形同虚设。
+   修法：凡显式标 data-keep="1"（语义＝保留）的标题一律放行；Wiki 未打标记的冗余小标题照旧隐藏。 */
+#lbWikiOverlay .tc-h:has(+ .tc-intro):not([data-keep="1"]), #lbWikiItemOverlay .tc-h:has(+ .tc-intro):not([data-keep="1"]), #lbNews .tc-h:has(+ .tc-intro):not([data-keep="1"]){display:none !important}
 /* v5875：地图 Wiki 不再新建面板 —— 直接渲染进 #lbWikiOverlay，样式全部复用现成规则。
    这里只保留入口按钮的定位（与 #lbBreedActions > #lbWikiBtn 同款 order:99） */
 #lbFuncBar > div > #lbMapWikiBtn{order:99}
@@ -1695,15 +1699,26 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 /* v6050：浮窗底部固定栏（.lw-panel 是 flex column，footer 放在 body 之后即天然不随滚动） */
 .lw-foot{flex-shrink:0;padding:10px 14px;background:#12121a;border-top:1px solid #2a2a3a}
 .lw-foot[hidden]{display:none!important}
-#lbArkBk .arbk-ask{margin-top:9px;padding:9px 11px;border-radius:7px;
+/* v6670（用户口径「系统管理 里面的 较独立的功能 应该做成折叠块」）：
+   系统管理的独立功能模块折叠块 —— 默认收起、手风琴互斥（互斥逻辑在 lbSysFoldToggle）。
+   箭头用纯 CSS 三角（不用字符符号），展开时旋转 90°。 */
+.lb-sys-fold{margin-top:16px;border-top:1px solid #2a2a3a;padding-top:12px}
+.lb-sys-fold>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:7px;font-size:13px;font-weight:bold;color:#ddd;padding:2px 0;user-select:none;-webkit-user-select:none}
+.lb-sys-fold>summary::-webkit-details-marker{display:none}
+.lb-sys-fold>summary::marker{content:''}
+.lb-sys-fold>summary::before{content:'';flex:0 0 auto;width:0;height:0;border-left:5px solid #8b8b9e;border-top:4px solid transparent;border-bottom:4px solid transparent;transition:transform .15s}
+.lb-sys-fold[open]>summary::before{transform:rotate(90deg)}
+.lb-sys-fold>summary:hover{color:#fff}
+.lb-sys-fold[open]>summary{margin-bottom:10px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-ask{margin-top:9px;padding:9px 11px;border-radius:7px;
   background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.28)}
-#lbArkBk .arbk-askh{display:flex;align-items:center;gap:6px;font-size:12px;color:#fca5a5;margin-bottom:7px}
-#lbArkBk .arbk-askh .mdi{font-size:14px}
-#lbArkBk .arbk-askr{display:flex;gap:6px;flex-wrap:wrap}
-#lbArkBk .arbk-askin{flex:1;min-width:120px;padding:6px 9px;border-radius:5px;border:1px solid #33334a;
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-askh{display:flex;align-items:center;gap:6px;font-size:12px;color:#fca5a5;margin-bottom:7px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-askh .mdi{font-size:14px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-askr{display:flex;gap:6px;flex-wrap:wrap}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-askin{flex:1;min-width:120px;padding:6px 9px;border-radius:5px;border:1px solid #33334a;
   background:#12121a;color:#e5e7eb;font-size:12px;outline:none}
-#lbArkBk .arbk-askin:focus{border-color:#7c3aed}
-#lbArkBk .arbk-asktip{font-size:11px;color:#9aa3b5;line-height:1.55;margin-bottom:7px;
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-askin:focus{border-color:#7c3aed}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-asktip{font-size:11px;color:#9aa3b5;line-height:1.55;margin-bottom:7px;
   padding:6px 8px;border-radius:5px;background:rgba(255,255,255,.03)}
 .lw-load{display:flex;align-items:center;justify-content:center;gap:10px;padding:40px 0;color:#8b8b9a;font-size:13px}
 .lw-spin{width:16px;height:16px;border:2px solid #33333d;border-top-color:#7c3aed;border-radius:50%;animation:lwspin .8s linear infinite}
@@ -2126,7 +2141,7 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 /* v6268：入口徽章改用**内联样式**（与三个兄弟按钮同模式），不再定义 .lb-task-cnt ——
    该 class 名 app.css:3019 早已用于任务进度区「N 条」，重名会造成双向污染（v6267 教训）。 */
 /* v6089: badge digits vertical centering (Arial descent gap) */
-#lbWatchCnt,#lbTodoCnt,#lbMaintCnt{display:inline-flex;align-items:center;justify-content:center;height:14px;line-height:normal}
+#lbTaskCnt,#lbWatchCnt,#lbTodoCnt,#lbMaintCnt{display:inline-flex;align-items:center;justify-content:center;height:14px;line-height:normal}
 .lb-class-btn:hover{background:#22223a;border-color:#7c3aed;color:#fff}
 .lb-class-btn:active{transform:scale(.97)}
 .lb-class-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:#a78bfa}
@@ -2311,7 +2326,36 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
 }
 .lb-picker-panel{background:#1a1a24;border:1px solid #333;border-radius:8px;width:90%;max-width:640px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden}
 .lb-picker-header{display:flex;gap:8px;padding:10px 12px;align-items:center;flex-shrink:0;border-bottom:1px solid #2a2a3a}
-.lb-picker-header.lb-rp-head{gap:5px}   /* v6082（用户口径「该行的入口图标间隔减1」）：只作用于「生存者」浮窗的入口图标行；v6083 7→6；v6084 6→5 */
+.lb-picker-header.lb-rp-head{gap:5px}
+/* ===== v6757（用户口径）：头部功能入口 → 统一按钮组（一个外框 + 按钮间短竖分割线）=====
+   「关闭」仍在组外，保持原独立方框样式（.lb-picker-close）。 */
+.lb-rp-head .lb-rp-grp{display:inline-flex;align-items:center;gap:0;flex-shrink:0;
+  border:1px solid #333;border-radius:6px;background:#15151f;overflow:hidden}
+.lb-rp-head .lb-rp-grp .lb-picker-close{width:28px;height:28px;border:0;border-radius:0;background:transparent;position:relative}
+.lb-rp-head .lb-rp-grp .lb-picker-close+.lb-picker-close::before{content:'';position:absolute;left:0;top:50%;
+  transform:translateY(-50%);width:1px;height:14px;background:#2f2f3f}
+.lb-rp-head .lb-rp-grp .lb-picker-close:hover{background:#22222e;color:#e0e0e0}
+/* ===== v6757（用户口径「移动端没有自适应高度」）：墓碑 / 租借历史列表 =====
+   原用内联固定 max-height:46vh / 32vh —— 375×812 实测底部各空 278px / 290px，且与
+   .lw-body 形成双滚动条。现在 .lw-body 变纵向 flex，列表 flex:1 填满剩余，只剩一层滚动。 */
+#lbTombHistOv .lw-body,#lbBorrowHistOv .lw-body{display:flex;flex-direction:column;overflow:hidden}
+#lbTombHistOv #lbTombList,#lbBorrowHistOv #lbBorrowList{display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
+.lb-hist-scroll{flex:1 1 auto;min-height:0;overflow-y:auto}
+/* 租借「当前借用中（实时）」块不能无限长：最多占 44%，超出自身滚动，保证历史区可见 */
+#lbBorrowHistOv #lbBorrowLive{flex:0 1 auto;min-height:0;max-height:44%;overflow-y:auto}
+/* ===== v6758（用户口径）：「回档授权」里的「找回 / 回溯」= 只读展示 =====
+   目的由流程发起人在「安全回档」里选定并随流程落库；被授权者只能看、不能切。 */
+/* v6760（用户口径「不是说要改成只读样式么？怎么还是按钮」）：只读项**不再是胶囊按钮** ——
+   去边框 / 去背景 / 去 hover，只有一行纯文字「目的：找回」。 */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-goals.goals-ro .g.ro-only{border:0;background:transparent;
+  padding:0;cursor:default;color:#c4b5fd;font-weight:700;border-radius:0;user-select:none}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-goals.goals-ro .g.ro-only:hover{background:transparent;border:0;color:#c4b5fd}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-goals.goals-ro .g.ro-only .ro-k{color:#8b8b9e;font-weight:400}
+/* ===== v6759/v6761（用户口径「步骤的 Tips 移动端经常被遮住一部分」）=====
+   v6759 曾在这里加窄屏 max-width 兜底 —— 但本段位于原 .stp-tip 规则**之前**，同特异性下被
+   后面的 max-width:360px 覆盖，从未生效（实测 computed 仍是 360px）。现移除，改到原规则之后做
+   移动端内联展开（见下方 v6761 段）。桌面仍用 tip-right 右对齐兜底。 */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .stp-wrap.tip-right .stp-tip{left:auto;right:0}   /* v6082（用户口径「该行的入口图标间隔减1」）：只作用于「生存者」浮窗的入口图标行；v6083 7→6；v6084 6→5 */
 .lb-picker-header input{flex:1;margin:0;background:#15151f;border:1px solid #333;border-radius:6px;color:#ccc;font-size:12px;padding:0 10px;height:28px}
 .lb-picker-close{width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid #333;border-radius:4px;background:#15151f;color:#999;cursor:pointer;flex-shrink:0;font-size:13px}
 .lb-picker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:6px;padding:12px;overflow-y:auto}
@@ -2705,132 +2749,197 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
 .lb-hf-aibtn.primary:disabled,.lb-hf-aibtn:disabled{background:#2a2a35;border-color:#3a3a46;color:#6b7280;cursor:not-allowed;opacity:.6}
 /* ===== P4（2026-11-04）：🗄 安全回档浮窗样式（全部新增，不改既有类）===== */
 /* v6035：服务器 Tab 右上角纯状态圆点（原为 MB 数字角标） */
-#lbArkBk .arbk-dot{position:absolute;top:-3px;right:-3px;width:8px;height:8px;border-radius:50%;border:1.5px solid #1a1a24;pointer-events:none;box-sizing:border-box}
-#lbArkBk .arbk-pickhead{display:flex;align-items:center;gap:8px;margin:2px 0 6px}
-#lbArkBk .arbk-dim{color:#8b8b9e;font-size:11px}
-#lbArkBk .arbk-cur{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:12px;
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-dot{position:absolute;top:-3px;right:-3px;width:8px;height:8px;border-radius:50%;border:1.5px solid #1a1a24;pointer-events:none;box-sizing:border-box}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pickhead{display:flex;align-items:center;gap:8px;margin:2px 0 6px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-dim{color:#8b8b9e;font-size:11px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-cur{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:12px;
   padding:6px 9px;margin:6px 0;border-radius:6px;background:rgba(124,58,237,.07);
   border:1px solid rgba(124,58,237,.18)}
-#lbArkBk .arbk-sec{display:flex;align-items:center;gap:6px;margin:10px 0 5px;font-size:12px;
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-sec{display:flex;align-items:center;gap:6px;margin:10px 0 5px;font-size:12px;
   color:#a78bfa;font-weight:600}
-#lbArkBk .arbk-sec.ok{color:#4ade80}
-#lbArkBk .arbk-sec.warn{color:#fbbf24}
-#lbArkBk .arbk-sec.bad{color:#f87171}
-#lbArkBk .arbk-sec .arbk-dim{margin-left:auto;font-weight:400}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-sec.ok{color:#4ade80}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-sec.warn{color:#fbbf24}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-sec.bad{color:#f87171}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-sec .arbk-dim{margin-left:auto;font-weight:400}
+/* v6565（用户口径）：行程段卡片要有 hover 效果 + 可点击（点了选中对应服） */
+/* v6577（用户口径）：普通流程块 与 离线块 **唯一来源**的盒模型 —— 内间距/行距/字号/圆角/gap/对齐
+   全部在这里定义，两个块的 HTML 内联样式只负责「背景 + 边框（色条或虚线框）」。
+   改间距只改这一处，禁止再往模板里塞 padding/line-height。 */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-seg{display:inline-flex;flex-direction:column;align-items:flex-start;justify-content:center;
+  gap:1px;padding:3px 8px;border-radius:6px;font-size:11px;line-height:1.35;cursor:pointer;text-align:left;
+  transition:filter .12s,border-color .12s,transform .12s}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-seg:hover{filter:brightness(1.45);border-color:#6b7280!important;transform:translateY(-1px)}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-seg:active{transform:translateY(0);filter:brightness(.95)}
 /* v6066（用户口径「高度扩大1倍，但是要自适应窗口高度」）：
    240px → min(480px, 60vh)：宽屏封顶翻倍，窗口变矮按 60vh 同比例收缩；
    面板 .lw-body 本身可滚，列表再高也不会破版。 */
-#lbArkBk .arbk-list{display:flex;flex-direction:column;gap:3px;max-height:min(480px,60vh);overflow-y:auto;
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-list{display:flex;flex-direction:column;gap:3px;max-height:min(480px,60vh);overflow-y:auto;
   padding:2px;border-radius:6px;background:rgba(255,255,255,.015)}
 /* v6067（用户口径「矮屏下不要出现双重滚动条」）：
    外层 .lw-body 与 .tc 改成纵向 flex 链并 overflow:hidden ⇒ 外层永不自己滚；
    溢出全部交给回档点列表（flex:1 吸收 + 自带 overflow-y:auto）⇒ 面板永远只有一条滚动条。
    高屏：列表仍封顶 min(480px,60vh)；矮屏：列表按剩余空间收缩，
    下方「怎么读这份列表」图例与各操作按钮始终可见，不会被挤出视口。 */
-#lbArkBk .lw-body{display:flex;flex-direction:column;overflow:hidden}
-#lbArkBk .lw-body>.tc{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
-#lbArkBk .lw-body>.tc>*{flex:0 0 auto}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .lw-body{display:flex;flex-direction:column;overflow:hidden}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .lw-body>.tc{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+/* v6665（用户「任务进度 应该放到 现在的底栏之下」）：任务进度槽位固定在底栏之下，
+   作为浮窗最底部独立区域 —— 不参与正文区 flex 竞争（挂在 .lw-body 里会被
+   .tc{flex:1 1 auto} 挤压缩小、内容溢出互相压叠，实测重叠 17px）。
+   与底栏同色 + 分隔线；任务多时本区自己滚，不撑破浮窗。 */
+:is(#lbArkBk,#lbArkBkGrant) .lw-panel>.lb-task-slot{flex-shrink:0;background:#12121a;border-top:1px solid #2a2a3a;padding:10px 14px;max-height:34vh;overflow-y:auto}
+/* v6667（用户「底栏没有元素（比如回档按钮）的情况下，应该整栏隐藏而不是留空，任务进度板块直接顶上」）：
+   .lb-task-sec 是**共用**标题样式（服务器控制浮窗 #lbSrvCtlRes 靠它分隔上段内容），
+   自带 margin-top:16px + padding-top:10px + border-top:1px ⇒ 在安全回档槽位里就变成
+   正文下方凭空 27px 空档 + 一条只覆盖标题宽度的短线（用户说的「没有拉通的分割线」）。
+   槽位自身已有通栏分隔线（上一行），这里让标题直接顶上，去掉重复的那条。 */
+:is(#lbArkBk,#lbArkBkGrant) .lb-task-slot .lb-task-sec{border-top:0;padding-top:0;margin-top:0}
+/* v6672（用户口径「通知其他玩家的步骤 的 tips 要有按钮 可以 一键手动发公告」）：
+   步骤 tips 里的「一键发公告」按钮（放在 .stp-tip 内，需 stopPropagation 避免触发展开切换） */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-annbtn{margin-top:8px;display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:7px;border:1px solid rgba(167,139,250,.45);background:rgba(124,58,237,.18);color:#c4b5fd;font-size:11.5px;cursor:pointer;font-family:inherit;line-height:1.5}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-annbtn:hover{background:rgba(124,58,237,.34);color:#ede9fe;border-color:rgba(167,139,250,.7)}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-annbtn i{font-size:13px;line-height:1}
+/* v6675（用户口径「tips 里要有一个框显示 将要发的公告内容」+「不改字体」）：
+   公告预览框 —— 暗底 + 细边框，字体继承 body（**不用等宽**），长文案内部滚动 */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-annprev{margin-top:8px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-annprev-h{font-size:10.5px;color:#6b7280;margin-bottom:4px;line-height:1.5}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-annprev-n{color:#4b5563}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-annprev-bd{padding:8px 10px;border-radius:7px;background:#0b1020;border:1px solid rgba(255,255,255,.09);color:#cbd5e1;font-size:11px;line-height:1.65;white-space:pre-wrap;word-break:break-all;max-height:140px;overflow-y:auto}
+/* v6667（用户「就是删错了 你删的那个border应该保留，应该删的是任务进度 这4个字上方的
+   那个没有拉通的分割线」）：v6666 曾在此用「底栏隐藏 ⇒ 去槽位 border-top」打条件补丁 ——
+   方向错了：那条**通栏**分隔线是要保留的，底栏无内容时本来就 display:none 不占位。
+   真正多余的是「任务进度」标题自带的短线与留空，见下方 :is(#lbArkBk,#lbArkBkGrant) .lb-task-slot .lb-task-sec。 */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .lw-body>.tc>*{flex:0 0 auto}
 /* v6068 修正：曾用 flex:1 1 0，其 flex-basis:0 在容器**没有确定高度**时会把列表压成 0
    （线上实测列表只剩 4px）⇒ 改 flex:1 1 auto：按内容高度（受 max-height 封顶），
    只有面板触碰 92vh 上限时才收缩，从而实现「矮屏把溢出让给列表内滚」。 */
-#lbArkBk .lw-body>.tc>.arbk-list{flex:1 1 auto;min-height:0}
-#lbArkBk .arbk-row{display:flex;align-items:center;gap:8px;padding:6px 9px;border-radius:5px;
+/* v6585（用户口径「不要外层滚动条，模块高度自适应」）：
+   滚动只发生在模块内部 —— 折叠块允许被压缩，块内容自己滚。
+   根因：原规则 `>.tc>.arbk-list` 在档列表被包进 <details> 后已失效（不再是 .tc 直接子级）。 */
+/* v6588：折叠块**吃满剩余高度**（flex:1 1 auto）—— 其它固定块先占位，剩下的全部给展开的折叠块，
+   内容超出时由块内的 .arbk-list / .arbk-plan 自己滚动（滚动条只出现在模块内部）。 */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .lw-body>.tc>details.arbk-fold{flex:0 0 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .lw-body>.tc>details.arbk-fold>summary{flex:0 0 auto}
+/* v6590（用户口径「动态计算、根据模块高度自适应」）：折叠块保持**自然高度**，
+   上限由 JS lbArkBkFitFold() 量出可用高度后写进内容块 max-height。
+   不能用 flex:1 1 0 —— 那会让内容不参与父级高度计算，浮窗反而长不高（v6588 实测 .tc 只剩 441px）。 */
+/* v6587（用户口径「模块高度自适应，内部要能出滚动条」）：
+   <details> 展开的内容被包在 ::details-content 伪元素里 —— 它不是 details 的直接子级，
+   所以 details 上的 flex 高度传不进 .arbk-list/.arbk-plan（v6586 实测：details 已缩到 439px，
+   内部内容仍是 485px 内容高，溢出被 overflow:hidden 裁掉 ⇒ 既没滚动条也看不到内容）。
+   这里让伪元素成为 flex item 占满剩余高度，内部块再 flex:1 1 0 吃满 ⇒ 溢出时在自身滚动。 */
+/* v6593：**不能给 ::details-content 加 flex:1 1 0** —— basis:0 会让内容不参与 details 的高度计算，
+   details 只剩 summary 高（实测 21px），里面的列表被压到 4px，这时 JS 写再大的 max-height 也没用。
+   保持自然高度，由 JS 写进内容块的 max-height 控制上限即可。 */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .lw-body>.tc>details.arbk-fold::details-content{min-height:0;display:flex;flex-direction:column}
+/* v6592：这里**不能加 flex:1 1 0** —— basis:0 会让块从 0 高度起算、又拿不到 grow 空间，
+   v6591 实测 max-height 已正确写 643px 但列表可视只有 4px。改为自然高度 + max-height 限制（JS 写入）。 */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .lw-body>.tc>details.arbk-fold[open]>.arbk-list{max-height:none;overflow-y:auto}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .lw-body>.tc>details.arbk-fold[open]>.arbk-plan{overflow-y:auto}
+/* 回退：不支持 ::details-content 的浏览器按视口给上限，至少保证能滚 */
+@supports not selector(details::details-content){
+  :is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .lw-body>.tc>details.arbk-fold[open]>.arbk-list{max-height:min(480px,46vh)}
+  :is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .lw-body>.tc>details.arbk-fold[open]>.arbk-plan{max-height:min(520px,52vh)}
+}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-row{display:flex;align-items:center;gap:8px;padding:6px 9px;border-radius:5px;
   cursor:pointer;font-size:12px;border:1px solid transparent;transition:background .12s}
-#lbArkBk .arbk-row:hover{background:rgba(124,58,237,.1)}
-#lbArkBk .arbk-row.sel{background:rgba(124,58,237,.18);border-color:rgba(124,58,237,.5)}
-#lbArkBk .arbk-ts{font-variant-numeric:tabular-nums;color:#e5e5f0;min-width:96px}
-#lbArkBk .arbk-mb{color:#8b8b9e;min-width:56px;font-variant-numeric:tabular-nums}
-#lbArkBk .arbk-lbl{color:#a78bfa;font-size:11px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-row:hover{background:rgba(124,58,237,.1)}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-row.sel{background:rgba(124,58,237,.18);border-color:rgba(124,58,237,.5)}
+/* v6574（用户口径）：选中的行程块「无档」时的占位虚线行（不可点、不可悬停高亮） */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-row-ph{border:1px dashed #3a3a4a;cursor:default;background:transparent!important}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-row-ph:hover{background:transparent!important}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-ts{font-variant-numeric:tabular-nums;color:#e5e5f0;min-width:96px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-mb{color:#8b8b9e;min-width:56px;font-variant-numeric:tabular-nums}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-lbl{color:#a78bfa;font-size:11px}
 /* v6037：回档点列表下方「怎么读这份列表」图例 */
-#lbArkBk .arbk-legend{margin-top:7px;padding:8px 10px;border-radius:6px;font-size:11px;
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-legend{margin-top:7px;padding:8px 10px;border-radius:6px;font-size:11px;
   line-height:1.8;color:#a8b7d0;background:rgba(96,165,250,.06);
   border:1px solid rgba(96,165,250,.18);display:flex;flex-direction:column;gap:1px}
-#lbArkBk .arbk-legend b{color:#c4b5fd;font-weight:600}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-legend b{color:#c4b5fd;font-weight:600}
 /* v6041（用户口径）：安全回档浮窗复用 wiki 右上角问号（.lw-help + data-tip 气泡）。
    原样式只对 Wiki/WikiItem/News/Route 四个浮窗定义，此处按同款补齐 #lbArkBk。
    注意：**不能同时挂 .lb-tipb**（会叠加两个气泡，见 v6028 教训）。 */
-#lbArkBk .lw-help{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .lw-help{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;
   width:24px;height:24px;border-radius:50%;color:#8b93a7;font-size:17px;line-height:1;
   cursor:help;position:relative;outline:none}
-#lbArkBk .lw-help[hidden]{display:none}
-#lbArkBk .lw-help:hover{color:#c4b5fd}
-#lbArkBk .lw-help::after{content:attr(data-tip);position:absolute;right:-6px;top:132%;
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .lw-help[hidden]{display:none}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .lw-help:hover{color:#c4b5fd}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .lw-help::after{content:attr(data-tip);position:absolute;right:-6px;top:132%;
   width:min(84vw,440px);max-height:54vh;overflow:auto;background:#262637;color:#d5dae6;
   border:1px solid #3d3d55;border-radius:8px;padding:9px 12px;font-size:11.5px;font-weight:400;
   line-height:1.8;white-space:pre-line;overflow-wrap:anywhere;box-shadow:0 12px 30px #000000a6;
   opacity:0;pointer-events:none;transition:opacity .12s;z-index:60;text-align:left}
-#lbArkBk .lw-help:hover::after{opacity:1;pointer-events:auto}
-#lbArkBk .lw-help .mdi{pointer-events:none}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .lw-help:hover::after{opacity:1;pointer-events:auto}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .lw-help .mdi{pointer-events:none}
 /* v6041（用户口径）：安全名单折叠（🟡/🔴 名单不折叠 —— 那是风险，必须直接看到） */
-#lbArkBk .arbk-fold{margin:10px 0 5px}
-#lbArkBk .arbk-fold>summary{display:flex;align-items:center;gap:6px;font-size:12px;
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-fold{margin:10px 0 5px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-fold>summary{display:flex;align-items:center;gap:6px;font-size:12px;
   font-weight:600;color:#4ade80;cursor:pointer;list-style:none;padding:2px 0}
-#lbArkBk .arbk-fold>summary::-webkit-details-marker{display:none}
-#lbArkBk .arbk-fold>summary::after{content:'展开';margin-left:auto;font-size:10.5px;
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-fold>summary::-webkit-details-marker{display:none}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-fold>summary::after{content:'展开';margin-left:auto;font-size:10.5px;
   font-weight:400;color:#6b7280}
-#lbArkBk .arbk-fold[open]>summary::after{content:'收起'}
-#lbArkBk .arbk-nmwrap{margin-top:4px;max-height:220px;overflow-y:auto}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-fold[open]>summary::after{content:'收起'}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-nmwrap{margin-top:4px;max-height:220px;overflow-y:auto}
 /* v6043：玩家角色档案行 */
 /* v6061：角色档案区（折叠容器 / 行 / 名称 / 行内按钮）四条 CSS 随功能一并删除 */
-#lbArkBk .arbk-legend code{background:rgba(0,0,0,.38);padding:0 4px;border-radius:3px;
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-legend code{background:rgba(0,0,0,.38);padding:0 4px;border-radius:3px;
   color:#fbbf24;font-size:10.5px;font-style:normal}
 /* v6036：原 `.arbk-job` 的「颜色 + margin-left:auto」规则与下方「回档进度块」同名规则
    打架（把列表里的 jobId 撑成带边框方块）⇒ 已删除；进度块继续沿用 .arbk-job */
-#lbArkBk .arbk-actions{display:flex;gap:6px;flex-wrap:wrap;margin:9px 0 6px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-actions{display:flex;gap:6px;flex-wrap:wrap;margin:9px 0 6px}
 /* v6049：补 justify-content:center —— 原缺此属性，一旦 flex 子项里有「宽度 0 的坏图标」，
    gap 仍占位而内容靠左，视觉上就成了「左右内边距不等」（实测 mdi-account-restore 就是这类） */
-#lbArkBk .arbk-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:6px 12px;border-radius:6px;
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:6px 12px;border-radius:6px;
   border:1px solid rgba(124,58,237,.45);background:rgba(124,58,237,.16);color:#c4b5fd;
   cursor:pointer;font-size:12px;transition:background .12s}
-#lbArkBk .arbk-btn:hover{background:rgba(124,58,237,.3)}
-#lbArkBk .arbk-btn.danger{border-color:rgba(239,68,68,.5);background:rgba(239,68,68,.14);color:#fca5a5}
-#lbArkBk .arbk-btn.danger:hover{background:rgba(239,68,68,.28)}
-#lbArkBk .arbk-btn.ghost{border-color:rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:#c9c9d6}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-btn:hover{background:rgba(124,58,237,.3)}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-btn.danger{border-color:rgba(239,68,68,.5);background:rgba(239,68,68,.14);color:#fca5a5}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-btn.danger:hover{background:rgba(239,68,68,.28)}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-btn.ghost{border-color:rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:#c9c9d6}
 /* v6054（用户口径「要有个取消选择的低可视化按钮」）：无边框、无底色、灰小字，弱于 ghost 按钮 */
-#lbArkBk .arbk-cancel{display:inline-flex;align-items:center;gap:4px;padding:4px 7px;border:0;
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-cancel{display:inline-flex;align-items:center;gap:4px;padding:4px 7px;border:0;
   background:none;color:#7c7c90;font-size:11.5px;line-height:1;cursor:pointer;border-radius:5px;
   transition:color .12s,background .12s}
-#lbArkBk .arbk-cancel:hover{color:#c9c9d6;background:rgba(255,255,255,.05)}
-#lbArkBk .arbk-cancel .mdi{font-size:12px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-cancel:hover{color:#c9c9d6;background:rgba(255,255,255,.05)}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-cancel .mdi{font-size:12px}
 /* v6058：底栏失败条下方的「重试 / 清除」按钮行 */
-#lbArkBk .arbk-footbtns{display:flex;align-items:center;gap:8px;margin-top:6px}
-#lbArkBk .arbk-plan{margin-top:8px;padding:9px 11px;border-radius:7px;
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-footbtns{display:flex;align-items:center;gap:8px;margin-top:6px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-plan{margin-top:8px;padding:9px 11px;border-radius:7px;
   background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07)}
-#lbArkBk .arbk-line{margin:2px 0}
-#lbArkBk .arbk-vd{display:inline-flex;align-items:center;gap:5px;font-weight:600;font-size:12.5px}
-#lbArkBk .arbk-vd.ok{color:#4ade80}
-#lbArkBk .arbk-vd.bad{color:#f87171}
-#lbArkBk .arbk-cnts{display:flex;gap:12px;flex-wrap:wrap;margin:7px 0}
-#lbArkBk .arbk-c{display:inline-flex;align-items:center;gap:4px;font-size:12px}
-#lbArkBk .arbk-c.ok{color:#4ade80}
-#lbArkBk .arbk-c.warn{color:#fbbf24}
-#lbArkBk .arbk-c.bad{color:#f87171}
-#lbArkBk .arbk-notice{margin:6px 0;padding:6px 9px;border-radius:5px;font-size:11.5px;
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-line{margin:2px 0}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-vd{display:inline-flex;align-items:center;gap:5px;font-weight:600;font-size:12.5px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-vd.ok{color:#4ade80}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-vd.bad{color:#f87171}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-cnts{display:flex;gap:12px;flex-wrap:wrap;margin:7px 0}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-c{display:inline-flex;align-items:center;gap:4px;font-size:12px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-c.ok{color:#4ade80}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-c.warn{color:#fbbf24}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-c.bad{color:#f87171}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-notice{margin:6px 0;padding:6px 9px;border-radius:5px;font-size:11.5px;
   color:#fbbf24;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.22)}
-#lbArkBk .arbk-notice.bad{color:#f87171;background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.25)}
-#lbArkBk .arbk-nm{font-size:11.5px;padding:3px 0 3px 16px;color:#dcdce8}
-#lbArkBk .arbk-nmx{margin-left:7px;color:#8b8b9e;font-size:10.5px}
-#lbArkBk .arbk-tag{margin-left:6px;font-size:10px;padding:0 5px;border-radius:4px;line-height:15px;display:inline-block;vertical-align:1px}
-#lbArkBk .arbk-tag.warn{color:#fbbf24;background:rgba(251,191,36,.14)}
-#lbArkBk .arbk-tag.bad{color:#f87171;background:rgba(248,113,113,.14)}
-#lbArkBk .arbk-guide{margin:9px 0;padding:9px 11px 9px 12px;border-radius:6px;font-size:11.5px;
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-notice.bad{color:#f87171;background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.25)}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-nm{font-size:11.5px;padding:3px 0 3px 16px;color:#dcdce8}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-nmx{margin-left:7px;color:#8b8b9e;font-size:10.5px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-tag{margin-left:6px;font-size:10px;padding:0 5px;border-radius:4px;line-height:15px;display:inline-block;vertical-align:1px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-tag.warn{color:#fbbf24;background:rgba(251,191,36,.14)}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-tag.bad{color:#f87171;background:rgba(248,113,113,.14)}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-guide{margin:9px 0;padding:9px 11px 9px 12px;border-radius:6px;font-size:11.5px;
   color:#c8d6ea;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.3);
   border-left:3px solid #60a5fa;line-height:1.65}
-#lbArkBk .arbk-gh{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-gh{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;
   color:#93c5fd;margin-bottom:6px;letter-spacing:.3px}
-#lbArkBk .arbk-gh .mdi{font-size:14px}
-#lbArkBk .arbk-gl{margin:0;padding-left:20px;list-style:decimal}
-#lbArkBk .arbk-gl li{margin:3px 0;color:#dbe6f5}
-#lbArkBk .arbk-gl li::marker{color:#60a5fa;font-weight:600}
-#lbArkBk .arbk-gn{margin-top:7px;padding-top:7px;border-top:1px dashed rgba(96,165,250,.25);
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-gh .mdi{font-size:14px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-gl{margin:0;padding-left:20px;list-style:decimal}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-gl li{margin:3px 0;color:#dbe6f5}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-gl li::marker{color:#60a5fa;font-weight:600}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-gn{margin-top:7px;padding-top:7px;border-top:1px dashed rgba(96,165,250,.25);
   color:#8b9bb5;font-size:11px;line-height:1.55}
-#lbArkBk .arbk-gn strong{color:#b9cae4}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-gn strong{color:#b9cae4}
 /* v6048：传服物品口径 —— 琥珀色警示块，与灰色常规说明区分 */
-#lbArkBk .arbk-gn.arbk-gn-tip{display:flex;gap:6px;align-items:flex-start;color:#d8c9a8;
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-gn.arbk-gn-tip{display:flex;gap:6px;align-items:flex-start;color:#d8c9a8;
   background:rgba(251,191,36,.08);border-top:1px dashed rgba(251,191,36,.3);
   border-radius:4px;padding:6px 8px;margin-top:7px}
-#lbArkBk .arbk-gn.arbk-gn-tip .mdi{font-size:13px;margin-top:1px;color:#fbbf24;flex:none}
-#lbArkBk .arbk-gn.arbk-gn-tip strong{color:#fcd34d}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-gn.arbk-gn-tip .mdi{font-size:13px;margin-top:1px;color:#fbbf24;flex:none}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-gn.arbk-gn-tip strong{color:#fcd34d}
 /* v6053（用户口径「附件是不是已经没用了」）：.arbk-ack / .arbk-chk / .arbk-conf 已废弃 ——
    block 档改用与 clear 一致的单一「执行回档」按钮；确认流程交给「通用确认浮窗 + 内联放行词条」。
    原输入框 #arbkConfirm 自 v6052 起不再参与校验，仅作预填，已一并删除。 */
@@ -2838,12 +2947,12 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
    .arbk-job / .arbk-jobhead / .arbk-step / .arbk-sp / .arbk-sm 已全部删除 ——
    回档进度只保留底栏固定进度条（.lw-foot + .lb-task-pg），正文不再重复列步骤。 */
 @media(max-width:560px){
-  #lbArkBk .arbk-ts{min-width:auto}
-  #lbArkBk .arbk-mb{min-width:auto}
+  :is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-ts{min-width:auto}
+  :is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-mb{min-width:auto}
   /* v6066：同样翻倍并自适应（手机屏矮，按 50vh 收） */
   /* v6076（用户口径「移动端附件下方为啥留了这么大空白」）：全屏后列表应交由 flex 链撑满 ——
      原 400px 封顶在 390×844 下只占 400px、下方空出 148px ⇒ 移动端取消封顶（PC 仍 480/60vh） */
-  #lbArkBk .arbk-list{max-height:none}
+  :is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-list{max-height:none}
 }
 /* v5963 P4：服务器控制浮窗（多选胶囊 + 3 统计卡）—— 全部新增，不改既有类 */
 .lb-srvctl-pickhead{display:flex;align-items:center;gap:8px;margin:2px 0 8px}
@@ -2935,16 +3044,8 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
 .lb-srvctl-online .ol-s{display:inline-flex;align-items:center;gap:3px;margin-right:11px;white-space:nowrap}
 .lb-srvctl-online .ol-s i{font-size:12px;opacity:.7}
 .lb-srvctl-online .ol-n{color:#a78bfa;font-weight:600;margin-right:1px}
-/* v6171：Bob（俱乐部）「仅进服」小标签 —— 3 字、9px、不换行、不撑高 */
-/* v6173（用户口径「徽章不允许撑高在线角色行」）：
-   徽章改**绝对定位** ⇒ 完全脱离文档流，行高只由名字决定，徽章浮在名字正下方。
-   左边缘靠 left:0 与名字严格对齐；与名字的上下间距由 margin-top 控制（想更紧可设负值）。 */
-.lb-srvctl-online .ol-bob{position:absolute;left:0;top:100%;margin-top:1px;z-index:2;
-  font-style:normal;font-size:9px;line-height:13px;padding:0 4px;
-  border-radius:7px;background:#3f2d1a;color:#fbbf24;border:1px solid #a16207;white-space:nowrap}
-/* v6173：首个名字的定位基准（relative），自身高度 = 名字高度 ⇒ 不被徽章撑高 */
-.lb-srvctl-online .ol-stack{position:relative;display:inline-flex;flex-direction:column;align-items:flex-start;
-  vertical-align:middle;margin-right:7px}
+/* v6549：删除 `.ol-bob`（Bob「仅进服」标签）与 `.ol-stack`（徽章定位基准）——
+   后端 v6548 已对 Bob 做 PlayerPos 交叉验证，假在线被剔除，该标签不再需要。 */
 .lb-srvctl-online .ol-g{color:#4b5263}
 .lb-srvctl-online .ol-non{color:#5f6779}
 .lb-srvctl-online .ol-sum{color:#a78bfa;font-weight:600;margin-right:5px}
@@ -2969,11 +3070,38 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
    只对加了 .lb-fs 标记的面板生效 —— 选角色/登录/重命名/签名/无部落等小浮窗不加标记，保持居中；
    确认类 .lb-ask-overlay / .lb-confirm-overlay 完全不受影响。 */
 @media(max-width:640px){
-  .lb-picker-overlay:has(>.lb-picker-panel.lb-fs),.lb-picker-overlay.lb-fs{padding:0!important;align-items:stretch!important;justify-content:stretch!important}
-  /* 裸 div / .lb-modal-scroll 面板（系统管理 / 自助配置 / 键位 / 基因）——按 overlay 标记整屏 */
-  .lb-picker-overlay.lb-fs>div{width:100%!important;max-width:100%!important;min-width:0!important;
+  /* v6803（用户口径 2026-11-16「附件这个浮窗在移动端为啥没有变成全屏样式？」）：
+     原规则**枚举** `.lb-picker-overlay` ⇒ 漏掉 `.lb-taskpanel-overlay`（任务面板）等家族
+     ⇒ 它们仍保留 `padding:8px 0` + `align-items:center`，面板高度只有 782 而非 852（没全屏）。
+     这已经是同一病根第 3 次（v6791 浮窗判定 / v6802 浮条去外框 / 这里）⇒ 改**通用规则**：
+     任何带 `.lb-fs` 标记的 overlay 一律铺满拉伸。确认/询问类浮窗不带 `.lb-fs`，不受影响。 */
+  /* v6804（用户口径 2026-11-16「服务器控制、安全回档、综合更新 在移动端都没有全屏」）：
+     `.lb-sheet` 家族名字不含 overlay、也不带 `.lb-fs` ⇒ v6803 的通用规则漏掉它们；
+     而 L1746 的 `.lb-sheet{padding:0}` **没有 !important**，被 overlay 的 `padding:8px 0` 压住
+     ⇒ 面板只剩 836px（852-16），看着不全屏。此处并入通用规则并加 !important。 */
+  .lb-picker-overlay:has(>.lb-picker-panel.lb-fs),[class*="overlay"].lb-fs,.lb-sheet{padding:0!important;align-items:stretch!important;justify-content:stretch!important}
+  /* 裸 div / .lb-modal-scroll 面板（系统管理 / 自助配置 / 键位 / 基因 / 任务面板）——按 overlay 标记整屏
+     ⚠️ `:not(.lb-task-slot)`：任务进度浮条也被搬到 overlay 直接子级，绝不能跟着整屏化（v6798/v6800 的坑）。 */
+  [class*="overlay"].lb-fs>div:not(.lb-task-slot),.lb-sheet>div:not(.lb-task-slot){width:100%!important;max-width:100%!important;min-width:0!important;
     height:100vh;height:100dvh;max-height:100vh!important;max-height:100dvh!important;
     border-radius:0!important;border:none!important;box-shadow:none!important}
+  /* v6798（用户口径 2026-11-16「移动端 为啥 附件占了全屏」）：
+     上一条本意只针对**面板**，但任务进度浮条（.lb-task-slot）已被搬到 overlay 直接子级
+     ⇒ 被一起整屏化：height:100dvh / border-radius:0 / 无投影（实测 #lbPcfgTasks 852px 占满屏）。
+     给浮条开例外：高度由内容撑开，圆角/描边/投影与其它浮条一致。宽度保持 100%（移动端与面板同宽）。 */
+  /* v6802（用户口径 2026-11-16「这里的附件 圆角还在」）：上一条**枚举 overlay 类名**
+     ⇒ 漏掉 `.lb-taskpanel-overlay`（任务面板 #lbTaskPanelTasks 圆角/描边/投影仍在）。
+     与 v6791「浮窗判定禁止用 class 白名单」同一个病根 ⇒ 改为**通用规则**：
+     移动端所有 .lb-task-slot 统一满宽 + 去外框，以后新增任何 overlay 家族都不用再改。 */
+  .lb-task-slot{
+    /* v6800（用户口径「移动端这个附件条，独立框为啥没有拉通宽度？」+「移动端也无需圆角外框」）：
+       ① 原 `width:auto!important` + JS 的 `max-width:92vw` ⇒ 92% × 屏宽 = 361px，
+          比面板 393px 少 31px，永远「没拉通」。现改 100%，与面板严格同宽。
+       ② 满宽后那圈圆角 + 描边 + 投影在手机上纯属多余 ⇒ 一律去掉，只保留浅底色区分区块。 */
+    width:100%!important;max-width:100%!important;min-width:0!important;
+    height:auto!important;max-height:none!important;min-height:0!important;
+    margin-left:0!important;margin-right:0!important;
+    border-radius:0!important;border:0!important;box-shadow:none!important}
   /* v6086：.lb-km-pickpanel 自带 max-width:min(440px,96vw)!important 且面板内有联 max-width ⇒
      必须用更强规则覆盖，否则移动端只有 96vw 宽（非整屏）。 */
   .lb-picker-overlay>.lb-picker-panel.lb-km-pickpanel.lb-fs{max-width:100%!important;width:100%!important}
@@ -3001,7 +3129,7 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
 .lb-srvctl-qline .ql-n{color:#f59e0b;font-weight:600}
 .lb-srvctl-qline .ql-done{color:#4ade80;font-weight:600}
 .lb-srvctl-qline .ql-sep{color:#4a4034;margin:0 6px}
-.lb-srvctl-qline .ql-heavy{color:#fbbf24}
+.lb-srvctl-qline .ql-heavy{color:#fbbf24;white-space:nowrap}
 .lb-srvctl-ph{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}
 /* v5982（用户口径）：移动端同样 3 列，不再压成 2 列 */
 @media(max-width:600px){.lb-srvctl-ph{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}}
@@ -3091,11 +3219,22 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
   .lb-task-pg > .lb-srvctl-mini{margin-left:auto;order:0}
 }
 .lb-task-pg .lb-srvctl-mini{padding:0 3px;line-height:1}
+/* v6696（用户口径「这组按钮的hover态无需圆角背景色」）：任务条内的跳过/中止按钮
+   hover 只变色不出圆角背景块（.lb-srvctl-mini:hover 的 #22222c + 6px 圆角在这里取消）。 */
+.lb-task-pg .lb-srvctl-mini{border-radius:0}
+.lb-task-pg .lb-srvctl-mini:hover{background:transparent}
+/* v6697（用户口径「服务器浮窗里不应该有任何操作按钮」）：只读概览浮窗内隐藏队列中止按钮 */
+.lb-taskpanel-overlay .lb-srvctl-qline .lb-srvctl-mini{display:none}
 /* v6277（用户口径 2026-11-08「PC 端中止按钮放到进度数字右边（也就是最后一个）」）：
    桌面 .lb-task-line2 是 display:contents ⇒ 其内的 .lb-task-sub / .lb-task-pct 直接参与
    父级 flex 布局；给中止/重试按钮 order:99 即可排到 pct **之后**（整行最后）。
    顶到右侧仍由前面的 .lb-task-sp{flex:1} 负责，不影响原布局。 */
-.lb-task-pg > .lb-srvctl-mini{order:99}
+/* v6702（BUG 修复）：上面那条窄屏 `order:0`（按钮在首行右上角，v6276 用户口径）被这条
+   **桌面** order:99 覆盖了 —— 两者选择器完全相同，且本行在媒体查询外、位置更靠后 ⇒ 窄屏也吃到 99，
+   按钮掉到最后一行（实测移动端小图标单独一行）。现把桌面规则收进 min-width 媒体查询。 */
+@media(min-width:561px){
+  .lb-task-pg > .lb-srvctl-mini{order:99}
+}
 /* v6269（用户口径）：服务器浮窗在移动端**全屏** —— 覆盖内联的 640px/94vw/86vh */
 @media(max-width:560px){
   .lb-taskpanel-overlay > .lb-taskpanel-box{
@@ -3303,7 +3442,7 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
 .lb-km-act{color:#dcdce8;white-space:nowrap}
 .lb-km-graph{font-weight:800;color:#fff}
 .lb-km-bang{color:#e0a030;margin-left:5px}
-.lb-km-c{width:78px;text-align:center}
+.lb-km-c{width:auto;min-width:78px;white-space:nowrap;text-align:center}   /* v6828：宽度自适应，多组键钮横向并排不换行 */
 .lb-km-dotc{width:22px;text-align:center}
 .lb-km-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#a78bfa;cursor:pointer}
 /* v5423：动作备注（普通玩家可见）—— 动作名下方一行灰色小字 */
@@ -3634,3 +3773,451 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
 .lb-upd-foot>.lb-upd-link{height:16px;line-height:1;font-size:11px}
 .lb-upd-foot>.lb-upd-link>i{line-height:1;font-size:13px}
 .lb-upd-foot>.lb-upd-link.lb-foot-left{margin-right:auto}   /* v6452：底栏左侧项（部署到本机）贴左，其余仍在右 */
+/* v6533（用户口径）：移动端**仅当出现部署进度条时**才切成两行 ——
+   第 1 行＝进度条+状态文字独占整行；「清空缓存 / 更新缓存」另起一行。
+   无进度条时保持原单行（.lb-prog-on 只在 lbLProgBegin → lbLProgRestore 之间存在）。 */
+@media (max-width:640px){
+  .lb-upd-foot.lb-prog-on{flex-wrap:wrap;height:auto;min-height:34px;padding:6px 12px;row-gap:5px}
+  .lb-upd-foot.lb-prog-on>.lb-foot-left{flex:0 0 100%;margin-right:0;height:auto;min-height:15px;text-decoration:none}
+  .lb-upd-foot.lb-prog-on .lb-lprog{width:100%}
+  .lb-upd-foot.lb-prog-on .lb-lprog-t{flex:1 1 auto;max-width:none}
+}
+
+/* ===== v6599（用户口径）：折叠块卡片化 + 间距统一 =====
+   ① 收起态：**拉通一行**的淡底圆角条（圆角 10px，铺满时也看得出边界）
+   ② 展开态：整块变卡片，标题就是卡片头（在卡片内部）
+   ③ .arbk-list / .arbk-plan 退化成「卡片内容区」—— 两者外观完全一致
+   ④ 间距统一由父级 flex gap 控制（模块间 10px / 卡片内 8px），子块自身 margin 全部清零
+   ⑤ 标题行内的动作按钮：无外框、靠右（.arbk-sumabtn）
+   ⑥ 去掉原来的「展开 / 收起」字样（::after） */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .lw-body>.tc{gap:10px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .lw-body>.tc>*{margin-top:0;margin-bottom:0}
+/* 空块（启动队列行 / 踢人结果 / 已清空的动作行）不参与排版，避免 gap 多出一格 */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .lw-body>.tc>*:empty{display:none}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-fold{margin:0}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-fold>summary{display:flex;align-items:center;gap:6px;font-size:12px;
+  font-weight:600;color:#4ade80;cursor:pointer;list-style:none;
+  padding:6px 12px;border-radius:10px;background:rgba(255,255,255,.045);
+  transition:background .12s}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-fold>summary:hover{background:rgba(255,255,255,.08)}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-fold>summary::after{content:none;display:none}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-fold[open]{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.08);
+  border-radius:10px;padding:0 0 4px;overflow:hidden}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-fold[open]>summary{border-radius:9px 9px 0 0;background:rgba(255,255,255,.05);
+  border-bottom:1px solid rgba(255,255,255,.07)}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-fold[open]>summary:hover{background:rgba(255,255,255,.075)}
+/* 卡片内容区：回档点列表 与 风险面板 完全同款（同内边距、无自家背景/边框/圆角） */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-list{padding:8px 10px;border-radius:0;background:transparent;gap:3px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-plan{margin-top:0;padding:8px 10px;border-radius:0;background:transparent;border:0;
+  display:flex;flex-direction:column;gap:8px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-plan>*{margin-top:0;margin-bottom:0}
+/* 卡片内嵌套的小折叠：比外层卡片淡一档，形成层次 */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-plan .arbk-fold>summary{padding:5px 10px;border-radius:8px;
+  background:rgba(255,255,255,.03)}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-plan .arbk-fold[open]{background:rgba(255,255,255,.03);
+  border-color:rgba(255,255,255,.07)}
+/* 标题行内的行内动作（无外框、靠右）—— 「重新检查」/「取消选择」图标 */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-sumabtn{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;
+  gap:4px;margin-left:auto;background:transparent;border:0;color:#8b93a7;font-size:11.5px;
+  line-height:1;cursor:pointer;padding:3px 5px;border-radius:6px;
+  transition:background .12s,color .12s}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-sumabtn:hover{background:rgba(124,58,237,.18);color:#c4b5fd}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-sumabtn .mdi{font-size:14px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-sumabtn-ico{padding:3px 6px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-sumabtn-ico .mdi{font-size:15px}
+
+/* ===== v6600（用户口径）=====
+   ① .arbk-nm 的 16px 左缩进是旧版「角色列表带圆点」的残留，现无圆点 ⇒ 清零
+   ② 「执行回档 / 撤销到上次回档前」那行按钮靠右
+   ③ 行程块选中态描边固定主题紫 —— 原来选中色取地图色，且 .arbk-seg:hover 的
+      border-color:#6b7280!important 会把选中描边盖成灰色。
+      注意：**只覆盖 top/right/bottom 三边**，左边 3px 地图色条要保留（用于识别哪张图） */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-nm{padding:3px 0}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .lw-body>.tc>.arbk-actions{justify-content:flex-end}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-seg.arbk-sel:hover{border-top-color:#a78bfa!important;
+  border-right-color:#a78bfa!important;border-bottom-color:#a78bfa!important}
+
+/* ===== v6602（用户口径）=====
+   ① 「当前档」行整合进「可选回档点」卡片内部并置顶 —— 卡片已有底色/边框，
+      所以这一行退化成「卡片内的一条」，只用下边线与列表分隔 */
+#lbArkBkPointFold .arbk-cur{margin:0;border:0;border-radius:0;background:transparent;
+  border-bottom:1px solid rgba(255,255,255,.07);padding:7px 10px}
+#lbArkBkPointFold .arbk-cur b{color:#e5e5f0}
+/* ② 卡片内嵌套折叠（背包内容差异 / 安全名单）展开后内容要留内边距，否则贴卡片边缘 */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-plan details.arbk-fold[open]::details-content{padding:4px 10px 8px}
+
+/* ===== v6604（用户口径）=====
+   ③ 矮屏兜底：折叠块最小高度 128px（由 JS 控制），空间实在不够时允许外层滚动，
+      避免把元素压到几十像素失去可读性。正常屏不会出现滚动条（内容恰好填满）。 */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .lw-body{overflow-y:auto}
+/* ⑤⑥ 卡片内子模块：展开时标题栏底部圆角去掉 + 内容区自身可滚 */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-plan details.arbk-fold[open]>summary{border-radius:8px 8px 0 0;
+  border-bottom:1px solid rgba(255,255,255,.07)}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-plan details.arbk-fold[open]::details-content{padding:4px 10px 8px;
+  max-height:260px;overflow-y:auto}
+/* 内容区已经能滚了，内层名单不要再叠一层 max-height */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-plan .arbk-nmwrap{max-height:none;overflow:visible}
+/* ② 底栏里的执行按钮行 */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-foot-exec{display:flex;justify-content:flex-end;gap:6px;padding:0 0 2px}
+
+/* ===== v6605（用户口径，方案 B）：子模块自己滚、标题固定 =====
+   滚动必须发生在**真实 DOM 元素**上 —— 伪元素 `::details-content` 的 ::-webkit-scrollbar 不可控，
+   之前「伪元素 + 内层 chip 容器」两层滚动叠加，导致样式不统一且滚到底看不全。
+   ⇒ 伪元素层彻底不滚；每个子模块内容外包一层 `.arbk-foldbody` 负责滚动。 */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-plan details.arbk-fold[open]::details-content{max-height:none;overflow:visible;padding:0}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-foldbody{max-height:260px;overflow-y:auto;padding:5px 10px 8px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-plan .arbk-nmwrap{max-height:none;overflow:visible}
+/* 物品 / 低温仓 chip 容器：不再自带滚动，交给 .arbk-foldbody */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-chips{display:flex;flex-wrap:wrap;gap:6px}
+
+/* ===== v6606（用户口径）：子模块高度由 JS 精确下发，plan 只兜底不裁剪 =====
+   之前 plan 自己 overflow-y:auto 且高度受限 ⇒ 内部 .arbk-foldbody 下半截被裁，
+   在子模块里滚到底也看不全最后一行。改为 plan 不裁剪，foldbody 由 lbArkBkFitFold 定高。 */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .lw-body>.tc>details.arbk-fold[open]>.arbk-plan{overflow-y:hidden}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-plan details.arbk-fold[open]>.arbk-foldbody{max-height:260px}
+
+/* ===== v6609（用户口径）：plan 是 flex 容器，子 details 不许被压扁 =====
+   flex 子项默认 flex-shrink:1 —— 空间不足时 details 被压到内容装不下，
+   内部 .arbk-foldbody 下半截被裁（「被遮住的更多了」的真凶）。 */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-plan > details.arbk-fold{flex:0 0 auto}
+
+/* ===== v6628（用户口径）：风险检查可视化 —— 指标胶囊 / 计数格 / 流程框 ===== */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-plan{padding:8px 8px 4px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:0;margin:0;font-size:11px;color:#8b8b9e}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-meta .bar{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08)}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-meta b{font-size:12.5px;font-weight:700;color:#d6d6e6}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-meta .arw{color:#6b7280;font-size:12px;display:inline-flex;align-items:center}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-meta .mdi{font-size:13px;line-height:1}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-cnts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-c{display:flex;align-items:center;gap:6px;padding:6px 9px;border-radius:9px;font-size:11px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07);border-bottom:2px solid #333;color:#9aa0b4;cursor:pointer;transition:all .12s;user-select:none}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-c:hover{border-color:rgba(255,255,255,.22);transform:translateY(-1px)}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-c .mdi{font-size:13px;line-height:1}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-c b{margin-left:auto;font-size:15px;font-weight:800;line-height:1}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-c.ok{border-bottom-color:rgba(74,222,128,.45)}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-c.ok b,:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-c.ok .mdi{color:#4ade80}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-c.amber{color:#fbbf24;background:rgba(251,191,36,.08);border-color:rgba(251,191,36,.3);border-bottom-color:#fbbf24;font-weight:700}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-c.amber b{color:#fbbf24;font-size:17px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-c.bad{color:#f87171;background:rgba(248,113,113,.08);border-color:rgba(248,113,113,.3);border-bottom-color:#f87171;font-weight:700}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-c.bad b{color:#f87171;font-size:17px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-flow{background:rgba(251,191,36,.055);border:1px solid rgba(251,191,36,.3);border-radius:10px;padding:10px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-verdict{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:700;padding:0 0 10px;margin:0 0 10px;border-bottom:1px dashed rgba(248,113,113,.28)}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-verdict.bad{color:#f87171}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-verdict.ok{color:#4ade80;border-bottom-color:rgba(74,222,128,.28)}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-verdict .mdi{font-size:17px;line-height:1}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-verdict .tail{margin-left:auto;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:20px;background:rgba(248,113,113,.16);border:1px solid rgba(248,113,113,.45)}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-verdict.ok .tail{background:rgba(74,222,128,.14);border-color:rgba(74,222,128,.4)}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-flow .hd{font-size:11.5px;font-weight:700;color:#fbbf24;display:flex;align-items:center;gap:6px;margin-bottom:8px;line-height:1.5}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-flow .hd .mdi{font-size:13px;flex:none}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-flow .bd{display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap}
+/* v6656：relative —— 让 .stp-tip 作为绝对定位浮层（不占布局、不撑走后面步骤） */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .stp-wrap{display:inline-flex;flex-direction:column;align-items:flex-start;gap:4px;max-width:100%;position:relative}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-flow .stp{cursor:pointer}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .stp-wrap.open .stp{border-color:#7c3aed}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .stp .txt{display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .alt-toggle{font-size:9.5px;padding:1px 6px;border-radius:4px;border:1px solid #7c3aed;background:rgba(124,58,237,.22);color:#c4b5fd;cursor:pointer;user-select:none;white-space:nowrap;flex:none}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .alt-toggle:hover{background:rgba(124,58,237,.34)}
+/* v6656（用户口径「附件2 不要将后面的步骤撑掉」）：绝对定位浮层 —— 展开时后续步骤位置完全不动 */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .stp-tip{display:none;position:absolute;top:100%;left:0;margin-top:5px;z-index:40;width:max-content;max-width:360px;font-size:11px;font-weight:400;color:#a9a9bd;background:#12121a;border:1px dashed rgba(255,255,255,.14);border-radius:7px;padding:7px 10px;line-height:1.78;white-space:pre-line;box-shadow:0 10px 26px rgba(0,0,0,.55)}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .stp-wrap.tip-up .stp-tip{top:auto;bottom:100%;margin-top:0;margin-bottom:5px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .stp-wrap.open .stp-tip{display:block}
+/* ===== v6761（用户口径「附件不还是被挡住了一部分？」）：移动端 tips 改**内联展开** =====
+   根因：.stp-tip 是 absolute + left:0 + width:max-content + max-width:360px。375px 视口下
+   可用宽仅 ~361：气泡宽 360、步骤起点又在 x=104 ⇒ 右边界 464，溢出 89px 被 .lw-body 裁掉。
+   光限宽不够（即使压到 319，right 仍 423）。故移动端直接取消浮层：position:static + 宽度自适应，
+   展开时把该步骤撑成一行、气泡排在它下方 —— 几何上不可能被裁。桌面端保持原浮层不变。 */
+@media (max-width:640px){
+  :is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .stp-wrap.open{width:100%}
+  :is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .stp-wrap.open .stp-tip{
+    position:static;top:auto;left:auto;right:auto;bottom:auto;width:auto;max-width:none;
+    margin:4px 0 0;box-shadow:none;z-index:auto}
+  :is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .stp-wrap.open.tip-up .stp-tip{
+    margin:0 0 4px;top:auto;bottom:auto}
+}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .stp-tip .tip-act{color:#d7dbe6}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .stp-tip .tip-key{color:#c4b5fd}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .stp-tip .tip-warn{color:#f87171}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .tip-alt{display:block;margin-top:6px;padding-top:6px;border-top:1px dashed rgba(255,255,255,.09)}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .tip-alt-lbl{display:block;font-size:10px;color:#8b8ba3;margin-bottom:3px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .alt-txt{display:flex;align-items:center;flex-wrap:wrap;row-gap:4px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .alt-txt i{font-style:normal;font-size:10.5px;color:#e3e9f7;white-space:nowrap}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .alt-sep{color:#7c8496;padding:0 4px;font-size:11px;display:inline-flex;align-items:center;flex:none}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .alt-sep svg{width:5px;height:8px;display:block}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .alt-br{color:#8b8ba3;padding:0 3px;font-size:10.5px}
+/* v6655（对齐预览）：步骤说明里的波及名单 + chip 补充注释 */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .aff-wrap{margin-top:8px;max-width:360px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .aff-h{font-size:10.5px;color:#fbbf24;font-weight:700;margin-bottom:5px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .aff-row{display:flex;align-items:center;gap:8px;padding:3px 0;flex-wrap:wrap}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .aff-chip{font-size:11px;color:#e5e5f0}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .aff-chip em{font-style:normal;font-size:9.5px;color:#fbbf24;margin-left:4px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .aff-t{font-size:10px;color:#8b8ba3}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .aff-on{font-size:9.5px;color:#f87171;border:1px solid rgba(248,113,113,.4);border-radius:4px;padding:0 4px}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .chip-note{font-size:10px;color:#5b5b6e;margin-top:5px;max-width:340px;line-height:1.5}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .ico-srv{display:inline-flex;align-items:center;flex:none;color:#c4b5fd}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .ico-srv[style*="color:"]{color:inherit}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .ico-srv svg{display:block;width:14px;height:14px;fill:currentColor}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) img.ico-ark{display:block;width:14px;height:14px;object-fit:contain;border-radius:3px;flex:none}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-goals{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 9px;font-size:11px}
+/* v6661（用户口径）：恢复目的行下方的虚线分割线（原在 .arbk-pv-verdict 上，v6659 移走结论时丢失） */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-goals.vd-ok{padding-bottom:10px;margin-bottom:10px;border-bottom:1px dashed rgba(74,222,128,.28)}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-goals.vd-bad{padding-bottom:10px;margin-bottom:10px;border-bottom:1px dashed rgba(248,113,113,.28)}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-goals .lbl{color:#8b8ba3}
+/* v6659：风险结论右对齐贴在「回档目的」同一行末尾（原 .arbk-pv-verdict 独占一行已取消） */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-goals .arbk-vd{margin-left:auto;display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;color:#8b8b9e}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-goals .arbk-vd.ok{color:#4ade80}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-goals .arbk-vd.bad{color:#f87171}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-goals .g{padding:3px 9px;border-radius:20px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:#a9a9bd;cursor:pointer;user-select:none}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-goals .g:hover{border-color:#7c3aed;color:#c4b5fd}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-goals .g.on{background:rgba(124,58,237,.22);border-color:#7c3aed;color:#c4b5fd;font-weight:700}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-flow .stp{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;height:30px;overflow:hidden;max-width:100%;border-radius:8px;font-size:11px;font-weight:600;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#d5dae6}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-flow .stp b{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;font-size:9.5px;background:#fbbf24;color:#1a1a24;flex:none}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-flow .stp.done{color:#4ade80;border-color:rgba(74,222,128,.4);background:rgba(74,222,128,.08)}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-flow .stp.done b{background:#4ade80}
+/* v6655（对齐预览）：风险步骤红框 + 红序号；预览页有这套，正式实现原来完全没定义 */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-flow .stp.warn{border-color:#ef4444}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-flow .stp.warn b{background:#ef4444}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-flow .arw{color:#6b7280;font-size:12px;display:inline-flex;align-items:center}
+/* 弹窗内：details 解包后的平铺样式 */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-flat{display:block}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pop-h{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:#4ade80;padding:2px 0 7px;flex-wrap:wrap}
+#arbkRiskPop .lw-body{padding:12px 14px 16px;overflow-y:auto}
+#arbkRiskPop .lw-title{display:flex;align-items:baseline;gap:10px;flex:1 1 auto;min-width:0;overflow:hidden}
+#arbkRiskPop .lw-title .pop-t{flex:0 0 auto;white-space:nowrap}
+#arbkRiskPop .lw-title .pop-s{flex:0 1 auto;min-width:0;font-size:11px;font-weight:400;color:#c9b98a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#arbkRiskPop .arbk-foldbody{max-height:none;overflow:visible;border:0;padding:0}
+
+/* ===== v6631（用户口径） ===== */
+/* ② 风险检查面板自身不出滚动条：按内容自适应，允许撑高外框（.lw-body 出滚动条） */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .tc{overflow:visible!important;max-height:none!important}
+:is(#lbArkBk,#lbArkBkGrant) #lbArkBkPlanFold{max-height:none!important;overflow:visible!important}
+:is(#lbArkBk,#lbArkBkGrant) #lbArkBkPlanFold .arbk-plan{max-height:none!important;overflow:visible!important;height:auto!important}
+:is(#lbArkBk,#lbArkBkGrant) #lbArkBkBody{overflow-y:auto!important;flex:1 1 auto!important;min-height:0!important}
+/* ③ 移动端行程块：最多 2 行（JS 控制 max-height），按钮复用 .arbk-sumabtn */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-seg-foldbtn{white-space:nowrap}
+/* ④ 窄屏计数格：图标位置与尺寸都不动（左侧垂直居中）/ 文字标题一行右对齐且随状态着色 / 数字另起一行右对齐 */
+@media (max-width:640px){
+  /* v6633（用户口径）：4 个徽章**必须一行内塞下** —— 4 列等分，gap 5px */
+  :is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-cnts{grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}
+  /* 格内：图标固定第 1 列、跨两行垂直居中；第 1 行标题（一行不换行）、第 2 行数字右对齐 */
+  :is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-c{display:grid;grid-template-columns:auto 1fr;column-gap:4px;row-gap:0;align-items:center;flex-wrap:nowrap;padding:5px 7px;font-size:10.5px;text-align:right}
+  :is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-c .mdi{grid-column:1;grid-row:1 / span 2;align-self:center;justify-self:center}
+  :is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-c b{grid-column:2;grid-row:2;margin-left:0!important;text-align:right;line-height:1.1;font-size:14px}
+}
+
+/* v6635（用户口径）：徽章文字也要随状态着色（原先只有数字和图标着色） */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-c.ok{color:#4ade80!important}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-c.amber{color:#fbbf24!important}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-c.bad{color:#f87171!important}
+
+/* ===== v6636（用户口径） ===== */
+/* ② 移动端指标行**不允许换行**：胶囊按比例压缩 + 极窄降档 + 兜底横滑 */
+@media (max-width:640px){
+  :is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-meta{flex-wrap:nowrap!important;gap:6px;overflow-x:auto;scrollbar-width:none}
+  :is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-meta::-webkit-scrollbar{display:none}
+  :is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-meta .bar{flex:0 1 auto;min-width:0;white-space:nowrap}
+  :is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-meta .arw{flex:0 0 auto}
+}
+@media (max-width:360px){
+  :is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-meta{font-size:10px;gap:5px}
+  :is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-meta .bar{padding:2px 6px}
+  :is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-pv-meta b{font-size:11.5px}
+}
+/* ③ 行程展开按钮：上下内边距对称（原 3px/5px + line-height:11px 导致下沿贴边） */
+/* v6637（用户口径）：固定 24px 行盒 + flex 居中（原 padding:4px + line-height:1.25 上下不对称）；
+   外边距统一 6px，与下方虚线间距一致 */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-seg-foldbtn{display:inline-flex!important;align-items:center!important;justify-content:center!important;height:24px!important;padding:0 9px!important;line-height:1!important;gap:5px!important;margin:0 0 6px!important}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-seg-foldbtn .mdi{font-size:14px!important;line-height:1!important;display:block!important}
+
+/* ===== v6683（用户口径 2026-11-14）：回档流程 Session —— 底栏流程条 + 步骤内按钮 ===== */
+:is(#lbArkBk,#lbArkBkGrant) .arbk-flowbar{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;
+  background:rgba(124,58,237,.10);border:1px solid rgba(124,58,237,.30);margin-bottom:6px}
+:is(#lbArkBk,#lbArkBkGrant) .arbk-flowbar.live{background:rgba(251,191,36,.10);border-color:rgba(251,191,36,.32)}
+:is(#lbArkBk,#lbArkBkGrant) .arbk-flowbar.live.mine{background:rgba(124,58,237,.14);border-color:rgba(124,58,237,.42)}
+:is(#lbArkBk,#lbArkBkGrant) .arbk-flowbar .fb-t{display:flex;align-items:center;gap:6px;min-width:0;font-size:12px;
+  font-weight:700;color:#c4b5fd;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+:is(#lbArkBk,#lbArkBkGrant) .arbk-flowbar.live .fb-t{color:#fbbf24}
+:is(#lbArkBk,#lbArkBkGrant) .arbk-flowbar.live.mine .fb-t{color:#c4b5fd}
+:is(#lbArkBk,#lbArkBkGrant) .arbk-flowbar .fb-s{font-weight:400;font-size:11px;color:#8b8b9e;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+:is(#lbArkBk,#lbArkBkGrant) .arbk-flowbar .fb-sp{flex:1 1 auto}
+:is(#lbArkBk,#lbArkBkGrant) .arbk-fb-btn{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:7px;
+  font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;border:1px solid #3a3a4a;
+  background:#22222e;color:#cfd2dc}
+:is(#lbArkBk,#lbArkBkGrant) .arbk-fb-btn.go{background:#7c3aed;border-color:#7c3aed;color:#fff}
+:is(#lbArkBk,#lbArkBkGrant) .arbk-fb-btn.go:hover{background:#8b5cf6}
+:is(#lbArkBk,#lbArkBkGrant) .arbk-fb-btn.ghost{background:transparent;color:#9aa0b0}
+:is(#lbArkBk,#lbArkBkGrant) .arbk-fb-btn.ghost:hover{color:#e0e0e0;border-color:#4a4a5e}
+:is(#lbArkBk,#lbArkBkGrant) .arbk-fb-btn .mdi{font-size:14px}
+/* ===== v6755（用户口径「移动端样式崩了」）：回档流程条窄屏折行 =====
+   根因（实测 375px 视口）：.arbk-flowbar 自身是 .arbk-flowin 的 flex 子项，但**没 min-width:0**
+   ⇒ 自动最小宽度 = 内容 min-content（标题 343 + 说明 146 + 按钮 66 + 间距 ≈ 606px），
+   把 375px 容器撑破，右侧「结束」按钮被裁掉点不到。
+   修法：① 允许换行 + 允许压缩（min-width:0）；② 窄屏标题独占第一行、说明与按钮排第二行。 */
+:is(#lbArkBk,#lbArkBkGrant) .arbk-flowin{min-width:0;max-width:100%}
+:is(#lbArkBk,#lbArkBkGrant) .arbk-flowbar{min-width:0;max-width:100%;flex-wrap:wrap;row-gap:6px}
+:is(#lbArkBk,#lbArkBkGrant) .arbk-flowbar .fb-t{flex:1 1 auto;min-width:0}
+/* v6764（用户口径「直接和主标合并」）：副标回到 .fb-t 内部，沿用标题字号与色系，
+   仅字重 400 + 略降不透明度区分主次（原 v6756/v6763 的独立行 + 居中规则一并移除）。 */
+:is(#lbArkBk,#lbArkBkGrant) .arbk-flowbar .fb-t .fb-s{font-size:12px;font-weight:400;color:inherit;opacity:.82}
+:is(#lbArkBk,#lbArkBkGrant) .arbk-flowbar>.fb-s{flex:0 1 auto;min-width:0}
+:is(#lbArkBk,#lbArkBkGrant) .arbk-flowbar .arbk-fb-btn{flex:0 0 auto}
+/* v6756（用户口径）：窄屏两行 —— 第 1 行只放标题（独占 100%），
+   第 2 行放副标（.fb-sub，可省略）+ 右侧按钮；.fb-sp 占位在窄屏无意义直接隐藏。 */
+@media (max-width:640px){
+  :is(#lbArkBk,#lbArkBkGrant) .arbk-flowbar{padding:6px 8px}
+  :is(#lbArkBk,#lbArkBkGrant) .arbk-flowbar .fb-t{flex:1 1 100%}
+  :is(#lbArkBk,#lbArkBkGrant) .arbk-flowbar .fb-sp{display:none}
+  :is(#lbArkBk,#lbArkBkGrant) .arbk-flowbar .fb-t .fb-s{font-size:11.5px}
+  :is(#lbArkBk,#lbArkBkGrant) .arbk-flowbar .arbk-fb-btn{margin-left:auto}
+}
+/* 步骤说明框（.stp-tip）内的操作按钮 —— 口径1：未开始流程时置灰 */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-tipbtn{display:inline-flex;align-items:center;gap:5px;margin-top:8px;
+  padding:6px 12px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;
+  border:1px solid transparent;line-height:1.2}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-tipbtn.danger{background:#dc2626;border-color:#dc2626;color:#fff}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-tipbtn.danger:hover{background:#ef4444}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-tipbtn.ok{background:transparent;border-color:#22c55e;color:#4ade80}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-tipbtn.ok:hover{background:rgba(34,197,94,.12)}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-tipbtn[disabled]{background:#26262f!important;
+  border-color:#33334a!important;color:#5b5b6b!important;cursor:not-allowed}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-tipbtn .mdi{font-size:14px}
+
+/* ===== v6684（用户口径 2026-11-14）：底栏并入「风险流程」块 + 底栏彻底移除 ===== */
+:is(#lbArkBk,#lbArkBkGrant) .lw-foot{display:none!important}
+:is(#lbArkBk,#lbArkBkGrant) .arbk-flowsep{border-top:1px dashed rgba(251,191,36,.28);margin:9px 0 8px}
+:is(#lbArkBk,#lbArkBkGrant) .arbk-flowin{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+:is(#lbArkBk,#lbArkBkGrant) .arbk-flowin .arbk-flowbar{margin-bottom:0;flex:1 1 100%}
+/* v6685：撤销入口在「可选回档点」标题栏右侧 —— 无外框、hover 变色、
+   移动端窄屏用省略号截断（.arbk-sumabtn 已提供 margin-left:auto 与 hover 样式） */
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-undo-sum{max-width:56%;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-tipbtn.ghost{background:transparent;border-color:#4a4a5e;color:#c4b5fd}
+:is(#lbArkBk,#lbArkBkGrant,#arbkRiskPop) .arbk-tipbtn.ghost:hover{background:rgba(124,58,237,.14);border-color:#7c3aed}
+
+/* v6710（用户口径「入口按钮都改成低可视形式，无需按钮外框，hover 效果也只图标+文字着色即可」）：
+   选角色浮窗底栏 · 主宰者入口 —— 无底色无边框，默认灰，hover 只染成主题橙 */
+.lb-pw-btn{color:#8b8b9a;transition:color .12s ease}
+.lb-pw-btn:hover{color:#f59e0b}
+.lb-pw-btn i{transition:color .12s ease}
+
+/* v6711（用户口径）：插件配置 · 每项「分服定制」入口 —— 低可视小图标，hover/展开才着色 */
+.lb-pcfg-subbtn{color:#5f6272;cursor:pointer;display:inline-flex;align-items:center;transition:color .12s ease;padding:0 2px}
+.lb-pcfg-subbtn:hover{color:#f59e0b}
+.lb-pcfg-subbtn.on{color:#a78bfa}
+
+/* v6712（用户口径）：插件配置 · 分服区「单服锁定」—— 低可视，锁上才染金 */
+.lb-pcfg-lock{color:#4b4e5c;cursor:pointer;display:inline-flex;align-items:center;transition:color .12s ease;padding:0 2px}
+.lb-pcfg-lock:hover{color:#f59e0b}
+.lb-pcfg-lock.on{color:#f59e0b}
+
+/* ===== v6736（用户口径·方案 C）：台账记录浮窗 · 时间轴卡片 =====
+   替换原 <table>；所有字段平铺（不再依赖 tips），左侧竖轴 + 状态圆点。
+   配色对齐浮窗：面板 #1a1a24 / 卡片 #16161f / 描边 #262636 */
+.lb-hist-tl{position:relative;padding-left:18px}
+.lb-hist-tl:before{content:"";position:absolute;left:5px;top:6px;bottom:6px;width:1px;background:#2b2b3c}
+.lb-hc-day{font-size:10px;color:#6b6f80;margin:2px 0 6px}
+.lb-hcard{position:relative;background:#16161f;border:1px solid #262636;border-radius:10px;margin-bottom:8px;padding:8px 10px}
+.lb-hcard:before{content:"";position:absolute;left:-16px;top:13px;width:7px;height:7px;border-radius:50%;
+  background:#93c5fd;box-shadow:0 0 0 2px #1a1a24,0 0 8px rgba(147,197,253,.7)}
+.lb-hcard.ok:before{background:#4ade80;box-shadow:0 0 0 2px #1a1a24,0 0 8px rgba(74,222,128,.7)}
+.lb-hcard.bad:before{background:#f87171;box-shadow:0 0 0 2px #1a1a24,0 0 8px rgba(248,113,113,.7)}
+.lb-hcard.warn:before{background:#fbbf24;box-shadow:0 0 0 2px #1a1a24,0 0 8px rgba(251,191,36,.7)}
+.lb-hcard.info:before{background:#93c5fd;box-shadow:0 0 0 2px #1a1a24,0 0 8px rgba(147,197,253,.7)}
+.lb-hcard.bok{border-left:2px solid rgba(74,222,128,.6)}
+.lb-hcard.bbad{border-left:2px solid rgba(248,113,113,.6)}
+.lb-hcard.bwarn{border-left:2px solid rgba(251,191,36,.6)}
+.lb-hcard.binfo{border-left:2px solid rgba(147,197,253,.6)}
+.lb-hc-h{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.lb-hc-h .nm{font-size:12.5px;font-weight:700;color:#fff;display:inline-flex;align-items:center;gap:5px;min-width:0}
+.lb-hc-h .nm .mdi{font-size:14px}
+.lb-hc-h .tag{font-size:9.5px;line-height:15px;padding:1px 6px;border-radius:4px;font-weight:700;white-space:nowrap;display:inline-flex;align-items:center;gap:3px}
+.lb-hc-h .tag .mdi{font-size:11px}
+.lb-hc-h .tag.ok{background:rgba(74,222,128,.15);color:#4ade80}
+.lb-hc-h .tag.bad{background:rgba(248,113,113,.15);color:#f87171}
+.lb-hc-h .tag.bld{background:rgba(147,197,253,.14);color:#93c5fd}
+.lb-hc-h .tag.live{background:rgba(251,191,36,.15);color:#fbbf24}
+.lb-hc-h .tm{margin-left:auto;font-size:10.5px;color:#6b6f80;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.lb-hc-h .tm .pin{color:#a78bfa;cursor:pointer;font-size:14px}
+.lb-hc-g{display:grid;grid-template-columns:auto 1fr;gap:1px 8px;font-size:10.5px;line-height:1.75}
+.lb-hc-g .k{color:#5f6070;white-space:nowrap}
+.lb-hc-g .v{color:#c9c9d6;word-break:break-word}
+
+/* ===== v6770：地图宣传图 / Steam 宣传片播放（右下角按钮）===== */
+.lb-mw-media{position:relative;margin:6px auto 2px;max-width:560px;border-radius:8px;border:1px solid #2a2a3a;overflow:hidden;background:#000}
+.lb-mw-media .lb-mw-poster{width:100%;display:block;opacity:.92;aspect-ratio:16/9;object-fit:cover}
+/* v6773（用户口径「点播放直接在宣传图原位置播放」）：视频绝对定位铺满宣传图那一块，
+   图片始终保留撑住高度 ⇒ 播放前后尺寸/位置完全一致，不塌高、不跳动 */
+.lb-mw-media .lb-mw-video{position:absolute;inset:0;width:100%;height:100%;display:block;background:#000;object-fit:contain;z-index:1}
+.lb-mw-media .lb-mw-video[hidden]{display:none}
+.lb-mw-play{position:absolute;right:10px;bottom:10px;width:40px;height:40px;padding:0;line-height:1;border-radius:50%;border:1px solid rgba(255,255,255,.35);background:rgba(0,0,0,.55);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;transition:background .15s,transform .15s}
+.lb-mw-play i{font-size:22px;line-height:1}
+.lb-mw-play:hover{background:rgba(124,58,237,.85);transform:scale(1.06)}
+@media (max-width:640px){
+  .lb-mw-play{width:34px;height:34px;right:8px;bottom:8px}
+  .lb-mw-play i{font-size:19px}
+}
+
+/* ===== v6777（用户口径 2026-11-15）：租借记录浮窗 —— 实时区全部展开、历史紧随其后 ===== */
+/* 背景：v6757 给 #lbBorrowLive 设 flex:0 1 auto + min-height:0 ⇒ 被历史区挤压，
+   实测声明高 52px 而内容 142px（第二张实时卡被裁）；且其内层 div 有内联 max-height:26vh。
+   新口径：实时区有多少显示多少（不滚动）→ 再显示历史；超高时整个浮窗滚动。
+   注：全部加 #lbBorrowHistOv 前缀，不影响墓碑记录浮窗。 */
+#lbBorrowHistOv .lw-body{overflow-y:auto}
+#lbBorrowHistOv #lbBorrowLive{flex:0 0 auto;min-height:0;max-height:none;overflow:visible}
+#lbBorrowHistOv #lbBorrowLive > div{max-height:none;overflow:visible}
+#lbBorrowHistOv #lbBorrowList{flex:0 0 auto;min-height:0}
+#lbBorrowHistOv #lbBorrowList .lb-hist-scroll{flex:none;overflow:visible}
+
+/* ===== v6783（用户口径 2026-11-16）：任务进度块统一为「独立圆角框」 =====
+   与角色选择浮窗的权限浮条同风格：8px 圆角 + 四边细边框 + 略亮底色 + 投影。
+   覆盖全项目所有 .lb-task-slot（服务器控制 / 安全回档 / 综合更新 / 任务面板 …）。
+   框内首行「任务进度」原本有 border-top（分隔用），进框后变成框内多余横线 ⇒ 去掉。 */
+.lb-task-slot{
+  border:1px solid #2f2f40;
+  border-radius:8px;
+  background:#1c1c26;
+  box-shadow:0 2px 10px rgba(0,0,0,.35);
+  padding:8px 10px;
+  margin:10px 0 6px;
+  box-sizing:border-box;
+  min-height:0;
+}
+.lb-task-slot>.lb-task-sec,
+.lb-task-slot .lb-task-sec:first-child{
+  margin:0 0 6px;
+  padding-top:0;
+  border-top:0;
+}
+.lb-task-slot .lb-srvctl-qline{margin:6px 0 6px}
+
+/* ===== v6817（用户口径 2026-11-17「单行输入框太矮 + 鼠标移上去右侧会出现滚动条」）=====
+   number input 的上下箭头（::-webkit-inner-spin-button）Chrome **只在 hover/focus 时渲染**，
+   在深色底上宽约 14px 的白色小块，看起来就像一条小滚动条 ⇒ 全部隐藏，输入仍可用键盘/滚轮。
+   输入框高度由 app_core.js 的 lbPcfgCtrl() common padding 统一加高（主 7px 8px / 分服 4px 7px）。 */
+#lbPcfgList input[type=number]{-moz-appearance:textfield;appearance:textfield}
+#lbPcfgList input[type=number]::-webkit-outer-spin-button,
+#lbPcfgList input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;appearance:none;margin:0}
+
+/* v6823（用户口径「一功能多键位」）：备选键位前的「或」分隔 —— 小字灰色，紧贴键帽 */
+.lb-km-or{font-size:10px;color:#6b7280;margin:0 2px 0 3px;line-height:1;vertical-align:middle}
+
+/* v6824：键位「绑到该键」二选一卡片（覆盖主键 / 加为备选键） */
+.lb-km-bch-body{padding:10px 14px 4px}
+.lb-km-bch-act{font-size:14px;color:#e6e8ef;font-weight:600;margin-bottom:8px}
+.lb-km-bch-cur{display:flex;align-items:center;flex-wrap:wrap;gap:2px;font-size:12px;color:#9aa0b5;min-height:22px}
+.lb-km-bch-foot{display:flex;gap:8px;padding:10px 14px 14px}
+.lb-km-bch-foot .lb-hf-aibtn{height:32px}
+
+/* v6827（用户口径「要分成多键」）：一个键 = 一个圆角按钮 / 键块 */
+.lb-km-c .lb-km-key{margin:0 1px}
+.lb-km-key.na-wrap{background:transparent;border:0;box-shadow:none;padding:0 2px;min-width:0}
+.lb-km-kvb{display:inline-flex;align-items:center;justify-content:center;gap:1px;min-width:32px;height:30px;padding:2px 5px;border-radius:7px;background:#33333d;border:1px solid #3a3a4a;box-shadow:inset 0 -2px 0 #26262e;margin:0 1px}
+.lb-km-kvb.cus{background:#3a2f55;border-color:#4a3f6e;box-shadow:inset 0 -2px 0 #2a2140}
+/* v6827：组合键「已启用」= .set（弱化），只有「当前编辑模式」用 .on（强调） */
+.lb-km-pchord.set{background:transparent;border-color:#4a3f6e;color:#c4b5fd}
+
+/* v6828：键钮组横向并排（组合键+主键 = 1 组，备选键各 1 组） */
+.lb-km-c .lb-km-key{margin:0 2px;vertical-align:middle}
+.lb-km-kvb{vertical-align:middle}
+/* v6828：备选模式下的浮窗标签与说明 */
+.lb-km-seltag{display:inline-block;font-size:10.5px;color:#8a8a9c;border:1px solid #3a3a4a;border-radius:4px;padding:0 4px;margin-right:5px;line-height:15px;vertical-align:middle}
+.lb-km-alttip{font-size:10.5px;color:#7a7a8c;margin-top:4px}

@@ -2858,8 +2858,10 @@ function lbGKeySave(btn){
   if(!a || !a.user){ if(msg) msg.innerHTML = '<span style="color:#ef4444">未登录</span>'; return; }
   var v = (el && el.value || '').trim();
   if(!v){ if(msg) msg.innerHTML = '<span style="color:#f59e0b">请输入 API Key（留空＝不修改）</span>'; return; }
-  if(!/^AIza[0-9A-Za-z_-]{20,}$/.test(v)){
-    if(msg) msg.innerHTML = '<span style="color:#f59e0b">格式不像 Google API Key（应以 AIza 开头）</span>';
+  /* v6499：飞书格式 cli_xxx|app_secret 与 Google API Key 二选一 */
+  var _isFs = /^cli_[A-Za-z0-9_-]+\|.+$/.test(v);
+  if(!_isFs && !/^AIza[0-9A-Za-z_-]{20,}$/.test(v)){
+    if(msg) msg.innerHTML = '<span style="color:#f59e0b">格式不符：应为 AIza... （Google）或 cli_xxx|app_secret（飞书）</span>';
     return;
   }
   var old = btn ? btn.innerHTML : '';
@@ -2878,6 +2880,51 @@ function lbGKeySave(btn){
   }).catch(function(e){
     if(btn){ btn.disabled = false; btn.style.opacity = ''; btn.innerHTML = old; }
     if(msg) msg.innerHTML = '<span style="color:#ef4444">' + escapeHtml(String((e && e.message) || e)) + '</span>';
+  });
+}
+/* v6499：测试飞书凭据 —— 后端换 tenant_access_token 并试下载 1KB，逐步回报 */
+function lbFsTest(btn){
+  /* v6499b：修复「esc」未定义导致点击无反应（全局只有 escapeHtml） */
+  var msg = document.getElementById('lbGKeyMsg');
+  var old = btn ? btn.innerHTML : '';
+  var _e = (typeof escapeHtml === 'function') ? escapeHtml : function(x){ return String(x == null ? '' : x); };
+  var done = function(html){
+    if(btn){ btn.disabled = false; btn.style.opacity = ''; btn.innerHTML = old; }
+    if(msg) msg.innerHTML = html;
+  };
+  var a = null; try{ a = JSON.parse(localStorage.getItem('dinoAuth') || 'null'); }catch(e){}
+  if(!a || !a.user){ done('<span style="color:#ef4444">未登录（请先登录痒痒服搞事系统）</span>'); return; }
+  if(btn){ btn.disabled = true; btn.style.opacity = '.5'; btn.innerHTML = '⏳ 测试中…'; }
+  if(msg) msg.innerHTML = '<span style="color:#9ca3af">正在测试…</span>';
+  fetch(lbSrvDomainApiBase() + '/api/fs/test?username=' + encodeURIComponent(a.user)
+        + '&nick=' + encodeURIComponent(a.nick || ''), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file_token: 'DD7ZbO0ylo4CAMxyYrlcWyqon6e' })
+  }).then(function(r){
+    return r.text().then(function(tx){
+      var j = null;
+      try{ j = JSON.parse(tx); }catch(e1){ j = { ok: false, error: 'HTTP ' + r.status + ' ' + String(tx || '').slice(0, 120) }; }
+      return { s: r.status, j: j };
+    });
+  })
+  .then(function(x){
+    var j = x.j || {};
+    var steps = j.steps || [];
+    var st = steps.length ? steps.map(function(s){
+      var okTag = s.ok ? '<span style="color:#22c55e">OK</span>' : '<span style="color:#ef4444">FAIL</span>';
+      return okTag + ' ' + _e(String(s.step || '')) + (s.http ? (' [HTTP ' + s.http + ']') : '')
+        + (s.bytes ? (' ' + s.bytes + 'B') : '') + (s.msg ? (' ' + _e(String(s.msg)).slice(0, 200)) : '');
+    }).join('<br>') : ('<span style="color:#f59e0b">无步骤返回（HTTP ' + x.s + '）：' + _e(String(j.error || j.msg || '')) + '</span>');
+    /* v6505：展示自动发现的文档附件（file_token 由后端从文档块解析，无需手填） */
+    var _fl = j.zh_files || [];
+    var ft = _fl.length ? ('<div style="margin-top:5px;color:#9ca3af">文档附件 ' + _fl.length + ' 项（自动发现）：</div>'
+      + _fl.map(function(f){
+          return '<div style="color:#bbb">· ' + _e(String(f.name || '?')) + '</div>';
+        }).join('')) : '';
+    var fe = j.zh_files_err ? ('<div style="color:#ef4444;margin-top:4px">附件列表失败：' + _e(String(j.zh_files_err)).slice(0, 200) + '</div>') : '';
+    done('<span style="color:#9ca3af">凭据类型：' + _e(String(j.kind || '无')) + '</span><br>' + st + ft + fe);
+  }).catch(function(e){
+    done('<span style="color:#ef4444">请求失败：' + _e(String((e && e.message) || e)) + '</span>');
   });
 }
 /* v6458：「测试直连」—— 后端给出带 key 的 Drive v3 URL，浏览器实际拉 64 字节验证 CORS+权限 */
@@ -3262,6 +3309,51 @@ function lbIpDrillRun(btn){
   else if (window.confirm(note)) fly();
 }
 
+/* ===== v6670（用户口径「系统管理 里面的 较独立的功能 应该做成折叠块」）=====
+   系统管理原来是一页 14 个模块平铺直下，要滚很久才能看到下面的。
+   这里在 innerHTML 落地后，把「较独立的功能」模块自动包装成 <details> 折叠块：
+     · 判定依据：模块外层 div 的 style 含 margin-top:18px（= 原来的分隔块），
+       所以「管理员信息 / 游戏切换 / 方舟运维按钮组」这类非独立块不会被误包
+     · 模块的第一个子 div 作为 <summary> 标题（保留原 emoji / mdi 图标）
+     · 默认全部收起；**不记忆**展开状态；手风琴互斥（同时只展开一个）
+   不改 HTML 结构的原因：14 个模块各有一对开/闭锚点，静态改造锚点风险远高于运行时包装。 */
+function lbSysFoldify(host){
+  if (!host) return;
+  var kids = Array.prototype.slice.call(host.children);
+  kids.forEach(function(c){
+    try {
+      if (!c || c.tagName !== 'DIV') return;
+      var st = c.getAttribute('style') || '';
+      if (st.indexOf('margin-top:18px') < 0) return;       /* 只处理模块分隔块 */
+      var hd = c.firstElementChild;
+      if (!hd || hd.tagName !== 'DIV') return;
+      if (!hd.nextElementSibling) return;                  /* 只有标题没内容 ⇒ 不是模块 */
+      var d = document.createElement('details');
+      d.className = 'lb-sys-fold';
+      d.setAttribute('ontoggle', 'lbSysFoldToggle(this)');
+      var sm = document.createElement('summary');
+      sm.innerHTML = hd.innerHTML;
+      c.removeChild(hd);
+      while (c.firstChild) d.appendChild(c.firstChild);
+      d.insertBefore(sm, d.firstChild);
+      c.removeAttribute('style');
+      if (c.parentNode) c.parentNode.replaceChild(d, c);
+    } catch (e_one) {}
+  });
+}
+/* 手风琴互斥：打开一个就关掉同一容器里的其它折叠块（不记忆，每次打开系统管理都从全收起开始） */
+function lbSysFoldToggle(el){
+  if (!el || !el.open) return;
+  var host = el.parentNode;
+  if (!host) return;
+  var all = host.querySelectorAll('.lb-sys-fold');
+  for (var i = 0; i < all.length; i++){
+    if (all[i] !== el && all[i].open){
+      all[i].open = false;      /* 触发对方的 toggle 时 open=false ⇒ lbSysFoldToggle 立刻 return，不会递归 */
+    }
+  }
+}
+
 function lbOpenServerAdminModal(){
   var auth = null;
   try{ auth = JSON.parse(localStorage.getItem('dinoAuth') || 'null'); }catch(e){}
@@ -3270,7 +3362,7 @@ function lbOpenServerAdminModal(){
   var overlay = document.createElement('div'); overlay.className='lb-picker-overlay lb-fs';
   overlay.onclick = function(e){ if(e.target===overlay) overlay.remove(); };
   var inp = 'width:100%;box-sizing:border-box;padding:8px 10px;border-radius:6px;border:1px solid #333;background:#12121a;color:#ddd;margin-bottom:8px;font-size:13px';
-  var selArrow = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")";
+  var selArrow = "url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23888%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpolyline points=%226 9 12 15 18 9%22/%3E%3C/svg%3E')";   /* v6807：改单引号+%22 编码，否则双引号截断外层 style 属性 */
   var selExtra = ';appearance:none;-webkit-appearance:none;background-image:'+selArrow+';background-repeat:no-repeat;background-position:right 14px center;background-size:12px 12px';
   var btn = 'padding:7px 14px;border-radius:6px;border:none;background:#7c3aed;color:#fff;cursor:pointer;font-size:13px';
   var srvOpts = (LB.SERVERS||[]).map(function(s){ return '<option value="'+s.abbr+'">'+s.abbr+' '+s.name+'</option>'; }).join('');
@@ -3338,13 +3430,16 @@ function lbOpenServerAdminModal(){
     + '</div>'
     /* v6458（用户口径）：Google API Key —— Drive API v3，浏览器「部署到本机」直连源站用 */
     + '<div style="margin-top:18px;padding-top:14px;border-top:1px solid #2a2a3a">'
-    + '<div style="font-size:13px;font-weight:bold;color:#ddd;margin-bottom:6px">🔑 Google API Key（Drive v3）</div>'
-    + '<div style="font-size:11px;color:#666;margin-bottom:6px">「部署到本机」直连 Google Drive 下载汉化包用（仅存服务器本地，前端只显示尾号）'
-    + ' · 获取：console.cloud.google.com → 启用 Drive API → 创建 API 密钥 → 限制网站 ' + 'dino.whiterober.ccwu.cc/*' + '</div>'
-    + '<input id="lbGKey" type="password" style="'+inp+'" placeholder="Google API Key（AIza...）" autocomplete="new-password">'
+    + '<div style="font-size:13px;font-weight:bold;color:#ddd;margin-bottom:6px">🔑 云盘凭据（Google API Key / 飞书 App）</div>'
+    + '<div style="font-size:11px;color:#666;margin-bottom:6px">汉化包自动取源用，<b>二选一</b>（仅存服务器本地，前端只显示尾号）'
+    /* v6505：Google Drive 目录里 3 个包全带 Trad（繁体），简体只放飞书文档附件 */
+    + '<br>· <b style="color:#f59e0b">飞书（推荐）</b>：<code>cli_xxxxx|app_secret</code>（open.feishu.cn/app → 自建应用 → 凭证与基础信息）—— <b>简体包</b>源'
+    + '<br>· Google：<code>AIza...</code>（console.cloud.google.com → 启用 Drive API → 创建 API 密钥）—— <b style="color:#ef4444">Drive 目录是繁体包</b>' + '</div>'
+    + '<input id="lbGKey" type="password" style="'+inp+'" placeholder="AIza... 或 cli_xxx|app_secret" autocomplete="new-password">'
     + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
     + '<button onclick="lbGKeySave(this)" style="'+btn+'">保存 Key</button>'
     + '<button onclick="lbGKeyTest(this)" style="padding:7px 14px;border-radius:6px;border:1px solid #333;background:transparent;color:#bbb;cursor:pointer;font-size:13px">测试直连</button>'
+    + '<button onclick="lbFsTest(this)" style="padding:7px 14px;border-radius:6px;border:1px solid #333;background:transparent;color:#bbb;cursor:pointer;font-size:13px">测试飞书凭据</button>'
     + '<span id="lbGKeyMsg" style="font-size:11px;color:#888"></span>'
     + '</div>'
     + '</div>'
@@ -3411,11 +3506,26 @@ function lbOpenServerAdminModal(){
     + '</div>'
     + '<pre id="lbUpdDryOut" style="display:none;margin:8px 0 0;padding:8px 10px;border-radius:6px;background:#0b1020;border:1px solid rgba(255,255,255,.08);color:#a5f3fc;font-size:11px;line-height:1.65;max-height:240px;overflow:auto;white-space:pre-wrap;word-break:break-all"></pre>'
     + '</div>'
+    /* v6668（用户口径「回档 的预演 应该可以在系统管理里 可配」）：安全回档预演
+       —— 与「服务器更新预演」同款持久开关；回档必须先选服选档，故不做「一键全 11 台」 */
+    + '<div style="margin-top:18px;padding-top:14px;border-top:1px solid #2a2a3a">'
+    + '<div style="font-size:13px;font-weight:bold;color:#ddd;margin-bottom:6px">🔁 安全回档预演</div>'
+    + '<div style="font-size:11px;color:#666;margin-bottom:8px">开启后，安全回档点「执行回档」也<b style="color:#f59e0b">只跑到风险闸门</b>：不停服、不备份、不换档、不启动。<span style="color:#4b5563">（为取准确名单，仍会先 saveworld 一次）</span></div>'
+    + '<div id="lbArkBkDryInfo" style="margin-bottom:10px;padding:8px 10px;background:#12121a;border:1px solid #2a2a3a;border-radius:6px;font-size:11px;color:#6b7280">读取中…</div>'
+    + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">'
+    + '<button id="lbArkBkDryBtnDefault" onclick="lbArkBkDryToggle(this)" style="padding:6px 12px;border-radius:6px;border:1px solid #333;background:transparent;color:#6b7280;cursor:pointer;font-size:12px">默认预演：—</button>'
+    + '</div>'
+    + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+    + '<button onclick="lbArkBkDryGo()" style="' + btn + '"><i class="mdi mdi-backup-restore"></i> 去预演（打开安全回档）</button>'
+    + '<button onclick="lbArkBkDryLoad()" style="padding:5px 12px;border-radius:6px;border:1px solid #333;background:transparent;color:#bbb;cursor:pointer;font-size:12px">刷新状态</button>'
+    + '<span id="lbArkBkDryMsg" style="font-size:11px;color:#888"></span>'
+    + '</div>'
+    + '</div>'
     /* v6241（B4，用户口径）：汉化补丁 —— 下载地址可配 + 变体 + 云端/本地/各服状态 + 下载解压
        ⚠ 字體補丁（HLN-A/winhttp.dll）属玩家客户端，服务端不装，故此处不提供任何 DLL 开关 */
     + '<div style="margin-top:18px;padding-top:14px;border-top:1px solid #2a2a3a">'
     + '<div style="font-size:13px;font-weight:bold;color:#ddd;margin-bottom:6px">📥 汉化补丁</div>'
-    + '<div style="font-size:11px;color:#666;margin-bottom:8px">从作者 Google Drive 取「恐龙&amp;物品双语」包，<b style="color:#22d3ee">只解出 3 个 _P 文件</b>（包内 HLN-A/PDF/PNG 全部跳过）。<span style="color:#4b5563">下载约 124 MB，仅写 D:\Cache-zh</span></div>'
+    + '<div style="font-size:11px;color:#666;margin-bottom:8px">从云盘源取「恐龙&amp;物品双语」包（飞书＝简体 / Google Drive＝繁体），<b style="color:#22d3ee">只解出 3 个 _P 文件</b>（包内 HLN-A/PDF/PNG 全部跳过）。<span style="color:#4b5563">下载约 124 MB，仅写 D:\Cache-zh</span></div>'
     + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center">'
     + '<input id="lbZhFolderUrl" type="text" placeholder="https://drive.google.com/drive/folders/&lt;id&gt;" style="flex:1;min-width:240px;padding:5px 8px;border-radius:6px;border:1px solid #333;background:#12121a;color:#ddd;font-size:11.5px">'
     + '<select id="lbZhVariant" style="padding:5px 8px;border-radius:6px;border:1px solid #333;background:#12121a;color:#ddd;font-size:11.5px">'
@@ -3426,7 +3536,7 @@ function lbOpenServerAdminModal(){
     + '</div>'
     + '<div id="lbZhInfo" style="margin-bottom:10px;padding:8px 10px;background:#12121a;border:1px solid #2a2a3a;border-radius:6px;font-size:11px;color:#6b7280">读取中…</div>'
     + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
-    + '<button id="lbZhPrepareBtn" onclick="lbZhPrepare(this)" style="' + btn + '"><i class="mdi mdi-download"></i> 更新本地包</button>'
+    + '<button id="lbZhPrepareBtn" onclick="lbZhPrepare(this)" style="' + btn + '"><i class="mdi mdi-download"></i> 更新缓存</button>'
     + '<button onclick="lbZhCheck(this)" style="padding:5px 12px;border-radius:6px;border:1px solid #333;background:transparent;color:#bbb;cursor:pointer;font-size:12px">重新检查云端</button>'
     + '<button onclick="lbZhLoad()" style="padding:5px 12px;border-radius:6px;border:1px solid #333;background:transparent;color:#bbb;cursor:pointer;font-size:12px">刷新状态</button>'
     + '<span id="lbZhMsg" style="font-size:11px;color:#888"></span>'
@@ -3436,10 +3546,14 @@ function lbOpenServerAdminModal(){
     + '</div>';  // v6076：收面板
   overlay.innerHTML = html;
   document.body.appendChild(overlay);
+  /* v6670（用户口径「系统管理 里面的 较独立的功能 应该做成折叠块」）：
+     渲染落地后把独立功能模块包成折叠块（默认收起 / 手风琴互斥 / 不记忆） */
+  try { lbSysFoldify(overlay.querySelector('.lw-body')); } catch (eF) {}
   lbSrvDomainLoad();
   try{ lbBackendProbe(); }catch(eB){ }   /* v6155：开窗即拉一次后端状态 */
   try{ lbIpDrillLoad(); }catch(eD){ }    /* v6218：IP 切换演练状态 */
   try{ lbUpdDryLoad(); }catch(eU){ }     /* v6233：服务器更新预演状态 */
+  try{ lbArkBkDryLoad(); }catch(eA){ }   /* v6668：安全回档预演状态 */
   try{ lbZhLoad(); }catch(eZ){ }         /* v6241：汉化补丁状态 */
 }
 // ===== 2026-10-27：服务器规则（后端 /api/cfg_rules，逐服查询，绝不自动轮询）=====
@@ -5805,9 +5919,13 @@ function lbUpdTgUsable(){
   var zhOk = _zhReady ? (((Z0.behind) || []).length > 0) : false;
   /* v6284：MOD / API 分发可用性（MOD 看策略差集；API 还受缓存就绪硬门控） */
   var modOk = (typeof lbUpdModsNeed === 'function') ? (lbUpdModsNeed() > 0) : false;
-  /* v6307（用户口径）：「分发」勾选**不再置灰** —— 即便缓存未就绪/无待分发项也允许点，
-     由确认浮窗说明原因并提供「强制分发」。 */
-  return { server: svOk, zh: zhOk, mod: modOk, api: true };
+  /* v6510（用户口径「API 如果全绿 分发按钮不应该置灰么」）：
+     API 卡右上角「分发」勾选**按真实是否有活干**判定 ——
+       lbUpdApiNeed() 统计：必需插件缺装数 + 库需升级 + 无缓存（有活干）
+     == 0 即「全绿」⇒ 置灰不可勾（v6307 的恒 true 已废弃；
+     缓存未就绪那种"不能分发"仍由卡片自己的 tips + 后端 gate 拦，不影响此处可勾） */
+  var apiOk = (typeof lbUpdApiNeed === 'function') ? (lbUpdApiNeed() > 0) : false;
+  return { server: svOk, zh: zhOk, mod: modOk, api: apiOk };
 }
 function lbUpdTgList(){
   var t = lbUpdTgGet(), a = [], u = lbUpdTgUsable();
@@ -6054,7 +6172,7 @@ function lbUpdBadge(s, d){
            cls: (same ? '' : ' mis'), title: tip };
 }
 /* ===== v6228（P2，用户口径）：**单一分发确认浮窗** =====
-   方案 §14.4：版本类型【1】+ AsaApi 缓存【2】+ 分发范围【3】三区块整合在**一个**浮窗内，
+   方案 §14.4：版本类型【1】+ 库偏移表【2】+ 分发范围【3】三区块整合在**一个**浮窗内，
    一次确认完成全部决策（不拆成多个串联弹窗）。
    ⚠ 不新建顶层浮窗：复用 #lbUpd body 内的绝对定位覆盖层，
      避免 app.css 浮窗白名单三处漏改（v6208 / v6032 各踩过一次）。
@@ -6287,20 +6405,30 @@ function lbUpdConfirmLoad(){
   });
 }
 
-/* AsaApi 缓存判定：优先用「强制重抓」的 api_cache 现算（后端 asaapi 可能是几秒前的快照）
+/* 库偏移表判定：优先用「强制重抓」的 api_cache 现算（后端 asaapi 可能是几秒前的快照）
    判据（§14.3）：规范化后含 'automated cache build: success' 即就绪 —— **唯一精确串** */
 function lbUpdAsaApiState(){
+  /* v6543（用户口径「当前情况为啥需要这种提示」）：**判据只留后端一份** ——
+     前端这里原来又实现了一遍，而且同样只看最后一条（cards[len-1] = 'safe! dig in'）
+     ⇒ 后端已判 ready，前端却判 building ⇒ 明明已就绪还弹「我已知悉插件可能失效」+「仍要分发」。
+     后端 /api/update/status 的 asaapi 已按「从最新往前扫」算好，直接用；仅在后端结果缺失时本地回退。 */
+  var be = (LB_UPD_CF.data || {}).asaapi;
+  if (be && typeof be === 'object' && be.state) return be;
   var cards = ((LB_UPD_CF.news || {}).cards) || [];
-  if (cards.length) {
-    var raw = String((cards[cards.length - 1] || {}).content || '');
-    var t = raw.replace(/<[^>]+>/g, ' ').replace(/[*_`]+/g, '')
-               .replace(/\s+/g, ' ').trim().toLowerCase();
-    var hit = t.indexOf('automated cache build: success') >= 0;
-    return { state: (hit ? 'ready' : 'building'), hit: hit, raw: raw,
-             text: raw.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
-             updated: (LB_UPD_CF.news || {}).updated || '', total: cards.length };
+  var _tidy = function(s){ return String(s || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(); };
+  for (var i = cards.length - 1; i >= 0; i--){
+    var raw = String((cards[i] || {}).content || '');
+    var t = raw.replace(/<[^>]+>/g, ' ').replace(/[*_`]+/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+    if (t.indexOf('automated cache build: success') >= 0){
+      return { state: 'ready', hit: true, raw: raw, text: _tidy(raw),
+               updated: (LB_UPD_CF.news || {}).updated || '', total: cards.length };
+    }
+    if (t.indexOf('update detected') >= 0 || t.indexOf('cache builder is running') >= 0){
+      return { state: 'building', hit: false, raw: raw, text: _tidy(raw),
+               updated: (LB_UPD_CF.news || {}).updated || '', total: cards.length };
+    }
   }
-  return (LB_UPD_CF.data || {}).asaapi || { state: 'unknown', hit: false, raw: '', text: '', total: 0 };
+  return { state: 'unknown', hit: false, raw: '', text: '', total: cards.length };
 }
 
 function lbUpdConfirmChk(v){
@@ -6313,13 +6441,14 @@ function lbUpdConfirmGo(){
   var aa = lbUpdAsaApiState();
   var vk = String(((LB_UPD_CF.data || {}).verKind || {}).kind || 'unknown');
   /* v6328（用户口径）：缓存门控只对「服务器本体」与「API」生效——
-     只发汉化/MOD 时，API 缓存未就绪不应拦。 */
+     只发汉化/MOD 时，库偏移表未就绪不应拦。 */
   var _tgG = (typeof lbUpdTgList === 'function') ? lbUpdTgList() : ['server'];
-  var _hasSvG = (_tgG.indexOf('server') >= 0), _hasApiG = (_tgG.indexOf('api') >= 0);
-  var _gateOnG = (_hasSvG || _hasApiG);
+  var _hasSvG = (_tgG.indexOf('server') >= 0);
+  /* v6543（用户口径）：库偏移表只门控「版本更新缓存（本体）」，不拦 API / 汉化 / MOD */
+  var _gateOnG = _hasSvG;
   var _gateOkG = (aa.state === 'ready') || (_hasSvG && vk === 'forced');
   if (_gateOnG && !_gateOkG && !LB_UPD_CF.chk) {
-    if (typeof lbToast === 'function') lbToast('缓存未就绪：请先勾选确认，或点【重新检查】');
+    if (typeof lbToast === 'function') lbToast('库偏移表未就绪：更新游戏本体前请先勾选确认，或点【重新检查】');
     return;
   }
   var cb = LB_UPD_CF.cb;
@@ -6362,7 +6491,7 @@ function lbUpdConfirmHtml(){
   var _zv1 = String((_zst1.remote || {}).ver || (_zst1.pkg || {}).ver || '');
   var _zpkg1 = _zst1.pkg || {};
   /* v6327（用户口径）：确认浮窗卡片顺序对齐父级 ——
-     本次更新 → 汉化包 → MOD → AsaApi 缓存 → 分发范围 */
+     本次更新 → 汉化包 → MOD → 库偏移表 → 分发范围 */
   var _tgMod0 = (_tgL.indexOf('mod') >= 0);
   var _M1 = (typeof LB_UPD !== 'undefined' && LB_UPD.mods) ? LB_UPD.mods : {};
   /* v6229：**停服台数必须取 /api/srvctl/status 的运行状态**
@@ -6415,7 +6544,7 @@ function lbUpdConfirmHtml(){
   /* v6236：仅在**首次加载**（尚无数据）时用整块提示占位；
      重新检查时保留原内容不闪白，反馈交给「检查中…」按钮 + 底部「上次检查」时刻。 */
   if (LB_UPD_CF.busy && !LB_UPD_CF.data) {
-    h += '<div style="color:#a5f3fc;font-size:12.5px;padding:16px 0">正在读取版本与 AsaApi 缓存…</div>';
+    h += '<div style="color:#a5f3fc;font-size:12.5px;padding:16px 0">正在读取版本与库偏移表…</div>';
   } else if (LB_UPD_CF.err && !LB_UPD_CF.data) {
     h += '<div style="color:#f87171;font-size:12.5px;padding:12px 0">读取失败：'
        + lbMdEsc(LB_UPD_CF.err) + '</div>';
@@ -6445,7 +6574,7 @@ function lbUpdConfirmHtml(){
       var _Mneed0 = Math.max(0, _Msc0 - _Mconf0);
     }
 
-    /* AsaApi 缓存段 */
+    /* 库偏移表段 */
 
     /* 分发范围（v6330：唯一保留的段） */
     var _tgMod2 = (_tgL.indexOf('mod') >= 0);
@@ -6461,7 +6590,7 @@ function lbUpdConfirmHtml(){
     }
     if (_tgApi2 && !ready) {
       _warns.push({ ic: 'mdi-shield-alert-outline',
-        t: '门控：AsaApi 缓存未就绪',
+        t: '门控：库偏移表未就绪',
         why: '未命中 "Automated Cache Build: SUCCESS"；官方最新消息：'
             + String(aa.text || '').slice(0, 120) + '（' + String(aa.updated || '-') + '）',
         risk: '强行替换 dll 后，若 offsets 与当前游戏版本不匹配，服务器可能起不来'
@@ -6469,14 +6598,14 @@ function lbUpdConfirmHtml(){
     }
     if (_tgHasZh && !_zrdy0) {
       _warns.push({ ic: 'mdi-download-off-outline',
-        t: '汉化包本地包未就绪',
-        why: '本地包未下载或未解压',
+        t: '汉化包缓存未就绪',
+        why: '缓存未下载或未解压',
         risk: '汉化部分会因缺源失败；服务器保持原状（不会损坏）' });
     }
     if (_tgMod2 && !_Mlp0.count) {
       _warns.push({ ic: 'mdi-package-variant-remove',
-        t: 'MOD 本地包未就绪',
-        why: '本地包未下载',
+        t: 'MOD 缓存未就绪',
+        why: '缓存未下载',
         risk: 'MOD 分发会因缺源失败；其余模块不受影响' });
     }
     var _warnHtml = '';
@@ -6553,7 +6682,7 @@ function lbUpdConfirmHtml(){
                + '<div style="font-size:11.5px;color:#9ca3af;line-height:1.85">'
                + (_tgHasZh ? ('汉化：云端 <b style="color:#22d3ee">'
                       + lbMdEsc(_zv1 ? ('V' + _zv1) : '未知') + '</b>'
-                      + ' · 本地包 ' + (_zrdy0 ? '<span style="color:#4ade80">已就绪</span>'
+                      + ' · 缓存 ' + (_zrdy0 ? '<span style="color:#4ade80">已就绪</span>'
                                                            : '<span style="color:#fbbf24">未下载</span>')
                       + ' · ' + (_zsel0
                             ? ('<b style="color:#fbbf24">' + _zsel0 + ' 服需升级</b>（全服 ' + _zneed0 + ' 服）')
@@ -6564,9 +6693,9 @@ function lbUpdConfirmHtml(){
                       ? ('<b style="color:#fbbf24">' + _Mneed0 + ' 服需分发</b>')
                       : '<span style="color:#4ade80">无待分发（所选服均已符合策略）</span>')
                     + '<br>') : '')
-               + (_tgApi2 ? ('API：' + (ready
-                      ? '<span style="color:#4ade80">缓存就绪，将补装非最新项</span>'
-                      : '<b style="color:#f87171">缓存未就绪（见下方门控）</b>')) : '')
+               + (_tgApi2 ? ('API：' + ((typeof lbUpdApiNeed === 'function' && lbUpdApiNeed() > 0)
+                      ? '<span style="color:#4ade80">将补装非最新项</span>'
+                      : '<span style="color:#4ade80">所选服库/插件均已最新</span>')) : '')
                + '</div>') : '')
        + _warnHtml
        + '</div>';
@@ -6576,9 +6705,10 @@ function lbUpdConfirmHtml(){
   /* v6236：重新检查期间**保留按钮区**（避免 3 秒空白像卡死），只把「确认分发」置灰 */
   if ((!LB_UPD_CF.busy && !LB_UPD_CF.err) || (LB_UPD_CF.busy && LB_UPD_CF.data)
       || (LB_UPD_CF.err && LB_UPD_CF.data)) {
-    /* v6328（用户口径）：原写死「API 缓存就绪 OR 强制更新」，导致没勾本体也叫「强制更新并分发」
+    /* v6328（用户口径）：原写死「库偏移表就绪 OR 强制更新」，导致没勾本体也叫「强制更新并分发」
        → 改为按本次勾选判定：仅当勾了本体或 API 才看缓存门控 */
-    var _gateOn = (_tgHasSv || _tgApi);
+    /* v6543（用户口径）：库偏移表只拦「本体」，不再把 API 拉进来 */
+    var _gateOn = _tgHasSv;
     var _gateOk = ready || (_tgHasSv && kind === 'forced');
     var needChk = (_gateOn && !_gateOk);
     var canGo = ((!_gateOn || _gateOk || LB_UPD_CF.chk) && !LB_UPD_CF.busy);
@@ -6592,7 +6722,7 @@ function lbUpdConfirmHtml(){
          + 'style="position:absolute;opacity:0;width:0;height:0;pointer-events:none">'
          + '<i class="mdi ' + (LB_UPD_CF.chk ? 'mdi-check' : 'mdi-checkbox-blank-outline')
          + '" style="font-size:14px"></i>'
-         + '<span>我已知悉插件可能失效</span></label>';
+         + '<span>我已知悉：本体升级后插件需跟着更新</span></label>';
     }
     h += '<span style="flex:1"></span>'
        + '<button onclick="lbUpdConfirmClose()" style="padding:7px 14px;border-radius:6px;'
@@ -6613,6 +6743,111 @@ function lbUpdConfirmHtml(){
 
   h += '</div></div>';
   return h;
+}
+
+/* ===== v6668（用户口径「回档 的预演 应该可以在系统管理里 可配」）：安全回档预演 =====
+   与「服务器更新预演」同款：持久开关存 server_config.json 的 arkbk_dry（全局 11 台共用），
+   后端 /api/arkbackup/execute 读它并**强制 dryRun** —— 前端就算传 false 也绕不过。
+   区别：回档必须指定「哪台服 + 哪个回档点」，所以这里不做「一键全 11 台」，
+        只放开关 +「去预演」跳转（打开安全回档浮窗，由它选服选档）。
+   注意：预演仍会先 saveworld 一次（为取准确名单），之后停在闸门：不停服 / 不备份 / 不换档 / 不启动。 */
+var LB_ARKBK_DRY = { cfg: null, busy: false, at: 0 };
+
+function lbArkBkDryIsOn(){
+  var c = LB_ARKBK_DRY.cfg || {};
+  return !!c.arkbk_dry;
+}
+function lbArkBkDryPaint(){
+  var box = document.getElementById('lbArkBkDryInfo');
+  var sw = document.getElementById('lbArkBkDryBtnDefault');
+  var on = lbArkBkDryIsOn();
+  if (sw){
+    sw.textContent = '默认预演：' + (on ? '开' : '关');
+    sw.style.borderColor = (on ? '#f59e0b' : '#4ade80') + '88';
+    sw.style.color = (on ? '#f59e0b' : '#4ade80');
+    sw.disabled = !!LB_ARKBK_DRY.busy;
+    sw.style.opacity = LB_ARKBK_DRY.busy ? '.55' : '';
+  }
+  if (!box) return;
+  var dot = function(txt, col){
+    return '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:' + col
+         + ';margin-right:5px;vertical-align:1px"></span>' + txt;
+  };
+  var row = function(k, v){
+    return '<div style="display:flex;gap:8px;line-height:1.75"><span style="color:#6b7280;min-width:64px;flex:0 0 auto">'
+         + k + '</span><span style="color:#b9c0d0;word-break:break-all">' + v + '</span></div>';
+  };
+  box.innerHTML =
+      row('模式', on ? dot('默认预演（点「执行回档」也只跑到闸门）', '#f59e0b')
+                     : dot('真跑（停服 → 备份 → 换档 → 启动）', '#f87171'))
+    + row('范围', '全部 11 台共用这一个开关')
+    + row('预演做什么', '先 saveworld 一次 → 强制重解析当前档 → 跑风险闸门；之后<b style="color:#f59e0b">停下</b>');
+}
+function lbArkBkDryLoad(force){
+  var box = document.getElementById('lbArkBkDryInfo');
+  if (box) box.innerHTML = '<div style="color:#6b7280">读取中…</div>';
+  var api = (typeof lbSrvCtlApi === 'function') ? lbSrvCtlApi() : '';
+  if (!api) return null;
+  return lbSrvCtlFetchW(api + '/api/server_config?t=' + Date.now(), { cache: 'no-store' })
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(o){
+      if (o){ LB_ARKBK_DRY.cfg = o; LB_ARKBK_DRY.at = Date.now(); }
+      if (box){
+        if (!o) box.innerHTML = '<div style="color:#f87171">读取失败（后端无响应）</div>';
+        else lbArkBkDryPaint();
+      }
+      /* v6669：底栏按钮文案已不再随预演状态变化；这里只保证回档浮窗开着时状态新鲜 */
+      try {
+        var ov = document.getElementById('lbArkBk');
+        if (ov && ov.classList && ov.classList.contains('show')) lbArkBkRender();
+      } catch (e_r) {}
+    })
+    .catch(function(){
+      if (box) box.innerHTML = '<div style="color:#f87171">读取失败（后端无响应）</div>';
+    });
+}
+function lbArkBkDryToggle(){
+  if (LB_ARKBK_DRY.busy) return;
+  var next = !lbArkBkDryIsOn();
+  var a = null; try{ a = JSON.parse(localStorage.getItem('dinoAuth') || 'null'); }catch(e){}
+  if (!a || !a.user){ if (typeof lbToast === 'function') lbToast('未登录'); return; }
+  var msg = document.getElementById('lbArkBkDryMsg');
+  var warn = next
+    ? '开启「默认预演」后，安全回档点「执行回档」也**只跑到风险闸门**：不停服、不备份、不换档、不启动。\n\n（为取准确名单，仍会先 saveworld 一次）'
+    : '关闭「默认预演」后，安全回档点「执行回档」会**真的停服、备份、换档、启动**。';
+  var fly = function(){
+    LB_ARKBK_DRY.busy = true;
+    lbArkBkDryPaint();
+    if (msg){ msg.style.color = '#888'; msg.textContent = '保存中…'; }
+    lbSrvCtlFetchW(lbSrvCtlApi() + '/api/server_config?username=' + encodeURIComponent(a.user)
+          + '&nick=' + encodeURIComponent(a.nick || ''), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ arkbk_dry: next })
+    }).then(function(r){ return r.json().then(function(j){ return { s: r.status, j: j }; }); })
+      .then(function(x){
+        LB_ARKBK_DRY.busy = false;
+        if (x.s !== 200){
+          if (msg){ msg.style.color = '#f87171'; msg.textContent = '保存失败：' + ((x.j && x.j.error) || ('HTTP ' + x.s)); }
+          lbArkBkDryPaint();
+          return;
+        }
+        LB_ARKBK_DRY.cfg = LB_ARKBK_DRY.cfg || {};
+        LB_ARKBK_DRY.cfg.arkbk_dry = next;
+        if (msg){ msg.style.color = '#4ade80'; msg.textContent = '已保存（所有人共享）'; }
+        lbArkBkDryPaint();
+        try{ lbToast('默认预演已' + (next ? '开启' : '关闭')); }catch(e){}
+      }).catch(function(e){
+        LB_ARKBK_DRY.busy = false;
+        if (msg){ msg.style.color = '#f87171'; msg.textContent = '保存失败：' + String((e && e.message) || e); }
+        lbArkBkDryPaint();
+      });
+  };
+  if (typeof lbAsk === 'function') lbAsk(warn, fly, next ? '确定开启' : '确定关闭');
+  else fly();
+}
+/* 「去预演」：回档必须先选服选档，所以这里只负责把安全回档浮窗拉起来（层级由 lbZOpen 抬高） */
+function lbArkBkDryGo(){
+  try { if (typeof lbArkBkOpen === 'function') lbArkBkOpen(); } catch (e) {}
 }
 
 /* ===== v6233（用户口径）：系统管理 → 「服务器更新预演」 =====
@@ -6790,7 +7025,7 @@ function lbUpdDryRun(btn){
           if (z.needUpd) zn++;
           lines.push(String(z.srv || '?') + '　当前 ' + (z.curVer || '?')
                    + ' → ' + (z.toVer || '?') + '　' + st
-                   + (z.ready ? '' : '　[本地包未就绪]')
+                   + (z.ready ? '' : '　[缓存未就绪]')
                    + (z.conflict ? '　[多包冲突]' : '')
                    + (z.err ? '　[' + z.err + ']' : ''));
         });
@@ -6815,9 +7050,13 @@ function lbUpdDryRun(btn){
    ⚠ 字體補丁（HLN-A/winhttp.dll）属玩家客户端，服务端完全不装，前端不提供任何开关。 */
 var LB_ZH = { st: null, busy: false, msg: '', poll: 0 };
 
-function lbZhFetch(local){
+function lbZhFetch(local, force){
   var api = lbSrvCtlApi();
-  var p = lbSrvCtlFetchW(api + '/api/zh/status' + (local ? '?local=1&' : '?') + 't=' + Date.now(),
+  /* v6494：新增 force（绕过 30 分钟远端 TTL）—— 展开汉化胶囊时用于「和 Google 比」 */
+  var _q = [];
+  if (local) _q.push('local=1');
+  if (force) _q.push('force=1');
+  var p = lbSrvCtlFetchW(api + '/api/zh/status' + (_q.length ? ('?' + _q.join('&') + '&') : '?') + 't=' + Date.now(),
                          { cache: 'no-store' })
             .then(function (r) { return r.ok ? r.json() : null; })
             .catch(function () { return null; });
@@ -6870,7 +7109,7 @@ function lbZhPaintSys(){
   var lsP = probe.ls || {}, dlP = probe.dl || {};
   box.innerHTML =
       row('版本变体', lbMdEsc(varMap[String(cfg.variant || '')] || String(cfg.variant || '-')))
-    + row(String(rem.src || '') === 'local_cache' ? '本地版本' : '云端最新',
+    + row(String(rem.src || '') === 'local_cache' ? '缓存版本' : '云端最新',
           (rem.ok ? dot('V' + lbMdEsc(String(rem.ver || '?')), '#4ade80') : dot('未获取', '#6b7280'))
         + (rem.ok ? '　<span style="color:#6b7280">' + lbMdEsc(String((rem.asset || {}).name || '')) + '</span>' : '')
         + (rem.err ? '　<span style="color:#f87171">' + lbMdEsc(String(rem.err)) + '</span>' : ''))
@@ -6881,7 +7120,7 @@ function lbZhPaintSys(){
         + '　' + (dlP.ok ? dot('下载域名 ' + dlP.ms + 'ms', '#4ade80')
                             : (dlP.ok === undefined ? dot('下载域名未检测', '#6b7280')
                                                     : dot('下载域名失败', '#f87171'))))
-    + row('本地包', (pkg.ready ? dot('已就绪 V' + lbMdEsc(String(pkg.ver || '')), '#4ade80')
+    + row('缓存', (pkg.ready ? dot('已就绪 V' + lbMdEsc(String(pkg.ver || '')), '#4ade80')
                      : (pkg.downloaded ? dot('已下载未解压', '#fbbf24') : dot('未下载', '#6b7280')))
         + '　<span style="color:#6b7280">' + lbMdEsc(String(pkg.cacheRoot || 'D:\\Cache-zh')) + '</span>')
     + row('各服', (needN ? '<b style="color:#fbbf24">' + needN + ' 台需升级</b>'
@@ -6930,8 +7169,8 @@ function lbZhPrepare(btn){
         if (sw) { sw.style.color = '#f87171'; }
         if (typeof lbToast === 'function') lbToast(LB_ZH.msg);
       } else if (j.already) {
-        /* v6246（用户口径）：本地包已是最新 -> 只提示，不启动下载 */
-        LB_ZH.msg = String(j.msg || ('当前本地包已是最新（V' + (j.ver || '') + '），无需更新'));
+        /* v6246（用户口径）：缓存已是最新 -> 只提示，不启动下载 */
+        LB_ZH.msg = String(j.msg || ('当前缓存已是最新（V' + (j.ver || '') + '），无需更新'));
         if (sw) { sw.style.color = '#4ade80'; }
         if (typeof lbToast === 'function') lbToast(LB_ZH.msg);
       } else {
@@ -6965,7 +7204,7 @@ function lbZhPoll(n){
         var p = (j && j.prep) || {};
         if (p.running) lbZhPoll(n + 1);
         else if (p.phase === 'done') {
-          /* v6246：skipped = 本地包已是最新，msg 本身就是完整提示，不再加「已就绪：」前缀 */
+          /* v6246：skipped = 缓存已是最新，msg 本身就是完整提示，不再加「已就绪：」前缀 */
           LB_ZH.msg = (p.skipped ? '' : '已就绪：') + String(p.msg || '');
           if (typeof lbToast === 'function') lbToast(LB_ZH.msg);
           try { lbZhPaintSys(); } catch (e) {}
@@ -7146,8 +7385,26 @@ function lbUpdApiNeed(){
     n += ((P[nm] || {}).missing || []).length;
   });
   if (A.libNeedsUpgrade) n += 1;                       /* 库需升级也算一项 */
+  /* v6686（用户口径「明明 ServerOpsKitAPI 要升级，为啥不允许分发」）：
+     原实现只看「缺装 + 库落后官方 + 无缓存」，漏掉纯版本/文件差异 ⇒
+     「各服装 0.84、自研源已 0.8.5」被判成"全绿"，分发勾选被误置灰。
+     这里补两个判据：
+       ① 后端 apiNeed（与 _api_deploy_plan3 真实分发同源，按 dll 大小比对）为 true 的服数；
+       ② 插件已装版本 ≠ 权威版本（ServerOpsKitAPI = 自研源 localPack.srcVer）的服数。 */
+  var _nmA = A.apiNeed || {}, _cA = 0;
+  Object.keys(_nmA).forEach(function(k){ if (_nmA[k]) _cA++; });
+  if (_cA) n += _cA;
+  var _srcV = String((A.localPack || {}).srcVer || '');
+  var _sok = P.ServerOpsKitAPI || {};
+  if (_srcV && typeof lbVerCmp === 'function'){
+    var _pv = _sok.vers || {}, _cV = 0;
+    Object.keys(_pv).forEach(function(v){
+      if (String(v) && lbVerCmp(v, _srcV) !== 0) _cV += (_pv[v] || []).length;
+    });
+    if (_cV) n += _cV;
+  }
   var lp = A.localPack || {};
-  if (!(A.lib || {}) || (lp.count ? false : true)) n += 1;   /* 无本地包 ⇒ 无源可分发，记为一项提示 */
+  if (!(A.lib || {}) || (lp.count ? false : true)) n += 1;   /* 无缓存 ⇒ 无源可分发，记为一项提示 */
   return n;
 }
 function lbUpdModsOpenCf(){
@@ -7161,7 +7418,7 @@ function lbUpdModsOpenCf(){
   else { try { lbToast('暂无 CurseForge 链接（磁盘缺少 .uplugin）'); } catch (e) { } }
 }
 function lbUpdModsPrefetch(btn){
-  /* v6355（用户口径·方案 A）：「更新本地包」= **从 CurseForge 官方下载服务端包**（不依赖任何服）
+  /* v6355（用户口径·方案 A）：「更新缓存」= **从 CurseForge 官方下载服务端包**（不依赖任何服）
      · 原实现（v6293）只是「从现有服 copytree 进新批次缓存」——没有源服就彻底没源
      · 未配 cf_key / 接口不可用 / 下载失败 → 自动回落老路径（从现有服复制），保证不退化 */
   var b = btn || null;
@@ -7194,7 +7451,7 @@ function lbUpdModsPrefetch(btn){
         var _pl = d.plans || [];
         var _n = 0, _mb = 0;
         _pl.forEach(function(x){ if (x.ok && !x.cached){ _n++; _mb += (x.bytes || 0); } });
-        try { lbToast('已开始从 CurseForge 下载本地包：' + _n + ' 项' + (_mb ? (' / ' + lbUpdFmtSz(_mb)) : '')); } catch (e) { }
+        try { lbToast('已开始从 CurseForge 下载缓存：' + _n + ' 项' + (_mb ? (' / ' + lbUpdFmtSz(_mb)) : '')); } catch (e) { }
         try { if (typeof lbTaskSyncStart === 'function') lbTaskSyncStart(); } catch (e0) { }
         return;
       }
@@ -7209,12 +7466,14 @@ function lbUpdModsCardHtml(_card){
         + '<div style="display:flex;align-items:center;gap:6px">'
         + '<i class="mdi mdi-package-variant-closed" style="font-size:15px;color:#f59e0b"></i>'
         + '<b style="color:#fcd34d">MOD</b>'
+        + lbLocalPillHtml('mods')
         + '<span class="lb-tipb" style="color:#6b7280;cursor:help" title="【是什么】\nCurseForge 模组，gameId 83374\n以磁盘 83374\\&lt;pid&gt;_&lt;fid&gt; 为唯一判定\n\n【版本规则】\n同 pid 不同 fid = 同一 MOD 的不同版本\n基准 = 目录时间最新的版本，分发以它为目标\n\n【分发哪些服】\nBob 固定自己那套\n其余服按「系统管理 → MOD 策略」\n\n【开场视频】\n服务端不读 Content\\Movies\\LoadingScreen.bk2\n分发时自动跳过，已有的无感清理">'
         + '<i class="mdi mdi-information-outline" style="font-size:12px"></i></span>'
         + '<span style="flex:1"></span>'
         + lbUpdCbxMini('mod', _tg.mod, '分发', !_tgU.mod,
                    '所选服务器的 MOD 已符合策略，没有需要分发的')
-        + '</div>';
+        + '</div>'
+        + '<div id="lbLocalPop_mods" style="display:none"></div>';
   if (!M || M.ok === false){
     h += '<div style="color:#6b7280">' + (LB_UPD.loading ? '读取中…' : '未获取') + '</div></div>';
     return h;
@@ -7222,7 +7481,7 @@ function lbUpdModsCardHtml(_card){
   var conf = M.conformCount || 0, sc = M.serverCount || 11;
   h += '<div style="color:#9ca3af">符合策略：<b style="color:' + (conf >= sc ? '#4ade80' : '#fbbf24') + '">'
      + conf + '/' + sc + '</b></div>';
-  /* v6293（用户口径）：MOD 本地包（_upd_cache/批次/mods） */
+  /* v6293（用户口径）：MOD 缓存（_upd_cache/批次/mods） */
   var _mlp = M.localPack || {};
   var _mver = (_mlp.items || []).map(function(z){ return String(z.key || ''); }).filter(Boolean);
   var _mwant = Object.keys(M.baseFid || {}).sort().map(function(pid){
@@ -7230,7 +7489,7 @@ function lbUpdModsCardHtml(_card){
   }).filter(function(k){ return k.slice(-1) !== '_'; });
   /* v6369（用户口径）：「已就绪」原来只看「有没有包」—— 只有 1/2 个也显示已就绪 ⇒
      改为按**策略覆盖率**显示：`已就绪 2/2`（绿）/ `1/2（缺 Fear Ascended）`（黄）。
-     · 覆盖率只数「策略基准版本」（M.baseFid），本地包里多余的版本不计入分子；
+     · 覆盖率只数「策略基准版本」（M.baseFid），缓存里多余的版本不计入分子；
      · 缺失明细写进 ⓘ tips（名字取自 M.servers[].items[].name，取不到用 pid_fid）。 */
   var _nmByPid = {};
   Object.keys(M.servers || {}).forEach(function(sv){
@@ -7255,14 +7514,25 @@ function lbUpdModsCardHtml(_card){
                  return k + '（' + (_nmByPid[pid] || pid) + '）';
                }).join('\n　      ')) : ''))
         : (String(_mver.join(' / ')) || '未下载'))
-    + '\n【大小】' + (_mlp.count ? (String(_mlp.count) + ' 个版本 · ' + lbUpdFmtSz(_mlp.bytes)) : '未下载')
+    + '\n【大小】' + (_mlp.count
+        ? (String(_mlp.count) + ' 个版本 · ' + lbUpdFmtSz(_mlp.bytes) + '（已剔除开场视频）')
+        : '未下载')
+    /* v6515（用户口径 2026-11-10「MOD 缓存 2 个版本只有 130M 完全对不上」）：
+       CF 的 windowsserver 包里绝大部分体积是 Content/Movies/LoadingScreen.bk2（开场视频），
+       服务端 dedicated 根本不读它 ⇒ 更新缓存/分发都会主动删掉。
+       不写清这一点，很容易被误读成「下载不全 / 缓存残缺」。 */
+    + '\n\n【为什么比 CurseForge 小很多】'
+    + '\n· CF 包内含 Content\\Movies\\LoadingScreen.bk2（开场视频），单包可达数百 MB'
+    + '\n　 实测 Fear Ascended：zip 746 MB → 剔除开场后仅 5.46 MB'
+    + '\n· 服务端 dedicated 不读该文件（不在打包清单里），故「更新缓存 / 分发」都会自动删掉'
+    + '\n· 所以这里的 MB 是「服务端真正会用到的体积」，与 CF 页面数字天然差很多'
     + '\n\n【来源】优先从 CurseForge 官方下载服务端包（windowsserver）'
     + '\n        未配 CurseForge API Key 时回落「从现有服复制」'
     + '\n【用途】分发 MOD 时从这里取文件；各服都没有目标版本时也用它兜底'
-    + '\n【说明】本地包含哪些最新版本，看的就是这里；缺的点「更新本地包」补齐'
+    + '\n【说明】缓存含哪些最新版本，看的就是这里；缺的点「更新缓存」补齐'
     + '\n只写 D:\\ARK Server\\_upd_cache，不动任何服务器';
-  /* v6397（用户口径「4 个卡片的本地包要加一个 待升级状态，只跟权威线上最新版本号对比」）：
-     MOD 本地包「待升级」= 本地包版本集合里，是否有 pid 缺 CurseForge 线上最新 fid。
+  /* v6397（用户口径「4 个卡片的缓存要加一个 待升级状态，只跟权威线上最新版本号对比」）：
+     MOD 缓存「待升级」= 缓存版本集合里，是否有 pid 缺 CurseForge 线上最新 fid。
      只与 CF 最新比，不与「各服已装 / 策略基准」比。 */
   var _mPkgLatest = '', _mPkgNeed = false;
   Object.keys(M.cfLatest || {}).forEach(function(p){
@@ -7271,7 +7541,7 @@ function lbUpdModsCardHtml(_card){
     if (!_mPkgLatest) _mPkgLatest = _fid;
     if (_mver.indexOf(p + '_' + _fid) < 0) _mPkgNeed = true;
   });
-  h += '<div style="color:#9ca3af">本地包：'
+  h += '<div style="color:#9ca3af">缓存：'
      /* 覆盖率数字保留（2/2 有用），但不再写「已就绪」—— 状态统一由状态机输出 */
      + (_mtot
           ? ('<b style="color:' + (_mAll ? '#4ade80' : '#fbbf24') + '">' + _mhav + '/' + _mtot + '</b>'
@@ -7284,7 +7554,7 @@ function lbUpdModsCardHtml(_card){
      + '　<span class="lb-tipb" style="color:#6b7280;cursor:help" title="' + lbMdEsc(_mTip) + '">'
      + '<i class="mdi mdi-information-outline" style="font-size:12px"></i></span>'
      + '</div>'
-     /* v6371（用户口径）：更新本地包运行态条 */
+     /* v6371（用户口径）：更新缓存运行态条 */
      + '<div id="lbPkgBar_mods"></div>';
   /* v6320（用户口径）：与 API 卡一致，区块之间用虚线分割 */
   h += '<div style="border-top:1px dashed #33334a;margin:7px 0 5px"></div>';
@@ -7395,14 +7665,15 @@ function lbUpdModsCardHtml(_card){
        + (extras.length > 6 ? ('…+' + (extras.length - 6)) : '') + '</div>';
   }
   /* v6305（用户口径）：删除「可回收」行 —— 开场视频改为**无感回收**：
-     分发/更新本地包时自动跳过 LoadingScreen.bk2，分发前把目标旧目录里已有的删掉，
+     分发/更新缓存时自动跳过 LoadingScreen.bk2，分发前把目标旧目录里已有的删掉，
      用户不需要任何按钮，界面上也不再显示回收信息。 */
   /* v6448（用户口径「附件这种 要做成底栏形式」）：统一底栏 */
   h += '<div class="lb-upd-foot">'
      /* v6452（用户口径「部署到本机」）
         v6453（用户实测纠正）：客户端 MOD 不在 Content\\Mods，而在
         ShooterGame\\Binaries\\Win64\\ShooterGame\\Mods\\83374\\<pid>_<fid>\\（与服务端同构） */
-     + '<a class="lb-tipb lb-upd-link lb-foot-left" onclick="lbDeployLocal(\'mods\',this)"'
+     + (lbLocalSupported() ? (
+       '<a class="lb-tipb lb-upd-link lb-foot-left" onclick="lbDeployLocal(\'mods\',this)"'
      + ' title="' + lbMdEsc(
           '【部署到本机】\n从 CurseForge 直连下载「客户端包」\n解压写入本机游戏目录，不经过服务器\n\n'
         + '【写入位置】\nARK Survival Ascended\\ShooterGame\\Binaries\\Win64\\\n'
@@ -7414,9 +7685,10 @@ function lbUpdModsCardHtml(_card){
         + '【注意】\n· 客户端包 ≠ 服务端包，体积大得多\n'
         + '　Fear Ascended 约 800 MB\n'
         + '　Club ARK 约 2.2 GB\n'
-        + '· 自动跳过开场视频，再省约 740 MB\n'
+        + '· 完整写入包内所有文件（含开场视频 LoadingScreen.bk2）\n'
         + '· 不做服务器回落：直连不了就报错\n'
-        + '· 旧 <pid>_* 目录不会自动删除\n\n'
+        + '· 旧 <pid>_* 目录：部署结束后弹出干跑清单，\n'
+        + '　点「确认清理」才删除（浏览器删除不进回收站）\n\n'
         + '【已装会拦截】\n· 本机已有 <pid>_<当前版本> 且含 .pak 时\n'
         + '　判定已是最新，直接跳过、不重复下载\n'
         + '· 全部 MOD 都已是本机最新时整批拦截，\n'
@@ -7427,16 +7699,19 @@ function lbUpdModsCardHtml(_card){
         + '· 全部处理完提示重启游戏\n\n'
         + '【说明】\n只写本机游戏目录，不动任何服务器') + '">'
      + '<i class="mdi mdi-folder-download-outline"></i>部署到本机</a>'
-     /* v6293（用户口径）：MOD 也要有本地包系统 */
-     /* v6294（用户口径）：去掉「更新 MOD」按钮，只留「更新本地包」 */
-     /* v6366（用户口径）：右下角「清空本地包」—— 未下载时置灰 */
+       ) : '')
+     /* v6293（用户口径）：MOD 也要有缓存系统 */
+     /* v6294（用户口径）：去掉「更新 MOD」按钮，只留「更新缓存」 */
+     /* v6366（用户口径）：右下角「清空缓存」—— 未下载时置灰 */
      + lbUpdPkgClearLink('mods', !!_mlp.count, false,
-          '【清空本地包】\n删除 _upd_cache\\_modpkg 与批次缓存 mb*\\mods\n'
-          + '当前 ' + (_mlp.count ? (String(_mlp.count) + ' 个版本 · ' + lbUpdFmtSz(_mlp.bytes)) : '未下载')
-          + '\n\n服务器上的 MOD 不受影响，只删本地包\n不可撤销，下次分发/更新需重新下载')
+          '【清空缓存】\n删除 _upd_cache\\_modpkg 与批次缓存 mb*\\mods\n'
+          + '当前 ' + (_mlp.count
+              ? (String(_mlp.count) + ' 个版本 · ' + lbUpdFmtSz(_mlp.bytes) + '（已剔除开场视频）')
+              : '未下载')
+          + '\n\n服务器上的 MOD 不受影响，只删缓存\n不可撤销，下次分发/更新需重新下载')
      + '<a id="lbPkgBtn_mods" class="lb-tipb lb-upd-link" onclick="lbUpdModsPrefetch(this)" '
-     + 'title="【更新本地包】\n把策略最新版本的 MOD 复制进本批次缓存\n只写 D:\\ARK Server\\_upd_cache，不动任何服务器\n\n自动跳过开场视频 LoadingScreen.bk2（服务端不需要）">'
-     + '<i class="mdi mdi-download" style="font-size:13px"></i><span class="lb-pkgbtn-txt">更新本地包</span></a>'
+     + 'title="【更新缓存】\n把策略最新版本的 MOD 复制进本批次缓存\n只写 D:\\ARK Server\\_upd_cache，不动任何服务器\n\n自动跳过开场视频 LoadingScreen.bk2（服务端不需要）">'
+     + '<i class="mdi mdi-download" style="font-size:13px"></i><span class="lb-pkgbtn-txt">更新缓存</span></a>'
      /* v6310（用户口径）：MOD 多余清理 —— 有待清理项才显示；tips 内列详细清单 */
      + (_mex.length
           ? ('<a class="lb-tipb lb-upd-link" style="color:#f87171" onclick="lbUpdModsCleanExtra(this)" '
@@ -7530,8 +7805,8 @@ function lbUpdApiOpenHome(){
   catch (e) { try { lbToast('打开链接失败'); } catch (e2) { } }
 }
 function lbUpdApiPrefetch(btn){
-  /* v6307（用户口径）：更新本地包 = 从 GitHub（ArkServerApi/AsaApi）下载最新官方包，
-     解压到 _upd_cache/_apipkg/<版本>/；**进度走任务总线**（任务进度里会出一条「AsaApi · 更新本地包」）。*/
+  /* v6307（用户口径）：更新缓存 = 从 GitHub（ArkServerApi/AsaApi）下载最新官方包，
+     解压到 _upd_cache/_apipkg/<版本>/；**进度走任务总线**（任务进度里会出一条「AsaApi · 更新缓存」）。*/
   var b = btn || null;
   if (b){ if (b.getAttribute('data-busy') === '1') return; b.setAttribute('data-busy', '1'); }
   var tk = (typeof lbSrvCtlToken === 'function') ? lbSrvCtlToken() : '';
@@ -7676,7 +7951,7 @@ function lbUpdApiCleanExtras(btn){
 function lbUpdApiPluginOpen(nm){
   /* v6293（用户口径）：每个插件后面都有更新链接；Permissions 是 AsaApi 自带，不提供（调用方不渲染） */
   if (nm === 'ServerOpsKitAPI'){
-    try { lbToast('自研插件：更新服务器上的 \\\\Tnas\\public\\ServerOpsKitAPI 后，点「更新本地包」再分发'); } catch (e) { }
+    try { lbToast('自研插件：更新服务器上的 \\\\Tnas\\public\\ServerOpsKitAPI 后，点「更新缓存」再分发'); } catch (e) { }
     return;
   }
   try {
@@ -7697,16 +7972,16 @@ function lbUpdApiCardHtml(_card){
            + '【版本】\n库：各服 AsaAPI.dll 应全服一致（分叉会标红）\n'
            + '插件：Permissions、ServerOpsKitAPI（绿=最新版 黄=旧版）\n\n'
            + '【各服色条】\n绿 = 最新版 / 黄 = 旧版 / 灰 = 未安装\n\n'
-           + '【分发】官方缓存未就绪时禁止分发\n（会 offsets 不匹配导致起不来）') + '">'
+           + '【分发】只补「非最新」项，与库偏移表无关\n'
+           + '（库偏移表只门控「版本更新缓存」分发）') + '">'
         + '<i class="mdi mdi-information-outline" style="font-size:12px"></i></span>'
         + '<span style="flex:1"></span>'
+        /* v6510（用户口径）：API 全绿 ⇒ 这个「分发」勾选置灰不可勾 */
         + lbUpdCbxMini('api', _tg.api, '分发', !_tgU.api,
-                   (A && A.ok && !A.deployReady)
-                     ? ('官方缓存未就绪（' + ((A.officialCacheState === 'building') ? '构建中'
-                        : (A.officialCacheState === 'detected') ? '已检测到新版本'
-                        : (A.officialCacheState === 'ready') ? '本地分代缺失' : '状态未知')
-                        + '），暂不可分发：此时替换 dll 会 offsets 不匹配导致起不来')
-                     : '所选服务器的库/插件均已符合，没有需要分发的')
+                   /* v6543（用户口径）：库偏移表未就绪不拦 API 分发（它拦的是「版本更新缓存」） */
+                   (lbUpdApiNeed() > 0)
+                     ? ('有 ' + lbUpdApiNeed() + ' 项需分发（库/插件版本差异）')
+                     : '全部服务器的 AsaAPI 库与必需插件均已是最新版，没有需要分发的')
         + '</div>';
   if (!A || A.ok === false){
     h += '<div style="color:#6b7280">' + (LB_UPD.loading ? '读取中…' : '未获取') + '</div></div>';
@@ -7736,7 +8011,7 @@ function lbUpdApiCardHtml(_card){
   });
   /* 归一化去 v 前缀 + trim：官方 latest.verNum 与各服 dllVer 可能带/不带 v。
      v6393（用户口径「不是应该找到为啥你拉到的 Discord 官方公告号是旧的么？要真根因，而不是换方式」）：
-     已回滚 v6392 的「本地包版本兜底」—— 官方公告号之所以旧，根因在后端：
+     已回滚 v6392 的「缓存版本兜底」—— 官方公告号之所以旧，根因在后端：
        ① _api_discord_latest 只读缓存、不开资讯就不刷新（已修：读数前按需 _news_refresh）
        ② 公告标题格式由「AsaApi v2.1」变成「ASA: Server API v2.11」，老正则失配致 verNum 为空（已修）
      现在 LT.verNum 能拿到真实的官方最新版。 */
@@ -7816,7 +8091,7 @@ function lbUpdApiCardHtml(_card){
      + '　<span class="lb-tipb" style="color:#6b7280;cursor:help" title="' + lbMdEsc(_libTip) + '">'
      + '<i class="mdi mdi-information-outline" style="font-size:12px"></i></span>'
      + '</div>';
-  /* v6293（用户口径）：API 本地包（官方 AsaApi 包缓存 + 自研插件源 \\Tnas\public\ServerOpsKitAPI） */
+  /* v6293（用户口径）：API 包缓存（官方 AsaApi 包缓存 + 自研插件源 \\Tnas\public\ServerOpsKitAPI） */
   /* v6298（用户口径）：去掉「（最新 v2.1）」；自研源路径与日期收进 ⓘ */
   var _alp = A.localPack || {};
   var _srcTip = '【SOK 自研源】\n路径：' + String(_alp.srcPath || '\\\\Tnas\\public\\ServerOpsKitAPI')
@@ -7824,7 +8099,7 @@ function lbUpdApiCardHtml(_card){
     + (_alp.srcAt ? ('\n最新文件：' + String(_alp.srcAt)) : '')
     + '\n状态：' + (_alp.srcOk ? '已就绪' : '缺失（目录不存在或为空）')
     + '\n\n【用途】\nAPI 分发时的插件来源，直接读该目录';
-  h += '<div style="color:#9ca3af">本地包：'
+  h += '<div style="color:#9ca3af">缓存：'
      + (_alp.count ? ('<b style="color:#e5e7eb">' + lbMdEsc(String(_alp.ver || '-')) + '</b>') : '')
      /* v6398（用户口径「已就绪、已最新 不能放到同一个状态机里么？」）：单一状态机
         权威线上最新 = Discord 公告 latest.verNum */
@@ -7853,7 +8128,7 @@ function lbUpdApiCardHtml(_card){
      + '　<span class="lb-tipb" style="color:#6b7280;cursor:help" title="' + lbMdEsc(_srcTip) + '">'
      + '<i class="mdi mdi-information-outline" style="font-size:12px"></i></span>'
      + '</div>'
-     /* v6371（用户口径）：更新本地包运行态条 */
+     /* v6371（用户口径）：更新缓存运行态条 */
      + '<div id="lbPkgBar_api"></div>';
   var rc = A.cacheReadyCount || 0, sc = A.serverCount || 11;
   var ck = Object.keys(A.cache || {}), c0 = ck.length ? A.cache[ck[0]] : null;
@@ -7863,12 +8138,12 @@ function lbUpdApiCardHtml(_card){
            : (_oc === 'detected') ? '已检测到更新' : '未获取';
   var _ocC = (_oc === 'ready') ? '#4ade80' : (_oc === 'building') ? '#fbbf24' : '#f87171';
   /* v6298（用户口径）：官方缓存时间、分代/服务端时间全部收进 ⓘ */
-  var _cTip = '【官方缓存进度】\n公告时间：' + String(A.officialCacheAt || '-')
+  var _cTip = '【官方库偏移表进度】\n公告时间：' + String(A.officialCacheAt || '-')
     + (c0 ? ('\n\n【本地分代】\n' + String(c0.genAt || '-')
              + '\nAsaApi 生成的游戏内存地址表'
              + '\n\n【服务端本体】\n' + String(c0.exeAt || '-')
              + '\nArkAscendedServer.exe 更新时间'
-             + '\n\n【判定】\n分代 ≥ 服务端 ⇒ 缓存已覆盖当前游戏版本') : '');
+             + '\n\n【判定】\n分代 ≥ 服务端 ⇒ 库偏移表已覆盖当前游戏版本') : '');
   /* v6316（用户口径）：光看「本地 10/11」不知道缺哪台 ⇒ 该数字挂 tips 逐个列出未就绪服务器 */
   var _missCache = [];
   (LB.SERVERS || []).forEach(function(s){
@@ -7878,7 +8153,7 @@ function lbUpdApiCardHtml(_card){
                       genAt: String((_c && _c.genAt) || '未生成'),
                       exeAt: String((_c && _c.exeAt) || '-') });
   });
-  var _rcTip = '【各服缓存】' + rc + '/' + sc + ' 就绪';
+  var _rcTip = '【各服库偏移表】' + rc + '/' + sc + ' 就绪';
   if (_missCache.length){
     _rcTip += '\n\n【缺 ' + _missCache.length + ' 服】';
     _missCache.forEach(function(m){
@@ -7892,10 +8167,15 @@ function lbUpdApiCardHtml(_card){
   } else {
     _rcTip += '\n\n全部已就绪（分代 ≥ 服务端）';
   }
-  h += '<div style="color:#9ca3af">缓存：'
+  h += '<div style="color:#9ca3af">库偏移表：'
      /* v6375（用户口径）：「官方」与状态词之间的全角空格太宽 ⇒ 收紧为 4px（其他间距不动） */
      + '<span style="color:#6b7280">官方</span>'
-     + '<span style="color:' + _ocC + ';font-weight:700;margin-left:4px">' + _ocT + '</span>'
+     /* v6541（用户口径）：**只把状态词改成链接**（前面的「库偏移表：官方」不动）——
+        点击跳到资讯广场「API → API偏移」那个 tab（库偏移表的公告发在那里）。 */
+     + '<span style="color:' + _ocC + ';font-weight:700;margin-left:4px;cursor:pointer;'
+     + 'text-decoration:underline dotted;text-underline-offset:2px" '
+     + 'onclick="lbNewsGoTab(\'api_cache\')" title="点击查看「API 偏移」资讯（库偏移表公告）">'
+     + _ocT + '</span>'
      /* v6381（用户口径「附件 2、3 无需显示」）：去掉 11/11 数字 ——
         全就绪显示绿色「各服就绪」，有缺显示黄色（hover ⓘ 看缺哪几服） */
      + '　<span style="color:#374151">|</span>　'
@@ -7915,94 +8195,125 @@ function lbUpdApiCardHtml(_card){
   req.forEach(function(nm){
     var p = P[nm] || {}, miss = (p.missing || []).length;
     /* v6381（用户口径「弄成 绿 / 黄 这种」）：与 MOD 版本行同构 ——
-       绿 = 最新版（版本号最大）/ 黄 = 旧版，用「 / 」分隔，最新版恒在最前。
-       版本比较按数字段（0.83 > 0.7，不是字符串比较）。
+       v6684：绿 = 与权威最新一致 / 黄 = 与权威不一致，用「 / 」分隔；权威最新恒在最前。
+       版本比较走全局 lbVerCmp（数字串联归一化，兼容 0.84 / 0.8.5 混用）。
        色条改三段：绿=最新版数 / 黄=旧版数 / 灰=未安装。行尾的 11/11 数字取消。 */
     var _vers = p.vers || {};
-    var _vt = function (x) {
-      return String(x).replace(/^v/i, '').split('.').map(function (y) { return parseInt(y, 10) || 0; });
-    };
-    var _vcmp = function (a, b) {
-      var A2 = _vt(a), B2 = _vt(b), n2 = Math.max(A2.length, B2.length);
-      for (var i2 = 0; i2 < n2; i2++) {
-        var x2 = A2[i2] || 0, y2 = B2[i2] || 0;
-        if (x2 !== y2) return x2 - y2;
-      }
-      return 0;
-    };
+    /* v6684（用户口径「所有绿条的口径都不该是各服已装版本集合里的最大值」）：
+       权威最新版 = SOK 自研源目录里的 PluginInfo.json 版本号（localPack.srcVer）。
+       Permissions 单独处理（v6685：跟随 AsaApi 库最新状态）；其余无权威源插件才显示中性灰。
+       不再拿「已装最大值」冒充最新版。 */
+    var _vcmp = lbVerCmp;
+    /* v6684（用户口径）：权威最新版 = SOK 自研源目录里 PluginInfo.json 的版本（localPack.srcVer）。 */
+    var _authV = (String(nm) === 'ServerOpsKitAPI' && _alp && _alp.srcOk)
+      ? String(_alp.srcVer || '') : '';
+    var _authOk = !!_authV;
+    /* v6685（用户口径「只特别针对 Permissions：只要 AsaApi 库是最新，它就是最新的」）：
+       Permissions 随官方 AsaApi 包一起下发、没有独立版本源 ⇒ 判定跟随库：
+       库（本地 localPack.ver vs 官方最新 latestVer）已最新 ⇒ Permissions 视为最新（绿）；
+       库待升级 ⇒ 黄（提示随库升级）。 */
+    var _followLib = (String(nm) === 'Permissions');
+    var _libNew = !!(_alp && _alp.needUpgrade === false && (_alp.latestVer || _alp.ver));
+    var _libV = String((_alp && (_alp.latestVer || _alp.ver)) || '');
+    var _mode = _authOk ? 'src' : (_followLib ? 'lib' : 'none');
     var _vkeys = Object.keys(_vers).filter(function (k) { return !!k; }).sort(_vcmp);
-    var _newV = _vkeys.length ? String(_vkeys[_vkeys.length - 1]) : String(p.version || '');
+    var _instNew = _vkeys.length ? String(_vkeys[_vkeys.length - 1]) : String(p.version || '');
+    var _instAll = 0;
+    _vkeys.forEach(function (k) { _instAll += (_vers[k] || []).length; });
     var _vfork = _vkeys.length > 1;
-    var _pgreen = (_newV && _vers[_newV]) ? _vers[_newV].length : 0;
-    var _pyel = 0;
-    _vkeys.forEach(function (k) { if (String(k) !== _newV) _pyel += (_vers[k] || []).length; });
+    var _pgreen = 0, _pyel = 0, _phigh = 0;
+    if (_mode === 'src') {
+      _vkeys.forEach(function (k) {
+        var n2 = (_vers[k] || []).length, c2 = lbVerCmp(k, _authV);
+        if (c2 === 0) _pgreen += n2;
+        else if (c2 < 0) _pyel += n2;
+        else _phigh += n2;
+      });
+    } else if (_mode === 'lib') {
+      if (_libNew) _pgreen = _instAll; else _pyel = _instAll;
+    } else {
+      _pgreen = _instAll;
+    }
+    var _barCol = (_mode === 'src') ? '#4ade80'
+      : (_mode === 'lib' ? (_libNew ? '#4ade80' : '#fbbf24') : '#6b7280');
     var _pgray = miss;
     var _vn = (sc || 11);
-    /* v6387（用户口径「色条的tips 都要有 最新版、旧版的列表（同MOD的色条tips）」）：
-       补「最新版 / 旧版」分组明细，格式与 MOD 色条完全一致。 */
-    var _pDet = lbUpdVerDet(_newV, _vers, (p.missing || []), { prefix: 'v', missLabel: '未安装' });
-    var _pTip = '【插件覆盖】共 ' + _vn + ' 服\n'
-      + '· 绿：最新版 v' + _newV + ' —— ' + _pgreen + ' 服\n'
-      + '· 黄：旧版本 —— ' + _pyel + ' 服\n'
-      + '· 灰：未安装 —— ' + _pgray + ' 服'
+    var _pDet = lbUpdVerDet(_mode === 'src' ? _authV : _instNew, _vers, (p.missing || []),
+                            { prefix: 'v', missLabel: '未安装',
+                              verFmt: (String(nm) === 'ServerOpsKitAPI' ? lbVerDisp : null) });
+    var _pTip = '【插件覆盖】共 ' + _vn + ' 服'
+      + (_mode === 'src' ? ('\n基准：权威最新 v' + _authV + '（SOK 自研源）')
+        : _mode === 'lib'
+          ? ('\n基准：随 AsaApi 库 —— 库 v' + (_libV || '?') + (_libNew ? '（已最新）' : '（待升级）')
+             + '\nPermissions 随官方 AsaApi 包下发，不单列版本源')
+          : '\n基准：无权威版本源（以官方 AsaApi 包为准）')
+      + '\n· ' + (_mode === 'src' ? '绿' : (_mode === 'lib' ? (_libNew ? '绿' : '黄') : '灰')) + '：'
+      + (_mode === 'src' ? ('与权威一致 v' + _authV)
+        : _mode === 'lib' ? (_libNew ? '已随库最新' : '库待升级')
+          : '已装（不判定最新）')
+      + ' —— ' + (_mode === 'lib' ? (_libNew ? _pgreen : _pyel) : _pgreen) + ' 服'
+      + (_mode === 'src' ? ('\n· 黄：低于权威（可升级）—— ' + _pyel + ' 服') : '')
+      + (_phigh ? ('\n· 黄：高于权威（自研源滞后）—— ' + _phigh + ' 服') : '')
+      + '\n· 灰：未安装 —— ' + _pgray + ' 服'
       + (_pDet ? ('\n\n' + _pDet) : '');
     var _versHtml = '';
-    if (_vfork) {
+    if (_vkeys.length) {
       var _ord = _vkeys.slice().sort(_vcmp).reverse();
       _versHtml = _ord.map(function (k, i3) {
-        var _isNew = (String(k) === _newV);
         var _arr = _vers[k] || [];
-        var _t = '【' + (_isNew ? '最新版本' : '旧版本') + '】v' + k + '\n'
-               + _arr.length + ' 服在用'
-               + (_isNew ? '' : '\n分发后会升到最新版')
-               + '\n\n【使用中的服】\n' + _arr.join('、');
+        var _c3 = (_mode === 'src') ? lbVerCmp(k, _authV) : 0;
+        var _col = (_mode === 'src') ? (_c3 === 0 ? '#4ade80' : '#fbbf24')
+          : (_mode === 'lib' ? (_libNew ? '#4ade80' : '#fbbf24') : '#9ca3af');
+        var _tag = (_mode === 'src')
+          ? (_c3 === 0 ? '与权威一致' : (_c3 < 0 ? '低于权威（可升级）' : '高于权威（自研源滞后）'))
+          : (_mode === 'lib'
+            ? ('随 AsaApi 库' + (_libNew ? '已最新' : '待升级') + '（v' + (_libV || '?') + '）')
+            : '已装（无权威源）');
+        /* v6739（用户口径「版本号要写 0.n.n 三段式」）：v6738 把「三段式」误解成了 tips 分段，
+           实际指**版本号写法** —— 0.92 / 0.93 应写作 0.9.2 / 0.9.3。
+           显示层统一走 lbVerDisp（只补 0.xx 两段，不碰 2.11 / 1.1）；比较仍走 lbVerNorm，判定不变。
+           v6738 的两处修正保留（末段【权威最新】标题 + 名单中文名）。 */
+        var _vkv = (_mode === 'src') ? lbVerDisp(k) : String(k);
+        var _t = '【v' + _vkv + '】' + _tag + '\n' + _arr.length + ' 服在用'
+          + (_arr.length ? ('\n\n【使用中的服】\n· ' + _arr.map(_lnm).join('、')) : '')
+          + (_mode === 'src' && _c3 !== 0 ? ('\n\n【权威最新】\nv' + lbVerDisp(_authV)) : '');
         return (i3 ? '<span style="color:#4b5563"> / </span>' : '')
-             + '<span class="lb-tipb" style="color:' + (_isNew ? '#4ade80' : '#fbbf24') + ';font-weight:600"'
-             + ' title="' + lbMdEsc(_t) + '">v' + lbMdEsc(String(k)) + '</span>';
+          + '<span class="lb-tipb" style="color:' + _col + ';font-weight:600"'
+          + ' title="' + lbMdEsc(_t) + '">v' + lbMdEsc(_vkv) + '</span>';
       }).join('');
-    } else if (!_vkeys.length) {
-      /* v6390（用户口径「v1.1 这个没绿色加粗是什么意思？」）：
-         v6381 只给「分叉」分支上了绿/黄 + font-weight:600，全服同一版本走灰色不加粗 ⇒ 口径不一致。
-         这里拆两种：全服都没装（无版本可谈）→ 保持灰色；单一版本（全服一致）→ 与分叉分支同款绿/黄 + 加粗。 */
-      _versHtml = '<span style="color:#4b5563">v' + lbMdEsc(String(p.version || '?')) + '</span>';
-    } else {
-      /* 单一版本 = 全服一致 ⇒ 最新版，绿色加粗；tips 与分叉分支同格式（版本 + 服数 + 服名单） */
-      var _arr0 = _vers[_newV] || [];
-      var _t0 = '【最新版本】v' + (_newV || '?') + '\n' + _arr0.length + ' 服在用'
-              + (_arr0.length ? ('\n\n【使用中的服】\n' + _arr0.join('、')) : '');
-      _versHtml = '<span class="lb-tipb" style="color:#4ade80;font-weight:600"'
-                + ' title="' + lbMdEsc(_t0) + '">v' + lbMdEsc(_newV || '?') + '</span>';
     }
+
     h += '<div style="color:#9ca3af">'
-       /* v6333：插件名加粗 */
        + '<span style="color:#e5e7eb;font-weight:600">' + lbMdEsc(String(nm)) + '</span>'
        + '　' + _versHtml
-       /* v6381：三段色条（绿=最新版 / 黄=旧版 / 灰=未装） */
        + '　<span class="lb-tipb" style="display:inline-block;width:54px;height:4px;border-radius:2px;background:#374151;'
        + 'overflow:hidden;vertical-align:middle;font-size:0;cursor:help"'
        + ' title="' + lbMdEsc(_pTip) + '">'
        + (_pgreen ? ('<span style="display:inline-block;height:100%;width:'
-                     + (100 * _pgreen / (_vn || 1)) + '%;background:#4ade80"></span>') : '')
+                     + (100 * _pgreen / (_vn || 1)) + '%;background:' + _barCol + '"></span>') : '')
        + (_pyel ? ('<span style="display:inline-block;height:100%;width:'
                    + (100 * _pyel / (_vn || 1)) + '%;background:#fbbf24"></span>') : '')
+       + (_phigh ? ('<span style="display:inline-block;height:100%;width:'
+                    + (100 * _phigh / (_vn || 1)) + '%;background:#fbbf24"></span>') : '')
        + '</span>'
        + (miss ? ('　<span class="lb-tipb" style="color:#f87171;font-weight:700" title="【缺 ' + miss + ' 服】\n' + lbMdEsc((p.missing || []).join('、')) + '">缺 ' + miss + ' 服</span>') : '')
        + '</div>';
+
   });
   /* v6315（用户口径）：删掉「多余 · 应清理（N）」标题行与插件明细 —— 与 MOD 卡一致，
      清单只放在底部「安全清理」按钮的 tips 里，不重复占版面。 */
   /* v6448：统一底栏 */
   h += '<div class="lb-upd-foot">'
-     /* v6293（用户口径）：API 也要有本地包系统（官方包下载 + 自研源） */
-     /* v6294（用户口径）：去掉「更新 API」按钮，只留「更新本地包」 */
-     /* v6366（用户口径）：右下角「清空本地包」—— 未下载时置灰 */
+     /* v6293（用户口径）：API 也要有缓存系统（官方包下载 + 自研源） */
+     /* v6294（用户口径）：去掉「更新 API」按钮，只留「更新缓存」 */
+     /* v6366（用户口径）：右下角「清空缓存」—— 未下载时置灰 */
      + lbUpdPkgClearLink('api', !!_alp.count, false,
-          '【清空本地包】\n删除 D:\\ARK Server\\_upd_cache\\_apipkg 下全部内容\n'
+          '【清空缓存】\n删除 D:\\ARK Server\\_upd_cache\\_apipkg 下全部内容\n'
           + '当前 ' + (_alp.count ? (String(_alp.count) + ' 个版本 · ' + lbUpdFmtSz(_alp.bytes)) : '未下载')
           + '\n\n不动 \\\\Tnas\\public\\ServerOpsKitAPI 自研源\n不可撤销，下次分发/更新需重新下载')
      + '<a id="lbPkgBtn_api" class="lb-tipb lb-upd-link" onclick="lbUpdApiPrefetch(this)" '
-     + 'title="【更新本地包】\n把官方 AsaApi 包与 \\\\Tnas\\public\\ServerOpsKitAPI 汇总成本地包\n只写 D:\\ARK Server\\_upd_cache，不动任何服务器">'
-     + '<i class="mdi mdi-download" style="font-size:13px"></i><span class="lb-pkgbtn-txt">更新本地包</span></a>'
+     + 'title="【更新缓存】\n把官方 AsaApi 包与 \\\\Tnas\\public\\ServerOpsKitAPI 汇总成缓存\n只写 D:\\ARK Server\\_upd_cache，不动任何服务器">'
+     + '<i class="mdi mdi-download" style="font-size:13px"></i><span class="lb-pkgbtn-txt">更新缓存</span></a>'
      /* v6314（用户口径）：API 安全清理对齐 MOD 的「入口 + tips」形式 —— 底部独立按钮，无待清理项不显示 */
      + (extras.length
           ? ('<a class="lb-tipb lb-upd-link" style="color:#f87171" onclick="lbUpdApiCleanExtras(this)" '
@@ -8076,13 +8387,17 @@ function lbUpdRender(){
      更新面板看的是各台 buildId 与缓存的差异，官服网络版本在这里没有决策价值。
      服务器控制 / 安全回档仍保留该行（同一函数，未改动）。 */
   h += lbSrvCtlOnlineWrapHtml('lbUpdOnline', LB_UPD.loading)
-    /* v6262（用户口径）：启动队列行 —— 与服务器控制同一来源 */
-    + '<div class="lb-srvctl-qline" id="lbUpdQLine">' + lbSrvCtlQueueLineHtml() + '</div>';
+    /* v6531（用户口径）：本浮窗复用了在线角色栏（含 ✕ 踢人），但没有结果容器 ⇒ 踢出结果被静默丢弃。
+       只补容器、不做任何兜底提示 —— 真实错误（含 401 会话过期）必须原样显示出来。 */
+    + '<div id="lbUpdKickRes" style="display:none;margin-top:6px;padding:6px 10px;border-radius:6px;'
+    + 'font-size:11.5px;text-align:center;line-height:1.6"></div>';
+  /* v6687（用户口径「附件 应该放在任务进度里」）：启动队列行不再单独占 .tc 一行，
+     改由 lbTaskRender() 渲染进「任务进度」块内（id 仍为 lbUpdQLine，轮询刷新不变）。 */
 
   /* ===== v6244（用户口径 2026-11-07）三块重排 =====
      ① 「更新目标」移到「更新缓存」之上（桌面端；移动端由 app.css 的 order 把缓存提到最前）
      ② 「更新目标」内部两列（本体 / 汉化），窄屏自动变一列
-     ③ 原挂在更新目标里的「本地包 / 各服」拆出成独立「汉化包」卡片
+     ③ 原挂在更新目标里的「缓存 / 各服」拆出成独立「汉化包」卡片
      ④ 「缓存」改名「更新缓存」 */
   var _ok = !!C.hasContent;
   var _color = _ok ? '#4ade80' : '#f87171';
@@ -8106,7 +8421,7 @@ function lbUpdRender(){
   var _zbar = '';
   if (_zsv.length > 0){
     /* v6387（用户口径「色条的tips 都要有 最新版、旧版的列表」）：
-       绿段（非 none 且 needUpd=false）统一挂【最新版】（显示为本地包版本），
+       绿段（非 none 且 needUpd=false）统一挂【最新版】（显示为缓存版本），
        其余按各服实跑版本列【旧版】；none 归【未安装】。 */
     var _zvg = {}, _zmiss = [], _znew = [];
     _zsv.forEach(function(x){
@@ -8149,7 +8464,11 @@ function lbUpdRender(){
      v6453（用户纠正）：强制 = 服务器不更新，玩家进不来；补丁 = 服务器不更新，玩家也能进 */
   var _vkTxt = lbUpdKindShort(_vkK);
   var _vkTip = '【变更类型】\n' + lbUpdKindText(_vkK).replace(' · ', '\n');
-  var _can = (_tgL0.length > 0) && (_needCache ? !!D.canApply : !!_zpkg.ready);
+  /* v6510：按**每一项**各自的条件判断，不再「非本体就一律要求汉化包就绪」——
+     只勾 MOD / API 时被误要求汉化就绪会把按钮莫名其妙置灰。 */
+  var _can = (_tgL0.length > 0);
+  if (_can && _needCache && !D.canApply) _can = false;
+  if (_can && _tgL0.indexOf('zh') >= 0 && !_zpkg.ready) _can = false;
   var _card = 'padding:8px 10px;border-radius:7px;background:rgba(255,255,255,.04);'
             + 'border:1px solid rgba(255,255,255,.08);font-size:11.5px;';
   /* v6247（用户口径「更新目标的勾选直接整合到对应卡片里」）：
@@ -8173,11 +8492,22 @@ function lbUpdRender(){
   h += '<div class="lb-upd-stack">';
 
   /* v6379（用户口径「再加一个 各服： 色条」）：缓存卡也加覆盖度分段条 ——
-     绿 = 已与缓存一致（same=true）/ 黄 = 不一致（需升级）/ 灰 = 未获取版本（buildId 为空）。 */
+     绿 = buildId 等于官方最新 / 黄 = 非最新（需分发）/ 灰 = 未获取版本（buildId 为空）。 */
   var _csv = (D.servers || []);
-  var _cgr = _csv.filter(function(x){ return String((x || {}).srv || '') ? ((x || {}).same === true) : false; }).length;
-  var _cyl = _csv.filter(function(x){ return String((x || {}).srv || '') ? ((x || {}).same === false) : false; }).length;
-  var _cgy = _csv.length - _cgr - _cyl;
+  /* v6684（用户口径「所有绿条的口径都不该是各服已装版本集合里的最大值」）：
+     各服条基准改为**官方最新 buildId**（Steam 权威），不再用「缓存 buildId」——
+     否则缓存落后官方时，各服与旧缓存一致也会显示「均已最新」。
+     读不到官方最新 buildId 时退回缓存 buildId，并在 tips 里标注。 */
+  var _cbase = String(C.latestBuildId || C.buildId || '');
+  var _cbaseAuth = !!String(C.latestBuildId || '');
+  var _cgr = 0, _cyl = 0, _cgy = 0;
+  _csv.forEach(function (x) {
+    if (!String((x || {}).srv || '')) return;
+    var b2 = String((x || {}).buildId || '');
+    if (!b2) _cgy++;
+    else if (b2 === _cbase) _cgr++;
+    else _cyl++;
+  });
   var _cbdBar = '';
   if (_csv.length > 0){
     /* v6387（用户口径「色条的tips 都要有 最新版、旧版的列表」）：
@@ -8187,7 +8517,7 @@ function lbUpdRender(){
     _csv.forEach(function(x){
       var ab = String((x || {}).srv || '');
       if (!ab) return;
-      if (x && x.same === true) _cnew.push(ab);
+      if (x && String((x || {}).buildId || '') === _cbase) _cnew.push(ab);
       else {
         var bb = String((x || {}).buildId || '');
         if (!bb) _cmiss.push(ab);
@@ -8197,13 +8527,15 @@ function lbUpdRender(){
     var _cnewKey = '__new__';
     if (_cnew.length) _cvg[_cnewKey] = _cnew;
     var _cDet = lbUpdVerDet(_cnewKey, _cvg, _cmiss,
-                            { missLabel: '未获取版本', newLabel: (String(C.buildId || '') || '最新') });
+                            { missLabel: '未获取版本', newLabel: (_cbase || '最新') });
     _cbdBar = '<span class="lb-tipb" style="display:inline-block;width:54px;height:4px;border-radius:2px;'
             + 'background:#374151;overflow:hidden;vertical-align:middle;font-size:0;cursor:help;margin-right:5px"'
-            + ' title="' + lbMdEsc('【缓存覆盖】共 ' + _csv.length + ' 服\n'
-                + '· 绿：已与缓存一致 ' + _cgr + ' 服\n'
-                + '· 黄：需升级 ' + _cyl + ' 服\n'
-                + '· 灰：未获取版本 ' + _cgy + ' 服'
+            + ' title="' + lbMdEsc('【各服版本覆盖】共 ' + _csv.length + ' 服\n'
+                + '基准：' + (_cbaseAuth ? ('官方最新 buildId ' + _cbase)
+                                        : ('缓存 buildId ' + _cbase + '（未读到官方最新，暂以缓存为准）'))
+                + '\n· 绿：已是最新 —— ' + _cgr + ' 服'
+                + '\n· 黄：非最新（需分发）—— ' + _cyl + ' 服'
+                + '\n· 灰：未获取版本 —— ' + _cgy + ' 服'
                 + (_cDet ? ('\n\n' + _cDet) : '')) + '">'
             + (_cgr ? ('<span style="display:inline-block;height:100%;width:'
                         + (100 * _cgr / _csv.length) + '%;background:#4ade80"></span>') : '')
@@ -8228,7 +8560,13 @@ function lbUpdRender(){
      + '<i class="mdi mdi-information-outline" style="font-size:12px"></i></span>'
      + '<span style="flex:1"></span>'
      + _cbxMini('server', _tg.server, '分发', !_tgU.server,
-                '所有服的版本都与缓存一致，没有需要更新本体的服务器')
+                /* v6543（用户口径）：库偏移表未就绪**拦的正是这条**（版本更新缓存分发） */
+                (LB_UPD.api && LB_UPD.api.ok && !LB_UPD.api.deployReady)
+                  ? ('官方库偏移表未就绪（' + ((LB_UPD.api.officialCacheState === 'building') ? '构建中'
+                     : (LB_UPD.api.officialCacheState === 'detected') ? '已检测到新版本'
+                     : (LB_UPD.api.officialCacheState === 'ready') ? '本地分代缺失' : '状态未知')
+                     + '），此时分发新版本本体，插件会 offsets 不匹配导致起不来')
+                  : '所有服的版本都与缓存一致，没有需要更新本体的服务器')
      + '</div>'
      /* v6250（用户口径）：状态字（已就绪/未就绪）从标题行**移到版本行**，紧跟「版本：」之后。
         v6212：路径行按用户口径删除；manifest（= Steam depot 清单号）收进 hover tips，版本号只留 buildId。 */
@@ -8307,11 +8645,17 @@ function lbUpdRender(){
      + '<div style="display:flex;align-items:center;gap:6px">'
      + '<i class="mdi mdi-translate" style="font-size:15px;color:#22d3ee"></i>'
      + '<b style="color:#a5f3fc">汉化包</b>'
+     + lbLocalPillHtml('zh')
      /* v6386：标题行补 ⓘ */
      + '<span class="lb-tipb" style="color:#6b7280;cursor:help" title="' + lbMdEsc(
           '【是什么】Dino & Item 双语汉化补丁（.pak）\n'
         + '各服放在 ShooterGame\\Content\\Paks\n\n'
-        + '【版本】本地包 D:\\Cache-zh\\<版本>；backup 是分发前备份\n'
+        + '【字形·简/繁】\n'
+        + '缓存/本机都会标「简体 / 繁体」\n'
+        + '· 飞书凭据 → 简体包（飞书文档附件）\n'
+        + '· Google API Key → 繁体包（Drive 目录，文件名带 Trad）\n'
+        + '本机判定依据：pak 大小 简体 49,872,281 / 繁体 49,875,589\n\n'
+        + '【版本】缓存 D:\\Cache-zh\\<版本>；backup 是分发前备份\n'
         + '「已就绪 V10.1」可点击 → 资讯广场·汉化版本\n\n'
         + '【各服色条】\n绿 = 已是最新 / 黄 = 需升级 / 灰 = 未安装\n\n'
         + '【分发】备份旧 pak → 复制新 pak → 校验\n不停服，下次重启生效') + '">'
@@ -8320,11 +8664,14 @@ function lbUpdRender(){
      + _cbxMini('zh', _tg.zh, '分发', !_tgU.zh,
                 '所有服的汉化包都已是最新，没有需要升级汉化的服务器')
      + '</div>'
-     + '<div style="color:#9ca3af;line-height:1.8;margin-top:3px">本地包：'
+     + '<div id="lbLocalPop_zh" style="display:none"></div>'
+     + '<div style="color:#9ca3af;line-height:1.8;margin-top:3px">缓存：'
      + (_zpkg.ready
           /* v6247（用户口径）：版本号改链接样式，点了跳到 资讯广场 →「汉化版本」Tab */
           ? ('<span class="lb-verlink" onclick="lbNewsGoTab(\'tieba\')"'
-             + ' title="查看汉化版本（资讯广场 → 汉化版本）">V' + lbMdEsc(String(_zpkg.ver || '')) + '</span>')
+             + ' title="查看汉化版本（资讯广场 → 汉化版本）">V' + lbMdEsc(String(_zpkg.ver || '')) + '</span>'
+             /* v6508：缓存包字形（读 manifest 来源：飞书=简体 / Drive=繁体） */
+             + lbZhKindTagHtml(_zpkg.src))
           : '')
      /* v6398（用户口径「已就绪、已最新 不能放到同一个状态机里么？」）：单一状态机 */
      + lbUpdPkgState(!!_zpkg.ready,
@@ -8333,11 +8680,11 @@ function lbUpdRender(){
           String(_zrem.ver || ''),
           { prefix: 'V', pending: !!_zpkg.downloaded, cur: _zpkg.ver })
      + (_zprep.running && _zprep.msg ? ('　<span style="color:#22d3ee">' + lbMdEsc(String(_zprep.msg)) + '</span>') : '')
-     /* v6245（用户口径）：本地包已就绪时不再追加上次的失败信息，避免「已就绪 + 下载失败」同屏矛盾 */
+     /* v6245（用户口径）：缓存已就绪时不再追加上次的失败信息，避免「已就绪 + 下载失败」同屏矛盾 */
      + ((_zprep.phase === 'fail' && !_zpkg.ready)
           ? ('　<span style="color:#f87171">' + lbMdEsc(String(_zprep.err || '失败')) + '</span>') : '')
      + '</div>'
-     /* v6371（用户口径）：更新本地包运行态条（进度条 + 文案，数据源 = 任务总线） */
+     /* v6371（用户口径）：更新缓存运行态条（进度条 + 文案，数据源 = 任务总线） */
      + '<div id="lbPkgBar_zh"></div>'
      + '<div style="color:#9ca3af;line-height:1.8">各服：' + _zbar
      + (_zneed ? ('<b style="color:#fbbf24">' + _zneed + ' 服需升级</b>')
@@ -8345,32 +8692,34 @@ function lbUpdRender(){
      + (_zconf ? ('　<b style="color:#f87171">' + _zconf + ' 服多包冲突</b>') : '')
      /* v6250（用户口径）：各服行**不再显示「当前 旧版」**（末段整块删除） */
      + '</div>'
-     /* v6248（用户口径）：**更新本地包移到卡片右下角**（原在标题行，与「分发」挤在一起） */
+     /* v6248（用户口径）：**更新缓存移到卡片右下角**（原在标题行，与「分发」挤在一起） */
      /* v6448：统一底栏 */
      + '<div class="lb-upd-foot">'
      /* v6452（用户口径「汉化包、MOD 的底栏 左侧要加两个功能：部署到本机」） */
-     + '<a class="lb-tipb lb-upd-link lb-foot-left" onclick="lbDeployLocal(\'zh\',this)"'
+     + (lbLocalSupported() ? (
+       '<a class="lb-tipb lb-upd-link lb-foot-left" onclick="lbDeployLocal(\'zh\',this)"'
      + ' title="' + lbMdEsc(
-          '【部署到本机】\n从 Google Drive 直连下载，写入本机游戏目录\n\n'
+          '【部署到本机】\n从云盘源直连下载（飞书＝简体 / Google Drive＝繁体），写入本机游戏目录\n\n'
         + '【写入位置】\nARK Survival Ascended\\ShooterGame\\Content\\Paks\n'
         + '　　只覆盖 pak / ucas / utoc 三个文件\n\n'
         + '【首次要点】\n· 选 ASA 所在 Steam 库根目录（如 B:\\SteamLibrary）\n'
         + '· 之后自动记住，不用再选\n'
         + '· 换目录：按住 Shift 再点本按钮\n'
         + '· 记住的目录失效会自动重弹\n\n'
-        + '【前置条件】\n先在「系统管理 → Google API Key」配好密钥\n\n'
+        + '【前置条件】\n先在「系统管理 → 云盘凭据」配好飞书（推荐，简体）或 Google\n\n'
         + '【说明】\n已是最新版会拦截不下载\n需重开游戏生效') + '">'
      + '<i class="mdi mdi-folder-download-outline"></i>部署到本机</a>'
-     /* v6366（用户口径）：右下角「清空本地包」—— 参考「清空缓存」，未就绪/下载中置灰 */
+       ) : '')
+     /* v6366（用户口径）：右下角「清空缓存」—— 参考「清空缓存」，未就绪/下载中置灰 */
      + lbUpdPkgClearLink('zh', !!_zpkg.ready, _zprep.running,
-          '【清空本地包】\n删除 ' + String(_zpkg.cacheRoot || 'D:\\Cache-zh') + ' 下全部内容\n'
+          '【清空缓存】\n删除 ' + String(_zpkg.cacheRoot || 'D:\\Cache-zh') + ' 下全部内容\n'
           + '当前版本 ' + (String(_zpkg.ver || '') || '未下载') + '\n'
           + '含 backup 分发前备份目录（一并删除）\n\n不可撤销，下次分发需重新下载')
      + '<a id="lbPkgBtn_zh" class="lb-tipb lb-upd-link' + (_zprep.running ? ' dis' : '') + '" '
      + (_zprep.running ? '' : 'onclick="lbZhPrepare(this)" ')
-     + 'title="【更新本地包】\n从 Google Drive 下载最新汉化包（Dino &amp; Item 双语）\n解压到 D:\\Cache-zh\n\n约 130 MB，只写缓存目录，不改动任何服务器">'
+     + 'title="【更新缓存】\n从云盘源下载最新汉化包（Dino &amp; Item 双语）\n解压到 D:\\Cache-zh\n\n【字形·简/繁】\n飞书凭据 → 简体包\nGoogle API Key → 繁体包\n（看「系统管理 → 云盘凭据」当前填的是哪个）\n\n约 130 MB，只写缓存目录，不改动任何服务器">'
      + '<i class="mdi mdi-download" style="font-size:13px"></i>'
-     + '<span class="lb-pkgbtn-txt">' + (_zprep.running ? '更新中…' : '更新本地包') + '</span></a>'
+     + '<span class="lb-pkgbtn-txt">' + (_zprep.running ? '更新中…' : '更新缓存') + '</span></a>'
      + '</div></div>';
 
   /* 【3】v6283（用户口径 Round 1）：MOD 卡（CurseForge，只读） */
@@ -8386,9 +8735,16 @@ function lbUpdRender(){
      「系统管理 → 服务器更新预演」（含默认预演开关 + 全 11 台一键预演）。 */
   h += '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">'
      + '<button ' + _dis + ' onclick="lbUpdApply()" '
-     + 'title="' + (_can ? ('分配到选中台（' + (_needCache ? '本体' : '') + (_needCache && _tgL0.indexOf('zh') >= 0 ? '+' : '') + (_tgL0.indexOf('zh') >= 0 ? '汉化' : '') + '）')
-                            : (!_tgL0.length ? '没有需要更新的服务器（本体版本与缓存一致、汉化均为最新）'
-                               : (_needCache ? '缓存无内容，暂不可用' : '汉化包未就绪，请先点汉化包卡片的「更新本地包」'))) + '" '
+     + 'title="' + (_can ? ('分配到选中台（'
+                              + [_needCache ? '本体' : '', _tgL0.indexOf('zh') >= 0 ? '汉化' : '',
+                                 _tgL0.indexOf('mod') >= 0 ? 'MOD' : '',
+                                 _tgL0.indexOf('api') >= 0 ? 'API' : '']
+                                .filter(function(x){ return !!x; }).join('+') + '）')
+                            : (!_tgL0.length
+                                 ? '没有需要分发的项（勾选的目标均已是最新，或还没勾任何目标）'
+                               : (_needCache && !D.canApply)
+                                 ? '缓存无内容，暂不可用'
+                                 : '汉化包未就绪，请先点汉化包卡片的「更新缓存」')) + '" '
      + 'style="padding:7px 14px;border-radius:6px;border:none;cursor:pointer;font-size:12.5px;'
      + 'background:' + (_can ? '#15803d' : '#374151') + ';color:' + (_can ? '#fff' : '#9ca3af') + ';font-weight:600">'
      + '一键分发</button>'
@@ -8414,8 +8770,10 @@ function lbUpdRender(){
   }
 
   S.body.innerHTML = h;
+  /* v6487：DOM 就绪后异步探测本机状态（不阻塞；60s 内复用缓存） */
+  try { lbLocalProbeKick(false); } catch (eP0) {}
   /* v6211：重渲染后立即补 .lb-tipb（不等 MutationObserver 防抖）——
-     保证 chips / 刷新 / 官服版本 / 在线玩家行 / 踢人 ✕ / Bob「仅进服」的 title
+     保证 chips / 刷新 / 官服版本 / 在线玩家行 / 踢人 ✕ 的 title
      立刻走 #lbTipBox 气泡，与服务器控制完全一致。 */
   try { lbTipsMark('lbUpd'); } catch (e) {}
   /* v6212：任务槽位随 innerHTML 重建 ⇒ 立刻重绘一次任务总线（缓存更新进度条） */
@@ -8441,9 +8799,590 @@ var LB_ARKBK = {
   jobEndAt: 0,        /* v6058：job 结束时刻（60 秒后自动隐藏进度条） */
   jobObserved: false, /* v6058：本次会话是否见过 job 在跑 */
   jobNotified: false, /* v6058：失败提示只弹一次 */
-  busy: ''
+  busy: '',
+  who: '',            /* v6554（用户口径）：行程/背包统一使用的选中角色 eosId */
+  whoName: '',        /* v6554：选中角色显示名 */
+  paths: null,        /* v6554：/api/arkbackup/paths 结果（全部服跨服路径） */
+  pathsAt: 0,
+  pathsBusy: false,
+  pathsHours: 0,      /* v6557（用户口径）：0 = 不限窗口（取日志全部） */
+  segSel: null,       /* v6568/69：选中的行程块 {server, from, to, kind:'seg'|'offline'} —— 离线块也算一种行程块 */
+  onlineRetry: 0,     /* v6650：在线快照陈旧时的一次性补拉标记（lbArkBkOpen 每次重置） */
+  /* v6683（用户口径 2026-11-14）：回档流程 Session —— 存后端（跨客户端 / 跨玩家）
+     flow=null ⇒ 本服没有进行中的流程；_flowKey 用于「状态真变了才重绘」；flowTimer=30s 轮询 */
+  flow: null, flowAt: 0, flowTimer: null, flowBusy: '', _flowKey: '',
+  /* v6742（方案「安全回档·临时授权监督入口」）：被授权时只看【风险检查 + 任务进度】。watch=null ⇒ 普通模式（所有用户默认） */
+  /* v6746（用户口径）：改为独立「回档授权」浮窗——不再改造安全回档浮窗。
+     grantOn=true 期间，lbArkBkRender 的所有内部重绘都转到 Grant 渲染。
+     grantInfo = {srv, who, by, ts} 表示已被授权；null 表示未被授权。 */
+  grantOn: false, grantInfo: null
 };
+/* v6742：「我被授权了哪些流程」的轻缓存。
+   后端 mine=1 返回**全部进行中流程**（不当裁判），前端用 LB.playerEos 自己比对。
+   轮询策略：打开身份浮窗时立即拉一次；有流程才 60s 轮询；没有就停。 */
+var LB_ARKBK_MINE = { last: [], hot: false, busy: false, timer: null, at: 0 };
 
+/* ===== v6683（用户口径 2026-11-14）：回档流程 Session =====
+   为什么：回档是多步骤人工流程，原来没有「我正在做这个档」的标记 ⇒ 两个人可能同时对同一档操作，
+   也没人知道别人做到哪一步。状态存后端 ark_backup_flow.json（6 小时无动作惰性过期）。
+   前端职责：底栏「开始回档流程」+ 步骤内按钮解锁 + 切档打断确认 + 30s 跨端轮询。 */
+function lbArkBkFlowApi(action, extra){
+  var base = lbSrvCtlApi();
+  if (action == null){
+    return lbSrvCtlFetchW(base + '/api/arkbackup/flow?server='
+                          + encodeURIComponent(LB_ARKBK.srv || ''), { cache: 'no-store' })
+      .then(function (r) { return r.json(); });
+  }
+  var body = { server: LB_ARKBK.srv || '', action: action };
+  for (var k in (extra || {})){ body[k] = extra[k]; }
+  return lbSrvCtlFetchW(base + '/api/arkbackup/flow', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  }).then(function (r) { return r.json().then(function (j) { j.__status = r.status; return j; }); });
+}
+function lbArkBkFlowLive(){
+  var f = LB_ARKBK.flow;
+  return !!(f && (f.phase === 'active' || f.phase === 'verifying'));
+}
+/* v6764（用户口径）：回档目的持久化 + 以流程为准 */
+function lbArkBkGoalsSave(){
+  try { localStorage.setItem('dinoArkBkGoals', JSON.stringify(ARKBK_G.goals)); } catch (e_gsv) {}
+}
+function lbArkBkGoalsSyncFromFlow(){
+  var f = LB_ARKBK.flow, g = f && f.goals;
+  if (!lbArkBkFlowLive() || !g) return false;
+  var _k = !!g.keep, _r = !!g.recover;
+  if (_k && !_r) ARKBK_G.goals = { recover: false, keep: true };
+  else if (_r) ARKBK_G.goals = { recover: true, keep: false };
+  else return false;
+  lbArkBkGoalsSave();
+  return true;
+}
+/* v6764（用户口径「安全回档中 如果有正在进行的流程，应该自动选这个档，
+   让玩家一进来就看到这个档的风险检查面板」）：
+   打开浮窗 / 切服 / 轮询发现别人刚开始流程 时自动接管目标档并跑风险检查。
+   只在「档号不同」时接管一次 ⇒ 用户手动换档后不会被反复覆盖。 */
+function lbArkBkAutoPickFlowPoint(){
+  if (LB_ARKBK.grantOn) return false;
+  var f = LB_ARKBK.flow;
+  if (!f || !lbArkBkFlowLive()) return false;
+  var pid = String(f.pointId || '');
+  if (!pid || String(LB_ARKBK.point || '') === pid) return false;
+  if (!LB_ARKBK.srv) return false;
+  LB_ARKBK.point = pid;
+  LB_ARKBK._fold = LB_ARKBK._fold || {};
+  LB_ARKBK._fold.lbArkBkPointFold = false;
+  LB_ARKBK._fold.lbArkBkPlanFold = true;
+  try { lbArkBkPlan(); } catch (e_ap) {}
+  return true;
+}
+function lbArkBkFlowMine(){
+  var f = LB_ARKBK.flow;
+  if (!f) return false;
+  return String(f.startedBy || '') === String(lbSrvCtlUser() || '');
+}
+/* 步骤内按钮的解锁条件（口径1：没开始流程 ⇒ 全灰）。要求流程针对的正是当前选中的档。 */
+function lbArkBkFlowOpen(){
+  var f = LB_ARKBK.flow;
+  if (!f || !lbArkBkFlowLive()) return false;
+  if (!f.pointId) return true;
+  return String(f.pointId) === String(LB_ARKBK.point || '');
+}
+function lbArkBkFlowAgeTxt(f){
+  var t0 = Number((f && f.t0) || 0) * 1000;
+  if (!t0) return '';
+  var m = Math.max(1, Math.round((Date.now() - t0) / 60000));
+  return (m < 60) ? ('已 ' + m + ' 分钟') : ('已 ' + Math.floor(m / 60) + ' 小时 ' + (m % 60) + ' 分');
+}
+function lbArkBkFlowLoad(){
+  if (!LB_ARKBK.srv) return Promise.resolve(null);
+  var srvAt = LB_ARKBK.srv;
+  return lbArkBkFlowApi().then(function (j) {
+    if (LB_ARKBK.srv !== srvAt) return null;          /* 期间切服 ⇒ 丢弃这次的返回 */
+    if (j && j.ok){ LB_ARKBK.flow = j.flow || null; LB_ARKBK.flowAt = Date.now(); }
+    return LB_ARKBK.flow;
+  }).catch(function () { return LB_ARKBK.flow; });
+}
+function lbArkBkFlowPollStart(){
+  lbArkBkFlowPollStop();
+  LB_ARKBK.flowTimer = setInterval(function () {
+    if (document.hidden || !LB_ARKBK.srv) return;
+    lbArkBkFlowLoad().then(function (fl) {
+      var f = fl || {};
+      /* v6746：回档授权浮窗打开时，流程结束（finish/abort/过期）⇒ **自动关窗** + 提示 */
+      if (LB_ARKBK.grantOn && (!fl || !lbArkBkFlowLive())){
+        try { lbToast('回档流程已结束'); } catch (e_wc) {}
+        try { lbArkBkGrantClose(); } catch (e_wd) {}
+        try { lbArkBkMineRefresh(); } catch (e_we) {}
+        return;
+      }
+      var key = [f.id || '', f.phase || '', f.step || '', f.startedBy || '', f.pointId || '',
+                 (f.watchers || []).length].join('|');
+      /* 只在状态真变了才重绘 —— 否则每 30 秒把用户正在看的步骤 tips 收起来 */
+      if (key !== (LB_ARKBK._flowKey || '')){
+        LB_ARKBK._flowKey = key;
+        try {
+          lbArkBkGoalsSyncFromFlow();
+          if (!lbArkBkAutoPickFlowPoint()) lbArkBkRender();
+        } catch (e) {}
+      }
+    });
+  }, 30000);
+}
+function lbArkBkFlowPollStop(){
+  if (LB_ARKBK.flowTimer){ clearInterval(LB_ARKBK.flowTimer); LB_ARKBK.flowTimer = null; }
+}
+/* ===== v6742（方案「安全回档·临时授权监督入口」）：被授权监督侧 =====
+   ⚠️ 不能叫 lbArkBkFlowMine —— 那个名字已有（返回布尔：流程是不是我开的，
+   lbArkBkFlowBarHtml 在用），重名会被后者覆盖 ⇒ 流程条永远显示「你的流程进行中」。 */
+function lbArkBkMineFetch(){
+  var base = lbSrvCtlApi();
+  return lbSrvCtlFetchW(base + '/api/arkbackup/flow?mine=1&username='
+                        + encodeURIComponent(lbSrvCtlUser() || '') + '&t=' + Date.now(),
+                        { cache: 'no-store' })
+    .then(function (r) { return r.json(); });
+}
+/* v6765（用户实测「打开安全回档还是要我请先选择一台服务器」）：
+   根因 —— lbArkBkFlowLoad() 第一行 `if (!LB_ARKBK.srv) return`，而刚打开时 srv 必为空
+   ⇒ 流程永远拉不到 ⇒ 上一版的「自动选流程档」拿不到 flow，永不触发。
+   这里先用 mine=1（后端返回**全部**进行中流程，不当裁判）找出哪台服有流程，把 srv 补上。 */
+function lbArkBkAutoSrvFromFlow(done){
+  var fin = function () { if (done) { try { done(); } catch (e_dn) {} } };
+  if (LB_ARKBK.srv) { fin(); return; }
+  lbArkBkMineFetch().then(function (j) {
+    var arr = (j && j.ok && j.flows) || [];
+    var pick = null;
+    for (var i = 0; i < arr.length; i++){
+      var it = arr[i] || {}, f = it.flow || {};
+      if (f.phase !== 'active' && f.phase !== 'verifying') continue;
+      if (!it.server) continue;
+      pick = it;
+      break;
+    }
+    if (pick){
+      LB_ARKBK.srv = String(pick.server);
+      LB_ARKBK.flow = pick.flow || null;
+      LB_ARKBK._flowKey = '';
+    }
+    fin();
+  }).catch(fin);
+}
+/* 从缓存里找「授权给我」的流程（eosId 统一大写比较） */
+function lbArkBkWatcherOfMine(){
+  var me = String(LB.playerEos || '').toUpperCase();
+  if (!me) return null;
+  var arr = (LB_ARKBK_MINE && LB_ARKBK_MINE.last) || [];
+  for (var i = 0; i < arr.length; i++){
+    var it = arr[i] || {}, f = it.flow || {}, ws = f.watchers || [];
+    /* v6767（用户口径「当前没授权 这里不是应该提示联系服主授权么」）：
+       只认**有目标档**的流程。没有 pointId 的空流程（历史测试遗留）不该被当作有效授权，
+       否则会显示「已授权你接管 星耀 的 — 档回档流程」。 */
+    if (!String(f.pointId || '').trim()) continue;
+    for (var j = 0; j < ws.length; j++){
+      var w = ws[j] || {};
+      if (String(w.eosId || '').toUpperCase() === me){
+        return { server: String(it.server || ''), flow: f, name: String(w.name || '') };
+      }
+    }
+  }
+  return null;
+}
+function lbArkBkMinePollStop(){
+  if (LB_ARKBK_MINE.timer){ clearTimeout(LB_ARKBK_MINE.timer); LB_ARKBK_MINE.timer = null; }
+}
+function lbArkBkMinePollStart(){
+  lbArkBkMinePollStop();
+  LB_ARKBK_MINE.timer = setTimeout(function () {
+    if (document.hidden){ lbArkBkMinePollStart(); return; }   /* 后台标签页不发请求 */
+    lbArkBkMineRefresh();
+  }, 60000);
+}
+/* 拉一次 mine：刷新缓存 + 变化才重绘底栏权限行 */
+function lbArkBkMineRefresh(done){
+  if (LB_ARKBK_MINE.busy){ if (done) done(); return; }
+  LB_ARKBK_MINE.busy = true;
+  lbArkBkMineFetch().then(function (j) {
+    LB_ARKBK_MINE.busy = false;
+    LB_ARKBK_MINE.at = Date.now();
+    /* v6767：缓存同样只留「有目标档」的流程 —— 否则一条空流程会让 hot 恒真、白开 60s 轮询 */
+    var items = ((j && j.ok && j.flows) || []).filter(function (it) {
+      var _f = (it || {}).flow || {};
+      return String(_f.pointId || '').trim() !== '';
+    });
+    var had = items.length > 0;
+    var changed = (had !== LB_ARKBK_MINE.hot);
+    LB_ARKBK_MINE.last = items;
+    LB_ARKBK_MINE.hot = had;
+    if (changed) lbPwRowRepaint();
+    if (had) lbArkBkMinePollStart(); else lbArkBkMinePollStop();
+    if (done) done();
+  }).catch(function () {
+    LB_ARKBK_MINE.busy = false;
+    if (done) done();
+  });
+}
+/* 只重绘底栏权限行（不重建整个身份浮窗）；没这行时兜底重开 */
+function lbPwRowRepaint(){
+  var el = document.getElementById('lbPwRow');
+  var h = (typeof lbPwRowBuild === 'function') ? lbPwRowBuild(lbRoleLevel()) : '';
+  if (el){
+    if (h) el.outerHTML = h; else el.parentNode.removeChild(el);
+    return;
+  }
+  if (h && document.querySelector('.lb-picker-overlay')){
+    try { lbOpenRolePicker(); } catch (e) {}
+  }
+}
+/* ===== v6746（用户口径）：独立的「回档授权」浮窗（不再改造安全回档浮窗）=====
+   被授权 ⇒ 只显示【风险检查】+ 【任务进度】（步骤里的按钮均可操作）；
+   未授权 ⇒ 显示「没有被授权，请联系服主授权回档流程」。入口一直保留。 */
+function lbArkBkGrantOpen(){
+  if (lbRoleLevel() < 2){ try { lbToast('回档授权需管理者权限'); } catch (e0) {} return; }
+  if (typeof lbArkBkMineRefresh !== 'function') return;
+  lbArkBkMineRefresh(function () {
+    var hit = lbArkBkWatcherOfMine();
+    if (hit && hit.server){
+      var _f = hit.flow || {};
+      LB_ARKBK.grantOn = true;
+      LB_ARKBK.grantInfo = { srv: hit.server, who: String(hit.name || ''),
+                             by: String(_f.startedBy || ''), ts: String(_f.pointTs || '') };
+      LB_ARKBK.srv = hit.server;
+      LB_ARKBK.flow = _f;
+      LB_ARKBK.point = String(_f.pointId || '');
+      LB_ARKBK.plan = null;
+      LB_ARKBK._flowKey = '';
+      lbArkBkGrantRender();
+      try { lbArkBkFetch(); } catch (e1) {}                  /* 内部 lbArkBkRender 会转到 Grant 渲染 */
+      if (LB_ARKBK.point){ try { lbArkBkPlan(); } catch (e2) {} }
+      try { lbArkBkFlowPollStart(); } catch (e3) {}
+      return;
+    }
+    LB_ARKBK.grantOn = true;
+    LB_ARKBK.grantInfo = null;
+    lbArkBkGrantRender();
+  });
+}
+function lbArkBkGrantRender(){
+  if (typeof lbSheetBuild !== 'function'){
+    lbUIEnsure().then(function () { try { lbArkBkGrantRender(); } catch (e) {} }, function () {});
+    return;
+  }
+  var S = lbSheetBuild('lbArkBkGrant', { onClose: 'lbArkBkGrantClose()' });
+  if (!S || !S.body) return;
+  S.title.innerHTML = '<i class="mdi mdi-account-eye"></i> 回档授权';
+  if (S.tabs) S.tabs.style.display = 'none';
+  if (S.meta) S.meta.style.display = 'none';
+  if (S.help){ S.help.setAttribute('hidden', ''); S.help.style.display = 'none'; }
+  var w = LB_ARKBK.grantInfo;
+  var h;
+  if (!w){
+    /* v6768（用户口径「授权是授权给玩家级」）：这里必须是**当前玩家**（账号昵称），不是角色名；
+       动词统一用「接管」（与「已授权 X 接管」一致）。 */
+    var _cn = (typeof lbSrvCtlNick === 'function' ? String(lbSrvCtlNick() || '').trim() : '')
+              || (typeof lbSrvCtlUser === 'function' ? String(lbSrvCtlUser() || '').trim() : '')
+              || '未知玩家';
+    h = '<div class="tc">'
+      + '<div class="arbk-notice" style="line-height:1.9">'
+      +   '当前玩家 <b>' + lbMdEsc(_cn) + '</b> <b style="color:#f59e0b">没有被授权</b> 接管回档流程。'
+      +   '<br><b style="color:#7dd3fc">请联系服主授权回档流程。</b>'
+      +   '<br><span style="color:#8b8b9e">服主在安全回档里点「开始回档流程」时，会自动把当前玩家加入授权；流程结束后自动失效。</span>'
+      + '</div></div>';
+  } else {
+    var _who = lbMdEsc(w.who || (String(w.by || '').slice(0, 8) + '…'));
+    var _srv = lbMdEsc(lbArkBkCn(w.srv));
+    var _pt = lbArkBkPointObj();
+    var _ts = lbMdEsc((_pt && lbArkBkFmtTs(_pt.ts)) || w.ts || '—');
+    /* v6751（用户口径）：
+       ① 流程条（lbArkBkFlowBarHtml）与下面的说明重复 ⇒ **不再输出**
+       ② 说明块改成「回档说明」：已授权到具体哪个档 + 怎么看 / 怎么结束 */
+    h = '<div class="tc">'
+      + '<div class="arbk-notice" style="line-height:1.85">'
+      +   '<b style="color:#c4b5fd">回档说明</b>'
+      +   '<br>已授权你接管 <b>' + _srv + '</b> 的 <b>' + _ts + '</b> 档回档流程'
+      /* v6758（用户口径）：灰字固定两行，避免自动折行断在「已完成回档 / 流程」中间 */
+      +   '<br><span style="color:#8b8b9e;display:block">'
+      +     '点步骤 → 按说明点里面的操作按钮'
+      +   '</span>'
+      +   '<span style="color:#8b8b9e;display:block">'
+      +     '全部做完后点「已完成回档流程」结束'
+      +   '</span>'
+      + '</div>'
+      + lbArkBkPlanHtml(LB_ARKBK.plan, true)
+      + '</div>';
+  }
+  S.body.innerHTML = h;
+  if (S.foot){ S.foot.innerHTML = ''; S.foot.setAttribute('hidden', ''); }
+  if (w){
+    try { lbArkBkTaskSlotEnsure(); lbTaskEnsureSlots(); lbTaskRender(); } catch (e_t) {}
+    try { lbArkBkFitFold(); } catch (e_f) {}
+  }
+  lbSheetOpen('lbArkBkGrant');
+}
+function lbArkBkGrantClose(){
+  LB_ARKBK.grantOn = false;
+  LB_ARKBK.grantInfo = null;
+  try { if (typeof lbSheetClose === 'function') lbSheetClose('lbArkBkGrant'); } catch (e) {}
+}
+/* v6684（用户口径「撤销到上次回档前不是应该集成到步骤tips里面么」）：
+   选档后由「撤销回档」步骤的 tips 提供按钮；未选档（没有步骤）时，
+   由「可选回档点」折叠区顶部的入口提供（见 lbArkBkUndoInlineHtml）。 */
+function lbArkBkUndoBtnHtml(){
+  var L = LB_ARKBK.list || {};
+  if (!L.ownBackup) return '';
+  var n = Number(L.ownBackup.undoCount) || 0;
+  return '<button class="arbk-tipbtn ghost" onclick="event.stopPropagation();lbArkBkUndo()"'
+    + ' title="把本服换回上次回档前自动备份的那份档（整档替换）">'
+    + '<i class="mdi mdi-undo-variant"></i> 撤销到上次回档前'
+    + '（' + lbMdEsc(lbArkBkFmtTs(L.ownBackup.ts))
+    + (n > 0 ? (' · 已撤销 ' + n + ' 次') : '') + '）</button>';
+}
+/* v6685（用户口径「放到『可选回档点』标题栏右对齐，无需按钮框，hover 文字变色即可」）：
+   直接复用标题栏已有的 .arbk-sumabtn（无边框 / hover 变色 / margin-left:auto 靠右），
+   文案精简成「撤销到 <时间>」，并用省略号截断，移动端窄屏不撑破标题栏。 */
+function lbArkBkUndoInlineHtml(){
+  var L = LB_ARKBK.list || {};
+  if (!L.ownBackup) return '';
+  var n = Number(L.ownBackup.undoCount) || 0;
+  return '<button class="arbk-sumabtn arbk-undo-sum"'
+    + ' onclick="event.stopPropagation();event.preventDefault();lbArkBkUndo()"'
+    + ' title="把本服换回上次回档前自动备份的那份档（整档替换）'
+    + (n > 0 ? ('· 已撤销 ' + n + ' 次') : '') + '">'
+    + '<i class="mdi mdi-undo-variant"></i>撤销到 ' + lbMdEsc(lbArkBkFmtTs(L.ownBackup.ts))
+    + '</button>';
+}
+/* v6762（根因修复）：「主体玩家」显示名 = **角色名（玩家昵称）**。
+   为什么不能只用 watchers[].name：v6762 之前存的是 lbCharName(LB.curPid)，即**当前选中角色**
+   （用户当时选的是灭绝服的「板板」），与本次回档目标服无关 ⇒ 核心岛的流程显示成「板板」。
+   为什么不能只用 eosId：LB.playerEos 是**账号级**唯一值，一个账号在 11 个服各有角色。
+   故按「srv + eosId」从 LB.playerRoles 反查该服角色；只有本机账号能反查（别人的角色数据不在本地）。 */
+function lbArkBkWatcherDisp(w, srv){
+  /* v6768（用户口径「授权是授权给玩家级」）：显示**玩家昵称**，不再带角色名。
+     授权键是 eosId（账号级），一个账号多服多角色 ⇒ 显示角色名既可能指错、也没必要。
+     （v6762 的「按 srv 反查角色名」逻辑随之移除） */
+  var eos = String((w || {}).eosId || '').toUpperCase();
+  var stored = String((w || {}).name || '').trim();
+  var me = String(LB.playerEos || '').toUpperCase();
+  if (eos && me && eos === me){
+    var nick = (typeof lbSrvCtlNick === 'function') ? String(lbSrvCtlNick() || '').trim() : '';
+    if (nick) return nick;
+    var un = (typeof lbSrvCtlUser === 'function') ? String(lbSrvCtlUser() || '').trim() : '';
+    if (un) return un;
+  }
+  return stored || (eos ? (eos.slice(0, 8) + '…') : '');
+}
+/* 底栏流程条：未开始 / 我进行中 / 别人进行中 三态（需求4） */
+function lbArkBkFlowBarHtml(){
+  if (!LB_ARKBK.srv) return '';
+  var f = LB_ARKBK.flow;
+  var mkBtn = function (label, ico, cls, onclick, title){
+    return '<button class="arbk-fb-btn ' + cls + '" onclick="' + onclick + '"'
+      + ' title="' + lbMdEsc(title || '') + '"><i class="mdi ' + ico + '"></i> ' + label + '</button>';
+  };
+  if (!lbArkBkFlowLive()){
+    if (!LB_ARKBK.point) return '';
+    var _pt = lbArkBkPointObj();
+    var _ts = _pt ? lbArkBkFmtTs(_pt.ts) : '';
+    return '<div class="arbk-flowbar">'
+      + '<div class="fb-t"><i class="mdi mdi-play-circle-outline"></i> 回档流程'
+      + (_ts ? ('<span class="fb-s">目标档 ' + lbMdEsc(_ts) + '</span>') : '')
+      + '</div><span class="fb-sp"></span>'
+      + mkBtn('开始回档流程', 'mdi-play', 'go', 'lbArkBkFlowStart()',
+              '把「我正在做这个档」记到服务器（跨客户端 / 跨玩家可见），之后步骤里的按钮才解锁')
+      + '</div>';
+  }
+  var mine = lbArkBkFlowMine();
+  var who = lbMdEsc(String(f.startedBy || '?'));
+  var ts = lbMdEsc(String(f.pointTs || ''));
+  var age = lbMdEsc(lbArkBkFlowAgeTxt(f));
+  var stepTxt = ({ start: '准备中', exec: '已执行回档', verify: '待验证' })[String(f.step || '')] || '';
+  /* v6742（方案：自动授权回档主体玩家）：主导者一眼看到「已授权给谁」。
+     文案单独算成字符串（不在 return 里堆嵌套三元，免得括号错） */
+  var _wtList = f.watchers || [];
+  var _wtTxt = '未选主体玩家 ⇒ 本次不授权任何人';
+  if (_wtList.length) {
+    var _w0 = _wtList[0] || {};
+    /* v6762：按「目标服 + eosId」反查角色名并带上昵称 —— 旧流程里 name 存的是错角色也能纠正 */
+    var _wn = lbArkBkWatcherDisp(_w0, LB_ARKBK.srv);
+    /* v6766（用户口径）：文案定为「已授权 人类（whiter.rober）接管」——
+       原「（主体玩家）查看」会跟角色名后的昵称括号连成两个括号，读起来绕。 */
+    _wtTxt = '已授权 ' + _wn + ' 接管';
+  }
+  /* v6764（用户口径「直接和主标合并」）：副标并回标题行内，沿用标题字号与色系（字重 400 分主次），
+     文案精简 —— 去掉「目标档」前缀与「已」字 ⇒「11/13 05:23 · 准备中 · 8 分钟」。 */
+  var _ageS = age ? String(age).replace(/^已\s*/, '') : '';
+  return '<div class="arbk-flowbar live' + (mine ? ' mine' : '') + '">'
+    + '<div class="fb-t"><i class="mdi mdi-progress-clock"></i> '
+    + (mine ? '你的回档流程进行中' : (who + ' 的回档流程进行中'))
+    + '<span class="fb-s">' + (ts || '')
+    + (stepTxt ? (' · ' + stepTxt) : '') + (_ageS ? (' · ' + _ageS) : '') + '</span>'
+    + '</div>'
+    + '<span class="fb-sp"></span>'
+    /* v6755（用户口径）：Grant 浮窗顶部说明块已写「已授权你接管 …」，这里再显示一遍
+       「已授权 X（主体玩家）查看」属重复 ⇒ Grant 下不输出（主浮窗保留，服主要看授权给谁） */
+    + (LB_ARKBK.grantOn ? ''
+       : ('<span class="fb-s" style="margin-left:6px;color:' + (_wtList.length ? '#7dd3fc' : '#6b7280') + '">'
+          + lbMdEsc(_wtTxt)
+          + '</span>'))
+    + (mine
+        ? mkBtn('结束', 'mdi-stop-circle-outline', 'ghost', 'lbArkBkFlowAbort()',
+                '结束本条流程标记（不会动服务器）')
+        : mkBtn('接管', 'mdi-account-switch', 'ghost', 'lbArkBkFlowTakeover()',
+                '把流程改成由你继续（目标档不变）'))
+    + '</div>';
+}
+function lbArkBkFlowStart(){
+  if (!LB_ARKBK.srv || !LB_ARKBK.point || LB_ARKBK.flowBusy) return;
+  LB_ARKBK.flowBusy = '1';
+  lbArkBkRender();
+  var _pt = lbArkBkPointObj();
+  /* v6742（用户口径：不手动指定，自动给回档主体玩家入口）：
+     LB_ARKBK.who 就是浮窗角色 TAB 手选的那个角色（行程/背包/precheck 损失清单用的） */
+  lbArkBkFlowApi('start', {
+    pointId: LB_ARKBK.point,
+    pointTs: _pt ? lbArkBkFmtTs(_pt.ts) : '',
+    /* v6745（用户口径「主体就是当前玩家」）：授权对象改成**当前登录角色**（LB.playerEos）；
+       LB_ARKBK.who 仍供行程/背包/precheck 损失清单使用 */
+    /* v6762（根因修复）：原来写 lbCharName(LB.curPid) —— curPid 是「当前选中角色」（可能属于别的服），
+       与本次回档目标服无关 ⇒ 核心岛的流程把灭绝服的「板板」当主体玩家。
+       改为按「目标服 + 本账号」反查该服角色，并附玩家昵称：人类（whiter.rober）。 */
+    watchers: LB.playerEos ? [{ eosId: LB.playerEos,
+                                /* v6768：存**玩家昵称**（授权是玩家级，与角色无关） */
+                                name: lbArkBkWatcherDisp({ eosId: LB.playerEos }, LB_ARKBK.srv) }] : [],
+    /* v6758：把当前回档目的一起存进流程 session（Grant 只读展示用） */
+    goals: { recover: !!ARKBK_G.goals.recover, keep: !!ARKBK_G.goals.keep }
+  }).then(function (j) {
+    LB_ARKBK.flowBusy = '';
+    if (j && j.ok){
+      LB_ARKBK.flow = j.flow; LB_ARKBK._flowKey = '';
+      try { lbToast('已开始回档流程，步骤里的按钮已解锁'); } catch (e) {}
+      lbArkBkRender();
+      return;
+    }
+    if (j && j.code === 'conflict' && j.flow){
+      LB_ARKBK.flow = j.flow; LB_ARKBK._flowKey = '';
+      lbArkBkRender();
+      lbArkBkFlowConflictCard(j.flow);
+      return;
+    }
+    try { lbToast('开始失败：' + ((j && (j.error || j.code)) || '未知')); } catch (e2) {}
+    lbArkBkRender();
+  }).catch(function (e) {
+    LB_ARKBK.flowBusy = '';
+    try { lbToast('开始失败：' + e); } catch (e2) {}
+    lbArkBkRender();
+  });
+}
+/* 冲突：该服已被别人开始 ⇒ 接管 / 取消（口径2：可接管） */
+function lbArkBkFlowConflictCard(fl){
+  var who = String((fl && fl.startedBy) || '?');
+  var ts = String((fl && fl.pointTs) || '');
+  var w = {}; w[LB_ARKBK.srv] = '接管后由你继续';
+  lbAskCard({
+    tone: 'warn', badge: '流程占用', title: '该服已有回档流程',
+    servers: [LB_ARKBK.srv],
+    steps: [who + ' 开始', ts ? ('目标档 ' + ts) : ''],
+    warn: w, okText: '接管', cancelText: '取消',
+    onOk: function () { lbArkBkFlowTakeover(); }
+  });
+}
+function lbArkBkFlowTakeover(){
+  if (!LB_ARKBK.srv || LB_ARKBK.flowBusy) return;
+  LB_ARKBK.flowBusy = '1';
+  lbArkBkFlowApi('takeover').then(function (j) {
+    LB_ARKBK.flowBusy = '';
+    if (j && j.ok){
+      LB_ARKBK.flow = j.flow; LB_ARKBK._flowKey = '';
+      try { lbToast('已接管回档流程'); } catch (e) {}
+    } else {
+      try { lbToast('接管失败：' + ((j && (j.error || j.code)) || '未知')); } catch (e2) {}
+    }
+    lbArkBkRender();
+  }).catch(function (e) {
+    LB_ARKBK.flowBusy = '';
+    try { lbToast('接管失败：' + e); } catch (e2) {}
+    lbArkBkRender();
+  });
+}
+function lbArkBkFlowAbort(){
+  if (!LB_ARKBK.srv || LB_ARKBK.flowBusy) return;
+  lbAskCard({
+    tone: 'warn', badge: '结束流程', title: '结束当前回档流程？',
+    servers: [LB_ARKBK.srv],
+    steps: ['流程标记清除', '步骤里的按钮重新上锁'],
+    okText: '结束流程', cancelText: '取消',
+    onOk: function () {
+      LB_ARKBK.flowBusy = '1';
+      lbArkBkFlowApi('abort').then(function (j) {
+        LB_ARKBK.flowBusy = '';
+        if (j && j.ok){
+          LB_ARKBK.flow = null; LB_ARKBK._flowKey = '';
+          try { lbToast('流程已结束'); } catch (e) {}
+        } else {
+          try { lbToast('取消失败：' + ((j && (j.error || j.code)) || '未知')); } catch (e2) {}
+        }
+        lbArkBkRender();
+      }).catch(function (e) {
+        LB_ARKBK.flowBusy = '';
+        try { lbToast('取消失败：' + e); } catch (e2) {}
+        lbArkBkRender();
+      });
+    }
+  });
+}
+/* 需求3：验证步骤 tips 里的「已完成回档流程」 */
+function lbArkBkFlowFinish(){
+  if (!LB_ARKBK.srv || LB_ARKBK.flowBusy) return;
+  if (!lbArkBkFlowOpen()) return;
+  lbAskCard({
+    tone: 'info', badge: '收尾', title: '确认回档流程已完成？',
+    servers: [LB_ARKBK.srv],
+    steps: ['标注流程完成', '底栏流程条消失'],
+    okText: '已完成', cancelText: '还没',
+    onOk: function () {
+      LB_ARKBK.flowBusy = '1';
+      lbArkBkFlowApi('finish').then(function (j) {
+        LB_ARKBK.flowBusy = '';
+        if (j && j.ok){
+          LB_ARKBK.flow = null; LB_ARKBK._flowKey = '';
+          try { lbToast('回档流程已完成'); } catch (e) {}
+        } else {
+          try { lbToast('提交失败：' + ((j && (j.error || j.code)) || '未知')); } catch (e2) {}
+        }
+        lbArkBkRender();
+      }).catch(function (e) {
+        LB_ARKBK.flowBusy = '';
+        try { lbToast('提交失败：' + e); } catch (e2) {}
+        lbArkBkRender();
+      });
+    }
+  });
+}
+/* 推进阶段（执行回档后调用；失败静默 —— 只是进度标记，不影响回档本身） */
+function lbArkBkFlowStep(step){
+  if (!LB_ARKBK.srv || !lbArkBkFlowLive()) return;
+  lbArkBkFlowApi('step', { step: step }).then(function (j) {
+    if (j && j.ok){ LB_ARKBK.flow = j.flow; LB_ARKBK._flowKey = ''; }
+  }).catch(function () {});
+}
+/* 需求5：切档 / 取消选择会打断当前流程 ⇒ 先确认 */
+function lbArkBkFlowGuard(nextPointId, onOk){
+  var f = LB_ARKBK.flow;
+  if (!f || !lbArkBkFlowLive()){ onOk(); return; }
+  if (nextPointId && String(f.pointId || '') === String(nextPointId)){ onOk(); return; }
+  var w = {}; w[LB_ARKBK.srv] = '流程会被中止';
+  lbAskCard({
+    tone: 'warn', badge: '将打断流程', title: '将打断当前回档流程',
+    servers: [LB_ARKBK.srv],
+    steps: [String(f.startedBy || '?') + ' 开始', f.pointTs ? ('目标档 ' + f.pointTs) : ''],
+    warn: w, okText: '仍然切换', cancelText: '取消',
+    onOk: function () {
+      lbArkBkFlowApi('abort').then(function () {
+        LB_ARKBK.flow = null; LB_ARKBK._flowKey = '';
+        onOk();
+      }).catch(function () { onOk(); });
+    }
+  });
+}
 function lbArkBkOpen(){
   /* 2026-11-05 B2：依赖 app_ui（lbSheetBuild/lbSheetOpen）——未加载则先加载再重入 */
   if (typeof lbSheetBuild !== 'function') { lbUIEnsure().then(lbArkBkOpen, function(){}); return; }
@@ -8454,17 +9393,36 @@ function lbArkBkOpen(){
   /* v6057（用户口径「重新打开安全回档，进度条就消失了」）：**不再清 job** ——
      关浮窗 ≠ 丢弃上一次回档结果；只有切换服务器才清（见 lbArkBkPickSrv）。 */
   LB_ARKBK.confirmText = ''; LB_ARKBK.busy = ''; LB_ARKBK.ask = null;
+  LB_ARKBK.onlineRetry = 0;                   /* v6650：每次打开重置补拉标记 */
   if (!LB_ARKBK.srv) LB_ARKBK.srv = '';
   lbSheetBuild('lbArkBk', { onClose: 'lbArkBkClose()' });
   lbSheetOpen('lbArkBk');
   try { lbTaskSyncStart(); } catch (e) {}   /* v6122：任务列表全服共享，回档浮窗同样同步 */
+  /* v6669：面板不再按预演状态改按钮文案 ⇒ 打开时无需再拉 server_config（少一次请求） */
   lbArkBkRender();
   try { lbSrvCtlOnlineSync(); } catch (e) {}   /* v6055：在线栏数据与服务器控制共享（15s TTL） */
-  lbArkBkJobResume();                          /* v6057：恢复上一次回档进度/结果 */
-  lbArkBkFetch();
+  /* v6765（用户实测）：先确定「哪台服有进行中的流程」——
+     否则 srv 为空时 lbArkBkFlowLoad 直接返回，自动选档永远触发不了。 */
+  lbArkBkAutoSrvFromFlow(function () {
+    try { lbArkBkRender(); } catch (e_r0) {}
+    lbArkBkJobResume();                        /* v6057：恢复上一次回档进度/结果 */
+    lbArkBkFetch();
+    /* v6683：拉本服回档流程 + 开 30 秒跨端轮询（别人开始/结束时这边自动跟上） */
+    try {
+      lbArkBkFlowLoad().then(function () {
+        try {
+          LB_ARKBK._flowKey = '';
+          lbArkBkGoalsSyncFromFlow();
+          if (!lbArkBkAutoPickFlowPoint()) lbArkBkRender();
+        } catch (e) {}
+      });
+      lbArkBkFlowPollStart();
+    } catch (e_fl0) {}
+  });
 }
 function lbArkBkClose(){
   lbArkBkJobStop();
+  try { lbArkBkFlowPollStop(); } catch (e_fl1) {}
   if (typeof lbSheetClose !== 'function') return;
   lbSheetClose('lbArkBk');
 }
@@ -8496,15 +9454,39 @@ function lbArkBkJobResume(){
 function lbArkBkJobStop(){
   if (LB_ARKBK.jobTimer){ clearTimeout(LB_ARKBK.jobTimer); LB_ARKBK.jobTimer = null; }
 }
-function lbArkBkPickSrv(abbr){
+/* v6578（用户口径）：取消选中地图 —— 清空服/档/块选中，回到「请先选择一台服务器」 */
+function lbArkBkClearSrv(){
   if (LB_ARKBK.busy) return;
+  LB_ARKBK.srv = '';
+  LB_ARKBK.list = null; LB_ARKBK.point = ''; LB_ARKBK.plan = null;
+  LB_ARKBK.segSel = null; LB_ARKBK.confirmText = ''; LB_ARKBK.ask = null;
+  /* v6683：流程是按服存的 —— 取消选服时先清本地，避免串到别的服 */
+  LB_ARKBK.flow = null; LB_ARKBK._flowKey = '';
+  try { lbArkBkJobStop(); } catch (e0) {}
+  lbArkBkRender();
+}
+function lbArkBkPickSrv(abbr, keepSeg){
+  if (LB_ARKBK.busy) return;
+  /* v6585（用户口径）：选地图 TAB / 选行程块 ⇒ 自动展开「可选回档点」，收起「风险检查结果」 */
+  LB_ARKBK._fold = LB_ARKBK._fold || {};
+  LB_ARKBK._fold.lbArkBkPointFold = true;
+  LB_ARKBK._fold.lbArkBkPlanFold = false;
+  if (!keepSeg) LB_ARKBK.segSel = null;   /* v6568：直接点地图 TAB -> 不再指定块区间 */
   LB_ARKBK.srv = abbr;
   LB_ARKBK.list = null; LB_ARKBK.point = ''; LB_ARKBK.plan = null;
   LB_ARKBK.job = null; LB_ARKBK.confirmText = '';
   LB_ARKBK.ask = null;
+  /* v6683：流程按服存 —— 切服先清本地，再由 fetch 之后重拉该服流程 */
+  LB_ARKBK.flow = null; LB_ARKBK._flowKey = '';
   lbArkBkJobStop();
   lbArkBkRender();
   lbArkBkFetch();
+  try {
+    lbArkBkFlowLoad().then(function () {
+      LB_ARKBK._flowKey = '';
+      try { lbArkBkGoalsSyncFromFlow(); if (!lbArkBkAutoPickFlowPoint()) lbArkBkRender(); } catch (e) {}
+    });
+  } catch (e_fl2) {}
 }
 function lbArkBkFetch(){
   var base = lbSrvCtlApi();
@@ -8575,17 +9557,42 @@ function lbArkBkServerChips(){
     return '<span class="lb-tipb server-tab' + (on ? ' active' : '') + '"'
       + ' onclick="lbArkBkPickSrv(\'' + s.abbr + '\')" title="' + lbMdEsc(tip) + '">'
       + (mdi ? '<i class="mdi ' + mdi + '"></i>' : lbMdEsc(s.abbr)) + badge + '</span>';
-  }).join('');
+  }).join('')
+    /* v6578（用户口径）：地图 TAB 行末尾加「取消选中地图」—— 与角色行同一套 .lb-srvctl-mini 结构 */
+    + (LB_ARKBK.srv
+        ? '<button class="lb-srvctl-mini" title="取消选中地图" onclick="lbArkBkClearSrv()"'
+          + ' style="margin-left:auto"><i class="mdi mdi-checkbox-blank-outline"></i></button>'
+        : '');
+}
+/* v6574（用户口径）：选中的行程块「无档」时，在可选回档点列表里按时间插一条虚线占位行，
+   明确告诉用户这个时间段没有任何回档点（不是列表漏了）。 */
+function lbArkBkNoArcHintHtml(){
+  var ss = LB_ARKBK.segSel;
+  if (!ss) return '';
+  var n = lbArkBkArcCount(ss.server, ss.from, ss.to);
+  if (n > 0) return '';
+  var rng = lbFmtTs(ss.from) + ' → ' + (ss.to ? lbFmtTs(ss.to) : '至今');
+  var head = (ss.kind === 'offline' ? '离线区间' : '该时间段');
+  return '<div class="arbk-row arbk-row-ph">'
+    + '<i class="mdi mdi-calendar-remove-outline" style="font-size:16px;flex:none;color:#64748b"></i>'
+    + '<span style="color:#8b8b9e">' + lbMdEsc(head + '（' + rng + '）没有回档点') + '</span>'
+    + '</div>';
 }
 function lbArkBkRowHtml(p){
   var sel = (LB_ARKBK.point === p.id);
+  /* v6568（用户口径）：点行程块后，落在该块区间内的档要**高亮**（便于直接挑），供滚动定位 */
+  var ss = LB_ARKBK.segSel;
+  var inSeg = !!(ss && Number(p.tsEpoch) * 1000 >= ss.from
+                 && Number(p.tsEpoch) * 1000 <= (ss.to || Date.now()));
+  var hitAttr = inSeg ? (' data-seg-hit="1" style="box-shadow:inset 0 0 0 1px #a78bfa;border-radius:6px"') : '';
   var isOwn = (p.kind === 'own_backup');
   var isRbf = (p.kind === 'rollback_backup');   /* v6038：滚动备份 */
   var icon = isRbf ? 'mdi-backup-restore' : (isOwn ? 'mdi-shield-check-outline' : 'mdi-history');
   var color = isRbf ? '#f59e0b' : (isOwn ? '#22c55e' : '#a78bfa');
   var label = isRbf ? ('滚动备份 · ' + lbArkBkAgo(p.tsEpoch))
     : (isOwn ? (p.label || '回档前自动备份') : ('定时快照 · ' + lbArkBkAgo(p.tsEpoch)));
-  return '<div class="arbk-row' + (sel ? ' sel' : '') + '" onclick="lbArkBkPickPoint(\'' + lbMdEsc(p.id) + '\')">'
+  return '<div class="arbk-row' + (sel ? ' sel' : '') + '"' + hitAttr
+    + ' onclick="lbArkBkPickPoint(\'' + lbMdEsc(p.id) + '\')">'
     + '<i class="mdi ' + icon + '" style="color:' + color + ';font-size:16px;flex:none"></i>'
     + '<span class="arbk-ts">' + lbMdEsc(lbArkBkFmtTs(p.ts)) + '</span>'
     + '<span class="arbk-mb">' + (p.mb || 0) + ' MB</span>'
@@ -8629,7 +9636,13 @@ function lbArkBkPresList(pr){
   var mv = pr.moved || [];
   if (!mv.length) return '';
   return mv.map(function (x) {
-    var nm = x.name || String(x.eosId || '').slice(0, 8);
+    /* v6754（用户口径「角色名（玩家昵称）」，防角色重名分不清）：
+       后端 v6754 起 name=角色名、accountName=平台账号名；兼容旧后端（无这两个字段）退回 x.name */
+    var _ch = String(x.characterName || '').trim();
+    var _ac = String(x.accountName || '').trim();
+    var nm;
+    if (_ch && _ac && _ch !== _ac) nm = _ch + '（' + _ac + '）';
+    else nm = _ch || _ac || String(x.name || '').trim() || String(x.eosId || '').slice(0, 8);
     var tag, cls;
     if (x.newRole) { tag = '角色将消失'; cls = 'bad'; }
     else if (x.hasRoleInTarget) { tag = '进度回退'; cls = 'warn'; }
@@ -8660,101 +9673,2513 @@ function lbArkBkGuide(title, steps, note, tip){
     + '<span>' + tip + '</span></div>';
   return h + '</div>';
 }
-function lbArkBkPlanHtml(pl){
+/* v6752：noFold=true 时（「回档授权」浮窗）风险检查**不允许折叠**：
+   不绑 ontoggle，且 summary 点击直接拦截并强制 open=true。 */
+function lbArkBkPlanHtml(pl, noFold){
   if (!pl) return '';
+  /* v6641（用户口径）：标题行要显示**选中档的时间** —— 一眼看出这次检查针对哪个档 */
+  var _tpObj = null;
+  try { _tpObj = (typeof lbArkBkPointObj === 'function') ? lbArkBkPointObj() : null; } catch (e_tp) { _tpObj = null; }
+  var _tpTxt = _tpObj ? String(lbArkBkFmtTs(_tpObj.ts) || '') : '';
   var pc = pl.precheck || {};
   var pr = pc.presenceRisk || {};   /* v6045：角色进出（后端按目标档时刻切窗口算） */
-  /* v6055（用户口径「同时风险要考虑在线用户」）：onlineRisk 由后端 precheck 返回，
-     数据源 = asa-data/<abbr>_online.json（RCON ListPlayers 快照）。onN = -1 表示「未知」。 */
   var on = pc.onlineRisk || {};
   var onN = on.ok ? (on.count || 0) : -1;
   var vd = pl.verdict || pc.verdict || '';
-  /* 有人在线 ⇒ 无论后端 verdict 如何都按风险处理：回档会把人直接踢下线、进度退回目标档 */
-  var _riskNow = (vd !== 'clear') || (onN > 0);
-  var head = !_riskNow
-    ? '<span class="arbk-vd ok"><i class="mdi mdi-check-circle"></i> 全绿，可直接回档</span>'
-    : '<span class="arbk-vd bad"><i class="mdi mdi-alert-circle"></i> 存在风险，需确认后执行</span>';
-  var h = '<div class="arbk-plan">'
-    + '<div class="arbk-line">' + head + '</div>'
-    + '<div class="arbk-line arbk-dim">目标档 ' + (pl.targetMB || '?') + ' MB → 当前档 ' + (pl.activeMB || '?') + ' MB'
-    + '　预计 ' + (pl.etaSec || 0) + ' 秒</div>'
-    + '<div class="arbk-cnts">'
-    +   '<span class="arbk-c ok"><i class="mdi mdi-check-circle-outline"></i> 安全 ' + (pl.safe || 0) + '</span>'
-    +   '<span class="arbk-c warn"><i class="mdi mdi-alert-outline"></i> 物品丢失 ' + (pl.loss || 0) + '</span>'
-    +   '<span class="arbk-c bad"><i class="mdi mdi-content-duplicate"></i> 角色重复 ' + (pl.dup || 0) + '</span>'
-    +   '<span class="arbk-c ' + (pr.newRoleCount ? 'bad' : (pr.count ? 'warn' : 'ok')) + '">'
-    +     '<i class="mdi mdi-account-switch"></i> 角色进出 ' + (pr.count || 0) + '</span>'
-    +   '<span class="arbk-c ' + (onN > 0 ? 'bad' : (onN === 0 ? 'ok' : 'warn')) + '">'
-    +     '<i class="mdi mdi-account-multiple"></i> 在线 ' + (onN < 0 ? '未知' : onN) + '</span>'
-    + '</div>';
-  if (pl.notice) h += '<div class="arbk-notice">' + lbMdEsc(pl.notice) + '</div>';
-  /* v6055：在线玩家是「此刻立刻受影响」的一类，单独成块列出名字 */
+  /* v6653：背包会减少也算风险（对齐 v6624「会少东西就直接标黄」） */
+  var _bsRisk = 0;
+  try { _bsRisk = (lbArkBkBagStat(pl) || {}).kinds || 0; } catch (e_bsR) { _bsRisk = 0; }
+  var _riskNow = (vd !== 'clear') || (onN > 0) || (_bsRisk > 0);
+  /* v6628（用户口径「除折叠块外全部可视化」）：结构改为
+     ① 指标胶囊（当前档 → 目标档 · 预计耗时）
+     ② 4 个计数格（0=绿 / >0 突出重点，点击各自打开独立浮窗）
+     ③ 黄框流程（风险结论 + 后端提示 + 消除风险的步骤）
+     ①②③ 之外的原块（在线 / 物品丢失 / 角色重复 / 角色进出 / 背包差异）
+     全部搬进隐藏容器 #arbkRiskSrc，由计数格弹窗按需取用（内容一字不丢）。 */
+  var _foldAttr = noFold
+    ? ' open'
+    : (' ontoggle="lbArkBkAccToggle(this)"'
+       + ((LB_ARKBK._fold && LB_ARKBK._fold.lbArkBkPlanFold === false) ? '' : ' open'));
+  var _sumAttr = noFold ? ' onclick="event.preventDefault();this.parentNode.open=true"' : '';
+  var h = '<details class="arbk-fold" id="lbArkBkPlanFold"' + _foldAttr + '>'
+    + '<summary' + _sumAttr + '><i class="mdi mdi-shield-search"></i> 风险检查'
+    + (_tpTxt ? ('<span class="arbk-dim" style="color:#c4b5fd">' + lbMdEsc(_tpTxt) + '</span>') : '')
+    + (_riskNow
+        ? '<span class="arbk-dim" style="color:#f87171">存在风险</span>'
+        : '<span class="arbk-dim" style="color:#22c55e">全绿</span>')
+    + '<button class="arbk-sumabtn" title="按下名单处理完（换档/传走/传回）后，再查一次"'
+    + ' onclick="event.stopPropagation();event.preventDefault();lbArkBkPlan()">'
+    + '<i class="mdi mdi-refresh"></i> 重新检查</button>'
+    + '</summary>'
+    + '<div class="arbk-plan">'
+    /* v6659（用户口径「附件3 放到 执行回档 的确认浮窗里」）：档大小/预计耗时不再占面板一行，
+       改由 lbArkBkAskCard 在「执行回档」确认浮窗的说明里给出。 */
+    + lbArkBkPlanCntsHtml(pl, pr, onN)
+    + lbArkBkPlanFlowHtml(pl, pc, pr, on, onN, _riskNow);
+
+  /* ===== 以下为「内容源」：原来平铺在面板里的块，现在隐藏等弹窗调用 ===== */
+  var src = '';
+  /* 在线玩家 */
   if (onN > 0){
     var _ons = (on.players || []).map(function (x) { return x.name || x.eosId || ''; })
       .filter(function (s) { return s; });
-    h += '<div class="arbk-sec bad"><i class="mdi mdi-account-multiple"></i> 此刻在线（' + onN + ' 人）'
+    src += '<div id="arbkRiskOnWrap">'
+      + '<div class="arbk-sec bad"><i class="mdi mdi-account-multiple"></i> 此刻在线（' + onN + ' 人）'
       + '<span class="arbk-dim">回档会把这些人踢下线，进度退回目标档时刻</span></div>'
       + '<div class="arbk-dim" style="padding:2px 0 6px">' + lbMdEsc(_ons.join(' · '))
       + (on.fresh === false && on.ageSec
           ? ('　（快照 ' + Math.max(1, Math.round(on.ageSec / 60)) + ' 分钟前）') : '')
-      + '</div>';
+      + '</div></div>';
   } else if (onN < 0){
-    h += '<div class="arbk-dim" style="padding:4px 0">在线状态未知（未拿到 ListPlayers 快照）'
-      + '—— 可先到「服务器控制」刷新一次在线状态，再点「重新检查」。</div>';
+    src += '<div id="arbkRiskOnWrap"><div class="arbk-dim" style="padding:4px 0">'
+      + '在线状态未知（未拿到 ListPlayers 快照）—— 可先到「服务器控制」刷新一次在线状态，再点「重新检查」。</div></div>';
   }
+  /* 物品丢失（v6653 用户口径：= 背包会减少，全角色汇总） */
+  var _bs1 = { kinds: 0, roles: [] };
+  try { _bs1 = lbArkBkBagStat(pl) || _bs1; } catch (e_bs1) { _bs1 = { kinds: 0, roles: [] }; }
+  if (_bs1.kinds){
+    src += '<div id="arbkRiskBagLossWrap">'
+      + '<div class="arbk-sec warn"><i class="mdi mdi-bag-personal"></i> 物品会减少（'
+      + _bs1.kinds + ' 种）'
+      + '<span class="arbk-dim">回档后这些物品在当前档里多出来的部分会消失</span></div>';
+    _bs1.roles.forEach(function (r1, i1) {
+      src += '<div class="arbk-dim" style="padding:2px 0 3px">'
+        + (i1 === 0 ? '' : '<span style="color:#2a2a3a">—</span> ')
+        + lbMdEsc(r1.name || ('pid ' + r1.pid)) + '（' + r1.items.length + ' 种）</div>'
+        + '<div class="arbk-chips">';
+      r1.items.forEach(function (x1) { src += lbArkBkBagChip(x1.k, x1.q || x1.n, x1.g); });
+      src += '</div>';
+    });
+    src += lbArkBkGuide('怎么避免', [
+        '换<strong>其他回档点</strong> —— 选一个这些物品数量已经对上的档',
+        '或回档前把多出来的物品<strong>转移到别服仓库/低温仓带走</strong>',
+        '接受减少（这些物品回档后会消失）'
+      ], '整图回档下箱子里的东西也会一起回到目标时刻 —— 只有<strong>带出本服</strong>才保得住。')
+      + '</div>';
+  }
+  /* 角色丢失（原「物品将丢失」，v6653 改名并归入「角色异常」） */
   if ((pc.loss || []).length){
-    h += '<div class="arbk-sec warn"><i class="mdi mdi-alert-outline"></i> 物品将丢失（' + pc.loss.length + ' 名）</div>'
-      + lbArkBkNameList(pc.loss, 1, 'loss');
-    /* §5.5.7 规避指引（v6047：不限定「更晚」—— 角色被删的情况要选更早的档） */
-    h += lbArkBkGuide('怎么避免', [
-      '换<strong>其他回档点</strong> —— 选一个这些角色<strong>已存在</strong>的档（更早或更晚都行，看哪个档里有他们）',
-      '或让这些角色先<strong>离开本服</strong>（去任意其他服，回档后再回来）',
-      '接受重置（等级 / 背包 / 恐龙全部清空）'
-    ], '整图回档下「把东西存箱子 / 收低温仓」<strong>无效</strong> —— 箱子也会一起回到目标时刻；'
-      + '唯一有效的是让角色本身不在本服。',
-      '<strong>带物品走</strong> —— 目标档里没有这个角色，他的装备不会与档内物品撞 ID，'
-      + '带走、回档、再带回来都能保住。但<strong>回档点之前就放进过本服箱子 / 恐龙背包的东西别带</strong>：'
-      + '回档后箱子里会再出现一份，同 ID 相遇会湮灭。');
+    src += '<div id="arbkRiskLossWrap">'
+      + '<div class="arbk-sec warn"><i class="mdi mdi-alert-outline"></i> 角色丢失（' + pc.loss.length + ' 名）</div>'
+      + lbArkBkNameList(pc.loss, 1, 'loss')
+      + lbArkBkGuide('怎么避免', [
+          '换<strong>其他回档点</strong> —— 选一个这些角色<strong>已存在</strong>的档（更早或更晚都行，看哪个档里有他们）',
+          '或让这些角色先<strong>离开本服</strong>（去任意其他服，回档后再回来）',
+          '接受重置（等级 / 背包 / 恐龙全部清空）'
+        ], '整图回档下「把东西存箱子 / 收低温仓」<strong>无效</strong> —— 箱子也会一起回到目标时刻；'
+          + '唯一有效的是让角色本身不在本服。',
+          '<strong>带物品走</strong> —— 目标档里没有这个角色，他的装备不会与档内物品撞 ID，'
+          + '带走、回档、再带回来都能保住。但<strong>回档点之前就放进过本服箱子 / 恐龙背包的东西别带</strong>：'
+          + '回档后箱子里会再出现一份，同 ID 相遇会湮灭。')
+      + '</div>';
   }
+  /* 角色重复 */
   if ((pc.dup || []).length){
-    h += '<div class="arbk-sec bad"><i class="mdi mdi-content-duplicate"></i> 将出现重复（' + pc.dup.length + ' 名）</div>'
-      + lbArkBkNameList(pc.dup, 1, 'dup');
-    h += lbArkBkGuide('怎么避免', [
-      '让这些角色先<strong>回到本服</strong> —— 上面标了他们现在在哪台服，从那台服传回来',
-      '确认角色能在本服进游戏后，再执行回档'
-    ], '回档后他们退回目标档时刻的状态。<strong>回档后请勿立即跨服。</strong>',
-      '<strong>脱光再传回</strong> —— 目标档里他原本就有一份装备，带回来会与档内同 ID 物品湮灭。'
-      + '物品先留在原服，回档后从本服的背包 / 箱子里取。');
+    src += '<details class="arbk-fold" id="lbArkBkDupFold" ontoggle="lbArkBkAccToggle(this)"'
+      + ((LB_ARKBK._fold && LB_ARKBK._fold.lbArkBkDupFold) ? ' open' : '') + '>'
+      + '<summary style="color:#f87171"><i class="mdi mdi-content-duplicate"></i> 角色重复（'
+      + pc.dup.length + ' 名）</summary>'
+      + '<div class="arbk-foldbody"><div class="arbk-nmwrap">' + lbArkBkNameList(pc.dup, 1, 'dup') + '</div>'
+      + lbArkBkGuide('怎么避免', [
+          '让这些角色先<strong>回到本服</strong> —— 上面标了他们现在在哪台服，从那台服传回来',
+          '确认角色能在本服进游戏后，再执行回档'
+        ], '回档后他们退回目标档时刻的状态。',
+          '<strong>只带档内已有的物品传回</strong> —— 多出来的东西留在原服。'
+          + '（真正会造成两份的是「把多出来的东西也一起带进来」，不是「带着档内原有的东西回来」。）')
+      + '</div></details>';
   }
-  if ((pr.moved || []).length){
-    /* v6045（用户口径）：**不折叠** —— 用户要「列出哪些角色进出过」，
-       这是回档影响面的一等公民，藏起来等于没做。 */
-    h += '<div class="arbk-sec ' + (pr.newRoleCount ? 'bad' : 'warn') + '">'
-      + '<i class="mdi mdi-account-switch"></i> 期间进出（' + pr.moved.length + ' 名）'
-      + '<span class="arbk-dim">回档点 ' + lbMdEsc(pr.tTargetStr || '?') + ' → 现在</span></div>'
-      + '<div class="arbk-nmwrap">' + lbArkBkPresList(pr) + '</div>';
-    if (pr.newRoleCount){
-      h += lbArkBkGuide('这些角色会消失', [
-        '换<strong>其他回档点</strong> —— 选一个他们<strong>已创建角色</strong>的档',
-        '或回档后让他们重创角色，再用下方「玩家角色档案」单独恢复'
-      ], '这些账号在回档点之后才在本服创建角色，回档后目标档里没有他们 ⇒ 角色整只消失。');
+  /* 角色进出 */
+  var _mvN = (pr.moved || []).length;
+  var _presCls = pr.newRoleCount ? 'bad' : (_mvN ? 'warn' : '');
+  src += '<details class="arbk-fold" id="lbArkBkPresFold" ontoggle="lbArkBkAccToggle(this)"'
+    + ((LB_ARKBK._fold && LB_ARKBK._fold.lbArkBkPresFold) ? ' open' : '') + '>'
+    + '<summary style="color:' + (_presCls === 'bad' ? '#f87171' : (_presCls === 'warn' ? '#fbbf24' : '')) + '">'
+    + '<i class="mdi mdi-account-switch"></i> 角色进出（' + _mvN + ' 名）'
+    + '<span class="arbk-dim">回档点 ' + lbMdEsc(pr.tTargetStr || '?') + ' → 现在</span></summary>';
+  if (_mvN){
+    src += '<div class="arbk-foldbody"><div class="arbk-nmwrap">' + lbArkBkPresList(pr) + '</div></div>';
+  } else {
+    src += '<div class="arbk-foldbody"><div class="arbk-dim" style="padding:2px 0 6px">'
+      + '本窗口内没有角色进出记录</div></div>';
+  }
+  if (pr.newRoleCount){
+    src += '<div class="arbk-foldbody">' + lbArkBkGuide('这些角色会消失', [
+      '换<strong>其他回档点</strong> —— 选一个他们<strong>已创建角色</strong>的档',
+      '或回档后让他们重创角色，再用下方「玩家角色档案」单独恢复'
+    ], '这些账号在回档点之后才在本服创建角色，回档后目标档里没有他们 ⇒ 角色整只消失。') + '</div>';
+  }
+  src += '</details>';
+  /* 背包差异 */
+  src += lbArkBkEmbedsHtml();
+
+  h += '<div id="arbkRiskSrc" style="display:none">' + src + '</div>'
+    + '</div></details>';
+  return h;
+}
+/* v6628：指标胶囊 —— 当前档 → 目标档 + 预计耗时（秒自动换算） */
+function lbArkBkPlanMetaHtml(pl){
+  var sec = Number(pl.etaSec || 0);
+  var mm = Math.floor(sec / 60), ss = sec % 60;
+  var dur = !sec ? '' : (mm ? (mm + ' 分' + (ss ? ' ' + ss + ' 秒' : '')) : (ss + ' 秒'));
+  return '<div class="arbk-pv-meta">'
+    + '<span class="bar">当前档 <b>' + (pl.activeMB || '?') + '</b> MB</span>'
+    + '<span class="arw"><i class="mdi mdi-arrow-right"></i></span>'
+    + '<span class="bar">目标档 <b>' + (pl.targetMB || '?') + '</b> MB</span>'
+    + (dur ? '<span class="bar">预计 <b>' + dur + '</b></span>' : '')
+    + '</div>';
+}
+/* v6628：4 个计数格 —— 0 绿 / >0 高亮，点击打开对应浮窗
+   v6653（用户口径）：①「物品丢失」= 两档背包比对后会减少的**物品种类数**（全角色汇总）
+                     ②「角色重复」+「角色丢失」合并成「角色异常」 */
+function lbArkBkPlanCntsHtml(pl, pr, onN){
+  var _bsN = 0;
+  try { _bsN = (lbArkBkBagStat(pl) || {}).kinds || 0; } catch (e_bsN) { _bsN = 0; }
+  /* v6678（用户口径「角色异常，要包含其他角色异常情况」）：
+     原来只数 loss + dup（pid 维），漏了「回档点之后新建的角色」（回档后整个消失）。
+     改为优先读后端 roleIssues.total（按 eosId 去重），旧后端回退原口径。 */
+  var _ri = null;
+  try { _ri = (pl && pl.precheck && pl.precheck.roleIssues) || null; } catch (e_ri) { _ri = null; }
+  var _roleN = _ri ? Number(_ri.total || 0) : (Number(pl.loss || 0) + Number(pl.dup || 0));
+  var items = [
+    ['loss', '物品丢失', _bsN,           'mdi-bag-personal', 'bad'],
+    ['role', '角色异常', _roleN,         'mdi-content-duplicate', 'amber'],
+    ['pres', '角色进出', (pr.count || 0), 'mdi-account-switch', 'amber'],
+    ['on',   '在线',     onN,            'mdi-account-multiple', 'bad']
+  ];
+  var out = '<div class="arbk-pv-cnts">';
+  items.forEach(function (it) {
+    var n = it[2];
+    var cls = (n > 0) ? it[4] : 'ok';
+    var txt = (n < 0) ? '未知' : String(n);
+    out += '<span class="arbk-pv-c ' + cls + '" onclick="lbArkBkRiskPop(&quot;' + it[0] + '&quot;)"'
+      + ' title="点击查看明细">'
+      + '<i class="mdi ' + it[3] + '"></i>' + it[1] + '<b>' + txt + '</b></span>';
+  });
+  return out + '</div>';
+}
+/* v6628：黄框 —— 风险结论 + 后端提示（原 notice）+ 消除风险步骤 */
+function lbArkBkPlanFlowHtml(pl, pc, pr, on, onN, riskNow){
+  /* v6659（用户口径）：
+     ① 结论（全绿/存在风险）移到「回档目的」胶囊同一行、右对齐（不再独占一行）
+     ② 去掉 .tail 胶囊（「无需处理 / 需处理后回档」）—— 与结论重复
+     v6657：整行 notice（div.hd）不再渲染，后端 pl.notice 仍原样返回只是不显示。 */
+  var vdTxt = riskNow ? '存在风险，需确认后执行' : '全绿，可直接回档';
+  var vdIco = riskNow ? 'mdi-alert' : 'mdi-check-circle';
+  /* v6684（用户口径「底栏的元素整个移到附件块内，用分隔线隔开；确认移干净后把底栏干掉」）：
+     流程条（开始/进行中/接管）与失败时的「重试/清除」都搬到这里，
+     用 .arbk-flowsep 虚线分隔线跟步骤隔开。底栏 .lw-foot 从此不再渲染。 */
+  var _footIn = '';
+  try { _footIn = lbArkBkFlowBarHtml(); } catch (e_fi0) { _footIn = ''; }
+  try { _footIn += lbArkBkFootBtns(); } catch (e_fi1) {}
+  return '<div class="arbk-pv-flow' + (riskNow ? '' : ' ok') + '">'
+    + lbArkBkGoalsHtml(vdTxt, riskNow ? 'bad' : 'ok', vdIco)
+    + '<div class="bd">' + lbArkBkRiskSteps(pl, pc, pr, on, onN) + '</div>'
+    + (_footIn ? ('<div class="arbk-flowsep"></div><div class="arbk-flowin">' + _footIn + '</div>') : '')
+    + '</div>';
+}
+/* v6628：当前选中角色（pid 为唯一权威，名字只用于显示） */
+function lbArkBkMyRole(){
+  var who = String(LB_ARKBK.who || '');
+  var out = { eos: who, pid: '', charName: '', inCur: false, inTgt: false };
+  if (!who) return out;
+  try {
+    var arr = (LB_ARKBK.paths && LB_ARKBK.paths.players) || [];
+    for (var i = 0; i < arr.length; i++){
+      if (String(arr[i].eosId) === who){ out.charName = arr[i].charName || arr[i].name || ''; break; }
+    }
+  } catch (e) {}
+  var pc = (LB_ARKBK.plan && LB_ARKBK.plan.precheck) || {};
+  var low = who.toLowerCase();
+  [].concat(pc.safe || [], pc.loss || [], pc.dup || []).forEach(function (r) {
+    if (r && !out.pid && String(r.eosId || '').toLowerCase() === low) out.pid = String(r.pid || '');
+  });
+  if (out.pid){
+    (pc.loss || []).forEach(function (r) { if (r && String(r.pid) === out.pid) out.inCur = true; });
+    (pc.dup || []).forEach(function (r) { if (r && String(r.pid) === out.pid) out.inTgt = true; });
+    (pc.safe || []).forEach(function (r) { if (r && String(r.pid) === out.pid) { out.inCur = true; out.inTgt = true; } });
+  }
+  return out;
+}
+/* ===== v6644（2026-11-13）：安全回档「消除风险步骤」改为规则引擎 =====
+  来源：_preview_arkbk_steps.html（沙盒原型，1024 组合矩阵 0 违规）
+  设计：
+    · 一条规则 = 一个动作；slots = 同一动作的多个触发点（各展开成一步）
+    · 同一 order 的命中触发点自动合并成一步（如「上传生物+物品」）
+    · altSteps = 备选方案（可开关）；altStops = 终止型备选（选中后后续步骤作废）
+    · 就位只由 pos 决定，与「是否撤销」无关（3 条不变量见沙盒页注释）
+  禁止：再在别处手写步骤文案 —— 本段是唯一真相源。 */
+/* v6658（用户口径）：回档目的由 4 个合并成 2 个 ——
+     recover 找回 = 原「拿回物品」+「生物死了」（决定上传/取回什么）
+     keep    回溯 = 原「驯龙重训」+「建筑塌了」（决定是否允许撤销）
+   细粒度仍由 arkbkFacts() 映射成 items/dino/tame/build，规则表 ARKBK_RULES 一行不改。 */
+var ARKBK_G = { goals: { recover: true, keep: false }, alt: {} };
+/* v6764（用户口径「找回、回溯 为啥我重打开窗口会被重置选择」）：
+   原来只存内存变量 ⇒ 刷新页面 / 重开客户端就回默认「找回」。现在落 localStorage。 */
+try {
+  var _arkbkG0 = JSON.parse(localStorage.getItem('dinoArkBkGoals') || 'null');
+  if (_arkbkG0 && typeof _arkbkG0 === 'object'){
+    if (!!_arkbkG0.keep && !!!_arkbkG0.recover) ARKBK_G.goals = { recover: false, keep: true };
+  }
+} catch (e_arkbkG0) {}
+/* 阶段3：图标 —— 服务器 MDI（@mdi/svg）+ 泰克传送门 / 低温仓（项目 webp 缩略图） */
+var ARKBK_WEBP = 'https://dino.whiterober.ccwu.cc/thumbs/webp96/';
+/* 步骤胶囊专用：服务器名 → 图标；上传 → 泰克传送门；低温仓 → 低温仓图标
+   只作用于 .txt 显示层，不影响步骤纯文本（导出 / 断言） */
+function arkbkIcoText(t, abbr){
+  var h = String(t == null ? '' : t);
+  try {
+    var cn = abbr ? lbArkBkCn(abbr) : '';
+    /* 图标走项目现成 LB_SERVER_MDI + lbMdiSvg；配色走 ARKBK_SRV_COLOR（HA server_themes） */
+    var svg = (abbr && typeof LB_SERVER_MDI === 'object' && LB_SERVER_MDI[abbr])
+      ? lbMdiSvg(LB_SERVER_MDI[abbr], 14) : '';
+    var col = (abbr && ARKBK_SRV_COLOR[abbr]) || '#c4b5fd';
+    if (cn && svg){
+      h = h.split(cn).join('<span class="ico-srv" style="color:' + col + '" title="' + lbMdEsc(cn)
+        + '">' + svg + '</span>');
+    }
+  } catch (e) {}
+  h = h.replace(/上传/g, '<img class="ico-ark" src="' + ARKBK_WEBP
+    + 'f964471282ae_w96.webp" alt="" title="上传（泰克传送门）">上传');
+  h = h.replace(/低温仓/g, '<img class="ico-ark" src="' + ARKBK_WEBP
+    + '1b0525a78ab0_w96.webp" alt="" title="低温仓">');
+  return h;
+}
+
+
+/* 目的开关（回档目的选择器） */
+function lbArkBkGoalToggle(k){
+  if (!k) return;
+  /* v6660（用户口径「找回、回溯 改成单选」）：radio 式互斥 —— 点另一个就切过去，
+     点已选中的无反应。任何时刻恒有且只有一个目的被选中（自动满足「至少一个」）。 */
+  if (ARKBK_G.goals[k]) return;
+  ['recover', 'keep'].forEach(function (x) { ARKBK_G.goals[x] = (x === k); });
+  try { lbArkBkGoalsSave(); } catch (e_gs0) {}   /* v6764：持久化，重开窗口不再重置 */
+  /* v6758：流程进行中 ⇒ 把目的同步到流程 session（「回档授权」只读展示用它）。
+     失败静默：本地切换照常生效，不因网络问题阻断操作。 */
+  try {
+    if (lbArkBkFlowLive() && lbArkBkFlowMine()) {
+      lbArkBkFlowApi('goals', { goals: ARKBK_G.goals }).catch(function () {});
+    }
+  } catch (e_g58) {}
+  lbArkBkRender();
+}
+function lbArkBkAltToggle(key, e){
+  if (e){ e.stopPropagation(); e.preventDefault(); }
+  if (!key) return;
+  var keys = String(key).split('|');
+  var on = !keys.every(function (k) { return !!ARKBK_G.alt[k]; });
+  keys.forEach(function (k) { ARKBK_G.alt[k] = on; });
+  lbArkBkRender();
+}
+/* v6672（用户口径「步骤中 通知其他玩家的步骤 的 tips 要有按钮 可以 一键手动发公告」）：
+   手动广播一条回档公告（后端 /api/arkbackup/announce：中英各一条，写明回档到哪个时间点 + 在线人数）。
+   **只发广播**，不创建任务、不改变任何服务器状态。 */
+function lbArkBkAnnounce(e, kind){
+  if (e){ e.stopPropagation(); e.preventDefault(); }
+  if (!LB_ARKBK.srv){ try { lbToast('请先选择服务器'); } catch (e0) {} return; }
+  if (LB_ARKBK._annBusy){ try { lbToast('上一次公告还在发送…'); } catch (e1) {} return; }
+  LB_ARKBK._annBusy = true;
+  /* v6676（用户口径「请下线的公告要动态说明，会不会回到当前档」）：
+     undoable 由前端算（取决于用户勾的目的），后端据此选文案 —— 与预览框同一套判断。 */
+  var _und = false;
+  try { _und = arkbkCanUndo(arkbkFacts()); } catch (e_u) { _und = false; }
+  lbSrvCtlFetchW(lbSrvCtlApi() + '/api/arkbackup/announce', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ server: LB_ARKBK.srv, pointId: LB_ARKBK.point || '',
+                           kind: (kind === 'consent') ? 'consent' : 'offline',
+                           undoable: !!_und })
+  }).then(function (r) { return r.json().then(function (j) { return { s: r.status, j: j }; }); })
+    .then(function (x) {
+      LB_ARKBK._annBusy = false;
+      if (x.s === 200 && x.j && x.j.ok){
+        var n = x.j.online;
+        try { lbToast('公告已发送' + (n != null ? ('（在线 ' + n + ' 人）') : '')); } catch (e2) {}
+      } else {
+        var msg = (x.j && (x.j.error || (x.j.sent && x.j.sent[0] && x.j.sent[0].msg))) || ('HTTP ' + x.s);
+        try { lbToast('公告发送失败：' + msg); } catch (e3) {}
+      }
+    }).catch(function (err) {
+      LB_ARKBK._annBusy = false;
+      try { lbToast('公告发送异常：' + err); } catch (e4) {}
+    });
+}
+
+
+/* v6662：物品丢失事实 —— 背包减少种数（跨全角色，与「物品丢失」徽标 / bag chip 同源） */
+function _arkbkItemsLossN(){
+  try {
+    var st = lbArkBkBagStat(LB_ARKBK.plan);
+    return Number((st && st.kinds) || 0);
+  } catch (e) { return 0; }
+}
+/* v6662：生物丢失事实 —— 当前档低温仓有、目标档没有的生物数量（回档会带走）
+   与 lbArkBkStepChipsHtml('cryo') 的 loseN 同一算法，键用 lbArkBkCryoKey */
+function _arkbkDinoLossN(){
+  try {
+    var p = LB_ARKBK.plan || {};
+    var pc = p.precheck || {};
+    var cNow = pc.currentCryopods || p.currentCryopods || [];
+    var cTgt = pc.targetCryopods || p.targetCryopods || [];
+    var seen = {};
+    (cTgt || []).forEach(function (x) { seen[lbArkBkCryoKey(x)] = 1; });
+    var n = 0;
+    (cNow || []).forEach(function (x) { if (!seen[lbArkBkCryoKey(x)]) n++; });
+    return n;
+  } catch (e2) { return 0; }
+}
+/* v6678：读后端 roleIssues 某一类的人数；旧后端无 roleIssues 时回退到 loss/dup 口径 */
+function _arkbkRoleN(pc, kind){
+  try {
+    var ri = (pc && pc.roleIssues) || null;
+    if (ri){
+      /* v6678c：total 是**数字**（去重后总数），不是数组 —— 直接取，不能走下面的 .length */
+      if (kind === 'total') return Number(ri.total || 0);
+      if (kind === 'newAfter') return (ri.newAfter || []).length;
+      return (ri[kind] || []).length;
+    }
+    /* 兼容旧后端：新增号从 presenceRisk 取，其余按 loss/dup 长度 */
+    if (kind === 'newAfter') return Number(((pc || {}).presenceRisk || {}).newRoleCount || 0);
+    if (kind === 'vanish') return ((pc || {}).loss || []).length;
+    if (kind === 'appear') return ((pc || {}).dup || []).length;
+    /* v6678c：旧后端无 roleIssues 时的 total —— 补上「回档点后新建的角色」（原 chip 漏的第三类） */
+    if (kind === 'total') return Number(((pc || {}).loss || []).length)
+      + Number(((pc || {}).dup || []).length)
+      + Number(((pc || {}).presenceRisk || {}).newRoleCount || 0);
+    return 0;
+  } catch (e) { return 0; }
+}
+/* 事实映射：正式项目数据 → 规则引擎的 f */
+function arkbkFacts(){
+  var me = lbArkBkMyRole();
+  var pc = (LB_ARKBK.plan && LB_ARKBK.plan.precheck) || {};
+  var pr = pc.presenceRisk || {};
+  var on = pc.onlineRisk || {};
+  var onN = on.ok ? Number(on.count || 0) : 0;
+  var pos = me.inCur ? (me.inTgt ? 'both' : 'curOnly') : (me.inTgt ? 'tgtOnly' : 'none');
+  var cn = lbArkBkCn(LB_ARKBK.srv);
+  var g = ARKBK_G.goals;
+  return {
+    pos: pos,
+    onlineN: onN,
+    moveN: Number(pr.count || 0),
+    lossN: (pc.loss || []).length,
+    /* v6662（用户 2026-11-14「明明有物品丢失风险；却没有回档前处理物品的步骤」）：
+       原来规则表把 lossN（= pc.loss.length，角色丢失**人数**）当物品丢失用，口径错配。
+       真正的物品丢失口径是「背包减少种数」（lbArkBkBagStat，跨全角色），v6653 已完成，
+       但规则引擎没接 ⇒ 这里补成独立事实 itemsLossN。 */
+    itemsLossN: _arkbkItemsLossN(),
+    /* v6662（用户 2026-11-14「明明没有波及其他角色所以不用撤销，你却给了多余的上传生物-取回生物」）：
+       原来 upDino 只看 goals.dino（用户勾的目的 = 意图），不看是否真有生物会丢。
+       这里补事实 dinoLossN = 当前档低温仓有、目标档没有的生物数（回档会带走它们）。 */
+    dinoLossN: _arkbkDinoLossN(),
+    /* v6678（用户口径「角色异常，要包含其他角色异常情况」）：
+       后端 roleIssues 按 eosId 去重给出三类角色异常：
+         vanish   回档后本服消失（当前档有 / 目标档无）
+         appear   回档后本服出现（目标档有 / 当前档无）
+         newAfter 回档点之后建号 ⇒ 回档后整个消失（传图也保不住）
+       三者供「传图离开 / 传图来」既有规则的新 slot 与「征得同意」的 when 使用。 */
+    roleVanishN: _arkbkRoleN(pc, 'vanish'),
+    roleAppearN: _arkbkRoleN(pc, 'appear'),
+    roleNewN:    _arkbkRoleN(pc, 'newAfter'),
+    roleIssues:  (pc.roleIssues || null),
+    /* v6658：2 个目的 → 4 个内部细粒度事实（找回 = items+dino；回溯 = tame+build） */
+    goals: { items: !!g.recover, dino: !!g.recover, tame: !!g.keep, build: !!g.keep },
+    curSrvCn: cn, srvCn: cn,
+    roleName: me.charName || LB_ARKBK.whoName || '该角色'
+  };
+}
+/* v6673（用户口径「请其他玩家下线 以及 征得波及玩家同意 都要」）：
+   两个「通知玩家」步骤统一用 {annbtn} 占位符 —— 只有确实有在线玩家时才渲染按钮
+   （ask 步骤也可能由「没人在线、但有别人进出记录」触发，那种情况发公告没有意义）。 */
+/* v6673（用户口径「请其他玩家下线 以及 征得波及玩家同意 都要」）：
+   两个「通知玩家」步骤统一用占位符 —— 只有确实有在线玩家时才渲染按钮
+   （ask 步骤也可能由「没人在线、但有别人进出记录」触发，那种情况发公告没有意义）。
+   v6676（用户口径「征得同意 和 请下线 应该是不一样的公告」）：
+     改为按场景生成 —— ask ⇒ kind='consent'（明确「不会回到当前档」）；
+     其余 ⇒ kind='offline'（按 canUndo 动态说明能否恢复当前进度）。 */
+function arkbkAnnKind(ruleId){
+  return (ruleId === 'ask') ? 'consent' : 'offline';
+}
+function arkbkAnnBtnHtml(ruleId, f){
+  var kind = arkbkAnnKind(ruleId);
+  var label = (kind === 'consent') ? '发公告征询同意' : '一键发公告';
+  var tip = (kind === 'consent')
+    ? '立即向本服广播一条回档征询公告（中英各一条，明确说明本次回档不会回到当前档）'
+    : '立即向本服广播一条回档公告（中英各一条，含回档时间点与在线人数）';
+  return '<button class="arbk-annbtn" onclick="lbArkBkAnnounce(event,\'' + kind + '\')"'
+    + ' title="' + lbMdEsc(tip) + '">'
+    + '<i class="mdi mdi-bullhorn"></i> ' + label + '</button>';
+}
+/* v6675（用户口径「tips 里要有一个框显示 将要发的公告内容」+「不改字体，我只需要一个框」）：
+   文案来自后端 plan/precheck 下发的 announcePreview（与 /api/arkbackup/announce 实发同源），
+   用 div + white-space:pre-wrap 呈现 —— **不用 <pre>**，避免强制等宽字体。
+   v6676：按场景挑文案 —— consent 取 consent；offline 按 arkbkCanUndo(f) 取 offlineUndo / offlineNo。 */
+function arkbkAnnPrevHtml(ruleId, f){
+  var pv = null;
+  try { pv = (LB_ARKBK.plan && LB_ARKBK.plan.precheck && LB_ARKBK.plan.precheck.announcePreview) || null; } catch (e) {}
+  if (!pv) return '';
+  var one = null;
+  if (arkbkAnnKind(ruleId) === 'consent'){
+    one = pv.consent || null;
+  } else {
+    var undo = false;
+    try { undo = arkbkCanUndo(f || arkbkFacts()); } catch (e2) { undo = false; }
+    one = undo ? (pv.offlineUndo || null) : (pv.offlineNo || null);
+  }
+  /* 兼容旧后端（只有 {cn,en} 单份） */
+  if (!one && (pv.cn || pv.en)) one = pv;
+  if (!one || (!one.cn && !one.en)) return '';
+  var body = [];
+  if (one.cn) body.push(lbMdEsc(one.cn));
+  if (one.en) body.push(lbMdEsc(one.en));
+  var hd = (arkbkAnnKind(ruleId) === 'consent') ? '将要发送的征询公告' : '将要发送的公告';
+  return '<div class="arbk-annprev">'
+    + '<div class="arbk-annprev-h">' + hd + '<span class="arbk-annprev-n">（发送时会按当时在线人数重算）</span></div>'
+    + '<div class="arbk-annprev-bd">' + body.join('\n') + '</div>'
+    + '</div>';
+}
+function arkbkRep(t, f, ruleId){
+  var _onN = 0;
+  try { _onN = Number((f && f.onlineN) || 0); } catch (e_on) { _onN = 0; }
+  return String(t == null ? '' : t)
+    .replace(/\{cur\}/g, f.curSrvCn || '本服')
+    .replace(/\{srv\}/g, f.srvCn || '本服')
+    .replace(/\{name\}/g, f.roleName || '该角色')
+    /* v6678b：角色异常三类人数（v6678 的规则 tip 里用到，此处必须替换，否则原样显示占位符） */
+    .replace(/\{roleVanishN\}/g, String(Number((f && f.roleVanishN) || 0)))
+    .replace(/\{roleAppearN\}/g, String(Number((f && f.roleAppearN) || 0)))
+    .replace(/\{roleNewN\}/g, String(Number((f && f.roleNewN) || 0)))
+    /* v6683：步骤内按钮（口径1：未开始流程时置灰，由各自 HTML 函数负责 disabled） */
+    .replace(/\{execbtn\}/g, (ruleId === 'do') ? lbArkBkExecBtnHtml() : '')
+    .replace(/\{undobtn\}/g, (ruleId === 'undo') ? lbArkBkUndoBtnHtml() : '')
+    .replace(/\{donebtn\}/g, (ruleId === 'verify') ? lbArkBkDoneBtnHtml() : '')
+    .replace(/\{annbtn\}/g, (_onN > 0) ? arkbkAnnBtnHtml(ruleId, f) : '')
+    .replace(/\{annprev\}/g, (_onN > 0) ? arkbkAnnPrevHtml(ruleId, f) : '');
+}
+/* 能否撤销：有波及 且 目的不含「建筑塌了 / 驯龙重训」
+   v6663（用户「能否撤销不代表必须要撤销；在不影响其他角色的情况下，能不撤销就不要撤销」）：
+     · 本函数只回答「撤销这条路是否还留着」，**不再**用来决定别的步骤做不做 / 什么时候做
+     · 无波及（affected=false）⇒ 本来就不需要撤销，这里返回 false 是对的：
+       回档就是用户要的结果，没有任何人的进度被牺牲，没有撤销的必要 */
+function arkbkCanUndo(f){
+  var affected = !!(f.onlineN || f.moveN);
+  var keepResult = !!(f.goals.build || f.goals.tame);
+  return affected && !keepResult;
+}
+/* 是否有必须角色在场才能做的动作（v6662：改事实驱动；v6663：去掉 canUndo 乘子 —— 能撤销≠会撤销） */
+function arkbkNeedRole(f){ return !!(f.dinoLossN || f.itemsLossN); }
+/* 回档前必须先离开本服：他在当前档，但目标档里没有他 */
+function arkbkLeaveBefore(f){ return f.pos === 'curOnly'; }
+/* 需要一次「传图来本服」 */
+function arkbkEnterWhen(f){ return f.pos !== 'both' && (f.pos !== 'none' || arkbkNeedRole(f)); }
+/* 时机：tgtOnly 必须回档前（否则目标档旧数据 + 本人 = 角色重复）；其余回档后 */
+function arkbkEnterOrder(f){ return f.pos === 'tgtOnly' ? 25 : 45; }
+/* 备选（低温仓 / 传图寄存）会把角色带去别的服 */
+function arkbkAltLeaves(f){
+  /* v6662：三项改事实驱动；v6663：物品合并成一档（不再按 canUndo 分叉） */
+  var liveDino = !!f.dinoLossN;
+  var liveItems = !!f.itemsLossN;
+  var A = ARKBK_G.alt;
+  return !!((A.upDino && liveDino) || (A.upItems && liveItems));
+}
+/* 撤销前也必须离开：撤销 = 整档换成「回档前」那份，而那份档里没有他 */
+function arkbkUndoLeaves(f){
+  if (arkbkAltLeaves(f)) return false;   /* 备选已把人带去别服并在线 ⇒ 撤销不影响他 */
+  return arkbkCanUndo(f) && f.pos !== 'both' && (f.pos === 'tgtOnly' || arkbkNeedRole(f));
+}
+
+/* ---- 「传图来本服」这个动作的唯一定义（多处复用，禁止再另写一份文案） ---- */
+var ARKBK_DEF_ENTER = {
+  tag: '就位',
+  text: '传图来{cur}',
+  tip: '角色要进{cur}：目标档有他 → 回档前传；没他 → 回档后传。\n<span class="tip-act">→ 备选带走的，用他时再传。</span>'
+};
+function arkbkEnterRule(id, whenFn, extra){
+  var o = { id: id, when: whenFn };
+  for (var k in ARKBK_DEF_ENTER) o[k] = ARKBK_DEF_ENTER[k];
+  for (var k2 in extra) o[k2] = extra[k2];
+  /* v6678：多槽位合并（arkbkMergeGroup 的 multi 分支）只读 **slot 级** text/tip，
+     而本函数把定义放在 rule 级 ⇒ 加第二个 slot 后合并会得到空文本。
+     这里给每个 slot 补齐（已显式指定的不覆盖）。 */
+  if (o.slots && o.slots.length){
+    o.slots.forEach(function (sl) {
+      for (var k3 in ARKBK_DEF_ENTER){ if (sl[k3] == null) sl[k3] = ARKBK_DEF_ENTER[k3]; }
+    });
+  }
+  return o;
+}
+
+var ARKBK_RULES = [
+  { id: 'notify', order: 12, tag: '波及',
+    when: function (f) { return !!f.onlineN; },
+    whenText: '此刻有其他玩家在线（不含选中角色；回档瞬间世界跳变，会掉线 / 死亡 / 掉装备）',
+    text: '请其他玩家下线',
+    /* v6672（用户口径「通知其他玩家的步骤 的 tips 要有按钮 可以 一键手动发公告」）：
+       按需手动广播，不强制公告期；公告内容由后端拼（含回档时间点 + 当前在线人数） */
+    tip: '回档瞬间世界跳变，在线玩家<span class="tip-warn">会掉线 / 死亡 / 掉装备</span>。\n<span class="tip-act">→ 先让他们下线，或传图离开{cur}。</span>'
+       + '{annprev}{annbtn}' },
+  { id: 'ask', order: 10, tag: '波及',
+    /* v6678：新增号（回档点之后建的）无法用传图保住 ⇒ 并入「征得同意」这条告知类步骤 */
+    when: function (f) { return !!(f.onlineN || f.moveN || f.roleNewN) && !arkbkCanUndo(f); },
+    whenText: '不撤销回档 且（其他玩家在线>0 / 其他玩家进出记录>0 / 有回档点后新建的角色）',
+    text: '征得波及玩家同意',
+    warn: true, aff: true,
+    tip: '本次不能撤销，他们的进度<span class="tip-warn">会真的退回目标档</span>。\n<span class="tip-act">→ 先征得这些玩家同意。</span>'
+       + '\n<span class="tip-warn">其中 {roleNewN} 个号是回档点之后建的，回档后会整个消失</span>（传图也保不住，因为目标档里没有他们）。'
+       + '{annprev}{annbtn}' },
+  arkbkEnterRule('roleEnter', null, {
+    whenText: '上传必须在本服做：tgtOnly 回档前传过来；其余回档后传过来；回档后要重新出现的其他角色也同理',
+    /* v6678（用户口径「其他玩家的步骤要对齐自己的传进传出步骤」）：
+       第二支复用同一动作文本「传图来{cur}」，order 45 = 回档后传。 */
+    slots: [
+      { when: arkbkEnterWhen, orderIf: arkbkEnterOrder },
+      { when: function (f) { return Number(f.roleAppearN || 0) > 0; },
+        orderIf: function () { return 45; },
+        tip: '还有 <span class="tip-warn">{roleAppearN} 个角色</span>回档后会重新出现在{cur}。\n<span class="tip-act">→ 他们在回档前若已离开，回档后传图回{cur}即可用回原角色。</span>' }
+    ]
+  }),
+  { id: 'roleOnline', order: 82, tag: '就位',
+    when: function (f) { return arkbkUndoLeaves(f); },
+    whenText: '撤销前他为避抹除离开了本服（人在集群里），取回前得登入任意一个服',
+    text: '上线取回',
+    tip: '<span class="tip-key">方尖碑跨存档</span>，任意服都能取。\n<span class="tip-act">→ 登入任意服取出来，不必回{cur}。</span>' },
+  { id: 'roleLeaveBefore', tag: '就位前',
+    whenText: '换档会整档覆盖服存档，而角色数据挂在服存档上：回档（目标档没他）/ 撤销（回档前档没他）前都必须先离开',
+    slots: [
+      { when: arkbkLeaveBefore, order: 25, altStops: true,
+        text: '传图离开{cur}',
+        altKey: 'leaveAlt',
+        altShort: '改用含此角色的回档点',
+        altTip: '目标档里没有这个角色。\n<span class="tip-act">→ 换成含他的回档点，等于整套流程重走。</span>',
+        altSteps: function (f) { return arkbkNeedRole(f) ? null : ['换含此角色的回档点（流程重走）']; },
+        tip: '回档是<span class="tip-key">整档替换</span>，他的数据会被覆盖<span class="tip-warn">（等级/背包/恐龙全丢）</span>。\n<span class="tip-act">→ 先让他传图离开{cur}，回档后再传回。</span>' },
+      { when: arkbkUndoLeaves, order: 65,
+        text: '传图离开{cur}',
+        tip: '撤销=换回「回档前」的存档，那份没他；他人正服里会被<span class="tip-warn">一起抹掉</span>。\n<span class="tip-act">→ 撤销前先传图离开{cur}。</span>' },
+      /* v6678（用户口径「角色异常要包含其他角色」+「不要重复造轮子」）：
+         复用同一个动作文本「传图离开{cur}」—— 与本规则「自己」那支同 order 25，
+         arkbkMergeGroup 会合并成**一步**（文本去重），只是 tip 多一段说明对象是别人。 */
+      { when: function (f) { return Number(f.roleVanishN || 0) > 0; }, order: 25,
+        text: '传图离开{cur}',
+        tip: '还有 <span class="tip-warn">{roleVanishN} 个其他角色</span>在目标档里不存在，回档后本服就不存在他们了。\n<span class="tip-act">→ 让他们也先传图离开{cur}（角色跟着人走），回档后在别的服还能用。</span>' }
+    ] },
+  { id: 'upload', tag: '上传', verb: '上传',
+    whenText: '要保住的东西会被回档带走：当前档背包有 / 目标档没有的物品（itemsLossN>0），或当前档低温仓有 / 目标档没有的生物（dinoLossN>0）',
+    slots: [
+      { altKey: 'upItems',
+        /* v6662：去掉 pos==='both' 前置（v6644 时代「只看本人背包」的残留），改事实驱动
+           v6663（用户「能否撤销不代表必须要撤销」）：再去掉 !arkbkCanUndo ——
+           不管本次能不能撤销，回档都会带走这些物品，所以一律回档前上传（order 35）。 */
+        when: function (f) { return !!f.itemsLossN; },
+        order: 35, text: '上传物品', obj: '物品', chips: 'bag',
+        altShort: '传图寄存到别服',
+        altTip: '不用方尖碑。\n<span class="tip-act">→ 带物品传图去别服放箱子，回档后取回。</span>',
+        altSteps: ['带物品传图', '放别服箱'],
+        tip: '回档会<span class="tip-warn">带走</span>这些物品。\n<span class="tip-act">→ 回档前把物品上传方尖碑（留 24 小时），回档后取回。</span>' },
+      { altKey: 'upDino',
+        /* v6662：不再看「是否勾了找回」，只看「当前档是否真有生物会被回档带走」 */
+        when: function (f) { return !!f.dinoLossN; },
+        order: 60, text: '上传生物', obj: '生物', chips: 'cryo',
+        altShort: '低温仓运走生物',
+        altTip: '不用方尖碑，改用低温仓。\n<span class="tip-act">→ 装走生物后必须销毁低温仓，<span class="tip-warn">否则会有湮灭风险</span>；要撤销，撤销前别传回{cur}。</span>',
+        altSteps: ['低温仓装走', '传图离开', '扔出放出', '销毁低温仓'],
+        tip: '回档会<span class="tip-warn">带走</span>复活的生物。\n<span class="tip-act">→ 回档前上传方尖碑（留 24 小时），撤销不会丢，之后取回放生。</span>' }
+    ] },
+  { id: 'do', order: 40,
+    when: function () { return true; }, whenText: '恒定',
+    text: '回档',
+    /* v6683（用户口径「回档按钮要放到回档步骤的 Tips 里」）：按钮由 {execbtn} 注入 */
+    tip: '确认准备都做完。\n<span class="tip-act">→ 执行回档，过程中别操作服务器。</span>'
+       + '{execbtn}' },
+  { id: 'retrieve', tag: '取回', verb: '取回',
+    whenText: '有东西被上传过（物品 / 生物）；低温仓备选路线就地放生，不取回',
+    slots: [
+      { when: function (f) {
+          /* v6662：与上传严格对称，只认真实物品丢失；顺手修掉「选了备选仍出取回物品」
+             v6663：上传只剩一档（upItems），备选判断同步收窄 */
+          if (ARKBK_G.alt['upItems']) return false;
+          return !!f.itemsLossN;
+        },
+        order: 85, text: '取回物品', obj: '物品',
+        tip: '物品在方尖碑里（留 <span class="tip-key">24 小时</span>）。\n<span class="tip-act">→ 取回背包 / 箱子，别放到过期。</span>' },
+      { when: function (f) { return !!f.dinoLossN && !ARKBK_G.alt['upDino']; },
+        order: 85, text: '取回生物', obj: '生物',
+        tip: '生物在方尖碑里（留 <span class="tip-key">24 小时</span>）。\n<span class="tip-act">→ 取回放生到{cur}，别放到过期。</span>' }
+    ] },
+  { id: 'verify', order: 90,
+    when: function () { return true; }, whenText: '恒定收尾',
+    text: '验证',
+    tip: '等级 / 背包 / 恐龙任意服可看。\n<span class="tip-act">→ {cur}的世界状态要登{cur}才能核对，可稍后。</span>'
+       + '\n<span class="tip-act">→ 角色数应为目标档人数；多出/缺少说明上面的角色异常已被兑现。</span>'
+       + '{donebtn}' },
+  { id: 'undo', order: 70, tag: '可撤销',
+    /* v6678：有角色会在回档后消失时**不提供撤销** —— 撤销也救不回目标档里不存在的角色，
+       留着只会让人以为「撤回来就没事了」。 */
+    when: function (f) { return arkbkCanUndo(f) && !(Number(f.roleVanishN || 0) > 0); },
+    whenText: '有波及 且 目的不含「建筑塌了 / 驯龙重训」',
+    text: '撤销回档',
+    /* v6684（用户口径「撤销到上次回档前 应该集成到步骤tips里面」）：按钮由 {undobtn} 注入 */
+    tip: '把服恢复回档前，你上传的东西不会丢。\n<span class="tip-act">→ <span class="tip-warn">只有一次机会</span>，再回档就覆盖还原源，撤不回来了。</span>'
+       + '{undobtn}' }
+];
+
+/* 同 order 的多个命中断点合并成一步 */
+function arkbkMergeGroup(r, g){
+  var items = g.items, multi = items.length > 1, first = items[0].sl;
+  var o = {};
+  for (var k in r) o[k] = r[k];
+  delete o.slots;
+  if (!multi){
+    for (var k1 in first){
+      if (k1 === 'when' || k1 === 'order' || k1 === 'orderIf') continue;
+      o[k1] = first[k1];
+    }
+    return o;
+  }
+  var objs = [], tips = [], aShort = [], aTip = [], aKeys = [], aSteps = [];
+  var _chips = '', _aff = false;
+  items.forEach(function (it){
+    var sl = it.sl;
+    if (sl.chips && !_chips) _chips = sl.chips;
+    if (sl.aff) _aff = true;
+    if (sl.obj) objs.push(sl.obj);
+    if (sl.tip) tips.push(sl.tip);
+    if (sl.altShort) aShort.push(sl.altShort);
+    if (sl.altTip) aTip.push(sl.altTip);
+    if (sl.altKey) aKeys.push(sl.altKey);
+    /* v6678：altSteps 可能是函数（如 roleLeaveBefore 的「改用含此角色的回档点」），
+       arkbkBuildSteps 已预先求值到 __altStepsVal；优先用它，避免把函数当字符串渲染 */
+    var _as = (sl.__altStepsVal !== undefined) ? sl.__altStepsVal : sl.altSteps;
+    if (_as) aSteps.push(_as);
+  });
+  /* v6678：多个 slot 共用同一动作文本（如两处「传图离开{cur}」）⇒ 去重，避免「A+A」 */
+  var _txts = [];
+  items.forEach(function (it) { var t = it.sl.text; if (t && _txts.indexOf(t) < 0) _txts.push(t); });
+  o.text = (r.verb || '') + (objs.length ? objs.join('+') : _txts.join('+'));
+  if (_chips) o.chips = _chips;
+  if (_aff) o.aff = true;
+  o.tip = arkbkJoinDedup(tips, '\n');
+  if (aSteps.length){
+    o.altKey = aKeys.join('|');
+    o.altShort = aShort.join(' + ');
+    o.altTip = arkbkJoinDedup(aTip, '；');
+    var merged = [];
+    aSteps.forEach(function (st, i) { if (i) merged.push('__BR__'); merged = merged.concat(st); });
+    o.altSteps = merged;
+  } else {
+    delete o.altKey; delete o.altShort; delete o.altTip; delete o.altSteps;
+  }
+  return o;
+}
+function arkbkLCP(arr){
+  if (!arr || arr.length < 2) return '';
+  var p = arr[0];
+  for (var i = 1; i < arr.length; i++){
+    var j = 0;
+    while (j < p.length && j < arr[i].length && p.charAt(j) === arr[i].charAt(j)) j++;
+    p = p.substring(0, j);
+    if (!p) break;
+  }
+  return p;
+}
+function arkbkJoinDedup(arr, sep){
+  arr = (arr || []).filter(function (t) { return !!t; });
+  if (!arr.length) return '';
+  if (arr.length === 1) return arr[0];
+  var cp = arkbkLCP(arr);
+  var ok = cp.length >= 4 && /[，。；、,.;]$/.test(cp);
+  var out = '';
+  arr.forEach(function (t, i){
+    var piece = (i && ok) ? t.substring(cp.length) : t;
+    if (i){
+      var prev = out.charAt(out.length - 1);
+      var dropSep = (sep !== '\n') && /[，。；、,.;\n]/.test(prev);
+      if (!dropSep) out += sep;
+    }
+    out += piece;
+  });
+  return out;
+}
+function arkbkIsAltOpen(o){
+  if (!o || !o.altSteps || !o.altSteps.length) return false;
+  var keys = String(o.altKey || o.id).split('|');
+  return keys.every(function (k) { return !!ARKBK_G.alt[k]; });
+}
+/* 主入口：事实 → 步骤数组 */
+function arkbkBuildSteps(f){
+  var out = [];
+  ARKBK_RULES.forEach(function (r){
+    var slots = (r.slots && r.slots.length) ? r.slots : [{ when: r.when, order: r.order, orderIf: r.orderIf }];
+    var live = [];
+    slots.forEach(function (sl, si){
+      /* v6678：函数型 altSteps 先求值（只在命中槽位时才需要，但求值成本极低） */
+      if (sl && typeof sl.altSteps === 'function'){
+        try { sl.__altStepsVal = sl.altSteps(f); } catch (e_as) { sl.__altStepsVal = null; }
+      }
+      var ok = false;
+      try { ok = !!sl.when(f); } catch (e) { ok = false; }
+      if (!ok) return;
+      var ord = (typeof sl.orderIf === 'function') ? sl.orderIf(f) : (sl.order != null ? sl.order : r.order);
+      live.push({ sl: sl, si: si, ord: ord });
+    });
+    var groups = [];
+    live.forEach(function (it){
+      var g = null;
+      for (var gi = 0; gi < groups.length; gi++){ if (groups[gi].ord === it.ord){ g = groups[gi]; break; } }
+      if (!g){ g = { ord: it.ord, items: [] }; groups.push(g); }
+      g.items.push(it);
+    });
+    groups.forEach(function (g){
+      var o = arkbkMergeGroup(r, g);
+      o.ruleId = r.id;
+      o.id = (slots.length > 1) ? (r.id + '#' + g.items[0].si) : r.id;
+      o.order = g.ord;
+      out.push(o);
+    });
+  });
+  out.sort(function (a, b){
+    var x = (a.order == null ? 9999 : a.order), y = (b.order == null ? 9999 : b.order);
+    return x - y;
+  });
+  /* 终止型备选：选中后链条截断到这一步 */
+  var stopAt = -1;
+  for (var oi = 0; oi < out.length; oi++){
+    if (out[oi].altStops && arkbkIsAltOpen(out[oi])){ stopAt = oi; break; }
+  }
+  if (stopAt >= 0) out.length = stopAt + 1;
+  out.forEach(function (o, i){
+    o.n = i + 1;
+    o.text = arkbkRep(o.text, f);
+    o.tip = arkbkRep(o.tip, f, o.ruleId);   /* v6676：公告按钮/预览按 ruleId 区分场景 */
+    o.altTip = arkbkRep(o.altTip, f);
+    o.altShort = arkbkRep(o.altShort, f);
+  });
+  out.arkbkStopped = (stopAt >= 0);
+  return out;
+}
+/* 回档目的选择器（阶段1：只影响步骤生成；UI 沿用现有 .stp 胶囊） */
+function lbArkBkGoalsHtml(vdTxt, vdTone, vdIco){
+  /* v6656（用户口径「附件1 不用显示」）：去掉「回档目的」这个灰色小标签，只留目的胶囊
+     v6658（用户口径「就叫：找回、回溯，要有 tips 详细说明」）：
+       找回 = 拿回物品 + 生物死了；回溯 = 驯龙重训 + 建筑塌了 */
+  var G = [
+    ['recover', '找回',
+     '找回：把这次回档后要保住的东西（物品 / 生物）拿回来。'
+     + '上传 / 取回步骤不由此项决定 —— 按实际风险自动生成：'
+     + '背包真会少东西才出「上传物品」，当前档真有生物会被带走才出「上传生物」。'],
+    ['keep', '回溯',
+     '回溯：要保住这次重训的龙 / 新建的建筑。'
+     + '结果不能被撤销抹掉，所以本次不提供「撤销回档」（这是本项唯一作用）。']
+  ];
+  /* v6661（用户口径「附件这一行 底下的虚线分割线呢？」）：v6659 把结论从独占行搬进来时，
+     原来挂在 .arbk-pv-verdict 上的 border-bottom 虚线一起丢了 ⇒ 这里按结论状态给容器加类补回 */
+  /* v6758（用户口径）：
+     ①「回档授权」里这两个胶囊**只读**（由流程发起人在「安全回档」里选定，被授权者不能切）
+     ② Grant 显示的状态取**流程里的 goals** —— 原来只读本地内存 ARKBK_G.goals，
+        服主选「回溯」后被授权者仍看到默认「找回」⇒ 跨客户端不同步 */
+  var _roG = !!LB_ARKBK.grantOn;
+  var _goalsSrc = (_roG && LB_ARKBK.flow && LB_ARKBK.flow.goals) ? LB_ARKBK.flow.goals : ARKBK_G.goals;
+  var h = '<div class="arbk-goals' + (vdTone ? (' vd-' + vdTone) : '') + (_roG ? ' goals-ro' : '') + '">';
+  if (_roG){
+    /* v6760（用户口径）：只读 = **只输出已选中的那一项**，纯文字「目的：找回」
+       （无边框 / 无背景 / 无 hover，看上去不是按钮）；未选中的另一项直接不渲染。 */
+    var _oneG = G[0];
+    if (_goalsSrc['keep']) _oneG = G[1];
+    h += '<span class="g ro-only lb-tipb" title="' + lbMdEsc(_oneG[2]) + '">'
+      + '<span class="ro-k">目的：</span>' + _oneG[1] + '</span>';
+  } else {
+    G.forEach(function (x){
+      var on = !!_goalsSrc[x[0]];
+      h += '<span class="g lb-tipb' + (on ? ' on' : '') + '"'
+        + ' title="' + lbMdEsc(x[2]) + '"'
+        + ' onclick="lbArkBkGoalToggle(\'' + x[0] + '\')">' + x[1] + '</span>';
+    });
+  }
+  /* v6659：风险结论右对齐贴在本行末尾 */
+  if (vdTxt){
+    h += '<span class="arbk-vd ' + (vdTone || '') + '">'
+      + '<i class="mdi ' + (vdIco || 'mdi-check-circle') + '"></i>' + lbMdEsc(vdTxt) + '</span>';
+  }
+  return h + '</div>';
+}
+/* 阶段2：点击展开 + 手风琴互斥（同一时刻最多展开一个步骤） */
+function lbArkBkStepTip(e, el){
+  if (e){ e.stopPropagation(); e.preventDefault(); }
+  var w = el.parentNode;
+  var wasOpen = w.classList.contains('open');
+  /* v6752（bug）：原选择器只含 #lbArkBk / #arbkRiskPop ⇒ 在「回档授权」浮窗（#lbArkBkGrant）里
+     第一次点展开后，第二次点时 querySelectorAll 返回空 ⇒ 永远删不掉 open ⇒ 点开关不掉。 */
+  var sel = '#lbArkBk .stp-wrap.open, #lbArkBkGrant .stp-wrap.open, #arbkRiskPop .stp-wrap.open';
+  var cnt = document.querySelectorAll(sel).length;
+  Array.prototype.forEach.call(document.querySelectorAll(sel), function (o) { o.classList.remove('open'); });
+  if (!wasOpen || cnt > 1){
+    w.classList.add('open');
+    /* v6656（用户口径「附件2 不要将后面的步骤撑掉」）：说明框改成绝对定位浮层后不占布局，
+       但朝下展开若超出 .lw-body(overflow-y:auto) 的可视区会被裁掉 ⇒ 这里测一次，
+       空间不够就翻到步骤上方（.tip-up）。 */
+    try {
+      /* v6759（用户口径「步骤的 Tips 移动端经常被遮住一部分」）：
+         根因 —— .stp-tip 是 absolute + left:0 + width:max-content + max-width:360px，
+         **横向完全没有约束**。375px 视口实测：第 1 步气泡右侧溢出 18px、第 2 步溢出 89px，
+         被 .lw-body 的 overflow 裁掉。原来只处理了纵向（tip-up）。
+         现在：①右边界超容器 ⇒ 加 tip-right（气泡右对齐）②保留 tip-up 纵向翻转
+               ③若上下仍放不下 ⇒ 把气泡滚到容器可视区内。 */
+      w.classList.remove('tip-up');
+      w.classList.remove('tip-right');
+      var _tp = w.querySelector('.stp-tip');
+      var _sc = w.closest('.lw-body') || document.body;
+      if (_tp && _sc){
+        var _rb = _tp.getBoundingClientRect(), _rs = _sc.getBoundingClientRect();
+        /* v6761：原条件多写了 `_rb.left <= _rs.left + 6`（要求左边界已经顶到容器左边才右对齐）
+           ⇒ 实测 left=104 时永不成立，从来没右对齐过。现改为：右侧溢出就试右对齐，
+           右对齐后若左边界反而溢出则回退（桌面窄窗口仍可能两头顶，靠移动端内联展开兜底）。 */
+        if (_rb.right > _rs.right - 6) {
+          w.classList.add('tip-right');
+          var _rbj = _tp.getBoundingClientRect();
+          if (_rbj.left < _rs.left + 6) w.classList.remove('tip-right');
+          _rb = _tp.getBoundingClientRect();
+        }
+        if (_rb.bottom > _rs.bottom - 6 && (_rs.bottom - _rs.top) > 120) {
+          w.classList.add('tip-up');
+          _rb = _tp.getBoundingClientRect();
+        }
+        if (_rb.top < _rs.top + 4 || _rb.bottom > _rs.bottom - 4) {
+          try { _tp.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e_si) {}
+        }
+      }
+    } catch (e_tf) {}
+  }
+}
+/* 消除风险步骤（规则引擎输出；点击展开说明、手风琴互斥、备选可切换）
+   说明内容来自 ARKBK_RULES[].tip（已含 .tip-act / .tip-warn / .tip-key 标记） */
+/* v6655（对齐预览 chipsHtml）：步骤说明里嵌真实数据 chip —— 与预览页结构一致。
+   kind='bag'  → 回档后会减少的物品 chip（data 来自 lbArkBkBagStat，跨全角色汇总）
+   kind='cryo' → 当前档有、目标档没有的低温仓生物（回档会带走它们） */
+function lbArkBkStepChipsHtml(kind){
+  if (!kind) return '';
+  var H = [];
+  if (kind === 'bag' || kind === 'both'){
+    var st = null;
+    try { st = lbArkBkBagStat(LB_ARKBK.plan); } catch (e1) { st = null; }
+    var rows = [];
+    ((st && st.roles) || []).forEach(function (r) { rows = rows.concat(r.items || []); });
+    rows = rows.slice(0, 8);
+    if (rows.length){
+      H.push('<div class="arbk-chips">');
+      rows.forEach(function (x) { H.push(lbArkBkBagChip(x.k, x.q || x.n, x.g)); });
+      H.push('</div>');
     }
   }
-  if ((pc.safe || []).length){
-    /* v6041（用户口径）：安全名单**默认折叠**（十几人名单很占版面，且通常不需要逐条看）；
-       🟡/🔴 名单故意不折叠 —— 那是必须处理的风险，不能藏。 */
-    h += '<details class="arbk-fold"><summary>'
-      + '<i class="mdi mdi-check-circle-outline"></i> 安全（' + pc.safe.length + ' 名）</summary>'
-      + '<div class="arbk-nmwrap">' + lbArkBkNameList(pc.safe, 0) + '</div></details>';
+  if (kind === 'cryo' || kind === 'both'){
+    var p = LB_ARKBK.plan || {};
+    var pc2 = p.precheck || {};
+    var cNow = pc2.currentCryopods || p.currentCryopods || [];
+    var cTgt = pc2.targetCryopods || p.targetCryopods || [];
+    var seen = {};
+    (cTgt || []).forEach(function (x) { seen[lbArkBkCryoKey(x)] = 1; });
+    var loseN = 0;
+    (cNow || []).forEach(function (x) { if (!seen[lbArkBkCryoKey(x)]) loseN++; });
+    if (loseN){
+      H.push('<div class="arbk-chips"><span class="lb-tipb" style="display:inline-flex;align-items:center;'
+        + 'gap:4px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:3px 7px;font-size:12px"'
+        + ' title="低温仓里的生物：回档后会消失 ' + loseN + ' 只">'
+        + '<i class="mdi mdi-snowflake" style="color:#7dd3fc;font-size:14px"></i>'
+        + '<span style="color:#cbd5e1">低温仓生物</span>'
+        + '<span style="color:#475569;font-size:10px">·</span>'
+        + '<span style="color:#64748b">' + loseN + ' 只</span></span></div>');
+    }
   }
-  h += '</div>';
+  return H.join('');
+}
+/* v6655（对齐预览 affHtml）：步骤说明里嵌**波及名单**（真实 presenceRisk.moved） */
+function lbArkBkStepAffHtml(pr){
+  var mv = (pr && pr.moved) || [];
+  if (!mv.length) return '';
+  var H = ['<div class="aff-wrap"><div class="aff-h">波及名单（' + mv.length + ' 人）</div>'];
+  mv.slice(0, 6).forEach(function (a) {
+    H.push('<div class="aff-row"><span class="aff-chip">' + lbMdEsc(a.name || a.eosId || '?')
+      + (a.newRole ? '<em>新角色</em>' : '') + '</span>'
+      + '<span class="aff-t">进 ' + (a.winConnect || 0) + ' · 出 ' + (a.winDisconnect || 0) + '</span>'
+      + (a.hasRoleInTarget ? '' : '<span class="aff-on">目标档无他</span>') + '</div>');
+  });
+  if (mv.length > 6) H.push('<div class="chip-note">…还有 ' + (mv.length - 6) + ' 人</div>');
+  H.push('<div class="chip-note">按 presenceRisk 实际数据填充</div></div>');
+  return H.join('');
+}
+function lbArkBkRiskSteps(pl, pc, pr, on, onN){
+  var f = arkbkFacts();
+  var steps = arkbkBuildSteps(f);
+  if (!steps.length) return '';
+  var h = '';
+  steps.forEach(function (x, idx){
+    var alts = (typeof x.altSteps === 'function') ? x.altSteps(f) : x.altSteps;
+    var keys = String(x.altKey || x.id).split('|');
+    var isAlt = !!(alts && alts.length && keys.every(function (k) { return !!ARKBK_G.alt[k]; }));
+    h += '<span class="stp-wrap">';
+    h += '<span class="stp' + (x.warn ? ' warn' : '') + (x.done ? ' done' : '') + '"'
+      + ' onclick="lbArkBkStepTip(event,this)">';
+    h += '<b>' + (idx + 1) + '</b>';
+    if (alts && alts.length){
+      h += '<span class="alt-toggle' + (isAlt ? ' on' : '') + '" data-k="'
+        + lbMdEsc(x.altKey || x.id) + '" title="当前：' + (isAlt ? '备选方案' : '主选方案') + '（点击切换）"'
+        + ' onclick="lbArkBkAltToggle(this.dataset.k,event)">'
+        + (isAlt ? '备选' : '主选') + '</span>';
+    }
+    h += '<span class="txt">' + arkbkIcoText(lbMdEsc(isAlt ? (x.altShort || alts.join('、')) : x.text), LB_ARKBK.srv) + '</span>';
+    h += '</span>';
+    var altBlock = '';
+    if (alts && alts.length && isAlt){
+      altBlock = '<span class="tip-alt"><span class="tip-alt-lbl">备选步骤</span><span class="alt-txt">'
+        + alts.map(function (t) {
+            return (t === '__BR__') ? '<span class="alt-br">＋</span>' : ('<i>' + lbMdEsc(t) + '</i>');
+          }).join('<span class="alt-sep"><svg viewBox="0 0 5 8" fill="none" stroke="currentColor"'
+            + ' stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">'
+            + '<path d="M1 1 L4 4 L1 7"/></svg></span>')
+        + '</span></span>';
+    }
+    var tipBase = isAlt ? (x.altTip || x.tip || '') : (x.tip || '');
+    h += '<span class="stp-tip">' + (tipBase || '（无详细说明）') + altBlock
+      + (x.aff ? lbArkBkStepAffHtml(pr) : '') + lbArkBkStepChipsHtml(x.chips) + '</span>';
+    h += '</span>';
+    /* v6655（用户口径「在预览里不是说不用箭头了么」）：预览页步骤之间**没有箭头**，
+       正式实现原来每步后插一个 <span class="arw"><i class="mdi mdi-arrow-right"> —— 已删。 */
+  });
   return h;
+}
+/* v6681（用户口径「附件1/附件2 那种行不需要，重复了」）：
+   浮窗正文里不要再出现块标题行 —— 名称与摘要由浮窗标题栏统一承担。
+   v6681 同时修掉「第二次打开副标题就没了」的根因：
+   原实现 lbArkBkRiskFlatten 把 <details> **原地替换**成 <div>，
+   关闭时又把这个已破坏的 div 搬回 #arbkRiskSrc ⇒ 原始 <summary> 永久消失。
+   改为**克隆**：原节点留在隐藏容器里保持完好，每次打开都能重新读到 summary。 */
+function lbArkBkRiskClone(n){
+  var c = n.cloneNode(true);
+  if (c.tagName === 'DETAILS'){
+    /* details → 展开的 div，丢掉 summary（正文不再重复显示标题行） */
+    var box = document.createElement('div');
+    box.className = 'arbk-flat';
+    if (c.id) box.id = c.id + 'Pop';
+    Array.prototype.slice.call(c.children).forEach(function (ch) {
+      if (ch.tagName === 'SUMMARY') return;
+      box.appendChild(ch);
+    });
+    c = box;
+  } else {
+    if (c.id) c.id = c.id + 'Pop';
+    /* v6682：普通 div 块（此刻在线 / 角色丢失）的标题行是 .arbk-sec，
+       浮窗标题栏已经显示名称 + 摘要 ⇒ 正文同样不能重复这一行 */
+    var _sec = c.querySelector ? c.querySelector(':scope > .arbk-sec') : null;
+    if (_sec && _sec.parentNode) _sec.parentNode.removeChild(_sec);
+  }
+  /* 背包差异的内容容器必须是独立 id ——
+     否则 getElementById 只会取到隐藏容器里的那份，浮窗永远停在「加载中…」 */
+  var bb = c.querySelector ? c.querySelector('#lbArkBkBagBox') : null;
+  if (bb) bb.id = 'lbArkBkBagBoxPop';
+  return c;
+}
+/* v6681：副标题 = 块标题行文本 − 块名（保留人数 / 时间范围等有效信息） */
+function lbArkBkRiskSub(n, strip, headOnly){
+  if (!n) return '';
+  var src = null;
+  if (n.querySelector){
+    src = n.querySelector(':scope > summary') || n.querySelector('.arbk-pop-h')
+      || n.querySelector('.arbk-sec');
+  }
+  if (!src) return '';
+  var t;
+  if (headOnly){
+    /* v6682：只要「块名 + 人数」这类短信息 —— 把 .arbk-dim 里的后果说明整段剔掉
+       （此刻在线那句「回档会把这些人踢下线…」属于正文说明，不该塞进标题） */
+    var c = src.cloneNode(true);
+    Array.prototype.forEach.call(c.querySelectorAll('.arbk-dim'), function (x) {
+      if (x.parentNode) x.parentNode.removeChild(x);
+    });
+    t = c.textContent || '';
+  } else {
+    t = src.textContent || '';
+  }
+  t = String(t).replace(/\s+/g, ' ').trim();
+  (strip || []).forEach(function (nm) { if (nm) t = t.split(nm).join(' '); });
+  return t.replace(/\s+/g, ' ').trim();
+}
+function lbArkBkRiskFlatten(root, cb){
+  if (!root) return;
+  var list = [];
+  if (root.tagName === 'DETAILS') list.push(root);
+  if (root.querySelectorAll){
+    Array.prototype.forEach.call(root.querySelectorAll('details'), function (d) { list.push(d); });
+  }
+  list.forEach(function (d) {
+    if (!d.isConnected || !d.parentNode) return;
+    var wrap = document.createElement('div');
+    if (d.id) wrap.id = d.id;
+    wrap.className = 'arbk-flat';
+    var sum = d.querySelector(':scope > summary');
+    if (sum){
+      var dim = sum.querySelector('.arbk-dim');
+      var hh = document.createElement('div');
+      hh.className = 'arbk-pop-h';
+      hh.innerHTML = sum.innerHTML;
+      wrap.appendChild(hh);
+      if (cb) cb(sum.textContent || '', dim ? (dim.textContent || '') : '');
+    }
+    Array.prototype.forEach.call(d.children, function (c) {
+      if (c !== sum) wrap.appendChild(c);
+    });
+    d.parentNode.replaceChild(wrap, d);
+  });
+}
+function lbArkBkRiskPopClose(){
+  /* v6680：关闭即清浮窗类型标记，防止异步摘要回填到下次打开的其他浮窗 */
+  LB_ARKBK._popKind = '';
+  /* v6681：浮窗里是克隆体，直接丢弃（原块一直留在 #arbkRiskSrc，无需搬回） */
+  var b = document.getElementById('arbkRiskPopBody');
+  if (b){ while (b.firstChild) b.removeChild(b.firstChild); }
+  lbSheetClose('arbkRiskPop');
+}
+function lbArkBkRiskPop(kind){
+  var src = document.getElementById('arbkRiskSrc');
+  if (!src) return;
+  /* v6653（用户口径）：「物品丢失」= 背包会减少的清单；「角色异常」= 角色丢失 + 角色重复 */
+  /* v6680（用户口径「物品丢失浮窗只保留背包差异之下的部分；标题直接改成背包差异的图标文字
+     以及动态副标题」+「四个浮窗统一都加图标」）：
+     ① loss 只留 lbArkBkBagFold（背包差异）—— 上面那块「物品会减少（N 种）+ 各角色物品清单」
+        （arbkRiskBagLossWrap）不再进浮窗，避免同一件事说两遍
+     ② 四类浮窗标题统一「MDI 图标 + 名称」，图标与计数格保持一致 */
+  var map = {
+    loss: { t: '<i class="mdi mdi-bag-personal"></i> 背包差异', ids: ['lbArkBkBagFold'], strip: ['背包差异'] },
+    role: { t: '<i class="mdi mdi-content-duplicate"></i> 角色异常', ids: ['arbkRiskLossWrap', 'lbArkBkDupFold'], strip: [] },
+    dup:  { t: '<i class="mdi mdi-content-duplicate"></i> 角色异常', ids: ['arbkRiskLossWrap', 'lbArkBkDupFold'], strip: [] },
+    pres: { t: '<i class="mdi mdi-account-switch"></i> 角色进出', ids: ['lbArkBkPresFold'], strip: ['角色进出'] },
+    on:   { t: '<i class="mdi mdi-account-multiple"></i> 此刻在线', ids: ['arbkRiskOnWrap'], strip: ['此刻在线'], headOnly: true }
+  };
+  var cfg = map[kind] || { t: '明细', ids: [] };
+  /* v6680：记住当前浮窗类型 —— 背包差异是异步算的，算完要回填到本浮窗副标题，
+     靠这个标记避免把摘要写到别的浮窗上 */
+  LB_ARKBK._popKind = kind;
+  var S = lbSheetBuild('arbkRiskPop', { onClose: 'lbArkBkRiskPopClose()' });
+  if (!S || !S.body) return;
+  if (S.tabs) S.tabs.style.display = 'none';
+  if (S.meta) S.meta.style.display = 'none';
+  /* v6681：浮窗里只放**克隆体**，原块留在 #arbkRiskSrc 不动（保住 summary）
+     —— 关闭时把克隆体直接丢掉即可，不需要再搬回任何节点 */
+  while (S.body.firstChild) S.body.removeChild(S.body.firstChild);
+  var subs = [];
+  cfg.ids.forEach(function (id) {
+    var n = document.getElementById(id);
+    if (!n) return;
+    var _sub = lbArkBkRiskSub(n, cfg.strip, cfg.headOnly);
+    if (_sub) subs.push(_sub);
+    S.body.appendChild(lbArkBkRiskClone(n));
+  });
+  var sub = subs.join(' · ');
+  if (!S.body.children.length){
+    S.body.appendChild((function () {
+      var d = document.createElement('div');
+      d.className = 'arbk-dim';
+      d.style.padding = '10px 4px';
+      d.textContent = '这一类没有需要处理的条目';
+      return d;
+    })());
+  }
+  S.title.innerHTML = '<span class="pop-t">' + cfg.t + '</span>'
+    + (sub ? '<span class="pop-s">' + lbMdEsc(sub) + '</span>' : '');
+  lbSheetOpen('arbkRiskPop');
+  /* v6681：背包差异浮窗里是克隆容器，加载要指向它（其它浮窗没有该容器，走默认路径即可） */
+  try { lbArkBkBagLoad(document.getElementById('lbArkBkBagBoxPop') ? 'lbArkBkBagBoxPop' : null); } catch (e) {}
+  try { lbArkBkFitFold(); } catch (e) {}
+}
+/* v6550（用户口径「按现有预览落地」）：安全回档新增两块 ——
+   ① 行程明细（停留段 + 该段是否有档）② 背包内容差异（当前档 vs 目标档）。
+   取舍：都嵌在 .arbk-plan 内（期间进出之后、安全名单之前），默认折叠、展开才加载，
+   同一时刻只允许一个展开（手风琴）；物品 chip 复用「待制作」材料 chip 的样式，不另造。 */
+/* v6623（用户口径）：把差异摘要写进「背包内容差异」折叠标题 ——
+   不展开也能一眼看出这段差异是好是坏；tone 与上方风险徽标同一套颜色。 */
+/* v6680（用户口径「标题要动态副标题」）：把差异摘要回填到浮窗标题
+   —— 背包差异是展开/打开浮窗时才异步算的，点开那一刻摘要还是空的，
+      算完必须自动补上，否则副标题永远空着。 */
+function lbArkBkPopSub(kind, txt){
+  try {
+    if (String(LB_ARKBK._popKind || '') !== kind) return;
+    var t = document.getElementById('arbkRiskPopTitle');
+    if (!t) return;
+    var el = t.querySelector('.pop-s');
+    if (!el){
+      el = document.createElement('span');
+      el.className = 'pop-s';
+      t.appendChild(el);
+    }
+    el.textContent = txt || '';
+  } catch (e) {}
+}
+function lbArkBkBagSum(tone, txt){
+  /* v6680：先回填浮窗副标题（浮窗里没有折叠标题节点时 el 会为空，故必须先做） */
+  lbArkBkPopSub('loss', txt || '');
+  var el = document.getElementById('lbArkBkBagSum');
+  if (!el) return;
+  el.textContent = txt || '';
+  el.style.color = (tone === 'bad') ? '#f87171'
+    : (tone === 'warn') ? '#fbbf24'
+    : (tone === 'ok') ? '#4ade80' : '#8b8b9e';
+}
+function lbArkBkEmbedsHtml(){
+  if (!LB_ARKBK.srv || !LB_ARKBK.point) return '';
+  /* v6598：记住展开状态（render 全量重建 DOM，否则每次重绘都弹回收起） */
+  return '<details class="arbk-fold" id="lbArkBkBagFold" ontoggle="lbArkBkAccToggle(this)"'
+    + ((LB_ARKBK._fold && LB_ARKBK._fold.lbArkBkBagFold) ? ' open' : '') + '>'
+    /* v6623（用户口径）：标题动态化 —— 加载后填差异摘要，配色与上方
+       「物品丢失（N 名）」名单同口径（loss=红 / dup=黄 / 一致=绿） */
+    + '<summary><i class="mdi mdi-bag-personal"></i> 背包差异'
+    + '<span id="lbArkBkBagSum" class="arbk-dim" style="margin-left:6px;font-weight:400"></span>'
+    + '</summary>'
+    + '<div id="lbArkBkBagBox" class="arbk-foldbody"><div class="arbk-dim">展开后加载…</div></div></details>';
+}
+/* v6552（用户口径「行程明细放到地图 TAB 之前」）：行程段独立成块，挂在服务器 chips 上方。
+   只依赖服务器（不依赖选中档），展开即加载。 */
+function lbArkBkTraceSectionHtml(){
+  /* v6561（用户口径）：行程明细与「是否选中地图/服」无关 —— 没选服也要显示 */
+  /* v6568（用户口径）：去掉「行程明细」标题行（一整行不显示），只留角色行 + 行程块 */
+  return '<div id="lbArkBkWhoRow" class="lb-srvctl-chips" style="margin:2px 0 4px"></div>'
+    + '<div id="lbArkBkPathBox" style="padding:0 0 4px"></div>';
+}
+/* v6590（用户口径「模块高度动态计算、自适应」）：纯 CSS 走不通 ——
+   「内容撑高父级」与「内容受限于父级」互斥（v6588 用 flex:1 1 0，内容不参与父级高度计算，
+   浮窗反而长不高，.tc 只剩 441px，列表可视区仅 99px）。
+   改为：CSS 让折叠块保持自然高度，渲染后这里量一次可用高度，写进展开块内容的 max-height，
+   内容超了就在块内自己滚（滚动条只出现在模块内部），浮窗高度也随之恰好自适应。 */
+function lbArkBkFitFold(){
+  var host = document.getElementById('lbArkBkBody');
+  if (!host) return;
+  var tc = host.querySelector('.tc');
+  if (!tc) return;
+  /* v6591：不能用 host.clientHeight —— 浮窗高度本身由内容撑，首帧只有 324px，
+     据此算 room 会变负数，全部撞到下限。改用「浮窗能长到的上限」：
+     92vh - 头部 - 底栏 - body 上下 padding。 */
+  var panel = host.closest ? host.closest('.lw-panel') : null;
+  var head = panel ? panel.querySelector('.lw-head') : null;
+  var foot = panel ? panel.querySelector('.lw-foot') : null;
+  var csb = getComputedStyle(host);
+  var padV = (parseFloat(csb.paddingTop) || 0) + (parseFloat(csb.paddingBottom) || 0);
+  /* v6665：任务进度槽位已挪到 .lw-foot 之下（.lw-panel 直接子节点），
+     它占的高度必须一起扣掉 —— 否则算出的可用高度偏大，.tc 内容会溢出到浮窗之外 */
+  var _tsk = panel ? panel.querySelector(':scope > .lb-task-slot') : null;
+  var _tskH = 0;
+  try { if (_tsk && getComputedStyle(_tsk).display !== 'none') _tskH = _tsk.offsetHeight; } catch (e_tsk) {}
+  var cap = Math.round(window.innerHeight * 0.92)
+    - (head ? head.offsetHeight : 0)
+    - (foot && !foot.hasAttribute('hidden') ? foot.offsetHeight : 0)
+    - _tskH
+    - padV;
+  var avail = Math.max(240, cap, host.clientHeight);
+  if (!avail) return;
+  /* v6602（用户口径）：`.lw-body` 里除 `.tc` 之外还有别的子块 —— 典型是 `.lb-task-slot`
+     （任务进度，**异步**出现）。它们占的高度必须从可用空间扣掉，否则折叠块会把它们挤出可视区。 */
+  var _sibH = 0;
+  Array.prototype.forEach.call(host.children, function (c) {
+    if (c === tc) return;
+    var cs2 = getComputedStyle(c);
+    if (cs2.display === 'none' || cs2.position === 'absolute') return;
+    var rr = c.getBoundingClientRect();
+    if (rr.height <= 0) return;
+    _sibH += rr.height + (parseFloat(cs2.marginTop) || 0) + (parseFloat(cs2.marginBottom) || 0);
+  });
+  avail -= Math.round(_sibH);
+  var used = 0, folds = [];
+  Array.prototype.forEach.call(tc.children, function (c) {
+    if (c.tagName === 'DETAILS' && c.classList.contains('arbk-fold')){ folds.push(c); return; }
+    /* v6596：rect.height **不含 margin** —— .arbk-actions 有 margin:9px 0 6px，
+       页面上有 2 个这样的行 ⇒ 漏算 (9+6)*2=30px，正好是「执行回档」那行被裁掉的高度。
+       margin 取不到（auto）时按 0 处理。 */
+    var cs = getComputedStyle(c);
+    var mt = parseFloat(cs.marginTop) || 0;
+    var mb = parseFloat(cs.marginBottom) || 0;
+    used += c.getBoundingClientRect().height + mt + mb;
+  });
+  var room = avail - used - 8;
+  /* v6594：只按 children 的 rect 估 room 会漏掉 margin/gap/伪元素，实测仍溢出 78px 被裁。
+     改为「估算 → 实测溢出 → 扣掉重写」迭代（最多 3 轮），收敛后不再有内容被裁。 */
+  function applyRoom(r){
+    folds.forEach(function (d) {
+      var body = d.querySelector(':scope > .arbk-list') || d.querySelector(':scope > .arbk-plan');
+      if (!body) return;
+      if (!d.open){ body.style.maxHeight = ''; return; }
+      var sm = d.querySelector(':scope > summary');
+      var smH = sm ? sm.getBoundingClientRect().height : 0;
+      /* v6595：下限 96 → 72；v6604（用户口径）：72 → 128 —— 矮屏压到几十像素读不了，
+         空间实在不够就让它溢出，由外层 .lw-body 兜底滚动 */
+      var h = Math.max(128, r - smH);
+      /* v6606（用户口径，方案 B 收尾）：`.arbk-plan` 只兜底、不再做滚动容器 ——
+         它一旦自己滚，就会把内部子模块的 `.arbk-foldbody` 下半截裁掉，
+         用户「滚到最底仍只看一半」。改为把剩余高度精确下发给当前展开的子模块内容区。 */
+      if (body.classList.contains('arbk-plan')){
+        var cs3 = getComputedStyle(body);
+        var padIn = (parseFloat(cs3.paddingTop) || 0) + (parseFloat(cs3.paddingBottom) || 0);
+        var innerUsed = 0, openBodies = [];
+        /* v6609（用户口径）：`.arbk-plan` 是 flex 容器（row-gap:8px）—— gap 不计入任何子项
+           的 rect，漏算会让预算偏大 8x8=64px，foldbody 被 plan 裁掉一截（「被遮住的更多」）。 */
+        var _gapV = parseFloat(cs3.rowGap) || 0;
+        if (body.children.length > 1) innerUsed += _gapV * (body.children.length - 1);
+        Array.prototype.forEach.call(body.children, function (c) {
+          if (c.tagName === 'DETAILS' && c.classList.contains('arbk-fold')){
+            var s2 = c.querySelector(':scope > summary');
+            if (s2) innerUsed += s2.getBoundingClientRect().height;
+            if (c.open){
+              var fb0 = c.querySelector(':scope > .arbk-foldbody');
+              if (fb0) openBodies.push(fb0);
+            }
+            return;
+          }
+          var cs4 = getComputedStyle(c);
+          if (cs4.display === 'none' || cs4.position === 'absolute') return;
+          innerUsed += c.getBoundingClientRect().height
+            + (parseFloat(cs4.marginTop) || 0) + (parseFloat(cs4.marginBottom) || 0);
+        });
+        /* 留 8px 余量：内层个别块 margin/gap 取不全，宁可少给也不能被裁 */
+        var fbMax = Math.max(96, Math.round(h - padIn - innerUsed) - 8);
+        var setFb = function (v) {
+          Array.prototype.forEach.call(
+            body.querySelectorAll(':scope > details.arbk-fold > .arbk-foldbody'),
+            function (fb) {
+              fb.style.maxHeight = (openBodies.indexOf(fb) >= 0) ? (v + 'px') : '';
+            });
+        };
+        setFb(fbMax);
+        body.style.maxHeight = Math.round(h) + 'px';
+        body.style.overflowY = 'hidden';
+        /* v6608（用户口径）：上面是**预算**，`.tc` gap / 子块 margin / plan 内 details 间距
+           取不全 ⇒ 实测会比预算高一点，底部半行 + padding 被 overflow:hidden 裁掉，
+           滚到底永远差一行。改为实测收敛：超多少缩多少，缩到下限仍超就让 plan 自己滚。 */
+        for (var k2 = 0; k2 < 5; k2++){
+          var overP = Math.round(body.scrollHeight - body.clientHeight);
+          if (!(overP > 2)) break;
+          if (fbMax <= 96){ body.style.overflowY = 'auto'; break; }
+          fbMax = Math.max(96, fbMax - overP);
+          setFb(fbMax);
+        }
+        return;
+      }
+      body.style.maxHeight = Math.round(h) + 'px';
+      body.style.overflowY = 'auto';
+    });
+  }
+  applyRoom(room);
+  /* v6595：迭代 3 → 6 圈，收敛阈 2px（矮屏实测 3 圈仍剩 ~20px 未归零） */
+  for (var it = 0; it < 6; it++){
+    var over = Math.round(tc.scrollHeight - tc.clientHeight);
+    if (!(over > 2)) break;
+    room -= over;
+    applyRoom(room);
+  }
+  /* v6602：任务进度等兄弟块是**异步**出现的、高度会变 ⇒ 必须重新量。
+     只观察非 `.tc` 的兄弟块（fitFold 自己只改 details 内部 maxHeight，不会触发这些块变尺寸，
+     所以不会自激循环）。 */
+  if (typeof ResizeObserver === 'function'){
+    window.__lbArkBkRO = window.__lbArkBkRO || new ResizeObserver(function () {
+      clearTimeout(window.__lbArkBkROt);
+      window.__lbArkBkROt = setTimeout(function () { try { lbArkBkFitFold(); } catch (e) {} }, 120);
+    });
+    if (!window.__lbArkBkROseen) window.__lbArkBkROseen = {};
+    Array.prototype.forEach.call(host.children, function (c) {
+      if (c === tc) return;
+      var key = c.id || (c.className || '') + '#' + (Array.prototype.indexOf.call(host.children, c));
+      if (window.__lbArkBkROseen[key]) return;
+      window.__lbArkBkROseen[key] = 1;
+      try { window.__lbArkBkRO.observe(c); } catch (e) {}
+    });
+  }
+  if (typeof MutationObserver === 'function' && !window.__lbArkBkMO){
+    window.__lbArkBkMO = new MutationObserver(function () {
+      clearTimeout(window.__lbArkBkMOt);
+      window.__lbArkBkMOt = setTimeout(function () { try { lbArkBkFitFold(); } catch (e) {} }, 150);
+    });
+    try { window.__lbArkBkMO.observe(host, { childList: true }); } catch (e) {}
+  }
+}
+
+/* v6631（用户口径）：移动端行程块最多展示 2 行 ——
+   只改展示，不丢数据：全部段仍在 DOM 里，点按钮展开/收起。
+   与回档面板其它折叠行手风琴互斥（展开行程会收起 details，反之亦然）。 */
+function lbArkBkSegSetOpen(open){
+  var box = document.getElementById('lbArkBkPathBox');
+  if (!box) return;
+  var wrap = box.querySelector('.arbk-segwrap') || box.firstElementChild;   /* v6639：按钮已移到最前，不能再取 firstElementChild */
+  var btn = box.querySelector('.arbk-seg-foldbtn');
+  var lim = Number(LB_ARKBK._segLim || 0);
+  if (!wrap || !lim) return;
+  LB_ARKBK._segOpen = !!open;
+  var mh = wrap.style.maxHeight;
+  wrap.style.maxHeight = 'none';
+  var full = wrap.scrollHeight;
+  wrap.style.maxHeight = mh;
+  wrap.style.maxHeight = (open ? full : lim) + 'px';
+  var btn2 = box.querySelector('.arbk-seg-foldbtn');
+  var n = wrap.querySelectorAll('.arbk-seg').length;
+  if (btn2){
+    btn2.innerHTML = open ? '<i class="mdi mdi-chevron-up"></i> 收起行程'
+      : ('<i class="mdi mdi-chevron-down"></i> 展开全部行程（' + n + ' 段）');
+  }
+}
+function lbArkBkSegToggle(){
+  var willOpen = !LB_ARKBK._segOpen;
+  if (willOpen){
+    Array.prototype.forEach.call(document.querySelectorAll('#lbArkBk details.arbk-fold'), function (d) { d.open = false; });
+  }
+  lbArkBkSegSetOpen(willOpen);
+  try { lbArkBkFitFold(); } catch (e) {}
+}
+function lbArkBkSegFoldApply(){
+  var box = document.getElementById('lbArkBkPathBox');
+  if (!box) return;
+  var wrap = box.querySelector('.arbk-segwrap') || box.firstElementChild;   /* v6639 */
+  if (!wrap || !wrap.querySelectorAll) return;
+  var segs = wrap.querySelectorAll('.arbk-seg');
+  var btn = box.querySelector('.arbk-seg-foldbtn');
+  var narrow = (window.innerWidth <= 640);
+  var rows = [];
+  if (narrow && segs.length > 3){
+    Array.prototype.forEach.call(segs, function (s) {
+      var rc = s.getBoundingClientRect();
+      var t = Math.round(rc.top);
+      if (!rows.length || Math.abs(rows[rows.length - 1].t - t) > 4) rows.push({ t: t, b: 0 });
+      rows[rows.length - 1].b = Math.max(rows[rows.length - 1].b, Math.round(rc.bottom));
+    });
+  }
+  if (rows.length <= 2){
+    /* v6640（用户口径）：宽屏（>640px）不该有这个按钮 —— 直接移除，不只是 display:none
+       （原来先窄后宽时按钮会永久残留：重绘 innerHTML 清掉后 btn 为 null，就再没人隐藏它） */
+    wrap.style.maxHeight = '';
+    wrap.style.overflow = '';
+    wrap.style.alignContent = '';
+    wrap.style.transition = '';
+    LB_ARKBK._segLim = 0;
+    LB_ARKBK._segOpen = false;
+    if (btn && btn.parentNode) btn.parentNode.removeChild(btn);
+    else if (btn) btn.style.display = 'none';
+    return;
+  }
+  /* v6639（用户口径）：折叠时保留**最新** 2 行，旧行程藏起来 ——
+     取**末尾**两行的高度；再用 align-content:flex-end 让行从底部堆叠，
+     超出的旧行向上溢出、被 overflow:hidden 裁掉（不重排、不丢 DOM） */
+  var _nr = rows.length;
+  LB_ARKBK._segLim = rows[_nr - 1].b - rows[_nr - 2].t;
+  wrap.style.overflow = 'hidden';
+  wrap.style.alignContent = 'flex-end';
+  wrap.style.transition = 'max-height .18s';
+  if (!btn){
+    btn = document.createElement('button');
+    btn.className = 'arbk-sumabtn arbk-seg-foldbtn';
+    btn.style.cssText = 'font-size:11px;display:inline-flex;align-items:center;gap:5px';
+    btn.onclick = function (e) { if (e) e.stopPropagation(); lbArkBkSegToggle(); };
+    /* v6639（用户口径）：按钮放在**行程块之上**（列表最前）；底部虚线保持在行程块下方 */
+    box.insertBefore(btn, box.firstElementChild);
+  }
+  btn.style.display = '';
+  lbArkBkSegSetOpen(LB_ARKBK._segOpen);
+}
+/* v6640（用户口径）：窗口尺寸变化实时重算折叠态 —— 原来只在渲染时判定一次 innerWidth，
+   先窄后宽（或侧栏/面板拖宽）会把按钮永久留在宽屏上。 */
+(function () {
+  if (window.__lbArkBkSegFoldResize) return;
+  window.__lbArkBkSegFoldResize = true;
+  var _t = 0;
+  window.addEventListener('resize', function () {
+    clearTimeout(_t);
+    _t = setTimeout(function () {
+      try { if (document.getElementById('lbArkBkPathBox')) lbArkBkSegFoldApply(); } catch (e_r) {}
+    }, 160);
+  });
+})();
+function lbArkBkAccToggle(el){
+  /* v6584：记住用户手动展开/收起的状态 —— render 是全量重建 DOM，否则每次重绘都会弹回默认态 */
+  if (el && el.id){
+    LB_ARKBK._fold = LB_ARKBK._fold || {};
+    LB_ARKBK._fold[el.id] = !!el.open;
+  }
+  if (!el || !el.open) return;
+  /* v6631（用户口径）：与「行程块展开」互斥 —— 展开任一折叠行时收起行程 */
+  if (LB_ARKBK._segOpen){ try { lbArkBkSegSetOpen(false); } catch (e_segc) {} }
+  var p = el.parentNode;
+  if (p){
+    Array.prototype.forEach.call(p.querySelectorAll('details.arbk-fold'), function (d) {
+      if (d !== el) d.open = false;
+    });
+  }
+  try { lbArkBkFitFold(); } catch (e) {}
+  if (el.id === 'lbArkBkBagFold') lbArkBkBagLoad();
+}
+/* v6590：视口变化后重新分配 */
+(function () {
+  if (window.__lbArkBkFitBound) return;
+  window.__lbArkBkFitBound = 1;
+  window.addEventListener('resize', function () {
+    try { lbArkBkFitFold(); } catch (e) {}
+  });
+})();
+/* v6554（用户口径）：切换角色 → 行程重绘 + 背包差异跟着换人
+   （「切换角色后，后续所有判断都以选中角色来判断」） */
+function lbArkBkWhoPick(eos){
+  LB_ARKBK.who = String(eos || '');
+  var arr = (LB_ARKBK.paths && LB_ARKBK.paths.players) || [];
+  for (var i = 0; i < arr.length; i++){
+    if (String(arr[i].eosId) === LB_ARKBK.who){
+      LB_ARKBK.whoName = arr[i].charName || arr[i].name || '';
+      break;
+    }
+  }
+  lbArkBkPathRender();
+  var bb = document.getElementById('lbArkBkBagBox');
+  if (bb){ bb.removeAttribute('data-done'); bb.setAttribute('data-srv', ''); lbArkBkBagLoad(); }
+}
+/* v6563（用户口径）：默认选中「当前角色所属玩家」名下**累计在线时长最长**的角色。
+   ① 当前登录角色 lbPlayer()（如「板板」）② 在 paths 里反查它的玩家昵称 name（如 whiter.rober）
+   ③ 同 name 的全部角色都算「这个玩家的角色」④ 其间选累计停留时长最长者
+   ⑤ 兜底：反查不到 → 按 charName/name 命中 → 在线者 → 列表第一人 */
+/* v6568（用户口径）：统计某服在 [from,to] 区间内有几个档（快照 + 滚动备份，口径同 v6566）。
+   数据源 = 后端 pointsByServer（每服档时间戳秒序列），段卡片与离线块共用同一算法。 */
+function lbArkBkArcCount(ab, from, to){
+  var J = LB_ARKBK.paths || {};
+  var arr = (J.pointsByServer || {})[ab] || [];
+  var lo = Number(from) || 0, hi = Number(to) || 0;
+  if (!hi) hi = Date.now();
+  var n = 0;
+  for (var i = 0; i < arr.length; i++){
+    var t = Number(arr[i]) * 1000;
+    if (t >= lo && t <= hi) n++;
+  }
+  return n;
+}
+/* v6566（用户口径）：取「当前选中档」的时间（毫秒）—— 复用现成 lbArkBkPointObj（同时查 rbf/points）。
+   行程块高亮靠它：只有选中档后，才高亮该档所在的那一段。 */
+function lbArkBkPointTs(){
+  var p = null;
+  try { p = (typeof lbArkBkPointObj === 'function') ? lbArkBkPointObj() : null; } catch (e0) { p = null; }
+  return (p && p.tsEpoch) ? (Number(p.tsEpoch) * 1000) : 0;
+}
+function lbArkBkSegSecs(x){
+  var segs = (x && x.segments) || [], now = Date.now(), t = 0;
+  for (var i = 0; i < segs.length; i++){
+    var sg = segs[i];
+    var v = Number(sg.secs);
+    if (!(v > 0)) v = Math.max(0, Math.round(((sg.to || now) - (sg.from || now)) / 1000));
+    t += v;
+  }
+  return t;
+}
+function lbArkBkPickDefaultWho(arr){
+  arr = arr || [];
+  /* v6618（用户口径「只允许用 id 匹配」）：**禁止任何名字匹配**。
+     唯一依据：当前登录角色 pid（lbCurPid）→ 在 data.players 的 roles{pid: 角色名} 里
+     反查出该 pid 所属的 **eosId** → 再按 eosId 在行程列表里定位角色。
+     名字重名（默认角色名「人类」）、改名、昵称差异一律不影响。 */
+  var pid = '';
+  try { pid = String(lbCurPid() || ''); } catch (e0) { pid = ''; }
+  var eos = '';
+  if (pid){
+    try {
+      var P = (LB._cache && LB._cache.data && LB._cache.data.players) || {};
+      for (var k in P){
+        if (!Object.prototype.hasOwnProperty.call(P, k)) continue;
+        var rl = P[k] && P[k].roles;
+        if (rl && Object.prototype.hasOwnProperty.call(rl, pid)){
+          eos = String((P[k] && P[k].eosId) || k || '');
+          break;
+        }
+      }
+    } catch (e1) { eos = ''; }
+  }
+  if (eos){
+    var hit = arr.filter(function (x) {
+      return String(x.eosId || '').toLowerCase() === eos.toLowerCase();
+    })[0];
+    if (hit) return hit;
+  }
+  /* 找不到登录角色在本服行程里 → 保持列表第一项（列表已按最近活动排序），不做名字猜测 */
+  return arr[0] || null;
+}
+/* v6569（用户口径）：按时间反查它属于哪个行程块 —— 先找在线段，再找离线空档（>2 分钟）。
+   用于「手动选中某个档 → 自动选中对应的行程块」。返回 null 表示落在范围外。 */
+function lbArkBkSegAt(ts){
+  var J = LB_ARKBK.paths, srv = LB_ARKBK.srv;
+  ts = Number(ts) || 0;
+  if (!J || !srv || !ts) return null;
+  var arr = J.players || [], cur = null;
+  for (var i = 0; i < arr.length; i++){
+    if (String(arr[i].eosId) === LB_ARKBK.who){ cur = arr[i]; break; }
+  }
+  if (!cur) return null;
+  var segs = (cur.segments || []).filter(function (x) { return x.server === srv; })
+    .sort(function (p, q) { return p.from - q.from; });
+  var now = Date.now();
+  for (var k = 0; k < segs.length; k++){
+    var sg = segs[k], to = sg.to || now;
+    if (ts >= Number(sg.from) && ts <= Number(to)){
+      return { server: srv, from: Number(sg.from), to: Number(to), kind: 'seg' };
+    }
+    if (k < segs.length - 1){
+      var nx = segs[k + 1];
+      if (ts > Number(to) && ts < Number(nx.from) && (Number(nx.from) - Number(to)) > 120000){
+        return { server: srv, from: Number(to), to: Number(nx.from), kind: 'offline' };
+      }
+    }
+  }
+  return null;
+}
+/* v6568/69（用户口径）：点行程块 = 选中该服 + 记住块区间（kind: seg=在线段 / offline=离线块）；
+   回档点列表里落在该区间的档会高亮并自动滚到该处 */
+function lbArkBkPickSeg(ab, from, to, kind){
+  if (LB_ARKBK.busy) return;
+  LB_ARKBK.segSel = { server: String(ab || ''), from: Number(from) || 0,
+                      to: Number(to) || 0, kind: (kind === 'offline' ? 'offline' : 'seg') };
+  lbArkBkPickSrv(String(ab || ''), true);
+}
+/* v6568：滚动到「本区间命中档」的第一行
+   v6638（用户口径）：原实现写死滚 .tc —— 实测真正溢出的是 .arbk-list 自己
+   （.tc / #lbArkBkBody 的 scrollHeight==clientHeight，滚了也没反应）
+   ⇒ 改为「从命中行向上找最近的溢出祖先」逐层滚，并把命中行滚到容器**垂直居中**。 */
+function lbArkBkScrollToSegHit(){
+  if (!LB_ARKBK.segSel) return;
+  var root = document.getElementById('lbArkBk');
+  if (!root) return;
+  var el = root.querySelector('.arbk-list [data-seg-hit="1"]');
+  if (!el) return;
+  var p = el.parentNode, guard = 0;
+  while (p && p !== document.body && guard++ < 24){
+    if (p.scrollHeight > p.clientHeight + 2){
+      var r1 = el.getBoundingClientRect(), r2 = p.getBoundingClientRect();
+      var rel = r1.top - r2.top;
+      if (rel < 0 || (rel + r1.height) > p.clientHeight){
+        p.scrollTop = Math.max(0, p.scrollTop + rel - (p.clientHeight - r1.height) / 2);
+      }
+    }
+    p = p.parentNode;
+  }
+}
+/* v6567（用户口径）：取消选择角色 —— 清空选中后行程块回到「请先选择一个角色」 */
+function lbArkBkClearWho(){
+  LB_ARKBK.who = '';
+  LB_ARKBK.whoName = '';
+  lbArkBkPathRender();
+  var bb = document.getElementById('lbArkBkBagBox');
+  if (bb){ bb.removeAttribute('data-done'); bb.setAttribute('data-srv', ''); }
+}
+/* 行程数据 = 后端 /api/arkbackup/paths：一次返回全部服日志会话按角色归并的时间线。
+   与选中服无关（跨服），因此切服只重绘高亮，不重拉。 */
+function lbArkBkTraceLoad(force){
+  var box = document.getElementById('lbArkBkPathBox');
+  if (!box) return;
+  /* v6561（用户口径）：全服日志扫描与选中服无关，没选服也照常加载
+     v6651：force=true 时跳过前端 30s TTL 早退，并在 URL 上加 fresh=1
+            —— 否则后端 PS_PATHS_TTL(30s) 缓存会原样返回旧结果，补拉等于没拉 */
+  if (!force && LB_ARKBK.paths && (Date.now() - LB_ARKBK.pathsAt) < 30000){ lbArkBkPathRender(); return; }
+  if (LB_ARKBK.pathsBusy) return;
+  LB_ARKBK.pathsBusy = true;
+  box.innerHTML = '<div class="arbk-dim">加载中…（全服日志扫描，约 2 秒）</div>';
+  lbSrvCtlFetchW(lbSrvCtlApi() + '/api/arkbackup/paths?hours=' + (LB_ARKBK.pathsHours || 0)
+                 + (force ? '&fresh=1' : ''),
+                 { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (j) {
+      LB_ARKBK.pathsBusy = false;
+      if (!j || !j.ok){
+        var b1 = document.getElementById('lbArkBkPathBox');
+        if (b1) b1.innerHTML = '<div class="arbk-notice bad">行程加载失败：' + lbMdEsc((j && j.error) || '未知') + '</div>';
+        return;
+      }
+      LB_ARKBK.paths = j; LB_ARKBK.pathsAt = Date.now();
+      /* v6650（用户口径「每次刷新后新打开安全回档总是取不到在线状态」·根因修复）：
+         页面加载时本请求与 11 个 /api/list_players 同毫秒并发出发，list_players 走 RCON
+         需数秒才写 <abbr>_online.json ⇒ 本次读到的是上一轮快照。后端对 age>300s 的快照
+         整批放弃 ⇒ 所有角色判离线。后端已回传 servers[].onlineStale，这里 6 秒后强制补拉一次
+         （onlineRetry 只允许一次，避免死循环；下次打开浮窗会重置）。 */
+      var _staleOnl = (j.servers || []).some(function (s4) { return s4 && s4.onlineStale; });
+      if (_staleOnl && LB_ARKBK.onlineRetry < 2){
+        LB_ARKBK.onlineRetry++;
+        /* v6651：实测 11 服 RCON 批量刷新快照需约 18 秒（页面加载时发起、约 23:53:23 才写完），
+           6 秒太早 ⇒ 改为 10 秒一次、最多 2 次；且必须 fresh=1 绕过后端 30s 缓存，
+           否则请求会命中"补拉前"那份缓存（实测 cache.hit=true ageMs=7947）。 */
+        setTimeout(function () {
+          LB_ARKBK.paths = null; LB_ARKBK.pathsAt = 0;
+          lbArkBkTraceLoad(true);
+        }, 10000);
+      }
+      var arr = j.players || [];
+      var keep = arr.filter(function (x) { return String(x.eosId) === LB_ARKBK.who; })[0];
+      if (!keep){
+        /* v6563（用户口径）：按「当前角色所属玩家」选默认角色（同玩家名下累计在线最长者） */
+        var hit = lbArkBkPickDefaultWho(arr);
+        LB_ARKBK.who = hit ? String(hit.eosId) : '';
+        LB_ARKBK.whoName = hit ? (hit.charName || hit.name || '') : '';
+      }
+      lbArkBkPathRender();
+    })
+    .catch(function (e) {
+      LB_ARKBK.pathsBusy = false;
+      var b2 = document.getElementById('lbArkBkPathBox');
+      if (b2) b2.innerHTML = '<div class="arbk-notice bad">行程加载失败：' + lbMdEsc(String(e).slice(0, 60)) + '</div>';
+    });
+}
+/* 服配色（v6554）：跨服路径用颜色区分服；与服器图标 LB_SERVER_MDI 同源。 */
+var ARKBK_SRV_COLOR = {
+  /* v6645（用户口径）：基础取 HA apps.yaml `server_themes` 的 light_color（深底可读）
+     v6646（用户口径「有几个地图的配色过于接近」）：只微调 4 台，把色相/明度拉开 ——
+       原表 5 对冲突：Ast vs Bob ΔH=10/ΔL=0、Isl vs Val ΔH=15/ΔL=4、Ext vs Los ΔH=13/ΔL=3、
+                     Cen vs Ext ΔH=13/ΔL=8、Sco vs Ast ΔH=22/ΔL=5
+       调整：Ext 青→天蓝、Ast 橙黄→深橙、Val 浅绿→薄荷绿、Bob 黄→柠檬黄
+       复算后「ΔH≤20 且 ΔL≤15 且 ΔS≤40」的冲突数 = 0 */
+  Isl: '#81C784', Sco: '#FF8A65', Cen: '#4DB6AC', Abe: '#BA68C8', Ext: '#5AB0F5',
+  Ast: '#FFA726', Rag: '#F06292', Val: '#43D695', Bob: '#FFE082', Los: '#90A4AE', Gen: '#7986CB'
+};
+/* v6560（用户口径）：日期只在「跨到新的一天」时显示，且日期部分高亮（#fbbf24 加粗）；
+   同一天内的后续段只显示 HH:MM → HH:MM。时间格式仍复用项目现成 lbFmtTs。 */
+function lbArkBkSplitTs(ms){
+  var s = String(lbFmtTs(ms) || '');   /* 项目现成：当天 "HH:MM" / 跨天 "MM-DD HH:MM" */
+  var i = s.lastIndexOf(' ');
+  return (i < 0) ? ['', s] : [s.slice(0, i), s.slice(i + 1)];
+}
+function lbArkBkDateOf(ms){
+  var n = Number(ms) || 0;
+  if (!n) return '';
+  var d = new Date(n), z = function (x) { return ('0' + x).slice(-2); };
+  var y = (d.getFullYear() === new Date().getFullYear()) ? '' : ((d.getFullYear() % 100) + '-');
+  return y + z(d.getMonth() + 1) + '-' + z(d.getDate());
+}
+function lbArkBkSpanHtml(a, b, showDate){
+  var p1 = lbArkBkSplitTs(a);
+  var dA = lbArkBkDateOf(a), dB = lbArkBkDateOf(b);
+  var HL = function (d) { return '<span style="color:#fbbf24;font-weight:700">' + lbMdEsc(d) + '</span> '; };
+  var out = ((showDate && dA) ? HL(dA) : '') + lbMdEsc(p1[1]);
+  if (!b) return out + ' → 至今';
+  var p2 = lbArkBkSplitTs(b);
+  if (dB && dB !== dA) out += ' → ' + HL(dB) + lbMdEsc(p2[1]);
+  else out += ' → ' + lbMdEsc(p2[1]);
+  return out;
+}
+function lbArkBkPathHours(h){
+  LB_ARKBK.pathsHours = Number(h) || 24;
+  LB_ARKBK.paths = null; LB_ARKBK.pathsAt = 0;
+  var box = document.getElementById('lbArkBkPathBox');
+  if (box) box.innerHTML = '<div class="arbk-dim">加载中…</div>';
+  lbArkBkTraceLoad();
+}
+/* v6555（用户口径「看不懂」）：改成**段卡片序列**（流程图形式）——
+   逐段一张卡：服图标+服名 / 起止 / 停留时长，卡间箭头表示传服先后；
+   选中服的卡高亮，其它卡淡化（用户需求 ④）。不再用时间轴——
+   窗口内 3 分钟的段在 24 小时轴上只有 0.2%，看不见。 */
+function lbArkBkPathRender(){
+  var box = document.getElementById('lbArkBkPathBox');
+  var J = LB_ARKBK.paths;
+  if (!box || !J) return;
+  var arr = J.players || [];
+  /* v6565（用户口径）：标题右侧灰字（全部日志 · 全部服 · N 人）不再显示，head 元素已删 */
+  var hrs = J.hours || 0;
+  var winTxt = hrs ? ('近 ' + (hrs >= 24 ? Math.round(hrs / 24) + ' 天' : hrs + ' 小时')) : '全部日志';
+  var whoRow = document.getElementById('lbArkBkWhoRow');
+  if (whoRow){
+    whoRow.innerHTML = arr.map(function (x) {
+      var on = (String(x.eosId) === LB_ARKBK.who);
+      /* v6619（用户口径）：地图 mdi **离线也要显示** —— 取「最后下线的那个服」的图标。
+         在线 → onlineServer；离线 → segments 里 to 最大的那段所属服务器（= 最后所在服）。 */
+      var _srvOfIc = String(x.onlineServer || '');
+      if (!_srvOfIc){
+        var _sgx = x.segments || [];
+        var _lastTo = -1;
+        for (var _gi = 0; _gi < _sgx.length; _gi++){
+          var _g = _sgx[_gi];
+          if (!_g || !_g.server) continue;
+          var _t2 = Number(_g.to || 0);
+          if (_t2 >= _lastTo){ _lastTo = _t2; _srvOfIc = String(_g.server); }
+        }
+      }
+      var md = _srvOfIc ? ((LB_SERVER_MDI || {})[_srvOfIc] || '') : '';
+      var _mdOff = !x.onlineServer && !!md;
+      /* v6558（用户口径）：两行 —— 第一行玩家昵称（playerName），第二行角色名（charName）；
+         两者相同时也照显示两行（用户选定） */
+      var pn = String(x.name || '');
+      var cn2 = String(x.charName || '');
+      if (!pn) pn = cn2 || String(x.eosId).slice(0, 8);
+      if (!cn2) cn2 = pn;
+      var tip = pn + ' / ' + cn2 + '（' + ((x.servers || []).length) + ' 台服'
+        + (x.onlineServer ? (' · 现在在' + lbArkBkCn(x.onlineServer))
+            : (_srvOfIc ? (' · 最后在' + lbArkBkCn(_srvOfIc)) : '')) + '）';
+      /* v6618（用户口径）：在线状态用**样式**表达，不再单列「在线角色」模块
+         v6647（用户口径「不用描边着色」）：去掉绿色内描边
+         v6648（用户口径「可以不用绿点，地图图标着色即可」）：去掉绿点 ——
+               在线/离线**只用右下角地图图标的颜色**表达（在线=主题色，离线=灰+45%透明） */
+      var _onl = !!x.onlineServer;
+      /* v6649（用户口径「描边要着色但不用加粗」）：在线 chip 加 1px 内描边，
+         颜色取该角色现在所在地图的主题色（无则退回最后所在地图）；粗细固定 1px，不随选中加粗 */
+      var _onlCol = _onl ? (((ARKBK_SRV_COLOR || {})[String(x.onlineServer || _srvOfIc || '')]) || '#94a3b8') : '';
+      return '<span class="lb-tipb server-tab' + (on ? ' active' : '') + (_onl ? ' is-online' : '') + '"'
+        + ' onclick="lbArkBkWhoPick(&quot;' + lbMdEsc(String(x.eosId)) + '&quot;)"'
+        + ' title="' + lbMdEsc(tip) + '"'
+        + ' style="height:auto;flex-direction:column;align-items:flex-start;justify-content:center;'
+        + 'gap:0;padding:4px 10px;line-height:1.2;text-align:left'
+        + (_onlCol ? (';box-shadow:inset 0 0 0 1px ' + _onlCol) : '') + '">'
+        + '<span style="display:inline-flex;align-items:center;gap:3px;font-size:12px">'
+        + lbMdEsc(pn) + '</span>'
+        + '<span style="font-size:11px;opacity:.72;display:inline-flex;align-items:center;gap:3px;padding-right:15px">'
+        + lbMdEsc(cn2) + '</span>'
+        /* v6622（用户口径）：地图图标固定在 TAB **右下角**、尺寸缩小；
+           在线 → 按该地图主题色着色（ARKBK_SRV_COLOR），离线 → 灰色淡化 */
+        + (md ? ('<i class="mdi ' + md + '" style="position:absolute;right:4px;bottom:2px;'
+            + 'font-size:12px;line-height:1;'
+            + (_mdOff ? 'color:#94a3b8;opacity:.45'
+                      : ('color:' + ((ARKBK_SRV_COLOR || {})[_srvOfIc] || '#94a3b8'))) + '"></i>') : '')
+        + '</span>';
+    }).join('')
+      /* v6567（用户口径）：角色行末尾加「取消选择角色」mdi 按钮 —— 复用项目 .lb-srvctl-mini 结构
+         （与右上角 全选 / 清空 / 刷新 同款），只在已选中角色时才出现 */
+      + (LB_ARKBK.who
+          ? '<button class="lb-srvctl-mini" title="取消选择角色" onclick="lbArkBkClearWho()"'
+            + ' style="margin-left:auto"><i class="mdi mdi-checkbox-blank-outline"></i></button>'
+          : '')
+      || '<span class="arbk-dim">' + winTxt + '内没有角色活动</span>';
+  }
+  var cur = null;
+  for (var i = 0; i < arr.length; i++){ if (String(arr[i].eosId) === LB_ARKBK.who){ cur = arr[i]; break; } }
+  if (!cur){ box.innerHTML = '<div class="arbk-dim">请先选择一个角色</div>'; return; }
+  var segs = (cur.segments || []).slice();
+  /* v6618（用户口径）：行程块按「**所有服最旧存档所在行程的前一个行程**」截断 ——
+     比那更早的行程回档也回不到（更早的档已经不存在），无限累加只会把面板撑爆。
+     最旧存档时间取自 LB_ARKBK.paths.pointsByServer（各服存档点 epoch 秒数组，已有）。 */
+  try {
+    var _pbs = (LB_ARKBK.paths && LB_ARKBK.paths.pointsByServer) || {};
+    var _tmin = Infinity;
+    Object.keys(_pbs).forEach(function (k) {
+      (_pbs[k] || []).forEach(function (t) {
+        var n = Number(t);
+        if (n > 0 && n < _tmin) _tmin = n;
+      });
+    });
+    if (_tmin !== Infinity){
+      var _minMs = (_tmin < 1e12) ? (_tmin * 1000) : _tmin;
+      var _asc = segs.slice().sort(function (a, b) { return Number(a.from) - Number(b.from); });
+      var _cut = -1;
+      for (var _si = 0; _si < _asc.length; _si++){
+        if (Number(_asc[_si].to) >= _minMs){ _cut = _si; break; }
+      }
+      if (_cut > 0) segs = _asc.slice(Math.max(0, _cut - 1));
+    }
+  } catch (e_cut) {}
+  var now = Date.now();
+  var CO = ARKBK_SRV_COLOR;
+  var curSrv = LB_ARKBK.srv;
+  var H = [];
+  /* v6557（用户口径）：去掉「窗口 近xx」切换行 —— 直接显示日志全部范围 */
+  if (!segs.length){
+    H.push('<div class="arbk-dim">' + winTxt + '内该角色没有停留段</div>');
+    box.innerHTML = H.join('');
+    return;
+  }
+  var segsAsc = segs.slice().sort(function (p, q) { return p.from - q.from; });
+  H.push('<div class="arbk-segwrap" style="display:flex;flex-wrap:wrap;align-items:stretch;gap:3px">');
+  var prevEnd = 0;   /* v6559：上一段结束时刻（毫秒），用于算出离线空档 */
+  var lastDate = '';  /* v6560：上一段结束时的日期，用于判断「是否跨到新的一天」 */
+  segsAsc.forEach(function (sg, idx) {
+    var c = CO[sg.server] || '#64748b';
+    var showDate = (lbArkBkDateOf(sg.from) !== lastDate);   /* v6560：只有跨天的那一段才显示日期 */
+    /* v6569（用户口径）四条规则：
+       ① 未选地图：全部无描边、opacity 100%
+       ② 选中地图：该服块保持现状，其它服块半透明
+       ③ 选中某个行程块：该块加高亮描边（并高亮该块范围内的档 + 自动滚动）
+       ④ 手动选中某个档：自动选中它所属的行程块（见 lbArkBkPickPoint） */
+    var ss2 = LB_ARKBK.segSel;
+    var selSeg = !!(ss2 && ss2.kind !== 'offline' && ss2.server === sg.server
+                 && Math.abs(Number(ss2.from) - Number(sg.from)) < 1000);
+    var dim = !!(curSrv && sg.server !== curSrv);
+    var nArc = lbArkBkArcCount(sg.server, sg.from, sg.to);   /* v6568：前端统一口径 */
+    var md = (LB_SERVER_MDI || {})[sg.server] || '';
+    var end = sg.to || now;
+    var durTxt = lbFmtDur(Math.round((end - sg.from) / 1000));
+    var stTxt = sg.state === 'online' ? '至今在线' : '';
+    var tip = lbArkBkCn(sg.server) + '：' + lbFmtTs(sg.from) + ' → '
+      + (sg.to ? lbFmtTs(sg.to) : '至今') + '；停留 ' + durTxt
+      + '；' + (sg.state === 'online' ? '在线中' : '已离开');
+    /* v6559（用户口径）：相邻两段之间的空档 = 玩家下线（哪个服都不在），
+       空档 > 2 分钟才单独成一个「离线块」，否则传图瞬间的碎空档会刷出一堆碎块 */
+    if (idx) {
+      var dimOff = !!(curSrv && sg.server !== curSrv);   /* v6569：离线块跟随服半透明 */
+      if (prevEnd && (sg.from - prevEnd) > 120000) {
+        var gDur = lbFmtDur(Math.round((sg.from - prevEnd) / 1000));
+        var gTip = '离线：' + lbFmtTs(prevEnd) + ' → ' + lbFmtTs(sg.from) + '；离线 ' + gDur;
+        /* v6562（用户口径）：块之间不再插箭头 —— 白占横向空间，靠 gap:3px 自然分隔 */
+        /* v6560（用户口径）：离线块只留图标，不显示时间和时长；完整起止/时长放 title */
+        /* v6568（用户口径）：离线块里也要显示有几档（该离线区间内该服的档数） */
+        var gN = lbArkBkArcCount(sg.server, prevEnd, sg.from);
+        var gTip2 = gTip + '；该区间 ' + (gN ? (gN + ' 个档') : '没有档');
+        /* v6569（用户口径）：离线块也算一种特殊的行程块 —— 可点击选中、选中加描边、跟随服半透明 */
+        var selOff = !!(LB_ARKBK.segSel && LB_ARKBK.segSel.kind === 'offline'
+                     && LB_ARKBK.segSel.server === sg.server
+                     && Math.abs(Number(LB_ARKBK.segSel.from) - Number(prevEnd)) < 1000);
+        /* v6571（用户口径）：离线块改成上下两行 —— 上行=该服地图图标（服色，标出在哪张图下线），
+           下行=断电图标 + 档数；完整起止/时长/档数仍在 title */
+        var gTip3 = gTip2 + '（在 ' + lbArkBkCn(sg.server) + ' 下线后离线）';
+        H.push('<span class="lb-tipb arbk-seg' + (selOff ? ' arbk-sel' : '') + '"'
+          + ' title="' + lbMdEsc(gTip3) + '  · 点击选中本离线块"'
+          + ' onclick="lbArkBkPickSeg(&quot;' + lbMdEsc(String(sg.server)) + '&quot;,'
+          + Number(prevEnd) + ',' + Number(sg.from) + ',&quot;offline&quot;)"'
+          /* v6572（用户口径）：两行左对齐 —— 地图图标与「N 档」左边贴齐，不再居中 */
+          /* v6577（用户口径）：与普通流程块共用 .arbk-seg 的盒模型（内间距/行距/字号/圆角/gap 全部一致），
+             只保留「背景 + 虚线框」这一处差异（色条由普通块独有） */
+          + ' style="background:' + (selOff ? '#1d1d2e' : '#131320') + ';border:1px dashed '
+          + (selOff ? '#7c3aed' : '#3a3a4a') + ';opacity:' + (dimOff ? '.45' : '.85') + '">'
+          + '<span style="display:inline-flex;align-items:center;gap:3px">'
+          /* v6572（用户口径）：图标大小与其它行程块一致 —— 不写死 font-size，继承卡片 11px */
+          + (md ? ('<i class="mdi ' + md + '" style="color:' + c + '"></i>') : '')
+          + '<i class="mdi mdi-power-plug-off" style="color:#64748b"></i>'
+          + '</span>'
+          + '<span style="font-size:10px;color:' + (gN ? '#a78bfa' : '#5b5b6e') + '">'
+          + (gN ? (gN + ' 档') : '无档') + '</span>'
+          + '</span>');
+      }
+    }
+    /* v6566（用户口径）：两级高亮 —— 选中服只描边（边框用服色），选中档才填充高亮；不再淡化其它段 */
+    /* v6565（用户口径）：段卡片可点击 —— 点它即自动选中该段对应的服（下方地图 TAB 跟着切） */
+    H.push('<span class="lb-tipb arbk-seg' + (selSeg ? ' arbk-sel' : '') + '"'
+      + ' title="' + lbMdEsc(tip) + '  · 点击选中本块并高亮本块范围内的档"'
+      + ' onclick="lbArkBkPickSeg(&quot;' + lbMdEsc(String(sg.server)) + '&quot;,'
+      + Number(sg.from) + ',' + Number(sg.to || 0) + ',&quot;seg&quot;)"'
+      /* v6577（用户口径）：盒模型（padding/行距/字号/圆角/gap/对齐）统一放进 .arbk-seg CSS，
+         内联只留「背景 + 边框（含左侧色条）」，与离线块共用同一套间距 */
+      /* v6600（用户口径）：选中态描边**固定主题紫**（不再取地图色），左边 3px 地图色条保留 */
+      + ' style="background:' + (selSeg ? '#23233a' : '#1a1a24') + ';border:1px solid '
+      + (selSeg ? '#7c3aed' : '#2a2a3a') + ';border-left:3px solid ' + c + ';'
+      + (dim ? 'opacity:.45;' : '') + '">'
+      + '<span style="display:inline-flex;align-items:center;gap:3px;color:#e5e5f0">'
+      + (md ? '<i class="mdi ' + md + '" style="color:' + c + '"></i>' : '')
+      + lbArkBkSpanHtml(sg.from, sg.to, showDate) + '</span>'
+      + '<span style="color:#c9c9d6">' + durTxt + (stTxt ? (' · ' + stTxt) : '')
+      + (nArc ? ('  <span style="color:#a78bfa">' + nArc + ' 档</span>')
+              : '  <span style="color:#5b5b6e">无档</span>') + '</span>'
+      + '</span>');
+    prevEnd = sg.to || sg.from;
+    lastDate = lbArkBkDateOf(sg.to || now);
+  });
+  H.push('</div>');
+  /* v6564（用户口径）：底部摘要行（角色名 · N 段 · N 台服）不再显示文字，改成一条虚线分割线，
+     与下方服务器 TAB 视觉分开。原 nmCur / used 两个变量随之无用，一并清掉。 */
+  H.push('<div style="margin:6px 0 8px;border-top:1px dashed #2a2a3a"></div>');
+  box.innerHTML = H.join('');
+  /* v6631（用户口径）：移动端行程块最多 2 行，多余折叠可展开/收起 */
+  try { lbArkBkSegFoldApply(); } catch (e_segf) {}
+}
+/* v6653（用户口径「物品丢失 就是背包减少啊」）：把「物品丢失」口径从
+   「目标档没有该角色的人数」改成「两档背包比对后会减少的物品种类数」，且**汇总全部角色**。
+   与背包差异区（lbArkBkBagLoad 里的 lose/gain）完全同一口径：同走 lbIsEmptyItem 过滤 +
+   lbItemAggKey 归并，按 pid 分组（绝不按名字，见 v6613）。 */
+function lbArkBkBagStat(pl){
+  var cache = LB_ARKBK._bagStat;
+  if (cache && cache.pl === pl) return cache;
+  var pc = (pl && pl.precheck) || {};
+  var cur = pc.currentItems || (pl && pl.currentItems) || [];
+  var tgt = pc.targetItems || (pl && pl.targetItems) || [];
+  var per = {}, tper = {};
+  var _fold = function (arr, dst) {
+    arr.forEach(function (it) {
+      if (!it || !it['class']) return;
+      try { if (lbIsEmptyItem(it)) return; } catch (e_f0) {}
+      var _pid = (it.pid != null && it.pid !== '') ? it.pid : it.containerOwnerPid;
+      var key = (_pid != null && _pid !== '' && Number(_pid) !== 0)
+        ? ('p:' + String(_pid)) : ('n:' + String(it.playerName || '(未知)'));
+      var o = dst[key] || (dst[key] = { byCls: {}, name: String(it.playerName || '') });
+      var g = lbItemAggKey(it['class']);
+      var e = o.byCls[g] || (o.byCls[g] = { n: 0, q: 0, cls: it['class'] });
+      e.n++; e.q += (it.quantity || 0);
+    });
+  };
+  _fold(cur, per); _fold(tgt, tper);
+  var keys = {}, k;
+  for (k in per) { if (Object.prototype.hasOwnProperty.call(per, k)) keys[k] = 1; }
+  for (k in tper) { if (Object.prototype.hasOwnProperty.call(tper, k)) keys[k] = 1; }
+  var kinds = {}, nKind = 0, roles = [];
+  for (k in keys) {
+    if (!Object.prototype.hasOwnProperty.call(keys, k)) continue;
+    var c0 = (per[k] || { byCls: {} }).byCls, t1 = (tper[k] || { byCls: {} }).byCls;
+    var allK = {}, kk;
+    for (kk in c0) { if (Object.prototype.hasOwnProperty.call(c0, kk)) allK[kk] = 1; }
+    for (kk in t1) { if (Object.prototype.hasOwnProperty.call(t1, kk)) allK[kk] = 1; }
+    var items = [];
+    for (kk in allK) {
+      if (!Object.prototype.hasOwnProperty.call(allK, kk)) continue;
+      var a = c0[kk] || { n: 0, q: 0, cls: '' };
+      var b = t1[kk] || { n: 0, q: 0, cls: '' };
+      var dn = a.n - b.n, dq = a.q - b.q;
+      if (dn > 0 || (dn === 0 && dq > 0)) {
+        items.push({ k: a.cls || b.cls || kk, q: dq, n: dn, g: a.n });
+        if (!kinds[kk]) { kinds[kk] = 1; nKind++; }
+      }
+    }
+    if (items.length) {
+      roles.push({ pid: k.replace(/^p:/, ''),
+                   name: ((per[k] && per[k].name) || (tper[k] && tper[k].name) || ''),
+                   items: items });
+    }
+  }
+  roles.sort(function (a2, b2) { return b2.items.length - a2.items.length; });
+  var out = { pl: pl, kinds: nKind, roles: roles };
+  LB_ARKBK._bagStat = out;
+  return out;
+}
+/* 物品 chip —— 与「待制作」材料 chip 完全一致（lbBpMatChip / lbBpMatsHtml 同款内联样式）：
+   16px 图标 + 中文名 + ·N组（=1 省略）+ ·数量；精确值放 title。 */
+function lbArkBkBagChip(cls, qty, groups){
+  var url = '', nm = String(cls || '');
+  try { url = lbItemIconUrl(cls) || ''; } catch (e) {}
+  try { var m = lbItemMeta(cls); nm = (m && m.zh) || nm; } catch (e2) {}
+  var q = Number(qty) || 0, g = Number(groups) || 0;
+  return '<span class="lb-tipb" style="display:inline-flex;align-items:center;gap:4px;background:#1a1a24;'
+    + 'border:1px solid #2a2a3a;border-radius:8px;padding:3px 7px;font-size:12px" title="'
+    + lbMdEsc(nm + '：共 ' + q + (g > 0 ? ('（' + g + ' 组）') : '')) + '">'
+    + (url ? '<img src="' + lbMdEsc(url) + '" style="width:16px;height:16px;object-fit:contain" onerror="lbImgRetry(this)">' : '')
+    + '<span style="color:#cbd5e1">' + lbMdEsc(nm) + '</span>'
+    + (g > 1 ? '<span style="color:#475569;font-size:10px">·</span>'
+        + '<span style="color:#94a3b8;font-size:11px">' + g + '组</span>' : '')
+    + '<span style="color:#475569;font-size:10px">·</span>'
+    + '<span style="color:#64748b">' + (window.lbFmtQty ? lbFmtQty(q) : q) + '</span>'
+    + '</span>';
+}
+/* v6601（用户口径）：低温仓生物差异 —— exe light 新产出 playerCryopods（38 字段/条）。
+   键用 dinoClass + dinoId1 + dinoId2（同一只恐龙跨档稳定）；玩家按 playerName 过滤。
+   ⚠️ playerCryopods **没有 pid**，只有 containerOwnerPid，所以这里一律用 playerName 关联。 */
+function lbArkBkCryoKey(x){
+  return String(x.dinoClass || '') + '|' + String(x.dinoId1 || 0) + '|' + String(x.dinoId2 || 0);
+}
+/* v6607（用户口径）：低温仓用项目标准物品图标 —— 与空球行 lbEmptyRowHtml() 同源
+   （LB_ICON_BY_NAME['Cryopod']）。取不到图标 URL 时回退雪花 mdi，保证不会出现空图标。 */
+function lbArkBkCryoIc(px){
+  var u = '';
+  try { u = (LB_ICON_BY_NAME && LB_ICON_BY_NAME['Cryopod']) || ''; } catch (e) {}
+  var n = px || 14;
+  if (!u) return '<i class="mdi mdi-snowflake" style="color:#7dd3fc;font-size:' + n + 'px"></i>';
+  return '<img src="' + u + '" style="width:' + n + 'px;height:' + n + 'px;object-fit:contain"'
+    + ' onerror="lbImgRetry(this)">';
+}
+function lbArkBkCryoChip(x){
+  var nm = String(x.name || '').trim();
+  var cls = String(x.dinoClass || '').replace(/_Character_BP_C$/, '').replace(/_C$/, '');
+  var lv = x.level ? (' Lv.' + x.level) : '';
+  var g = (x.gender === 'MALE' ? ' ♂' : (x.gender === 'FEMALE' ? ' ♀' : ''));
+  var baby = Number(x.isBaby) ? ' 幼' : '';
+  /* v6609（用户口径）：项目已有现成翻译（lbZhDeep：同义词→原样→剥括号→key 变体），
+     优先用中文名，查不到才回退 exe 给的英文 name —— 之前直接显示
+     「Carcharodontosaurus - Lvl 295 (Carcharodontosaurus)」太长。 */
+  var zh = '';
+  try { zh = lbZhDeep(cls) || ''; } catch (e) {}
+  var txt = (zh || nm || cls) + lv + g + baby;
+  var tip = (zh ? (zh + ' · ') : '') + (nm ? (nm + ' · ') : '') + cls + lv + g + baby
+    + (x.saddle ? (' · 鞍：' + String(x.saddle).replace(/^PrimalItemArmor_/, '').replace(/_C$/, '')) : '')
+    + (x.imprinterName ? (' · 留痕：' + x.imprinterName) : '');
+  return '<span class="lb-tipb" aria-label="' + lbMdEsc(tip) + '" data-tip="' + lbMdEsc(tip) + '"'
+    + ' style="display:inline-flex;align-items:center;gap:4px;background:#1a1a24;border:1px solid #2a2a3a;'
+    + 'border-radius:8px;padding:3px 7px;font-size:12px">'
+    + lbArkBkCryoIc(14)
+    + '<span style="color:#cbd5e1">' + lbMdEsc(txt) + '</span></span>';
+}
+function lbArkBkCryoDiffHtml(who, cNow, cTgt){
+  var group = function (arr) {
+    var o = {};
+    (arr || []).forEach(function (x) {
+      if (!x) return;
+      if (who && x.playerName && String(x.playerName) !== String(who)) return;
+      o[lbArkBkCryoKey(x)] = x;
+    });
+    return o;
+  };
+  var a = group(cNow), b = group(cTgt);
+  var ka = Object.keys(a), kb = Object.keys(b);
+  var lose = [], gain = [];
+  ka.forEach(function (k) { if (!b[k]) lose.push(a[k]); });
+  kb.forEach(function (k) { if (!a[k]) gain.push(b[k]); });
+  var H = [];
+  var head = '<div style="font-size:11px;color:#8b8b9e;margin:8px 0 3px 2px">'
+    + lbArkBkCryoIc(13) + ' 低温仓：当前档 '
+    + '<b style="color:#e5e5f0">' + ka.length + '</b> 只 · 目标档 '
+    + '<b style="color:#e5e5f0">' + kb.length + '</b> 只';
+  if (!lose.length && !gain.length){
+    H.push(head + ' · <span style="color:#4ade80">两侧一致</span></div>');
+    return H.join('');
+  }
+  H.push(head + '</div>');
+  var block = function (list, color, icon, label){
+    if (!list.length) return;
+    H.push('<div style="font-size:11px;color:' + color + ';margin:2px 0 3px 2px">'
+      + '<i class="mdi ' + icon + '"></i> ' + label + '（' + list.length + ' 只）</div>');
+    H.push('<div class="arbk-chips">');
+    list.forEach(function (x) { H.push(lbArkBkCryoChip(x)); });
+    H.push('</div>');
+  };
+  /* 排序：等级高的先看 */
+  var byLv = function (x, y) { return (Number(y.level) || 0) - (Number(x.level) || 0); };
+  lose.sort(byLv); gain.sort(byLv);
+  block(lose, '#f87171', 'mdi-arrow-down-bold', '回档后将消失');
+  block(gain, '#4ade80', 'mdi-arrow-up-bold', '回档后会出现');
+  return H.join('');
+}
+/* v6616（用户口径）：重复角色 —— 角色当前不在本服、但目标档有他。
+   此时拿他**在别服**的背包，与目标档背包做差异对比（全部按 pid，名字会重名）。
+   数据源：后端 /api/arkbackup/peerbag（对该角色所在的其它服跑 exe light，600s 缓存）。 */
+function lbArkBkPeerBagLoad(srv, pid, T0){
+  var box = document.getElementById('lbArkBkPeerBox');
+  if (!box) return;
+  var base = (typeof lbSrvCtlApi === 'function') ? lbSrvCtlApi() : '';
+  var url = base + '/api/arkbackup/peerbag?server=' + encodeURIComponent(srv)
+    + '&pid=' + encodeURIComponent(pid);
+  var _agg = function (arr) {
+    var out = {};
+    (arr || []).forEach(function (it) {
+      if (!it || !it['class']) return;
+      try { if (lbIsEmptyItem(it)) return; } catch (e) {}
+      var g = lbItemAggKey(it['class']);
+      var o = out[g] || (out[g] = { n: 0, q: 0, cls: it['class'] });
+      o.n++; o.q += (it.quantity || 0);
+    });
+    return out;
+  };
+  var _blocks = function (H2, cm, tm, labelPeer, labelTgt) {
+    var allK = {}, kk;
+    for (kk in cm) { if (Object.prototype.hasOwnProperty.call(cm, kk)) allK[kk] = 1; }
+    for (kk in tm) { if (Object.prototype.hasOwnProperty.call(tm, kk)) allK[kk] = 1; }
+    var onlyPeer = [], onlyTgt = [];
+    for (kk in allK) {
+      if (!Object.prototype.hasOwnProperty.call(allK, kk)) continue;
+      var a = cm[kk] || { n: 0, q: 0, cls: '' };
+      var b = tm[kk] || { n: 0, q: 0, cls: '' };
+      var dn = a.n - b.n, dq = a.q - b.q;
+      if (dn > 0 || (dn === 0 && dq > 0)) onlyPeer.push({ k: a.cls || b.cls || kk, q: dq, n: dn });
+      else if (dn < 0 || (dn === 0 && dq < 0)) onlyTgt.push({ k: b.cls || a.cls || kk, q: -dq, n: -dn });
+    }
+    onlyPeer.sort(function (x, y) { return (y.q - x.q) || (y.n - x.n); });
+    onlyTgt.sort(function (x, y) { return (y.q - x.q) || (y.n - x.n); });
+    if (!onlyPeer.length && !onlyTgt.length) {
+      H2.push('<div class="arbk-dim"><i class="mdi mdi-check-circle" style="color:#4ade80"></i>'
+        + ' 与目标档完全一致</div>');
+      return { p: 0, t: 0 };
+    }
+    if (onlyPeer.length) {
+      H2.push('<div style="font-size:11px;color:#f87171;margin:2px 0 3px 2px">'
+        + '<i class="mdi mdi-arrow-down-bold"></i> ' + labelPeer + '（' + onlyPeer.length + ' 种）</div>');
+      H2.push('<div class="arbk-chips">');
+      onlyPeer.forEach(function (x) { H2.push(lbArkBkBagChip(x.k, x.q || x.n, x.n)); });
+      H2.push('</div>');
+    }
+    if (onlyTgt.length) {
+      H2.push('<div style="font-size:11px;color:#4ade80;margin:5px 0 3px 2px">'
+        + '<i class="mdi mdi-arrow-up-bold"></i> ' + labelTgt + '（' + onlyTgt.length + ' 种）</div>');
+      H2.push('<div class="arbk-chips">');
+      onlyTgt.forEach(function (x) { H2.push(lbArkBkBagChip(x.k, x.q || x.n, x.n)); });
+      H2.push('</div>');
+    }
+    return { p: onlyPeer.length, t: onlyTgt.length };
+  };
+  lbSrvCtlFetchW(url).then(function (r) { return r.json(); }).then(function (j) {
+    var el = document.getElementById('lbArkBkPeerBox');
+    if (!el) return;
+    if (!j || !j.ok) {
+      lbArkBkBagSum('warn', '角色重复：别服对比失败');
+      el.innerHTML = '<div class="arbk-dim">无法与别服对比：'
+        + lbMdEsc((j && j.error) || '未知原因') + '</div>';
+      try { lbArkBkFitFold(); } catch (e) {}
+      return;
+    }
+    var peerName = '';
+    try { peerName = (typeof LB !== 'undefined' && LB.servName) ? LB.servName(j.server) : j.server; } catch (e2) { peerName = j.server; }
+    var pb = _agg(j.items || []);
+    var tm = (T0 && T0.byCls) || {};
+    var nPeer = 0; for (var k1 in pb) { if (Object.prototype.hasOwnProperty.call(pb, k1)) nPeer += pb[k1].n; }
+    var H = [];
+    H.push('<div style="font-size:11px;color:#fbbf24;margin:5px 0 3px 2px">'
+      + '<i class="mdi mdi-swap-horizontal"></i> <b>对比来源：' + lbMdEsc(peerName) + ' 该角色的背包</b>'
+      + '<span style="color:#8b8b9e">（角色现在在 ' + lbMdEsc(peerName) + '，本服没有他的角色信息）</span></div>');
+    H.push('<div style="font-size:11px;color:#8b8b9e;margin:0 0 3px 2px">'
+      + lbMdEsc(peerName) + ' <b style="color:#e5e5f0">' + nPeer + '</b> 格'
+      + ' · 目标档 <b style="color:#e5e5f0">' + ((T0 && T0.stacks) || 0) + '</b> 格</div>');
+    var _bd = _blocks(H, pb, tm, '别服有、回档后没有', '目标档有、别服没有（回档后会出现）') || {};
+    /* v6623：别服对比完成后刷新标题摘要 */
+    /* v6629（用户口径）：角色重复场景一句话说清后果，账目留在正文 */
+    lbArkBkBagSum(_bd.p ? 'warn' : '', '角色重复：会多出一套背包物品');
+    /* 低温仓球：同上口径对比 */
+    try {
+      var _pv = {}, _tv = {};
+      (j.cryopods || []).forEach(function (x) { if (x && x.dinoClass) _pv[lbArkBkCryoKey(x)] = x; });
+      var _pcA = ((LB_ARKBK.plan || {}).precheck) || {};
+      (_pcA.targetCryopods || []).forEach(function (x) { if (x && x.dinoClass) _tv[lbArkBkCryoKey(x)] = x; });
+      var _onlyP = [], _onlyT = [];
+      for (var ck in _pv) { if (Object.prototype.hasOwnProperty.call(_pv, ck) && !_tv[ck]) _onlyP.push(_pv[ck]); }
+      for (var ck2 in _tv) { if (Object.prototype.hasOwnProperty.call(_tv, ck2) && !_pv[ck2]) _onlyT.push(_tv[ck2]); }
+      if (_onlyP.length || _onlyT.length) {
+        H.push('<div style="font-size:11px;color:#8b8b9e;margin:7px 0 3px 2px">'
+          + lbArkBkCryoIc(13) + ' 低温仓：' + lbMdEsc(peerName) + ' <b style="color:#e5e5f0">'
+          + Object.keys(_pv).length + '</b> 只 · 目标档 <b style="color:#e5e5f0">'
+          + Object.keys(_tv).length + '</b> 只</div>');
+        if (_onlyP.length) {
+          H.push('<div style="font-size:11px;color:#f87171;margin:2px 0 3px 2px">'
+            + '<i class="mdi mdi-arrow-down-bold"></i> 别服有、回档后没有（' + _onlyP.length + ' 只）</div>');
+          H.push('<div class="arbk-chips">');
+          _onlyP.forEach(function (x) { H.push(lbArkBkCryoChip(x)); });
+          H.push('</div>');
+        }
+        if (_onlyT.length) {
+          H.push('<div style="font-size:11px;color:#4ade80;margin:5px 0 3px 2px">'
+            + '<i class="mdi mdi-arrow-up-bold"></i> 目标档有、别服没有（回档后会出现）（' + _onlyT.length + ' 只）</div>');
+          H.push('<div class="arbk-chips">');
+          _onlyT.forEach(function (x) { H.push(lbArkBkCryoChip(x)); });
+          H.push('</div>');
+        }
+      }
+    } catch (e_cp) {}
+    el.innerHTML = H.join('');
+    try { lbArkBkFitFold(); } catch (e3) {}
+  }).catch(function (e) {
+    var el2 = document.getElementById('lbArkBkPeerBox');
+    if (el2) el2.innerHTML = '<div class="arbk-dim">读取别服背包失败：'
+      + lbMdEsc(String(e).slice(0, 80)) + '</div>';
+    try { lbArkBkFitFold(); } catch (e4) {}
+  });
+}
+function lbArkBkBagLoad(boxId){
+  /* v6681：浮窗里是克隆容器（id 带 Pop 后缀），必须支持指定容器，
+     否则只加载到隐藏容器里，浮窗一直显示「加载中…」 */
+  var _bid = boxId || 'lbArkBkBagBox';
+  var box = document.getElementById(_bid);
+  if (!box) return;
+  var srv = LB_ARKBK.srv;
+  if (!srv) return;
+  if (box.getAttribute('data-done') === '1' && box.getAttribute('data-srv') === srv) return;
+  box.setAttribute('data-srv', srv);
+  box.innerHTML = '<div class="arbk-dim">加载中…</div>';
+  try {
+    if (typeof lbItemZhLoad === 'function'
+        && !(window.LB_ITEM_ZH && Object.keys(LB_ITEM_ZH).length)) lbItemZhLoad();
+  } catch (e) {}
+  var baseItem = DINO_JSON + srv + '_item.json';
+  lbFetchDataJson(baseItem, baseItem + '.gz').then(function (data) {
+    var box2 = document.getElementById(_bid);
+    if (!box2) return;
+    /* v6612：不能用 data 单独判空 —— precheck.currentItems（light 源）可能可用而 _item.json 缺失；
+       两源都空才报「暂无背包数据」（判空挪到下面 _curLight 之后） */
+    /* v6611（用户口径「light 模式的 item 已带 id」）：当前档优先用后端 precheck.currentItems ——
+       那是 exe light 产出的 playerItems，**每条带 pid**。而 _item.json 那条链没有 pid，
+       只能按 playerName 分组，遇默认角色名（如「人类」）重名会把两个人的背包合成一组。
+       只有 currentItems 缺失时才退回 _item.json。过滤仍走现成 lbIsEmptyItem（含皮肤/隐藏名单）。 */
+    var _pl1 = LB_ARKBK.plan || null;
+    var _pc1 = (_pl1 && _pl1.precheck) || {};
+    var _curLight = _pc1.currentItems || (_pl1 && _pl1.currentItems) || [];
+    if (!data && !_curLight.length){
+      lbArkBkBagSum('', '无背包数据');
+      box2.innerHTML = '<div class="arbk-dim">该服暂无背包数据</div>';
+      box2.setAttribute('data-done', '1');
+      return;
+    }
+    var per = {}, perName = {}, _bagRows = [];
+    if (_curLight.length){
+      _curLight.forEach(function (it) {
+        if (!it || !it['class']) return;
+        try { if (lbIsEmptyItem(it)) return; } catch (e_cur1) {}
+        _bagRows.push(it);
+      });
+    } else {
+      (data.items || []).forEach(function (it) {
+        if (it.containerType !== 'player') return;
+        try { if (lbIsEmptyItem(it)) return; } catch (e_cur2) {}
+        _bagRows.push(it);
+      });
+    }
+    _bagRows.forEach(function (it) {
+      var _pid = (it.pid != null && it.pid !== '') ? it.pid : it.containerOwnerPid;
+      /* 分组键：有 pid 用 pid（重名也能区分）；无 pid 才退回名字 */
+      var key = (_pid != null && _pid !== '' && Number(_pid) !== 0)
+        ? ('p:' + String(_pid)) : ('n:' + String(it.playerName || '(未知)'));
+      var o = per[key] || (per[key] = { stacks: 0, qty: 0, byCls: {} });
+      if (!perName[key]) perName[key] = String(it.playerName || '') || '(未知)';
+      o.stacks++; o.qty += (it.quantity || 0);
+      /* v6551：同物归并走项目现成 lbItemAggKey（alias 链 + en/zh 内容键 + _C 后缀剥离），不自写正则 */
+      var g = lbItemAggKey(it['class']);
+      var e = o.byCls[g] || (o.byCls[g] = { n: 0, q: 0, cls: it['class'] });
+      e.n++; e.q += (it.quantity || 0);
+    });
+    /* ===== v6581：目标档背包（插件端新 exe 已在 light 模式输出 playerItems，经 plan.targetItems 下发）===== */
+    var tPer = {}, tPerName = {};
+    var _pl0 = LB_ARKBK.plan || null;
+    var tRaw = (_pl0 && ((_pl0.precheck && _pl0.precheck.targetItems) || _pl0.targetItems)) || [];
+    tRaw.forEach(function (it) {
+      if (!it || !it['class']) return;
+      /* v6610（用户口径·只复用现成规则）：目标档必须走与当前档**同一条可见性链** lbIsEmptyItem
+         —— 它内含 lbIsHiddenItem（Skin_ 前缀 / lb_material.hideItems / 词典 hide|skin 标记），
+         也就是「聚落列表里不显示皮肤」的那套口径。
+         原实现一条过滤都没走：同一角色两侧原始各 127 条，当前档过滤后 84、目标档仍 127
+         ⇒ 多出的 43 条（皮肤等）被误判成「回档后会出现」。 */
+      try { if (lbIsEmptyItem(it)) return; } catch (e_tgt0) {}
+      /* v6611：与当前档同一分组口径 —— 有 pid 用 pid（playerName 会重名） */
+      var _pid2 = (it.pid != null && it.pid !== '') ? it.pid : it.containerOwnerPid;
+      var key2 = (_pid2 != null && _pid2 !== '' && Number(_pid2) !== 0)
+        ? ('p:' + String(_pid2)) : ('n:' + String(it.playerName || '(未知)'));
+      var o2 = tPer[key2] || (tPer[key2] = { stacks: 0, qty: 0, byCls: {} });
+      if (!tPerName[key2]) tPerName[key2] = String(it.playerName || '') || '(未知)';
+      o2.stacks++; o2.qty += (it.quantity || 0);
+      var g2 = lbItemAggKey(it['class']);
+      var e2 = o2.byCls[g2] || (o2.byCls[g2] = { n: 0, q: 0, cls: it['class'] });
+      e2.n++; e2.q += (it.quantity || 0);
+    });
+    var pns = Object.keys(per);
+    Object.keys(tPer).forEach(function (n2) { if (pns.indexOf(n2) < 0) pns.push(n2); });
+    /* v6613（用户口径「pid 才是唯一权威，不允许用名字匹配」）：
+       角色名有大量重名（默认角色名「人类」），**任何情况下都不能拿名字定位玩家**。
+       手选角色存的是 eosId（LB_ARKBK.who）；precheck 的 safe/loss/dup 每条都带 eosId + pid
+       ⇒ 先用 eosId 换成 pid，之后全程按 pid 取背包。 */
+    var _nameOf = function (k) { return perName[k] || tPerName[k] || ''; };
+    var _eos2pids = {};
+    [].concat(_pc1.safe || [], _pc1.loss || [], _pc1.dup || []).forEach(function (r) {
+      var e = String((r && r.eosId) || '').toLowerCase();
+      var p = (r && r.pid != null) ? String(r.pid) : '';
+      if (!e || !p) return;
+      var arr = _eos2pids[e] || (_eos2pids[e] = []);
+      if (arr.indexOf(p) < 0) arr.push(p);
+    });
+    var _pidList = function () {
+      return pns.map(function (k) {
+        return k.replace(/^p:/, '') + '(' + (_nameOf(k) || '?') + ')';
+      }).join(' · ') || '（无）';
+    };
+    var _curPidS = '';
+    try { _curPidS = String(lbCurPid() || ''); } catch (eP) { _curPidS = ''; }
+    var pick = '', _pidWant = '';
+    var _wantEos = String(LB_ARKBK.who || '').toLowerCase();
+    if (_wantEos){
+      var _cands = (_eos2pids[_wantEos] || []).slice();
+      if (_cands.length === 1){
+        _pidWant = _cands[0];
+      } else if (_cands.length > 1){
+        /* 同一账号在本服有多个角色 —— 优先当前登录 pid，否则让用户明确指定，绝不猜 */
+        if (_curPidS && _cands.indexOf(_curPidS) >= 0) _pidWant = _curPidS;
+        else {
+          lbArkBkBagSum('bad', '本服该账号有 ' + _cands.length + ' 个角色 · 需指定');
+          box2.innerHTML = '<div class="arbk-notice bad">该账号在本服有 <b>' + _cands.length
+            + '</b> 个角色，无法确定比对哪一个</div>'
+            + '<div class="arbk-dim" style="margin-top:4px">候选 pid：' + lbMdEsc(_cands.join(' · ')) + '</div>';
+          box2.setAttribute('data-done', '1');
+          return;
+        }
+      } else {
+        lbArkBkBagSum('bad', '两档均无该角色');
+        box2.innerHTML = '<div class="arbk-notice bad">' + lbMdEsc(srv) + ' 的当前档 / 目标档里'
+          + '<b>没有该账号的角色</b>（eosId ' + lbMdEsc(_wantEos.slice(0, 12)) + '…）</div>'
+          + '<div class="arbk-dim" style="margin-top:4px">本服这两份档有背包的 pid：'
+          + lbMdEsc(_pidList()) + '</div>';
+        box2.setAttribute('data-done', '1');
+        return;
+      }
+    } else if (_curPidS){
+      _pidWant = _curPidS;
+    }
+    if (_pidWant){
+      if (per['p:' + _pidWant] || tPer['p:' + _pidWant]) pick = 'p:' + _pidWant;
+      else {
+        lbArkBkBagSum('warn', '该角色两档均无物品');
+        box2.innerHTML = '<div class="arbk-notice bad">pid ' + lbMdEsc(_pidWant)
+          + ' 在两份档里都没有背包物品</div>'
+          + '<div class="arbk-dim" style="margin-top:4px">本服有背包的 pid：' + lbMdEsc(_pidList()) + '</div>';
+        box2.setAttribute('data-done', '1');
+        return;
+      }
+    }
+    if (!pick){
+      lbArkBkBagSum('', '未选择角色');
+      box2.innerHTML = '<div class="arbk-dim">未指定角色 —— 请先选择要对比的角色</div>'
+        + '<div class="arbk-dim" style="margin-top:4px">本服有背包的 pid：' + lbMdEsc(_pidList()) + '</div>';
+      box2.setAttribute('data-done', '1');
+      return;
+    }
+    var P0 = per[pick] || { stacks: 0, qty: 0, byCls: {} };
+    var T0 = tPer[pick] || null;
+    /* v6614（用户口径）：角色**存在性**必须如实显示 —— 当前档根本没有这个角色时，
+       不能写成「当前档 0 格」（那是「有角色但背包空」的意思，两者语义完全不同）。
+       依据 precheck 已算好的三组 pid（safe=两档都有 / loss=仅当前档 / dup=仅目标档），全程用 pid。 */
+    var _pidOfSafe = {}, _pidOfLoss = {}, _pidOfDup = {};
+    (_pc1.safe || []).forEach(function (r) { if (r && r.pid != null) _pidOfSafe[String(r.pid)] = 1; });
+    (_pc1.loss || []).forEach(function (r) { if (r && r.pid != null) _pidOfLoss[String(r.pid)] = 1; });
+    (_pc1.dup || []).forEach(function (r) { if (r && r.pid != null) _pidOfDup[String(r.pid)] = 1; });
+    var _pickedPid = pick.replace(/^p:/, '');
+    var _roleInCur = !!(_pidOfSafe[_pickedPid] || _pidOfLoss[_pickedPid]);
+    var _roleInTgt = !!(_pidOfSafe[_pickedPid] || _pidOfDup[_pickedPid]);
+    var _whoDisp = lbMdEsc(perName[pick] || tPerName[pick] || pick);
+    var H = [];
+    if (!_roleInCur && _roleInTgt){
+      /* v6615（用户口径·方舟角色机制）：判据不是「当前档有没有角色」，而是
+         「角色当前是否在本服」×「目标档有没有该角色」。
+         角色当前不在本服 ⇒ 没有角色信息 ⇒ 当前档自然没有他的物品；回档到**有该角色**的档
+         ⇒ 角色与物品会一并从目标档恢复。 */
+      H.push('<div style="font-size:11px;color:#8b8b9e;margin:0 0 4px 2px">角色 <b style="color:#e5e5f0">'
+        + _whoDisp + '</b>：<b style="color:#f87171">角色当前不在本服</b>'
+        + '<span style="color:#64748b">（没有角色信息 ⇒ 当前档没有其物品）</span>'
+        + ' · 回档后角色与物品会一并从目标档恢复（目标档 '
+        + '<b style="color:#e5e5f0">' + (T0 ? T0.stacks : 0) + '</b> 格）</div>');
+    } else if (_roleInCur && !_roleInTgt){
+      /* 角色在本服，但目标档没有该角色 ⇒ 人物上线仍在，物品全丢 */
+      H.push('<div style="font-size:11px;color:#8b8b9e;margin:0 0 4px 2px">角色 <b style="color:#e5e5f0">'
+        + _whoDisp + '</b>：当前档 <b style="color:#e5e5f0">' + P0.stacks + '</b> 格'
+        + ' · <b style="color:#f87171">目标档没有该角色 ⇒ 回档后物品全部丢失</b>'
+        + '<span style="color:#64748b">（角色人物仍会存在，上线可见）</span></div>');
+    } else {
+      H.push('<div style="font-size:11px;color:#8b8b9e;margin:0 0 4px 2px">角色 <b style="color:#e5e5f0">'
+        + _whoDisp + '</b>：当前档 <b style="color:#e5e5f0">' + P0.stacks + '</b> 格'
+        + (T0 ? ' · 目标档 <b style="color:#e5e5f0">' + T0.stacks + '</b> 格' : '') + '</div>');
+    }
+    /* v6616（用户口径）：
+       · loss（目标档没该角色）→ 只说没角色，不列任何物品
+       · dup（目标档有该角色、当前不在本服）→ 与「他在别服的背包」做差异对比
+       · safe → 原差异对比 */
+    var _noTargetRole = (_roleInCur && !_roleInTgt);
+    var _peerMode = (!_roleInCur && _roleInTgt);
+    /* v6623（用户口径·与上方「物品丢失」绑定）：_noTargetRole 就是 loss 名单里
+       的 pid（目标档没有该角色）⇒ 标题直接红色写明回档后全丢，不用展开看 */
+    /* v6624（用户口径「数据要联通」）：摘要必须带上**上方徽标同名标签** ——
+       角色属于 loss ⇒ 对应「物品丢失 N」，属于 dup ⇒ 对应「角色重复 N」，
+       这样一眼能看出摘要说的是哪一条风险，不会出现「上面 0、下面说丢」的错觉。 */
+    if (_noTargetRole) lbArkBkBagSum('warn', '物品丢失：回档后全部丢失（当前档 ' + P0.stacks + ' 格）');
+    else if (_peerMode) lbArkBkBagSum('warn', '角色重复：会多出一套背包物品');
+    else if (!T0) lbArkBkBagSum('warn', '目标档未解析 · 当前 ' + P0.stacks + ' 格');
+    if (_noTargetRole){
+      H.push('<div class="arbk-dim" style="margin-top:2px">目标档没有该角色，'
+        + '无法给出背包对比（本服当前档的物品回档后会全部丢失）。</div>');
+    } else if (_peerMode){
+      H.push('<div id="lbArkBkPeerBox" class="arbk-dim">正在读取该角色在其它服的背包…'
+        + '<span style="color:#64748b">（首次解析该服存档约 10~30 秒）</span></div>');
+    } else if (!T0){
+      /* 目标档还没解析（未点「检查风险」）—— 退回展示当前档真实值 */
+      var ents0 = Object.keys(P0.byCls).map(function (k) {
+        return { k: P0.byCls[k].cls || k, n: P0.byCls[k].n, q: P0.byCls[k].q };
+      });
+      ents0.sort(function (a, b) { return (b.q - a.q) || (b.n - a.n); });
+      H.push('<div class="arbk-dim" style="margin-bottom:3px">目标档背包尚未解析 —— 先点上方'
+        + '<b style="color:#e5e5f0">「检查风险」</b>，完成后这里显示差异 · 下面是'
+        + '<b style="color:#e5e5f0">当前档真实值</b></div>');
+      H.push('<div class="arbk-chips">');
+      ents0.forEach(function (x) { H.push(lbArkBkBagChip(x.k, x.q, x.n)); });
+      H.push('</div>');
+    } else {
+      /* 双档差异：格数差为主、数量差为辅（装备 quantity=0，只能靠格数判断） */
+      var cm = P0.byCls, tm = T0.byCls, allK = {}, kk;
+      for (kk in cm) { if (Object.prototype.hasOwnProperty.call(cm, kk)) allK[kk] = 1; }
+      for (kk in tm) { if (Object.prototype.hasOwnProperty.call(tm, kk)) allK[kk] = 1; }
+      var lose = [], gain = [];
+      for (kk in allK) {
+        if (!Object.prototype.hasOwnProperty.call(allK, kk)) continue;
+        var c0 = cm[kk] || { n: 0, q: 0, cls: '' };
+        var t1 = tm[kk] || { n: 0, q: 0, cls: '' };
+        var dn = c0.n - t1.n, dq = c0.q - t1.q;
+        /* v6653：额外带 g = 该侧**实际格数**（c0.n / t1.n）。
+           原来 chip 第三个参数传的是格数差 dn —— 格数不变、只有数量变化时 dn 恒为 0，
+           hover 提示就写成「共 48（0 组）」，看起来像"丢失 0 组"。 */
+        if (dn > 0 || (dn === 0 && dq > 0)) lose.push({ k: c0.cls || t1.cls || kk, q: dq, n: dn, g: c0.n });
+        else if (dn < 0 || (dn === 0 && dq < 0)) gain.push({ k: t1.cls || c0.cls || kk, q: -dq, n: -dn, g: t1.n });
+      }
+      lose.sort(function (a, b) { return (b.q - a.q) || (b.n - a.n); });
+      gain.sort(function (a, b) { return (b.q - a.q) || (b.n - a.n); });
+      /* v6623：标题摘要 —— 与下方两组列表同口径（丢失种数 / 新增种数） */
+      /* v6624（用户口径「会少东西就直接标黄」）：损失类统一黄（物品丢失徽标同色），
+         不再用红；只变多（无损失）才绿；完全一致为灰。 */
+      if (!lose.length && !gain.length) lbArkBkBagSum('', '安全：两侧一致（' + P0.stacks + ' 格）');
+      else lbArkBkBagSum(lose.length ? 'warn' : 'ok',
+        (lose.length ? ('回档后少 ' + lose.length + ' 种') : '')
+        + (lose.length && gain.length ? ' · ' : '')
+        + (gain.length ? ('回档后多 ' + gain.length + ' 种') : ''));
+      if (!lose.length && !gain.length) {
+        H.push('<div class="arbk-dim"><i class="mdi mdi-check-circle" style="color:#4ade80"></i> 两侧背包完全一致</div>');
+      } else {
+        if (lose.length) {
+          H.push('<div style="font-size:11px;color:#f87171;margin:2px 0 3px 2px"><i class="mdi mdi-arrow-down-bold"></i> 回档后将丢失（' + lose.length + ' 种）</div>');
+          H.push('<div class="arbk-chips">');
+          lose.forEach(function (x) { H.push(lbArkBkBagChip(x.k, x.q || x.n, x.g)); });
+          H.push('</div>');
+        }
+        if (gain.length) {
+          H.push('<div style="font-size:11px;color:#4ade80;margin:5px 0 3px 2px"><i class="mdi mdi-arrow-up-bold"></i> 回档后会出现（' + gain.length + ' 种）</div>');
+          H.push('<div class="arbk-chips">');
+          gain.forEach(function (x) { H.push(lbArkBkBagChip(x.k, x.q || x.n, x.g)); });
+          H.push('</div>');
+        }
+      }
+    }
+    /* v6601：低温仓生物差异（后端 precheck 透传；两侧都没有就整节不渲染） */
+    try {
+      var _pp0 = LB_ARKBK.plan || {};
+      var _pc0 = _pp0.precheck || {};
+      var cNow0 = _pc0.currentCryopods || _pp0.currentCryopods || [];
+      var cTgt0 = _pc0.targetCryopods || _pp0.targetCryopods || [];
+      if ((cNow0 && cNow0.length) || (cTgt0 && cTgt0.length))
+        H.push(lbArkBkCryoDiffHtml(pick, cNow0, cTgt0));
+    } catch (e_cryo) {}
+    box2.innerHTML = H.join('');
+    box2.setAttribute('data-done', '1');
+    /* v6616：重复角色 → 触发别服背包对比（异步，失败只显示原因） */
+    if (_peerMode){
+      try { lbArkBkPeerBagLoad(srv, _pickedPid, T0); } catch (e_peer) {}
+    }
+    /* v6603：内容是异步 fetch 回来的，填完必须重算折叠块高度，否则外层 .tc 溢出被裁 */
+    try { lbArkBkFitFold(); } catch (e_fit_bag) {}
+    setTimeout(function () { try { lbArkBkFitFold(); } catch (e) {} }, 60);
+  }).catch(function (e) {
+    lbArkBkBagSum('bad', '加载失败');
+    var box3 = document.getElementById(_bid);
+    if (box3) box3.innerHTML = '<div class="arbk-notice bad">背包数据加载失败：' + lbMdEsc(String(e).slice(0, 60)) + '</div>';
+  });
 }
 /* v6056：原 lbArkBkJobHtml()（正文步骤明细块）已删除 —— 与底栏进度条重复，
    完整错误信息改由底栏 title 提供（见 lbArkBkProgHtml）。 */
+
+/* v6602（用户口径）：「当前档」其实也是一份存档 ⇒ 整合进「可选回档点」卡片内部并置顶。
+   样式退化成「卡片内的一条」（CSS #lbArkBkPointFold .arbk-cur），与下方列表用下边线分隔。 */
+/* v6683（用户口径「底栏去掉回档按钮；回档按钮放到回档步骤的 Tips 里」）：
+   本函数现在只在「回档」那一步的说明框内渲染（由 arkbkRep 的 {execbtn} 注入）。
+   口径1（用户拍板）：**没开始回档流程时，步骤里的按钮全部置灰**
+   ⇒ 这里是 disabled + title 说明，不是隐藏（隐藏了用户会以为没这个功能）。 */
+function lbArkBkExecBtnHtml(){
+  var pl = LB_ARKBK.plan;
+  if (!pl || !LB_ARKBK.point) return '';
+  if (pl.verdict !== 'clear' && pl.verdict !== 'block') return '';
+  var _pt = lbArkBkPointObj();
+  var _ptTs = _pt ? lbArkBkFmtTs(_pt.ts) : '';
+  var _ptSuffix = _ptTs ? ('（' + lbMdEsc(_ptTs) + '）') : '';
+  var _locked = !lbArkBkFlowOpen();
+  var _tip = _locked
+    ? '先在底栏点「开始回档流程」，步骤里的按钮才会解锁'
+    : ('确认后执行回档' + (_ptTs ? ('到 ' + _ptTs) : ''));
+  return '<button class="arbk-tipbtn danger"' + (_locked ? ' disabled' : '')
+    + ' title="' + lbMdEsc(_tip) + '"'
+    + ' onclick="event.stopPropagation();' + (_locked ? 'return false;' : 'lbArkBkExec(0);') + '">'
+    + '<i class="mdi mdi-backup-restore"></i> 执行回档' + _ptSuffix + '</button>';
+}
+/* v6683（需求3）：验证步骤 tips 里的「已完成回档流程」按钮 */
+function lbArkBkDoneBtnHtml(){
+  if (!LB_ARKBK.srv) return '';
+  var live = lbArkBkFlowLive();
+  var ok = live && lbArkBkFlowOpen();
+  var _tip = ok ? '标注本次回档流程已完成（底栏流程条会消失）'
+    : (live ? '当前进行中的是别的档的流程' : '先在底栏点「开始回档流程」');
+  return '<button class="arbk-tipbtn ok"' + (ok ? '' : ' disabled')
+    + ' title="' + lbMdEsc(_tip) + '"'
+    + ' onclick="event.stopPropagation();' + (ok ? 'lbArkBkFlowFinish();' : 'return false;') + '">'
+    + '<i class="mdi mdi-check-circle"></i> 已完成回档流程</button>';
+}
+
+function lbArkBkCurRowHtml(){
+  var st = LB_ARKBK.status[LB_ARKBK.srv] || {};
+  return '<div class="arbk-cur">'
+    + '<i class="mdi mdi-server' + (st.running ? '' : '-off') + '" style="color:' + (st.running ? '#22c55e' : '#ef4444') + '"></i>'
+    + '<b>' + lbMdEsc(st.activeFile || '—') + '</b>'
+    + '<span class="arbk-tag ok" style="font-size:10px">当前档</span>'
+    + '<span class="arbk-dim">' + (st.activeMB || 0) + ' MB</span>'
+    + '<span class="arbk-dim">写入 ' + lbMdEsc(lbArkBkFmtTs(st.activeMtime || '')) + '</span>'
+    + '<span style="color:' + (st.running ? '#22c55e' : '#ef4444') + '">' + (st.running ? '运行中' : '已停止') + '</span>'
+    + (st.busyJob ? '<span style="color:#f59e0b">任务进行中</span>' : '')
+    + '</div>';
+}
+
 function lbArkBkRender(){
   /* 2026-11-05 B2：依赖 app_ui（lbSheetBuild）——未加载则先加载再重入 */
   if (typeof lbSheetBuild !== 'function') { lbUIEnsure().then(function(){ try{ lbArkBkRender(); }catch(e){} }, function(){}); return; }
+  /* v6746：「回档授权」浮窗打开期间，所有内部重绘都转到 Grant 渲染（普通模式不受影响） */
+  if (LB_ARKBK.grantOn) { try { lbArkBkGrantRender(); } catch (e_g) {} return; }
   var S = lbSheetBuild('lbArkBk', { onClose: 'lbArkBkClose()' });
   if (!S || !S.body) return;
   S.title.innerHTML = '<i class="mdi mdi-backup-restore"></i> 安全回档';
@@ -8792,16 +12217,13 @@ function lbArkBkRender(){
     + lbMdEsc(_upTxt) + '</span>'
     + '<span style="flex:1"></span>'
     + '<button class="lb-srvctl-mini" title="刷新状态与回档点" onclick="lbArkBkFetch()"><i class="mdi mdi-refresh"></i></button>'
-    + '</div><div class="lb-srvctl-chips">' + lbArkBkServerChips() + '</div>';
+    + '</div>'
+    + lbArkBkTraceSectionHtml()   /* v6552（用户口径）：行程明细置顶 —— 服务器地图 TAB 之前 */
+    + '<div class="lb-srvctl-chips">' + lbArkBkServerChips() + '</div>';
 
-  /* v6208d（用户口径「复用非复制」）：在线角色行 → 统一走共用函数（原手写 HTML 复制品已收掉） */
-  h += lbSrvCtlOnlineWrapHtml('lbArkBkOnline')
-    /* v6262（用户口径）：启动队列行 —— 与服务器控制同一来源（lbSrvCtlQueueLineHtml） */
-    + '<div class="lb-srvctl-qline" id="lbArkBkQLine">' + lbSrvCtlQueueLineHtml() + '</div>'
-    /* v6065（用户口径）：在线栏带 ✕ 了，结果横幅也必须跟着有 ——
-       lbSrvCtlKickRes() 同时写 lbSrvCtlKickRes / lbArkBkKickRes 两个容器（哪个在页面上就更到哪个） */
-    + '<div id="lbArkBkKickRes" style="display:none;margin-top:6px;padding:6px 10px;border-radius:6px;'
-    + 'font-size:11.5px;text-align:center;line-height:1.6"></div>';
+  /* v6618（用户口径）：**删掉「在线角色」模块**（在线角色行 + ✕ 踢人 + 踢人结果横幅）——
+     在线状态改由下方「角色 TAB」上的绿点 / 绿色描边 + 所在地图图标表达，不再单占一行。
+     启动队列行（与服务器控制同源）保留。 */
 
   if (LB_ARKBK.err){
     h += '<div class="arbk-notice bad">' + lbMdEsc(LB_ARKBK.err) + '</div>';
@@ -8810,32 +12232,65 @@ function lbArkBkRender(){
   if (!LB_ARKBK.srv){
     h += '<div class="arbk-dim" style="padding:22px 0;text-align:center">请先选择一台服务器</div>';
   } else {
-    /* ② 当前档 */
-    h += '<div class="arbk-cur">'
-      + '<i class="mdi mdi-server' + (st.running ? '' : '-off') + '" style="color:' + (st.running ? '#22c55e' : '#ef4444') + '"></i>'
-      + '<b>' + lbMdEsc(st.activeFile || '—') + '</b>'
-      + '<span class="arbk-dim">' + (st.activeMB || 0) + ' MB</span>'
-      + '<span class="arbk-dim">写入 ' + lbMdEsc(lbArkBkFmtTs(st.activeMtime || '')) + '</span>'
-      + '<span style="color:' + (st.running ? '#22c55e' : '#ef4444') + '">' + (st.running ? '运行中' : '已停止') + '</span>'
-      + (st.busyJob ? '<span style="color:#f59e0b">任务进行中</span>' : '')
-      + '</div>';
+    /* ② 当前档 —— v6602（用户口径）：「当前档其实也算一个存档」，已整合进「可选回档点」
+       卡片内部并置顶（见 lbArkBkCurRowHtml），这里不再单独占一块。 */
 
     /* ③ 回档点 */
     /* v6036（用户口径）：不再把「回档前自动备份」列进回档点 —— 底部已有「撤销到上次回档前」按钮，
        功能完全重复。 */
     /* v6038（用户口径）：「滚动备份」(.arkrbf) 列入回档点，且**置顶** */
     var rbfPts = (L.rbf || []).slice();
-    var pts = rbfPts.concat((L.points || []).slice());
-    h += '<div class="arbk-sec"><i class="mdi mdi-history"></i> 可选回档点（' + pts.length + '）'
-      + '<span class="arbk-dim">滚动备份 ' + rbfPts.length + ' · 定时快照 ' + (L.points || []).length
-      + ' · ' + (L.mapDir || '') + '</span></div>';
+    /* v6575（用户口径）：可选回档点**严格按时间从新到旧**排序 —— 合并「滚动备份 + 定时快照」
+       后统一按 tsEpoch 降序，允许同类型被拆散（原为 rbf 整组置顶，时间非单调） */
+    var pts = rbfPts.concat((L.points || []).slice()).sort(function (a, b) {
+      var ta = Number(a && a.tsEpoch) || 0, tb = Number(b && b.tsEpoch) || 0;
+      if (tb !== ta) return tb - ta;
+      return String((a && a.name) || '').localeCompare(String((b && b.name) || ''));
+    });
+    /* v6583（用户口径）：可选回档点改为可折叠 + 手风琴（默认收起，选档时点开） */
+    h += '<details class="arbk-fold" id="lbArkBkPointFold" ontoggle="lbArkBkAccToggle(this)"'
+      + ((LB_ARKBK._fold && LB_ARKBK._fold.lbArkBkPointFold) ? ' open' : '') + '>'
+      /* v6686（用户口径）：标题「可选回档点」→「回档点」（只改可见文案） */
+      + '<summary><i class="mdi mdi-history"></i> 回档点（' + pts.length + '）'
+      /* v6627（用户口径「太啰嗦」）：标题只留当前档时间 ——
+         滚动备份/定时快照的数量与地图目录名对玩家无决策价值，当前档文件名/大小/状态
+         在下方「当前档」行里已经有了。 */
+      + '<span class="arbk-dim">当前档 ' + lbMdEsc(lbArkBkFmtTs((LB_ARKBK.status[LB_ARKBK.srv] || {}).activeMtime || '') || '时间未知') + '</span>'
+      /* v6599（用户口径）：「取消选择」从面板中间那行挪进标题行，改纯图标；
+         必须拦掉事件冒泡 + 默认行为，否则点它会把折叠块一起开关 */
+      + (LB_ARKBK.point
+          ? '<button class="arbk-sumabtn arbk-sumabtn-ico" title="取消选择（不执行任何操作）"'
+            + ' aria-label="取消选择" onclick="event.stopPropagation();event.preventDefault();lbArkBkClearPoint()">'
+            + '<i class="mdi mdi-checkbox-blank-outline"></i></button>'
+          : '')
+      /* v6685（用户口径）：撤销入口挪进标题栏右侧 —— 与「取消选择」互斥
+         （前者只在未选档时出现），所以不会两个右对齐按钮打架。
+         选中档后该入口改由「撤销回档」步骤的 tips 提供。 */
+      + ((!LB_ARKBK.point && L.ownBackup) ? lbArkBkUndoInlineHtml() : '')
+      + '</summary>'
+      + lbArkBkCurRowHtml();
     if (!pts.length){
-      h += '<div class="arbk-dim" style="padding:10px 0">该服没有可用回档点</div>';
+      h += '<div class="arbk-dim" style="padding:10px">该服没有可用回档点</div>';
     } else {
-      h += '<div class="arbk-list">' + pts.slice(0, 40).map(lbArkBkRowHtml).join('') + '</div>';
+      /* v6574：占位行按时间插入 —— 找到第一条「时间早于该块中点」的档，插在它前面；
+         全部都比它早则插到末尾（列表是倒序，rbf 置顶、各自内部按时间倒序） */
+      var _ph = lbArkBkNoArcHintHtml();
+      var _phTs = 0;
+      if (_ph){
+        var _ssP = LB_ARKBK.segSel;
+        _phTs = Number(_ssP.from) + ((Number(_ssP.to) || Date.now()) - Number(_ssP.from)) / 2;
+      }
+      var _rows = [], _phDone = !_ph;
+      pts.slice(0, 40).forEach(function (p) {
+        if (!_phDone && Number(p.tsEpoch) * 1000 < _phTs){ _rows.push(_ph); _phDone = true; }
+        _rows.push(lbArkBkRowHtml(p));
+      });
+      if (!_phDone) _rows.push(_ph);
+      h += '<div class="arbk-list">' + _rows.join('') + '</div>';
       if (pts.length > 40) h += '<div class="arbk-dim">仅显示最近 40 个</div>';
       /* v6041（用户口径）：原先内嵌的 .arbk-legend 说明块已移到右上角问号气泡 */
     }
+    h += '</details>';
 
     /* ④ 详情/计划 */
     if (LB_ARKBK.point){
@@ -8843,17 +12298,11 @@ function lbArkBkRender(){
       /* v6040（用户口径）：再删「演练（不改文件）」—— 它走 execute 的 dryRun，与 plan 结果**完全重复**，
          却会真的 saveworld 一次，且 kill/换档/启动全不验证 ⇒ 既不多给信息又带副作用。
          仅保留 ghost「重新检查」：方案 §5.5.7 要求名单处理完再查一次（有缓存，秒回） */
-      h += '<div class="arbk-actions">'
-        + '<button class="arbk-btn ghost" onclick="lbArkBkPlan()"'
-        + ' title="按下名单处理完（换档/传走/传回）后，再查一次"><i class="mdi mdi-refresh"></i> 重新检查</button>'
-        + '<span style="flex:1"></span>'
-        /* v6054（用户口径）：低可视化「取消选择」—— 清空当前档，回到未选档状态 */
-        + '<button class="arbk-cancel" onclick="lbArkBkClearPoint()" title="清空当前选择（不执行任何操作）">'
-        + '<i class="mdi mdi-close"></i> 取消选择</button>'
-        + '</div>';
+      /* v6599（用户口径）：原来的「重新检查 / 取消选择」整行已拆解 ——
+         取消选择 → 回档点标题行图标；重新检查 → 风险标题行行内文字按钮。 */
       if (LB_ARKBK.busy === 'plan'){
-        h += '<div class="arbk-dim" style="padding:8px 0">正在检查风险…'
-          + '（首次需解析存档，约 5~15 秒）</div>';
+        /* v6652（用户口径「附件 无需括号里的」）：删掉整段括号说明，只留「正在检查风险…」 */
+        h += '<div class="arbk-dim" style="padding:8px 0">正在检查风险…</div>';
       }
       h += lbArkBkPlanHtml(LB_ARKBK.plan);
 
@@ -8863,14 +12312,9 @@ function lbArkBkRender(){
          回档点列表是 `rbf（滚动备份）+ points（定时快照）` 合并的，而这里原来**只查 L.points**
          ⇒ 选中 rbf 点时取不到时间，按钮就成了「执行回档（）」。
          统一走 lbArkBkPointObj()，取不到时间时干脆不显示括号（不再输出空括号）。 */
-      var _pt = lbArkBkPointObj();
-      var _ptTs = _pt ? lbArkBkFmtTs(_pt.ts) : '';
-      var _ptSuffix = _ptTs ? ('（' + lbMdEsc(_ptTs) + '）') : '';
-      if (pl && pl.verdict === 'clear'){
-        h += '<div class="arbk-actions"><button class="arbk-btn danger" onclick="lbArkBkExec(0)">'
-          + '<i class="mdi mdi-backup-restore"></i> 执行回档' + _ptSuffix
-          + '</button></div>';
-      } else if (pl && pl.verdict === 'block'){
+      /* v6604（用户口径）：「执行回档」固定到底栏（见 lbArkBkExecBtnHtml + render 里 S.foot），
+         这里不再在内容流里输出，避免滚出可视区。 */
+      if (false){
         /* v6053（用户口径「附件是不是已经没用了」）：整块 .arbk-ack 已冗余 ——
            风险提示分别在 plan.notice / 通用确认浮窗 note / 内联放行词条 各有一份；
            #arbkConfirm 自 v6052 起不再参与校验（lbArkBkExec 只负责弹浮窗）。
@@ -8883,15 +12327,9 @@ function lbArkBkRender(){
       /* v6054（用户口径「撤销按钮应该只在没选存档时显示」）：
          撤销是「整台服务器」层级的动作，与「挑某一档」互斥 —— 选中档时该位置留给「取消选择」，
          未选档时才露出撤销入口。 */
-      if (L.ownBackup){
-        h += '<div class="arbk-actions" style="margin-top:6px">'
-          /* v6059（用户口径）：文案「撤销到上次回档前」+ 显示**当前这份备份档**已撤销次数
-             （不是历史累计；新回档生成新备份时后端会把它重置为 0） */
-          + '<button class="arbk-btn ghost" onclick="lbArkBkUndo()"><i class="mdi mdi-undo-variant"></i> 撤销到上次回档前'
-          + '（' + lbMdEsc(lbArkBkFmtTs(L.ownBackup.ts))
-          + (Number(L.ownBackup.undoCount) > 0 ? (' · 已撤销 ' + Number(L.ownBackup.undoCount) + ' 次') : '')
-          + '）</button></div>';
-      }
+      /* v6684（用户口径）：这里的撤销块**已移走** ——
+         未选档 → 「可选回档点」折叠区顶部（lbArkBkUndoInlineHtml）
+         已选档 → 「撤销回档」步骤的 tips（lbArkBkUndoBtnHtml）。 */
     }
 
     /* ⑥ v6061：玩家角色档案区已下线（见 lbArkBkFmtTs 上方说明） */
@@ -8901,16 +12339,61 @@ function lbArkBkRender(){
     h += lbArkBkAskHtml();
   }
   h += '</div>';
+  /* v6665（用户「任务进度 应该放到 现在的底栏之下」）：
+     v6664 曾把槽位常驻在 .lw-body 里解决「时隐时现」，但立刻引出新问题 ——
+     .lw-body 是纵向 flex，.tc{flex:1 1 auto} 可被压缩，槽位一变高（多条任务）就挤压 .tc；
+     而 .tc 内部折叠块高度是 fitFold 写死的 max-height、不会跟着缩，.tc 又没 overflow:hidden
+     ⇒ 内容溢出压住任务进度（实测 3 条任务时重叠 17px）。
+     ⇒ 槽位挪出正文区，固定在 .lw-foot **之下**，成为浮窗最底部独立区域，不再参与正文 flex 竞争。 */
   S.body.innerHTML = h;
+  try { lbArkBkTaskSlotEnsure(); } catch (e_slot) {}
+  /* v6664：槽位内容仍需 lbTaskRender 填充 —— 重写后立即补一次（幂等，不额外发请求） */
+  try { lbTaskEnsureSlots(); lbTaskRender(); } catch (e_task) {}
+  try { lbArkBkFitFold(); } catch (e_fit) {}          /* v6590：按可用高度动态限制折叠块内部滚动区 */
+  /* v6638（用户口径）：滚动定位必须排在 fitFold 之后 —— 列表高度被限死才会溢出，否则无处可滚 */
+  try { lbArkBkScrollToSegHit(); } catch (e_seg) {}
+  setTimeout(function () { try { lbArkBkScrollToSegHit(); } catch (e_sd) {} }, 80);
+  /* v6554（用户口径「行程明细直接展开」）：渲染即拉取/重绘，无需展开动作。
+     已有 30s 内缓存 ⇒ 只重绘高亮（切服不重拉）。 */
+  try {
+    /* v6561（用户口径）：没选服也照常渲染/拉取行程（与地图 TAB 解耦） */
+    if (LB_ARKBK.paths && (Date.now() - LB_ARKBK.pathsAt) < 30000) lbArkBkPathRender();
+    else lbArkBkTraceLoad();
+  } catch (e_path) {}
   /* v6050（用户口径）：底栏固定进度条 —— 完全复用 srvctl 的 .lb-task-pg 结构
      （底槽 + .lb-task-fill 填充 + 图标 + 主文 + 副文 + 百分比，文字叠在条内） */
   if (S.foot){
-    /* v6127（M2 用户口径）：回档进度已并入统一任务列表（action=rollback），
-       回档浮窗底栏不再自绘进度条，只保留失败时的「重试/清除」。 */
-    var _fb = lbArkBkFootBtns();
-    if (_fb){ S.foot.innerHTML = _fb; S.foot.removeAttribute('hidden'); }
-    else { S.foot.innerHTML = ''; S.foot.setAttribute('hidden', ''); }
+    /* v6684（用户口径「确认移干净后，就把整个底栏干掉」）：
+       流程条 + 失败重试/清除已并入 .arbk-pv-flow（见 lbArkBkPlanFlowHtml），
+       底栏永久清空并隐藏。高度自适应由 lbArkBkFitFold 的
+       「foot 有 hidden 属性 ⇒ 不扣高度」逻辑兜住，不会多算。 */
+    S.foot.innerHTML = '';
+    S.foot.setAttribute('hidden', '');
   }
+  /* v6597：上面的 fitFold 在 S.foot 填内容**之前**跑 ⇒ 那时 foot.offsetHeight 还是 0，
+     avail 偏大，底部「执行回档」行会被挤出可视区。底栏就位后必须再量一次。 */
+  try { lbArkBkFitFold(); } catch (e_fit2) {}
+}
+/* v6665（用户「任务进度 应该放到 现在的底栏之下」）：
+   任务进度槽位唯一创建点 —— 挂在 .lw-panel 末尾（即 .lw-foot 之下），
+   既不会被 S.body.innerHTML 全量重写冲掉（v6664 的「时隐时现」），
+   也不与 .tc 抢 .lw-body 的 flex 空间（v6664 的「重叠」）。 */
+function lbArkBkTaskSlotEnsure(){
+  /* v6746：「回档授权」浮窗也要有任务进度槽位 */
+  var ov = document.getElementById('lbArkBk') || document.getElementById('lbArkBkGrant');
+  if (!ov) return null;
+  var panel = ov.querySelector('.lw-panel');
+  if (!panel) return null;
+  var d = panel.querySelector(':scope > .lb-task-slot');
+  if (d) return d;
+  /* 正文区里遗留的（旧版 append 在 .lw-body 下）先摘掉，避免出现两份 */
+  Array.prototype.forEach.call(panel.querySelectorAll('.lw-body .lb-task-slot'), function (x) {
+    try { if (x && x.parentNode) x.parentNode.removeChild(x); } catch (e_rm) {}
+  });
+  d = document.createElement('div');
+  d.className = 'lb-srvctl-res lb-task-slot';
+  panel.appendChild(d);          /* ← .lw-foot 之后 = 浮窗最底部 */
+  return d;
 }
 /* v6050：回档 / 撤销进度（数据源 LB_ARKBK.job：phase + steps[]） */
 function lbArkBkProgHtml(){
@@ -8988,16 +12471,44 @@ function lbArkBkDismiss(){
 }
 function lbArkBkPickPoint(id){
   if (LB_ARKBK.busy) return;
+  /* v6683（需求5）：进行中的流程会因换档而失效 ⇒ 先弹「将打断当前回档流程」 */
+  if (id && id !== LB_ARKBK.point && lbArkBkFlowLive()){
+    var _next = id;
+    lbArkBkFlowGuard(_next, function () { lbArkBkPickPointApply(_next); });
+    return;
+  }
+  lbArkBkPickPointApply(id);
+}
+function lbArkBkPickPointApply(id){
   LB_ARKBK.point = (LB_ARKBK.point === id) ? '' : id;
   LB_ARKBK.plan = null; LB_ARKBK.job = null;
   LB_ARKBK.confirmText = '';
   lbArkBkJobStop();
+  /* v6569（用户口径）：手动选中档 -> 自动选中它所属的行程块（离线块也算一种行程块） */
+  if (LB_ARKBK.point){
+    try {
+      var _pt = lbArkBkPointTs();
+      var _blk = _pt ? lbArkBkSegAt(_pt) : null;
+      if (_blk) LB_ARKBK.segSel = _blk;      /* 命中才覆盖，未命中保持原样 */
+    } catch (e_lk) {}
+  }
   lbArkBkRender();
   if (LB_ARKBK.point) lbArkBkPlan();
+  /* v6568：显式重绘行程块 —— 不再依赖 lbArkBkRender 内部的 30s 缓存分支 */
+  try { lbArkBkPathRender(); } catch (e_rp) {}
+  try { lbArkBkScrollToSegHit(); } catch (e_sc) {}
 }
 /* v6054（用户口径）：低可视化「取消选择」—— 只清空当前选择，不发任何请求、不动服务器 */
 function lbArkBkClearPoint(){
   if (LB_ARKBK.busy) return;
+  /* v6683（需求5）：取消选择同样会打断流程 ⇒ 先确认 */
+  if (lbArkBkFlowLive()){
+    lbArkBkFlowGuard('', function () { lbArkBkClearPointApply(); });
+    return;
+  }
+  lbArkBkClearPointApply();
+}
+function lbArkBkClearPointApply(){
   LB_ARKBK.point = ''; LB_ARKBK.plan = null; LB_ARKBK.job = null;
   LB_ARKBK.confirmText = ''; LB_ARKBK.ask = null;
   lbArkBkJobStop();
@@ -9023,13 +12534,31 @@ function lbArkBkPlan(){
   lbArkBkRender();
   lbSrvCtlFetchW(base + '/api/arkbackup/plan', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ server: LB_ARKBK.srv, pointId: LB_ARKBK.point })
+    /* v6654：带上当前选中角色 —— 后端「角色进出」会排除它（只统计其他角色）
+       v6754（根因修复）：只取 LB_ARKBK.who 是错的 —— 它**只在「安全回档」浮窗手选角色时**才有值，
+         被授权玩家打开「回档授权」时恒为空 ⇒ 后端 exclude_eos='' ⇒ 回档主体玩家自己也被算进
+         「角色进出」。现在：手选优先，没手选就用当前登录角色（LB.playerEos）。 */
+    body: JSON.stringify({ server: LB_ARKBK.srv, pointId: LB_ARKBK.point,
+                           who: LB_ARKBK.who || String(LB.playerEos || '') })
   }).then(function (r) { return r.json(); })
     .then(function (j) {
       LB_ARKBK.busy = '';
-      if (j && j.ok) { LB_ARKBK.plan = j; }
+      if (j && j.ok) {
+        LB_ARKBK.plan = j;
+        /* v6585（用户口径）：风险数据刷新完成 ⇒ 自动展开「风险检查结果」，收起「可选回档点」 */
+        LB_ARKBK._fold = LB_ARKBK._fold || {};
+        LB_ARKBK._fold.lbArkBkPlanFold = true;
+        LB_ARKBK._fold.lbArkBkPointFold = false;
+      }
       else { LB_ARKBK.plan = null; try { lbToast('检查失败：' + ((j && j.error) || '未知')); } catch (e) {} }
       lbArkBkRender();
+      /* v6581：plan 到达后「目标档背包」才有数据 —— 清缓存标记，展开时重算差异 */
+      try {
+        var _bb = document.getElementById('lbArkBkBagBox');
+        if (_bb) { _bb.removeAttribute('data-done'); _bb.setAttribute('data-srv', ''); }
+        var _fd = document.getElementById('lbArkBkBagFold');
+        if (_fd && _fd.open) lbArkBkBagLoad();
+      } catch (e3) {}
     })
     .catch(function (e) { LB_ARKBK.busy = ''; try { lbToast('检查失败：' + e); } catch (e2) {} lbArkBkRender(); });
 }
@@ -9072,14 +12601,25 @@ function lbArkBkAskCard(kind, extra){
           steps: ['校验备份', '停服', '还原 pre_restore.ark', '启动', '等 RCON 就绪'],
           note: '用「回档前自动备份」把服务器还原到上一次回档之前的状态；执行后本次还原不可再回退。',
           okText: '继续（下一步输入放行词）' };
-  } else if (kind === 'dry'){
-    o = { tone: 'info', badge: '演练', title: '演练回档（不改动任何文件）', servers: [srv],
-          steps: ['存档', '闸门校验', '备份当前档'],
-          note: '只演算不落地，用于确认风险判定与耗时估算是否正确。',
-          okText: '继续（下一步输入放行词）' };
   } else {
+    /* v6659：档大小 + 预计耗时放进确认浮窗
+       v6660（用户口径「要小 chips 形式」）：改成一行小胶囊，并标出目标档相对当前档的差量 */
+    var _sec0 = Number(pl.etaSec || 0);
+    var _mm0 = Math.floor(_sec0 / 60), _ss0 = _sec0 % 60;
+    var _dur0 = !_sec0 ? '' : (_mm0 ? (_mm0 + ' 分' + (_ss0 ? ' ' + _ss0 + ' 秒' : '')) : (_ss0 + ' 秒'));
+    var _dMB = (Number(pl.activeMB) || 0) - (Number(pl.targetMB) || 0);
+    var _dTxt = (Math.abs(_dMB) < 0.05) ? '与当前档相同'
+      : ((_dMB > 0 ? '− ' : '+ ') + Math.abs(_dMB).toFixed(1) + ' MB');
+    var _dCol = (Math.abs(_dMB) < 0.05) ? '#9aa0b0' : (_dMB > 0 ? '#fbbf24' : '#4ade80');
     o = { tone: 'danger', badge: '回档', title: '执行回档', servers: [srv],
           steps: ['存档', '闸门校验', '备份当前档', '停服', '原子换档', '启动', '验证'],
+          chips: [
+            { ic: 'mdi-file-document-outline', label: '当前档', val: ((pl.activeMB || '?') + ' MB') },
+            { sep: true },
+            { ic: 'mdi-file-document-outline', label: '目标档', val: ((pl.targetMB || '?') + ' MB'), c: '#c4b5fd' },
+            { ic: 'mdi-database-minus-outline', label: '', val: _dTxt, c: _dCol },
+            { ic: 'mdi-timer-outline', label: '预计', val: (_dur0 || '—') }
+          ],
           note: '会强制终止服务器并重启，在线玩家全部掉线；回档后的进度不可恢复（可用撤销备份还原）。'
               + (pl.notice ? ('\n风险判定：' + pl.notice) : ''),
           /* v6062：全绿没有下一步输入，按钮文案要说实话 */
@@ -9107,13 +12647,13 @@ function lbArkBkAskGo(){
   var kind = a.kind, word = a.word;
   LB_ARKBK.ask = null;
   if (kind === 'undo') lbArkBkUndoGo(word);
-  else lbArkBkExecGo(kind === 'dry', word);
+  else lbArkBkExecGo(false, word);   /* v6669：面板不再有演练入口；是否 dry 由后端 arkbk_dry 决定 */
 }
 function lbArkBkAskHtml(){
   var a = LB_ARKBK.ask;
   if (!a) return '';
-  var ttl = (a.kind === 'undo') ? '撤销到上次回档前'
-    : (a.kind === 'dry' ? '演练（不改动任何文件）' : '执行回档');
+  /* v6669：面板里不再有独立「演练」入口 ⇒ 只剩 撤销 / 执行回档 两种标题 */
+  var ttl = (a.kind === 'undo') ? '撤销到上次回档前' : '执行回档';
   return '<div class="arbk-ask">'
     + '<div class="arbk-askh"><i class="mdi mdi-alert-circle-outline"></i> ' + lbMdEsc(ttl)
     + '<span class="arbk-dim">输入服务器中文名放行</span></div>'
@@ -9130,8 +12670,11 @@ function lbArkBkAskHtml(){
 function lbArkBkExec(dry){
   if (!LB_ARKBK.srv || !LB_ARKBK.point) return;
   if (LB_ARKBK.busy) return;
-  /* v6052：先项目通用确认浮窗，再放行词确认 */
-  lbArkBkAskCard(dry ? 'dry' : 'exec', null);
+  /* v6052：先项目通用确认浮窗，再放行词确认
+     v6669（用户口径「回档面板里 的预演 去掉吧」）：面板不再有独立预演入口，
+       是否演练完全由系统管理「默认预演」开关 + 后端 arkbk_dry 强制决定，
+       所以这里固定走 'exec'（dry 参数保留只为兼容既有 onclick 调用点）。 */
+  lbArkBkAskCard('exec', null);
 }
 function lbArkBkExecGo(dry, word){
   var pl = LB_ARKBK.plan || {};
@@ -9153,6 +12696,8 @@ function lbArkBkExecGo(dry, word){
       LB_ARKBK.job = { id: x.j.jobId, phase: x.j.phase || 'queued', dryRun: x.j.dryRun, steps: [] };
       lbArkBkRender();
       lbArkBkPoll(x.j.jobId);
+      /* v6683：流程推进到 exec（失败静默，只是进度标记） */
+      try { lbArkBkFlowStep('exec'); } catch (e_st) {}
     } else {
       var msg = (x.j && (x.j.error || x.j.code)) || ('HTTP ' + x.s);
       if (x.j && x.j.missing) msg += '（缺少 ' + x.j.missing.join('/') + '）';
@@ -9375,8 +12920,8 @@ function lbSrvCtlOfficialHtml(official, state){
 }
 /* v6215（用户口径「如果没有玩家在线（或只有 Bob 有在线玩家时）不允许点击」）：
    在线角色行**何时可点** —— 只有存在「非俱乐部的真实在线玩家」才允许跳玩家位置地图。
-   理由：Bob（俱乐部）的在线列表不刷新、只记录「进服」，不代表当前真实在线，
-        地图上自然也没有可查看的对象。
+   理由：Bob（俱乐部）地图暂不支持定位查询，在线玩家也没有可在地图上查看的对象。
+        （v6548 起 Bob 的在线列表已由后端 PlayerPos 交叉验证，不会再出现「仅进服」假记录）
    返回 {ok, why, tip}；tip 供不可点时的 hover 说明（仍走项目 tips 引擎）。 */
 function lbSrvCtlOnlinePlayable(){
   var real = 0, bob = 0, known = 0;
@@ -9390,7 +12935,7 @@ function lbSrvCtlOnlinePlayable(){
   });
   if (real > 0) return { ok: true, why: '', tip: '点击查看玩家位置（联盟成员分布地图）' };
   if (bob > 0) return { ok: false, why: 'bob_only',
-    tip: '仅俱乐部有进服记录（其在线列表不刷新，不代表真实在线）—— 没有可在地图上查看的在线玩家' };
+    tip: '仅俱乐部有在线玩家（俱乐部地图暂不支持定位查询）—— 没有可在地图上查看的在线玩家' };
   if (!known) return { ok: false, why: 'nodata',
     tip: '尚未取得在线数据，暂不可查看玩家位置' };
   return { ok: false, why: 'none', tip: '全服无人在线，暂无可在地图上查看的玩家' };
@@ -9418,7 +12963,7 @@ function lbSrvCtlOnlineWrapHtml(id, onLoading){
    服务器图标 chips 生成的**唯一来源** —— 由 lbSrvCtlRender 原内联段抽出。
    参数：selObj 选中表 / toggleFn 点击函数名 / smap 状态表 / officialVer 官服版本 / ipBadFn 可选 IP 判定
    禁止在其它浮窗复制本函数内的 HTML。 */
-function lbSrvCtlChipsHtml(selObj, toggleFn, smap, officialVer, ipBadFn, badgeFn, zhOldFn, roMode, markFn){
+function lbSrvCtlChipsHtml(selObj, toggleFn, smap, officialVer, ipBadFn, badgeFn, zhOldFn, roMode, markFn, noStatus){
   /* v6223：新增可选 badgeFn(s, d) -> {text, color, cls, title}
      返回非空时**替代**默认的游戏版本角标（「服务器更新」用它显示 buildId 后 3 位）。
      v6247（用户口径）：新增可选 zhOldFn(s) -> bool —— 返回 true 时按钮加 .zhb **蓝色内描边**
@@ -9439,6 +12984,19 @@ function lbSrvCtlChipsHtml(selObj, toggleFn, smap, officialVer, ipBadFn, badgeFn
     var _stLow = (d && String(d.status || '').toLowerCase()) || '';
     var running = (_stLow === 'running');
     var starting = (_stLow === 'starting');
+    /* v6835（用户口径 2026-11-17「服务器控制 浮窗里 地图TAB的tips要有本次启动时刻」）：
+       取 /api/srvctl/status 的 bootAt（该服**本次进程**启动时刻，Unix 秒，与 lbSrvCtlIpBad 同源）。
+       bootAt=0（离线 / 取不到）⇒ 不拼这一行，避免出现 1970-01-01。 */
+    var _bootTxt = '';
+    (function(){
+      var _bt2 = Number((d && d.bootAt) || 0);
+      if (!_bt2) return;
+      var _bd = new Date(_bt2 * 1000);
+      if (isNaN(_bd.getTime())) return;
+      var _p2 = function(n){ return (n < 10 ? '0' : '') + n; };
+      _bootTxt = _bd.getFullYear() + '-' + _p2(_bd.getMonth() + 1) + '-' + _p2(_bd.getDate())
+               + ' ' + _p2(_bd.getHours()) + ':' + _p2(_bd.getMinutes());
+    })();
     var ver = d ? lbSrvCtlVer(d.serverVersion || d.version).replace(/^v/i, '') : '';   /* v5981：角标显示该服**实际**版本（ServerVersion），非官方网络值 */
     var mis = !!(_official && ver && ver !== _official);   /* v5980：与官服版本不一致 -> 呼吸外环（底色不变） */
     /* v6162（用户口径·方案 B）：角标版本号看不清 —— 底色加深一号 + 白字 700 + 字号 9.5px + 内边距 4px */
@@ -9473,14 +13031,18 @@ function lbSrvCtlChipsHtml(selObj, toggleFn, smap, officialVer, ipBadFn, badgeFn
          才能看出「已下载更新但还没重启」（Bob: buildId 035 / 运行 96.9）。 */
     var _useBf = !!(_bf && _bf.text);
     var tipFull = (s.name || s.abbr)
-                + '\n【状态】' + (starting ? '启动中' : (d ? (running ? '运行中' : '已停止') : '状态未知'))
+                /* v6732（用户口径）：记录浮窗的地图 TAB（noStatus=true）不显示【状态】—— 该处状态恒未知，无意义 */
+                + (noStatus ? '' : ('\n【状态】' + (starting ? '启动中' : (d ? (running ? '运行中' : '已停止') : '状态未知'))))
+                + (_bootTxt ? ('\n【启动】' + _bootTxt) : '')
                 + (ver ? ('\n【运行版本】' + ver) : '')
                 + (_useBf && _bf.title ? ('\n【更新】' + _bf.title) : '')
                 + (ipB ? ('\n【IP】公网 IP ' + _ipPair + '（' + (ipB.changedAt || '近期') + ' 变更）\n本服启动早于该变更，需重启后才能被搜到') : '')
                 + (zhOld ? '\n【汉化】旧版（该服汉化包落后云端，需分发汉化补丁）' : '')
                 + (_mk ? ((_mk.mod ? '\n【MOD】待升级（与最新版本不一致，需分发 MOD）' : '')
-                        + (_mk.api ? '\n【API】待升级（必需插件缺失或版本落后，需分发 API）' : '')) : '')
-                + (_ro ? '' : '\n【操作】点击切换选中');
+                        + (_mk.api ? '\n【API】待升级（必需插件缺失或版本落后，需分发 API）' : '')) : '');
+    /* v6735（用户口径）：地图 TAB 一律不再拼「【操作】点击切换选中」这类操作说明；
+       按钮本身就是操作，tips 只保留真实信息（状态/版本/更新/IP/汉化/MOD/API）。
+       这是全项目地图 TAB 的唯一出口（六个浮窗共用）⇒ 改一处全部生效。 */
     return '<span class="lb-tipb server-tab' + (on ? ' active' : '') + (ipB ? ' ipb' : '')
          + (zhOld ? ' zhb' : '') + (_ro ? ' ro' : '') + '" data-abbr="' + s.abbr + '"'
          + (_ro ? '' : (' onclick="' + toggleFn + '(\'' + s.abbr + '\')"'))
@@ -9616,19 +13178,11 @@ function lbSrvCtlOnlineHtml(onLoading){
       var ns = roles.map(function(r){ return lbMdEsc(r.role); });
       show = ns.slice(0, 4).join('·') + (ns.length > 4 ? (' 等 ' + ns.length + ' 人') : '');
     }
-    /* v6171（用户口径）：俱乐部（Bob）在线列表不刷新，人数只反映「进服记录」——
-       加 3 字小标签说明，避免把它当成真实在线人数。
-       v6172（用户口径）：徽章改挂**第一个名字正下方**、左边缘与名字左对齐
-       （管理员视图把首个名字 + 徽章包进 .ol-stack；非管理员视图名字连成一串，退回横排）。 */
-    if (a === 'Bob'){
-      var _bobTag = '<em class="ol-bob lb-tipb" title="俱乐部在线列表不刷新，此数仅记录进服，不代表当前真实在线">仅进服</em>';
-      if (showArr && showArr.length){
-        showArr[0] = '<span class="ol-stack">' + showArr[0] + _bobTag + '</span>';
-        show = showArr.join('');
-      } else {
-        show = show + _bobTag;
-      }
-    }
+    /* v6549（用户口径 2026-11-11「这种就可以清理了」）：
+       删除 Bob「仅进服」小标签（原 v6171/v6172 那套 .ol-bob + .ol-stack）。
+       原因：v6548 起后端 list_players 已对 Bob 做 PlayerPos 交叉验证 ——
+            退服残留的假在线会被剔除，`Bob_online.json` 里的就是真在线，
+            「此数仅记录进服、不代表真实在线」的提示语义不再成立。 */
     parts.push('<span class="ol-s' + (canKick ? ' ol-kick' : '') + '"><i class="mdi ' + (mdi[a] || 'mdi-server') + '"></i>'
              + '<span class="ol-n">' + roles.length + '</span>' + show + '</span>');
   });
@@ -9692,13 +13246,31 @@ function lbNewsGoTab(tabId){
     /* 2026-11-05 B2：依赖 app_ui（lbNewsEntry/lbNewsTab）——未加载则先加载再重入 */
     if (typeof lbNewsEntry !== 'function') { lbUIEnsure().then(function(){ lbNewsGoTab(_id); }, function(){}); return; }
     lbNewsEntry();
-    var n = document.getElementById('lbNews');
-    if (n) n.style.zIndex = '10001';
-    /* 显式切到目标 tab（不依赖 tab 顺序；idx=0 时 lbNewsEntry 已默认加载，不重复拉） */
+    /* v6541：删掉旧的 `n.style.zIndex='10001'` 手写补丁 —— 层级统一由 lbZOpen 分配
+       （lbNewsOpen → lbSheetOpen → lbZOpen），再手写会造成两套规则冲突。 */
+    /* v6541：支持**二级 tab id**（如 api_cache）——先在 children 里找，找到则先切一级组再定子项 */
     try{
-      var idx = -1;
-      for (var i = 0; i < LB_NEWS.tabs.length; i++){ if (LB_NEWS.tabs[i].id === _id){ idx = i; break; } }
-      if (idx > 0) lbNewsTab(idx);
+      var idx = -1, sub = '';
+      for (var i = 0; i < LB_NEWS.tabs.length; i++){
+        var t = LB_NEWS.tabs[i];
+        if (t.id === _id){ idx = i; break; }
+        if (t.children && t.children.length){
+          for (var j = 0; j < t.children.length; j++){
+            if (t.children[j].id === _id){ idx = i; sub = _id; break; }
+          }
+          if (idx >= 0) break;
+        }
+      }
+      if (idx >= 0){
+        if (sub){
+          var _g = LB_NEWS.tabs[idx];
+          LB_NEWS.sub = LB_NEWS.sub || {};
+          LB_NEWS.sub[_g.id] = sub;
+          LB_NEWS.__leafId = '';      /* 强制重新拉取该子 tab 数据 */
+          LB_NEWS.data = null;
+        }
+        lbNewsTab(idx);
+      }
     }catch(e){}
   }catch(e){}
 }
@@ -9778,11 +13350,11 @@ function lbTaskIdByKey(key){
 }
 /* v6186（用户口径）：「已完成」只算**启动成功**的台数 ——
    原来用 doneCount（含失败），出现「已完成 3/3」但实际只起了 1 台。
-   失败单独显示为「（失败 n）」。 */
+   v6781（用户口径 2026-11-16「这里不用显示 失败」）：**不再拼「（失败 n）」** ——
+   失败与否看每台任务条自己的状态色即可，汇总行重复显示反而占宽。 */
 function lbStartqDoneTxt(q){
   var ok = (q && q.okCount != null) ? Number(q.okCount) : Number((q && q.doneCount) || 0);
-  var bad = (q && q.failCount != null) ? Number(q.failCount) : Math.max(0, Number((q && q.doneCount) || 0) - ok);
-  return ok + '/' + Number((q && q.total) || 0) + (bad ? ('（失败 ' + bad + '）') : '');
+  return ok + '/' + Number((q && q.total) || 0);
 }
 function lbSrvCtlQueueLineHtml(){
   var q = LB_SRVCTL.q;
@@ -9806,30 +13378,36 @@ function lbSrvCtlQueueLineHtml(){
     if (_endMs && (Date.now() - _endMs) > 60000 && !_pend) return '';
     /* v6402（用户口径「启动任务条 补上终止 mdi 图标按钮」）：复用 lb-srvctl-mini 样式
        与现有 /api/srvctl/action 的 kill+interrupt 通道（不新造中止机制）。 */
-    var _h0 = '<span class="ql-ttl">启动队列</span>' + lbStartqAbortBtnHtml();
+    /* v6780：终止按钮挪到行尾；v6781（用户口径「方案 A」）：
+       用 `flex:1` 占位把按钮顶到右边缘（不再依赖按钮自带的 margin-left:auto）。 */
+    var _h0 = '<span class="ql-ttl">启动队列</span>';
     if (_pend) _h0 += '<span class="ql-n">待启动 ' + _pend + ' 台</span>';
     else _h0 += '<span class="ql-done">已完成 ' + lbStartqDoneTxt(q) + '</span>';
+    _h0 += '<span style="flex:1"></span>';
+    _h0 += lbStartqAbortBtnHtml();
     return _h0;
   }
+  /* v6781（用户口径 2026-11-16「方案 A，但统计组的启动中和待启动要合并显示，以期节省空间」）：
+     ① 「启动中 N 台」+「待启动 M 台」（+ 排队）合并成一个 `启动 N/M`：
+          N = 启动中台数，M = 本批次还要启动的总数（启动中 + 待启动 + 排队）⇒ 一眼看出「还要起几台」；
+          明细放进 title，hover 看得到。排队仍只在 >0 时并入 M（v6546 的口径不变）。
+     ② 右组整体一个 nowrap span，用 gap 分隔，不再散落多个 `·` 子项（窄屏不会拆散）。
+     ③ `flex:1` 占位把「右组 + 终止按钮」整体推到右边缘；按钮不再带前导 `·`。
+     ④ 世界加载保持 v6547 文案。 */
+  var _act = Number(q.activeCount || 0);
+  var _que = Number(q.queuedCount || 0);
+  var _pendN = Number(q.pendingCount || 0);
+  var _totStart = _act + _pendN + _que;
+  var _tipStart = '启动中 ' + _act + ' 台'
+                + (_pendN ? (' · 待启动 ' + _pendN + ' 台') : '')
+                + (_que ? (' · 排队 ' + _que + ' 台') : '');
   return '<span class="ql-ttl">启动队列</span>'
        + '<span class="ql-n">已完成 ' + lbStartqDoneTxt(q) + '</span>'
-       + '<span class="ql-sep">·</span>启动中 ' + q.activeCount + ' 台'
-       + '<span class="ql-sep">·</span>排队 ' + q.queuedCount + ' 台'
-       /* v6271（用户口径 2026-11-08「将要启动的也要算在启动队列里」）：
-          编排中处于 ready/savekill/sync 但尚未下发启动的服，后端已计入 pending ——
-          不显示的话用户会以为「一堆排队的没一个开始启动」。 */
-       + ((q.pendingCount || 0) > 0
-            ? ('<span class="ql-sep">·</span><span class="ql-pend" title="本批次中尚未下发启动的服（将要启动）">待启动 ' + q.pendingCount + ' 台</span>')
-            : '')
-       /* v6186b（用户口径 2026-11-06）：「重压」改名「并发」 —— heavyCount 统计的是
-          `_SRVCTL_STARTQ['active']` 中 `heavy=True` 的台数，而 heavy 自 v6006 起就是
-          「**下发即占槽位**」（防 8s 间隔把 11 台全推下去压垮机器），
-          与「是否进入 world_load 重压期」无关 ⇒ 只要常有 2 台在启动就恒为 2/2。
-          限流判据依然用 heavyCount（不能改算法），仅修正展示文案。 */
-       /* v6188（用户口径）：改回「重压」—— heavyCount 统计的就是
-          `[下发, started)` 区间内的台数，即「**待进入重压 + 正在重压**」，
-          它本身就是重压限制的载体（不存在独立的「并发」概念）。 */
-       + '<span class="ql-sep">·</span><span class="ql-heavy" title="待进入重压 + 正在重压的台数（上限 ' + (q.heavyMax || 2) + '）">重压 ' + q.heavyCount + '/' + (q.heavyMax || 2) + '</span>'
+       + '<span style="flex:1"></span>'
+       + '<span style="display:inline-flex;align-items:center;gap:7px;white-space:nowrap">'
+       +   '<span class="ql-start" style="color:#f59e0b;font-weight:600" title="' + _tipStart + '">启动 ' + _act + '/' + _totStart + '</span>'
+       +   '<span class="ql-heavy" title="世界加载中的台数（上限 ' + (q.heavyMax || 2) + '）">世界加载 ' + q.heavyCount + '/' + (q.heavyMax || 2) + '</span>'
+       + '</span>'
        + lbStartqAbortBtnHtml();
 }
 function lbSrvCtlQueueLinePaint(){
@@ -9837,7 +13415,7 @@ function lbSrvCtlQueueLinePaint(){
      队列行**唯一来源**，四个浮窗共用同一份 HTML —— 有哪个容器就刷哪个。 */
   var _h = '';
   try { _h = lbSrvCtlQueueLineHtml(); } catch (e0) { _h = ''; }
-  ['lbSrvCtlQLine', 'lbArkBkQLine', 'lbUpdQLine', 'lbTaskPanelQLine'].forEach(function (id) {
+  ['lbTaskQLine'].forEach(function (id) {   /* v6695：唯一一份，渲染在任务进度块内 */
     var el = document.getElementById(id);
     if (!el) return;
     if (el.innerHTML === _h) return;   /* v6278：内容未变不重建 DOM（现每 1.5s 随 /api/tasks 刷新） */
@@ -9898,7 +13476,7 @@ function lbSrvCtlStartQueuePoll(sel, after){
         (q.active || []).forEach(function(a){
           var id = lbTaskIdByKey(a.server + '|start');
           if (id) lbTaskUpdate(id, { phase:'run', pct: a.pct || 2,
-                                     msg: (a.msg || a.label || '启动中') + (a.heavy ? ' · 重压期' : '') });
+                                     msg: (a.msg || a.label || '启动中') + (a.heavy ? ' · 世界加载' : '') });
         });
         (q.done || []).forEach(function(d){
           var id = lbTaskIdByKey(d.server + '|start');
@@ -9910,7 +13488,7 @@ function lbSrvCtlStartQueuePoll(sel, after){
         (q.queued || []).forEach(function(s){
           var id = lbTaskIdByKey(s + '|start');
           if (id) lbTaskUpdate(id, { phase:'queue', pct:0,
-                                     msg:'排队中（重压 ' + q.heavyCount + '/' + (q.heavyMax || 2) + '）' });
+                                     msg:'排队中（世界加载 ' + q.heavyCount + '/' + (q.heavyMax || 2) + '）' });
         });
         /* v6022：记录「本次会话有没有亲眼见过队列在跑」，供概览行显隐判断 */
         if (q.running){ LB_STARTQ.observed = 1; LB_STARTQ.endAt = 0; }
@@ -9962,12 +13540,12 @@ function lbSrvCtlQueueApplyTasks(q){
   (q.queued || []).forEach(function(s){
     var id = ensure(s);
     if (id) lbTaskUpdate(id, { phase: 'queue', pct: 0,
-                               msg: '排队中（重压 ' + q.heavyCount + '/' + (q.heavyMax || 2) + '）', err: '' });
+                               msg: '排队中（世界加载 ' + q.heavyCount + '/' + (q.heavyMax || 2) + '）', err: '' });
   });
   (q.active || []).forEach(function(a){
     var id = ensure(a.server);
     if (id) lbTaskUpdate(id, { phase: 'run', pct: a.pct || 2,
-                               msg: (a.msg || a.label || '启动中') + (a.heavy ? ' · 重压期' : ''), err: '' });
+                               msg: (a.msg || a.label || '启动中') + (a.heavy ? ' · 世界加载' : ''), err: '' });
   });
   (q.done || []).forEach(function(d){
     var id = lbTaskIdByKey(d.server + '|start');
@@ -10168,7 +13746,23 @@ function lbTaskSync(){
         try {
           if (o.startq) { LB_SRVCTL.q = o.startq; lbSrvCtlQueueLinePaint(); }
         } catch(eQ){}
-        if (o.changed === false){ LB_TASK_REV = Number(o.rev) || LB_TASK_REV; return; }
+        if (o.changed === false){
+          LB_TASK_REV = Number(o.rev) || LB_TASK_REV;
+          /* v6664：任务空闲时本函数恒在此早退，原来**永不重绘** ⇒ 一旦别处的
+             innerHTML 全量重写冲掉了 .lb-task-slot（如安全回档），任务区就永久消失，
+             直到下次任务变化才回来（用户看到的「时隐时现」）。
+             这里加一道极轻量自愈：槽位不存在或没有内容时才补画，有内容绝不打扰。 */
+          try {
+            var _slots = document.querySelectorAll('.lb-task-slot');
+            if (!_slots.length){ lbTaskEnsureSlots(); lbTaskRender(); }
+            else {
+              for (var _i = 0; _i < _slots.length; _i++){
+                if (!_slots[_i].firstChild){ lbTaskRender(); break; }
+              }
+            }
+          } catch (e_slot) {}
+          return;
+        }
         LB_TASK_REV = Number(o.rev) || 0;
         LB_TASKS.items = Array.isArray(o.tasks) ? o.tasks : [];
         LB_LOCKS = (o.locks && typeof o.locks === 'object') ? o.locks : {};   /* v6135：服务器锁表 */
@@ -10294,6 +13888,45 @@ function lbTaskStepsHtml(t){
     + '<span class="lb-task-stage">' + lbMdEsc(curName) + '</span>'
     + '<span class="lb-task-cnt2">' + curNo + '/' + _its.length + '</span></span>';
 }
+/* v6692（用户口径「附件按钮 跳过成功后 就应该隐藏」）：已请求跳过的服 ——
+   点成功后立刻隐藏该按钮，等任务自然推进到下一阶段（任务结束/换阶段时自动清理）。 */
+var LB_SKIPQ_REQ = {};
+/* v6697（用户口径「服务器浮窗里不应该有任何操作按钮」）：
+   true ⇒ 任务条只渲染状态，不渲染 跳过静默 / 中止 / 重试 按钮。
+   由 lbTaskRender 按「槽位是否位于只读浮窗 .lb-taskpanel-overlay 内」动态设置。 */
+var LB_TASK_RO = false;
+
+/* v6698（用户口径「当前任务不在能跳过的阶段，跳过要隐藏」）：
+   只有「等待空置」或「静默校验」这两步正处于进行中（state=run）时，跳过才有意义。 */
+function lbTaskSkipable(t){
+  /* v6701（用户口径「附件为啥没有跳过按钮」）：原判据要求「空置/静默」步骤 state=run，
+     但后端在**公告 → 空置累计**阶段 steps.empty 仍是 wait（只有有人在线时才置 run），
+     ⇒ 明明在「空置确认中」却没有按钮。
+     改为：只要静默还没通过（steps.quiet 不是 ok/skip）就允许跳，覆盖
+     公告 / 空置累计 / 静默校验 三个子阶段；静默一过（进入存档停服及之后）自动隐藏。 */
+  /* v6792（用户口径 2026-11-16「跳过按钮为啥在分发 API 任务里出现了，明明是直接停服状态执行的」）：
+     原实现 q 默认 ''，兜底无条件 return true ⇒ 不区分
+       · 「静默步骤还在等」          ⇒ 允许跳（v6701 的口径，保留）
+       · 「**根本没有静默步骤**」    ⇒ 也返回 true ⇒ 挂出一个点了没用的跳过按钮（本次 bug）
+     触发场景：服务器本来就是停服状态 ⇒ 编排直接跳过「等空置 / 集群静默」整段
+       （后端形如 `_arkbk_step(job, 'stopping', True, '服已停，跳过停服')`）
+       ⇒ steps 里压根没有「静默」这一步 ⇒ q 恒 '' ⇒ 误显示。
+     修法：加前置条件 —— 必须**真的存在**「静默 / 空置」步骤才允许跳过。 */
+  var a = (t && t.steps) || [];
+  var found = false, q = '';
+  for (var i = 0; i < a.length; i++){
+    var s = a[i];
+    if (!s || typeof s !== 'object') continue;
+    var _lb = String(s.label || '') + String(s.key || '');
+    if (_lb.indexOf('静默') >= 0 || _lb.indexOf('空置') >= 0){
+      found = true;
+      q = String(s.state || '');
+    }
+  }
+  if (!found) return false;                 /* 没有可跳过的步骤 ⇒ 不显示按钮 */
+  if (q === 'ok' || q === 'skip') return false;
+  return true;
+}
 function lbTaskHtml(t){
   var ph = t.phase;
   var cls = (ph === 'run' ? 'run' : ph === 'ok' ? 'ok' : ph === 'skip' ? 'skip' : ph === 'queue' ? 'queue' : 'fail');
@@ -10333,14 +13966,21 @@ function lbTaskHtml(t){
     /* v6164（计划 §16 第 7 项 / C8）：自动重启任务在「进行中/排队」时给一个中止按钮 */
     /* v6436（用户口径「启动任务条也要有终止 mdi」）：`start` 任务同样给中止按钮 ——
        动作走 kill+interrupt（与 lbStartqAbort 同一后端通道），不再只限 restart。 */
-    +   (((t.action === 'restart' || t.action === 'start') && (ph === 'run' || ph === 'queue'))
+    /* v6688（用户口径「任务条要有跳过三重静默的按钮 和中止按钮 一个位置和样式」）：
+       自动重启任务进行中/排队时，给一个「跳过集群静默」按钮 —— 与中止同款 .lb-srvctl-mini。
+       v6689：0 人时空置跨度确认也一起跳过；有玩家仍等。 */
+    +   ((!LB_TASK_RO && t.action === 'restart' && !(t.meta && t.meta.batch) && ph === 'run' && lbTaskSkipable(t)
+              && !(LB_SKIPQ_REQ[String(t.server || '')] > 0))
+          ? '<button class="lb-srvctl-mini" title="跳过空置+集群静默（仅在线 0 人时生效）" onclick="lbTaskSkipQuiet(\'' + lbMdEsc(t.server) + '\')"><i class="mdi mdi-skip-next-circle-outline"></i></button>'
+          : '')
+    +   ((!LB_TASK_RO && (t.action === 'restart' || t.action === 'start') && (ph === 'run' || ph === 'queue'))
           ? (t.action === 'start'
               ? '<button class="lb-srvctl-mini" title="终止本台启动（强制结束正在启动的进程）" onclick="lbTaskAbortStart(\'' + lbMdEsc(t.server) + '\')"><i class="mdi mdi-stop-circle-outline"></i></button>'
               : ((t.meta && t.meta.batch)
                   ? '<button class="lb-srvctl-mini" title="中止整批自动重启" onclick="lbTaskAbortAll()"><i class="mdi mdi-stop-circle-outline"></i></button>'
                   : '<button class="lb-srvctl-mini" title="中止本台自动重启（其它服继续）" onclick="lbTaskAbort(\'' + lbMdEsc(t.server) + '\')"><i class="mdi mdi-stop-circle-outline"></i></button>'))
           : '')
-    +   ((ph === 'fail' && LB_TASK_RETRYABLE.indexOf(String(t.action || '')) >= 0)
+    +   ((!LB_TASK_RO && ph === 'fail' && LB_TASK_RETRYABLE.indexOf(String(t.action || '')) >= 0)
           ? '<button class="lb-srvctl-mini" title="重试" onclick="lbTaskRetry(' + Number(t.id) + ')"><i class="mdi mdi-refresh"></i></button>'
           : '')
     /* v6270（用户口径「移动端百分比放第二行右对齐，最多两行」）：
@@ -10384,12 +14024,17 @@ function lbTaskEnsureSlots(){
   if (sb && (sb.className || '').indexOf('lb-task-slot') < 0) sb.className = (sb.className || '') + ' lb-task-slot';
   var ark = document.getElementById('lbArkBk');
   if (ark && !ark.querySelector('.lb-task-slot')){
-    var body = ark.querySelector('.lw-body') || ark;
-    var d = document.createElement('div');
-    /* v6125：与 #lbSrvCtlRes 同结构同 class，保证两处样式一致 */
-    d.className = 'lb-srvctl-res lb-task-slot';
-    d.style.marginTop = '10px';
-    body.appendChild(d);
+    /* v6665：优先挂到 .lw-panel 末尾（底栏之下），不再塞进 .lw-body —— 避免与 .tc 抢 flex 空间 */
+    var _made = false;
+    try { _made = !!lbArkBkTaskSlotEnsure(); } catch (e_ts) { _made = false; }
+    if (!_made){
+      var body = ark.querySelector('.lw-body') || ark;
+      var d = document.createElement('div');
+      /* v6125：与 #lbSrvCtlRes 同结构同 class，保证两处样式一致 */
+      d.className = 'lb-srvctl-res lb-task-slot';
+      d.style.marginTop = '10px';
+      body.appendChild(d);
+    }
   }
 }
 /* v6267（用户口径）：入口按钮 #lbTaskPanelBtn 的「在途数」徽章。
@@ -10447,6 +14092,8 @@ function lbTaskRender(){
   } catch(eB){}
   var slots = document.querySelectorAll('.lb-task-slot');
   if (!slots.length) return;
+  /* v6697：只读浮窗（「服务器」概览）⇒ 不渲染任何操作按钮 */
+  try { LB_TASK_RO = !!document.querySelector('.lb-taskpanel-overlay .lb-task-slot'); } catch (eRO) { LB_TASK_RO = false; }
   var items = LB_TASKS.items.slice();
   var actOrder = {};
   (LB_SRVCTL_ACTS || []).forEach(function(a, i){ actOrder[a.a] = i; });
@@ -10476,25 +14123,183 @@ function lbTaskRender(){
      分发（mode=update）后端**只写 restart|__batch 批次条、不写单台条**，
      而 v6260 又把批次条隐藏 ⇒ 任务区全空。没单台条时把批次条显示出来。 */
   if (!items.length && _batchItems.length) { items = _batchItems; _hiddenN = 0; }
+  /* v6692：任务已不在进行中（完成/失败/被替换）⇒ 清掉跳过记忆，下次重新可用 */
+  try {
+    Object.keys(LB_SKIPQ_REQ).forEach(function(k){
+      var _it = null;
+      for (var _i2 = 0; _i2 < items.length; _i2++){ if (String(items[_i2].server || '') === k){ _it = items[_i2]; break; } }
+      if (!_it || (_it.phase !== 'run' && _it.phase !== 'queue')) delete LB_SKIPQ_REQ[k];
+    });
+  } catch (eSQ) {}
   var failN = items.filter(function(t){ return t.phase === 'fail'; }).length;
   /* v6125（用户口径）：标题「任务进度」由渲染函数统一输出 —— 任何 .lb-task-slot 结构与样式完全一致 */
-  var h = '<div class="lb-task-sec">任务进度</div>'
-        + '<div class="lb-task-bar">'
-        +   '<span class="lb-task-cnt">' + (items.length ? (items.length + ' 条') : '') + '</span>'
+  /* v6691（用户口径「附件完全可以作为任务进度的副标题，和右对齐的信息」）：
+     原 `.lb-task-sec`（标题）+ `.lb-task-bar`（条数/右对齐信息）两行合并成一行 ——
+     左：标题 + 低可视副标题「N 条」；右：批次汇总已合并 / 清理失败按钮。
+     用内联样式承载，避免新增 CSS 类（两端共用同一渲染函数）。 */
+  var h = '<div class="lb-task-sec" style="display:flex;align-items:center;gap:8px;margin-bottom:5px">'
+        +   '<span>任务进度</span>'
+        +   (items.length ? ('<span style="font-size:11px;font-weight:400;color:#8b93a7">' + items.length + ' 条</span>') : '')
         +   '<span style="flex:1"></span>'
         /* v6276：原文案「已折叠 N 台明细」与实现不符 —— 折叠的是**批次汇总条**（1 条），
            每台明细是照常显示的（v6260 口径「一个服一个任务条」）。 */
-        +   (_hiddenN ? ('<span style="font-size:11px;color:#6b7280;margin-right:8px">批次汇总已合并</span>') : '')
-        +   (failN ? '<button class="lb-srvctl-mini" title="清理全部失败（' + failN + '）" onclick="lbTaskClearFail()"><i class="mdi mdi-broom"></i></button>' : '')
+        +   (_hiddenN ? ('<span style="font-size:11px;font-weight:400;color:#6b7280;margin-right:2px">批次汇总已合并</span>') : '')
+        +   (!LB_TASK_RO && failN ? '<button class="lb-srvctl-mini" title="清理全部失败（' + failN + '）" onclick="lbTaskClearFail()"><i class="mdi mdi-broom"></i></button>' : '')
         + '</div>';
-  h += items.length
+  var _bodyHtml = items.length
      ? items.map(lbTaskHtml).join('')
      : '<div class="lb-srvctl-tip">尚未执行操作</div>';
-  for (var _si = 0; _si < slots.length; _si++){ slots[_si].innerHTML = h; }
+  /* v6687（用户口径「附件 应该放在任务进度里」）：启动队列条挪进「任务进度」块
+     （标题 + 条数 之后、任务条之前），且**只**渲染进「服务器更新」浮窗的槽位。 */
+  /* v6695（用户口径「所有任务进度都应该有这个模块 … 同源统一唯一」）：
+     启动队列条**只由这里输出一份**，所有浮窗的 .lb-task-slot 一律包含它；
+     各浮窗模板里原先的 #lbSrvCtlQLine / #lbArkBkQLine / #lbUpdQLine / #lbTaskPanelQLine 已删除。 */
+  var _qLine = '';
+  try {
+    if (typeof lbSrvCtlQueueLineHtml === 'function'){
+      _qLine = '<div class="lb-srvctl-qline" id="lbTaskQLine" style="margin:2px 0 6px">'
+             + lbSrvCtlQueueLineHtml() + '</div>';
+    }
+  } catch (eQ) { _qLine = ''; }
+  for (var _si = 0; _si < slots.length; _si++){
+    slots[_si].innerHTML = h + _qLine + _bodyHtml;
+  }
   try { lbSrvCtlTips(); } catch(e){}   /* v5991：任务条重建后补统一 tips */
-  /* v6371：任务条重绘后同步三卡的「更新本地包」运行态条（局部 DOM，不整块重绘） */
+  /* v6371：任务条重绘后同步三卡的「更新缓存」运行态条（局部 DOM，不整块重绘） */
   try { lbUpdPkgBarsPaint(); } catch(e){}
+  /* v6514：编排进度变化（尤其分发跑完）后刷新汉化状态 ⇒ 蓝框/色条自动归位 */
+  try { lbZhAutoRefreshByTasks(items); } catch(eZ){}
+  /* v6785（用户口径「任务进度不应该放在浮窗内部，和主宰者操作条一样」）：
+     把各浮窗里的任务进度搬到**面板外面**（浮窗下方独立浮条）。 */
+  try { lbTaskSlotFloat(); } catch(eFL){}
 }
+/* ===== v6785：任务进度浮条外部化 =====
+   用户口径（2026-11-16）：任务进度不该嵌在浮窗内部，要和「主宰者操作条」一样 ——
+   挂在浮窗**面板外面下方**，一条同宽、同圆角（8px）、8px 间隙的独立圆角浮条。
+   做法：找到每个 .lb-task-slot 所属的 overlay，把它从面板内部搬到 overlay 直接子级（面板之后），
+        并把该 overlay 改成纵向排列 + gap:8px（与角色浮窗的权限浮条同构）。
+   · 面板是 overflow:hidden ⇒ 只有搬到 overlay 下，圆角/投影才不被裁
+   · lbTaskRender 每次渲染后调用；已搬过的只更新宽度（窗口缩放时对齐面板）
+   · v6788（用户口径「附件你漏了独立」）：任务面板浮窗（#lbTaskPanelTasks）同样要浮出去 ——
+     它原本整块在 .lb-modal-scroll 里，搬出后面板内仍保留服务器状态/图例，不会空。
+   · v6788（用户口径「没有总线任务在执行时，整个独立框不显示」）：无任务条且无启动队列 ⇒ 整条隐藏 */
+function lbTaskSlotFloat(){
+  try {
+    var slots = document.querySelectorAll('.lb-task-slot');
+    for (var i = 0; i < slots.length; i++){
+      var slot = slots[i];
+      if (!slot) continue;
+      /* v6791（用户口径「所有带任务进度的浮窗里的任务进度都要独立」）：
+         原判定只认 4 种 overlay class ⇒ **.lb-sheet 类浮窗全被漏掉**
+           · 服务器控制  div#lbSrvCtl.lb-sheet.show
+           · 安全回档    div#lbArkBk.lb-sheet.show
+           · 综合更新    div#lbUpd.lb-sheet.show
+         改为**通用判定**：向上爬到 body 的直接子级，且该节点 position:fixed ⇒ 即浮窗根。
+         以后新增任何浮窗（无论用什么 class）都自动覆盖，不用再改白名单。 */
+      var ov = slot.parentNode;
+      while (ov && ov.nodeType === 1 && ov.parentNode && ov.parentNode !== document.body){
+        ov = ov.parentNode;
+      }
+      if (!ov || ov.nodeType !== 1 || ov === document.body) continue;   /* 不在浮窗里 ⇒ 不动 */
+      try { if (window.getComputedStyle(ov).position !== 'fixed') continue; } catch (eFX) { continue; }
+      var panel = ov.querySelector('.lb-picker-panel, .lb-modal-box, .lb-modal-scroll, .lw-panel');
+      if (!panel) continue;
+      if (slot.parentNode !== ov){
+        /* v6789（缺陷修复）：同一 overlay 下**只保留一条**任务浮条。
+           各浮窗的「确保槽位存在」函数（lbArkBkTaskSlotEnsure / 任务面板 repaint 等）发现
+           面板内没有 .lb-task-slot 就会**重新建一个**；而浮条已被搬到 overlay 下 ⇒
+           下一次 repaint 又建一个 ⇒ 越积越多（实测任务面板累积到 3 条一模一样的浮条）。 */
+        try {
+          var _dupes = ov.querySelectorAll(':scope > .lb-task-slot');
+          for (var _d = 0; _d < _dupes.length; _d++){
+            if (_dupes[_d] !== slot){ try { _dupes[_d].remove(); } catch (eD) {} }
+          }
+        } catch (eDup) {}
+        /* 首次搬出：overlay 改纵向排列 + 8px 间隙（只改本实例内联样式） */
+        try {
+          ov.style.flexDirection = 'column';
+          ov.style.gap = '8px';
+          if (!ov.style.padding) ov.style.padding = '8px 0';
+          ov.style.boxSizing = 'border-box';
+          if (ov.scrollHeight > ov.clientHeight) ov.style.overflowY = 'auto';
+        } catch (e0) {}
+        try { ov.appendChild(slot); } catch (e1) { continue; }
+      }
+      /* 每次都对宽度（窗口缩放 / 面板换宽后保持等宽） */
+      try {
+        var w = panel.getBoundingClientRect().width;
+        if (w > 20){
+          /* v6799（移动端拉通宽度）：v6798 的 CSS 例外里写了 `width:auto!important`，
+             而这里原先是**普通内联**宽度 ⇒ 被 !important 覆盖 ⇒ 宽度退化成内容宽（实测 352px），
+             再被 `margin:0 auto` 居中（左右各 20px），看起来没和面板拉通。
+             改用内联 **!important**（优先级高于样式表 !important）⇒ 与面板严格等宽。 */
+          try {
+            slot.style.setProperty('width', Math.round(w) + 'px', 'important');
+            /* v6800：原 `92vw` 在移动端 = 361px < 面板 393px ⇒ 宽度永远差一截（实测 width 被压成 361.688px）。
+               改为 100%（相对 overlay），桌面端面板 < 100% 不受影响。 */
+            slot.style.setProperty('max-width', '100%', 'important');
+          } catch (eW) {
+            slot.style.width = Math.round(w) + 'px';
+            slot.style.maxWidth = '92vw';
+          }
+        }
+        slot.style.flex = '0 0 auto';
+        slot.style.boxSizing = 'border-box';
+        slot.style.margin = '0 auto';
+        slot.style.minHeight = '0';
+        /* v6798（移动端占满全屏修复）：.lb-picker-overlay.lb-fs>div 的整屏规则
+           （height:100dvh!important / border-radius:0 / 无投影）会命中被搬出来的浮条。
+           这里用**内联 !important** 兜底（内联 important 优先级高于样式表 important），
+           高度交给内容撑开，圆角/描边/投影恢复浮条样式。 */
+        try {
+          /* v6800：外框（圆角/描边/投影）交给 CSS —— 桌面端用 .lb-task-slot 基础样式，
+             移动端由媒体查询置为 0，这里**不能再内联 important**，否则移动端压不掉。
+             此处只保留尺寸类，用来压 `.lb-*-overlay.lb-fs>div` 的整屏规则。 */
+          /* v6801（血泪）：只"不再设置"是不够的 —— 元素上**已存在**的内联
+             `border-radius/border/box-shadow !important`（v6798 设过）会一直压着移动端 CSS，
+             导致「去圆角外框」永远不生效（实测内联仍为 8px / 1px solid / 有投影）。
+             必须显式 removeProperty 清掉，把外框样式完全交还给 CSS。 */
+          slot.style.removeProperty('border-radius');
+          slot.style.removeProperty('border');
+          slot.style.removeProperty('box-shadow');
+          slot.style.setProperty('height', 'auto', 'important');
+          slot.style.setProperty('max-height', 'none', 'important');
+          slot.style.setProperty('min-height', '0', 'important');
+        } catch (eFB) {}
+      } catch (e2) {}
+      /* v6788（用户口径「没有总线任务在执行时，整个独立框不显示」）：
+         有任务条(.lb-task) 或 启动队列行有内容 ⇒ 显示；否则整条隐藏（连标题也不留）。 */
+      try {
+        var _q = slot.querySelector('#lbTaskQLine');
+        var _hasQ = !!(_q && _q.children && _q.children.length > 0);
+        var _hasT = !!slot.querySelector('.lb-task');
+        slot.style.display = (_hasT || _hasQ) ? '' : 'none';
+      } catch (e3) {}
+    }
+  } catch (e) {}
+}
+/* ===== v6514（用户口径 2026-11-10「汉化包分发后，为啥地图 TAB 还有蓝色框」）=====
+   蓝色内描边 .zhb 的判据是 LB_ZH.st.behind，而分发（update/rollback 编排）跑完后
+   前端**从未重新拉过** /api/zh/status ⇒ behind 还是分发前那 11 台 ⇒ 蓝框一直挂着。
+   这里在任务条重绘时按「编排任务进度指纹」检测变化，60s 节流刷一次（local=1 秒回）。 */
+var LB_ZH_AUTOSIG = '', LB_ZH_AUTOAT = 0;
+
+function lbZhAutoRefreshByTasks(items){
+  var sig = '';
+  (items || []).forEach(function(t){
+    if (!t || t.action !== 'restart') return;
+    if (t.meta && t.meta.batch) return;      /* 批次汇总行不算 */
+    sig += String(t.server || '') + ':' + String(t.phase || '') + ';';
+  });
+  if (!sig) return;                          /* 没有编排任务 ⇒ 不动 */
+  if (sig === LB_ZH_AUTOSIG) return;         /* 进度没变 ⇒ 不动 */
+  LB_ZH_AUTOSIG = sig;
+  var now = Date.now();
+  if (now - LB_ZH_AUTOAT < 60000) return;    /* 60s 节流，避免刷爆 */
+  LB_ZH_AUTOAT = now;
+  try { lbZhFetch(true); } catch (e) {}
+}
+
 function lbTaskClearFail(){
   /* v6122：失败条清理走后端（全服同步消失）*/
   var base = (typeof lbSrvCtlApi === 'function') ? lbSrvCtlApi() : '';
@@ -10541,6 +14346,29 @@ function lbStartqAbortPost(servers, doneCb){
     try { lbToast('清理队列失败：' + e); } catch(e2){}
     if (doneCb) doneCb(false);
   });
+}
+/* v6688（用户口径）：任务条「跳过静默」—— 只放行 L3 集群目录静默。
+   后端 /api/restart/quiet/skip 写入一次性标记，编排下一轮（秒级）即判通过。 */
+function lbTaskSkipQuiet(server){
+  var s = String(server || '').trim();
+  if (!s) return;
+  var base = (typeof lbSrvCtlApi === 'function') ? lbSrvCtlApi() : '';
+  var tk = (typeof lbSrvCtlToken === 'function') ? lbSrvCtlToken() : '';
+  if (!base){ try { lbToast('未配置服务器控制地址'); } catch(e0){} return; }
+  lbSrvCtlFetchW(base + '/api/restart/quiet/skip', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tk },
+    body: JSON.stringify({ server: s,
+                           username: (typeof lbSrvCtlUser === 'function') ? lbSrvCtlUser() : '' })
+  }).then(function(r){ return r.json(); }).then(function(j){
+    try {
+      if (j && j.ok){ LB_SKIPQ_REQ[s] = Date.now(); try { lbTaskRender(); } catch(e3){} }
+      lbToast((j && j.ok)
+        ? ('已请求跳过 ' + s + ' 空置/集群静默（在线 0 人时立即通过）')
+        : ('跳过失败：' + ((j && (j.error || j.code)) || '未知')));
+    } catch(e){}
+    try { lbTaskSync(); } catch(e){}
+  }).catch(function(e){ try { lbToast('跳过失败：' + e); } catch(e2){} });
 }
 function lbTaskAbortStart(server){
   var s = String(server || '').trim();
@@ -11789,7 +15617,6 @@ function lbSrvCtlRender(){
     /* v6063（用户口径）：踢人结果横幅 —— 随踢人功能从地图位置搬来（成功 8s 自动隐藏 / 失败常驻） */
     + '<div id="lbSrvCtlKickRes" style="display:none;margin-top:6px;padding:6px 10px;border-radius:6px;'
     + 'font-size:11.5px;text-align:center;line-height:1.6"></div>'
-    + '<div class="lb-srvctl-qline" id="lbSrvCtlQLine">' + lbSrvCtlQueueLineHtml() + '</div>'
     /* v6024（用户口径）：管理员但缺 token ⇒ 常驻红条 + 一键重登（即使自动弹框的提示被关掉也能找回入口） */
     + ((lbRoleLevel() >= 2 && !lbSrvCtlToken())
         ? ('<div style="margin-top:6px;padding:6px 9px;border-radius:6px;background:rgba(239,68,68,.08);'
@@ -11895,16 +15722,43 @@ function lbSrvCtlRender(){
   /* v5978（用户口径）：更新时间已并入首行 pickhead，meta 行不再单独占一行 */
   if (S.meta) S.meta.style.display = 'none';
 }
+/* v6742（方案「安全回档·临时授权监督入口」）：底栏权限行抽成独立函数。
+   目的：「回档流程（监督）」入口出现/消失时**只重绘这一行**（lbPwRowRepaint），
+   不必重建整个身份浮窗（会打断用户操作）。 */
+function lbPwRowBuild(_rlLv) {
+  var _pwBtn = 'display:inline-flex;align-items:center;gap:4px;font-size:11px;line-height:1;cursor:pointer;padding:3px 4px;user-select:none';
+  var _pwSep = '<span style="width:1px;height:11px;background:#2a2a3a;margin:0 1px;flex:none"></span>';
+  var _pwItems = [];
+  if (lbIsAdmin()) _pwItems.push('<span class="lb-pw-btn" style="' + _pwBtn + '" onclick="lbOpenServerAdminModal()" aria-label="系统管理"><i class="mdi mdi-shield-crown-outline" style="font-size:13px"></i>系统管理</span>');
+  if (_rlLv >= 3) _pwItems.push('<span class="lb-pw-btn" style="' + _pwBtn + '" onclick="lbArkBkOpen()" aria-label="安全回档"><i class="mdi mdi-backup-restore" style="font-size:13px"></i>安全回档</span>');
+  if (_rlLv >= 3) _pwItems.push('<span class="lb-pw-btn" style="' + _pwBtn + '" onclick="lbUpdOpen()" aria-label="综合更新"><i class="mdi mdi-update" style="font-size:13px"></i>综合更新</span>');
+  if (_rlLv >= 3) _pwItems.push('<span class="lb-pw-btn" style="' + _pwBtn + '" onclick="lbPluginCfgOpen()" aria-label="SOK配置"><i class="mdi mdi-tune-variant" style="font-size:13px"></i>SOK配置</span>');
+  /* v6745（用户口径）：临时监督入口已改为**头部固定入口「回档授权」**（lbArkBkGrantOpen），
+     不再挂在本行。下方为原实现留档说明：当年这里按「被授权 + 管理者」才显示。 */
+  if (!_pwItems.length) return '';
+  /* v6782（用户口径「改成当前浮窗下方的独立浮窗条，仅样式上，就是个圆角浮窗条」）：
+     与 `.lb-picker-panel` **同宽同圆角**（width:90% / max-width:400px / 8px）—— 面板是
+     `overflow:hidden`，所以它必须挂在面板**外面**才能形成「下方独立浮条」的观感（见 lbOpenRolePicker）。
+     底色比面板 #1a1a24 略亮一档，四边细边框 + 投影，与面板之间由 overlay 的 gap:8px 拉开。 */
+  return '<div id="lbPwRow" style="width:90%;max-width:400px;box-sizing:border-box;flex:none;display:flex;align-items:center;gap:2px;padding:6px 12px;border:1px solid #2f2f40;border-radius:8px;background:#1c1c26;box-shadow:0 4px 16px rgba(0,0,0,.5);flex-wrap:wrap">'
+    + _pwItems.join(_pwSep) + '</div>';
+}
 function lbOpenRolePicker(){
   var old=document.querySelector('.lb-picker-overlay'); if(old) old.remove();
   var overlay=document.createElement('div'); overlay.className='lb-picker-overlay';
+  /* v6782（用户口径）：面板 + 下方权限浮条纵向排列，中间 8px 间隙。
+     只改本实例内联样式（不动全局 .lb-picker-overlay，避免影响其他浮窗）。 */
+  overlay.style.flexDirection = 'column';
+  overlay.style.gap = '8px';
   overlay.onclick=function(e){ if(e.target===overlay) overlay.remove(); };
   var html='<div class="lb-picker-panel" onclick="event.stopPropagation()" style="max-width:400px">';
   // v5404（用户口径「版本号放到该浮窗底栏，可以不要那么低可视化」「选择生存者 改叫 生存者」）
   //   标题改名；版本号移到底栏（见下方 footer），不再挤在标题右侧
   /* v6082（用户口径「附件2个透明度怎么不一样」→「全部全亮」）：本行各入口原先手写了 .4/.55/.6/.8 四档 opacity ⇒ 移除全部 opacity，统一全亮；
      同时加专属 class .lb-rp-head（v6082「该行的入口图标间隔减1」），仅这一行 gap 8→7px，不动共享的 .lb-picker-header。 */
-  html+='<div class="lb-picker-header lb-rp-head">'+(lbIsAdmin()?'<button class="lb-tipb lb-picker-close" style="font-size:14px;color:#f59e0b" onclick="lbOpenServerAdminModal()" title="系统管理"><i class="mdi mdi-shield-crown-outline"></i></button>':'')+(lbRoleLevel()>=3?'<button class="lb-tipb lb-picker-close" style="font-size:14px;color:#f59e0b" onclick="lbArkBkOpen()" title="安全回档"><i class="mdi mdi-backup-restore"></i></button>':'')+(lbRoleLevel()>=3?'<button class="lb-tipb lb-picker-close" style="font-size:14px;color:#f59e0b" onclick="lbUpdOpen()" title="服务器更新"><i class="mdi mdi-update"></i></button>':'')+(lbCanServerCtl()?'<button class="lb-tipb lb-picker-close" style="font-size:14px;color:#a78bfa" onclick="lbSrvCtlOpen()" title="服务器控制"><i class="mdi mdi-server-security"></i></button>':'')+'<button class="lb-tipb lb-picker-close" style="font-size:14px" onclick="lbNewsEntry()" title="资讯广场"><i class="mdi mdi-newspaper-variant-outline"></i></button>'+'<button class="lb-tipb lb-picker-close" style="font-size:14px" onclick="lbOpenAlliancePos()" title="联盟成员位置"><i class="mdi mdi-account-group-outline"></i></button><button class="lb-tipb lb-picker-close" style="font-size:14px" onclick="lbRoleView(\'keys\')" title="键位配置"><i class="mdi mdi-gamepad-variant"></i></button><button class="lb-tipb lb-picker-close" style="font-size:14px" onclick="lbOpenConfigModal()" title="自助配置"><i class="mdi mdi-cog"></i></button>'+'<button class="lb-tipb lb-picker-close" style="font-size:14px" onclick="lbCfgOpenRules()" title="服务器规则"><i class="mdi mdi-clipboard-text-outline"></i></button>'+'<span style="flex:1"></span><button class="lb-tipb lb-picker-close" onclick="this.closest(\'.lb-picker-overlay\').remove()" title="关闭"><i class="mdi mdi-close"></i></button></div>';
+  /* v6757（用户口径）：除「关闭」外的功能入口统一装进一个按钮组框（按钮间短分割线） */
+  var _rpGrp=''+(lbCanServerCtl()?'<button class="lb-tipb lb-picker-close" style="font-size:14px;color:#a78bfa" onclick="lbSrvCtlOpen()" title="服务器控制"><i class="mdi mdi-server-security"></i></button>':'')+(lbRoleLevel()>=2/* v6747（用户口径）：回档授权入口 = **管理者权限**（≥2），并按权限着色：颜色与【服务器控制】同为主题紫 #a78bfa（两者都是管理者权限） */?'<button class="lb-tipb lb-picker-close" style="font-size:14px;color:#a78bfa" onclick="lbArkBkGrantOpen()" title="回档授权"><i class="mdi mdi-account-eye"></i></button>':'')+(lbRoleLevel()>=1?'<button class="lb-tipb lb-picker-close" style="font-size:14px" onclick="lbTombHistOpen()" title="墓碑记录"><i class="mdi mdi-grave-stone"></i></button><button class="lb-tipb lb-picker-close" style="font-size:14px" onclick="lbBorrowHistOpen()" title="租借记录"><i class="mdi mdi-swap-horizontal"></i></button>':'')+'<button class="lb-tipb lb-picker-close" style="font-size:14px" onclick="lbNewsEntry()" title="资讯广场"><i class="mdi mdi-newspaper-variant-outline"></i></button>'+'<button class="lb-tipb lb-picker-close" style="font-size:14px" onclick="lbOpenAlliancePos()" title="联盟成员位置"><i class="mdi mdi-account-group-outline"></i></button><button class="lb-tipb lb-picker-close" style="font-size:14px" onclick="lbRoleView(\'keys\')" title="键位配置"><i class="mdi mdi-gamepad-variant"></i></button><button class="lb-tipb lb-picker-close" style="font-size:14px" onclick="lbOpenConfigModal()" title="自助配置"><i class="mdi mdi-cog"></i></button>'+'<button class="lb-tipb lb-picker-close" style="font-size:14px" onclick="lbCfgOpenRules()" title="服务器规则"><i class="mdi mdi-clipboard-text-outline"></i></button>'+'';
+  html+='<div class="lb-picker-header lb-rp-head"><span class="lb-rp-grp">'+_rpGrp+'</span><span style="flex:1"></span><button class="lb-tipb lb-picker-close" onclick="this.closest(\'.lb-picker-overlay\').remove()" title="关闭"><i class="mdi mdi-close"></i></button></div>';
   html+='<div class="lb-picker-grid" id="lbRoleGrid">';
   var huIcon=(LB_ICON_BY_NAME && LB_ICON_BY_NAME['Human_icon']) || '';
   LB.playerRoles.forEach(function(r, i){
@@ -11918,7 +15772,10 @@ function lbOpenRolePicker(){
   /* v6023（用户口径）：底栏左侧显示**当前权限等级**：主宰者 / 管理者 / 生存者 / 未登录 */
   var _rlLv = lbRoleLevel();
   var _rlMap = _rlLv >= 3 ? { t: '主宰者', i: 'mdi-shield-crown', c: '#f59e0b' }
-             : _rlLv === 2 ? { t: '管理者', i: 'mdi-shield-account', c: '#22c55e' }
+             /* v6749（用户口径）：管理者徽章 #22c55e 绿 → **#a78bfa 主题紫**。
+                原绿色在项目里是「成功/已保存/OK」状态色（十几处），与管理者权限无关；
+                而管理者权限的功能入口（服务器控制 / 回档授权）用的是 #a78bfa ⇒ 徽章跟入口对齐。 */
+             : _rlLv === 2 ? { t: '管理者', i: 'mdi-shield-account', c: '#a78bfa' }
              : _rlLv === 1 ? { t: '生存者', i: 'mdi-account', c: '#22d3ee' }
              : { t: '未登录', i: 'mdi-account-outline', c: '#6b7280' };
   /* v6213（用户口径「注销入口 移到底栏（改成链接样式），底栏加一个显示当前账号名」）：
@@ -11926,6 +15783,30 @@ function lbOpenRolePicker(){
      · 昵称显示 dinoAuth.nick（Steam 昵称，非登录账号）；hover 走**项目 tips 引擎**（.lb-tipb），
        气泡用【小标题】格式给出「账号 / Steam 昵称」两行
      · 版式：权限徽章 → 昵称 → 注销 →[弹性]→ 版本号 */
+  /* v6707（用户口径「主宰者权限的功能能放到浮窗底栏里，独占一行」）：
+     系统管理 / 安全回档 / 服务器更新 三个入口从**头部图标行**移到底栏上方的**独占一行**；
+     头部只保留所有角色可用的入口（资讯广场/联盟成员位置/键位配置/自助配置/服务器规则）+ 关闭。
+     判据不变：系统管理 = lbIsAdmin()（whiterober）；安全回档/服务器更新 = lbRoleLevel() >= 3（主宰者）。
+     视觉：橙色系胶囊（沿用原 #f59e0b 表达主宰者级），图标 + 11px 文字，全亮不设透明度。 */
+  /* v6710（用户口径）：
+     · 入口一律「低可视无框」——不要底色/边框，色值降到 #8b8b9a，hover 只让图标+文字变橙（无背景块，见 .lb-pw-btn）
+     · 各入口之间插**短竖分割线**（不拉通整行高度：11px）
+     · 「服务器更新」改名「综合更新」 */
+  /* v6742：权限行已抽成 lbPwRowBuild()（便于单行重绘） */
+  var _pwRow = lbPwRowBuild(_rlLv);
+  if (false) {
+    var _pwItems = [];
+    /* v6714（用户口径「附件行 无需 Tips」）：文字已写全，去掉 title / data-tip / lb-tipb 气泡；aria-label 保留 */
+    if (lbIsAdmin()) _pwItems.push('<span class="lb-pw-btn" style="' + _pwBtn + '" onclick="lbOpenServerAdminModal()" aria-label="系统管理"><i class="mdi mdi-shield-crown-outline" style="font-size:13px"></i>系统管理</span>');
+    if (_rlLv >= 3)   _pwItems.push('<span class="lb-pw-btn" style="' + _pwBtn + '" onclick="lbArkBkOpen()" aria-label="安全回档"><i class="mdi mdi-backup-restore" style="font-size:13px"></i>安全回档</span>');
+    if (_rlLv >= 3)   _pwItems.push('<span class="lb-pw-btn" style="' + _pwBtn + '" onclick="lbUpdOpen()" aria-label="综合更新"><i class="mdi mdi-update" style="font-size:13px"></i>综合更新</span>');
+    if (_rlLv >= 3)   _pwItems.push('<span class="lb-pw-btn" style="' + _pwBtn + '" onclick="lbPluginCfgOpen()" aria-label="SOK配置（插件 config.json）"><i class="mdi mdi-tune-variant" style="font-size:13px"></i>SOK配置</span>');
+    if (_pwItems.length) {
+      _pwRow = '<div style="flex:none;display:flex;align-items:center;gap:2px;padding:6px 12px;border-top:1px solid #2a2a3a;background:#181820;flex-wrap:wrap">'
+        + _pwItems.join(_pwSep) + '</div>';
+    }
+  }
+  /* v6782：_pwRow 不再拼进面板内部 —— 改为面板闭合后挂到 overlay 下（见下方 html += _pwRow） */
   var _nick = lbSrvCtlNick();
   var _acct = lbSrvCtlUser();
   var _disp = _nick || _acct || '未登录';
@@ -11939,10 +15820,15 @@ function lbOpenRolePicker(){
     +'</span>'
     +'<span class="lb-linkbtn" onclick="lbLogout()" title="注销登录" style="font-size:11px;line-height:1">注销</span>'
     +'<span style="flex:1"></span>'
-    +'<span class="lb-tipb" style="user-select:none;font-size:11px;color:#9a9aae;line-height:1;white-space:nowrap;flex:none" title="前端版本">'+LB_VERSION+'</span>'
+    +'<span class="lb-tipb" style="user-select:none;font-size:11px;color:#9a9aae;line-height:1;white-space:nowrap;flex:none" title="前端版本 '+LB_VERSION+'">'+lbVerShort()+'</span>'
     +'<span class="lb-tipb" id="lbBeVer" style="user-select:none;font-size:11px;color:#6b7280;line-height:1;margin-left:6px;cursor:help;white-space:nowrap;flex:none" title="后端版本（读取 /api/health）">be …</span>'
     +'</div>';
   html+='</div>';
+  /* v6782（用户口径）：权限浮条挂在 `.lb-picker-panel` **外面** —— overlay 的第二个子元素。
+     · 仍是本浮窗的一部分（无独立关闭按钮；overlay 的 onclick 只认 e.target===overlay，点浮条不会关）
+     · `lbPwRowRepaint()` 走 `el.outerHTML = h` 整体替换，位置在 overlay 下同样能找到 #lbPwRow
+     · 面板 overflow:hidden 不会裁到它，投影/圆角都完整 */
+  html += _pwRow;
   overlay.innerHTML=html;
   document.body.appendChild(overlay);
   try{ lbBeVerLoad(); }catch(e){}
@@ -12433,8 +16319,8 @@ function lbOpenConfigModal(){
     + '</div>'
     + '<div style="margin-top:18px;padding-top:14px;border-top:1px solid #2a2a3a">'
     + '<div style="font-size:13px;font-weight:bold;color:#ddd;margin-bottom:4px">🗑️ 清空本地生物数据</div>'
-    + '<div style="font-size:11px;color:#666;margin-bottom:10px">清除本地生物缓存（保留登录/筛选），下次加载自动重新下载</div>'
-    + '<button id="lbClearCacheBtn" onclick="lbClearLocalData()" style="padding:7px 14px;border-radius:6px;border:none;background:#ef4444;color:#fff;cursor:pointer;font-size:13px;font-weight:bold">清空缓存</button>'
+    + '<div style="font-size:11px;color:#666;margin-bottom:10px">清除本机已下载的生物数据（保留登录/筛选），下次加载自动重新下载</div>'
+    + '<button id="lbClearCacheBtn" onclick="lbClearLocalData()" style="padding:7px 14px;border-radius:6px;border:none;background:#ef4444;color:#fff;cursor:pointer;font-size:13px;font-weight:bold">清空生物数据</button>'
     + '</div>'
     + '</div>'   // v6076：收 .lw-body（底部「关闭」按钮已移入标题栏右上角）
     + '</div>';  // v6076：收面板
@@ -15872,7 +19758,7 @@ var LB_ID_TIP = null, LB_ID_TIP_TIMER = null;
 function lbIdTipEl(){
   if(!LB_ID_TIP){
     LB_ID_TIP = document.createElement('div');
-    LB_ID_TIP.style.cssText = 'position:fixed;z-index:1000000;display:none;background:#1a1a2a;border:1px solid #7c3aed;border-radius:6px;padding:4px 10px;font-size:11px;color:#ccc;pointer-events:none;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.4)';
+    LB_ID_TIP.style.cssText = 'position:fixed;z-index:' + LB_Z.TOOLTIP + ';display:none;background:#1a1a2a;border:1px solid #7c3aed;border-radius:6px;padding:4px 10px;font-size:11px;color:#ccc;pointer-events:none;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.4)';
     document.body.appendChild(LB_ID_TIP);
   }
   return LB_ID_TIP;
@@ -15987,12 +19873,124 @@ function lbClassPressEnd(){
   clearTimeout(LB_CLASS_PRESS_TM);
   LB_CLASS_PRESS_TM = null;
 }
+/* ===== v6540（用户口径「浮窗里再打开浮窗被盖住，要从源头解决，未来不要再出现」）：统一层级栈 =====
+   根因：全项目 z-index 是**手写固定值**（16 种：996/997/9997/9998/9999/10000/
+   99997~99999/100000~100003/1000000~1000010/2147483000）。position:fixed 数值相同时，
+   **谁先进入 DOM 谁在下** ⇒ 父浮窗与子浮窗同值必然出现「子被父盖住」
+   （#lbWikiOverlay / .lb-picker-overlay / .lb-sheet 三家族全是 9998）。
+   解法：模态浮层不再写死数值 —— **显示时向栈取号**，后开的必然高于此前所有浮层，
+   与父子关系、DOM 顺序、打开历史都无关。只有三档常量保持固定：
+     · MODAL   = 9000        模态浮层起始值（实际值由 lbZNext 递增分配）
+     · NOTIFY  = 1000000     常驻通知层（toast / 底部细条 / 提示卡片 / 资源进度条）—— 永远在模态之上
+     · TOOLTIP = 2147483000  悬停气泡 —— 永远最上
+   规矩（新增浮层必须遵守）：模态浮层显示时调 lbZOpen(el)、隐藏时调 lbZClose(el)，
+   **禁止再手写 z-index**。自检：控制台执行 __lbZAudit() */
+var LB_Z = { MODAL: 9000, NOTIFY: 1000000, TOOLTIP: 2147483000, top: 9000, seq: 0, stack: [] };
+function lbZNext(){ LB_Z.seq++; LB_Z.top = LB_Z.MODAL + LB_Z.seq * 10; return LB_Z.top; }
+/* 显示浮层时调用：取新号（同一元素重复显示不重复取号，但会重新抬到最高） */
+function lbZOpen(el, tag){
+  try {
+    if (!el) return 0;
+    if (el.__lbZ){
+      if (el.__lbZ < LB_Z.top){ el.__lbZ = lbZNext(); el.style.zIndex = String(el.__lbZ); }
+      return el.__lbZ;
+    }
+    el.__lbZ = lbZNext();
+    el.style.zIndex = String(el.__lbZ);
+    LB_Z.stack.push({ el: el, tag: String(tag || el.id || '') });
+    return el.__lbZ;
+  } catch (e) { return 0; }
+}
+/* 隐藏浮层时调用：出栈并把 top 回落到栈内最大值 */
+function lbZClose(el){
+  try {
+    if (!el || !el.__lbZ) return;
+    delete el.__lbZ;
+    var max = LB_Z.MODAL;
+    LB_Z.stack = LB_Z.stack.filter(function (x) { return x.el !== el; });
+    for (var i = 0; i < LB_Z.stack.length; i++){
+      var z = Number(LB_Z.stack[i].el.__lbZ || 0);
+      if (z > max) max = z;
+    }
+    LB_Z.top = max;
+  } catch (e) {}
+}
+/* 只需抬到最高、不必入栈的场景（下拉气泡 / 临时提示） */
+function lbZRaise(el){
+  try { if (el) el.style.zIndex = String(lbZNext()); } catch (e) {}
+}
+/* 自检工具：列出当前所有可见 fixed 浮层按层级排序 + 模态栈内容 */
+function lbZAudit(){
+  var out = [];
+  var all = document.querySelectorAll('body > div');
+  for (var i = 0; i < all.length; i++){
+    var el = all[i];
+    var cs = getComputedStyle(el);
+    if (cs.display === 'none' || cs.position !== 'fixed') continue;
+    if (el.offsetWidth < 20 && el.offsetHeight < 20) continue;
+    out.push({ id: el.id || '(no-id)', cls: String(el.className || '').slice(0, 36),
+               z: Number(cs.zIndex) || 0, w: el.offsetWidth, h: el.offsetHeight });
+  }
+  out.sort(function (a, b) { return a.z - b.z; });
+  try {
+    console.table(out);
+    console.log('[lbZAudit] 模态栈：',
+      LB_Z.stack.map(function (x) { return x.tag + '=' + x.el.__lbZ; }).join(' → ') || '(空)');
+  } catch (e) {}
+  return out;
+}
+try { window.__lbZAudit = lbZAudit; } catch (e) {}
+
+/* v6540：自动兜底 —— 任何**新插入**或**新显示（class 含 show）**的全屏 fixed 浮层，
+   即使调用方没手动接 lbZOpen，也会被自动抬到当前最高层。
+   只监听 childList 与 class 变化（**不监听 style**，否则进度条每帧都会触发）；
+   通知层（z >= NOTIFY）与已入栈元素直接跳过。
+   这样「新增浮层忘了写层级」也不会再出现被盖住的情况。 */
+(function lbZAutoGuard(){
+  try {
+    if (typeof MutationObserver !== 'function' || !document.body) return;
+    function isModalEl(el){
+      try {
+        if (!el || el.nodeType !== 1) return false;
+        var cs = getComputedStyle(el);
+        if (cs.position !== 'fixed' || cs.display === 'none') return false;
+        var z = Number(cs.zIndex) || 0;
+        if (z < LB_Z.MODAL) return false;              /* 页内浮层（996/997 等）不参与，避开 lb-hf-overlay/panel 这种成对布局 */
+        if (z >= LB_Z.NOTIFY) return false;            /* toast / 底部细条 / tips 不参与 */
+        if (el.id === 'lbBoot') return false;          /* 启动遮罩自带最高层，不参与 */
+        if (el.__lbZ) return false;                    /* 已入栈 */
+        var r = el.getBoundingClientRect();
+        return (r.width >= window.innerWidth * 0.9 && r.height >= window.innerHeight * 0.9);
+      } catch (e) { return false; }
+    }
+    function bump(el){
+      try {
+        if (isModalEl(el)) lbZOpen(el, 'auto:' + (el.id || String(el.className || '').slice(0, 12)));
+      } catch (e) {}
+    }
+    var mo = new MutationObserver(function (muts) {
+      for (var i = 0; i < muts.length; i++){
+        var m = muts[i];
+        if (m.type === 'childList'){
+          for (var j = 0; j < m.addedNodes.length; j++){
+            var n = m.addedNodes[j];
+            if (n && n.nodeType === 1) bump(n);
+          }
+        } else if (m.type === 'attributes' && m.attributeName === 'class'){
+          bump(m.target);
+        }
+      }
+    });
+    mo.observe(document.body, { childList: true, attributes: true, attributeFilter: ['class'] });
+  } catch (e) {}
+})();
+
 // 轻提示浮层（右上角，自动消失；v350 由左下角移至右上角，top:56px 错开资源加载进度条）
 var LB_TOAST=null, LB_TOAST_TM=null;
 function lbToast(msg){
   if(!LB_TOAST){
     LB_TOAST=document.createElement('div');
-    LB_TOAST.style.cssText='position:fixed;right:12px;top:56px;z-index:1000010;background:#7c3aed;color:#fff;padding:6px 14px;border-radius:8px;font-size:13px;box-shadow:0 2px 12px rgba(0,0,0,.4);display:none;pointer-events:none';
+    LB_TOAST.style.cssText='position:fixed;right:12px;top:56px;z-index:' + (LB_Z.NOTIFY + 10) + ';background:#7c3aed;color:#fff;padding:6px 14px;border-radius:8px;font-size:13px;box-shadow:0 2px 12px rgba(0,0,0,.4);display:none;pointer-events:none';
     document.body.appendChild(LB_TOAST);
   }
   LB_TOAST.textContent = msg;
@@ -16086,7 +20084,7 @@ function lbClearLocalData(){
     lbToast(' 本地生物数据已清空，正在重新加载…');
     setTimeout(function(){ try{ location.reload(); }catch(e){} }, 600);
   }).catch(function(){
-    if(btn){ btn.disabled = false; btn.textContent = '清空缓存'; }
+    if(btn){ btn.disabled = false; btn.textContent = '清空生物数据'; }
     lbToast('清理失败，请重试');
   });
 }
@@ -17630,8 +21628,6 @@ function lbTaskPanelBodyHtml(){
     + _legend
     + (function(){ try { return lbSrvCtlOfficialHtml(_official, LB_SRVCTL.officialState); } catch(e5){ return ''; } })()
     + (function(){ try { return lbSrvCtlOnlineWrapHtml('lbTaskPanelOnline'); } catch(e6){ return ''; } })()
-    + '<div class="lb-srvctl-qline" id="lbTaskPanelQLine">'
-    +   (function(){ try { return lbSrvCtlQueueLineHtml(); } catch(e7){ return ''; } })() + '</div>'
     + '<div class="lb-task-slot" id="lbTaskPanelTasks" style="margin-top:14px"></div>';
 }
 function lbTaskPanelRepaint(){
@@ -26186,8 +30182,14 @@ function lbOpenRefreshModal(){
   box.style.cssText = 'background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;min-width:320px;width:min(520px,92vw);max-width:92vw;box-shadow:0 4px 24px rgba(0,0,0,0.18);max-height:90vh;overflow-y:auto';
   // 标题（无图标，纯文字）
   var title = document.createElement('div');
-  title.style.cssText = 'margin-bottom:12px;font-size:0.95em;color:var(--text);font-weight:bold;display:flex;align-items:center;justify-content:space-between';
-  title.innerHTML = '<span>刷新数据</span><span style="cursor:pointer;color:#888;font-size:14px" onclick="lbCloseRefreshModal()"><i class="mdi mdi-close"></i></span>';
+  /* v6790（用户口径「刷新数据浮窗的标题栏样式为啥和别的浮窗不一致」）：
+     原来是自己拼的一行（.95em + 白色标题 + 无底部分隔线 + 裸 span 关闭），
+     与其它浮窗的 .lw-head（紫色 .lw-title + 1px 分隔线 + .lw-x 方框按钮）完全不同。
+     改用全局统一结构；.lb-modal-box 有 16px padding ⇒ 负 margin 让标题栏通栏。 */
+  title.className = 'lw-head';
+  title.style.cssText = 'margin:-16px -16px 12px;';
+  title.innerHTML = '<span class="lw-title"><i class="mdi mdi-refresh"></i> 刷新数据</span>'
+    + '<button class="lw-x" onclick="lbCloseRefreshModal()" title="关闭" aria-label="关闭"><i class="mdi mdi-close"></i></button>';
   box.appendChild(title);
   // 最近拉数据时间（2026-08-13 v109：从右上角移入刷新浮窗）
   var dtRow = document.createElement('div');
@@ -26237,6 +30239,14 @@ function lbOpenRefreshModal(){
     detailId: 'lbProgDetail'
   });
   box.appendChild(prog);
+  /* v6783（用户口径）：刷新数据浮窗加入「任务进度」框（lbTaskRender 统一渲染所有 .lb-task-slot） */
+  try {
+    var _rtsk = document.createElement('div');
+    _rtsk.className = 'lb-srvctl-res lb-task-slot';
+    _rtsk.id = 'lbRefreshTasks';
+    _rtsk.style.cssText = 'margin-top:12px';
+    box.appendChild(_rtsk);
+  } catch (eRTSK) {}
   overlay.appendChild(box);
   // v1073：防误触关闭——① 刷新进行中点遮罩**不再关闭**（仅提示，避免误触）；② 移动端「按下→抬起」位移 >14px 视为滑动/滚动，不计为点击
   var _downPt = null;
@@ -26248,6 +30258,8 @@ function lbOpenRefreshModal(){
     lbCloseRefreshModal();
   };
   document.body.appendChild(overlay);
+  /* v6797（根因修复）：本浮窗同样没启动任务轮询 ⇒ #lbRefreshTasks 恒为空壳（与插件配置浮窗同一个坑）。 */
+  try { if (typeof lbTaskSyncStart === 'function') lbTaskSyncStart(); } catch (eT1) {}
   /* v6148（用户口径）：打开浮窗即显示图例 —— 原来要等点「刷新」才由 lbRefreshTamed() 填充，期间图例行是空的 */
   try{ var _lg0 = document.getElementById('lbProgLegend'); if(_lg0) _lg0.innerHTML = lbProgLegendHtml(); }catch(eL0){}
   // 渲染服务器多选（默认全不选）
@@ -26357,6 +30369,22 @@ function lbAskCard(o){
     if (o.skipped && o.skipped.length){
       h += '<div style="margin-top:8px;font-size:11.5px;color:#7b7f8e;line-height:1.5">已跳过：'
          + esc(o.skipped.map(sname).join('、')) + '</div>';
+    }
+    if (o.chips && o.chips.length){
+      /* v6660（用户口径「要小 chips 形式」）：结构化小胶囊，替代挤成一行的纯文本。
+         item = { label, val, ic, c } ；传 {sep:true} 渲染一个向右箭头分隔符。 */
+      h += '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:10px">'
+         + o.chips.map(function(it){
+             it = it || {};
+             if (it.sep) return '<i class="mdi mdi-arrow-right" style="font-size:13px;color:#4a4a5e"></i>';
+             return '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:7px;'
+                  + 'font-size:11.5px;background:#22222e;border:1px solid #33334a;color:#9aa0b0;white-space:nowrap">'
+                  + (it.ic ? ('<i class="mdi ' + esc(it.ic) + '" style="font-size:13px;color:' + esc(it.c || '#9aa0b0') + '"></i>') : '')
+                  + esc(it.label || '')
+                  + (it.val ? ('<b style="color:' + esc(it.c || '#fff') + ';font-weight:700">' + esc(it.val) + '</b>') : '')
+                  + '</span>';
+           }).join('')
+         + '</div>';
     }
     if (o.note){
       /* v6317（用户口径）：note 原来不吃 \n，长文挤成一坨 ⇒ pre-wrap 保留换行 */
@@ -27174,6 +31202,9 @@ async function lbRefreshTamed(btn){
       LB_PROG.lockUI = null;
     }catch(eUnlock){}
     LB._tamedRefreshing = false; // 无论成功/异常，刷新结束都恢复可关闭浮窗
+    /* v6769：刷新收尾同步各服 tamed 的 Last-Modified（不阻塞收尾）——
+       否则右上角刷新图标的「超 7 天」判据永远拿旧值，刷完仍紫。 */
+    try { lbRefreshLmSync(sel).catch(function () {}); } catch (e_lm) {}
     // v602：蛋刷新（lbEggProbe）可能在后端卡住，不在此处依赖 finally 自动关闭（浮窗已由上方成功后 1s 调度关闭）
   }
 }
@@ -27232,6 +31263,30 @@ function lbUpdateDataTime(){
    404 哨兵 LB_LM_404（'__404__'）与缺失键跳过，不当超期。 */
 var LB_STALE_DAYS = 7;
 var LB_STALE_INFO = null;
+/* v6769（用户实测「刷新所有数据后右上角刷新图标还是紫色，直到刷新页面才恢复」）：
+   根因 —— 新架构（LB_ARCH==='new'）下 lbRefreshTamed 不再调 lbReloadIncremental()，
+   数据只在刷新**前**（阶段0）加载过 ⇒ data._lm[服].tamed 还是旧的 Last-Modified；
+   而 lbDataStaleCheck 的判据正是它 ⇒ 刚刷完仍判「超 7 天」⇒ 图标继续紫。
+   这里在刷新收尾对本次选中各服重取一次 tamed 的 Last-Modified 写回内存，再复查陈旧状态。 */
+async function lbRefreshLmSync(sel){
+  var data = (LB._cache && LB._cache.data) || null;
+  if (!data || !sel || !sel.length){ try { lbDataStaleCheck(); } catch (e0) {} return; }
+  data._lm = data._lm || {};
+  await Promise.all(sel.map(function (abbr){
+    var url = DINO_JSON + abbr + '_tamed.json?cb=' + Date.now();
+    return fetch(url, { method: 'HEAD', cache: 'no-store' })
+      .then(function (r){
+        var lm = (r && r.ok) ? String(r.headers.get('Last-Modified') || '').trim() : '';
+        if (!lm) return false;
+        data._lm[abbr] = data._lm[abbr] || {};
+        data._lm[abbr].tamed = lm;
+        return true;
+      })
+      .catch(function () { return false; });
+  }));
+  try { lbUpdateDataTime(); } catch (e1) {}   /* 内部会调 lbDataStaleCheck 并刷新「最近拉数据时间」 */
+  try { lbDataStaleCheck(); } catch (e2) {}
+}
 function lbDataStaleCheck(){
   var DAY = 86400000, now = Date.now();
   var eggDays = [], tamedDays = [];
@@ -27986,7 +32041,6 @@ var LB_TAMEABLE_FORCE = [
   'Scout_Character_BP_C',                                 // 侦察机
   'RemoteCamera_Character_BP_C',                          // v320：侦察机/摄像头（用户 2026-08-27 归可驯服=未驯服区）
   // v256：Enforcer_Character_BP_Race_C 移出（_Race 竞速版全隐藏，用户 2026-08-23）
-  'DodoWyvern_Character_BP_C',                            // 嘟嘟飞龙
   'Vulture_Character_BP_OasisaurTaming_C',                // 秃鹫
   // v264：AstralScorpionKing 移出（星界蝎子归特殊折叠区）
   'Xenomorph_Character_BP_Male_Tamed_Gen2_C',             // v259：创世2可驯服R-死神国王（nonViolent，归未驯服）
@@ -28007,7 +32061,7 @@ var LB_TAMEABLE_FORCE = [
   'IceKaiju_Character_BP_C','DesertKaiju_Character_BP_C','Fenrir_Character_BP_C','Titanosaur_Character_BP_C','BossBat_Character_BP_C','Bee_Queen_Character_BP_C',
   // v267：血仆/渡渡霸王龙/机甲系/泰克悬浮艇/双桅帆船/森林泰坦/蝎子 移未驯服（用户 2026-08-24）
   'Thrall_Character_BP_WithFlamethrower_C','Thrall_Character_BP_WithSniperRifle_C','Thrall_Character_BP_WithCrossbow_C','Thrall_Character_BP_Soldier_C','Thrall_Character_BP_SoldierWithPistol_C','Thrall_Character_BP_WithBola_C','Thrall_Character_BP_WithShotgun_C','Thrall_Character_BP_Cultist_C','Thrall_Character_BP_Tamer_C','Thrall_Character_BP_Fighter_C', // 血仆×10
-  'DodoRex_Character_BP_C','DodoRex_Character_BP_TurkeyTrials_C','DodoRex_Character_BP_FearEvolved_C', // 渡渡霸王龙×3
+  'DodoRex_Character_BP_TurkeyTrials_C', // 渡渡霸王龙（火鸡试炼版；v6775：普通/万圣节版移出→特殊其他）
   'Mek_Character_BP_C','MegaMek_Character_BP_C','Exosuit_Character_BP_C', // 机甲/力神机甲/外骨骼机甲
   'TekHoverSkiff_Character_BP_C','BrigShipBP_C', // 泰克悬浮艇/双桅帆船
   'ForestKaiju_Character_BP_C' // 森林泰坦（v289：星界蝎子王移出→归不可训变体，见 LB_SPECIAL_NAMES + /^Astral/ 规则）
@@ -28161,6 +32215,8 @@ var LB_EXTRA_FORCE = [
   'Xenomorph_Character_BP_Female_C',          // 普通死神王后（v403 曾移出，v404 用户改回特殊）
   'RhynioDrone_Character_BP_C'                // v294：莱尼颚虫 Drone（用户 2026-08-24 移特殊）
   ,'Rhynio_Character_BP_LoveBug_C'             // v299：爱情虫 Love Bug（用户 2026-08-25，数据源无收录）
+  // v6775（用户口径 2026-11-15）：万圣节 BOSS 两只 → 特殊「其他」组（不进「预览」分隔线）
+  ,'DodoRex_Character_BP_C','DodoRex_Character_BP_FearEvolved_C','DodoWyvern_Character_BP_C'
 ];
 // v454：无 ASB 数据新生物「预览」分隔组（原「测试」，用户 2026-08-29 改名）——ASB 物种库未收录（GitHub master/dev 均无），手动维护类名+显示名（LB_SPECIAL_NAMES 注入浮窗），收进特殊区「预览」分隔线组；待 ASB 收录后移出正式归类
 var LB_TEST_EXTRA = [
@@ -28194,10 +32250,8 @@ var LB_HIDDEN_FORCE = ['DesertKaiju_FirstFlockChar_BP_C','Beyla_Character_BP_C',
   ,'Volcanic_Dragon_Character_BP_C'
   // v393：莱尼颚虫 Drone 隐藏（用户 2026-08-29）
   ,'RhynioDrone_Character_BP_C'
-  // v397：普通/恐惧进化渡渡霸王龙隐藏（用户 2026-08-29；仅保留火鸡试炼版归可拥有）
-  ,'DodoRex_Character_BP_C','DodoRex_Character_BP_FearEvolved_C'
-  // v398：渡渡飞龙隐藏（用户 2026-08-29）
-  ,'DodoWyvern_Character_BP_C'
+  // v6775（用户口径 2026-11-15）：普通/恐惧进化渡渡霸王龙 + 渡渡飞龙 **解除隐藏**
+  //   原 v397/v398（用户 2026-08-29 要求隐藏）本次按新口径推翻 → 归「特殊 → 其他」，见 LB_EXTRA_FORCE
   // v399：灰烬飞龙/仙境火飞龙隐藏（用户 2026-08-29）；v406 仙境火飞龙曾移出归可拥有，v408 改回隐藏
   // v409：寒冰飞龙也隐藏（用户 2026-08-29）
   ,'Wyvern_Character_BP_Ash_C','Ragnarok_Wyvern_Override_C','Ragnarok_Wyvern_Override_Ice_C'
@@ -31786,6 +35840,39 @@ function lbFuncList(ab){ return (ab && LB_SRV_FUNCS[ab]) || []; }
    定义放在本块（lbRenderFuncBar 所在 script 块），mapwiki 逻辑（后续 script 块）同样可见。 */
 var LB_MW_AI_PROBE = {};   // slug -> 1 ：已知有 AI 整理结果
 var LB_MW_AI_TRY = {};     // slug -> 1 ：已发起过探测（防重入 / 防轮询）
+/* v6771（用户口径「附件为啥提示无数据？点进去明明就有啊？」）：
+   根因 —— 「有没有 wiki 资料」的三层判定（lbMapWikiHas）与索引缓存、索引加载函数
+   **全在按需加载的 app_ui.js 里**；功能条却是首屏 core 渲染的 ⇒ 首屏判定时它们都不存在
+   ⇒ _mwHas 恒 false ⇒ 按钮永远虚线，只有点进去一次（地图数据落值）后重绘才变实线。
+   另一路兜底（text?slug= 的 ready 探测）后端对未 AI 整理的地图返回 ready:false，也补不上。
+   修法：core 自备就绪表，直接打 index 接口（一次返回全部地图的 ready）——
+     app_ui 加载后仍以它的三层判定为准，两者取并集。 */
+var LB_MW_READY = {};      // 地图Id -> 1 ：后端 index 声明该图有缓存资料
+var LB_MW_READY_AT = 0;    // 上次探测时间（TTL 20s，防每次重绘都打后端）
+var LB_MW_READY_P = null;  // 进行中的探测 Promise（防重入）
+function lbMwkReadyProbe(){
+  try{
+    if (LB_MW_READY_P) return LB_MW_READY_P;
+    if (LB_MW_READY_AT && (Date.now() - LB_MW_READY_AT) < 20000) return null;
+    var api = (typeof LB_MW_API !== 'undefined') ? String(LB_MW_API || '') : '';
+    if (!api) return null;
+    if (!LB_MW_READY) LB_MW_READY = {};
+    LB_MW_READY_AT = Date.now();
+    LB_MW_READY_P = fetch(api + 'index?t=' + Date.now(), { cache: 'no-store' })
+      .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function(j){
+        LB_MW_READY_P = null;
+        var m = (j && j.maps) || null;
+        if (!m) return;
+        var _chg = false;
+        for (var k in m){
+          if (m[k] && m[k].ready && !LB_MW_READY[k]){ LB_MW_READY[k] = 1; _chg = true; }
+        }
+        if (_chg){ try { lbRenderFuncBar(); } catch (eR) {} }
+      }, function(){ LB_MW_READY_P = null; });
+    return LB_MW_READY_P;
+  }catch(e){ return null; }
+}
 // 功能条渲染：有功能才显示；聚落详情打开时隐藏（详情有吸顶条）
 function lbRenderFuncBar(){
   var bar = document.getElementById('lbFuncBar'); if(!bar) return;
@@ -31808,7 +35895,15 @@ function lbRenderFuncBar(){
   var _mwOn = false;
   try { _mwOn = !_detailOpen && !!ab && (typeof LB_MW_SLUGS !== 'undefined') && !!LB_MW_SLUGS && !!LB_MW_SLUGS[ab]; } catch (eMW) {}
   var _mwHas = false;
-  try { _mwHas = (_mwOn && typeof lbMapWikiHas === 'function') ? !!lbMapWikiHas(ab) : false; } catch (eMWH) {}
+  try {
+    if (_mwOn){
+      /* v6772：**并集**而非二选一 —— 点开 wiki 会先清空本地地图数据，那一瞬间 app_ui 侧判定为 false，
+         若只认它就会让按钮闪回虚线；反过来首屏 app_ui 还没加载，只认 core 就绪表又会漏掉已抓到的情况。
+         ⇒ 两路任一为真即实线。 */
+      if (typeof lbMapWikiHas === 'function' && lbMapWikiHas(ab)) _mwHas = true;
+      else _mwHas = !!(LB_MW_READY && LB_MW_READY[ab]);
+    }
+  } catch (eMWH) {}
   try {
     var _mwApi0 = (typeof LB_MW_API !== 'undefined') ? LB_MW_API : '';
     var _mwSlug0 = (_mwOn && (typeof LB_MW_SLUGS !== 'undefined') && LB_MW_SLUGS) ? String(LB_MW_SLUGS[ab] || '') : '';
@@ -31835,9 +35930,14 @@ function lbRenderFuncBar(){
     });
   } catch (eMW2) {}
   try {
-    var _mwIdx0 = (typeof LB_MW_IDX !== 'undefined') ? LB_MW_IDX : null;
-    if (_mwOn && typeof lbMapWikiIndexLoad === 'function' && (!_mwIdx0 || !Object.keys(_mwIdx0).length)){
-      lbMapWikiIndexLoad().then(function(){ try { lbRenderFuncBar(); } catch (eR) {} }).catch(function(){});
+    if (_mwOn && typeof lbMapWikiIndexLoad === 'function'){
+      var _mwIdx0 = (typeof LB_MW_IDX !== 'undefined') ? LB_MW_IDX : null;
+      if (!_mwIdx0 || !Object.keys(_mwIdx0).length){
+        lbMapWikiIndexLoad().then(function(){ try { lbRenderFuncBar(); } catch (eR) {} }).catch(function(){});
+      }
+    } else if (_mwOn && !_mwHas){
+      /* v6771：app_ui 未加载 ⇒ core 自探 index（一次拿全 10 图的 ready），回来即重绘 */
+      lbMwkReadyProbe();
     }
   } catch (eMW3) {}
   bar.style.display = (!_detailOpen && (!!h || _clockOn || _mwOn)) ? 'block' : 'none';
@@ -33338,7 +37438,7 @@ function lbInnerHtmlSet(el, h, force){   // v4434（用户口径）：内容未�
     if(window.__lbTipInit) return; window.__lbTipInit = 1;
     var box = document.createElement('div');
     box.id = 'lbTipBox';
-    box.style.cssText = 'position:fixed;z-index:2147483000;display:none;max-width:min(320px,calc(100vw - 16px));background:rgba(16,16,24,.98);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:8px 10px;font-size:11px;line-height:1.7;color:#c4c4d0;box-shadow:0 8px 28px rgba(0,0,0,.55);pointer-events:none;font-family:inherit';   // v4604（用户口径）：z-index 99999→2147483000（浮窗遮罩 1000001 之上，不被挡）
+    box.style.cssText = 'position:fixed;z-index:' + LB_Z.TOOLTIP + ';display:none;max-width:min(320px,calc(100vw - 16px));background:rgba(16,16,24,.98);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:8px 10px;font-size:11px;line-height:1.7;color:#c4c4d0;box-shadow:0 8px 28px rgba(0,0,0,.55);pointer-events:none;font-family:inherit';   // v4604（用户口径）：z-index 99999→2147483000（浮窗遮罩 1000001 之上，不被挡）
     (document.body || document.documentElement).appendChild(box);
     function esc(s){ return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
     function mkHtml(txt){
@@ -42847,7 +46947,7 @@ var LB_KEYMAP_SKIN = {
     lsp:'quest_stick_l_press',rsp:'quest_stick_r_press',rsu:'quest_stick_r_up',
     view:'quest_button_menu',menu:'quest_button_meta'}
 };
-var LB_KEYMAP_GROUPS = ['常用','战斗','移动','界面','口哨','聊天','骑乘','背包内','建造','镜头'];   // v5278：按 ARK Wiki Controls 全量扩充
+var LB_KEYMAP_GROUPS = ['常用','战斗','移动','界面','快捷栏','口哨','聊天','骑乘','背包内','建造','镜头'];   // v5278：按 ARK Wiki Controls 全量扩充
 // v5418：分组列表改为「固定顺序 + 动作里实际出现的分组」动态合并 —— 否则自定义分组（如 输入 / 滚轮）不显示
 function lbKeymapGroupsAll(){
   var o = LB_KEYMAP_GROUPS.slice();
@@ -42879,13 +46979,11 @@ function lbKeymapSetBaseForGame(){
 //   新键：lb_keymap_actions_<玩家>_<游戏>（ark / scum）
 //   旧键：lb_keymap_actions_<玩家>（无后缀）—— 自动视为方舟并迁移，玩家无需重配
 function lbKeymapActionsLegacyKey(){
-  var u = '';
-  try { u = (typeof lbPlayer === 'function') ? String(lbPlayer() || '') : ''; } catch (e) {}
+  var u = lbKeymapOwner();   // v6818：玩家层级（不再用角色名）
   return 'lb_keymap_actions' + (u ? ('_' + u) : '');
 }
 function lbKeymapActionsKey(g){
-  var u = '';
-  try { u = (typeof lbPlayer === 'function') ? String(lbPlayer() || '') : ''; } catch (e) {}
+  var u = lbKeymapOwner();   // v6818：玩家层级
   var gm = g;
   if (!gm){ try { gm = (typeof lbKeymapCurGame === 'function') ? lbKeymapCurGame() : 'ark'; } catch (e2) { gm = 'ark'; } }
   gm = String(gm || 'ark');
@@ -42958,9 +47056,12 @@ function lbKeymapCustomSave(){
     return;
   }
   LB_KEYMAP_CUSTOM.updatedAt = Date.now();
-  try { localStorage.setItem(lbKeymapActionsKey(), JSON.stringify(LB_KEYMAP_CUSTOM)); } catch (e) {}
+  try { lbKmStorageWrite(lbKeymapActionsKey(), JSON.stringify(LB_KEYMAP_CUSTOM)); } catch (e) {}   // v6821：双写镜像
   try { lbKeymapApplyCustom(); } catch (e2) {}
-  try { if (typeof lbPrefsPush === 'function') lbPrefsPush(); } catch (e3) {}
+  try {
+    if (typeof lbPrefsTouch === 'function') lbPrefsTouch(lbKeymapActionsKey());   // v6818：补 kts
+    else if (typeof lbPrefsPush === 'function') lbPrefsPush();
+  } catch (e3) {}
 }
 // 权限：仅系统拥有者（与 lbIsAdmin 同口径）
 function lbKeymapActionAdmin(){
@@ -43009,7 +47110,7 @@ function lbKmGestureOrder(x){
 }
 var LB_KEYMAP = null;
 var LB_KEYMAP_UI = {open:{}, mode:'list'};   // v5311（用户口径「按动作不需默认展开第一项」）：初始全收起
-var LB_KEYMAP_PICK = {grp:{}, aid:'', pickFor:''};   // v5253：pickFor='chord' 时键池改为「选组合键」
+var LB_KEYMAP_PICK = {grp:{}, aid:'', pickFor:'', seg:'main'};   // v5253：pickFor='chord' 时键池改为「选组合键」；v6829：seg = 'main' | 备选键索引 | 'new'
 var LB_KEYMAP_KCACHE = {};
 
 function lbKeymapGames(){ return [{id:'ark', name:'方舟生存飞升'}, {id:'scum', name:'洛夫克拉夫特行动：堕落玩偶'}]; }
@@ -43071,8 +47172,7 @@ function lbKeymapMigrateV1(d){
 //   设计：不动渲染层，只在 4 个数据入口做「作用域分流」⇒ 键位配置的全部 UI/交互自动可用（非复制）
 var LB_KM_SCOPE = { mode:'global', cls:'', shadow:null, gBase:undefined, gCustom:null };
 function lbSpeciesOpsKey(){
-  var u = '';
-  try { u = (typeof lbPlayer === 'function') ? String(lbPlayer() || '') : ''; } catch (e) {}
+  var u = lbKeymapOwner();   // v6818：玩家层级（不再用角色名）
   return 'lb_keymap_species' + (u ? ('_' + u) : '');
 }
 function lbSpeciesStoreLoad(){
@@ -43086,9 +47186,12 @@ function lbSpeciesStoreLoad(){
 function lbSpeciesStoreSave(d){
   if (!d) return;
   d.updatedAt = Date.now();
-  try { localStorage.setItem(lbSpeciesOpsKey(), JSON.stringify(d)); } catch (e) {}
+  try { lbKmStorageWrite(lbSpeciesOpsKey(), JSON.stringify(d)); } catch (e) {}   // v6821：双写镜像
   LB_SPECIES_OPS_IDX = null;   // v5443：索引失效（下次重新统计）
-  try { if (typeof lbPrefsPush === 'function') lbPrefsPush(); } catch (e2) {}
+  try {
+    if (typeof lbPrefsTouch === 'function') lbPrefsTouch(lbSpeciesOpsKey());   // v6818：补 kts，否则跨端永不比对
+    else if (typeof lbPrefsPush === 'function') lbPrefsPush();
+  } catch (e2) {}
 }
 // v5443（用户口径「有操作的项，也要加标记点，复用流程点的样式，只是颜色用操作入口的橙色」）
 //   索引：键 = 物种类名 / 物品 canon 名；只收「有动作」的作用域。带缓存 —— 浮窗里有上千项，不能每项都解析 localStorage
@@ -43145,8 +47248,7 @@ function lbSpeciesEntry(cls, st){
 //   · 无配置（没存过）= 全部可见设备（默认全显示）
 //   · 存空数组 [] = 用户主动全不选 ⇒ 设备行一台都不显示
 function lbKeymapDevsKey(){
-  var u = '';
-  try { u = (typeof lbPlayer === 'function') ? String(lbPlayer() || '') : ''; } catch (e) {}
+  var u = lbKeymapOwner();   // v6818：玩家层级（不再用角色名）
   return 'lb_keymap_devs' + (u ? ('_' + u) : '');
 }
 function lbKeymapDevsVisible(){
@@ -43169,8 +47271,11 @@ function lbKeymapDevsSel(){
   return out;
 }
 function lbKeymapDevsSave(arr){
-  try { localStorage.setItem(lbKeymapDevsKey(), JSON.stringify(Array.isArray(arr) ? arr : [])); } catch (e) {}
-  try { if (typeof lbPrefsPush === 'function') lbPrefsPush(); } catch (e2) {}
+  try { lbKmStorageWrite(lbKeymapDevsKey(), JSON.stringify(Array.isArray(arr) ? arr : [])); } catch (e) {}   // v6821：双写镜像
+  try {
+    if (typeof lbPrefsTouch === 'function') lbPrefsTouch(lbKeymapDevsKey());   // v6818：补 kts
+    else if (typeof lbPrefsPush === 'function') lbPrefsPush();
+  } catch (e2) {}
 }
 // v5442（用户口径「物品的器械分类，也要复用（非复制）物种的操作入口」）：
 //   器械 = 器械 tab 覆盖的四类 kind（armor/attachment/weapon/ammo，见 v4130 合并口径）
@@ -43331,12 +47436,164 @@ function lbKeymapScopeReadOnly(){
   //   ⚠️ 「动作管理」入口/内部选键器走的是 lbKeymapActionAdmin()，与本函数无关 ⇒ 不受影响。
   return true;
 }
-function lbKeymapUserKey(){
+/* v6818（用户口径 2026-11-17「要按照玩家层级同步，而不是角色层级」）：
+   原来 4 类键位存储都用 lbPlayer()（= 当前选中**角色名**）拼 key ⇒ 同账号多角色、
+   或两端默认选中的角色不同时，键位天然分成两份存、互不同步。
+   现统一用登录账号名（lbPrefsUser()，实测 whiterober）；未登录才回退当前玩家（游客）。
+   ⚠ 本函数是「键位类存储 owner」的唯一来源，四个 key 函数全部走它，禁止各自再调 lbPlayer。 */
+function lbKeymapOwner(){
   var u = '';
-  try { u = (typeof lbPlayer === 'function') ? String(lbPlayer() || '') : ''; } catch (e) {}
+  try { u = (typeof lbPrefsUser === 'function') ? String(lbPrefsUser() || '') : ''; } catch (e0) { u = ''; }
+  if (u) return u;
+  try { return String(lbPlayer() || ''); } catch (e1) { return ''; }
+}
+function lbKeymapUserKey(){
+  var u = lbKeymapOwner();
   return 'lb_keymap' + (u ? ('_' + u) : '');
 }
+/* v6818：旧档 → 账号层级的一次性迁移（幂等）。
+   为什么要迁：v6818 之前 key 用角色名（如 lb_keymap_板板），改版后读的是 lb_keymap_whiterober，
+   不迁移就等于「键位全丢」。策略：**目标键已存在则绝不覆盖**；多个旧源则取 updatedAt 最新者。
+   旧键保留不删（可随时回滚）；云端旧键同理，首次 lbPrefsPush 会把账号层级的新键补传上去。 */
+var LB_KM_ACCT_MIG = 0;
+/* v6821（用户口径「按玩家层级同步没变啊」根因收尾）：
+   过渡期双写兼容。背景：后端 /api/user_prefs 的 POST 是**整份覆盖**（doc.keys 直接替换），
+   而旧版（未升级的移动端）仍按「角色名」key 读写 ⇒ 两端各自 push 会互相把对方的键删掉。
+   对策：
+     ① lbKmStorageWrite —— 写账号层 key 的同时，镜像到所有「target 解析到同一主键」的旧式 key
+     ② lbKmAbsorbLegacyToMain —— 读/拉取后若旧式 key 更新，吸收到账号层（看到另一端的改动）
+     ③ lbPrefsKeys 纳入旧式 key —— 整份覆盖时也把它们带上，双向都不丢
+   注：等两端都升级到 v6821+ 后，旧式镜像可移除（保留亦无害）。 */
+function lbKmLegacyTwins(mainKey, u){
+  var out = [];
+  try {
+    var ks = Object.keys(localStorage);
+    for (var i = 0; i < ks.length; i++) {
+      var k = ks[i];
+      if (k === mainKey || k.indexOf('lb_keymap') !== 0) continue;
+      if (lbKeymapAcctTargetKey(k, u) === mainKey) out.push(k);
+    }
+  } catch (e) {}
+  return out;
+}
+function lbKmStorageWrite(mainKey, valStr){
+  if (!mainKey) return;
+  try { localStorage.setItem(mainKey, valStr); } catch (e0) {}
+  var u = '';
+  try { u = lbKeymapOwner(); } catch (e1) { u = ''; }
+  if (!u) return;
+  var tw = lbKmLegacyTwins(mainKey, u);
+  for (var i = 0; i < tw.length; i++) { try { localStorage.setItem(tw[i], valStr); } catch (e2) {} }
+}
+/* 把「较新的旧式 key」吸收到主键（无 updatedAt 的数组型用 kts 比较） */
+function lbKmAbsorbLegacyToMain(mainKey){
+  var u = '';
+  try { u = lbKeymapOwner(); } catch (e) { return false; }
+  if (!u || !mainKey) return false;
+  var tw = lbKmLegacyTwins(mainKey, u);
+  if (!tw.length) return false;
+  var kts = {};
+  try { kts = lbPrefsKts(); } catch (eK) { kts = {}; }
+  var readT = function(k){
+    var raw = null; try { raw = localStorage.getItem(k); } catch (e1) { return { raw: null, t: 0, obj: null }; }
+    if (raw == null) return { raw: null, t: 0, obj: null };
+    var o = null; try { o = JSON.parse(raw); } catch (e2) { o = null; }
+    var t = 0;
+    if (o && typeof o === 'object' && !Array.isArray(o)) t = Number(o.updatedAt) || 0;
+    else t = Number(kts[k] || 0) || 0;      // 数组型（设备勾选）没有 updatedAt ⇒ 用按类时间
+    return { raw: raw, t: t, obj: o };
+  };
+  var cur = readT(mainKey);
+  var best = null, bt = cur.t;
+  for (var i = 0; i < tw.length; i++) {
+    var r = readT(tw[i]);
+    if (r.raw == null) continue;
+    if (r.t > bt) { best = r; bt = r.t; }
+  }
+  if (!best) return false;
+  try { localStorage.setItem(mainKey, best.raw); } catch (e3) { return false; }
+  /* 吸收后把旧键也刷新成同一份，避免下次又判「旧键更新」来回搬 */
+  for (var j = 0; j < tw.length; j++) { try { localStorage.setItem(tw[j], best.raw); } catch (e4) {} }
+  return true;
+}
+function lbKeymapAcctTargetKey(k, u){
+  var A = 'lb_keymap_actions_';
+  if (k.indexOf('lb_keymap_species_') === 0) return 'lb_keymap_species_' + u;
+  if (k.indexOf('lb_keymap_devs_') === 0) return 'lb_keymap_devs_' + u;
+  if (k.indexOf(A) === 0){
+    var rest = k.slice(A.length);
+    var m = /^(.+)_(ark|scum)$/.exec(rest);
+    return m ? (A + u + '_' + m[2]) : (A + u);
+  }
+  if (k.indexOf('lb_keymap_') === 0) return 'lb_keymap_' + u;
+  return '';
+}
+function lbKeymapMigrateToAccount(){
+  if (LB_KM_ACCT_MIG) return 0;
+  LB_KM_ACCT_MIG = 1;
+  var u = '';
+  try { u = (typeof lbPrefsUser === 'function') ? String(lbPrefsUser() || '') : ''; } catch (eU) { u = ''; }
+  if (!u) return 0;                                   // 未登录：key 本就无后缀，无需迁移
+  var mark = 'lb_km_acctmig_' + u;
+  try { if (localStorage.getItem(mark)) return 0; } catch (eM) {}
+  var ks = [];
+  try { ks = Object.keys(localStorage); } catch (eK) { ks = []; }
+  var best = {};
+  ks.forEach(function(k){
+    if (k.indexOf('lb_keymap') !== 0) return;
+    var tk = lbKeymapAcctTargetKey(k, u);
+    if (!tk || tk === k) return;                      // 已是账号层级 / 非键位键
+    var raw = null;
+    try { raw = localStorage.getItem(k); } catch (e4) { return; }
+    if (raw == null) return;
+    var tv = 0;
+    try { var o = JSON.parse(raw); tv = Number(o && o.updatedAt) || 0; } catch (e5) { tv = 0; }
+    if (!best[tk] || tv > best[tk].tv) best[tk] = { src: k, tv: tv, raw: raw };
+  });
+  var n = 0;
+  Object.keys(best).forEach(function(tk){
+    try { if (localStorage.getItem(tk) != null) return; } catch (e6) { return; }   // 已有的不覆盖
+    try { localStorage.setItem(tk, best[tk].raw); n++; } catch (e7) {}
+  });
+  /* 按类时间戳一并搬过去（否则新 key 的 kts 为 0，pull 判定会一直判「本地较新」而反复补传） */
+  try {
+    var ktso = lbPrefsKts(), kch = false;
+    Object.keys(best).forEach(function(tk){
+      var old = ktso[best[tk].src];
+      if (old && !ktso[tk]) { ktso[tk] = old; kch = true; }
+    });
+    if (kch) localStorage.setItem(lbPrefsKtsKey(u), JSON.stringify(ktso));
+  } catch (eT) {}
+  try { localStorage.setItem(mark, '1'); } catch (e8) {}
+  /* v6821：迁移后立刻吸收「较新的旧式键」（可能是另一端旧版刚写入的） */
+  try {
+    var _a1 = lbKmAbsorbLegacyToMain(lbKeymapUserKey());
+    var _a2 = lbKmAbsorbLegacyToMain(lbSpeciesOpsKey());
+    var _a3 = false;
+    (LB_GAME_LIST || []).forEach(function(gg){ try { if (lbKmAbsorbLegacyToMain(lbKeymapActionsKey(gg && gg.id))) _a3 = true; } catch (eA) {} });
+    try { if (lbKmAbsorbLegacyToMain(lbKeymapDevsKey())) _a3 = true; } catch (eA2) {}
+    if (_a1 || _a2 || _a3) { try { LB_KEYMAP = null; LB_KEYMAP_CUSTOM_INITED = 0; lbKeymapLoad(); } catch (eA3) {} }
+  } catch (eA4) {}
+  if (n) { try { console.log('[lbKeymap] 已迁移 ' + n + ' 个键位存储到账号层级 ' + u); } catch (e9) {} }
+  return n;
+}
+/* v6821：拉取后吸收（云端旧式键可能刚被另一端的旧版更新过） */
+function lbKeymapAbsorbAfterPrefs(){
+  var ch = false;
+  try { if (lbKmAbsorbLegacyToMain(lbKeymapUserKey())) ch = true; } catch (e1) {}
+  try { if (lbKmAbsorbLegacyToMain(lbSpeciesOpsKey())) ch = true; } catch (e2) {}
+  try {
+    (LB_GAME_LIST || []).forEach(function(gg){ try { if (lbKmAbsorbLegacyToMain(lbKeymapActionsKey(gg && gg.id))) ch = true; } catch (e3) {} });
+  } catch (e4) {}
+  try { if (lbKmAbsorbLegacyToMain(lbKeymapDevsKey())) ch = true; } catch (e5) {}
+  if (ch) {
+    try { LB_KEYMAP = null; LB_KEYMAP_CUSTOM_INITED = 0; lbKeymapLoad(); } catch (e6) {}
+    try { lbKeymapRender(); } catch (e7) {}
+  }
+  return ch;
+}
 function lbKeymapLoad(){
+  try { lbKeymapMigrateToAccount(); } catch (eMig) {}   // v6818：旧「角色名」档 → 「账号」档（幂等）
   // v5405：物种作用域下不得重载全局自定义层（否则会覆盖物种动作表）
   if (LB_KM_SCOPE.mode !== 'species') { try { lbKeymapCustomInit(); } catch (eC) {} }   // v5391：动作自定义层（管理员动作管理）
   if (LB_KEYMAP) return LB_KEYMAP;
@@ -43422,8 +47679,13 @@ function lbKeymapSave(){
   }
   lbKeymapLoad();
   LB_KEYMAP.updatedAt = Date.now();
-  try { localStorage.setItem(lbKeymapUserKey(), JSON.stringify(LB_KEYMAP)); } catch (e) {}
-  try { if (typeof lbPrefsPush === 'function') lbPrefsPush(); } catch (e) {}
+  try { lbKmStorageWrite(lbKeymapUserKey(), JSON.stringify(LB_KEYMAP)); } catch (e) {}   // v6821：双写镜像
+  /* v6818（跨端不同步的主根因）：原来只 push 不 touch ⇒ lbprefs_kts 里该键时间戳永不前进
+     ⇒ 两端 kts 恒相等 ⇒ pull 判「无变化」⇒ 双向永不同步（实测卡在 2026-10-26 达 22 天）。 */
+  try {
+    if (typeof lbPrefsTouch === 'function') lbPrefsTouch(lbKeymapUserKey());
+    else if (typeof lbPrefsPush === 'function') lbPrefsPush();
+  } catch (e) {}
 }
 // 当前游戏档（跟随全局游戏上下文）
 function lbKeymapCurGame(){
@@ -43461,58 +47723,151 @@ function lbKmIsActKey(k){
   var g = ''; try { g = lbKeymapGrpOf(k); } catch (e) { return false; }
   return (g === '面键' || g === '摇杆' || g === '摇杆按键' || g === '十字键');
 }
+/* v6829（用户口径「每个备选键 = 完整键位单元」）：alt 元素统一为对象
+     { k:'xbox_button_x', mode:'', chord:'' }  （旧数据 alt 为纯字符串 ⇒ 这里自动升级，零迁移） */
+function lbKmAltNorm(al){
+  var out = [], seen = {};
+  (al || []).forEach(function(x){
+    var o = null;
+    if (typeof x === 'string' || typeof x === 'number') o = { k:String(x), mode:'', chord:'' };
+    else if (x && typeof x === 'object') o = { k:String(x.k || ''), mode:String(x.mode || ''), chord:String(x.chord || '') };
+    if (!o || !o.k) return;
+    if (!LB_KM_MODE_OK[o.mode]) o.mode = '';
+    if (seen[o.k]) return;
+    seen[o.k] = 1; out.push(o);
+  });
+  return out;
+}
 function lbKmN(v){
-  var ks = [], md = '', ch = '', mo = '';   // v5343：mo = modeOn（操作标识归属）
-  if (!v) return {k:ks, mode:md, chord:ch, modeOn:mo};
+  var ks = [], al = [], md = '', ch = '', mo = '';   // v5343：mo = modeOn；v6823：al = 备选键位
+  if (!v) return {k:ks, alt:al, mode:md, chord:ch, modeOn:mo};
   if (typeof v === 'string') ks = [v];
   else if (Object.prototype.toString.call(v) === '[object Array]') ks = v.slice();
   else {
     ks = (v.k || []).slice();
+    al = lbKmAltNorm(v.alt);
     md = (v.mode !== undefined) ? String(v.mode || '') : (v.hold ? 'long' : (v.dbl ? 'double' : ''));
     if (!LB_KM_MODE_OK[md]) md = '';
     ch = String(v.chord || '');
     mo = String(v.modeOn || '');   // v5343：'chord' = 操作作用在组合键成员；缺省 = 作用在主键
   }
-  // v5256：主键只允许一个 —— 老存档多主键自动转成「主键 + 组合键」（多余丢弃）
-  // v5377：改按物理语义决定谁是组合键（不再用「第 1 个 = 主键」）
-  // v5377b：只有「纯组合键」（无操作方式，或 mode 仅为占位的 'chord'）才做语义摆正。
-  //   有 mode='long'/'double'/... 时，主键与组合键的角色已由 modeOn 明确表达（如 quick_pack 的「LB + 十字↑ 长按」），
-  //   此时交换会让长按标识挂到错的键上 ⇒ 禁止交换。
+  // v5256：主键只允许一个；v5377：按物理语义决定谁是组合键；v5377b：仅纯组合键才摆正
   var _fixOK = (!md || md === 'chord');
   if (ks.length > 1){
     if (!ch){
       var _a = ks[0], _b = ks[1];
-      if (_fixOK && lbKmIsActKey(_a) && lbKmIsModKey(_b)) { ch = _b; ks = [_a]; }         // 动作键在前 ⇒ 已是正确顺序
-      else if (_fixOK && lbKmIsModKey(_a) && lbKmIsActKey(_b)) { ch = _a; ks = [_b]; }   // AI「按下顺序」修饰键在前 ⇒ 摆正
-      else { ch = ks[1]; ks = ks.slice(0, 1); }                                         // 无法判定 ⇒ 原规则兜底
+      if (_fixOK && lbKmIsActKey(_a) && lbKmIsModKey(_b)) { ch = _b; ks = [_a]; }
+      else if (_fixOK && lbKmIsModKey(_a) && lbKmIsActKey(_b)) { ch = _a; ks = [_b]; }
+      else { ch = ks[1]; ks = ks.slice(0, 1); }
     } else { ks = ks.slice(0, 1); }
     md = 'chord';
   } else if (ch && ks.length === 1){
-    // v5377：已有 chord 但方向明显反了（主键是修饰键、组合键是动作键）⇒ 交换
     if (_fixOK && lbKmIsModKey(ks[0]) && lbKmIsActKey(ch)){ var _t = ks[0]; ks = [ch]; ch = _t; }
   }
-  return {k:ks, mode:md, chord:ch, modeOn:mo};
+  /* v6823：alt 与主键正交；这里只去掉「与主键 / 组合键重复」的项，不做任何语义推断 */
+  var _seenAl = {};
+  if (ch) _seenAl[ch] = 1;
+  ks.forEach(function(x){ _seenAl[x] = 1; });
+  var _alo = [];
+  al.forEach(function(o){
+    if (!o.k || _seenAl[o.k]) return;
+    _seenAl[o.k] = 1; _alo.push(o);
+  });
+  return {k:ks, alt:_alo, mode:md, chord:ch, modeOn:mo};
+}
+/* v6829：取某「组」的键位数据
+     seg='main'  ⇒ 主键组（动作级 k/mode/chord/modeOn）
+     seg=数字    ⇒ 第 i 个备选键组（各自有 k/mode/chord） */
+function lbKmSeg(n, seg){
+  if (seg === 'new') return { k:[], mode:'', chord:'', modeOn:'' };   // v6829：新增备选键的临时态
+  if (!n) return { k:[], mode:'', chord:'', modeOn:'' };
+  if (seg === 'main' || seg === undefined || seg === null) return { k:(n.k || []).slice(), mode:(n.mode || ''), chord:(n.chord || ''), modeOn:(n.modeOn || '') };
+  var a = (n.alt || [])[seg];
+  if (!a) return null;
+  return { k:(a.k ? [a.k] : []), mode:(a.mode || ''), chord:(a.chord || ''), modeOn:'' };
+}
+/* v6829：把「改组」写回整条数据（其余组原样保留） */
+function lbKmSegSet(n, seg, segVal){
+  var base = { k:(n.k || []).slice(), alt:(n.alt || []).map(function(o){ return { k:o.k, mode:o.mode || '', chord:o.chord || '' }; }), mode:(n.mode || ''), chord:(n.chord || ''), modeOn:(n.modeOn || '') };
+  if (seg === 'main' || seg === undefined || seg === null){
+    base.k = (segVal.k || []).slice();
+    base.mode = segVal.mode || '';
+    base.chord = segVal.chord || '';
+    base.modeOn = segVal.modeOn || '';
+    return base;
+  }
+  var i = Number(seg);
+  if (isNaN(i) || !base.alt[i]) return base;
+  base.alt[i] = { k:((segVal.k || [])[0] || ''), mode:(segVal.mode || ''), chord:(segVal.chord || '') };
+  base.alt = base.alt.filter(function(o){ return !!o.k; });
+  if (base.modeOn === 'chord') {}   // 保持
+  return base;
 }
 // v5253：写一列键位（唯一出口，避免各调用点重复判空）
 function lbKmWrite(aid, col, nn){
-  // v5405：物种作用域下仅系统拥有者可编辑（其他玩家只读）
-  // v5460：名单内（allowEdit:1）的动作对所有玩家放开
-  // v5464：按列判定 —— 该列已有默认键则仍写不进（防空改）
   if (lbKeymapScopeReadOnly() && !lbKmColEditable(aid, col)) { try { lbToast('该动作键位为默认绑定，不可修改（请用「动作管理」维护）'); } catch (eRO) {} return; }
   var m = lbKeymapProf().map;
-  if (!nn || ((!nn.k || !nn.k.length) && !nn.mode && !nn.chord)){
+  if (!nn || ((!nn.k || !nn.k.length) && !(nn.alt && nn.alt.length) && !nn.mode && !nn.chord)){
     if (m[aid]) { delete m[aid][col]; if (m[aid].pad === undefined && m[aid].kbm === undefined) delete m[aid]; }
     return;
   }
   if (!m[aid]) m[aid] = {};
   // v5388：入库前把设备键名规范成基准键（lbKmStoreKey），使改动能跨设备自动映射
   m[aid][col] = { k:(nn.k || []).map(lbKmStoreKey), mode:(nn.mode || ''), chord:(nn.chord ? lbKmStoreKey(nn.chord) : '') };
+  /* v6829：备选键存为对象数组（每个备选键 = 完整键位单元，各自可有 mode/chord）
+     去重按 k；与主键 / 主键组合键重复的项丢弃 */
+  var _kAll = m[aid][col].k.slice();
+  if (m[aid][col].chord) _kAll.push(m[aid][col].chord);
+  var _seenW = {}, _alW = [];
+  lbKmAltNorm(nn.alt).forEach(function(o){
+    var kk = lbKmStoreKey(o.k);
+    if (!kk || _seenW[kk] || _kAll.indexOf(kk) >= 0) return;
+    _seenW[kk] = 1;
+    var rec = { k:kk };
+    if (o.mode) rec.mode = o.mode;
+    if (o.chord) rec.chord = lbKmStoreKey(o.chord);
+    _alW.push(rec);
+  });
+  if (_alW.length) m[aid][col].alt = _alW;
   if (nn.modeOn) m[aid][col].modeOn = nn.modeOn;   // v5343：保留操作标识归属
 }
-// 冲突签名：键集合（排序） + 操作方式 + 组合键 ⇒ 「B」「长按B」「双击B」互不冲突
+/* v6829：签名改为**逐组**产出 —— 每组一条「键集合 + 该组方式/组合键」
+     （组合键 + 主键算同一个单元；每个备选键各自一个单元） */
+function lbKmSegSig(n, seg){
+  var g = lbKmSeg(n, seg); if (!g) return '';
+  var keys = (g.k || []).slice();
+  if (g.chord && keys.indexOf(g.chord) < 0) keys.push(g.chord);
+  if (!keys.length) return '';
+  return keys.slice().sort().join('+') + (g.mode ? ('|' + g.mode) : '') + (g.chord ? ('@' + g.chord) : '');
+}
 function lbKmSig(n){
-  if (!n || !n.k || !n.k.length) return '';
-  return n.k.slice().sort().join('+') + (n.mode ? ('|' + n.mode) : '') + (n.chord ? ('@' + n.chord) : '');
+  if (!n) return '';
+  var parts = [];
+  var m = lbKmSegSig(n, 'main'); if (m) parts.push(m);
+  (n.alt || []).forEach(function(o, i){ var x = lbKmSegSig(n, i); if (x) parts.push(x); });
+  if (!parts.length) return '';
+  return parts.sort().join(' / ');
+}
+function lbKmSigs(n){
+  var out = [];
+  if (!n) return out;
+  var push = function(seg){
+    var g = lbKmSeg(n, seg); if (!g) return;
+    var keys = (g.k || []).slice();
+    if (g.chord && keys.indexOf(g.chord) < 0) keys.push(g.chord);
+    var tail = (g.mode ? ('|' + g.mode) : '') + (g.chord ? ('@' + g.chord) : '');
+    keys.forEach(function(k){ out.push(k + tail); });
+  };
+  push('main');
+  (n.alt || []).forEach(function(o, i){ push(i); });
+  return out;
+}
+function lbKmHasConflict(conf, nn){
+  try {
+    var ss = lbKmSigs(nn);
+    for (var i = 0; i < ss.length; i++) if (conf && conf[ss[i]]) return true;
+  } catch (e) {}
+  return false;
 }
 function lbKmShort(n){
   var s = (n.k || []).join(' + ');
@@ -43523,21 +47878,66 @@ function lbKmShort(n){
   }
   return s;
 }
-// v5258：该列存的值是否与默认**完全相同**（主键 + 操作方式 + 组合键，均按当前设备换算后比较）
-//   相同 ⇒ 视为「没改过」，展示/统计/冲突一律按默认处理（数据本身不删）
-function lbKmSameAsDefault(aid, col, val){
+// v5258：该列存的值是否与默认**完全相同**（逐组比较：主键组比主键组，备选组恒算「改过」）
+function lbKmSegSameAsDefault(aid, col, val, seg){
   try {
-    var a = lbKeymapAct(aid); if (!a) return false;
-    // v5439（用户口径「手柄侧应该是自定义的，为啥键鼠那边一改这边也变」根因之一）：
-    //   旧的 conv 走 lbKeymapSkinKey（设备键体系），steamdeck_button_options 与 xbox_button_menu
-    //   换算后【不相等】⇒ 同一颗 Menu 键被误判成「改过」。
-    //   改用 lbKmStoreKey（设备键 → xbox 基准键）做归一：与 ② 层存储口径同源，两边对称比较。
+    var a = lbKeymapAct(aid); if (!a) return true;
     var conv = function(x){ try { return lbKmStoreKey(x); } catch (eC) { return lbKmBase(x); } };
-    var cur = lbKmN(val), def = lbKmN(a[col]);
-    if (cur.k.map(conv).sort().join('+') !== def.k.map(conv).sort().join('+')) return false;
+    var cur = lbKmSeg(lbKmN(val), seg); if (!cur) return true;
+    var defAll = lbKmN(a[col]);
+    var def = lbKmSeg(defAll, seg);
+    if (seg !== 'main') return false;   // v6829：默认没有备选键 ⇒ 任何备选键都算「改过」
+    if (!def) return false;
+    var ck = (cur.k || []).map(conv).sort().join('+');
+    var dk = (def.k || []).map(conv).sort().join('+');
+    if (ck !== dk) return false;
     if ((cur.mode || '') !== (def.mode || '')) return false;
     var cc = cur.chord ? conv(cur.chord) : '', dc = def.chord ? conv(def.chord) : '';
     return cc === dc;
+  } catch (e) { return false; }
+}
+function lbKmSameAsDefault(aid, col, val){
+  try {
+    var a = lbKeymapAct(aid); if (!a) return false;
+    var cur = lbKmN(val), def = lbKmN(a[col]);
+    if (!lbKmSegSameAsDefault(aid, col, val, 'main')) return false;
+    /* v6830（用户口径「明明都是默认键位 为啥也被算改动」）：
+       备选键若在**当前设备上不存在**（如 Elite 背键在 Steam 手柄列没有对应键），
+       对当前设备而言等同于没改 ⇒ 不计入差异。 */
+    var _u = function(o){ return (col === 'pad') ? !!lbKeymapSkinKey(o.k) : true; };
+    var ca = (cur.alt || []).filter(_u), da = (def.alt || []).filter(_u);
+    if (ca.length !== da.length) return false;
+    if (ca.length){
+      var cv = function(x){ try { return lbKmStoreKey(x); } catch (eC) { return lbKmBase(x); } };
+      var sg = function(arr){
+        return arr.map(function(o){ return cv(o.k) + (o.mode ? ('|' + o.mode) : '') + (o.chord ? ('@' + cv(o.chord)) : ''); }).sort().join('+');
+      };
+      if (sg(ca) !== sg(da)) return false;
+    }
+    return true;
+  } catch (e) { return false; }
+}
+/* v6829（用户口径「附件1 是默认键位 为啥也着色了」）：着色要**逐组**判定 ——
+   原来整条动作一票（只要加了备选键，连没改过的默认组合也一起染紫）。
+   现在：主键组与默认一致 ⇒ 不染；备选键组恒染（默认没有备选键）。 */
+function lbKmSegCustom(aid, col, seg){
+  try {
+    var m = lbKeymapProf().map[aid];
+    if (!m || m[col] === undefined) return false;
+    return !lbKmSegSameAsDefault(aid, col, m[col], seg);
+  } catch (e) { return false; }
+}
+/* v6830（用户口径「明明都是默认键位 为啥被显示到了只看改动里」）：
+   「只看改动 / 紫点 / 已改 N」原先用**整条动作一票**（isCustom = 新增动作 custom:1 ‖ 另一列有改动 ‖ 跨设备备选键）
+   ⇒ 键位全是默认的动作也被列进来。现改为**只按当前列键位是否真偏离默认**判定。 */
+function lbKmActDiff(aid, col){
+  try {
+    var m = lbKeymapProf().map[aid];
+    if (!m || m[col] === undefined) return false;
+    if (lbKmSegCustom(aid, col, 'main')) return true;
+    var n = lbKmN(m[col]);
+    var _u = function(o){ return (col === 'pad') ? !!lbKeymapSkinKey(o.k) : true; };
+    return (n.alt || []).filter(_u).length > 0;
   } catch (e) { return false; }
 }
 // v5231：该动作的「当前列」是否被玩家显式改过（决定键位着色：原色 / 主题色）
@@ -43553,6 +47953,16 @@ function lbKmColCustom(aid, col){
 // v5441（口径统一）：与紫点/「只看改动」同源 —— 新增动作、列级标记(_markPad/_markKbm) 也计入，
 //   否则界面上有 17 行紫点、底栏却显示「已改 0」
 function lbKeymapChangedCount(){
+  /* v6830：与「只看改动」/紫点同源 —— 只数「当前列键位真偏离默认」的动作
+     （不再把「新增动作 custom:1」「另一列的改动」「跨设备备选键」算成改动） */
+  var n = 0, _col = 'pad';
+  try { _col = lbKeymapShowCol(); } catch (eCC0) { _col = 'pad'; }
+  try {
+    LB_KEYMAP_ACTIONS.forEach(function(a){ if (lbKmActDiff(a.id, _col)) n++; });
+  } catch (e) {}
+  return n;
+}
+function _lbKmChangedCountOld(){
   var n = 0;
   try {
     var _m = lbKeymapProf().map || {};
@@ -43607,52 +48017,97 @@ function lbKmSelfColor(k){
   return !!(_LB_KM_SELFCOLOR && _LB_KM_SELFCOLOR[kk]);
 }
 // 渲染一个按键定义（多键用 + 连接，长按/双击加角标）
-function lbKmChips(n, col, size, custom, noMod){   // v5252：noMod=不画长按/双击角标（改键弹层「当前：」行由 pmod 按钮承担）
-  if (!n || !n.k || !n.k.length) return '<span class="lb-km-na">未设</span>';
-  var parts = [];
-  var _sz = size || 22, _cls = custom ? 'lb-km-cus' : '';
-  // v5368（用户口径「已改动的键位 无需直接给主键着色」）：键图标**一律不染紫**，保持原色便于认键。
-  //   「已改动」标识只保留：动作名紫加粗（.lb-km-an.lb-km-cus）+ 行尾还原圆点 + 🖐 操作方式图标（_cx）。
-  //   注：v5265 的 lbKmSelfColor 保护因此不再需要（函数保留，暂未被调用）。
-  var _kcls = function(fk){ return ''; };
-  // v5257（用户口径）：组合键放在主键**前面**，两者之间不加分隔符
-  var _chordH = '';   // v5349：组合键段单独保存，便于把操作标识插在「组合键」与「主键」之间
-  if (n.mode === 'chord' && n.chord){
-    var _ck = (col === 'pad') ? lbKeymapSkinKey(n.chord) : n.chord;
-    if (_ck) { var _fk0 = lbKeySrc(_ck); _chordH = lbKeyChipHtml(_fk0, _sz, _kcls(_fk0)); parts.push(_chordH); }
-  }
-  for (var i=0;i<n.k.length;i++){
-    var raw = n.k[i];
+/* v6827（用户口径「我不是说了 要分成多键么」）：键帽不再挤在一个按钮里 ——
+   统一由 lbKmKeyFrags 产出「片段数组」，每项 = 一个键（操作方式图标并入被作用的那个键里）。
+     · lbKmChips     → 拼成单串（兼容旧调用 / 纯文本场景）
+     · lbKmCellBtns  → 每片一个 <button class="lb-km-key">（表格键格）
+     · lbKmKeyViews  → 每片一个 <span class="lb-km-kvb">（改键浮窗「当前」行 / 绑键卡片预览） */
+function lbKmKeyFrags(n, col, size, custom, noMod){
+  /* v6829：**逐组**产出片段。每组 = 一个「触发单元」
+       主键组   = [组合键][主键][方式图标]      （动作级 mode/chord）
+       备选键组 = [组合键][备选键][方式图标]    （该备选键自己的 mode/chord）
+     frag.seg = 'main' | 0..n（用于点击定位到该组浮窗 / 逐组着色） */
+  var _sz = size || 22, out = [];
+  var _NA = '<span class="lb-km-na">未设</span>';
+  var _chip = function(raw){
     var k = (col === 'pad') ? lbKeymapSkinKey(raw) : raw;
-    if (col === 'pad' && !k) return '<span class="lb-km-na" title="该设备无此键（数据仍保留）">不适用</span>';
-    var _fk1 = lbKeySrc(k);
-    parts.push(lbKeyChipHtml(_fk1, _sz, _kcls(_fk1)));   // v5238：统一走 lbKeySrc（唯一显示源）；v5231 改动→主题色
+    return k ? lbKeyChipHtml(lbKeySrc(k), _sz, '') : '';
+  };
+  var _modOf = function(mode){
+    if (!mode || mode === 'chord' || noMod) return '';
+    var md = lbKmMode(mode);
+    return '<span class="lb-km-mod" title="' + md.n + '">'
+      + (md.ic ? lbKeyChipHtml(md.ic, Math.max(14, Math.round(_sz * 0.82)), '')
+               : '<span class="lb-km-mtxt">' + md.n + '</span>')
+      + '</span>';
+  };
+  var _one = function(g, seg){
+    var h = '', chordH = '';
+    var ks = (g.k || []).filter(function(x){ return !!x; });
+    if (g.chord && (g.mode === 'chord' || !ks.length)) chordH = _chip(g.chord);
+    var mainH = '';
+    for (var i = 0; i < ks.length; i++){
+      if (col === 'pad' && !lbKeymapSkinKey(ks[i])) return null;   // 该设备无此键
+      mainH += _chip(ks[i]);
+    }
+    h = chordH + (mainH || (chordH ? _NA : ''));
+    if (!h) return null;
+    h += _modOf(g.mode);
+    return { html:h, isKey:true, seg:seg };
+  };
+  // 主键组
+  var m = _one(lbKmSeg(n, 'main'), 'main');
+  if (m === null) return [{ html:'<span class="lb-km-na" title="该设备无此键（数据仍保留）">不适用</span>', isKey:false }];
+  if (m) out.push(m);
+  // 备选键组
+  (n.alt || []).forEach(function(o, i){
+    var x = _one(lbKmSeg(n, i), i);
+    if (x) out.push(x);
+  });
+  if (!out.length) return [{ html:_NA, isKey:false }];
+  return out;
+}
+function lbKmChips(n, col, size, custom, noMod){
+  return lbKmKeyFrags(n, col, size, custom, noMod).map(function(f){ return f.html; }).join('');
+}
+/* 表格键格：一组 = 一颗键钮；**逐组着色**（v6829：默认组不染紫） */
+function lbKmCellBtns(nn, col, aid, bad, ccIgnore, ro){
+  var frags = lbKmKeyFrags(nn, col, 22, false);
+  /* v6833（用户口径 2026-11-17「附件为啥还显示」）：把 v6829 的「逐组」口径延伸到**渲染层**——
+     「只看改动」下只渲染**真改动的那一组**，默认组（如 transfer 的 R2+A）不再跟着出现。
+     原来整行所有组都渲染、只靠颜色区分，用户看到的仍是「默认键位被显示在只看改动里」。 */
+  var _diff = false;
+  try {
+    _diff = (typeof LB_KEYMAP_UI !== 'undefined') && !!LB_KEYMAP_UI
+            && LB_KEYMAP_UI.mode === 'diff';
+  } catch (eDf) { _diff = false; }
+  if (_diff && !ro){
+    var _keep = frags.filter(function(f){
+      return !!f.isKey && !!lbKmSegCustom(aid, col, f.seg);
+    });
+    if (_keep.length) frags = _keep;   // 兜底：若全被滤掉则保留原样，避免键格空白
   }
-  var _mainH = parts.slice(_chordH ? 1 : 0).join('');
-  var h = _chordH + _mainH;   // v5257：不再插加号；v5349：拆段拼接
-  // v5253：操作方式单选 —— 图标 / 短文字；v5258：组合键不画方式图标
-  // v5266：操作方式图标显示在主键前面
-  // v5343（用户口径「操作作用在主键上就把标识放在后面，否则相反，比如附件」）：
-  //   默认（作用在主键）=> 标识拼在键图标**后面**；n.modeOn==='chord'（作用在组合键成员）=> 拼在**前面**
-  if (n.mode && n.mode !== 'chord' && !noMod){
-    // v5379（用户口径「改动的着色也别着色操作图标」）：方式图标/文字不染紫（v5368 只去了键图标与同伴键，漏了方式图标）
-    var _md = lbKmMode(n.mode), _cx = '';
-    var _modH = '<span class="lb-km-mod" title="' + _md.n + '">'
-       + (_md.ic ? lbKeyChipHtml(_md.ic, 18, _cx) : '<span class="lb-km-mtxt' + _cx + '">' + _md.n + '</span>')
-       + '</span>';
-    // v5349（用户口径「操作标识右边那位就是被作用的按键；被作用键是当前主键 => 标识放最后面」）：
-    //   被作用键 = 组合键（modeOn==='chord'）=> [组合键] 标识 [主键]（标识右邻即组合键）
-    //   被作用键 = 主键（默认）        => [组合键][主键] 标识
-    // v5379（用户口径「要把操作方式放到 被操作键的左侧」）：标识一律插在被作用键**左侧**
-    //   作用组合键（modeOn==='chord'）=> 标识 [组合键] [主键]
-    //   作用主键 + 有组合键       => [组合键] 标识 [主键]
-    //   作用主键 + 无组合键       => 标识 [主键]
-    //   （v5343/v5349 旧口径「标识在被作用键右侧」作废）
-    if (_chordH && n.modeOn === 'chord') h = _modH + _chordH + _mainH;
-    else if (_chordH) h = _chordH + _modH + _mainH;
-    else h = _modH + _mainH;
-  }
-  return h;
+  return frags.map(function(f){
+    if (!f.isKey) return '<span class="lb-km-key na-wrap">' + f.html + '</span>';
+    var _cus = ro ? false : lbKmSegCustom(aid, col, f.seg);
+    var cls = 'lb-km-key' + (bad ? ' conflict' : '') + (_cus ? ' custom' : '');
+    var _segArg = (f.seg === 'main') ? '' : (", '" + f.seg + "'");
+    var _segArgJs = (f.seg === 'main') ? '' : (", " + f.seg);
+    var _ds = ' data-seg="' + f.seg + '"';   // v6831：审计按组比对着色
+    if (ro) return '<button type="button" class="' + cls + '"' + _ds + ' style="cursor:default" title="默认绑定">' + f.html + '</button>';
+    return '<button type="button" class="' + cls + '"' + _ds + ' onclick="lbKeymapPick(\'' + aid + '\',this' + _segArgJs + ')" title="' + (f.seg === 'main' ? '点击改主键' : '点击改该备选键') + '">' + f.html + '</button>';
+  }).join('');
+}
+/* 浮窗「当前」行等：一组 = 一个圆角键块 */
+function lbKmKeyViews(n, col, size, custom, onlySeg){
+  var frags = lbKmKeyFrags(n, col, size, custom);
+  return frags.filter(function(f){
+    if (onlySeg === undefined) return true;
+    return f.seg === onlySeg;
+  }).map(function(f){
+    if (!f.isKey) return f.html;
+    return '<span class="lb-km-kvb' + (custom ? ' cus' : '') + '">' + f.html + '</span>';
+  }).join('');
 }
 function lbKeymapAct(aid){
   for (var i=0;i<LB_KEYMAP_ACTIONS.length;i++) if (LB_KEYMAP_ACTIONS[i].id === aid) return LB_KEYMAP_ACTIONS[i];
@@ -43849,10 +48304,13 @@ function lbKeymapConflicts(){
   LB_KEYMAP_ACTIONS.forEach(function(a){
     var e = lbKeymapEff(a.id);
     var nn = (col === 'pad') ? e.padN : e.kbmN;
-    var sig = lbKmSig(nn); if (!sig) return;
-    if (!seen[sig]) seen[sig] = [];
+    /* v6823：改为逐键签名（主键 + 备选键各自一条）⇒ 备选键撞键也能报出来 */
+    var sigs = lbKmSigs(nn); if (!sigs.length) return;
     var colCustom = lbKmColCustom(a.id, col);   // v5258：与默认相同不算改动
-    seen[sig].push({ id:a.id, custom:colCustom });
+    sigs.forEach(function(sig){
+      if (!seen[sig]) seen[sig] = [];
+      seen[sig].push({ id:a.id, custom:colCustom });
+    });
   });
   for (var s in seen) {
     var arr = seen[s]; if (arr.length < 2) continue;
@@ -44067,7 +48525,10 @@ function lbKeymapToggleOnlyEmpty(){
 function lbKmIsActEmpty(a, col){
   try {
     var e = lbKeymapEff(a.id), nn = (col === 'pad') ? e.padN : e.kbmN;
-    return !(nn && nn.k && nn.k.length);
+    /* v6819（v6818 组合键修复的收尾）：原判定只认主键 ⇒「无主键 + 有组合键」被判成「未绑定」
+       ⇒ 在「只看已绑定」筛选下整行被 filter 掉（组合键明明写了却看不到）。
+       有组合键也算已绑定；本函数是 5 个消费点（两个计数 + 三处筛选）的唯一入口，改一处全生效。 */
+    return !(nn && ((nn.k && nn.k.length) || (nn.alt && nn.alt.length) || nn.chord));   // v6823：有备选键也算已绑定
   } catch (err) { return false; }
 }
 function lbKmEmptyCount(){
@@ -44292,13 +48753,19 @@ function lbKeymapAudit(){
   var _badCap = [];
   try {
     var _colNow = lbKeymapShowCol();
+    /* v6831（配合 v6829 逐组着色）：着色粒度已由「整条动作」改为「每组」，
+       审计也必须**逐键钮按 data-seg 对应的组**比对，否则「主键组=默认 + 备选组=改动」必然误报。 */
     Array.prototype.forEach.call(document.querySelectorAll('.lb-km-row[data-aid]'), function(tr){
       var _aid5 = tr.getAttribute('data-aid');
-      var _btn5 = tr.querySelector('.lb-km-key');
-      if (!_btn5 || !_aid5) return;
-      var _capCus = _btn5.classList.contains('custom');
-      var _real5 = !!lbKeymapEff(_aid5).isCustom;   // v5440：键帽紫底与列级 isCustom 一致
-      if (_capCus !== _real5) _badCap.push(_aid5);
+      if (!_aid5) return;
+      Array.prototype.forEach.call(tr.querySelectorAll('.lb-km-key[data-seg]'), function(b){
+        var _seg5 = b.getAttribute('data-seg');
+        var _segKey = (_seg5 === 'main') ? 'main' : Number(_seg5);
+        if (_segKey !== 'main' && isNaN(_segKey)) return;
+        var _capCus = b.classList.contains('custom');
+        var _real5 = !!lbKmSegCustom(_aid5, _colNow, _segKey);
+        if (_capCus !== _real5) _badCap.push(_aid5 + '/' + _seg5);
+      });
     });
   } catch (e5c) {}
   if (_badCap.length) F('规则5 键帽配色与本列改动不一致：' + _badCap.slice(0,5).join(',') + (_badCap.length>5?' …':''));
@@ -44321,36 +48788,34 @@ function lbKeymapCellHtml(aid, e, conf){
   // v5460：动作在「允许玩家编辑」名单内 ⇒ 本行键格恢复可点（其余行仍只读）
   // v5464（用户口径「键鼠、手柄要分开考虑」）：改**按列**判定 —— 只有该列定义层默认键为空（待对应）才可编辑
   if (_ro1){ try { if (lbKmColEditable(aid, col)) _ro1 = false; } catch (eRE) {} }
-  if (!nn.k.length){   // v5302：未设 → 虚线立体键格（可点击进入改键）
+  /* v6820（v6818/v6819 组合键修复的最后一处）：原来只判主键 ⇒「无主键 + 有组合键」被判成未设
+     ⇒ 走空键格分支（隐藏键帽），lbKmChips 根本不被调用 ⇒ 组合键数据在、界面一片空白。
+     有组合键时按已绑定渲染（lbKmChips 会画 组合键 + 主键「未设」）。 */
+  if (!nn.k.length && !(nn.mode === 'chord' && nn.chord)){   // v5302：未设 → 虚线立体键格（可点击进入改键）
     // v5373（用户口径「手柄可以通过映射所有的键鼠键位」「手柄端无需展示该动作所对应的键鼠键位」）：
     //   原 v5278 把 pad:null 判为「不适用」并锁成不可点的纯文字 —— 前提错误。
     //   手柄可把任意按键映射到键鼠动作 ⇒ pad:null 只是「还没填手柄键」，一律走可点空键格。
     if (_ro1) return '<span class="lb-km-key empty" style="cursor:default" title="默认未绑定"><i class="lbk lbk-keyboard_a" style="font-size:22px;line-height:1;visibility:hidden"></i></span>';
     return '<button type="button" class="lb-km-key empty" onclick="lbKeymapPick(\'' + aid + '\',this)" title="点击设置键位"><i class="lbk lbk-keyboard_a" style="font-size:22px;line-height:1;visibility:hidden"></i></button>';
   }
-  var bad = !!(conf[lbKmSig(nn)]);
+  var bad = lbKmHasConflict(conf, nn);   // v6823：逐键判定（备选键也参与）
   // v5440（用户口径「改动过的键要有紫色底」）：键帽紫底 = 【列级 isCustom】
   //   = 新增动作(custom:1) || 本列真改动 || 本列显式标记(_markPad/_markKbm)
   //   v5438 曾改成纯 lbKmColCustom ⇒ 新增动作（鼠标三键）也没有紫底，用户报障。
   //   isCustom 已在 lbKeymapEff 内按当前显示列计算，不会再串列；键帽内文字/图标仍按列级 diff 着色
   // v5448（用户口径「明明都是默认动作，为啥界面显示成改动键的样式」）：
   //   物种/器械操作里每条都是该作用域的默认绑定，不是「改过的键」⇒ 只读作用域一律不套 .custom 紫底
-  var _cc = !!e.isCustom && !_ro1;
-  if (_ro1){
-    return '<button type="button" class="lb-km-key' + (bad ? ' conflict' : '') + (_cc ? ' custom' : '') + '"'
-      + ' style="cursor:default" title="默认绑定">' + lbKmChips(nn, col, 22, lbKmColCustom(aid, col)) + '</button>';
-  }
-  return '<button type="button" class="lb-km-key' + (bad ? ' conflict' : '') + (_cc ? ' custom' : '') + '"'
-    + ' onclick="lbKeymapPick(\'' + aid + '\',this)" title="点击改键">' + lbKmChips(nn, col, 22, lbKmColCustom(aid, col)) + '</button>';
+  // v6827：一组 = 一颗按钮；v6829：着色改为**逐组**判定（默认组不再被连坐染紫）
+  return lbKmCellBtns(nn, col, aid, bad, false, _ro1);
 }
 function lbKeymapRowHtml(a, conf){
   var e = lbKeymapEff(a.id), col = lbKeymapShowCol();
-  var bad = !!(conf[lbKmSig((col === 'pad') ? e.padN : e.kbmN)]);
+  var bad = lbKmHasConflict(conf, (col === 'pad') ? e.padN : e.kbmN);   // v6823：逐键判定
   // v5444：只读作用域不显示紫点（紫点 = 点击还原，属配置入口）
   var _roRow = false;
   try { _roRow = lbKeymapScopeReadOnly(); } catch (eRo2) { _roRow = false; }
-  // v5448：同一口径 —— 只读作用域里没有「改动过的行」，不套 .custom（动作名就不会变白）
-  var _cusRow = !!e.isCustom && !_roRow;
+  // v5448：只读作用域里没有「改动过的行」；v6830：改为「当前列键位真偏离默认」才标改动
+  var _cusRow = !_roRow && lbKmActDiff(a.id, col);
   var cls = 'lb-km-row' + (_cusRow ? ' custom' : '') + (bad ? ' conflict' : '');
   // v5423：备注对普通玩家可见（动作名下方灰色小字）
   // v5426（用户口径「未改过的键位 就不应该有删除按钮」）：右侧图标严格只在 e.isCustom 时出现
@@ -44459,6 +48924,21 @@ function lbKeymapBindMap(){
         disp.unshift(lbKmBase(nn.chord)); mount.unshift(lbKmBase(nn.chord)); _chordMount[lbKmBase(nn.chord)] = 1;
       }
     }
+    /* v6823（用户口径「一功能多键位」）：备选键位也要在「按按键」视图里挂到对应键卡下 */
+    var _altMount = {};
+    if (nn.alt && nn.alt.length){
+      for (var _ai2 = 0; _ai2 < nn.alt.length; _ai2++){
+        var _ao = nn.alt[_ai2] || {};
+        var _akRaw = (typeof _ao === 'string') ? _ao : String(_ao.k || '');   // v6829：alt 已升级为对象
+        if (!_akRaw) continue;
+        if (col === 'pad'){
+          var _as = lbKeymapSkinKeys(_akRaw);
+          if (_as.length) for (var _aq = 0; _aq < _as.length; _aq++){ mount.push(lbKmBase(_as[_aq])); _altMount[lbKmBase(_as[_aq])] = 1; }
+        } else {
+          mount.push(lbKmBase(_akRaw)); _altMount[lbKmBase(_akRaw)] = 1;
+        }
+      }
+    }
     if (!disp.length) return;
     // v5351：判定依据改为设备键名集合（_mainMount / _chordMount），与 kk 同空间
     var _seen = {};
@@ -44474,6 +48954,7 @@ function lbKeymapBindMap(){
         combo:false, keys:disp.slice(), mode:(nn.mode || ''), chord:(nn.chord || ''), modeOn:(nn.modeOn || ''),
         isMain:(_mainMount[kk] ? 1 : 0),
         isChordKey:(_chordMount[kk] ? 1 : 0),
+        isAltKey:(_altMount[kk] ? 1 : 0),   // v6823：该键是否为备选键位
         peer:_peer });   // v5256：不再有多主键组合；v5339：补 zhPad；v5343：补 modeOn；v5350：补 isMain/isChordKey/peer（同一命名空间内预算）
     }
   });
@@ -44717,23 +49198,78 @@ function lbKeymapKeyMenuEdit(aid){
   var ov = document.querySelector('.lb-km-kmenu-wrap'); if (ov) ov.remove();
   lbKeymapPick(aid, null);
 }
+/* v6824（用户口径「点了浮窗要能选是覆盖主键还是备选」）：
+   原实现点「绑到该键」直接问「把主键改为该键？」⇒ 只能覆盖主键，无法加备选。
+   现改为先弹小卡片二选一：覆盖主键 / 加为备选键（用户口径：覆盖主键**不再二次确认**）。 */
 function lbKeymapKeyMenuBind(aid){
+  lbKeymapBindChoose(aid);
+}
+function lbKeymapBindChoose(aid){
+  var k = LB_KM_KMENU_K;
+  var a = lbKeymapAct(aid); if (!a || !k) return;
+  var old = document.querySelector('.lb-km-bch-wrap'); if (old) old.remove();
+  var col = lbKeymapShowCol();
+  var e = lbKeymapEff(aid);
+  var nn = (col === 'pad') ? e.padN : e.kbmN;
+  // v6824：当前主键 / 备选键预览（与表格同口径：pad 列走 lbKeymapSkinKey 映射设备键）
+  var _keyTxt = function(arr){
+    var o = [], sz = (col === 'pad') ? 18 : 16;
+    (arr || []).forEach(function(x){
+      var xk = (x && typeof x === 'object') ? String(x.k || '') : String(x || '');   // v6829：alt 可能是对象
+      var kk = (col === 'pad') ? lbKeymapSkinKey(xk) : xk;
+      if (kk) o.push('<span class="lb-km-kvb">' + lbKeyChipHtml(lbKeySrc(kk), sz, '') + '</span>');   // v6827：每键一个键块
+    });
+    return o.join('');
+  };
+  var _mainH = nn.k.length ? _keyTxt(nn.k) : '<span class="lb-km-na">无</span>';
+  var ov = document.createElement('div');
+  ov.className = 'lb-picker-overlay lb-km-bch-wrap';
+  ov.onclick = function(ev){ if (ev.target === ov) ov.remove(); };
+  ov.innerHTML = '<div class="lb-picker-panel lb-km-kmenu" onclick="event.stopPropagation()" style="max-width:min(420px,94vw)">'
+    + '<div class="lb-km-kmenu-head">' + lbKeyChipHtml(lbKeySrc(k), 24)
+    + '<span class="lb-km-kmenu-name">' + escapeHtml(lbKmKeyName(k)) + '</span>'
+    + '<span class="lb-hf-ai-fill"></span>'
+    + '<span class="lb-km-x" onclick="this.closest(\'.lb-picker-overlay\').remove()"><i class="mdi mdi-close"></i></span></div>'
+    + '<div class="lb-km-bch-body">'
+    +   '<div class="lb-km-bch-act">' + escapeHtml(a.zh) + '</div>'
+    +   '<div class="lb-km-bch-cur">当前主键 ' + _mainH
+    +     ((nn.alt && nn.alt.length) ? _keyTxt(nn.alt) : '')
+    +   '</div></div>'
+    + '<div class="lb-km-bch-foot">'
+    +   '<button class="lb-hf-aibtn primary" style="flex:1" onclick="lbKeymapBindDo(\'' + aid + '\',0)">覆盖主键</button>'
+    +   '<button class="lb-hf-aibtn" style="flex:1" onclick="lbKeymapBindDo(\'' + aid + '\',1)">加为备选键</button>'
+    + '</div></div>';
+  document.body.appendChild(ov);
+  try { lbTipify(ov); } catch (eT) {}
+}
+function lbKeymapBindDo(aid, isAlt){
   var k = LB_KM_KMENU_K, col = lbKeymapShowCol();
   var a = lbKeymapAct(aid); if (!a || !k) return;
-  var cur = lbKeymapEff(aid);
-  var nn = (col === 'pad') ? cur.padN : cur.kbmN;
+  var e = lbKeymapEff(aid);
+  var nn = (col === 'pad') ? e.padN : e.kbmN;
   var kn = lbKmKeyName(k);
-  var _do = function(){
-    lbKmWrite(aid, col, { k:[k], mode:(nn.mode || ''), chord:(nn.chord || '') });
-    lbKeymapSave();
-    lbKeymapRender();
-    var ov = document.querySelector('.lb-km-kmenu-wrap'); if (ov) ov.remove();
-    try { if (typeof lbToast === 'function') lbToast('已把「' + a.zh + '」的主键设为 ' + kn); } catch (e) {}
+  var _same = function(x){
+    var xk = (x && typeof x === 'object') ? String(x.k || '') : String(x || '');   // v6829：alt 为对象
+    return lbKmBase((col === 'pad') ? lbKeymapSkinKey(xk) : xk) === lbKmBase(k);
   };
-  var q = '把「' + a.zh + '」的主键改为 ' + kn + '？' + (nn.k.length ? '\n原键位将被替换。' : '');
-  var ok = false;
-  try { if (typeof lbAsk === 'function') ok = lbAsk(q, _do, '设为该键'); } catch (e0) {}
-  if (!ok && confirm(q)) _do();
+  var msg = '';
+  /* v6825：无主键时没有「备选」可言 ⇒ 直接作为主键写入 */
+  if (isAlt && !nn.k.length) isAlt = 0;
+  if (isAlt){
+    if (nn.k.length && nn.k.some(_same)) { try { lbToast('该键已是「' + a.zh + '」的主键'); } catch (e1) {} return; }
+    if ((nn.alt || []).some(_same)) { try { lbToast('该键已在「' + a.zh + '」的备选键位里'); } catch (e2) {} return; }
+    var alts = (nn.alt || []).slice(); alts.push({ k:k, mode:'', chord:'' });
+    lbKmWrite(aid, col, { k:nn.k.slice(), alt:alts, mode:(nn.mode || ''), chord:(nn.chord || '') });
+    msg = '已给「' + a.zh + '」加备选键 ' + kn;
+  } else {
+    var keep = (nn.alt || []).filter(function(x){ return !_same(x); });
+    lbKmWrite(aid, col, { k:[k], alt:keep, mode:(nn.mode || ''), chord:(nn.chord || '') });
+    msg = '已把「' + a.zh + '」的主键设为 ' + kn;
+  }
+  lbKeymapSave(); lbKeymapRender();
+  var c = document.querySelector('.lb-km-bch-wrap'); if (c) c.remove();
+  var ov = document.querySelector('.lb-km-kmenu-wrap'); if (ov) ov.remove();
+  try { if (typeof lbToast === 'function') lbToast(msg); } catch (e3) {}
 }
 // ============ v5391：动作管理（仅系统拥有者 lbIsAdmin()）============
 var LB_KM_AM = { g: '*' };                       // 分组筛选
@@ -45438,7 +49974,7 @@ function lbKeymapTableHtml(){
   var h = '<table class="lb-km-table">', total = 0;
   if (_flat){
     var _fl = LB_KEYMAP_ACTIONS.filter(function(a){ return lbKmDevVisible(a, col); });
-    if (diff) _fl = _fl.filter(function(a){ return lbKeymapEff(a.id).isCustom; });
+    if (diff) _fl = _fl.filter(function(a){ return lbKmActDiff(a.id, col); });   // v6830：只看键位真改动
     var _afF = lbKmFilter();
     if (_afF === 'empty') _fl = _fl.filter(function(a){ return lbKmIsActEmpty(a, col); });
     else if (_afF === 'bound') _fl = _fl.filter(function(a){ return !lbKmIsActEmpty(a, col); });
@@ -45455,7 +49991,7 @@ function lbKeymapTableHtml(){
     var list = LB_KEYMAP_ACTIONS.filter(function(a){ return a.g === g; });
     list = list.filter(function(a){ return lbKmDevVisible(a, col); });   // v5375：按 dev 过滤（v5290 的 KBSHOT 白名单退休）
     //   ⇒ 键鼠页 74 → 112 条（排除 8 条 dev:'pad' 的手柄特有动作），与手柄页口径对齐
-    if (diff) list = list.filter(function(a){ return lbKeymapEff(a.id).isCustom; });
+    if (diff) list = list.filter(function(a){ return lbKmActDiff(a.id, col); });   // v6830：只看键位真改动
     var _af = lbKmFilter();   // v5330：三态
     // v5373：三态过滤不再排除 pad:null（手柄可映射任意键鼠动作 ⇒ 它们属于「未绑定」而非「不适用」）
     if (_af === 'empty') list = list.filter(function(a){   // v5320 只看未绑定（v5373：不再排除 pad:null）
@@ -45995,9 +50531,16 @@ function lbKeymapPickBody(){
   var e = lbKeymapEff(aid);
   var cur = (col === 'pad') ? e.padN : e.kbmN;
   var _chordMode = (LB_KEYMAP_PICK.pickFor === 'chord');   // v5253：高亮对象改为组合键
+  /* v6826（用户口径「点了按钮为啥高亮的不是当前备选键」）：
+     高亮要跟着**当前模式**走 ——
+       组合键模式 ⇒ 只亮 chord；备选键模式 ⇒ 只亮 alt；主键模式 ⇒ 只亮 k。
+     原实现（v6823）把 alt 并入主键集合，切到备选模式时高亮的仍是主键 ⇒ 看不出哪些已是备选。 */
+  /* v6829（用户口径「每个键位打开的应该是独立浮窗」）：高亮 = **当前这一组**的键 */
+  var _g = lbKmSeg(cur, LB_KEYMAP_PICK.seg) || { k:[], mode:'', chord:'' };
+  var _norm1 = function(x){ return lbKmBase((col === 'pad') ? lbKeymapSkinKey(x) : x); };
   var curKeys = _chordMode
-    ? (cur.chord ? [lbKmBase((col === 'pad') ? lbKeymapSkinKey(cur.chord) : cur.chord)] : [])
-    : cur.k.map(function(x){ return lbKmBase((col === 'pad') ? lbKeymapSkinKey(x) : x); });   // v5225
+    ? (_g.chord ? [_norm1(_g.chord)] : [])
+    : (_g.k || []).map(_norm1);   // v5225
   var groups = lbKeymapPickGroups();
   var h = '', shown = 0;
   // v5240 手风琴：预计算「唯一展开组」
@@ -46041,40 +50584,92 @@ function lbKeymapPickSelHtml(){
   var col = lbKeymapShowCol(), aid = LB_KEYMAP_PICK.aid;
   var e = lbKeymapEff(aid);
   var cur = (col === 'pad') ? e.padN : e.kbmN;
-  var md = cur.mode || '';
-  var h = '<div class="lb-km-selline">'   // v5255：去掉「当前：」字样
-    + (cur.k.length ? lbKmChips(cur, col, 20, lbKmColCustom(aid, col)) : '<span class="lb-km-na">未设</span>')   // v5255：恢复主键后的操作方式副标
-    + '<span class="lb-km-pclr" onclick="lbKeymapClearKeys()" title="清空该动作的键位"><i class="mdi mdi-eraser"></i></span></div>'   // v5263：改用橡皮擦图标（原退格键帽语义不符且内部小字发糊）
-    + '<div class="lb-km-modline">';   // v5255：去掉「操作方式」字样
-  // v5264（用户口径）：组合键不再单设按钮，与组合键槽位**合并成一个控件**（4 状态）
+  var seg = LB_KEYMAP_PICK.seg;
+  var g = lbKmSeg(cur, seg) || { k:[], mode:'', chord:'' };
+  var md = g.mode || '';
+  var _isMain = (seg === 'main');
+  var _isNew = (seg === 'new');
+  var _title = _isMain ? '主键' : (_isNew ? '新增备选键' : ('备选键 ' + (Number(seg) + 1)));
+  // 本组键位预览（组合键 + 主键/备选键 + 方式图标），key 用整组
+  var _gN = { k:(g.k || []).slice(), alt:[], mode:(g.mode || ''), chord:(g.chord || ''), modeOn:(g.modeOn || '') };
+  var _cus = _isNew ? false : lbKmSegCustom(aid, col, seg);
+  var _keysH = lbKmKeyViews(_gN, col, 20, _cus);
+  var h = '<div class="lb-km-selline"><span class="lb-km-seltag">' + _title + '</span>' + _keysH
+    + '<span class="lb-km-pclr" onclick="' + (_isMain ? 'lbKeymapClearKeys()' : 'lbKeymapDelSeg()') + '" title="' + (_isMain ? '清空主键组' : '删除该备选键') + '"><i class="mdi mdi-eraser"></i></span></div>'
+    + '<div class="lb-km-modline">';
+  // 操作方式（作用于本组）
   LB_KEYMAP_MODES.forEach(function(m){
     if (m.id === 'chord') return;
     h += '<span class="lb-km-pmod' + (md === m.id ? ' on' : '') + '" onclick="lbKeymapSetMode(\'' + m.id + '\')" title="' + m.n + '">'
-       + (m.ic ? lbKeyChipHtml(m.ic, 15) : '') + '<span class="lb-km-pmn">' + m.n + '</span></span>';   // v5254：图标 + 文字
+       + (m.ic ? lbKeyChipHtml(m.ic, 15) : '') + '<span class="lb-km-pmn">' + m.n + '</span></span>';
   });
   var _ci = lbKmMode('chord').ic;
   var _chip = function(){ return _ci ? lbKeyChipHtml(_ci, 15) : ''; };
-  var ck = cur.chord ? ((col === 'pad') ? lbKeymapSkinKey(cur.chord) : cur.chord) : '';
+  var ck = g.chord ? ((col === 'pad') ? lbKeymapSkinKey(g.chord) : g.chord) : '';
   if (LB_KEYMAP_PICK.pickFor === 'chord')
-    h += '<span class="lb-km-pchord picking" onclick="lbKeymapChordPick()" title="返回主键选择">' + _chip()
+    h += '<span class="lb-km-pchord picking" onclick="lbKeymapChordPick()" title="返回键位选择">' + _chip()
        + '<span class="lb-km-pmn">选组合键中 · 点此返回</span></span>';
   else if (md === 'chord')
-    h += '<span class="lb-km-pchord on" onclick="lbKeymapChordPick()" title="改选组合键">' + _chip()
+    h += '<span class="lb-km-pchord set" onclick="lbKeymapChordPick()" title="改选组合键">' + _chip()
        + '<span class="lb-km-pmn">组合键：' + (ck ? lbKeyChipHtml(lbKeySrc(ck), 16) : '未设') + '</span></span>';
   else
     h += '<span class="lb-km-pchord" onclick="lbKeymapChordStart()" title="启用组合键：与另一个键同时按下">' + _chip()
        + '<span class="lb-km-pmn">组合键</span></span>';
   h += '</div>';
+  /* v6829：底部按钮按「当前组」切换 —— 主键组可新增备选键；备选键组可再新增 / 删除 / 切到主键 */
+  h += '<div class="lb-km-modline" style="margin-top:2px">'
+     + '<span class="lb-km-pmod' + (_isMain ? ' on' : '') + '" onclick="lbKeymapGoSeg(\'main\')" title="编辑主键组">'
+     +   '<span class="lb-km-pmn">主键' + ((cur.k && cur.k.length) ? '' : '（未设）') + '</span></span>'
+     + '<span class="lb-km-pmod" onclick="lbKeymapAddAlt()" title="新增一个备选键（与主键是「或」的关系）">'
+     +   '<span class="lb-km-pmn">＋ 备选键' + (((cur.alt || []).length) ? ('（' + (cur.alt || []).length + '）') : '') + '</span></span>';
+  (cur.alt || []).forEach(function(o, i){
+    h += '<span class="lb-km-pmod' + ((seg === i) ? ' on' : '') + '" onclick="lbKeymapGoSeg(' + i + ')" title="编辑该备选键">'
+       + '<span class="lb-km-pmn">备选 ' + (i + 1) + '</span></span>';
+  });
+  h += '</div>';
   return h;
 }
-// v5253：弹层页头 / 底部提示（随「选组合键」模式变化）
+/* v6829：切到某一组（'main' / 索引 / 'new'）*/
+function lbKeymapGoSeg(seg){
+  LB_KEYMAP_PICK.seg = seg;
+  LB_KEYMAP_PICK.pickFor = '';
+  LB_KEYMAP_PICK.grp = {};
+  lbKeymapPickRefresh();
+}
+/* v6829：新增一个备选键（进入「待填」态，点一个键即创建） */
+function lbKeymapAddAlt(){
+  LB_KEYMAP_PICK.seg = 'new';
+  LB_KEYMAP_PICK.pickFor = '';
+  LB_KEYMAP_PICK.grp = {};
+  lbKeymapPickRefresh();
+  try { lbToast('点一个键，作为新的备选键'); } catch (e) {}
+}
+/* v6829：删除当前备选键组（主键组不在此列） */
+function lbKeymapDelSeg(){
+  var col = lbKeymapShowCol(), aid = LB_KEYMAP_PICK.aid;
+  var e = lbKeymapEff(aid); if (!e) return;
+  var cur = (col === 'pad') ? e.padN : e.kbmN;
+  var seg = LB_KEYMAP_PICK.seg;
+  if (seg === 'main'){ lbKeymapClearKeys(); return; }
+  var i = Number(seg);
+  if (isNaN(i)) return;
+  var alts = (cur.alt || []).slice();
+  if (!alts[i]) return;
+  alts.splice(i, 1);
+  lbKmWrite(aid, col, { k:(cur.k || []).slice(), alt:alts, mode:(cur.mode || ''), chord:(cur.chord || '') });
+  LB_KEYMAP_PICK.seg = 'main';
+  lbKeymapSave(); lbKeymapPickRefresh(); lbKeymapRender();
+}
 function lbKeymapPickHeadTxtHtml(){
   var a = lbKeymapAct(LB_KEYMAP_PICK.aid);
-  return '改「' + escapeHtml(a ? a.zh : '') + '」· ' + (lbKeymapShowCol() === 'kbm' ? '键盘 / 鼠标' : '手柄键');   // v5260：返回入口已合并到组合键槽位
+  var seg = LB_KEYMAP_PICK.seg;
+  var _segTxt = (seg === 'main' || seg === undefined) ? '主键组' : (seg === 'new' ? '新增备选键' : ('备选键 ' + (Number(seg) + 1)));
+  return '改「' + escapeHtml(a ? a.zh : '') + '」· ' + (lbKeymapShowCol() === 'kbm' ? '键盘 / 鼠标' : '手柄键') + ' · ' + _segTxt;
 }
 function lbKeymapPickFootHtml(){
+  if (LB_KEYMAP_PICK.seg === 'new') return '点一个键 = 新建该备选键（与主键是「或」的关系）';
   if (LB_KEYMAP_PICK.pickFor === 'chord') return '点键 = 设为组合键（再点同一键取消）· 组合键与主键需不同';
-  return '点键 = 设为主键（再点取消）· 组合键在「组合键」方式下另选';
+  return '点键 = 设为该组的键（再点同一键取消）· 组合键在「组合键」方式下另选';
 }
 function lbKeymapPickRefresh(){
   var b = document.getElementById('lbKmPickBody'); if (b) b.innerHTML = lbKeymapPickBody();
@@ -46087,18 +50682,32 @@ function lbKeymapToggleKey(k){
   var col = lbKeymapShowCol(), aid = LB_KEYMAP_PICK.aid;
   var e = lbKeymapEff(aid);
   var cur = (col === 'pad') ? e.padN : e.kbmN;
-  var kBase = lbKmBase(k);   // v5225：一律存短名，与默认键位同口径
-  // v5253：选组合键模式 —— 单键设置（再点同一键取消），不动主键列表
-  if (LB_KEYMAP_PICK.pickFor === 'chord'){
-    var same = !!cur.chord && lbKmBase((col === 'pad') ? lbKeymapSkinKey(cur.chord) : cur.chord) === kBase;
-    lbKmWrite(aid, col, { k:cur.k.slice(), mode:'chord', chord:(same ? '' : kBase) });
+  var seg = LB_KEYMAP_PICK.seg;
+  var g = lbKmSeg(cur, seg) || { k:[], mode:'', chord:'' };
+  var kBase = lbKmBase(k);   // v5225：一律存短名
+  var _norm = function(x){ return lbKmBase((col === 'pad') ? lbKeymapSkinKey(x) : x); };
+  // v6829：新增备选键 —— 点第一个键即创建该组
+  if (seg === 'new'){
+    var alts0 = (cur.alt || []).slice();
+    alts0.push({ k:kBase, mode:'', chord:'' });
+    lbKmWrite(aid, col, { k:(cur.k || []).slice(), alt:alts0, mode:(cur.mode || ''), chord:(cur.chord || '') });
+    LB_KEYMAP_PICK.seg = alts0.length - 1;
     lbKeymapSave(); lbKeymapPickRefresh(); lbKeymapRender();
     return;
   }
-  // v5256：主键只允许一个 —— 点键 = 替换当前主键；点已选中的那一个 = 取消
-  var list = cur.k.slice();
-  var same = (list.length === 1) && (lbKmBase((col === 'pad') ? lbKeymapSkinKey(list[0]) : list[0]) === kBase);
-  lbKmWrite(aid, col, { k:(same ? [] : [kBase]), mode:(cur.mode || ''), chord:(cur.chord || '') });
+  // 选组合键模式（作用于当前组）
+  if (LB_KEYMAP_PICK.pickFor === 'chord'){
+    var same = !!g.chord && _norm(g.chord) === kBase;
+    var ng = { k:(g.k || []).slice(), mode:'chord', chord:(same ? '' : kBase), modeOn:(g.modeOn || '') };
+    lbKmWrite(aid, col, lbKmSegSet(cur, seg, ng));
+    lbKeymapSave(); lbKeymapPickRefresh(); lbKeymapRender();
+    return;
+  }
+  // 设置该组的键（点已选中的那个 = 取消）
+  var sameK = (g.k && g.k.length === 1 && _norm(g.k[0]) === kBase);
+  var ng2 = { k:(sameK ? [] : [kBase]), mode:(g.mode || ''), chord:(g.chord || ''), modeOn:(g.modeOn || '') };
+  lbKmWrite(aid, col, lbKmSegSet(cur, seg, ng2));
+  if (seg !== 'main') LB_KEYMAP_PICK.seg = seg;   // 保持在该备选组
   lbKeymapSave(); lbKeymapPickRefresh(); lbKeymapRender();
 }
 // v5253：操作方式单选 —— 点新的替换旧的；点已选中的那一个 = 取消回普通按压
@@ -46106,10 +50715,12 @@ function lbKeymapSetMode(mode){
   var col = lbKeymapShowCol(), aid = LB_KEYMAP_PICK.aid;
   var e = lbKeymapEff(aid);
   var cur = (col === 'pad') ? e.padN : e.kbmN;
-  var cm = cur.mode || '';
+  var seg = LB_KEYMAP_PICK.seg;
+  var g = lbKmSeg(cur, seg) || { k:[], mode:'', chord:'' };
+  var cm = g.mode || '';
   var nm = (cm === mode) ? '' : mode;
-  var nc = (nm === 'chord') ? (cur.chord || '') : '';   // 离开组合键模式即清掉组合键
-  lbKmWrite(aid, col, { k:cur.k.slice(), mode:nm, chord:nc });
+  /* v6818：离开组合键方式时**不再清空**组合键（数据留着，切回即恢复） */
+  lbKmWrite(aid, col, lbKmSegSet(cur, seg, { k:(g.k || []).slice(), mode:nm, chord:(g.chord || ''), modeOn:(g.modeOn || '') }));
   LB_KEYMAP_PICK.pickFor = '';
   lbKeymapSave(); lbKeymapPickRefresh(); lbKeymapRender();
 }
@@ -46118,7 +50729,14 @@ function lbKeymapChordStart(){
   var col = lbKeymapShowCol(), aid = LB_KEYMAP_PICK.aid;
   var e = lbKeymapEff(aid); if (!e) return;
   var cur = (col === 'pad') ? e.padN : e.kbmN;
-  lbKmWrite(aid, col, { k:cur.k.slice(), mode:'chord', chord:(cur.chord || '') });
+  var seg = LB_KEYMAP_PICK.seg;
+  var g = lbKmSeg(cur, seg) || { k:[], mode:'', chord:'' };
+  /* v6818：不允许产生「只有组合键没有主键」的半成品 */
+  if (!g.k || !g.k.length){
+    try { lbToast('请先点一个键设为该组的键，再设组合键'); } catch (eT0) {}
+    return;
+  }
+  lbKmWrite(aid, col, lbKmSegSet(cur, seg, { k:(g.k || []).slice(), mode:'chord', chord:(g.chord || ''), modeOn:(g.modeOn || '') }));
   LB_KEYMAP_PICK.pickFor = 'chord';
   LB_KEYMAP_PICK.grp = {};
   lbKeymapSave(); lbKeymapPickRefresh(); lbKeymapRender();
@@ -46131,8 +50749,16 @@ function lbKeymapChordPick(){
 }
 function lbKeymapClearKeys(){
   var col = lbKeymapShowCol(), aid = LB_KEYMAP_PICK.aid;
-  var m = lbKeymapProf().map;
-  if (m[aid]) { delete m[aid][col]; if (m[aid].pad === undefined && m[aid].kbm === undefined) delete m[aid]; }
+  var e = lbKeymapEff(aid); if (!e) return;
+  var cur = (col === 'pad') ? e.padN : e.kbmN;
+  var seg = LB_KEYMAP_PICK.seg;
+  if (seg === 'main'){
+    // 清空主键组，保留备选键
+    lbKmWrite(aid, col, { k:[], alt:(cur.alt || []).slice(), mode:'', chord:'' });
+  } else {
+    lbKeymapDelSeg();
+    return;
+  }
   lbKeymapSave(); lbKeymapPickRefresh(); lbKeymapRender();
 }
 // v5240 手风琴：只允许一组展开；点已展开的组则全收起（写显式 false 是为了阻止回落默认展开）
@@ -46141,11 +50767,13 @@ function lbKeymapPickToggle(name){
   LB_KEYMAP_PICK.grp = {}; LB_KEYMAP_PICK.grp[name] = !was;
   lbKeymapPickRefresh();
 }
-function lbKeymapPick(aid, anchorEl){
+function lbKeymapPick(aid, anchorEl, seg){
   // v5444：只读作用域（物种/器械操作）不得进入改键弹层（界面上已无入口，这里再兜一层）
   try { if (lbKeymapScopeReadOnly() && !lbKmColEditable(aid, lbKeymapShowCol())) { try { lbToast('该动作键位为默认绑定，不可修改（请用「动作管理」维护）'); } catch (eT) {} return; } } catch (eRo4) {}   // v5460：名单内动作放开 · v5464：按列判定
   var a = lbKeymapAct(aid); if (!a) return;
+  /* v6829：seg = 'main' | 备选键索引 | 'new'（点哪组开哪组的独立浮窗） */
   LB_KEYMAP_PICK.aid = aid; LB_KEYMAP_PICK.grp = {}; LB_KEYMAP_PICK.pickFor = '';
+  LB_KEYMAP_PICK.seg = (seg === undefined || seg === null) ? 'main' : seg;
   var old = document.querySelector('.lb-km-pickwrap'); if (old) old.remove();
   var overlay = document.createElement('div'); overlay.className = 'lb-picker-overlay lb-km-pickwrap';
   overlay.onclick = function(e){ if (e.target === overlay) overlay.remove(); };
@@ -47500,6 +52128,18 @@ function lbPrefsKeys(){
   } catch (e2) {}
   try { var sk = lbSpeciesOpsKey(); if (sk && ks.indexOf(sk) < 0) ks.push(sk); } catch (e3) {}   // v5405：物种操作键位
   try { var dk = lbKeymapDevsKey(); if (dk && ks.indexOf(dk) < 0) ks.push(dk); } catch (e4) {}   // v5410：操作设备勾选
+  /* v6821（关键）：把本地所有「旧式角色名」键位存储也纳入同步名单 ——
+     后端 POST 是整份覆盖，不带上它们的话，新版 push 会把云端另一端的数据直接删掉
+     （本会话实测过：移动端旧版与 PC 新版互相抹除对方整份键位）。 */
+  try {
+    var _ks = Object.keys(localStorage);
+    for (var _i = 0; _i < _ks.length; _i++) {
+      var _k = _ks[_i];
+      if (_k.indexOf('lb_keymap') !== 0) continue;
+      if (ks.indexOf(_k) >= 0) continue;
+      ks.push(_k);
+    }
+  } catch (e5) {}
   return ks;
 }
 var LB_PREFS = { user: '', timer: 0, ts: 0, lastPull: 0 };   // v4841：lastPull 用于可见性唤醒节流
@@ -47538,6 +52178,7 @@ function lbPrefsAfterApply(){
   try{ if(LB._watchOpen) lbWatchRender(); }catch(e){}   // v4841：已打开的浮窗重绘
   try{ if(LB._maintOpen) lbMaintRender(); }catch(e){}
   try{ if(LB._todoOpen) lbTodoRender(); }catch(e){}
+  try{ if(typeof lbKeymapAbsorbAfterPrefs === 'function') lbKeymapAbsorbAfterPrefs(); }catch(eKm){}   // v6821：键位双写吸收
 }
 function lbPrefsApply(keys){
   if(!keys) return 0;
@@ -47584,8 +52225,23 @@ function lbPrefsPull(cb){
       var _applied = 0, _needPush = false;
       lbPrefsKeys().forEach(function(k){
         var hasCloud = (k in ck);
-        var ct = hasCloud ? (Number(ckts[k] || cloudTs) || 0) : 0;   // 旧数据无 kts ⇒ 用全局 updatedAt 兜底
-        var lt = Number(lkts[k] || 0) || 0;
+        /* v6822（关键）：旧式「角色名」键位 key 必须按**数据自带的 updatedAt** 比较，不能用 kts ——
+           旧版客户端保存时不写 kts（ls kts 永恒不变），按 kts 判会得出「两边一样」或「本地更新」，
+           ⇒ 本地陈旧副本反而覆盖云端另一端的真实新数据（本会话实测发生过两次丢改动）。
+           非键位键 / 账号层键仍走原 kts 逻辑。 */
+        var _kmLegacy = false;
+        try { _kmLegacy = (k.indexOf('lb_keymap') === 0) && (lbKeymapAcctTargetKey(k, lbKeymapOwner()) !== k); } catch (eLg) { _kmLegacy = false; }
+        var _dataTs = function(o){ return (o && typeof o === 'object' && !Array.isArray(o)) ? (Number(o.updatedAt) || 0) : 0; };
+        var ct, lt;
+        if (_kmLegacy) {
+          ct = hasCloud ? (_dataTs(ck[k]) || Number(ckts[k] || 0) || 0) : 0;
+          var _lo = null;
+          try { _lo = JSON.parse(localStorage.getItem(k) || 'null'); } catch (eLo) { _lo = null; }
+          lt = _dataTs(_lo) || Number(lkts[k] || 0) || 0;
+        } else {
+          ct = hasCloud ? (Number(ckts[k] || cloudTs) || 0) : 0;   // 旧数据无 kts ⇒ 用全局 updatedAt 兜底
+          lt = Number(lkts[k] || 0) || 0;
+        }
         if(!hasCloud){
           try{ if(localStorage.getItem(k) != null) _needPush = true; }catch(e){}   // 云端缺此键：本地有则补传
           return;
@@ -47606,6 +52262,7 @@ function lbPrefsPull(cb){
 }
 function lbPrefsInit(){
   var u = lbPrefsUser();
+  try { lbKeymapMigrateToAccount(); } catch (eMig2) {}   // v6818：先迁移再拉，避免新 key 空档
   if(!u || u === LB_PREFS.user) return;   // 幂等：同一账号只拉一次
   LB_PREFS.user = u;
   lbPrefsPull();
@@ -51483,6 +56140,8 @@ function lbOnlineEosToSrv(online){
   online = online || LB._onlineByServer || {};
   var m = {};
   Object.keys(online).forEach(function(a){
+    /* v6545：与 lbOnlineRolesOf 同口径 —— 人数为 0 的服，其残留 players 一律不认 */
+    if (Number((online[a] || {}).count || 0) <= 0) return;
     ((online[a] && online[a].players) || []).forEach(function(p){
       if(p && p.eosId && !m[p.eosId]) m[p.eosId] = a;
     });
@@ -51495,6 +56154,11 @@ function lbOnlineRolesOf(abbr){
   var online = LB._onlineByServer || {};
   var o = online[abbr];
   if(!o || !Array.isArray(o.players)) return null;
+  /* v6545（用户口径「在线人数清 0 就把玩家列表置空」）：
+     **以 count 为权威** —— 人数为 0 时无论 players 里残留了什么都视为无人。
+     专门覆盖 Bob（俱乐部）这类「进服记录会残留、人数已归零」的情形，
+     避免玩家列表一直挂着一个早已离线的人。 */
+  if (Number(o.count || 0) <= 0) return [];
   var data = LB._cache && LB._cache.data;
   var out = [];
   o.players.forEach(function(p){
@@ -51617,7 +56281,7 @@ function lbKickPlayerCmd(action, eosId){
 }
 /* v6065（用户口径）：踢人可在「服务器控制」和「安全回档」两处发起 ⇒
    结果横幅同时写两个容器（不存在的那侧自动跳过），成功 8s 自动隐藏、失败常驻。 */
-var LB_KICKRES_IDS = ['lbSrvCtlKickRes', 'lbArkBkKickRes'];
+var LB_KICKRES_IDS = ['lbSrvCtlKickRes', 'lbArkBkKickRes', 'lbUpdKickRes'];   /* v6531：补「服务器更新」浮窗（lbUpdOnline 复用同一在线角色栏） */
 function lbSrvCtlKickRes(ok, text){
   var any = false;
   LB_KICKRES_IDS.forEach(function(id){
@@ -51652,7 +56316,11 @@ function lbSrvCtlKickGo(srv, eosId){
   var doKick = function(){
     var t0 = Date.now();
     lbSrvCtlKickRes(1, '正在踢出 ' + pname + '…');
-    fetch(LB_API + '/api/srvctl/rcon?t=' + Date.now(), {
+    /* v6531 根因修复：原来是裸 fetch，headers 只有 Content-Type —— **没带 Authorization**
+       ⇒ 后端 _srvctl_guard 拿不到会话，一律回 401「会话已过期，请重新登录」。
+       改为走全项目统一封装 lbSrvCtlFetchW（自动加 Authorization: Bearer <token> + no-store），
+       与 action / rcon / startq/abort 等写接口保持一致。 */
+    lbSrvCtlFetchW(lbSrvCtlApi() + '/api/srvctl/rcon?t=' + Date.now(), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: lbSrvCtlUser(), servers: [srv], action: 'rcon', message: cmd })
     }).then(function(r){ return r.json().then(function(j){ return { s: r.status, j: j }; }); })
@@ -51826,12 +56494,25 @@ async function lbOpenAlliancePos(){
         /* v5995 根因修复：同一 EOS 账号下可能有多个角色（如「板板」@Ext 与「人类」@Cen），
            旧逻辑只按 EOS 判断在某服在线 -> 两个角色都被算作该服在线（重复 chip/DOM id 重复）。
            双条件：EOS 在该服在线 AND 该角色 pid 的所在服也是该服（pidSrv 缺失时回退旧逻辑）。 */
+        /* v6703（BUG 修复「附件1 显示 JaronV5 在线，地图信息却 0 人」）：
+           v5995 的双条件里 `lbPidServer(m.pid)===abbr` 读的是**存档里的 pidSrv（角色最后所在服）**，
+           不是实时在线服 ⇒ 角色跨服玩过（存档在 Val、人在 Los）就被整条剔除，地图统计恒 0。
+           现改为：EOS 在线上匹配后**按 EOS 去重** —— 同一 EOS 命中多个联盟角色时
+           优先取 `pidSrv === 当前服` 的那个（保留 v5995 防重复的意图），只有一个时直接用。 */
+        var _cand = [];
         lbCollectAllianceMembers(alli.id).forEach(function(m){
           var eos = m.eosId || lbPidToEos(m.pid);
           if(!eos || eosToSrv[eos] !== abbr) return;
-          var _ps = lbPidServer(m.pid);
-          if(_ps && _ps !== abbr) return;
-          onNames.push(m.name || m.pid);
+          _cand.push({ nm: (m.name || m.pid), ps: lbPidServer(m.pid), eos: eos });
+        });
+        var _byEos = {};
+        _cand.forEach(function(c){ (_byEos[c.eos] = _byEos[c.eos] || []).push(c); });
+        Object.keys(_byEos).forEach(function(e){
+          var arr = _byEos[e];
+          var pick = null;
+          for (var _k = 0; _k < arr.length; _k++){ if (arr[_k].ps === abbr){ pick = arr[_k]; break; } }
+          if (!pick) pick = arr[0];
+          onNames.push(pick.nm);
         });
       }
       _n += onNames.length;
@@ -53971,16 +58652,16 @@ function lbRouteHelpClose(){
   if(ov) ov.style.display = 'none';
 }
 
-/* v6366（用户口径）：三卡右下角「清空本地包」—— 参考「清空缓存」的做法：
+/* v6366（用户口径）：三卡右下角「清空缓存」—— 参考「清空缓存」的做法：
    同款 .lb-upd-link 链接 + 悬停 tips + 危险确认卡 → POST /api/pkg/clear → toast + 刷新卡片。
    三张卡（汉化包 / MOD / API）共用同一入口，kind 决定清哪个目录。
-   ⚠ 本地包未就绪 / 正在下载时链接置灰（.dis，不带 onclick）。 */
+   ⚠ 缓存未就绪 / 正在下载时链接置灰（.dis，不带 onclick）。 */
 function lbUpdPkgClearLink(kind, hasPkg, busy, tip){
   var dis = (!hasPkg || !!busy);
   return '<a class="lb-tipb lb-upd-link' + (dis ? ' dis' : '') + '" '
        + (dis ? '' : ('onclick="lbUpdPkgClear(\'' + kind + '\')" '))
        + 'title="' + lbMdEsc(tip) + '">'
-       + '<i class="mdi mdi-delete-sweep-outline" style="font-size:13px"></i>清空本地包</a>';
+       + '<i class="mdi mdi-delete-sweep-outline" style="font-size:13px"></i>清空缓存</a>';
 }
 function lbUpdPkgClear(kind){
   var M = LB_UPD.mods || {}, A = LB_UPD.api || {};
@@ -53988,18 +58669,18 @@ function lbUpdPkgClear(kind){
   var _zp = Z.pkg || {}, _mp = M.localPack || {}, _ap = A.localPack || {};
   var nm = '', dir = '', det = '', extra = '';
   if (kind === 'zh'){
-    nm = '汉化包本地包';
+    nm = '汉化包缓存';
     dir = String(_zp.cacheRoot || 'D:\\Cache-zh');
     det = _zp.ready ? ('当前版本 V' + String(_zp.ver || '?')) : '未下载';
     extra = '含 backup 分发前备份目录（一并删除）';
   } else if (kind === 'mods'){
-    nm = 'MOD 本地包';
-    /* v6367：本地包实际由两处组成 —— _modpkg（CurseForge 真·本地包）+ 最新批次 mb*\mods */
+    nm = 'MOD 缓存';
+    /* v6367：缓存实际由两处组成 —— _modpkg（CurseForge 真·缓存）+ 最新批次 mb*\mods */
     dir = 'D:\\ARK Server\\_upd_cache\\_modpkg + 批次 mb*\\mods';
     det = _mp.count ? (String(_mp.count) + ' 个版本 · ' + lbUpdFmtSz(_mp.bytes)) : '未下载';
     extra = '两处一起清（否则卡片数字不会归零）\n服务器上的 MOD 不受影响';
   } else if (kind === 'api'){
-    nm = 'API 本地包';
+    nm = 'API 包缓存';
     dir = 'D:\\ARK Server\\_upd_cache\\_apipkg';
     det = _ap.count ? (String(_ap.count) + ' 个版本 · ' + lbUpdFmtSz(_ap.bytes)) : '未下载';
     extra = '不动 \\\\Tnas\\public\\ServerOpsKitAPI 自研源';
@@ -54017,7 +58698,7 @@ function lbUpdPkgClear(kind){
       .then(function(x){
         var j = x.j || {};
         if (j.ok){
-          try { lbToast(j.msg || '本地包已清空'); } catch(e1){}
+          try { lbToast(j.msg || '缓存已清空'); } catch(e1){}
         } else {
           try { lbToast('清空失败：' + (j.error || ('HTTP ' + x.s))); } catch(e2){}
         }
@@ -54032,12 +58713,12 @@ function lbUpdPkgClear(kind){
   var ok = false;
   try {
     ok = lbAskCard({
-      tone: 'danger', badge: '清空本地包',
+      tone: 'danger', badge: '清空缓存',
       title: '清空' + nm,
       servers: [],
       steps: ['校验无进行中任务', '删除 ' + dir, '刷新卡片状态'],
       note: '【清空目标】\n' + dir + '\n\n【当前】' + det + '\n' + (extra ? (extra + '\n') : '')
-          + '\n只写缓存目录，不改动任何服务器。删除后需重新「更新本地包」才能再次分发，此操作不可撤销。',
+          + '\n只写缓存目录，不改动任何服务器。删除后需重新「更新缓存」才能再次分发，此操作不可撤销。',
       okText: '确认清空',
       cancelText: '取消',
       onOk: go
@@ -54047,7 +58728,7 @@ function lbUpdPkgClear(kind){
 }
 
 
-/* ===== v6371（用户口径）：「更新本地包」三卡统一运行态条 =====
+/* ===== v6371（用户口径）：「更新缓存」三卡统一运行态条 =====
    背景：汉化卡会在卡片内实时显示进度文案 + 轮询刷新，MOD/API 点完只有一句 toast，
         卡片里毫无动静 ⇒ 看起来像没反应。现统一为「进度条 + 百分比 + 文案」。
    数据源：任务总线（zhprepare|latest / modpkg|fetch / apipkg|latest）—— 后端已给 pct/msg/phase，
@@ -54126,7 +58807,7 @@ function lbUpdPkgBarsPaint(){
     if (el) el.innerHTML = lbUpdPkgBarHtml(k);
     if (btn){
       var sp = btn.querySelector('span.lb-pkgbtn-txt');
-      if (sp) sp.textContent = run ? '更新中…' : '更新本地包';
+      if (sp) sp.textContent = run ? '更新中…' : '更新缓存';
       if (run) btn.classList.add('dis'); else btn.classList.remove('dis');
     }
     /* 运行结束（run→ok/fail/skip）⇒ 触发一次卡片数据刷新，否则「已就绪 N/M」不会变 */
@@ -54138,7 +58819,7 @@ function lbUpdPkgBarsPaint(){
         if (k === 'zh'){ if (typeof lbZhFetch === 'function') lbZhFetch(true); }
         else { if (typeof lbUpdFetch === 'function') lbUpdFetch(); }
       } catch (e) {}
-      try { lbToast(k === 'zh' ? '汉化包本地包已更新' : (k === 'mods' ? 'MOD 本地包已更新' : 'API 本地包已更新')); } catch (e2) {}
+      try { lbToast(k === 'zh' ? '汉化包缓存已更新' : (k === 'mods' ? 'MOD 缓存已更新' : 'API 包缓存已更新')); } catch (e2) {}
     } else if (ph && ph !== prev){
       LB_PKG_PH[k] = ph;
     }
@@ -54207,6 +58888,8 @@ function lbUpdVerDet(newKey, map, miss, opt){
        对 baseline 目录实测返回中文字符串（旧版），直接拼会出现【旧版】旧版 · 8 服。
        这类键不显示版本号段，只显示服数与名单。 */
     var raw = (isNew && o.newLabel) ? String(o.newLabel) : norm(k);
+    /* v6739：可选显示形态化（API 卡传 lbVerDisp 把 0.92 显示为 0.9.2），不影响分组与比较 */
+    if (o.verFmt && !(isNew && o.newLabel)) raw = o.verFmt(raw);
     var keyTxt = /^\d/.test(raw)
                ? ((isNew && o.newLabel) ? raw : ((o.prefix || '') + raw))
                : '';
@@ -54225,7 +58908,7 @@ function lbUpdVerDet(newKey, map, miss, opt){
 }
 
 /* ===== v6398（用户口径「已就绪、已最新 不能放到同一个状态机里么？」）=====
-   四张卡的「本地包」统一为**单一状态机**，一行只出一个状态词，按优先级：
+   四张卡的「缓存」统一为**单一状态机**，一行只出一个状态词，按优先级：
      ① 未下载           灰   （ready=false）
      ② 已下载未解压     黄   （ready=false 且 opt.pending=true）
      ③ 待升级（最新 X） 黄   （ready + 落后权威线上最新）
@@ -54233,10 +58916,70 @@ function lbUpdVerDet(newKey, map, miss, opt){
      ⑤ 已就绪           绿   （ready 但该源暂取不到权威线上版本，退化为可分发）
    口径：只与**权威线上最新版本号**比，不与「各服已装 / SOK 自研源 / 策略基准」比。
      · 缓存卡：本地缓存 buildId   vs Steam 官方最新 buildId（api.steamcmd.net）
-     · 汉化卡：本地包 V 版本       vs 云端最新（remote.ver）
-     · MOD 卡：本地包里的 pid_fid  vs CurseForge 线上最新 fid
-     · API 卡：本地包版本          vs Discord 公告 latest.verNum
+     · 汉化卡：缓存 V 版本       vs 云端最新（remote.ver）
+     · MOD 卡：缓存里的 pid_fid  vs CurseForge 线上最新 fid
+     · API 卡：缓存版本          vs Discord 公告 latest.verNum
    参数：ready / need / latest + opt{prefix, cur, pending, emptyTxt, pendingTxt} */
+/* v6684（用户口径「所有绿条的口径都不该是各服已装版本集合里的最大值」）：
+   统一版本比较器 —— 版本号按「数字串联」归一化后比大小。
+   兼容两段式（0.84）与三段式（0.8.5）混用：
+     "0.84" -> "84"、"0.8.5" -> "85" ⇒ 0.84 < 0.8.5
+   （旧逻辑按段 parseInt 会得 84 > 8，把 0.8.5 判成旧版）。
+   去尾零：0.10 与 0.1 视为同版。 */
+/* v6739（用户口径「版本号要写 0.n.n 三段式」）：插件的 PluginInfo.json 历史上把
+   0.9.2 写成两段 "0.92"（各服实际装的版本键就是 0.92 / 0.93），而权威源已是 0.9.3 三段。
+   ⇒ 显示层统一补成三段：0.92 -> 0.9.2、0.93 -> 0.9.3。
+   ⚠️ 只用于**显示**：版本比较一律走 lbVerNorm（0.92 与 0.9.2 归一化都是 "92"，判定不变）。
+   ⚠️ 不碰 2.11（AsaApi 库）/ 1.1（Permissions）这些正常的 major.minor。 */
+function lbVerDisp(x) {
+  var s = String(x === undefined || x === null ? '' : x).trim();
+  return /^0\.\d\d$/.test(s) ? ('0.' + s.charAt(2) + '.' + s.charAt(3)) : s;
+}
+function lbVerNorm(x) {
+  var d = String(x === undefined || x === null ? '' : x).replace(/^[vV]/, '').replace(/[^0-9]/g, '');
+  d = d.replace(/^0+/, '');
+  d = d.replace(/0+$/, '');
+  return d || '0';
+}
+/* v6779（用户口径 2026-11-16「插件端放弃 patch 级，版本号两段式」）：
+   原实现「去掉所有点再比字符串长度」有两个硬伤：
+     ① 跨大版本必错：lbVerNorm('1.0')='1'、lbVerNorm('0.95')='95' ⇒ **1.0 被判成比 0.95 旧**；
+     ② 尾零碰撞：0.9.1 与 0.9.10、0.94 与 0.940 全被当成同一版本。
+   新实现：分段取整数逐段比较；三段历史写法按旧约定并成两段（0.9.4 → 0.94，与「0.84 == 0.8.4」一致）。 */
+function lbVerSeg(x) {
+  /* v6793（用户口径 2026-11-16「后缀比较 以及 有后缀的比没后缀的大」）：
+     先拆出尾部字母后缀（1.04b -> 主体 1.04 + 后缀 b），
+     后缀转成一段权重追加到段数组末尾：无后缀=0、a=1、b=2 …（多位按 26 进制累加）
+     这样交给 lbVerCmp 逐段数值比较即可，无需改动比较器本身。
+       1.04  -> [1,4,0]
+       1.04a -> [1,4,1]
+       1.04b -> [1,4,2]
+       1.05  -> [1,5,0]  ⇒ 1.05 > 1.04b > 1.04a > 1.04 */
+  var s = String(x === undefined || x === null ? '' : x).replace(/^[vV]/, '').trim();
+  var suf = '';
+  var mm = s.match(/^(.*?)([A-Za-z]+)$/);
+  if (mm && mm[2]) { suf = mm[2].toLowerCase(); s = mm[1]; }
+  var p = s.split('.');
+  var q = [];
+  for (var i = 0; i < p.length; i++) { if (p[i] !== '') q.push(p[i]); }
+  if (q.length >= 3) q = [q[0], String(q[1]) + String(q[2])];
+  var r = [];
+  for (var j = 0; j < q.length; j++) { r.push(parseInt(q[j], 10) || 0); }
+  var w = 0;
+  for (var k = 0; k < suf.length; k++) { w = w * 26 + (suf.charCodeAt(k) - 96); }
+  r.push(w);
+  return r;
+}
+function lbVerCmp(a, b) {
+  var A = lbVerSeg(a), B = lbVerSeg(b), n = Math.max(A.length, B.length);
+  for (var i = 0; i < n; i++) {
+    var x = (A[i] === undefined ? 0 : A[i]), y = (B[i] === undefined ? 0 : B[i]);
+    if (x !== y) return (x > y) ? 1 : -1;
+  }
+  return 0;
+}
+function lbVerSame(a, b) { return lbVerCmp(a, b) === 0; }
+
 function lbUpdPkgState(ready, need, latest, opt){
   var o = opt || {};
   if (!ready){
@@ -54249,7 +58992,7 @@ function lbUpdPkgState(ready, need, latest, opt){
   var C = String(o.cur === undefined || o.cur === null ? '' : o.cur).trim();
   if (need){
     return '　<b style="color:#fbbf24" title="' + lbMdEsc(
-        '【本地包待升级】\n本地包：' + (C || '—') + '\n线上最新：' + L
+        '【缓存待升级】\n缓存：' + (C || '—') + '\n线上最新：' + L
       + '\n\n只与权威线上最新版本号比对'
       + '\n（不看各服已装 / 自研源 / 策略基准）') + '">待升级（最新 ' + P + lbMdEsc(L) + '）</b>';
   }
@@ -54679,8 +59422,9 @@ function lbStartqAbortBtnHtml(){
   if (!q) return '';
   var n = ((q.active || []).length) + ((q.pending || []).length) + ((q.queued || []).length);
   if (!n) return '';
-  return '<span class="ql-sep">·</span>'
-       + '<button class="lb-srvctl-mini" style="margin-left:2px;vertical-align:middle"'
+  /* v6781（用户口径「方案 A」）：去掉前导「·」—— 位置交由其前面的 `flex:1` 占位负责，
+     按钮自带 margin-left:8px 与左侧统计组拉开间距。 */
+  return '<button class="lb-srvctl-mini" style="margin-left:8px;vertical-align:middle"'
        + ' title="中止启动队列（强制终止正在启动的服；已在运行的不受影响）"'
        + ' onclick="lbStartqAbort()"><i class="mdi mdi-stop-circle-outline"></i></button>';
 }
@@ -54777,6 +59521,12 @@ function lbUpdVerFillManifest(bid){
         dino_backend.py，前端版本号不会动 ⇒ 容易误以为"没更新"。
    数据源：GET /api/health 的 code.size（后端文件字节数）+ code.mtime（文件修改时间）
         + startedAt / uptimeSec（本进程启动时间与已运行秒数） */
+/* v6638（用户口径）：界面只显示短版本（v20261112-6637 → v6637），完整版本放 title —— 移动端窄屏放不下 */
+function lbVerShort(){
+  var v = String((typeof LB_VERSION === 'string' && LB_VERSION) ? LB_VERSION : '');
+  var m = v.match(/-(\d+)$/);
+  return m ? ('v' + m[1]) : v;
+}
 function lbBeVerLoad(){
   var el = document.getElementById('lbBeVer');
   if(!el) return;
@@ -54829,12 +59579,33 @@ function lbUpdSrvCtlEntrySync(){
 }
 
 /* ===== v6452（用户口径「汉化包、MOD 的底栏 左侧加两个功能：部署到本机」）=====
-   把服务器上的**本地包**（汉化 D:\Cache-zh / MOD _upd_cache\_modpkg）写到用户 PC 的 ASA 目录。
+   把服务器上的**缓存**（汉化 D:\Cache-zh / MOD _upd_cache\_modpkg）写到用户 PC 的 ASA 目录。
    浏览器硬限制：网页读不到 Steam 库路径（注册表/steamapps 都在磁盘上）
    ⇒ 首次点一次 showDirectoryPicker 选 Steam 库根，handle 存 IndexedDB，之后免选（权限失效再点一次）。
    MOD 侧载依据（社区一致口径）：ShooterGame\Content\Mods\<项目ID>\ + <项目ID>.mod 两件套；
    官方社区指南明确 ASA 没有手动侧载机制，故这里**不覆盖已有 .mod**，只补文件内容。 */
 var LB_LOCAL = { handle: null, game: null, busy: false, msg: '' };
+
+/* ===== v6487（用户口径 2026-11-10）=====
+   需求②：「不支持的设备上应该看不到这两个『部署到本机』」——
+   判定 = 非 Windows **或** 浏览器不支持目录 API ⇒ 都算不支持（ASA 客户端仅 Windows）。
+   Chromium 系优先用 userAgentData.platform（可靠），取不到再回退 UA 正则。
+   注意：VS Code 内置浏览器（Electron）UA 含 Windows NT ⇒ 判定为 Windows，正常显示。 */
+function lbLocalSupported(){
+  try {
+    if (typeof window.showDirectoryPicker !== 'function') return false;
+    var p = '';
+    try { p = String((navigator.userAgentData && navigator.userAgentData.platform) || ''); } catch (e0) {}
+    if (!p) {
+      var ua = String(navigator.userAgent || '');
+      if (/Windows NT|Win64|WOW64/i.test(ua)) p = 'Windows';
+    }
+    return /^Windows/i.test(p);
+  } catch (e) { return false; }
+}
+
+/* 探测状态（内存）：busy 防并发、res 缓存结果、at 缓存时间、open 记录明细展开态 */
+var LB_LOCAL_PROBE = { busy: false, loading: false, pending: false, res: null, at: 0, open: { mods: false, zh: false } };
 
 function lbLocalIdb(){
   return new Promise(function(res, rej){
@@ -54984,14 +59755,843 @@ function lbLocalFmt(n){
   if (n >= 1024) return (n / 1024).toFixed(0) + ' KB';
   return n + ' B';
 }
+/* ===== v6487：本机状态只读探测 =====
+   铁律：只 queryPermission，**绝不 requestPermission、绝不 lbLocalForget**
+   —— 否则在无手势时机调用会误删 IndexedDB 里记住的句柄，反而导致下次必须重选目录。 */
+async function lbLocalProbe(base, hd){
+  var out = { ok: false, why: '', modErr: '', game: null, mods: [], zh: null, at: Date.now() };
+  if (!lbLocalSupported()) { out.why = 'api_unsupported'; return out; }
+  var hh = null;
+  try { hh = await lbLocalIdbGet('asaLib'); } catch (e) { hh = null; }
+  if (!hh) { out.why = 'no_handle'; return out; }
+  try {
+    var p = await hh.queryPermission({ mode: 'readwrite' });
+    if (p !== 'granted') { out.why = 'perm_lost'; return out; }
+  } catch (e1) { out.why = 'perm_lost'; return out; }
+  var g = null;
+  try { g = await lbLocalLocate(hh); } catch (e2) { g = null; }
+  if (!g) { out.why = 'bad_root'; return out; }
+  out.game = { path: String(g.path || ''), name: String(hh.name || '') };
+
+  /* ---- MOD ---- */
+  var pids = null, pnames = {}, pcf = {};
+  try {
+    pids = await lbLocalModsPolicyPids(base, hd);
+    if (pids && pids._names) pnames = pids._names;
+    if (pids && pids._cfLatest) pcf = pids._cfLatest;
+  } catch (e3) { pids = null; }
+  if (!pids) { out.modErr = 'no_net'; }
+  else if (pids.length) {
+    var gid = null;
+    try {
+      var bin = await lbLocalDir(g.sg, 'Binaries');
+      var w64 = await lbLocalDir(bin, 'Win64');
+      var inner = await w64.getDirectoryHandle('ShooterGame', { create: true });
+      var mdir = await inner.getDirectoryHandle('Mods', { create: true });
+      gid = await mdir.getDirectoryHandle('83374', { create: true });
+    } catch (e4) { gid = null; }
+    if (gid) {
+      /* v6520（用户口径「MOD 还是显示 本机 2/2 已最新」）：
+         只按「目录存在 + 有 .pak」判已装会**误报** —— Club ARK 目录在、但 CFCore 库里
+         status 是 OutOfDate/Invalid（游戏内显示失效、且自动重下反复失败），前端却说已最新。
+         ⇒ 这里把库记录一并读出来（library.json 浏览器可读），判定时结合 status。
+         库读不到（游戏从没装过 MOD / 文件被独占）⇒ out.libOk=false，退回旧判定，避免全盘误报。 */
+      var _lib = null;
+      try {
+        var _lr = await lbCfLibRead(g.sg);
+        if (_lr && _lr.obj) _lib = _lr.obj;
+      } catch (_eL0) { _lib = null; }
+      out.libOk = !!_lib;
+      for (var i = 0; i < pids.length; i++) {
+        var pid = String(pids[i] || '');
+        if (!pid) continue;
+        var row = { pid: pid, name: String(pnames[pid] || ''), dirs: [],
+                    curDn: '', curFid: '', latestFid: String(pcf[pid] || ''),
+                    curInstalled: false, curBytes: 0,
+                    libStatus: '', libPath: '', libFound: false,
+                    oldDirs: [], oldBytes: 0 };
+        var ds = [];
+        try { ds = await lbLocalModDirs(gid, pid); } catch (e5) { ds = []; }
+        row.dirs = ds;
+        /* 当前版 = 目录名里 fid 最大的那个（纯数字比较） */
+        var cur = '';
+        for (var d2 = 0; d2 < ds.length; d2++) {
+          var f2 = Number(String(ds[d2]).split('_')[1] || 0);
+          var cf = cur ? Number(String(cur).split('_')[1] || 0) : -1;
+          if (f2 > cf) cur = ds[d2];
+        }
+        row.curDn = cur;
+        row.curFid = cur ? (String(cur).split('_')[1] || '') : '';
+        for (var k = 0; k < ds.length; k++) {
+          var nm = ds[k], dh = null, hasPak = false, st = { n: 0, bytes: 0 };
+          try { dh = await gid.getDirectoryHandle(nm); } catch (e6) { continue; }
+          try { hasPak = await lbLocalAnyPak(dh, 0); } catch (e6b) { hasPak = false; }
+          if (hasPak) { try { st = await lbLocalDirStat(dh, 0); } catch (e7) {} }
+          if (nm === cur) { row.curInstalled = hasPak; row.curBytes = Number(st.bytes || 0); }
+          else if (hasPak) { row.oldDirs.push(nm); row.oldBytes += Number(st.bytes || 0); }
+        }
+        if (_lib) {
+          var _ix = lbCfLibFind(_lib, pid);
+          if (_ix >= 0) {
+            var _rc = _lib.installedMods[_ix] || {};
+            row.libStatus = String(_rc.status || '');
+            row.libPath = String(_rc.pathOnDisk || '');
+            row.libFound = true;
+          }
+        }
+        out.mods.push(row);
+      }
+    }
+  }
+
+  /* ---- 汉化包 ----
+     v6494（用户口径「和 Google 比」）：本机 pak 里没有可读版本号、
+     Drive 也只给 zip 总体积 ⇒ 用**传递式**判定（结论与跟 Google 比等价，且不用下 130MB zip）：
+       ① 本机 3 件 size == 缓存 manifest 的 size
+       ② 缓存版本 == Google 云端版本（LB_ZH.st.remote.ver，读缓存不额外请求）
+     两段都成立 ⇒ 本机 == 云端最新 */
+  try {
+    var sp = await g.sg.getDirectoryHandle('Content');
+    var pks = await sp.getDirectoryHandle('Paks');
+    var have = 0, ab = 0, miss = [], pakSize = 0;
+    for (var z = 0; z < LB_ZH_PKG_NAMES.length; z++) {
+      var zn = LB_ZH_PKG_NAMES[z];
+      try {
+        var zf = await pks.getFileHandle(zn);
+        var zob = await zf.getFile();
+        have++; ab += Number(zob.size || 0);
+        /* v6508：只取 .pak 作为字形指纹（ucas/utoc 简繁完全相同，无区分度） */
+        if (zn === 'ShooterGame-Windows_P.pak') pakSize = Number(zob.size || 0);
+      } catch (e8) { miss.push(zn); }
+    }
+    var _z = { have: have, need: LB_ZH_PKG_NAMES.length, bytes: ab, missing: miss,
+               same: null, pkgVer: '', remVer: '', sizeOk: null,
+               diffN: 0, missN: miss.length, why: '' };
+    /* ① 本机 vs 缓存（只比大小） */
+    try {
+      var lr2 = await fetch(base + '/api/pkg/local/list?kind=zh&t=' + Date.now(),
+                            { headers: hd, cache: 'no-store' });
+      var lj2 = await lr2.json();
+      if (lj2 && lj2.ok && (lj2.files || []).length) {
+        _z.pkgVer = String(lj2.ver || '');
+        var _ck = await lbLocalZhPaksSame({ sg: g.sg }, lj2.files);
+        if (_ck && _ck.ok) {
+          _z.sizeOk = !!_ck.same;
+          _z.diffN = (_ck.diff || []).length;
+          _z.missN = (_ck.missing || []).length;
+        }
+      } else { _z.why = 'no_local_pkg'; }
+    } catch (eZ1) { _z.why = 'no_local_pkg'; }
+    /* ② 缓存 vs Google 云端（版本号） */
+    try {
+      _z.remVer = String(((((window.LB_ZH || {}).st || {}).remote) || {}).ver || '');
+    } catch (eZ2) {}
+    var _pv = lbLocalZhVerNorm(_z.pkgVer), _rv = lbLocalZhVerNorm(_z.remVer);
+    if (_z.why === 'no_local_pkg' || _z.sizeOk === null) {
+      _z.same = null;
+    } else if (!have) {
+      _z.same = false;
+    } else if (!_pv || !_rv) {
+      _z.same = null; _z.why = 'no_ver';
+    } else if (_pv !== _rv) {
+      _z.same = false; _z.why = 'pkg_old';
+    } else {
+      _z.same = !!_z.sizeOk;
+      if (!_z.same) _z.why = 'size_diff';
+    }
+    /* v6508：本机字形 —— pak 字节指纹优先；对不上且「与缓存同大小」时跟随缓存字形 */
+    _z.pakSize = pakSize;
+    _z.kind = LB_ZH_PAK_KIND[String(pakSize || 0)] || '';
+    _z.kindFrom = _z.kind ? 'pakSize' : '';
+    if (!_z.kind && _z.sizeOk === true) {
+      try {
+        var _pz = (((window.LB_ZH || {}).st || {}).pkg) || {};
+        _z.kind = lbZhKindOf(_pz.src);
+        if (_z.kind) _z.kindFrom = 'sameAsCache';
+      } catch (eZK) {}
+    }
+    out.zh = _z;
+  } catch (e9) { out.zh = null; }
+
+  out.ok = true;
+  return out;
+}
+
+/* 胶囊文案与配色 */
+function lbLocalPillState(kind, r){
+  if (!r || !r.ok) {
+    var mp = { no_handle: '本机未授权', perm_lost: '权限已失效', bad_root: '目录已失效',
+               no_net: '网络异常', api_unsupported: '不支持 ASA' };
+    return { text: mp[r && r.why] || '本机未知', color: '#9ca3af', bg: '#232329', bd: '#33333c' };
+  }
+  if (kind === 'mods') {
+    /* 网络失败 ⇒ MOD 清单拿不到，别误报成「未安装」（汉化区块不受影响） */
+    if (r.modErr === 'no_net') {
+      return { text: '本机未知（网络）', color: '#9ca3af', bg: '#232329', bd: '#33333c' };
+    }
+    /* v6491（用户口径）：胶囊必须能看出「版本是否最新」，且与「旧版目录」
+       （同 pid 其它版本残留，可清理）分开表达。 nChk = 能判定新旧的数量（需两边 fid 都有） */
+    /* v6520：已装 = 目录在 + 有 .pak **且**（库可读时）库状态正常；
+       库状态 Invalid / Pending / Unknown 或库无记录 ⇒ 记「库状态异常」，不算已装（否则误报已最新） */
+    var n = 0, o = 0, tot = (r.mods || []).length, nStale = 0, nChk = 0, nBad = 0;
+    var _useLib = !!r.libOk;
+    (r.mods || []).forEach(function(x){
+      if (!x.curInstalled) return;
+      o += (x.oldDirs || []).length;
+      if (_useLib && (!x.libFound || x.libStatus === 'Invalid'
+                      || x.libStatus === 'Pending' || x.libStatus === 'Unknown')) { nBad++; return; }
+      n++;
+      /* v6521：库 status !== Normal（如 OutOfDate）即使目录 fid 已是最新，也算「待更新」 */
+      var _libStale = !!(_useLib && x.libFound && String(x.libStatus || '') !== 'Normal');
+      if (x.latestFid && x.curFid) {
+        nChk++;
+        if (String(x.curFid) !== String(x.latestFid) || _libStale) nStale++;
+      } else if (_libStale) {
+        nStale++;
+      }
+    });
+    if (!n && !o && !nBad) return { text: '本机未安装', color: '#9ca3af', bg: '#232329', bd: '#33333c' };
+    /* v6492 修正两处偏差：
+       ①「全部最新 + 有旧版目录」应为绿（版本没问题，旧目录只是占空间）
+       ②部分安装时不能说「已最新」，要明说「缺 N 个」 */
+    var _t = '本机 ' + n + '/' + tot, _warn = false;
+    var _canJudge = (nChk > 0) || _useLib;
+    if (nBad) { _t += ' · ' + nBad + ' 个库状态异常'; _warn = true; }
+    if (nStale) { _t += ' · ' + nStale + ' 个待更新'; _warn = true; }
+    else if (!nBad && n >= tot && _canJudge) { _t += ' 已最新'; }
+    if ((n + nBad) < tot) { _t += ' · 缺 ' + (tot - n - nBad) + ' 个'; _warn = true; }
+    if (!_canJudge) { _t += '（最新版未知）'; }
+    if (nChk === 0 && n) { _t += '（最新版未知）'; }
+    if (o) _t += ' · ' + o + ' 个旧版目录';
+    if (_warn) return { text: _t, color: '#fbbf24', bg: '#2a2108', bd: '#4a3a0d' };
+    if (nChk > 0) return { text: _t, color: '#4ade80', bg: '#12261a', bd: '#1e4029' };
+    return { text: _t, color: '#9ca3af', bg: '#232329', bd: '#33333c' };
+  }
+  /* v6494（用户口径「汉化包 为啥 没有 已最新 这种标识？」）：
+     本机 pak 无版本号 ⇒ 传递式判定：本机==缓存 && 缓存==Google 云端 */
+  var z = r.zh;
+  if (!z) return { text: '本机未知', color: '#9ca3af', bg: '#232329', bd: '#33333c' };
+  if (!z.have) return { text: '本机未安装', color: '#9ca3af', bg: '#232329', bd: '#33333c' };
+  if (z.have < z.need) {
+    return { text: '本机缺 ' + (z.need - z.have) + ' 件', color: '#fbbf24', bg: '#2a2108', bd: '#4a3a0d' };
+  }
+  /* v6508：胶囊里带字形（简/繁），一眼看出本机装的是哪种 */
+  var _zt = '本机已装 ' + z.have + '/' + z.need + (z.kind ? (' · ' + z.kind) : '');
+  if (z.same === true) return { text: _zt + ' 已最新', color: '#4ade80', bg: '#12261a', bd: '#1e4029' };
+  if (z.same === false) return { text: _zt + ' · 待更新', color: '#fbbf24', bg: '#2a2108', bd: '#4a3a0d' };
+  return { text: _zt + '（最新版未知）', color: '#9ca3af', bg: '#232329', bd: '#33333c' };
+}
+
+/* 标题行胶囊（样式 B）。不支持 ASA 的设备直接返回空串 ⇒ 整块不出现 */
+function lbLocalPillHtml(kind){
+  if (!lbLocalSupported()) return '';
+  var r = LB_LOCAL_PROBE.res;
+  var id = 'lbLocalPill_' + kind;
+  /* v6490（用户口径）：探测期间显示「检测中…」—— 展开/部署完自动刷新时看得见，
+     不再像原来那样「点了没反应」。同一 id 保证 paint 能替换。 */
+  if (LB_LOCAL_PROBE.loading) {
+    return '<span id="' + id + '" class="lb-tipb" style="font-size:11px;border-radius:999px;'
+         + 'padding:2px 9px;display:inline-flex;align-items:center;gap:5px;cursor:pointer;'
+         + 'color:#9ca3af;background:#232329;border:1px solid #33333c"'
+         + ' onclick="lbLocalPillToggle(\'' + kind + '\')">'
+         + '<span style="width:6px;height:6px;border-radius:50%;background:currentColor"></span>'
+         + '检测中…</span>';
+  }
+  if (!r) return '<span id="' + id + '" style="font-size:11px;color:#6b7280">本机检测中…</span>';
+  var t = lbLocalPillState(kind, r);
+  return '<span id="' + id + '" class="lb-tipb" style="font-size:11px;border-radius:999px;'
+       + 'padding:2px 9px;display:inline-flex;align-items:center;gap:5px;cursor:pointer;'
+       + 'color:' + t.color + ';background:' + t.bg + ';border:1px solid ' + t.bd + '"'
+       + ' onclick="lbLocalPillToggle(\'' + kind + '\')" title="点开查看本机明细">'
+       + '<span style="width:6px;height:6px;border-radius:50%;background:currentColor"></span>'
+       + lbMdEsc(t.text) + '</span>';
+}
+
+/* 展开后的明细 */
+function lbLocalPopHtml(kind, r){
+  var box = 'border:1px solid #2b2b33;border-radius:8px;padding:8px 10px;background:#17171d;'
+          + 'margin-top:6px;font-size:12px;color:#9ca3af;line-height:1.7';
+  if (!r) return '<div style="' + box + '">检测中…</div>';
+  if (!r.ok) {
+    var mp = { no_handle: '点一次「部署到本机」后可显示本机状态',
+               perm_lost: '权限已失效，点一次「部署到本机」重新授权',
+               bad_root: '记住的目录已失效，按住 Shift 点「部署到本机」重新选择',
+               no_net: '无法获取策略清单（网络问题），点「重新检测」重试',
+               api_unsupported: '当前设备不支持 ASA，已隐藏「部署到本机」' };
+    return '<div style="' + box + '">' + lbMdEsc(mp[r.why] || '本机状态未知') + '</div>';
+  }
+  var rows = [];
+  function fmt(n){ return lbLocalFmt(n || 0); }
+  if (kind === 'mods') {
+    if (r.modErr === 'no_net') {
+      return '<div style="' + box + '">无法获取策略 MOD 清单（网络问题），点「重新检测」重试</div>';
+    }
+    (r.mods || []).forEach(function(x){
+      var fid = String(x.curDn || '').split('_')[1] || '';
+      /* v6521（用户实报「已装 9411566 · 已最新 · 库状态 OutOfDate 显然不合理」）：
+         fid 相同 ≠ 游戏认可 —— library.json 里 status 才是最终裁决。
+         库可读且记录存在时：status !== 'Normal' 一律不算「已最新」（OutOfDate/Invalid/Pending 都算待处理）。
+         ⚠ 之前"目录 fid == CF 最新 fid"就说已最新，会出现「已最新 + 库 OutOfDate」自相矛盾，
+           并导致部署被拦截 ⇒ v6519 的补库永远跑不到（死锁）。 */
+      var _lat = String(x.latestFid || '');
+      var _fidStale = !!(_lat && fid && String(fid) !== _lat);
+      var _lsv = String(x.libStatus || '');
+      var _libKnown = !!r.libOk && !!x.libFound;
+      var _libBad = !!(_libKnown && _lsv !== 'Normal');
+      var _stale = _fidStale || _libBad;
+      var _cmp = '';
+      if (_libBad) {
+        _cmp = ' <span style="color:#fbbf24">· 待处理（库 ' + lbMdEsc(_lsv || '未知') + '）</span>';
+      } else if (_lat && fid) {
+        _cmp = _fidStale
+          ? (' <span style="color:#fbbf24">· 待更新 → ' + lbMdEsc(_lat) + '</span>')
+          : ' <span style="color:#4ade80">· 已最新</span>';
+      } else if (fid && !_lat) {
+        _cmp = ' <span style="color:#6b7280">· 最新版未知</span>';
+      }
+      var st = x.curInstalled
+        ? ('<span style="color:' + (_stale ? '#fbbf24' : '#4ade80') + '">已装 ' + lbMdEsc(fid) + '</span>'
+           + ' <span style="color:#6b7280">' + fmt(x.curBytes) + '</span>' + _cmp)
+        : '<span style="color:#6b7280">本机未安装</span>';
+      /* v6520/v6521：库状态已并入上面 _cmp；此处只补「库无记录」这一种 */
+      var _lbx = '';
+      if (r.libOk && x.curInstalled && !x.libFound) {
+        _lbx = ' <span style="color:#f87171">· 库无记录</span>';
+      }
+      var od = (x.oldDirs || []).length
+        ? (' <span style="color:#fbbf24">· 旧版目录 ' + x.oldDirs.length + ' 个（' + fmt(x.oldBytes) + '）</span>')
+        : '';
+      /* v6489（用户口径）：行首显示 MOD 名字，不再裸奔 pid（pid 放 title 悬停可见） */
+      var _nm = String(x.name || '') || ('MOD ' + x.pid);
+      rows.push('<div style="display:flex;gap:8px;align-items:baseline">'
+              + '<span style="color:#d1d5db;cursor:help" title="pid ' + lbMdEsc(x.pid) + '">'
+              + lbMdEsc(_nm) + '</span>'
+              + '<span style="flex:1">' + st + _lbx + od + '</span></div>');
+    });
+    if (!rows.length) rows.push('<div style="color:#6b7280">策略内没有 MOD</div>');
+    /* v6525：上一次库写入结果 —— 直接可见，不用去翻操作日志 */
+    try {
+      if (LB_CF_LASTWRITE && LB_CF_LASTWRITE.at) {
+        var _lw = LB_CF_LASTWRITE, _lk = String(_lw.kind || '');
+        var _lt = new Date(_lw.at);
+        var _lts = ('0' + (_lt.getMonth() + 1)).slice(-2) + '-' + ('0' + _lt.getDate()).slice(-2)
+                 + ' ' + ('0' + _lt.getHours()).slice(-2) + ':' + ('0' + _lt.getMinutes()).slice(-2)
+                 + ':' + ('0' + _lt.getSeconds()).slice(-2);
+        /* v6530（用户口径「诊断先留着，但要精简」）：
+           正常结果（成功写入 / 无需修改）只显示一行，明细收进项目统一 tips 悬停查看；
+           只有异常（写库失败 / 读库失败 / 本次没装上任何 MOD）才展开显示 plan 与部署链路。 */
+        var _calm = (_lk === 'ok' || _lk === 'ok2' || _lk === 'ok-m'
+                     || _lk === 'nochange' || _lk === 'nochange2');
+        if (_calm) {
+          var _lbl = (_lk === 'nochange' || _lk === 'nochange2') ? '无需修改' : 'ok';
+          rows.push('<div class="lb-tipb" style="color:#4ade80;font-size:11px;margin-top:6px;cursor:help" title="'
+                  + lbMdEsc(String(_lw.msg || '').slice(0, 1500)) + '">'
+                  + 'CFCore 库：' + lbMdEsc(_lbl) + '　' + _lts + '</div>');
+        } else {
+          var _lcol = (_lk.indexOf('readerr') === 0 || _lk.indexOf('err') === 0) ? '#f87171' : '#fbbf24';
+          rows.push('<div style="color:' + _lcol + ';font-size:11px;margin-top:6px">'
+                  + '上次部署 · CFCore 库写入：' + lbMdEsc(_lk || '?') + '　' + _lts + '</div>'
+                  + '<div style="color:#9ca3af;font-size:11px;word-break:break-all">' + lbMdEsc(String(_lw.msg || '').slice(0, 1600)) + '</div>');
+        }
+      }
+    } catch (_eLW) {}
+    /* v6520：清理本机 MOD 目录入口 */
+    if (r.game && r.game.path) {
+      rows.push('<div style="margin-top:8px">'
+        + '<button onclick="event.stopPropagation();lbLocalModsCleanOpen()" '
+        + 'style="font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer;'
+        + 'background:#2a2108;color:#fbbf24;border:1px solid #4a3a0d">'
+        + '<i class="mdi mdi-broom"></i> 清理本机 MOD 目录</button></div>');
+    }
+  } else {
+    var z = r.zh;
+    /* v6494：明细裡写清「跟 Google 云端比」的两段依据 */
+    var _zpv = String((z && z.pkgVer) || ''), _zrv = String((z && z.remVer) || '');
+    var _zcmp = '', _zwhy = '';
+    if (z) {
+      if (z.same === true) _zcmp = ' <span style="color:#4ade80">· 已最新</span>';
+      else if (z.same === false) _zcmp = ' <span style="color:#fbbf24">· 待更新</span>';
+      else if (z.have >= z.need) _zcmp = ' <span style="color:#6b7280">· 最新版未知</span>';
+      /* v6495（用户口径「云端 V10.1 ｜ 缓存 V10.1 这个说法很容易和服务端的缓存搞混」）：
+         改成**链路式** —— 三段一目了然，且不再使用「缓存」这个歧义词 */
+      _zwhy = '云端 ' + (_zrv ? ('V' + lbMdEsc(_zrv)) : '未知')
+            + ' → 缓存 ' + (_zpv ? ('V' + lbMdEsc(_zpv)) : '无')
+            + ' → 本机' + (z.kind ? ('（' + lbMdEsc(z.kind) + '）') : '')
+            + (z.why === 'pkg_old' ? '（缓存落后云端，先点「更新缓存」）'
+               : z.why === 'size_diff' ? ('（本机与缓存大小不同 ' + (z.diffN || 0) + ' 件）')
+               : z.why === 'no_local_pkg' ? '（缓存未下载，无法判定）'
+               : z.why === 'no_ver' ? '（版本号缺失，无法判定）' : '');
+    }
+    if (!z) rows.push('<div style="color:#6b7280">未找到 Content/Paks 目录</div>');
+    else if (z.have >= z.need) {
+      rows.push('<div><span style="color:#4ade80">已装 ' + z.have + '/' + z.need + ' 件</span>'
+              + ' <span style="color:#6b7280">' + fmt(z.bytes) + '</span>' + _zcmp + '</div>');
+    } else if (z.have > 0) {
+      rows.push('<div><span style="color:#fbbf24">缺 ' + (z.need - z.have) + ' 件</span>'
+              + ' <span style="color:#6b7280">' + lbMdEsc((z.missing || []).join('、')) + '</span></div>');
+    } else {
+      rows.push('<div style="color:#6b7280">本机未安装</div>');
+    }
+    if (z && z.have && _zwhy) {
+      rows.push('<div style="color:#6b7280;font-size:11px">' + _zwhy + '</div>');
+    }
+    /* v6508：字形单独一行，写清依据（pak 指纹 / 跟随缓存） */
+    if (z && z.have) {
+      var _kd = (z.kindFrom === 'pakSize')
+        ? ('pak ' + lbLocalFmt(z.pakSize || 0) + ' 指纹命中')
+        : (z.kindFrom === 'sameAsCache' ? '与本机缓存同大小，跟随缓存字形' : '无法判定');
+      rows.push('<div style="color:#6b7280;font-size:11px">字形：'
+              + (z.kind ? lbZhKindTagHtml(z.kind) : '<span style="color:#6b7280">未知</span>')
+              + ' <span style="color:#4b5563">· ' + lbMdEsc(_kd) + '</span></div>');
+    }
+  }
+  var gp = (r.game && r.game.path) ? ('已授权 ' + lbMdEsc(r.game.path)) : '';
+  if (gp) rows.push('<div style="color:#6b7280;font-size:11px;margin-top:4px">' + gp + '</div>');
+  return '<div style="' + box + '">' + rows.join('') + '</div>';
+}
+
+/* ===== v6520（用户口径「需要做一个清理本机MOD的功能」）=====
+   场景：游戏内装不上/装坏的 MOD 目录会一直留在磁盘（且因为 be 库里认领了，
+   CFCore 的 deleteStaleModDirs 不会再动它），需要一个"看得见、能勾、能删"的入口。
+   设计（沿用 v6481 的安全五重防护）：
+     ① 目录名只取 gid.entries() 的原始字符串，绝不重建/编码
+     ② 格式白名单 /^\d+_\d+$/ —— .temp、中文名、其他一律不碰
+     ③ 必须 kind === 'directory'
+     ④ 删除前再验一次「目录内确实有 .pak」（防选中后被别的进程改动）
+     ⑤ 未勾选任何项 ⇒ 不执行
+   另：列出 CFCore 库状态（Normal / OutOfDate / Invalid / Pending / 无记录），
+       让用户能判断该删哪个（库状态异常的通常就是"装坏了"）。 */
+
+var LB_MODS_CLEAN = { list: [], gid: null, busy: false, sel: {} };
+/* v6525：上一次「CFCore 库写入/补全」的结果 —— 直接显示在 MOD 胶囊明细里，
+   因为用户实报「操作日志里根本看不到」，而库文件 mtime 又证明没写成功。 */
+var LB_CF_LASTWRITE = { at: 0, kind: '', msg: '' };
+function _haveSrcOf(it){ return String((it && it.haveSrc) || ''); }
+function lbCfSetLast(kind, msg){
+  var _pd = window.__lbPlanDiag || '';
+  LB_CF_LASTWRITE = { at: Date.now(), kind: String(kind || ''),
+                      msg: String(msg || '') + (_pd ? ('\n' + _pd) : '') };
+}
+
+function lbModsCleanSetSt(s, col){
+  var el = document.getElementById('lbModsCleanSt');
+  if (el) { el.textContent = s; el.style.color = col || '#9ca3af'; }
+}
+
+function lbModsCleanRender(){
+  var ov = document.getElementById('lbModsCleanOv');
+  if (!ov) return;
+  var list = LB_MODS_CLEAN.list || [];
+  var sel = LB_MODS_CLEAN.sel || {};
+  var totB = 0, selN = 0, selB = 0;
+  for (var i = 0; i < list.length; i++) {
+    totB += Number(list[i].size || 0);
+    if (sel[list[i].name]) { selN++; selB += Number(list[i].size || 0); }
+  }
+  var h = '<div style="background:#1b1b22;border:1px solid #333;border-radius:14px;max-width:680px;'
+        + 'width:100%;max-height:84vh;overflow:auto;padding:16px;box-shadow:0 18px 48px rgba(0,0,0,.55)">'
+        + '<div style="font-size:15px;font-weight:700;color:#a78bfa;margin-bottom:6px">'
+        + '<i class="mdi mdi-broom"></i> 清理本机 MOD 目录</div>'
+        + '<div style="font-size:12px;color:#9ca3af;line-height:1.7;margin-bottom:10px">'
+        + '路径：<span style="color:#d1d5db">ShooterGame\\Mods\\83374\\&lt;pid&gt;_&lt;fid&gt;</span>　'
+        + '共 ' + list.length + ' 个目录（' + lbLocalFmt(totB) + '）<br>'
+        + '「库状态」来自 CFCore 的 library.json：<b>Normal</b>=游戏认可；'
+        + '<b>OutOfDate</b>=有新版；<b>Invalid / Pending</b>=游戏认为没装好；'
+        + '<b>无记录</b>=CFCore 不认识。<br>'
+        + '<span style="color:#f87171">删除为永久删除（浏览器删除不进回收站），.ini/.cfg/.dll 类文件浏览器无法列举但会被一并删除。</span>'
+        + '</div>';
+  if (!list.length) {
+    h += '<div style="color:#6b7280;font-size:12px">本机没有 &lt;pid&gt;_&lt;fid&gt; 形式的 MOD 目录</div>';
+  } else {
+    h += '<div style="border:1px solid #2b2b33;border-radius:10px;overflow:hidden">';
+    for (var j = 0; j < list.length; j++) {
+      var it = list[j];
+      var ck = !!sel[it.name];
+      var sc = (it.libStatus === 'Normal') ? '#4ade80'
+             : (!it.libFound ? '#f87171' : '#fbbf24');
+      var sl = it.libFound ? (it.libStatus || '未知') : '无记录';
+      h += '<div style="display:flex;gap:8px;align-items:center;padding:8px 10px;'
+         + 'border-bottom:1px solid #26262e;font-size:12px;color:#d1d5db">'
+         + '<label class="lb-upd-tgx' + (ck ? ' on' : '') + '" style="position:relative;flex:0 0 auto;margin-right:2px">'
+         + '<input type="checkbox" data-cn="' + lbMdEsc(it.name) + '" ' + (ck ? 'checked ' : '')
+         + 'onchange="lbModsCleanToggle(this.getAttribute(\'data-cn\'),this.checked)" '
+         + 'style="position:absolute;opacity:0;width:0;height:0;pointer-events:none">'
+         + '<i class="mdi ' + (ck ? 'mdi-check' : 'mdi-checkbox-blank-outline') + '"></i>'
+         + '</label>'
+         + '<span class="lb-tipb" style="color:#e5e7eb;cursor:help" title="'
+         + lbMdEsc('目录　' + it.name + '\npid ' + it.pid + ' · fid ' + it.fid
+                   + '\n库状态　' + (it.libFound ? (it.libStatus || '未知') : '无记录'))
+         + '">' + lbMdEsc(it.libName || it.name) + '</span>'
+         + '<span style="color:#6b7280">' + lbLocalFmt(it.size) + ' · ' + it.files + ' 文件</span>'
+         + '<span style="flex:1"></span>'
+         + '<span style="color:' + sc + '">' + lbMdEsc(sl) + '</span>'
+         + (it.hasPak ? '' : '<span style="color:#f87171;font-size:11px">无 .pak</span>')
+         + '</div>';
+    }
+    h += '</div>';
+  }
+  h += '<div id="lbModsCleanSt" style="font-size:12px;color:#9ca3af;margin-top:10px">'
+     + (selN ? ('已选 ' + selN + ' 项 / ' + lbLocalFmt(selB)) : '未选择任何目录')
+     + '</div>'
+     + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">'
+     + '<button onclick="lbLocalModsCleanClose()" style="font-size:12px;padding:6px 14px;border-radius:8px;'
+     + 'cursor:pointer;background:#232329;color:#d1d5db;border:1px solid #33333c">关闭</button>'
+     + '<button id="lbModsCleanGoBtn" onclick="lbLocalModsCleanGo()" '
+     + 'style="font-size:12px;padding:6px 14px;border-radius:8px;cursor:pointer;'
+     + 'background:#3a1414;color:#f87171;border:1px solid #5a1f1f"'
+     + (selN ? '' : ' disabled') + '>确认删除所选</button>'
+     + '</div></div>';
+  ov.innerHTML = h;
+  ov.style.display = 'flex';
+  /* v6523：浮层是动态插入的 ⇒ 主动挂项目统一 tips（.lb-tipb → #lbTipBox），不等 MutationObserver */
+  try { lbTipsWatch('lbModsCleanOv', 0); } catch (_eTW) {}
+  if (selN) {
+    var b = document.getElementById('lbModsCleanGoBtn');
+    if (b) { b.disabled = false; b.style.opacity = '1'; }
+  }
+}
+
+function lbModsCleanToggle(name, on){
+  LB_MODS_CLEAN.sel = LB_MODS_CLEAN.sel || {};
+  if (on) LB_MODS_CLEAN.sel[name] = 1;
+  else delete LB_MODS_CLEAN.sel[name];
+  lbModsCleanRender();
+}
+
+function lbLocalModsCleanClose(){
+  var ov = document.getElementById('lbModsCleanOv');
+  if (ov) { ov.style.display = 'none'; ov.innerHTML = ''; }
+  LB_MODS_CLEAN.sel = {};
+  LB_MODS_CLEAN.busy = false;
+}
+
+/* 打开：定位游戏目录 → 扫描 83374 下所有 <pid>_<fid> → 附库状态 */
+async function lbLocalModsCleanOpen(){
+  if (LB_MODS_CLEAN.busy) return;
+  LB_MODS_CLEAN.busy = true;
+  LB_MODS_CLEAN.sel = {};
+  var ov = document.getElementById('lbModsCleanOv');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'lbModsCleanOv';
+    ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:100003;display:none;'
+                     + 'background:rgba(0,0,0,.62);align-items:center;justify-content:center;padding:16px';
+    document.body.appendChild(ov);
+  }
+  ov.innerHTML = '<div style="background:#1b1b22;border:1px solid #333;border-radius:14px;padding:18px;'
+               + 'color:#d1d5db;font-size:13px">正在扫描本机 MOD 目录…</div>';
+  ov.style.display = 'flex';
+  try { if (typeof lbZOpen === 'function') lbZOpen(ov, 'modsClean'); } catch (_eZ1) {}
+  try {
+    var hh = await lbLocalIdbGet('asaLib');
+    if (!hh) throw new Error('尚未授权 ASA 目录 —— 请先点一次「部署到本机」');
+    var g = await lbLocalLocate(hh);
+    if (!g) throw new Error('记住的目录已失效，请按住 Shift 点「部署到本机」重新选择');
+    var bin = await lbLocalDir(g.sg, 'Binaries');
+    var w64 = await lbLocalDir(bin, 'Win64');
+    var inner = await w64.getDirectoryHandle('ShooterGame', { create: true });
+    var mdir = await inner.getDirectoryHandle('Mods', { create: true });
+    var gid = await mdir.getDirectoryHandle('83374', { create: true });
+    LB_MODS_CLEAN.gid = gid;
+    var lib = null;
+    try { var lr = await lbCfLibRead(g.sg); if (lr && lr.obj) lib = lr.obj; } catch (eL) { lib = null; }
+    var list = [];
+    var it = gid.entries();
+    while (true) {
+      var r = await it.next();
+      if (r.done) break;
+      var nm = String(r.value[0] || '');            /* ① 原始名字 */
+      var hd = r.value[1];
+      if (!hd || hd.kind !== 'directory') continue; /* ③ 只要目录 */
+      if (!/^\d+_\d+$/.test(nm)) continue;          /* ② 格式白名单：.temp / 中文名一律跳过 */
+      var item = { name: nm, pid: nm.split('_')[0], fid: nm.split('_')[1],
+                   size: 0, files: 0, hasPak: false, libFound: false, libStatus: '' };
+      try { item.hasPak = await lbLocalAnyPak(hd, 0); } catch (eP) { item.hasPak = false; }
+      try { var stt = await lbLocalDirStat(hd, 0); item.size = stt.bytes; item.files = stt.n; } catch (eS) {}
+      if (lib) {
+        var ix = lbCfLibFind(lib, item.pid);
+        if (ix >= 0) {
+          var rc = lib.installedMods[ix] || {};
+          item.libFound = true;
+          item.libStatus = String(rc.status || '');
+          item.libName = String((rc.details || {}).name || '');   /* v6523：行首显示 MOD 名字 */
+        }
+      }
+      list.push(item);
+    }
+    list.sort(function(a, b){
+      var sa = (a.libStatus === 'Normal') ? 1 : 0;
+      var sb = (b.libStatus === 'Normal') ? 1 : 0;
+      if (sa !== sb) return sa - sb;                /* 异常的排前面 */
+      return a.name < b.name ? -1 : (a.name > b.name ? 1 : 0);
+    });
+    LB_MODS_CLEAN.list = list;
+    LB_MODS_CLEAN.busy = false;
+    lbModsCleanRender();
+  } catch (e) {
+    LB_MODS_CLEAN.busy = false;
+    ov.innerHTML = '<div style="background:#1b1b22;border:1px solid #5a1f1f;border-radius:14px;padding:18px;'
+                 + 'color:#f87171;font-size:13px;max-width:560px">清理失败：'
+                 + lbMdEsc(String((e && e.message) || e)) + '</div>';
+    ov.style.display = 'flex';
+  }
+}
+
+/* 执行删除：只删勾选项；删前再验「有 .pak」 */
+async function lbLocalModsCleanGo(){
+  var gid = LB_MODS_CLEAN.gid;
+  var list = LB_MODS_CLEAN.list || [];
+  var sel = LB_MODS_CLEAN.sel || {};
+  var picked = [];
+  for (var i = 0; i < list.length; i++) if (sel[list[i].name]) picked.push(list[i]);
+  if (!gid) { lbModsCleanSetSt('目录句柄已失效，请重新打开', '#f87171'); return; }
+  if (!picked.length) { lbModsCleanSetSt('未选择任何目录', '#fbbf24'); return; }   /* ⑤ */
+  var btn = document.getElementById('lbModsCleanGoBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '正在删除…'; }
+  var okN = 0, okB = 0, fail = [], skip = [];
+  for (var j = 0; j < picked.length; j++) {
+    var it = picked[j];
+    lbModsCleanSetSt('正在删除 ' + (j + 1) + '/' + picked.length + '：' + it.name + ' …', '#fbbf24');
+    try {
+      var dh = await gid.getDirectoryHandle(it.name);
+      var still = await lbLocalAnyPak(dh, 0);      /* ④ 删前再验 */
+      if (!still) { skip.push(it.name + '（已无 .pak）'); continue; }
+      await gid.removeEntry(it.name, { recursive: true });
+      okN++; okB += Number(it.size || 0);
+    } catch (e) {
+      fail.push(it.name + '（' + lbErrTxt(e) + '）');
+    }
+  }
+  /* v6538（用户口径「清理本机 MOD 目录要和部署一样，不止是删除文件本体」）：
+     与部署时的「补库」对称 —— 目录删掉后 CFCore library.json 里的记录必须同步移除，
+     否则游戏仍认为该 MOD 装着 ⇒ 启动时 Missing module / status=Invalid。
+     只在「该 pid 已无任何版本目录残留」时才移除（还有其它版本的目录则不动库）。 */
+  var _libMsg = '';
+  try {
+    var _pids = [], _seen = {};
+    for (var q = 0; q < picked.length; q++){
+      var _p1 = String((picked[q] && picked[q].name) || '').split('_')[0];
+      if (!/^\d+$/.test(_p1) || _seen[_p1]) continue;
+      _seen[_p1] = 1;
+      var _left = await lbLocalModDirs(gid, _p1);
+      if (!_left.length) _pids.push(_p1);
+    }
+    if (_pids.length){
+      var _fg = await lbCfForgetPids(_pids);
+      if (_fg.ok && _fg.removed) _libMsg = '；已同步清理 CFCore 库记录 ' + _fg.removed + ' 条（' + _fg.msg + '）';
+      else if (!_fg.ok) _libMsg = '；⚠ CFCore 库记录未清理：' + _fg.msg;
+    }
+  } catch (_eFg) {}
+  var msg = '已删除 ' + okN + ' 个目录（释放 ' + lbLocalFmt(okB) + '）' + _libMsg;
+  if (skip.length) msg += '；跳过 ' + skip.length + ' 个：' + skip.join('、');
+  if (fail.length) msg += '；失败 ' + fail.length + ' 个：' + fail.join('；');
+  /* v6536（用户口径）：成功汇报不用跳脚样式 —— toast 已发，只有失败才用 err 常驻条 */
+  if (fail.length) { try { lbNoteBar(msg, 'err'); } catch (eN) {} }
+  try { if (typeof lbToast === 'function') lbToast(msg); } catch (eT) {}
+  /* 删完刷新：重新扫描本页 + 刷新胶囊 */
+  LB_MODS_CLEAN.sel = {};
+  try { await lbLocalModsCleanOpen(); } catch (eR) {}
+  try { lbLocalProbeKick(true); } catch (eR2) {}
+}
+
+/* 只更新「胶囊 + 明细容器」，绝不整卡重渲染（避免丢滚动/折叠/输入） */
+function lbLocalProbePaint(){
+  if (!lbLocalSupported()) return;
+  ['mods', 'zh'].forEach(function(kind){
+    var pill = document.getElementById('lbLocalPill_' + kind);
+    if (pill && pill.parentNode) {
+      var holder = document.createElement('span');
+      holder.innerHTML = lbLocalPillHtml(kind);
+      if (holder.firstChild) pill.parentNode.replaceChild(holder.firstChild, pill);
+    }
+    var pop = document.getElementById('lbLocalPop_' + kind);
+    if (pop) {
+      if (LB_LOCAL_PROBE.open[kind]) {
+        pop.innerHTML = lbLocalPopHtml(kind, LB_LOCAL_PROBE.res);
+        pop.style.display = '';
+      } else {
+        pop.innerHTML = '';
+        pop.style.display = 'none';
+      }
+    }
+  });
+}
+
+function lbLocalPillToggle(kind){
+  LB_LOCAL_PROBE.open[kind] = !LB_LOCAL_PROBE.open[kind];
+  lbLocalProbePaint();
+  if (!LB_LOCAL_PROBE.open[kind]) return;
+  /* v6494（用户口径「和 Google 比」）：展开汉化胶囊时**强制刷新云端**（绕 30 分钟 TTL），
+     60 秒内不重复刷；刷完再重探本机，让胶囊与「缓存」那行同时更新。 */
+  if (kind === 'zh') {
+    var _nT = Date.now();
+    if (!LB_LOCAL_PROBE.zhForceAt || (_nT - LB_LOCAL_PROBE.zhForceAt) > 60000) {
+      LB_LOCAL_PROBE.zhForceAt = _nT;
+      try {
+        lbZhFetch(false, true).then(function(){
+          try { lbLocalProbeKick(true); } catch (e1) {}
+        }).catch(function(){ try { lbLocalProbeKick(true); } catch (e2) {} });
+      } catch (e3) { try { lbLocalProbeKick(true); } catch (e4) {} }
+      return;
+    }
+  }
+  /* v6490：展开即自动刷新（替代原「重新检测」按钮） */
+  try { lbLocalProbeKick(true); } catch (e0) {}
+}
+
+/* 触发探测：force=true 绕过 60s 缓存。异步，不阻塞首屏 */
+function lbLocalProbeKick(force){
+  if (!lbLocalSupported()) return;
+  /* v6518（用户实报「部署完 本机 1/2 · 缺 1 个 不自动刷新」）：
+     原来 busy 时直接 return ⇒ 部署结束那次 force 刷新会被当时正在跑的探测**静默丢弃**，
+     之后也不会补跑，胶囊永远停在旧值。改为记 pending，当前探测结束后自动补跑一次。 */
+  if (LB_LOCAL_PROBE.busy) { if (force) LB_LOCAL_PROBE.pending = true; return; }
+  if (!force && LB_LOCAL_PROBE.res && (Date.now() - LB_LOCAL_PROBE.at) < 60000) {
+    lbLocalProbePaint();
+    return;
+  }
+  LB_LOCAL_PROBE.busy = true;
+  LB_LOCAL_PROBE.loading = true;
+  /* v6490：立即 paint 成「检测中…」，让自动刷新看得见 */
+  try { lbLocalProbePaint(); } catch (eL) {}
+  setTimeout(function(){
+    (async function(){
+      try {
+        var tk = (typeof lbSrvCtlToken === 'function') ? lbSrvCtlToken() : '';
+        var hd = { 'Content-Type': 'application/json' };
+        if (tk) hd['Authorization'] = 'Bearer ' + tk;
+        var base = (typeof lbUpdApiBase === 'function') ? lbUpdApiBase() : lbSrvCtlApi();
+        var r = await lbLocalProbe(base, hd);
+        LB_LOCAL_PROBE.res = r;
+        LB_LOCAL_PROBE.at = Date.now();
+      } catch (e) {
+        LB_LOCAL_PROBE.res = { ok: false, why: 'no_net', game: null, mods: [], zh: null, at: Date.now() };
+        LB_LOCAL_PROBE.at = Date.now();
+      } finally {
+        LB_LOCAL_PROBE.busy = false;
+        LB_LOCAL_PROBE.loading = false;
+        try { lbLocalProbePaint(); } catch (e2) {}
+        /* v6518：期间被丢弃的强制刷新，这里补跑一次 */
+        if (LB_LOCAL_PROBE.pending) {
+          LB_LOCAL_PROBE.pending = false;
+          try { setTimeout(function(){ try { lbLocalProbeKick(true); } catch (eP) {} }, 120); } catch (eQ) {}
+        }
+      }
+    })();
+  }, 0);
+}
+
+/* ===== v6533（用户口径）：本机部署进度条 —— 原地复用「部署到本机」的位置 =====
+   用户要求：① 进度条要低调 ② 直接复用「部署到本机」的位置 ③ 原右上角 toast 提示也放这里
+             ④ 移动端**仅当出现进度条时**才让进度条+文案独占一行，「清空缓存/更新缓存」另起一行
+   设计：点按钮 → 该 <a> 原地换成「图标 + 灰字状态 + 3px 细进度条 + 百分比」；
+        完成后恢复原按钮（成功 1.6s / 失败 6s）。进度条落位后给父级 .lb-upd-foot 加 .lb-prog-on，
+        供移动端媒体查询切换两行布局。不走任务总线（lbTaskPut / .lb-task-pg），零新增浮层。 */
+var LB_LPROG = { host: null, pct: 0, lastPaint: 0, timer: 0, active: false };
+function lbLProgFoot(host){
+  try { return host && host.closest ? host.closest('.lb-upd-foot') : null; } catch (e) { return null; }
+}
+function lbLProgBegin(host, title){
+  try {
+    if (!host || !host.parentNode) return false;
+    if (LB_LPROG.active && LB_LPROG.host && LB_LPROG.host !== host) lbLProgRestore();
+    clearTimeout(LB_LPROG.timer);
+    /* 原件只保存一次（第二次点时 host 内已是进度条 HTML，不能覆盖原件） */
+    if (typeof host.__lbSavedHtml !== 'string') host.__lbSavedHtml = host.innerHTML;
+    if (typeof host.__lbSavedClick !== 'string') host.__lbSavedClick = String(host.getAttribute('onclick') || '');
+    LB_LPROG.active = true;
+    LB_LPROG.host = host;
+    LB_LPROG.pct = 0;
+    host.removeAttribute('onclick');
+    host.style.opacity = '';
+    host.style.pointerEvents = 'none';
+    host.style.cursor = 'default';
+    host.style.textDecoration = 'none';
+    host.innerHTML =
+        '<span class="lb-lprog" style="display:inline-flex;align-items:center;gap:6px;min-width:0">'
+      +   '<i class="mdi mdi-folder-download-outline" style="font-size:13px;color:#5b606f;flex-shrink:0"></i>'
+      +   '<span class="lb-lprog-t" style="font-size:11px;color:#8b8f9e;min-width:0;max-width:200px;'
+      +     'white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + lbMdEsc(title || '准备中…') + '</span>'
+      +   '<span class="lb-lprog-b" style="display:inline-block;width:54px;height:3px;border-radius:2px;'
+      +     'background:#262633;overflow:hidden;flex-shrink:0;vertical-align:middle">'
+      +     '<i style="display:block;height:100%;width:0%;background:#7c3aed;transition:width .16s linear"></i></span>'
+      +   '<span class="lb-lprog-p" style="font-size:10.5px;color:#5b606f;font-variant-numeric:tabular-nums;'
+      +     'min-width:26px;text-align:right;flex-shrink:0">0%</span>'
+      + '</span>';
+    var foot = lbLProgFoot(host);
+    if (foot) { try { foot.classList.add('lb-prog-on'); } catch (e2) {} }
+    return true;
+  } catch (e) { return false; }
+}
+function lbLProgSet(pct, text){
+  if (!LB_LPROG.active) return;
+  var host = LB_LPROG.host;
+  if (!host || !host.parentNode) { LB_LPROG.active = false; return; }
+  var now = Date.now();
+  if (pct !== null && pct !== undefined && isFinite(pct)) LB_LPROG.pct = Math.max(0, Math.min(100, Number(pct)));
+  if (now - LB_LPROG.lastPaint < 90 && LB_LPROG.pct < 100) return;   /* 节流：下载回调可能每秒几十次 */
+  LB_LPROG.lastPaint = now;
+  try {
+    var b = host.querySelector('.lb-lprog-b > i');
+    var p = host.querySelector('.lb-lprog-p');
+    var t = host.querySelector('.lb-lprog-t');
+    if (b) b.style.width = LB_LPROG.pct.toFixed(1) + '%';
+    if (p) p.textContent = Math.round(LB_LPROG.pct) + '%';
+    if (t && text) { t.textContent = String(text); t.title = String(text); }
+  } catch (e) {}
+}
+function lbLProgRestore(){
+  clearTimeout(LB_LPROG.timer);
+  var host = LB_LPROG.host;
+  LB_LPROG.active = false;
+  LB_LPROG.host = null;
+  /* v6535：部署过程中产生的结论类提示（拦截/失败）在进度条收工后渲染成原位徽标 —— 不占屏 */
+  var _np = LB_NOTE_PENDING;
+  LB_NOTE_PENDING = null;
+  if (!host || !host.parentNode){
+    if (_np) { try { lbNoteBadge(_np.kind, _np.msg, _np.anchor); } catch (e0) {} }
+    return;
+  }
+  try {
+    if (typeof host.__lbSavedHtml === 'string') host.innerHTML = host.__lbSavedHtml;
+    host.style.pointerEvents = '';
+    host.style.cursor = '';
+    host.style.textDecoration = '';
+    if (typeof host.__lbSavedClick === 'string' && host.__lbSavedClick) host.setAttribute('onclick', host.__lbSavedClick);
+    var foot = lbLProgFoot(host);
+    if (foot) { try { foot.classList.remove('lb-prog-on'); } catch (e2) {} }
+    if (_np) { try { lbNoteBadge(_np.kind, _np.msg, host); } catch (e3) {} }
+  } catch (e) {}
+}
+function lbLProgEnd(ok, text){
+  var host = LB_LPROG.host;
+  if (!LB_LPROG.active || !host || !host.parentNode) { LB_LPROG.active = false; LB_LPROG.host = null; return; }
+  try {
+    var t = host.querySelector('.lb-lprog-t');
+    var b = host.querySelector('.lb-lprog-b > i');
+    var p = host.querySelector('.lb-lprog-p');
+    var col = ok ? '#4ade80' : '#f87171';
+    if (t) { t.textContent = String(text || (ok ? '完成' : '失败')); t.title = t.textContent; t.style.color = col; }
+    if (b) { b.style.width = '100%'; b.style.background = col; }
+    /* v6534：终态百分比必须落到 100%（原只在 End 里改颜色，渲染演示实测停在 84% 不自然） */
+    if (p) { p.textContent = '100%'; p.style.color = col; }
+  } catch (e) {}
+  LB_LPROG.pct = 100;
+  LB_LPROG.timer = setTimeout(function(){ lbLProgRestore(); }, ok ? 1600 : 6000);
+}
+
 async function lbDeployLocal(kind, btn){
   /* v6462（用户口径）：按住 Shift 点 = 强制更换游戏目录（丢掉已记住的 handle 重新选） */
   var force = false;
   try { force = !!(window.event && window.event.shiftKey); } catch (e) { force = false; }
   if (LB_LOCAL.busy) { if (typeof lbToast === 'function') lbToast('正在部署中，请稍候…'); return; }
   LB_LOCAL.busy = true;
-  if (btn) { btn.style.opacity = '.5'; btn.style.pointerEvents = 'none'; }
-  var say = function(m){ LB_LOCAL.msg = m; try { if (typeof lbToast === 'function') lbToast(m); } catch (e) {} };
+  /* v6533（用户口径）：原来每条 say 都弹一个右上角 toast（一闪就没）—— 改为全部写进
+     「部署到本机」原位的进度行文字里，不再弹窗。 */
+  var say = function(m){ LB_LOCAL.msg = m; try { lbLProgSet(null, m); } catch (e) {} };
+  /* v6535：本次部署的结论类提示（拦截/失败）改落到「部署到本机」原位徽标，不再弹底部大框 */
+  try { LB_NOTE_ANCHOR = btn; LB_NOTE_PENDING = null; } catch (eNA) {}
+  try { lbLProgBegin(btn, '正在定位游戏目录…'); } catch (eP0) {}
   var tk = (typeof lbSrvCtlToken === 'function') ? lbSrvCtlToken() : '';
   var hd = { 'Content-Type': 'application/json' };
   if (tk) hd['Authorization'] = 'Bearer ' + tk;
@@ -55000,21 +60600,23 @@ async function lbDeployLocal(kind, btn){
     say('正在定位游戏目录…');
     var g = await lbLocalEnsure(say, force);
     /* v6460（用户口径「切成 Drive 直连」）：汉化改走 Google Drive API v3 ——
-       浏览器直接从源站下 zip → 网页内解压 → 只写白名单 3 个文件，全程不经过服务器缓存。
+       浏览器直接从源站下 zip → 网页内解压 → 只写白名单 3 个文件，全程不经过缓存。
        MOD 仍按原样从服务器拷贝（用户 2026-11-09 裁决）。 */
     if (kind === 'zh') {
       await lbLocalDeployZhByDrive(g, say, base, hd);
+      try { lbLProgEnd(true, '汉化包已部署'); } catch (ePZ) {}
       return;
     }
     /* v6464（用户口径「MOD 部署到本机 给个不经过服务器的方案」）：先试浏览器直连 CurseForge CDN，失败才回落服务器拷贝 */
     if (kind === 'mods') {
       await lbLocalDeployModsByCDN(g, say, base, hd);
+      try { lbLProgEnd(true, 'MOD 已部署'); } catch (ePM) {}
       return;
     }
     var lr = await fetch(base + '/api/pkg/local/list?kind=' + encodeURIComponent(kind) + '&t=' + Date.now(),
                           { headers: hd, cache: 'no-store' });
     var lj = await lr.json();
-    if (!lj.ok) throw new Error(lj.error || '本地包不可用');
+    if (!lj.ok) throw new Error(lj.error || '缓存不可用');
     var sg = g.sg;                       /* ShooterGame 句柄 */
     var n = 0, bytes = 0, where = '';
     {
@@ -55040,27 +60642,63 @@ async function lbDeployLocal(kind, btn){
       say('MOD 已部署 ' + lj.groups.length + ' 组 / ' + n + ' 个文件（' + lbLocalFmt(bytes) + '）→ ' + where);
     }
     try { console.log('[deploy-local]', kind, n, bytes, where); } catch (e) {}
+    try { lbLProgEnd(true, '部署完成'); } catch (ePE0) {}
   } catch (e) {
     var m = String((e && e.message) || e);
     if (m.indexOf('The user aborted') >= 0 || m.indexOf('AbortError') >= 0) m = '已取消目录选择';
     say('部署失败：' + m);
+    try { lbLProgEnd(false, '部署失败'); } catch (ePE) {}
     /* v6472：失败原因必须留得住（用户实报"提示消失的太快没时间复制"） */
     try { lbErrBar('部署失败：' + m); } catch (eB) {}
     try { console.error('[deploy-local] failed', e); } catch (eC) {}
   } finally {
     LB_LOCAL.busy = false;
-    if (btn) { btn.style.opacity = ''; btn.style.pointerEvents = ''; }
+    /* v6533：进度行还在显示时不要把按钮恢复可点（否则 1.6s 内可重复触发） */
+    if (btn && !LB_LPROG.active) { btn.style.opacity = ''; btn.style.pointerEvents = ''; }
+    /* v6490：部署结束自动刷新本机状态（替代原「重新检测」按钮） */
+    try { lbLocalProbeKick(true); } catch (eR) {}
+    /* v6518：刚写完文件时目录枚举可能滞后 ⇒ 1.5s 后再补探一次，保证胶囊落到真实结果 */
+    try { setTimeout(function(){ try { lbLocalProbeKick(true); } catch (eR2) {} }, 1500); } catch (eR3) {}
   }
 }
 
 /* ===== v6460（用户口径「切成 Drive 直连」）：汉化包 Drive API v3 直连 + 网页内解压 =====
-   数据源与「更新本地包」一致（同一个 Drive 文件夹 / 同一份云端清单），但**不经过服务器**：
+   数据源与「更新缓存」一致（同一个 Drive 文件夹 / 同一份云端清单），但**不经过服务器**：
      浏览器 fetch(www.googleapis.com/drive/v3/files/<id>?alt=media&key=…) → ArrayBuffer
      → 解析 zip 中央目录 → 只解压白名单 3 个文件 → 写入 ShooterGame\Content\Paks
    注意：Drive 只有 www.googleapis.com 给 CORS（usercontent / uc 都没有），所以必须用 v3 + key。 */
 var LB_ZH_PKG_NAMES = ['ShooterGame-Windows_P.pak',
                        'ShooterGame-Windows_P.ucas',
                        'ShooterGame-Windows_P.utoc'];
+
+/* ===== v6508（用户口径）：简繁标注 =====
+   对应关系（以「系统管理 → 云盘凭据」当前配置为准）：
+     飞书 App  → 飞书文档附件里的包 = **简体**
+     Google    → Drive 文件夹里的包   = **繁体**（文件名带 Trad）
+   本机判定用 pak 字节指纹（实测同构建、只差 locres）：
+     简体 49,872,281 / 繁体 49,875,589（差 3,308 B；ucas/utoc 相同） */
+var LB_ZH_PAK_KIND = { '49872281': '简体', '49875589': '繁体' };
+var LB_ZH_KIND_TIP = '飞书凭据 → 简体包\nGoogle API Key → 繁体包\n'
+                   + '（以「系统管理 → 云盘凭据」当前配置为准）';
+
+function lbZhKindOf(src){
+  var s = String(src || '');
+  if (s === 'feishu') return '简体';
+  if (s === 'google') return '繁体';
+  return '';
+}
+
+/* 传入 'feishu' / 'google' / '简体' / '繁体' 均可；无值返回空串（不占位） */
+function lbZhKindTagHtml(v){
+  var k = (v === '简体' || v === '繁体') ? v : lbZhKindOf(v);
+  if (!k) return '';
+  var c = (k === '简体')
+    ? ['#22d3ee', '#0b2b33', '#155e6b']
+    : ['#fbbf24', '#2a2108', '#4a3a0d'];
+  return ' <span class="lb-tipb" style="font-size:10.5px;border-radius:4px;padding:0 5px;'
+       + 'color:' + c[0] + ';background:' + c[1] + ';border:1px solid ' + c[2] + '"'
+       + ' title="' + lbMdEsc(LB_ZH_KIND_TIP) + '">' + lbMdEsc(k) + '</span>';
+}
 
 /* 找 EOCD → 遍历中央目录 → 取出目标条目的压缩数据（不解压） */
 function lbZipPick(buf, targets){
@@ -55119,20 +60757,25 @@ function lbZhPickCloudZip(items){
   var cfg = ((window.LB_ZH || {}).st || {}).cfg || {};
   var v = String(cfg.variant || 'dinoitem').toLowerCase();
   var pick = null;
+  /* v6506：飞书附件是中文名（V10.1-(恐龙&物品双语)汉化修复补丁.zip），
+     纯英文关键词匹配不到 -> 先按中文判，再回落英文 */
+  var _cnDino = function(z){ return /恐龙/.test(z.name) && /物品/.test(z.name); };
+  var _cnItem = function(z){ return /物品双语/.test(z.name); };
+  var _cnAny  = function(z){ return /双语/.test(z.name); };
   if (v === 'dinoitem') {
-    pick = zips.filter(function(z){ return /dino\s*&\s*item/i.test(z.name) && /bilingual/i.test(z.name); })[0];
+    pick = zips.filter(function(z){ return _cnDino(z) || (/dino\s*&\s*item/i.test(z.name) && /bilingual/i.test(z.name)); })[0];
   } else if (v === 'item') {
-    pick = zips.filter(function(z){ return /bilingual/i.test(z.name) && !/dino/i.test(z.name); })[0];
+    pick = zips.filter(function(z){ return _cnItem(z) || (/bilingual/i.test(z.name) && !/dino/i.test(z.name)); })[0];
   }
-  if (!pick) pick = zips.filter(function(z){ return !/bilingual/i.test(z.name); })[0] || zips[0];
+  if (!pick) pick = zips.filter(function(z){ return !_cnAny(z) && !/bilingual/i.test(z.name); })[0] || zips[0];
   return pick;
 }
 
 /* 主流程：Drive 直连 → 解压 → 写 Paks */
 async function lbLocalDeployZhByDrive(g, say, base, hd){
-  /* v6461（用户口径 2026-11-09）：「选了目录后，应该先检查是否和本地包一致，如果一致就提示并拦截部署」
-     用户修正：只有「当前本地包本身是最新版」时才能当基准比对；
-     本地包落后于云端时不比（旧版不能代表最新），直接继续部署。 */
+  /* v6461（用户口径 2026-11-09）：「选了目录后，应该先检查是否和缓存一致，如果一致就提示并拦截部署」
+     用户修正：只有「当前缓存本身是最新版」时才能当基准比对；
+     缓存落后于云端时不比（旧版不能代表最新），直接继续部署。 */
   try {
     var _plr = await fetch(base + '/api/pkg/local/list?kind=zh&t=' + Date.now(),
                             { headers: hd, cache: 'no-store' });
@@ -55141,11 +60784,11 @@ async function lbLocalDeployZhByDrive(g, say, base, hd){
       var _pkgVer = lbLocalZhVerNorm(_plj.ver);
       var _remVer = lbLocalZhVerNorm((((window.LB_ZH || {}).st || {}).remote || {}).ver);
       if (!_pkgVer || !_remVer){
-        say('本地包 V' + (_pkgVer || '?') + ' / 云端 V' + (_remVer || '?') + '：版本号缺失，跳过一致性检查');
+        say('缓存 V' + (_pkgVer || '?') + ' / 云端 V' + (_remVer || '?') + '：版本号缺失，跳过一致性检查');
       } else if (_pkgVer !== _remVer){
-        var _zmsg2 = '本地包 V' + _pkgVer + ' 非最新（云端 V' + _remVer + '），已跳过一致性检查，继续部署';
+        var _zmsg2 = '缓存 V' + _pkgVer + ' 非最新（云端 V' + _remVer + '），已跳过一致性检查，继续部署';
         say(_zmsg2);
-        try { lbNoteBar(_zmsg2, 'warn'); } catch (_eNB2) {}
+        try { lbNoteBar(_zmsg2, 'info'); } catch (_eNB2) {}
       } else {
         say('正在比对本机汉化包（V' + _pkgVer + '）…');
         var _ck = await lbLocalZhPaksSame(g, _plj.files);
@@ -55154,14 +60797,14 @@ async function lbLocalDeployZhByDrive(g, say, base, hd){
                     + lbLocalFmt(_ck.bytes) + '，与服务端一致），已拦截部署';
           say(_zmsg);
           /* v6473：拦截结论常驻（toast 1.6s 看不清） */
-          try { lbNoteBar(_zmsg, 'warn'); } catch (_eNB) {}
+          try { lbNoteBar(_zmsg, 'info'); } catch (_eNB) {}
           return;
         }
         if (_ck.ok){
           var _d = [];
           if (_ck.missing.length) _d.push('缺 ' + _ck.missing.length + ' 件');
           if (_ck.diff.length) _d.push('大小不同 ' + _ck.diff.length + ' 件');
-          say('本机汉化包与本地包不一致（' + (_d.join('·') || '异常') + '），继续部署…');
+          say('本机汉化包与缓存不一致（' + (_d.join('·') || '异常') + '），继续部署…');
         }
       }
     }
@@ -55177,23 +60820,50 @@ async function lbLocalDeployZhByDrive(g, say, base, hd){
     pick = lbZhPickCloudZip(items);
   }
   if (!pick) throw new Error('拿不到云端 zip 清单（请先打开「服务器更新」刷新一次，或检查汉化包下载地址）');
-  say('获取直连地址：' + String(pick.name || ''));
-  var r1 = await fetch(base + '/api/zh/drive/url?id=' + encodeURIComponent(pick.id) + '&t=' + Date.now(),
-                       { headers: hd, cache: 'no-store' });
-  var j1 = await r1.json();
-  if (!j1 || !j1.ok) throw new Error((j1 && j1.error) || ('取直连地址失败 HTTP ' + r1.status));
+  /* v6506（用户口径「附件通路改飞书」）：按云端来源分流 ——
+     飞书不能浏览器直连（Bearer + 无 CORS），走本后端代理 /api/zh/file；
+     Google 仍给带 key 的 v3 直链。 */
+  /* v6507：来源以「系统配置里的凭据类型」为准（cloud_kind），
+     清单里的 asset.src 只作兜底 —— 避免切凭据后清单缓存过期导致走错通路 */
+  var _zst = ((window.LB_ZH || {}).st || {});
+  var _zsrc = String(_zst.cloud_kind
+      || (((_zst.remote || {}).asset || {}).src)
+      || 'google');
+  var _dlUrl = '';
+  say('获取直连地址：' + String(pick.name || '') + '（' + (_zsrc === 'feishu' ? '飞书' : 'Google Drive') + '）');
+  if (_zsrc === 'feishu') {
+    _dlUrl = base + '/api/zh/file?id=' + encodeURIComponent(pick.id) + '&t=' + Date.now();
+  } else {
+    var r1 = await fetch(base + '/api/zh/drive/url?id=' + encodeURIComponent(pick.id) + '&t=' + Date.now(),
+                         { headers: hd, cache: 'no-store' });
+    var j1 = await r1.json();
+    if (!j1 || !j1.ok) throw new Error((j1 && j1.error) || ('取直连地址失败 HTTP ' + r1.status));
+    _dlUrl = j1.url;
+  }
   say('获取汉化包…（' + String(pick.name || '') + '）');
   /* v6477：汉化包同样走本机缓存（约 130MB，同版本不重复下载） */
   var _zkey = lbPkgKey('zh', String(pick.id || ''), '', String(pick.name || ''));
   var buf = null;
   try {
-    buf = await lbFetchCached(j1.url, function(g, tot){
-      say('  下载汉化包：' + lbLocalFmt(g) + (tot ? (' / ' + lbLocalFmt(tot)) : '') + ' …');
-    }, Number(pick.size || 0), _zkey, say);
+    buf = await lbFetchCached(_dlUrl, function(g, tot){
+      var _zt1 = '下载汉化包：' + lbLocalFmt(g) + (tot ? (' / ' + lbLocalFmt(tot)) : '');
+      say(_zt1);
+      if (tot && tot > 0) { try { lbLProgSet((g / tot) * 70, _zt1); } catch (eLZ1) {} }   /* v6533：下载 0~70% */
+    }, Number(pick.size || 0), _zkey, say,
+       (_zsrc === 'feishu')
+         ? { headers: hd,
+             refreshHeaders: function(){
+               var _t2 = (typeof lbSrvCtlToken === 'function') ? lbSrvCtlToken() : '';
+               var _h2 = { 'Content-Type': 'application/json' };
+               if (_t2) _h2['Authorization'] = 'Bearer ' + _t2;
+               return _h2;
+             } }
+         : null);
   } catch (eDl) {
-    throw new Error('Drive 下载失败（key 未生效 / 文件未公开）：' + String((eDl && eDl.message) || eDl));
+    throw new Error('汉化包下载失败（' + (_zsrc === 'feishu' ? '飞书凭据失效 / 权限不足' : 'key 未生效 / 文件未公开')
+                    + '）：' + String((eDl && eDl.message) || eDl));
   }
-  if (!buf || !buf.byteLength) throw new Error('Drive 下载得到空文件（请检查下载地址是否仍可公开访问）');
+  if (!buf || !buf.byteLength) throw new Error('汉化包下载得到空文件（请到「系统管理 → 云盘凭据」点「测试飞书凭据」核对）');
   say('已就绪 ' + lbLocalFmt(buf.byteLength) + '，正在解压…');
   var found = lbZipPick(buf, LB_ZH_PKG_NAMES);
   var content = await g.sg.getDirectoryHandle('Content');
@@ -55203,23 +60873,26 @@ async function lbLocalDeployZhByDrive(g, say, base, hd){
     var nm = LB_ZH_PKG_NAMES[i];
     var e = found[nm.toLowerCase()];
     if (!e) { say('⚠ zip 里没有 ' + nm + '（跳过）'); continue; }
-    say('解压写入 ' + (i + 1) + '/' + LB_ZH_PKG_NAMES.length + '：' + nm);
+    var _zt2 = '解压写入 ' + (i + 1) + '/' + LB_ZH_PKG_NAMES.length + '：' + nm;
+    say(_zt2);
+    try { lbLProgSet(70 + ((i + 1) / LB_ZH_PKG_NAMES.length) * 28, _zt2); } catch (eLZ2) {}   /* v6533：解压 70~98% */
     var data = await lbZipInflate(e);
     await lbLocalWrite(paks, nm, new Blob([data]));
     bytes += data.byteLength; n++;
   }
   if (!n) throw new Error('zip 里没找到汉化白名单文件（' + LB_ZH_PKG_NAMES.join(' / ') + '）');
-  say('汉化已部署 ' + n + ' 个文件（直连 Google Drive，' + lbLocalFmt(bytes) + '）→ '
+  say('汉化已部署 ' + n + ' 个文件（' + (_zsrc === 'feishu' ? '飞书简体源' : 'Google Drive')
+      + '，' + lbLocalFmt(bytes) + '）→ '
       + g.path + '\\ShooterGame\\Content\\Paks，重启游戏后生效');
 }
 
 
 /* ===== v6461（用户口径 2026-11-09）：部署到本机前的一致性预检 =====
-   规则：**当前本地包为最新版**（本地包 ver == 云端最新 ver）才拿它当基准；
+   规则：**当前缓存为最新版**（缓存 ver == 云端最新 ver）才拿它当基准；
    基准有效时逐件比对本机 ShooterGame\Content\Paks 的 3 个汉化文件大小：
      全等 → 提示并拦截部署（不下载、不写盘）
      有差异/缺失 → 照常部署
-   本地包落后于云端 → 不比对，直接继续。 */
+   缓存落后于云端 → 不比对，直接继续。 */
 function lbLocalZhVerNorm(s){
   return String((s === undefined || s === null) ? '' : s).replace(/^v/i, '').trim();
 }
@@ -55234,7 +60907,7 @@ async function lbLocalHandleOf(rootHandle, rel){
   try { return await cur.getFileHandle(parts[parts.length - 1]); } catch (e) { return null; }
 }
 
-/* 本机 Paks 与本地包文件清单比对（只比大小）
+/* 本机 Paks 与缓存文件清单比对（只比大小）
    → {ok:true, same, same_n, bytes, diff:[{name,local,pkg}], missing:[name], total}
       {ok:false, why} ← 连 Paks 目录都取不到 */
 async function lbLocalZhPaksSame(g, files){
@@ -55275,45 +60948,196 @@ async function lbLocalZhPaksSame(g, files){
    失败信息改用**常驻错误条**：不自动消失、可全选复制、带关闭按钮。
    toast 仍保留（1.6s）用于过程提示，但失败原因一律用错误条兜底。 */
 var LB_NOTEBAR = null;
-/* v6473（用户口径）：常驻提示条覆盖**两个**「部署到本机」（汉化包 / MOD）
-   kind='err' 红（失败）/ 'warn' 黄（拦截、需要人工处理）；
-   不自动消失、可选中复制、带关闭 —— toast 只有 1.6s，结论类信息必须留得住。 */
+/* v6535（用户口径「黄红不消失的大框换低调形式，要能查看复制」）：
+   按调用场景自动选形态 ——
+     · 有锚点（「部署到本机」底栏）→ 原位小徽标「⚠ 提示 · 查看」，点开轻量卡片（可「复制全部」）
+     · 无锚点（其它调用点）      → 底部**单行**细条（首行省略）+ 详情 / 复制 / 关闭
+   对外签名保持 lbNoteBar(msg, kind) 兼容，第 3 参 anchorEl 为可选新增。 */
 var LB_NOTE_UI = {
-  err:  { bg: '#3b0d10', bd: '#f87171', fg: '#fecaca', sub: '#fca5a5',
-          ic: 'mdi-alert-circle-outline', icf: '#f87171', tag: '错误' },
-  warn: { bg: '#3a2a08', bd: '#fbbf24', fg: '#fde68a', sub: '#fcd34d',
-          ic: 'mdi-alert-outline', icf: '#fbbf24', tag: '提示' }
+  err:  { bd:'#f87171', fg:'#c8cddb', ic:'mdi-alert-circle-outline', icf:'#f87171', tag:'错误' },
+  warn: { bd:'#fbbf24', fg:'#c8cddb', ic:'mdi-alert-outline',        icf:'#fbbf24', tag:'警告' },
+  info: { bd:'#7c3aed', fg:'#c8cddb', ic:'mdi-information-outline',  icf:'#a78bfa', tag:'信息' }
 };
-function lbNoteBar(msg, kind){
+var LB_NOTE_CUR = null;        /* { kind, msg, host } 最新一条，供卡片/复制读取 */
+var LB_NOTE_ANCHOR = null;     /* 「部署到本机」时由 lbDeployLocal 设成按钮元素 */
+var LB_NOTE_PENDING = null;    /* 进度条仍在跑时暂存，等 lbLProgRestore 再渲染成徽标 */
+
+function lbNoteBar(msg, kind, anchorEl){
   try {
-    var k = (kind === 'warn') ? 'warn' : 'err';
-    var u = LB_NOTE_UI[k];
-    var d = LB_NOTEBAR;
-    if (!d) {
-      d = document.createElement('div');
-      d.id = 'lbNoteBar';
-      document.body.appendChild(d);
-      LB_NOTEBAR = d;
+    var k = (kind === 'err') ? 'err' : ((kind === 'warn') ? 'warn' : 'info');
+    var txt = String(msg == null ? '' : msg);
+    var a = anchorEl || LB_NOTE_ANCHOR || null;
+    /* v6536（用户口径）：分级明确 ——
+         err  → 底部细条，**常驻**，只能手动关（固定带 ✕）
+         warn → 底部细条，**20s 自动消失**（也可手关）
+         其它 → **绝不用底部细条（太招摇）**：有锚点就进原位徽标，没锚点只发 1.6s toast */
+    if (k === 'info'){
+      if (a && a.parentNode){
+        if (typeof LB_LPROG !== 'undefined' && LB_LPROG.active && LB_LPROG.host === a){
+          LB_NOTE_PENDING = { kind: k, msg: txt, anchor: a };
+          return;
+        }
+        lbNoteBadge(k, txt, a);
+        return;
+      }
+      try { if (typeof lbToast === 'function') lbToast(String(txt).split('\n')[0]); } catch (e0) {}
+      return;
     }
-    d.style.cssText = 'position:fixed;left:12px;right:12px;bottom:12px;z-index:1000050;'
-                    + 'background:' + u.bg + ';border:1px solid ' + u.bd + ';border-radius:10px;'
-                    + 'padding:10px 12px;color:' + u.fg + ';font-size:12px;line-height:1.65;'
-                    + 'box-shadow:0 10px 30px rgba(0,0,0,.5);display:block';
-    d.innerHTML = '<div style="display:flex;gap:8px;align-items:flex-start">'
-      + '<i class="mdi ' + u.ic + '" style="color:' + u.icf + ';font-size:17px;margin-top:1px"></i>'
-      + '<div style="flex:1;white-space:pre-wrap;word-break:break-word;user-select:text;'
-      + '-webkit-user-select:text"><span style="color:' + u.icf + ';font-weight:700">'
-      + u.tag + '：</span>' + lbMdEsc(String(msg || '')) + '</div>'
-      + '<button type="button" onclick="lbNoteBarClose()" style="flex:none;border:0;background:transparent;'
-      + 'color:' + u.sub + ';cursor:pointer;font-size:16px;line-height:1;padding:0 2px">'
-      + '<i class="mdi mdi-close"></i></button>'
-      + '</div>'
-      + '<div style="margin-top:6px;font-size:11px;color:' + u.sub + ';opacity:.75">'
-      + '此提示不会自动消失，可选中文字复制</div>';
+    lbNoteSlim(k, txt);
   } catch (e) {}
+}
+/* 形态①：原位徽标（贴底栏，零额外占位） */
+function lbNoteBadge(kind, msg, host){
+  try {
+    var u = LB_NOTE_UI[kind] || LB_NOTE_UI.err;
+    if (!host || !host.parentNode) return;
+    if (typeof host.__lbSavedHtml !== 'string') host.__lbSavedHtml = host.innerHTML;
+    if (typeof host.__lbSavedClick !== 'string') host.__lbSavedClick = String(host.getAttribute('onclick') || '');
+    host.removeAttribute('onclick');
+    host.style.textDecoration = 'none';
+    host.style.pointerEvents = 'auto';
+    host.style.cursor = '';
+    host.innerHTML = '<span class="lb-notebadge" style="display:inline-flex;align-items:center;gap:5px;min-width:0">'
+      + '<i class="mdi ' + u.ic + '" style="color:' + u.icf + ';font-size:13px;flex-shrink:0"></i>'
+      + '<span style="font-size:11px;color:#8b8f9e;flex-shrink:0">' + u.tag + '</span>'
+      + '<span onclick="event.stopPropagation();lbNoteCardShow(this)" style="font-size:11px;color:' + u.icf + ';cursor:pointer;'
+      + 'text-decoration:underline dotted;text-underline-offset:2px;flex-shrink:0">查看</span>'
+      + '<i class="mdi mdi-close" title="关闭提示" onclick="event.stopPropagation();lbNoteBadgeClear(this)" '
+      + 'style="color:#5b606f;font-size:12px;cursor:pointer;flex-shrink:0"></i>'
+      + '</span>';
+    LB_NOTE_CUR = { kind: kind, msg: String(msg || ''), host: host };
+  } catch (e) {}
+}
+function lbNoteBadgeClear(el){
+  try {
+    var host = (el && el.closest) ? el.closest('.lb-foot-left') : null;
+    var h = host || (LB_NOTE_CUR && LB_NOTE_CUR.host);
+    LB_NOTE_CUR = null;
+    lbNoteCardClose();
+    if (!h || typeof h.__lbSavedHtml !== 'string') return;
+    h.innerHTML = h.__lbSavedHtml;
+    h.style.pointerEvents = '';
+    /* v6539 根因修复：徽标是 <a onclick="lbDeployLocal(...,this)"> 的**子元素**，
+       点 ✕ 的事件会冒泡到 <a>。若此刻同步挂回 onclick，就会当场再触发一次部署
+       （用户实报「点叉叉又开始循环部署」）。
+       双保险：① 徽标内可点元素已加 event.stopPropagation()；
+               ② 这里再延后一拍才挂回 onclick，确保本次点击彻底走完。 */
+    var _clk = h.__lbSavedClick;
+    if (_clk) setTimeout(function(){ try { h.setAttribute('onclick', _clk); } catch (e1) {} }, 0);
+  } catch (e) {}
+}
+/* 形态②：底部单行细条（原「整宽大框」压成一行，首行省略） */
+function lbNoteSlim(kind, msg){
+  try {
+    var u = LB_NOTE_UI[kind] || LB_NOTE_UI.err;
+    var d = LB_NOTEBAR;
+    if (!d) { d = document.createElement('div'); d.id = 'lbNoteBar'; document.body.appendChild(d); LB_NOTEBAR = d; }
+    var first = String(msg || '').split('\n')[0];
+    if (d.__lbTimer) { clearTimeout(d.__lbTimer); d.__lbTimer = null; }   /* v6536：新消息作废旧定时器 */
+    d.style.cssText = 'position:fixed;left:12px;right:12px;bottom:12px;z-index:' + (LB_Z.NOTIFY + 50) + ';'
+      + 'background:rgba(22,22,31,.97);border:1px solid ' + u.bd + ';border-radius:8px;'
+      + 'padding:5px 9px;display:flex;align-items:center;gap:7px;font-size:11.5px;'
+      + 'box-shadow:0 6px 20px rgba(0,0,0,.45);line-height:1.5';
+    d.innerHTML = '<i class="mdi ' + u.ic + '" style="color:' + u.icf + ';font-size:14px;flex-shrink:0"></i>'
+      + '<span style="flex:1;min-width:0;color:' + u.fg + ';white-space:nowrap;overflow:hidden;'
+      + 'text-overflow:ellipsis">' + lbMdEsc(first) + '</span>'
+      + '<span onclick="lbNoteCardShow(this)" style="color:' + u.icf + ';cursor:pointer;flex-shrink:0;'
+      + 'text-decoration:underline dotted;text-underline-offset:2px">详情</span>'
+      + '<span onclick="lbNoteCopyAll(this)" style="color:#8b8f9e;cursor:pointer;flex-shrink:0;'
+      + 'text-decoration:underline dotted;text-underline-offset:2px">复制</span>'
+      + '<i class="mdi mdi-close" onclick="lbNoteBarClose()" '
+      + 'style="color:#5b606f;font-size:13px;cursor:pointer;flex-shrink:0"></i>';
+    LB_NOTE_CUR = { kind: kind, msg: String(msg || ''), host: null };
+    /* v6536：warn 20s 自动消失；err 常驻（只能点 ✕ 手动关） */
+    if (kind === 'warn'){
+      d.__lbTimer = setTimeout(function(){
+        try { d.style.display = 'none'; } catch (e2) {}
+        LB_NOTE_CUR = null;
+        d.__lbTimer = null;
+      }, 20000);
+    }
+  } catch (e) {}
+}
+/* 轻量卡片：正文可拖选 + 「复制全部」，锚在徽标/细条上方，点空白关闭 */
+function lbNoteCardClose(){
+  try { var o = document.getElementById('lbNoteCardOv'); if (o && o.parentNode) o.parentNode.removeChild(o); } catch (e) {}
+}
+function lbNoteCardShow(el){
+  try {
+    lbNoteCardClose();
+    var cur = LB_NOTE_CUR || { kind: 'err', msg: '' };
+    var u = LB_NOTE_UI[cur.kind] || LB_NOTE_UI.err;
+    var ov = document.createElement('div');
+    ov.id = 'lbNoteCardOv';
+    ov.style.cssText = 'position:fixed;left:0;top:0;right:0;bottom:0;z-index:' + (LB_Z.NOTIFY + 60) + ';background:transparent';
+    ov.onclick = function (e) { if (e.target === ov) lbNoteCardClose(); };
+    var hostEl = (cur.host && cur.host.parentNode) ? cur.host
+               : ((el && el.closest) ? el.closest('.lb-foot-left') : null);
+    if (!hostEl && el && el.closest) hostEl = el.closest('#lbNoteBar');
+    var pos = 'left:50%;top:50%;transform:translate(-50%,-50%)';
+    if (hostEl){
+      var r = hostEl.getBoundingClientRect();
+      var w = Math.min(360, window.innerWidth - 24);
+      var left = Math.max(12, Math.min(r.left, window.innerWidth - w - 12));
+      pos = 'left:' + left + 'px;bottom:' + Math.max(12, window.innerHeight - r.top + 6) + 'px';
+    }
+    var card = document.createElement('div');
+    card.style.cssText = 'position:fixed;' + pos + ';width:min(360px,calc(100vw - 24px));'
+      + 'background:#16161f;border:1px solid #2a2a3a;border-radius:10px;padding:10px 12px;'
+      + 'box-shadow:0 14px 40px rgba(0,0,0,.6)';
+    card.innerHTML = '<div style="display:flex;align-items:center;gap:7px">'
+      + '<i class="mdi ' + u.ic + '" style="color:' + u.icf + ';font-size:16px"></i>'
+      + '<b style="font-size:13px;color:#fff">' + u.tag + '</b>'
+      + '<span style="flex:1"></span>'
+      + '<i class="mdi mdi-close" onclick="lbNoteCardClose()" style="color:#5b606f;font-size:14px;cursor:pointer"></i>'
+      + '</div>'
+      + '<div style="margin-top:8px;max-height:40vh;overflow:auto;white-space:pre-wrap;word-break:break-word;'
+      + 'font-family:ui-monospace,Consolas,monospace;font-size:11.5px;line-height:1.65;color:#c8cddb;'
+      + 'user-select:text;-webkit-user-select:text">' + lbMdEsc(cur.msg || '') + '</div>'
+      + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">'
+      + '<button type="button" onclick="lbNoteCopyAll(this)" style="padding:5px 11px;border-radius:6px;'
+      + 'border:none;background:#7c3aed;color:#fff;font-size:12px;cursor:pointer">复制全部</button>'
+      + '<button type="button" onclick="lbNoteCardClose()" style="padding:5px 11px;border-radius:6px;'
+      + 'border:1px solid #3a3a4a;background:transparent;color:#bbb;font-size:12px;cursor:pointer">关闭</button>'
+      + '</div>';
+    ov.appendChild(card);
+    document.body.appendChild(ov);
+  } catch (e) {}
+}
+function lbNoteCopyFallback(txt){
+  try {
+    var ta = document.createElement('textarea');
+    ta.value = txt;
+    ta.setAttribute('readonly', 'readonly');
+    ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch (e) { return false; }
+}
+function lbNoteCopyAll(btn){
+  var txt = String((LB_NOTE_CUR && LB_NOTE_CUR.msg) || '');
+  var done = function (ok) {
+    if (!btn) return;
+    var old = btn.textContent;
+    btn.textContent = ok ? '已复制' : '复制失败';
+    setTimeout(function () { try { btn.textContent = old; } catch (e) {} }, 1400);
+  };
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(txt).then(function(){ done(true); }, function(){ done(lbNoteCopyFallback(txt)); });
+      return;
+    }
+  } catch (e) {}
+  done(lbNoteCopyFallback(txt));
 }
 function lbNoteBarClose(){
   try { if (LB_NOTEBAR) LB_NOTEBAR.style.display = 'none'; } catch (e) {}
+  LB_NOTE_CUR = null;
+  LB_NOTE_PENDING = null;
+  lbNoteCardClose();
 }
 /* 兼容旧调用名 */
 function lbErrBar(msg){ lbNoteBar(msg, 'err'); }
@@ -55491,7 +61315,11 @@ async function lbPkgCacheEnsure(needBytes){
 }
 
 /* 带缓存的大文件下载：命中缓存直接返回 ArrayBuffer；否则边下边存（tee） */
-async function lbFetchCached(url, onProgress, expectSize, cacheKey, say){
+/* v6509：新增 opt.headers —— 走自家后端代理（如 /api/zh/file 飞书代理）时必须带
+   Authorization，否则 _srvctl_guard 直接 401（Drive 直连不需要头，所以以前没暴露） */
+async function lbFetchCached(url, onProgress, expectSize, cacheKey, say, opt){
+  var _hd = (opt && opt.headers) ? opt.headers : null;
+  var _rh = (opt && opt.refreshHeaders) ? opt.refreshHeaders : null;
   var want = Number(expectSize || 0);
   if (cacheKey) {
     var hit = await lbPkgCacheGet(cacheKey, want);
@@ -55510,8 +61338,16 @@ async function lbFetchCached(url, onProgress, expectSize, cacheKey, say){
       } catch (eNB1) {}
     }
   }
-  var rs = await fetch(url, { cache: 'no-store' });
-  if (!rs.ok) throw new Error('HTTP ' + rs.status);
+  var rs = await fetch(url, { cache: 'no-store', headers: (_hd || undefined) });
+  if (!rs.ok && rs.status === 401 && _rh) {
+    /* 令牌可能过期：重取一次再试（只重试一次） */
+    try { _hd = _rh() || _hd; } catch (eRH) {}
+    rs = await fetch(url, { cache: 'no-store', headers: (_hd || undefined) });
+  }
+  if (!rs.ok) {
+    if (rs.status === 401) throw new Error('登录令牌失效（HTTP 401），请刷新页面重新登录后再试');
+    throw new Error('HTTP ' + rs.status);
+  }
   var total = want;
   if (!total) {
     var cl = Number(rs.headers.get('content-length') || 0);
@@ -56030,6 +61866,203 @@ async function lbLocalAnyPak(dirHandle, depth){
   return false;
 }
 
+/* ===== v6516（用户口径 2026-11-10「library.json 是动态的，要自动补全 pathOnDisk」）=====
+   根因（三段实测取证 T1/T2/T3 + CFCore 历史日志）：
+     CFCore（游戏内置 MOD 管理器 cfcore.ue）启动时执行 deleteStaleModDirs，
+     判据 = 磁盘目录名是否等于 ModsUserData/83374/library.json 里任一 installedMods[].pathOnDisk。
+     不在名单里的目录一律删除（日志 mods_cleanup_service_impl.cpp:156 "Deleting mods dir"），
+     pathOnDisk 指向的目录不存在则 "Missing module" → status=Invalid（游戏内显示"文件损坏"）。
+   ⇒ 「部署到本机」只写文件、不改库记录 ⇒ 写进去必被清掉。
+   方案：部署前**运行时读取** library.json（绝不写死 fid），把该 pid 的 pathOnDisk 补成
+        即将写入的目录名；若 latestFiles 里就有该 fid，把 installedFile 一并指过来。
+        写入前备份 library.json.bak，写后重读复核。
+   安全约束：
+     ① 只改目标 pid 的那一条，其他记录不动；
+     ② 解析失败 / 读取失败一律不写，直接报错让用户处理（不静默改坏文件）；
+     ③ 游戏运行时 library.json 被独占 ⇒ 明确提示「请先退出游戏」；
+     ④ 保留原文件 BOM（CFCore 自己写的带 BOM）；
+     ⑤ 保护名单：库里所有 pathOnDisk 的目录名，清理旧版目录时一律不碰。 */
+
+function lbCfLibNow(){
+  var d = new Date();
+  function p2(n){ return (n < 10 ? '0' : '') + n; }
+  return d.getFullYear() + '.' + p2(d.getMonth() + 1) + '.' + p2(d.getDate())
+       + '-' + p2(d.getHours()) + '.' + p2(d.getMinutes()) + '.' + p2(d.getSeconds());
+}
+function lbCfLibGuid(){
+  var s = '', hex = '0123456789ABCDEF';
+  for (var i = 0; i < 32; i++) s += hex.charAt(Math.floor(Math.random() * 16));
+  return s;
+}
+
+/* 取 ModsUserData\83374 目录句柄（不存在返回 null） */
+function lbCfLibDir(sg){
+  if (!sg || typeof sg.getDirectoryHandle !== 'function') return Promise.resolve(null);
+  return lbLocalDir(sg, 'Binaries')
+    .then(function(b){ return lbLocalDir(b, 'Win64'); })
+    .then(function(w){ return lbLocalDir(w, 'ShooterGame'); })
+    .then(function(s2){ return lbLocalDir(s2, 'ModsUserData'); })
+    .then(function(m){ return lbLocalDir(m, '83374'); })
+    .catch(function(){ return null; });
+}
+
+/* 读 library.json → { dir, fh, obj, raw, err } */
+function lbCfLibRead(sg){
+  return lbCfLibDir(sg).then(function(d){
+    if (!d) return { dir: null, err: '未找到 ModsUserData\\83374 目录（游戏是否还没装过任何 MOD？）' };
+    return d.getFileHandle('library.json').then(function(fh){
+      return fh.getFile().then(function(f){
+        return f.text();
+      }).then(function(txt){
+        var obj = null;
+        try { obj = JSON.parse(txt); } catch (eJ) {
+          return { dir: d, fh: fh, err: 'library.json 解析失败：' + String((eJ && eJ.message) || eJ) };
+        }
+        if (!obj || !obj.installedMods) return { dir: d, fh: fh, err: 'library.json 结构异常（无 installedMods）' };
+        return { dir: d, fh: fh, obj: obj, raw: txt };
+      });
+    }, function(eF){
+      return { dir: d, err: '读不到 library.json（游戏可能正在运行，文件被独占）—— 请退出游戏后再部署' };
+    });
+  }).catch(function(e){
+    return { err: '读取 CFCore 库失败：' + String((e && e.message) || e) };
+  });
+}
+
+/* 库里某 pid 的记录下标（details.iD 或 installedFile.modId 命中即可） */
+function lbCfLibFind(lib, pid){
+  var arr = (lib && lib.installedMods) || [];
+  var p = String(pid);
+  for (var i = 0; i < arr.length; i++) {
+    var m = arr[i] || {};
+    var det = m.details || {};
+    var inf = m.installedFile || {};
+    if (String(det.iD || '') === p || String(inf.modId || '') === p) return i;
+  }
+  return -1;
+}
+
+/* 库里所有 pathOnDisk 的目录名 → 清理保护名单 */
+function lbCfLibProtectedNames(lib){
+  var out = {};
+  var arr = (lib && lib.installedMods) || [];
+  for (var i = 0; i < arr.length; i++) {
+    var pod = String((arr[i] || {}).pathOnDisk || '');
+    if (!pod) continue;
+    var nm = pod.split('/').pop();
+    if (nm) out[nm] = 1;
+  }
+  return out;
+}
+
+/* 把该 pid 的 pathOnDisk 补成 wantName（就地改 lib 对象）→ { changed, msg } */
+function lbCfLibPatchPath(lib, pid, wantName, meta){
+  var p = String(pid);
+  var want = '83374/' + String(wantName);
+  var md = meta || {};
+  var fid = String(md.fid || '');
+  var i = lbCfLibFind(lib, p);
+  if (i < 0) {
+    /* 库里没有该 pid ⇒ 新增一条最小可用记录（先让它认得目录名，其它元数据等游戏自己补） */
+    var fo = {
+      iD: Number(fid) || 0, gameId: 83374, modId: Number(p) || 0,
+      displayName: String(md.fileName || ''), filename: String(md.fileName || ''),
+      fileLength: Number(md.size) || 0, fileSizeOnDisk: Number(md.size) || 0,
+      downloadUrl: String((md.urls && md.urls[0]) || '')
+    };
+    lib.installedMods = lib.installedMods || [];
+    lib.installedMods.push({
+      iD: lbCfLibGuid(), dateInstalled: lbCfLibNow(), dateUpdated: lbCfLibNow(),
+      status: 'Normal', pathOnDisk: want, enabled: true, unmanaged: false,
+      details: { iD: Number(p) || 0, gameId: 83374, name: String(md.name || ('MOD ' + p)) },
+      installedFile: fo, latestFiles: [fo]
+    });
+    return { changed: true, msg: '库中无记录 → 新增 pathOnDisk=' + want };
+  }
+  var rec = lib.installedMods[i] || {};
+  var chg = [];
+  if (String(rec.pathOnDisk || '') !== want) {
+    rec.pathOnDisk = want; chg.push('pathOnDisk → ' + want);
+  }
+  var lfs = rec.latestFiles || [];
+  for (var k = 0; k < lfs.length; k++) {
+    if (fid && String((lfs[k] || {}).iD || '') === fid) {
+      var cur = String((rec.installedFile || {}).iD || '');
+      if (cur !== fid) { rec.installedFile = lfs[k]; chg.push('installedFile → ' + fid); }
+      break;
+    }
+  }
+  if (chg.length) rec.dateUpdated = lbCfLibNow();
+  return { changed: chg.length > 0, msg: chg.length ? chg.join('；') : ('已一致 ' + want) };
+}
+
+/* 写回 library.json（先备份 .bak，保留 BOM，写后重读复核）→ { ok, obj, msg } */
+function lbCfLibWrite(read){
+  if (!read || !read.obj || !read.fh || !read.dir) {
+    return Promise.resolve({ ok: false, msg: '无有效句柄' });
+  }
+  var hasBom = String(read.raw || '').charCodeAt(0) === 0xFEFF;
+  var txt = (hasBom ? '\ufeff' : '') + JSON.stringify(read.obj);
+  var bakOk = false;
+  return read.dir.getFileHandle('library.json.bak', { create: true }).then(function(bfh){
+    return bfh.createWritable().then(function(w){
+      return w.write(String(read.raw || '')).then(function(){ return w.close(); });
+    }).then(function(){ bakOk = true; });
+  }).catch(function(){ bakOk = false; }).then(function(){
+    return read.fh.createWritable();
+  }).then(function(w){
+    return w.write(txt).then(function(){ return w.close(); });
+  }).then(function(){
+    return read.fh.getFile().then(function(f){ return f.text(); });
+  }).then(function(t){
+    var o2 = null;
+    try { o2 = JSON.parse(t); } catch (e) {
+      return { ok: false, msg: '写回后 JSON 解析失败（备份=' + (bakOk ? 'library.json.bak' : '无') + '）' };
+    }
+    return { ok: true, obj: o2, msg: 'ok' };
+  }).catch(function(e){
+    return { ok: false, msg: '写入 library.json 失败：' + String((e && e.message) || e)
+             + '（备份=' + (bakOk ? 'library.json.bak' : '无') + '）—— 请退出游戏后重试' };
+  });
+}
+
+/* ===== v6519（用户口径「直接上 v6519」）=====
+   为什么需要这一步：v6516 只把 pathOnDisk 补对（目录不会被删），但 CFCore 判定
+   「是否已装最新版」看的是 installedFile.iD 是否 == 目录里的 fid。
+   实测 Club ARK（1005639）：pathOnDisk 已是 1005639_9418025，但 installedFile 还是旧的
+   7587680 ⇒ status=Pending/OutOfDate ⇒ 游戏内显示失效 ⇒ 自动重下 2.34GB（且反复超时失败，
+   表现为「卡 100%」）。
+   v6516 原本想从 latestFiles 里找同 fid 那条来回填，但 Club 的 latestFiles 是空的
+   （CF API 一直 serverUnreachable）⇒ 永远补不上。
+   ⇒ 改为：**用部署时拿到的包元数据 + 实际写入字节数**直接构造 installedFile，并把 status 置 Normal。
+   ⚠ 已实证：预放 zip 喂给 CFCore 不可行（它的 Cleaning up 会清空整个 .temp，连无关探针文件都删）。 */
+
+function lbCfLibPatchInstalled(lib, pid, dn, meta, bytes){
+  var i = lbCfLibFind(lib, pid);
+  if (i < 0) return { changed: false, msg: '库中无该 pid 记录，跳过' };
+  var rec = lib.installedMods[i] || {};
+  var p = String(pid), md = meta || {}, fid = String(md.fid || '');
+  var want = '83374/' + String(dn);
+  var chg = [];
+  if (String(rec.pathOnDisk || '') !== want) { rec.pathOnDisk = want; chg.push('pathOnDisk → ' + want); }
+  if (fid && String((rec.installedFile || {}).iD || '') !== fid) {
+    rec.installedFile = {
+      iD: Number(fid) || 0, gameId: 83374, modId: Number(p) || 0,
+      isAvailable: true,
+      displayName: String(md.fileName || ''), filename: String(md.fileName || ''),
+      releaseType: 'Release', fileStatus: 'Approved',
+      fileLength: Number(md.size) || 0,
+      fileSizeOnDisk: Number(bytes) || Number(md.size) || 0,
+      downloadUrl: String((md.urls && md.urls[0]) || '')
+    };
+    chg.push('installedFile → ' + fid + '（' + (Number(bytes) || 0) + ' B）');
+  }
+  /* status：文件已完整写入 ⇒ Normal（与游戏自己装完后的取值一致） */
+  if (String(rec.status || '') !== 'Normal') { rec.status = 'Normal'; chg.push('status → Normal'); }
+  if (chg.length) rec.dateUpdated = lbCfLibNow();
+  return { changed: chg.length > 0, msg: chg.join('；') };
+}
+
 /* 本机 Mods\83374 下某 pid 的全部版本目录（<pid>_*） */
 async function lbLocalModDirs(gid, pid){
   var out = [];
@@ -56081,7 +62114,7 @@ async function lbLocalDirStat(dirH, depth){
 }
 
 /* 干跑：只扫描旧版本目录并统计，**不删除任何东西** */
-async function lbLocalScanOldModDirs(gid, pid, keepDn){
+async function lbLocalScanOldModDirs(gid, pid, keepDn, protect){
   var out = [];
   var keep = String(keepDn || '');
   if (!keep) return out;                              /* ⑤ */
@@ -56098,6 +62131,7 @@ async function lbLocalScanOldModDirs(gid, pid, keepDn){
       var hh = r.value[1];
       if (!hh || hh.kind !== 'directory') continue;   /* ④ 只要目录 */
       if (nm === keep) continue;                      /* ③ 严格相等：当前版保留 */
+      if (protect && protect[nm]) continue;           /* ★ v6516：CFCore 库正在引用的目录，绝不删 */
       if (!reOk.test(nm)) continue;                   /* ② 只认 <pid>_<数字> */
       names.push(nm);
     }
@@ -56114,10 +62148,10 @@ async function lbLocalScanOldModDirs(gid, pid, keepDn){
 }
 
 /* ===== v6481：干跑结果确认浮层（旧版目录清理）===== */
-var LB_MODS_PRUNE = { list: [], gid: null, say: null, busy: false };
+var LB_MODS_PRUNE = { list: [], gid: null, say: null, protect: {}, busy: false };
 
-function lbModsPruneOpen(list, gid, say){
-  LB_MODS_PRUNE = { list: (list || []), gid: gid, say: say || null, busy: false };
+function lbModsPruneOpen(list, gid, say, protect){
+  LB_MODS_PRUNE = { list: (list || []), gid: gid, say: say || null, protect: (protect || {}), busy: false };
   var ov = document.getElementById('lbModsPruneOv');
   if (!ov) {
     ov = document.createElement('div');
@@ -56164,11 +62198,13 @@ function lbModsPruneOpen(list, gid, say){
        + '</div>';
   ov.innerHTML = hh2;
   ov.style.display = 'flex';
+  try { if (typeof lbZOpen === 'function') lbZOpen(ov, 'modsPrune'); } catch (_eZ2) {}
 }
 
 function lbModsPruneClose(){
   var ov = document.getElementById('lbModsPruneOv');
   if (ov) ov.style.display = 'none';
+  try { if (ov && typeof lbZClose === 'function') lbZClose(ov); } catch (_eZ3) {}
   if (typeof LB_MODS_PRUNE.say === 'function') {
     try { LB_MODS_PRUNE.say('已暂不清理旧版目录（旧版仍占空间，下次部署会再次提示）'); } catch (e) {}
   }
@@ -56197,6 +62233,10 @@ async function lbModsPruneGo(){
     var it = list[i];
     lbModsPruneSetSt('正在清理 ' + (i + 1) + '/' + list.length + '：' + it.name + ' …', '#fbbf24');
     try {
+      if (LB_MODS_PRUNE.protect && LB_MODS_PRUNE.protect[it.name]) {
+        skip.push(it.name + '（CFCore 库正在引用，已保护）');   /* ★ v6516 */
+        continue;
+      }
       var dh = await gid.getDirectoryHandle(it.name);      /* ① 原始名字 */
       var still = await lbLocalAnyPak(dh, 0);              /* ④ 删前再验一次 */
       if (!still) { skip.push(it.name); continue; }
@@ -56212,13 +62252,16 @@ async function lbModsPruneGo(){
   lbModsPruneSetSt(msg, fail.length ? '#f87171' : '#4ade80');
   if (btn) btn.style.display = 'none';
   try { if (typeof LB_MODS_PRUNE.say === 'function') LB_MODS_PRUNE.say(msg); } catch (e1) {}
-  try { lbNoteBar(msg, fail.length ? 'err' : 'warn'); } catch (e2) {}
+  /* v6536：成功汇报不弹底部条（已有 say/状态行），只有失败才 err 常驻 */
+  if (fail.length) { try { lbNoteBar(msg, 'err'); } catch (e2) {} }
   LB_MODS_PRUNE.busy = false;
+  /* v6490：清理结束自动刷新本机状态（释放的空间要能立刻看到） */
+  try { lbLocalProbeKick(true); } catch (eR2) {}
 }
 
 /* ===== v6470（用户口径 2026-11-10）：MOD「部署到本机」两处调整 =====
    ① 清单来源换成 /api/mods/status 的「**所有服务器策略内 MOD 并集**」（expect），
-      **不再读服务端本地包** —— 本地包下没下、是否最新，与「部署到本机」无关。
+      **不再读服务端缓存** —— 缓存下没下、是否最新，与「部署到本机」无关。
    ② 「作者限制第三方分发」（官方 CDN 返回 403）不再只弹一句文字提示：
       先把能直连的 MOD 全部装完 → 汇总成一个可交互浮层（打开 CurseForge 下载页 + 选择已下载的 zip）
       → 网页内解压写盘 → 继续，直到全部处理完。
@@ -56237,7 +62280,29 @@ async function lbLocalModsPolicyPids(base, hd){
   Object.keys(j.servers || {}).forEach(function(sv){
     ((j.servers[sv] || {}).expect || []).forEach(function(p){ if (p) set[String(p)] = 1; });
   });
-  return Object.keys(set).sort();
+  var arr = Object.keys(set).sort();
+  /* v6489：顺带抽出 pid -> MOD 名（items[].name = .uplugin 的 FriendlyName），
+     供「本机状态」明细直接显示 MOD 名字而不是裸 pid。挂在数组属性上，不影响现有调用。 */
+  var names = {};
+  Object.keys(j.servers || {}).forEach(function(sv){
+    ((j.servers[sv] || {}).items || []).forEach(function(it){
+      if (it && it.pid && it.name && !names[String(it.pid)]) names[String(it.pid)] = String(it.name);
+    });
+  });
+  arr._names = names;
+  /* v6491（用户口径「本机胶囊里 看不出来是否是最新的」）：
+     顺带抽出 cfLatest（CurseForge 线上最新 fid），供本机状态判定「已最新 / 待更新」 */
+  /* v6493（用户口径）：本机比对必须用**客户端**最新 fid。
+     CurseForge 同一 MOD 的服务端包(windowsserver) 与客户端包(windows) 是两个独立文件，
+     fileId 天然不同（实测 9411569 vs 9411566）⇒ 拿 cfLatest 比对会永远显示「待更新」。
+     优先 clientLatest（新后端字段），老后端无该字段时回退 cfLatest。 */
+  var cf = {}, _cfSrc = j.clientLatest || j.cfLatest || {};
+  Object.keys(_cfSrc).forEach(function(p){
+    var f = String((_cfSrc[p] || {}).fid || '');
+    if (f) cf[String(p)] = f;
+  });
+  arr._cfLatest = cf;
+  return arr;
 }
 
 /* MOD 直连部署（文件字节不走服务器，只取几百字节的地址元数据）
@@ -56288,12 +62353,24 @@ async function lbLocalDeployModsByCDN(g, say, base, hd){
     }
 
     var cdn = cpid + '_' + String(cmeta.fid || '');
-    var chave = false;
+    var chave = false, _haveSrc = '';
     if (cmeta.fid) {
       try {
         var cexist = await gid.getDirectoryHandle(cdn);
         chave = await lbLocalAnyPak(cexist, 0);
-      } catch (e2) { chave = false; }
+        _haveSrc = chave ? 'pak' : '';
+        /* v6527（实测 have=否 但目录里明明有 .pak、2.17GB）：
+           lbLocalAnyPak 是递归 entries 扫描，任一层句柄异常都会被 catch 成 false ⇒ 误判未装
+           ⇒ 白重下 2.3 GB。这里加兜底：目录里只要有文件且总量 >1KB 也算已装。 */
+        if (!chave) {
+          try {
+            var _st0 = await lbLocalDirStat(cexist, 0);
+            if (Number(_st0.n) > 0 && Number(_st0.bytes) > 1024) {
+              chave = true; _haveSrc = 'files(' + _st0.n + '/' + _st0.bytes + ')';
+            }
+          } catch (_eSt0) {}
+        }
+      } catch (e2) { chave = false; _haveSrc = 'nodir'; }
     }
     /* v6480：把同 pid 的版本目录记下来 —— 后面既用于「是否要清旧版」，也用于阻断判断 */
     var olds = [];
@@ -56303,26 +62380,151 @@ async function lbLocalDeployModsByCDN(g, say, base, hd){
     var staleN = 0;
     for (var oi = 0; oi < olds.length; oi++) { if (olds[oi] !== cdn) staleN++; }
     if (staleN) stale.push(cpid + ' 有 ' + staleN + ' 个旧版本目录（将自动清理）');
-    plan.push({ pid: cpid, meta: cmeta, have: chave, dn: cdn, olds: olds });
+    plan.push({ pid: cpid, meta: cmeta, have: chave, haveSrc: _haveSrc, dn: cdn, olds: olds });
+  }
+
+  /* ===== ①.5 v6516：自动补全 CFCore library.json 的 pathOnDisk =====
+     只对「需要真正写入」的组做；读不到库 / 写不进库 ⇒ 直接报错阻断
+     （否则文件写进去，游戏一启动就被 deleteStaleModDirs 清掉，等于白干）。 */
+  var _protect = {};
+  var _libReady = false;          /* 库成功读到（判定"是否真的已最新"必须依赖它） */
+  var _cflib = null;
+  var _needDeploy = false;
+  for (var _di = 0; _di < plan.length; _di++) { if (!plan[_di].have) _needDeploy = true; }
+  if (plan.length) {
+    _cflib = await lbCfLibRead(g.sg);
+    if (_cflib && _cflib.obj) {
+      _libReady = true;
+      _protect = lbCfLibProtectedNames(_cflib.obj);
+      /* v6521：把库状态标到每个 plan 项 —— 目录 fid == 最新 fid 但库 status=OutOfDate 时，
+         游戏内仍会提示更新，不能算「已最新」，也不能拦截部署。 */
+      for (var _di3 = 0; _di3 < plan.length; _di3++) {
+        var _ix3 = lbCfLibFind(_cflib.obj, plan[_di3].pid);
+        if (_ix3 >= 0) {
+          plan[_di3].libFound = true;
+          plan[_di3].libStatus = String((_cflib.obj.installedMods[_ix3] || {}).status || '');
+        } else {
+          plan[_di3].libFound = false;
+          plan[_di3].libStatus = '';
+        }
+      }
+    }
+    if (!_libReady) {
+      lbCfSetLast('readerr', '读库失败：' + ((_cflib && _cflib.err) || '未知原因'));
+    }
+    if (_needDeploy && !_libReady) {
+      throw new Error('无法读取 CFCore 库（library.json），写入的 MOD 会被游戏清理：'
+        + ((_cflib && _cflib.err) || '未知原因')
+        + '\n请先退出游戏 → 再点「部署到本机」');
+    }
+  }
+  /* v6524（用户实报「6523 点了部署，明细还是 库 Pending」，且 library.json.bak 停在 22:11
+     ⇒ 说明修库这段**从没执行到**）。这里把每个判定依据写进操作日志，下次一眼能看出卡在哪：
+       读库成功/失败 → 每个 pid 的 目录名/本机是否已装/库记录状态/metaFid。 */
+  try {
+    var _pdLines = ['库=' + (_libReady
+      ? ('OK(' + (((_cflib || {}).obj || {}).installedMods || []).length + '条)')
+      : ('读取失败:' + ((_cflib && _cflib.err) || '未知')))
+      + ' needDeploy=' + (_needDeploy ? '是' : '否') + ' plan=' + plan.length];
+    say(_pdLines[0]);
+    for (var _dg = 0; _dg < plan.length; _dg++) {
+      var _dp = plan[_dg];
+      var _ln = '  · ' + _dp.pid + ' dn=' + _dp.dn + ' have=' + (_dp.have ? '是' : '否')
+          + ( _haveSrcOf(_dp) ? ('[' + _haveSrcOf(_dp) + ']') : '')
+          + ' metaFid=' + String((_dp.meta && _dp.meta.fid) || '-')
+          + ' libFound=' + (_dp.libFound ? '是' : '否')
+          + ' libStatus=' + (_dp.libFound ? String(_dp.libStatus || '空') : '-');
+      say(_ln);
+      _pdLines.push(_ln.replace(/^\s+/, ''));
+    }
+    window.__lbPlanDiag = _pdLines.join('｜');
+  } catch (_eDg) {}
+  if (_libReady) {
+    var _chgN = 0, _chgMsg = [];
+    /* (a) 需要真正写入的：先补 pathOnDisk，让 CFCore 认账（否则写完就被清） */
+    for (var _li = 0; _li < plan.length; _li++) {
+      if (plan[_li].have) continue;
+      if (!plan[_li].meta || !plan[_li].meta.fid) continue;
+      var _pr = lbCfLibPatchPath(_cflib.obj, plan[_li].pid, plan[_li].dn, plan[_li].meta);
+      if (_pr.changed) { _chgN++; _chgMsg.push(plan[_li].pid + '：' + _pr.msg); }
+      else say('CFCore 库记录已一致：' + plan[_li].pid + ' → ' + plan[_li].dn);
+    }
+    /* (b) v6522（用户实报「已装 9418025 2.17 GB · 待处理（库 Pending）」）：
+       **目录已经装好**但库状态不是 Normal（Pending / OutOfDate / Invalid / 无记录）时，
+       v6521 只是"放行部署"，可部署循环里 `if (it.have) continue` 直接跳过 ⇒ 文件不重写、库也不修
+       ⇒ 用户点完看到「什么都没变」。这里直接按现有目录的实际字节数把库修成 Normal。 */
+    for (var _fj = 0; _fj < plan.length; _fj++) {
+      var _fp = plan[_fj];
+      if (!_fp.meta || !_fp.meta.fid) continue;
+      if (_fp.libFound && String(_fp.libStatus || '') === 'Normal') continue;
+      /* v6528（实测：1005639 have=否[nodir] 但磁盘上目录与 4673 行 Manifest 都在，
+         且该 MOD 客户端包下载被 403 拒绝 ⇒ 永远走不到"部署后回填"）
+         ⇒ 修库**不再以 have 为前提**，改用"目录里实际有文件"判定：
+            只要有文件（stat.n>0），就按它把库里的 installedFile/status 修成 Normal。 */
+      var _fb = 0, _fexists = false;
+      try {
+        var _fdh = await gid.getDirectoryHandle(_fp.dn);
+        var _fst = await lbLocalDirStat(_fdh, 0);
+        _fb = Number(_fst.bytes || 0);
+        _fexists = (Number(_fst.n) > 0);
+      } catch (_eFD) { _fexists = false; }
+      if (!_fexists) {
+        say('  · ' + _fp.pid + ' 目录不存在（' + _fp.dn + '），跳过修库：需先安装');
+        continue;
+      }
+      var _fr = lbCfLibPatchInstalled(_cflib.obj, _fp.pid, _fp.dn, _fp.meta, _fb);
+      if (!_fr.changed) { say('  · ' + _fp.pid + ' 修库未产生变更：' + String(_fr.msg || '')); }
+      if (_fr.changed) {
+        _chgN++;
+        _chgMsg.push(_fp.pid + '（目录已装，仅修库 ' + String(_fp.libStatus || '无记录') + ' → Normal）：' + _fr.msg);
+        _fp.libFound = true;
+        _fp.libStatus = 'Normal';
+      }
+    }
+    if (_chgN) {
+      say('补全 CFCore 库记录（' + _chgN + ' 项）：' + _chgMsg.join('｜'));
+      var _wr = await lbCfLibWrite(_cflib);
+      if (!_wr.ok) {
+        var _wmsg = '自动补全 CFCore 库失败：' + _wr.msg
+          + '\n未写入任何 MOD 文件（避免装了又被清掉）。请退出游戏后重试';
+        lbCfSetLast('err', _wr.msg);
+        try { lbErrBar(_wmsg); } catch (_eEB) {}
+        throw new Error(_wmsg);
+      }
+      lbCfSetLast('ok', '已写入 ' + _chgN + ' 项：' + _chgMsg.join('｜'));
+      _protect = lbCfLibProtectedNames(_wr.obj);
+      say('CFCore 库已更新（备份 library.json.bak）→ 目录不会再被清理，游戏内也不再提示更新');
+      try { lbNoteBar('已修正 CFCore 库记录（' + _chgN + ' 项）：目录不会被清理、游戏内不再提示需更新', 'info'); } catch (_eNB4) {}
+    } else {
+      say('CFCore 库无需修改：以上各项的目录名与库状态均已一致');
+      lbCfSetLast('nochange', '库无需修改（判定时各项目录名/状态已一致）');
+      try { lbNoteBar('CFCore 库无需修改（目录名与库状态已一致）', 'info'); } catch (_eNB6) {}
+    }
+  } else if (_needDeploy && !_libReady) {
+    say('注意：读不到 CFCore 库，无法补全 registry（本次仍继续部署）');
   }
 
   /* ===== ② 整批阻断：全部已是最新就不动任何文件 ===== */
-  var allHave = plan.length > 0, allClean = true;
+  var allHave = plan.length > 0, allClean = true, allLibOk = true;
   for (var xi = 0; xi < plan.length; xi++) {
     if (!plan[xi].have) allHave = false;
+    /* v6521：库状态不是 Normal（OutOfDate / Invalid / Pending / 无记录）⇒ 游戏内会一直提示更新，
+       **必须放行部署**让 v6519 的补库把 status 刷成 Normal —— 否则"已最新→拦截→库永远修不好"死锁。 */
+    if (_libReady && (!plan[xi].libFound || String(plan[xi].libStatus || '') !== 'Normal')) allLibOk = false;
     /* v6480：只要还残留旧版本目录，就不能整批阻断 —— 要放行去把它们清掉 */
     var _os = plan[xi].olds || [];
     for (var xj = 0; xj < _os.length; xj++) {
       if (_os[xj] !== plan[xi].dn) { allClean = false; break; }
     }
   }
-  if (allHave && allClean && !nopkg.length && !failed.length) {
+  if (allHave && allClean && allLibOk && !nopkg.length && !failed.length) {
     var names = [];
     for (var ni = 0; ni < plan.length; ni++) {
       var pm = plan[ni].meta || {};
       names.push(pm.name ? (pm.name + '(' + plan[ni].dn + ')') : plan[ni].dn);
     }
-    var _mmsg = '本机 MOD 已是最新版（' + plan.length + ' 组：' + names.join('、') + '），已拦截部署';
+    var _mmsg = '本机 MOD 已是最新版（' + plan.length + ' 组：' + names.join('、') + '），已拦截部署'
+              + (_libReady ? '（依据：目录已在 + 无旧版残留 + CFCore 库状态均为 Normal）' : '');
     say(_mmsg);
     /* v6473：拦截结论常驻 */
     try { lbNoteBar(_mmsg, 'warn'); } catch (_eNB3) {}
@@ -56332,6 +62534,8 @@ async function lbLocalDeployModsByCDN(g, say, base, hd){
 
   /* ===== ③ 部署缺的那些 ===== */
   var n = 0, bytes = 0, cdnN = 0, skipN = 0;
+  var bytesByPid = {};            /* v6519：每个 pid 实际写入字节，用于回填 fileSizeOnDisk */
+  var donePid = {};               /* v6519：本次真正写入完成的 pid → meta / dn */
   var manual = [];
   var pruneCand = [];       /* v6481：干跑收集到的旧版目录候选（确认后才删） */
 
@@ -56343,11 +62547,12 @@ async function lbLocalDeployModsByCDN(g, say, base, hd){
 
     if (it.have) {
       skipN++;
+      try { (window.__lbDepDiag = window.__lbDepDiag || []).push(pid + ':skip'); } catch (_eDD1) {}
       say('MOD ' + pid + (meta.name ? ('（' + meta.name + '）') : '')
           + ' 本机已安装 ' + dn + '，已拦截部署');
       /* v6481：旧版目录改「干跑预演 → 用户确认才删」——这里只收集候选，不删任何东西 */
       try {
-        var _sc0 = await lbLocalScanOldModDirs(gid, pid, dn);
+        var _sc0 = await lbLocalScanOldModDirs(gid, pid, dn, _protect);
         for (var _k0 = 0; _k0 < _sc0.length; _k0++) pruneCand.push(_sc0[_k0]);
       } catch (_e0) {}
       continue;
@@ -56367,8 +62572,13 @@ async function lbLocalDeployModsByCDN(g, say, base, hd){
         var _ckey = lbPkgKey('mods', pid, String(meta.fid || ''), _nm);
         say('获取 ' + String(meta.name || pid) + ' ' + _nm
             + '（' + lbLocalFmt(meta.size) + '）@' + host + ' …');
+        var _gLo = (plan.length ? (gi / plan.length) : 0) * 100;   /* v6533：整批按组均分 0~100 */
+        var _span1 = 100 / (plan.length || 1);
         var _got = await lbFetchCached(u, function(g, tot){
-          say('  下载 ' + _nm + '：' + lbLocalFmt(g) + (tot ? (' / ' + lbLocalFmt(tot)) : '') + ' …');
+          var _dt1 = '下载 ' + _nm + '：' + lbLocalFmt(g) + (tot ? (' / ' + lbLocalFmt(tot)) : '');
+          say(_dt1);
+          /* v6533：组内下载占 70%，解压占 30% */
+          if (tot && tot > 0) { try { lbLProgSet(_gLo + (g / tot) * _span1 * 0.7, _dt1); } catch (eLP1) {} }
         }, meta.size, _ckey, say);
         var _want = Number(meta.size || 0);
         if (_want && _got.byteLength !== _want) {
@@ -56386,6 +62596,7 @@ async function lbLocalDeployModsByCDN(g, say, base, hd){
     }
 
     if (!buf) {
+      try { (window.__lbDepDiag = window.__lbDepDiag || []).push(pid + ':nobuf(' + String(lastErr || got403 ? '403' : 'dl') + ')'); } catch (_eDD3) {}
       /* v6472：「下载不完整」不属于"作者限制分发"，必须显式报错（可重试），
          不能混进手动下载列表让人以为要自己去下。 */
       if (lastErr && lastErr.indexOf('下载不完整') === 0) {
@@ -56409,8 +62620,10 @@ async function lbLocalDeployModsByCDN(g, say, base, hd){
       ex = await lbZipExtractAll(pd, buf, {
         onProgress: function (done, total, b, tb) {
           if (!done) return;
-          say('  解压 ' + done + '/' + total + '（' + lbLocalFmt(b || 0)
-              + (tb ? (' / ' + lbLocalFmt(tb)) : '') + '）');
+          var _et1 = '解压 ' + done + '/' + total + '（' + lbLocalFmt(b || 0)
+              + (tb ? (' / ' + lbLocalFmt(tb)) : '') + '）';
+          say(_et1);
+          if (total > 0) { try { lbLProgSet(_gLo + _span1 * (0.7 + (done / total) * 0.3), _et1); } catch (eLP2) {} }
         }
       });
     } catch (eX) {
@@ -56447,15 +62660,64 @@ async function lbLocalDeployModsByCDN(g, say, base, hd){
       }
     }
     n += ex.files; bytes += ex.bytes; cdnN++;
+    bytesByPid[pid] = (bytesByPid[pid] || 0) + Number(ex.bytes || 0);
+    donePid[pid] = { meta: meta, dn: dn };
+    try { (window.__lbDepDiag = window.__lbDepDiag || []).push(pid + ':deployed(' + ex.files + 'f/' + ex.bytes + 'B)'); } catch (_eDD2) {}
     say('MOD ' + pid + ' 部署完成：' + ex.files + ' 个文件（' + lbLocalFmt(ex.bytes)
         + '）→ ' + dn);
     /* v6477：同 pid 只留当前版本缓存，旧 fid 的包自动清掉（防无限堆积占空间） */
     try { await lbPkgCachePruneGroup('mods', pid, String(meta.fid || '')); } catch (eP2) {}
-    /* v6481：旧版目录改「干跑预演 → 用户确认才删」——这里只收集候选，不删任何东西 */
+    /* v6537：旧版目录候选改走统一收尾（整批库回填与探针刷新仍在末尾统一做） */
     try {
-      var _sc1 = await lbLocalScanOldModDirs(gid, pid, dn);
+      var _finA = await lbModLocalFinalize({
+        pid: pid, dn: dn, meta: meta, bytes: Number(ex.bytes || 0),
+        syncLib: false, progReset: false, probe: false,
+        gid: gid, protect: _protect
+      });
+      var _sc1 = _finA.pruneCand || [];
       for (var _k1 = 0; _k1 < _sc1.length; _k1++) pruneCand.push(_sc1[_k1]);
     } catch (_e1) {}
+  }
+
+  /* ===== v6519：部署完成后回填 installedFile + status=Normal =====
+     必须重新读一次库（部署耗时可能几分钟，游戏/其它进程可能改过它），改完再写回。 */
+  try {
+    window.__lbPlanDiag = (window.__lbPlanDiag || '')
+      + '｜部署链路=' + ((window.__lbDepDiag || []).join(',') || '(空)')
+      + '｜donePid=' + (Object.keys(donePid).join(',') || '(空)');
+  } catch (_eDD4) {}
+  if (Object.keys(donePid).length) {
+    var _lib2 = await lbCfLibRead(g.sg);
+    if (_lib2.obj) {
+      var _chg2 = [], _n2 = 0;
+      for (var _pk in donePid) {
+        if (!Object.prototype.hasOwnProperty.call(donePid, _pk)) continue;
+        var _it = donePid[_pk];
+        var _r = lbCfLibPatchInstalled(_lib2.obj, _pk, _it.dn, _it.meta, bytesByPid[_pk]);
+        if (_r.changed) { _n2++; _chg2.push(_pk + '：' + _r.msg); }
+      }
+      if (_n2) {
+        var _wr2 = await lbCfLibWrite(_lib2);
+        if (_wr2.ok) {
+          lbCfSetLast('ok2', '部署后回填 ' + _n2 + ' 项：' + _chg2.join('｜'));
+          say('已把 CFCore 库标记为「已装最新版」（' + _n2 + ' 项）：' + _chg2.join('｜'));
+          try { lbNoteBar('CFCore 库已标记为已装最新版（' + _n2 + ' 项），游戏内不会再提示更新、也不会重下', 'info'); } catch (_eNB5) {}
+        } else {
+          say('注意：回填 CFCore 库失败（' + _wr2.msg + '）—— 目录已就位但游戏内可能仍提示「需更新」');
+          lbCfSetLast('err2', '部署后回填失败：' + _wr2.msg);
+        }
+      } else {
+        say('CFCore 库的 installedFile/status 已一致，无需回填');
+        lbCfSetLast('nochange2', '部署后重读：installedFile/status 已一致，无需回填');
+      }
+    } else {
+      say('注意：部署后重读 CFCore 库失败（' + (_lib2.err || '未知') + '），未能标记为已装最新版');
+      lbCfSetLast('readerr2', '部署后重读库失败：' + (_lib2.err || '未知'));
+    }
+  }
+
+  if (!Object.keys(donePid).length) {
+    try { lbCfSetLast('nodeploy', '本次没有成功写入任何 MOD（见下方部署链路）'); } catch (_eND) {}
   }
 
   /* ---- 汇总 ---- */
@@ -56505,7 +62767,7 @@ async function lbLocalDeployModsByCDN(g, say, base, hd){
   }
   /* v6481：干跑确认浮层（z-index 低于「需手动下载」浮层，用户先处理完那个再见这个） */
   if (pruneCand.length) {
-    try { lbModsPruneOpen(pruneCand, gid, say); } catch (eP3) {
+    try { lbModsPruneOpen(pruneCand, gid, say, _protect); } catch (eP3) {
       try { console.error('[prune] open fail', eP3); } catch (eP4) {}
     }
   }
@@ -56565,11 +62827,13 @@ function lbLocalModsManualOpen(list, gid, where, say){
      + 'color:#e5e7eb;font-size:12px;cursor:pointer">关闭</button></div></div>';
   ov.innerHTML = h;
   ov.style.display = 'flex';
+  try { if (typeof lbZOpen === 'function') lbZOpen(ov, 'modsManual'); } catch (_eZ4) {}
 }
 
 function lbLocalModsManualClose(){
   var ov = document.getElementById('lbModsManualOv');
   if (ov) ov.style.display = 'none';
+  try { if (ov && typeof lbZClose === 'function') lbZClose(ov); } catch (_eZ5) {}
 }
 
 function lbLocalModsFind(pid){
@@ -56625,6 +62889,134 @@ function lbLocalModsProgReset(pid){
   if (d) d.style.width = '0%';
 }
 
+/* ===== v6529（用户口径 2026-11-11「club 我一直是通过手动选择下载包的形式部署的」）=====
+   真根因：手动导入走的是 lbLocalModsDeployZip()，它解压完只报「已部署 N 个文件」，
+   **完全没有改 CFCore 的 library.json** ⇒ pathOnDisk / installedFile / status 全是旧值
+   ⇒ 游戏内显示 Pending/失效，甚至被 deleteStaleModDirs 当垃圾清掉。
+   （v6516~v6528 只改了「自动下载」那条路，手动路一直没覆盖，这是长期失效的真正原因。）
+   本函数：读库 → 补 pathOnDisk → 补 installedFile(iD=该目录 fid) + status=Normal → 备份写回 → 结果上界面。 */
+/* ===== v6538（用户口径「清理本机 MOD 目录要和部署一样，不止是删除文件本体」）=====
+   与 lbCfSyncForPid（部署时补库）对称：目录删掉后必须把 CFCore library.json 里
+   对应 installedMods 条目一并移除 —— 否则库还指着一个不存在的 pathOnDisk，
+   游戏启动时会报 Missing module ⇒ status=Invalid。
+   ⚠ 调用方必须保证「该 pid 已无任何版本目录残留」才传进来（还有其它版本的不动库）。 */
+async function lbCfForgetPids(pids){
+  var want = {};
+  (pids || []).forEach(function (p) { if (p) want[String(p)] = 1; });
+  var keys = Object.keys(want);
+  if (!keys.length) return { ok: true, removed: 0, msg: '无需处理' };
+  try {
+    var hh = await lbLocalIdbGet('asaLib');
+    if (!hh) return { ok: false, removed: 0, msg: '尚未授权 ASA 目录' };
+    var g = await lbLocalLocate(hh);
+    if (!g || !g.sg) return { ok: false, removed: 0, msg: '定位 ASA 目录失败' };
+    var rd = await lbCfLibRead(g.sg);
+    if (!rd || !rd.obj) return { ok: false, removed: 0, msg: '读库失败：' + ((rd && rd.err) || '未知') };
+    var arr = rd.obj.installedMods || [];
+    var keep = [], names = [];
+    for (var i = 0; i < arr.length; i++){
+      var m = arr[i] || {};
+      var det = m.details || {};
+      var inf = m.installedFile || {};
+      var pid = String(det.iD || inf.modId || '');
+      if (pid && want[pid]) {
+        names.push(String(m.pathOnDisk || ('MOD ' + pid)));
+        continue;                       /* 该 MOD 文件已删完 ⇒ 移除库记录 */
+      }
+      keep.push(m);
+    }
+    if (!names.length) return { ok: true, removed: 0, msg: '库中无对应记录' };
+    rd.obj.installedMods = keep;
+    var wr = await lbCfLibWrite(rd);
+    if (!wr.ok) return { ok: false, removed: 0, msg: wr.msg };
+    lbCfSetLast('forget', '已移除库记录 ' + names.length + ' 条：' + names.join('、'));
+    return { ok: true, removed: names.length, msg: names.join('、') };
+  } catch (e) {
+    return { ok: false, removed: 0, msg: String((e && e.message) || e) };
+  }
+}
+
+async function lbCfSyncForPid(pid, dn, meta, bytes){
+  var p = String(pid), dn2 = String(dn), md = meta || {};
+  try {
+    var hh = await lbLocalIdbGet('asaLib');
+    if (!hh) { lbCfSetLast('readerr-m', '尚未授权 ASA 目录'); return { ok: false, msg: '未授权' }; }
+    var g = await lbLocalLocate(hh);
+    if (!g || !g.sg) { lbCfSetLast('readerr-m', '定位 ASA 目录失败'); return { ok: false, msg: '定位失败' }; }
+    var rd = await lbCfLibRead(g.sg);
+    if (!rd || !rd.obj) {
+      var _e1 = '读库失败：' + ((rd && rd.err) || '未知');
+      lbCfSetLast('readerr-m', _e1);
+      return { ok: false, msg: _e1 };
+    }
+    var _p1 = lbCfLibPatchPath(rd.obj, p, dn2, md);
+    var _p2 = lbCfLibPatchInstalled(rd.obj, p, dn2, md, bytes);
+    var _wr = await lbCfLibWrite(rd);
+    if (!_wr.ok) {
+      lbCfSetLast('err-m', '写库失败：' + _wr.msg);
+      try { lbErrBar('CFCore 库登记失败：' + _wr.msg); } catch (_eB) {}
+      return { ok: false, msg: _wr.msg };
+    }
+    var _ms = [];
+    if (_p1 && _p1.msg) _ms.push(_p1.msg);
+    if (_p2 && _p2.msg) _ms.push(_p2.msg);
+    var _msg = _ms.join('；') || '记录已一致';
+    lbCfSetLast('ok-m', '已登记到 CFCore（' + dn2 + '）：' + _msg);
+    try {
+      lbNoteBar('已把 ' + p + ' 登记到 CFCore 库（status=Normal）—— 游戏内不会再提示需更新、也不会被清理', 'info');
+    } catch (_eN) {}
+    return { ok: true, msg: _msg };
+  } catch (e) {
+    var _m = String((e && e.message) || e);
+    lbCfSetLast('err-m', _m);
+    return { ok: false, msg: _m };
+  }
+}
+
+/* ===== v6537（用户口径「手动选的逻辑怎么老是缺这缺那」）：**唯一收尾入口** =====
+   背景：手动 zip（lbLocalModsDeployZip）与自动 CDN（lbLocalDeployModsByCDN）是两套独立实现，
+   每次改自动路径都会漏掉手动路径（v6516~v6528 白改、v6529 才补库、v6537 又漏了探测刷新）。
+   本函数把收尾收成一处，两条路径都调它；以后加功能只改这一处。
+   o = { pid, dn, meta, bytes, gid, protect, syncLib, progReset, scanOld, probe }
+   返回 { sync, pruneCand, protect } */
+async function lbModLocalFinalize(o){
+  o = o || {};
+  var pid = String(o.pid || '');
+  var dn = String(o.dn || '');
+  var out = { sync: null, pruneCand: [], protect: o.protect || null };
+  /* ① 补 CFCore 库（pathOnDisk / installedFile / status=Normal） */
+  if (o.syncLib !== false){
+    try { out.sync = await lbCfSyncForPid(pid, dn, o.meta || {}, Number(o.bytes || 0)); }
+    catch (e1) { out.sync = { ok: false, msg: String((e1 && e1.message) || e1) }; }
+  }
+  /* ② 进度条收起（手动路径原来停 100% 不收） */
+  if (o.progReset !== false){ try { lbLocalModsProgReset(pid); } catch (e2) {} }
+  /* ③ 旧版本目录扫描（带 CFCore 保护名单，不拿保护名单会误把在用目录列成候选） */
+  if (o.scanOld !== false && o.gid){
+    try {
+      if (!out.protect){
+        try {
+          var _hh = await lbLocalIdbGet('asaLib');
+          if (_hh){
+            var _g = await lbLocalLocate(_hh);
+            if (_g && _g.sg){
+              var _rd = await lbCfLibRead(_g.sg);
+              if (_rd && _rd.obj) out.protect = lbCfLibProtectedNames(_rd.obj);
+            }
+          }
+        } catch (_eP) {}
+      }
+      out.pruneCand = await lbLocalScanOldModDirs(o.gid, pid, dn, out.protect || {});
+    } catch (e3) {}
+  }
+  /* ④ 本机状态刷新：立即 + 1.5s 补探（目录枚举可能滞后，只刷一次可能读不到新文件） */
+  if (o.probe !== false){
+    try { lbLocalProbeKick(true); } catch (e4) {}
+    try { setTimeout(function(){ try { lbLocalProbeKick(true); } catch (e5) {} }, 1500); } catch (e6) {}
+  }
+  return out;
+}
+
 async function lbLocalModsDeployZip(pid, file){
   var it = lbLocalModsFind(pid);
   if (!it) return;
@@ -56633,6 +63025,14 @@ async function lbLocalModsDeployZip(pid, file){
     return;
   }
   var dn = String(pid) + '_' + String(it.fid || '');
+  /* v6537：目录已存在时先提醒（手动重选同一个包会再解压一遍 2GB+，用户应知道是覆盖） */
+  try {
+    var _ex0 = await LB_MODS_MANUAL.gid.getDirectoryHandle(dn);
+    var _st0 = await lbLocalDirStat(_ex0, 0);
+    if (Number(_st0.n) > 0){
+      lbLocalModsSetSt(pid, '目录已存在（' + _st0.n + ' 个文件 / ' + lbLocalFmt(_st0.bytes) + '），将覆盖写入…', '#fbbf24');
+    }
+  } catch (_eN0) {}
   try {
     /* v6483：不再 file.arrayBuffer() 整包读入 —— 直接把 File 交给 lbZipExtractAll
        走按需分块读取（2GB+ 包内存峰值从「整包」降到「单个条目」） */
@@ -56669,10 +63069,30 @@ async function lbLocalModsDeployZip(pid, file){
                         + ex.files + ' 个）：\n  ' + lbModFailedText(_sp2.crit));
       }
     }
+    /* v6537（统一收尾）：补库 / 进度条收起 / 旧目录扫描 / 本机探测刷新 —— 全走 lbModLocalFinalize */
     LB_MODS_MANUAL.done[String(pid)] = 1;
-    lbLocalModsSetSt(pid, '已部署 ' + ex.files + ' 个文件（' + lbLocalFmt(ex.bytes)
-                        + '）→ ' + dn, '#4ade80');
+    var _fin = await lbModLocalFinalize({
+      pid: pid, dn: dn,
+      meta: { fid: String(it.fid || ''), fileName: String((file && file.name) || ''),
+              size: Number((file && file.size) || 0), name: String(it.name || '') },
+      bytes: Number(ex.bytes || 0), gid: LB_MODS_MANUAL.gid
+    });
+    var _sync = _fin.sync;
+    var _stMsg = '已部署 ' + ex.files + ' 个文件（' + lbLocalFmt(ex.bytes) + '）→ ' + dn
+               + (_sync && _sync.ok ? '　·　CFCore 已登记为 Normal' : '　·　⚠ 库登记未完成');
+    lbLocalModsSetSt(pid, _stMsg, (_sync && _sync.ok) ? '#4ade80' : '#fbbf24');
     lbLocalModsManualCheck();
+    /* 浮层已关（找不到状态行）⇒ 至少给一条 toast，不能静默 */
+    if (!document.getElementById('lbModsSt_' + pid)){
+      try { lbToast('已部署 ' + String(it.name || pid) + '：' + ex.files + ' 个文件（' + lbLocalFmt(ex.bytes) + '）'); } catch (_eT2) {}
+    }
+    /* 旧版本目录：同样走「干跑预演 → 用户确认才删」 */
+    if (_fin.pruneCand && _fin.pruneCand.length){
+      try {
+        lbModsPruneOpen(_fin.pruneCand, LB_MODS_MANUAL.gid,
+          function (m) { try { lbToast(m); } catch (_eT3) {} }, _fin.protect || {});
+      } catch (_eP3) {}
+    }
   } catch (e) {
     /* v6483：带上文件名 / 大小 / 错误类型 + 排查建议（原来只有一句英文，没法定位） */
     var mm = '手动解压失败（' + (file && file.name ? file.name : '?')
@@ -56681,6 +63101,8 @@ async function lbLocalModsDeployZip(pid, file){
            + '\n排查：①确认文件已下载完（大小不再变化）②资源管理器能否正常打开该 zip'
            + '③是否 OneDrive 占位（图标带云朵）④关闭可能占用它的下载器/杀毒后重试';
     lbLocalModsSetSt(pid, mm, '#f87171');
+    try { lbLocalModsProgReset(pid); } catch (ePR) {}
+    try { lbLocalProbeKick(true); } catch (ePK) {}   /* v6537：部分文件可能已写入，状态要重算 */
     try { lbErrBar(mm); } catch (eB) {}
     try { console.error('[deploy-local] manual fail', e); } catch (eC) {}
   }
@@ -56700,3 +63122,2031 @@ function lbLocalModsManualCheck(){
     try { LB_MODS_MANUAL.say('需手动下载的 MOD 已全部部署完成，重启游戏后生效'); } catch (e) {}
   }
 }
+
+
+/* ===== v6711（用户口径 2026-11-15）插件配置浮窗 · 全服优先版 =====
+   ① 默认「全服（10 服同构）」：读 10 台合成视图，保存 = 一次批量写 10 台
+   ② 每个配置项右侧有**低可视**「分服」入口（小图标）：点开才列出各服差异值，
+      不展开时完全跟随全服值（大部分情况就是全服统一，视觉上不打扰）
+   ③ Bob（俱乐部）不与这 10 台同构：下拉里单独一项，选中即单服模式（原行为）
+   后端：GET /api/plugins/config?server= · PATCH /api/plugins/config（支持 servers 数组批量）· POST /api/plugins/config/reload */
+/* v6808：新增 gopen = 当前展开的**分组标题**（空 = 全部收起）。只存一个 ⇒ 天然互斥。 */
+var LB_PCFG = { mode: '__all__', allList: [], perSrv: {}, data: null, base: {}, multi: {}, open: {}, locks: {}, defs: {}, pending: {}, gopen: '' };
+var LB_PCFG_GROUPS = [
+  { t: '二次加载 / 重连', k: ['reconnect.enabled', 'reconnect.whitelist', 'reconnect.max_reconnects_per_session', 'reconnect.cooldown_seconds'] },
+  { t: '死亡包自动转移', k: ['auto_transfer_enabled', 'auto_transfer_window_seconds', 'auto_transfer_interval_seconds', 'auto_transfer_min_remaining_seconds', 'auto_transfer_move_batch_limit', 'auto_transfer_give_pending_enabled', 'auto_transfer_give_pending_interval_seconds', 'death_record_ttl_seconds', 'death_bag_match_distance'] },
+  { t: '墓碑通知', k: ['tomb_notify_enabled', 'tomb_notify_min_interval_seconds'] },
+  /* v6786（用户口径 2026-11-16）：服务器标识 / 存档路径 / 输出路径 恢复显示并改为**可编辑** */
+  { t: '存档解析', k: ['auto_parse_enabled', 'auto_parse_settle_ms', 'auto_parse_retry_max',
+                      'auto_parse_server_id', 'auto_parse_ark_path', 'auto_parse_out_json'] },
+  { t: '保活', k: ['auto_keep_alive_enabled', 'auto_keep_alive_interval_seconds', 'auto_keep_alive_extra_classes'] },
+  { t: '可借建筑', k: ['borrowable_classes'] },
+  /* v6805（用户口径 2026-11-16）：`history_record_denied` 是**死配置**（插件只在 LoadConfig 赋值、
+     全代码无读取点，见 报告\配置生效性_重载vs重启_20261116.md §5）⇒ 直接从界面隐藏。 */
+  { t: '台账历史', k: ['history_enabled', 'history_flush_interval_seconds', 'history_max_rows'] },
+  { t: '火山探测', k: ['volcano_actor_filter', 'volcano_rescan_seconds', 'volcano_cache_seconds', 'volcano_record_seconds'] },
+  { t: 'WorldProbe / 天气', k: ['probe_cache_seconds', 'probe_rescan_seconds', 'weather_autoscan_seconds', 'weather_history_persist'] },
+  /* v6805：`sidecar_enabled` 同为死配置（仅 LoadConfig 赋值 + ArkStatus 回显，无实际使用点）⇒ 隐藏。 */
+  { t: '其它', k: ['language', 'debug.chat_enabled', 'rcon_inbound_utf8_fix'] }
+];
+/* v6805（用户口径 2026-11-16「只有必须重启的才需要加徽章」）：
+   配置**生效方式**表 —— 依据 `报告\配置生效性_重载vs重启_20261116.md`（插件 1.05 源码逐行核对）。
+   只有「重载不够、必须重启进程」的键才在这里登记；A 类（40 项重载即生效）不登记。
+   b = 徽章文字；tip = 悬停说明（含源码依据）。
+   ⚠️ 插件升级后需复核本表（尤其 language 是否会改成热重载）。 */
+/* v6806（用户口径 2026-11-16「附件应该改成 项目统一下拉样式」）：
+   下拉的视觉范式与 `lbOpenServerAdminModal()` 里的 selArrow / selExtra 完全一致
+   —— 隐藏系统箭头（appearance:none）+ 右侧自绘 12px SVG 下箭头，配色随输入框。
+   抽成全局常量，后续任何新下拉直接拼 LB_SEL_EXTRA 即可，不要再各写一份。 */
+var LB_SEL_ARROW = "url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23888%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpolyline points=%226 9 12 15 18 9%22/%3E%3C/svg%3E')";
+var LB_SEL_EXTRA = 'appearance:none;-webkit-appearance:none;background-image:' + LB_SEL_ARROW
+  + ';background-repeat:no-repeat;background-position:right 8px center;background-size:12px 12px;padding-right:24px';
+/* 枚举型配置：只在表里的键才渲染成下拉（其余仍是文本框 / 数字框 / 多行框） */
+var LB_PCFG_SELECT = {
+  'language': ['zh', 'en']
+};
+var LB_PCFG_EFFECT = {
+  'language': {
+    b: '需重启',
+    tip: '通知语言只在插件启动时调用一次 SetLanguage()；'
+       + 'TransferIdentityFix.ReloadConfig 与 .Reload 都**不会**重跑它 —— '
+       + '改完必须重启服务器。重载后 config 里的值会变，但游戏内文案仍是旧的。'
+  },
+  'history_max_rows': {
+    b: '下次启动',
+    tip: '台账最大行数只在启动时 HistTrimFile() 裁剪一次；'
+       + '运行期 HistFlush() 只追加不裁剪 —— 改小不会立刻缩小现有文件，下次启动才生效。'
+  },
+  'history_enabled': {
+    b: '开需重启',
+    tip: '关闭 = 立即生效（每次写台账都判断 enabled）；'
+       + '开启 = 必须重启 —— sink 的 disabled 标记只在启动时重置，代码里没有任何地方把它置回 false。'
+  }
+};
+var LB_PCFG_LABEL = {
+  'reconnect.enabled': '二次加载总开关',
+  'reconnect.whitelist': '传图自动二次加载白名单（每行一条；单独一条 * = 全体）',
+  'reconnect.max_reconnects_per_session': '每会话最大重连次数',
+  'reconnect.cooldown_seconds': '重连冷却（秒）',
+  'auto_transfer_enabled': '死亡包自动转移总开关',
+  'auto_transfer_window_seconds': '转移时间窗（秒）',
+  'auto_transfer_interval_seconds': '扫描间隔（秒）',
+  'auto_transfer_min_remaining_seconds': '剩余时间阈值（秒）',
+  'auto_transfer_move_batch_limit': '单批上限（个）',
+  'auto_transfer_give_pending_enabled': '待处理补给开关',
+  'auto_transfer_give_pending_interval_seconds': '补给间隔（秒）',
+  'tomb_notify_enabled': '墓碑通知开关',
+  'tomb_notify_min_interval_seconds': '通知节流（秒）',
+  'auto_parse_enabled': '定时解析存档总开关',
+  'auto_parse_settle_ms': '存档落定等待（毫秒）',
+  'auto_parse_retry_max': '解析重试次数',
+  'auto_parse_server_id': '服务器标识（数据文件前缀，如 Isl / Cen —— 写错会把本服数据写进别服台账）',
+  'auto_parse_ark_path': '存档路径（.ark 绝对路径）',
+  'auto_parse_out_json': '输出路径（_cryo.json 绝对路径）',
+  'auto_keep_alive_enabled': '保活开关',
+  'auto_keep_alive_interval_seconds': '保活间隔（秒）',
+  'auto_keep_alive_extra_classes': '额外保活类名（每行一条）',
+  'borrowable_classes': '可借建筑白名单（每行：类名=显示名）',
+  'language': '通知语言（zh / en）',
+  'debug.chat_enabled': '调试聊天',
+  'history_enabled': '台账总开关',
+  'history_flush_interval_seconds': '台账刷盘节流（秒）',
+  'history_max_rows': '台账最大行数',
+  'history_record_denied': '记录「被拒 / 冷却」事件',
+  'death_record_ttl_seconds': '死亡记录新鲜度窗口（秒）',
+  'death_bag_match_distance': '死亡包精确匹配距离（格）',
+  'volcano_actor_filter': '火山危害类名子串',
+  'volcano_rescan_seconds': '火山重扫间隔（秒，最小 10）',
+  'volcano_cache_seconds': '火山缓存（秒，0~60）',
+  'volcano_record_seconds': '火山后台事件记录（秒，0=关闭）',
+  'probe_cache_seconds': 'WorldProbe 缓存（秒，0~60）',
+  'probe_rescan_seconds': 'WorldProbe 重扫间隔（秒，15~600）',
+  'weather_autoscan_seconds': '天气自动采样间隔（秒，0=关闭）',
+  'weather_history_persist': '天气历史落盘',
+  'sidecar_enabled': '侧车数据合并（Max 属性 / 性别）',
+  'rcon_inbound_utf8_fix': '入站 RCON UTF-8 修正'
+};
+var LB_PCFG_RO_LABEL = {
+  'plugin_name': '插件名', 'version': '版本', 'reconnect.host': '重连主机', 'reconnect.port': '重连端口',
+  'dino_data_dir': '数据目录', 'auto_parse_reader_exe': '解析器路径', 'auto_parse_ark_path': '存档路径',
+  'auto_parse_out_json': '输出路径', 'auto_parse_server_id': '服务器标识'
+};
+
+function lbPluginCfgApi() { return (typeof LB_API === 'string' && LB_API) ? LB_API : 'https://data.whiterober.ccwu.cc'; }
+function lbPluginCfgTok() { return (typeof lbSrvCtlToken === 'function') ? lbSrvCtlToken() : ''; }
+function lbPluginCfgBust() { return '&t=' + Date.now() + Math.random().toString(36).slice(2, 6); }
+function lbPcfgMsg(t, col) {
+  var el = document.getElementById('lbPcfgMsg');
+  if (!el) return;
+  el.textContent = t || '';
+  el.style.color = col || '#9aa0b5';
+}
+/* 全服同构清单（排除 Bob 俱乐部，它另配） */
+function lbPcfgAllList() {
+  /* v6712（用户口径）：Bob 并入同构体系 —— 全部服一起批量读写；Bob 需要不同值就给它上锁 */
+  var out = [];
+  (LB.SERVERS || []).forEach(function (x) { if (x && x.abbr) out.push(x.abbr); });
+  return out;
+}
+function lbPcfgSrvName(ab) {
+  try { return LB.servName(ab) || ab; } catch (e) { return ab; }
+}
+/* v6713（用户口径 2026-11-15「所有非显式配置项也要以默认值展示」）：
+   插件读取是「键缺失 → 保持代码默认值」⇒ config.json 没写不等于关闭。
+   这里把后端返回的 defaults 填进 items，让未写入项也能显示真实生效值；
+   present 仍保留原样，用于给这类项打「默认」标记。 */
+function lbPcfgFillDefaults(j) {
+  if (!j || !j.items) return;
+  var defs = j.defaults || {};
+  LB_PCFG.defs = defs;
+  var it = j.items;
+  Object.keys(it).forEach(function (k) {
+    if ((it[k] === null || it[k] === undefined) && defs.hasOwnProperty(k)) it[k] = defs[k];
+  });
+}
+function lbPcfgIsDefault(key) { return !!(LB_PCFG.defs && LB_PCFG.defs.hasOwnProperty(key)); }
+
+/* v6712：单服锁定（保护锁）—— 锁住后「全服保存」会跳过该服该项，保留其定制值；单服保存仍可改 */
+function lbPcfgIsLocked(ab, key) {
+  var a = LB_PCFG.locks && LB_PCFG.locks[ab];
+  return !!(a && a.indexOf(key) >= 0);
+}
+function lbPcfgSyncLocks() {
+  LB_PCFG.locks = {};
+  Object.keys(LB_PCFG.perSrv || {}).forEach(function (ab) {
+    var j = LB_PCFG.perSrv[ab];
+    if (j && j.ok && Array.isArray(j.locked) && j.locked.length) LB_PCFG.locks[ab] = j.locked.slice();
+  });
+}
+async function lbPcfgToggleLock(ab, key) {
+  var arr = (LB_PCFG.locks[ab] || []).slice();
+  var i = arr.indexOf(key);
+  if (i >= 0) { arr.splice(i, 1); } else { arr.push(key); }
+  var tk = lbPluginCfgTok();
+  if (!tk) { lbPcfgMsg('会话已过期，请重新登录', '#f87171'); return; }
+  try {
+    var r = await fetch(lbPluginCfgApi() + '/api/plugins/config/locks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tk },
+      body: JSON.stringify({ server: ab, keys: arr })
+    });
+    var j = await r.json();
+    if (!j || !j.ok) { lbPcfgMsg('锁定保存失败：' + ((j && (j.error || j.code)) || ''), '#f87171'); return; }
+    if (j.locked && j.locked.length) { LB_PCFG.locks[ab] = j.locked; } else { delete LB_PCFG.locks[ab]; }
+    lbPluginCfgRender();
+  } catch (e) { lbPcfgMsg('锁定请求失败：' + String(e), '#f87171'); }
+}
+
+function lbPluginCfgOpen() {
+  if (typeof lbRoleLevel === 'function' && lbRoleLevel() < 3) { lbToast('仅主宰者可用'); return; }
+  var old = document.getElementById('lbPcfgOv');
+  if (old) old.remove();
+  var ov = document.createElement('div');
+  ov.className = 'lb-picker-overlay lb-fs';
+  ov.id = 'lbPcfgOv';
+  ov.onclick = function (e) { if (e.target === ov) ov.remove(); };
+  /* v6715（用户口径）：①去掉服务器下拉框（恒为全服模式）②读取状态移到标题栏做副标题 */
+  var btn = 'padding:7px 14px;border-radius:6px;border:none;background:#7c3aed;color:#fff;cursor:pointer;font-size:13px';
+  var btn2 = 'padding:7px 14px;border-radius:6px;border:1px solid #333;background:transparent;color:#bbb;cursor:pointer;font-size:13px';
+  ov.innerHTML = '<div class="lb-modal-scroll" style="background:#1a1a24;border:1px solid #7c3aed55;border-radius:12px;width:660px;max-width:94vw;box-shadow:0 10px 40px rgba(0,0,0,.6);max-height:88vh;overflow:hidden;display:flex;flex-direction:column">'
+    + '<div class="lw-head"><span class="lw-title"><i class="mdi mdi-tune-variant"></i> 插件配置</span>'
+    + '<span id="lbPcfgMeta" style="font-size:10px;color:#6b6f80;margin-left:auto;margin-right:8px;white-space:nowrap"></span>'
+    + '<button class="lw-x" onclick="document.getElementById(\'lbPcfgOv\').remove()" title="关闭" aria-label="关闭"><i class="mdi mdi-close"></i></button></div>'
+    /* v6817：padding-bottom 16→13 —— 实测本浮窗 .lw-body 内容比可见高度多 3px
+       （scrollHeight 739 / clientHeight 736），导致右侧常驻一条竖向滚动条。 */
+    + '<div class="lw-body" style="padding:12px 16px 13px">'
+    + '<div id="lbPcfgList"><div style="font-size:12px;color:#888;padding:10px 0">读取中…</div></div>'
+    /* v6783（用户口径）：SOK 配置浮窗加入「任务进度」框 —— lbTaskRender 会自动渲染所有 .lb-task-slot，
+       全服保存（saveJSON / 分发 / 重启）的进度都会在这里按任务总线显示，不再只靠底栏那行小字。 */
+    + '<div class="lb-srvctl-res lb-task-slot" id="lbPcfgTasks" style="margin-top:12px"></div>'
+    + '</div>'
+    + '<div style="flex:none;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 16px;border-top:1px solid #2a2a3a;background:#181820">'
+    + '<button onclick="lbPluginCfgSave(this)" style="' + btn + '">保存并生效</button>'
+    /* v6816（用户口径 2026-11-17「要有撤销改动的按钮」）：只撤销**本次未保存**改动 ——
+       清前端 pending + 重绘回到服务器当前值，不写服务器、不发任何请求。无改动时置灰不可点。 */
+    + '<button id="lbPcfgUndo" onclick="lbPluginCfgReset()" disabled style="' + btn2 + ';opacity:.45;cursor:not-allowed">撤销改动</button>'
+    + '<button onclick="lbPluginCfgReload()" style="' + btn2 + '">重新读取</button>'
+    /* v6811（用户口径 2026-11-17「底栏要显示多少值未应用」）：常驻计数，0 项时自动隐藏 */
+    + '<span id="lbPcfgDirty" style="font-size:11px;color:#f59e0b;font-weight:600"></span>'
+    + '<span id="lbPcfgMsg" style="font-size:11px;color:#9aa0b5"></span>'
+    + '</div>'
+    + '</div>';
+  document.body.appendChild(ov);
+  LB_PCFG.open = {};
+  LB_PCFG.gopen = '';   /* v6808：每次打开都从「全部收起」开始 */
+  /* v6797（根因修复，2026-11-16 实测）：本浮窗**从未启动任务轮询** ⇒ #lbPcfgTasks 永远是空壳
+     （51 次采样 kids 恒 0 / display:none），保存后的任务条根本不渲染。
+     实测证据：后端 /api/tasks 明明有 `Cen|run|80 触发 ReloadConfig…` → `ok|100 已保存并生效`，
+     而前端 LB_TASK_SYNC_TIMER === null（lbTaskRender 只在轮询回调里被调用）。
+     修法：与其它浮窗一致，打开即启动任务同步。 */
+  try { if (typeof lbTaskSyncStart === 'function') lbTaskSyncStart(); } catch (eT0) {}
+  lbPluginCfgLoad('__all__');
+}
+
+function lbPluginCfgLoad(mode) {
+  LB_PCFG.mode = mode || '__all__';
+  var box = document.getElementById('lbPcfgList');
+  var meta = document.getElementById('lbPcfgMeta');
+  if (box) box.innerHTML = '<div style="font-size:12px;color:#888;padding:10px 0">读取中…</div>';
+  if (meta) meta.textContent = '';
+  var tk = lbPluginCfgTok();
+  if (!tk) { if (box) box.innerHTML = '<div style="font-size:12px;color:#f87171;padding:10px 0">会话已过期，请重新登录后重试</div>'; return; }
+  if (LB_PCFG.mode === '__all__') { lbPcfgLoadAll(tk); return; }
+  lbPcfgLoadOne(LB_PCFG.mode, tk);
+}
+
+function lbPcfgLoadOne(abbr, tk) {
+  fetch(lbPluginCfgApi() + '/api/plugins/config?server=' + encodeURIComponent(abbr) + lbPluginCfgBust(), {
+    headers: { 'Authorization': 'Bearer ' + tk }, cache: 'no-store'
+  }).then(function (r) { return r.json(); }).then(function (j) {
+    LB_PCFG.data = j;
+    LB_PCFG.multi = {};
+    LB_PCFG.pending = {};
+    LB_PCFG.roMulti = {};   /* v6812：单服模式无跨服比较 */
+    LB_PCFG.roVals = {};
+    if (!j || !j.ok) { lbPcfgShowErr(j); return; }
+    /* v6713：config.json 里没写的键 → 用插件代码默认值展示（键缺失 != 关闭） */
+    lbPcfgFillDefaults(j);
+    LB_PCFG.base = JSON.parse(JSON.stringify(j.items || {}));
+    LB_PCFG.locks = {};
+    if (Array.isArray(j.locked) && j.locked.length) LB_PCFG.locks[abbr] = j.locked.slice();
+    var meta = document.getElementById('lbPcfgMeta');
+    if (meta) meta.textContent = abbr + ' · ' + (j.size || 0) + ' B · ' + (j.mtime || '');
+    lbPluginCfgRender();
+  }).catch(function (e) { lbPcfgShowErr({ error: String(e) }); });
+}
+
+function lbPcfgLoadAll(tk) {
+  var list = lbPcfgAllList();
+  LB_PCFG.allList = list;
+  LB_PCFG.perSrv = {};
+  LB_PCFG.pending = {};   /* v6718：重新读取清空待提交预览 */
+  var jobs = list.map(function (ab) {
+    return fetch(lbPluginCfgApi() + '/api/plugins/config?server=' + encodeURIComponent(ab) + lbPluginCfgBust(), {
+      headers: { 'Authorization': 'Bearer ' + tk }, cache: 'no-store'
+    }).then(function (r) { return r.json(); }).then(function (j) { LB_PCFG.perSrv[ab] = j; })
+      .catch(function (e) { LB_PCFG.perSrv[ab] = { ok: false, error: String(e) }; });
+  });
+  Promise.all(jobs).then(function () { lbPcfgBuildAll(); lbPluginCfgRender(); });
+}
+
+function lbPcfgBuildAll() {
+  var list = LB_PCFG.allList || [];
+  var okList = list.filter(function (ab) { return LB_PCFG.perSrv[ab] && LB_PCFG.perSrv[ab].ok; });
+  var meta = document.getElementById('lbPcfgMeta');
+  if (!okList.length) {
+    LB_PCFG.data = { ok: false, error: '全服读取失败', code: 'all_failed' };
+    if (meta) meta.textContent = '';
+    return;
+  }
+  var first = LB_PCFG.perSrv[okList[0]];
+  var spec = first.spec || {};
+  /* v6713：先给每台未写入的键填代码默认值，后续渲染 / 比较 / 提交全部基于「默认值 + 显式值」 */
+  okList.forEach(function (ab) { lbPcfgFillDefaults(LB_PCFG.perSrv[ab]); });
+  lbPcfgSyncLocks();   /* v6717：先同步锁，multi 判定要用到 */
+  var items = {}, present = {}, multi = {};
+  Object.keys(spec).forEach(function (k) {
+    var pairs = okList.map(function (ab) {
+      var it = LB_PCFG.perSrv[ab].items || {};
+      return { ab: ab, v: (it.hasOwnProperty(k) ? it[k] : null) };
+    });
+    var vals = pairs.map(function (o) { return o.v; });
+    /* v6717（用户口径）：已锁定（固定）的服不参与「各服不同」判定 —— 它们本来就要保留自己的值 */
+    var free = pairs.filter(function (o) { return !lbPcfgIsLocked(o.ab, k); });
+    var use = free.length ? free : pairs;
+    var s0 = JSON.stringify(use[0].v);
+    multi[k] = !use.every(function (o) { return JSON.stringify(o.v) === s0; });
+    items[k] = use[0].v;
+    present[k] = okList.some(function (ab) {
+      var p = LB_PCFG.perSrv[ab].present || {};
+      return !!p[k];
+    });
+  });
+  /* v6812（用户口径 2026-11-17「只读区里面也不一定每个服都一样，不一样的情况下要以低可视样式体现」）：
+     原实现直接取第一台服的 `readonly`，各服不一致时**完全看不出来**。
+     这里逐键比对全部读取成功的服，记 roMulti（是否不一致）+ roVals（各服值，供悬停展示）。 */
+  var roMulti = {}, roVals = {};
+  try {
+    var ro0 = first.readonly || {};
+    Object.keys(ro0).forEach(function (k) {
+      var pairs = okList.map(function (ab) {
+        var rd = (LB_PCFG.perSrv[ab] || {}).readonly || {};
+        return { ab: ab, v: (rd.hasOwnProperty(k) ? rd[k] : null) };
+      });
+      var s0 = JSON.stringify(pairs[0].v);
+      roMulti[k] = !pairs.every(function (o) { return JSON.stringify(o.v) === s0; });
+      roVals[k] = pairs;
+    });
+  } catch (eRO) {}
+  LB_PCFG.roMulti = roMulti;
+  LB_PCFG.roVals = roVals;
+  LB_PCFG.data = { ok: true, spec: spec, items: items, present: present,
+                   readonly: first.readonly || {}, size: null, mtime: '' };
+  LB_PCFG.multi = multi;
+  LB_PCFG.base = JSON.parse(JSON.stringify(items));
+  if (meta) meta.textContent = '全服 ' + okList.length + '/' + list.length + ' 台读取成功';
+}
+
+function lbPcfgShowErr(j) {
+  var box = document.getElementById('lbPcfgList');
+  var why = (j && (j.error || j.code)) || '读取失败';
+  var tip = '';
+  if (why === 'config_not_found') tip = '该服没有 config.json（插件未安装或路径不符）';
+  else if (why === 'owner_only') tip = '仅主宰者可读写插件配置';
+  else if (why === 'token_invalid') tip = '会话已过期，请重新登录';
+  if (box) box.innerHTML = '<div style="font-size:12px;color:#f87171;padding:10px 0">' + escapeHtml(tip || why) + '</div>';
+}
+
+/* ---------- 控件渲染 ---------- */
+function lbPcfgCtrl(key, typ, val, present, ab, small) {
+  var sz = small ? 11 : 12;
+  /* v6817（用户口径「单行输入框太矮了」）：padding 5px→7px（主面板 25px→29px 高）/ 3px→4px（分服行）。
+     同时 app.css 里 #lbPcfgList 的 number input 去掉上下箭头 —— 箭头只在 hover 时出现，
+     深色底上像一条小滚动条（用户原话「鼠标移上去右侧会出现滚动条」）。 */
+  var common = 'width:100%;box-sizing:border-box;padding:' + (small ? '4px 7px' : '7px 8px') + ';border-radius:5px;border:1px solid #333;background:#12121a;color:#ddd;font-size:' + sz + 'px';
+  /* v6810（用户口径「输入后必须要回车一下才算是改了」）：
+     input 的 change 事件**只在失焦/回车时**触发 ⇒ 输入过程中 LB_PCFG.pending 不登记，
+     分组标题「已改 N」不刷新、分服区不重绘（看着像"没算改"；实际保存时 collectMain 读 DOM 能拿到）。
+     补两个事件：
+       · oninput  → 安静模式登记（quiet=1，**不重绘** —— 逐字重绘会丢焦点/输入时闪）
+       · onblur   → 完整模式（登记 + 重绘分服区与计数），覆盖"点别处"这条路径
+     bool 开关 / 圆角切换组走 onclick，不受影响（span 不可聚焦，input/blur 不会触发）。 */
+  var dk = ' data-k="' + key + '" data-t="' + typ + '"' + (ab ? ' data-ab="' + ab + '"' : '')
+    + ' oninput="lbPcfgMarkPending(this,1)"'
+    + ' onblur="lbPcfgMarkPending(this)"'
+    + ' onchange="lbPcfgMarkPending(this)"';
+  if (typ === 'bool') {
+    var on = !!val;
+    return '<span' + dk + ' data-v="' + (on ? '1' : '0') + '" onclick="lbPcfgToggle(this)" style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-size:' + sz + 'px;color:' + (on ? '#22c55e' : '#6b7280') + '">'
+      + '<i class="mdi ' + (on ? 'mdi-toggle-switch' : 'mdi-toggle-switch-off-outline') + '" style="font-size:' + (small ? 15 : 18) + 'px"></i>' + (on ? '已开启' : '已关闭') + '</span>';
+  }
+  /* v6809（用户口径 2026-11-16「附件不要下拉了，直接改成 圆角切换（一个圆角组，可以切换）」）：
+     枚举键渲染成**圆角切换组** —— 整组一个 6px 圆角外框（overflow:hidden 裁内段），
+     选中段紫底白字加粗、未选段透明灰字；值挂容器 data-v（供 lbPcfgCtlVal 读取）。
+     · 表外值（插件将来新增语言）自动追加一段，避免被静默改掉
+     · 主面板大号（4px 16px）、分服行小号（2px 10px）—— 同一个函数，分服自动同步 */
+  var _opts = LB_PCFG_SELECT[key];
+  if (_opts && typ === 'str') {
+    var _cur = (present && val !== null && val !== undefined) ? String(val) : '';
+    var _vals = _opts.slice();
+    if (_cur && _vals.indexOf(_cur) < 0) _vals.push(_cur);
+    if (!_cur) _cur = _vals[0] || '';
+    var _pad = small ? '2px 10px' : '4px 16px';
+    var _fsz = small ? 11 : sz;
+    var _segs = _vals.map(function (o) {
+      var _on = (o === _cur);
+      var _ov = String(o).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      return '<span data-seg="' + escapeHtml(o) + '" onclick="lbPcfgSegPick(this, \'' + _ov + '\')"'
+        + ' style="padding:' + _pad + ';font-size:' + _fsz + 'px;line-height:16px;cursor:pointer;user-select:none;'
+        + (_on ? 'background:#7c3aed;color:#fff;font-weight:600' : 'background:transparent;color:#8b8ea0') + '">'
+        + escapeHtml(o) + '</span>';
+    }).join('');
+    return '<span' + dk + ' data-segbox="1" data-v="' + escapeHtml(_cur) + '"'
+      + ' style="display:inline-flex;align-items:stretch;border:1px solid #333;border-radius:6px;'
+      + 'overflow:hidden;background:#12121a;box-sizing:border-box;vertical-align:middle">'
+      + _segs + '</span>';
+  }
+  if (typ === 'int') {
+    return '<input type="number" min="0" step="1"' + dk + ' value="' + ((present && val !== null && val !== undefined) ? val : '') + '" placeholder="' + (present ? '' : '未写入（保持默认）') + '" style="' + common + '">';
+  }
+  if (typ === 'str') {
+    return '<input type="text"' + dk + ' value="' + escapeHtml(present && val !== null && val !== undefined ? String(val) : '') + '" style="' + common + '">';
+  }
+  if (typ === 'strlist') {
+    var arr = Array.isArray(val) ? val : [];
+    return '<textarea' + dk + ' rows="' + Math.max(2, Math.min(8, arr.length + 1)) + '" placeholder="每行一条" style="' + common + ';resize:vertical;font-family:inherit">' + escapeHtml(present ? arr.join('\n') : '') + '</textarea>';
+  }
+  if (typ === 'objlist') {
+    var arr2 = Array.isArray(val) ? val : [];
+    var lines = arr2.map(function (o) { return (o && o['class'] ? o['class'] : '') + '=' + (o && o.name ? o.name : ''); });
+    return '<textarea' + dk + ' rows="' + Math.max(3, Math.min(14, lines.length + 1)) + '" placeholder="每行：类名=显示名" style="' + common + ';resize:vertical;font-family:inherit">' + escapeHtml(lines.join('\n')) + '</textarea>';
+  }
+  return '';
+}
+
+function lbPcfgSubRows(key, typ) {
+  var allMode = (LB_PCFG.mode === '__all__');
+  if (!allMode) return '';
+  var list = LB_PCFG.allList || [];
+  var rows = list.map(function (ab) {
+    var j = LB_PCFG.perSrv[ab] || {};
+    var it = j.items || {};
+    var pv = j.present || {};
+    var v = it.hasOwnProperty(key) ? it[key] : null;
+    var on = !!pv[key];
+    var isDef = !on && lbPcfgIsDefault(key);
+    if (isDef) on = true;   /* v6713：未写入 → 按默认值渲染（容器内已有淡「默认」标记） */
+    var locked = lbPcfgIsLocked(ab, key);
+    /* v6718：主控件已改动 → 未锁定服跟随预览新值；锁定的服保持原值 */
+    var _pend = LB_PCFG.pending && LB_PCFG.pending.hasOwnProperty(key) ? LB_PCFG.pending[key] : undefined;
+    var _follow = (!locked && _pend !== undefined);
+    if (_follow) { v = _pend; on = true; isDef = false; }
+    /* v6816（用户口径「只给本次未保存改动的值着色」）：基准已改 ⇒ 未锁定服的值被实时带到新值
+       ⇒ 该值本身属于「本次未保存改动」⇒ 值区浅橙底（与主面板同一套着色口径） */
+    var _svBg = _follow ? ';background:rgba(245,158,11,.10);border-radius:6px;padding:1px 4px' : '';
+    return '<div style="display:flex;gap:8px;align-items:flex-start;padding:3px 0">'
+      + '<div style="flex:0 0 92px;font-size:11px;color:' + (j.ok ? (locked ? '#f59e0b' : '#8b8ea0') : '#f87171') + ';line-height:1.6;padding-top:2px">'
+      + ab + ' <span style="color:#5f6272">' + escapeHtml(lbPcfgSrvName(ab)) + '</span>'
+      + (isDef ? '<span style="color:#4b4e5c"> ·默认</span>' : '') + '</div>'
+      + '<div data-svbox="1" style="flex:1;min-width:0' + _svBg + (locked ? ';opacity:.72' : '') + '">' + (j.ok ? lbPcfgCtrl(key, typ, v, on, ab, true) : '<span style="font-size:11px;color:#f87171">读取失败</span>') + '</div>'
+      + '<div style="flex:none;padding-top:2px">'
+      + (j.ok ? '<span class="lb-pcfg-lock' + (locked ? ' on' : '') + '" onclick="lbPcfgToggleLock(\'' + ab + '\',\'' + key + '\')" title="'
+        + (locked ? '已锁定：全服保存会跳过此项（单服保存仍可改）' : '锁定：全服保存时跳过此项，保留本服值') + '">'
+        + '<i class="mdi ' + (locked ? 'mdi-lock' : 'mdi-lock-open-outline') + '"></i></span>' : '')
+      + '</div>'
+      + '</div>';
+  }).join('');
+  return '<div style="margin:2px 0 4px;padding:6px 8px;border-left:2px solid #7c3aed55;background:#101018;border-radius:4px">'
+    + '<div style="font-size:10px;color:#5f6272;margin-bottom:4px">分服定制（不改动 = 跟随全服值；点右侧锁 = 全服保存时跳过本服此项）</div>'
+    + rows + '</div>';
+}
+
+function lbPcfgRow(key, typ, val, present) {
+  var lab = LB_PCFG_LABEL[key] || key;
+  var isAll = (LB_PCFG.mode === '__all__');
+  var mflag = isAll && LB_PCFG.multi && LB_PCFG.multi[key];
+  var opened = !!LB_PCFG.open[key];
+  /* v6717（用户口径）：各服不同时不显示某台的具体值（易被误读成"全服统一值"），直接显示「各服不同」；
+     点它等同展开分服区逐台查看/修改。 */
+  var ctrl = mflag
+    ? '<span onclick="lbPcfgToggleSub(\'' + key + '\')" title="各服取值不同，点此展开逐台查看 / 修改" style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#fbbf24"><i class="mdi mdi-vector-difference" style="font-size:15px"></i>各服不同</span>'
+    : lbPcfgCtrl(key, typ, val, present || lbPcfgIsDefault(key), '', false);
+  var right = '';
+  if (isAll) {
+    right = '<span class="lb-pcfg-subbtn' + (opened ? ' on' : '') + '" onclick="lbPcfgToggleSub(\'' + key + '\')" title="分服定制（默认全服统一）">'
+      + '<i class="mdi mdi-' + (opened ? 'chevron-up' : 'tune-variant') + '"></i></span>';
+  }
+  var badge = '';   /* v6717：「各服不同」已搬到值位显示，标题旁不再重复 */
+  /* v6805（用户口径）：需要重启才生效的键加橙色徽章（只登记 restart 类，A 类不标） */
+  var eff = LB_PCFG_EFFECT[key];
+  var effBadge = eff
+    ? ('<span class="lb-tipb" style="font-size:10px;margin-left:6px;color:#f59e0b;white-space:nowrap;cursor:help"'
+       + ' title="' + lbMdEsc(eff.tip) + '">'
+       + '<i class="mdi mdi-restart" style="font-size:11px;vertical-align:-1px"></i>' + eff.b + '</span>')
+    : '';
+  var defBadge = (!present && lbPcfgIsDefault(key)) ? '<span class="lb-tipb" style="font-size:10px;color:#4b4e5c;margin-left:6px" title="config.json 里没写这一项，当前生效的是插件代码默认值">默认</span>' : '';
+  /* v6811（用户口径 2026-11-17「改过的值要着色 · 默认值也要着色」）：
+     · 已改（LB_PCFG.pending 有此键）→ 值区浅橙底 + 标签旁「已改」橙字
+     · 默认（config.json 里没写 present=false）→ 值区浅灰底（配合已有的「默认」灰徽章）
+     · 正常 → 不着色 */
+  var _isPend = false;
+  try { _isPend = !!(LB_PCFG.pending && Object.prototype.hasOwnProperty.call(LB_PCFG.pending, key)); } catch (ePD) {}
+  var _isDef = !present;
+  /* v6813（修复 v6811「着色完全没效果」）：徽章改**常驻 span**、行/值区加稳定锚点 ——
+     这样 lbPcfgPaintRow() 可以只切换 display/背景，不必重绘整表（重绘会丢焦点）。 */
+  var pendBadge = '<span data-pendbadge="1" style="font-size:10px;color:#f59e0b;margin-left:6px;font-weight:600'
+    + (_isPend ? '' : ';display:none') + '">已改</span>';
+  var valStyle = _isPend
+    ? 'flex:1;min-width:0;background:rgba(245,158,11,.10);border-radius:6px;padding:2px 4px'
+    : (_isDef ? 'flex:1;min-width:0;background:rgba(107,114,128,.10);border-radius:6px;padding:2px 4px' : 'flex:1;min-width:0');
+  /* v6815（用户口径 2026-11-17「附件中左侧的色条不需要」）：去掉 inset 橙色竖条，
+     已改状态由「浅橙底 + 已改徽章」两重标识表达，足够识别。 */
+  return '<div data-rowkey="' + key + '" style="padding:6px 0;border-top:1px solid #23232e">'
+    + '<div style="display:flex;gap:10px;align-items:flex-start">'
+    + '<div style="flex:0 0 40%;min-width:0"><div style="font-size:12px;color:#c9c9d6;line-height:1.4">' + lab + badge + effBadge + pendBadge + defBadge + '</div>'
+    + '<div style="font-size:10px;color:#5f6272;word-break:break-all;line-height:1.35">' + key + '</div></div>'
+    + '<div data-vbox="1"' + (_isDef ? ' data-def="1"' : '') + ' style="' + valStyle + '">' + ctrl + '</div>'
+    + '<div style="flex:none;padding-top:1px">' + right + '</div>'
+    + '</div>'
+    + (opened ? ('<div id="lbPcfgSub_' + key + '">' + lbPcfgSubRows(key, typ) + '</div>') : '')
+    + '</div>';
+}
+
+function lbPcfgToggleGroup(t) {
+  /* v6808（用户口径）：分组折叠 —— 点同一个标题=收起，点别的=切过去（互斥，只展开一组） */
+  LB_PCFG.gopen = (LB_PCFG.gopen === t) ? '' : t;
+  lbPluginCfgRender();
+}
+
+function lbPcfgToggleSub(key) {
+  /* v6788（用户口径「插件配置展开的互斥原则失效了」）：
+     原实现只做 open[key] 取反 ⇒ 多个键能同时展开（LB_PCFG.open 里累积多个 true）。
+     改为**互斥**：同一时刻只允许展开一项；点头部再次点击则收起。 */
+  var _on = !LB_PCFG.open[key];
+  LB_PCFG.open = {};
+  if (_on) LB_PCFG.open[key] = true;
+  lbPluginCfgRender();
+}
+
+function lbPluginCfgRender() {
+  var box = document.getElementById('lbPcfgList');
+  var j = LB_PCFG.data;
+  if (!box) return;
+  if (!j || !j.ok) { if (j && j.code === 'all_failed') box.innerHTML = '<div style="font-size:12px;color:#f87171;padding:10px 0">全服读取失败，请点「重新读取」</div>'; return; }
+  var spec = j.spec || {};
+  var items = j.items || {};
+  var present = j.present || {};
+  var html = '';
+  /* v6808（用户口径 2026-11-16「附件这类级别都要做成折叠的，并要有互斥规则」）：
+     分组标题变成可点折叠行；`LB_PCFG.gopen` 只存一个标题 ⇒ 同时只展开一组（互斥）。
+     默认全部收起（10 组 40+ 项全摊开太长）。标题右侧显示「N 项 · 已改 M」，
+     收起时也能一眼看出哪组动过；分组收起**不影响**内部「分服展开」状态（LB_PCFG.open）。 */
+  var _gopen = LB_PCFG.gopen || '';
+  LB_PCFG_GROUPS.forEach(function (g) {
+    var rows = '';
+    var _n = 0, _pend = 0;
+    g.k.forEach(function (k) {
+      if (!(k in spec)) return;
+      _n++;
+      rows += lbPcfgRow(k, spec[k], items[k], !!present[k]);
+      try { if (LB_PCFG.pending && LB_PCFG.pending.hasOwnProperty(k)) _pend++; } catch (eP) {}
+    });
+    if (!_n) return;
+    var _on = (_gopen === g.t);
+    var _gt = String(g.t).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    html += '<div style="margin-bottom:10px">'
+      + '<div onclick="lbPcfgToggleGroup(\'' + _gt + '\')"'
+      +   ' title="' + _n + ' 项' + (_pend ? ('，已改 ' + _pend + ' 项') : '') + '"'
+      +   ' style="cursor:pointer;display:flex;align-items:center;gap:5px;font-size:12px;font-weight:bold;'
+      +   'color:#a78bfa;margin:8px 0 2px;padding:3px 0;user-select:none">'
+      +   '<i class="mdi mdi-' + (_on ? 'chevron-down' : 'chevron-right') + '" style="font-size:15px"></i>'
+      +   '<span>' + g.t + '</span>'
+      +   '<span style="font-size:10px;font-weight:400;color:#6b7280">' + _n + ' 项'
+      +     (_pend ? (' · 已改 ' + _pend) : '') + '</span>'
+      + '</div>'
+      + (_on ? rows : '')
+      + '</div>';
+  });
+  /* v6716（用户口径 2026-11-15）：只读项①直接展开（不再折叠）③不再显示说明行
+     v6786（用户口径 2026-11-16「不显示服务器标识 / 存档路径 / 输出路径 直接取消；并且移出只读」）：
+       RO_HIDE 清空 —— 这三个键已移出只读表、并入可写 SPEC，改由「存档解析」分组正常渲染。 */
+  var ro = j.readonly || {};
+  var RO_HIDE = {};
+  var roKeys = Object.keys(ro).filter(function (k) { return !RO_HIDE[k]; });
+  if (roKeys.length) {
+    var roRows = roKeys.map(function (k) {
+      var v = ro[k];
+      var txt = (v === null || v === undefined || v === '') ? '—' : String(v);
+      /* v6812：各服不一致 ⇒ 低可视样式（暗色 + 虚下划线 + 低透明差异图标），悬停列出各服值 */
+      var _m = !!(LB_PCFG.roMulti && LB_PCFG.roMulti[k]);
+      var _tip = '';
+      if (_m) {
+        try {
+          /* v6815（用户口径「tips 中只显示不一致的」）：原来把 11 台全列出来，太长。
+             改按**值分组**：台数最多的那组当基准，只列偏离它的服，末尾标注基准台数。 */
+          var _arr = LB_PCFG.roVals[k] || [];
+          var _fmt = function (v) { return (v === null || v === undefined || v === '') ? '—' : String(v); };
+          var _grp = {}, _order = [];
+          _arr.forEach(function (o) {
+            var g = _fmt(o.v);
+            if (!_grp[g]) { _grp[g] = []; _order.push(g); }
+            _grp[g].push(o.ab);
+          });
+          _order.sort(function (a, b) { return _grp[b].length - _grp[a].length; });
+          var _baseK = _order[0] || '';
+          var _diffTxt = _order.slice(1).map(function (g) { return _grp[g].join('、') + '=' + g; }).join(' · ');
+          _tip = _diffTxt
+            ? ('各服不同：' + _diffTxt + '（其余 ' + _grp[_baseK].length + ' 台 = ' + _baseK + '）')
+            : '各服不同';
+        } catch (eTip) { _tip = '各服不同'; }
+      }
+      var _valStyle = _m
+        ? 'flex:1;font-size:11px;color:#5a5e6e;word-break:break-all;cursor:help;text-decoration:underline dotted #4b4e5c'
+        : 'flex:1;font-size:11px;color:#9aa0b5;word-break:break-all';
+      var _diffIc = _m
+        ? '<i class="mdi mdi-vector-difference" style="font-size:11px;color:#4b4e5c;opacity:.75;margin-left:4px"></i>'
+        : '';
+      return '<div style="display:flex;gap:10px;padding:4px 0;border-top:1px solid #23232e">'
+        + '<div style="flex:0 0 40%;font-size:11px;color:#8b8ea0">' + (LB_PCFG_RO_LABEL[k] || k) + '</div>'
+        + '<div' + (_m ? ' class="lb-tipb"' : '') + ' style="' + _valStyle + '"'
+        + (_m ? (' title="' + lbMdEsc(_tip) + '"') : '') + '>'
+        + escapeHtml(txt) + _diffIc + '</div></div>';
+    }).join('');
+    html += '<div style="margin-top:12px">' + roRows + '</div>';
+  }
+  box.innerHTML = html;
+  try { lbPcfgDirtyCount(); } catch (eDC2) {}   /* v6811：整表重绘后同步底栏未应用计数 */
+}
+
+function lbPcfgApplyBool(el, on) {
+  if (!el) return;
+  el.setAttribute('data-v', on ? '1' : '0');
+  el.style.color = on ? '#22c55e' : '#6b7280';
+  var small = el.querySelector('i');
+  var px = small ? small.style.fontSize : '18px';
+  el.innerHTML = '<i class="mdi ' + (on ? 'mdi-toggle-switch' : 'mdi-toggle-switch-off-outline') + '" style="font-size:' + (px || '18px') + '"></i>' + (on ? '已开启' : '已关闭');
+}
+function lbPcfgToggle(el) {
+  if (!el) return;
+  lbPcfgApplyBool(el, el.getAttribute('data-v') !== '1');
+  lbPcfgMarkPending(el);
+}
+/* v6718（用户口径「未锁定全部跟着改」）：主控件改动后，把该键待提交值记进 pending，
+   分服区重绘时未锁定的服直接按新值预览，锁定的服保持原值。保存仍走一次性全服批量。 */
+/* v6809（用户口径 2026-11-16「附件不要下拉了，直接改成 圆角切换」）：
+   圆角切换组没有 `.value`（值挂在容器的 data-v 上）⇒ 所有取值点统一走这里。
+   data-segbox="1" 标记该控件是切换组，避免误读子 span 的 data-seg。 */
+function lbPcfgCtlVal(el) {
+  if (!el) return '';
+  try {
+    if (el.getAttribute && el.getAttribute('data-segbox')) {
+      var v = el.getAttribute('data-v');
+      return (v === null || v === undefined) ? '' : String(v);
+    }
+  } catch (e) {}
+  return (el.value === null || el.value === undefined) ? '' : String(el.value);
+}
+
+/* v6809：圆角切换组点击 —— 切高亮 + 把值写到容器 data-v + 触发待提交登记 */
+function lbPcfgSegPick(el, v) {
+  var box = el && el.parentNode;
+  if (!box) return;
+  try { box.setAttribute('data-v', v); } catch (e0) {}
+  var kids = box.children || [];
+  for (var i = 0; i < kids.length; i++) {
+    var on = (kids[i].getAttribute('data-seg') === v);
+    kids[i].style.background = on ? '#7c3aed' : 'transparent';
+    kids[i].style.color = on ? '#fff' : '#8b8ea0';
+    kids[i].style.fontWeight = on ? '600' : '400';
+  }
+  try { lbPcfgMarkPending(box); } catch (e1) {}
+}
+
+/* v6811（用户口径 2026-11-17「底栏要显示多少值未应用」）：
+   口径 = 主面板 pending 条数 + 当前展开的分服改动条数（分服改动只在 DOM 里，收起时不计）。 */
+/* v6813（修复 v6811 值着色看不见）：**只改当前行**的视觉标记 —— 不动整表、不动分服区。
+   背景/徽章/左侧竖条全部按 on 切换；默认值行（data-def=1）取消高亮时恢复浅灰底。 */
+function lbPcfgPaintRow(key, on) {
+  try {
+    var rows = document.querySelectorAll('#lbPcfgList [data-rowkey]');
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      if (r.getAttribute('data-rowkey') !== key) continue;
+      r.style.boxShadow = '';   /* v6815：不再画左侧竖条 */
+      var vb = r.querySelector('[data-vbox]');
+      if (vb) {
+        vb.style.background = on
+          ? 'rgba(245,158,11,.10)'
+          : (vb.getAttribute('data-def') === '1' ? 'rgba(107,114,128,.10)' : 'transparent');
+      }
+      var bd = r.querySelector('[data-pendbadge]');
+      if (bd) bd.style.display = on ? '' : 'none';
+      break;
+    }
+  } catch (e) {}
+}
+
+function lbPcfgDirtyCount() {
+  var el = document.getElementById('lbPcfgDirty');
+  if (!el) return;
+  var n = 0;
+  try { n += Object.keys(LB_PCFG.pending || {}).length; } catch (e0) {}
+  try {
+    var ps = lbPcfgCollectPerSrv();
+    var m = ps.map || {};
+    Object.keys(m).forEach(function (ab) { n += Object.keys(m[ab] || {}).length; });
+  } catch (e1) {}
+  el.textContent = n ? ('未应用 ' + n + ' 项') : '';
+  /* v6816：有未应用改动才允许点「撤销改动」（0 项时置灰，避免误点后以为回滚了服务器数据） */
+  try {
+    var ub = document.getElementById('lbPcfgUndo');
+    if (ub) {
+      ub.disabled = !n;
+      ub.style.opacity = n ? '' : '.45';
+      ub.style.cursor = n ? 'pointer' : 'not-allowed';
+    }
+  } catch (eU) {}
+}
+
+function lbPcfgMarkPending(el, quiet) {
+  /* v6810：quiet=1 = 安静模式（oninput 用）—— 只更新 LB_PCFG.pending，不重绘。
+     重绘会重建分服区 DOM，逐字输入时会把焦点/光标弄丢。 */
+  if (!el) return;
+  /* v6816（用户口径「只给本次未保存改动的值着色」）：分服控件改动 → 只给该控件所在值区上/去色。
+     分服改动**不进** pending（集合仍由 lbPcfgCollectPerSrv 读 DOM 收集），且**不重绘**（重绘会丢输入焦点）。 */
+  if (el.getAttribute('data-ab')) {
+    try { lbPcfgPaintSub(el.getAttribute('data-ab'), el.getAttribute('data-k')); } catch (ePS) {}
+    try { lbPcfgDirtyCount(); } catch (eDC0) {}
+    return;
+  }
+  var key = el.getAttribute('data-k'), typ = el.getAttribute('data-t');
+  if (!key) return;
+  var val;
+  if (typ === 'bool') val = (el.getAttribute('data-v') === '1');
+  else {
+    var r = lbPcfgParse(key, typ, lbPcfgCtlVal(el));
+    if (r.err || r.skip) { delete LB_PCFG.pending[key]; if (!quiet) lbPcfgRenderSubs(key); return; }
+    val = r.v;
+  }
+  /* 新值等于基线（改回原值）⇒ 不算待提交，避免 collectPerSrv 误跳过该键的分服自定义 */
+  var base = LB_PCFG.base || {};
+  if (base.hasOwnProperty(key) && JSON.stringify(base[key]) === JSON.stringify(val)) delete LB_PCFG.pending[key];
+  else LB_PCFG.pending[key] = val;
+  if (!quiet) lbPcfgRenderSubs(key);
+  else lbPcfgSubsDebounce(key);   /* v6816：逐字输入时也实时把新值带到未锁定分服（防抖，只重建分服区 DOM，主输入框焦点不受影响） */
+  /* v6813：安静模式（oninput）也要立刻上色 —— 只改这一行，不重绘，焦点/光标不受影响 */
+  try { lbPcfgPaintRow(key, !!(LB_PCFG.pending && Object.prototype.hasOwnProperty.call(LB_PCFG.pending, key))); } catch (ePR) {}
+  try { lbPcfgDirtyCount(); } catch (eDC) {}   /* v6811：安静模式也刷新底栏计数（只改文本，极轻） */
+}
+function lbPcfgRenderSubs(key) {
+  if (!LB_PCFG.open[key]) return;
+  var sub = document.getElementById('lbPcfgSub_' + key);
+  if (!sub) return;
+  var spec = (LB_PCFG.data || {}).spec || {};
+  if (!spec[key]) return;
+  sub.innerHTML = lbPcfgSubRows(key, spec[key]);
+}
+
+/* ===== v6816（用户口径 2026-11-17「我改了基准值，应该实时改未锁定的分服值；而且值本身也应该着色」） =====
+   三个小工具：
+     · lbPcfgSubsDebounce —— 主控件逐字输入时防抖重建分服区（只动 #lbPcfgSub_key，主输入框焦点不受影响）
+     · lbPcfgSubEl        —— 按 (服缩写, 键) 找到分服控件
+     · lbPcfgSubDirty     —— 判定该服该键是否属于「本次未保存改动」（唯一着色判据）
+     · lbPcfgPaintSub     —— 按上面的判据给值区上/去浅橙底（与主面板 lbPcfgPaintRow 同口径） */
+var LB_PCFG_SUB_TIMER = null;
+function lbPcfgSubsDebounce(key) {
+  try { if (LB_PCFG_SUB_TIMER) clearTimeout(LB_PCFG_SUB_TIMER); } catch (e0) {}
+  LB_PCFG_SUB_TIMER = setTimeout(function () {
+    LB_PCFG_SUB_TIMER = null;
+    try { lbPcfgRenderSubs(key); } catch (e1) {}
+  }, 120);
+}
+function lbPcfgSubEl(ab, key) {
+  try {
+    var list = document.querySelectorAll('#lbPcfgList [data-ab][data-k]');
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].getAttribute('data-ab') === ab && list[i].getAttribute('data-k') === key) return list[i];
+    }
+  } catch (e) {}
+  return null;
+}
+function lbPcfgSubDirty(ab, key) {
+  try {
+    if (lbPcfgIsLocked(ab, key)) return false;   /* 锁定服不参与全服批量，值不会被本次改动影响 */
+    /* 基准已改 ⇒ 未锁定服的值会被实时带到新值 ⇒ 属于本次未保存改动 */
+    if (LB_PCFG.pending && Object.prototype.hasOwnProperty.call(LB_PCFG.pending, key)) return true;
+    var el = lbPcfgSubEl(ab, key);
+    if (!el) return false;
+    var j = LB_PCFG.perSrv[ab] || {};
+    var baseV = (j.items && j.items.hasOwnProperty(key)) ? j.items[key] : null;
+    var typ = el.getAttribute('data-t');
+    var cur;
+    if (typ === 'bool') cur = (el.getAttribute('data-v') === '1');
+    else {
+      var r = lbPcfgParse(key, typ, lbPcfgCtlVal(el));
+      if (r.err || r.skip) return false;
+      cur = r.v;
+    }
+    return JSON.stringify(cur) !== JSON.stringify(baseV);
+  } catch (e) { return false; }
+}
+function lbPcfgPaintSub(ab, key) {
+  try {
+    var el = lbPcfgSubEl(ab, key);
+    if (!el) return;
+    var box = el;
+    while (box && box !== document.body) {
+      if (box.getAttribute && box.getAttribute('data-svbox')) break;
+      box = box.parentNode;
+    }
+    if (!box || box === document.body) return;
+    var on = lbPcfgSubDirty(ab, key);
+    box.style.background = on ? 'rgba(245,158,11,.10)' : 'transparent';
+    box.style.borderRadius = on ? '6px' : '';
+    box.style.padding = on ? '1px 4px' : '';
+  } catch (e) {}
+}
+
+/* ---------- 收集与保存 ---------- */
+function lbPcfgParse(key, typ, raw) {
+  if (typ === 'int') {
+    var tt = String(raw || '').trim();
+    if (tt === '') return { skip: true };
+    if (!/^\d+$/.test(tt)) return { err: (LB_PCFG_LABEL[key] || key) + '：需为整数' };
+    return { v: Number(tt) };
+  }
+  if (typ === 'str') {
+    if (raw === '') return { skip: true };
+    return { v: raw };
+  }
+  if (typ === 'strlist') {
+    return { v: String(raw || '').split(/\r?\n/).map(function (x) { return x.trim(); }).filter(function (x) { return x; }) };
+  }
+  if (typ === 'objlist') {
+    var arr = [], bad = '';
+    String(raw || '').split(/\r?\n/).forEach(function (line) {
+      line = line.trim();
+      if (!line) return;
+      var p = line.indexOf('=');
+      if (p < 0) { bad = '需为「类名=显示名」：' + line; return; }
+      arr.push({ 'class': line.slice(0, p).trim(), name: line.slice(p + 1).trim() });
+    });
+    if (bad) return { err: bad };
+    return { v: arr };
+  }
+  return { skip: true };
+}
+
+/* 主控件（无 data-ab）→ 与基线比较，只提交改动项 */
+function lbPcfgCollectMain() {
+  var patch = {}, err = '';
+  var els = document.querySelectorAll('#lbPcfgList [data-k]');
+  for (var i = 0; i < els.length; i++) {
+    var el = els[i];
+    if (el.getAttribute('data-ab')) continue;
+    var k = el.getAttribute('data-k'), t = el.getAttribute('data-t');
+    if (t === 'bool') {
+      var on = el.getAttribute('data-v') === '1';
+      if (JSON.stringify(on) !== JSON.stringify(!!LB_PCFG.base[k])) patch[k] = on;
+      continue;
+    }
+    var r = lbPcfgParse(k, t, lbPcfgCtlVal(el));
+    if (r.err) { err = r.err; continue; }
+    if (r.skip) continue;
+    if (JSON.stringify(r.v) !== JSON.stringify(LB_PCFG.base[k])) patch[k] = r.v;
+  }
+  return { patch: patch, err: err };
+}
+
+/* 分服控件（data-ab）→ 与各服基线比较；只提交该服改动 */
+function lbPcfgCollectPerSrv() {
+  var out = {}, err = '';
+  var pend = LB_PCFG.pending || {};
+  var els = document.querySelectorAll('#lbPcfgList [data-ab]');
+  for (var i = 0; i < els.length; i++) {
+    var el = els[i];
+    var ab = el.getAttribute('data-ab');
+    var k = el.getAttribute('data-k'), t = el.getAttribute('data-t');
+    if (lbPcfgIsLocked(ab, k)) continue;   /* v6712：锁定项不进批量提交（后端亦有兜底） */
+    if (pend.hasOwnProperty(k)) continue;  /* v6718：该键主控件已改 → 走全服批量，不重复计入分服 */
+    var j = LB_PCFG.perSrv[ab] || {};
+    var baseVal = (j.items && j.items.hasOwnProperty(k)) ? j.items[k] : null;
+    var val, skip = false;
+    if (t === 'bool') val = (el.getAttribute('data-v') === '1');
+    else { var r = lbPcfgParse(k, t, lbPcfgCtlVal(el)); if (r.err) { err = ab + ' ' + r.err; continue; } if (r.skip) continue; val = r.v; }
+    if (JSON.stringify(val) === JSON.stringify(baseVal)) continue;
+    if (!out[ab]) out[ab] = {};
+    out[ab][k] = val;
+  }
+  return { map: out, err: err };
+}
+
+function lbPcfgWarnText(patchList) {
+  var warn = [];
+  (patchList || []).forEach(function (patch) {
+    if (!patch) return;
+    if ('reconnect.whitelist' in patch) {
+      var wl = patch['reconnect.whitelist'];
+      if (!wl.length) warn.push('白名单为空 ⇒ 二次加载对所有玩家关闭');
+      if (wl.length === 1 && wl[0] === '*') warn.push('白名单为 * ⇒ 所有玩家都会走二次加载（可能引发重连风暴）');
+    }
+    if ('reconnect.enabled' in patch && patch['reconnect.enabled'] === false) warn.push('关闭总开关后，白名单配置将完全失效');
+  });
+  return warn;
+}
+
+async function lbPluginCfgSave(btn, force) {
+  var isAll = (LB_PCFG.mode === '__all__');
+  var main = { patch: {}, err: '' }, per = { map: {}, err: '' };
+  if (isAll) {
+    main = lbPcfgCollectMain();
+    per = lbPcfgCollectPerSrv();
+    if (main.err || per.err) { lbPcfgMsg(main.err || per.err, '#f87171'); return; }
+  } else {
+    main = lbPcfgCollectMain();
+    if (main.err) { lbPcfgMsg(main.err, '#f87171'); return; }
+  }
+  var perKeys = Object.keys(per.map || {});
+  var mainKeys = Object.keys(main.patch || {});
+  if (!mainKeys.length && !perKeys.length) { lbPcfgMsg('没有需要保存的内容', '#9aa0b5'); return; }
+  if (!force) {
+    var warn = lbPcfgWarnText([main.patch].concat(perKeys.map(function (ab) { return per.map[ab]; })));
+    if (warn.length) {
+      lbPcfgMsg(warn.join('；') + ' —— 确认要写入请再点一次', '#fbbf24');
+      btn.textContent = '确认写入';
+      btn.style.background = '#b45309';
+      btn.onclick = function () { lbPluginCfgSave(btn, true); };
+      return;
+    }
+  }
+  var tk = lbPluginCfgTok();
+  if (!tk) { lbPcfgMsg('会话已过期，请重新登录', '#f87171'); return; }
+  btn.disabled = true;
+  btn.textContent = '写入中…';
+  var head = isAll ? ('写入 ' + LB_PCFG.allList.length + ' 台…') : '写入中…';
+  lbPcfgMsg(head + ' 正在触发 ReloadConfig…', '#9aa0b5');
+  try {
+    var done = 0, fail = 0, errs = [], lockSkip = 0, asyncN = 0;   /* v6784：asyncN=已提交到任务总线的台数 */
+    if (mainKeys.length) {
+      var body = isAll ? { servers: LB_PCFG.allList, patch: main.patch }
+                       : { server: LB_PCFG.mode, patch: main.patch };
+      var r1 = await fetch(lbPluginCfgApi() + '/api/plugins/config', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tk },
+        body: JSON.stringify(body)
+      });
+      var j1 = await r1.json();
+      /* v6784（用户口径「保存 config 也要做成总线任务条」）：后端改为**异步任务** ——
+         立即返回 {async:true,count:N,keys:[...]}，逐台进度写进任务总线，
+         由「任务进度」框（.lb-task-slot）自动渲染。这里不再等 11 台串行 RCON。 */
+      if (j1 && j1.async) { asyncN += (j1.count || 0); }
+      else if (j1 && j1.servers) {
+        j1.servers.forEach(function (x) {
+          if (x.skippedKeys && x.skippedKeys.length) lockSkip += x.skippedKeys.length;
+        });
+      }
+      if (j1 && !j1.async) {
+        if (j1.ok) done += (j1.okCount || j1.count || 1);
+        else {
+          fail++;
+          if (j1.servers) {
+            j1.servers.forEach(function (x) { if (!x.ok) errs.push(x.server + '(' + (x.error || 'fail') + ')'); });
+          } else errs.push((j1.error || j1.code) || 'fail');
+        }
+      }
+    }
+    for (var t = 0; t < perKeys.length; t++) {
+      var ab = perKeys[t];
+      var r2 = await fetch(lbPluginCfgApi() + '/api/plugins/config', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tk },
+        body: JSON.stringify({ server: ab, patch: per.map[ab] })
+      });
+      var j2 = await r2.json();
+      if (j2 && j2.async) { asyncN += (j2.count || 1); }        /* v6784：异步任务 */
+      else if (j2 && j2.ok) done++;
+      else { fail++; errs.push(ab + '(' + ((j2 && (j2.error || j2.code)) || 'fail') + ')'); }
+    }
+    btn.disabled = false;
+    btn.textContent = '保存并生效';
+    btn.style.background = '#7c3aed';
+    btn.onclick = function () { lbPluginCfgSave(btn); };
+    if (fail) {
+      lbPcfgMsg('部分失败：' + errs.join('、') + (done ? ('；成功 ' + done + ' 台') : '')
+        + (asyncN ? ('；另 ' + asyncN + ' 台已交给任务总线') : ''), '#f87171');
+    } else if (asyncN) {
+      /* v6796（用户口径 2026-11-16「这段提示 缩到6字以内」）：
+         原「已提交到任务总线（N 台），进度见下方「任务进度」；X 项因锁定已跳过」过长
+         ⇒ 缩成「已提交N台」（1 位数 5 字 / 2 位数 6 字，严格 ≤6 字）。
+         逐台进度本来就在下方「任务进度」框里，不必再用文字指路。 */
+      lbPcfgMsg('已提交' + asyncN + '台', '#22c55e');
+    } else {
+      lbPcfgMsg('已保存' + (isAll ? ('（全服 ' + done + ' 台）') : '') + '并触发生效'
+        + (lockSkip ? ('；' + lockSkip + ' 项因锁定已跳过') : ''), '#22c55e');
+    }
+    lbPluginCfgLoad(LB_PCFG.mode);
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = '保存并生效';
+    lbPcfgMsg('请求失败：' + String(e), '#f87171');
+  }
+}
+
+function lbPluginCfgReload() { lbPluginCfgLoad(LB_PCFG.mode); }
+
+/* v6816（用户口径 2026-11-17「要有撤销改动的按钮」）：撤销本次**未保存**改动。
+   只清前端 LB_PCFG.pending + 整表重绘（值回到服务器当前值 / 各服原值），
+   **不写服务器、不触发 reload、不发任何后端请求** —— 与「重新读取」的区别是不多打 11 个请求。 */
+function lbPluginCfgReset() {
+  LB_PCFG.pending = {};
+  try { if (LB_PCFG_SUB_TIMER) { clearTimeout(LB_PCFG_SUB_TIMER); LB_PCFG_SUB_TIMER = null; } } catch (eT) {}
+  try { lbPluginCfgRender(); } catch (eR) {}
+  try { lbPcfgMsg('已撤销未保存的改动', '#9aa0b5'); } catch (eM) {}
+}
+
+/* ===== v6720（用户口径 2026-11-15）：墓碑记录 / 租借记录（生存者 level>=1） =====
+   拉取纪律（用户强令）：只有 3 个时机拉取 —— ①打开面板 ②切换地图 TAB ③点右上角刷新 mdi。
+   严禁定时器轮询 / 后台预取；切 TAB 用 AbortController 取消上一次未完成的请求。
+   历史台账 = 静态 TSV（零 RCON）；只有租借「当前借用中」走 RCON（实测单次约 1.1 s）。
+   UI 复用：服务器 TAB 用 lbSrvCtlChipsHtml（唯一来源）、右上刷新用 .lb-srvctl-mini + mdi-refresh、
+   浮窗头/体用 .lw-head / .lw-body。禁止 ✓ ✗ 字符，一律 MDI 图标。 */
+var LB_HIST = {
+  tomb:   { srv: '', rows: null, loading: false, err: '', abort: null, filter: 'all' },
+  borrow: { srv: '', rows: null, loading: false, err: '', abort: null, filter: 'all',
+            live: null, liveErr: '', liveLoading: false, liveAbort: null, tick: null }
+};
+var LB_HIST_NUM = { ts: 1, teamId: 1, movedCount: 1, x: 1, y: 1, z: 1,
+                    origTribeId: 1, borrowerTribeId: 1, expireAtMs: 1, charId: 1, remainSec: 1, index: 1 };
+function lbHistApi() { return (typeof LB_API === 'string' && LB_API) ? LB_API : 'https://data.whiterober.ccwu.cc'; }
+function lbHistTok() { return (typeof lbSrvCtlToken === 'function') ? lbSrvCtlToken() : ''; }
+function lbHistTime(ts) {
+  var n = Number(ts);
+  if (!n) return '—';
+  try {
+    var d = new Date(n);
+    var p = function (x) { return (x < 10 ? '0' : '') + x; };
+    return (d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+  } catch (e) { return '—'; }
+}
+function lbHistEosShort(eos) {
+  var t = String(eos || '');
+  if (!t) return '—';
+  return t.length > 8 ? (t.slice(0, 8) + '…') : t;
+}
+function lbHistTribeName(abbr, tid) {
+  try {
+    var d = (LB._cache && LB._cache.data) || {};
+    var t = d.tribesByServer && d.tribesByServer[abbr] && d.tribesByServer[abbr][String(tid)];
+    if (t) return t.tribeName || t.name || '';
+  } catch (e) {}
+  return '';
+}
+function lbHistPlayerName(abbr, eos) {
+  var e = String(eos || '').toUpperCase();
+  if (!e) return '';
+  try {
+    var ps = ((LB._cache && LB._cache.data) || {}).players || [];
+    for (var i = 0; i < ps.length; i++) {
+      if (String(ps[i].eosId || '').toUpperCase() === e) return ps[i].name || '';
+    }
+  } catch (e2) {}
+  return '';
+}
+/* v6721：插件在玩家名解析失败时会把 **EOS 写进名字列**（实测 Cen 台账 playerName = 32 位 hex）
+   ⇒ 不能直接当名字显示：先识别 hex，再用 EOS 反查玩家名，查不到就截断显示前 8 位。 */
+function lbHistNameCell(rawName, abbr, eosId) {
+  var n = String(rawName || '').trim();
+  var e = String(eosId || '').trim();
+  if (n && /^[0-9a-fA-F]{16,}$/.test(n)) { if (!e) e = n; n = ''; }
+  if (!n && e) n = lbHistPlayerName(abbr, e);
+  if (n) return n;
+  return lbHistEosShort(e);
+}
+/* ===== v6723（用户口径 2026-11-15）：台账字段全部中文化 =====
+   生存者视角：不出现类名（CryoFridge_C）、不出现英文枚举（manual_player / ok / bagMoved=1）。
+   数据来源与枚举见 报告\墓碑与设施租借_前端界面化方案_20261114.md §15.8（kind 4 种 / note 6 键 /
+   reason 的 trigger 5 种）。名字查不到时一律「未知部落」「未知玩家」，不露裸 ID。 */
+var LB_HIST_TOMB_KIND = { 'auto': '自动转移', 'manual_player': '手动·玩家',
+                          'manual_tribe': '手动·部落', 'manual_all': '手动·全部' };
+var LB_HIST_RESULT = { 'ok': '成功', 'fail': '失败' };
+var LB_HIST_NOTE_KEYS = { bagMoved: '背包', corpseMoved: '尸体', refreshed: '刷新',
+                          remaining: '剩余', nearTomb: '附近墓碑', failed: '失败' };
+var LB_HIST_NOTE_ENUM = { dino_corpse: '恐龙尸体', player_corpse: '玩家尸体',
+                          deathbag: '死亡背包', grinder_kill: '研磨机击杀' };
+var LB_HIST_TRIGGER = { cancel_toggle: '举镜取消', cancel_all: '全部取消',
+                        cmd: '指令归还', rcon: 'RCON 归还', expire: '到期归还' };
+function lbHistTombKindZh(k) {
+  var v = LB_HIST_TOMB_KIND[String(k || '')];
+  return v || '其他';
+}
+function lbHistResultZh(r) {
+  var v = LB_HIST_RESULT[String(r || '')];
+  return v || '未知';
+}
+/* 备注：「bagMoved=1,corpseMoved=1,...」→「背包 1 · 尸体 1 · …」；
+   自动转移行是单枚举（dino_corpse / player_corpse / deathbag / grinder_kill）→ 直接中文。
+   用户口径：完全不保留原始英文串。 */
+function lbHistNoteZh(note) {
+  var t = String(note || '').trim();
+  if (!t) return '—';
+  if (LB_HIST_NOTE_ENUM[t] !== undefined) return LB_HIST_NOTE_ENUM[t];
+  var parts = t.split(',');
+  var out = [];
+  for (var i = 0; i < parts.length; i++) {
+    var kv = parts[i].split('=');
+    var k = String(kv[0] || '').trim();
+    var v = (kv.length > 1) ? String(kv[1] || '').trim() : '';
+    if (!k) continue;
+    var zn = LB_HIST_NOTE_KEYS[k];
+    if (zn !== undefined) { out.push(zn + (v !== '' ? (' ' + v) : '')); }
+    else if (LB_HIST_NOTE_ENUM[k] !== undefined) { out.push(LB_HIST_NOTE_ENUM[k]); }
+    else { out.push(k + (v !== '' ? (' ' + v) : '')); }
+  }
+  return out.length ? out.join(' · ') : '—';
+}
+/* 归还方式：「released=1,trigger=cancel_toggle」→「举镜取消」
+   v6730（用户口径）：`released=N` 与动作列的「手动归还」语义重复（全服实测 4/4 恒为 1）
+   ⇒ 不再显示数量，只保留动作列没有的「归还途径」。 */
+function lbHistReasonZh(reason) {
+  var t = String(reason || '').trim();
+  if (!t) return '—';
+  var parts = t.split(',');
+  var out = [];
+  for (var i = 0; i < parts.length; i++) {
+    var kv = parts[i].split('=');
+    var k = String(kv[0] || '').trim();
+    var v = (kv.length > 1) ? String(kv[1] || '').trim() : '';
+    if (!k) continue;
+    if (k === 'trigger') { out.push(LB_HIST_TRIGGER[v] || v || '—'); continue; }
+    if (k === 'released') continue;
+    out.push(v !== '' ? v : k);
+  }
+  return out.length ? out.join(' · ') : '—';
+}
+/* 建筑类名 → 中文：structKey 可能形如「CryoFridge_C|-132733.85,-194696.74」先取类名段；
+   走项目统一设施中文表 lbFacZhOf（facility_zh 人工表 → facility_official → def → 友好英文）。 */
+function lbHistFacZh(cls) {
+  var t = String(cls || '').trim();
+  if (!t) return '—';
+  var bar = t.indexOf('|');
+  if (bar > 0) t = t.slice(0, bar);
+  var z = '';
+  try { z = lbFacZhOf(t) || ''; } catch (e) { z = ''; }
+  if (!z) { try { z = lbFacBaseKey(t) || ''; } catch (e2) { z = ''; } }
+  return z || t;
+}
+/* 名字兜底（用户口径）：查不到就「未知部落」「未知玩家」，不露裸 ID */
+function lbHistTribeDisp(rawName, abbr, tid) {
+  var n = String(rawName || '').trim();
+  if (!n) n = lbHistTribeName(abbr, tid);
+  return n || '未知部落';
+}
+/* v6727（用户口径「尽量对应到角色，而不是玩家」）：优先角色名（如「人类」），
+   查不到才回退账号名（whiter.rober），都查不到才「未知玩家」。账号名由渲染层放 title。 */
+function lbHistPlayerDisp(rawName, abbr, eosId, tribeId) {
+  var n = String(rawName || '').trim();
+  var e = String(eosId || '').trim();
+  /* v6740：eosId 有值时 playerName 不参与（只在 eosId 空的历史行才把 hex 当 EOS 回退） */
+  if (!e && n && /^[0-9a-fA-F]{16,}$/.test(n)) { e = n; n = ''; }
+  else if (e && /^[0-9a-fA-F]{16,}$/.test(n)) { n = ''; }
+  if (!e) return n || '未知玩家';
+  var rn = lbHistRoleName(abbr, e, tribeId);
+  if (rn) return rn;
+  if (n) return n;
+  var acct = lbHistPlayerName(abbr, e);
+  return acct || '未知玩家';
+}
+/* ===== v6725（用户口径 2026-11-15）：台账按身份过滤 =====
+   ① 主宰者（lbRoleLevel() >= 3，即 whiterober）→ 显示该服**全部玩家**的记录，不过滤
+   ② 非主宰者 → 只显示自己的记录；判定按 **EOS 账号**（同一账号下多个角色共享 eosId，
+      所以「多角色都要显示」天然满足，不需要按 pid 逐个匹配）
+   ③ 租借额外放行「我的部落」相关（用户口径原话「涉及我 以及 我的部落的」）
+      —— origTribeId（我的设施被别人借走）/ borrowerTribeId（我部落成员借的）
+   过滤只在渲染层做：LB_HIST.*.rows 始终保留全量，地图汇总/统计卡都基于过滤后的集合。 */
+function lbHistIsBoss() { return (typeof lbRoleLevel === 'function') && lbRoleLevel() >= 3; }
+function lbHistMyEos() {
+  var e = LB.playerEos;
+  return e ? String(e).toUpperCase() : '';
+}
+/* 账号下**所有角色**的部落集合 → { 'Cen:1181886739':1, ... }（按服区分，避免跨服 tid 撞号） */
+function lbHistMyTribes() {
+  var set = {};
+  try {
+    var tbs = (LB._cache && LB._cache.data && LB._cache.data.tribesByServer) || null;
+    if (!tbs) return set;
+    var pids = [];
+    (LB.playerRoles || []).forEach(function (r) { if (r && r.pid != null) pids.push(r.pid); });
+    if (!pids.length && LB.curPid != null) pids = [LB.curPid];
+    pids.forEach(function (pid) {
+      var s2 = lbPlayerTribes(tbs, pid) || {};
+      Object.keys(s2).forEach(function (k) { set[k] = 1; });
+    });
+  } catch (e) {}
+  return set;
+}
+/* 台账「EOS 是否本人」——**只比单个 EOSID**（v6740 简化）。
+   背景：v6726 时代插件把 EOS 写进 playerName 列、eosId 列留空，所以当时逐列都猜；
+   0.9.3 起 eosId 列**一定有值**、playerName 恒空 ⇒ 调用方先看 eosId，
+   只有历史行（eosId 空）才回退看 playerName，不再无脑两列都试。 */
+function lbHistEosIsMe(eos) {
+  var me = lbHistMyEos();
+  if (!me) return false;
+  var v = String(eos == null ? '' : eos).trim();
+  return !!(v && /^[0-9a-fA-F]{16,}$/.test(v) && v.toUpperCase() === me);
+}
+/* 墓碑「我的」= 死亡玩家 EOS == 我
+   （eosId 有值就只信它；为空的历史行才回退 playerName） */
+function lbTombIsMine(r) {
+  if (!r || !lbHistMyEos()) return false;
+  var _e = String(r.eosId == null ? '' : r.eosId).trim();
+  return _e ? lbHistEosIsMe(_e) : lbHistEosIsMe(r.playerName);
+}
+/* 租借「我的」= 我借的 / 我的设施被借 / 我部落成员借的 */
+function lbBorrowIsMine(r, srv, tset) {
+  if (!r) return false;
+  /* v6740：借用人 EOS 优先（borrowerEosId 有值就只信它），历史行才回退 borrowerName */
+  var _be = String(r.borrowerEosId == null ? '' : r.borrowerEosId).trim();
+  if (_be ? lbHistEosIsMe(_be) : lbHistEosIsMe(r.borrowerName)) return true;
+  var s3 = String(srv || '');
+  var ot = (r.origTribeId == null) ? '' : String(r.origTribeId);
+  if (ot && tset[s3 + ':' + ot]) return true;
+  var bt = (r.borrowerTribeId == null) ? '' : String(r.borrowerTribeId);
+  if (bt && tset[s3 + ':' + bt]) return true;
+  return false;
+}
+/* 实时借用区（RCON 回包）按同一口径过滤；lbBorrowRender 与 lbBorrowMapLive 共用，禁止各写一份 */
+function lbBorrowLiveItems() {
+  var st = LB_HIST.borrow;
+  var d = (st.live && st.live.data) || null;
+  var its = (d && Array.isArray(d.items)) ? d.items.slice() : [];
+  if (lbHistIsBoss()) return its;
+  var tset = lbHistMyTribes();
+  var s3 = String(st.srv || '');
+  return its.filter(function (it) {
+    if (!it) return false;
+    /* v6740：同 lbBorrowIsMine，实时区也是优先看 borrowerEosId */
+    var _be2 = String(it.borrowerEosId == null ? '' : it.borrowerEosId).trim();
+    if (_be2 ? lbHistEosIsMe(_be2) : lbHistEosIsMe(it.borrowerName)) return true;
+    var ot = (it.origTribeId == null) ? '' : String(it.origTribeId);
+    if (ot && tset[s3 + ':' + ot]) return true;
+    var bt = (it.borrowerTribeId == null) ? '' : String(it.borrowerTribeId);
+    if (bt && tset[s3 + ':' + bt]) return true;
+    return false;
+  });
+}
+/* 顶部身份提示条：生存者必须一眼看清「全部」还是「仅我的」，否则会以为数据缺失 */
+function lbHistScopeHtml(which, nShown, nAll) {
+  var boss = lbHistIsBoss();
+  var np = (LB.playerRoles || []).length || (LB.curPid != null ? 1 : 0);
+  var me = lbHistMyEos();
+  var txt = '', col = '', ico = '';
+  if (boss) {
+    txt = '主宰者视角 · 显示本服全部玩家的记录（' + nShown + ' 条）';
+    col = '#fbbf24'; ico = 'mdi-crown';
+  } else if (!me) {
+    txt = '无法识别当前身份（EOS 未就绪），请重新登录后再试';
+    col = '#f87171'; ico = 'mdi-alert-circle-outline';
+  } else {
+    txt = '仅显示我的记录（' + (np > 1 ? (np + ' 个角色') : '本账号') + '）· ' + nShown + ' 条'
+        + (which === 'borrow' ? ' · 含我的部落相关' : '');
+    col = '#a78bfa'; ico = 'mdi-account-check-outline';
+  }
+  /* v6737（用户口径）：整条身份横幅删掉，只回一个图标塞进标题栏（标题右侧）；
+     完整文案降为悬浮提示，信息不丢。三种身份图标保持区分：皇冠/人像/警告。 */
+  return '<i class="mdi ' + ico + ' lb-tipb" title="' + lbAttr(txt) + '"'
+    + ' style="font-size:13px;color:' + col + ';cursor:help"></i>';
+}
+/* ===== v6727（用户口径 2026-11-15）：可读性收口 =====
+   ① 浮窗内一律中文服名（不再出现 Cen/Isl 这类缩写）
+   ② 玩家列优先显示**角色名**，账号名降为悬浮提示
+   ③ 墓碑记录区分「来源」（背包/尸体…）与「目标墓碑」（落点反查 structures）
+   实测数据源：tribesByServer[服][tid].members[] = {name:角色名, pid, eosId}
+              players[].roles{pid:角色名} + players[].pidSrv{pid:服}
+              data.structures[] = {class,name,tribeName,x,y,z,server} */
+function lbHistSrvZh(abbr) {
+  var z = '';
+  try { z = (typeof LB.servName === 'function') ? LB.servName(abbr) : ''; } catch (e) { z = ''; }
+  return z || String(abbr || '');
+}
+/* EOS + 服务器 → 角色名（同账号多角色时用「该记录所在服」精确定位；实测 Cen=人类 / Ext=板板） */
+function lbHistRoleName(abbr, eosId, tribeId) {
+  var e = String(eosId || '').toUpperCase();
+  if (!e || !abbr) return '';
+  var d = (LB._cache && LB._cache.data) || {};
+  var t = ((d.tribesByServer || {})[abbr]) || {};
+  var tids = [];
+  if (tribeId != null && String(tribeId) !== '' && t[String(tribeId)]) tids = [String(tribeId)];
+  else tids = Object.keys(t);
+  for (var i = 0; i < tids.length; i++) {
+    var ms = ((t[tids[i]] || {}).members) || [];
+    for (var j = 0; j < ms.length; j++) {
+      if (!ms[j]) continue;
+      if (String(ms[j].eosId || '').toUpperCase() !== e) continue;
+      var nm = String(ms[j].name || '').trim();
+      if (nm) return nm;
+    }
+  }
+  var ps = d.players || [];
+  for (var k = 0; k < ps.length; k++) {
+    if (String(ps[k].eosId || '').toUpperCase() !== e) continue;
+    var roles = ps[k].roles || {}, srvMap = ps[k].pidSrv || {};
+    for (var pid in roles) {
+      if (!roles.hasOwnProperty(pid)) continue;
+      if (String(srvMap[pid] || '') !== String(abbr)) continue;
+      var cn = String(roles[pid] || '').trim();
+      if (cn) return cn;
+    }
+    break;
+  }
+  return '';
+}
+/* v6728：账号名（悬浮提示用）。EOS 可能落在 eosId 列，也可能被插件写进 playerName/borrowerName 列（hex）
+   ⇒ altName 传入名字列，是 hex 就拿来当 EOS 用。 */
+function lbHistAccountOf(abbr, eosId, altName) {
+  var e = String(eosId || '').trim();
+  if (!e) {
+    var a = String(altName || '').trim();
+    if (/^[0-9a-fA-F]{16,}$/.test(a)) e = a;
+  }
+  return e ? (lbHistPlayerName(abbr, e) || '') : '';
+}
+/* 墓碑「来源」：auto 行 note 是单枚举（恐龙尸体/玩家尸体/死亡背包/研磨机击杀）；
+   手动行 note 是统计串 ⇒ 用 bagMoved / corpseMoved 推「背包 / 尸体」。 */
+function lbTombSourceOf(r) {
+  var note = String((r && r.note) || '').trim();
+  if (!note) return '—';
+  if (LB_HIST_NOTE_ENUM[note] !== undefined) return LB_HIST_NOTE_ENUM[note];
+  var bag = 0, corpse = 0;
+  var ps = note.split(',');
+  for (var i = 0; i < ps.length; i++) {
+    var kv = ps[i].split('=');
+    var k = String(kv[0] || '').trim(), v = Number(kv[1]) || 0;
+    if (k === 'bagMoved') bag = v;
+    else if (k === 'corpseMoved') corpse = v;
+  }
+  var base = '—';
+  if (bag > 0 && corpse > 0) base = '背包 + 尸体';
+  else if (bag > 0) base = '背包';
+  else if (corpse > 0) base = '尸体';
+  /* v6733（用户口径「附近 n 放到 Tips 里」）：来源列只留搬移对象；
+     note 里仅 nearTomb 有效（refreshed/remaining/failed 实测恒 0），改由 lbTombNearCnt 供 tips 用 */
+  return base;
+}
+/* v6733：墓碑记录的「附近墓碑数」（note 的 nearTomb；auto 枚举行没有该字段 ⇒ 0）
+   与 lbTombSourceOf 共用同一份 note 解析口径 */
+function lbTombNearCnt(r) {
+  var note = String((r && r.note) || '').trim();
+  if (!note || LB_HIST_NOTE_ENUM[note] !== undefined) return 0;
+  var ps = note.split(',');
+  for (var i = 0; i < ps.length; i++) {
+    var kv = ps[i].split('=');
+    if (String(kv[0] || '').trim() === 'nearTomb') return Number(kv[1]) || 0;
+  }
+  return 0;
+}
+var LB_HIST_GRAVE_RE = /Gravestone|Coffin|Tomb/i;
+var LB_HIST_GRAVE_EPS = 400;   /* 落点 → 最近墓碑结构 的匹配阈值（米），对齐方案 §15.8.9 */
+function lbHistGraveTypeName(cls) {
+  var c = String(cls || ''), z = '';
+  try { z = lbFacZhOf(c) || ''; } catch (e) { z = ''; }
+  if (z && /[\u4e00-\u9fff]/.test(z) && !/^(结构|未知)$/.test(z)) return z;
+  if (/Coffin_Upright/i.test(c)) return '直立棺材';
+  if (/Coffin/i.test(c)) return '棺材';
+  if (/Gravestone/i.test(c)) return '墓碑';
+  return '墓碑';
+}
+/* 落点反查目标墓碑：本服 structures 里最近的 Gravestone/Coffin（阈值 400 米）
+   返回 { name:自定义名, type:类型中文, tribe:归属部落, dist } 或 null（不显示即代表该服快照里没匹配到） */
+function lbTombGraveOf(r, abbr) {
+  var x = Number(r && r.x), y = Number(r && r.y);
+  if (!isFinite(x) || !isFinite(y)) return null;
+  var st = ((LB._cache || {}).data || {}).structures || [];
+  var best = null, bd = LB_HIST_GRAVE_EPS;
+  for (var i = 0; i < st.length; i++) {
+    var g = st[i];
+    if (!g || String(g.server || '') !== String(abbr)) continue;
+    if (!LB_HIST_GRAVE_RE.test(String(g.class || ''))) continue;
+    var dx = Number(g.x) - x, dy = Number(g.y) - y;
+    if (!isFinite(dx) || !isFinite(dy)) continue;
+    var dd = Math.sqrt(dx * dx + dy * dy);
+    if (dd < bd) { bd = dd; best = g; }
+  }
+  if (!best) return null;
+  return { name: String(best.name || '').trim(), type: lbHistGraveTypeName(best.class),
+           tribe: String(best.tribeName || '').trim(), dist: Math.round(bd) };
+}
+/* v6737（用户口径）：统计不再是独占一行的胶囊块，改为**低可视化内联文本**（标签统一 2 字），
+   与筛选小 TAB 同一行、右对齐（margin-left:auto），不再多占一行高度。 */
+function lbHistStatInline(items) {
+  if (!items || !items.length) return '';
+  var ps = [];
+  for (var i = 0; i < items.length; i++) {
+    ps.push(lbMdEsc(String(items[i][0])) + ' <b style="color:#9aa0b5;font-weight:700">'
+      + lbMdEsc(String(items[i][1])) + '</b>');
+  }
+  return '<span style="font-size:10px;color:#5f6070;margin-left:auto;white-space:nowrap;'
+    + 'display:inline-flex;align-items:center;line-height:16px">' + ps.join(' · ') + '</span>';
+}
+function lbHistSetMeta(id, txt) {
+  var el = document.getElementById(id);
+  if (el) el.textContent = txt || '';
+}
+function lbHistCopy(txt) {
+  var t = String(txt || '');
+  if (!t || t === '—') return;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(t).then(function () { try { lbToast('已复制：' + t); } catch (e) {} },
+        function () { try { lbToast('复制失败'); } catch (e) {} });
+      return;
+    }
+  } catch (e) {}
+  try { lbToast('已复制：' + t); } catch (e) {}
+}
+/* 拉 TSV：404 = 该服零事件（不建文件）⇒ 返回 null，绝不弹错误 */
+async function lbHistFetch(abbr, kind, signal) {
+  var url = DINO_JSON + abbr + '_' + kind + '_history.tsv?cb=' + Date.now();
+  var r = await fetch(url, { cache: 'no-store', signal: signal });
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error('http_' + r.status);
+  return await r.text();
+}
+/* 解析：按表头取列（去掉 #vN\t 前缀），坏行跳过，数值列转 Number */
+function lbHistParse(text) {
+  var lines = String(text || '').split(/\r?\n/).filter(function (x) { return x.length; });
+  if (!lines.length) return { cols: [], rows: [] };
+  if (lines[0].charAt(0) !== '#') return { cols: [], rows: [], bad: true };
+  var cols = lines[0].replace(/^#v\d+\t/, '').split('\t');
+  var rows = [];
+  for (var i = 1; i < lines.length; i++) {
+    var f = lines[i].split('\t');
+    if (f.length < 2) continue;
+    while (f.length < cols.length) f.push('');
+    if (f.length > cols.length) f.length = cols.length;
+    var o = {};
+    for (var k = 0; k < cols.length; k++) {
+      var v = f[k];
+      o[cols[k]] = (LB_HIST_NUM[cols[k]] && v !== '') ? Number(v) : v;
+    }
+    rows.push(o);
+  }
+  return { cols: cols, rows: rows };
+}
+/* 服务器 TAB（复用地图 TAB 唯一来源 lbSrvCtlChipsHtml） */
+function lbHistRenderChips(which) {
+  var box = document.getElementById(which === 'tomb' ? 'lbTombChips' : 'lbBorrowChips');
+  if (!box) return;
+  var st = LB_HIST[which];
+  var sel = {}; if (st.srv) sel[st.srv] = 1;
+  var fn = (which === 'tomb') ? 'lbTombPickSrv' : 'lbBorrowPickSrv';
+  var smap = (window.LB_SRVCTL && LB_SRVCTL.detail) || {};
+  var off = (window.LB_SRVCTL && LB_SRVCTL.official) || '';
+  /* v6732（用户口径）：记录浮窗的地图 TAB tips 不显示【状态】（第 10 参 noStatus=true） */
+  try { box.innerHTML = lbSrvCtlChipsHtml(sel, fn, smap, off, null, null, null, false, null, true); } catch (e) { box.innerHTML = ''; }
+}
+function lbHistDefaultSrv() {
+  try {
+    var sel = (window.LB_SRVCTL && LB_SRVCTL.sel) || {};
+    var k = Object.keys(sel).filter(function (x) { return sel[x]; });
+    if (k.length) return k[0];
+  } catch (e) {}
+  return (LB.SERVERS && LB.SERVERS[0] && LB.SERVERS[0].abbr) || 'Isl';
+}
+
+/* ---------------- 墓碑记录 ---------------- */
+function lbTombHistOpen() {
+  if (typeof lbRoleLevel === 'function' && lbRoleLevel() < 1) { try { lbToast('请先登录'); } catch (e) {} return; }
+  var old = document.getElementById('lbTombHistOv'); if (old) old.remove();
+  var ov = document.createElement('div');
+  ov.className = 'lb-picker-overlay lb-fs';
+  ov.id = 'lbTombHistOv';
+  ov.onclick = function (e) { if (e.target === ov) ov.remove(); };
+  ov.innerHTML = '<div class="lb-modal-scroll" style="background:#1a1a24;border:1px solid #7c3aed55;border-radius:12px;width:820px;max-width:96vw;box-shadow:0 10px 40px rgba(0,0,0,.6);max-height:88vh;overflow:hidden;display:flex;flex-direction:column">'
+    + '<div class="lw-head"><span class="lw-title"><i class="mdi mdi-grave-stone"></i> 墓碑记录</span>'
+    + '<span id="lbTombScope" style="display:inline-flex;align-items:center;margin-left:5px"></span>'
+    + '<span id="lbTombMeta" style="font-size:10px;color:#6b6f80;margin-left:auto;margin-right:6px;white-space:nowrap"></span>'
+    + '<button class="lb-srvctl-mini lb-tipb" title="本服墓碑地图（全部点位）" onclick="lbTombMapAll()"><i class="mdi mdi-map-marker-multiple"></i></button>'
+    + '<button class="lb-srvctl-mini lb-tipb" title="刷新（重新读取当前选中服）" onclick="lbTombRefresh()"><i class="mdi mdi-refresh"></i></button>'
+    + '<button class="lw-x lb-tipb" onclick="document.getElementById(\'lbTombHistOv\').remove()" title="关闭" aria-label="关闭"><i class="mdi mdi-close"></i></button></div>'
+    + '<div class="lw-body" style="padding:10px 14px 14px">'
+    + '<div class="lb-srvctl-chips" id="lbTombChips" style="margin-bottom:6px"></div>'
+    + '<div id="lbTombStat"></div>'
+    + '<div id="lbTombList"></div>'
+    + '</div></div>';
+  document.body.appendChild(ov);
+  var st = LB_HIST.tomb;
+  if (!st.srv) st.srv = lbHistDefaultSrv();
+  lbHistRenderChips('tomb');
+  lbTombLoad();          /* 时机①：打开面板拉一次 */
+}
+function lbTombPickSrv(ab) {
+  var st = LB_HIST.tomb;
+  if (!ab || st.srv === ab) return;
+  st.srv = ab; st.rows = null; st.err = '';
+  lbHistRenderChips('tomb');
+  lbTombLoad();          /* 时机②：切地图 TAB 拉目标服 */
+}
+function lbTombRefresh() { lbTombLoad(); }   /* 时机③：右上角刷新 mdi */
+function lbTombSetFilter(f) {
+  LB_HIST.tomb.filter = f || 'all';
+  lbTombRender();
+}
+async function lbTombLoad() {
+  var st = LB_HIST.tomb;
+  var box = document.getElementById('lbTombList');
+  if (!box || !st.srv) return;
+  if (st.abort) { try { st.abort.abort(); } catch (e) {} }
+  st.abort = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  st.loading = true;
+  box.innerHTML = '<div style="font-size:12px;color:#888;padding:10px 0">读取中…</div>';
+  lbHistSetMeta('lbTombMeta', '读取中…');
+  try {
+    var txt = await lbHistFetch(st.srv, 'tomb', st.abort ? st.abort.signal : undefined);
+    if (txt === null) { st.rows = []; st.cols = []; }
+    else { var p = lbHistParse(txt); st.cols = p.cols; st.rows = p.rows; }
+    st.err = '';
+  } catch (e) {
+    if (String((e && e.name) || '') === 'AbortError') return;
+    st.err = String(e); st.rows = null;
+  } finally { st.loading = false; }
+  lbTombRender();
+}
+function lbTombRender() {
+  var st = LB_HIST.tomb;
+  var list = document.getElementById('lbTombList');
+  var stat = document.getElementById('lbTombStat');
+  if (!list) return;
+  if (st.err) {
+    list.innerHTML = '<div style="font-size:12px;color:#f87171;padding:10px 0">读取失败：' + lbMdEsc(st.err) + '</div>';
+    if (stat) stat.innerHTML = '';
+    lbHistSetMeta('lbTombMeta', '读取失败');
+    return;
+  }
+  var allRows = st.rows || [];
+  var rows = (lbHistIsBoss() ? allRows.slice() : allRows.filter(lbTombIsMine));
+  /* v6776（用户口径）：卡片排序 = 时间**从新到旧**。台账 TSV 是追加写（旧行在前），
+     原实现直接按文件序出卡片 ⇒ 最新记录压在最底部。此处 copy + 按 ts 数值降序。 */
+  rows.sort(function (a, b) { return (Number(b && b.ts) || 0) - (Number(a && a.ts) || 0); });
+  var _scb = document.getElementById('lbTombScope');
+  if (_scb) _scb.innerHTML = lbHistScopeHtml('tomb', rows.length, allRows.length);
+  if (!rows.length) {
+    var _mt = allRows.length ? '该服没有我的墓碑记录' : '该服暂无墓碑记录';
+    list.innerHTML = '<div style="font-size:12px;color:#6b6f80;padding:18px 0;text-align:center">' + _mt + '</div>';
+    if (stat) stat.innerHTML = '';
+    lbHistSetMeta('lbTombMeta', lbHistSrvZh(st.srv) + ' · 暂无记录');
+    return;
+  }
+  var f = st.filter || 'all';
+  var shown = rows.filter(function (r) {
+    var okk = String(r.result) === 'ok';
+    if (f === 'ok') return okk;
+    if (f === 'fail') return !okk;
+    return true;
+  });
+  var okCnt = 0;
+  rows.forEach(function (r) { if (String(r.result) === 'ok') okCnt++; });
+  var tset = {};
+  rows.forEach(function (r) { if (r.teamId) tset[r.teamId] = 1; });
+  if (stat) {
+    var btn = function (k, t) {
+      var on = (f === k);
+      return '<span onclick="lbTombSetFilter(\'' + k + '\')" style="cursor:pointer;font-size:11px;'
+        + 'border-radius:5px;padding:3px 8px;border:1px solid ' + (on ? '#7c3aed' : '#23232e') + ';'
+        + 'color:' + (on ? '#a78bfa' : '#8b8ea0') + ';background:' + (on ? '#7c3aed22' : '#101018') + '">' + t + '</span>';
+    };
+    /* v6737：筛选按钮行右侧挂低可视化统计（总计/成功/失败/部落，均 2 字） */
+    stat.innerHTML = '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 6px">'
+      + btn('all', '全部') + btn('ok', '成功') + btn('fail', '失败')
+      + lbHistStatInline([['总计', rows.length], ['成功', okCnt], ['失败', rows.length - okCnt],
+                          ['部落', Object.keys(tset).length]])
+      + '</div>';
+  }
+  /* v6736（用户口径·方案 C）：表格 → 时间轴卡片；原表格列 + 原 tips 内容全部平铺，一条不丢 */
+  /* v6757：去掉固定 max-height:46vh（移动端底部空 278px + 双滚动）⇒ 交给 .lb-hist-scroll 填满剩余 */
+  var h = '<div class="lb-hist-scroll" style="border-top:1px solid #23232e;padding-top:8px">'
+    + '<div class="lb-hist-tl">';
+  if (!shown.length) {
+    h += '<div style="padding:14px 6px;text-align:center;color:#6b6f80;font-size:12px">当前筛选无记录</div>';
+  }
+  var _ldT = '';
+  rows.forEach(function (r) {
+    if (shown.indexOf(r) < 0) return;
+    var ri = allRows.indexOf(r);   /* v6725：行内地图入口用「全量数组」下标，过滤后不能直接用循环序 */
+    var tn = lbHistTribeDisp(r.tribeName, st.srv, r.teamId);
+    var pn = lbHistPlayerDisp(r.playerName, st.srv, r.eosId, r.teamId);
+    var _acc = lbHistAccountOf(st.srv, r.eosId, r.playerName);
+    var hv = (r.x !== '' && r.x !== null && r.x !== undefined && !isNaN(Number(r.x)));
+    var okk = String(r.result) === 'ok';
+    var _mapIc = hv ? ('<i class="mdi mdi-map-marker-radius lb-tipb pin" onclick="event.stopPropagation();lbTombMapOne(' + ri + ')" title="在地图查看这座墓碑的位置"></i>') : '';
+    var _src = lbTombSourceOf(r);
+    var _nearT = lbTombNearCnt(r);
+    var _mvT = (r.movedCount !== '' && r.movedCount != null) ? String(r.movedCount) : '';
+    var _srcTxt = _src + (_nearT > 0 ? (' · 附近 ' + _nearT + ' 座') : '') + (_mvT ? (' · 移动 ' + _mvT) : '');
+    var _gv = lbTombGraveOf(r, st.srv);
+    var _gvTitle = _gv ? (_gv.name || _gv.type) : '墓碑';
+    var _gvTxt = _gv ? ((_gv.name || _gv.type) + (_gv.tribe ? (' · ' + _gv.tribe) : '') + ' · ' + _gv.dist + ' 米') : '未匹配到附近墓碑';
+    var _pTxt = pn + (_acc ? ('（' + _acc + '）') : '') + ' · ' + tn;
+    var _dayT = String(lbHistTime(r.ts)).slice(0, 5);
+    if (_dayT !== _ldT) { h += '<div class="lb-hc-day">' + lbMdEsc(_dayT) + '</div>'; _ldT = _dayT; }
+    h += '<div class="lb-hcard ' + (okk ? 'ok bok' : 'bad bbad') + '">'
+      + '<div class="lb-hc-h"><span class="nm"><i class="mdi mdi-grave-stone"></i> ' + lbMdEsc(_gvTitle) + '</span>'
+      + '<span class="tag ' + (okk ? 'ok' : 'bad') + '"><i class="mdi ' + (okk ? 'mdi-check-circle' : 'mdi-close-circle') + '"></i> ' + lbMdEsc(lbHistResultZh(r.result)) + '</span>'
+      + '<span class="tm">' + lbHistTime(r.ts) + _mapIc + '</span></div>'
+      + '<div class="lb-hc-g">'
+      + '<span class="k">方式</span><span class="v">' + lbMdEsc(lbHistTombKindZh(r.kind)) + '</span>'
+      + '<span class="k">来源</span><span class="v">' + lbMdEsc(_srcTxt) + '</span>'
+      + '<span class="k">玩家</span><span class="v">' + lbMdEsc(_pTxt) + '</span>'
+      + '<span class="k">目标</span><span class="v">' + lbMdEsc(_gvTxt) + '</span>'
+      + '</div></div>';
+  });
+  h += '</div></div>';
+  list.innerHTML = h;
+  lbHistSetMeta('lbTombMeta', lbHistSrvZh(st.srv) + ' · ' + rows.length + ' 条');
+}
+
+/* ---------------- 租借记录 ---------------- */
+var LB_BORROW_ACT = {
+  'borrow':         { t: '借用',       ico: 'mdi-arrow-right-circle-outline', c: '#fbbf24' },
+  'manual_restore': { t: '手动归还',   ico: 'mdi-arrow-left-circle-outline',  c: '#4ade80' },
+  'auto_restore':   { t: '到期归还',   ico: 'mdi-clock-outline',              c: '#60a5fa' }
+};
+function lbBorrowActMeta(a) {
+  var k = String(a || '');
+  return LB_BORROW_ACT[k] || { t: k || '—', ico: 'mdi-information-outline', c: '#8b8ea0' };
+}
+function lbBorrowHistOpen() {
+  if (typeof lbRoleLevel === 'function' && lbRoleLevel() < 1) { try { lbToast('请先登录'); } catch (e) {} return; }
+  var old = document.getElementById('lbBorrowHistOv'); if (old) old.remove();
+  var ov = document.createElement('div');
+  ov.className = 'lb-picker-overlay lb-fs';
+  ov.id = 'lbBorrowHistOv';
+  ov.onclick = function (e) { if (e.target === ov) { lbBorrowTickStop(); ov.remove(); } };
+  ov.innerHTML = '<div class="lb-modal-scroll" style="background:#1a1a24;border:1px solid #7c3aed55;border-radius:12px;width:820px;max-width:96vw;box-shadow:0 10px 40px rgba(0,0,0,.6);max-height:88vh;overflow:hidden;display:flex;flex-direction:column">'
+    + '<div class="lw-head"><span class="lw-title"><i class="mdi mdi-swap-horizontal"></i> 租借记录</span>'
+    + '<span id="lbBorrowScope" style="display:inline-flex;align-items:center;margin-left:5px"></span>'
+    + '<span id="lbBorrowMeta" style="font-size:10px;color:#6b6f80;margin-left:auto;margin-right:6px;white-space:nowrap"></span>'
+    + '<button class="lb-srvctl-mini lb-tipb" title="本服借出建筑地图（全部点位）" onclick="lbBorrowMapAll()"><i class="mdi mdi-map-marker-multiple"></i></button>'
+    + '<button class="lb-srvctl-mini lb-tipb" title="刷新（重新读取当前选中服）" onclick="lbBorrowRefresh()"><i class="mdi mdi-refresh"></i></button>'
+    + '<button class="lw-x lb-tipb" onclick="lbBorrowTickStop();document.getElementById(\'lbBorrowHistOv\').remove()" title="关闭" aria-label="关闭"><i class="mdi mdi-close"></i></button></div>'
+    + '<div class="lw-body" style="padding:10px 14px 14px">'
+    + '<div class="lb-srvctl-chips" id="lbBorrowChips" style="margin-bottom:6px"></div>'
+    + '<div style="font-size:11px;color:#a78bfa;margin:2px 0 4px">当前借用中（实时）</div>'
+    + '<div id="lbBorrowLive"></div>'
+    + '<div style="font-size:11px;color:#a78bfa;margin:10px 0 4px">历史事件</div>'
+    + '<div id="lbBorrowStat"></div>'
+    + '<div id="lbBorrowList"></div>'
+    + '</div></div>';
+  document.body.appendChild(ov);
+  var st = LB_HIST.borrow;
+  if (!st.srv) st.srv = lbHistDefaultSrv();
+  lbHistRenderChips('borrow');
+  lbBorrowLoad();        /* 时机①②合并：一次点击 = 历史(静态) + 实时(RCON) 各一次 */
+}
+function lbBorrowPickSrv(ab) {
+  var st = LB_HIST.borrow;
+  if (!ab || st.srv === ab) return;
+  st.srv = ab; st.rows = null; st.err = ''; st.live = null; st.liveErr = '';
+  lbHistRenderChips('borrow');
+  lbBorrowLoad();
+}
+function lbBorrowRefresh() { lbBorrowLoad(); }
+function lbBorrowSetFilter(f) {
+  LB_HIST.borrow.filter = f || 'all';
+  lbBorrowRender();
+}
+async function lbBorrowLoad() {
+  var st = LB_HIST.borrow;
+  var box = document.getElementById('lbBorrowList');
+  if (!box || !st.srv) return;
+  /* 历史（静态 TSV，零 RCON） */
+  if (st.abort) { try { st.abort.abort(); } catch (e) {} }
+  st.abort = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  st.loading = true;
+  box.innerHTML = '<div style="font-size:12px;color:#888;padding:10px 0">读取中…</div>';
+  lbHistSetMeta('lbBorrowMeta', '读取中…');
+  var p1 = (async function () {
+    try {
+      var txt = await lbHistFetch(st.srv, 'borrow', st.abort ? st.abort.signal : undefined);
+      if (txt === null) { st.rows = []; }
+      else { var p = lbHistParse(txt); st.rows = p.rows; }
+      st.err = '';
+    } catch (e) {
+      if (String((e && e.name) || '') !== 'AbortError') { st.err = String(e); st.rows = null; }
+    } finally { st.loading = false; }
+  })();
+  /* 实时（RCON）—— 同一个用户动作触发，不算轮询 */
+  var p2 = lbBorrowLiveLoad();
+  await Promise.all([p1, p2]);
+  lbBorrowRender();
+}
+async function lbBorrowLiveLoad() {
+  var st = LB_HIST.borrow;
+  var box = document.getElementById('lbBorrowLive');
+  if (!box) return;
+  if (st.liveAbort) { try { st.liveAbort.abort(); } catch (e) {} }
+  st.liveAbort = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  st.liveLoading = true;
+  box.innerHTML = '<div style="font-size:12px;color:#888;padding:8px 0">读取中…</div>';
+  try {
+    var url = lbHistApi() + '/api/plugins/borrow-list?server=' + encodeURIComponent(st.srv) + '&t=' + Date.now();
+    var r = await fetch(url, { cache: 'no-store', headers: { 'Authorization': 'Bearer ' + lbHistTok() },
+                               signal: st.liveAbort ? st.liveAbort.signal : undefined });
+    var j = await r.json();
+    st.live = j;
+    st.liveErr = (j && j.ok) ? '' : ((j && (j.error || j.code)) || ('http_' + r.status));
+  } catch (e) {
+    if (String((e && e.name) || '') === 'AbortError') { st.liveLoading = false; return; }
+    st.live = null; st.liveErr = String(e);
+  } finally { st.liveLoading = false; }
+}
+function lbBorrowRender() {
+  var st = LB_HIST.borrow;
+  var list = document.getElementById('lbBorrowList');
+  var stat = document.getElementById('lbBorrowStat');
+  var live = document.getElementById('lbBorrowLive');
+  /* --- 实时区 --- */
+  if (live) {
+    if (st.liveErr) {
+      live.innerHTML = '<div style="font-size:12px;color:#f87171;padding:6px 0">读取失败：' + lbMdEsc(st.liveErr) + '</div>';
+    } else {
+      var its = lbBorrowLiveItems();
+      if (!its.length) {
+        live.innerHTML = '<div style="font-size:12px;color:#6b6f80;padding:6px 0">'
+          + (lbHistIsBoss() ? '当前无借用' : '当前无我的借用') + '</div>';
+      } else {
+        /* v6736（方案 C）：实时区也改时间轴卡片；data-exp 保留给本地倒计时 tick */
+        /* v6777（用户口径「实时区永远显示所有，不要出滚动条，显示完了再显示历史」）：
+           这里原来是 max-height:26vh;overflow:auto（内联），CSS 盖不住 ⇒ 直接去掉限制，内容自然高度 */
+        var h0 = '<div style="border-top:1px solid #23232e;padding-top:8px">'
+          + '<div class="lb-hist-tl">';
+        its.forEach(function (it, ii) {
+          var cls = lbHistFacZh(it.kind || it.structClass || '');
+          var tn = lbHistTribeDisp(it.origTribeName, st.srv, it.origTribeId);
+          var bn = lbHistPlayerDisp(it.borrowerName, st.srv, it.borrowerEosId, it.borrowerTribeId);
+          var _accL = lbHistAccountOf(st.srv, it.borrowerEosId, it.borrowerName);
+          var exp = Number(it.expireAtMs) || 0;
+          var _hx = (it.x != null && !isNaN(Number(it.x)));
+          var _mi = _hx ? ('<i class="mdi mdi-map-marker-radius lb-tipb pin" onclick="event.stopPropagation();lbBorrowMapLive(' + ii + ')" title="在地图查看这台建筑"></i>') : '';
+          var _bTxt = bn + (_accL ? ('（' + _accL + '）') : '') + ' · ' + tn;
+          h0 += '<div class="lb-hcard warn bwarn">'
+            + '<div class="lb-hc-h"><span class="nm"><i class="mdi mdi-archive-outline"></i> ' + lbMdEsc(cls) + '</span>'
+            + '<span class="tag live">借用中</span>'
+            + '<span class="tm"><span style="color:#fbbf24;font-weight:700" data-exp="' + exp + '">'
+            + lbMdEsc(lbBorrowRemainTxt(exp)) + '</span>' + _mi + '</span></div>'
+            + '<div class="lb-hc-g">'
+            + '<span class="k">借用人</span><span class="v">' + lbMdEsc(_bTxt) + '</span>'
+            + '</div></div>';
+        });
+        h0 += '</div></div>';
+        live.innerHTML = h0;
+      }
+    }
+    lbBorrowTickStart();   /* 本地倒计时（纯计算，不发请求） */
+  }
+  /* --- 历史区 --- */
+  if (!list) return;
+  if (st.err) {
+    list.innerHTML = '<div style="font-size:12px;color:#f87171;padding:10px 0">读取失败：' + lbMdEsc(st.err) + '</div>';
+    if (stat) stat.innerHTML = '';
+    lbHistSetMeta('lbBorrowMeta', '读取失败');
+    return;
+  }
+  var allRows = st.rows || [];
+  var _tsl = lbHistMyTribes();
+  var rows = lbHistIsBoss() ? allRows.slice()
+    : allRows.filter(function (r) { return lbBorrowIsMine(r, st.srv, _tsl); });
+  /* v6776（用户口径）：同墓碑记录 —— 卡片按时间从新到旧 */
+  rows.sort(function (a, b) { return (Number(b && b.ts) || 0) - (Number(a && a.ts) || 0); });
+  var _scb2 = document.getElementById('lbBorrowScope');
+  if (_scb2) _scb2.innerHTML = lbHistScopeHtml('borrow', rows.length, allRows.length);
+  if (!rows.length) {
+    var _mt2 = allRows.length ? '该服没有与我相关的租借记录' : '该服暂无租借历史';
+    list.innerHTML = '<div style="font-size:12px;color:#6b6f80;padding:18px 0;text-align:center">' + _mt2 + '</div>';
+    if (stat) stat.innerHTML = '';
+    lbHistSetMeta('lbBorrowMeta', lbHistSrvZh(st.srv) + ' · 暂无记录');
+    return;
+  }
+  var f = st.filter || 'all';
+  var shown = rows.filter(function (r) { return (f === 'all') || (String(r.action) === f); });
+  var cnt = {};
+  rows.forEach(function (r) { var a = String(r.action || ''); cnt[a] = (cnt[a] || 0) + 1; });
+  if (stat) {
+    var btn = function (k, t) {
+      var on = (f === k);
+      return '<span onclick="lbBorrowSetFilter(\'' + k + '\')" style="cursor:pointer;font-size:11px;'
+        + 'border-radius:5px;padding:3px 8px;border:1px solid ' + (on ? '#7c3aed' : '#23232e') + ';'
+        + 'color:' + (on ? '#a78bfa' : '#8b8ea0') + ';background:' + (on ? '#7c3aed22' : '#101018') + '">' + t + '</span>';
+    };
+    /* v6737：统计标签压成 2 字（总计/借用/手动/到期），与筛选按钮同行右对齐 */
+    stat.innerHTML = '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 6px">'
+      + btn('all', '全部') + btn('borrow', '借用')
+      + btn('manual_restore', '手动归还') + btn('auto_restore', '到期归还')
+      + lbHistStatInline([['总计', rows.length], ['借用', cnt['borrow'] || 0],
+                          ['手动', cnt['manual_restore'] || 0], ['到期', cnt['auto_restore'] || 0]])
+      + '</div>';
+  }
+  /* v6736（用户口径·方案 C）：历史区表格 → 时间轴卡片 */
+  /* v6757：去掉固定 max-height:32vh（移动端底部空 290px + 双滚动）⇒ 交给 .lb-hist-scroll 填满剩余 */
+  var h = '<div class="lb-hist-scroll" style="border-top:1px solid #23232e;padding-top:8px">'
+    + '<div class="lb-hist-tl">';
+  if (!shown.length) {
+    h += '<div style="padding:14px 6px;text-align:center;color:#6b6f80;font-size:12px">当前筛选无记录</div>';
+  }
+  var _ldB = '';
+  rows.forEach(function (r) {
+    if (shown.indexOf(r) < 0) return;
+    var ri = allRows.indexOf(r);   /* v6725：同墓碑，地图入口用全量数组下标 */
+    var am = lbBorrowActMeta(r.action);
+    var tn = lbHistTribeDisp(r.origTribeName, st.srv, r.origTribeId);
+    var bn = lbHistPlayerDisp(r.borrowerName, st.srv, r.borrowerEosId, r.borrowerTribeId);
+    var _accH = lbHistAccountOf(st.srv, r.borrowerEosId, r.borrowerName);
+    var _hx = (r.x !== '' && r.x != null && !isNaN(Number(r.x)));
+    var _mi = _hx ? ('<i class="mdi mdi-map-marker-radius lb-tipb pin" onclick="event.stopPropagation();lbBorrowMapOne(' + ri + ')" title="在地图查看这台建筑"></i>') : '';
+    var _bld = lbHistFacZh(r.structClass || r.structKey || '');
+    var _pTxt2 = bn + (_accH ? ('（' + _accH + '）') : '') + ' · ' + tn;
+    var _isB = String(r.action) === 'borrow';
+    var _dot = (_isB ? 'warn bwarn' : (String(r.action) === 'auto_restore' ? 'ok bok' : 'info binfo'));
+    var _dayB = String(lbHistTime(r.ts)).slice(0, 5);
+    if (_dayB !== _ldB) { h += '<div class="lb-hc-day">' + lbMdEsc(_dayB) + '</div>'; _ldB = _dayB; }
+    h += '<div class="lb-hcard ' + _dot + '">'
+      + '<div class="lb-hc-h"><span class="nm"><i class="mdi ' + am.ico + '" style="color:' + am.c + '"></i> ' + lbMdEsc(am.t) + '</span>'
+      + '<span class="tag bld">' + lbMdEsc(_bld) + '</span>'
+      + '<span class="tm">' + lbHistTime(r.ts) + _mi + '</span></div>'
+      + '<div class="lb-hc-g">'
+      + '<span class="k">借用人</span><span class="v">' + lbMdEsc(_pTxt2) + '</span>'
+      + '<span class="k">归还方式</span><span class="v">' + lbMdEsc(lbHistReasonZh(r.reason)) + '</span>'
+      + '</div></div>';
+  });
+  h += '</div></div>';
+  list.innerHTML = h;
+  lbHistSetMeta('lbBorrowMeta', lbHistSrvZh(st.srv) + ' · ' + rows.length + ' 条');
+}
+/* ===== v6723（用户口径 2026-11-15）：台账坐标可视化 =====
+   复用项目现成地图链路（不新造样式/不新造交互）：
+     lbMapForServer(abbr,z) → 底图 + 换算参数；lbWorldToPx(x,y,map) → 百分比坐标
+     lbMapPagerRender(cfg)  → 多页翻页地图浮层（箭头翻页 / 底部操作条 / 自动挂 lbZoomBind）
+     .lb-fac-map.lb-map-vp + .lb-map-zoom + [data-wp] → 与「公共设施位置」同一套 DOM（缩放时点位视觉恒定）
+   入口（用户口径 A 方案）：① 每行坐标前的小地图图标 = 该单点；② 面板头部按钮 = 本服全部点位。 */
+var LB_HIST_MAP = { open: false, kind: '' };
+function lbHistMapPage(abbr, pts, opt) {
+  opt = opt || {};
+  if (!pts || !pts.length) return '';
+  var zmed = null;
+  for (var i = 0; i < pts.length; i++) { if (isFinite(Number(pts[i].z))) { zmed = Number(pts[i].z); break; } }
+  var map = lbMapForServer(abbr, zmed);
+  if (!map) return '';
+  var col = opt.color || '#c084fc';
+  var single = pts.length === 1;
+  var dots = pts.map(function (p, pi) {
+    var q = lbWorldToPx(Number(p.x), Number(p.y), map);
+    var lat = (Number(p.y) / map.multLat + map.shiftLat).toFixed(2);
+    var lon = (Number(p.x) / map.multLon + map.shiftLon).toFixed(2);
+    var sz = single ? 20 : 15;
+    var _c = p.color || col;
+    /* v6724（用户口径「可读性」）：多点时长名单标签会互相遮挡（同一玩家连续两次死亡坐标只差百余单位）
+       ⇒ 多点只标序号（1/2/3…），完整信息看底部清单；单点才显示完整名单。 */
+    var _lab = single ? String(p.name || '') : String(pi + 1);
+    return '<div class="lb-fac-node lb-tipb" data-wp="fac" data-fsrv="' + lbAttr(abbr) + '" data-nm="' + lbAttr(opt.title || '') + '"'
+      + ' data-fdn="' + lbAttr(String(p.name || '')) + '" data-fc="' + lbAttr(_c) + '"'
+      + ' data-fx="' + String(p.x) + '" data-fy="' + String(p.y) + '" data-fz="' + String(p.z) + '"'
+      + ' data-flat="' + lat + '" data-flon="' + lon + '"'
+      + ' title="' + lbAttr(String(p.name || '')) + '"'
+      + ' style="position:absolute;left:' + q.x.toFixed(2) + '%;top:' + q.y.toFixed(2) + '%;transform:translate(-50%,-50%);z-index:2;text-align:center;line-height:1">'
+      + '<div style="width:' + sz + 'px;height:' + sz + 'px;border-radius:50%;background:' + _c + ';border:2px solid #fff;'
+      + 'box-shadow:0 0 9px rgba(0,0,0,.9);margin:0 auto' + (single ? ';box-shadow:0 0 0 4px rgba(167,139,250,.35),0 0 14px rgba(124,58,237,.9)' : '') + '"></div>'
+      + (single
+          ? ('<div style="font-size:10px;color:#fff;background:rgba(0,0,0,.7);border-radius:3px;padding:2px 6px;margin-top:3px;white-space:nowrap">'
+             + lbMdEsc(_lab) + '</div>')
+          : ('<div style="font-size:10px;font-weight:bold;color:#fff;text-shadow:0 0 4px #000;margin-top:1px;white-space:nowrap">'
+             + lbMdEsc(_lab) + '</div>'))
+      + '</div>';
+  }).join('');
+  var rows = pts.map(function (p, i2) {
+    return '<div style="display:flex;gap:8px;align-items:center;padding:3px 0;border-bottom:1px solid #1f1f2a">'
+      + '<span style="color:#6b6f80;font-size:11px;min-width:18px">' + (i2 + 1) + '</span>'
+      + '<span style="color:#c9c9d6;font-size:11px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + lbMdEsc(String(p.name || '')) + '</span>'
+      + '</div>';
+  }).join('');
+  return '<div style="flex:0 0 100%;min-width:100%;box-sizing:border-box;padding:0 10px">'
+    + '<div style="text-align:center;font-size:13px;color:#fff;font-weight:bold;margin-bottom:6px">'
+    + LB.servName(abbr) + ' · ' + pts.length + ' 个位置</div>'
+    + '<div class="lb-fac-map lb-map-vp" data-vp="' + lbAttr(abbr) + '" style="position:relative;border-radius:10px;overflow:hidden;line-height:0;border:1px solid #2a2a3a;touch-action:none">'
+    + '<div class="lb-map-zoom" style="transform-origin:0 0;transform:translate(0px,0px) scale(1)">'
+    + '<img src="' + LB_MAP_BASE + String(map.img).replace(/_s$/, '') + LB_MAP_EXT + '" style="width:100%;height:auto;display:block">'
+    + dots + '</div></div>'
+    + '<div style="max-height:22vh;overflow:auto;margin-top:8px">' + rows + '</div>'
+    + '</div>';
+}
+function lbHistMapOpen(abbr, pts, title, color) {
+  if (!pts || !pts.length) { try { lbToast('该记录没有坐标'); } catch (e0) {} return; }
+  var ov = document.getElementById('lbBreedOverlay');
+  var body = document.getElementById('lbBreedOverlayBody');
+  if (!ov || !body) { try { lbToast('地图容器不可用'); } catch (e1) {} return; }
+  if (!LB_HIST_MAP.open) { LB_HIST_MAP.pz = ov.style.zIndex || '9999'; LB_HIST_MAP.open = true; }
+  ov.style.zIndex = '1000003';
+  var closeBtn = '<span class="lb-tipb" onclick="event.stopPropagation();lbHistMapClose()" title="关闭" style="cursor:pointer;color:#aaa;font-size:22px;line-height:1;display:inline-flex;align-items:center;justify-content:center;height:22px;width:22px"><svg viewBox="5 5 14 14" style="width:22px;height:22px;display:block;fill:currentColor"><path d="M19,6.41L17.59,5 12,10.59 6.41,5 5,6.41 10.59,12 5,17.59 6.41,19 12,13.41 17.59,19 19,17.59 13.41,12z"/></svg></span>';
+  lbMapPagerRender({
+    titleHtml: '📌 ' + title,
+    meta: [{ abbr: abbr, n: pts.length, label: '📌 ' + title }],
+    pageHtmls: [lbHistMapPage(abbr, pts, { title: title, color: color })],
+    headBtns: closeBtn,
+    footerHtml: '',
+    focusAbbr: abbr
+  });
+}
+function lbHistMapClose() {
+  var ov = document.getElementById('lbBreedOverlay');
+  var body = document.getElementById('lbBreedOverlayBody');
+  if (body) body.innerHTML = '';
+  if (ov) { ov.style.display = 'none'; if (LB_HIST_MAP.pz) ov.style.zIndex = LB_HIST_MAP.pz; }
+  LB_HIST_MAP.open = false;
+}
+/* 单条 → 点位数组（ri = 原始 rows 下标） */
+function lbHistPtsOf(which, ri) {
+  var st = LB_HIST[which] || {};
+  var r = (st.rows || [])[ri];
+  if (!r) return null;
+  if (r.x === '' || r.x == null || isNaN(Number(r.x))) return null;
+  if (which === 'tomb') {
+    return { abbr: st.srv, color: '#c084fc', title: '墓碑位置',
+             pts: [{ x: r.x, y: r.y, z: r.z,
+                     name: lbHistTime(r.ts) + ' · ' + lbHistPlayerDisp(r.playerName, st.srv, r.eosId) }] };
+  }
+  var act = lbBorrowActMeta(r.action).t;
+  return { abbr: st.srv, color: '#22d3ee', title: '借用建筑位置',
+           pts: [{ x: r.x, y: r.y, z: r.z, name: act + ' · ' + lbHistFacZh(r.structClass || r.structKey || '') }] };
+}
+function lbTombMapOne(ri) {
+  var o = lbHistPtsOf('tomb', ri); if (!o) return;
+  lbHistMapOpen(o.abbr, o.pts, o.title, o.color);
+}
+function lbBorrowMapOne(ri) {
+  var o = lbHistPtsOf('borrow', ri); if (!o) return;
+  lbHistMapOpen(o.abbr, o.pts, o.title, o.color);
+}
+/* 实时借用区单条（its 下标） */
+function lbBorrowMapLive(ii) {
+  var st = LB_HIST.borrow;
+  var its = lbBorrowLiveItems();
+  var it = its[ii];
+  if (!it || it.x == null || isNaN(Number(it.x))) { try { lbToast('该记录没有坐标'); } catch (e) {} return; }
+  lbHistMapOpen(st.srv,
+    [{ x: it.x, y: it.y, z: it.z,
+       name: lbHistFacZh(it.kind || it.structClass || '') + ' · ' + lbHistPlayerDisp(it.borrowerName, st.srv, it.borrowerEosId) }],
+    '借用中建筑位置', '#fbbf24');
+}
+/* 头部汇总：本服全部点位 */
+function lbTombMapAll() {
+  var st = LB_HIST.tomb;
+  var arr = [];
+  var _alT = st.rows || [];
+  var _rlT = lbHistIsBoss() ? _alT : _alT.filter(lbTombIsMine);
+  _rlT.forEach(function (r) {
+    if (r.x === '' || r.x == null || isNaN(Number(r.x))) return;
+    arr.push({ x: r.x, y: r.y, z: r.z,
+               name: lbHistTime(r.ts) + ' · ' + lbHistPlayerDisp(r.playerName, st.srv, r.eosId) });
+  });
+  if (!arr.length) { try { lbToast('该服暂无带坐标的墓碑记录'); } catch (e) {} return; }
+  lbHistMapOpen(st.srv, arr, lbHistSrvZh(st.srv) + ' · 墓碑点位', '#c084fc');
+}
+function lbBorrowMapAll() {
+  var st = LB_HIST.borrow;
+  var arr = [];
+  var _alB = st.rows || [];
+  var _tsB = lbHistMyTribes();
+  var _rlB = lbHistIsBoss() ? _alB : _alB.filter(function (r) { return lbBorrowIsMine(r, st.srv, _tsB); });
+  _rlB.forEach(function (r) {
+    if (r.x === '' || r.x == null || isNaN(Number(r.x))) return;
+    arr.push({ x: r.x, y: r.y, z: r.z,
+               name: lbBorrowActMeta(r.action).t + ' · ' + lbHistFacZh(r.structClass || r.structKey || '') });
+  });
+  var its = lbBorrowLiveItems();
+  its.forEach(function (it) {
+    if (it.x == null || isNaN(Number(it.x))) return;
+    arr.push({ x: it.x, y: it.y, z: it.z, color: '#fbbf24',
+               name: '借用中 · ' + lbHistFacZh(it.kind || it.structClass || '') });
+  });
+  if (!arr.length) { try { lbToast('该服暂无带坐标的借出建筑'); } catch (e) {} return; }
+  lbHistMapOpen(st.srv, arr, lbHistSrvZh(st.srv) + ' · 借出建筑点位', '#22d3ee');
+}
+function lbBorrowRemainTxt(expMs) {
+  var n = Number(expMs) || 0;
+  if (!n) return '—';
+  var left = Math.max(0, Math.round((n - Date.now()) / 1000));
+  if (!left) return '已到期';
+  var m = Math.floor(left / 60), s = left % 60;
+  return m > 0 ? (m + ' 分 ' + s + ' 秒') : (s + ' 秒');
+}
+/* 本地倒计时：只重算 DOM 里的剩余秒，不发任何请求 */
+function lbBorrowTickStart() {
+  var st = LB_HIST.borrow;
+  lbBorrowTickStop();
+  st.tick = setInterval(function () {
+    var ov = document.getElementById('lbBorrowHistOv');
+    if (!ov) { lbBorrowTickStop(); return; }
+    var tds = ov.querySelectorAll('[data-exp]');   /* v6736：卡片化后剩余时间不再是 td */
+    for (var i = 0; i < tds.length; i++) {
+      var e = Number(tds[i].getAttribute('data-exp')) || 0;
+      tds[i].textContent = lbBorrowRemainTxt(e);
+    }
+  }, 1000);
+}
+function lbBorrowTickStop() {
+  var st = LB_HIST.borrow;
+  if (st && st.tick) { try { clearInterval(st.tick); } catch (e) {} st.tick = null; }
+}
+
+/* ===== v6783（用户口径 2026-11-16「所有带右上角关闭按钮的浮窗都应该点遮罩不关闭」）=====
+   全项目有 30+ 处 `overlay.onclick = e => { if (e.target === overlay) overlay.remove(); }`，
+   逐个改既繁琐又容易漏。这里在 **document 的 capture 阶段**统一拦截：
+     · 条件：点击目标本身就是遮罩（fixed 定位 + 尺寸接近视口）+ 遮罩内部有「关闭」按钮
+       （.lw-x / .lb-picker-close / [title="关闭"] / .mdi-close 任一）
+     · 动作：stopPropagation() —— capture 阶段叫停后，事件不会到达遮罩自身的 onclick ⇒ 不关闭
+     · 不带关闭按钮的浮窗（纯「取消/确认」对话框）不受影响，仍可点遮罩取消
+   注意：点浮窗**内部任何元素**时 e.target 不是遮罩，querySelector 也找不到「自身」⇒ 不拦截。 */
+/* v6785：窗口缩放后任务浮条要与面板重新对齐（宽度来自面板实测宽度） */
+try {
+  window.addEventListener('resize', function () {
+    try { lbTaskSlotFloat(); } catch (e) {}
+  });
+} catch (eRS) {}
+
+/* v6787（缺陷修复）：浮窗**一打开**就把任务进度浮条搬到面板外面。
+   原因：lbTaskSlotFloat 原先只在 lbTaskRender 末尾调用，而 lbTaskRender 仅在任务数据变化时执行
+        ⇒ 首次打开浮窗且当前没有任务在跑时，浮条会留在面板内部（实测 SOK 配置浮窗就是这样）。
+   做法：MutationObserver 盯 body 直接子节点新增（= 新浮窗 append 上来）⇒ 立刻调一次。
+        成本可忽略（只在 body 子节点增删时触发），且覆盖全部浮窗，不用逐个改创建代码。 */
+(function () {
+  if (window.__lbTaskSlotFloatObs) return;
+  try {
+    var _obs = new MutationObserver(function (muts) {
+      for (var i = 0; i < muts.length; i++) {
+        var m = muts[i];
+        if (m.addedNodes && m.addedNodes.length) {
+          try { lbTaskSlotFloat(); } catch (e0) {}
+          return;
+        }
+      }
+    });
+    _obs.observe(document.body, { childList: true });
+    window.__lbTaskSlotFloatObs = _obs;
+  } catch (e) {}
+  /* 兜底：首屏可能已经有浮窗（或 body 尚未就绪）⇒ 延时补一次 */
+  setTimeout(function () { try { lbTaskSlotFloat(); } catch (e1) {} }, 800);
+})();
+
+(function () {
+  if (window.__lbOvMaskGuardV6783) return;
+  window.__lbOvMaskGuardV6783 = 1;
+  document.addEventListener('click', function (e) {
+    try {
+      var t = e.target;
+      if (!t || t.nodeType !== 1 || !t.querySelector) return;
+      if (!t.querySelector('.lw-x, .lb-picker-close, [title="关闭"], .mdi-close')) return;
+      var cs = window.getComputedStyle(t);
+      if (!cs || cs.position !== 'fixed') return;
+      /* 只在「确实点中遮罩本身」时生效：遮罩通常铺满视口，宽高都得接近窗口 */
+      var w = parseFloat(cs.width) || 0, h = parseFloat(cs.height) || 0;
+      if (w < window.innerWidth * 0.85 || h < window.innerHeight * 0.85) return;
+      e.stopPropagation();
+    } catch (err) {}
+  }, true);
+})();

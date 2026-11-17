@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>安全回档 · 步骤自动拼接（规则驱动）</title>
+<style>
+:root{--bg:#0f0f16;--panel:#16161f;--panel2:#1a1a24;--line:#2a2a3a;--tx:#e5e5ee;--dim:#8b8b9e;--pu:#7c3aed;--pu2:#c4b5fd;--ok:#4ade80;--warn:#fbbf24;--bad:#f87171}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--tx);font:13px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:18px 20px 90px}
+h1{font-size:16px;font-weight:700}
+h2{font-size:12.5px;font-weight:700;color:var(--pu2);margin-bottom:10px}
+.sub{color:var(--dim);font-size:11.5px;margin-top:4px}
+header{border-bottom:1px solid var(--line);padding-bottom:14px}
+.tbar{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+button{background:transparent;border:1px solid var(--line);color:var(--dim);font:inherit;font-size:11.5px;padding:5px 11px;border-radius:7px;cursor:pointer;transition:.12s}
+button:hover{background:rgba(124,58,237,.16);color:var(--pu2);border-color:var(--pu)}
+button.pri{background:rgba(124,58,237,.2);border-color:var(--pu);color:var(--pu2);font-weight:600}
+.wrap{display:grid;grid-template-columns:minmax(320px,400px) 1fr;gap:16px;margin-top:16px;align-items:start}
+@media (max-width:900px){.wrap{grid-template-columns:1fr}}
+.facts{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:13px 15px}
+.fnote{font-size:9.5px;color:#6b7280;margin-top:2px}
+.sinp{background:#0d0d14;border:1px solid #2a2a3a;border-radius:6px;color:var(--tx);font:inherit;font-size:11px;padding:2px 7px;width:74px}
+.sinp:focus{border-color:var(--pu);outline:none}
+.sarw{color:#6b7280;font-size:11px;margin:0 3px}
+.fgroup{margin-bottom:13px}
+.fl{font-size:11px;font-weight:700;color:var(--dim);margin-bottom:6px}
+.fo{display:flex;flex-wrap:wrap;gap:6px}
+.opt{padding:5px 10px;border-radius:7px;border:1px solid var(--line);background:var(--panel2);color:var(--dim);font-size:11.5px;cursor:pointer;user-select:none;transition:.12s}
+.opt:hover{border-color:var(--pu);color:var(--pu2)}
+.opt.on{background:rgba(124,58,237,.22);border-color:var(--pu);color:var(--pu2);font-weight:700}
+.opt.on.warn{background:rgba(251,191,36,.2);border-color:var(--warn);color:var(--warn)}
+.opt.dis{opacity:.35;cursor:not-allowed}
+.result{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:13px 15px;min-height:120px}
+.flow{display:flex;flex-wrap:wrap;align-items:flex-start;gap:6px}
+.stp-wrap{display:inline-flex;flex-direction:column;align-items:flex-start;gap:4px;max-width:100%}
+.stp{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;height:30px;overflow:hidden;border-radius:8px;font-size:11px;font-weight:600;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#d5dae6;max-width:100%;cursor:pointer}
+.stp b{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;font-size:9.5px;background:var(--warn);color:#1a1a24;flex:none}
+.stp.done b{background:var(--ok)}
+.stp .tag{font-size:9.5px;font-weight:700;padding:0 5px;border-radius:4px;background:rgba(124,58,237,.25);color:var(--pu2);flex:none}
+.stp.warn{border-color:#ef4444}
+.stp.warn b{background:#ef4444}
+.alt-toggle{font-size:9.5px;padding:1px 6px;border-radius:4px;border:1px solid var(--pu);background:rgba(124,58,237,.22);color:var(--pu2);cursor:pointer;user-select:none;white-space:nowrap;flex:none}
+.alt-toggle:hover{background:rgba(124,58,237,.34)}
+.alt-txt{display:inline-flex;align-items:stretch;gap:0;height:30px;margin:-5px 0;padding:0 2px;color:#c4b5fd;overflow:hidden}
+.alt-txt i{font-style:normal;font-size:10px;padding:0;background:none;border:0;color:#e3e9f7;white-space:normal;word-break:break-word;line-height:1.15;display:flex;align-items:center;justify-content:flex-start;text-align:left;flex:0 1 auto;max-width:32px;overflow:hidden}
+.alt-sep{display:inline-flex;align-items:center;flex:none;color:#7c8496;padding:0 4px}
+.alt-sep svg{width:5px;height:8px;display:block}
+.tip-alt{display:block;margin-top:6px;padding-top:6px;border-top:1px dashed rgba(255,255,255,.09)}
+.tip-alt-lbl{display:block;font-size:10px;color:#8b8ba3;margin-bottom:3px}
+.tip-alt .alt-txt{display:flex;align-items:center;flex-wrap:wrap;row-gap:4px;height:auto;margin:0;padding:0;overflow:visible}
+.tip-alt .alt-txt i{max-width:none;white-space:nowrap;overflow:visible}
+.stp-tip{display:none;font-size:10.5px;font-weight:400;color:#a9a9bd;background:#12121a;border:1px dashed var(--line);border-radius:7px;padding:6px 9px;max-width:340px;line-height:1.6}
+.stp-wrap.open .stp-tip{display:block}
+.stp-wrap.open .stp{border-color:var(--pu)}
+.arw{color:var(--dim);flex:none;margin-top:4px}
+.arbk-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:7px}
+.arbk-chip{display:inline-flex;align-items:center;gap:4px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:3px 7px;font-size:12px}
+.chip-note{font-size:10px;color:#5b5b6e;margin-top:5px;max-width:340px;line-height:1.5}
+.aff-wrap{margin-top:8px;max-width:360px}
+.aff-h{font-size:10.5px;color:#fbbf24;font-weight:700;margin-bottom:5px}
+.aff-row{display:flex;align-items:center;gap:8px;padding:3px 0;flex-wrap:wrap}
+.aff-chip{display:inline-flex;align-items:baseline;gap:5px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:2px 8px;font-size:11.5px;color:#cbd5e1}
+.aff-chip em{font-style:normal;font-size:10px;color:#64748b}
+.aff-t{font-size:10.5px;color:#94a3b8}
+.aff-on{font-size:9.5px;padding:1px 6px;border-radius:4px;background:rgba(74,222,128,.16);border:1px solid rgba(74,222,128,.5);color:#4ade80}
+.rules{margin-top:26px}
+table{width:100%;border-collapse:collapse;font-size:11px;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+th,td{border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:7px 9px;vertical-align:top;text-align:left}
+th{background:var(--panel2);color:var(--dim);font-weight:600;font-size:10.5px;white-space:nowrap}
+td:last-child,th:last-child{border-right:0}
+tr:last-child td{border-bottom:0}
+td.rid{color:var(--pu2);font-weight:700;white-space:nowrap;font-family:ui-monospace,Consolas,monospace}
+td.when{color:#94a3b8;font-size:10.5px}
+tr.on td{background:rgba(124,58,237,.09)}
+textarea{width:100%;height:260px;margin-top:10px;background:#0d0d14;border:1px solid var(--line);border-radius:8px;color:#c9c9d6;font:11.5px/1.6 ui-monospace,Consolas,monospace;padding:10px;resize:vertical}
+.hint{color:var(--dim);font-size:11px}
+#tipbox{position:fixed;z-index:999;max-width:330px;background:#1b1b28;border:1px solid var(--pu);border-radius:8px;padding:8px 11px;font-size:11px;font-weight:400;line-height:1.65;color:#d5dae6;box-shadow:0 10px 28px #000a;display:none;pointer-events:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>安全回档 · 步骤自动拼接（规则驱动）</h1>
+  <div class="sub">已去掉「情况」层：左边改<b>事实</b> → 右边按规则表自动拼出步骤。规则表在底部，是唯一逻辑真相源。</div>
+  <div class="tbar">
+    <button onclick="EXP.tipAll(true)">展开全部说明</button>
+    <button onclick="EXP.tipAll(false)">收起全部说明</button>
+    <button onclick="EXP.reset()">恢复默认事实</button>
+    <button class="pri" onclick="EXP.export()">导出结论</button>
+  </div>
+</header>
+<div class="wrap">
+  <section class="facts">
+    <h2>① 事实（改这里）</h2>
+    <div class="fgroup">
+      <div class="fl">服务器 / 角色</div>
+      <div class="fo" id="fSrv"></div>
+    </div>
+    <div class="fgroup">
+      <div class="fl">角色位置</div>
+      <div class="fo" id="fPos"></div>
+    </div>
+    <div class="fgroup">
+      <div class="fl">其他玩家此刻在线人数</div>
+      <div class="fnote">不含选中角色本身</div>
+      <div class="fo" id="fOnline"></div>
+    </div>
+    <div class="fgroup">
+      <div class="fl">其他玩家进出记录</div>
+      <div class="fnote">不含选中角色本身</div>
+      <div class="fo" id="fMove"></div>
+    </div>
+    <div class="fgroup">
+      <div class="fl">会丢失物品</div>
+      <div class="fo" id="fLoss"></div>
+    </div>
+    <div class="fgroup" style="margin-bottom:0">
+      <div class="fl">回档目的（可多选 · 至少一个）</div>
+      <div class="fo" id="fGoals"></div>
+    </div>
+  </section>
+  <section class="result">
+    <h2>② 自动拼接出的步骤（<span id="nStep">0</span> 步）</h2>
+    <div class="flow" id="flow"></div>
+    <div class="hint" id="flowNote" style="margin-top:10px"></div>
+  </section>
+</div>
+<section class="rules">
+  <h2>③ 规则表（唯一逻辑真相源 · 高亮行 = 本次命中）</h2>
+  <table id="ruleTable"></table>
+  <div class="hint" style="margin-top:8px">加一步 = 表里加一行；改条件 = 改该行 <code>when</code>。渲染、矩阵、导出全部调用同一个 <code>arkbkBuildSteps()</code>。</div>
+</section>
+<section id="outWrap" style="margin-top:22px">
+  <h2>④ 导出结论</h2>
+  <button onclick="EXP.copy()">复制全文</button>
+  <textarea id="out" readonly placeholder="点右上「导出结论」生成…"></textarea>
+</section>
+<div id="tipbox"></div>
+<script>
+/* ================= 示例数据（线上由真实接口填充） ================= */
+var SAMPLE_BAG = [
+  { name: '铁锭', qty: 1200, groups: 3 },
+  { name: '水泥', qty: 400, groups: 1 },
+  { name: '聚合物', qty: 260, groups: 2 },
+  { name: '火箭燃料', qty: 90, groups: 1 }
+];
+var SAMPLE_CRYO = [
+  { name: '霸王龙', lv: 295, g: '♂' },
+  { name: '南方巨兽龙', lv: 240, g: '♀' },
+  { name: '狮鹫', lv: 180, g: '♂', baby: true }
+];
+var SAMPLE_AFFECTED = [
+  { role: '嘎巴丸', acc: '嘎巴菜', from: '11-10 20:29', to: '11-11 07:32', dur: '11 小时 3 分', online: false },
+  { role: '人类', acc: 'whiter.rober', from: '11-10 22:00', to: '至今', dur: '进行中', online: true }
+];
+/* ================= 规则层：唯一逻辑真相源 ================= */
+/* ================= v33 重构：就位状态机（3 条不变量） =================
+   I1 数据唯一：回档 = 整档替换世界 ⇒ 执行回档那一刻，角色数据源必须唯一
+        · curOnly（目标档没他）  → 回档前必须传图离开，否则他那份数据被覆盖掉
+        · tgtOnly（目标档有他、人却在别的服）→ 回档前必须传图来，否则旧数据 + 本人 = 角色重复
+   I2 在场：任何「要角色在场」的动作（上传 / 取回）之前，角色必须在 {cur}
+   I3 静止：回档、撤销都只换世界档，不移动角色；只有「传图」改变位置
+   ⇒ 就位只由 pos 决定，与「是否撤销」无关（旧版把 canUndo 混进就位条件是根因）
+*/
+function arkbkNeedRole(f) { return !!(f.goals.dino || (f.goals.items && arkbkCanUndo(f))); }  /* 是否有必须角色在场才能做的动作 */
+/* 回档前必须先离开 {cur}：他在当前档，但目标档里没有他 */
+function arkbkLeaveBefore(f) { return f.pos === 'curOnly'; }
+/* 回档前必须先传图来 {cur}：目标档里有他，他本人却在别的服 */
+function arkbkEnterBefore(f) { return f.pos === 'tgtOnly'; }
+/* 回档后必须把他弄回 {cur}：他为本流程离开过（curOnly），或两档都没他但要他做事（none） */
+function arkbkEnterAfter(f) { return f.pos === 'curOnly' || (f.pos === 'none' && arkbkNeedRole(f)); }
+/* 备选方案（低温仓 / 传图寄存）会把角色带去别的服 ⇒ 需要额外一次「传图回」
+   守卫：该备选对应的步骤必须真的在链上，避免 ALTOPEN 残留开关误触发 */
+function arkbkAltLeaves(f) {
+  var liveDino = !!f.goals.dino;
+  var liveItems = (f.pos === 'both' && !!f.lossN && !arkbkCanUndo(f));
+  var liveItemsGoal = (!!f.goals.items && arkbkCanUndo(f));
+  return !!((ALTOPEN['upDino'] && liveDino) || (ALTOPEN['upItems'] && liveItems) || (ALTOPEN['upItemsGoal'] && liveItemsGoal));
+}
+/* 走完流程后，角色是否应该已在 {cur} */
+function arkbkFinalIn(f) {
+  if (f.pos === 'none') return arkbkNeedRole(f);  /* 两档都没他：只有要做事才把他弄来 */
+  return true;                                    /* both / tgtOnly 一直在；curOnly 会传回来 */
+}
+function arkbkCanUndo(f) {
+  var affected = !!(f.onlineN || f.moveN);
+  var keepResult = !!(f.goals.build || f.goals.tame);
+  return affected && !keepResult;
+}
+var ARKBK_RULES = [
+  { id: 'notify', order: 12, tag: '波及',
+    when: function (f) { return !!f.onlineN; },
+    whenText: '此刻有其他玩家在线（不含选中角色；回档瞬间世界跳变，会掉线 / 死亡 / 掉装备）',
+    text: '请其他玩家下线',
+    tip: '回档瞬间世界会跳变，在线的其他玩家可能掉线 / 死亡 / 掉装备。让他们先到安全点再下线，或直接传图离开{cur}，装备随身收好。' },
+  { id: 'ask', order: 10, tag: '波及',
+    when: function (f) { return !!(f.onlineN || f.moveN) && !arkbkCanUndo(f); },
+    whenText: '不撤销回档 且（其他玩家在线>0 或 其他玩家进出记录>0）',
+    text: '征得波及玩家同意',
+    warn: true,
+    tip: '本次无法撤销回档，他们的进度会真的退回目标档时刻。先征得这些玩家同意，再往下做。', aff: true },
+  { id: 'roleLeaveBefore', order: 25, tag: '就位前',
+    when: function (f) { return arkbkLeaveBefore(f); },
+    whenText: '角色只在当前档（目标档没他）：回档整档替换，他那份数据会被覆盖掉',
+    text: '传图离开{cur}',
+    altShort: '改用含此角色的回档点',
+    altTip: '目标档里没有这个角色，那就换成包含他的回档点 —— 等于整套流程从第一步重新走一遍。',
+    altSteps: function (f) { return arkbkNeedRole(f) ? null : ['换含此角色的回档点（流程重走）']; },
+    tip: '目标档里没有这个角色，回档是整档替换 —— 他留在{cur}的角色数据会被目标档覆盖掉（等级 / 背包 / 恐龙全丢）。先让他传图离开{cur}（角色存进集群），回档完成后再传回来。' },
+  { id: 'roleEnterBefore', order: 25, tag: '就位前',
+    when: function (f) { return arkbkEnterBefore(f); },
+    whenText: '角色只在目标档（人还在别的服）：必须在回档前传过来，否则旧数据 + 本人 = 角色重复',
+    text: '传图来{cur}',
+    tip: '目标档里已经有这个角色，而他本人现在还在别的服。必须先让他传图来{cur}：不传的话，回档会把目标档里那份旧数据带进世界，两份撞一起就是角色重复；而且人不在场，生物 / 物品也没法上传方尖碑。' },
+  { id: 'do', order: 40,
+    when: function () { return true; }, whenText: '恒定',
+    text: '回档',
+    tip: '确认前面的准备都做完，再点执行。回档过程中不要操作服务器。' },
+  { id: 'roleEnterAfter', order: 45, tag: '就位',
+    when: function (f) { return arkbkEnterAfter(f); },
+    whenText: '回档后角色不在{cur}（他为本流程离开过 / 两档都没他但要他做事）',
+    text: '传图来{cur}',
+    tip: '回档完成后{cur}里没有这个角色：他要么刚被传图离开，要么本来就不在任何一档。把他（从集群 / 原服）传图来{cur}，才能继续上传方尖碑、取回物品与生物。' },
+  { id: 'takeItems', order: 85, tag: '取回',
+    when: function (f) {
+      var a = (f.pos === 'both' && !!f.lossN && !arkbkCanUndo(f) && !ALTOPEN['upItems']);
+      var b = (!!f.goals.items && arkbkCanUndo(f) && !ALTOPEN['upItemsGoal']);
+      return a || b;
+    },
+    whenText: '有物品被上传方尖碑（回档前上传 / 撤销前上传）',
+    text: '取回物品',
+    tip: '回档（或撤销）已经完成，之前上传的物品还在方尖碑里（跨存档保留 24 小时）。现在把它取回背包 / 箱子，别放着过期。' },
+  { id: 'takeDino', order: 85, tag: '取回',
+    when: function (f) { return !!f.goals.dino && !ALTOPEN['upDino']; },
+    whenText: '目的含「生物死了」（生物已上传方尖碑）',
+    text: '取回生物',
+    tip: '之前把复活的生物上传到了方尖碑（跨存档保留 24 小时）。现在把它取回来放生到{cur}，别放着过期。' },
+  { id: 'verifyIn', order: 90,
+    when: function (f) { return arkbkFinalIn(f); },
+    whenText: '走到最后一步时角色已在{cur}（无需再传回）',
+    text: '验证',
+    tip: '此时角色已在{cur}（回档 / 撤销完成后直接上线），确认世界状态、角色等级 / 背包 / 恐龙是否符合预期。' },
+  { id: 'verifyOut', order: 90,
+    when: function (f) { return !arkbkFinalIn(f); },
+    whenText: '走到最后一步时角色不在{cur}，且本流程不需要他到场',
+    text: '核对世界状态',
+    tip: '两档里都没有这个角色，本次也不需要他做事，所以不必把人弄过来。直接看{cur}的世界状态（建筑 / 恐龙 / 地形）是否符合预期。' },
+  { id: 'upDino', order: 60, tag: '生物',
+    when: function (f) { return !!f.goals.dino; },
+    whenText: '目的含「生物死了」',
+    text: '上传生物', chips: 'cryo',
+    altLabel: '备选：低温仓',
+    altShort: '低温仓运走生物',
+    altTip: '不用方尖碑，改用低温仓把生物装走。低温仓必须销毁，否则会复制。若本次要撤销回档，撤销完成前不要传回{cur}。',
+    altSteps: ['低温仓装走', '传图离开', '扔出放出', '销毁低温仓'],
+    tip: '把刚复活的生物上传到方尖碑，跨存档保留 24 小时。撤销回档不会丢，撤销完成后再从方尖碑取回放生。' },
+  { id: 'upItems', order: 35, tag: '无撤销',
+    when: function (f) { return f.pos === 'both' && !!f.lossN && !arkbkCanUndo(f); },
+    whenText: '两档都有 且 有物品会丢 且 不满足撤销条件（必须在执行回档之前做）',
+    text: '上传物品',
+    altLabel: '备选：传图寄存',
+    altShort: '传图寄存到别服',
+    altTip: '不用方尖碑，带物品传图去别的服，放进那边的箱子；回档后再回来取。',
+    altSteps: ['带物品传图', '放别服箱', '取回物品'],
+    tip: '必须在执行回档之前做：把这些物品上传到方尖碑，跨存档保留 24 小时，回档后再从方尖碑取回。备选：把这些物品传图放到别的服箱子里，回档后再回来取。', chips: 'bag' },
+  { id: 'upItemsGoal', order: 60, tag: '拿回',
+    when: function (f) { return !!f.goals.items && arkbkCanUndo(f); },
+    whenText: '目的含「拿回物品」且存在撤销回档（回档后先上传，再撤销才不会丢）',
+    text: '上传物品',
+    altLabel: '备选：传图寄存',
+    altShort: '传图寄存到别服',
+    altTip: '不用方尖碑，带物品传图去别的服暂存；撤销回档完成后再回来取回。',
+    altSteps: ['带物品传图', '放别服箱', '取回物品'],
+    tip: '回档后这些物品已经回到世界里了，但接下来要「撤销回档」把世界还给别人 —— 先上传到方尖碑（跨存档保留 24 小时），撤销后再从方尖碑取回。', chips: 'bag' },
+  { id: 'roleEnterLate', order: 80, tag: '就位',
+    when: function (f) { return arkbkAltLeaves(f) && arkbkFinalIn(f); },
+    whenText: '备选把角色带去了别的服（低温仓 / 传图寄存），收尾前得先回来',
+    text: '传图回{cur}',
+    tip: '备选方案是「带着东西传图去别的服」，人现在不在{cur}。等它那套动作（装走或寄存 → 传图离开 → 放出或放箱 → 销毁低温仓）走完，再传图回{cur}，否则没法在本服收尾验证。' },
+  { id: 'undo', order: 70, tag: '可撤销',
+    when: function (f) { return arkbkCanUndo(f); },
+    whenText: '有波及 且 目的不含「建筑塌了 / 驯龙重训」',
+    text: '撤销回档',
+    tip: '把服务器恢复到回档前的状态，消除对所有被波及玩家的影响。你自己要的东西已经在「上传方尖碑」（物品 / 生物）里保住了，撤销不会丢。\n注意：撤销只有一次机会 —— 再执行一次回档会把这份还原源覆盖掉，上一次就再也撤不回来了。' }
+];
+function arkbkOrd(r, f) {
+  try { return (typeof r.orderIf === 'function') ? r.orderIf(f) : r.order; } catch (e) { return r.order; }
+}
+function arkbkRep(t, f) {
+  return String(t == null ? '' : t)
+    .replace(/\{x\}/g, f.xName || 'X')
+    .replace(/\{cur\}/g, f.curSrvCn || '当前服')
+    .replace(/\{srv\}/g, f.srvCn || '目标服');
+}
+function arkbkBuildSteps(f) {
+  return ARKBK_RULES.filter(function (r) { try { return !!r.when(f); } catch (e) { return false; } })
+    .sort(function (a, b) { return arkbkOrd(a, f) - arkbkOrd(b, f); })
+    .map(function (r, i) {
+      var o = {};
+      for (var k in r) o[k] = r[k];
+      o.n = i + 1;
+      o.text = arkbkRep(r.text, f);
+      o.tip = arkbkRep(r.tip, f);
+      o.altTip = arkbkRep(r.altTip, f);
+      o.altShort = arkbkRep(r.altShort, f);
+      return o;
+    });
+}
+/* ================= 事实状态 ================= */
+var DEFAULT_FACTS = {
+  pos: 'both', onlineN: 0, moveN: 0, lossN: 0,
+  xName: 'JaronV5', curSrvCn: '孤岛', srvCn: '星耀',
+  goals: { items: true }   /* 目的至少选一个，默认「拿回物品」 */
+};
+var FACTS = JSON.parse(JSON.stringify(DEFAULT_FACTS));
+var ALTOPEN = {};
+var ARKBK_ALT_SEP = '<span class="alt-sep"><svg viewBox="0 0 5 8" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1 L4 4 L1 7"/></svg></span>';
+var TIPALL = false;
+var GOALBLOCK = false;   /* v16：尝试取消最后一个目的时置 true，用于提示 */
+/* ================= 渲染 ================= */
+function escAttr(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function chipSvg(path, color) {
+  return '<span style="display:inline-flex;flex:none;color:' + color + '">'
+    + '<svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:currentColor"><path d="' + path + '"/></svg></span>';
+}
+var ICO_ITEM = 'M21,16.5C21,16.88 20.79,17.21 20.47,17.38L12.57,21.82C12.41,21.94 12.21,22 12,22C11.79,22 11.59,21.94 11.43,21.82L3.53,17.38C3.21,17.21 3,16.88 3,16.5V7.5C3,7.12 3.21,6.79 3.53,6.62L11.43,2.18C11.59,2.06 11.79,2 12,2C12.21,2 12.41,2.06 12.57,2.18L20.47,6.62C20.79,6.79 21,7.12 21,7.5V16.5M12,4.15L6.04,7.5L12,10.85L17.96,7.5L12,4.15Z';
+var ICO_SNOW = 'M20.79,13.95L18.46,14.57L16.46,13.44V10.56L18.46,9.43L20.79,10.05L21.31,8.12L19.54,7.65L20,5.88L18.07,5.36L17.45,7.69L15.45,8.82L13,7.38V5.12L14.71,3.41L13.29,2L12,3.29L10.71,2L9.29,3.41L11,5.12V7.38L8.55,8.82L6.55,7.69L5.93,5.36L4,5.88L4.47,7.65L2.69,8.12L3.21,10.05L5.54,9.43L7.54,10.56V13.44L5.54,14.57L3.21,13.95L2.69,15.88L4.47,16.35L4,18.12L5.93,18.64L6.55,16.31L8.55,15.18L11,16.62V18.88L9.29,20.59L10.71,22L12,20.71L13.29,22L14.71,20.59L13,18.88V16.62L15.45,15.18L17.45,16.31L18.07,18.64L20,18.12L19.54,16.35L21.31,15.88L20.79,13.95Z';
+function chipBagHtml(x) {
+  return '<span class="arbk-chip" title="' + escAttr(x.name + '：共 ' + x.qty + '（' + x.groups + ' 组）') + '">'
+    + chipSvg(ICO_ITEM, '#94a3b8') + '<span style="color:#cbd5e1">' + x.name + '</span>'
+    + (x.groups > 1 ? '<span style="color:#475569;font-size:10px">·</span><span style="color:#94a3b8;font-size:11px">' + x.groups + '组</span>' : '')
+    + '<span style="color:#475569;font-size:10px">·</span><span style="color:#64748b">' + x.qty + '</span></span>';
+}
+function chipCryoHtml(x) {
+  var txt = x.name + ' Lv.' + x.lv + (x.g ? (' ' + x.g) : '') + (x.baby ? ' 幼' : '');
+  return '<span class="arbk-chip" title="' + escAttr(txt) + '">' + chipSvg(ICO_SNOW, '#7dd3fc')
+    + '<span style="color:#cbd5e1">' + txt + '</span></span>';
+}
+function chipsHtml(kind) {
+  if (!kind) return '';
+  var H = ['<div class="arbk-chips">'];
+  if (kind === 'bag' || kind === 'both') SAMPLE_BAG.forEach(function (x) { H.push(chipBagHtml(x)); });
+  if (kind === 'cryo' || kind === 'both') SAMPLE_CRYO.forEach(function (x) { H.push(chipCryoHtml(x)); });
+  H.push('</div><div class="chip-note">线上按实际背包 / 低温仓差异填充（同一套 chip，含翻译、数量与排序）</div>');
+  return H.join('');
+}
+function chipsText(kind) {
+  if (!kind) return '';
+  var a = [];
+  if (kind === 'bag' || kind === 'both') SAMPLE_BAG.forEach(function (x) { a.push(x.name + ' ' + x.qty + '(' + x.groups + '组)'); });
+  if (kind === 'cryo' || kind === 'both') SAMPLE_CRYO.forEach(function (x) { a.push(x.name + ' Lv.' + x.lv); });
+  return '携带清单：' + a.join('、');
+}
+function affHtml() {
+  var H = ['<div class="aff-wrap"><div class="aff-h">波及名单（' + SAMPLE_AFFECTED.length + ' 人）</div>'];
+  SAMPLE_AFFECTED.forEach(function (a) {
+    H.push('<div class="aff-row"><span class="aff-chip">' + a.role
+      + (a.acc && a.acc !== a.role ? '<em>' + a.acc + '</em>' : '') + '</span>'
+      + '<span class="aff-t">' + a.from + ' → ' + a.to + ' · ' + a.dur + '</span>'
+      + (a.online ? '<span class="aff-on">在线中</span>' : '') + '</div>');
+  });
+  H.push('<div class="chip-note">线上按 presenceRisk / onlineRisk 实际数据填充 —— 每人时间段可能不同</div></div>');
+  return H.join('');
+}
+function affText() {
+  return '波及名单：' + SAMPLE_AFFECTED.map(function (a) {
+    return a.role + ' ' + a.from + '→' + a.to + ' · ' + a.dur + (a.online ? '(在线中)' : '');
+  }).join('；');
+}
+function renderFlow() {
+  var steps = arkbkBuildSteps(FACTS);
+  var h = '';
+  steps.forEach(function (s, i) {
+    var alts = (typeof s.altSteps === 'function') ? s.altSteps(FACTS) : s.altSteps;
+    var isAlt = !!(alts && alts.length && ALTOPEN[s.id]);
+    var cls = 'stp' + (s.done ? ' done' : '') + (s.warn ? ' warn' : '');
+    var tipBase = (isAlt && s.altTip) ? s.altTip : (s.tip || '');
+    var dt = tipBase + (s.chips ? ('  ' + chipsText(s.chips)) : '') + (s.aff ? ('  ' + affText()) : '');
+    h += '<span class="stp-wrap' + (TIPALL ? ' open' : '') + '">';
+    h += '<span class="' + cls + '" data-tip="' + escAttr(dt) + '" onclick="EXP.tip(event,this)">';
+    h += '<b>' + s.n + '</b>';
+    if (alts && alts.length) {
+      h += '<span class="alt-toggle' + (isAlt ? ' on' : '') + '"'
+        + ' title="当前：' + (isAlt ? '备选方案' : '主选方案') + '（点击切换）"'
+        + ' onclick="EXP.alt(\'' + s.id + '\',event)">'
+        + (isAlt ? '备选' : '主选') + '</span>';
+    }
+    h += '<span class="txt">' + (isAlt ? (s.altShort || alts.join('、')) : s.text) + '</span>';
+    h += '</span>';
+    var altBlock = '';
+    if (alts && alts.length) {
+      altBlock = '<span class="tip-alt"><span class="tip-alt-lbl">备选步骤</span>'
+        + '<span class="alt-txt">'
+        + alts.map(function (t) { return '<i>' + t + '</i>'; }).join(ARKBK_ALT_SEP)
+        + '</span></span>';
+    }
+    h += '<span class="stp-tip">' + (tipBase || '（无详细说明）') + altBlock + (s.aff ? affHtml() : '') + chipsHtml(s.chips) + '</span>';
+    h += '</span>';
+  });
+  document.getElementById('flow').innerHTML = h;
+  document.getElementById('nStep').textContent = steps.length;
+  var hit = {};
+  steps.forEach(function (s) { hit[s.id] = true; });
+  var ids = steps.map(function (s) { return s.id; }).join(' → ');
+  var diag = '步骤链：' + (ids || '（空）');
+  if (!hit['undo']) {
+    var undoRule = ARKBK_RULES.filter(function (r) { return r.id === 'undo'; })[0];
+    diag += '\n没有「撤销回档」：' + missReason(undoRule, FACTS);
+  }
+  if (!hit['upItems'] && FACTS.lossN) {
+    var uiRule = ARKBK_RULES.filter(function (r) { return r.id === 'upItems'; })[0];
+    diag += '\n没有「上传物品到方尖碑」：' + missReason(uiRule, FACTS);
+  }
+  document.getElementById('flowNote').textContent = diag;
+  document.getElementById('flowNote').style.whiteSpace = 'pre-line';
+  renderRuleTable(steps);
+}
+function missReason(r, f) {
+  if (r.id === 'undo') {
+    var affected = !!(f.onlineN || f.moveN);
+    if (!affected) return '需先有波及：把「其他玩家此刻在线人数」或「其他玩家进出记录」调成 ≥1';
+    if (f.goals.build || f.goals.tame) return '已被回档目的锁定（建筑塌了 / 驯龙重训 不允许撤销）';
+    return '需「' + r.whenText + '」';
+  }
+  if (r.id === 'upItems') {
+    if (f.pos !== 'both') return '仅在「两档都有」时才判定物品丢失（单边无法对比背包差异）';
+    if (!f.lossN) return '需先有物品会丢（把「会丢失物品」调成有）';
+    if (arkbkCanUndo(f)) return '已走「撤销回档」，无需上传物品';
+    return '需「' + r.whenText + '」';
+  }
+  if (r.id === 'upDino') return '需勾选目的「生物死了」';
+  if (r.id === 'roleEnterAfter') {
+    if (f.pos === 'none') return '两档都没他，但本次不需要他做事（目的不含「生物死了」，或「拿回物品」但不撤销）';
+    return '角色本来就在{cur}、或回档前已就位，无需再传图来';
+  }
+  if (r.id === 'roleEnterLate') {
+    if (!arkbkAltLeaves(f)) return '未开备选（低温仓 / 传图寄存），角色不会被带去别的服';
+    if (!arkbkFinalIn(f)) return '两档都没这个角色，也不需要他做事，不必回来';
+    return '需「' + r.whenText + '」';
+  }
+  if (r.id === 'takeItems') {
+    var upI = (f.pos === 'both' && !!f.lossN && !arkbkCanUndo(f));
+    var upG = (!!f.goals.items && arkbkCanUndo(f));
+    if (!upI && !upG) return '本次没有物品被上传方尖碑（需「两档都有 + 有物品会丢 + 不撤销」或「目的含拿回物品 + 会撤销」）';
+    return '需「' + r.whenText + '」';
+  }
+  if (r.id === 'takeDino') return '需勾选目的「生物死了」（生物已上传方尖碑）';
+  if (r.id === 'verifyIn') return '需「走到最后一步时角色已在{cur}」（' + (arkbkFinalIn(f) ? '已满足' : '当前不满足') + '）';
+  if (r.id === 'verifyOut') return '需「走到最后一步时角色不在{cur}」（当前' + (arkbkFinalIn(f) ? '已在{cur}，改为「验证」' : '不在{cur}') + '）';
+  if (r.id === 'upItemsGoal') {
+    if (!f.goals.items) return '需勾选目的「拿回物品」';
+    if (!arkbkCanUndo(f)) return '本次不走撤销回档，物品直接留在世界里，无需上传';
+    return '需「' + r.whenText + '」';
+  }
+  if (r.id === 'roleLeaveBefore') {
+    if (f.pos !== 'curOnly') return '仅「只在当前档」时才需要回档前传图离开';
+    return '需「' + r.whenText + '」';
+  }
+  if (r.id === 'roleEnterBefore') {
+    if (f.pos !== 'tgtOnly') return '仅「只在目标档」时才需要回档前传图来';
+    return '需「' + r.whenText + '」';
+  }
+  if (r.id === 'notify') {
+    if (!f.onlineN) return '此刻没有其他玩家在线（只有进出记录，不需要请人下线）';
+    return '需「' + r.whenText + '」';
+  }
+  if (r.id === 'ask') {
+    if (arkbkCanUndo(f)) return '本次会撤销回档，影响自动还原，无需征求同意';
+    return '需先有波及（其他玩家在线 ≥1 或 其他玩家进出 ≥1）';
+  }
+  return '需「' + r.whenText + '」';
+}
+function renderRuleTable(steps) {
+  var hit = {};
+  (steps || []).forEach(function (s) { hit[s.id] = true; });
+  var h = '<tr><th>#</th><th>规则</th><th>触发条件</th><th>步骤文案</th><th>标签</th><th>本次</th></tr>';
+  ARKBK_RULES.slice().sort(function (a, b) { return a.order - b.order; }).forEach(function (r) {
+    h += '<tr' + (hit[r.id] ? ' class="on"' : '') + '>'
+      + '<td>' + arkbkOrd(r, FACTS) + '</td>'
+      + '<td class="rid">' + r.id + '</td>'
+      + '<td class="when">' + r.whenText + '</td>'
+      + '<td>' + r.text + '</td>'
+      + '<td>' + (r.tag ? '<span style="color:#fbbf24">' + r.tag + '</span>' : '—') + '</td>'
+      + '<td>' + (hit[r.id] ? '<span style="color:#4ade80;font-weight:700">命中</span>'
+        : '<span style="color:#6b7280">未命中</span><br><span style="color:#7c7c90;font-size:10px">'
+          + missReason(r, FACTS) + '</span>') + '</td></tr>';
+  });
+  document.getElementById('ruleTable').innerHTML = h;
+}
+function renderFacts() {
+  document.getElementById('fSrv').innerHTML =
+    '<input class="sinp" value="' + escAttr(FACTS.curSrvCn) + '" oninput="EXP.txt(\'curSrvCn\',this.value)" placeholder="当前服" title="当前服务器地图名">'
+    + '<span class="sarw">→</span>'
+    + '<input class="sinp" value="' + escAttr(FACTS.srvCn) + '" oninput="EXP.txt(\'srvCn\',this.value)" placeholder="目标服" title="目标存档所在服务器地图名">'
+    + '<span class="sarw">/</span>'
+    + '<input class="sinp" value="' + escAttr(FACTS.xName) + '" oninput="EXP.txt(\'xName\',this.value)" placeholder="角色名" style="width:88px">';
+  var POS = [['both', '两档都有'], ['curOnly', '只在当前档'], ['tgtOnly', '只在目标档'], ['none', '两边都没有']];
+  document.getElementById('fPos').innerHTML = POS.map(function (p) {
+    return '<span class="opt' + (FACTS.pos === p[0] ? ' on' : '') + '" onclick="EXP.set(\'pos\',\'' + p[0] + '\')">' + p[1] + '</span>';
+  }).join('');
+  [['fOnline', 'onlineN'], ['fMove', 'moveN']].forEach(function (it) {
+    document.getElementById(it[0]).innerHTML = [0, 1, 2, 3].map(function (n) {
+      return '<span class="opt' + (FACTS[it[1]] === n ? ' on' : '') + '" onclick="EXP.set(\'' + it[1] + '\',' + n + ')">'
+        + (n === 3 ? '3+' : n) + '</span>';
+    }).join('');
+  });
+  var lossOK = (FACTS.pos === 'both');
+  document.getElementById('fLoss').innerHTML = [[0, '无'], [1, '有（4 种）']].map(function (p) {
+    return '<span class="opt' + (FACTS.lossN === p[0] && lossOK ? ' on' : '') + (lossOK ? '' : ' dis') + '"'
+      + (lossOK ? (' onclick="EXP.set(\'lossN\',' + p[0] + ')"') : ' title="仅两档都有时才谈得上物品丢失"') + '>'
+      + p[1] + '</span>';
+  }).join('')
+    + (lossOK ? '' : '<div style="color:#7c7c90;font-size:10px;margin-top:5px">仅「两档都有」时才谈得上物品丢失（单边无法对比背包差异）</div>');
+  var G = [['items', '拿回物品'], ['tame', '驯龙重训'], ['dino', '生物死了'], ['build', '建筑塌了']];
+  document.getElementById('fGoals').innerHTML = G.map(function (g) {
+    var on = !!FACTS.goals[g[0]];
+    var warn = on && (g[0] === 'tame' || g[0] === 'build');
+    return '<span class="opt' + (on ? ' on' : '') + (warn ? ' warn' : '') + '" onclick="EXP.goal(\'' + g[0] + '\')">' + g[1] + '</span>';
+  }).join('')
+    + (GOALBLOCK ? '<div style="color:#f87171;font-size:10.5px;margin-top:6px">至少选一个目的（不能全部取消）</div>' : '');
+}
+var EXP = {
+  set: function (k, v) {
+    FACTS[k] = v;
+    if (k === 'pos' && v !== 'both') FACTS.lossN = 0;   /* 单边位置没有可比对的背包差异 */
+    renderAll();
+  },
+  txt: function (k, v) { FACTS[k] = String(v == null ? '' : v); renderFlow(); },
+  goal: function (id) {
+    var sel = Object.keys(FACTS.goals).filter(function (k) { return FACTS.goals[k]; });
+    if (FACTS.goals[id]) {
+      if (sel.length <= 1) { GOALBLOCK = true; renderAll(); return; }
+      delete FACTS.goals[id];
+    } else {
+      FACTS.goals[id] = true;
+    }
+    GOALBLOCK = false;
+    renderAll();
+  },
+  reset: function () { FACTS = JSON.parse(JSON.stringify(DEFAULT_FACTS)); ALTOPEN = {}; renderAll(); },
+  alt: function (id, e) {
+    if (e) { e.stopPropagation(); e.preventDefault(); }
+    ALTOPEN[id] = !ALTOPEN[id];
+    renderFlow();
+  },
+  tip: function (e, el) { if (e) { e.stopPropagation(); e.preventDefault(); } el.parentNode.classList.toggle('open'); },
+  tipAll: function (on) {
+    TIPALL = on;
+    Array.prototype.forEach.call(document.querySelectorAll('.stp-wrap'), function (w) {
+      if (on) w.classList.add('open'); else w.classList.remove('open');
+    });
+  },
+  export: function () {
+    var steps = arkbkBuildSteps(FACTS);
+    var L = ['安全回档 · 步骤裁决单（规则驱动）', '生成时间: ' + new Date().toLocaleString(), ''];
+    L.push('【事实】');
+    L.push('  角色位置: ' + FACTS.pos + ' · 其他玩家在线: ' + FACTS.onlineN + ' · 其他玩家进出: ' + FACTS.moveN
+      + ' · 会丢物品: ' + (FACTS.lossN ? '有' : '无'));
+    var gs = Object.keys(FACTS.goals).filter(function (k) { return FACTS.goals[k]; });
+    L.push('  目的: ' + gs.join(' / '));
+    L.push('');
+    L.push('【自动拼出的步骤 ' + steps.length + ' 步】');
+    steps.forEach(function (s) {
+      L.push('  ' + s.n + '. (' + s.id + ') ' + s.text);
+    });
+    document.getElementById('outWrap').hidden = false;
+    document.getElementById('out').value = L.join('\n');
+    document.getElementById('outWrap').scrollIntoView({ behavior: 'smooth' });
+  },
+  copy: function () {
+    var t = document.getElementById('out');
+    t.removeAttribute('readonly'); t.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    t.setAttribute('readonly', 'readonly');
+  }
+};
+function renderAll() { renderFacts(); renderFlow(); }
+var TIPBOX = document.getElementById('tipbox');
+var canHover = window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+if (canHover) {
+  document.addEventListener('mouseover', function (e) {
+    var s = e.target.closest ? e.target.closest('.stp') : null;
+    if (!s) { TIPBOX.style.display = 'none'; return; }
+    var txt = s.getAttribute('data-tip') || '';
+    if (!txt) { TIPBOX.style.display = 'none'; return; }
+    TIPBOX.textContent = txt; TIPBOX.style.display = 'block';
+  });
+  document.addEventListener('mousemove', function (e) {
+    if (TIPBOX.style.display !== 'block') return;
+    var w = TIPBOX.offsetWidth, h = TIPBOX.offsetHeight;
+    var x = e.clientX + 14, y = e.clientY + 16;
+    if (x + w > window.innerWidth - 10) x = window.innerWidth - w - 10;
+    if (y + h > window.innerHeight - 10) y = e.clientY - h - 12;
+    TIPBOX.style.left = x + 'px'; TIPBOX.style.top = Math.max(6, y) + 'px';
+  });
+  document.addEventListener('mouseout', function (e) {
+    var s = e.target.closest ? e.target.closest('.stp') : null;
+    if (s) TIPBOX.style.display = 'none';
+  });
+  document.addEventListener('click', function () { TIPBOX.style.display = 'none'; });
+}
+renderAll();
+</script>
+</body>
+</html>

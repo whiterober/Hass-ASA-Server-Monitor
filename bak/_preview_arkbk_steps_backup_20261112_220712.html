@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>安全回档 · 步骤自动拼接（规则驱动）</title>
+<style>
+:root{--bg:#0f0f16;--panel:#16161f;--panel2:#1a1a24;--line:#2a2a3a;--tx:#e5e5ee;--dim:#8b8b9e;--pu:#7c3aed;--pu2:#c4b5fd;--ok:#4ade80;--warn:#fbbf24;--bad:#f87171}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--tx);font:13px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:18px 20px 90px}
+h1{font-size:16px;font-weight:700}
+h2{font-size:12.5px;font-weight:700;color:var(--pu2);margin-bottom:10px}
+.sub{color:var(--dim);font-size:11.5px;margin-top:4px}
+header{border-bottom:1px solid var(--line);padding-bottom:14px}
+.tbar{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+button{background:transparent;border:1px solid var(--line);color:var(--dim);font:inherit;font-size:11.5px;padding:5px 11px;border-radius:7px;cursor:pointer;transition:.12s}
+button:hover{background:rgba(124,58,237,.16);color:var(--pu2);border-color:var(--pu)}
+button.pri{background:rgba(124,58,237,.2);border-color:var(--pu);color:var(--pu2);font-weight:600}
+.wrap{display:grid;grid-template-columns:minmax(320px,400px) 1fr;gap:16px;margin-top:16px;align-items:start}
+@media (max-width:900px){.wrap{grid-template-columns:1fr}}
+.facts{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:13px 15px}
+.fgroup{margin-bottom:13px}
+.fl{font-size:11px;font-weight:700;color:var(--dim);margin-bottom:6px}
+.fo{display:flex;flex-wrap:wrap;gap:6px}
+.opt{padding:5px 10px;border-radius:7px;border:1px solid var(--line);background:var(--panel2);color:var(--dim);font-size:11.5px;cursor:pointer;user-select:none;transition:.12s}
+.opt:hover{border-color:var(--pu);color:var(--pu2)}
+.opt.on{background:rgba(124,58,237,.22);border-color:var(--pu);color:var(--pu2);font-weight:700}
+.opt.on.warn{background:rgba(251,191,36,.2);border-color:var(--warn);color:var(--warn)}
+.opt.dis{opacity:.35;cursor:not-allowed}
+.result{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:13px 15px;min-height:120px}
+.flow{display:flex;flex-wrap:wrap;align-items:flex-start;gap:6px}
+.stp-wrap{display:inline-flex;flex-direction:column;align-items:flex-start;gap:4px;max-width:100%}
+.stp{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:8px;font-size:11px;font-weight:600;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#d5dae6;max-width:100%;cursor:pointer}
+.stp b{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;font-size:9.5px;background:var(--warn);color:#1a1a24;flex:none}
+.stp.done b{background:var(--ok)}
+.stp .tag{font-size:9.5px;font-weight:700;padding:0 5px;border-radius:4px;background:rgba(124,58,237,.25);color:var(--pu2);flex:none}
+.stp.drop{opacity:.34;text-decoration:line-through}
+.stp.edit{border-color:var(--pu);background:rgba(124,58,237,.14)}
+.stp .inp{display:none;background:#0d0d14;border:1px solid var(--pu);border-radius:5px;color:var(--tx);font:inherit;font-size:11px;padding:2px 5px;min-width:170px}
+.stp.edit .inp{display:inline-block}
+.vote{display:inline-flex;gap:3px;margin-left:2px;flex:none}
+.vote span{font-size:9.5px;padding:1px 6px;border-radius:4px;border:1px solid var(--line);color:var(--dim);cursor:pointer;user-select:none;white-space:nowrap}
+.vote span.on[data-v="keep"]{background:rgba(74,222,128,.18);border-color:var(--ok);color:var(--ok)}
+.vote span.on[data-v="drop"]{background:rgba(248,113,113,.18);border-color:var(--bad);color:var(--bad)}
+.vote span.on[data-v="edit"]{background:rgba(124,58,237,.22);border-color:var(--pu);color:var(--pu2)}
+.stp-tip{display:none;font-size:10.5px;font-weight:400;color:#a9a9bd;background:#12121a;border:1px dashed var(--line);border-radius:7px;padding:6px 9px;max-width:340px;line-height:1.6}
+.stp-wrap.open .stp-tip{display:block}
+.stp-wrap.open .stp{border-color:var(--pu)}
+.arw{color:var(--dim);flex:none;margin-top:4px}
+.arbk-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:7px}
+.arbk-chip{display:inline-flex;align-items:center;gap:4px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:3px 7px;font-size:12px}
+.chip-note{font-size:10px;color:#5b5b6e;margin-top:5px;max-width:340px;line-height:1.5}
+.aff-wrap{margin-top:8px;max-width:360px}
+.aff-h{font-size:10.5px;color:#fbbf24;font-weight:700;margin-bottom:5px}
+.aff-row{display:flex;align-items:center;gap:8px;padding:3px 0;flex-wrap:wrap}
+.aff-chip{display:inline-flex;align-items:baseline;gap:5px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:2px 8px;font-size:11.5px;color:#cbd5e1}
+.aff-chip em{font-style:normal;font-size:10px;color:#64748b}
+.aff-t{font-size:10.5px;color:#94a3b8}
+.aff-on{font-size:9.5px;padding:1px 6px;border-radius:4px;background:rgba(74,222,128,.16);border:1px solid rgba(74,222,128,.5);color:#4ade80}
+.rules{margin-top:26px}
+table{width:100%;border-collapse:collapse;font-size:11px;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+th,td{border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:7px 9px;vertical-align:top;text-align:left}
+th{background:var(--panel2);color:var(--dim);font-weight:600;font-size:10.5px;white-space:nowrap}
+td:last-child,th:last-child{border-right:0}
+tr:last-child td{border-bottom:0}
+td.rid{color:var(--pu2);font-weight:700;white-space:nowrap;font-family:ui-monospace,Consolas,monospace}
+td.when{color:#94a3b8;font-size:10.5px}
+tr.on td{background:rgba(124,58,237,.09)}
+textarea{width:100%;height:260px;margin-top:10px;background:#0d0d14;border:1px solid var(--line);border-radius:8px;color:#c9c9d6;font:11.5px/1.6 ui-monospace,Consolas,monospace;padding:10px;resize:vertical}
+.hint{color:var(--dim);font-size:11px}
+#tipbox{position:fixed;z-index:999;max-width:330px;background:#1b1b28;border:1px solid var(--pu);border-radius:8px;padding:8px 11px;font-size:11px;font-weight:400;line-height:1.65;color:#d5dae6;box-shadow:0 10px 28px #000a;display:none;pointer-events:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>安全回档 · 步骤自动拼接（规则驱动）</h1>
+  <div class="sub">已去掉「情况」层：左边改<b>事实</b> → 右边按规则表自动拼出步骤。规则表在底部，是唯一逻辑真相源。</div>
+  <div class="tbar">
+    <button onclick="EXP.tipAll(true)">展开全部说明</button>
+    <button onclick="EXP.tipAll(false)">收起全部说明</button>
+    <button onclick="EXP.reset()">恢复默认事实</button>
+    <button class="pri" onclick="EXP.export()">导出结论</button>
+  </div>
+</header>
+<div class="wrap">
+  <section class="facts">
+    <h2>① 事实（改这里）</h2>
+    <div class="fgroup">
+      <div class="fl">角色位置</div>
+      <div class="fo" id="fPos"></div>
+    </div>
+    <div class="fgroup">
+      <div class="fl">此刻在线人数</div>
+      <div class="fo" id="fOnline"></div>
+    </div>
+    <div class="fgroup">
+      <div class="fl">期间角色进出记录</div>
+      <div class="fo" id="fMove"></div>
+    </div>
+    <div class="fgroup">
+      <div class="fl">会丢失物品</div>
+      <div class="fo" id="fLoss"></div>
+    </div>
+    <div class="fgroup" style="margin-bottom:0">
+      <div class="fl">回档目的（可多选 · 至少一个）</div>
+      <div class="fo" id="fGoals"></div>
+    </div>
+  </section>
+  <section class="result">
+    <h2>② 自动拼接出的步骤（<span id="nStep">0</span> 步）</h2>
+    <div class="flow" id="flow"></div>
+    <div class="hint" id="flowNote" style="margin-top:10px"></div>
+  </section>
+</div>
+<section class="rules">
+  <h2>③ 规则表（唯一逻辑真相源 · 高亮行 = 本次命中）</h2>
+  <table id="ruleTable"></table>
+  <div class="hint" style="margin-top:8px">加一步 = 表里加一行；改条件 = 改该行 <code>when</code>。渲染、矩阵、导出全部调用同一个 <code>arkbkBuildSteps()</code>。</div>
+</section>
+<section id="outWrap" style="margin-top:22px">
+  <h2>④ 导出结论</h2>
+  <button onclick="EXP.copy()">复制全文</button>
+  <textarea id="out" readonly placeholder="点右上「导出结论」生成…"></textarea>
+</section>
+<div id="tipbox"></div>
+<script>
+/* ================= 示例数据（线上由真实接口填充） ================= */
+var SAMPLE_BAG = [
+  { name: '铁锭', qty: 1200, groups: 3 },
+  { name: '水泥', qty: 400, groups: 1 },
+  { name: '聚合物', qty: 260, groups: 2 },
+  { name: '火箭燃料', qty: 90, groups: 1 }
+];
+var SAMPLE_CRYO = [
+  { name: '霸王龙', lv: 295, g: '♂' },
+  { name: '南方巨兽龙', lv: 240, g: '♀' },
+  { name: '狮鹫', lv: 180, g: '♂', baby: true }
+];
+var SAMPLE_AFFECTED = [
+  { role: '嘎巴丸', acc: '嘎巴菜', from: '11-10 20:29', to: '11-11 07:32', dur: '11 小时 3 分', online: false },
+  { role: '人类', acc: 'whiter.rober', from: '11-10 22:00', to: '11-10 23:31', dur: '1 小时 31 分', online: false },
+  { role: 'JaronV5', acc: 'JaronV5', from: '11-11 23:04', to: '至今', dur: '进行中', online: true }
+];
+/* ================= 规则层：唯一逻辑真相源 ================= */
+function arkbkCanUndo(f) {
+  var affected = !!(f.onlineN || f.moveN);
+  var keepResult = !!(f.goals.build || f.goals.tame);
+  return affected && !keepResult;
+}
+var ARKBK_RULES = [
+  { id: 'notify', order: 10, tag: '波及',
+    when: function (f) { return !!f.onlineN && arkbkCanUndo(f); },
+    whenText: '会撤销回档 且 此刻有人在线（撤销后影响自动还原，无需征求同意）',
+    text: '请在线者到安全点下线',
+    tip: '本次会执行「撤销回档」，被波及玩家的进度会自动还原，不会真的影响到他们，所以无需征求同意。只需请在线的人先到安全点再下线，或直接传图离开本服，避免回档瞬间死亡或掉落装备。' },
+  { id: 'ask', order: 10, tag: '波及',
+    when: function (f) { return !!(f.onlineN || f.moveN) && !arkbkCanUndo(f); },
+    whenText: '不撤销回档 且（在线>0 或 进出记录>0）',
+    text: '征得波及玩家同意',
+    textIf: function (f) { return f.onlineN ? '征得同意并请在线者下线' : '征得波及玩家同意'; },
+    tip: '本次无法撤销回档，他们的进度会真的退回目标档时刻。先征得这些玩家同意再往下做；当下在线的人请他们先到安全点再下线，或直接传图离开本服，装备随身收好。', aff: true },
+  { id: 'sendback', order: 30,
+    when: function (f) { return f.pos === 'tgtOnly'; },
+    whenText: '角色只在目标档（不在当前档）',
+    text: '操作 {x} 传回 {srv}',
+    tip: '角色现在不在本服。只带目标档里已有的物品；多出来的东西留在原服，回档后再从本服的背包 / 箱子取。', chips: 'bag' },
+  { id: 'newpoint', order: 30,
+    when: function (f) { return f.pos === 'curOnly'; },
+    whenText: '角色只在当前档（目标档没有）',
+    text: '换回档点或先离开',
+    tip: '目标档里没有这个角色，回档后他会消失。要么换一个他已在的回档点，要么让他先离开本服。' },
+  { id: 'do', order: 40,
+    when: function () { return true; }, whenText: '恒定',
+    text: '执行回档',
+    tip: '确认前面的准备都做完，再点执行。回档过程中不要操作服务器。' },
+  { id: 'verifyX', order: 50,
+    when: function (f) { return f.pos === 'both'; },
+    whenText: '角色在两档都有',
+    text: '回档后上线验证',
+    tip: '回档完成后上线，确认角色、背包、恐龙是否符合预期。' },
+  { id: 'verifyBack', order: 50,
+    when: function (f) { return f.pos === 'curOnly' || f.pos === 'none'; },
+    whenText: '角色只在当前档（已先传走）或两边都没有',
+    text: '把 {x} 传回来验证',
+    tip: '回档完成后把角色传回来，进游戏确认等级 / 背包 / 恐龙都正常。角色不在本图时都必须传回来才算验证完成。' },
+  { id: 'verifyMap', order: 50,
+    when: function (f) { return f.pos === 'tgtOnly'; },
+    whenText: '角色只在目标档（第 2 步已传回本图）',
+    text: '上线确认',
+    tip: '角色在第 2 步已经传回本图，回档完成后直接在本图上线即可：确认世界状态、角色等级 / 背包 / 恐龙正常，无需再传一次。' },
+  { id: 'upDino', order: 60, tag: '生物',
+    when: function (f) { return !!f.goals.dino; },
+    whenText: '目的含「生物死了」',
+    text: '把生物上传方尖碑', chips: 'cryo',
+    tip: '把刚复活的生物上传到方尖碑，跨存档保留 24 小时。备选：用低温仓装走 → 传图 → 扔出放出 → 销毁该低温仓 → 再把角色传回本图（当前档里没有这个角色就不用传回）。' },
+  { id: 'upItems', order: 35, tag: '无撤销',
+    when: function (f) { return f.pos === 'both' && !!f.lossN && !arkbkCanUndo(f); },
+    whenText: '两档都有 且 有物品会丢 且 不满足撤销条件（必须在执行回档之前做）',
+    text: '上传物品到方尖碑',
+    tip: '必须在执行回档之前做：把这些物品上传到方尖碑，跨存档保留 24 小时，回档后再从方尖碑取回。备选：把这些物品传图放置，回档后再回来取。', chips: 'bag' },
+  { id: 'upItemsGoal', order: 60, tag: '拿回',
+    when: function (f) { return !!f.goals.items && arkbkCanUndo(f); },
+    whenText: '目的含「拿回物品」且存在撤销回档（回档后先上传，再撤销才不会丢）',
+    text: '把要找回的物品上传方尖碑',
+    tip: '回档后这些物品已经回到世界里了，但接下来要「撤销回档」把世界还给别人 —— 先上传到方尖碑（跨存档保留 24 小时），撤销后再从方尖碑取回。', chips: 'bag' },
+  { id: 'undo', order: 70, tag: '可撤销',
+    when: function (f) { return arkbkCanUndo(f); },
+    whenText: '有波及 且 目的不含「建筑塌了 / 驯龙重训」',
+    text: '撤销回档',
+    tip: '把服务器恢复到回档前的状态，消除对所有被波及玩家的影响。你自己要的东西已经在「上传方尖碑」（物品 / 生物）里保住了，撤销不会丢。' }
+];
+function arkbkBuildSteps(f) {
+  return ARKBK_RULES.filter(function (r) { try { return !!r.when(f); } catch (e) { return false; } })
+    .sort(function (a, b) { return a.order - b.order; })
+    .map(function (r, i) {
+      var o = {};
+      for (var k in r) o[k] = r[k];
+      o.n = i + 1;
+      var _tf = (typeof r.textIf === 'function') ? r.textIf(f) : r.text;
+      o.text = String(_tf).replace('{x}', f.xName || 'X').replace('{srv}', f.srvCn || '目标服');
+      return o;
+    });
+}
+/* ================= 事实状态 ================= */
+var DEFAULT_FACTS = {
+  pos: 'both', onlineN: 0, moveN: 0, lossN: 0,
+  xName: 'JaronV5', srvCn: '星耀',
+  goals: { items: true }   /* 目的至少选一个，默认「拿回物品」 */
+};
+var FACTS = JSON.parse(JSON.stringify(DEFAULT_FACTS));
+var VOTE = {};
+var TIPALL = false;
+var GOALBLOCK = false;   /* v16：尝试取消最后一个目的时置 true，用于提示 */
+/* ================= 渲染 ================= */
+function escAttr(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function chipSvg(path, color) {
+  return '<span style="display:inline-flex;flex:none;color:' + color + '">'
+    + '<svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:currentColor"><path d="' + path + '"/></svg></span>';
+}
+var ICO_ITEM = 'M21,16.5C21,16.88 20.79,17.21 20.47,17.38L12.57,21.82C12.41,21.94 12.21,22 12,22C11.79,22 11.59,21.94 11.43,21.82L3.53,17.38C3.21,17.21 3,16.88 3,16.5V7.5C3,7.12 3.21,6.79 3.53,6.62L11.43,2.18C11.59,2.06 11.79,2 12,2C12.21,2 12.41,2.06 12.57,2.18L20.47,6.62C20.79,6.79 21,7.12 21,7.5V16.5M12,4.15L6.04,7.5L12,10.85L17.96,7.5L12,4.15Z';
+var ICO_SNOW = 'M20.79,13.95L18.46,14.57L16.46,13.44V10.56L18.46,9.43L20.79,10.05L21.31,8.12L19.54,7.65L20,5.88L18.07,5.36L17.45,7.69L15.45,8.82L13,7.38V5.12L14.71,3.41L13.29,2L12,3.29L10.71,2L9.29,3.41L11,5.12V7.38L8.55,8.82L6.55,7.69L5.93,5.36L4,5.88L4.47,7.65L2.69,8.12L3.21,10.05L5.54,9.43L7.54,10.56V13.44L5.54,14.57L3.21,13.95L2.69,15.88L4.47,16.35L4,18.12L5.93,18.64L6.55,16.31L8.55,15.18L11,16.62V18.88L9.29,20.59L10.71,22L12,20.71L13.29,22L14.71,20.59L13,18.88V16.62L15.45,15.18L17.45,16.31L18.07,18.64L20,18.12L19.54,16.35L21.31,15.88L20.79,13.95Z';
+function chipBagHtml(x) {
+  return '<span class="arbk-chip" title="' + escAttr(x.name + '：共 ' + x.qty + '（' + x.groups + ' 组）') + '">'
+    + chipSvg(ICO_ITEM, '#94a3b8') + '<span style="color:#cbd5e1">' + x.name + '</span>'
+    + (x.groups > 1 ? '<span style="color:#475569;font-size:10px">·</span><span style="color:#94a3b8;font-size:11px">' + x.groups + '组</span>' : '')
+    + '<span style="color:#475569;font-size:10px">·</span><span style="color:#64748b">' + x.qty + '</span></span>';
+}
+function chipCryoHtml(x) {
+  var txt = x.name + ' Lv.' + x.lv + (x.g ? (' ' + x.g) : '') + (x.baby ? ' 幼' : '');
+  return '<span class="arbk-chip" title="' + escAttr(txt) + '">' + chipSvg(ICO_SNOW, '#7dd3fc')
+    + '<span style="color:#cbd5e1">' + txt + '</span></span>';
+}
+function chipsHtml(kind) {
+  if (!kind) return '';
+  var H = ['<div class="arbk-chips">'];
+  if (kind === 'bag' || kind === 'both') SAMPLE_BAG.forEach(function (x) { H.push(chipBagHtml(x)); });
+  if (kind === 'cryo' || kind === 'both') SAMPLE_CRYO.forEach(function (x) { H.push(chipCryoHtml(x)); });
+  H.push('</div><div class="chip-note">线上按实际背包 / 低温仓差异填充（同一套 chip，含翻译、数量与排序）</div>');
+  return H.join('');
+}
+function chipsText(kind) {
+  if (!kind) return '';
+  var a = [];
+  if (kind === 'bag' || kind === 'both') SAMPLE_BAG.forEach(function (x) { a.push(x.name + ' ' + x.qty + '(' + x.groups + '组)'); });
+  if (kind === 'cryo' || kind === 'both') SAMPLE_CRYO.forEach(function (x) { a.push(x.name + ' Lv.' + x.lv); });
+  return '携带清单：' + a.join('、');
+}
+function affHtml() {
+  var H = ['<div class="aff-wrap"><div class="aff-h">波及名单（' + SAMPLE_AFFECTED.length + ' 人）</div>'];
+  SAMPLE_AFFECTED.forEach(function (a) {
+    H.push('<div class="aff-row"><span class="aff-chip">' + a.role
+      + (a.acc && a.acc !== a.role ? '<em>' + a.acc + '</em>' : '') + '</span>'
+      + '<span class="aff-t">' + a.from + ' → ' + a.to + ' · ' + a.dur + '</span>'
+      + (a.online ? '<span class="aff-on">在线中</span>' : '') + '</div>');
+  });
+  H.push('<div class="chip-note">线上按 presenceRisk / onlineRisk 实际数据填充 —— 每人时间段可能不同</div></div>');
+  return H.join('');
+}
+function affText() {
+  return '波及名单：' + SAMPLE_AFFECTED.map(function (a) {
+    return a.role + ' ' + a.from + '→' + a.to + ' · ' + a.dur + (a.online ? '(在线中)' : '');
+  }).join('；');
+}
+function renderFlow() {
+  var steps = arkbkBuildSteps(FACTS);
+  var h = '';
+  steps.forEach(function (s, i) {
+    var v = VOTE[s.id] || {};
+    var cls = 'stp' + (s.done ? ' done' : '') + (v.v === 'drop' ? ' drop' : '') + (v.v === 'edit' ? ' edit' : '');
+    var dt = (s.tip || '') + (s.chips ? ('  ' + chipsText(s.chips)) : '') + (s.aff ? ('  ' + affText()) : '');
+    h += '<span class="stp-wrap' + (TIPALL ? ' open' : '') + '">';
+    h += '<span class="' + cls + '" data-tip="' + escAttr(dt) + '" onclick="EXP.tip(event,this)">';
+    h += '<b>' + s.n + '</b>';
+    if (s.tag) h += '<span class="tag">' + s.tag + '</span>';
+    h += '<span class="txt">' + s.text + '</span>';
+    h += '<input class="inp" value="' + escAttr(s.text) + '" onclick="event.stopPropagation()" oninput="EXP.typed(\'' + s.id + '\',this.value)">';
+    h += '<span class="vote">'
+      + '<span data-v="keep" class="' + (v.v === 'keep' ? 'on' : '') + '" onclick="EXP.vote(\'' + s.id + '\',\'keep\',event)">保留</span>'
+      + '<span data-v="drop" class="' + (v.v === 'drop' ? 'on' : '') + '" onclick="EXP.vote(\'' + s.id + '\',\'drop\',event)">删掉</span>'
+      + '<span data-v="edit" class="' + (v.v === 'edit' ? 'on' : '') + '" onclick="EXP.vote(\'' + s.id + '\',\'edit\',event)">改写</span>'
+      + '</span></span>';
+    h += '<span class="stp-tip">' + (s.tip || '（无详细说明）') + (s.aff ? affHtml() : '') + chipsHtml(s.chips) + '</span>';
+    h += '</span>';
+    if (i < steps.length - 1) h += '<span class="arw">→</span>';
+  });
+  document.getElementById('flow').innerHTML = h;
+  document.getElementById('nStep').textContent = steps.length;
+  var hit = {};
+  steps.forEach(function (s) { hit[s.id] = true; });
+  var ids = steps.map(function (s) { return s.id; }).join(' → ');
+  var diag = '步骤链：' + (ids || '（空）');
+  if (!hit['undo']) {
+    var undoRule = ARKBK_RULES.filter(function (r) { return r.id === 'undo'; })[0];
+    diag += '\n没有「撤销回档」：' + missReason(undoRule, FACTS);
+  }
+  if (!hit['upItems'] && FACTS.lossN) {
+    var uiRule = ARKBK_RULES.filter(function (r) { return r.id === 'upItems'; })[0];
+    diag += '\n没有「上传物品到方尖碑」：' + missReason(uiRule, FACTS);
+  }
+  document.getElementById('flowNote').textContent = diag;
+  document.getElementById('flowNote').style.whiteSpace = 'pre-line';
+  renderRuleTable(steps);
+}
+function missReason(r, f) {
+  if (r.id === 'undo') {
+    var affected = !!(f.onlineN || f.moveN);
+    if (!affected) return '需先有波及：把「此刻在线人数」或「期间角色进出记录」调成 ≥1';
+    if (f.goals.build || f.goals.tame) return '已被回档目的锁定（建筑塌了 / 驯龙重训 不允许撤销）';
+    return '需「' + r.whenText + '」';
+  }
+  if (r.id === 'upItems') {
+    if (f.pos !== 'both') return '仅在「两档都有」时才判定物品丢失（单边无法对比背包差异）';
+    if (!f.lossN) return '需先有物品会丢（把「会丢失物品」调成有）';
+    if (arkbkCanUndo(f)) return '已走「撤销回档」，无需上传物品';
+    return '需「' + r.whenText + '」';
+  }
+  if (r.id === 'upDino') return '需勾选目的「生物死了」';
+  if (r.id === 'upItemsGoal') {
+    if (!f.goals.items) return '需勾选目的「拿回物品」';
+    if (!arkbkCanUndo(f)) return '本次不走撤销回档，物品直接留在世界里，无需上传';
+    return '需「' + r.whenText + '」';
+  }
+  if (r.id === 'notify') {
+    if (!arkbkCanUndo(f)) return '本次无法撤销回档，改为「征得波及玩家同意」';
+    if (!f.onlineN) return '需此刻有人在线（人已离开就不用请下线）';
+    return '需「' + r.whenText + '」';
+  }
+  if (r.id === 'ask') {
+    if (arkbkCanUndo(f)) return '本次会撤销回档，影响自动还原，无需征求同意（只需请在线者下线）';
+    return '需先有波及（在线 ≥1 或 进出 ≥1）';
+  }
+  return '需「' + r.whenText + '」';
+}
+function renderRuleTable(steps) {
+  var hit = {};
+  (steps || []).forEach(function (s) { hit[s.id] = true; });
+  var h = '<tr><th>#</th><th>规则</th><th>触发条件</th><th>步骤文案</th><th>标签</th><th>本次</th></tr>';
+  ARKBK_RULES.slice().sort(function (a, b) { return a.order - b.order; }).forEach(function (r) {
+    h += '<tr' + (hit[r.id] ? ' class="on"' : '') + '>'
+      + '<td>' + r.order + '</td>'
+      + '<td class="rid">' + r.id + '</td>'
+      + '<td class="when">' + r.whenText + '</td>'
+      + '<td>' + ((typeof r.textIf === 'function') ? r.textIf(FACTS) : r.text) + '</td>'
+      + '<td>' + (r.tag ? '<span style="color:#fbbf24">' + r.tag + '</span>' : '—') + '</td>'
+      + '<td>' + (hit[r.id] ? '<span style="color:#4ade80;font-weight:700">命中</span>'
+        : '<span style="color:#6b7280">未命中</span><br><span style="color:#7c7c90;font-size:10px">'
+          + missReason(r, FACTS) + '</span>') + '</td></tr>';
+  });
+  document.getElementById('ruleTable').innerHTML = h;
+}
+function renderFacts() {
+  var POS = [['both', '两档都有'], ['curOnly', '只在当前档'], ['tgtOnly', '只在目标档'], ['none', '两边都没有']];
+  document.getElementById('fPos').innerHTML = POS.map(function (p) {
+    return '<span class="opt' + (FACTS.pos === p[0] ? ' on' : '') + '" onclick="EXP.set(\'pos\',\'' + p[0] + '\')">' + p[1] + '</span>';
+  }).join('');
+  [['fOnline', 'onlineN'], ['fMove', 'moveN']].forEach(function (it) {
+    document.getElementById(it[0]).innerHTML = [0, 1, 2, 3].map(function (n) {
+      return '<span class="opt' + (FACTS[it[1]] === n ? ' on' : '') + '" onclick="EXP.set(\'' + it[1] + '\',' + n + ')">'
+        + (n === 3 ? '3+' : n) + '</span>';
+    }).join('');
+  });
+  var lossOK = (FACTS.pos === 'both');
+  document.getElementById('fLoss').innerHTML = [[0, '无'], [1, '有（4 种）']].map(function (p) {
+    return '<span class="opt' + (FACTS.lossN === p[0] && lossOK ? ' on' : '') + (lossOK ? '' : ' dis') + '"'
+      + (lossOK ? (' onclick="EXP.set(\'lossN\',' + p[0] + ')"') : ' title="仅两档都有时才谈得上物品丢失"') + '>'
+      + p[1] + '</span>';
+  }).join('')
+    + (lossOK ? '' : '<div style="color:#7c7c90;font-size:10px;margin-top:5px">仅「两档都有」时才谈得上物品丢失（单边无法对比背包差异）</div>');
+  var G = [['items', '拿回物品'], ['tame', '驯龙重训'], ['dino', '生物死了'], ['build', '建筑塌了']];
+  document.getElementById('fGoals').innerHTML = G.map(function (g) {
+    var on = !!FACTS.goals[g[0]];
+    var warn = on && (g[0] === 'tame' || g[0] === 'build');
+    return '<span class="opt' + (on ? ' on' : '') + (warn ? ' warn' : '') + '" onclick="EXP.goal(\'' + g[0] + '\')">' + g[1] + '</span>';
+  }).join('')
+    + (GOALBLOCK ? '<div style="color:#f87171;font-size:10.5px;margin-top:6px">至少选一个目的（不能全部取消）</div>' : '');
+}
+var EXP = {
+  set: function (k, v) {
+    FACTS[k] = v;
+    if (k === 'pos' && v !== 'both') FACTS.lossN = 0;   /* 单边位置没有可比对的背包差异 */
+    renderAll();
+  },
+  goal: function (id) {
+    var sel = Object.keys(FACTS.goals).filter(function (k) { return FACTS.goals[k]; });
+    if (FACTS.goals[id]) {
+      if (sel.length <= 1) { GOALBLOCK = true; renderAll(); return; }
+      delete FACTS.goals[id];
+    } else {
+      FACTS.goals[id] = true;
+    }
+    GOALBLOCK = false;
+    renderAll();
+  },
+  reset: function () { FACTS = JSON.parse(JSON.stringify(DEFAULT_FACTS)); VOTE = {}; renderAll(); },
+  tip: function (e, el) { if (e) { e.stopPropagation(); e.preventDefault(); } el.parentNode.classList.toggle('open'); },
+  tipAll: function (on) {
+    TIPALL = on;
+    Array.prototype.forEach.call(document.querySelectorAll('.stp-wrap'), function (w) {
+      if (on) w.classList.add('open'); else w.classList.remove('open');
+    });
+  },
+  vote: function (id, v, e) {
+    if (e) { e.stopPropagation(); e.preventDefault(); }
+    var cur = VOTE[id] || {};
+    if (cur.v === v) delete VOTE[id]; else VOTE[id] = { v: v, txt: cur.txt || '' };
+    renderAll();
+  },
+  typed: function (id, val) {
+    VOTE[id] = VOTE[id] || { v: 'edit', txt: '' };
+    VOTE[id].txt = val;
+    if (VOTE[id].v !== 'edit') VOTE[id].v = 'edit';
+  },
+  export: function () {
+    var steps = arkbkBuildSteps(FACTS);
+    var L = ['安全回档 · 步骤裁决单（规则驱动）', '生成时间: ' + new Date().toLocaleString(), ''];
+    L.push('【事实】');
+    L.push('  角色位置: ' + FACTS.pos + ' · 在线: ' + FACTS.onlineN + ' · 进出: ' + FACTS.moveN
+      + ' · 会丢物品: ' + (FACTS.lossN ? '有' : '无'));
+    var gs = Object.keys(FACTS.goals).filter(function (k) { return FACTS.goals[k]; });
+    L.push('  目的: ' + gs.join(' / '));
+    L.push('');
+    L.push('【自动拼出的步骤 ' + steps.length + ' 步】');
+    steps.forEach(function (s) {
+      var v = VOTE[s.id] || {};
+      var mark = v.v === 'keep' ? '  [保留]' : (v.v === 'drop' ? '  [删掉]' : (v.v === 'edit' ? '  [改写→ ' + v.txt + ']' : ''));
+      L.push('  ' + s.n + '. (' + s.id + ') ' + s.text + mark);
+    });
+    var un = steps.filter(function (s) { return !VOTE[s.id]; });
+    if (un.length) { L.push(''); L.push('（未标注 = 保持现状）'); }
+    document.getElementById('outWrap').hidden = false;
+    document.getElementById('out').value = L.join('\n');
+    document.getElementById('outWrap').scrollIntoView({ behavior: 'smooth' });
+  },
+  copy: function () {
+    var t = document.getElementById('out');
+    t.removeAttribute('readonly'); t.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    t.setAttribute('readonly', 'readonly');
+  }
+};
+function renderAll() { renderFacts(); renderFlow(); }
+var TIPBOX = document.getElementById('tipbox');
+var canHover = window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+if (canHover) {
+  document.addEventListener('mouseover', function (e) {
+    var s = e.target.closest ? e.target.closest('.stp') : null;
+    if (!s) { TIPBOX.style.display = 'none'; return; }
+    var txt = s.getAttribute('data-tip') || '';
+    if (!txt) { TIPBOX.style.display = 'none'; return; }
+    TIPBOX.textContent = txt; TIPBOX.style.display = 'block';
+  });
+  document.addEventListener('mousemove', function (e) {
+    if (TIPBOX.style.display !== 'block') return;
+    var w = TIPBOX.offsetWidth, h = TIPBOX.offsetHeight;
+    var x = e.clientX + 14, y = e.clientY + 16;
+    if (x + w > window.innerWidth - 10) x = window.innerWidth - w - 10;
+    if (y + h > window.innerHeight - 10) y = e.clientY - h - 12;
+    TIPBOX.style.left = x + 'px'; TIPBOX.style.top = Math.max(6, y) + 'px';
+  });
+  document.addEventListener('mouseout', function (e) {
+    var s = e.target.closest ? e.target.closest('.stp') : null;
+    if (s) TIPBOX.style.display = 'none';
+  });
+  document.addEventListener('click', function () { TIPBOX.style.display = 'none'; });
+}
+renderAll();
+</script>
+</body>
+</html>

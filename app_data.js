@@ -500,16 +500,26 @@ var LB_KEYMAP_ACTIONS = [
   {g:'界面', id:'wheel',     zh:'上下文轮盘', zhPad:'轮盘',      pad:{k:['xbox_button_b'], hold:1},      kbm:{k:['keyboard_e'], hold:1},  note:'生物行为 / 结构拆除'},
   {g:'界面', id:'chat',      zh:'世界聊天',        pad:['xbox_lb','xbox_button_view'],     kbm:'keyboard_enter',            note:''},
   {g:'界面', id:'drop',      zh:'丢弃物品', zhPad:'丢弃',            pad:'xbox_lt',                          kbm:'keyboard_o',                note:'背包内 · L2 短按'},   // v5336（用户口径「L2 短按：丢弃」）：手柄侧叫法补齐；zh 保持「丢弃物品」不动（键鼠列不受影响）
-  {g:'界面', id:'slot1',   zh:'使用快捷栏1',   pad:{k:['xbox_dpad_left']},  kbm:'keyboard_1',        note:'十字键 ←'},   // v5280 拆条；v5332：去掉组合键；v5348（用户口径「快捷栏：左-上-右-下-L1（X-Y-B-A-左-右，L1 组都要加 L1）」）：改为十字键←
-  {g:'界面', id:'slot2',   zh:'使用快捷栏2',   pad:{k:['xbox_dpad_up']},  kbm:'keyboard_2',        note:'十字键 ↑'},   // v5348：手柄键位补齐
-  {g:'界面', id:'slot3',   zh:'使用快捷栏3',   pad:{k:['xbox_dpad_right']},  kbm:'keyboard_3',        note:'十字键 →'},   // v5348：手柄键位补齐
-  {g:'界面', id:'slot4',   zh:'使用快捷栏4',   pad:{k:['xbox_dpad_down']},  kbm:'keyboard_4',        note:'十字键 ↓'},   // v5348：手柄键位补齐
-  {g:'界面', id:'slot5',   zh:'使用快捷栏5',   pad:{k:['xbox_button_x'], chord:'xbox_lb'},  kbm:'keyboard_5',        note:'L1 + X'},   // v5348：手柄键位补齐
-  {g:'界面', id:'slot6',   zh:'使用快捷栏6',   pad:{k:['xbox_button_y'], chord:'xbox_lb'},  kbm:'keyboard_6',        note:'L1 + Y'},   // v5348：手柄键位补齐
-  {g:'界面', id:'slot7',   zh:'使用快捷栏7',   pad:{k:['xbox_button_b'], chord:'xbox_lb'},  kbm:'keyboard_7',        note:'L1 + B'},   // v5348：手柄键位补齐
-  {g:'界面', id:'slot8',   zh:'使用快捷栏8',   pad:{k:['xbox_button_a'], chord:'xbox_lb'},  kbm:'keyboard_8',        note:'L1 + A'},   // v5348：手柄键位补齐
-  {g:'界面', id:'slot9',   zh:'使用快捷栏9',   pad:{k:['xbox_dpad_left'], chord:'xbox_lb'},  kbm:'keyboard_9',        note:'L1 + 十字←'},   // v5348：手柄键位补齐
-  {g:'界面', id:'slot10',  zh:'使用快捷栏10',  pad:{k:['xbox_dpad_right'], chord:'xbox_lb'},  kbm:'keyboard_0',        note:'L1 + 十字→'},   // v5348：手柄键位补齐
+  {g:'快捷栏', id:'slot1',   zh:'使用快捷栏1',   pad:{k:['xbox_dpad_left']},  kbm:'keyboard_1',        note:'十字键 ←'},   // v5280 拆条；v5332：去掉组合键；v5348（用户口径「快捷栏：左-上-右-下-L1（X-Y-B-A-左-右，L1 组都要加 L1）」）：改为十字键←
+  {g:'快捷栏', id:'slot2',   zh:'使用快捷栏2',   pad:{k:['xbox_dpad_up']},  kbm:'keyboard_2',        note:'十字键 ↑'},   // v5348：手柄键位补齐
+  {g:'快捷栏', id:'slot3',   zh:'使用快捷栏3',   pad:{k:['xbox_dpad_right']},  kbm:'keyboard_3',        note:'十字键 →'},   // v5348：手柄键位补齐
+  {g:'快捷栏', id:'slot4',   zh:'使用快捷栏4',   pad:{k:['xbox_dpad_down']},  kbm:'keyboard_4',        note:'十字键 ↓'},   // v5348：手柄键位补齐
+  {g:'快捷栏', id:'slot5',   zh:'使用快捷栏5',   pad:{k:['xbox_button_x'], chord:'xbox_lb'},  kbm:'keyboard_5',        note:'L1 + X'},   // v5348：手柄键位补齐
+  {g:'快捷栏', id:'slot6',   zh:'使用快捷栏6',   pad:{k:['xbox_button_y'], chord:'xbox_lb'},  kbm:'keyboard_6',        note:'L1 + Y'},   // v5348：手柄键位补齐
+  {g:'快捷栏', id:'slot7',   zh:'使用快捷栏7',   pad:{k:['xbox_button_b'], chord:'xbox_lb'},  kbm:'keyboard_7',        note:'L1 + B'},   // v5348：手柄键位补齐
+  {g:'快捷栏', id:'slot8',   zh:'使用快捷栏8',   pad:{k:['xbox_button_a'], chord:'xbox_lb'},  kbm:'keyboard_8',        note:'L1 + A'},   // v5348：手柄键位补齐
+  {g:'快捷栏', id:'slot9',   zh:'使用快捷栏9',   pad:{k:['xbox_dpad_left'], chord:'xbox_lb'},  kbm:'keyboard_9',        note:'L1 + 十字←'},   // v5348：手柄键位补齐
+  {g:'快捷栏', id:'slot10',  zh:'使用快捷栏10',  pad:{k:['xbox_dpad_right'], chord:'xbox_lb'},  kbm:'keyboard_0',        note:'L1 + 十字→'},   // v5348：手柄键位补齐
+  {g:'快捷栏', id:'craft_hot1', zh:'制作快捷键1', pad:null, kbm:{k:['keyboard_1'], chord:'keyboard_alt_left'}, note:'左 Alt + 1'},   // v6834（用户口径「制作快捷键1-10，默认键值只有键鼠的左Alt+对应数字」）
+  {g:'快捷栏', id:'craft_hot2', zh:'制作快捷键2', pad:null, kbm:{k:['keyboard_2'], chord:'keyboard_alt_left'}, note:'左 Alt + 2'},   // v6834（用户口径「制作快捷键1-10，默认键值只有键鼠的左Alt+对应数字」）
+  {g:'快捷栏', id:'craft_hot3', zh:'制作快捷键3', pad:null, kbm:{k:['keyboard_3'], chord:'keyboard_alt_left'}, note:'左 Alt + 3'},   // v6834（用户口径「制作快捷键1-10，默认键值只有键鼠的左Alt+对应数字」）
+  {g:'快捷栏', id:'craft_hot4', zh:'制作快捷键4', pad:null, kbm:{k:['keyboard_4'], chord:'keyboard_alt_left'}, note:'左 Alt + 4'},   // v6834（用户口径「制作快捷键1-10，默认键值只有键鼠的左Alt+对应数字」）
+  {g:'快捷栏', id:'craft_hot5', zh:'制作快捷键5', pad:null, kbm:{k:['keyboard_5'], chord:'keyboard_alt_left'}, note:'左 Alt + 5'},   // v6834（用户口径「制作快捷键1-10，默认键值只有键鼠的左Alt+对应数字」）
+  {g:'快捷栏', id:'craft_hot6', zh:'制作快捷键6', pad:null, kbm:{k:['keyboard_6'], chord:'keyboard_alt_left'}, note:'左 Alt + 6'},   // v6834（用户口径「制作快捷键1-10，默认键值只有键鼠的左Alt+对应数字」）
+  {g:'快捷栏', id:'craft_hot7', zh:'制作快捷键7', pad:null, kbm:{k:['keyboard_7'], chord:'keyboard_alt_left'}, note:'左 Alt + 7'},   // v6834（用户口径「制作快捷键1-10，默认键值只有键鼠的左Alt+对应数字」）
+  {g:'快捷栏', id:'craft_hot8', zh:'制作快捷键8', pad:null, kbm:{k:['keyboard_8'], chord:'keyboard_alt_left'}, note:'左 Alt + 8'},   // v6834（用户口径「制作快捷键1-10，默认键值只有键鼠的左Alt+对应数字」）
+  {g:'快捷栏', id:'craft_hot9', zh:'制作快捷键9', pad:null, kbm:{k:['keyboard_9'], chord:'keyboard_alt_left'}, note:'左 Alt + 9'},   // v6834（用户口径「制作快捷键1-10，默认键值只有键鼠的左Alt+对应数字」）
+  {g:'快捷栏', id:'craft_hot10', zh:'制作快捷键10', pad:null, kbm:{k:['keyboard_0'], chord:'keyboard_alt_left'}, note:'左 Alt + 0'},   // v6834（用户口径「制作快捷键1-10，默认键值只有键鼠的左Alt+对应数字」）
   {g:'界面', id:'admin', toggle:1,     zh:'控制台', zhPad:'游戏选项',        pad:'xbox_button_menu',                 kbm:'keyboard_tilde',            note:'权威：Tilde；Esc 为暂停菜单'},   // v5280   // v5279：菜单键(Esc)
   {g:'界面', id:'steam_overlay', toggle:1, zh:'STEAM 叠层', zhPad:'STEAM 叠层', pad:{k:['controller_icon']}, kbm:'', note:'Steam 页 · ICON / GUIDE 键', dev:'pad'},   // v5347（用户口径「ICON/GUIDE：切换STEAM叠层」）：Steam logo 键短按；LB_KM_EQUIV 等价组让 controller_icon 与 steamdeck_button_guide 共享绑定；id 不入 LB_KM_KBSHOT => 键鼠页不新增行
   {g:'界面', id:'craftables',zh:'打开制作栏',      pad:'xbox_rb',                          kbm:'keyboard_v',                note:'背包内'},
@@ -524,7 +534,6 @@ var LB_KEYMAP_ACTIONS = [
   {g:'界面', id:'select',    zh:'选中',            pad:'xbox_button_a',                    kbm:'mouse_left',                note:'虚拟鼠标场景'},   // v5279 新增 · v5282 补键
   {g:'界面', id:'tribe_mgr', zh:'部落管理器',      pad:null,                               kbm:'keyboard_l',                note:''},   // v5280 新增
   {g:'界面', id:'emote2',    zh:'表情键 2',        pad:null,                               kbm:'keyboard_bracket_close',    note:''},   // v5280 新增
-  {g:'界面', id:'craft_hotbar', zh:'制作快捷栏物品(组合键)', pad:null,                             kbm:'keyboard_alt_left',              note:'左 Alt + 数字（组合键）'},   // v5280 新增
   {g:'界面', id:'gamma1',    zh:'设置伽马值1',      pad:null,                               kbm:'',                          note:'默认未分配'},   // v5301：ASA 设置新增项（Wiki 未收录）
   {g:'界面', id:'gamma2',    zh:'设置伽马值2',      pad:null,                               kbm:'',                          note:'默认未分配'},   // v5301：ASA 设置新增项（Wiki 未收录）
   {g:'口哨', id:'wh_menu',   zh:'口哨选择',        pad:null,                               kbm:'keyboard_apostrophe',       note:'键鼠：或长按 T；手柄：B 长按的轮盘内选择'},   // v5361（用户口径「轮盘 和 口哨选择 是同一个功能吧？」）：手柄 B 长按是同一个轮盘入口 => 口哨选择解绑，只留 wheel 挂 B 长按
@@ -588,3 +597,72 @@ var LB_KEYMAP_ACTIONS = [
 var LB_MW_API = 'https://data.whiterober.ccwu.cc/api/mapwiki/';
 var LB_MW_SLUGS = { Isl:'the-island', Sco:'scorched-earth', Cen:'the-center', Abe:'aberration', Ext:'extinction',
                     Ast:'astraeos', Rag:'ragnarok', Val:'valguero', Los:'lost-colony', Gen:'genesis' };
+
+/* ===== v6770：地图宣传片（Steam 商店 HLS，来源 map_videos.json）=====
+   hls 需要 hls.js（Chrome/Edge/Firefox）；Safari/iOS 原生支持，直接 src。
+   无 hls 字段的地图 → 前端不渲染播放按钮（Gen 目前无宣传片）。 */
+var LB_MAP_VIDEOS = {
+ "Abe": {
+  "appid": 3059650,
+  "hls": "https://video.akamai.steamstatic.com/store_trailers/3059650/752044/900275e90316caeef42718e80ce9a8f44ad382b3/1750971477/hls_264_master.m3u8?t=1725640020",
+  "movie": "Aberration Ascended Launch Trailer",
+  "poster": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/257052980/movie.293x165.jpg?t=1725640020",
+  "title": "ARK: Aberration Ascended"
+ },
+ "Ast": {
+  "appid": 3483400,
+  "hls": "https://video.akamai.steamstatic.com/store_trailers/3483400/828827/9ca029e0e9add8d278c2f9e606c3bde8c972e559/1750826273/hls_264_master.m3u8?t=1739509587",
+  "movie": "ARK Astraeos Launch Trailer",
+  "poster": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/257098285/c875b97bb964e67288e1a6a6f5228f58e599acee/movie_600x337.jpg?t=1739509587",
+  "title": "ARK: Astraeos"
+ },
+ "Cen": {
+  "appid": 2827030,
+  "hls": "https://video.akamai.steamstatic.com/store_trailers/2827030/709537/859b69d88d810313fe60304ab949de518d76a4ab/1750945181/hls_264_master.m3u8?t=1717566208",
+  "movie": "ARK: The Center Ascended Launch Trailer",
+  "poster": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/257028461/movie.293x165.jpg?t=1717566208",
+  "title": "ARK: The Center Ascended"
+ },
+ "Ext": {
+  "appid": 3349320,
+  "hls": "https://video.akamai.steamstatic.com/store_trailers/3349320/802707/04da285b080dee5650eb84a7693423497641e9a3/1750842557/hls_264_master.m3u8?t=1734715059",
+  "movie": "Extinction Ascended Launch Trailer",
+  "poster": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/257083748/484b3a7684cae9fabc4119a8e54c4339b9b060bd/movie_600x337.jpg?t=1734715059",
+  "title": "ARK: Extinction Ascended"
+ },
+ "Isl": {
+  "appid": 2399830,
+  "hls": "https://video.akamai.steamstatic.com/store_trailers/2399830/622596/5038b9195e3ec04b2647b861ee2d92f6f9584523/1750813753/hls_264_master.m3u8?t=1698255203",
+  "movie": "ARK: Survival Ascended Launch Trailer",
+  "poster": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/256978230/movie.293x165.jpg?t=1698255203",
+  "title": "方舟: 生存飞升"
+ },
+ "Los": {
+  "appid": 3583650,
+  "hls": "https://video.akamai.steamstatic.com/store_trailers/3583650/995048061/ef32e2128e60a80c485d076a33f8f691183fde6d/1766139384/hls_264_master.m3u8?t=1766508558",
+  "movie": "Lost Colony Release Trailer",
+  "poster": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/257252704/3a3f3f72bbac53ae789f9a2e0ac3e2fa5a690847/movie_600x337.jpg?t=1766508558",
+  "title": "ARK: Lost Colony"
+ },
+ "Rag": {
+  "appid": 3675020,
+  "hls": "https://video.akamai.steamstatic.com/store_trailers/3675020/513815730/8c01746a944fe09f49f2b1aa8ac2ccf21cd80f17/1750408707/hls_264_master.m3u8?t=1750414819",
+  "movie": "Ragnarok Ascended Launch Trailer",
+  "poster": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/257159169/b212bf81530e309164613fccbfbd121c4b58c59c/movie_600x337.jpg?t=1750414819",
+  "title": "ARK: Ragnarok Ascended"
+ },
+ "Sco": {
+  "appid": 2849450,
+  "hls": "https://video.akamai.steamstatic.com/store_trailers/2849450/682376/fc26ed5e5e9ffaf83c7dfe18dece2c86d0413e26/1750947430/hls_264_master.m3u8?t=1712163830",
+  "movie": "ARK: Scorched Earth Ascended Trailer",
+  "poster": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/257012794/movie.293x165.jpg?t=1712163830",
+  "title": "ARK: Scorched Earth Ascended"
+ },
+ "Val": {
+  "appid": 3982310,
+  "hls": "https://video.akamai.steamstatic.com/store_trailers/3982310/376187381/49969add16d389ed0cbdcfb23ddb1f18f5fa7edb/1759899419/hls_264_master.m3u8?t=1759900854",
+  "movie": "ARK: Valguero Ascended Release Trailer",
+  "poster": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/257214082/0ba441b078024687b8cfc5cbac18eebdd5db2844/movie_600x337.jpg?t=1759900854",
+  "title": "ARK: Valguero Ascended"
+ }
+};

@@ -101,6 +101,8 @@ function lbWikiOpen(){
   var ov = lbWikiEl('lbWikiOverlay');
   if (!ov) return;
   ov.classList.add('show');
+  /* v6540：走全局层级栈（原来固定 9998，与 .lb-sheet 同值 ⇒ 在浮窗里打开必被盖住） */
+  try { if (typeof lbZOpen === 'function') lbZOpen(ov, 'wiki'); } catch (eZ1) {}
   lbWikiLayoutWatch();   // v5756：布局修正（隐藏无序号小标题 / 徽章移到文案块下方）
   lbWikiRender();
   lbWikiEnsure().then(function(){ lbWikiRender(); })
@@ -110,6 +112,7 @@ function lbWikiOpen(){
 function lbWikiClose(){
   var ov = lbWikiEl('lbWikiOverlay');
   if (ov) ov.classList.remove('show');
+  try { if (ov && typeof lbZClose === 'function') lbZClose(ov); } catch (eZ2) {}
 }
 
 /* v6107（用户口径）：网络错误后的「重试」—— 清掉错误态/缓存的残缺数据，重新走一次完整拉取 */
@@ -5999,14 +6002,20 @@ function lbSheetBuild(id, opts){
    根因：所有浮窗的 z-index 都是 9998（.lb-sheet / id 白名单同值）⇒ 谁在 DOM 后面谁在上；
    「先建过 A、后建 B，再打开 A」时 A 会被 B 盖住（lbUpdVer 被 lbUpd 盖住即此）。
    递增 z-index 不改 DOM 结构、不影响滚动位置与 iframe，最安全。 */
-var _LB_SHEET_Z = 9998;
+/* v6540（用户口径「从源头解决」）：改用全局层级栈 lbZOpen（app_core.js）——
+   原来这里自己维护 _LB_SHEET_Z 递增（v6405 的局部补丁），只能解决 sheet 互相盖，
+   管不到 #lbWikiOverlay / .lb-picker-overlay 等同样 9998 的其它家族。 */
 function lbSheetOpen(id){
   var o = document.getElementById(id);
   if (!o) return;
-  try { _LB_SHEET_Z += 1; o.style.zIndex = String(_LB_SHEET_Z); } catch (e) {}
+  try { if (typeof lbZOpen === 'function') lbZOpen(o, 'sheet:' + id); } catch (e) {}
   o.classList.add('show');
 }
-function lbSheetClose(id){ var o = document.getElementById(id); if (o) o.classList.remove('show'); }
+function lbSheetClose(id){
+  var o = document.getElementById(id);
+  if (o) o.classList.remove('show');
+  try { if (o && typeof lbZClose === 'function') lbZClose(o); } catch (e) {}
+}
 /* 布局修正（原 lbWikiItemLayoutFix 主体参数化）：隐藏「紧邻 .tc-intro 的无序号小标题」 */
 function lbSheetLayoutFix(body){
   if (!body) return;
@@ -6096,10 +6105,14 @@ var LB_NEWS = {
             { href: 'https://ark-server-api.com/resources/categories/ark-survival-ascended.2/', icon: 'mdi-api', text: 'ASA API', label: 'Ark Survival Ascended | Ark Server Api' },
             { href: 'https://discord.com/channels/1219408563122999356/1219419717694001313', icon: 'mdi-chat-outline', svg: LB_SVG_DISCORD, text: 'Discord', label: 'Discord 频道' }
           ] },
-        /* v5956（用户口径）：二级 Tab 文字 API缓存 ⇒ 缓存 */
-        { id: 'api_cache', name: 'API缓存', short: '缓存', links: [
+        /* v6498（用户口径）：二级 Tab 文字 API缓存 ⇒ 偏移（与「库偏移表」口径一致） */
+        { id: 'api_cache', name: 'API偏移', short: '偏移', links: [
             { href: 'https://ark-server-api.com/resources/categories/ark-survival-ascended.2/', icon: 'mdi-api', text: 'ASA API', label: 'Ark Survival Ascended | Ark Server Api' },
             { href: 'https://discord.com/channels/1219408563122999356/1243622513779675186', icon: 'mdi-chat-outline', svg: LB_SVG_DISCORD, text: 'Discord', label: 'Discord 频道' }
+          ] },
+        /* v6498（用户口径）：新增「告警」子 Tab —— Discord 频道 1569211761096134796 */
+        { id: 'api_alert', name: '告警', short: '告警', links: [
+            { href: 'https://discord.com/channels/1219408563122999356/1569211761096134796', icon: 'mdi-chat-outline', svg: LB_SVG_DISCORD, text: 'Discord', label: 'Discord 频道' }
           ] }
       ] }
   ]
@@ -6296,12 +6309,22 @@ function lbNewsCardsToTc(cards, tabId, zhMap){
         /* v5937：含标签的（AI 译文 / 原始 HTML）走白名单富文本，保留表格与列表结构；
            纯 markdown 仍交给 lbMdRender。 */
         var body = /<[a-z][^>]*>/i.test(rest) ? lbNewsRichHtml(rest) : lbMdRender(rest);
+        /* v6542（用户口径「不允许出现附件这种空的框」）：
+           判空必须看**纯文本** —— 空行会被 lbMdRender 转成 <div style="height:6px"></div>（真值），
+           结果输出了一个只有 6px 占位的 .tc-intro ⇒ 渲染成空紫框。
+           正文为空时**复用小标题内容**；标题和正文都空则整块不输出。
+           原文/译文共用这里（raw 已在上面按语义替换过），两条路径自动一致。 */
+        var _bodyTxt = String(body || '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim();
+        if (!_bodyTxt){
+          body = title ? ('<div style="margin:2px 0">' + lbMdEsc(title) + '</div>') : '';
+        }
         if (title) _n++;
         /* v5940（用户口径「每个小标题 无需 ⑤ 这种」）：卡片标题不再带 ①②③ 圈号，只留标题文字 */
         var hd = title
           ? ('<div class="tc-h" data-keep="1">' + lbMdEsc(title) + '</div>')
           : '';
-        parts.push(hd + (body ? '<div class="tc-intro">' + body + '</div>' : ''));
+        var _piece = hd + (body ? '<div class="tc-intro">' + body + '</div>' : '');
+        if (_piece) parts.push(_piece);
       } else if (c.type === 'picture'){
         parts.push('<div class="tc-pic">'
           + '<img src="' + lbMdEsc(c.image || '') + '"'
@@ -6689,14 +6712,14 @@ function lbWikiItemOpen(){
   if (!cls) return;
   LB_WI.cur = cls; LB_WI.tab = 0; LB_WI.err = null; LB_WI.data = null; LB_WI.pollN = 0;
   LB_WI._iniTried = 0; LB_WI._craftHas = false;   // v5913：每次打开重置 ini 配方探测与「制作关注」按钮态
-  var ov = lbWiEl('lbWikiItemOverlay'); if (ov) ov.classList.add('show');
+  var ov = lbWiEl('lbWikiItemOverlay'); if (ov) { ov.classList.add('show'); try { if (typeof lbZOpen === 'function') lbZOpen(ov, 'wikiItem'); } catch (eZ3) {} }
   lbWikiItemLayoutWatch();   // v5915：隐藏紧邻文案块的无序号小标题
   lbWikiItemRender();
   lbWikiItemFetch();
 }
 
 function lbWikiItemClose(){
-  var ov = lbWiEl('lbWikiItemOverlay'); if (ov) ov.classList.remove('show');
+  var ov = lbWiEl('lbWikiItemOverlay'); if (ov) { ov.classList.remove('show'); try { if (typeof lbZClose === 'function') lbZClose(ov); } catch (eZ4) {} }
 }
 
 /* ===== v5913（用户口径）：wiki 浮窗「制作关注」——普通印痕（非品质蓝图）按「类」加入待制作
@@ -8795,6 +8818,7 @@ function lbMapWikiOpen(){
   var ov = document.getElementById('lbWikiOverlay');
   if (!ov) return;
   ov.classList.add('show');
+  try { if (typeof lbZOpen === 'function') lbZOpen(ov, 'mapwiki'); } catch (eZ5) {}
   lbWikiLayoutWatch();           // 现成布局修正（作用 #lbWikiBody）
   lbWikiRender();
   lbMapWikiEnsure().then(function(){ lbWikiRender(); })
@@ -9202,13 +9226,117 @@ function lbMapWikiPromoHtml(){
     if (!id || id === 'Bob') return '';               // Bob 无地图
     var src = LB_MAP_BASE + id.toLowerCase() + '_promo' + LB_MAP_EXT;
     var uid = 'lbMwPromo_' + id.toLowerCase();
+    var _vs = (typeof LB_MAP_VIDEOS !== 'undefined' && LB_MAP_VIDEOS) ? (LB_MAP_VIDEOS[id] || null) : null;
+    var _hasV = !!(_vs && _vs.hls);
+    var _btn = _hasV
+      ? '<button type="button" class="lb-mw-play" title="播放宣传片" aria-label="播放宣传片"'
+        + ' onclick="lbMwVideoToggle(this)"><i class="mdi mdi-play"></i></button>'
+      : '';
+    var _vid = _hasV
+      ? '<video class="lb-mw-video" hidden controls playsinline preload="none"'
+        + ' poster="' + lbMdEsc(_vs.poster || '') + '" data-hls="' + lbMdEsc(_vs.hls) + '"'
+        + ' onerror="lbMwVideoFail(this)"></video>'
+      : '';
     return '<div class="tc-sec" id="' + uid + '"><div class="tc-h" data-keep="1">地图宣传图</div>'
-      + '<div style="position:relative;margin:6px auto 2px;max-width:560px;border-radius:8px;border:1px solid #2a2a3a">'
-      + '<img src="' + lbResURL(src) + '" data-lbasset="' + src + '" alt="地图宣传图" loading="lazy"'
-      + ' style="width:100%;display:block;opacity:.92;border-radius:7px"'
+      + '<div class="lb-mw-media">' + _vid
+      + '<img class="lb-mw-poster" src="' + lbResURL(src) + '" data-lbasset="' + src + '" alt="地图宣传图" loading="lazy"'
       + ' onerror="var _p=document.getElementById(\'' + uid + '\');if(_p&&_p.parentNode)_p.parentNode.removeChild(_p)">'
-      + '</div></div>';
+      + _btn + '</div></div>';
   }catch(e){ return ''; }
+}
+
+/* ===== v6770（用户口径）：右下角播放按钮 → 宣传图原地变视频播放 =====
+   数据：LB_MAP_VIDEOS[地图Id].hls（Steam 官方 HLS，ACAO:* 允许跨域）
+   要点：① 禁 autoplay（必须用户点）② playsinline（iOS 不强制全屏）③ preload=none（不点不耗流量）
+        ④ 懒加载 hls.js（仅 Chrome 系需要，Safari 原生可播）⑤ 任何失败 → 回退图片、隐藏按钮 */
+var LB_MW_VH = null;
+var LB_MW_HLSQ = null;
+
+function lbMwHlsLoad(cb){
+  if (typeof window.Hls !== 'undefined') { cb(null); return; }
+  if (LB_MW_HLSQ) { LB_MW_HLSQ.push(cb); return; }
+  LB_MW_HLSQ = [cb];
+  var _flush = function(err){
+    var q = LB_MW_HLSQ; LB_MW_HLSQ = null;
+    for (var i = 0; i < (q || []).length; i++){ try{ q[i](err); }catch(e){} }
+  };
+  var s = document.createElement('script');
+  s.src = '/libs/hls.light.min.js';
+  s.async = true;
+  s.onload = function(){ _flush(null); };
+  s.onerror = function(){ _flush(new Error('hls.js 加载失败')); };
+  document.head.appendChild(s);
+}
+
+function lbMwVideoToggle(btn){
+  try{
+    var wrap = btn && btn.parentNode;
+    if (!wrap) return;
+    var v = wrap.querySelector('.lb-mw-video');
+    var img = wrap.querySelector('.lb-mw-poster');
+    if (!v) return;
+    var _playing = !v.hidden;
+    if (_playing){                                   /* 收起：销毁实例 + 复位 */
+      try{ if (LB_MW_VH){ LB_MW_VH.destroy(); LB_MW_VH = null; } }catch(e){}
+      try{ v.pause(); v.removeAttribute('src'); v.load(); }catch(e){}
+      v.hidden = true;                           /* v6773：图片一直在底层，隐藏视频即回到图片 */
+      btn.innerHTML = '<i class="mdi mdi-play"></i>';
+      btn.setAttribute('title', '播放宣传片');
+      return;
+    }
+    var hlsUrl = v.getAttribute('data-hls') || '';
+    if (!hlsUrl) return;
+    v.removeAttribute('data-fail');            /* v6772：允许重试 */
+    v.hidden = false;                          /* v6773：视频绝对定位盖在宣传图上，图片保留撑尺寸 */
+    btn.innerHTML = '<i class="mdi mdi-close"></i>';
+    btn.setAttribute('title', '收起宣传片');
+    if (v.canPlayType('application/vnd.apple.mpegurl')){   /* Safari / iOS 原生 */
+      v.src = hlsUrl;
+      try{ v.play(); }catch(e){}
+      return;
+    }
+    lbMwHlsLoad(function(err){
+      if (err){ lbMwVideoFail(v); return; }
+      try{
+        if (LB_MW_VH){ LB_MW_VH.destroy(); LB_MW_VH = null; }
+        LB_MW_VH = new window.Hls({ maxBufferLength: 24 });
+        LB_MW_VH.on(window.Hls.Events.ERROR, function(ev, d){
+          if (d && d.fatal) lbMwVideoFail(v);
+        });
+        LB_MW_VH.loadSource(hlsUrl);
+        LB_MW_VH.attachMedia(v);
+        LB_MW_VH.on(window.Hls.Events.MANIFEST_PARSED, function(){
+          try{ v.play(); }catch(e){}
+        });
+      }catch(e){ lbMwVideoFail(v); }
+    });
+  }catch(e){}
+}
+
+function lbMwVideoFail(v){
+  try{
+    /* v6772：下面的 removeAttribute('src') + load() 会再抛一次 error ⇒ 必须先打标防递归 */
+    if (v && v.getAttribute('data-fail') === '1') return;
+    if (v) v.setAttribute('data-fail', '1');
+    if (LB_MW_VH){ try{ LB_MW_VH.destroy(); }catch(e){} LB_MW_VH = null; }
+    var wrap = v && v.parentNode;
+    if (!wrap) return;
+    var img = wrap.querySelector('.lb-mw-poster');
+    var btn = wrap.querySelector('.lb-mw-play');
+    try{ v.pause(); v.removeAttribute('src'); v.load(); }catch(e){}
+    v.hidden = true;
+    if (btn){                       /* v6772：复位成可再点——原实现直接隐藏，网络抖一下入口就永久没了 */
+      btn.style.display = '';
+      btn.innerHTML = '<i class="mdi mdi-play"></i>';
+      btn.setAttribute('title', '播放宣传片');
+    }
+    /* v6772：区分病因。缺 AAC 解码（Electron / 精简内核）与真加载失败不是一回事，提示不能混 */
+    var _noAudio = false;
+    try { _noAudio = !window.MediaSource || !window.MediaSource.isTypeSupported('audio/mp4; codecs="mp4a.40.2"'); } catch (eA) {}
+    if (typeof lbToast === 'function') lbToast(_noAudio
+      ? '当前浏览器缺少 AAC 音频解码，放不了宣传片（用 Chrome / Edge 打开即可）'
+      : '宣传片加载失败，已回到图片（可再点重试）');
+  }catch(e){}
 }
 
 function lbMapWikiBodyHtml(ix){

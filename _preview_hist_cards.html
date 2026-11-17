@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>记录浮窗 · 卡片式方案预览</title>
+<style>
+  :root{
+    --bg:#0d0d13; --panel:#1a1a24; --card:#16161f; --line:#262636;
+    --txt:#c9c9d6; --dim:#8b8ea0; --dim2:#6b6f80;
+    --pur:#a78bfa; --pur2:#7c3aed; --ok:#4ade80; --bad:#f87171;
+    --warn:#fbbf24; --cyan:#22d3ee; --blue:#93c5fd;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;padding:18px 14px 60px}
+  .wrap{max-width:1120px;margin:0 auto}
+  .hd{font-size:15px;font-weight:700;color:#fff;margin-bottom:4px}
+  .sub{font-size:11.5px;color:var(--dim2);margin-bottom:14px;line-height:1.7}
+  .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .tab{background:#16161f;border:1px solid var(--line);color:var(--dim);
+    padding:7px 14px;border-radius:8px;font-size:12px;cursor:pointer;font-family:inherit}
+  .tab.on{background:var(--pur2);border-color:var(--pur2);color:#fff;font-weight:700}
+  .phone{background:var(--panel);border:1px solid #7c3aed55;border-radius:14px;
+    padding:12px;max-width:430px;box-shadow:0 10px 40px rgba(0,0,0,.55)}
+  .sec{font-size:11px;color:var(--pur);margin:10px 0 6px}
+  .sec:first-child{margin-top:2px}
+  .meta{font-size:10px;color:var(--dim2);margin-bottom:8px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;margin-bottom:7px;overflow:hidden}
+  .card:last-child{margin-bottom:0}
+  .sv{display:inline-block;width:12px;height:12px;flex:0 0 auto;fill:currentColor;vertical-align:-2px}
+  /* ===== A 紧凑单行卡 ===== */
+  .ca{display:flex}
+  .ca .bar{width:3px;flex:0 0 3px}
+  .ca.ok .bar{background:var(--ok)}
+  .ca.bad .bar{background:var(--bad)}
+  .ca.bw .bar{background:var(--warn)}
+  .ca.br .bar{background:var(--ok)}
+  .ca.ba .bar{background:var(--blue)}
+  .ca .in{flex:1;min-width:0;padding:7px 9px 8px}
+  .ca .l1{display:flex;align-items:center;gap:6px;margin-bottom:3px}
+  .ca .nm{font-size:12.5px;font-weight:700;color:#fff;display:inline-flex;align-items:center;gap:5px}
+  .ca .bdg{font-size:9.5px;line-height:14px;padding:1px 6px;border-radius:999px;font-weight:700}
+  .ca .bdg.ok{background:rgba(74,222,128,.15);color:var(--ok);border:1px solid rgba(74,222,128,.35)}
+  .ca .bdg.bad{background:rgba(248,113,113,.15);color:var(--bad);border:1px solid rgba(248,113,113,.35)}
+  .ca .tm{margin-left:auto;font-size:10.5px;color:var(--dim2);white-space:nowrap}
+  .ca .pin{color:var(--pur);cursor:pointer;display:inline-flex;flex:0 0 auto}
+  .ca .l2{font-size:11px;color:var(--txt);line-height:1.65;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ca .l2 .sep{color:#4b4b5c;margin:0 4px}
+  .ca .l3{font-size:10.5px;color:var(--dim);line-height:1.6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ca .l3 .k{color:#5f6070}
+  /* ===== B 双行标签卡 ===== */
+  .cb{padding:8px 10px 9px}
+  .cb .t1{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+  .cb .ico{width:22px;height:22px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .cb .ico.g{background:rgba(74,222,128,.14);color:var(--ok)}
+  .cb .ico.r{background:rgba(248,113,113,.14);color:var(--bad)}
+  .cb .ico.y{background:rgba(251,191,36,.14);color:var(--warn)}
+  .cb .ico.b{background:rgba(147,197,253,.14);color:var(--blue)}
+  .cb .nm{font-size:12.5px;font-weight:700;color:#fff}
+  .cb .bdg{font-size:9.5px;line-height:14px;padding:1px 6px;border-radius:999px;font-weight:700}
+  .cb .bdg.ok{background:rgba(74,222,128,.15);color:var(--ok)}
+  .cb .bdg.bad{background:rgba(248,113,113,.15);color:var(--bad)}
+  .cb .tm{margin-left:auto;font-size:10.5px;color:var(--dim2);white-space:nowrap;display:flex;align-items:center;gap:6px}
+  .cb .t2{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:10.5px;line-height:1.75;color:var(--dim)}
+  .cb .t2 .kv{white-space:nowrap}
+  .cb .t2 .k{color:#5f6070}
+  .cb .t2 .v{color:var(--txt)}
+  /* ===== C 时间轴卡 ===== */
+  .tl{position:relative;padding-left:18px}
+  .tl:before{content:"";position:absolute;left:5px;top:6px;bottom:6px;width:1px;background:#2b2b3c}
+  .tl .card{position:relative;margin-bottom:9px}
+  .tl .card:before{content:"";position:absolute;left:-16px;top:13px;width:7px;height:7px;border-radius:50%;
+    background:var(--ok);box-shadow:0 0 0 2px var(--panel),0 0 8px rgba(74,222,128,.7)}
+  .tl .card.bad:before{background:var(--bad);box-shadow:0 0 0 2px var(--panel),0 0 8px rgba(248,113,113,.7)}
+  .tl .card.warn:before{background:var(--warn);box-shadow:0 0 0 2px var(--panel),0 0 8px rgba(251,191,36,.7)}
+  .tl .card.info:before{background:var(--blue);box-shadow:0 0 0 2px var(--panel),0 0 8px rgba(147,197,253,.7)}
+  .daygrp{font-size:10px;color:var(--dim2);margin:2px 0 6px;padding-left:18px}
+  .cc{padding:8px 10px}
+  .cc .h{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+  .cc .h .nm{font-size:12.5px;font-weight:700;color:#fff}
+  .cc .h .tag{font-size:9.5px;padding:1px 6px;border-radius:4px;font-weight:700}
+  .cc .h .tag.ok{background:rgba(74,222,128,.15);color:var(--ok)}
+  .cc .h .tag.bad{background:rgba(248,113,113,.15);color:var(--bad)}
+  .cc .h .tm{margin-left:auto;font-size:10.5px;color:var(--dim2);display:flex;align-items:center;gap:6px}
+  .cc .grid{display:grid;grid-template-columns:auto 1fr;gap:1px 8px;font-size:10.5px;line-height:1.75}
+  .cc .grid .k{color:#5f6070;white-space:nowrap}
+  .cc .grid .v{color:var(--txt);word-break:break-all}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hd">记录浮窗 · 列表改卡片式 · 3 套方案预览</div>
+  <div class="sub">数据 = 核心岛（Cen）真实台账：墓碑 2 条 · 借用中 1 条 · 历史 8 条。三套方案都保证「表格 + 原悬浮提示」的信息一条不丢。</div>
+  <div class="tabs">
+    <button class="tab on" data-p="A">方案 A · 紧凑单行卡</button>
+    <button class="tab" data-p="B">方案 B · 双行标签卡</button>
+    <button class="tab" data-p="C">方案 C · 时间轴卡</button>
+  </div>
+  <div class="phone" id="stage"></div>
+</div>
+<script>
+var IC = {
+  tomb:'M12,2C16.42,2 20,5.58 20,10V14H13V22H11V14H4V10C4,5.58 7.58,2 12,2Z',
+  box:'M12,2L2,7V17L12,22L22,17V7L12,2M12,4.15L19.5,7.9L12,11.65L4.5,7.9L12,4.15Z',
+  pin:'M12,2C15.31,2 18,4.66 18,7.95C18,12.41 12,19 12,19C12,19 6,12.41 6,7.95C6,4.66 8.69,2 12,2M12,6A2,2 0 0,0 10,8A2,2 0 0,0 12,10A2,2 0 0,0 14,8A2,2 0 0,0 12,6Z',
+  clock:'M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12.5,7V12.25L17,14.92L16.25,16.15L11,13V7H12.5Z',
+  swap:'M21,9L17,5V8H10V10H17V13M7,11L3,15L7,19V16H14V14H7V11Z',
+  out:'M11,4H6A2,2 0 0,0 4,6V18A2,2 0 0,0 6,20H11V18H6V6H11V4M17,7L22,12L17,17V14H9V10H17V7Z',
+  back:'M13,4H18A2,2 0 0,1 20,6V18A2,2 0 0,1 18,20H13V18H18V6H13V4M7,7L2,12L7,17V14H15V10H7V7Z'
+};
+var TOMB = [
+  {ts:'11-14 21:20:27', day:'11-14', kind:'手动·玩家', src:'背包 + 尸体', near:4, moved:2,
+   target:'墓碑', graveTribe:'人类的部落', dist:99, player:'人类', acc:'whiter.rober', tribe:'人类的部落', ok:true},
+  {ts:'11-14 21:49:16', day:'11-14', kind:'手动·玩家', src:'尸体', near:6, moved:1,
+   target:'墓碑', graveTribe:'人类的部落', dist:206, player:'人类', acc:'whiter.rober', tribe:'人类的部落', ok:true}
+];
+var LIVE = [{bld:'低温冰箱', who:'人类', acc:'whiter.rober', tribe:'鱼人族', remain:'10 分 0 秒', hasPin:true}];
+var HIST = [
+  {ts:'11-14 20:06:35', day:'11-14', act:'借用', bld:'低温冰箱', who:'人类', acc:'whiter.rober', tribe:'鱼人族', back:'—', hasPin:false},
+  {ts:'11-14 20:06:41', day:'11-14', act:'手动归还', bld:'低温冰箱', who:'未知玩家', acc:'', tribe:'未知部落', back:'举镜取消', hasPin:false},
+  {ts:'11-14 21:17:41', day:'11-14', act:'借用', bld:'低温冰箱', who:'人类', acc:'whiter.rober', tribe:'鱼人族', back:'—', hasPin:true},
+  {ts:'11-14 21:17:44', day:'11-14', act:'手动归还', bld:'低温冰箱', who:'未知玩家', acc:'', tribe:'未知部落', back:'举镜取消', hasPin:false},
+  {ts:'11-14 21:47:57', day:'11-14', act:'借用', bld:'低温冰箱', who:'人类', acc:'whiter.rober', tribe:'鱼人族', back:'—', hasPin:true},
+  {ts:'11-14 21:47:59', day:'11-14', act:'手动归还', bld:'低温冰箱', who:'未知玩家', acc:'', tribe:'未知部落', back:'举镜取消', hasPin:true},
+  {ts:'11-14 22:41:44', day:'11-14', act:'借用', bld:'低温冰箱', who:'人类', acc:'whiter.rober', tribe:'鱼人族', back:'—', hasPin:true},
+  {ts:'11-14 22:43:27', day:'11-14', act:'手动归还', bld:'—', who:'未知玩家', acc:'', tribe:'未知部落', back:'RCON 归还', hasPin:false}
+];
+function svg(p, cls){ return '<svg class="sv' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24"><path d="' + p + '"/></svg>'; }
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+function pin(color){ return '<span class="pin" style="color:' + (color || 'var(--pur)') + ';cursor:pointer" title="在地图查看">' + svg(IC.pin) + '</span>'; }
+
+/* ============ 方案 A：紧凑单行卡 ============ */
+function renderA(){
+  var h = '';
+  h += '<div class="sec">' + svg(IC.tomb) + ' 墓碑记录 · 2 条</div>';
+  h += '<div class="meta">主宰者视角 · 显示本服全部玩家的记录</div>';
+  TOMB.forEach(function(r){
+    h += '<div class="card ca ' + (r.ok ? 'ok' : 'bad') + '">'
+      + '<div class="bar"></div><div class="in">'
+      + '<div class="l1"><span class="nm">' + svg(IC.tomb) + esc(r.target) + '</span>'
+      + '<span class="bdg ' + (r.ok ? 'ok' : 'bad') + '">' + (r.ok ? '成功' : '失败') + '</span>'
+      + '<span class="tm">' + esc(r.ts) + '</span>' + pin() + '</div>'
+      + '<div class="l2">' + esc(r.kind) + '<span class="sep">·</span>' + esc(r.src)
+      + '<span class="sep">·</span>附近 ' + r.near + ' 座<span class="sep">·</span>移动 ' + r.moved + '</div>'
+      + '<div class="l3"><span class="k">玩家</span> ' + esc(r.player)
+      + '<span class="sep">·</span><span class="k">账号</span> ' + esc(r.acc)
+      + '<span class="sep">·</span><span class="k">部落</span> ' + esc(r.tribe) + '</div>'
+      + '<div class="l3"><span class="k">目标墓碑</span> ' + esc(r.target) + ' · ' + esc(r.graveTribe) + ' · 距离 ' + r.dist + ' 米</div>'
+      + '</div></div>';
+  });
+  h += '<div class="sec">' + svg(IC.swap) + ' 当前借用中（实时）</div>';
+  LIVE.forEach(function(r){
+    h += '<div class="card ca bw"><div class="bar"></div><div class="in">'
+      + '<div class="l1"><span class="nm">' + svg(IC.box) + esc(r.bld) + '</span>'
+      + '<span class="bdg ok" style="background:rgba(251,191,36,.15);color:var(--warn);border-color:rgba(251,191,36,.35)">借用中</span>'
+      + '<span class="tm">剩余 ' + esc(r.remain) + '</span>' + pin() + '</div>'
+      + '<div class="l3"><span class="k">借用人</span> ' + esc(r.who)
+      + '<span class="sep">·</span><span class="k">账号</span> ' + esc(r.acc)
+      + '<span class="sep">·</span><span class="k">部落</span> ' + esc(r.tribe) + '</div>'
+      + '</div></div>';
+  });
+  h += '<div class="sec">' + svg(IC.swap) + ' 历史事件 · 8 条</div>';
+  HIST.forEach(function(r){
+    var cls = r.act === '借用' ? 'ba' : 'br';
+    h += '<div class="card ca ' + cls + '"><div class="bar"></div><div class="in">'
+      + '<div class="l1"><span class="nm">' + svg(r.act === '借用' ? IC.out : IC.back) + esc(r.act) + '</span>'
+      + '<span class="bdg ' + (r.act === '借用' ? 'ok' : 'ok') + '" style="background:rgba(147,197,253,.14);color:var(--blue);border-color:rgba(147,197,253,.35)">' + esc(r.bld) + '</span>'
+      + '<span class="tm">' + esc(r.ts) + '</span>' + pin() + '</div>'
+      + '<div class="l3"><span class="k">借用人</span> ' + esc(r.who)
+      + (r.acc ? '<span class="sep">·</span><span class="k">账号</span> ' + esc(r.acc) : '')
+      + '<span class="sep">·</span><span class="k">部落</span> ' + esc(r.tribe)
+      + '<span class="sep">·</span><span class="k">归还方式</span> ' + esc(r.back) + '</div>'
+      + '</div></div>';
+  });
+  return h;
+}
+
+/* ============ 方案 B：双行标签卡 ============ */
+function renderB(){
+  var h = '';
+  h += '<div class="sec">' + svg(IC.tomb) + ' 墓碑记录 · 2 条</div>';
+  h += '<div class="meta">主宰者视角 · 显示本服全部玩家的记录</div>';
+  TOMB.forEach(function(r){
+    h += '<div class="card cb">'
+      + '<div class="t1"><span class="ico ' + (r.ok ? 'g' : 'r') + '">' + svg(IC.tomb) + '</span>'
+      + '<span class="nm">' + esc(r.target) + '</span>'
+      + '<span class="bdg ' + (r.ok ? 'ok' : 'bad') + '">' + (r.ok ? '成功' : '失败') + '</span>'
+      + '<span class="tm">' + esc(r.ts) + pin() + '</span></div>'
+      + '<div class="t2">'
+      + '<span class="kv"><span class="k">方式</span> <span class="v">' + esc(r.kind) + '</span></span>'
+      + '<span class="kv"><span class="k">来源</span> <span class="v">' + esc(r.src) + '</span></span>'
+      + '<span class="kv"><span class="k">附近墓碑</span> <span class="v">' + r.near + ' 座</span></span>'
+      + '<span class="kv"><span class="k">移动</span> <span class="v">' + r.moved + '</span></span>'
+      + '<span class="kv"><span class="k">玩家</span> <span class="v">' + esc(r.player) + '</span></span>'
+      + '<span class="kv"><span class="k">账号</span> <span class="v">' + esc(r.acc) + '</span></span>'
+      + '<span class="kv"><span class="k">部落</span> <span class="v">' + esc(r.tribe) + '</span></span>'
+      + '<span class="kv"><span class="k">目标墓碑</span> <span class="v">' + esc(r.target) + ' · ' + esc(r.graveTribe) + ' · ' + r.dist + ' 米</span></span>'
+      + '</div></div>';
+  });
+  h += '<div class="sec">' + svg(IC.swap) + ' 当前借用中（实时）</div>';
+  LIVE.forEach(function(r){
+    h += '<div class="card cb">'
+      + '<div class="t1"><span class="ico y">' + svg(IC.box) + '</span>'
+      + '<span class="nm">' + esc(r.bld) + '</span>'
+      + '<span class="bdg" style="background:rgba(251,191,36,.15);color:var(--warn)">借用中</span>'
+      + '<span class="tm"><span style="color:var(--warn);font-weight:700">剩余 ' + esc(r.remain) + '</span>' + pin() + '</span></div>'
+      + '<div class="t2">'
+      + '<span class="kv"><span class="k">借用人</span> <span class="v">' + esc(r.who) + '</span></span>'
+      + '<span class="kv"><span class="k">账号</span> <span class="v">' + esc(r.acc) + '</span></span>'
+      + '<span class="kv"><span class="k">部落</span> <span class="v">' + esc(r.tribe) + '</span></span>'
+      + '</div></div>';
+  });
+  h += '<div class="sec">' + svg(IC.swap) + ' 历史事件 · 8 条</div>';
+  HIST.forEach(function(r){
+    var isB = r.act === '借用';
+    h += '<div class="card cb">'
+      + '<div class="t1"><span class="ico ' + (isB ? 'y' : 'b') + '">' + svg(isB ? IC.out : IC.back) + '</span>'
+      + '<span class="nm">' + esc(r.act) + '</span>'
+      + '<span class="bdg" style="background:rgba(147,197,253,.14);color:var(--blue)">' + esc(r.bld) + '</span>'
+      + '<span class="tm">' + esc(r.ts) + pin() + '</span></div>'
+      + '<div class="t2">'
+      + '<span class="kv"><span class="k">借用人</span> <span class="v">' + esc(r.who) + '</span></span>'
+      + '<span class="kv"><span class="k">账号</span> <span class="v">' + (r.acc || '—') + '</span></span>'
+      + '<span class="kv"><span class="k">部落</span> <span class="v">' + esc(r.tribe) + '</span></span>'
+      + '<span class="kv"><span class="k">归还方式</span> <span class="v">' + esc(r.back) + '</span></span>'
+      + '</div></div>';
+  });
+  return h;
+}
+
+/* ============ 方案 C：时间轴卡 ============ */
+function renderC(){
+  var h = '';
+  h += '<div class="sec">' + svg(IC.tomb) + ' 墓碑记录 · 2 条</div>';
+  h += '<div class="meta">主宰者视角 · 显示本服全部玩家的记录</div>';
+  h += '<div class="daygrp">11-14</div><div class="tl">';
+  TOMB.forEach(function(r){
+    h += '<div class="card ' + (r.ok ? '' : 'bad') + '"><div class="cc">'
+      + '<div class="h"><span class="nm">' + svg(IC.tomb) + ' ' + esc(r.target) + '</span>'
+      + '<span class="tag ' + (r.ok ? 'ok' : 'bad') + '">' + (r.ok ? '成功' : '失败') + '</span>'
+      + '<span class="tm">' + esc(r.ts) + pin() + '</span></div>'
+      + '<div class="grid">'
+      + '<span class="k">方式</span><span class="v">' + esc(r.kind) + '</span>'
+      + '<span class="k">来源</span><span class="v">' + esc(r.src) + ' · 附近 ' + r.near + ' 座 · 移动 ' + r.moved + '</span>'
+      + '<span class="k">玩家</span><span class="v">' + esc(r.player) + '（' + esc(r.acc) + '）· ' + esc(r.tribe) + '</span>'
+      + '<span class="k">目标墓碑</span><span class="v">' + esc(r.target) + ' · ' + esc(r.graveTribe) + ' · ' + r.dist + ' 米</span>'
+      + '</div></div></div>';
+  });
+  h += '</div>';
+  h += '<div class="sec">' + svg(IC.swap) + ' 当前借用中（实时）</div>';
+  LIVE.forEach(function(r){
+    h += '<div class="tl"><div class="card warn"><div class="cc">'
+      + '<div class="h"><span class="nm">' + svg(IC.box) + ' ' + esc(r.bld) + '</span>'
+      + '<span class="tag" style="background:rgba(251,191,36,.15);color:var(--warn)">借用中</span>'
+      + '<span class="tm"><span style="color:var(--warn);font-weight:700">剩余 ' + esc(r.remain) + '</span>' + pin() + '</span></div>'
+      + '<div class="grid">'
+      + '<span class="k">借用人</span><span class="v">' + esc(r.who) + '（' + esc(r.acc) + '）· ' + esc(r.tribe) + '</span>'
+      + '</div></div></div></div>';
+  });
+  h += '<div class="sec">' + svg(IC.swap) + ' 历史事件 · 8 条</div>';
+  h += '<div class="daygrp">11-14</div><div class="tl">';
+  HIST.forEach(function(r){
+    var isB = r.act === '借用';
+    h += '<div class="card info" style="border-left:2px solid ' + (isB ? 'rgba(251,191,36,.6)' : 'rgba(147,197,253,.6)') + '"><div class="cc">'
+      + '<div class="h"><span class="nm">' + svg(isB ? IC.out : IC.back) + ' ' + esc(r.act) + '</span>'
+      + '<span class="tag" style="background:rgba(147,197,253,.14);color:var(--blue)">' + esc(r.bld) + '</span>'
+      + '<span class="tm">' + esc(r.ts) + pin() + '</span></div>'
+      + '<div class="grid">'
+      + '<span class="k">借用人</span><span class="v">' + esc(r.who) + (r.acc ? '（' + esc(r.acc) + '）' : '') + ' · ' + esc(r.tribe) + '</span>'
+      + '<span class="k">归还方式</span><span class="v">' + esc(r.back) + '</span>'
+      + '</div></div></div>';
+  });
+  h += '</div>';
+  return h;
+}
+var stage = document.getElementById('stage');
+var MAP = {A:renderA, B:renderB, C:renderC};
+function show(p){
+  stage.innerHTML = MAP[p]();
+  document.querySelectorAll('.tab').forEach(function(b){ b.classList.toggle('on', b.dataset.p === p); });
+}
+document.querySelectorAll('.tab').forEach(function(b){ b.onclick = function(){ show(b.dataset.p); }; });
+show('A');
+</script>
+</body>
+</html>

@@ -556,6 +556,72 @@ def _pp_time(digits):
         return 0
 
 
+# ---------------- v6576：统一 eosId → 真名解析（根除法） ----------------
+#   根因：ARK 写 PlayerProfile **文件名**时把非 ASCII 字符全替换成 '_'
+#   （「嘎巴菜」3 个中文字 → 「___」3 个下划线），所以文件名本身丢信息，不能当唯一来源。
+#   按可信度层层兜底：存档 accountName（precheck）→ 跨服文件名 → ArkApi 日志 playerName → eosId 前 8 位。
+#   铁律：**纯下划线 / 空名一律视为假名**，不得覆盖已拿到的真名。
+_PRES_NAME_TTL = 600
+_PRES_NAME_CACHE = {'ts': 0, 'map': None}
+_LOG_NAME_CACHE = {'ts': 0, 'map': None}
+
+
+def _name_is_real(nm):
+    """名字是否可信：非空，且去掉下划线后仍有余量（'___' / '' 都不可信）"""
+    s = str(nm or '').strip()
+    return bool(s) and s.strip('_') != ''
+
+
+def _pp_name_map(force=False):
+    """扫**全部服**的 PlayerProfile 文件名，构建 eosId→文件名真名（只收含非下划线的）。
+    仅 listdir 不解压，毫秒级；结果缓存 10 分钟。"""
+    now = time.time()
+    c = _PRES_NAME_CACHE
+    if (not force) and c.get('map') is not None and (now - (c.get('ts') or 0) < _PRES_NAME_TTL):
+        return c['map']
+    mp = {}
+    for ab in _ALL_SERVERS:
+        try:
+            names = os.listdir(pp_dir(ab))
+        except Exception:
+            continue
+        for fn in names:
+            m = _RE_PP.match(fn)
+            if not m:
+                continue
+            pname = m.group(3)
+            eos = (m.group(4) or '').lower()
+            if not eos or not _name_is_real(pname):
+                continue
+            if not _name_is_real(mp.get(eos)):
+                mp[eos] = pname
+    c['ts'] = now
+    c['map'] = mp
+    return mp
+
+
+def _log_name_map(force=False):
+    """ArkApi 日志里的 eosId→playerName（含中文真名）。仅在有残留假名时才构建，缓存 10 分钟。"""
+    now = time.time()
+    c = _LOG_NAME_CACHE
+    if (not force) and c.get('map') is not None and (now - (c.get('ts') or 0) < _PRES_NAME_TTL):
+        return c['map']
+    mp = {}
+    for ab in _ALL_SERVERS:
+        try:
+            lg = player_sessions_payload(ab)
+        except Exception:
+            continue
+        for s2 in (lg.get('sessions') or []):
+            eos = str(s2.get('eosId') or '').lower()
+            nm = s2.get('playerName') or ''
+            if eos and _name_is_real(nm) and not _name_is_real(mp.get(eos)):
+                mp[eos] = nm
+    c['ts'] = now
+    c['map'] = mp
+    return mp
+
+
 def read_presence(abbr):
     """扫描 PlayerProfile 的连接流水（**只读文件名，不解压**，几百个文件毫秒级）。
 
@@ -588,7 +654,10 @@ def read_presence(abbr):
             p = players[eos] = {'eosId': eos, 'name': pname, 'lastConnect': 0,
                                 'firstConnect': 0, 'lastDisconnect': 0, 'firstDisconnect': 0,
                                 'connects': 0, 'disconnects': 0, 'events': []}
-        if pname:
+        # v6576（根因修复）：**优先级覆盖**。原来是「谁最后遍历到谁生效」，
+        #   而 os.listdir 是字母序 ⇒ 只要最新那批文件名恰好是下划线，历史真名就被永久丢掉。
+        #   现在：新名字可信（含非下划线）且现有名字不可信时才覆盖。
+        if _name_is_real(pname) and not _name_is_real(p.get('name')):
             p['name'] = pname
         # v6045：保留**逐条**进出事件 —— precheck 要按「目标档时刻 T」切窗口列出名单，
         #   只有 last*/first* 无法回答「T 之后这个人到底进出了几次、什么时候」
@@ -619,6 +688,25 @@ def read_presence(abbr):
                                if p['lastConnect'] else '')
         p['lastDisconnectStr'] = (datetime.fromtimestamp(p['lastDisconnect']).strftime('%Y-%m-%dT%H:%M:%S')
                                   if p['lastDisconnect'] else '')
+    # v6576（根因修复）：仍为假名（纯下划线/空）的，按可信度依次补齐
+    #   ① 全部服 PlayerProfile 文件名（毫秒级，缓存 10 分钟）
+    #   ② ArkApi 日志 playerName（含中文真名，较贵，仅在仍有残留时才拉，缓存 10 分钟）
+    #   ③ 都没有 → eosId 前 8 位（绝不再吐 '___'）
+    _bad = [pp for pp in players.values() if not _name_is_real(pp.get('name'))]
+    if _bad:
+        _m1 = _pp_name_map()
+        _rest = []
+        for pp in _bad:
+            v = _m1.get(pp['eosId'])
+            if _name_is_real(v):
+                pp['name'] = v
+            else:
+                _rest.append(pp)
+        if _rest:
+            _m2 = _log_name_map()
+            for pp in _rest:
+                v = _m2.get(pp['eosId'])
+                pp['name'] = v if _name_is_real(v) else pp['eosId'][:8]
     return {'ok': True, 'dir': d, 'count': n, 'players': players,
             'playerCount': len(players), 'elapsedMs': int((time.time() - t0) * 1000)}
 
@@ -887,6 +975,41 @@ def _cleanup_exe_side(out_base):
             pass
 
 
+def _offline_prune(abbr, base, keep_secs=172800):
+    """删同 base 的离线解析旧残留。
+
+    只删 mtime 早于 keep_secs（默认 2 天）的副本，最新一份永远保留。
+    """
+    try:
+        pref = abbr + '__' + base + '__'
+        if not os.path.isdir(OFFLINE_DIR):
+            return 0
+        cutoff = time.time() - keep_secs
+        names = [f for f in os.listdir(OFFLINE_DIR)
+                 if f.startswith(pref) and f.endswith('.json.gz')]
+        if len(names) <= 1:
+            return 0
+        info = []
+        for f in names:
+            p = os.path.join(OFFLINE_DIR, f)
+            try:
+                info.append((os.path.getmtime(p), p))
+            except Exception:
+                pass
+        info.sort(reverse=True)
+        n = 0
+        for mt, p in info[1:]:
+            if mt < cutoff:
+                try:
+                    os.remove(p)
+                    n += 1
+                except Exception:
+                    pass
+        return n
+    except Exception:
+        return 0
+
+
 def run_exe(ark_abs, abbr, timeout=150, out_base=None):
     """直调插件端解析器（方案 §5.5.5①）。
 
@@ -915,7 +1038,13 @@ def run_exe(ark_abs, abbr, timeout=150, out_base=None):
 
     if not out_base:
         base = re.sub(r'[^A-Za-z0-9_.-]', '_', os.path.basename(ark_abs))[:60]
-        out_base = os.path.join(OFFLINE_DIR, '%s__%s__%d' % (abbr, base, int(now * 1000) % 10 ** 9))
+        # v6580：确定性命名（档名 + 体积 + mtime）→ 同一档内容不变就复用同一文件，不再无限堆积
+        try:
+            _sz, _mt = int(st.st_size), int(st.st_mtime)
+        except Exception:
+            _sz, _mt = 0, int(now)
+        out_base = os.path.join(OFFLINE_DIR, '%s__%s__%d_%d' % (abbr, base, _sz, _mt))
+        _offline_prune(abbr, base)
     if not out_base.lower().endswith('.json'):
         out_base += '.json'
     try:
@@ -956,6 +1085,10 @@ def run_exe(ark_abs, abbr, timeout=150, out_base=None):
         'ok': True,
         'players': players, 'tribes': tribes, 'pid2tribe': pid2tribe, 'pid2tid': pid2tid,
         'gzPath': gz, 'outBytes': os.path.getsize(gz),
+        # v6581：新 exe（2026-11-11 20:57）light 模式已带玩家背包，原样透传给前端做目标档差异
+        'playerItems': doc.get('playerItems') or [],
+        # 低温仓内生物（新 exe light 模式已输出），原样透传给前端做目标档差异
+        'playerCryopods': doc.get('playerCryopods') or [],
         'rc': rc, 'elapsedMs': int(elapsed), 'cacheHit': False,
         'arkPath': doc.get('arkPath') or ark_abs,
         'serverId': doc.get('serverId') or abbr,
@@ -1163,7 +1296,7 @@ def resolve_point(abbr, point):
     return {'ok': False, 'code': 'point_missing', 'error': '找不到回档点: %s' % p}
 
 
-def precheck(abbr, target, current=None, index=None, server_names=None):
+def precheck(abbr, target, current=None, index=None, server_names=None, exclude_eos=''):
     """回档前置闸门（方案 §5.5.2 / §5.5.3）。
 
     target：相对 mapDir 的文件名，或绝对路径（own:pre_restore / 历史档）。
@@ -1192,6 +1325,29 @@ def precheck(abbr, target, current=None, index=None, server_names=None):
     if not tp.get('ok'):
         return {'ok': False, 'code': tp.get('code') or 'target_parse_failed',
                 'error': tp.get('error') or '目标档解析失败'}
+
+    # v6601：当前档低温仓 —— current_players() 只挑 players/pid2tribe/pid2tid，
+    # 不带背包与低温仓；这里对「当前档」跑一次 run_exe（有 600s 缓存，通常直接命中）。
+    # v6611（用户口径「light 模式的 item 已带 id」）：当前档既然已经跑过 run_exe，
+    #   就把 playerItems 也留下 —— 两侧统一用 light 产出的 playerItems（**每条带 pid**），
+    #   背包差异才能按 pid 对齐。playerName 会重名（如默认角色名「人类」），不能用它当键。
+    #   原先只取 playerCryopods，playerItems 被直接丢弃 ⇒ 前端只能退回无 pid 的 _item.json。
+    _curCryo = cur.get('playerCryopods') or []
+    _curItems = cur.get('playerItems') or []
+    if not _curCryo or not _curItems:
+        try:
+            _md_c = md
+            _an_c = _active_name(abbr, _md_c) if _md_c else ''
+            if _an_c:
+                _ap_c = os.path.join(ARK_ROOT, abbr, 'ShooterGame', 'Saved', 'SavedArks', _md_c, _an_c)
+                _ar_c = run_exe(_ap_c, abbr)
+                if _ar_c.get('ok'):
+                    if not _curCryo:
+                        _curCryo = _ar_c.get('playerCryopods') or []
+                    if not _curItems:
+                        _curItems = _ar_c.get('playerItems') or []
+        except Exception:
+            pass
 
     C = cur['players']
     T = tp['players']
@@ -1236,6 +1392,26 @@ def precheck(abbr, target, current=None, index=None, server_names=None):
         _t_tgt = int(_tmeta.get('tsEpoch') or 0)
     except Exception:
         _t_tgt = 0
+    # v6573（用户口径：期间进出玩家名为空）：PlayerProfile **文件名**里的玩家名会把
+    #   中文等非 ASCII 字符替换成下划线（「嘎巴菜」→「___」），read_presence 解析出来就是
+    #   「___」这种假名字。这里用存档里的 eosId→账号名 映射兜底覆盖。
+    # v6754（用户口径「显示 角色名（玩家昵称）」，防角色重名）：
+    #   存档产物里 name = 平台账号名（如 whiter.rober），characterName = 游戏角色名（如 人类）。
+    #   v6573 时把两者混成一个 _eosname 且**优先账号名** ⇒ 明细里显示的是昵称不是角色名。
+    #   现在分两张映射：_eoschar 角色名（权威显示）、_eosacct 账号名（括注防重名）。
+    _eoschar = {}
+    _eosacct = {}
+    for _src in (C, T):
+        for _info in (_src or {}).values():
+            _e = (_info.get('eosId') or '').lower()
+            if not _e:
+                continue
+            _vn_cn = (_info.get('characterName') or '').strip()
+            _vn_ac = (_info.get('name') or '').strip()
+            if _vn_cn and not _eoschar.get(_e):
+                _eoschar[_e] = _vn_cn
+            if _vn_ac and not _eosacct.get(_e):
+                _eosacct[_e] = _vn_ac
     if _pres and _t_tgt:
         _tgt_eos = set()
         for _pi in T.values():
@@ -1243,7 +1419,12 @@ def precheck(abbr, target, current=None, index=None, server_names=None):
             if _e:
                 _tgt_eos.add(_e)
         _moved, _newrole = [], []
+        # v6654（用户口径「角色进出 只记录非选中角色的」）：行程里选中的那个角色，
+        #   它自己的进出不算风险（用户只关心其他角色）
+        _excl_eos = str(exclude_eos or '').strip().lower()
         for _eos, _pp in _pres.items():
+            if _excl_eos and _eos == _excl_eos:
+                continue
             _ev = [e for e in (_pp.get('events') or []) if int(e.get('ts') or 0) > _t_tgt]
             if not _ev:
                 continue          # 该玩家在 T 之后没有任何进出记录 ⇒ 不受回档影响
@@ -1254,9 +1435,19 @@ def precheck(abbr, target, current=None, index=None, server_names=None):
             # 只看 ① 会在 PlayerProfile 被清理过时误判；加上 ② 后语义收敛为
             # 「回档后这个账号在本服没有角色」= 角色真的消失。
             _isnew = bool(_first and _first > _t_tgt and not _has)
+            # v6754（用户口径）：name 只放**角色名**；账号名另走 accountName 字段。
+            #   PlayerProfile 文件名（_nm_raw）是平台账号名，仅作账号名兜底。
+            _nm_raw = (_pp.get('name') or '').strip()
+            _nm_char = _eoschar.get(_eos) or ''
+            _nm_acct = _eosacct.get(_eos) or ''
+            if not _nm_acct and _nm_raw and _nm_raw.strip('_') != '':
+                _nm_acct = _nm_raw
+            _nm = _nm_char or _nm_acct or _eos[:8]
             _row = {
                 'eosId': _eos,
-                'name': _pp.get('name') or '',
+                'name': _nm,
+                'characterName': _nm_char,
+                'accountName': _nm_acct,
                 'firstConnect': _first,
                 'lastConnect': int(_pp.get('lastConnect') or 0),
                 'lastDisconnect': int(_pp.get('lastDisconnect') or 0),
@@ -1350,6 +1541,20 @@ def precheck(abbr, target, current=None, index=None, server_names=None):
         _on = read_online(abbr)
     except Exception:
         _on = {'ok': False, 'reason': 'read_failed', 'count': 0, 'players': []}
+    # v6674（用户口径「附件以及相关逻辑 对在线的判断 应该只算非选中玩家角色」）：
+    #   presenceRisk（角色进出）自 v6654 起已按 exclude_eos 排除选中角色，
+    #   而 onlineRisk 仍统计**整份在线快照**（含选中角色自己）⇒ 自己在线也被算成
+    #   「有人会被踢下线」的风险（红色「在线 1」chip + verdict=block）。
+    #   这里统一口径：在线人数只算除选中角色之外的其他玩家。
+    _ex_on = str(exclude_eos or '').strip().lower()
+    if _ex_on and _on.get('ok'):
+        _raw_on = list(_on.get('players') or [])
+        _pl_on = [x for x in _raw_on if str((x or {}).get('eosId') or '').lower() != _ex_on]
+        _on = dict(_on)
+        _on['players'] = _pl_on
+        _on['count'] = len(_pl_on)
+        _on['rawCount'] = len(_raw_on)
+        _on['excludedEos'] = _ex_on
     _on_n = int(_on.get('count') or 0)
 
     verdict = 'clear' if (not loss and not dup and not _nr and not _on_n) else 'block'
@@ -1363,10 +1568,59 @@ def precheck(abbr, target, current=None, index=None, server_names=None):
     if _nr:
         bits.append('%d 名角色在回档点后才创建（回档后将消失）' % _nr)
     if not bits:
-        if _mv:
-            bits.append('%d 名角色在回档点后进出过（进度将回退到目标档时刻）' % _mv)
-        else:
-            bits.append('全部 %d 名角色安全' % len(safe))
+        # v6654（用户口径「附件不需要显示，步骤里不是有撤销回档么」）：
+        #   不再输出「%d 名角色在回档点后进出过」这条 —— 与下方「撤销回档」步骤重复，
+        #   且进出本身不改变 verdict（一直是 clear），纯冗余提示。
+        bits.append('全部 %d 名角色安全' % len(safe))
+
+    # v6678（用户口径「角色异常，要包含其他角色异常情况；以此来防止其他角色的问题」）：
+    #   前端「角色异常」原来只数 loss + dup（pid 维），**漏了「回档点之后新建的角色」**
+    #   （回档后整个消失）。这里统一成一份**按 eosId 去重**的清单，供：
+    #     · 前端「角色异常」chip 读数（roleIssues.total）
+    #     · 现有「传图离开{cur}」规则的新增 slot（vanish > 0）
+    #     · 现有「传图来{cur}」规则的新增 slot（appear > 0）
+    #     · 现有「征得波及玩家同意」规则的 when（newAfter > 0）
+    #   三类去重后 total 才不会重复计数（loss/dup 是 pid 维，presenceRisk 是 eosId 维）。
+    _ri_vanish, _ri_appear, _ri_new, _ri_cross = [], [], [], []
+    _ri_seen = {}
+    for _r in loss:
+        _e = str((_r.get('eosId') or '')).lower()
+        if _e:
+            _ri_seen[_e] = 1
+        _ri_vanish.append({'eosId': _e,
+                           'name': _r.get('characterName') or _r.get('accountName') or (_e[:8] or '?'),
+                           'pid': _r.get('pid'),
+                           'tribeName': _r.get('tribeName') or '',
+                           'cryoDinoCount': int(_r.get('cryoDinoCount') or 0),
+                           'structuresByTribe': int(_r.get('structuresByTribe') or 0),
+                           'inPresenceWindow': bool(_r.get('presence'))})
+    for _r in dup:
+        _e = str((_r.get('eosId') or '')).lower()
+        _na = list(_r.get('nowAt') or [])
+        if _e:
+            _ri_seen[_e] = 1
+        if _na and _e:
+            _ri_cross.append(_e)
+        _ri_appear.append({'eosId': _e,
+                           'name': _r.get('characterName') or _r.get('accountName') or (_e[:8] or '?'),
+                           'pid': _r.get('pid'),
+                           'tribeName': _r.get('tribeName') or '',
+                           'nowAt': _na, 'crossServer': bool(_na)})
+    for _r in (_pres_risk.get('newRole') or []):
+        _e = str((_r.get('eosId') or '')).lower()
+        if _e:
+            _ri_seen[_e] = 1
+        _ri_new.append({'eosId': _e,
+                        'name': _r.get('name') or (_e[:8] or '?'),
+                        'firstConnect': int(_r.get('firstConnect') or 0),
+                        'hasRoleInTarget': bool(_r.get('hasRoleInTarget'))})
+    _role_issues = {
+        'total': len(_ri_seen),
+        'vanish': _ri_vanish,        # 回档后本服「消失」（当前档有 / 目标档无）
+        'appear': _ri_appear,        # 回档后本服「出现」（目标档有 / 当前档无）
+        'newAfter': _ri_new,         # 回档点之后建号 ⇒ 回档后整个消失（传图也保不住）
+        'crossDup': _ri_cross,       # appear 中 nowAt 非空者 ⇒ 跨服重复风险
+    }
 
     return {
         'ok': True,
@@ -1380,8 +1634,16 @@ def precheck(abbr, target, current=None, index=None, server_names=None):
         'cryoAgeSec': cur.get('ageSec'),
         'targetPlayerCount': len(T),
         'currentPlayerCount': len(C),
+        # v6581：目标档玩家背包（新 exe light 产出）—— 前端「背包内容差异」用它跟当前档比
+        'targetItems': tp.get('playerItems') or [],
+        # v6611：当前档玩家背包（同一个 exe light 产出，每条带 pid）—— 前端两侧按 pid 对齐
+        'currentItems': _curItems,
+        # v6601：低温仓生物（exe light 已输出 playerCryopods，38 字段/条）
+        'targetCryopods': tp.get('playerCryopods') or [],
+        'currentCryopods': _curCryo,
         'safe': safe, 'loss': loss, 'dup': dup,
         'presenceRisk': _pres_risk,
+        'roleIssues': _role_issues,       # v6678：角色异常去重清单（vanish/appear/newAfter/crossDup）
         'onlineRisk': _on,
         'notice': '；'.join(bits),
         'elapsedMs': int((time.time() - t0) * 1000),
@@ -1501,6 +1763,442 @@ def restore_pre(abbr, expect_job=None, force=False, dry_run=False, max_age_hours
     return r
 
 
+# ---------------- ⑨ 玩家上下线记录（解析 ArkApi 日志，v2 2026-11-11） ----------------
+# 数据源：<ARK_ROOT>\<abbr>\ShooterGame\Binaries\Win64\logs\ArkApi_<pid>_<ts>[.N].log
+#   事件行：STATE_MACHINE player=<eos32> event=new_player|player_left
+#   名字行：STATE_MACHINE player=<eos32> state=Idle ... user=<账号> ctrl=<...> char=<角色>
+# 设计要点（见 报告/玩家上下线记录_后端解析日志_实施方案_20261111.md）：
+#   · 日志时间 = 服务器本地时间、无秒 ⇒ 用 time.mktime 直接换算（勿再做 -8h 双重换算）
+#   · 后缀数字越大越旧 ⇒ 必须按 mtime 升序跨文件拼接；pid 变化 = 进程换代，上一代 open 会话按上一份末行时间收尾
+#   · 子串预筛 'STATE_MACHINE' 剪掉 99% 噪声行
+#   · 全只读、不落任何文件；两级缓存（文件级 mtime+size / 服务级 TTL）
+PS_TZ_OFF = 8 * 3600                     # 仅作文档说明；实际换算走本地时区 time.mktime
+PS_OPEN_STALE = 2 * 3600                 # 无 leave 且超过 2h → 不再算在线
+PS_SESS_TTL = 60
+PS_FILE_CACHE_MAX = 128
+PS_FILE_CACHE = {}
+PS_SESS_CACHE = {}
+PS_LOCK = threading.Lock()
+
+_PS_LINE_RE = re.compile(r'^(\d{2})/(\d{2})/(\d{2}) (\d{2}):(\d{2}) \[ServerOpsKitAPI\]\[(\w+)\] (\w+)(.*)$')
+_PS_EOS_RE = re.compile(r'\bplayer=([0-9a-fA-F]{16,40})\b')
+_PS_EVENT_RE = re.compile(r'\bevent=(new_player|player_left)\b')
+_PS_USER_RE = re.compile(r'\buser=(\S+)')
+_PS_CHAR_RE = re.compile(r'\bchar=(\S+)')
+_PS_CTRL_RE = re.compile(r'\bctrl=(\S+)')
+
+
+def ps_log_dir(abbr):
+    """ARK_ROOT/<abbr>/ShooterGame/Binaries/Win64/logs"""
+    return os.path.join(ARK_ROOT, abbr, 'ShooterGame', 'Binaries', 'Win64', 'logs')
+
+
+def _ps_ts(mo, dd, yy, hh, mi):
+    """日志本地时间(MM/DD/YY HH:MM) -> epoch 秒；失败返回 0"""
+    try:
+        return int(time.mktime(datetime(2000 + int(yy), int(mo), int(dd), int(hh), int(mi)).timetuple()))
+    except Exception:
+        return 0
+
+
+def _ps_files(abbr):
+    """按 mtime 升序列出 ArkApi_*.log（含轮转 .N.log）"""
+    d = ps_log_dir(abbr)
+    if not os.path.isdir(d):
+        return []
+    out = []
+    try:
+        names = os.listdir(d)
+    except Exception:
+        return []
+    for fn in names:
+        if not (fn.startswith('ArkApi_') and fn.endswith('.log')):
+            continue
+        p = os.path.join(d, fn)
+        try:
+            st = os.stat(p)
+        except OSError:
+            continue
+        m = re.match(r'^ArkApi_(\d+)_', fn)
+        out.append({'path': p, 'name': fn, 'pid': (m.group(1) if m else ''),
+                    'mtime': int(st.st_mtime), 'size': st.st_size})
+    out.sort(key=lambda x: (x['mtime'], x['name']))
+    return out
+
+
+def _ps_scan_file(rec):
+    """解析单个日志文件（带 mtime+size 缓存）"""
+    key = rec['path']
+    c = PS_FILE_CACHE.get(key)
+    if c and c.get('mtime') == rec['mtime'] and c.get('size') == rec['size']:
+        return c
+    events, names = [], {}
+    last_ts, first_ts, hit = 0, 0, 0
+    try:
+        with io.open(rec['path'], 'r', encoding='utf-8', errors='replace') as f:
+            for line in f:
+                if 'STATE_MACHINE' not in line:
+                    continue
+                m = _PS_LINE_RE.match(line.rstrip('\r\n'))
+                if not m:
+                    continue
+                ts = _ps_ts(m.group(1), m.group(2), m.group(3), m.group(4), m.group(5))
+                if not ts:
+                    continue
+                rest = m.group(8)
+                me = _PS_EOS_RE.search(rest)
+                if not me:
+                    continue
+                eos = me.group(1).lower()
+                hit += 1
+                if not first_ts or ts < first_ts:
+                    first_ts = ts
+                if ts > last_ts:
+                    last_ts = ts
+                ev = _PS_EVENT_RE.search(rest)
+                if ev:
+                    events.append((ts, eos, 'join' if ev.group(1) == 'new_player' else 'leave'))
+                mu = _PS_USER_RE.search(rest)
+                if mu:
+                    nm = names.get(eos) or {}
+                    nm['user'] = mu.group(1)
+                    mc = _PS_CHAR_RE.search(rest)
+                    if mc:
+                        nm['char'] = mc.group(1)
+                    names[eos] = nm
+    except Exception as e:
+        _log('ps_scan_file %s FAIL %s' % (rec['name'], e))
+    data = {'path': key, 'mtime': rec['mtime'], 'size': rec['size'], 'pid': rec['pid'],
+            'events': events, 'names': names, 'lastTs': last_ts, 'firstTs': first_ts, 'hit': hit}
+    PS_FILE_CACHE[key] = data
+    if len(PS_FILE_CACHE) > PS_FILE_CACHE_MAX:
+        ks = sorted(PS_FILE_CACHE.keys(), key=lambda k: PS_FILE_CACHE[k].get('mtime') or 0)
+        for k in ks[:max(1, len(ks) // 2)]:
+            PS_FILE_CACHE.pop(k, None)
+    return data
+
+
+def _ps_scan(abbr):
+    """扫描一个服 -> {sessions, online, coverage, degraded, ...}"""
+    files = _ps_files(abbr)
+    if not files:
+        return {'ok': True, 'server': abbr, 'sessions': [], 'online': [], 'coverage': None,
+                'counts': {'sessions': 0, 'closed': 0, 'online': 0, 'unclosed': 0},
+                'degraded': True, 'degradedReason': 'log_dir_missing', 'files': 0}
+    recs = [_ps_scan_file(f) for f in files]
+    open_map, sessions = {}, []
+    prev = None
+    for r in recs:
+        # 进程换代：上一代未收尾的会话按上一份文件末行时间收尾（否则永远显示在线）
+        if prev and prev.get('pid') and r.get('pid') and prev['pid'] != r['pid']:
+            lt = prev.get('lastTs') or 0
+            for eos in [k for k, v in open_map.items() if v.get('pid') == prev['pid']]:
+                if lt:
+                    sessions.append({'eosId': eos, 'joinAt': open_map[eos]['joinAt'],
+                                     'leftAt': lt, 'state': 'closed_by_restart'})
+                    open_map.pop(eos, None)
+        for (ts, eos, kind) in r.get('events') or []:
+            if kind == 'join':
+                p = open_map.get(eos)
+                if p:
+                    sessions.append({'eosId': eos, 'joinAt': p['joinAt'], 'leftAt': None,
+                                     'state': 'unclosed_rejoin'})
+                open_map[eos] = {'joinAt': ts, 'pid': r.get('pid')}
+            else:
+                p = open_map.pop(eos, None)
+                if p:
+                    sessions.append({'eosId': eos, 'joinAt': p['joinAt'], 'leftAt': ts,
+                                     'state': 'closed'})
+                else:
+                    sessions.append({'eosId': eos, 'joinAt': None, 'leftAt': ts,
+                                     'state': 'leave_without_join'})
+        prev = r
+
+    now = int(time.time())
+    online = []
+    for eos, v in list(open_map.items()):
+        if now - v['joinAt'] <= PS_OPEN_STALE:
+            sessions.append({'eosId': eos, 'joinAt': v['joinAt'], 'leftAt': None, 'state': 'online'})
+            online.append({'eosId': eos, 'joinAt': v['joinAt'], 'seconds': now - v['joinAt']})
+        else:
+            sessions.append({'eosId': eos, 'joinAt': v['joinAt'], 'leftAt': None, 'state': 'stale_open'})
+
+    # 名字回填（取所有文件里最后一次出现的 user/char）
+    names = {}
+    for r in recs:
+        for k, v in (r.get('names') or {}).items():
+            cur = names.setdefault(k, {})
+            cur.update(v)
+    for s in sessions:
+        n = names.get(s['eosId']) or {}
+        s['playerName'] = n.get('user') or ''
+        s['charName'] = n.get('char') or n.get('user') or ''
+        if s.get('joinAt') and s.get('leftAt'):
+            s['seconds'] = int(s['leftAt'] - s['joinAt'])
+        elif s.get('joinAt') and s['state'] == 'online':
+            s['seconds'] = int(now - s['joinAt'])
+        else:
+            s['seconds'] = None
+        s['source'] = 'log'
+    for o in online:
+        n = names.get(o['eosId']) or {}
+        o['playerName'] = n.get('user') or ''
+        o['charName'] = n.get('char') or n.get('user') or ''
+    sessions.sort(key=lambda x: (x.get('leftAt') or x.get('joinAt') or 0), reverse=True)
+
+    fts = [r.get('firstTs') for r in recs if r.get('firstTs')]
+    lts = [r.get('lastTs') for r in recs if r.get('lastTs')]
+    cov = None
+    if fts and lts:
+        a, b = min(fts), max(lts)
+        cov = {'from': a, 'to': b, 'hours': round((b - a) / 3600.0, 1),
+               'files': len(recs), 'bytes': sum(r.get('size') or 0 for r in recs),
+               'smLines': sum(r.get('hit') or 0 for r in recs)}
+    closed = len([s for s in sessions if s['state'] == 'closed'])
+    unclosed = len([s for s in sessions if s['state'] in ('unclosed_rejoin', 'leave_without_join', 'stale_open')])
+    out = {'ok': True, 'server': abbr, 'sessions': sessions, 'online': online,
+           'coverage': cov, 'counts': {'sessions': len(sessions), 'closed': closed,
+                                       'online': len(online), 'unclosed': unclosed},
+           'files': len(recs),
+           'degraded': (str(abbr).lower() == 'bob'),
+           'degradedReason': ('events_not_logged' if str(abbr).lower() == 'bob' else None)}
+    return out
+
+
+def ps_sessions(abbr, force=False):
+    """带 60s 服务级缓存"""
+    now = time.time()
+    c = PS_SESS_CACHE.get(abbr)
+    if (not force) and c and (now - c['ts'] < PS_SESS_TTL):
+        d = dict(c['data'])
+        d['cache'] = {'hit': True, 'ageMs': int((now - c['ts']) * 1000)}
+        return d
+    with PS_LOCK:
+        c = PS_SESS_CACHE.get(abbr)
+        if (not force) and c and (time.time() - c['ts'] < PS_SESS_TTL):
+            d = dict(c['data'])
+            d['cache'] = {'hit': True, 'ageMs': int((time.time() - c['ts']) * 1000)}
+            return d
+        data = _ps_scan(abbr)
+    PS_SESS_CACHE[abbr] = {'ts': time.time(), 'data': data}
+    d = dict(data)
+    d['cache'] = {'hit': False, 'ageMs': 0}
+    return d
+
+
+def player_sessions_payload(abbr, force=False):
+    """对外统一入口（presence 合并用）"""
+    try:
+        d = ps_sessions(abbr, force=force)
+    except Exception as e:
+        return {'ok': False, 'error': '%s: %s' % (type(e).__name__, e),
+                'sessions': [], 'online': [], 'coverage': None,
+                'degraded': True, 'degradedReason': 'log_scan_error'}
+    d['generatedAt'] = int(time.time() * 1000)
+    if d.get('coverage'):
+        d['coverageOut'] = {'from': d['coverage']['from'] * 1000,
+                            'to': d['coverage']['to'] * 1000,
+                            'hours': d['coverage']['hours']}
+    # v6555（BUG 修复）：ps_sessions 返回的是 dict(c['data']) **浅拷贝**，sessions 列表与缓存同一对象。
+    #   原实现直接就地 s[k] = s[k]*1000 ⇒ 每调用一次就再放大 1000 倍（缓存也被污染），
+    #   实测 24h → 7d 切窗口后 from 变成 1.79e18，前端时间全报错。现改为**逐条拷贝后再换算**。
+    _sess = []
+    for _s in (d.get('sessions') or []):
+        _x = dict(_s)
+        for _k in ('joinAt', 'leftAt'):
+            if _x.get(_k):
+                _x[_k] = int(_x[_k] * 1000)
+        _sess.append(_x)
+    d['sessions'] = _sess
+    _onl = []
+    for _o in (d.get('online') or []):
+        _y = dict(_o)
+        if _y.get('joinAt'):
+            _y['joinAt'] = int(_y['joinAt'] * 1000)
+        _onl.append(_y)
+    d['online'] = _onl
+    return d
+
+
+# ---------------- 跨服角色路径（2026-11-11） ----------------
+#   用户口径：行程明细 = 「选中角色在**全部服**的行程路径」，不再只看单服停留段。
+PS_PATHS_TTL = 30                          # 全服归并结果短时缓存（各服自身仍有 60s 会话缓存）
+PS_PATHS_CACHE = {'ts': 0, 'key': None, 'data': None}
+# v6566：每服「可回档点时间序列」缓存，供「行程段里有几个档」统计
+#   口径（用户选定）：定时快照 .ark + 滚动备份 .arkrbf；不含当前活跃档 / 旧 bat 残留
+PS_POINTS_TTL = 60
+PS_POINTS_CACHE = {}
+
+
+def _ps_points_series(ab, force=False):
+    """返回某服可回档点时间戳列表（秒，升序）。失败返回空列表，不抛。"""
+    now = time.time()
+    c = PS_POINTS_CACHE.get(ab)
+    if (not force) and c and (now - c[0] < PS_POINTS_TTL):
+        return c[1]
+    series = []
+    try:
+        r = list_points(ab) or {}
+        for p in (r.get('points') or []):
+            t = p.get('tsEpoch')
+            if t:
+                series.append(int(t))
+        for p in (r.get('rbf') or []):
+            t = p.get('tsEpoch')
+            if t:
+                series.append(int(t))
+    except Exception as e:
+        _log('ps_points_series %s FAIL %s' % (ab, e))
+        series = []
+    series.sort()
+    PS_POINTS_CACHE[ab] = (now, series)
+    return series
+
+
+def _ps_state_norm(st):
+    """会话状态归一：online / closed / unknown（unclosed_rejoin、stale_open、leave_without_join）"""
+    st = str(st or '')
+    if st == 'online':
+        return 'online'
+    if st == 'closed':
+        return 'closed'
+    return 'unknown'
+
+
+def player_paths_payload(hours=24, force=False):
+    """跨服角色路径：遍历全部服的 ArkApi 日志会话，按角色（eosId）归并成一条时间线。
+
+    返回：
+      {ok, hours, generatedAt, since, servers:[...], players:[
+         {eosId, name, charName, onlineServer, lastSeen, servers:[abbr..],
+          segments:[{server, from(ms), to(ms|null), state, secs}]}]}
+    口径：窗口内（默认 24h）有活动的角色才列出；段按开始时间升序。
+    异常降级：单服失败只记录在 servers[].error，不影响其他服。
+    """
+    now = time.time()
+    # v6557（用户口径）：hours=0 表示**不限窗口**（取日志里能取到的全部会话）
+    try:
+        hours = float(hours or 0)
+    except Exception:
+        hours = 0.0
+    if hours < 0:
+        hours = 0.0
+    if hours > 24 * 365:
+        hours = 24 * 365.0
+    ck = (round(hours, 2),)
+    c = PS_PATHS_CACHE.get('data')
+    if (not force) and c and PS_PATHS_CACHE.get('key') == ck \
+            and (now - (PS_PATHS_CACHE.get('ts') or 0) < PS_PATHS_TTL):
+        d = dict(c)
+        d['cache'] = {'hit': True, 'ageMs': int((now - (PS_PATHS_CACHE.get('ts') or 0)) * 1000)}
+        return d
+
+    since = (now - hours * 3600.0) if hours else 0.0
+    by, servers = {}, []
+    srvpts = {}          # v6566: abbr -> [档时间戳(秒)...]
+    for ab in _ALL_SERVERS:
+        try:
+            lg = player_sessions_payload(ab, force=force)
+        except Exception as e:
+            servers.append({'server': ab, 'ok': False,
+                            'error': '%s: %s' % (type(e).__name__, e)})
+            continue
+        ss = lg.get('sessions') or []
+        # v6647（用户口径「Jaron 明明在线」）：日志判定在线有硬伤 —— 长时间在线的玩家
+        #   不会再产生 join 日志，超过 PS_OPEN_STALE(2h) 就被误判 stale_open。
+        #   这里额外取该服 RCON 在线快照 <abbr>_online.json（TTL 300s）作为权威校正依据。
+        _onl_eos = set()
+        _onl_ok, _onl_age = False, None       # v6650：在线快照状态（供前端判断是否需补拉）
+        try:
+            _ro = read_online(ab) or {}
+            _onl_ok = bool(_ro.get('ok'))
+            _onl_age = _ro.get('ageSec')
+            if _ro.get('ok') and _ro.get('fresh', True):
+                for _x2 in (_ro.get('players') or []):
+                    _e2 = str(_x2.get('eosId') or '').lower()
+                    if _e2:
+                        _onl_eos.add(_e2)
+        except Exception:
+            _onl_eos = set()
+        srvpts[ab] = _ps_points_series(ab, force=force)
+        servers.append({'server': ab, 'ok': bool(lg.get('ok', True)), 'sessions': len(ss),
+                        'points': len(srvpts[ab]),
+                        'degraded': bool(lg.get('degraded')),
+                        'coverageHours': ((lg.get('coverage') or {}).get('hours')),
+                        # v6650（用户口径「每次刷新后新打开安全回档总是取不到在线状态」·根因修复）：
+                        #   页面加载时 /api/arkbackup/paths 与 11 个 /api/list_players **同毫秒并发**出发，
+                        #   list_players 走 RCON 要 1~8 秒才写 <abbr>_online.json ⇒ paths 抢跑读到上一轮快照；
+                        #   而本函数只采信 age<=ONLINE_TTL_DEFAULT(300s) 的快照，过期就整批放弃 ⇒ 全判离线。
+                        #   这里把快照年龄/新鲜度回传前端，由前端在 RCON 跑完后（约 6 秒）强制补拉一次。
+                        'onlineOk': _onl_ok,
+                        'onlineAge': _onl_age,
+                        'onlineStale': bool(_onl_age is None or _onl_age > ONLINE_TTL_DEFAULT)})
+        for s2 in ss:
+            eos = str(s2.get('eosId') or '').lower()
+            if not eos:
+                continue
+            j = s2.get('joinAt') or 0          # 毫秒
+            l = s2.get('leftAt') or 0
+            j_s = (j / 1000.0) if j else 0.0
+            l_s = (l / 1000.0) if l else 0.0
+            end = l_s or now
+            if end < since:
+                continue
+            p = by.get(eos)
+            if not p:
+                p = by[eos] = {'eosId': eos, 'name': '', 'charName': '', 'segments': [],
+                               'servers': [], 'onlineServer': '', 'lastSeen': 0}
+            if not p['name']:
+                p['name'] = s2.get('playerName') or ''
+            if not p['charName']:
+                p['charName'] = s2.get('charName') or s2.get('playerName') or ''
+            seg_from = j_s if j_s else (l_s - 60 if l_s else 0.0)
+            if not seg_from:
+                continue
+            st = _ps_state_norm(s2.get('state'))
+            # v6647：RCON 快照确认该角色此刻在本服，且这段还没有 leftAt ⇒ 判在线
+            if (eos in _onl_eos) and not l_s:
+                st = 'online'
+            p['segments'].append({'server': ab,
+                                  'from': int(seg_from * 1000),
+                                  'to': (int(l_s * 1000) if l_s else None),
+                                  'state': st,
+                                  'secs': int(end - seg_from)})
+            if ab not in p['servers']:
+                p['servers'].append(ab)
+            if st == 'online':
+                p['onlineServer'] = ab
+            if int(end * 1000) > p['lastSeen']:
+                p['lastSeen'] = int(end * 1000)
+
+    players = []
+    now_ms = int(now * 1000)
+    for eos, p in by.items():
+        p['segments'].sort(key=lambda x: x['from'])
+        # v6566（用户口径）：每段标出「该时间段内该服有几个档」
+        for sg in p['segments']:
+            ser = srvpts.get(sg['server']) or []
+            lo = int(sg['from'] or 0)
+            hi = int(sg['to']) if sg.get('to') else now_ms
+            sg['archives'] = sum(1 for t in ser if lo <= t * 1000 <= hi)
+        p['name'] = p['name'] or eos[:8]
+        p['charName'] = p['charName'] or p['name']
+        p['servers'].sort(key=lambda a: str(a))
+        players.append(p)
+    players.sort(key=lambda x: -(x['lastSeen'] or 0))
+
+    # v6568（用户口径）：额外返回每服档时间序列（秒），前端据此统计「任意区间有几个档」
+    #   —— 段卡片 + 离线空档块都用同一口径，避免两套算法
+    data = {'ok': True, 'hours': hours, 'generatedAt': int(time.time() * 1000),
+            'since': int(since * 1000), 'servers': servers, 'players': players,
+            'pointsByServer': srvpts}
+    PS_PATHS_CACHE.clear()
+    PS_PATHS_CACHE.update({'ts': now, 'key': ck, 'data': data})
+    d = dict(data)
+    d['cache'] = {'hit': False, 'ageMs': 0}
+    return d
+
+
 # ---------------- 本地自测 ----------------
 if __name__ == '__main__':
     import sys
@@ -1517,3 +2215,49 @@ if __name__ == '__main__':
         print('  当前档: %s  %s MB  %s' % (act.get('name'), act.get('mb'), act.get('ts')))
         for p in (r.get('points') or [])[:5]:
             print('   - %-40s %6.1f MB  %s  %s' % (p['name'], p['mb'], p['ts'], p['kind']))
+
+def peer_bag(abbr, pid):
+    """v6616（用户口径）：重复角色（目标档有、当前档无）—— 取该角色在**其它服**当前档的
+    背包与低温仓（全部按 pid，不用名字）。
+
+    数据源：对候选服跑一次 ark_save_reader.exe light（run_exe 有 600s 缓存），
+    只保留该 pid 的条目。找不到就返回 ok=False，调用方据此显示「无法对比」。
+    """
+    try:
+        pid = int(pid)
+    except Exception:
+        return {'ok': False, 'code': 'bad_pid', 'error': '必须是整数'}
+    idx = pid_index()
+    cands = [x for x in ((idx.get('index') or {}).get(pid) or []) if x != abbr]
+    if not cands:
+        return {'ok': False, 'code': 'not_in_other_server',
+                'error': '该角色当前不在其它服'}
+    tried = []
+    for sv in cands:
+        try:
+            md, _how = detect_map_dir(sv)
+            if not md:
+                tried.append({'server': sv, 'err': 'mapdir_unknown'})
+                continue
+            an = _active_name(sv, md)
+            if not an:
+                tried.append({'server': sv, 'err': 'no_active'})
+                continue
+            ap = os.path.join(ARK_ROOT, sv, 'ShooterGame', 'Saved', 'SavedArks', md, an)
+            r = run_exe(ap, sv)
+            if not r.get('ok'):
+                tried.append({'server': sv, 'err': r.get('error') or r.get('code') or 'exe_failed'})
+                continue
+            items = [x for x in (r.get('playerItems') or []) if str(x.get('pid')) == str(pid)]
+            cryo = [x for x in (r.get('playerCryopods') or [])
+                    if str(x.get('containerOwnerPid')) == str(pid)]
+            if items or cryo:
+                return {'ok': True, 'server': sv, 'pid': pid, 'items': items,
+                        'cryopods': cryo, 'tried': tried, 'cacheHit': bool(r.get('cacheHit'))}
+            tried.append({'server': sv, 'err': 'pid_not_found'})
+        except Exception as e:
+            tried.append({'server': sv, 'err': '%s: %s' % (type(e).__name__, str(e)[:120])})
+    return {'ok': False, 'code': 'no_peer_data',
+            'error': '其它服没找到该角色的背包数据',
+            'tried': tried}
+

@@ -125,14 +125,27 @@ _ARKBK_HOLD = {}                 # server -> jobId（回档进行中）
 _ARKBK_JOB_KEEP = 1800           # 已结束 job 保留 30 分钟，之后 GC 掉
 # v6058：阶段权重（原来的前端 TOTAL=8 是**等权**估算，restoring 花 40s 与 saveworld 花 2s
 #   各算 1/8，百分比是假的）。改为后端按真实耗时量级下发 pct。
-_ARKBK_STEP_PCT = {'saveworld': 6, 'precheck': 12, 'snapshot': 20, 'stopping': 30,
+_ARKBK_STEP_PCT = {'saveworld': 6, 'precheck': 12, 'snapshot': 20, 'quiet': 26, 'stopping': 30,
                    'stopped': 38, 'restoring': 60, 'starting': 72, 'verifying': 92}
 _ARKBK_JOB_TTL = 7200            # 2 小时
 _ARKBK_POOL = __import__('concurrent.futures', fromlist=['ThreadPoolExecutor']).ThreadPoolExecutor(max_workers=1)
 # v6058：原顺序把 snapshot 排在 stopping **之后**，与实际实现（备份 → 停服 → 换档）相反，
 #   该常量全文件无使用点，纯误导（曾让进度条按错误顺序实现）⇒ 按真实执行顺序修正。
-_ARKBK_PHASES = ('queued', 'saveworld', 'precheck', 'snapshot', 'stopping', 'stopped',
+_ARKBK_PHASES = ('queued', 'saveworld', 'precheck', 'snapshot', 'quiet', 'stopping', 'stopped',
                  'restoring', 'starting', 'verifying', 'done', 'failed')
+
+# ===== v6683（用户口径 2026-11-14）：安全回档「流程 Session」 =====
+# 为什么需要：回档是多步骤人工流程（传图离开 / 上传 / 执行 / 验证 …），
+#   原来没有任何「我正在做这个档」的标记 ⇒ 两个人可能同时对同一档操作，
+#   也没人知道别人做到哪一步。这里把「当前正在做的档 + 谁开始 + 何时开始」
+#   落盘成**全局单实体**（每服一条），跨客户端、跨玩家、重启不丢。
+# 过期口径（用户拍板）：6 小时无动作自动作废 —— 读取时惰性判定，不跑定时器。
+ARKBK_FLOW_FILE = os.environ.get(
+    'ARKBK_FLOW_FILE',
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ark_backup_flow.json'))
+_ARKBK_FLOW_LOCK = threading.Lock()
+_ARKBK_FLOW_TTL = 6 * 3600
+_ARKBK_FLOW_LIVE = ('active', 'verifying')
 
 # ===== v6127（M2）：回档/演练进度并入统一任务总线 =====
 _ARKBK_GROUPS = (
@@ -143,7 +156,7 @@ _ARKBK_GROUPS = (
     ('verify', u'校验'),
 )
 _ARKBK_GROUP = {'queued': 'save', 'saveworld': 'save', 'precheck': 'check',
-                'snapshot': 'swap', 'stopping': 'swap', 'stopped': 'swap',
+                'snapshot': 'swap', 'quiet': 'swap', 'stopping': 'swap', 'stopped': 'swap',
                 'restoring': 'swap', 'starting': 'start', 'verifying': 'verify'}
 
 
@@ -206,6 +219,89 @@ def _arkbk_task_push(job):
                    meta={'jobId': job.get('id')})
     except Exception:
         _sexc('arkbk_task_push')
+
+
+def _arkbk_point_ts_txt(point_id):
+    """v6672（用户口径「公告里写明回档时间点」）：从 pointId 提取 MM/DD HH:MM。
+       pointId 形如 rbf:20261114060750 / auto:20261112014904（14 位时间戳）。"""
+    try:
+        m = re.search(r'(\d{8})(\d{6})', str(point_id or ''))
+        if not m:
+            return ''
+        d, t = m.group(1), m.group(2)
+        return '%s/%s %s:%s' % (d[4:6], d[6:8], t[0:2], t[2:4])
+    except Exception:
+        return ''
+
+
+def _arkbk_ann_texts(server, point_id, online_n=None, kind='offline', undoable=False, operator=''):
+    """回档公告文案的**唯一生成点** —— 前端预览框与实际发送都走这里，避免两套模板漂移。
+       v6676：kind='offline'（动态说明能否回到当前档）/ 'consent'（明确不会回到当前档）。
+       v6677（用户口径「要明确说是谁要回档，并提醒玩家如果有异议请找这个人沟通」+「操作者放最前」）：
+         文案头变成【回档 · <操作者>】/【回档征询 · <操作者>】，结尾加「有异议请找 <操作者>」。
+         操作者为空时退回旧格式（不写人）。
+       返回 {'cn': 中文, 'en': 英文}（各截 200 字符，对应 RCON broadcast 上限）。"""
+    _tsx = _arkbk_point_ts_txt(point_id)
+    _op = str(operator or '').strip()[:24]
+    _who_cn = (u' · %s' % _op) if _op else u''
+    _who_en = (u' · %s' % _op) if _op else u''
+    _obj_cn = (u'有异议请找 %s。' % _op) if _op else u''
+    _obj_en = (u' Objections: contact %s.' % _op) if _op else u''
+    if kind == 'consent':
+        # 征询同意：重点是「不可撤回」，让对方在知情前提下决定
+        if _tsx:
+            cn = (u'【回档征询%s】本服将回档到 %s，不会回到当前档，之后进度永久丢失（本次不可撤销）。'
+                  u'%s' % (_who_cn, _tsx, _obj_cn))
+            en = (u'[Rollback consent%s] This server rolls back to %s. This will NOT return to the '
+                  u'current save; progress after that point is permanently lost (no undo).%s'
+                  % (_who_en, _tsx, _obj_en))
+        else:
+            cn = (u'【回档征询%s】本服即将回档，不会回到当前档，之后进度永久丢失（本次不可撤销）。'
+                  u'%s' % (_who_cn, _obj_cn))
+            en = (u'[Rollback consent%s] This server is about to roll back. This will NOT return to '
+                  u'the current save; progress after that point is permanently lost (no undo).%s'
+                  % (_who_en, _obj_en))
+    else:
+        # 请下线：动态区分「能不能回到当前档」
+        if undoable:
+            if _tsx:
+                cn = (u'【回档%s】本服将回档到 %s。本次可通过撤销恢复当前进度，请先下线，回档后可再进。'
+                      u'%s' % (_who_cn, _tsx, _obj_cn))
+                en = (u'[Rollback%s] Rollback to %s. Current progress CAN be restored by undo. '
+                      u'Log off now, rejoin after rollback.%s' % (_who_en, _tsx, _obj_en))
+            else:
+                cn = u'【回档%s】本服即将回档。本次可通过撤销恢复当前进度，请先下线，回档后可再进。%s' % (_who_cn, _obj_cn)
+                en = (u'[Rollback%s] Rollback incoming. Current progress CAN be restored by undo. '
+                      u'Log off now, rejoin after rollback.%s' % (_who_en, _obj_en))
+        else:
+            if _tsx:
+                cn = (u'【回档%s】本服将回档到 %s，进度会退回该时刻且不可撤销。请立即下线。%s'
+                      % (_who_cn, _tsx, _obj_cn))
+                en = (u'[Rollback%s] Rollback to %s. Progress is permanently lost (no undo). '
+                      u'Log off now.%s' % (_who_en, _tsx, _obj_en))
+            else:
+                cn = u'【回档%s】本服即将回档，进度会退回该时刻且不可撤销。请立即下线。%s' % (_who_cn, _obj_cn)
+                en = (u'[Rollback%s] Rollback incoming. Progress is permanently lost (no undo). '
+                      u'Log off now.%s' % (_who_en, _obj_en))
+    if online_n is not None:
+        try:
+            cn += u'（在线%d人）' % int(online_n)
+            en += u' (online: %d)' % int(online_n)
+        except Exception:
+            pass
+    return {'cn': cn[:200], 'en': en[:200]}
+
+
+def _arkbk_ann_previews(server, point_id, online_n=None, operator=''):
+    """v6676/v6677：一次生成三种可能文案供前端预览框按场景挑（与实发同源）：
+       offlineUndo（请下线·可撤销） / offlineNo（请下线·不可撤销） / consent（征得同意）
+       三种都带操作者（v6677：让玩家知道找谁沟通）。"""
+    return {
+        'offlineUndo': _arkbk_ann_texts(server, point_id, online_n, 'offline', True, operator),
+        'offlineNo': _arkbk_ann_texts(server, point_id, online_n, 'offline', False, operator),
+        'consent': _arkbk_ann_texts(server, point_id, online_n, 'consent', False, operator),
+        'operator': str(operator or ''),
+    }
 
 
 def _arkbk_rcon_alive(server, timeout=3):
@@ -383,7 +479,31 @@ def _arkbk_do_rollback(job, argv, cfg):
                 return
 
         # ④ 停服
+        _gate_q = None
         if st.get('running'):
+            # ③.5 v6672（用户口径「安全回档的任务里面 你没有调用 三重静默 逻辑」）：
+            #   三重静默原来只在 _srvctl_one('kill') 内部**隐式**判（_srvctl_terminal_gate），
+            #   成功时任务条上完全看不到它跑过，被拦时也只报「停服失败」。
+            #   这里显式跑一次并作为独立步骤上报 —— 步骤名与「更新」编排的「静默校验」一致。
+            #   （L1 在线人数必须 0 + L3 集群目录静默；Bob 豁免 L1，与自动重启同口径）
+            try:
+                _gate_q = _srvctl_terminal_gate(server)
+            except Exception as _e_q:
+                _gate_q = {'ok': False, 'blocked': True,
+                           'reasons': [u'静默探测异常：%s' % type(_e_q).__name__], 'detail': {}}
+            _q_ok = not bool(_gate_q.get('blocked'))
+            _qd = _gate_q.get('detail') or {}
+            if _q_ok:
+                _q_msg = u'静默通过（在线 %s 人 · 集群目录 %ss 无写入）' % (
+                    ('未知' if _qd.get('players') is None else int(_qd.get('players') or 0)),
+                    ('-' if _qd.get('cq') is None else int(_qd.get('cq') or 0)))
+            else:
+                _q_msg = u'静默未过：' + u'；'.join(_gate_q.get('reasons') or [])
+            _arkbk_step(job, 'quiet', _q_ok, _q_msg, extra={'gate': _gate_q})
+            if not _q_ok:
+                _arkbk_finish(job, False,
+                              u'安全护栏拦截：' + u'；'.join(_gate_q.get('reasons') or []))
+                return
             # v6120：kill 前复核 DinoData（防「边导出边强杀」留半截文件）
             #   硬失败只针对 .tmp/.part/.lock/.writing 这类明确「写入中」标记；
             #   普通 mtime 变动（如恰好碰上自动存档）只记警告，避免把回档卡死。
@@ -398,7 +518,10 @@ def _arkbk_do_rollback(job, argv, cfg):
             if not _dw2.get('ok'):
                 _arkbk_step(job, 'stopping', True,
                             '停服前复核：DinoData 仍有变动（%s），按计划继续' % (_dw2.get('reason') or ''))
-            r = _srvctl_one(server, 'kill', None, cfg)
+            # v6672：静默已在上面显式验过并作为 quiet 步骤上报 ⇒ 传 _gate_passed
+            #   让 _srvctl_one 跳过重复探测（结论只隔了「DinoData 稳定复核」的几秒，仍然有效）。
+            _cfg_kill = dict(cfg); _cfg_kill['_gate_passed'] = True
+            r = _srvctl_one(server, 'kill', None, _cfg_kill)
             _arkbk_step(job, 'stopping', r.get('ok'),
                         ('已强杀 %sms' % r.get('ms')) if r.get('ok') else str(r.get('message')))
             if not r.get('ok'):
@@ -724,6 +847,152 @@ def _arkbk_job_gc():
         for k in dead:
             _ARKBK_JOBS.pop(k, None)
     return len(dead)
+
+
+def _arkbk_flow_read():
+    """读流程表（每服一条）。文件不存在/损坏 ⇒ 空表。"""
+    try:
+        with open(ARKBK_FLOW_FILE, 'r', encoding='utf-8') as f:
+            d = json.load(f)
+        return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
+
+
+def _arkbk_flow_write(doc):
+    """原子写（与 _srv_cfg_write 同款：先写 .tmp 再 os.replace）"""
+    tmp = ARKBK_FLOW_FILE + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(doc, f, ensure_ascii=False, indent=1)
+    os.replace(tmp, ARKBK_FLOW_FILE)
+
+
+def _arkbk_flow_norm(fl):
+    """补默认字段 + 惰性过期（phase=expired 由调用方决定是否落盘）"""
+    if not isinstance(fl, dict) or not fl.get('id'):
+        return None
+    out = dict(fl)
+    out.setdefault('phase', 'active')
+    out.setdefault('step', 'start')
+    try:
+        t0 = float(out.get('t0') or 0)
+    except Exception:
+        t0 = 0
+    if t0 <= 0:
+        out['phase'] = 'expired'
+        return out
+    if out.get('phase') in _ARKBK_FLOW_LIVE and (time.time() - t0) > _ARKBK_FLOW_TTL:
+        out['phase'] = 'expired'
+    return out
+
+
+def _arkbk_flow_get(server):
+    """读某服流程；返回 None 表示没有。惰性过期会顺手落盘（只落一次）。"""
+    if not server:
+        return None
+    with _ARKBK_FLOW_LOCK:
+        d = _arkbk_flow_read()
+        fl = _arkbk_flow_norm(d.get(server))
+        if fl and fl.get('phase') == 'expired' and (d.get(server) or {}).get('phase') != 'expired':
+            d[server] = fl
+            try:
+                _arkbk_flow_write(d)
+            except Exception:
+                pass
+        return fl
+
+
+def _arkbk_flow_set(server, fl):
+    """写/删某服流程（fl=None ⇒ 删除该服条目）"""
+    with _ARKBK_FLOW_LOCK:
+        d = _arkbk_flow_read()
+        if fl is None:
+            d.pop(server, None)
+        else:
+            d[server] = fl
+        _arkbk_flow_write(d)
+        return fl
+
+
+def _arkbk_flow_watchers_norm(raw):
+    """v6742（方案「安全回档·临时授权监督入口」）：规范化监督名单。
+    接受 list / JSON 字符串 / 逗号分隔 eosId。输出 [{'eosId': '大写', 'name': '…'}]，
+    去重 + 最多 5 个 + eosId 必须是 16~64 位十六进制。
+    ❗ 这份名单**只用于前端视图裁剪**，绝不进入 execute/rollback/undo 的任何鉴权分支。"""
+    items = []
+    if isinstance(raw, str):
+        t = raw.strip()
+        if t.startswith('['):
+            try:
+                items = json.loads(t)
+            except Exception:
+                items = []
+        elif t:
+            items = t.split(',')
+    elif isinstance(raw, (list, tuple)):
+        items = list(raw)
+    out, seen = [], set()
+    for x in items:
+        if isinstance(x, dict):
+            e = str(x.get('eosId') or x.get('eos') or '').strip().upper()
+            nm = str(x.get('name') or x.get('whoName') or '').strip()[:32]
+        else:
+            e = str(x or '').strip().upper()
+            nm = ''
+        if not e or e in seen:
+            continue
+        if not re.match(r'^[0-9A-F]{16,64}$', e):
+            continue
+        seen.add(e)
+        out.append({'eosId': e, 'name': nm})
+        if len(out) >= 5:
+            break
+    return out
+
+
+def _arkbk_flow_goals_norm(raw):
+    """回档目的（找回 recover / 回溯 keep）归一化成 radio 语义 —— 恰好一个 True。
+    缺省 / 非法 / 两个都开 ⇒ 默认 recover。
+    ❗ 只用于前端视图（「回档授权」里只读展示），不参与 execute / rollback 鉴权。"""
+    out = {'recover': True, 'keep': False}
+    try:
+        if isinstance(raw, str) and raw.strip():
+            raw = json.loads(raw)
+    except Exception:
+        raw = None
+    if isinstance(raw, dict):
+        _r = bool(raw.get('recover'))
+        _k = bool(raw.get('keep'))
+        if _k and not _r:
+            out = {'recover': False, 'keep': True}
+    return out
+
+
+def _arkbk_flow_new(server, point_id, point_ts, user, watchers=None, goals=None):
+    """新建一条 active 流程"""
+    now = time.time()
+    _wt_norm = _arkbk_flow_watchers_norm(watchers)
+    return {
+        'id': 'flw_%s_%04x' % (time.strftime('%Y%m%d_%H%M%S', time.localtime(now)),
+                               int(now * 1000) & 0xffff),
+        'server': server,
+        'serverCn': _arkbk_server_cn(server),
+        'pointId': str(point_id or ''),
+        'pointTs': str(point_ts or ''),
+        'phase': 'active',
+        'step': 'start',
+        'startedBy': str(user or ''),
+        'startedAt': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(now)),
+        'updatedAt': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(now)),
+        't0': now,
+        # v6742：回档主体玩家（前端 start 时自动从 LB_ARKBK.who 填）；
+        #   只服务前端视图裁剪，与执行类鉴权无关
+        'watchers': _wt_norm,
+        'watchAt': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(now)) if _wt_norm else '',
+        # v6758：回档目的（找回 / 回溯）随流程落库 —— 被授权玩家在「回档授权」里只读展示。
+        #   原来只存前端内存 ARKBK_G.goals ⇒ 服主选「回溯」、被授权者仍看到默认「找回」（不同步）。
+        'goals': _arkbk_flow_goals_norm(goals),
+    }
 
 
 def _arkbk_server_cn(server):
@@ -5075,6 +5344,14 @@ CMD_VOLCANO = 'TransferIdentityFix.Volcano'  # 2026-09-14：火山喷发权威�
 CMD_WORLDPROBE = 'TransferIdentityFix.WorldProbe'  # 2026-09-30：公共设施实时查询（插件 v9；只读、无副作用）
 CRAFTING_COST_SERVERS = set(SERVERS.keys())  # 2026-09-15：全服放开（用户确认所有地图均已部署 CraftingCost 命令；原阶段一白名单 {'Abe'}）
 CMD_LIST_PLAYERS = 'ListPlayers'  # v532：原生 RCON 在线玩家列表（联盟位置只查在线成员）
+# v6548（用户口径 2026-11-11「Bob 退出后玩家列表还残留」）：
+#   Bob（俱乐部）的 ListPlayers 会**挂住已退服的连接** —— 实测玩家退出 4 分钟后仍被列出，
+#   而 `TransferIdentityFix.PlayerPos <eos>` 明确返回 {"ok":false,"error":"player not found"}。
+#   ⇒ 对 Bob 而言 count/players 完全不可信（v6545 前端「count 归零才置空」因此天然失效：
+#     Bob 的 count 恒 >0，那道闸永远不触发）。
+#   源头修正：写 _online.json 前对候选玩家做一次 PlayerPos 交叉验证，ok=false 的剔除。
+ONLINE_XCHECK_SERVERS = {'Bob'}   # 需要 PlayerPos 交叉验证的服（目前仅俱乐部）
+ONLINE_XCHECK_MAX = 10            # 候选人数超过此值则跳过验证（防批量 RCON 拖慢，整批按原样返回）
 CMD_INGAME_TIME = 'TransferIdentityFix.GetInGameTime'  # 2026-11-08：我们插件自带（可让 ExtendedRcon 退役）
 CMD_SAVE_WORLD = 'SaveWorld'  # v17：原生 RCON 保存世界（强制存档，cryo.json.gz 落地后前端拉最新球数据）
 
@@ -5674,11 +5951,23 @@ def _srvctl_one(server, action, message, cfg, progress=None):
         _tmo = 180 if action == 'destroy' else 40
         # v6190：瘦档基线必须在 **SaveWorld 之前** 取 ——
         #   原实现在 DinoData 稳定后才取，那时 .ark 已写完 ⇒ 基线 == 当前值
-        #   ⇒ 「新档 < 基线 x 0.95」恒不成立，瘦档保护形同虚设。
+        #   ⇒ 「新档 < 基线 x 0.90」恒不成立，瘦档保护形同虚设。
+        # v6741（用户口径「连刚才的 BUG 一起改」）：基线「**首次锁定、重试复用**」——
+        #   原实现每次都现取（=上一次写出的档），重试时基线已被瘦档自污染
+        #   ⇒ 第 1 次拦住的瘦档，重试时它自己变成了基线，反而被放行。
+        #   输排（_restart_exec_saveworld）会把首次基线写进 st['akBase']，这里优先用它；
+        #   非编排路径（服务器控制→保存世界）没有 st 派生的基线 ⇒ 仍现取，行为不变。
+        _ak_base0 = 0
         try:
-            _ak_base0 = int(((_srv_observe_ark(server, (_srv_observe_log(server) or {}).get('map') or '') or {}).get('size')) or 0)
+            _st_ak = (_RESTART.get('servers') or {}).get(server) or {}
+            _ak_base0 = int(_st_ak.get('akBase') or 0)
         except Exception:
             _ak_base0 = 0
+        if not _ak_base0:
+            try:
+                _ak_base0 = int(((_srv_observe_ark(server, (_srv_observe_log(server) or {}).get('map') or '') or {}).get('size')) or 0)
+            except Exception:
+                _ak_base0 = 0
         _t_save = time.time()
         # v6178：真进度上报（savekill 整合进度条用）
         if progress:
@@ -6016,20 +6305,29 @@ def _srv_observe_log(server):
         out['err'] = '%s: %s' % (type(e).__name__, e)
         return out
     try:
-        m = re.search(r'Log file open,\s*(\d{2}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})', txt)
-        if m:
-            out['firstLineAt'] = m.group(1)
-        m = re.search(r'ARK Version:\s*([\d.]+)', txt)
+        # v6832（用户实测 2026-11-17 Val 02:23 误杀）：日志可能是**追加**写 —— 新进程复用
+        #   同一个 ShooterGame.log 时，整份文件里会出现**多个** `Log file open`。原实现取
+        #   第一个匹配 ⇒ 首行永远是上一轮的，`firstLineAt` 恒不变 ⇒ 新进程起来也判不出来。
+        #   改为取**最后一个** `Log file open`，并把后续解析限定在最后一段（`_seg`）内，
+        #   否则全文搜 advertising 会命中**上一轮进程**的标记 ⇒ 刚认定「有新进程」就立刻
+        #   误报「已对外开放」启动成功（比误报失败更危险）。
+        _opens = list(re.finditer(
+            r'Log file open,\s*(\d{2}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})', txt))
+        _seg = txt
+        if _opens:
+            out['firstLineAt'] = _opens[-1].group(1)
+            _seg = txt[_opens[-1].start():]
+        m = re.search(r'ARK Version:\s*([\d.]+)', _seg)
         if m:
             out['arkVersion'] = m.group(1)
-        m = re.search(r'Commandline:\s*"([^"]+)"', txt)
+        m = re.search(r'Commandline:\s*"([^"]+)"', _seg)
         if m:
             out['map'] = m.group(1)
-        m = re.search(r'Full Startup:\s*([\d.]+) seconds', txt)
+        m = re.search(r'Full Startup:\s*([\d.]+) seconds', _seg)
         if m:
             out['fullStartupSec'] = float(m.group(1))
         for k, _label, pat in SRVCTL_BOOT_MARKS:
-            out['marks'][k] = bool(re.search(pat, txt))
+            out['marks'][k] = bool(re.search(pat, _seg))
     except Exception as e:
         out['err'] = '%s: %s' % (type(e).__name__, e)
     return out
@@ -6159,7 +6457,11 @@ def _srvctl_check_ark_after_dd(server, base_size=0):
     sz = int(ak.get('size') or 0)
     mt = int(ak.get('mtime') or 0)
     _base = int(base_size or 0)
-    thin = bool(_base and sz and sz < int(_base * 0.95))
+    # v6741（用户口径「95% 会不会太严格了一点」）：阈值 95% -> 90%。
+    #   依据：v6007 记录的真实瘦档事故是掉 19%~56%，而 .ark 是 SQLite 容器，
+    #   玩家拆基地 / 清野生 / 部落解散 带来的 5%~10% 波动属正常。
+    #   90% 既能抓住 19% 起的真实瘦档，又不再把正常波动当事故。
+    thin = bool(_base and sz and sz < int(_base * 0.90))
     if not path:
         return {'ok': False, 'path': '', 'size': 0, 'mtime': 0, 'baseSize': _base,
                 'thin': False, 'waited': round(time.time() - t0, 1),
@@ -6512,6 +6814,13 @@ def _startq_worker():
                 el = now - float(v.get('t0') or now)
                 # v6011：进程状态兜底 —— 日志只能证明「有进展」，证明不了「还活着」
                 pst = _psnap.get(srv) or ''
+                # v6832（用户实测 2026-11-17 Val 02:23 误杀）：日志判据有盲区 —— 新进程
+                #   复用同一日志文件、或日志迟迟不落盘时首行不变 ⇒ 即使 ASA 已报
+                #   Starting/Running，180s 后仍会走到「未见新进程启动」把整条编排打成 FAIL，
+                #   前端据此显示「api 更新异常」，运维以为机器没起来。进程状态是硬证据：
+                #   ASA 说它在起/在跑，就认定新进程已启动（后续 completed 仍以 advertising 为准）。
+                if not new_proc and pst in ('Starting', 'Running'):
+                    new_proc = True
                 if pst in ('Starting', 'Running'):
                     v['seenProc'] = True
                 if v.get('seenProc') and pst == 'Stopped':
@@ -7173,15 +7482,21 @@ def webp_check():
 
 
 # 玩家名缓存（扫描 DinoData 全部 *_cryo 的 players[].name，5 分钟缓存；绑定 SteamID 时验证存在性）
-_PLAYER_NAMES_CACHE = {'ts': 0, 'names': set()}
+_PLAYER_NAMES_CACHE = {'ts': 0, 'names': set(), 'eos': {}}
 
 
 def _player_names(force=False):
+    """扫 DinoData 全部 *_cryo 的 players[]（5 分钟缓存）。
+
+    2026-11-12：同一次扫描**额外**产出 eosId(小写) -> {name, characterName} 映射，
+    供 _eos_name_map() 回填被 ARK 原生命令打成 '?' 的中文名 —— 不额外增加 IO。
+    """
     import gzip
     now = time.time()
     if not force and _PLAYER_NAMES_CACHE['ts'] > now - 300:
         return _PLAYER_NAMES_CACHE['names']
     names = set()
+    eos = {}
     try:
         for fn in os.listdir(DINO_DATA):
             if not (fn.endswith('_cryo.json.gz') or fn.endswith('_cryo.json')):
@@ -7197,6 +7512,12 @@ def _player_names(force=False):
                 for p in (j.get('players') or []):
                     if p.get('name'):
                         names.add(str(p['name']))
+                    _e = str(p.get('eosId') or '').strip().lower()
+                    if _e:
+                        _nm = str(p.get('name') or '').strip()
+                        _cn = str(p.get('characterName') or '').strip()
+                        if _nm or _cn:
+                            eos[_e] = {'name': _nm, 'characterName': _cn}
             except Exception:
                 pass
     except Exception:
@@ -7204,7 +7525,20 @@ def _player_names(force=False):
         pass
     _PLAYER_NAMES_CACHE['ts'] = now
     _PLAYER_NAMES_CACHE['names'] = names
+    _PLAYER_NAMES_CACHE['eos'] = eos
     return names
+
+
+def _eos_name_map(force=False):
+    """eosId(小写) -> {name: 账号名, characterName: 角色名}。
+
+    与 _player_names() 共用同一次磁盘扫描 + 同 5 分钟缓存 ⇒ 调用它几乎零成本。
+    """
+    try:
+        _player_names(force)
+    except Exception:
+        _sexc('eos_name_map')
+    return _PLAYER_NAMES_CACHE.get('eos') or {}
 
 
 def mem_status(name, state, attrs):
@@ -7505,6 +7839,61 @@ def list_players(server):
         nm = re.sub(r'^\d+\.\s*', '', line)
         name = nm.split(',')[0].strip()
         players.append({'eosId': eos, 'name': name})
+    # v6548：PlayerPos 交叉验证（只对 ONLINE_XCHECK_SERVERS，即 Bob）——
+    #   ListPlayers 对俱乐部不可信，故以「插件能否找到该玩家」为最终判据。
+    #   原则：**只剔除明确 not found 的**；验证超时 / 响应无法解析 → 保守保留（宁可留一个假的，
+    #   也不误杀真在线的人 —— 误杀会导致动作闸门报「无法确认在线状态」、联盟位置漏查）。
+    if server in ONLINE_XCHECK_SERVERS and players:
+        if len(players) > ONLINE_XCHECK_MAX:
+            _sinfo('[online-xcheck] %s 候选 %d 人 > 上限 %d，跳过验证' % (server, len(players), ONLINE_XCHECK_MAX))
+        else:
+            _alive, _dropped = [], []
+            for _p in players:
+                _eos = (_p.get('eosId') or '').strip()
+                if not _eos:
+                    _alive.append(_p)
+                    continue
+                _j = None
+                try:
+                    _okc, _res = _rcon_str(port, '%s %s' % (CMD_PLAYER_POS, _eos))
+                    if _okc and _res:
+                        _j = json.loads(_res)
+                except Exception:
+                    _alive.append(_p)          # 验证异常 → 保守保留
+                    continue
+                if not isinstance(_j, dict):
+                    _alive.append(_p)          # 无法解析 → 保守保留
+                elif _j.get('ok'):
+                    _alive.append(_p)          # 确认在线
+                else:
+                    _dropped.append(_p.get('name') or _eos)
+            if _dropped:
+                _sinfo('[online-xcheck] %s 剔除假在线 %d 人: %s' % (server, len(_dropped), ','.join(_dropped)))
+            players = _alive
+    # 2026-11-12 根治 '???' 玩家名：ARK 原生 ListPlayers 在**生成响应文本时**就把非 ASCII 名字
+    #   逐字符转成 '?'（实测 TCP 原始字节 3f 3f 3f，链路上根本没有中文，客户端改解码救不回来），
+    #   但 eosId 始终完好。⇒ 名字全是 '?' 时用存档侧 players[].name 回填。
+    #   懒触发：没出现 '?' 就根本不碰缓存（空服 / 纯英文名玩家零成本）。
+    #   通用规范：原生命令只取 ID / 数值，任何中文字段一律事后用 ID join 回填。
+    _badname = [p for p in players
+                if not str(p.get('name') or '').replace('?', '').strip()]
+    if _badname:
+        try:
+            _e2n = _eos_name_map()
+        except Exception:
+            _e2n = {}
+            _sexc('online_backfill')
+        for _p in _badname:
+            _hit = _e2n.get(str(_p.get('eosId') or '').strip().lower())
+            if not _hit:
+                continue
+            _real = (_hit.get('name') or '').strip()
+            if not _real:
+                continue
+            _p['nameRcon'] = _p.get('name') or ''      # 保留原始值便于诊断
+            _p['name'] = _real
+            if _hit.get('characterName'):
+                _p['characterName'] = _hit['characterName']
     result = {'ok': True, 'server': server, 'players': players, 'count': len(players), 'ts': str(datetime.now())}
     write_status_file('%s_online.json' % server, 'ok', result)
     return result
@@ -7611,6 +8000,707 @@ def stop_track_dino(server, player):
          'result': str(result)[:200], 'ts': str(datetime.now())}
     mem_status('sensor.stop_track_dino_status', 'ok' if ok else 'error', r)
     return r
+
+
+# ===== v43（2026-11-15，用户口径「先落地 config 配置浮窗」）：插件配置（ServerOpsKitAPI / config.json）读写 =====
+#   插件是「正则逐键提取」读取（非 JSON 库）⇒ 写入必须走**文本级替换**（保键序/保留未知键），
+#   禁止 json.dump 整文件重写；每次写入后 json.loads 自检 + 回读校验 + 自动 ReloadConfig。
+SOK_PLUGIN_NAME = 'ServerOpsKitAPI'
+# A 类：可读写（键路径, 类型）
+PLUGIN_CFG_SPEC = [
+    ('reconnect.enabled', 'bool'),
+    ('reconnect.whitelist', 'strlist'),
+    ('reconnect.max_reconnects_per_session', 'int'),
+    ('reconnect.cooldown_seconds', 'int'),
+    ('auto_parse_enabled', 'bool'),
+    ('auto_parse_settle_ms', 'int'),
+    ('auto_parse_retry_max', 'int'),
+    ('auto_transfer_enabled', 'bool'),
+    ('auto_transfer_window_seconds', 'int'),
+    ('auto_transfer_interval_seconds', 'int'),
+    ('auto_transfer_min_remaining_seconds', 'int'),
+    ('auto_transfer_move_batch_limit', 'int'),
+    ('auto_transfer_give_pending_enabled', 'bool'),
+    ('auto_transfer_give_pending_interval_seconds', 'int'),
+    ('tomb_notify_enabled', 'bool'),
+    ('tomb_notify_min_interval_seconds', 'int'),
+    ('auto_keep_alive_enabled', 'bool'),
+    ('auto_keep_alive_interval_seconds', 'int'),
+    ('auto_keep_alive_extra_classes', 'strlist'),
+    ('borrowable_classes', 'objlist'),
+    ('language', 'str'),
+    ('debug.chat_enabled', 'bool'),
+    ('history_enabled', 'bool'),
+    ('history_flush_interval_seconds', 'int'),
+    ('history_max_rows', 'int'),
+    ('history_record_denied', 'bool'),
+    # v47：补齐「代码支持但 SPEC 未列」的 12 个键（依据 前端界面化方案 §12.6 源码逐项提取）
+    ('sidecar_enabled', 'bool'),
+    ('weather_history_persist', 'bool'),
+    ('rcon_inbound_utf8_fix', 'bool'),
+    ('death_record_ttl_seconds', 'int'),
+    ('death_bag_match_distance', 'int'),
+    ('volcano_actor_filter', 'str'),
+    ('volcano_rescan_seconds', 'int'),
+    ('volcano_cache_seconds', 'int'),
+    ('volcano_record_seconds', 'int'),
+    ('probe_cache_seconds', 'int'),
+    ('probe_rescan_seconds', 'int'),
+    ('weather_autoscan_seconds', 'int'),
+    # v6786（用户口径 2026-11-16「不显示服务器标识 / 存档路径 / 输出路径 直接取消；并且移出只读」）：
+    #   这三个键原先在 READONLY 里（路径类写错会让多服输出串台），现在按用户要求**放开为可写**。
+    #   ⚠ auto_parse_server_id 是「数据文件前缀」闸门：写错 ⇒ 本服台账/气象历史写进别服文件。
+    #     前端标签已带风险说明；写入仍走「文本级替换 + json 自检 + 逐键回读」五道闸。
+    ('auto_parse_server_id', 'str'),
+    ('auto_parse_ark_path', 'str'),
+    ('auto_parse_out_json', 'str'),
+]
+PLUGIN_CFG_WRITABLE = dict(PLUGIN_CFG_SPEC)
+
+# v47（2026-11-15 用户口径「所有非显式配置项也要以默认值展示」）：
+#   插件读取是「键缺失 → 保持代码默认值」，所以 config.json 里没写 != 关闭。
+#   这张表来自插件源码逐项提取（前端界面化方案 §12.6），供前端把未写入项按默认值展示。
+PLUGIN_CFG_DEFAULT = {
+    'reconnect.enabled': True,
+    'reconnect.whitelist': [],
+    'reconnect.max_reconnects_per_session': 1,
+    'reconnect.cooldown_seconds': 30,
+    'auto_parse_enabled': True,
+    'auto_parse_settle_ms': 3000,
+    'auto_parse_retry_max': 2,
+    'auto_transfer_enabled': False,
+    'auto_transfer_window_seconds': 300,
+    'auto_transfer_interval_seconds': 10,
+    'auto_transfer_min_remaining_seconds': 300,
+    'auto_transfer_move_batch_limit': 20,
+    'auto_transfer_give_pending_enabled': True,
+    'auto_transfer_give_pending_interval_seconds': 1800,
+    'tomb_notify_enabled': True,
+    'tomb_notify_min_interval_seconds': 30,
+    'auto_keep_alive_enabled': False,
+    'auto_keep_alive_interval_seconds': 10,
+    'auto_keep_alive_extra_classes': [],
+    'borrowable_classes': [],
+    'language': 'en',
+    'debug.chat_enabled': True,
+    'history_enabled': True,
+    'history_flush_interval_seconds': 5,
+    'history_max_rows': 20000,
+    'history_record_denied': False,
+    'sidecar_enabled': True,
+    'weather_history_persist': True,
+    'rcon_inbound_utf8_fix': False,
+    'death_record_ttl_seconds': 2100,
+    'death_bag_match_distance': 5,
+    'volcano_actor_filter': 'Volcanic_Eruption_Hazard',
+    'volcano_rescan_seconds': 120,
+    'volcano_cache_seconds': 1,
+    'volcano_record_seconds': 1,
+    'probe_cache_seconds': 1,
+    'probe_rescan_seconds': 30,
+    'weather_autoscan_seconds': 5,
+}
+# B / C 类：只读展示（路径类写错会让 10 服输出全废 ⇒ 一律不给前端改）
+#   v6786（用户口径 2026-11-16）：auto_parse_server_id / _ark_path / _out_json 已**移出**本表 ⇒ 改为可写。
+PLUGIN_CFG_READONLY = ('plugin_name', 'version', 'reconnect.host', 'reconnect.port',
+                       'dino_data_dir', 'auto_parse_reader_exe')
+
+
+# ===== v46（用户口径 2026-11-15）单服锁定（保护锁）=====
+#   语义：锁只**挡批量**（全服保存跳过该服该项，保留其定制值）；单服保存照样能改。
+#   存储：与后端同目录的 plugin_cfg_locks.json（{服: [键路径, ...]}），跨浏览器/设备生效。
+PLUGIN_CFG_LOCKS_FILE = os.environ.get(
+    'PLUGIN_CFG_LOCKS', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'plugin_cfg_locks.json'))
+
+
+def _pcfg_locks_read():
+    try:
+        with open(PLUGIN_CFG_LOCKS_FILE, 'r', encoding='utf-8') as f:
+            d = json.load(f)
+        if isinstance(d, dict):
+            return d
+    except FileNotFoundError:
+        pass
+    except Exception:
+        _sexc('pcfg_locks_read')
+    return {}
+
+
+def _pcfg_locks_write(doc):
+    try:
+        tmp = PLUGIN_CFG_LOCKS_FILE + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(doc, f, ensure_ascii=False, indent=1)
+        os.replace(tmp, PLUGIN_CFG_LOCKS_FILE)
+        return True
+    except Exception:
+        _sexc('pcfg_locks_write')
+        return False
+
+
+def plugin_cfg_locks_of(srv):
+    """某服已锁定的键列表（只保留 A 类可写键）。"""
+    v = _pcfg_locks_read().get(srv)
+    if not isinstance(v, list):
+        return []
+    out = []
+    for k in v:
+        k = str(k).strip()
+        if k in PLUGIN_CFG_WRITABLE and k not in out:
+            out.append(k)
+    return out
+
+
+def plugin_cfg_lock_set(srv, keys):
+    """整体替换某服的锁定列表；空数组 = 全部解锁。"""
+    if srv not in SERVERS:
+        return {'ok': False, 'error': 'unknown server'}
+    if not isinstance(keys, list):
+        return {'ok': False, 'error': 'keys 需为数组'}
+    out = []
+    for k in keys:
+        k = str(k).strip()
+        if k in PLUGIN_CFG_WRITABLE and k not in out:
+            out.append(k)
+    d = _pcfg_locks_read()
+    if out:
+        d[srv] = out
+    else:
+        d.pop(srv, None)
+    if not _pcfg_locks_write(d):
+        return {'ok': False, 'error': 'locks_write_failed'}
+    return {'ok': True, 'server': srv, 'locked': out}
+
+
+def _plugin_cfg_path(srv):
+    return os.path.join(_srv_win64(srv), 'ArkApi', 'Plugins', SOK_PLUGIN_NAME, 'config.json')
+
+
+def _cfg_get_path(doc, key):
+    cur = doc
+    for seg in key.split('.'):
+        if not isinstance(cur, dict) or seg not in cur:
+            return None
+        cur = cur[seg]
+    return cur
+
+
+def _json_value_end(s, i):
+    """从 s[i]（值起始）扫描到值的结束位置（不含）。支持 字符串 / 对象 / 数组 / 字面量。"""
+    n = len(s)
+    while i < n and s[i] in ' \t\r\n':
+        i += 1
+    if i >= n:
+        return i
+    c = s[i]
+    if c == '"':
+        j = i + 1
+        while j < n:
+            if s[j] == '\\':
+                j += 2
+                continue
+            if s[j] == '"':
+                return j + 1
+            j += 1
+        return n
+    if c in '{[':
+        close = '}' if c == '{' else ']'
+        depth = 0
+        j = i
+        in_str = False
+        while j < n:
+            ch = s[j]
+            if in_str:
+                if ch == '\\':
+                    j += 2
+                    continue
+                if ch == '"':
+                    in_str = False
+            else:
+                if ch == '"':
+                    in_str = True
+                elif ch == c:
+                    depth += 1
+                elif ch == close:
+                    depth -= 1
+                    if depth == 0:
+                        return j + 1
+            j += 1
+        return n
+    j = i
+    while j < n and s[j] not in ',}]':
+        j += 1
+    while j > i and s[j - 1] in ' \t\r\n':
+        j -= 1
+    return j
+
+
+def _cfg_set_in_block(text, key, val_text):
+    """在 JSON 文本中替换（或插入）某个键的值。保留其余内容与键序；失败返回 None。"""
+    if '.' in key:
+        grp, sub = key.split('.', 1)
+        m = re.search(r'"' + re.escape(grp) + r'"\s*:\s*\{', text)
+        if not m:
+            return None
+        start = m.end() - 1
+        if start >= len(text) or text[start] != '{':
+            return None
+        end = _json_value_end(text, start)
+        if end <= start:
+            return None
+        block = text[start:end]
+        nb = _cfg_set_in_block(block, sub, val_text)
+        if nb is None:
+            return None
+        return text[:start] + nb + text[end:]
+    m = re.search(r'"' + re.escape(key) + r'"\s*:\s*', text)
+    if m:
+        vs = m.end()
+        ve = _json_value_end(text, vs)
+        return text[:vs] + val_text + text[ve:]
+    if not text.startswith('{'):
+        return None
+    ins = ('\n  "%s": %s,' % (key, val_text)) if ('\n' in text) else (' "%s":%s,' % (key, val_text))
+    return text[:1] + ins + text[1:]
+
+
+def _cfg_val_text(v, typ):
+    if typ == 'bool':
+        return 'true' if bool(v) else 'false'
+    if typ == 'int':
+        return str(int(v))
+    if typ == 'str':
+        return json.dumps(str(v), ensure_ascii=False)
+    return json.dumps(v, ensure_ascii=False, separators=(',', ':'))
+
+
+def _plugin_cfg_norm(key, typ, val):
+    """归一化并校验；返回 (值, 错误文本)。"""
+    if typ == 'bool':
+        if isinstance(val, bool):
+            return val, ''
+        t = str(val).strip().lower()
+        if t in ('1', 'true', 'yes', 'on'):
+            return True, ''
+        if t in ('0', 'false', 'no', 'off', ''):
+            return False, ''
+        return None, '布尔值不合法'
+    if typ == 'int':
+        try:
+            n = int(str(val).strip())
+        except Exception:
+            return None, '需为整数'
+        if n < 0:
+            return None, '不能为负数'
+        if n > 100000000:
+            return None, '数值过大'
+        return n, ''
+    if typ == 'str':
+        t = str(val or '')
+        if len(t) > 32:
+            return None, '长度超限（不超过 32）'
+        if '"' in t or '\\' in t:
+            return None, '不能包含引号或反斜杠'
+        return t, ''
+    if typ in ('strlist', 'objlist'):
+        if not isinstance(val, list):
+            return None, '需为数组'
+        if len(val) > 200:
+            return None, '条数超限（不超过 200）'
+        if typ == 'strlist':
+            out = []
+            seen = set()
+            for it in val:
+                t = str(it or '').strip()
+                if not t:
+                    continue
+                if len(t) > 64:
+                    return None, '单条长度超限（不超过 64）'
+                for ch in (',', '"', '\\'):
+                    if ch in t:
+                        return None, '单条不能包含逗号 / 引号 / 反斜杠'
+                if t.lower() in seen:
+                    continue
+                seen.add(t.lower())
+                out.append(t)
+            return out, ''
+        out = []
+        for it in val:
+            if not isinstance(it, dict):
+                continue
+            cls = str(it.get('class') or '').strip()
+            nm = str(it.get('name') or '').strip()
+            if not cls:
+                continue
+            badch = False
+            for ch in (',', '"', '\\'):
+                if ch in cls or ch in nm:
+                    badch = True
+                    break
+            if badch:
+                return None, 'class / name 不能包含逗号 / 引号 / 反斜杠'
+            out.append({'class': cls, 'name': nm})
+        return out, ''
+    return None, '未知类型'
+
+
+def plugin_cfg_reload(srv, timeout=None):
+    """投 TransferIdentityFix.ReloadConfig 使配置生效。
+
+    v6784（用户口径 2026-11-16）：超时从全局 15s 降到 **5s** —— 全服保存时一台离线就白等 15 秒，
+      11 台串行能卡两分半（实测前端「正在触发 ReloadConfig…」停住数分钟）。现在并发 + 短超时。
+    v6794（v6784 回归修复，2026-11-16 实测根因）：**5s 必然误判失败** ——
+      实测 `ReloadConfig` 单台耗时 **10.26s（Isl）/ 11.31s（Cen）**，而 `GetInGameTime` 仅 1.06~1.11s；
+      5s 到点 ⇒ `rcon_command` 返回空 ⇒ `_rcon_str` 返回 (False, None)
+      ⇒ 11 台全部被标成「已写入，但生效失败（RCON 未响应）」（config.json 其实写成功了）。
+      修法：**并发保留**（不再串行 11×15s），单台超时放回 **15s**（实测 11.3s 留 24% 余量）。
+    """
+    port = SERVERS.get(srv)
+    if not port:
+        return {'ok': False, 'server': srv, 'error': 'unknown server'}
+    _to = timeout or 15
+    try:
+        ok, res = _rcon_str(port, 'TransferIdentityFix.ReloadConfig', timeout=_to)
+    except Exception as e:
+        return {'ok': False, 'server': srv, 'error': repr(e)[:200], 'timeout': _to}
+    if not ok:
+        # v6794：失败必须带 error —— 原实现只有 result，worker 取 rr.get('error') 恒 None
+        #   ⇒ 任务条显示毫无信息量的「原始返回：None」。
+        return {'ok': False, 'server': srv, 'result': '', 'timeout': _to,
+                'error': u'RCON %ds 内无响应（服离线 / 插件未加载 / 重载超时）' % int(_to)}
+    return {'ok': True, 'server': srv, 'result': str(res)[:300], 'timeout': _to}
+
+
+def plugin_borrow_list(server, tribe='', limit=0, offset=0):
+    """v48（用户口径「租借记录·当前借用中」）：透传插件 TransferIdentityFix.BorrowList 的 JSON。
+
+    与 /api/srvctl/rcon 的关键差别：**不做 300 字符截断**（多条借用时必然超 300，通用通道装不下）。
+    实测单次 RCON 约 1.0~1.1 s（新建连接 + 认证 + 往返）；仅面板打开 / 切地图 TAB / 手点刷新时调用，
+    严禁轮询。
+    """
+    if server not in SERVERS:
+        return {'ok': False, 'error': 'unknown server'}
+    cmd = 'TransferIdentityFix.BorrowList'
+    _tribe = str(tribe or '').strip()
+    if _tribe:
+        cmd += ' ' + _tribe
+        try:
+            _lim = int(limit or 0)
+        except Exception:
+            _lim = 0
+        try:
+            _off = int(offset or 0)
+        except Exception:
+            _off = 0
+        if _lim > 0:
+            cmd += ' %d %d' % (_lim, max(0, _off))
+    ok, text = _rcon_exec(server, cmd, timeout=10)
+    if not ok:
+        return {'ok': False, 'server': server, 'error': 'rcon_failed', 'detail': str(text)[:200]}
+    raw = str(text or '').strip()
+    # 插件回包可能带前缀字符（实测形如 'Z{"ok":true,...}'）⇒ 从第一个 { 或 [ 起截
+    _i = -1
+    for _idx, _ch in enumerate(raw):
+        if _ch in '{[':
+            _i = _idx
+            break
+    if _i < 0:
+        return {'ok': False, 'server': server, 'error': 'bad_json', 'raw': raw[:500]}
+    try:
+        doc = json.loads(raw[_i:])
+    except Exception as e:
+        return {'ok': False, 'server': server, 'error': 'bad_json', 'detail': repr(e)[:150], 'raw': raw[:500]}
+    return {'ok': True, 'server': server, 'cmd': cmd, 'data': doc}
+
+
+def plugin_cfg_get(srv):
+    """读某服插件 config.json：A 类（可写）+ 只读项。"""
+    if srv not in SERVERS:
+        return {'ok': False, 'error': 'unknown server'}
+    p = _plugin_cfg_path(srv)
+    if not os.path.isfile(p):
+        return {'ok': False, 'server': srv, 'error': 'config_not_found', 'path': p}
+    try:
+        raw = _read_text(p) or ''
+        st = os.stat(p)
+    except Exception as e:
+        return {'ok': False, 'error': 'read_failed', 'detail': repr(e)[:200]}
+    try:
+        doc = json.loads(raw)
+    except Exception as e:
+        return {'ok': False, 'error': 'config_invalid', 'detail': repr(e)[:200], 'path': p}
+    items = {}
+    present = {}
+    for k, _t in PLUGIN_CFG_SPEC:
+        v = _cfg_get_path(doc, k)
+        items[k] = v
+        present[k] = (v is not None)
+        if _t == 'objlist' and isinstance(v, list):
+            present[k] = True
+    ro = {}
+    for k in PLUGIN_CFG_READONLY:
+        ro[k] = _cfg_get_path(doc, k)
+    return {'ok': True, 'server': srv, 'path': p, 'size': st.st_size,
+            'mtime': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(st.st_mtime)),
+            'items': items, 'present': present,
+            'defaults': dict((k, PLUGIN_CFG_DEFAULT[k]) for k, _t in PLUGIN_CFG_SPEC if k in PLUGIN_CFG_DEFAULT),
+            'writable': [k for k, _t in PLUGIN_CFG_SPEC],
+            'spec': dict(PLUGIN_CFG_SPEC),
+            'readonly': ro, 'locked': plugin_cfg_locks_of(srv), 'ts': str(datetime.now())}
+
+
+def plugin_cfg_patch(srv, patch, do_reload=True):
+    """写某服插件 config.json（仅 A 类键）。文本级替换 + 自检 + 备份 + 原子写 + 自动 reload。"""
+    if srv not in SERVERS:
+        return {'ok': False, 'error': 'unknown server'}
+    if not isinstance(patch, dict) or not patch:
+        return {'ok': False, 'error': 'patch 为空', 'code': 'empty_patch'}
+    p = _plugin_cfg_path(srv)
+    if not os.path.isfile(p):
+        return {'ok': False, 'error': 'config_not_found', 'path': p}
+    try:
+        raw = _read_text(p) or ''
+    except Exception as e:
+        return {'ok': False, 'error': 'read_failed', 'detail': repr(e)[:200]}
+    try:
+        # v6795：解析结果必须留着 —— 后面要比对「目标值 vs 当前值」，决定是否需要写盘/重载
+        cur_doc = json.loads(raw)
+    except Exception as e:
+        return {'ok': False, 'error': 'config_invalid', 'detail': repr(e)[:200]}
+    norm = {}
+    bad = []
+    for k, v in patch.items():
+        typ = PLUGIN_CFG_WRITABLE.get(k)
+        if not typ:
+            bad.append({'key': k, 'why': 'key_not_allowed'})
+            continue
+        nv, err = _plugin_cfg_norm(k, typ, v)
+        if err:
+            bad.append({'key': k, 'why': err})
+            continue
+        norm[k] = (typ, nv)
+    if bad:
+        return {'ok': False, 'error': '校验未通过', 'code': 'invalid_value', 'items': bad}
+    # v6795（用户口径 2026-11-16「应该只对有改动的服进行重载」）：
+    #   原实现是**无条件**文本替换 + 无条件写盘 + 无条件 ReloadConfig ——
+    #   全服保存时 11 台即使值一个都没变，也各跑一次 ReloadConfig（实测单台 10~11s），
+    #   而且白刷 mtime、白堆 .bak。现改为：值相同的键不写；**所有键都没变 ⇒ 直接返回，
+    #   不碰文件、不备份、不 reload**（任务条显示「无改动，已跳过重载」）。
+    changed = {}
+    unchanged = []
+    for k, (typ, nv) in norm.items():
+        try:
+            _cur = _cfg_get_path(cur_doc, k)
+        except Exception:
+            _cur = None
+        if _cur == nv:
+            unchanged.append(k)
+        else:
+            changed[k] = (typ, nv)
+    if not changed:
+        return {'ok': True, 'server': srv, 'applied': [], 'unchanged': unchanged,
+                'changed': False, 'backup': '',
+                'reload': {'ok': True, 'skipped': True, 'reason': 'no_change'},
+                'ts': str(datetime.now())}
+    new = raw
+    applied = []
+    for k, (typ, nv) in changed.items():
+        nb = _cfg_set_in_block(new, k, _cfg_val_text(nv, typ))
+        if nb is None:
+            bad.append({'key': k, 'why': 'write_failed'})
+            continue
+        new = nb
+        applied.append(k)
+    if bad:
+        return {'ok': False, 'error': '写入未完成', 'code': 'write_failed', 'items': bad}
+    try:
+        doc2 = json.loads(new)
+    except Exception as e:
+        return {'ok': False, 'error': 'selfcheck_failed', 'detail': repr(e)[:300]}
+    for k, (typ, nv) in changed.items():
+        got = _cfg_get_path(doc2, k)
+        if got != nv:
+            return {'ok': False, 'error': 'verify_mismatch', 'key': k, 'got': got, 'want': nv}
+    ts = time.strftime('%Y%m%d_%H%M%S')
+    bak = p + '.bak_' + ts
+    try:
+        shutil.copy2(p, bak)
+    except Exception:
+        bak = ''
+    try:
+        try:
+            os.chmod(p, _stat.S_IWRITE)
+        except Exception:
+            pass
+        tmp = p + '.tmp'
+        with open(tmp, 'w', encoding='utf-8', newline='\n') as f:
+            f.write(new)
+        os.replace(tmp, p)
+    except Exception as e:
+        return {'ok': False, 'error': 'write_failed', 'detail': repr(e)[:300], 'backup': bak}
+    rl = plugin_cfg_reload(srv) if do_reload else {'ok': True, 'skipped': True}
+    return {'ok': True, 'server': srv, 'applied': applied, 'unchanged': unchanged,
+            'changed': True, 'backup': bak,
+            'reload': rl, 'ts': str(datetime.now())}
+
+
+def plugin_cfg_patch_multi(servers, patch):
+    """v44：一次写多服（全服统一配置）。先逐服写文件，再逐服 reload。"""
+    if not isinstance(servers, list) or not servers:
+        return {'ok': False, 'error': 'servers 为空', 'code': 'empty_servers'}
+    servers = [str(x).strip() for x in servers if str(x).strip()]
+    if not servers:
+        return {'ok': False, 'error': 'servers 为空', 'code': 'empty_servers'}
+    if len(servers) > 32:
+        return {'ok': False, 'error': 'servers 过多', 'code': 'too_many_servers'}
+    out = []
+    for srv in servers:
+        lk = plugin_cfg_locks_of(srv)
+        sub = patch
+        skipped = []
+        if lk and isinstance(patch, dict):
+            skipped = [k for k in patch if k in lk]
+            sub = dict((k, v) for k, v in patch.items() if k not in lk)
+        if isinstance(patch, dict) and not sub:
+            # 该服要写的键全被锁定 ⇒ 不改文件、不 reload
+            out.append({'server': srv, 'ok': True, 'skipped': True,
+                        'skippedKeys': skipped, 'applied': []})
+            continue
+        r = plugin_cfg_patch(srv, sub, do_reload=False)
+        out.append({'server': srv, 'ok': bool(r.get('ok')),
+                    'error': r.get('error'), 'detail': r.get('detail'),
+                    'items': r.get('items'), 'backup': r.get('backup'),
+                    'applied': r.get('applied'), 'unchanged': r.get('unchanged'),
+                    'changed': r.get('changed'), 'skippedKeys': skipped})
+    okv = [x for x in out if x['ok']]
+    rl = []
+    for x in okv:
+        if x.get('skipped'):
+            continue
+        # v6795：无改动的服不重载（全服保存时绝大多数服其实都没变）
+        if x.get('changed') is False:
+            rl.append({'server': x['server'], 'ok': True, 'skipped': True, 'reason': 'no_change'})
+            continue
+        rr = plugin_cfg_reload(x['server'])
+        rl.append({'server': x['server'], 'ok': bool(rr.get('ok'))})
+    return {'ok': len(okv) == len(out) and bool(okv), 'count': len(out), 'okCount': len(okv),
+            'servers': out, 'reload': rl,
+            'applied': list(patch.keys()) if isinstance(patch, dict) else [],
+            'ts': str(datetime.now())}
+
+
+# ===== v6784（用户口径 2026-11-16「保存 config 也要做成总线任务条」）=====
+#   原实现：一次 PATCH 同步跑完「逐台写文件 → 逐台 RCON reload(15s 超时)」——
+#     11 台串行 + 有台离线就白等 15s ⇒ 前端那行小字能停几分钟（实测 5 分钟无响应）。
+#   现实现：立即返回任务 keys，后台线程干活，进度全写进任务总线（每台一条 pcfg|<srv>），
+#     前端「任务进度」框（.lb-task-slot）自动渲染 —— 关掉浮窗也能看进度。
+def _cfg_save_worker(user, servers, patch, keys):
+    """保存插件配置的后台 worker：逐台写文件 → **并发** ReloadConfig(5s)。"""
+    okv = []
+    for srv, k in zip(servers, keys):
+        try:
+            _utask_put(k, srv, 'cfg', user, msg=u'写入 config.json…', pct=25, phase='run')
+            lk = plugin_cfg_locks_of(srv)
+            sub = patch
+            skipped = []
+            if lk and isinstance(patch, dict):
+                skipped = [x for x in patch if x in lk]
+                sub = dict((x, v) for x, v in patch.items() if x not in lk)
+            if isinstance(patch, dict) and not sub:
+                _utask_put(k, srv, 'cfg', user, msg=u'所选键已锁定，跳过', pct=100, phase='ok')
+                continue
+            r = plugin_cfg_patch(srv, sub, do_reload=False)
+            if not r.get('ok'):
+                _utask_put(k, srv, 'cfg', user,
+                           msg=u'写入失败：' + str(r.get('error') or ''),
+                           pct=100, phase='fail',
+                           err=str(r.get('detail') or r.get('error') or '')[:400])
+                continue
+            _n = len(r.get('applied') or [])
+            if not _n and not r.get('changed'):
+                # v6795：值没变 ⇒ 不写文件、不重载。原实现会让每台都空跑一次 10~11s 的 ReloadConfig。
+                _utask_put(k, srv, 'cfg', user,
+                           msg=(u'无改动，已跳过重载'
+                                + ((u'（%d 项锁定跳过）' % len(skipped)) if skipped else '')),
+                           pct=100, phase='ok')
+                continue
+            _m = u'已写入 %d 项' % _n
+            if skipped:
+                _m += u'（%d 项锁定跳过）' % len(skipped)
+            _utask_put(k, srv, 'cfg', user, msg=_m, pct=60, phase='run')
+            okv.append((srv, k))
+        except Exception as _e:
+            _sexc('cfg_save_write')
+            try:
+                _utask_put(k, srv, 'cfg', user, msg=u'写入异常', pct=100, phase='fail',
+                           err=repr(_e)[:400])
+            except Exception:
+                pass
+
+    def _one(srv, k):
+        try:
+            _utask_put(k, srv, 'cfg', user, msg=u'触发 ReloadConfig…', pct=80, phase='run')
+            rr = plugin_cfg_reload(srv, timeout=15)
+            if rr.get('ok'):
+                _utask_put(k, srv, 'cfg', user, msg=u'已保存并生效', pct=100, phase='ok')
+            else:
+                # v6794：区分「没写进去」与「写进去了但重载没回执」—— 后者其实大概率已生效。
+                _utask_put(k, srv, 'cfg', user,
+                           msg=u'已写入，但生效确认超时（RCON 未在 15s 内响应）',
+                           pct=100, phase='warn',
+                           err=(u'config.json 已写入成功，插件重载无回执。原因：'
+                                + str(rr.get('error') or rr.get('result') or '未知')
+                                + u'（实测 ReloadConfig 正常需 10~11s；配置大概率已生效，'
+                                + u'可点右下「重新载入」或再保存一次确认）')[:400])
+        except Exception as _e2:
+            _sexc('cfg_save_reload')
+            try:
+                _utask_put(k, srv, 'cfg', user, msg=u'生效阶段异常', pct=100, phase='fail',
+                           err=repr(_e2)[:400])
+            except Exception:
+                pass
+
+    _ths = []
+    for _srv, _k in okv:
+        try:
+            _t = threading.Thread(target=_one, args=(_srv, _k), daemon=True)
+            _t.start()
+            _ths.append(_t)
+        except Exception:
+            _sexc('cfg_save_thread')
+    for _t in _ths:
+        try:
+            _t.join(timeout=20)   # v6794：单台 reload 超时已放到 15s，join 同步放宽
+        except Exception:
+            pass
+
+
+def plugin_cfg_save_async(user, servers, patch):
+    """v6784：保存插件配置 → **异步任务**。立即返回 keys，进度看任务总线。"""
+    servers = [str(x).strip() for x in (servers or []) if str(x).strip()]
+    if not servers:
+        return {'ok': False, 'error': 'servers 为空', 'code': 'empty_servers'}
+    if len(servers) > 32:
+        return {'ok': False, 'error': 'servers 过多', 'code': 'too_many_servers'}
+    if not isinstance(patch, dict) or not patch:
+        return {'ok': False, 'error': 'patch 为空', 'code': 'empty_patch'}
+    keys = []
+    for srv in servers:
+        k = u'pcfg|%s' % srv
+        keys.append(k)
+        nm = (SERVER_THEMES.get(srv) or {}).get('name') or srv
+        try:
+            _utask_put(k, srv, 'cfg', user, label=u'配置保存 · ' + nm,
+                       msg=u'排队中…', pct=2, phase='queue')
+        except Exception:
+            _sexc('cfg_save_utask')
+    try:
+        threading.Thread(target=_cfg_save_worker, args=(user, servers, patch, keys),
+                         daemon=True).start()
+    except Exception as e:
+        return {'ok': False, 'error': 'worker 启动失败', 'detail': repr(e)[:200]}
+    return {'ok': True, 'async': True, 'count': len(servers), 'keys': keys,
+            'applied': list(patch.keys()), 'ts': str(datetime.now())}
 
 
 # v3（2026-08-30）：服务器管理——仅管理员 whiterober 可用（前端隐藏 + 后端双重校验）
@@ -9250,7 +10340,7 @@ SAVEKILL_STEPS = (('saveworld', u'存档'), ('verify', u'存档校验'), ('kill'
 
 
 # ===== v6338（用户口径「5 个步骤点的 tips 都是 ////」）：分步圆点真正着色 =====
-#   背景：MOD/API 分发、MOD/API 清理、本地包下载共 5 处 steps 原本是**纯字符串**，
+#   背景：MOD/API 分发、MOD/API 清理、缓存下载共 5 处 steps 原本是**纯字符串**，
 #   前端只认 {key,label,state} ⇒ 名字丢失（tips 成 " /  /  / "）、圆点恒灰。
 #   统一改为 _steps_apply() 生成带 state 的数组，零调用点改动（按 pct + phase + msg 自动推断）。
 STEP_5_DEPLOY = (('stop', u'停服'), ('bak', u'备份'), ('copy', u'复制'),
@@ -9344,6 +10434,17 @@ RESTART_IP_GRACE_PROBE = 120        # C：宽限结束后「无回归」确认�
 RESTART_TOTAL_TIMEOUT = 28800       # v6219（O4）：6h -> 8h。最坏单台 saveworld180+savekill300+
                                     #   startq1200+verify600=2280s，×11 台≈7h > 6h 会被总超时误杀。
 RESTART_STARTQ_IDLE_RETRY = 45      # v6219（R1）：入队后 N 秒仍 idle ⇒ 判为「被跳过/未登记」并重入队
+# v6512（用户口径）：**停服段独立并发** —— 静默通过后立即存档停服（抢占窗口），
+#   与「复制/起服」重活段分开计数。默认 3：既不让 11 台同时写盘压垮 HDD，
+#   又不至于因为等名额而错过静默窗口。可用环境变量覆盖。
+RESTART_STOP_PARALLEL = int(os.environ.get('RESTART_STOP_PARALLEL') or 3)
+# v6546（用户口径「复制差异 不是独立的排队池么？为啥会被重压池拦住」）：
+#   复制差异（sync）**独立名额**。原来 sync 与 startq/verify 共用 RESTART_PARALLEL=2，
+#   结果 2 台进 startq（等进程 + MOD 自动更新，实测 10~20 分钟）就把名额占满，
+#   后面 5 台连复制差异都进不去 ⇒ 全卡在 ready（界面「排队 0 / 待启动 5」并列矛盾的根源）。
+#   ⚠ 机器是机械盘：有服处于重压（world_load~started）时本值会自动降为 1，
+#     避免顺序复制与世界加载抢磁头把启动拖过 SRVCTL_STARTQ_HEAVY_TIMEOUT。
+RESTART_SYNC_PARALLEL = int(os.environ.get('RESTART_SYNC_PARALLEL') or 3)
 RESTART_PARALLEL = 2                # v6221（P2-1，用户 2026-11-07 拍板）：存档→校验→停服段并发上限。
                                     #   依据：存档写 Servers\<srv>\，不写共用集群目录（clusters\9102），
                                     #   多台并行存档不会互相破坏 L3 静默判定；风险仅在「停服窗口重叠」。
@@ -9413,6 +10514,43 @@ _RESTART = {'running': False, 'pendingReason': '', 'reason': '', 't0': 0, 'dry':
             'mode': 'restart',  # restart | update | rollback
             'verKind': '',      # forced | patch | same | unknown（仅 update/rollback 有意义）
             'srcRoot': ''}      # rollback 时的回滚包目录（空=用 UPDATE_CACHE_PATH）
+
+# v6688（用户口径「任务条要有跳过三重静默的按钮」）：一次性「跳过集群静默」标记。
+#   只放行 L3（集群目录写入静默）；L1（在线人数必须 0）仍强制 —— 编排走到 quiet 阶段时
+#   必然 n==0，所以本标记不会把在线玩家踩掉。
+_RESTART_SKIPQ = {}
+_RESTART_SKIPQ_TTL = 1800
+
+
+def _restart_skipq_set(srv):
+    try:
+        _RESTART_SKIPQ[str(srv)] = time.time()
+    except Exception:
+        pass
+
+
+def _restart_skipq_has(srv):
+    """v6689：只查不消耗（用于「空置跨度确认」也放行，随后到 quiet 再 take）。"""
+    k = str(srv or '')
+    ts = _RESTART_SKIPQ.get(k)
+    if not ts:
+        return False
+    try:
+        return (time.time() - float(ts)) <= _RESTART_SKIPQ_TTL
+    except Exception:
+        return False
+
+
+def _restart_skipq_take(srv):
+    """取走一次（一次性）；超 TTL 视为失效。"""
+    k = str(srv or '')
+    ts = _RESTART_SKIPQ.pop(k, None)
+    if not ts:
+        return False
+    try:
+        return (time.time() - float(ts)) <= _RESTART_SKIPQ_TTL
+    except Exception:
+        return False
 
 
 def _restart_enable_now():
@@ -9652,11 +10790,16 @@ def _restart_push_batch():
         msg = u'已完成 %d/%d 台' % (dn + fl, tot)
         if fl:
             msg += u'（失败 %d）' % fl
-        _sk_now = [k for k, v in svs.items() if v.get('phase') == 'savekill']
+        _sk_now = [k for k, v in svs.items() if v.get('phase') in ('savekill', 'stopseg')]
         if _sk_now and run:
-            msg += u' · 处理中 %s' % u','.join(_sk_now)
+            msg += u' · 停服中 %s' % u','.join(_sk_now)
         elif cur and run:
             msg += u' · 当前 %s' % cur
+        # v6512：已停服、排队等重活的台数（一眼看出「已经停了，在等活」）
+        _stq_now = [k for k, v in svs.items()
+                    if v.get('phase') == 'ready' and v.get('stoppedByMe')]
+        if _stq_now and run:
+            msg += u' · 已停服排队 %d 台' % len(_stq_now)
         _stopped_n = sum(1 for v in svs.values()
                          if not bool(v.get('wasRunning', True)))
         if _stopped_n and str(_RESTART.get('mode') or '') in ('update', 'rollback'):
@@ -9738,6 +10881,13 @@ def _restart_eta_sec(srv):
         return RESTART_ETA_STARTQ + RESTART_ETA_VERIFY
     if ph == 'savekill':
         return RESTART_ETA_SAVEKILL + RESTART_ETA_STARTQ + RESTART_ETA_VERIFY
+    if ph == 'stopseg':
+        # v6512：静默已过、马上停服 —— 与 savekill 同档估
+        return RESTART_ETA_SAVEKILL + RESTART_ETA_STARTQ + RESTART_ETA_VERIFY
+    if ph == 'ready' and st.get('stoppedByMe'):
+        # v6512（用户口径「停服后排队不设上限」）：已停服、等重活名额，时间不可估 ——
+        #   返回 None ⇒ 公告不写「约 X 分钟后可重新进入」，避免说了做不到。
+        return None
     # ---- announce / ready：还要先过「空置」这道关 ----
     _wait = float(RESTART_EMPTY_SPAN)
     if ph == 'ready':
@@ -9772,12 +10922,28 @@ def _restart_ann_text(lang, players, targets, eta=None):
             _m = 1                      # 已进入 verify 等尾段 ⇒ 至少报 1 分钟，不报 0
     _ba_cn = (u'预计约 %d 分钟后可重新进入。' % _m) if _m else u''
     _ba_en = (u'Back in ~%d min. ' % _m) if _m else u''
+    # v6832（用户口径 2026-11-17）：公告头按**实际 reason** 区分 —— 原来写死「公网IP变更」，
+    #   而 update-apply（游戏更新落地）等场景也发这句 ⇒ 玩家以为在换 IP，与实际不符。
+    _rs = ''
+    try:
+        _rs = str(_RESTART.get('reason') or '')
+    except Exception:
+        _rs = ''
+    if 'update' in _rs:
+        _h_cn = u'【维护】游戏更新，落地后自动重启。'
+        _h_en = u'[Maintenance] Game update. Restart when empty. '
+    elif 'ip' in _rs:
+        _h_cn = u'【维护】公网IP变更，玩家下线后自动重启。'
+        _h_en = u'[Maintenance] IP changed. Restart when empty. '
+    else:
+        _h_cn = u'【维护】计划维护，玩家下线后自动重启。'
+        _h_en = u'[Maintenance] Planned maintenance. Restart when empty. '
     if lang == 'cn':
-        s = u'【维护】公网IP变更，玩家下线后自动重启。' + _ba_cn
+        s = _h_cn + _ba_cn
         s += ((u'可传送至：' + tg) if targets else u'请尽快下线。')
         s += u'（在线%d人）' % players
     else:
-        s = u'[Maintenance] IP changed. Restart when empty. ' + _ba_en
+        s = _h_en + _ba_en
         s += ((u'Transfer to: ' + tg) if targets else u'Please log off. ')
         s += u'(online: %d)' % players
     return s[:200]
@@ -9919,6 +11085,12 @@ def _restart_start(reason, dry_override=None, force=False, mode='restart',
        · mode='update'  => savekill 段走 stop -> sync（见 _restart_tick）
        · mode='rollback'=> 同上，但 src_root 指向回滚包目录
        · 每台记录 wasRunning（进入时是否在运行）=> 停服批走 3 步快速通道（§17.1）"""
+    # v6698（BUG 修复）：新的一轮编排不继承上一轮的「手动跳过」意图 —— 否则上一轮没被消耗的
+    #   标记会在 30 分钟 TTL 内让**用户没点**的新一轮也自动跳过空置/静默（实测 21:26 Cen）。
+    try:
+        _RESTART_SKIPQ.clear()
+    except Exception:
+        pass
     _dry = _restart_dry_now() if dry_override is None else bool(dry_override)
     _mode = str(mode or 'restart')
     # v6276（用户口径「同时只允许一个批次在运行」）：已有**别人**的启动队列在跑时，不允许再起编排。
@@ -10011,6 +11183,8 @@ def _restart_start(reason, dry_override=None, force=False, mode='restart',
                                         'probeUntil': 0,
                                         'sawPlayer': False,
                                         'wasRunning': bool(_was_run),
+                                        # v6741：瘦档基线「首次锁定」用（每批次重建 ⇒ 自然清零，不跨批次继承）
+                                        'akBase': 0,
                                         'finalStatus': '',
                                         'syncDone': False, 'syncOk': False, 'syncMsg': '',
                                         'syncAt': 0, 'syncBytes': 0, 'syncFiles': 0}
@@ -10101,6 +11275,11 @@ def _restart_sample(now, limit=None):
     items = []
     for srv, st in (_RESTART.get('servers') or {}).items():
         if st.get('phase') in ('done', 'fail'):
+            continue
+        # v6512：已停服（我方停的）与「静默已过、待停服」的台不再采样 ——
+        #   · 已停服：RCON 必然连不上，白等 8s（11 台停完后每轮都白跑）
+        #   · stopseg：静默结论已定，人数不再影响决策（真有人进服由停服前复检兜底）
+        if st.get('stoppedByMe') or str(st.get('phase') or '') == 'stopseg':
             continue
         items.append((float(st.get('lastSample') or 0), srv, st))
     items.sort()
@@ -10218,6 +11397,17 @@ def _restart_exec_saveworld(srv):
        屏障未过（ok=False 或 data.ok=False）⇒ 调用方回 ready，**不重启**。"""
     def _job():
         ok, msg = False, ''
+        # v6741（用户口径「连刚才的 BUG 一起改」）：首次进入存档屏障时**锁定基线**，
+        #   之后所有重试都用这个基线（而不是重新取当前 .ark）。
+        #   否则：第 1 次写出瘦档 ⇒ 重试时基线 = 该瘦档 ⇒ 阈值被拉低 ⇒ 瘦档被当成正常放行。
+        try:
+            _st_ak0 = (_RESTART.get('servers') or {}).get(srv)
+            if _st_ak0 is not None and not int(_st_ak0.get('akBase') or 0):
+                _st_ak0['akBase'] = int(
+                    (_srv_observe_ark(srv, (_srv_observe_log(srv) or {}).get('map') or '') or {}).get('size') or 0)
+                _restart_log('saveworld %s 锁定瘦档基线 = %d B' % (srv, int(_st_ak0['akBase'])))
+        except Exception:
+            pass
         try:
             res = _srvctl_run('ipwatch', [srv], 'saveworld', None, silent=True)
             r0 = (res[0] if res else {}) or {}
@@ -10315,6 +11505,24 @@ def _zh_local_ver():
     return best
 
 
+def _zh_local_src(ver):
+    """已下载缓存包的来源（google=繁体 / feishu=简体）
+
+    v6504：Google Drive 目录里 3 个包全带 Trad（繁体），简体只放飞书文档附件；
+           两处版本号同为 10.1，只能靠来源区分，否则会误判「已是最新」不重下。
+           旧 manifest 无 source.src 字段 -> 按 'google'（历史都是 Drive 下的）。
+    """
+    try:
+        p = os.path.join(ZH_CACHE_ROOT, str(ver or ''), 'manifest.json')
+        if not os.path.isfile(p):
+            return ''
+        with open(p, encoding='utf-8') as f:
+            man = json.load(f) or {}
+        return str(((man.get('source') or {}).get('src')) or 'google')
+    except Exception:
+        return 'google'
+
+
 def _zh_cache_ready():
     """读本地缓存 manifest -> (ok, ver, man, paks_dir, err)"""
     try:
@@ -10326,7 +11534,7 @@ def _zh_cache_ready():
         paks_dir = os.path.join(base, 'paks')
         manp = os.path.join(base, 'manifest.json')
         if not os.path.isfile(manp):
-            return False, ver, {}, paks_dir, u'本地包未就绪（请先「下载并解压」）'
+            return False, ver, {}, paks_dir, u'缓存未就绪（请先「下载并解压」）'
         with open(manp, encoding='utf-8') as f:
             man = json.load(f) or {}
         if not (man.get('paks') or []):
@@ -10467,6 +11675,7 @@ def _zh_exec_apply(srv, st=None):
         # sidecar（§14 C6：放服务器根）
         try:
             sc = {'ver': ver, 'variant': man.get('variant') or '',
+                  'src': (man.get('source') or {}).get('src') or '',
                   'asset': (man.get('source') or {}).get('name') or '',
                   'at': time.strftime('%Y-%m-%d %H:%M:%S'),
                   'paksBase': base_name,
@@ -10811,7 +12020,49 @@ def _deploy_api_apply(srv, st=None):
 
 
 def _restart_step_fail(srv, st, why):
-    """C3：单步失败 -> attempts+1 -> 未超限回 ready 重排队；超限置 fail 并清锁"""
+    """C3：单步失败 -> attempts+1 -> 未超限回 ready 重排队；超限置 fail 并清锁
+
+    v6512（用户口径）：**护栏拦截**（有人进服 / 集群写入）不算故障 ——
+      · 不计 attempts（否则高峰期 3 次就把任务判死，玩家一直在就一定失败）
+      · 回 **stopseg** 重新抢停服名额（静默结论已过期，需要重新确认）
+    真正故障（存档屏障不过 / kill 失败 / 超时）仍按原逻辑计 attempts。
+    """
+    _wtxt = str(why or '')
+    _gate_blocked = ('safety_blocked' in _wtxt) or (u'安全护栏拦截' in _wtxt)
+    if _gate_blocked and not bool(st.get('stoppedByMe')):
+        st['err'] = _wtxt
+        st['execAt'] = 0; st['execDone'] = False; st['execOk'] = False
+        st['swAt'] = 0; st['swDone'] = False; st['swOk'] = False
+        st['skStage'] = ''
+        st['stopSegAt'] = 0
+        st['stopLockMsg'] = False
+        # ⚠️ 必须回 announce 重新赚静默，**不能**只回 stopseg：
+        #   玩家一直在 ⇒ savekill 复检必被拦 ⇒ 又回 stopseg ⇒ 无限循环（且不计 attempts，
+        #   永远不判失败、也不完成，只能等 8 小时总超时）。
+        #   回 announce 后：玩家走了就重新静默通过→停服；玩家一直在就一直等空置（这才是对的）。
+        st['phase'] = 'announce'
+        st['pct'] = 5
+        st['readyAt'] = 0
+        st['empty'] = []
+        st['firstEmptyTs'] = 0
+        st['annStart'] = time.time()
+        st['lastAnnRound'] = -1
+        st['annSlot'] = ''
+        st['probeUntil'] = 0
+        st['sawPlayer'] = False
+        st['rconFail'] = 0
+        _stp = st.get('steps') or {}
+        for _k in list(_stp.keys()):
+            if _stp[_k] == 'run':
+                _stp[_k] = 'wait'
+        _stp.update({'ann': 'run', 'empty': 'wait', 'quiet': 'wait',
+                     'saveworld': 'wait', 'savekill': 'wait'})
+        st['msg'] = u'停服被拦（有人进服/集群写入），重新公告并等待空置'
+        _restart_log('STOP-BLOCKED %s -> announce 重新静默（不计 attempts）：%s'
+                     % (srv, _wtxt[:160]))
+        _restart_push(srv)
+        return
+    _stopped_now = bool(st.get('stoppedByMe'))
     st['attempts'] = int(st.get('attempts') or 0) + 1
     st['err'] = str(why or '')
     # v6273（用户口径 2026-11-08）：**任务中途已停服的服，重试时跳过存档屏障直接起服** ——
@@ -10853,11 +12104,14 @@ def _restart_step_fail(srv, st, why):
         _srv_lock_clear(srv, 'restart|%s' % srv)
         _restart_log('FAIL %s attempts=%d %s' % (srv, st['attempts'], why))
     else:
-        st['phase'] = 'ready'
+        # v6512：已停服的服回 ready（排队等重活）；没停成的回 stopseg（重新停服）。
+        st['phase'] = ('ready' if _stopped_now else 'stopseg')
         st['readyAt'] = time.time()
+        st['stopSegAt'] = 0
+        st['stopLockMsg'] = False
         # v6270：退回 ready 时进度回落到 45 —— 原残留 75 让人误以为「还在起服」，
         #   与「第 N 次重试（等待重新调度）」自相矛盾。
-        st['pct'] = 45
+        st['pct'] = (55 if _stopped_now else 48)
         st['msg'] = u'第 %d 次重试（%s）' % (st['attempts'], why)
         _restart_log('RETRY %s attempts=%d %s' % (srv, st['attempts'], why))
     _restart_push(srv)
@@ -11039,6 +12293,13 @@ def _restart_tick():
         st.setdefault('empty', []).append(now)
         if not st.get('firstEmptyTs'):
             st['firstEmptyTs'] = now
+        # v6689（用户口径「空置 没有跳过啊」）：已点「跳过静默」且此刻在线=0 ⇒
+        #   空置跨度确认直接通过（不必再等 RESTART_EMPTY_SPAN）。有玩家时走不到这里。
+        if _restart_skipq_has(srv) and not (len(st['empty']) >= RESTART_EMPTY_SAMPLES
+                                           and now - float(st['firstEmptyTs']) >= RESTART_EMPTY_SPAN):
+            st['empty'] = [now] * RESTART_EMPTY_SAMPLES
+            st['firstEmptyTs'] = now - RESTART_EMPTY_SPAN
+            _restart_log('SKIPQ %s 手动跳过空置跨度确认（在线 0 人）' % srv)
         if not (len(st['empty']) >= RESTART_EMPTY_SAMPLES
                 and now - float(st['firstEmptyTs']) >= RESTART_EMPTY_SPAN):
             st['msg'] = u'空置确认中 %d/%d（跨度 %ds）' % (
@@ -11057,19 +12318,75 @@ def _restart_tick():
         _restart_log('QUIET %s cq=%s dirs=%s bad=%s'
                      % (srv, ('-' if cq is None else int(cq)),
                         '|'.join(_restart_cluster_dirs()), (';'.join(bad) or 'ok')))
+        # v6698（BUG 修复）：**先消耗再判断** —— 原来写成 `if bad and take()`，
+        #   当集群静默本来已通过（bad 为空）时短路，take 根本不执行 ⇒ 标记残留 30 分钟，
+        #   导致后续**用户没点**的新一轮编排仍被判成「手动跳过」（实测 21:26 Cen 自动跳过）。
+        _skipq_hit = _restart_skipq_take(srv)
+        if bad and _skipq_hit:
+            _restart_log('SKIPQ %s 手动跳过集群静默：%s' % (srv, u';'.join(bad)))
+            st['steps']['quiet'] = 'ok'
+            st['msg'] = u'已手动跳过集群静默'
+            bad = []
         if bad:
             st['steps']['quiet'] = 'run'
             st['msg'] = u'静默校验未过：' + u' / '.join(bad)
             _restart_push(srv)
             continue
-        st['phase'] = 'ready'
+        # v6512（用户口径）：**静默通过即刻停服**，不再进 ready 干等名额 ——
+        #   原来的「静默通过 → ready 排队」会让服务器继续对外提供服务，
+        #   等待期间玩家随时能进服 ⇒ 轮到它时护栏复检必然被拦 ⇒ 静默结论白做（错过窗口）。
+        #   现在改成：静默一过就存档+停服（占住窗口），停完再排队等复制/起服。
+        st['phase'] = 'stopseg'
         st['readyAt'] = now
-        st['pct'] = 45
+        st['pct'] = 48
         st['hasSave'] = _restart_has_save(srv)          # v6157（C4）：排序依据，只算一次
         st['steps'].update({'ann': 'ok', 'empty': 'ok', 'quiet': 'ok'})
-        st['msg'] = (u'三重静默通过，排队等待重启' if st['hasSave']
-                     else u'三重静默通过，排队等待重启（无主存档，排后）')
+        st['msg'] = u'静默通过，立即存档停服'
+        _restart_log('QUIET-OK %s -> stopseg（静默通过即刻停服）' % srv)
         _restart_push(srv)
+
+    # ---- 3.5) v6512 停服段调度：静默通过即刻存档+停服，用**独立**并发名额 ----
+    #   目的（用户口径）：静默确认低风险后马上把「已停服」这个状态占住，
+    #   后面复制/起服排队再久也不影响窗口有效性。
+    #   停服段限流只为保护磁盘（11 台同时 saveworld 会互相拖慢），默认 RESTART_STOP_PARALLEL=3。
+    _in_stop = [k for k, v in servers.items() if v.get('phase') == 'savekill']
+    _stop_slots = max(0, int(RESTART_STOP_PARALLEL) - len(_in_stop))
+    _scands = []
+    for _s2, _v2 in servers.items():
+        if _v2.get('phase') != 'stopseg':
+            continue
+        if _srv_lock_get(_s2).get('kind') in SRV_LOCK_HARD:
+            if not _v2.get('stopLockMsg'):
+                _v2['stopLockMsg'] = True
+                _v2['msg'] = u'静默通过，等待其他任务释放该服…'
+                _restart_push(_s2)
+            continue
+        _scands.append((float(_v2.get('readyAt') or 0), _s2))
+    _scands.sort()
+    for _sp in (_scands[:_stop_slots] if _stop_slots > 0 else []):
+        _s3 = _sp[1]
+        _v3 = servers[_s3]
+        _v3['stopLockMsg'] = False
+        _v3['phase'] = 'savekill'
+        _v3['pct'] = 60
+        # C6：Bob 不落盘 ⇒ 跳过存档屏障，直接走 kill
+        _v3['skStage'] = ('savekill' if _s3 == 'Bob' else 'saveworld')
+        _v3['steps']['saveworld'] = ('skip' if _s3 == 'Bob' else 'run')
+        _v3['steps']['savekill'] = ('run' if _s3 == 'Bob' else 'wait')
+        _v3['swAt'] = 0; _v3['swDone'] = False; _v3['swOk'] = False
+        _v3['execAt'] = 0; _v3['execDone'] = False; _v3['execOk'] = False
+        _v3['startqAt'] = 0; _v3['verifyAt'] = 0
+        _RESTART['current'] = _s3
+        _srv_lock_set(_s3, 'restart', 'restart|%s' % _s3,
+                      u'自动重启（IP 切换）', 'ipwatch')   # v6135：soft 锁
+        if dry:
+            _v3['msg'] = (u'[演练] 跳过存档停服' if _s3 != 'Bob'
+                          else u'[演练] 跳过停服（本图不落盘）')
+        else:
+            _v3['msg'] = u'存档并停服（等待）'
+        _restart_log('enter savekill %s (stop %d/%d)'
+                     % (_s3, len(_in_stop) + 1, int(RESTART_STOP_PARALLEL)))
+        _restart_push(_s3)
 
     # ---- 4) 并发门：最多 RESTART_PARALLEL 台同时在**整条执行链**内 ----
     #   v6270（用户口径 2026-11-07「重压到 0/2，一堆排队的一个都没开始启动」「启动失败后不会自动重试」）：
@@ -11079,14 +12396,17 @@ def _restart_tick():
     #     · 界面显示「0/2 有空位却没人启动」
     #     · _restart_step_fail 退回 ready 的失败台永远等不到重试
     #   修法：名额按整条链统计，两个判据统一；不再有「全局 busy」这个门。
-    _CHAIN_PH = ('savekill', 'sync', 'startq', 'verify')
+    # v6512：savekill 已移出 —— 停服段由 3.5 段用 RESTART_STOP_PARALLEL 单独管；
+    #   若仍留在链内，「已停服在排队」的台会占着重活名额，真干活的反而不够。
+    _CHAIN_PH = ('sync', 'startq', 'verify')
     _in_chain = [k for k, v in servers.items() if v.get('phase') in _CHAIN_PH]
-    # v6440（用户口径「更新一次只能一台 仅限于 缓存覆盖文件的步骤」）：
-    #   原来 update/rollback 把 _par_now 压成 1 ⇒ savekill→sync→startq→verify
-    #   整条链只能 1 台（实测 Cen 走完 5 分 19 秒，Los 全程 ready 干等）。
-    #   现统一按 RESTART_PARALLEL；真正的串行只由 _RESTART_SYNC_SERIAL 在
-    #   复制（sync）这一步把住。
-    _par_now = int(RESTART_PARALLEL)
+    # v6546：总名额 = 重活（startq/verify）2 + 复制差异独立名额（默认 3，重压时降 1）
+    try:
+        _heavy_now = int(_startq_heavy_count())
+    except Exception:
+        _heavy_now = 0
+    _sync_cap = (1 if _heavy_now > 0 else int(RESTART_SYNC_PARALLEL))
+    _par_now = int(RESTART_PARALLEL) + max(0, _sync_cap)
     busy = len(_in_chain) >= _par_now
     if not busy:
         # v6157（C4/C6）：锚点排序 = (Bob 永远最后, 有存档优先, 在线人数升序, readyAt 先到先得)
@@ -11110,13 +12430,31 @@ def _restart_tick():
         # v6228（O5 / §15.1）：更新/回滚是**纯磁盘 IO**，强制串行（与 ASAM 一致且极快）
         _is_upd_m = str(_RESTART.get('mode') or 'restart') in ('update', 'rollback')
         _par = 1 if _is_upd_m else int(RESTART_PARALLEL)
-        _in_sk = [k for k, v in servers.items()
-                  if v.get('phase') in ('savekill', 'sync')]
         # v6270：名额按**整条执行链**（含 startq/verify）统计，与上面的 busy 判据保持一致
         _free_slots = max(0, _par_now - len(_in_chain))
         for _pick in (_cands[:_free_slots] if _free_slots > 0 else []):
             srv = _pick[1]
             st = servers[srv]
+            # v6512（用户口径）：**已就地停服**（静默通过后停的）⇒ 排队只等重活，绝不再停一次。
+            #   update/rollback → 直接复制；restart → 直接起服。
+            if st.get('stoppedByMe'):
+                # v6513（2026-11-10 实测）：update 模式若**复制已完成**，重试必须直接起服 ——
+                #   原来统一派 sync / 或在 savekill 段重走存档，会对已停服的服发 RCON
+                #   ⇒ ConnectionRefusedError 10061 ⇒ 连撞 3 次判死（Abe/Ast 实测）。
+                _syncd = (str((st.get('steps') or {}).get('sync')) == 'ok')
+                _to_start = (not _is_upd_m) or _syncd
+                st['phase'] = ('startq' if _to_start else 'sync')
+                st['pct'] = (75 if _to_start else 80)
+                st['syncAt'] = 0; st['startqAt'] = 0; st['verifyAt'] = 0
+                st['steps'].update({'saveworld': 'skip', 'savekill': 'ok',
+                                    'sync': ('ok' if _syncd else ('run' if _is_upd_m else 'skip')),
+                                    'startq': ('run' if _to_start else 'wait')})
+                st['msg'] = (u'已停服，准备起服' if _to_start else u'已停服，开始复制差异')
+                _srv_lock_set(srv, 'restart', 'restart|%s' % srv,
+                              u'自动重启（IP 切换）', 'ipwatch')
+                _restart_log('DISPATCH %s 已停服 -> %s' % (srv, st['phase']))
+                _restart_push(srv)
+                continue
             # v6273（用户口径）：任务中途已停服的服 —— 跳过存档/停服，**直接重新起服**
             #   否则重试必然撞 RCON 10061（见 _restart_step_fail 注释）。
             if (not _is_upd_m) and st.get('skipSaveOnRetry'):
@@ -11134,30 +12472,23 @@ def _restart_tick():
                 _restart_log('RETRY-STARTQ %s 跳过存档屏障直接起服（savekill 已完成）' % srv)
                 _restart_push(srv)
                 continue
-            st['phase'] = 'savekill'
-            st['pct'] = 60
-            # C6：Bob 不落盘 ⇒ 跳过存档屏障，直接走 kill
+            # v6512：**这里不再直接进 savekill**（停服已提前到静默通过时，见 3.5 段）。
+            #   只剩两种合法情况：原本停服的更新批（skipToSync）→ 直接复制；
+            #   其余一律退回停服段，绝不跳过停服就往下冲。
             if _is_upd_m and st.get('skipToSync'):
-                # 停服批：直接进 sync（不存档 / 不停服 / 不起服）
-                st['skStage'] = 'sync'
+                st['phase'] = 'sync'
+                st['pct'] = 80
+                st['syncAt'] = 0
                 st['steps']['sync'] = 'run'
-            else:
-                st['skStage'] = ('savekill' if srv == 'Bob' else 'saveworld')
-                st['steps']['saveworld'] = ('skip' if srv == 'Bob' else 'run')
-                st['steps']['savekill'] = ('run' if srv == 'Bob' else 'wait')
-            st['swAt'] = 0; st['swDone'] = False; st['swOk'] = False
-            st['execAt'] = 0; st['execDone'] = False; st['execOk'] = False   # v6152（C1）：真执行状态位
-            st['startqAt'] = 0; st['verifyAt'] = 0
-            _RESTART['current'] = srv
-            _srv_lock_set(srv, 'restart', 'restart|%s' % srv,
-                          u'自动重启（IP 切换）', 'ipwatch')   # v6135：soft 锁
-            if dry:
-                st['msg'] = (u'[演练] 跳过存档停服' if srv != 'Bob'
-                             else u'[演练] 跳过停服（本图不落盘）')
-            else:
-                st['msg'] = u'存档并停服（等待）'
-            _restart_log('enter savekill %s (parallel %d/%d)'
-                         % (srv, len(_in_sk) + 1, int(RESTART_PARALLEL)))
+                st['msg'] = u'本服已停服，开始复制差异'
+                _restart_log('DISPATCH %s skipToSync -> sync' % srv)
+                _restart_push(srv)
+                continue
+            st['phase'] = 'stopseg'
+            st['stopSegAt'] = 0
+            st['stopLockMsg'] = False
+            st['msg'] = u'等待停服（静默已通过）'
+            _restart_log('DISPATCH %s 未停服 -> 回停服段' % srv)
             _restart_push(srv)
 
     # ---- 5) 推进执行链（dry：即时推进；真执行：按执行器回执 / 日志判据推进）----
@@ -11230,17 +12561,21 @@ def _restart_tick():
                     st['steps']['savekill'] = 'ok'
                     st['execAt'] = 0
                     st['execDone'] = False
-                    if str(_RESTART.get('mode') or 'restart') in ('update', 'rollback'):
-                        st['steps']['sync'] = 'run'
-                        st['phase'] = 'sync'
-                        st['pct'] = 80
-                        st['syncAt'] = 0
-                        st['msg'] = u'已停服，准备复制差异'
-                    else:
-                        st['steps']['startq'] = 'run'
-                        st['phase'] = 'startq'
-                        st['pct'] = 75
-                        st['msg'] = u'已停服，准备起服'
+                    # v6512（用户口径「先存档再停服、再排队」）：停服成功 ⇒ 回去**排队**
+                    #   由第 4 段按 RESTART_PARALLEL 派到复制/起服；
+                    #   原实现是就地一路往下冲（不受重活并发门控制）。
+                    st['stoppedByMe'] = True
+                    st['stoppedAt'] = now
+                    st['players'] = 0          # v6512：已停服 ⇒ 0 人，起服排序才准
+                    st['sampled'] = True
+                    st['skStage'] = ''
+                    st['phase'] = 'ready'
+                    st['readyAt'] = now
+                    st['pct'] = 55
+                    st['msg'] = (u'已停服，排队等待复制差异'
+                                 if str(_RESTART.get('mode') or 'restart') in ('update', 'rollback')
+                                 else u'已停服，排队等待起服')
+                    _restart_log('STOPPED %s 已停服 -> ready(queue)' % srv)
                     _restart_push(srv)
                 else:
                     _restart_step_fail(srv, st, u'savekill 失败：%s' % (st.get('execMsg') or u'无回执'))
@@ -13032,7 +14367,7 @@ def _upd_server_status(srv):
                        if str(a.get('sizeOnDisk') or '').isdigit() else 0)}
 
 
-# ===== v6397（用户口径「4 个卡片的本地包要加一个 待升级状态，只跟权威线上最新版本号对比」）=====
+# ===== v6397（用户口径「4 个卡片的缓存要加一个 待升级状态，只跟权威线上最新版本号对比」）=====
 #   缓存卡的「权威线上最新版本号」= Steam 官方最新 buildId。
 #   数据源 api.steamcmd.net（公开、免 key、实测可用）：
 #     data.<appid>.depots.branches.public.buildid
@@ -13073,7 +14408,7 @@ def _upd_status(include_players=False):
     include_players=True 时逐台查在线人数（慢，仅前端点「刷新」时用）"""
     cache = _upd_cache_status()
     cbuild = cache.get('buildId') or ''
-    # v6397：缓存卡的「本地包待升级」判据 —— 本地缓存 buildId vs Steam 官方最新 buildId
+    # v6397：缓存卡的「缓存待升级」判据 —— 本地缓存 buildId vs Steam 官方最新 buildId
     try:
         _st = _steam_latest_build()
         _lb = str(_st.get('buildid') or '')
@@ -13113,7 +14448,7 @@ def _upd_status_snapshot():
     return _upd_status(include_players=False)
 
 
-# ===== v6228（P1.5）：版本档位判定 + AsaApi 缓存就绪判定 =====
+# ===== v6228（P1.5）：版本档位判定 + 库偏移表就绪判定 =====
 #   方案 §16（版本号是「档位」不是小数）/ §14.3（精确串判据）
 # v6230（用户纠正口径）：版本号可能**没有小数部分**（`v97` = 97.0）
 _VER_RE = re.compile(r'^(\d+)(?:\.(\d+))?$')
@@ -13167,46 +14502,54 @@ def _ver_kind(old, new):
 
 
 def _asaapi_state(cards=None):
-    """v6228（§14.3）：AsaApi 缓存就绪判定 —— **唯一精确判据**
-       规范化（剥 HTML -> 去 markdown -> 小写 -> 压空白）后文本包含
-       `automated cache build: success` 即就绪；其余一律 building/unknown。
-       ⚠ 不做任何关键词猜测（旧方案在 'once completed' / 'cache-ready message' 上踩过 2 次坑）。
-       返回 (state, raw, meta)；raw 是**英文原文**，前端浮窗必须原样展示不翻译。"""
+    """v6542（用户口径「安全！开始挖掘」的前面一条明明已经是 Automated Cache Build: Success）：
+    就绪判定的**正确定序** ——
+      · 从**最新往旧**扫，遇到第一条「表态」消息即返回：
+          含 `automated cache build: success`（去 markdown 标记后匹配）=> ready
+          含 `update detected` / `cache builder is running` / `cache generation will take longer` => building
+      · 其余（闲聊、讨论、[Original Message Deleted]、无表态内容）=> 继续往前扫
+    历史踩坑（两次）：
+      ① 旧实现只看 cards[-1]（最新一条）—— 官方发完 SUCCESS 之后还会有人接着聊
+         （实测最新是「safe! dig in」）⇒ 永远判不出就绪，前端显示「未获取」。
+      ② 取数直接 open(_news_path(...)) 读缓存文件 —— 文件尚未生成时读到空，
+         `if not cards: return 'unknown'` ⇒ 明明有 20 条资讯却是 unknown。
+         改为优先用 _news_refresh 的返回值（自带冷却 + 落盘），文件仅作兜底。
+    """
     try:
         meta = {'updated': '', 'fetchedAt': 0, 'total': 0, 'hit': False}
         if cards is None:
-            # v6395（真根因收尾 · 用户口径「补上」）：
-            #   api_cache 缓存只有资讯广场前端按需请求时才刷新，本函数却**直接 open 文件**、
-            #   绕开 _news_read ⇒ 不开资讯就永远读旧内容（分发确认浮窗的
-            #   「Automated Cache Build」原文与 officialCacheState 一起滞后）。
-            #   lbUpdFetch 并发打 /api/update/status 与 /api/api/status，谁先返回不确定，
-            #   光靠 _api_discord_latest 刷新会出现首帧读旧值。这里补一次按需刷新，
-            #   _news_refresh 自带 60s 全局冷却 + 全局锁，冷却期内零网络开销、失败不抛。
+            cur = None
             try:
-                _news_refresh('api_cache')
+                cur, _f, _e = _news_refresh('api_cache')
             except Exception:
-                pass
-            doc = {}
+                cur = None
+            if not isinstance(cur, dict):
+                try:
+                    with open(_news_path('api_cache'), encoding='utf-8') as f:
+                        cur = json.load(f) or {}
+                except Exception:
+                    cur = {}
+            cards = cur.get('cards') or []
+            meta['updated'] = cur.get('updated') or ''
             try:
-                with open(_news_path('api_cache'), encoding='utf-8') as f:
-                    doc = json.load(f) or {}
-            except Exception:
-                doc = {}
-            cards = doc.get('cards') or []
-            meta['updated'] = doc.get('updated') or ''
-            try:
-                meta['fetchedAt'] = int(doc.get('fetched_at') or 0)
+                meta['fetchedAt'] = int(cur.get('fetched_at') or 0)
             except Exception:
                 meta['fetchedAt'] = 0
         meta['total'] = len(cards)
         if not cards:
             return 'unknown', '', meta
-        raw = cards[-1].get('content') or ''
-        t = _AS_TAG.sub(' ', raw)
-        t = _AS_MD.sub('', t)
-        t = _AS_WS.sub(' ', t).strip().lower()
-        meta['hit'] = (_AS_READY in t)
-        return ('ready' if meta['hit'] else 'building'), raw, meta
+        for c in reversed(cards):
+            raw = (c or {}).get('content') or ''
+            t = _AS_TAG.sub(' ', raw)
+            t = _AS_MD.sub('', t)
+            t = _AS_WS.sub(' ', t).strip().lower()
+            if _AS_READY in t:
+                meta['hit'] = True
+                return 'ready', raw, meta
+            if ('update detected' in t) or ('cache builder is running' in t) \
+               or ('cache generation will take longer' in t):
+                return 'building', raw, meta
+        return 'unknown', '', meta
     except Exception:
         return 'unknown', '', {'updated': '', 'fetchedAt': 0, 'total': 0, 'hit': False}
 
@@ -13406,8 +14749,15 @@ def mods_status():
     conform_n = sum(1 for sv in servers.values() if sv.get('conform'))
     # v6397（用户口径「不光要加进面板，还要影响对于最新版的判断」）：
     #   每个 pid 查 **CurseForge 最新文件**（走 _mods_cf_files，10 分钟缓存；未配 cf_key 时为空）。
-    #   前端「最新版」判定与「本地包待升级」都以它为准，不再拿「已装服里 mtime 最新的 fid」当最新。
+    #   前端「最新版」判定与「缓存待升级」都以它为准，不再拿「已装服里 mtime 最新的 fid」当最新。
     cf_latest = {}
+    # v6493（用户口径「9411566 这种MOD版本号，服务器端 和 客户端 是不是不一致？」）：
+    #   CurseForge 同一 MOD 的**服务端包(windowsserver) 与客户端包(windows) 是两个独立文件**，
+    #   fileId 天然不同（实测 Fear: 服务端 9411569 vs 客户端 9411566）。
+    #   cfLatest 取的是「最新文件」= 服务端包，拿去跟本机**客户端**目录的 fid 比对必然不等
+    #   ⇒ 另给一份 clientLatest（走 _mods_cf_client_file，复用同一份 _mods_cf_files 缓存，
+    #     零额外 CurseForge API 调用），供「部署到本机」判「是否最新」。
+    client_latest = {}
     for _pid in groups.keys():
         try:
             _fl = _mods_cf_files(_pid)
@@ -13419,10 +14769,15 @@ def mods_status():
                     'at': str(_f0.get('fileDate') or '')[:19].replace('T', ' '),
                     'dl': int(_f0.get('downloadCount') or 0),
                 }
+            _cfc = _mods_cf_client_file(_pid)
+            if _cfc:
+                client_latest[_pid] = {'fid': str(_cfc.get('id') or ''),
+                                       'name': str(_cfc.get('fileName') or '')}
         except Exception:
             _sexc('mods_cf_latest')
     data = {'ok': True, 'gameId': MODS_GAMEID, 'servers': servers, 'groups': groups,
             'policy': policy, 'baseFid': base_fid, 'cfLatest': cf_latest,
+            'clientLatest': client_latest,
             'localPack': _mods_local_pack(),
             'conformCount': conform_n, 'serverCount': len(SERVERS),
             'totalBytes': total, 'reclaimableBytes': reclaim,
@@ -13505,6 +14860,50 @@ def _dc_msg_text(m):
     return '\n'.join(parts)
 
 
+# ===== v6778（用户口径「照抄的话以后还会错，能否直接共用」）：Discord 公告「找最近一条」统一入口 =====
+# 背景：原先 _api_discord_latest() 内部两套写法 ——
+#   api_ver  取 ms[-1]（只看最新一条）⇒ 官方发一条「网站功能更新」公告就把版本号顶掉，verNum 变空、前端显示 v?
+#   api_cache 从最新往旧扫（v6542 修过「只看最新一条」的同类事故）
+# 两次事故（v6393 正则漏配 / v6542 只看最新）根因都是「同一语义写了两份」。现统一为：
+#   语义只维护一份（_dc_scan_latest），业务差异由调用方传 classify 表达。
+_DC_VER_RE = re.compile(
+    r'(?i)(?:AsaApi|Server\s*API|ASA[:\s\-]*API)\s*[:\-]?\s*v?([0-9]+(?:\.[0-9]+)+)')
+_DC_VER_RE2 = re.compile(r'(?i)\bv([0-9]+(?:\.[0-9]+)+)')
+
+
+def _dc_scan_latest(ms, classify):
+    """从**最新往旧**扫消息列表，返回第一条 classify(text) 为真的消息。
+
+    :param ms: 消息列表（时间升序，与缓存文件内顺序一致）
+    :param classify: 文本 → 真值（真值即返回；空/None 表示跳过该条）
+    :return: (msg, text, value)；无命中 → (None, '', None)
+    """
+    for _m in reversed([x for x in (ms or []) if isinstance(x, dict)]):
+        _t = _dc_msg_text(_m)
+        _v = classify(_t)
+        if _v:
+            return _m, _t, _v
+    return None, '', None
+
+
+def _dc_classify_ver(t):
+    """版本公告分类器：返回版本号（如 '2.11'）；非版本公告返回 ''。"""
+    mv = _DC_VER_RE.search(t) or _DC_VER_RE2.search(t)
+    return mv.group(1) if mv else ''
+
+
+def _dc_classify_cache(t):
+    """缓存状态表态分类器：ready / building / detected；闲聊、'safe! dig in'、[已删除] 返回 ''。"""
+    low = t.lower()
+    if 'success' in low:
+        return 'ready'
+    if ('longer than usual' in low) or ('running' in low):
+        return 'building'
+    if 'detected' in low:
+        return 'detected'
+    return ''
+
+
 def _api_discord_latest():
     """v6288（用户口径）：最新 API 信息取自 Discord 接口抓取缓存（api_ver / api_cache），零网络"""
     out = {}
@@ -13512,7 +14911,7 @@ def _api_discord_latest():
     #        「官方缓存 后面的 已就绪，也滞后，应该也是同一个根因」「我发现我必须手动打开过资讯 你才更新」）：
     #   api_ver / api_cache 两份缓存**只有资讯广场前端按需请求时**才会调 _news_refresh 去 Discord 抓，
     #   不开资讯就永远读旧文件 ⇒「库」最新版（latest.verNum）与「官方缓存」状态（officialCacheState）
-    #   一起滞后（用户本地包已 2.11，这里还返回 2.1）。
+    #   一起滞后（用户缓存已 2.11，这里还返回 2.1）。
     #   ⇒ 读数前先按需刷新一次。_news_refresh 自带全局冷却（NEWS_COOL_SEC=60s）与全局锁，
     #     冷却期内零网络开销；抓取失败不抛（保留旧缓存，行为与原来一致）。
     #   成本上界：api_status() 自身 _API_CACHE TTL=30s ⇒ 最多每 60s 打 2 个频道各一次。
@@ -13525,33 +14924,33 @@ def _api_discord_latest():
         d = _news_read('api_ver') or {}
         ms = [x for x in (d.get('messages') or []) if isinstance(x, dict)]
         if ms:
-            t = _dc_msg_text(ms[-1])
-            out['verAt'] = _dc_ts_local(ms[-1].get('timestamp'))
-            out['verText'] = t[:600]
-            # v6393（真根因 · 第二层）：Discord 公告标题格式已从「AsaApi v2.1 released」
-            #   变成「[ASA: Server API v2.11] released」—— 只认 AsaApi 的老正则抓不到 ⇒ verNum 为空，
-            #   前端「库」行变 v?、库需升级判定全失效。放宽为三种常见写法，再兜底取首个 vX.Y+。
-            mv = (re.search(r'(?i)(?:AsaApi|Server\s*API|ASA[:\s\-]*API)\s*[:\-]?\s*v?([0-9]+(?:\.[0-9]+)+)', t)
-                  or re.search(r'(?i)\bv([0-9]+(?:\.[0-9]+)+)', t))
-            out['verNum'] = mv.group(1) if mv else ''
+            # v6778：从最新往旧扫，取**最近一条含版本号**的公告（跳过「网站功能更新」这类无版本号公告）
+            _vm, _vt, _vv = _dc_scan_latest(ms, _dc_classify_ver)
+            if _vm is not None:
+                out['verAt'] = _dc_ts_local(_vm.get('timestamp'))
+                out['verText'] = _vt[:600]
+                out['verNum'] = _vv
     except Exception as e:
         out['verErr'] = repr(e)
     try:
         d2 = _news_read('api_cache') or {}
         ms2 = [x for x in (d2.get('messages') or []) if isinstance(x, dict)]
         if ms2:
-            t2 = _dc_msg_text(ms2[-1])
-            low = t2.lower()
-            out['cacheAt'] = _dc_ts_local(ms2[-1].get('timestamp'))
-            out['cacheText'] = t2[:600]
-            if 'success' in low:
-                out['cacheState'] = 'ready'
-            elif ('longer than usual' in low) or ('running' in low):
-                out['cacheState'] = 'building'
-            elif 'detected' in low:
-                out['cacheState'] = 'detected'
-            else:
+            # v6542（用户口径「安全！开始挖掘 的前面一条明明已经是 Automated Cache Build: Success」）：
+            #   原来只看 ms2[-1]（最新一条）—— 官方发完 SUCCESS 后还会有人接着聊
+            #   （实测最新 = 'safe! dig in'）⇒ 永远落进 else 判成 unknown，前端显示「未获取」。
+            #   改为**从最新往旧扫**，命中第一条「表态」消息即停。
+            # v6778：与 api_ver 共用同一倒序扫描器（此前是各自写一遍循环）
+            _cm, _ct, _cst = _dc_scan_latest(ms2, _dc_classify_cache)
+            if _cm is not None:
+                out['cacheState'] = _cst
+                out['cacheText'] = _ct[:600]
+                out['cacheAt'] = _dc_ts_local(_cm.get('timestamp'))
+                out['cacheSrcMid'] = str(_cm.get('id') or '')
+            if _cm is None:
                 out['cacheState'] = 'unknown'
+                out['cacheText'] = _dc_msg_text(ms2[-1])[:600]
+                out['cacheAt'] = _dc_ts_local(ms2[-1].get('timestamp'))
     except Exception as e:
         out['cacheErr'] = repr(e)
     return out
@@ -13576,11 +14975,11 @@ def _lib_needs_upgrade(_dc, lib):
 
 def _asa_lib_ver_map():
     """v6399（真根因）：dll size -> AsaApi 版本号。
-       **以本地包目录名（_upd_cache/_apipkg/<版本>/ArkApi/AsaApi.dll）为准动态生成**，
+       **以缓存目录名（_upd_cache/_apipkg/<版本>/ArkApi/AsaApi.dll）为准动态生成**，
        硬编码 ASA_API_VER_BY_SIZE 仅作兜底。
        根因：Bob 分发 2.11 后 dll=7351808 字节，硬编码表没有这一项 ⇒ dllVer='' ⇒
              前端 `_libGrp` 把它归进「未检测到 dll」灰段（用户报「AsaApi 显示 Bob 未检测到 dll」）。
-       以后本地包一升级就会自动识别，不再需要人工补表。"""
+       以后缓存一升级就会自动识别，不再需要人工补表。"""
     m = dict(ASA_API_VER_BY_SIZE)
     try:
         root = _asa_pkg_root()
@@ -13608,7 +15007,7 @@ def api_status():
     lib, cache, plugs = {}, {}, {}
     lib_sig = {}
     _diag2 = {}
-    _lib_vermap = _asa_lib_ver_map()          # v6399：本地包优先，硬编码兜底
+    _lib_vermap = _asa_lib_ver_map()          # v6399：缓存优先，硬编码兜底
     for srv in SERVERS.keys():
         win = _srv_win64(srv)
         dll = os.path.join(win, 'ArkApi', 'AsaApi.dll')
@@ -13711,8 +15110,8 @@ def api_status():
     except Exception:
         _sexc('api_need_by_srv')
         _need_map = {}
-    # v6397（用户口径「4 个卡片的本地包要加一个 待升级状态，只跟权威线上最新版本号对比」）：
-    #   API 卡本地包 —— 只与**权威线上最新**（Discord 公告 latest.verNum）比，
+    # v6397（用户口径「4 个卡片的缓存要加一个 待升级状态，只跟权威线上最新版本号对比」）：
+    #   API 卡缓存 —— 只与**权威线上最新**（Discord 公告 latest.verNum）比，
     #   不与「SOK 自研源版本」或「各服已装版本」比（那两个是分发源 / 现状，不是线上最新）。
     try:
         _nv = lambda x: str(x or '').strip().lstrip('vV')
@@ -13760,8 +15159,8 @@ def _mods_new_batch():
 
 
 def _mods_local_pack():
-    """v6293（用户口径）：MOD 本地包 = _upd_cache 下 批次/mods/ 已缓存的版本（pid_fid）
-    v6353（方案 A）：把 _upd_cache/_modpkg/ 下的「真·本地包」（CurseForge 下载）一并统计"""
+    """v6293（用户口径）：MOD 缓存 = _upd_cache 下 批次/mods/ 已缓存的版本（pid_fid）
+    v6353（方案 A）：把 _upd_cache/_modpkg/ 下的「真·缓存」（CurseForge 下载）一并统计"""
     root = _upd_cache_dir()
     items, tot, bat = [], 0, ''
     _pkg_root = os.path.join(root, MODS_PKG_ROOT_NAME)
@@ -13800,7 +15199,7 @@ def _mods_local_pack():
 
 
 def _mods_prefetch_plan():
-    """v6293：把策略基准版本从现有服复制进新批次缓存（=更新本地包），纯只读计算"""
+    """v6293：把策略基准版本从现有服复制进新批次缓存（=更新缓存），纯只读计算"""
     st = mods_status()
     base = st.get('baseFid') or {}
     svmap = st.get('servers') or {}
@@ -13830,7 +15229,7 @@ def _mods_prefetch_plan():
 
 
 # v6305（用户口径·无感回收）：MOD 开场视频 Content/Movies/LoadingScreen.bk2 服务端根本不读
-#   （不在 Manifest_NonUFS/UFS 清单里；dedicated 无渲染设备）⇒ 分发与更新本地包一律跳过，
+#   （不在 Manifest_NonUFS/UFS 清单里；dedicated 无渲染设备）⇒ 分发与更新缓存一律跳过，
 #   分发前把目标旧目录里已有的删掉，用户无感、不用任何按钮。
 MODS_LS_NAME = 'LoadingScreen.bk2'
 
@@ -13871,7 +15270,7 @@ def _mods_prefetch_run(user, batch_id, plans):
 
     def _pt(msg, pct, phase='run', err=''):
         try:
-            _utask_put(_pk, '', 'update', user, label=u'更新本地包',
+            _utask_put(_pk, '', 'update', user, label=u'更新缓存',
                        msg=msg, pct=pct, phase=phase, steps=_ps, err=err,
                        srv_name=u'%d 个 MOD' % _pn)
         except Exception:
@@ -13935,7 +15334,7 @@ def _pe_file_version(p):
 
 
 def _api_local_pack():
-    """v6293（用户口径）：API 本地包 = _upd_cache/_apipkg/版本/（官方 AsaApi 包 + 自研插件源）"""
+    """v6293（用户口径）：API 包缓存 = _upd_cache/_apipkg/版本/（官方 AsaApi 包 + 自研插件源）"""
     root = os.path.join(_upd_cache_dir(), '_apipkg')
     items, tot, cur = [], 0, ''
     try:
@@ -13991,8 +15390,8 @@ def _api_local_pack():
             'srcVer': _sver, 'srcDll': _sdll, 'srcDllSize': _ssz}
 
 
-# ===== v6353（用户口径·方案 A）：MOD 「真·本地包」—— 直接从 CurseForge 官方下载 =====
-#   背景：原「本地包」只是**从某台服 copytree 出来的副本**（_mods_prefetch_run），
+# ===== v6353（用户口径·方案 A）：MOD 「真·缓存」—— 直接从 CurseForge 官方下载 =====
+#   背景：原「缓存」只是**从某台服 copytree 出来的副本**（_mods_prefetch_run），
 #         没有源服就彻底没源；且文案写「请配置 CurseForge API Key 后再下载」但**下载功能从未实现**。
 #   实测（2026-11-09）：
 #     · GET /v1/mods/{id}/files  → 200，可列出该 mod 全部文件（筛 fileName 含 windowsserver = 服务端包）
@@ -14222,12 +15621,12 @@ def _pkg_local_list(kind, pid=u''):
         root, ver = _pkg_local_zh_root()
         if not root:
             return {'ok': False, 'code': 'no_local_pkg',
-                    'error': u'本地汉化包不存在，请先点「更新本地包」'}
+                    'error': u'汉化包未下载到缓存，请先点「更新缓存」'}
         allow = set(ZH_PKG_WHITELIST)
         files = [x for x in _pkg_local_walk(root) if x['rel'] in allow]
         if not files:
             return {'ok': False, 'code': 'no_local_pkg',
-                    'error': u'本地汉化包缺少 %s' % u' / '.join(ZH_PKG_WHITELIST)}
+                    'error': u'缓存里缺文件：%s' % u' / '.join(ZH_PKG_WHITELIST)}
         return {'ok': True, 'kind': u'zh', 'ver': ver, 'root': root,
                 'files': files, 'total': sum(x['size'] for x in files),
                 'count': len(files)}
@@ -14235,7 +15634,7 @@ def _pkg_local_list(kind, pid=u''):
         base = os.path.join(_upd_cache_dir(), MODS_PKG_ROOT_NAME)
         if not os.path.isdir(base):
             return {'ok': False, 'code': 'no_local_pkg',
-                    'error': u'本地 MOD 包不存在，请先点「更新本地包」'}
+                    'error': u'MOD 包未下载到缓存，请先点「更新缓存」'}
         want = str(pid or u'').strip()
         groups = []
         try:
@@ -14257,15 +15656,15 @@ def _pkg_local_list(kind, pid=u''):
             _sexc('pkg_local_list')
         if not groups:
             return {'ok': False, 'code': 'no_local_pkg',
-                    'error': (u'有本地包但目录为空，请重新「更新本地包」'
-                              if os.path.isdir(base) else u'本地 MOD 包不存在')}
+                    'error': (u'有缓存但目录为空，请重新「更新缓存」'
+                              if os.path.isdir(base) else u'MOD 包未下载到缓存')}
         return {'ok': True, 'kind': u'mods', 'root': base, 'groups': groups,
                 'total': sum(g['total'] for g in groups)}
     return {'ok': False, 'code': 'bad_kind', 'error': u'kind 只能是 zh / mods'}
 
 
 def _pkg_local_resolve(kind, pid, rel):
-    """(绝对路径, 错误) —— 严格限制在本地包根内，防目录穿越"""
+    """(绝对路径, 错误) —— 严格限制在缓存根内，防目录穿越"""
     kind = str(kind or u'').lower()
     rel = str(rel or u'').replace('\\', '/').strip()
     if not rel or '..' in rel.split('/'):
@@ -14303,7 +15702,7 @@ def _pkg_local_resolve(kind, pid, rel):
 
 
 def _mods_pkg_fetch(pid, on_prog=None, force=False):
-    """下载并解压「真·本地包」→ _upd_cache/_modpkg/<pid>_<fid>/
+    """下载并解压「真·缓存」→ _upd_cache/_modpkg/<pid>_<fid>/
        · 跳过开场视频 LoadingScreen.bk2（服务端不读，与分发同策略）
        · 原子性：先下 .zip 校验大小，再解压到临时目录后改名
        返回 (ok, msg, fid, dir)"""
@@ -14320,7 +15719,7 @@ def _mods_pkg_fetch(pid, on_prog=None, force=False):
     if os.path.isdir(dst) and not force:
         n0 = sum(len(fs) for _r, _d, fs in os.walk(dst))
         if n0 > 0:
-            return True, u'已存在本地包（%d 文件，跳过下载）' % n0, fid, dst
+            return True, u'已存在缓存（%d 文件，跳过下载）' % n0, fid, dst
     root = os.path.join(_upd_cache_dir(), MODS_PKG_ROOT_NAME)
     try:
         if not os.path.isdir(root):
@@ -14455,8 +15854,8 @@ def _mods_deploy_plan(servers, policy=None):
                                 break
                     if src_srv:
                         break
-                # v6353（方案 A）：**服上都没有该版本时，回落「真·本地包」**
-                #   原实现直接判 ok=False ⇒ 任务条「无可用源」，本地包形同摆设
+                # v6353（方案 A）：**服上都没有该版本时，回落「真·缓存」**
+                #   原实现直接判 ok=False ⇒ 任务条「无可用源」，缓存形同摆设
                 if not src_dir:
                     _pkg = _mods_pkg_dir(pid, want)
                     if os.path.isdir(_pkg):
@@ -14964,7 +16363,7 @@ def _asa_pkg_download(user):
         except Exception:
             pass
         try:
-            _utask_put(key, '', 'update', user, label=u'更新本地包',
+            _utask_put(key, '', 'update', user, label=u'更新缓存',
                        msg=msg, pct=pct, phase=phase,
                        steps=_steps_apply(STEP_4_PKG, pct, phase, msg, 'pkg'), err=err,
                        meta={'items': _its},
@@ -14988,7 +16387,7 @@ def _asa_pkg_download(user):
         return {'ok': False, 'error': u'release %s 无 zip 资产' % (tag or u'?')}
     dst = os.path.join(_asa_pkg_root(), tag)
     if os.path.isfile(os.path.join(dst, 'ArkApi', 'AsaApi.dll')):
-        _t(u'本地包 %s 已存在，跳过' % tag, 100, 'ok')
+        _t(u'缓存 %s 已存在，跳过' % tag, 100, 'ok')
         return {'ok': True, 'ver': tag, 'skipped': True, 'dir': dst}
     tmpd = os.path.join(_upd_cache_dir(), '_apipkg_dl')
     zpath = os.path.join(tmpd, str(z.get('name') or 'asaapi.zip'))
@@ -15084,7 +16483,7 @@ SOK_SRC_UNC = r'\\Tnas\public\ServerOpsKitAPI'
 
 
 def _asa_targets():
-    """目标文件表：本地包（库 + Permissions）+ 自研源插件（\\\\Tnas\\public\\ServerOpsKitAPI/*.dll）"""
+    """目标文件表：缓存（库 + Permissions）+ 自研源插件（\\\\Tnas\\public\\ServerOpsKitAPI/*.dll）"""
     ver = _asa_pkg_cur()
     files = []
     if ver:
@@ -15276,10 +16675,10 @@ def _api_need_by_srv(tgt=None):
     _t0 = tgt if tgt else _asa_targets()
     out = {}
     # v6396（用户口径「附件还是没显示 api 待升级的点」）：
-    #   Bob 的库是 2.1、本地包已 2.11，却因这里只比 plugin 而被判「无需升级」⇒ TAB 无紫点。
+    #   Bob 的库是 2.1、缓存已 2.11，却因这里只比 plugin 而被判「无需升级」⇒ TAB 无紫点。
     #   v6349 当年排除 lib 是为规避「前端按多数派判版本」的误报（Bob 升了反被报紫点）；
-    #   现在判据已换成后端目标文件表（本地包 / 自研源的真实 dll size），不存在多数派问题 ——
-    #   库 size 与本地包不一致就是真落后，一并纳入。
+    #   现在判据已换成后端目标文件表（缓存 / 自研源的真实 dll size），不存在多数派问题 ——
+    #   库 size 与缓存不一致就是真落后，一并纳入。
     #   防护：size 为 0（文件缺失 / 读不到）的条目跳过，避免「目标 size=0 ⇒ 全服误报」。
     fl = [f for f in (_t0.get('files') or [])
           if str(f.get('kind') or '') in ('plugin', 'lib')
@@ -15334,6 +16733,35 @@ def _sok_ver3(v):
     return s
 
 
+def _sok_ver2(v):
+    """v6779（用户口径 2026-11-16「插件端已放弃 patch 级」）：版本号统一成两段 major.minor。
+
+       '0.94'  -> '0.94'      （原样）
+       '0.9.4' -> '0.94'      （历史等价：旧约定 0.84 == 0.8.4 ⇒ 0.9.4 == 0.94）
+       '0.7'   -> '0.7'
+       '1'     -> '1.0'
+       '1.0.3' -> '1.03'
+       空/异常 -> 原样返回
+
+    ⚠ 与 _sok_ver3 的唯一区别：**不再补第三段**（0.94 不会被写成 0.9.4）。
+      插件端已放弃 patch 级，若仍写三段，config 会与插件自报打架、面板显示回退成 0.9.4。
+    """
+    s = str(v or '').strip()
+    if not s:
+        return ''
+    parts = [p for p in s.split('.') if p != '']
+    try:
+        if len(parts) >= 3:
+            return u'%s.%s%s' % (parts[0], parts[1], parts[2])
+        if len(parts) == 2:
+            return u'%s.%s' % (parts[0], parts[1])
+        if len(parts) == 1:
+            return u'%s.0' % parts[0]
+    except Exception:
+        pass
+    return s
+
+
 def _sync_sok_cfg_ver(srv, items):
     """v6400（用户口径「分发时 config.json 的 version 也要跟着改，不然会误判」）：
        把该服 SOK 的 config.json 里 `version` 同步为本次分发目标的 PluginInfo Version。
@@ -15354,10 +16782,9 @@ def _sync_sok_cfg_ver(srv, items):
             want = ''
     if not want:
         return False
-    # v6442（用户口径「version 应该写成 0.8.4」）：PluginInfo 是两段（0.84），
-    #   而 SOK config 惯用三段（0.8.4）。这里先规范化，再做**等价判定** ——
-    #   `0.84` 与 `0.8.4` 视为同一版本，不改写（避免把已有的 0.8.4 改成 0.84）。
-    want = _sok_ver3(want)
+    # v6779（用户口径 2026-11-16）：插件端放弃 patch 级 ⇒ 统一写两段（0.94），
+    #   不再用 _sok_ver3 补第三段（否则每次分发都把 0.94 改回 0.9.4，与插件自报打架）。
+    want = _sok_ver2(want)
     cfgp = os.path.join(_srv_win64(srv), 'ArkApi', 'Plugins', 'ServerOpsKitAPI', 'config.json')
     if not os.path.isfile(cfgp):
         return False
@@ -15731,6 +17158,22 @@ def _upd_dry_default():
         return True
 
 
+def _arkbk_dry_default():
+    """v6668（用户口径 2026-11-14「回档 的预演 应该可以在系统管理里 可配」）：
+       安全回档「默认预演」开关 —— server_config.json 的 arkbk_dry（全局，11 台共用）。
+       为真时 `/api/arkbackup/execute` **一律强制 dryRun**（只跑到闸门：不停服 / 不换档 / 不启动），
+       前端就算传 dryRun=false 也绕不过（与 update_dry 同款约束）。
+       缺省视为 **False** —— 回档是真操作，默认预演会导致「以为回档了、其实没回」。"""
+    try:
+        d = _srv_cfg_read() or {}
+        v = d.get('arkbk_dry')
+        if v is None:
+            return False
+        return str(v).lower() in ('1', 'true', 'yes', 'on')
+    except Exception:
+        return False
+
+
 # ===== v6237（B1）：汉化补丁（Google Drive 源）—— 只读探测 =====
 # 方案 §3 / §14。要点：
 #   · 云端版本只认 zip 文件名里的 V<n>.<n>；Drive embeddedfolderview 的 mtime 是 "1:08 am" 无日期，不参与比较（§14 A4）
@@ -15796,10 +17239,19 @@ def _zh_norm(s):
 
 
 def _zh_variant_of(name):
-    n = _zh_norm(name)
+    s = str(name or '')
+    n = _zh_norm(s)
+    # v6503：飞书附件用中文命名（V10.1-(恐龙&物品双语)汉化修复补丁.zip）
+    #        _zh_norm 只保留 a-z0-9，中文会被剥空，故先按中文关键词判
+    if (u'\u6050\u9f99' in s) and (u'\u7269\u54c1' in s):
+        return 'dinoitem'
+    if u'\u7269\u54c1\u53cc\u8bed' in s:
+        return 'item'
     if 'dinoitembilingual' in n:
         return 'dinoitem'
     if 'itembilingual' in n:
+        return 'item'
+    if u'\u53cc\u8bed' in s:
         return 'item'
     return 'normal'
 
@@ -15868,16 +17320,75 @@ def _zh_probe_meta(r):
             'ctype': r.get('ctype') or ''}
 
 
+def _zh_remote_feishu(cfg, fc, now=None):
+    """飞书源清单：汉化文档附件 -> items[{id,name}]（id = file_token）
+
+    v6502：Google Drive 目录里 3 个包全带 Trad（繁体），简体包只放在飞书文档附件里。
+    """
+    now = now or time.time()
+    out = {'at': now, 'ok': False, 'folder': 'feishu:' + FEISHU_ZH_WIKI_TOKEN,
+           'ver': '', 'variant': (cfg or {}).get('variant') or 'dinoitem',
+           'asset': {}, 'items': [], 'err': '', 'probe': {},
+           'src': 'feishu', 'kind': 'feishu'}
+    var = out['variant']
+    tk, err = _feishu_tenant_token((fc or {}).get('app_id') or '',
+                                   (fc or {}).get('app_secret') or '')
+    out['probe']['token'] = {'ok': bool(tk), 'code': 0,
+                             'err': (err or ('ok len=%d' % len(tk)))[:200]}
+    if not tk:
+        out['err'] = u'飞书 tenant_access_token 获取失败：%s' % (err or '')
+        return out
+    files, doc, ferr = _fs_zh_blocks(tk)
+    out['doc_token'] = doc
+    out['probe']['blocks'] = {'ok': not ferr, 'code': 0,
+                              'err': (ferr or '')[:200], 'n': len(files)}
+    if ferr:
+        out['err'] = u'飞书文档附件读取失败：%s' % ferr
+        return out
+    items = [{'id': f['file_token'], 'name': f['name']}
+             for f in files if f.get('file_token')]
+    out['items'] = items
+    if not items:
+        out['err'] = u'飞书文档里没有附件'
+        return out
+    pick = _zh_pick(items, var)
+    if not pick:
+        out['err'] = u'飞书文档里没有匹配变体 %s 的包（共 %d 项）' % (var, len(items))
+        return out
+    out['ok'] = True
+    out['ver'] = _zh_ver_of(pick['name'])
+    out['asset'] = {'id': pick['id'], 'name': pick['name'], 'ver': out['ver'],
+                    'variant': var, 'src': 'feishu'}
+    out['probe']['dl'] = {'ok': True, 'code': 0, 'err': '', 'ms': 0}
+    return out
+
+
 def _zh_remote(force=False):
-    """列 Google Drive 文件夹（embeddedfolderview，无需 API key/OAuth）"""
+    """列云端清单（**自适应**：配置飞书 → 飞书文档附件（简体）；配置 Google → Drive 文件夹）
+
+    v6507：缓存按**凭据类型**隔离 —— 系统配置从 Google 改成飞书（或反之）后，
+           不再沿用旧来源的清单，避免「配置改了通路还按旧的走」。
+    """
     now = time.time()
+    try:
+        _fc = _fs_cfg_of(_srv_cfg_read())
+    except Exception:
+        _fc = {'kind': ''}
+    _k0 = str(_fc.get('kind') or '')
     with _ZH_LOCK:
-        if (not force) and _ZH_CACHE.get('at') and (now - float(_ZH_CACHE['at']) < ZH_TTL):
+        if (not force) and _ZH_CACHE.get('at')                 and (now - float(_ZH_CACHE['at']) < ZH_TTL)                 and str(_ZH_CACHE.get('kind') or '') == _k0:
             return dict(_ZH_CACHE)
     cfg = _zh_cfg()
+    # v6502：云盘凭据为飞书时走飞书源（简体包在飞书文档附件；Google Drive 里是繁体）
+    if _k0 == 'feishu':
+        out = _zh_remote_feishu(cfg, _fc, now)
+        with _ZH_LOCK:
+            _ZH_CACHE.clear(); _ZH_CACHE.update(out)
+        return dict(out)
     fid = _zh_folder_id(cfg['folder_url'])
     out = {'at': now, 'ok': False, 'folder': fid, 'ver': '', 'variant': cfg['variant'],
-           'asset': {}, 'items': [], 'err': '', 'probe': {}}
+           'asset': {}, 'items': [], 'err': '', 'probe': {}, 'src': 'google',
+           'kind': 'google'}
     if not fid:
         out['err'] = u'下载地址里找不到 /folders/<id>'
         with _ZH_LOCK:
@@ -16001,9 +17512,17 @@ def _zh_server_status(srv, remote=None):
                 out['reason'] = u'云端有 %s' % rv
         elif out['curSrc'] == 'sidecar':
             a, b = _zh_ver_tuple(out['curVer']), _zh_ver_tuple(rv)
+            # v6511：本地模式没有 asset，改用 remote.kind（= 当前凭据类型）
+            _rsrc = str(((remote or {}).get('asset') or {}).get('src')
+                        or ((remote or {}).get('kind') or '') or '')
+            _lsc = str(sc.get('src') or '')
             if a and b and b > a:
                 out['needUpd'] = True
                 out['reason'] = u'云端 %s 高于本地 %s' % (rv, out['curVer'])
+            elif _rsrc == 'feishu' and _lsc != 'feishu':
+                # v6504：Google Drive 是繁体包，飞书才是简体 —— 版本号相同也要换
+                out['needUpd'] = True
+                out['reason'] = u'V%s 为繁体包，云端已有简体(%s)' % (rv, _rsrc)
     return out
 
 
@@ -16033,15 +17552,33 @@ def _zh_sha256(path):
     return h.hexdigest()
 
 
-def _zh_download_file(fid, dest, timeout=120):
-    """断点续传下载（串行，总尝试 2 次；§14 A5 校验 zip 魔数 + 大小）"""
+def _zh_download_file(fid, dest, timeout=120, src='google'):
+    """断点续传下载（串行，总尝试 2 次；§14 A5 校验 zip 魔数 + 大小）
+
+    v6502：src='feishu' 时走飞书 medias 下载（Bearer token，支持 Range/206）。
+    """
     import urllib.request as _ur
-    url = ZH_DL_URL % fid
+    _fs_src = (str(src or 'google') == 'feishu')
     last = ''
     for attempt in (1, 2):
         have = os.path.getsize(dest) if os.path.isfile(dest) else 0
         try:
-            hdr = {'User-Agent': _ZH_UA, 'Accept': '*/*'}
+            # 每次尝试都重新取 token（2h 有效；长下载 + 重试更稳）
+            if _fs_src:
+                _fc = _fs_cfg_of(_srv_cfg_read())
+                _tk, _te = _feishu_tenant_token(_fc.get('app_id') or '',
+                                                _fc.get('app_secret') or '')
+                if not _tk:
+                    last = u'飞书 token 获取失败：%s' % (_te or '')
+                    if attempt < 2:
+                        time.sleep(3)
+                    continue
+                url = FEISHU_API + '/drive/v1/medias/%s/download' % fid
+                hdr = {'Authorization': 'Bearer ' + _tk,
+                       'User-Agent': 'dino-backend/fs', 'Accept': '*/*'}
+            else:
+                url = ZH_DL_URL % fid
+                hdr = {'User-Agent': _ZH_UA, 'Accept': '*/*'}
             if have > 0:
                 hdr['Range'] = 'bytes=%d-' % have
             rq = _ur.Request(url, headers=hdr)
@@ -16139,6 +17676,7 @@ def _zh_unpack(zipp, paks_dir, ver, asset):
                'builtAt': time.strftime('%Y-%m-%d %H:%M:%S'),
                'source': {'assetId': (asset or {}).get('id') or '',
                           'name': (asset or {}).get('name') or '',
+                          'src': (asset or {}).get('src') or 'google',
                           'bytes': os.path.getsize(zipp)},
                'paks': out, 'skipped': skipped[:30], 'skippedCount': len(skipped)}
         return {'ok': True, 'paks': out, 'manifest': man,
@@ -16150,7 +17688,7 @@ def _zh_unpack(zipp, paks_dir, ver, asset):
 def _zh_prepare_start(force=False, user=''):
     """异步：读云端清单 -> 下载 -> 白名单解压 -> 写 manifest（只写 D:\\Cache-zh）
 
-    v6246（用户口径「本地包就是最新的，点更新本地包要提示已是最新」）：
+    v6246（用户口径「缓存就是最新的，点更新缓存要提示已是最新」）：
     在启动后台任务**之前**做一次零网络快判 —— 仅当云端清单缓存仍新鲜（TTL 内）时生效，
     命中则直接返回 already，不启动下载（同版本重复下载还会触发 Google 的 416）。
     """
@@ -16158,9 +17696,11 @@ def _zh_prepare_start(force=False, user=''):
         if (not force) and _ZH_CACHE.get('ok') and _ZH_CACHE.get('ver') \
                 and (time.time() - float(_ZH_CACHE.get('at') or 0)) < ZH_TTL:
             _lv0 = _zh_local_ver()
-            if _lv0 and str(_lv0) == str(_ZH_CACHE.get('ver')):
+            _s0 = str((_ZH_CACHE.get('asset') or {}).get('src') or 'google')
+            if _lv0 and str(_lv0) == str(_ZH_CACHE.get('ver')) \
+                    and (_zh_local_src(_lv0) or 'google') == _s0:
                 return {'ok': True, 'already': True, 'ver': _lv0,
-                        'msg': u'当前本地包已是最新（V%s），无需更新' % _lv0,
+                        'msg': u'当前缓存已是最新（V%s），无需更新' % _lv0,
                         'prep': dict(_ZH_PREP)}
     except Exception:
         pass
@@ -16178,7 +17718,7 @@ def _zh_prepare_start(force=False, user=''):
 
         def _zt(msg, pct, phase='run', err=''):
             try:
-                _utask_put(_zk, '', 'update', user, label=u'更新本地包',
+                _utask_put(_zk, '', 'update', user, label=u'更新缓存',
                            msg=msg, pct=pct, phase=phase,
                            steps=_steps_apply(STEP_4_ZH, pct, phase, msg, 'zh'), err=err,
                            srv_name=u'汉化包')
@@ -16194,15 +17734,17 @@ def _zh_prepare_start(force=False, user=''):
             fid = asset.get('id') or ''
             if not (ver and fid):
                 raise RuntimeError(u'云端版本或文件 ID 缺失')
-            # v6246：本地包已是最新 -> 不重复下载，直接完成并给出提示
+            # v6246：缓存已是最新 -> 不重复下载，直接完成并给出提示
             try:
                 _lvz = _zh_local_ver()
             except Exception:
                 _lvz = ''
-            if _lvz and str(_lvz) == str(ver):
+            _src_now = str(asset.get('src') or 'google')
+            if _lvz and str(_lvz) == str(ver) \
+                    and (_zh_local_src(_lvz) or 'google') == _src_now:
                 _ZH_PREP.update({'phase': 'done', 'ver': ver, 'skipped': True,
-                                 'msg': u'当前本地包已是最新（V%s），无需更新' % ver})
-                _zt(u'当前本地包已是最新（V%s），无需更新' % ver, 100, 'skip')
+                                 'msg': u'当前缓存已是最新（V%s），无需更新' % ver})
+                _zt(u'当前缓存已是最新（V%s），无需更新' % ver, 100, 'skip')
                 return
             base = os.path.join(ZH_CACHE_ROOT, ver)
             paks_dir = os.path.join(base, 'paks')
@@ -16214,7 +17756,7 @@ def _zh_prepare_start(force=False, user=''):
             _ZH_PREP.update({'ver': ver, 'phase': 'download',
                              'msg': u'开始下载 %s …' % (asset.get('name') or ver)})
             _zt(u'下载 %s（V%s）…' % (asset.get('name') or ver, ver), 30)
-            dl = _zh_download_file(fid, zipp)
+            dl = _zh_download_file(fid, zipp, src=(asset.get('src') or 'google'))
             if not dl.get('ok'):
                 raise RuntimeError(u'下载失败：%s' % (dl.get('err') or ''))
             _ZH_PREP.update({'phase': 'unpack', 'msg': u'解压中（白名单取 3 个文件）…'})
@@ -16260,13 +17802,22 @@ def _zh_prepare_start(force=False, user=''):
 def _zh_status(include_remote=True, force=False):
     """B1 完整状态：cfg + servers[] + remote（远端可跳过，供首屏快速渲染 §14 B3）"""
     cfg = _zh_cfg()
+    # v6511：当前凭据类型 = 云端来源（feishu 简体 / google 繁体）
+    #   本地模式（?local=1，不联网）也必须带上 —— 否则「各服来源 ≠ 云端来源」这条
+    #   升级判定会被跳过，只比版本号（两边都是 V10.1）⇒ 各服装的是繁体也显示「均已最新」。
+    try:
+        _ck = str(_fs_cfg_of(_srv_cfg_read()).get('kind') or '')
+    except Exception:
+        _ck = ''
     if include_remote:
         remote = _zh_remote(force=force)
+        if _ck and not remote.get('kind'):
+            remote['kind'] = _ck
     else:
         # v6240：本地模式也带上「已下载版本」，让 needUpd / pkg 仍可判断（不触发网络）
         _lv0 = _zh_local_ver()
         remote = ({'ok': True, 'ver': _lv0, 'src': 'local_cache', 'err': '',
-                   'asset': {}, 'items': [], 'probe': {}} if _lv0 else {})
+                   'asset': {}, 'items': [], 'probe': {}, 'kind': _ck} if _lv0 else {})
     servers = []
     for srv in sorted(SERVERS.keys()):
         try:
@@ -16285,12 +17836,21 @@ def _zh_status(include_remote=True, force=False):
             pkg['downloaded'] = os.path.isfile(os.path.join(zp, 'pkg.zip'))
             pkg['unpacked'] = os.path.isfile(os.path.join(zp, 'manifest.json'))
             pkg['ready'] = bool(pkg['unpacked'])
+            # v6508：缓存包字形来源（feishu＝简体 / google＝繁体），前端据此标注
+            try:
+                with open(os.path.join(zp, 'manifest.json'), encoding='utf-8') as _mf:
+                    _mz = json.load(_mf) or {}
+                pkg['src'] = str(((_mz.get('source') or {}).get('src')) or 'google')
+            except Exception:
+                pkg['src'] = ''
     except Exception:
         pass
     pkg['cacheRoot'] = ZH_CACHE_ROOT
+    # v6507：把「当前凭据类型」直接下发 —— 前端分流以此为准（比 remote.asset.src 稳）
     return {'ok': True, 'cfg': cfg, 'remote': remote, 'servers': servers,
             'behind': need, 'conflict': conf, 'needAny': bool(need), 'pkg': pkg,
             'prep': dict(_ZH_PREP), 'dl': dict(_ZH_DL),
+            'cloud_kind': _ck,
             'remoteSkipped': (not include_remote),
             'ts': time.strftime('%Y-%m-%d %H:%M:%S')}
 
@@ -16525,7 +18085,7 @@ def _utask_busy_prefix(pref_list):
 
 
 def _pkg_clear(kind):
-    """v6366（用户口径）：清空本地包 —— 汉化包 / MOD / API 三卡右下角「清空本地包」。
+    """v6366（用户口径）：清空缓存 —— 汉化包 / MOD / API 三卡右下角「清空缓存」。
        · 只删缓存目录**内容**，保留目录本身；不碰任何服务器、不碰 \\\\Tnas 自研源
        · zh  = D:\\Cache-zh 全部内容（含 backup 分发前备份 —— 用户 2026-11-09 明确要求一并清）
        · mods= _upd_cache/_modpkg 全部内容
@@ -16535,12 +18095,12 @@ def _pkg_clear(kind):
     try:
         if kind == 'zh':
             roots = [ZH_CACHE_ROOT]
-            label = u'汉化包本地包'
+            label = u'汉化包缓存'
             pref = (u'zhprepare|',)
             extra_busy = bool((_ZH_PREP or {}).get('running'))
         elif kind == 'mods':
-            # v6367（实测根因）：`_mods_local_pack()` 的「本地包」统计 **两处** ——
-            #   ① `_modpkg/*`（CurseForge 真·本地包）
+            # v6367（实测根因）：`_mods_local_pack()` 的「缓存」统计 **两处** ——
+            #   ① `_modpkg/*`（CurseForge 真·缓存）
             #   ② **最新批次** `_upd_cache/mb<ts>/mods/*`
             #   原来只删 ① ⇒ count/bytes 不归零，用户点完看起来「无效」
             #   （日志实测：PKG clear kind=mods n=2 bytes=137248255 真删了，但界面仍显示 130.9 MB）
@@ -16554,18 +18114,18 @@ def _pkg_clear(kind):
                         roots.append(_mdx)
             except Exception:
                 _sexc('pkg_clear_mods_batches')
-            label = u'MOD 本地包'
+            label = u'MOD 缓存'
             pref = (u'modpkg|',)
             extra_busy = False
         elif kind == 'api':
             roots = [os.path.join(_upd_cache_dir(), '_apipkg'),
                      os.path.join(_upd_cache_dir(), '_apipkg_dl')]
-            label = u'API 本地包'
+            label = u'API 包缓存'
             pref = (u'apipkg|',)
             extra_busy = False
         else:
             return {'ok': False, 'code': 'bad_kind',
-                    'error': u'未知的本地包类型：%s' % kind}
+                    'error': u'未知的缓存类型：%s' % kind}
     except Exception as e:
         return {'ok': False, 'code': 'err', 'error': repr(e)[:200]}
     if extra_busy or _utask_busy_prefix(pref):
@@ -16732,7 +18292,8 @@ UTASK_STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tas
 _UTASK_ACT_LABEL = {'start': u'启动', 'kill': u'强制终止', 'savekill': u'存档后终止',
                     'saveworld': u'保存世界', 'destroy': u'清理恐龙', 'rcon': u'RCON',
                     'refresh': u'刷新状态', 'fullbackup': u'完整备份', 'update': u'更新',
-                    'restart': u'重启（IP 切换）', 'rollback': u'安全回档'}
+                    'restart': u'重启（IP 切换）', 'rollback': u'安全回档',
+                    'cfg': u'配置保存'}   # v6784：SOK 配置保存（任务总线条目）
 _UTASK = {'rev': 0, 'seq': 0, 'items': []}
 _UTASK_LOCK = threading.Lock()
 
@@ -17175,6 +18736,164 @@ class _GuardedServer(ThreadingHTTPServer):
 
 
 
+# ===== v6499：云盘凭据（飞书自建应用 / Google API Key 二选一）=====
+#   用途：汉化包「自动化取源」。飞书侧只支持 tenant_access_token（见 /api/fs/test 实测结果）；
+#   若飞书返回 403（他人文档无权限），需再走 OAuth user_access_token。
+FEISHU_API = 'https://open.feishu.cn/open-apis'
+
+
+def _fs_cfg_of(doc):
+    """解析云盘凭据：优先后读次序 飞书 > Google；返回 {'kind','app_id','app_secret','key'}"""
+    doc = doc if isinstance(doc, dict) else {}
+    fa = doc.get('feishu_app')
+    if isinstance(fa, dict) and str(fa.get('app_id') or '').strip() and str(fa.get('app_secret') or '').strip():
+        return {'kind': 'feishu', 'app_id': str(fa['app_id']).strip(),
+                'app_secret': str(fa['app_secret']).strip(), 'key': ''}
+    gk = str(doc.get('google_api_key') or '').strip()
+    if gk:
+        return {'kind': 'google', 'app_id': '', 'app_secret': '', 'key': gk}
+    return {'kind': '', 'app_id': '', 'app_secret': '', 'key': ''}
+
+
+def _fs_http_json(url, payload=None, timeout=15):
+    import urllib.request as _ur
+    hd = {'Content-Type': 'application/json; charset=utf-8',
+          'User-Agent': 'dino-backend/fs'}
+    data = json.dumps(payload).encode('utf-8') if payload is not None else None
+    rq = _ur.Request(url, data=data, headers=hd, method=('POST' if payload is not None else 'GET'))
+    with _ur.urlopen(rq, timeout=timeout) as r:
+        return r.status, json.loads(r.read().decode('utf-8', 'replace'))
+
+
+def _feishu_tenant_token(app_id, app_secret):
+    """自建应用换 tenant_access_token（有效期 2h）-> (token, err)"""
+    try:
+        code, j = _fs_http_json(FEISHU_API + '/auth/v3/tenant_access_token/internal',
+                                {'app_id': app_id, 'app_secret': app_secret})
+        if j.get('code') == 0 and j.get('tenant_access_token'):
+            return str(j['tenant_access_token']), ''
+        return '', 'code=%s msg=%s' % (j.get('code'), j.get('msg'))
+    except Exception as e:
+        return '', '%s: %s' % (type(e).__name__, e)
+
+
+# v6501：飞书汉化文档附件自动发现（wiki node → docx blocks → 文件块 token/名称）
+#   用途：避免手工维护 file_token（版本更新后 token 会变）
+FEISHU_ZH_WIKI_TOKEN = 'ZipZwbSwZipThMkiFrHcibeCn6e'
+
+
+def _fs_feishu_api(path, token, method='GET', payload=None, timeout=25):
+    """飞书开放 API 通用调用 -> (code, data, err)；code=-1 表示网络/解析异常"""
+    import urllib.request as _ur
+    url = FEISHU_API + path
+    hd = {'Authorization': 'Bearer ' + str(token),
+          'Content-Type': 'application/json; charset=utf-8',
+          'User-Agent': 'dino-backend/fs'}
+    data = json.dumps(payload).encode('utf-8') if payload is not None else None
+    rq = _ur.Request(url, data=data, headers=hd, method=method)
+    try:
+        with _ur.urlopen(rq, timeout=timeout) as r:
+            j = json.loads(r.read().decode('utf-8', 'replace'))
+            return int(j.get('code') or 0), (j.get('data') or {}), ''
+    except Exception as e:
+        body = ''
+        try:
+            body = e.read()[:300].decode('utf-8', 'replace')
+        except Exception:
+            pass
+        return -1, {}, (body or ('%s: %s' % (type(e).__name__, e)))[:300]
+
+
+def _fs_zh_blocks(token, wiki_token=''):
+    """汉化文档 -> (文件块列表[{name,file_token}], 文档token, err)"""
+    wt = str(wiki_token or '').strip() or FEISHU_ZH_WIKI_TOKEN
+    code, data, err = _fs_feishu_api('/wiki/v2/spaces/get_node?token=%s&obj_type=wiki' % wt, token)
+    if code != 0:
+        return [], '', 'wiki_get_node code=%s %s' % (code, err)
+    node = data.get('node') or {}
+    doc = str(node.get('obj_token') or '')
+    otype = str(node.get('obj_type') or '')
+    if not doc:
+        return [], '', 'wiki_get_node 无 obj_token'
+    if otype and otype != 'docx':
+        return [], doc, 'obj_type=%s（目前只支持 docx 文档）' % otype
+    items = []
+    page = ''
+    for _i in range(20):
+        q = '/docx/v1/documents/%s/blocks?page_size=500&document_revision_id=-1' % doc
+        if page:
+            q += '&page_token=' + page
+        code, data, err = _fs_feishu_api(q, token)
+        if code != 0:
+            return [], doc, 'docx_blocks code=%s %s' % (code, err)
+        items.extend(data.get('items') or [])
+        if not data.get('has_more'):
+            break
+        page = str(data.get('page_token') or '')
+        if not page:
+            break
+    out = []
+    for b in items:
+        if not isinstance(b, dict):
+            continue
+        f = b.get('file')
+        if isinstance(f, dict) and f.get('token'):
+            out.append({'name': str(f.get('name') or ''), 'file_token': str(f.get('token'))})
+    return out, doc, ''
+
+
+def _fs_test(file_token=''):
+    """云盘凭据实测：换 token + 试下载 1KB（Range），返回逐步结果"""
+    import urllib.request as _ur
+    ft = str(file_token or '').strip() or 'DD7ZbO0ylo4CAMxyYrlcWyqon6e'
+    cfg = _fs_cfg_of(_srv_cfg_read())
+    r = {'ok': False, 'kind': cfg.get('kind') or '', 'file_token': ft, 'steps': []}
+    if cfg['kind'] == 'feishu':
+        tk, err = _feishu_tenant_token(cfg['app_id'], cfg['app_secret'])
+        r['steps'].append({'step': 'tenant_access_token', 'ok': bool(tk),
+                           'msg': err or ('ok len=%d' % len(tk))})
+        if not tk:
+            return r
+        url = FEISHU_API + '/drive/v1/medias/%s/download' % ft
+        try:
+            rq = _ur.Request(url, headers={'Authorization': 'Bearer ' + tk,
+                                           'Range': 'bytes=0-1023',
+                                           'User-Agent': 'dino-backend/fs'})
+            with _ur.urlopen(rq, timeout=20) as rr:
+                body = rr.read(1024)
+                r['steps'].append({'step': 'download', 'ok': True, 'http': rr.status,
+                                   'bytes': len(body),
+                                   'first4': body[:4].decode('latin1', 'replace'),
+                                   'msg': ''})
+                r['ok'] = True
+        except Exception as e:
+            httpc = int(getattr(e, 'code', 0) or 0)
+            body = b''
+            try:
+                body = e.read()[:400]
+            except Exception:
+                pass
+            r['steps'].append({'step': 'download', 'ok': False, 'http': httpc,
+                               'msg': (body.decode('utf-8', 'replace') if body
+                                       else '%s: %s' % (type(e).__name__, e))[:400]})
+        # v6501：顺带列出文档里的附件（用于自动发现 file_token / 版本号）
+        try:
+            _fl, _doc, _fe = _fs_zh_blocks(tk)
+            r['doc_token'] = _doc
+            r['zh_files'] = _fl
+            if _fe:
+                r['zh_files_err'] = _fe
+        except Exception as _e2:
+            r['zh_files_err'] = '%s: %s' % (type(_e2).__name__, _e2)
+    elif cfg['kind'] == 'google':
+        r['ok'] = True
+        r['steps'].append({'step': 'google', 'ok': True,
+                           'msg': u'Google API Key 已配置（用「测试直连」验证 Drive 权限）'})
+    else:
+        r['steps'].append({'step': 'cfg', 'ok': False, 'msg': u'未配置任何云盘凭据'})
+    return r
+
+
 # ===================== 资讯广场 News（v5926：后端直抓 Discord） =====================
 # 设计：计划/计划_资讯广场迁入搞事系统_v1_20261102.md
 #   · 凭据只读 <后端目录>/dino_backend.config.json —— 不读环境变量、不下发前端、不进 Git
@@ -17188,7 +18907,8 @@ NEWS_TABS = [('patch_pc', u'ASA PC版本', 'patch'),
              ('adm', u'ADM预告', 'adm'),
              ('tieba', u'汉化版本', 'tieba'),
              ('api_ver', u'API版本', 'patch'),
-             ('api_cache', u'API缓存', 'patch')]
+             ('api_cache', u'API偏移', 'patch'),
+             ('api_alert', u'告警', 'patch')]
 NEWS_COOL_SEC = 60          # 全局冷却：客户端打开/切 Tab 时的最小抓取间隔
 NEWS_IMG_COOL_SEC = 600     # 单条消息图片修复冷却
 NEWS_KEEP_MSGS = 20         # 每个 Tab 最多保留的消息条数
@@ -17689,7 +19409,7 @@ class Handler(BaseHTTPRequestHandler):
                'http://localhost:8080', 'http://127.0.0.1:8080')
         self.send_header('Access-Control-Allow-Origin', _org if (_org and _org in _wl) else _ao)
         self.send_header('Access-Control-Allow-Credentials', 'true')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, HEAD')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS, HEAD')   # v43b：+PATCH（插件配置写入）
         self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
         self.send_header('Access-Control-Max-Age', '86400')
         self.send_header('X-Dino-Trace', 'cors-v6275')
@@ -17743,7 +19463,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _send_bin(self, path, filename=''):
-        """v6452（用户口径「部署到本机」）：流式下载本地包文件（大文件不整块读内存）"""
+        """v6452（用户口径「部署到本机」）：流式下载缓存文件（大文件不整块读内存）"""
         try:
             sz = os.path.getsize(path)
             self.send_response(200)
@@ -17765,6 +19485,48 @@ class Handler(BaseHTTPRequestHandler):
             _sexc('send_bin')
             try:
                 self._send(500, {'ok': False, 'error': repr(_e)[:120]})
+            except Exception:
+                pass
+
+    def _send_fs_proxy(self, file_token):
+        """v6506：飞书文件代理（后端带 tenant token 去拉，浏览器连自家后端）
+
+        为什么必须代理：飞书下载要 `Authorization: Bearer`，且源站不给 CORS，
+        浏览器 fetch 直连必被拦 —— 由后端流式中转，前端只看到一个大文件响应。
+        """
+        import urllib.request as _ur
+        try:
+            _fc = _fs_cfg_of(_srv_cfg_read())
+            tk, err = _feishu_tenant_token(_fc.get('app_id') or '',
+                                           _fc.get('app_secret') or '')
+            if not tk:
+                self._send(400, {'ok': False, 'code': 'token_fail',
+                                 'error': u'飞书 token 获取失败：%s' % (err or '')})
+                return
+            url = FEISHU_API + '/drive/v1/medias/%s/download' % file_token
+            rq = _ur.Request(url, headers={'Authorization': 'Bearer ' + tk,
+                                           'User-Agent': 'dino-backend/fs',
+                                           'Accept': '*/*'})
+            with _ur.urlopen(rq, timeout=60) as r:
+                total = 0
+                try:
+                    total = int(r.headers.get('Content-Length') or 0)
+                except Exception:
+                    total = 0
+                self.send_response(200)
+                self._cors()
+                self.send_header('Content-Type', 'application/octet-stream')
+                if total:
+                    self.send_header('Content-Length', str(total))
+                self.send_header('Cache-Control', 'no-cache')
+                self.end_headers()
+                if getattr(self, '_head_only', False):
+                    return
+                shutil.copyfileobj(r, self.wfile, 1024 * 1024)
+        except Exception as _e:
+            _sexc('send_fs_proxy')
+            try:
+                self._send(500, {'ok': False, 'error': repr(_e)[:160]})
             except Exception:
                 pass
 
@@ -17808,6 +19570,39 @@ class Handler(BaseHTTPRequestHandler):
         path = parsed.path
         if path == '/healthz':
             self._send(200, {'ok': True, 'service': 'dino-backend', 'servers': sorted(SERVERS.keys())})
+        elif path == '/api/plugins/config':
+            # v43：插件 config.json 读取（仅主宰者 level>=3；路径类只读项原值返回，本接口本身需 token）
+            _qs_pc = parse_qs(parsed.query)
+            _u_pc = _srvctl_guard(self, _qs_pc, need_token=True)
+            if not _u_pc:
+                return
+            if _role_level(_u_pc) < 3:
+                self._send(403, {'ok': False, 'code': 'owner_only', 'error': u'仅主宰者可用'})
+                return
+            _pc_srv = (_qs_pc.get('server') or [''])[0].strip()
+            if not _pc_srv:
+                self._send(400, {'ok': False, 'error': 'server required'})
+                return
+            self._send(200, plugin_cfg_get(_pc_srv))
+        elif path == '/api/plugins/borrow-list':
+            # v48：租借实时列表（**生存者 level>=1 可读**）。
+            # 注意：不能复用 _srvctl_guard —— 它硬编码 _role_level < 2 ⇒ level2_required，生存者会被 401。
+            _qs_bl = parse_qs(parsed.query)
+            _u_bl = _srvctl_check_token(_srvctl_tk_of(self, _qs_bl))
+            if not _u_bl:
+                self._send(401, {'ok': False, 'code': 'token_invalid', 'error': u'会话已过期，请重新登录'})
+                return
+            if _role_level(_u_bl) < 1:
+                self._send(403, {'ok': False, 'code': 'login_required', 'error': 'login required'})
+                return
+            _bl_srv = (_qs_bl.get('server') or [''])[0].strip()
+            if not _bl_srv:
+                self._send(400, {'ok': False, 'error': 'server required'})
+                return
+            self._send(200, plugin_borrow_list(_bl_srv,
+                                               (_qs_bl.get('tribe') or [''])[0],
+                                               (_qs_bl.get('limit') or ['0'])[0],
+                                               (_qs_bl.get('offset') or ['0'])[0]))
         elif path in ('/api/arkbackup/list', '/api/arkbackup/audit'):
             # P0 只读：回档点清单 / 审计日志（方案 §6.1 / §6.8）
             _qs_ab = parse_qs(parsed.query)
@@ -17834,6 +19629,28 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(500, {'ok': False, 'error': '%s: %s' % (type(_e_ab).__name__, _e_ab)})
                 return
             self._send(200, _r_ab)
+
+        elif path == '/api/arkbackup/peerbag':
+            # v6616（用户口径）：重复角色（目标档有、当前档无）—— 取该角色在**其它服**的
+            #   背包与低温仓做差异对比。全部按 pid（名字会重名）；候选服跑 exe light（600s 缓存）。
+            _qs_pb = parse_qs(parsed.query)
+            _u_pb = _srvctl_guard(self, _qs_pb, need_token=True)
+            if not _u_pb:
+                return
+            if _arkbk is None:
+                self._send(500, {'ok': False, 'error': 'ark_backup module not loaded'})
+                return
+            _pb_srv = (_qs_pb.get('server') or [''])[0].strip()
+            _pb_pid = (_qs_pb.get('pid') or [''])[0].strip()
+            if not _pb_srv or not _pb_pid:
+                self._send(400, {'ok': False, 'error': 'server / pid required'})
+                return
+            try:
+                _r_pb = _arkbk.peer_bag(_pb_srv, _pb_pid)
+            except Exception as _e_pb:
+                self._send(500, {'ok': False, 'error': '%s: %s' % (type(_e_pb).__name__, _e_pb)})
+                return
+            self._send(200, _r_pb)
 
         elif path in ('/api/arkbackup/job', '/api/arkbackup/status'):
             _qs_g = parse_qs(parsed.query)
@@ -17934,6 +19751,69 @@ class Handler(BaseHTTPRequestHandler):
                 _out_st[_s] = _r
             self._send(200, {'ok': True, 'servers': _out_st, 'count': len(_out_st)})
             return
+        elif path == '/api/arkbackup/flow':
+            # v6683（用户口径 2026-11-14）：安全回档「流程 Session」读取 —— 跨客户端跨玩家
+            _qs_fl = parse_qs(parsed.query)
+            _u_fl = _srvctl_guard(self, _qs_fl, need_token=True)
+            if not _u_fl:
+                return
+            # v6742（方案 §8.2 P4 定稿）：`mine=1` —— 一次返回**全部进行中流程**。
+            #   后端不当裁判（watchers 存 eosId，鉴权只有 username，无映射通道），
+            #   由前端拿 LB.playerEos 自己比对。❗必须放在 server 必填校验**之前**。
+            _mine_fl = ((_qs_fl.get('mine') or [''])[0] or '').strip().lower()
+            if _mine_fl in ('1', 'true', 'yes'):
+                _out_mf = []
+                try:
+                    _doc_mf = _arkbk_flow_read() or {}
+                except Exception:
+                    _doc_mf = {}
+                # 逐服走 _arkbk_flow_get（保留原有惰性过期落盘时机）
+                for _sv_mf in (list(_doc_mf.keys()) if isinstance(_doc_mf, dict) else []):
+                    try:
+                        _f_mf = _arkbk_flow_get(_sv_mf)
+                    except Exception:
+                        continue
+                    if not _f_mf:
+                        continue
+                    if str(_f_mf.get('phase') or '') not in _ARKBK_FLOW_LIVE:
+                        continue
+                    _out_mf.append({'server': _sv_mf, 'flow': _f_mf})
+                self._send(200, {'ok': True, 'flows': _out_mf, 'count': len(_out_mf),
+                                 'now': int(time.time()), 'operator': _u_fl,
+                                 'ttlSec': _ARKBK_FLOW_TTL})
+                return
+            _s_fl = (_qs_fl.get('server') or [''])[0].strip()
+            if not _s_fl:
+                self._send(400, {'ok': False, 'error': 'server required'})
+                return
+            try:
+                _lv_fl = _role_level(_u_fl)
+            except Exception:
+                _lv_fl = 1
+            self._send(200, {'ok': True, 'server': _s_fl, 'flow': _arkbk_flow_get(_s_fl),
+                             'now': int(time.time()), 'operator': _u_fl, 'level': _lv_fl,
+                             'ttlSec': _ARKBK_FLOW_TTL})
+            return
+        elif path == '/api/arkbackup/paths':
+            # 2026-11-11（用户口径）：跨服角色路径 —— 把全部服的日志会话按角色归并成一条时间线
+            #   数据源 ark_backup.player_paths_payload；?hours=24 可调窗口，?fresh=1 强制重扫
+            _qs_pa = parse_qs(parsed.query)
+            _u_pa = _srvctl_guard(self, _qs_pa, need_token=True)
+            if not _u_pa:
+                return
+            if _arkbk is None:
+                self._send(500, {'ok': False, 'error': 'ark_backup module not loaded'})
+                return
+            _hrs_pa = ((_qs_pa.get('hours') or ['24'])[0] or '24')
+            _fr_pa = ((_qs_pa.get('fresh') or ['0'])[0] == '1')
+            try:
+                _r_pa = _arkbk.player_paths_payload(hours=_hrs_pa, force=_fr_pa)
+            except Exception as _e_pa:
+                _sexc('arkbk_paths')
+                self._send(500, {'ok': False, 'error': '%s: %s' % (type(_e_pa).__name__, _e_pa)})
+                return
+            self._send(200, _r_pa)
+            return
         elif path in ('/api/arkbackup/presence', '/api/arkbackup/profiles'):
             # v6043：玩家进出流水 / 可恢复的角色档案（只读文件名，不解压）
             _qs_p = parse_qs(parsed.query)
@@ -17956,6 +19836,21 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as _e_p:
                 self._send(500, {'ok': False, 'error': '%s: %s' % (type(_e_p).__name__, _e_p)})
                 return
+            # 2026-11-11：presence 合并 ArkApi 日志会话（只读；任何异常降级，绝不影响本接口）
+            #   数据源 ark_backup.player_sessions_payload；?native=1 可只取旧结构（软回滚）
+            if path.endswith('/presence') and ((_qs_p.get('native') or ['0'])[0] != '1'):
+                try:
+                    _lg_p = _arkbk.player_sessions_payload(
+                        _ab_p, force=((_qs_p.get('fresh') or ['0'])[0] == '1'))
+                    _r_p['log'] = _lg_p
+                    _r_p['sessions'] = _lg_p.get('sessions') or []
+                    _r_p['onlineLog'] = _lg_p.get('online') or []
+                    _r_p['coverage'] = _lg_p.get('coverage')
+                    _r_p['degraded'] = bool(_lg_p.get('degraded'))
+                except Exception as _e_lg:
+                    _r_p['log'] = {'ok': False, 'error': 'log scan failed: %r' % (_e_lg,)}
+                    _r_p['sessions'] = []
+                    _r_p['degraded'] = True
             self._send(200, _r_p)
             return
         elif path == '/webp_map.json':
@@ -18072,6 +19967,7 @@ class Handler(BaseHTTPRequestHandler):
                              'ipwatch_announce_real': bool(_restart_announce_real_now()),
                              'ipwatch_env_locked': bool(RESTART_ENABLE or os.environ.get('IPWATCH_RESTART_DRY') is not None),
                              'update_dry': bool(_upd_dry_default()),
+                             'arkbk_dry': bool(_arkbk_dry_default()),
                              'zh_patch': _zh_cfg_of(_sd)})
             return
         elif path == '/api/ipwatch':
@@ -18212,7 +20108,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             _with_p = str((_qs_u.get('players') or [''])[0]).lower() in ('1', 'true', 'yes')
             _r_up = _upd_status(include_players=_with_p)
-            # v6228（P1.5）：版本档位判定 + AsaApi 缓存状态（供 §14 分发确认浮窗）
+            # v6228（P1.5）：版本档位判定 + 库偏移表状态（供 §14 分发确认浮窗）
             try:
                 _r_up['verKind'] = _upd_ver_info()
             except Exception:
@@ -18332,7 +20228,7 @@ class Handler(BaseHTTPRequestHandler):
                              'ms': int((time.time() - _t0) * 1000)})
             return
         elif path in ('/api/pkg/local/list', '/api/pkg/local/get'):
-            # v6452（用户口径「部署到本机」）：把本地包文件供给浏览器（File System Access 直写游戏目录）
+            # v6452（用户口径「部署到本机」）：把缓存文件供给浏览器（File System Access 直写游戏目录）
             _qs_p = parse_qs(parsed.query)
             _u_p = _srvctl_guard(self, _qs_p, need_token=True)
             if not _u_p:
@@ -18367,6 +20263,39 @@ class Handler(BaseHTTPRequestHandler):
                                  'error': u'未配置 Google API Key（系统管理 → Google API Key）'})
                 return
             self._send(200, {'ok': True, 'id': _fid_g, 'url': _drive_v3_url(_fid_g)})
+            return
+        elif path == '/api/zh/file':
+            # v6506（用户口径「附件通路改飞书」）：汉化包走飞书时，浏览器经本后端代理下载
+            #   （飞书要 Bearer + 无 CORS，前端不能直连；Drive 那条仍走 /api/zh/drive/url）
+            _qs_f = parse_qs(parsed.query)
+            _u_f = _srvctl_guard(self, _qs_f, need_token=True)
+            if not _u_f:
+                return
+            _fid_f = str((_qs_f.get('id') or [''])[0]).strip()
+            if not re.match(r'^[A-Za-z0-9_-]{10,}$', _fid_f):
+                self._send(400, {'ok': False, 'code': 'bad_id', 'error': u'文件 id 非法'})
+                return
+            # v6507：按**系统配置里的凭据类型**自适应，不写死只走飞书
+            _cf_f = _fs_cfg_of(_srv_cfg_read())
+            _kind_f = str(_cf_f.get('kind') or '')
+            if _kind_f == 'feishu':
+                _admin_log('ZH file proxy(feishu) %s by %s' % (_fid_f, _u_f))
+                self._send_fs_proxy(_fid_f)
+                return
+            if _kind_f == 'google':
+                if not (_cf_f.get('key') or ''):
+                    self._send(400, {'ok': False, 'code': 'no_gkey',
+                                     'error': u'Google API Key 为空（系统管理 → 云盘凭据）'})
+                    return
+                _admin_log('ZH file redirect(google) %s by %s' % (_fid_f, _u_f))
+                self.send_response(302)
+                self._cors()
+                self.send_header('Location', _drive_v3_url(_fid_f))
+                self.send_header('Content-Length', '0')
+                self.end_headers()
+                return
+            self._send(400, {'ok': False, 'code': 'no_cred',
+                             'error': u'未配置云盘凭据（系统管理 → 云盘凭据：飞书或 Google）'})
             return
         elif path == '/api/health':
             # v6155：后端健康/状态（**无鉴权、极轻**）—— 前端「系统管理 → 后端服务」直读
@@ -18573,7 +20502,9 @@ class Handler(BaseHTTPRequestHandler):
             _files = {}
             try:
                 for _fn in os.listdir(DINO_DATA):
-                    if not (_fn.endswith('.json') or _fn.endswith('.json.gz')):
+                    # v43（2026-11-15）：纳入 .tsv —— 插件台账（<Abbr>_tomb_history.tsv / _borrow_history.tsv）
+                    #   需被前端增量判断覆盖；原先只收 json/json.gz ⇒ 台账拿不到 mtime。
+                    if not (_fn.endswith('.json') or _fn.endswith('.json.gz') or _fn.endswith('.tsv')):
                         continue
                     try:
                         _files[_fn] = self.date_time_string(os.path.getmtime(os.path.join(DINO_DATA, _fn)))
@@ -18619,6 +20550,46 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self._send(404, {'ok': False, 'error': 'not found'})
 
+    def do_PATCH(self):
+        self._guarded(self._do_PATCH_body)
+
+    def _do_PATCH_body(self):
+        # v43：插件 config.json 写入（PATCH /api/plugins/config，body={server, patch:{...}}）
+        parsed = urlparse(self.path)
+        qs = parse_qs(parsed.query)
+        path = parsed.path
+        body = {}
+        try:
+            ln = int(self.headers.get('Content-Length') or 0)
+            if 0 < ln < 262144:
+                j = json.loads(self.rfile.read(ln).decode('utf-8', 'ignore'))
+                if isinstance(j, dict):
+                    body = j
+        except Exception:
+            body = {}
+        if path != '/api/plugins/config':
+            self._send(404, {'ok': False, 'error': 'not found'})
+            return
+        u = _srvctl_guard(self, qs, need_token=True)
+        if not u:
+            return
+        if _role_level(u) < 3:
+            self._send(403, {'ok': False, 'code': 'owner_only', 'error': u'仅主宰者可用'})
+            return
+        _srv_list = body.get('servers')
+        if isinstance(_srv_list, list) and _srv_list:
+            # v44：批量写（全服统一配置）；v6784：改为**异步任务**（进度走任务总线，前端不再干等）
+            _r_pm = plugin_cfg_save_async(u, _srv_list, body.get('patch'))
+            self._send(200 if _r_pm.get('ok') else 400, _r_pm)
+            return
+        srv = str(body.get('server') or (qs.get('server') or [''])[0]).strip()
+        if not srv:
+            self._send(400, {'ok': False, 'error': 'server required'})
+            return
+        # v6784：单台同样走异步（与全服一致，前端只认 async 响应）
+        r = plugin_cfg_save_async(u, [srv], body.get('patch'))
+        self._send(200 if r.get('ok') else 400, r)
+
     def do_POST(self):
         self._guarded(self._do_POST_body)   # v2026-09-22（方案A）：同上（请求级令牌）
 
@@ -18643,9 +20614,45 @@ class Handler(BaseHTTPRequestHandler):
             if v is None:
                 v = (qs.get(name) or [default])[0]
             return str(v).strip()
+        def gt(name, default=''):
+            """v6671（用户口径 2026-11-14「明明 预演已关闭 为啥 附件还是演练」）：
+               布尔安全取值 —— 原写法 bool(g(x)) 有**致命陷阱**：g() 返回的是字符串，
+               前端传 JSON false ⇒ g('x') == 'False' ⇒ bool('False') == **True**（非空字符串恒真）。
+               ⇒ 安全回档的「执行回档」一直被后端判成演练（任务条显示「回档演练」），从未真跑。
+               本函数只认 '1'/'true'/'yes'/'on'，其余（'false'/'0'/''/'none'/'None'）一律为假。"""
+            return str(g(name, default)).strip().lower() in ('1', 'true', 'yes', 'on')
         # 配置规则：全服刷新（仅系统拥有者；后端自己读 11 台 ini → 落快照，全玩家共享）
         # 服务器域名：写（仅系统拥有者）
         # 2026-10-28：粑粑笔记导入（仅拥有者；整份覆盖）
+        if path == '/api/plugins/config/locks':
+            # v46：设置某服锁定项（整体替换；空数组 = 全部解锁）
+            _u_pcl = _srvctl_guard(self, qs, need_token=True)
+            if not _u_pcl:
+                return
+            if _role_level(_u_pcl) < 3:
+                self._send(403, {'ok': False, 'code': 'owner_only', 'error': u'仅主宰者可用'})
+                return
+            _pcl_srv = g('server')
+            _pcl_keys = body.get('keys')
+            if not _pcl_srv or not isinstance(_pcl_keys, list):
+                self._send(400, {'ok': False, 'error': 'server/keys required'})
+                return
+            self._send(200, plugin_cfg_lock_set(_pcl_srv, _pcl_keys))
+            return
+        if path == '/api/plugins/config/reload':
+            # v43：手动触发 TransferIdentityFix.ReloadConfig（仅主宰者）
+            _u_pcr = _srvctl_guard(self, qs, need_token=True)
+            if not _u_pcr:
+                return
+            if _role_level(_u_pcr) < 3:
+                self._send(403, {'ok': False, 'code': 'owner_only', 'error': u'仅主宰者可用'})
+                return
+            _pcr_srv = g('server')
+            if not _pcr_srv:
+                self._send(400, {'ok': False, 'error': 'server required'})
+                return
+            self._send(200, plugin_cfg_reload(_pcr_srv))
+            return
         if path == '/api/zh/prepare':
             # v6238（B2）：后台下载 + 白名单解压（只写 D:\\Cache-zh，不碰游戏目录）
             _u_zp = _srvctl_guard(self, qs)
@@ -18763,8 +20770,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200 if _r_cc.get('ok') else 400, _r_cc)
             return
         if path == '/api/pkg/clear':
-            # v6366（用户口径）：清空本地包（汉化包 / MOD / API）
-            #   —— token + 二级管理员 + body confirm='CLEARPKG'，三卡右下角「清空本地包」共用
+            # v6366（用户口径）：清空缓存（汉化包 / MOD / API）
+            #   —— token + 二级管理员 + body confirm='CLEARPKG'，三卡右下角「清空缓存」共用
             _u_pc = _srvctl_guard(self, qs, need_token=True)
             if not _u_pc:
                 return
@@ -18773,13 +20780,13 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if str(body.get('confirm') or '') != 'CLEARPKG':
                 self._send(400, {'ok': False, 'code': 'need_confirm',
-                                 'error': u'清空本地包需在 body 里传 confirm="CLEARPKG"'})
+                                 'error': u'清空缓存需在 body 里传 confirm="CLEARPKG"'})
                 return
             _r_pc = _pkg_clear(body.get('kind'))
             self._send(200 if _r_pc.get('ok') else 400, _r_pc)
             return
         if path == '/api/mods/prefetch':
-            # v6293（用户口径）：更新本地包 —— 只把基准版本复制进新批次缓存，不动任何服务器
+            # v6293（用户口径）：更新缓存 —— 只把基准版本复制进新批次缓存，不动任何服务器
             _u_pf = _srvctl_guard(self, qs, need_token=True)
             if not _u_pf:
                 return
@@ -18801,11 +20808,11 @@ class Handler(BaseHTTPRequestHandler):
             _res_pf = _mods_prefetch_run(_u_pf, _bid_pf, _good_pf)
             self._send(200, {'ok': True, 'dry': False, 'batchId': _bid_pf, 'result': _res_pf,
                              'plans': _pl_pf,
-                             'note': u'已更新本地包（只写缓存），可再点分发下发到各服'})
+                             'note': u'已更新缓存（只写缓存），可再点分发下发到各服'})
             return
         if path == '/api/mods/pkg/fetch':
-            # v6354（用户口径·方案 A）：从 CurseForge **下载真·本地包** —— 只写 _upd_cache，不动任何服务器
-            #   原「更新本地包」只从现有服 copytree（无源服就废）；这个是真下载，不依赖任何服
+            # v6354（用户口径·方案 A）：从 CurseForge **下载真·缓存** —— 只写 _upd_cache，不动任何服务器
+            #   原「更新缓存」只从现有服 copytree（无源服就废）；这个是真下载，不依赖任何服
             _u_pk = _srvctl_guard(self, qs, need_token=True)
             if not _u_pk:
                 return
@@ -18867,7 +20874,7 @@ class Handler(BaseHTTPRequestHandler):
                 def _put(msg, pct, phase='run', err=u'', nm=u''):
                     try:
                         _utask_put(_pk_key, '', 'update', _u_pk,
-                                   label=u'更新本地包（CurseForge）',
+                                   label=u'更新缓存（CurseForge）',
                                    msg=msg, pct=int(pct), phase=phase,
                                    steps=_steps_apply(STEP_4_PKG, int(pct), phase, msg, 'pkg'),
                                    err=err, meta={'items': _items},
@@ -18931,7 +20938,7 @@ class Handler(BaseHTTPRequestHandler):
                                 pass
                         else:
                             try:
-                                _it.update({'state': 'ok', 'pct': 100, 'msg': u'已入本地包'})
+                                _it.update({'state': 'ok', 'pct': 100, 'msg': u'已入缓存'})
                             except Exception:
                                 pass
                     except Exception as _e2:
@@ -18965,14 +20972,14 @@ class Handler(BaseHTTPRequestHandler):
                          % (len(_todo) - _badn, _badn, _errfin),
                          100, 'fail', _errfin, _nmfin)
                 else:
-                    _put(u'完成：已进本地包（CurseForge）', 100, 'ok', u'', _nmfin)
+                    _put(u'完成：已进缓存（CurseForge）', 100, 'ok', u'', _nmfin)
             try:
                 threading.Thread(target=_pk_run, daemon=True).start()
             except Exception as e:
                 self._send(500, {'ok': False, 'error': repr(e)})
                 return
             self._send(200, {'ok': True, 'dry': False, 'started': True, 'plans': _pl_pk,
-                             'note': u'已开始从 CurseForge 下载本地包（后台）；完成后分发会优先用它'})
+                             'note': u'已开始从 CurseForge 下载缓存（后台）；完成后分发会优先用它'})
             return
         if path == '/api/mods/cleanup-extra':
             # v6309（用户口径）：MOD 多余清理 —— dry 默认；confirm='CLEANUP' 才真跑
@@ -19064,7 +21071,7 @@ class Handler(BaseHTTPRequestHandler):
                              'note': u'已开始分发：逐台 停服→备份→复制→校验→起服（原本停服的保持停服）'})
             return
         if path == '/api/api/pkg/download':
-            # v6307（用户口径）：更新本地包 = 从 GitHub 下载最新 AsaApi 官方包（库 + Permissions）
+            # v6307（用户口径）：更新缓存 = 从 GitHub 下载最新 AsaApi 官方包（库 + Permissions）
             _u_pd = _srvctl_guard(self, qs, need_token=True)
             if not _u_pd:
                 return
@@ -19140,19 +21147,11 @@ class Handler(BaseHTTPRequestHandler):
             _tgt_ad = _asa_targets()
             _pl_ad = _api_deploy_plan3(_sv_ad)
             _gate_ad = []
-            if not _st_ad.get('deployReady'):
-                _oc = str(_st_ad.get('officialCacheState') or '')
-                _ocm = {'building': u'官方正在为最新游戏版本构建缓存（Discord：构建中）',
-                        'detected': u'已检测到新游戏版本，官方缓存尚未开始构建',
-                        'ready': u'官方缓存已就绪，但部分服本地分代缓存缺失（%d/%d）'
-                                 % (int(_st_ad.get('cacheReadyCount') or 0), int(_st_ad.get('serverCount') or 11))}
-                _gate_ad.append({'code': 'cache_not_ready',
-                                 'text': _ocm.get(_oc, u'官方缓存状态未知')
-                                         + (u'（%s）⇒ 此时替换 dll 可能因 offsets 不匹配导致服务器起不来'
-                                            % (_st_ad.get('officialCacheAt') or u'时间未知'))})
+            # v6543（用户口径）：**库偏移表就绪与否不拦 API 分发** ——
+            #   它拦的应该是「版本更新缓存（server 本体）」那条（见 /api/update/apply）。
             if not _tgt_ad.get('files'):
                 _gate_ad.append({'code': 'no_source',
-                                 'text': u'没有可用源：请先点「更新本地包」从 GitHub 下载 AsaApi 官方包'
+                                 'text': u'没有可用源：请先点「更新缓存」从 GitHub 下载 AsaApi 官方包'
                                          u'（或把插件 dll 放进 ' + SOK_SRC_UNC + u'）'})
             if _dry_ad:
                 self._send(200, {'ok': True, 'dry': True, 'servers': _sv_ad, 'plans': _pl_ad,
@@ -19235,6 +21234,27 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 _forced_a = False
             _cache_a = _upd_cache_status()
+            # v6543（用户口径「库偏移表未就绪 应该拦的是**版本更新缓存**的分发，而不是拦 API 分发」）：
+            #   门控挪到这里 —— 只拦 server（游戏本体）真跑；预演不拦（方便先看计划）。
+            #   纯汉化 / MOD / API 分发不受库偏移表影响。
+            if _do_sv_a and not _dry_a:
+                try:
+                    _st_sv_a = api_status()
+                except Exception:
+                    _st_sv_a = {}
+                if _st_sv_a and not _st_sv_a.get('deployReady'):
+                    _oc_a = str(_st_sv_a.get('officialCacheState') or '')
+                    _ocm_a = {'building': u'官方正在为最新游戏版本构建缓存（Discord：构建中）',
+                              'detected': u'已检测到新游戏版本，官方缓存尚未开始构建',
+                              'ready': u'官方缓存已就绪，但部分服本地分代缓存缺失（%d/%d）'
+                                       % (int(_st_sv_a.get('cacheReadyCount') or 0),
+                                          int(_st_sv_a.get('serverCount') or 11))}
+                    self._send(200, {'ok': False, 'code': 'cache_not_ready', 'dry': False,
+                                     'officialCacheState': _oc_a,
+                                     'error': _ocm_a.get(_oc_a, u'官方库偏移表状态未知')
+                                              + (u'（%s）⇒ 此时分发新版本本体，插件会因 offsets 不匹配导致服务器起不来'
+                                                 % (_st_sv_a.get('officialCacheAt') or u'时间未知'))})
+                    return
             # v6239：只有含「服务器本体」时才要求 Cache 有内容；纯汉化分发与 Cache 无关
             if _do_sv_a and not _cache_a.get('hasContent'):
                 self._send(200, {'ok': False, 'code': 'cache_empty', 'dry': _dry_a,
@@ -19378,7 +21398,7 @@ class Handler(BaseHTTPRequestHandler):
                 _as_st_a, _as_raw_a, _as_meta_a = _asaapi_state()
             except Exception:
                 _as_st_a, _as_raw_a, _as_meta_a = 'unknown', '', {}
-            # v6239：纯汉化分发前必须本地包已就绪（避免停服后才失败）
+            # v6239：纯汉化分发前必须缓存已就绪（避免停服后才失败）
             if _do_zh_a and not _do_sv_a:
                 _zok_p, _zver_p, _zman_p, _zpaks_p, _zerr_p = _zh_cache_ready()
                 if not _zok_p:
@@ -19482,7 +21502,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(400, {'ok': False, 'error': 'server + pointId required'})
                 return
             _sw_done = False
-            _skip_sw = bool(g('skipSaveworld'))
+            _skip_sw = gt('skipSaveworld')
             try:
                 _st_pc = _arkbk_rcon_alive(_ab_pc)
                 if _st_pc.get('running') and not _skip_sw:
@@ -19490,10 +21510,19 @@ class Handler(BaseHTTPRequestHandler):
                     _sw_done = bool(_rsw.get('ok'))
                     if _sw_done:
                         _arkbk_wait_ark_mtime(_ab_pc, budget=20)
-                _r_pc = _arkbk.precheck(_ab_pc, _pt_pc)
+                _r_pc = _arkbk.precheck(_ab_pc, _pt_pc, exclude_eos=(g('who') or ''))
                 _r_pc['savedWorld'] = _sw_done
                 _r_pc['running'] = bool(_st_pc.get('running'))
                 _r_pc['operator'] = _u_pc
+                # v6675（用户口径「tips 里要有一个框显示 将要发的公告内容」）：
+                #   把公告文案随 precheck 一起下发 ⇒ 前端「一键发公告」按钮旁可直接展示，
+                #   零额外请求，且与 /api/arkbackup/announce 实际发送的文案同源。
+                try:
+                    _r_pc['announcePreview'] = _arkbk_ann_previews(
+                        _ab_pc, _pt_pc, int((_r_pc.get('onlineRisk') or {}).get('count') or 0),
+                        operator=_u_pc)
+                except Exception:
+                    _r_pc['announcePreview'] = {}
                 _arkbk.append_audit({'server': _ab_pc, 'action': 'precheck', 'pointId': _pt_pc,
                                      'ok': bool(_r_pc.get('ok')), 'verdict': _r_pc.get('verdict', ''),
                                      'loss': len(_r_pc.get('loss') or []),
@@ -19531,7 +21560,17 @@ class Handler(BaseHTTPRequestHandler):
                 if _cur_abs and os.path.isfile(_cur_abs):
                     _cur_sz = os.path.getsize(_cur_abs)
                 _st_pl = _arkbk_rcon_alive(_ab_pl)
-                _pc_pl = _arkbk.precheck(_ab_pl, _pt_pl)
+                # v6654：把前端选中的角色（eosId）传下去，precheck 的「角色进出」据此排除它
+                _pc_pl = _arkbk.precheck(_ab_pl, _pt_pl, exclude_eos=(g('who') or ''))
+                # v6676（修 v6675 漏洞）：前端走的是 plan 接口，而 plan 内部直调 _arkbk.precheck
+                #   模块函数、**不经过 /api/arkbackup/precheck 路由** ⇒ 原来只有 precheck 路由带
+                #   announcePreview，plan 永远拿不到，前端预览框一直是空的。
+                try:
+                    _pc_pl['announcePreview'] = _arkbk_ann_previews(
+                        _ab_pl, _pt_pl, int((_pc_pl.get('onlineRisk') or {}).get('count') or 0),
+                        operator=_u_pl)
+                except Exception:
+                    _pc_pl['announcePreview'] = {}
                 _plan = {
                     'ok': True,
                     'server': _ab_pl,
@@ -19563,6 +21602,175 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, _plan)
             return
 
+        if path == '/api/arkbackup/flow':
+            # v6683（用户口径 2026-11-14）：安全回档「流程 Session」写操作
+            #   start    开始流程（同服已有进行中 ⇒ 409 conflict，前端弹「接管 / 取消」）
+            #   abort    打断流程（开始者本人 / 管理员）
+            #   finish   已完成回档流程（开始者本人 / 管理员）
+            #   takeover 接管（任何人，前端二次确认后 startedBy 改成自己，重新计 6 小时）
+            #   step     推进阶段 start → exec → verify
+            _u_fw = _srvctl_guard(self, qs, need_token=True)
+            if not _u_fw:
+                return
+            _s_fw = (g('server') or '').strip()
+            _ac_fw = (g('action') or 'start').strip().lower()
+            if not _s_fw:
+                self._send(400, {'ok': False, 'error': 'server required'})
+                return
+            try:
+                _lv_fw = _role_level(_u_fw)
+            except Exception:
+                _lv_fw = 1
+            _fl_fw = _arkbk_flow_get(_s_fw)
+            _live_fw = bool(_fl_fw and _fl_fw.get('phase') in _ARKBK_FLOW_LIVE)
+            _owner_fw = bool(_fl_fw and str(_fl_fw.get('startedBy') or '') == _u_fw)
+            _can_fw = _owner_fw or _lv_fw >= 2
+            with _ARKBK_JOB_LOCK:
+                _busy_fw = _ARKBK_BUSY.get(_s_fw)
+            try:
+                if _ac_fw == 'start':
+                    if _live_fw:
+                        self._send(409, {'ok': False, 'code': 'conflict', 'flow': _fl_fw,
+                                         'error': '该服已有进行中的回档流程'})
+                        return
+                    _pt_fw = g('pointId') or g('path')
+                    # v6767：目标档必填 —— 否则会创建出「没有档」的空流程，
+                    #   被授权者打开「回档授权」会看到「已授权你接管 X 的 — 档回档流程」这种假授权。
+                    if not str(_pt_fw or '').strip():
+                        self._send(400, {'ok': False, 'code': 'point_required',
+                                         'error': '开始回档流程必须指定目标档（pointId）'})
+                        return
+                    _ts_fw = g('pointTs') or _arkbk_point_ts_txt(_pt_fw)
+                    # v6742：自动授权回档主体玩家（前端自动填 LB_ARKBK.who，无手动选人）
+                    # ❗ 不能用 g('watchers')：g() 是 str(v).strip()，嵌套数组会变成 Python repr
+                    #   （单引号）⇒ json.loads 解不出来 ⇒ watchers 恒为空。直接取 body 原对象。
+                    _wt_fw = body.get('watchers')
+                    if _wt_fw is None:
+                        _wt_fw = g('watchers')
+                    _fl_new = _arkbk_flow_new(_s_fw, _pt_fw, _ts_fw, _u_fw, _wt_fw,
+                                              body.get('goals'))
+                    _arkbk_flow_set(_s_fw, _fl_new)
+                    try:
+                        _arkbk.append_audit({'server': _s_fw, 'action': 'flow_start',
+                                             'pointId': _fl_new['pointId'], 'ok': True,
+                                             'operator': _u_fw})
+                    except Exception:
+                        pass
+                    self._send(200, {'ok': True, 'flow': _fl_new})
+                    return
+                if _ac_fw in ('abort', 'finish'):
+                    if not _live_fw:
+                        self._send(404, {'ok': False, 'code': 'no_flow',
+                                         'error': '该服没有进行中的回档流程'})
+                        return
+                    if not _can_fw:
+                        self._send(403, {'ok': False, 'code': 'forbidden', 'flow': _fl_fw,
+                                         'error': '只有流程开始者或管理员可以结束'})
+                        return
+                    if _busy_fw:
+                        self._send(409, {'ok': False, 'code': 'busy', 'jobId': _busy_fw,
+                                         'error': '回档执行中，不能结束流程'})
+                        return
+                    _fl_end = dict(_fl_fw)
+                    _fl_end['phase'] = ('done' if _ac_fw == 'finish' else 'aborted')
+                    _fl_end['updatedAt'] = time.strftime('%Y-%m-%d %H:%M:%S')
+                    _arkbk_flow_set(_s_fw, _fl_end)
+                    try:
+                        _arkbk.append_audit({'server': _s_fw, 'action': 'flow_' + _ac_fw,
+                                             'pointId': _fl_end.get('pointId'), 'ok': True,
+                                             'operator': _u_fw})
+                    except Exception:
+                        pass
+                    self._send(200, {'ok': True, 'flow': _fl_end})
+                    return
+                if _ac_fw == 'takeover':
+                    if not _live_fw:
+                        self._send(404, {'ok': False, 'code': 'no_flow',
+                                         'error': '该服没有进行中的回档流程'})
+                        return
+                    _fl_tk = dict(_fl_fw)
+                    _fl_tk['tookOverFrom'] = str(_fl_fw.get('startedBy') or '')
+                    _fl_tk['startedBy'] = _u_fw
+                    _fl_tk['startedAt'] = time.strftime('%Y-%m-%d %H:%M:%S')
+                    _fl_tk['updatedAt'] = _fl_tk['startedAt']
+                    _fl_tk['t0'] = time.time()
+                    _arkbk_flow_set(_s_fw, _fl_tk)
+                    try:
+                        _arkbk.append_audit({'server': _s_fw, 'action': 'flow_takeover',
+                                             'pointId': _fl_tk.get('pointId'), 'ok': True,
+                                             'operator': _u_fw, 'from': _fl_tk['tookOverFrom']})
+                    except Exception:
+                        pass
+                    self._send(200, {'ok': True, 'flow': _fl_tk})
+                    return
+                if _ac_fw == 'step':
+                    if not _live_fw:
+                        self._send(404, {'ok': False, 'code': 'no_flow',
+                                         'error': '该服没有进行中的回档流程'})
+                        return
+                    _st_fw = (g('step') or '').strip().lower()
+                    if _st_fw not in ('start', 'exec', 'verify'):
+                        self._send(400, {'ok': False, 'error': 'bad step'})
+                        return
+                    _fl_sp = dict(_fl_fw)
+                    _fl_sp['step'] = _st_fw
+                    _fl_sp['updatedAt'] = time.strftime('%Y-%m-%d %H:%M:%S')
+                    if _st_fw == 'verify':
+                        _fl_sp['phase'] = 'verifying'
+                    _arkbk_flow_set(_s_fw, _fl_sp)
+                    self._send(200, {'ok': True, 'flow': _fl_sp})
+                    return
+                if _ac_fw == 'revoke':
+                    # v6742：主导者主动收回某人的监督入口（非主路径；
+                    #   授权只在 start 时自动发生，不提供 grant）
+                    if not _live_fw:
+                        self._send(404, {'ok': False, 'code': 'no_flow',
+                                         'error': '该服没有进行中的回档流程'})
+                        return
+                    if not _can_fw:
+                        self._send(403, {'ok': False, 'code': 'forbidden', 'flow': _fl_fw,
+                                         'error': '只有流程开始者或管理员可以收回授权'})
+                        return
+                    _wt_rv_raw = body.get('watchers')
+                    if _wt_rv_raw is None:
+                        _wt_rv_raw = g('watchers') or g('eosId')
+                    _wt_rev = _arkbk_flow_watchers_norm(_wt_rv_raw)
+                    _ids_rev = set(_x['eosId'] for _x in _wt_rev)
+                    _fl_rv = dict(_fl_fw)
+                    _fl_rv['watchers'] = [_x for _x in (_fl_fw.get('watchers') or [])
+                                          if str((_x or {}).get('eosId') or '').upper() not in _ids_rev]
+                    _fl_rv['updatedAt'] = time.strftime('%Y-%m-%d %H:%M:%S')
+                    _arkbk_flow_set(_s_fw, _fl_rv)
+                    try:
+                        _arkbk.append_audit({'server': _s_fw, 'action': 'flow_revoke',
+                                             'removed': list(_ids_rev), 'ok': True,
+                                             'operator': _u_fw})
+                    except Exception:
+                        pass
+                    self._send(200, {'ok': True, 'flow': _fl_rv})
+                    return
+                if _ac_fw == 'goals':
+                    # v6758：回档目的随流程同步 —— 流程发起人在「安全回档」里切「找回 / 回溯」时上报，
+                    #   被授权玩家的「回档授权」读这个值只读展示。
+                    if not _live_fw:
+                        self._send(404, {'ok': False, 'code': 'no_flow',
+                                         'error': '该服没有进行中的回档流程'})
+                        return
+                    if not _can_fw:
+                        self._send(403, {'ok': False, 'code': 'forbidden', 'flow': _fl_fw,
+                                         'error': '只有流程开始者或管理员可以改回档目的'})
+                        return
+                    _fl_gl = dict(_fl_fw)
+                    _fl_gl['goals'] = _arkbk_flow_goals_norm(body.get('goals'))
+                    _fl_gl['updatedAt'] = time.strftime('%Y-%m-%d %H:%M:%S')
+                    _arkbk_flow_set(_s_fw, _fl_gl)
+                    self._send(200, {'ok': True, 'flow': _fl_gl})
+                    return
+                self._send(400, {'ok': False, 'error': 'unknown action: %s' % _ac_fw})
+            except Exception as _e_fw:
+                self._send(500, {'ok': False, 'error': '%s: %s' % (type(_e_fw).__name__, _e_fw)})
+            return
+
         if path == '/api/arkbackup/execute':
             # §6.5 执行回档（异步 job）；dryRun:true ⇒ 只跑到闸门，不动文件/不停服
             _u_ex = _srvctl_guard(self, qs, need_token=True)
@@ -19582,7 +21790,13 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(409, {'ok': False, 'code': 'busy',
                                  'error': '该服已有回档任务在跑', 'jobId': _busy_ex})
                 return
-            _dry_ex = bool(g('dryRun'))
+            # v6668（用户口径 2026-11-14）：系统管理「安全回档预演」开关开启时**强制 dry** ——
+            #   前端就算传 dryRun=false 也绕不过，与 update_dry 对 /api/update/apply 的约束同款。
+            _dry_forced = bool(_arkbk_dry_default())
+            # v6671：原 bool(g('dryRun')) 会把 JSON false（→ 字符串 'False'）判成 True，
+            #   导致「执行回档」永远走演练。必须用 gt() 做字符串级布尔解析。
+            _dry_req = gt('dryRun')
+            _dry_ex = _dry_req or _dry_forced
             try:
                 _pc_ex = _arkbk.precheck(_ab_ex, _pt_ex)
             except Exception as _e_ex:
@@ -19595,7 +21809,7 @@ class Handler(BaseHTTPRequestHandler):
             _vd = _pc_ex.get('verdict')
             _missing = []
             if _vd != 'clear':
-                if not g('ackRisk'):
+                if not gt('ackRisk'):      # v6671：同样不能直接 not g(...)（'False' 是真值）
                     _missing.append('ackRisk')
                 if (g('confirm') or '') != _arkbk_server_cn(_ab_ex):
                     _missing.append('confirm')
@@ -19606,17 +21820,85 @@ class Handler(BaseHTTPRequestHandler):
                                  'error': '存在风险角色，需确认后执行'})
                 return
             _job_ex = _arkbk_new_job(_ab_ex, _pt_ex, _u_ex, _dry_ex, action='rollback')
+            # v6683（兼容旧客户端）：执行回档时该服无进行中流程 ⇒ 自动开一条；
+            #   已有 ⇒ 记为 step=exec 并顺延 6 小时过期计时（执行也是「有动作」）。
+            try:
+                _fl_ex0 = _arkbk_flow_get(_ab_ex)
+                if _fl_ex0 and _fl_ex0.get('phase') in _ARKBK_FLOW_LIVE:
+                    _fl_ex0['step'] = 'exec'
+                    _fl_ex0['jobId'] = _job_ex['id']
+                    _fl_ex0['updatedAt'] = time.strftime('%Y-%m-%d %H:%M:%S')
+                    _fl_ex0['t0'] = time.time()
+                    _arkbk_flow_set(_ab_ex, _fl_ex0)
+                else:
+                    _fl_ex1 = _arkbk_flow_new(_ab_ex, _pt_ex,
+                                              _arkbk_point_ts_txt(_pt_ex), _u_ex)
+                    _fl_ex1['step'] = 'exec'
+                    _fl_ex1['jobId'] = _job_ex['id']
+                    _arkbk_flow_set(_ab_ex, _fl_ex1)
+            except Exception:
+                pass
             _argv_ex = {'server': _ab_ex, 'pointId': _pt_ex, 'dryRun': _dry_ex,
-                        'ackRisk': bool(g('ackRisk')), 'confirm': g('confirm') or '',
-                        'skipSaveworld': bool(g('skipSaveworld'))}
+                        'ackRisk': gt('ackRisk'), 'confirm': g('confirm') or '',
+                        'skipSaveworld': gt('skipSaveworld')}
             _ARKBK_POOL.submit(_arkbk_do_rollback, _job_ex, _argv_ex, _srvctl_cfg())
             _arkbk.append_audit({'server': _ab_ex, 'action': ('dryrun' if _dry_ex else 'execute'),
                                  'pointId': _pt_ex, 'ok': True, 'jobId': _job_ex['id'],
                                  'verdict': _vd, 'loss': len(_pc_ex.get('loss') or []),
                                  'dup': len(_pc_ex.get('dup') or []), 'operator': _u_ex})
             self._send(200, {'ok': True, 'jobId': _job_ex['id'], 'dryRun': _dry_ex,
+                             'dryForced': bool(_dry_forced),
                              'verdict': _vd, 'notice': _pc_ex.get('notice'),
                              'phase': _job_ex['phase']})
+            return
+
+        if path == '/api/arkbackup/announce':
+            # v6672（用户口径「步骤中 通知其他玩家的步骤 的 tips 要有按钮 可以 一键手动发公告」）：
+            #   手动广播一条回档公告（中英各一条，写明回档到哪个时间点 + 当前在线人数）。
+            #   **只发广播**，不改变任何服务器状态、不创建任务。
+            _u_an = _srvctl_guard(self, qs, need_token=True)
+            if not _u_an:
+                return
+            _ab_an = g('server')
+            if not _ab_an:
+                self._send(400, {'ok': False, 'error': 'server required'})
+                return
+            _pt_an = g('pointId') or g('path')
+            _ts_an = _arkbk_point_ts_txt(_pt_an)
+            try:
+                _pn_an = _restart_players(_ab_an)
+            except Exception:
+                _pn_an = None
+            _cn_an = _arkbk_server_cn(_ab_an)
+            # v6675：文案走唯一生成点（与前端预览框同源）
+            # v6676（用户口径「征得同意 和 请下线 应该是不一样的公告」）：
+            #   kind=consent ⇒ 明确「不会回到当前档」；kind=offline ⇒ 按 undoable 动态说明能否恢复。
+            _kind_an = (g('kind') or 'offline').strip().lower()
+            if _kind_an not in ('offline', 'consent'):
+                _kind_an = 'offline'
+            _und_an = gt('undoable')
+            _tx_an = _arkbk_ann_texts(_ab_an, _pt_an, _pn_an, _kind_an, _und_an, operator=_u_an)
+            _cn_txt = _tx_an['cn']
+            _en_txt = _tx_an['en']
+            _sent_an = []
+            for _t_an in (_cn_txt, _en_txt):
+                try:
+                    _okb, _msgb = _rcon_exec(_ab_an, 'broadcast %s' % _t_an[:200], timeout=8)
+                    _sent_an.append({'ok': bool(_okb), 'text': _t_an[:200],
+                                     'msg': ('' if _okb else str(_msgb)[:160])})
+                except Exception as _e_br:
+                    _sent_an.append({'ok': False, 'text': _t_an[:200], 'msg': repr(_e_br)[:160]})
+            _okall_an = any([x.get('ok') for x in _sent_an])
+            try:
+                _arkbk.append_audit({'server': _ab_an, 'action': 'announce', 'pointId': _pt_an,
+                                     'ok': _okall_an, 'kind': _kind_an,
+                                     'undoable': bool(_und_an), 'operator': _u_an})
+            except Exception:
+                pass
+            self._send(200 if _okall_an else 500,
+                       {'ok': _okall_an, 'online': _pn_an, 'pointTs': _ts_an,
+                        'kind': _kind_an, 'undoable': bool(_und_an),
+                        'serverCn': _cn_an, 'sent': _sent_an})
             return
 
         if path == '/api/arkbackup/rollback':
@@ -19642,16 +21924,27 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(409, {'ok': False, 'code': 'busy', 'error': '该服已有回档任务在跑',
                                  'jobId': _busy_rb})
                 return
-            _chk_rb = _arkbk.restore_pre(_ab_rb, expect_job=g('jobId'), force=bool(g('force')), dry_run=True)
+            _chk_rb = _arkbk.restore_pre(_ab_rb, expect_job=g('jobId'), force=gt('force'), dry_run=True)
             if not _chk_rb.get('ok'):
                 _cm = {'no_backup': 404, 'stale': 409, 'job_mismatch': 409,
                        'sha_mismatch': 409, 'size_mismatch': 409}
                 self._send(_cm.get(_chk_rb.get('code'), 400), _chk_rb)
                 return
             _job_rb = _arkbk_new_job(_ab_rb, 'own:pre_restore', _u_rb, False, action='restore')
+            # v6683（用户口径 2026-11-14）：撤销 = 另一条回档 ⇒ 当前进行中的流程自动作废
+            try:
+                _fl_rb = _arkbk_flow_get(_ab_rb)
+                if _fl_rb and _fl_rb.get('phase') in _ARKBK_FLOW_LIVE:
+                    _fl_rb['phase'] = 'aborted'
+                    _fl_rb['abortedBy'] = _u_rb
+                    _fl_rb['abortReason'] = 'undo'
+                    _fl_rb['updatedAt'] = time.strftime('%Y-%m-%d %H:%M:%S')
+                    _arkbk_flow_set(_ab_rb, _fl_rb)
+            except Exception:
+                pass
             _argv_rb = {'server': _ab_rb, 'pointId': 'own:pre_restore', 'dryRun': False,
                         'ackRisk': True, 'confirm': _cn_rb,
-                        'skipSaveworld': bool(g('skipSaveworld')), 'skipBackup': True}
+                        'skipSaveworld': gt('skipSaveworld'), 'skipBackup': True}
             _ARKBK_POOL.submit(_arkbk_do_rollback, _job_rb, _argv_rb, _srvctl_cfg())
             _arkbk.append_audit({'server': _ab_rb, 'action': 'undo', 'pointId': 'own:pre_restore',
                                  'ok': True, 'jobId': _job_rb['id'], 'operator': _u_rb})
@@ -19809,6 +22102,7 @@ class Handler(BaseHTTPRequestHandler):
             _has_tok = ('asa_token' in body) or ('asa_token' in qs)
             _has_base = ('asa_base' in body) or ('asa_base' in qs)
             _has_udry = ('update_dry' in body) or ('update_dry' in qs)
+            _has_adry = ('arkbk_dry' in body) or ('arkbk_dry' in qs)   # v6668：安全回档「默认预演」
             _has_cf = ('cf_key' in body) or ('cf_key' in qs)   # v6282: CurseForge API Key
             _has_mp = ('mods_policy' in body) or ('mods_policy' in qs)   # v6284: MOD 策略
             # v6237：汉化补丁配置（folder_url / variant / auto_check）
@@ -19840,6 +22134,10 @@ class Handler(BaseHTTPRequestHandler):
                     # v6233：服务器更新「默认预演」开关（true=只出清单）
                     _udv = body.get('update_dry', g('update_dry', ''))
                     _d['update_dry'] = str(_udv).lower() in ('1', 'true', 'yes', 'on')
+                if _has_adry:
+                    # v6668（用户口径 2026-11-14）：安全回档「默认预演」开关（true=只跑到闸门）
+                    _adv = body.get('arkbk_dry', g('arkbk_dry', ''))
+                    _d['arkbk_dry'] = str(_adv).lower() in ('1', 'true', 'yes', 'on')
                 if _has_mp:
                     # v6284（用户口径）：MOD 策略 —— Bob 固定 MOD + 其他服统一 MOD 列表
                     _mp = body.get('mods_policy')
@@ -19870,12 +22168,26 @@ class Handler(BaseHTTPRequestHandler):
                     elif _clr_cf:
                         _d.pop('cf_key', None)
                 if _has_gk:
-                    # v6457：Google API Key（仅存服务器本地；留空=不修改）
+                    # v6499：云盘凭据 —— 同一输入框，飞书自建应用 / Google API Key 二选一
+                    #   飞书格式：cli_xxx|app_secret（用 | 分隔）；其余按 Google API Key 处理
                     _gk = str(body.get('google_api_key', g('google_api_key', '')) or '').strip()
                     if _gk:
-                        _d['google_api_key'] = _gk
+                        if _gk.startswith('cli_') and '|' in _gk:
+                            _aid, _, _asec = _gk.partition('|')
+                            _aid = _aid.strip()
+                            _asec = _asec.strip()
+                            if not _aid or len(_asec) < 8:
+                                self._send(400, {'ok': False, 'code': 'bad_feishu_app',
+                                                 'error': u'飞书凭据格式应为 cli_xxx|app_secret'})
+                                return
+                            _d['feishu_app'] = {'app_id': _aid, 'app_secret': _asec}
+                            _d.pop('google_api_key', None)   # 二选一
+                        else:
+                            _d['google_api_key'] = _gk
+                            _d.pop('feishu_app', None)       # 二选一
                     elif _clr_gk:
                         _d.pop('google_api_key', None)
+                        _d.pop('feishu_app', None)
                 if _has_zhp:
                     # v6237（B1）：汉化补丁配置 —— 地址必须含 /folders/<id>，变体必须在枚举内
                     _zp = _d.get('zh_patch')
@@ -19900,6 +22212,17 @@ class Handler(BaseHTTPRequestHandler):
                 _d['updated_at'] = time.strftime('%Y-%m-%dT%H:%M:%S+08:00')
                 _d['updated_by'] = _u
                 _srv_cfg_write(_d)
+                # v6507：配置一变就作废云端清单缓存 —— 否则切 Google/飞书后
+                #   还会沿用旧来源清单（TTL 30 分钟）导致通路不跟着配置走
+                try:
+                    with _ZH_LOCK:
+                        _ZH_CACHE.clear()
+                        _ZH_CACHE.update({'at': 0.0, 'ok': False, 'folder': '',
+                                          'ver': '', 'variant': '', 'asset': {},
+                                          'items': [], 'err': '', 'probe': {},
+                                          'src': '', 'kind': ''})
+                except Exception:
+                    _sexc('zh_cache_reset')
             except Exception as e:
                 self._send(500, {'ok': False, 'error': repr(e)})
                 return
@@ -19908,14 +22231,31 @@ class Handler(BaseHTTPRequestHandler):
                              'asa_token_masked': _asa_mask(_d.get('asa_token') or ''),
                              'asa_configured': bool(_d.get('asa_token')),
                              'update_dry': bool(_upd_dry_default()),
+                             'arkbk_dry': bool(_arkbk_dry_default()),
                              'cf_key_masked': _asa_mask(_d.get('cf_key') or ''),
                              'cf_key_configured': bool(_d.get('cf_key')),
                              'google_api_key_masked': _asa_mask(_d.get('google_api_key') or ''),
                              'google_api_key_configured': bool(_d.get('google_api_key')),
+                             'cloud_drive_kind': _fs_cfg_of(_d).get('kind') or '',
+                             'feishu_app_masked': _asa_mask(str((_d.get('feishu_app') or {}).get('app_id') or '')),
+                             'feishu_app_configured': bool((_d.get('feishu_app') or {}).get('app_secret')),
                              'mods_policy': _mods_policy(),
                              'zh_patch': _zh_cfg_of(_d)})
             return
         # ===== P3：服务器控制（仅二级管理员；前端不接触 token）=====
+        if path == '/api/fs/test':
+            # v6499：云盘凭据实测（飞书 tenant 换 token + 试下载 1KB）
+            _u = _srvctl_guard(self, qs)
+            if not _u:
+                return
+            try:
+                _ft = str(body.get('file_token') or g('file_token') or '')
+                _r = _fs_test(_ft)
+            except Exception:
+                _sexc('fs_test')
+                _r = {'ok': False, 'error': 'fs_test_fail'}
+            self._send(200, _r)
+            return
         if path == '/api/tasks/stage':
             # v6140（含 6140b 修正：路由必须挂在 **POST 链**，先前误挂到 GET 链 ⇒ 404）
             # 刷新流程阶段上报：只推进**已存在**的 refresh 任务行 msg/pct，不新建行、不碰执行逻辑
@@ -20084,6 +22424,30 @@ class Handler(BaseHTTPRequestHandler):
                              'how': _sp_how, 'restartRunning': _busy_rb, 'dry': _dry_rb, 'user': _u_rb})
             threading.Timer(0.2, lambda: _admin_do_restart(_u_rb, _sp_how)).start()
             return
+        if path == '/api/restart/quiet/skip':
+            # v6688（用户口径）：任务条「跳过静默」—— 只放行 L3 集群目录静默。
+            #   L1（在线人数 0）不放开：编排能走到 quiet 阶段说明此刻已无人。
+            _u_sq = _srvctl_guard(self, qs, need_token=True)
+            if not _u_sq:
+                return
+            _sv_sq = str(body.get('server') or g('server') or '').strip()
+            if _sv_sq not in SERVERS:
+                self._send(400, {'ok': False, 'code': 'bad_server', 'error': u'未知服务器'})
+                return
+            _ph_sq = ''
+            try:
+                _ph_sq = str(((_RESTART.get('servers') or {}).get(_sv_sq) or {}).get('phase') or '')
+            except Exception:
+                _ph_sq = ''
+            if not _RESTART.get('running') or _ph_sq != 'announce':
+                self._send(409, {'ok': False, 'code': 'not_in_quiet',
+                                 'error': u'该服当前不在静默等待阶段（phase=%s）' % (_ph_sq or '-'),
+                                 'phase': _ph_sq, 'running': bool(_RESTART.get('running'))})
+                return
+            _restart_skipq_set(_sv_sq)
+            _restart_log('SKIPQ-SET %s by %s' % (_sv_sq, _u_sq))
+            self._send(200, {'ok': True, 'server': _sv_sq, 'by': _u_sq})
+            return
         if path == '/api/restart/enable':
             # v6167（计划 §16 第 8 项，2026-11-06）：编排开关**热切** —— 仅系统拥有者
             #   背景：ipwatch_restart / ipwatch_restart_dry 原先只能手工编辑 server_config.json，
@@ -20207,7 +22571,7 @@ class Handler(BaseHTTPRequestHandler):
                                      'locks': dict((s, _allk[s]) for s in _hard)})
                     return
                 _soft = [s for s in _srvl if (_allk.get(s) or {}).get('kind') in SRV_LOCK_SOFT]
-                _intr = bool(g('interrupt') or body.get('interrupt'))
+                _intr = gt('interrupt') or bool(body.get('interrupt'))   # v6671：字符串 'False' 不能再被当成真
                 if _soft and not _intr:
                     self._send(409, {'ok': False, 'code': 'will_interrupt',
                                      'error': '该服正在执行自动任务，继续将中止它',
@@ -20591,7 +22955,7 @@ class Handler(BaseHTTPRequestHandler):
             if not server:
                 self._send(400, {'ok': False, 'error': 'missing server'})
                 return
-            self._send(200, volcano_state(server, bool(g('fresh'))))
+            self._send(200, volcano_state(server, gt('fresh')))   # v6671
         elif path.endswith('volcano_log'):  # v1146（用户定稿）：火山事件台账（history[] / hooks）——与状态同源，独立缓存槽
             server = g('server')
             if not server:
