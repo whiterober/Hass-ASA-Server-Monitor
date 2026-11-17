@@ -48933,9 +48933,9 @@ function lbKeymapBindMap(){
         if (!_akRaw) continue;
         if (col === 'pad'){
           var _as = lbKeymapSkinKeys(_akRaw);
-          if (_as.length) for (var _aq = 0; _aq < _as.length; _aq++){ mount.push(lbKmBase(_as[_aq])); _altMount[lbKmBase(_as[_aq])] = 1; }
+          if (_as.length) for (var _aq = 0; _aq < _as.length; _aq++){ mount.push(lbKmBase(_as[_aq])); _altMount[lbKmBase(_as[_aq])] = _ai2; }
         } else {
-          mount.push(lbKmBase(_akRaw)); _altMount[lbKmBase(_akRaw)] = 1;
+          mount.push(lbKmBase(_akRaw)); _altMount[lbKmBase(_akRaw)] = _ai2;
         }
       }
     }
@@ -48950,7 +48950,14 @@ function lbKeymapBindMap(){
       var _peer = '';
       for (var t0=0;t0<disp.length;t0++){ if (disp[t0] !== kk){ _peer = disp[t0]; break; } }
       if (!_peer) _peer = disp[0] || '';
-      bind[kk].push({ id:a.id, zh:a.zh, zhPad:(a.zhPad || ''), g:a.g, custom:lbKmColCustom(a.id, col),   // v5438：改列级判定，与键帽底色同源
+      /* v6836（用户口径 2026-11-17「附件这里明明是默认值，为啥却着色了？」）：
+         「按按键」视图原用列级 lbKmColCustom（**整条动作一票**）⇒ 只要该动作有任一改动
+         （如 transfer 新增备选键 L4），连默认的主键组 R2+A 也一起染紫。
+         改为**逐组**：本卡属于主键组/组合键成员 ⇒ 用 'main'；只属于某个备选键 ⇒ 用该 alt 索引。 */
+      var _seg6 = 'main';
+      if (!(_mainMount[kk] || _chordMount[kk]) && Object.prototype.hasOwnProperty.call(_altMount, kk))
+        _seg6 = _altMount[kk];
+      bind[kk].push({ id:a.id, zh:a.zh, zhPad:(a.zhPad || ''), g:a.g, custom:lbKmSegCustom(a.id, col, _seg6),   // v5438 列级 -> v6836 逐组
         combo:false, keys:disp.slice(), mode:(nn.mode || ''), chord:(nn.chord || ''), modeOn:(nn.modeOn || ''),
         isMain:(_mainMount[kk] ? 1 : 0),
         isChordKey:(_chordMount[kk] ? 1 : 0),
