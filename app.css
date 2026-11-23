@@ -3773,6 +3773,35 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
 .lb-upd-foot>.lb-upd-link{height:16px;line-height:1;font-size:11px}
 .lb-upd-foot>.lb-upd-link>i{line-height:1;font-size:13px}
 .lb-upd-foot>.lb-upd-link.lb-foot-left{margin-right:auto}   /* v6452：底栏左侧项（部署到本机）贴左，其余仍在右 */
+/* ===== v6840（用户口径）：资讯广场 · 本机部署四件套宿主
+   复用 .lb-upd-foot 的 flex 骨架与 .lb-prog-on 移动端规则（lbLProgFoot 靠 .lb-upd-foot 定位），
+   但去掉「卡片底栏」外观：负边距 / 上边框 / 深色底 / 下圆角 —— 它不是卡片底栏。 */
+/* v6843（用户口径「分割线左右要和主要内容对齐」+「留白不够」+「附件浮窗应在分割线之上」）：
+   外层 #lbNewsLocalWrap 承载「工具条 + 明细面板」，线画在 wrap 底部 ⇒
+     ① 线随明细面板下移（浮窗在线上）② left/right:0 与正文左右对齐 ③ padding-bottom+margin 给出上下留白。 */
+#lbNewsLocalWrap{position:relative;margin:0 0 18px;padding-bottom:10px}
+#lbNewsLocalWrap::after{content:'';position:absolute;left:0;right:0;bottom:0;height:1px;background:#ffffff14}
+.lb-upd-foot.lb-news-localbar{margin:0;padding:0;height:auto;min-height:30px;
+  border-top:0;background:none;border-radius:0;gap:8px;font-size:12px;line-height:1.6}
+/* v6842（用户口径「胶囊高度塌陷 / 中文字体变了」）：根因是 .lb-upd-foot 属「卡片底栏」紧凑排版
+   （font-size:11px;line-height:1）—— 拿它当工具条会把胶囊压成 16px 高，
+   中文在 line-height:1 的行盒下字形被压/失真。这里把工具条恢复成正常行高与字号。 */
+.lb-upd-foot.lb-news-localbar>a.lb-upd-link{height:20px;line-height:1.5;font-size:12px}
+.lb-upd-foot.lb-news-localbar>a.lb-upd-link>i{font-size:13px;line-height:1}
+/* v6849（用户口径「部署到本机 都改成圆角正式按钮样式」）：实心紫圆角按钮 */
+.lb-news-installbtn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 15px;
+  border:1px solid #7c3aed;border-radius:9px;background:#7c3aed;color:#fff;
+  font-size:12px;font-weight:600;line-height:1;cursor:pointer;
+  box-shadow:0 1px 6px rgba(124,58,237,.35);transition:background .15s,box-shadow .15s,border-color .15s}
+.lb-news-installbtn>i{font-size:14px;line-height:1}
+.lb-news-installbtn:hover{background:#8b5cf6;border-color:#8b5cf6;box-shadow:0 2px 10px rgba(139,92,246,.45)}
+.lb-news-installbtn:active{background:#6d28d9;border-color:#6d28d9;box-shadow:none}
+/* 进度条占位态（lbLProgBegin 会接管按钮内容）：保持同一外形，避免布局跳动 */
+.lb-news-installbtn[style*="pointer-events: none"]{background:#232329;border-color:#3a3a46;box-shadow:none}
+.lb-upd-foot.lb-news-localbar>span>[id^="lbLocalPill_"]{height:22px;line-height:1.35;
+  font-size:11.5px;box-sizing:border-box}
+/* 明细面板在 wrap 内（不在工具条 flex 行里）⇒ 显式给定字号与行高，避免继承 .lw-body 的 16px */
+#lbNewsLocalWrap>#lbLocalPop_zh, #lbNewsLocalWrap>#lbLocalPop_mods{font-size:12px;line-height:1.8}
 /* v6533（用户口径）：移动端**仅当出现部署进度条时**才切成两行 ——
    第 1 行＝进度条+状态文字独占整行；「清空缓存 / 更新缓存」另起一行。
    无进度条时保持原单行（.lb-prog-on 只在 lbLProgBegin → lbLProgRestore 之间存在）。 */
@@ -4221,3 +4250,18 @@ summary .lb-id-btn[data-facwatch].lb-watch-on:hover{color:#fbbf24}   /* v4681：
 /* v6828：备选模式下的浮窗标签与说明 */
 .lb-km-seltag{display:inline-block;font-size:10.5px;color:#8a8a9c;border:1px solid #3a3a4a;border-radius:4px;padding:0 4px;margin-right:5px;line-height:15px;vertical-align:middle}
 .lb-km-alttip{font-size:10.5px;color:#7a7a8c;margin-top:4px}
+
+/* v6855（用户口径）：用户管理浮窗按钮 —— **平时不显示外框，hover 才出框**
+   · 边框由 transparent 过渡到 #3a3a52（+ 极淡底色），避免常驻描边把行内按钮切得太碎
+   · 颜色走内联（各按钮语义色不同），这里不设 color，避免覆盖
+   · .lb-ua-danger 为删除类按钮，hover 出红框 */
+.lb-ua-btn{display:inline-flex;align-items:center;gap:3px;font-size:11px;line-height:1;cursor:pointer;
+  padding:3px 7px;border:1px solid transparent;border-radius:6px;
+  transition:border-color .12s ease,background-color .12s ease}
+.lb-ua-btn:hover{border-color:#3a3a52;background:#20202c}
+.lb-ua-btn.lb-ua-danger:hover{border-color:rgba(248,113,113,.55);background:rgba(248,113,113,.08)}
+
+/* v6859（用户口径「复用浮窗方法」）：用户管理复用 lbSheetBuild 骨架，
+   而 .lw-panel 默认 width:min(920px,100%) 对窄列表过宽 ⇒ 收窄；手机端仍整屏。 */
+#lbUserAdmin .lw-panel{width:min(560px,100%)}
+@media(max-width:640px){#lbUserAdmin .lw-panel{width:100%;max-width:100%}}

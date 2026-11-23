@@ -58,6 +58,21 @@ function lbUIEnsure(){
   });
   return window.__lbUI;
 }
+/* v6839（用户实报 2026-11-23「选了物种，本该有的 wiki 按钮不见了」）：
+   B2 按需加载后 app_ui 首屏不引入 ⇒ 同步判定函数 lbWikiKey/lbWikiHas **不存在**；
+   而 lbRenderBreedBar() 在首屏**同步**算 `visible = !!lbWikiKey(...)` ⇒ #lbWikiBtn 恒 display:none。
+   更糟的是「触发 app_ui 加载的入口（lbWikiOpen 等）本身也在 app_ui 里」⇒ 首次点不到就永远加载不了（死锁）。
+   这里给 lbWikiKey 一个与 app_ui **同口径**的兜底（纯字符串派生：原样 → 去 _Character_BP_C / _Character_BP / _C）；
+   app_ui 到位后其顶层 `function lbWikiKey(){}` 会覆盖本实现，返回值一致，无副作用。
+   注意：lbWikiHas（实心/虚线）仍留给 app_ui —— 只影响两态，不影响按钮显隐。 */
+if (typeof window.lbWikiKey !== 'function') {
+  window.lbWikiKey = function(cls){
+    var _s = String(cls || '');
+    if (!_s) return '';
+    var _t = _s.replace(/_Character_BP_C$/, '').replace(/_Character_BP$/, '').replace(/_C$/, '');
+    return _t || _s;
+  };
+}
 // 页面版本号：每次部署递增（静态资源缓存参数 ?v= 用；打包脚本据此生成 dino-import.version 供版本自检对比）
 // 2026-08-28 v351：递增版本号触发全玩家更新（洞穴种过滤等旧版用户强制刷新）；同时作为静态 JSON ?v= 缓存失效键
 // 2026-09-21 v3546：落地对照表手填/手选 9 项图标（石像鬼标本/空的低温舱/主宰者奖杯/死亡精华/甜蜜的玫瑰花束/受精的钉状龙蛋/泰坦蚺蛋/悬赏契约/莱尼颚虫费洛蒙）+ icons2 登记 Titanoboa_Egg
@@ -2544,13 +2559,26 @@ function lbMapForServer(abbr, z){
 // UE 坐标 → 地图像素百分比（clamp 0-100；按图片实际坐标范围归一化，无配置默认 0~100 全图）
 // 2026-08-12：y 方向北在下；图片范围（lon/lat 边界）由 LB_MAP_INFO 配置（点击地标实测）
 function lbWorldToPx(x, y, map){
-  var lon = Number(x)/map.multLon + map.shiftLon;
-  var lat = Number(y)/map.multLat + map.shiftLat;
+  /* v6837：**保持原返回结构**（全局 26 个调用点都直接读 p.x/p.y，不能改成 null 否则大面积崩）。
+     新增 `bad` 标记：入参非有限数 / map 缺换算参数 ⇒ bad=true，调用方据此跳过画点。
+     —— 这是「(0,0,0) 被画到地图正中」的第二道防线。 */
+  var _nx = Number(x), _ny = Number(y);
+  var _ml = map ? Number(map.multLon) : NaN, _mt = map ? Number(map.multLat) : NaN;
+  /* v6838：`Number(null) === 0`、`Number('') === 0` 都是**有限数**，会绕过 isFinite 被当成合法 (0,0)
+     ⇒ 又会画到地图正中。这里把 null/undefined/空串也判为无效（与 AsaApi 的 IsNearlyZero 同口径）。 */
+  var _blank = function(v){ return v === null || v === undefined || (typeof v === 'string' && v.trim() === ''); };
+  if(!map || _blank(x) || _blank(y) || !isFinite(_nx) || !isFinite(_ny)
+     || !isFinite(_ml) || !isFinite(_mt) || _ml === 0 || _mt === 0)
+    return {x:0, y:0, bad:true};
+  if(Math.abs(_nx) < 1 && Math.abs(_ny) < 1) return {x:0, y:0, bad:true};   // v6838：近零=FVector{0,0,0} 兜底值
+  var lon = _nx/_ml + Number(map.shiftLon || 0);
+  var lat = _ny/_mt + Number(map.shiftLat || 0);
   var lo0 = (map.lonMin!==undefined?map.lonMin:0), lo1 = (map.lonMax!==undefined?map.lonMax:100);
   var la0 = (map.latMin!==undefined?map.latMin:0), la1 = (map.latMax!==undefined?map.latMax:100);
   var px = Math.max(0, Math.min(100, (lon-lo0)/(lo1-lo0)*100));
   var py = Math.max(0, Math.min(100, (lat-la0)/(la1-la0)*100));
-  return {x:px, y:py};
+  if(!isFinite(px) || !isFinite(py)) return {x:0, y:0, bad:true};
+  return {x:px, y:py, bad:false};
 }
 LB._inited = false;
 LB._cache = null;   // 生物速查数据缓存（{data, ts}）
@@ -7466,14 +7494,12 @@ function lbUpdModsCardHtml(_card){
         + '<div style="display:flex;align-items:center;gap:6px">'
         + '<i class="mdi mdi-package-variant-closed" style="font-size:15px;color:#f59e0b"></i>'
         + '<b style="color:#fcd34d">MOD</b>'
-        + lbLocalPillHtml('mods')
         + '<span class="lb-tipb" style="color:#6b7280;cursor:help" title="【是什么】\nCurseForge 模组，gameId 83374\n以磁盘 83374\\&lt;pid&gt;_&lt;fid&gt; 为唯一判定\n\n【版本规则】\n同 pid 不同 fid = 同一 MOD 的不同版本\n基准 = 目录时间最新的版本，分发以它为目标\n\n【分发哪些服】\nBob 固定自己那套\n其余服按「系统管理 → MOD 策略」\n\n【开场视频】\n服务端不读 Content\\Movies\\LoadingScreen.bk2\n分发时自动跳过，已有的无感清理">'
         + '<i class="mdi mdi-information-outline" style="font-size:12px"></i></span>'
         + '<span style="flex:1"></span>'
         + lbUpdCbxMini('mod', _tg.mod, '分发', !_tgU.mod,
                    '所选服务器的 MOD 已符合策略，没有需要分发的')
         + '</div>'
-        + '<div id="lbLocalPop_mods" style="display:none"></div>';
   if (!M || M.ok === false){
     h += '<div style="color:#6b7280">' + (LB_UPD.loading ? '读取中…' : '未获取') + '</div></div>';
     return h;
@@ -7669,37 +7695,6 @@ function lbUpdModsCardHtml(_card){
      用户不需要任何按钮，界面上也不再显示回收信息。 */
   /* v6448（用户口径「附件这种 要做成底栏形式」）：统一底栏 */
   h += '<div class="lb-upd-foot">'
-     /* v6452（用户口径「部署到本机」）
-        v6453（用户实测纠正）：客户端 MOD 不在 Content\\Mods，而在
-        ShooterGame\\Binaries\\Win64\\ShooterGame\\Mods\\83374\\<pid>_<fid>\\（与服务端同构） */
-     + (lbLocalSupported() ? (
-       '<a class="lb-tipb lb-upd-link lb-foot-left" onclick="lbDeployLocal(\'mods\',this)"'
-     + ' title="' + lbMdEsc(
-          '【部署到本机】\n从 CurseForge 直连下载「客户端包」\n解压写入本机游戏目录，不经过服务器\n\n'
-        + '【写入位置】\nARK Survival Ascended\\ShooterGame\\Binaries\\Win64\\\n'
-        + '　　ShooterGame\\Mods\\83374\\<pid>_<fid>\\\n\n'
-        + '【首次要点】\n· 选 ASA 所在 Steam 库根目录（如 B:\\SteamLibrary）\n'
-        + '· 之后自动记住，不用再选\n'
-        + '· 换目录：按住 Shift 再点本按钮\n'
-        + '· 记住的目录失效会自动重弹\n\n'
-        + '【注意】\n· 客户端包 ≠ 服务端包，体积大得多\n'
-        + '　Fear Ascended 约 800 MB\n'
-        + '　Club ARK 约 2.2 GB\n'
-        + '· 完整写入包内所有文件（含开场视频 LoadingScreen.bk2）\n'
-        + '· 不做服务器回落：直连不了就报错\n'
-        + '· 旧 <pid>_* 目录：部署结束后弹出干跑清单，\n'
-        + '　点「确认清理」才删除（浏览器删除不进回收站）\n\n'
-        + '【已装会拦截】\n· 本机已有 <pid>_<当前版本> 且含 .pak 时\n'
-        + '　判定已是最新，直接跳过、不重复下载\n'
-        + '· 全部 MOD 都已是本机最新时整批拦截，\n'
-        + '　不下载任何文件、不写盘\n\n'
-        + '【限制分发的 MOD】\n· 先把能直连的全部装完\n'
-        + '· 再逐个给下载页链接，去网页下载 zip\n'
-        + '· 回来点「选择 zip 文件」，网页内解压\n'
-        + '· 全部处理完提示重启游戏\n\n'
-        + '【说明】\n只写本机游戏目录，不动任何服务器') + '">'
-     + '<i class="mdi mdi-folder-download-outline"></i>部署到本机</a>'
-       ) : '')
      /* v6293（用户口径）：MOD 也要有缓存系统 */
      /* v6294（用户口径）：去掉「更新 MOD」按钮，只留「更新缓存」 */
      /* v6366（用户口径）：右下角「清空缓存」—— 未下载时置灰 */
@@ -8645,7 +8640,6 @@ function lbUpdRender(){
      + '<div style="display:flex;align-items:center;gap:6px">'
      + '<i class="mdi mdi-translate" style="font-size:15px;color:#22d3ee"></i>'
      + '<b style="color:#a5f3fc">汉化包</b>'
-     + lbLocalPillHtml('zh')
      /* v6386：标题行补 ⓘ */
      + '<span class="lb-tipb" style="color:#6b7280;cursor:help" title="' + lbMdEsc(
           '【是什么】Dino & Item 双语汉化补丁（.pak）\n'
@@ -8664,7 +8658,6 @@ function lbUpdRender(){
      + _cbxMini('zh', _tg.zh, '分发', !_tgU.zh,
                 '所有服的汉化包都已是最新，没有需要升级汉化的服务器')
      + '</div>'
-     + '<div id="lbLocalPop_zh" style="display:none"></div>'
      + '<div style="color:#9ca3af;line-height:1.8;margin-top:3px">缓存：'
      + (_zpkg.ready
           /* v6247（用户口径）：版本号改链接样式，点了跳到 资讯广场 →「汉化版本」Tab */
@@ -8695,21 +8688,6 @@ function lbUpdRender(){
      /* v6248（用户口径）：**更新缓存移到卡片右下角**（原在标题行，与「分发」挤在一起） */
      /* v6448：统一底栏 */
      + '<div class="lb-upd-foot">'
-     /* v6452（用户口径「汉化包、MOD 的底栏 左侧要加两个功能：部署到本机」） */
-     + (lbLocalSupported() ? (
-       '<a class="lb-tipb lb-upd-link lb-foot-left" onclick="lbDeployLocal(\'zh\',this)"'
-     + ' title="' + lbMdEsc(
-          '【部署到本机】\n从云盘源直连下载（飞书＝简体 / Google Drive＝繁体），写入本机游戏目录\n\n'
-        + '【写入位置】\nARK Survival Ascended\\ShooterGame\\Content\\Paks\n'
-        + '　　只覆盖 pak / ucas / utoc 三个文件\n\n'
-        + '【首次要点】\n· 选 ASA 所在 Steam 库根目录（如 B:\\SteamLibrary）\n'
-        + '· 之后自动记住，不用再选\n'
-        + '· 换目录：按住 Shift 再点本按钮\n'
-        + '· 记住的目录失效会自动重弹\n\n'
-        + '【前置条件】\n先在「系统管理 → 云盘凭据」配好飞书（推荐，简体）或 Google\n\n'
-        + '【说明】\n已是最新版会拦截不下载\n需重开游戏生效') + '">'
-     + '<i class="mdi mdi-folder-download-outline"></i>部署到本机</a>'
-       ) : '')
      /* v6366（用户口径）：右下角「清空缓存」—— 参考「清空缓存」，未就绪/下载中置灰 */
      + lbUpdPkgClearLink('zh', !!_zpkg.ready, _zprep.running,
           '【清空缓存】\n删除 ' + String(_zpkg.cacheRoot || 'D:\\Cache-zh') + ' 下全部内容\n'
@@ -15725,14 +15703,262 @@ function lbSrvCtlRender(){
 /* v6742（方案「安全回档·临时授权监督入口」）：底栏权限行抽成独立函数。
    目的：「回档流程（监督）」入口出现/消失时**只重绘这一行**（lbPwRowRepaint），
    不必重建整个身份浮窗（会打断用户操作）。 */
+/* ===== v6853（用户口径）：用户管理浮窗 =====
+   口径：
+     ① 密码**只提供重置能力** → 一律重置为「默认密码」，接口不接受外部传入密码
+     ② 默认密码**统一配置**（后端 useradmin_cfg.json），本浮窗顶部可改
+     ③ 独立入口，不塞进「系统管理」；仅主宰者（lbIsAdmin）可见可用
+   数据：GET /api/useradmin/list ；写：POST /api/useradmin/{add|update|reset|delete|cfg}
+   注意：后端 update 接口语义是「传 role 就改角色、role 为空即降级」，所以
+         「只改昵称」时必须把**当前角色原值**一起带上，避免误降级。 */
+var LB_UA = { rows: [], masked: '', fallback: false, loading: false, err: '', busy: false };
+function lbUaApi(){ return (typeof lbUpdApiBase === 'function') ? lbUpdApiBase() : lbSrvCtlApi(); }
+function lbUaReq(p, opt){
+  opt = opt || {};
+  opt.headers = (typeof lbSrvCtlAuthHeaders === 'function') ? lbSrvCtlAuthHeaders(opt.headers) : (opt.headers || {});
+  opt.cache = 'no-store';
+  return fetch(lbUaApi() + p, opt).then(function(r){
+    return r.json().catch(function(){ return {}; }).then(function(j){ j = j || {}; j.__code = r.status; return j; });
+  });
+}
+function lbUaPost(op, body){
+  return lbUaReq('/api/useradmin/' + op, { method: 'POST',
+    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+}
+function lbUaEsc(v){ return (typeof lbMdEsc === 'function') ? lbMdEsc(v == null ? '' : String(v)) : String(v == null ? '' : v); }
+function lbUaToast(m){ try { lbToast(m); } catch (e) { } }
+function lbUserAdminClose(){ if (typeof lbSheetClose === 'function') lbSheetClose('lbUserAdmin'); }
+function lbUserAdminModalOpen(){
+  if (typeof lbIsAdmin === 'function' && !lbIsAdmin()){ lbUaToast('仅主宰者可用'); return; }
+  /* v6859（用户口径「4 个字为啥不是紫色？其他浮窗都是。严重怀疑你又重复造轮子」）：
+     **改调项目统一浮窗构建器 lbSheetBuild** —— 一次性拿到：
+       · .lw-head + .lw-title（标题紫色 #a78bfa）+ .lw-x 关闭按钮
+       · .lw-meta（顶部信息条）/ .lw-body（正文滚动区）/ .lw-foot
+       · .lb-sheet 类 ⇒ 自动挂 tips（lbTipsWatch）+ 移动端整屏 + 层级栈（lbZOpen）
+     历史教训：自建 .lb-picker-overlay 每次都要手工补 .lb-fs / lb-tipb / 颜色 ⇒ 三次返工。 */
+  if (typeof lbSheetBuild !== 'function'){
+    try { lbUIEnsure().then(lbUserAdminModalOpen, function(){}); } catch (e) { }
+    return;
+  }
+  var po = document.querySelector('.lb-picker-overlay');
+  if (po && po.parentNode) po.parentNode.removeChild(po);
+  var S = lbSheetBuild('lbUserAdmin', { onClose: 'lbUserAdminClose()' });
+  try { S.title.innerHTML = '<i class="mdi mdi-account-cog-outline"></i> 用户管理'; } catch (eT2) {}
+  lbSheetOpen('lbUserAdmin');
+  try { if (typeof lbTipsWatch === 'function') lbTipsWatch('lbUserAdmin', 60); } catch (eT) {}
+  LB_UA.rows = []; LB_UA.err = ''; LB_UA.loading = true; LB_UA.busy = false;
+  lbUserAdminRender();
+  lbUserAdminLoad();
+}
+function lbUserAdminLoad(){
+  LB_UA.loading = true; lbUserAdminRender();
+  lbUaReq('/api/useradmin/list?t=' + Date.now()).then(function(j){
+    LB_UA.loading = false;
+    if (!j || !j.ok){
+      LB_UA.rows = [];
+      LB_UA.err = (j && (j.error || j.code)) ? String(j.error || j.code) : ('HTTP ' + ((j && j.__code) ? j.__code : '?'));
+    } else {
+      LB_UA.err = '';
+      LB_UA.rows = j.rows || [];
+      LB_UA.masked = j.defaultPwdMasked || '';
+      LB_UA.fallback = !!j.defaultPwdIsFallback;
+    }
+    lbUserAdminRender();
+  }).catch(function(e){ LB_UA.loading = false; LB_UA.err = '网络错误：' + e; lbUserAdminRender(); });
+}
+function lbUaBtn(txt, ic, fn, col, danger){
+  /* v6856（用户口径「尽量将功能按钮只保留图标」）：
+     **纯图标按钮**——文字只留在 title / aria-label（hover 提示），视觉只显示 13px 图标；
+     边框/底色仍交给 .lb-ua-btn（平时无框，hover 出框）。 */
+  return '<span class="lb-pw-btn lb-ua-btn lb-tipb' + (danger ? ' lb-ua-danger' : '') + '"'
+    + ' style="color:' + (col || '#cfd2dc') + '"'
+    + ' title="' + lbUaEsc(txt) + '" aria-label="' + lbUaEsc(txt) + '"'
+    + ' onclick="' + fn + '"><i class="mdi ' + ic + '" style="font-size:13px"></i></span>';
+}
+function lbUaRowHtml(r){
+  var lv = Number(r.level) || 0;
+  var isO = lv >= 3;
+  /* v6858：角色徽章已删（与左侧角色图标重复）⇒ roleTxt 不再需要 */
+  var roleCol = isO ? '#f59e0b' : (lv === 2 ? '#a78bfa' : '#7b7f8e');
+  var ic = isO ? 'mdi-shield-crown' : (lv === 2 ? 'mdi-shield-account' : 'mdi-account');
+  var ua = String(r.user || '');
+  var u = lbUaEsc(ua);
+  var nick = lbUaEsc(r.nick || '（无昵称）');
+  /* v6856（用户口径「未改默认密码 不用写出来；只把 重置密码的入口改成金色即可」）：
+     仍在用默认密码 ⇒ 「重置密码」图标直接金色，并把这个事实写进它的 hover 提示 */
+  var pwdDefault = !!r.pwdIsDefault && !isO;
+  var lockTip = '锁定（拥有者不可改 / 不可删）';
+  var acts = isO
+    ? '<span class="lb-tipb" style="color:#6b7280;display:inline-flex;align-items:center;padding:3px 4px"'
+      + ' title="' + lockTip + '" aria-label="' + lockTip + '"><i class="mdi mdi-lock-outline" style="font-size:13px"></i></span>'
+    : (lbUaBtn('改昵称', 'mdi-account-edit-outline',
+                "lbUserAdminNick('" + ua + "','" + lbUaEsc(r.role || '') + "','" + lbUaEsc(r.nick || '') + "')")
+      + lbUaBtn(pwdDefault ? '重置密码（该账号当前仍在使用默认密码）' : '重置密码',
+                'mdi-lock-reset', "lbUserAdminReset('" + ua + "')", pwdDefault ? '#fbbf24' : '#cfd2dc')
+      + (lv === 2 ? lbUaBtn('降为玩家', 'mdi-arrow-down-bold-outline', "lbUserAdminRole('" + ua + "','')")
+                  : lbUaBtn('升为管理员', 'mdi-arrow-up-bold-outline', "lbUserAdminRole('" + ua + "','admin2')"))
+      + lbUaBtn('删除', 'mdi-trash-can-outline', "lbUserAdminDel('" + ua + "')", '#f87171', true));
+  /* v6856（用户口径「放到上一行右对齐」）：整行单行 flex
+       左区（弹性，可省略号）＝ 角色图标 + 账号 + 昵称 + 角色徽章
+       右区（固定，靠右）＝ 纯图标按钮组 */
+  return '<div style="border:1px solid #2a2a3a;border-radius:8px;padding:6px 8px 6px 10px;margin-bottom:7px;'
+    + 'background:#181820;display:flex;align-items:center;gap:8px">'
+    +   '<i class="mdi ' + ic + '" style="font-size:15px;color:' + roleCol + ';flex:none"></i>'
+    +   '<div style="flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:6px;overflow:hidden">'
+    +     '<b style="flex:0 0 auto;font-size:12.5px;color:#fff;font-family:ui-monospace,Consolas,monospace;white-space:nowrap;'
+    +        'overflow:hidden;text-overflow:ellipsis;max-width:132px">' + u + '</b>'
+    +     '<span style="flex:1 1 auto;min-width:0;font-size:11.5px;color:#9aa0b0;white-space:nowrap;'
+    +        'overflow:hidden;text-overflow:ellipsis">' + nick + '</span>'
+    +   '</div>'
+    +   '<div style="flex:none;display:flex;align-items:center;gap:3px">' + acts + '</div>'
+    + '</div>';
+}
+function lbUserAdminRender(){
+  /* v6859：改用 lbSheetBuild 骨架元素（#lbUserAdminMeta / #lbUserAdminBody） */
+  var top = document.getElementById('lbUserAdminMeta'), body = document.getElementById('lbUserAdminBody');
+  if (!top || !body) return;
+  var nO = 0, nA = 0;
+  LB_UA.rows.forEach(function(r){ if (Number(r.level) >= 3) nO++; else if (Number(r.level) === 2) nA++; });
+  if (!top.getAttribute('data-styled')){ top.setAttribute('data-styled', '1'); top.style.background = '#181820'; }
+  top.innerHTML = '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:11.5px;color:#9aa0b0">'
+    + '<i class="mdi mdi-key-variant" style="font-size:14px;color:#a78bfa"></i><span>默认密码</span>'
+    + '<b style="color:#fff;font-family:ui-monospace,Consolas,monospace;font-size:12px;letter-spacing:.5px">' + lbUaEsc(LB_UA.masked || '—') + '</b>'
+    + '<span style="flex:1"></span>'
+    + '<span class="lb-pw-btn lb-ua-btn" style="color:#c4b5fd" onclick="lbUserAdminCfgEdit()">'
+    + '<i class="mdi mdi-pencil-outline" style="font-size:12px"></i>修改默认密码</span>'
+    + '</div>'
+    + '<div style="margin-top:7px;font-size:11px;color:#7b7f8e">共 ' + LB_UA.rows.length + ' 个账号 · '
+    + nO + ' 拥有者 / ' + nA + ' 二级管理员 · 密码只能重置为默认密码</div>';
+  if (LB_UA.loading){
+    body.innerHTML = '<div style="padding:22px 0;text-align:center;font-size:12px;color:#7b7f8e">'
+      + '<i class="mdi mdi-loading mdi-spin" style="font-size:16px"></i> 加载中…</div>';
+    return;
+  }
+  if (LB_UA.err){
+    body.innerHTML = '<div style="padding:12px;border-radius:8px;background:rgba(248,113,113,.1);'
+      + 'border:1px solid rgba(248,113,113,.3);font-size:12px;color:#f87171;line-height:1.6">'
+      + lbUaEsc(LB_UA.err) + '</div>'
+      + '<div style="margin-top:8px;text-align:center"><span class="lb-pw-btn lb-ua-btn" style="color:#c4b5fd" onclick="lbUserAdminLoad()">重新加载</span></div>';
+    return;
+  }
+  var h = LB_UA.rows.map(lbUaRowHtml).join('');
+  var inp = 'height:28px;background:#15151f;border:1px solid #33334a;border-radius:6px;color:#ddd;font-size:12px;padding:0 8px;box-sizing:border-box';
+  h += '<div style="margin-top:10px;padding:9px 10px;border:1px dashed #3a3a52;border-radius:8px;background:#141420">'
+    + '<div style="font-size:11.5px;color:#c4b5fd;display:flex;align-items:center;gap:4px;margin-bottom:7px">'
+    + '<i class="mdi mdi-account-plus-outline" style="font-size:13px"></i>新增账号</div>'
+    + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
+    + '<input id="lbUaNewUser" maxlength="24" placeholder="账号（字母/数字/_.-）" style="flex:1 1 120px;min-width:0;' + inp + '">'
+    + '<input id="lbUaNewNick" maxlength="24" placeholder="昵称" style="flex:1 1 80px;min-width:0;' + inp + '">'
+    + '<select id="lbUaNewRole" style="flex:0 0 auto;' + inp + '"><option value="">普通玩家</option><option value="admin2">二级管理员</option></select>'
+    + '<button onclick="lbUserAdminAdd()" style="height:28px;padding:0 12px;border:none;border-radius:6px;'
+    + 'background:var(--accent,#7c3aed);color:#fff;font-size:12px;cursor:pointer">创建</button>'
+    + '</div>'
+    + '<div style="margin-top:6px;font-size:10.5px;color:#7b7f8e">初始密码固定为默认密码，请提醒对方登录后自行修改</div>'
+    + '</div>';
+  body.innerHTML = h;
+}
+function lbUserAdminAct(op, body, okMsg){
+  if (LB_UA.busy){ lbUaToast('正在处理，请稍候'); return; }
+  LB_UA.busy = true;
+  lbUaPost(op, body).then(function(j){
+    LB_UA.busy = false;
+    if (j && j.ok){
+      if (j.defaultPwdMasked) LB_UA.masked = j.defaultPwdMasked;
+      lbUaToast(okMsg || '已完成');
+      lbUserAdminLoad();
+    } else {
+      lbUaToast('失败：' + ((j && (j.error || j.code)) ? String(j.error || j.code) : '未知错误'));
+    }
+  }).catch(function(e){ LB_UA.busy = false; lbUaToast('网络错误：' + e); });
+}
+function lbUserAdminAdd(){
+  var eu = document.getElementById('lbUaNewUser'), en = document.getElementById('lbUaNewNick'), er = document.getElementById('lbUaNewRole');
+  var u = eu ? String(eu.value || '').trim() : '';
+  var n = en ? String(en.value || '').trim() : '';
+  var r = er ? String(er.value || '') : '';
+  if (!/^[A-Za-z0-9_.\-]{2,24}$/.test(u)){ lbUaToast('账号需 2~24 位字母/数字/_.-'); return; }
+  lbUserAdminAct('add', { user: u, nick: (n || u), role: r }, '账号已创建，初始密码为默认密码');
+}
+function lbUserAdminReset(u){
+  var pwd = LB_UA.masked || '默认密码';
+  var go = function(){ lbUserAdminAct('reset', { user: u }, '密码已重置为默认密码'); };
+  var ok = false;
+  if (typeof lbAskCard === 'function'){
+    ok = lbAskCard({ tone: 'warn', title: '重置密码', badge: u, icon: 'mdi-lock-reset',
+      note: '确定把「' + u + '」的密码重置为默认密码（' + pwd + '）？\n该用户会立即掉线，需用新密码重新登录。',
+      okText: '确认重置', onOk: go });
+  }
+  if (!ok){ try { if (window.confirm('确定把「' + u + '」的密码重置为默认密码？该用户会立即掉线。')) go(); } catch (e) { } }
+}
+function lbUserAdminDel(u){
+  var go = function(){ lbUserAdminAct('delete', { user: u }, '账号已删除'); };
+  var ok = false;
+  if (typeof lbAskCard === 'function'){
+    ok = lbAskCard({ tone: 'danger', title: '删除账号', badge: u, icon: 'mdi-trash-can-outline',
+      note: '确定删除账号「' + u + '」？\n删除后无法恢复，该用户会立即失去访问权限。',
+      okText: '确认删除', onOk: go });
+  }
+  if (!ok){ try { if (window.confirm('确定删除账号「' + u + '」？删除后无法恢复。')) go(); } catch (e) { } }
+}
+function lbUserAdminRole(u, role){
+  var down = !role;
+  var go = function(){ lbUserAdminAct('update', { user: u, role: role }, down ? '已降为普通玩家' : '已升为二级管理员'); };
+  var ok = false;
+  if (typeof lbAskCard === 'function'){
+    ok = lbAskCard({ tone: down ? 'warn' : 'info', title: down ? '降为普通玩家' : '升为二级管理员', badge: u,
+      icon: down ? 'mdi-arrow-down-bold-outline' : 'mdi-arrow-up-bold-outline',
+      note: down ? ('确定把「' + u + '」降为普通玩家？\n其服务器控制 / 回档等入口会立即消失。')
+                 : ('确定把「' + u + '」升为二级管理员？\n其将获得服务器控制等管理者入口。'),
+      okText: '确认', onOk: go });
+  }
+  if (!ok){ try { if (window.confirm('确定修改「' + u + '」的角色？')) go(); } catch (e) { } }
+}
+function lbUserAdminNick(u, role, curNick){
+  var go = function(v){
+    v = String(v || '').trim();
+    if (!v){ lbUaToast('昵称不能为空'); return; }
+    lbUserAdminAct('update', { user: u, nick: v, role: (role || '') }, '昵称已更新');
+  };
+  if (typeof lbAskInput === 'function') lbAskInput('修改「' + u + '」的昵称', curNick || '', go, { okText: '保存', placeholder: '昵称' });
+  else { try { var v = window.prompt('昵称', curNick || ''); if (v !== null) go(v); } catch (e) { } }
+}
+function lbUserAdminCfgEdit(){
+  var go = function(v){
+    v = String(v || '').trim();
+    if (v.length < 4){ lbUaToast('默认密码至少 4 位'); return; }
+    var save = function(){
+      lbUaPost('cfg', { default_pwd: v }).then(function(j){
+        if (j && j.ok){
+          LB_UA.masked = j.defaultPwdMasked || LB_UA.masked;
+          LB_UA.fallback = false;
+          lbUaToast('默认密码已更新');
+          lbUserAdminRender();
+        } else {
+          lbUaToast('失败：' + ((j && (j.error || j.code)) ? String(j.error || j.code) : '未知错误'));
+        }
+      }).catch(function(e){ lbUaToast('网络错误：' + e); });
+    };
+    var ok = false;
+    if (typeof lbAskCard === 'function'){
+      ok = lbAskCard({ tone: 'warn', title: '修改默认密码', icon: 'mdi-key-change',
+        note: '确定把默认密码改为新值？\n仅影响之后的「新建账号」与「重置密码」，已有账号密码不变。',
+        okText: '确认修改', onOk: save });
+    }
+    if (!ok){ try { if (window.confirm('确定修改默认密码？仅影响之后的新建与重置。')) save(); } catch (e) { } }
+  };
+  if (typeof lbAskInput === 'function') lbAskInput('设置新的默认密码（至少 4 位）', '', go, { okText: '下一步', placeholder: '新默认密码' });
+  else { try { var v = window.prompt('新的默认密码'); if (v !== null) go(v); } catch (e) { } }
+}
 function lbPwRowBuild(_rlLv) {
   var _pwBtn = 'display:inline-flex;align-items:center;gap:4px;font-size:11px;line-height:1;cursor:pointer;padding:3px 4px;user-select:none';
   var _pwSep = '<span style="width:1px;height:11px;background:#2a2a3a;margin:0 1px;flex:none"></span>';
   var _pwItems = [];
-  if (lbIsAdmin()) _pwItems.push('<span class="lb-pw-btn" style="' + _pwBtn + '" onclick="lbOpenServerAdminModal()" aria-label="系统管理"><i class="mdi mdi-shield-crown-outline" style="font-size:13px"></i>系统管理</span>');
-  if (_rlLv >= 3) _pwItems.push('<span class="lb-pw-btn" style="' + _pwBtn + '" onclick="lbArkBkOpen()" aria-label="安全回档"><i class="mdi mdi-backup-restore" style="font-size:13px"></i>安全回档</span>');
-  if (_rlLv >= 3) _pwItems.push('<span class="lb-pw-btn" style="' + _pwBtn + '" onclick="lbUpdOpen()" aria-label="综合更新"><i class="mdi mdi-update" style="font-size:13px"></i>综合更新</span>');
-  if (_rlLv >= 3) _pwItems.push('<span class="lb-pw-btn" style="' + _pwBtn + '" onclick="lbPluginCfgOpen()" aria-label="SOK配置"><i class="mdi mdi-tune-variant" style="font-size:13px"></i>SOK配置</span>');
+  if (lbIsAdmin()) _pwItems.push('<span class="lb-pw-btn" style="' + _pwBtn + '" onclick="lbOpenServerAdminModal()" aria-label="系统管理"><i class="mdi mdi-shield-crown-outline" style="font-size:13px"></i>系统</span>');
+  /* v6853（用户口径）：用户管理 **独立入口**（不放进系统管理浮窗），仅主宰者可见 */
+  if (lbIsAdmin()) _pwItems.push('<span class="lb-pw-btn" style="' + _pwBtn + '" onclick="lbUserAdminModalOpen()" aria-label="用户管理"><i class="mdi mdi-account-cog-outline" style="font-size:13px"></i>用户</span>');
+  if (_rlLv >= 3) _pwItems.push('<span class="lb-pw-btn" style="' + _pwBtn + '" onclick="lbArkBkOpen()" aria-label="安全回档"><i class="mdi mdi-backup-restore" style="font-size:13px"></i>回档</span>');
+  if (_rlLv >= 3) _pwItems.push('<span class="lb-pw-btn" style="' + _pwBtn + '" onclick="lbUpdOpen()" aria-label="综合更新"><i class="mdi mdi-update" style="font-size:13px"></i>更新</span>');
+  if (_rlLv >= 3) _pwItems.push('<span class="lb-pw-btn" style="' + _pwBtn + '" onclick="lbPluginCfgOpen()" aria-label="SOK配置"><i class="mdi mdi-tune-variant" style="font-size:13px"></i>插件</span>');
   /* v6745（用户口径）：临时监督入口已改为**头部固定入口「回档授权」**（lbArkBkGrantOpen），
      不再挂在本行。下方为原实现留档说明：当年这里按「被授权 + 管理者」才显示。 */
   if (!_pwItems.length) return '';
@@ -52385,6 +52611,15 @@ function lbRenderBreedBar(){
   // v262：去除「正常可繁育生物」限制（用户 2026-08-23）——所有选中物种（含不可驯服/不可繁殖的死亡蠕虫/精英死亡蠕虫等）都显示繁育栏
   var show = (LB._curPage !== 'import' && LB._curPage !== 'settings') && (!!LB.curClass || !!LB.pickItem); // v1368（用户需求）：物品模式也显示繁育栏（仅保留装备榜按钮）
   bar.style.display = show ? 'block' : 'none';
+  /* v6839：wiki 入口的显隐判定（lbWikiKey/lbWikiHas）与真正的加载入口都在 app_ui，而 app_ui 是按需加载、
+     且唯一触发点就是这些入口本身 ⇒ 首屏永远判定失败、按钮永不出现（死锁）。
+     这里在「已选中物种 / 已选物品」时**静默预加载** app_ui（Promise 复用，只发一次请求）；
+     到位后 lbUIEnsure 的 onload 会再调一次本函数，按钮即从虚线变实心。 */
+  try{
+    if(show && (LB.curClass || LB.pickItem) && typeof lbWikiHas !== 'function' && typeof lbUIEnsure === 'function'){
+      lbUIEnsure().then(function(){}, function(){});
+    }
+  }catch(eU){}
   // v321：不可训变体/特殊生物 繁育栏只保留「追踪最近」；v407：LB_OWNED_UNITS 可拥有组 + LB_FULL_BREED_EXTRA 白名单显示完整繁育栏（用户 2026-08-29）；v608：+ LB_STEAL_EGG 可偷蛋组（偷蛋龙需完整繁育栏看蛋/配对）
   var isSp = show && (lbIsSpecialCls(LB.curClass) || LB_EXTRA_FORCE.indexOf(LB.curClass) >= 0) && !(LB_OWNED_UNITS.indexOf(LB.curClass) >= 0 || LB_FULL_BREED_EXTRA.indexOf(LB.curClass) >= 0 || LB_STEAL_EGG.indexOf(LB.curClass) >= 0);
   // 物种变化时：保存旧物种选择 → 加载当前物种的持久化选择；重置结果（旧物种结果不残留）
@@ -53389,10 +53624,20 @@ async function lbQueryPlayerPos(abbr, token, eos){
           var obj = isNew ? lbParseStatusFile(await st.text()) : await st.json();
           var attrs = (obj && obj.attributes) || {};
           if(attrs.server === abbr && attrs.ts !== baseTs){
-            if(attrs.found && attrs.x !== undefined && attrs.y !== undefined){
-              return { server: abbr, x: Number(attrs.x), y: Number(attrs.y), z: Number(attrs.z !== undefined ? attrs.z : 0) };
+            if(attrs.found){
+              var _qpx = Number(attrs.x), _qpy = Number(attrs.y);
+              /* v6837（用户口径 2026-11-23「成员位置老是被固定在 50 50」的根因）：
+                 AsaApi 的 IApiUtils::GetPosition() 在 **PC 或 Pawn 为空** 时返回 FVector{0,0,0}
+                 （同一文件的 TeleportToPlayer 用 `him_position.IsNearlyZero()` 明确判其为"位置无效"）。
+                 玩家刚进服加载中 / 传送重生瞬间 / 死亡倒地 / 切骑乘时 Pawn 尚未生成 ⇒ 插件照原样回
+                 `found:true, x:0, y:0` ⇒ 前端若当合法坐标，lbWorldToPx(0,0) 正落在 ARK 地图正中心
+                 ⇒ 所有这类成员叠在 (50%,50%)。这里与 AsaApi 同口径：近零坐标视为**无法定位**。 */
+              if(isFinite(_qpx) && isFinite(_qpy) && !(Math.abs(_qpx) < 1 && Math.abs(_qpy) < 1)){
+                var _qz = Number(attrs.z);
+                return { server: abbr, x: _qpx, y: _qpy, z: isFinite(_qz) ? _qz : 0 };
+              }
             }
-            break; // 该服未找到玩家位置
+            break; // 该服未找到玩家位置（或坐标无效：null/NaN/近零）
           }
         }
       }catch(e){}
@@ -56386,6 +56631,7 @@ function lbAlliancePosRender(alli, results, focusAbbr){
     pageMeta.push({abbr:abbr, n:arr.length, pids:arr.map(function(x){return String(x.r.pid);}), alliName:(arr[0]&&arr[0].r.alliName)||''}); // v565 pids 轮询只刷当前页；v566 alliName 每页联盟名
     var dots = arr.map(function(x){
       var p = lbWorldToPx(Number(x.r.pos.x), Number(x.r.pos.y), map);
+      if(!p || p.bad) return '';   // v6837：坐标无效 ⇒ 不画点（防叠到地图正中 50,50）
       /* v5996：同一 EOS 账号下的所有角色都属于「我」（存档里同 eos 可有多个角色，如「板板」「人类」），
          故「我」的判定改为按 EOS，不再只看当前选中 pid；否则切换角色后同一人在图上会被当成陌生人。 */
       var _myEos = (LB.curPid!==null && LB.curPid!==undefined) ? (lbPidToEos(LB.curPid) || '') : '';
@@ -56731,7 +56977,10 @@ function lbAllianceMapTick(){
       var dot = document.getElementById('lbAlliDot_'+r.pid);
       if(!pos){
         // v568：下线/传图 → 标记置灰 + 名字标签标 ⏻（恢复后自动还原）
+        // v6837④（用户口径）：坐标已取不到 ⇒ **隐藏**旧点位，否则它会永远停在最后一次有效位置，
+        //   看起来就像「位置被固定不动」。用 display:none 而非 remove()，这样玩家回来能直接复原。
         if(dot){
+          dot.style.display = 'none';
           dot.style.opacity = '0.3';
           dot.style.filter = 'grayscale(1)';
           var _nt = dot.querySelector('.lb-alli-ntag');
@@ -56749,6 +56998,8 @@ function lbAllianceMapTick(){
       var map = lbMapForServer(pos.server, pos.z);
       if(!map) return;
       var p = lbWorldToPx(Number(pos.x), Number(pos.y), map);
+      if(!p || p.bad) return;   // v6837：坐标无效 ⇒ 不覆盖位置
+      if(dot) dot.style.display = '';   // v6837④：恢复显示（此前若被隐藏）
       dot.style.left = p.x.toFixed(2)+'%';
       dot.style.top = p.y.toFixed(2)+'%';
     }).catch(function(){}));
@@ -59591,7 +59842,55 @@ function lbUpdSrvCtlEntrySync(){
    ⇒ 首次点一次 showDirectoryPicker 选 Steam 库根，handle 存 IndexedDB，之后免选（权限失效再点一次）。
    MOD 侧载依据（社区一致口径）：ShooterGame\Content\Mods\<项目ID>\ + <项目ID>.mod 两件套；
    官方社区指南明确 ASA 没有手动侧载机制，故这里**不覆盖已有 .mod**，只补文件内容。 */
-var LB_LOCAL = { handle: null, game: null, busy: false, msg: '' };
+var LB_LOCAL = { handle: null, game: null, busy: false, msg: '', last: null };
+
+/* ===== v6851（用户口径「部署到本机 这个提示现在不合理了」）=====
+   按钮已改名（节日 TAB＝安装节日MOD / 汉化 TAB＝安装汉化包）⇒ 所有用户可见文案统一走这一个来源。
+   改名只需改这里；代码注释里的旧叫法不影响界面，保持不动。 */
+function lbLocalBtnName(kind){
+  return (kind === 'zh') ? '安装汉化包' : '安装节日MOD';
+}
+
+/* ===== v6840（用户口径）：两块的提示文案 —— 单一来源，不复制两份 ====
+   按钮本体已搬到资讯广场（汉化 → 汉化 TAB、MOD → 节日 TAB），文案跟着搬到这里。 */
+var LB_DEPLOY_TIP = {
+  mods: (
+          '【' + lbLocalBtnName('mods') + '】\n从 CurseForge 直连下载「客户端包」\n解压写入本机游戏目录，不经过服务器\n\n'
+        + '【写入位置】\nARK Survival Ascended\\ShooterGame\\Binaries\\Win64\\\n'
+        + '　　ShooterGame\\Mods\\83374\\<pid>_<fid>\\\n\n'
+        + '【首次要点】\n· 选含 ASA 的目录即可：磁盘根（如 B:\\ ）/ SteamLibrary /\n'
+        + '　steamapps / common / ARK Survival Ascended / ShooterGame 都行，程序自动查找\n'
+        + '· 之后自动记住，不用再选\n'
+        + '· 换目录：按住 Shift 再点本按钮\n'
+        + '· 记住的目录失效会自动重弹\n\n'
+        + '【注意】\n· 客户端包 ≠ 服务端包，体积大得多\n'
+        + '　Fear Ascended 约 800 MB\n'
+        + '　Club ARK 约 2.2 GB\n'
+        + '· 完整写入包内所有文件（含开场视频 LoadingScreen.bk2）\n'
+        + '· 不做服务器回落：直连不了就报错\n'
+        + '· 旧 <pid>_* 目录：部署结束后弹出干跑清单，\n'
+        + '　点「确认清理」才删除（浏览器删除不进回收站）\n\n'
+        + '【已装会拦截】\n· 本机已有 <pid>_<当前版本> 且含 .pak 时\n'
+        + '　判定已是最新，直接跳过、不重复下载\n'
+        + '· 全部 MOD 都已是本机最新时整批拦截，\n'
+        + '　不下载任何文件、不写盘\n\n'
+        + '【限制分发的 MOD】\n· 先把能直连的全部装完\n'
+        + '· 再逐个给下载页链接，去网页下载 zip\n'
+        + '· 回来点「选择 zip 文件」，网页内解压\n'
+        + '· 全部处理完提示重启游戏\n\n'
+        + '【说明】\n只写本机游戏目录，不动任何服务器'),
+  zh: (
+          '【' + lbLocalBtnName('zh') + '】\n从云盘源直连下载（飞书＝简体 / Google Drive＝繁体），写入本机游戏目录\n\n'
+        + '【写入位置】\nARK Survival Ascended\\ShooterGame\\Content\\Paks\n'
+        + '　　只覆盖 pak / ucas / utoc 三个文件\n\n'
+        + '【首次要点】\n· 选含 ASA 的目录即可：磁盘根（如 B:\\ ）/ SteamLibrary /\n'
+        + '　steamapps / common / ARK Survival Ascended / ShooterGame 都行，程序自动查找\n'
+        + '· 之后自动记住，不用再选\n'
+        + '· 换目录：按住 Shift 再点本按钮\n'
+        + '· 记住的目录失效会自动重弹\n\n'
+        + '【前置条件】\n先在「系统管理 → 云盘凭据」配好飞书（推荐，简体）或 Google\n\n'
+        + '【说明】\n已是最新版会拦截不下载\n需重开游戏生效')
+};
 
 /* ===== v6487（用户口径 2026-11-10）=====
    需求②：「不支持的设备上应该看不到这两个『部署到本机』」——
@@ -59664,36 +59963,121 @@ function lbLocalDir(parent, name){
     return step();
   });
 }
-/* 从所选目录向下探测 ASA 根（支持选 Steam 库根 / common / ASA 根本身）
+/* ===== v6848（用户口径）：目录定位防呆 =====
+   目标：选 Steam 库根 / steamapps / common / ASA 根 / 任意子目录 / **甚至分区根（B:\）** 都能用。
+   浏览器限制：File System Access **拿不到父目录**（没有 `..`）⇒ 只能向下探测，不能上溯。
+   因此策略：
+     ① 已知布局优先（O(1)，覆盖标准 Steam 安装位置）
+     ② 兜底广度优先搜索 BFS（分区根向下扫，限深 4 / 限 4000 目录 / 限 20 秒，跳过系统目录）
+     ③ 找不到返回 null，由上层给「请改选哪一层」的提示
    v6453（用户实测）：MOD 不在 Content\Mods，而在 ShooterGame\Binaries\Win64\ShooterGame\Mods\83374 */
-function lbLocalLocate(dir){
-  var chains = [
+var LB_LOCATE = { maxDir: 6000, maxDepth: 5, maxMs: 20000, scan: 0 };
+var LB_LOCATE_SKIP = {
+  'windows': 1, '$recycle.bin': 1, 'system volume information': 1, 'recovery': 1,
+  'perflogs': 1, 'config.msi': 1, 'msocache': 1, 'onedrivetemp': 1, '$windows.~bt': 1,
+  'appdata': 1, 'programdata': 1, 'node_modules': 1, '.git': 1, '.svn': 1, '__pycache__': 1
+};
+/* v6849：选到「游戏目录内部的子目录」时，按目录名给出「该往上选到哪一层」的提示。
+   浏览器拿不到父目录，这是唯一可行的「从路径上解决」方式。 */
+var LB_DEPTH_HINT = {
+  'ark survival ascended': '你选的已经是游戏根，但缺少 ShooterGame\\Binaries\\Win64 —— 游戏可能没装完整，请先用 Steam 校验文件完整性',
+  'shootergame': '你选的已经是 ShooterGame，但缺少 Content 或 Binaries\\Win64 —— 游戏可能没装完整，请先校验文件完整性',
+  'binaries': '请点 2 次「⬆ 上一级」，选到 ARK Survival Ascended',
+  'content': '请点 2 次「⬆ 上一级」，选到 ARK Survival Ascended',
+  'win64': '请点 3 次「⬆ 上一级」，选到 ARK Survival Ascended',
+  'paks': '请点 3 次「⬆ 上一级」，选到 ARK Survival Ascended',
+  'movies': '请点 3 次「⬆ 上一级」，选到 ARK Survival Ascended',
+  'mods': '请点 4 次「⬆ 上一级」，选到 ARK Survival Ascended',
+  '83374': '请点 5 次「⬆ 上一级」，选到 ARK Survival Ascended',
+  'steamapps': '它已经是 Steam 的 games 目录，应该能自动找到；若报错请改选磁盘根（如 B:\\ ）',
+  'common': '它已经是 Steam 库的 games 目录，应该能自动找到；若报错请改选磁盘根（如 B:\\ ）',
+  'steamlibrary': '这个目录应该可以直接用；若报错请选磁盘根（如 B:\\ ）',
+  'steam': '这个目录应该可以直接用；若报错请选磁盘根（如 B:\\ ）'
+};
+/* v6850：只对「游戏根内部」的目录做自动重弹补救（数值 = 需向上层数）。
+   其余层级向下可搜，重弹无意义，故不列出。 */
+var LB_DEPTH_UP = {
+  'binaries': 2, 'content': 2, 'win64': 3, 'paks': 3, 'movies': 3, 'mods': 4, '83374': 5
+};
+
+/* v6850（用户口径「选到游戏目录里面那几层要能自动防呆」）：
+   用户直接选到 ShooterGame 这一层时，句柄**本身**就是我们需要的 sg，不必上溯 ⇒ 直接可用。
+   判据与 _lbLocAsaRoot 同一套：内含 Content 且含 Binaries\Win64。 */
+async function _lbLocSgSelf(h){
+  try { await h.getDirectoryHandle('Content'); } catch (e1) { return null; }
+  try {
+    var b = await lbLocalDir(h, 'Binaries');
+    await lbLocalDir(b, 'Win64');
+    return h;
+  } catch (e2) { return null; }
+}
+/* 校验 handle 是否为 ASA 根（需 ShooterGame\Content + ShooterGame\Binaries\Win64），是则返回 ShooterGame 句柄 */
+async function _lbLocAsaRoot(h){
+  try {
+    var sg = await lbLocalDir(h, 'ShooterGame');
+    await sg.getDirectoryHandle('Content');
+    var b = await lbLocalDir(sg, 'Binaries');
+    await lbLocalDir(b, 'Win64');
+    return sg;
+  } catch (e) { return null; }
+}
+
+/* deep=false ⇒ 只做已知布局（供只读探测用，绝不扫盘） */
+async function lbLocalLocate(dir, notify, deep){
+  var say = function(m){ try { if (notify) notify(m); } catch (e0) {} };
+  LB_LOCATE.scan = 0;
+  /* v6850：⓪ 自身就是 ShooterGame（用户选到了 ShooterGame 这一层）⇒ 真自动，不重选、不上溯 */
+  var _sgSelf = await _lbLocSgSelf(dir);
+  if (_sgSelf) return { handle: dir, sg: _sgSelf, path: String(dir.name || 'ShooterGame') };
+  /* ---- ① 已知布局 ---- */
+  var CH = [
+    [],                                                       /* 自身就是 ASA 根 */
+    ['ARK Survival Ascended'],
     ['steamapps', 'common', 'ARK Survival Ascended'],
     ['common', 'ARK Survival Ascended'],
-    ['ARK Survival Ascended'],
-    []
+    ['SteamLibrary', 'steamapps', 'common', 'ARK Survival Ascended'],
+    ['Steam', 'steamapps', 'common', 'ARK Survival Ascended'],
+    ['Program Files (x86)', 'Steam', 'steamapps', 'common', 'ARK Survival Ascended'],
+    ['Program Files', 'Steam', 'steamapps', 'common', 'ARK Survival Ascended'],
+    ['Games', 'SteamLibrary', 'steamapps', 'common', 'ARK Survival Ascended'],
+    ['Games', 'Steam', 'steamapps', 'common', 'ARK Survival Ascended']
   ];
-  var i = 0;
-  function next(){
-    if (i >= chains.length) return Promise.resolve(null);
-    var ch = chains[i++], cur = Promise.resolve(dir), parts = [];
-    ch.forEach(function(nm){
-      cur = cur.then(function(h){ parts.push(nm); return lbLocalDir(h, nm); });
-    });
-    return cur.then(function(h){
-      /* 校验是 ASA 根：需有 ShooterGame\Content 与 ShooterGame\Binaries\Win64 */
-      return lbLocalDir(h, 'ShooterGame').then(function(sg){
-        return sg.getDirectoryHandle('Content').then(function(){
-          return lbLocalDir(sg, 'Binaries').then(function(b){
-            return lbLocalDir(b, 'Win64').then(function(){
-              return { handle: h, sg: sg, path: (parts.length ? parts.join('/') : h.name) };
-            });
-          });
-        });
-      });
-    }).catch(function(){ return next(); });
+  for (var i = 0; i < CH.length; i++) {
+    var parts0 = CH[i], cur = dir, ok = true, k;
+    try {
+      for (k = 0; k < parts0.length; k++) cur = await lbLocalDir(cur, parts0[k]);
+    } catch (e) { ok = false; }
+    if (!ok) continue;
+    var sg0 = await _lbLocAsaRoot(cur);
+    if (sg0) return { handle: cur, sg: sg0, path: (parts0.length ? parts0.join('/') : String(cur.name || '')) };
   }
-  return next();
+  if (deep === false) return null;
+  /* ---- ② 广度优先搜索（分区根 / 任意子目录） ---- */
+  say('正在本目录内搜索 ASA 游戏目录（最多 20 秒）…');
+  var t0 = Date.now(), found = null;
+  var queue = [{ h: dir, d: 0, p: '' }];
+  while (queue.length) {
+    if (LB_LOCATE.scan >= LB_LOCATE.maxDir || (Date.now() - t0) > LB_LOCATE.maxMs) break;
+    var it = queue.shift();
+    var sg1 = await _lbLocAsaRoot(it.h);
+    LB_LOCATE.scan++;
+    if (sg1) { found = { handle: it.h, sg: sg1, path: (it.p || String(it.h.name || '')) }; break; }
+    if (it.d >= LB_LOCATE.maxDepth) continue;
+    var list = [];
+    try {
+      for await (var ent of it.h.values()) list.push(ent);
+    } catch (eC) { continue; }
+    for (var n = 0; n < list.length; n++) {
+      var e2 = list[n];
+      if (!e2 || e2.kind !== 'directory') continue;
+      var nm = String(e2.name || '');
+      if (!nm || LB_LOCATE_SKIP[nm.toLowerCase()]) continue;
+      queue.push({ h: e2, d: it.d + 1, p: (it.p ? (it.p + '/' + nm) : nm) });
+    }
+    if ((LB_LOCATE.scan % 40) === 0) say('正在搜索 ASA 游戏目录…已扫描 ' + LB_LOCATE.scan + ' 个文件夹');
+  }
+  if (found) return found;
+  return null;
 }
 function lbLocalStat(h){
   return { name: (h && h.name) || '' };
@@ -59716,22 +60100,66 @@ async function lbLocalEnsure(notify, force, _retry){
     }
   }
   if (!h) {
-    if (notify) notify('请选择 ASA 所在的 Steam 库根目录（例如 B:\\SteamLibrary）');
+    if (notify) notify('请选择 ASA 所在的 Steam 库根目录（也可直接选磁盘根，如 B:\\ ，或任意子目录，程序会自动查找）');
     if (typeof window.showDirectoryPicker !== 'function') {
       throw new Error('当前浏览器不支持目录写入，请用 Chrome / Edge 打开本页');
     }
-    h = await window.showDirectoryPicker({ id: 'asaSteamLib', mode: 'readwrite' });
+    /* v6850：带起止目录 —— 选错后自动重弹时直接停在上次那个文件夹，不用从「此电脑」重新点进去 */
+    var _opt = { id: 'asaSteamLib', mode: 'readwrite' };
+    if (LB_LOCAL.last) { try { _opt.startIn = LB_LOCAL.last; } catch (eSI) {} }
+    try { h = await window.showDirectoryPicker(_opt); }
+    catch (eSI2) {
+      if (eSI2 && eSI2.name === 'AbortError') throw eSI2;   /* 用户主动取消：不再二次弹窗 */
+      h = await window.showDirectoryPicker({ id: 'asaSteamLib', mode: 'readwrite' });
+    }
     LB_LOCAL.handle = h;
-    try { await lbLocalIdbSet('asaLib', h); } catch (e) {}
+    LB_LOCAL.last = h;
+    /* v6848：**先不写 IndexedDB** —— locate 成功才落盘，
+       否则「手滑选错目录」会把上次正确的记录覆盖掉，反而每次都要重选。 */
   }
-  var g = await lbLocalLocate(h);
+  var g = await lbLocalLocate(h, notify);
   if (!g) {
-    /* v6462：记住的目录已经对不上（换盘 / 搬 Steam 库 / 删了游戏）
-       → 清掉记忆并重新弹一次选择器（只重试 1 次，避免死循环） */
+    /* v6848：本次选的目录里找不到 ASA ⇒ 先试「上次记住的目录」（若仍可用就直接用它跑完，不再折腾用户） */
+    try {
+      var oldH = await lbLocalIdbGet('asaLib');
+      if (oldH && oldH !== h) {
+        var op = await oldH.queryPermission({ mode: 'readwrite' });
+        if (op === 'granted') {
+          var gOld = await lbLocalLocate(oldH, null);
+          if (gOld) {
+            LB_LOCAL.handle = oldH; LB_LOCAL.game = gOld;
+            try { if (notify) notify('所选目录里没有 ASA，已改用上次记住的：' + gOld.path); } catch (eN) {}
+            return gOld;
+          }
+        }
+      }
+    } catch (eOld) {}
+    /* v6850（用户口径「选到游戏目录里面那几层要能自动防呆」）：
+       浏览器 File System Access 只授权「所选目录及其子目录」，拿不到父目录/兄弟目录
+       ⇒ 真正的「自动上溯」物理不可行（不是代码写法问题）。
+       能做到的最优自动补救：立刻重弹选择器，且**起止在你刚选的那个文件夹**，
+       提示点 N 次「⬆ 上一级」即可，不必从「此电脑」一层层点进去。只补救 1 次，防死循环。 */
+    var _dn = String((h && h.name) || '');
+    var _dk = _dn.toLowerCase();
+    var _hint = LB_DEPTH_HINT[_dk] || '';
+    var _upN = Number(LB_DEPTH_UP[_dk] || 0);
+    if (!_retry && _upN > 0 && typeof window.showDirectoryPicker === 'function') {
+      LB_LOCAL.last = h;
+      try {
+        if (notify) notify('「' + _dn + '」在游戏目录内部，浏览器不允许程序自动跳回上层。'
+          + '已重新打开选择器并停在这个文件夹 —— 请点 ' + _upN + ' 次「⬆ 上一级」到 ARK Survival Ascended，再点「选择文件夹」');
+      } catch (eN2) {}
+      return lbLocalEnsure(notify, true, true);
+    }
+    /* 都不行：清记忆，重新弹一次选择器（只重试 1 次，避免死循环） */
     lbLocalForget();
     if (!_retry) return lbLocalEnsure(notify, true, true);
-    throw new Error('所选目录不是 ASA 根（缺 ShooterGame\\Content 或 Binaries\\Win64）—— 请选 Steam 库根目录');
+    throw new Error('在「' + _dn + '」里没有找到 ASA（需要 ShooterGame\\Content 与 Binaries\\Win64）。'
+      + (_hint ? ('它看起来是游戏目录内部，' + _hint + '；')
+               : '可以直接选整个磁盘根（如 B:\\ ）或 Steam 库根，程序会自动查找；')
+      + '也可以按住 Shift 再点一次重新选择。');
   }
+  try { await lbLocalIdbSet('asaLib', h); } catch (eW) {}
   LB_LOCAL.game = g;
   if (reused && notify) notify('使用已记住的游戏目录：' + g.path + '（要更换请按住 Shift 再点）');
   return g;
@@ -59776,7 +60204,7 @@ async function lbLocalProbe(base, hd){
     if (p !== 'granted') { out.why = 'perm_lost'; return out; }
   } catch (e1) { out.why = 'perm_lost'; return out; }
   var g = null;
-  try { g = await lbLocalLocate(hh); } catch (e2) { g = null; }
+  try { g = await lbLocalLocate(hh, null, false); } catch (e2) { g = null; }   /* v6848：探测不扫盘 */
   if (!g) { out.why = 'bad_root'; return out; }
   out.game = { path: String(g.path || ''), name: String(hh.name || '') };
 
@@ -60020,11 +60448,13 @@ function lbLocalPopHtml(kind, r){
           + 'margin-top:6px;font-size:12px;color:#9ca3af;line-height:1.7';
   if (!r) return '<div style="' + box + '">检测中…</div>';
   if (!r.ok) {
-    var mp = { no_handle: '点一次「部署到本机」后可显示本机状态',
-               perm_lost: '权限已失效，点一次「部署到本机」重新授权',
-               bad_root: '记住的目录已失效，按住 Shift 点「部署到本机」重新选择',
+    /* v6851：按钮已改名 ⇒ 提示文案按 kind 取按钮真名（节日＝安装节日MOD / 汉化＝安装汉化包） */
+    var _bn = lbLocalBtnName(kind);
+    var mp = { no_handle: '点一次「' + _bn + '」后可显示本机状态',
+               perm_lost: '权限已失效，点一次「' + _bn + '」重新授权',
+               bad_root: '记住的目录已失效，按住 Shift 点「' + _bn + '」重新选择',
                no_net: '无法获取策略清单（网络问题），点「重新检测」重试',
-               api_unsupported: '当前设备不支持 ASA，已隐藏「部署到本机」' };
+               api_unsupported: '当前设备不支持 ASA，已隐藏「' + _bn + '」' };
     return '<div style="' + box + '">' + lbMdEsc(mp[r.why] || '本机状态未知') + '</div>';
   }
   var rows = [];
@@ -60291,9 +60721,9 @@ async function lbLocalModsCleanOpen(){
   try { if (typeof lbZOpen === 'function') lbZOpen(ov, 'modsClean'); } catch (_eZ1) {}
   try {
     var hh = await lbLocalIdbGet('asaLib');
-    if (!hh) throw new Error('尚未授权 ASA 目录 —— 请先点一次「部署到本机」');
+    if (!hh) throw new Error('尚未授权 ASA 目录 —— 请先点一次「' + lbLocalBtnName('mods') + '」');
     var g = await lbLocalLocate(hh);
-    if (!g) throw new Error('记住的目录已失效，请按住 Shift 点「部署到本机」重新选择');
+    if (!g) throw new Error('记住的目录已失效，请按住 Shift 点「' + lbLocalBtnName('mods') + '」重新选择');
     var bin = await lbLocalDir(g.sg, 'Binaries');
     var w64 = await lbLocalDir(bin, 'Win64');
     var inner = await w64.getDirectoryHandle('ShooterGame', { create: true });
@@ -61099,7 +61529,9 @@ function lbNoteCardShow(el){
       + '<i class="mdi mdi-close" onclick="lbNoteCardClose()" style="color:#5b606f;font-size:14px;cursor:pointer"></i>'
       + '</div>'
       + '<div style="margin-top:8px;max-height:40vh;overflow:auto;white-space:pre-wrap;word-break:break-word;'
-      + 'font-family:ui-monospace,Consolas,monospace;font-size:11.5px;line-height:1.65;color:#c8cddb;'
+      /* v6842（用户口径「这里的字体变了」）：正文是中文说明，原来是 ui-monospace/Consolas 等宽 ——
+         中文只能走等宽回退，字形与全站不一致。改为继承正文字体（路径/文件名依然靠 pre-wrap 保结构）。 */
+      + 'font-family:inherit;font-size:11.5px;line-height:1.65;color:#c8cddb;'
       + 'user-select:text;-webkit-user-select:text">' + lbMdEsc(cur.msg || '') + '</div>'
       + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">'
       + '<button type="button" onclick="lbNoteCopyAll(this)" style="padding:5px 11px;border-radius:6px;'
@@ -62232,7 +62664,7 @@ async function lbModsPruneGo(){
   var list = LB_MODS_PRUNE.list || [];
   var okN = 0, okB = 0, fail = [], skip = [];
   if (!gid) {
-    lbModsPruneSetSt('目录句柄已失效，请重新点「部署到本机」', '#f87171');
+    lbModsPruneSetSt('目录句柄已失效，请重新点「' + lbLocalBtnName('mods') + '」', '#f87171');
     LB_MODS_PRUNE.busy = false;
     return;
   }
@@ -62422,7 +62854,7 @@ async function lbLocalDeployModsByCDN(g, say, base, hd){
     if (_needDeploy && !_libReady) {
       throw new Error('无法读取 CFCore 库（library.json），写入的 MOD 会被游戏清理：'
         + ((_cflib && _cflib.err) || '未知原因')
-        + '\n请先退出游戏 → 再点「部署到本机」');
+        + '\n请先退出游戏 → 再点「' + lbLocalBtnName('mods') + '」');
     }
   }
   /* v6524（用户实报「6523 点了部署，明细还是 库 Pending」，且 library.json.bak 停在 22:11
@@ -62854,7 +63286,7 @@ function lbLocalModsPickZip(pid){
   var it = lbLocalModsFind(pid);
   if (!it) return;
   if (!it.fid) {
-    lbLocalModsSetSt(pid, '缺少客户端包版本号，无法确定目录名 —— 请重新点「部署到本机」', '#f87171');
+    lbLocalModsSetSt(pid, '缺少客户端包版本号，无法确定目录名 —— 请重新点「' + lbLocalBtnName('mods') + '」', '#f87171');
     return;
   }
   var inp = document.createElement('input');
@@ -63028,7 +63460,7 @@ async function lbLocalModsDeployZip(pid, file){
   var it = lbLocalModsFind(pid);
   if (!it) return;
   if (!LB_MODS_MANUAL.gid) {
-    lbLocalModsSetSt(pid, '游戏目录句柄已失效，请重新点「部署到本机」', '#f87171');
+    lbLocalModsSetSt(pid, '游戏目录句柄已失效，请重新点「' + lbLocalBtnName('mods') + '」', '#f87171');
     return;
   }
   var dn = String(pid) + '_' + String(it.fid || '');

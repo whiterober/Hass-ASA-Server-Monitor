@@ -6076,13 +6076,20 @@ var LB_NEWS = {
      对齐旧 HA `ark_patch` 视图的「底部链接图标」。旧页用的是 HA 内部签名图片
      （/api/image/serve/xxx?authSig=...，**会过期**），此处改用项目已有的 MDI 字体图标，不会失效。 */
   tabs: [
-    { id: 'patch_pc', name: 'ASA PC版本', short: 'PC版本', links: [
+    /* v6840（用户口径「PC版本 改叫 版本」）：只改显示名，id 不动（后端 NEWS_TABS / 缓存键 / lbNewsGoTab 都按 id） */
+    { id: 'patch_pc', name: '版本', short: '版本', links: [
         { href: 'https://survivetheark.com/index.php?/forums/', icon: 'mdi-forum-outline', text: '论坛', label: 'survivetheark 论坛' },
         { href: 'https://discord.com/channels/729837326120910915/735188487615283232', icon: 'mdi-chat-outline', svg: LB_SVG_DISCORD, text: 'Discord', label: 'Discord 频道' }
       ] },
     { id: 'news',     name: '方舟新闻',   short: '新闻', links: [
         { href: 'https://survivetheark.com/', icon: 'mdi-forum-outline', text: '官网', label: 'survivetheark 官网' },
         { href: 'https://discord.com/channels/729837326120910915/735188458972381194', icon: 'mdi-chat-outline', svg: LB_SVG_DISCORD, text: 'Discord', label: 'Discord 频道' }
+      ] },
+    /* v6841（用户口径「加一个TAB：节日；专门放 最新的节日信息；数据从wiki.gg取」）
+       数据源：ark.wiki.gg/wiki/Events → 后端 /api/fest/（复用物种/地图 wiki 同一个抓取器 + wiki_cache 落盘） */
+    { id: 'festival', name: '节日', short: '节日', links: [
+        { href: 'https://ark.wiki.gg/wiki/Events', icon: 'mdi-calendar-star', text: 'wiki.gg', label: 'ARK 活动日历（wiki.gg）' },
+        { href: 'https://survivetheark.com/', icon: 'mdi-forum-outline', text: '官网', label: 'survivetheark 官网' }
       ] },
     { id: 'grp_adm',  name: 'ADM', short: 'ADM', children: [
         /* v5956（用户口径）：二级 Tab 文字 ADM版本 ⇒ 版本（一级已标暂 ADM） */
@@ -6464,6 +6471,60 @@ function lbNewsAiTranslate(){
   try { lbToast('AI 翻译已开始（待译 ' + s.todo + ' 条）…'); } catch (e2) {}
   lbNewsTranslate(d.tab, d.cards);
 }
+/* ===== v6840（用户口径）：本机部署「四件套」宿主 —— 从「综合更新」搬到资讯广场
+   四件 = ① 部署到本机按钮 ② 本机状态胶囊(#lbLocalPill_<kind>) ③ 进度条（原地占按钮）
+          ④ 提示锚点（lbDeployLocal 内 LB_NOTE_ANCHOR = btn，自动跟随）
+   底层能力全部保留在 app_core（lbDeployLocal / lbLocalPillHtml / lbLocalProbeKick / lbLProg*），
+   这里只做宿主 + 触发探测；卡片本体（更新缓存/分发/色条）仍留在综合更新。
+   ⚠ 胶囊与明细靠 id 刷新（lbLocalProbePaint），与 DOM 位置无关 ⇒ 综合更新侧必须删干净，禁止两处同 id。 */
+function lbNewsLocalKind(){
+  var lf = (typeof lbNewsLeaf === 'function' ? lbNewsLeaf() : null) || {};
+  if (lf.id === 'tieba') return 'zh';          /* 汉化 TAB → 汉化包四件套 */
+  if (lf.id === 'festival') return 'mods';     /* 节日 TAB → MOD 四件套 */
+  return '';
+}
+function lbNewsLocalBarMount(body){
+  try {
+    if (!body) return;
+    /* v6843（用户口径「附件浮窗应该在分割线之上」「分割线左右要和主要内容对齐」）：
+       外层 #lbNewsLocalWrap 包住「工具条 + 明细面板」，分割线由 CSS 画在 wrap 底部 ⇒
+       明细面板展开时线自动下移，且线两端与正文左右对齐（left/right:0）。 */
+    var oldW = document.getElementById('lbNewsLocalWrap');
+    if (oldW && oldW.parentNode) return;          /* 本渲染周期已挂过（TAB 切换会重建 body，不会残留） */
+    var old = document.getElementById('lbNewsLocalBar');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+    var kind = lbNewsLocalKind();
+    if (!kind) return;
+    if (typeof lbLocalSupported !== 'function' || !lbLocalSupported()) return;
+    if (document.getElementById('lbLocalPill_' + kind)) return;   /* 已有宿主，勿重复 */
+    var tip = (typeof LB_DEPLOY_TIP !== 'undefined' && LB_DEPLOY_TIP[kind]) || '';
+    var wrap = document.createElement('div');
+    wrap.id = 'lbNewsLocalWrap';
+    var w = document.createElement('div');
+    w.id = 'lbNewsLocalBar';
+    w.className = 'lb-upd-foot lb-news-localbar';
+    /* v6849（用户口径）：改成圆角正式按钮，并按 TAB 给不同文案
+       汉化 TAB → 安装汉化包；节日 TAB → 安装节日MOD
+       v6851：文案统一走 app_core 的 lbLocalBtnName(kind)（单一来源，改名只改一处） */
+    var btnTxt = (typeof lbLocalBtnName === 'function')
+               ? lbLocalBtnName(kind)
+               : ((kind === 'zh') ? '安装汉化包' : '安装节日MOD');
+    w.innerHTML =
+        '<button type="button" class="lb-news-installbtn" onclick="lbDeployLocal(\'' + kind + '\',this)"'
+      + ' title="' + lbMdEsc(tip) + '">'
+      + '<i class="mdi mdi-folder-download-outline"></i>' + btnTxt + '</button>'
+      + '<span style="flex:1"></span>'
+      + '<span>' + lbLocalPillHtml(kind) + '</span>';
+    wrap.appendChild(w);
+    var pop = document.createElement('div');
+    pop.id = 'lbLocalPop_' + kind;
+    pop.style.display = 'none';
+    wrap.appendChild(pop);
+    body.insertBefore(wrap, body.firstChild);
+    /* 探测触发点：原来只有 lbUpdRender() 末尾一处，只开资讯广场时胶囊会永远「检测中…」 */
+    try { lbLocalProbeKick(false); } catch (eP) {}
+  } catch (e) {}
+}
 function lbNewsRender(){
   var S = lbSheetBuild('lbNews', { onClose: 'lbNewsClose()' });
   if (!S || !S.ov) return;
@@ -6500,8 +6561,11 @@ function lbNewsRender(){
   } else {
     S.body.innerHTML = lbNewsCardsToTc(d.cards, d.tab || (lbNewsLeaf() || {}).id, LB_NEWS.zh);
   }
+  /* v6840（用户口径）：四件套宿主（汉化 TAB / 节日 TAB 才有） */
+  try { lbNewsLocalBarMount(S.body); } catch (eLB) {}
   /* v5959：AI 模块（复用 wiki 的 AI 盒子，按钮=翻译，增量补翻）——位于底部来源链接上方 */
   try {
+    /* v6843：节日 TAB 也显示 AI 盒（默认不自动翻，用户点「翻译」才翻） */
     if (d.cards && d.cards.length){
       var _aiW = document.createElement('div');
       _aiW.innerHTML = lbNewsAiBoxHtml();
@@ -6547,8 +6611,13 @@ function lbNewsFetch(){
   /* v5931：取数据 + 取译文**并行**，一次打开内完成（用户口径「翻译要和取数据完全合在一起」）。
      译文接口失败不影响正文；译文由后端全服共享，命中即零成本。 */
   var _base = lbNewsApiBase();
-  var _pCards = fetch(_base + '/api/news/' + encodeURIComponent(t.id) + '?t=' + Date.now(), { cache: 'no-store' })
+  /* v6841：节日 TAB 走 /api/fest/（ark.wiki.gg Events，后端已配中文名）——不再走译文接口 */
+  var _isFest = (t.id === 'festival');
+  var _pCards = fetch(_base + (_isFest ? '/api/fest/' : ('/api/news/' + encodeURIComponent(t.id)))
+                      + '?t=' + Date.now(), { cache: 'no-store' })
     .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+  /* v6847（用户口径「另一个客户端还是原文」）：节日 TAB 也必须拉译文缓存 ——
+     v6841 为「不走译文接口」把这里置成 null，导致别人翻好的译文永远下不来、每个客户端都要重翻。 */
   var _pZh = fetch(_base + '/api/news/zh?tab=' + encodeURIComponent(t.id) + '&t=' + Date.now(), { cache: 'no-store' })
     .then(function(r){ return r.ok ? r.json() : null; })
     .catch(function(){ return null; });
@@ -6561,11 +6630,17 @@ function lbNewsFetch(){
       LB_NEWS.data = j; LB_NEWS.loading = false;
       /* v5932：历史脏数据（v5931 误写的 id/object/model 等元数据键）在入口处过滤掉 */
       var _zm = (zj && zj.map) ? zj.map : {};
-      Object.keys(_zm).forEach(function(k3){ if (!/^[0-9]{15,25}$/.test(k3)) delete _zm[k3]; });
+      /* v6844：原正则只放行 Discord 消息 id（纯数字 15~25 位）⇒ 节日卡的 ev_* 译文被整批删掉，
+         表现为「后端已有译文，另一个客户端仍显示原文」。这里同时放行 ev_ 前缀。 */
+      Object.keys(_zm).forEach(function(k3){
+        if (!/^[0-9]{15,25}$/.test(k3) && !/^ev_/.test(k3)) delete _zm[k3];
+      });
       LB_NEWS.zh = _zm;
       try { LB_NEWS.cache[t.id] = { data: j, zh: _zm }; } catch (eC) {}   // v5933：写会话缓存（zh 与 LB_NEWS.zh 同一引用，补翻后自动可见）
       lbNewsRender();
-      lbNewsTranslate(t.id, j.cards || []);               // 只补翻缺译文的消息（增量）
+      /* v6843（用户口径「保留英文 + 复用现有 AI 翻译（按需翻）」）：节日 TAB **不自动翻**
+         —— 原逻辑无条件补翻，会把 wiki 英文正文整段翻成中文（还白烧 token、写回被 400 拒） */
+      if (t.id !== 'festival') lbNewsTranslate(t.id, j.cards || []);   // 只补翻缺译文的消息（增量）
     })
     .catch(function(e){
       LB_NEWS.err = String((e && e.message) || e); LB_NEWS.loading = false;
@@ -6585,7 +6660,15 @@ var LB_NEWS_ZH_SYS = '你是《方舟：生存飞升》(ARK: Survival Ascended) 
   + '2) **不译**：版本号（v93.25 / 93.36 / v94.11）、日期、纯数字、@Steam/@Xbox/@Playstation/@Windows\n'
   + '   等平台标记、URL、代码/枚举类英文词。\n'
   + '3) **术语**：方舟专有名词用玩家通行译法（Metal Ingot 金属锭 / Polymer 聚合物 / '
-  + 'Artifact 神器 / Bounty 赏金 / Boss 首领 等）；确无通行译法可保留英文。\n\n'
+  + 'Artifact 神器 / Bounty 赏金 / Boss 首领 等）。\n'
+  /* v6845（用户口径「为啥 Chibi-xxx 全都没有被翻译？」）：原规则「确无通行译法可保留英文」
+     被模型理解成「专名一律保留」，导致 Event Chibis 整批英文。这里明确要求必译。 */
+  + '   · **Chibi 系列必须译**：`Chibi-XXX` → 「迷你+物种中文名」（Chibi-Rex 迷你霸王龙 / '
+  + 'Chibi-Astrocetus 迷你星鲸 / Chibi-Ammonite 迷你菊石）；`Event Chibis` → 「活动迷你宠物」。\n'
+  + '   · **生物 / 物品 / 皮肤 / 颜色名一律译中文**（Skins 皮肤 / Life Vest Skin 救生衣皮肤 / '
+  + 'Ghost Rex 幽灵霸王龙）；**不得以「是专名」为理由保留英文**，只有纯代码标识（蓝图路径、'
+  + '命令、URL、版本号）才保留原文。\n'
+  + '   · 原文里的图片残渣（`File:xxx.png`、单独出现的 `xxx.png`）**一律丢弃**，不要输出。\n\n'
   + '【排版：允许重构结构】（不必逐行照搬，可按语义重新组织得更清晰）\n'
   + '4) **只能使用以下标签**：\n'
   + '   `<h3>标题</h3>`  `<p>段落</p>`  `<ul><li>条目</li></ul>`  `<ol><li>条目</li></ol>`\n'
@@ -6622,7 +6705,8 @@ function lbNewsTranslate(tabId, cards){
          由提示词负责「繁体转简体 / 已是简体原样保留」。已有译文的（含别的玩家翻好的）仍然直接命中缓存。 */
       if (raw.length < 8) return;
       seen[mid] = 1;
-      todo.push({ id: mid, text: raw.slice(0, 1800) });
+      /* v6844：原文上限 1800 -> 6000 —— 节日详情卡最长 2171 字符，1800 会把 chibi/皮肤等小节截掉 */
+      todo.push({ id: mid, text: raw.slice(0, 6000) });
     });
     if (!todo.length) return;
     LB_NEWS.zhBusy = true;
@@ -6685,8 +6769,8 @@ function lbNewsTranslate(tabId, cards){
             var kk = pr[0], vv = pr[1];
             if (!_valid[kk]) return;                                   // 非本批 id ⇒ 丢弃
             if (vv.length > 20 && !/[\u4e00-\u9fa5]/.test(vv)) return;  // 明显没翻成中文 ⇒ 丢弃
-            LB_NEWS.zh[kk] = vv.slice(0, 2000);
-            items.push({ id: kk, text: vv.slice(0, 2000) });
+            LB_NEWS.zh[kk] = vv.slice(0, 6000);
+            items.push({ id: kk, text: vv.slice(0, 6000) });
           });
           if (items.length){
             _got += items.length;

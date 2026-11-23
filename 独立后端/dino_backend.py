@@ -4258,6 +4258,332 @@ def _ark_seed(key, data):
     return True
 
 
+# ===== v6840（用户口径「加一个TAB：节日；专门放 最新的节日信息；数据从wiki.gg取」）=====
+# 源： ark.wiki.gg/wiki/Events —— 章节「Calendar → Event Calendar」，每年一张表
+#      列固定： Image | Event | Start Date | End Date
+# 复用（不造新轮子）：
+#   · 抓取走 _wiki_fetch_page（与物种 wiki / 地图 wiki 同一个抓取器、同一 WIKI_UA）
+#   · 缓存落 WIKI_CACHE_DIR/events.json（与 wiki_cache/<Key>.json 同一目录）；**失败不落缓存**
+#   · 版本失效号范式与 _MW_VER 一致：解析规则变了就 +1，旧缓存自动重抓
+_EV_URL = 'https://ark.wiki.gg/wiki/Events'
+_EV_VER = 11
+_EV_MONTH = {'january': 1, 'february': 2, 'march': 3, 'april': 4, 'may': 5, 'june': 6,
+             'july': 7, 'august': 8, 'september': 9, 'october': 10, 'november': 11, 'december': 12}
+# 固定译名（只覆盖常见节日；未命中就显示英文原名，不猜）
+_EV_ZH = {
+    'fear ascended': u'惊惧进化', 'fear evolved': u'惊惧进化',
+    'winter wonderland': u'冬日仙境', 'turkey trial': u'火鸡试炼',
+    'eggcellent adventure': u'复活节彩蛋', 'easter evo': u'复活节进化',
+    'summer bash': u'夏日狂欢', 'summer evo': u'夏日进化',
+    'love ascended': u'爱之进化', 'love evolved': u'爱之进化',
+    'anniversary': u'周年庆', 'extra life': u'慈善活动',
+    'happy new year': u'新年', 'evolution event': u'进化活动',
+}
+_EV_LOCK = threading.Lock()
+
+
+def _ev_cache_path():
+    return os.path.join(WIKI_CACHE_DIR, 'events.json')
+
+
+def _ev_load():
+    p = _ev_cache_path()
+    if not os.path.isfile(p):
+        return None
+    try:
+        with open(p, 'r', encoding='utf-8') as f:
+            return json.loads(f.read())
+    except Exception:
+        _sexc('ev_load')
+        return None
+
+
+def _ev_save(d):
+    try:
+        os.makedirs(WIKI_CACHE_DIR, exist_ok=True)
+        with open(_ev_cache_path(), 'w', encoding='utf-8') as f:
+            f.write(json.dumps(d, ensure_ascii=False))
+        return True
+    except Exception:
+        _sexc('ev_save')
+        return False
+
+
+def _ev_zh(name):
+    s = str(name or '').lower()
+    for k in _EV_ZH:
+        if k in s:
+            return _EV_ZH[k]
+    return ''
+
+
+def _ev_date(s):
+    """'Wednesday, April 1, 2026' / 'February 12th, 2026' -> (y, m, d) 或 None"""
+    t = re.sub(r'^[A-Za-z]+,\s*', '', str(s or '').strip())
+    m = re.match(r'([A-Za-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})', t)
+    if not m:
+        return None
+    mo = _EV_MONTH.get(m.group(1).lower())
+    if not mo:
+        return None
+    try:
+        return (int(m.group(3)), mo, int(m.group(2)))
+    except Exception:
+        return None
+
+
+def _ev_parse(raw):
+    """Event Calendar 表 -> items（每年一张表，列 Image|Event|Start Date|End Date）"""
+    txt = str(raw or '')
+    ci = txt.find('Event_Calendar')
+    if ci > 0:
+        txt = txt[ci:]          # 只取日历段，避开 Event Types 段的其它表
+    items, seen = [], set()
+    for tb in re.findall(r'<table.*?</table>', txt, re.S | re.I):
+        for tr in re.findall(r'<tr.*?</tr>', tb, re.S | re.I):
+            cells = re.findall(r'<t[hd][^>]*>(.*?)</t[hd]>', tr, re.S | re.I)
+            if len(cells) != 4:
+                continue
+            vals = []
+            for c in cells:
+                c = re.sub(r'<br\s*/?>', ' ', c)
+                c = re.sub(r'<[^>]+>', '', c)
+                c = c.replace('&amp;', '&').replace('&nbsp;', ' ').replace('&#160;', ' ')
+                vals.append(re.sub(r'\s+', ' ', c).strip())
+            name = vals[1]
+            if not name or name.lower() == 'event' or name.lower() in seen:
+                continue
+            _hs = re.findall(r'href="(/wiki/[^"#]+)"', cells[1])
+            d1 = _ev_date(vals[2])
+            d2 = _ev_date(vals[3])
+            if not d1 or not d2:
+                continue
+            seen.add(name.lower())
+            items.append({'name': name, 'zh': _ev_zh(name),
+                          'href': _hs[0] if _hs else '',
+                          'start': '%04d-%02d-%02d' % d1, 'end': '%04d-%02d-%02d' % d2})
+    today = time.strftime('%Y-%m-%d')
+    for it in items:
+        if today < it['start']:
+            it['state'] = 'upcoming'
+        elif today > it['end']:
+            it['state'] = 'ended'
+        else:
+            it['state'] = 'current'
+    items.sort(key=lambda x: x['start'], reverse=True)
+    items.sort(key=lambda x: {'current': 0, 'upcoming': 1, 'ended': 2}.get(x['state'], 3))
+    return items
+
+
+def _ev_get(force=False):
+    with _EV_LOCK:
+        cd = _ev_load()
+        if not force and cd and int(cd.get('_v') or 0) >= _EV_VER and cd.get('items') is not None:
+            out = dict(cd)
+            out['ok'] = True
+            out['cached'] = True
+            return out
+        try:
+            raw = _wiki_fetch_page(_EV_URL, 45)
+            items = _ev_parse(raw)
+            if not items:
+                raise RuntimeError('解析不到活动表（页面结构可能已变）')
+            d = {'_v': _EV_VER, 'ok': True, 'items': items, 'at': int(time.time()),
+                 'updated': time.strftime('%Y-%m-%d %H:%M', time.localtime()),
+                 'src': _EV_URL}
+            _ev_save(d)          # 只有成功才落缓存
+            out = dict(d)
+            out['cached'] = False
+            return out
+        except Exception as e:
+            _sexc('ev_fetch')
+            if cd:
+                out = dict(cd)
+                out['ok'] = True
+                out['cached'] = True
+                out['stale'] = True
+                out['err'] = str(e)[:140]
+                return out
+            return {'ok': False, 'err': str(e)[:140], 'items': []}
+
+
+_EV_DETAIL_MAX = 5        # 详情卡数量上限（与前端 FOLD=5 对齐）
+_EV_DETAIL_ENDED = 3      # 已结束的取最近几个
+_EV_DETAIL_SECS = ('rates', 'colors', 'creatures', 'items', 'chibis', 'skins', 'emotes')
+# v6843c：白名单改为黑名单 —— Content 下的 h3 小节全收（如 Extra Life 的 Cake Slices），
+#          只排除导航/元信息类小节；最多取 _EV_DETAIL_MAXSEC 个
+_EV_DETAIL_SKIP = ('notes', 'calendar', 'references', 'gallery', 'videos', 'emotes',
+                   'external links', 'navigation', 'trivia', 'gallery of images', 'media')
+_EV_DETAIL_MAXSEC = 6
+_EV_SEC_ZH = {'rates': u'倍率', 'colors': u'颜色', 'creatures': u'生物', 'items': u'物品',
+              'chibis': u'Chibi', 'skins': u'皮肤', 'emotes': u'表情'}
+
+
+def _ev_detail_cache(slug):
+    k = re.sub(r'[^a-z0-9]+', '_', str(slug or '').lower())[:80]
+    return os.path.join(WIKI_CACHE_DIR, 'event_%s.json' % k)
+
+
+_EV_JUNK = ('this article is about', 'this content is not available', 'from ark wiki',
+            'jump to', 'navigation', 'search', 'event organizer', 'start date', 'end date',
+            'community crunch', 'ark wiki explore', 'primal survival', 'survival evolved',
+            'see also', 'not available outside', 'exclusive to the event', 'this content is',
+            'event content', 'organizer', 'singleplayer', 'multiplayer', 'dedicated server',
+            'tlc vote', 'vote overview', 'community crunch')
+
+
+def _ev_plain(frag):
+    """HTML 片段 -> 文本行（去脚本/样式/标签/引用标记/数字实体，li 转 - 行）"""
+    t = re.sub(r'<script.*?</script>', ' ', frag, flags=re.S | re.I)
+    t = re.sub(r'<style.*?</style>', ' ', t, flags=re.S | re.I)
+    t = re.sub(r'<br\s*/?>', '\n', t, flags=re.I)
+    t = re.sub(r'<li[^>]*>', '\n- ', t, flags=re.I)
+    t = re.sub(r'</(p|li|div|tr|h2|h3)>', '\n', t, flags=re.I)
+    t = re.sub(r'<[^>]+>', '', t)
+    t = re.sub(r'&#(\d+);', lambda m: chr(min(0x10FFFF, int(m.group(1)))), t)   # v6842b：&#32; 等
+    t = (t.replace('&nbsp;', ' ').replace('&amp;', '&')
+          .replace('&#39;', "'").replace('&quot;', '"').replace('&lt;', '<').replace('&gt;', '>'))
+    t = re.sub(r'\[\d+\]', '', t)
+    # v6845：wiki 图片残渣 —— [[File:Chibi-Grendel.png|Chibi-Grendel]] 会被抽成「File:x.png Chibi-Grendel」
+    t = re.sub(r'(?:File|Image):[^\s|]+\.(?:png|jpe?g|gif|webp|svg)\s*', ' ', t, flags=re.I)
+    out_lines = []
+    for _x in [re.sub(r'\s+', ' ', y).strip() for y in t.split('\n')]:
+        if not _x or _x == '-':
+            continue
+        _x = re.sub(r'^-\s+-\s+', '- ', _x)      # wikitext 嵌套列表 ⇒ 「- - xxx」
+        out_lines.append(_x)
+    return out_lines
+
+
+def _ev_detail_parse(html):
+    """活动详情页 -> {intro:[...], sections:[{k,t,zh,lines}]}
+       实测结构：Content -> Rates / Colors / Creatures / Items / Chibis / Skins / Emotes"""
+    m = re.search(r'<div class="mw-parser-output">(.*?)<div class="printfooter"', html, re.S)
+    body = m.group(1) if m else html
+    marks = []
+    for mm in re.finditer(r'<h([23])[^>]*>\s*<span[^>]*class="mw-headline"[^>]*>(.*?)</span>',
+                          body, re.S | re.I):
+        marks.append((mm.start(), mm.end(), int(mm.group(1)),
+                      re.sub(r'<[^>]+>', '', mm.group(2)).strip()))
+    head_txt = _ev_plain(body[:marks[0][0]]) if marks else _ev_plain(body)
+    intro = []
+    for _x in head_txt:
+        _lx = _x.lower()
+        # v6843e：口径 = 「长行(>40) OR 列表行(- 开头)」——
+        #   短列表项（「- Cake Slice」）能进；infobox 碎片（Event content / Organizer / Twitch）不进
+        if any(_j in _lx for _j in _EV_JUNK):
+            continue
+        if _x.startswith('- ') and re.match(r'^- \d', _x):
+            continue          # v6843g：目录/引用残留（如「- 3 Calendar」）
+        if len(_x) <= 40 and not _x.startswith('- '):
+            continue
+        intro.append(_x)
+        if len(intro) >= 8:
+            break
+    sections = []
+    nsec = 0
+    for idx, (s, e, lv, title) in enumerate(marks):
+        nxt = marks[idx + 1][0] if idx + 1 < len(marks) else len(body)
+        key = title.lower()
+        if lv != 3 or key in _EV_DETAIL_SKIP or nsec >= _EV_DETAIL_MAXSEC:
+            continue
+        lines = _ev_plain(body[e:nxt])
+        lines = [x for x in lines if len(x) > 1 and x.lower() != title.lower()][:14]
+        if lines:
+            sections.append({'k': key, 't': title, 'zh': _EV_SEC_ZH.get(key, ''), 'lines': lines})
+            nsec += 1
+    return {'intro': intro, 'sections': sections}
+
+
+def _ev_detail_get(it):
+    """抓单个活动详情页（有缓存且版本一致直接用）；失败返回 None，不影响其它活动"""
+    href = str((it or {}).get('href') or '')
+    if not href.startswith('/wiki/'):
+        return None
+    slug = href[len('/wiki/'):]
+    p = _ev_detail_cache(slug)
+    if os.path.isfile(p):
+        try:
+            with open(p, 'r', encoding='utf-8') as f:
+                d = json.loads(f.read())
+            if int(d.get('_v') or 0) >= _EV_VER and (d.get('sections') or d.get('intro')):
+                return d
+        except Exception:
+            _sexc('ev_detail_load')
+    try:
+        html = _wiki_fetch_page('https://ark.wiki.gg' + href, 30)
+        d = _ev_detail_parse(html)
+        if not (d.get('sections') or d.get('intro')):
+            return None
+        d['_v'] = _EV_VER
+        d['at'] = int(time.time())
+        try:
+            os.makedirs(WIKI_CACHE_DIR, exist_ok=True)
+            with open(p, 'w', encoding='utf-8') as f:
+                f.write(json.dumps(d, ensure_ascii=False))
+        except Exception:
+            _sexc('ev_detail_save')
+        return d
+    except Exception:
+        _sexc('ev_detail_fetch')
+        return None
+
+
+def _ev_pick(d):
+    """进行中 + 即将开始 + 最近 N 个已结束（最多 _EV_DETAIL_MAX 个）"""
+    items = list((d or {}).get('items') or [])
+    cur = [x for x in items if x.get('state') == 'current']
+    upc = [x for x in items if x.get('state') == 'upcoming']
+    end = [x for x in items if x.get('state') == 'ended'][:_EV_DETAIL_ENDED]
+    return (cur + upc + end)[:_EV_DETAIL_MAX]
+
+
+def _ev_cards(d):
+    """每个最新节日一张详情卡（markdown，前端渲染零改动）"""
+    cards = []
+    zhst = {'current': u'进行中', 'upcoming': u'即将开始', 'ended': u'已结束'}
+    for it in _ev_pick(d):
+        nm = str(it.get('name') or '')
+        zh = str(it.get('zh') or '')
+        head = (zh + u'（' + nm + u'）') if zh else nm
+        st = zhst.get(str(it.get('state') or ''), '')
+        lines = ['%s　·　%s → %s' % (st, it.get('start') or '', it.get('end') or '')]
+        det = _ev_detail_get(it)
+        if det:
+            for ln in (det.get('intro') or []):
+                lines.append('')
+                lines.append(ln)
+            for sc in (det.get('sections') or []):
+                t2 = ((sc.get('zh') + ' / ' if sc.get('zh') else '') + str(sc.get('t') or ''))
+                lines.append('')
+                lines.append('**' + t2 + '**')
+                for x in (sc.get('lines') or []):
+                    # v6846：行本身已带 '- '（_ev_plain 由 <li> 转出）时不要再加，否则出现「- - xxx」
+                    lines.append(x if x.startswith('- ') else ('- ' + x))
+        else:
+            lines.append('')
+            lines.append(u'（详情暂取不到，可点底部 wiki.gg 链接查看）')
+        cards.append({'mid': 'ev_' + str(it.get('start') or '') + '_'
+                             + re.sub(r'[^a-z0-9]+', '', nm.lower())[:24],
+                      'type': 'markdown',
+                      'content': '<h3>' + head + '</h3>\n' + '\n'.join(lines)})
+    # 前端 lbNewsCardsToTc 会 groups.reverse()（v5944 约定：后端给最旧在前）⇒ 这里先反转
+    cards.reverse()
+    return cards
+
+
+def _ev_payload(force=False):
+    d = _ev_get(force)
+    items = d.get('items') or []
+    cur = [x for x in items if x.get('state') == 'current']
+    nxt = [x for x in items if x.get('state') == 'upcoming']
+    return {'ok': bool(d.get('ok')), 'tab': 'festival', 'cards': _ev_cards(d),
+            'updated': d.get('updated') or '', 'cached': bool(d.get('cached')),
+            'stale': bool(d.get('stale')), 'err': d.get('err') or '',
+            'src': d.get('src') or _EV_URL,
+            'counts': {'total': len(items), 'current': len(cur), 'upcoming': len(nxt),
+                       'detail': len(_ev_pick(d))}}
+
 # ===== v5874：地图 Wiki（源 = wikily.gg 中文站，与物种 wiki 同一个站、同一个抓取器）=====
 # 用户口径（2026-11-01）：
 #   · 「按照wiki里的规则，在没有AI整理之前 只显示从wikily取到的中文内容」
@@ -5359,8 +5685,11 @@ CMD_SAVE_WORLD = 'SaveWorld'  # v17：原生 RCON 保存世界（强制存档，
 STATUS_MEM = {}
 
 # ================= 独立登录 =================
-# accounts.json：{登录账号: {pwd: 密码, nick: 玩家昵称}}（昵称用于匹配 players[].name → eosId）
+# accounts.json：{登录账号: {pwd: 密码, nick: 玩家昵称, role: 可选 admin2}}（昵称用于匹配 players[].name → eosId）
 _ACCOUNTS = None
+# v6853：补齐缺失定义 —— _save_accounts() 里 `with _ACCOUNTS_LOCK` 从未定义过，
+#   会 NameError ⇒ 现有 /api/change_password、/api/bind_player 一调用就 500。
+_ACCOUNTS_LOCK = threading.Lock()
 
 
 def _accounts():
@@ -5395,6 +5724,93 @@ def _role_level(username):
         return 2 if ((_accounts().get(username, {}) or {}).get('role') or '') == 'admin2' else 1
     except Exception:
         return 1
+
+
+# ===== v6853（用户口径）：用户管理（独立入口，仅主宰者 level 3）=====
+#   设计要点：
+#     · 密码「只提供重置能力」—— 接口**不接受外部传入的密码**，一律重置为「默认密码」
+#     · 默认密码**统一可配置**：独立文件 useradmin_cfg.json；缺失/损坏回落内置兜底
+#     · 写盘复用 _save_accounts()（内部已做 .bak 备份 + tmp + os.replace + 清缓存 + 加锁）
+#     · 改密/删号后旧 token 自动失效（token 用密码指纹签名，见 _srvctl_pwdtag）
+UA_CFG_FILE = os.path.join(os.path.dirname(ACCOUNTS_FILE), 'useradmin_cfg.json')
+UA_DEFAULT_PWD_FALLBACK = 'csbb9102'
+UA_NAME_RE = re.compile(r'^[A-Za-z0-9_.\-]{2,24}$')
+_UA_CFG = None
+_UA_CFG_LOCK = threading.Lock()
+
+
+def _ua_cfg():
+    """默认密码配置（文件优先；缺失/损坏回落内置兜底 ⇒ 永不因配置丢失而无法重置）"""
+    global _UA_CFG
+    if _UA_CFG is None:
+        pwd = UA_DEFAULT_PWD_FALLBACK
+        try:
+            with open(UA_CFG_FILE, 'r', encoding='utf-8') as f:
+                d = json.load(f) or {}
+            v = str(d.get('default_pwd') or '').strip()
+            if len(v) >= 4:
+                pwd = v
+        except Exception:
+            pass
+        _UA_CFG = {'default_pwd': pwd}
+    return _UA_CFG
+
+
+def _ua_default_pwd():
+    try:
+        return _ua_cfg().get('default_pwd') or UA_DEFAULT_PWD_FALLBACK
+    except Exception:
+        return UA_DEFAULT_PWD_FALLBACK
+
+
+def _ua_cfg_set(pwd):
+    """设置默认密码 -> (ok, err)。只影响后续新建与重置，已有账号密码不变。"""
+    global _UA_CFG
+    pwd = str(pwd or '').strip()
+    if len(pwd) < 4:
+        return False, u'默认密码太短（至少 4 位）'
+    with _UA_CFG_LOCK:
+        try:
+            import shutil as _sh
+            if os.path.exists(UA_CFG_FILE):
+                _sh.copy2(UA_CFG_FILE, UA_CFG_FILE + '.bak')
+        except Exception:
+            pass
+        tmp = UA_CFG_FILE + '.tmp'
+        try:
+            with open(tmp, 'w', encoding='utf-8') as f:
+                json.dump({'default_pwd': pwd, 'updatedAt': int(time.time())}, f, ensure_ascii=False, indent=2)
+            os.replace(tmp, UA_CFG_FILE)
+        except Exception as e:
+            return False, u'保存失败：%r' % (e,)
+        _UA_CFG = {'default_pwd': pwd}
+    return True, ''
+
+
+def _ua_mask(pwd):
+    pwd = str(pwd or '')
+    if len(pwd) <= 4:
+        return pwd[:1] + '***'
+    return pwd[:2] + '****' + pwd[-2:]
+
+
+def _ua_row(name, acc):
+    """单行展示数据（**绝不包含密码本身**）"""
+    acc = acc or {}
+    return {'user': name,
+            'nick': str(acc.get('nick') or ''),
+            'role': str(acc.get('role') or ''),
+            'level': _role_level(name),
+            'pwdIsDefault': str(acc.get('pwd') or '') == _ua_default_pwd(),
+            'protected': (name == 'whiterober')}
+
+
+def _ua_log(actor, action, target, ok, msg=''):
+    try:
+        _admin_log(u'[useradmin] by=%s action=%s target=%s ok=%s %s'
+                   % (actor, action, target, ok, msg))
+    except Exception:
+        pass
 
 
 # ===== v6155（用户口径「不依赖计划任务」）：后端远程重启（两级 spawn）=====
@@ -19136,7 +19552,6 @@ def _news_extract(m):
                 parts.append(str(fd['name']))
             if fd.get('value'):
                 parts.append(str(fd['value']))
-    text = '\n'.join(parts).strip()
     imgs = []
     for a in (m.get('attachments') or []):
         u = str(a.get('url') or a.get('proxy_url') or '')
@@ -19148,6 +19563,26 @@ def _news_extract(m):
         iu = str(((e.get('image') or {}).get('url')) or ((e.get('thumbnail') or {}).get('url')) or '')
         if iu:
             imgs.append(iu)
+    # v6852（用户口径「所有带『已转发』的都被跳过了」）：
+    #   Discord「已转发(Forwarded)」消息正文**不放在 content/embeds**，而在 message_snapshots[].message 里；
+    #   旧逻辑 content/embeds/attachments 全空 ⇒ 提取为空 ⇒ _news_cards 产出 0 卡 ⇒ 整条静默消失
+    #   （且 last_message_id 照常推进 ⇒ 永不重试）。这里递归复用同一套提取，取回原文与图片。
+    for _sn in (m.get('message_snapshots') or []):
+        try:
+            _sm = (_sn or {}).get('message') or {}
+        except Exception:
+            _sm = {}
+        if not _sm:
+            continue
+        try:
+            _sub = _news_extract(_sm)
+        except Exception:
+            continue
+        _st = (_sub.get('text') or '').strip()
+        if _st:
+            parts.append(_st)
+        imgs.extend(_sub.get('images') or [])
+    text = '\n'.join(parts).strip()
     yt = re.findall(r'https://www\.youtube\.com/watch\?v=([A-Za-z0-9_\-]{11})', text)
     return {'text': text, 'images': imgs,
             'youtube_links': ['https://www.youtube.com/watch?v=' + v for v in yt]}
@@ -19310,7 +19745,15 @@ def _news_refresh(tab_id):
                 _refm = _news_fetch_ref(_m, cfg, _refbudget)
                 if _refm:
                     _ex = _news_merge_ref(_ex, _refm)
-            for _c in _news_cards([_ex], tab[2]):
+            _cs = _news_cards([_ex], tab[2])
+            if not _cs:
+                # v6852：兜底 —— 提取为空（如跨服转发读不到原消息、或新版快照字段异常）时
+                #   不再整条静默丢弃，给一张可点开的说明卡，避免「消息凭空消失」。
+                _ts = str(_m.get('timestamp') or '')[:19].replace('T', ' ')
+                _cs = [{'type': 'markdown',
+                        'content': '<h3>转发消息</h3>\n\n本条是 Discord 转发消息，正文未能读取。\n\n'
+                                   '来源时间：' + (_ts or '未知') + '\n\n请到对应 Discord 频道查看原文。'}]
+            for _c in _cs:
                 _c['mid'] = str(_m.get('id') or '')   # v5927：图片过期时按 mid 单条修复
                 _cards.append(_c)
         new = {
@@ -19377,7 +19820,7 @@ def _news_zh_merge(tab_id, items):
         k = str(it.get('id') or '').strip()
         v = str(it.get('text') or it.get('zh') or '').strip()
         if k and v and not cur.get(k):
-            cur[k] = v[:2000]
+            cur[k] = v[:6000]     # v6844：2000 -> 6000（节日详情卡译文超 2000 字符会被截）
             added += 1
     try:
         os.makedirs(NEWS_CACHE_DIR, exist_ok=True)
@@ -20451,6 +20894,11 @@ class Handler(BaseHTTPRequestHandler):
                                  'fields': list(_MW_BLOCKS)})
             else:
                 self._send(200, _mw_get(_mrest, force=_mfo))
+        elif path.startswith('/api/fest/'):
+            # v6840（用户口径「节日」TAB）：ark.wiki.gg Events -> 复用 wiki 抓取器 + wiki_cache
+            _fqs = parse_qs(parsed.query)
+            _ffo = ((_fqs.get('force') or [''])[0].strip().lower() in ('1', 'true', 'yes'))
+            self._send(200, _ev_payload(_ffo))
         elif path.startswith('/api/news/'):
             # v5926：资讯广场。index | zh | <tab>（后端内部按 1 分钟冷却 + after 增量）
             _nrest = path[len('/api/news/'):].strip('/')
@@ -20466,7 +20914,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, {'ok': True, 'tabs': _tabs})
             elif _nrest == 'zh':
                 _tid = (_nqs.get('tab') or [''])[0].strip()
-                _zm = _news_zh_read(_tid) if _news_tab(_tid) else {}
+                _zm = _news_zh_read(_tid) if (_news_tab(_tid) or _tid == 'festival') else {}
+                # v6843：节日 TAB 的 AI 译文也走这份持久缓存（前端按需翻）
                 self._send(200, {'ok': True, 'tab': _tid, 'map': _zm, 'count': len(_zm)})
             else:
                 _cur, _fetched, _err = _news_refresh(_nrest)
@@ -20479,6 +20928,23 @@ class Handler(BaseHTTPRequestHandler):
                     _d['fetched'] = _fetched
                     self._send(200, _d)
             return
+        elif path == '/api/useradmin/list':
+            # v6853：用户管理列表（仅主宰者）；**不返回任何密码**
+            _qs_ua = parse_qs(parsed.query)
+            _u_ual = _srvctl_guard(self, _qs_ua, need_token=True)
+            if not _u_ual:
+                return
+            if _role_level(_u_ual) < 3:
+                self._send(403, {'ok': False, 'code': 'owner_only', 'error': u'仅主宰者可用'})
+                return
+            _acc_all = _accounts() or {}
+            _rows = [_ua_row(k, _acc_all.get(k)) for k in sorted(_acc_all.keys(),
+                                                                 key=lambda x: (x != 'whiterober', x))]
+            self._send(200, {'ok': True, 'rows': _rows,
+                             'defaultPwdMasked': _ua_mask(_ua_default_pwd()),
+                             'defaultPwdIsFallback': (_ua_default_pwd() == UA_DEFAULT_PWD_FALLBACK),
+                             'cfgHasFile': os.path.isfile(UA_CFG_FILE),
+                             'accountsFile': os.path.basename(ACCOUNTS_FILE)})
         elif path == '/api/bb_notes':
             # 2026-10-28：粑粑笔记（公开只读；内容由拥有者「导入 MD」覆盖）
             self._send(200, _bb_notes_read())
@@ -20624,6 +21090,100 @@ class Handler(BaseHTTPRequestHandler):
         # 配置规则：全服刷新（仅系统拥有者；后端自己读 11 台 ini → 落快照，全玩家共享）
         # 服务器域名：写（仅系统拥有者）
         # 2026-10-28：粑粑笔记导入（仅拥有者；整份覆盖）
+        if path.startswith('/api/useradmin/'):
+            # v6853：用户管理写操作（仅主宰者；密码只支持重置为「默认密码」）
+            _u_uat = _srvctl_guard(self, qs, need_token=True)
+            if not _u_uat:
+                return
+            if _role_level(_u_uat) < 3:
+                self._send(403, {'ok': False, 'code': 'owner_only', 'error': u'仅主宰者可用'})
+                return
+            _op = path[len('/api/useradmin/'):].strip('/')
+            _acc = _accounts()
+            # ① 改「默认密码」（统一配置项）
+            if _op == 'cfg':
+                _okc, _msgc = _ua_cfg_set(g('default_pwd'))
+                _ua_log(_u_uat, 'cfg', '-', _okc, _msgc)
+                if not _okc:
+                    self._send(400, {'ok': False, 'error': _msgc})
+                else:
+                    self._send(200, {'ok': True, 'defaultPwdMasked': _ua_mask(_ua_default_pwd())})
+                return
+            _tgt = g('user')
+            # ② 新增账号（密码固定为默认密码）
+            if _op == 'add':
+                _nick = g('nick')
+                _role = g('role') or ''
+                if not _tgt or not UA_NAME_RE.match(_tgt):
+                    self._send(400, {'ok': False, 'error': u'账号名不合法（2~24 位 字母/数字/_.-）'})
+                    return
+                if _tgt in _acc:
+                    self._send(400, {'ok': False, 'error': u'账号已存在'})
+                    return
+                if _role not in ('', 'admin2'):
+                    self._send(400, {'ok': False, 'error': u'role 仅支持空或 admin2'})
+                    return
+                _new = {'pwd': _ua_default_pwd(), 'nick': (_nick or _tgt)}
+                if _role:
+                    _new['role'] = _role
+                _acc[_tgt] = _new
+                _save_accounts(_acc)
+                _ua_log(_u_uat, 'add', _tgt, True, 'role=%s' % (_role or '-'))
+                self._send(200, {'ok': True, 'user': _tgt,
+                                 'defaultPwdMasked': _ua_mask(_ua_default_pwd())})
+                return
+            if not _tgt or _tgt not in _acc:
+                self._send(404, {'ok': False, 'error': u'账号不存在'})
+                return
+            # ③ 改昵称 / 角色
+            if _op == 'update':
+                _c = _acc[_tgt]
+                _nick2 = g('nick')
+                _role2 = g('role')
+                if _role2 not in ('', 'admin2'):
+                    self._send(400, {'ok': False, 'error': u'role 仅支持空或 admin2'})
+                    return
+                if _tgt == 'whiterober' and _role2 != str(_c.get('role') or ''):
+                    self._send(403, {'ok': False, 'error': u'拥有者不可调整角色'})
+                    return
+                if _role2 == '':
+                    _owners = [k for k in _acc if _role_level(k) >= 3]
+                    if _tgt in _owners and len(_owners) <= 1:
+                        self._send(400, {'ok': False, 'error': u'不能降级最后一个拥有者'})
+                        return
+                if _nick2:
+                    _c['nick'] = _nick2
+                if _role2:
+                    _c['role'] = _role2
+                else:
+                    _c.pop('role', None)
+                _save_accounts(_acc)
+                _ua_log(_u_uat, 'update', _tgt, True,
+                        'nick=%s role=%s' % (_nick2 or '-', _role2 or '-'))
+                self._send(200, {'ok': True})
+                return
+            # ④ 重置密码为「默认密码」（旧 token 自动失效）
+            if _op == 'reset':
+                _acc[_tgt]['pwd'] = _ua_default_pwd()
+                _save_accounts(_acc)
+                _ua_log(_u_uat, 'reset', _tgt, True)
+                self._send(200, {'ok': True, 'defaultPwdMasked': _ua_mask(_ua_default_pwd())})
+                return
+            # ⑤ 删除账号（不可删拥有者 / 不可删自己）
+            if _op == 'delete':
+                if _tgt == 'whiterober':
+                    self._send(403, {'ok': False, 'error': u'拥有者不可删除'})
+                    return
+                if _tgt == _u_uat:
+                    self._send(400, {'ok': False, 'error': u'不能删除自己'})
+                    return
+                _acc.pop(_tgt, None)
+                _save_accounts(_acc)
+                _ua_log(_u_uat, 'delete', _tgt, True)
+                self._send(200, {'ok': True})
+                return
+            self._send(404, {'ok': False, 'error': 'unknown useradmin op'})
+            return
         if path == '/api/plugins/config/locks':
             # v46：设置某服锁定项（整体替换；空数组 = 全部解锁）
             _u_pcl = _srvctl_guard(self, qs, need_token=True)
@@ -22045,7 +22605,8 @@ class Handler(BaseHTTPRequestHandler):
         if path == '/api/news/zh':
             # v5926：前端 DS 翻译完回写（按 id 合并，已存在不覆盖）
             _p_tid2 = g('tab')
-            if not _news_tab(_p_tid2):
+            # v6843：允许节日 TAB 写回（festival 不在 Discord NEWS_TABS 内）
+            if not (_news_tab(_p_tid2) or _p_tid2 == 'festival'):
                 self._send(400, {'ok': False, 'error': 'unknown tab'})
                 return
             _p_items = body.get('items') or []
