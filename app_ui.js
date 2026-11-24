@@ -3404,7 +3404,10 @@ function lbTipsAiBoxHtml(opt){
     + '<img class="lb-hf-aiinput-water lb-tips-water" src="thumbs/webp96/bdb8c3b809e6_w96.webp" alt="">'
     + '<div class="lb-hf-airow" style="position:relative;z-index:1">';
   if (opt.state){
-    h += '<span class="lb-hf-ai-meta" style="text-align:left;white-space:normal">' + opt.state + '</span>';
+    /* v6881（用户口径「原文已缓存、更新于 这行文字 迁到 翻译块 内部左侧 的文字块内」）：
+       state 支持 "\n" 分多行（渲染成 <br>），用于「更新于 xxx」+ 状态信息两行显示 */
+    h += '<span class="lb-hf-ai-meta" style="text-align:left;white-space:normal">'
+      + String(opt.state).replace(/\n/g, '<br>') + '</span>';
   }
   h += '<span class="lb-hf-ai-fill"></span>'
     + '<span class="lb-hf-ai-meta">' + lbTipsEsc(metaTxt) + '</span>'
@@ -6064,6 +6067,10 @@ var LB_NEWS = {
   zh: {}, zhBusy: false,
   /* v5934：每 Tab 折叠状态 {tabId: 1=已展开}（会话内保持，打开浮窗重置） */
   expand: {},
+  /* v6871（用户口径「详细内容也能放出来，覆盖当前浮窗，要返回按钮」）：
+     全文视图状态 {tab, mid, data, loading, err}；null = 列表视图 */
+  view: null,
+  viewScroll: null,
   /* v5933（用户口径「就算有缓存，为啥切换TAB时还是要正在拉取资讯…挺久的」）：
      会话级内存缓存 {tabId: {data, zh}}。切 Tab 命中即秒开、零请求；
      只在「打开浮窗」时清空一次（等于每次打开拉一次最新），关闭再打开会重新拉。 */
@@ -6299,6 +6306,20 @@ function lbNewsCardsToTc(cards, tabId, zhMap){
   var _n = 0;
   groups.forEach(function(g, gi){
     var parts = [];
+    /* v6873（用户口径「只放到新闻标题行右对齐，平时不要边框，hover 才需要」）：
+       该条消息的原文链接在 group 开头就算好，供标题行右端按钮使用
+       （.tc-h 本身是 flex + gap，按钮加 margin-left:auto 即右对齐）。 */
+    var _src = '';
+    for (var _qi = 0; _qi < g.items.length; _qi++){
+      if ((g.items[_qi] || {}).source_url){ _src = String(g.items[_qi].source_url); break; }
+    }
+    var _rdBtn = _src
+      ? ('<button type="button" class="lb-news-readfull"'
+         + ' onclick="lbNewsFullOpen(\'' + lbMdEsc(tabId || '') + '\',\'' + lbMdEsc(g.mid) + '\')"'
+         + ' title="抓取原文正文并在本窗内显示">'
+         + '<i class="mdi mdi-book-open-page-variant-outline"></i>阅读全文</button>')
+      : '';
+    var _titleSeen = false;
     g.items.forEach(function(c){
       if (c.type === 'markdown'){
         var raw = String(c.content || '');
@@ -6328,17 +6349,20 @@ function lbNewsCardsToTc(cards, tabId, zhMap){
         if (title) _n++;
         /* v5940（用户口径「每个小标题 无需 ⑤ 这种」）：卡片标题不再带 ①②③ 圈号，只留标题文字 */
         var hd = title
-          ? ('<div class="tc-h" data-keep="1">' + lbMdEsc(title) + '</div>')
+          ? ('<div class="tc-h" data-keep="1">' + lbMdEsc(title) + _rdBtn + '</div>')
           : '';
+        if (title) _titleSeen = true;
         var _piece = hd + (body ? '<div class="tc-intro">' + body + '</div>' : '');
         if (_piece) parts.push(_piece);
       } else if (c.type === 'picture'){
+        /* v6872（用户口径「把新闻列表中 点图片跳转到官网这个通路封了」）：
+           旧版给配图挂了 onclick=window.open(tap_action.url_path) ⇒ 一点图就跳出本站到 survivetheark。
+           现在只作展示（cursor 也不给 pointer）；图片过期仍由 onerror → lbNewsImgErr 单条修复。 */
         parts.push('<div class="tc-pic">'
           + '<img src="' + lbMdEsc(c.image || '') + '"'
           + ' data-mid="' + lbMdEsc(c.mid || '') + '" data-tab="' + lbMdEsc(tabId || '') + '"'
           + ' onerror="lbNewsImgErr(this)"'
-          + ((c.tap_action && c.tap_action.url_path) ? (' onclick="window.open(\'' + lbMdEsc(c.tap_action.url_path) + '\',\'_blank\')"') : '')
-          + ' loading="lazy" alt="" style="max-width:100%;border-radius:8px">'
+          + ' loading="lazy" alt="" style="max-width:100%;border-radius:8px;cursor:default">'
           + '</div>');
       } else if (c.type === 'iframe'){
         /* v5941：封面 + 点击播放（避免 iframe 被重建中止后留黑块） */
@@ -6356,14 +6380,247 @@ function lbNewsCardsToTc(cards, tabId, zhMap){
       }
     });
     var hid = (!exp && gi >= FOLD) ? ' lb-news-hide' : '';
+    /* v6873：按钮已进标题行；仅当该条消息**没有标题**时才在卡片底部兜底显示 */
+    var _rdFoot = (!_titleSeen && _rdBtn)
+      ? ('<div style="display:flex;justify-content:flex-end;margin-top:6px">' + _rdBtn + '</div>')
+      : '';
     out.push('<div class="tc-sec lb-news-item' + hid + '" data-mid="' + lbMdEsc(g.mid) + '">'
-      + parts.join('') + '</div>');
+      + parts.join('') + _rdFoot + '</div>');
   });
   if (!exp && groups.length > FOLD){
     out.push('<button class="lb-news-more" onclick="lbNewsExpandMore()">展开全部（还有 '
       + (groups.length - FOLD) + ' 条）</button>');
   }
   return out.join('');
+}
+/* ===== v6871：资讯广场「阅读全文」=====
+   用户口径（2026-11-24）：「点进去的详细内容也要放出来，不要跳到官网，直接抓原文，
+   覆盖现有内容显示在当前浮窗内，要提供返回按钮；要有独立翻译块（复用现有的）」。
+   数据链：卡片 source_url（后端从 embed.url 带下来）→ /api/news/full?tab=&mid=
+          → 后端 _news_article 抓 survivetheark 正文（复用 _ark_fetch + CF 检测 + 清洗）
+          → 本文件渲染成行；图片以 [[IMG:n]] 占位、按 images 数组取图。 */
+function lbNewsFullOpen(tab, mid){
+  try {
+    if (!tab || !mid) return;
+    var ov = document.getElementById('lbNews');
+    var bd = ov ? ov.querySelector('[id="lbNewsBody"]') : null;
+    LB_NEWS.viewScroll = bd ? bd.scrollTop : 0;
+    LB_NEWS.view = { tab: String(tab), mid: String(mid), data: null, loading: true, err: null };
+    lbNewsRender();
+    var base = lbNewsApiBase();
+    fetch(base + '/api/news/full?tab=' + encodeURIComponent(tab) + '&mid=' + encodeURIComponent(mid)
+          + '&t=' + Date.now(), { cache: 'no-store' })
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        var v = LB_NEWS.view;
+        if (!v || v.mid !== String(mid)) return;      /* 已切走，丢弃过期结果 */
+        v.loading = false;
+        v.data = j || {};
+        if (!(j && j.ok)) v.err = (j && (j.error || j.err)) || '抓取失败';
+        try { lbNewsRender(); } catch (e0) {}
+      })
+      .catch(function(e){
+        var v = LB_NEWS.view;
+        if (!v || v.mid !== String(mid)) return;
+        v.loading = false;
+        v.err = String((e && e.message) || e);
+        try { lbNewsRender(); } catch (e1) {}
+      });
+  } catch (e) {}
+}
+function lbNewsFullClose(){
+  try {
+    LB_NEWS.view = null;
+    lbNewsRender();
+    var ov = document.getElementById('lbNews');
+    var bd = ov ? ov.querySelector('[id="lbNewsBody"]') : null;
+    if (bd && LB_NEWS.viewScroll != null) bd.scrollTop = LB_NEWS.viewScroll;
+  } catch (e) {}
+}
+/* v6872：全文视图重绘（保留滚动位置）—— 翻译进度更新走这里，避免每批更新都把视口弹回顶部。
+   注意：lbNewsRender() 会重建整个浮窗，所以必须在重建前后各取一次 body 的 scrollTop。 */
+function lbNewsFullRepaint(){
+  try {
+    var ov = document.getElementById('lbNews');
+    var bd = ov ? ov.querySelector('[id="lbNewsBody"]') : null;
+    var st = bd ? bd.scrollTop : 0;
+    lbNewsRender();
+    var ov2 = document.getElementById('lbNews');
+    var bd2 = ov2 ? ov2.querySelector('[id="lbNewsBody"]') : null;
+    if (bd2) bd2.scrollTop = st;
+  } catch (e) {}
+}
+/* 把正文行切成「翻译块」（≤1500 字），纯图片行单独成块且不送翻译 */
+function lbNewsFullBlocks(mid, lines){
+  var CH = 1500, blocks = [], cur = [], i, len;
+  function flush(){ if (cur.length){ blocks.push(cur); cur = []; } }
+  function _isImg(s){ return /^\[\[IMG:\d+\]\]$/.test(s); }
+  for (i = 0; i < (lines || []).length; i++){
+    var l = String(lines[i] || '');
+    /* v6875：图片行**不切断**文本块（只在块内按序占位）。
+       旧版每遇图片就 flush ⇒ 50 张图把 12,400 字正文切成 40+ 个碎块（每块约 300 字），
+       翻译请求数翻 4 倍、system prompt 重复烧 token、总耗时 4~6 分钟。 */
+    if (!_isImg(l)){
+      len = 0;
+      for (var k = 0; k < cur.length; k++) len += cur[k].length + 1;
+      if (len + l.length + 1 > CH) flush();
+    }
+    cur.push(l);
+  }
+  flush();
+  var _seq = 0;
+  for (i = 0; i < blocks.length; i++){
+    var b = blocks[i], hasText = false;
+    for (var j = 0; j < b.length; j++){ if (!_isImg(b[j])){ hasText = true; break; } }
+    b.isImg = !hasText;
+    /* 只给「含文字的块」编号，图片块不占号 ⇒ 段号连续、译文 key 稳定 */
+    b.id = b.isImg ? '' : (String(mid) + '#f' + (++_seq));
+  }
+  return blocks;
+}
+/* 单行渲染（标题 / 列表 / 图片 / 正文） */
+function lbNewsFullLineHtml(l, imgs){
+  var m = /^\[\[IMG:(\d+)\]\]$/.exec(l);
+  if (m){
+    var iu = (imgs || [])[parseInt(m[1], 10) - 1] || '';
+    return iu ? ('<div class="tc-pic" style="margin:8px 0"><img src="' + lbMdEsc(iu)
+      + '" loading="lazy" alt="" style="max-width:100%;border-radius:8px"></div>') : '';
+  }
+  if (/^###\s+/.test(l)) return '<div class="tc-h" data-keep="1">' + lbMdEsc(l.replace(/^###\s+/, '')) + '</div>';
+  if (/^##\s+/.test(l))  return '<div class="tc-h" data-keep="1">' + lbMdEsc(l.replace(/^##\s+/, '')) + '</div>';
+  if (/^-\s+/.test(l))   return '<div style="padding-left:14px;margin:3px 0;color:#c8cddb;font-size:12.5px">• '
+    + lbMdEsc(l.replace(/^-\s+/, '')) + '</div>';
+  return '<p style="margin:6px 0;color:#c8cddb;font-size:12.5px;line-height:1.66">' + lbMdEsc(l) + '</p>';
+}
+function lbNewsFullBodyHtml(v){
+  var d = (v && v.data) || {};
+  if (v && v.loading) return '<div class="tc-hintb">正在抓取原文…</div>';
+  if (v && v.err) return '<div class="tc-hintb">原文抓取失败：' + lbMdEsc(String(v.err)) + '</div>';
+  var lines = d.lines || [], imgs = d.images || [];
+  var blocks = lbNewsFullBlocks(v.mid, lines);
+  var out = [];
+  out.push('<div style="font-size:14px;font-weight:600;color:#e8e8f0;margin:2px 0 10px;line-height:1.5">'
+    + lbMdEsc(String(d.title || '').replace(/\s*-\s*ARK News.*$/, '')) + '</div>');
+  for (var i = 0; i < blocks.length; i++){
+    var b = blocks[i];
+    var zh = (b.id && LB_NEWS.zh) ? String(LB_NEWS.zh[b.id] || '') : '';
+    if (zh){
+      /* 已译：整块走富文本白名单（保留表格/列表） */
+      out.push('<div class="tc-intro" data-fid="' + lbMdEsc(b.id) + '">' + lbNewsRichHtml(zh) + '</div>');
+      /* v6875：块内图片不能被译文吞掉 —— 按原顺序补在译文后面 */
+      for (var _k2 = 0; _k2 < b.length; _k2++){
+        if (/^\[\[IMG:\d+\]\]$/.test(b[_k2])) out.push(lbNewsFullLineHtml(b[_k2], imgs));
+      }
+    } else {
+      for (var k = 0; k < b.length; k++) out.push(lbNewsFullLineHtml(b[k], imgs));
+    }
+  }
+  return out.join('');
+}
+function lbNewsFullAiBoxHtml(){
+  var v = LB_NEWS.view || {};
+  var d = v.data || {};
+  if (!d.ok) return '';
+  var blocks = lbNewsFullBlocks(v.mid, d.lines || []);
+  var total = 0, done = 0;
+  for (var i = 0; i < blocks.length; i++){
+    if (!blocks[i].id) continue;
+    total++;
+    if (LB_NEWS.zh && LB_NEWS.zh[blocks[i].id]) done++;
+  }
+  var st;
+  /* v6872：忙碌时也把「已译 x/N 段」显示出来，用户能看到在动 */
+  if (LB_NEWS.zhBusy) st = 'AI 翻译中…（已译 ' + done + '/' + total + ' 段）';
+  else if (!total) st = '本篇暂无可翻译内容';
+  else if (done >= total) st = '本篇共 ' + total + ' 段，已全部译好';
+  else st = '本篇共 ' + total + ' 段 · 已译 ' + done + ' 段 · 待译 ' + (total - done) + ' 段';
+  /* v6881（用户口径）：原文状态（原文已缓存/原文已抓取）从顶部 meta 迁进翻译块左侧第一行 */
+  var _fmt0 = d.cached ? '原文已缓存' : (d.fetchedAt ? '原文已抓取' : '');
+  if (_fmt0) st = _fmt0 + '\n' + st;
+  return lbTipsAiBoxHtml({
+    state: lbMdEsc(st),
+    /* v6878：同上 —— 内联 margin 会盖掉 CSS */
+    style: 'margin:0',
+    disabled: (!total) || (done >= total) || !!LB_NEWS.zhBusy,
+    btn: { txt: '翻译全文', fn: 'lbNewsFullTranslate()' }
+  });
+}
+function lbNewsFullTranslate(){
+  try {
+    var v = LB_NEWS.view;
+    if (!v || !v.data || !v.data.ok) return;
+    var cfg = null; try { cfg = lbAiCfgGet(); } catch (e0) { cfg = null; }
+    if (!cfg || !cfg.token){
+      if (!LB_NEWS._noTok){ LB_NEWS._noTok = 1; try { lbToast('未配置大肥鱼 token，只能看英文原文'); } catch (e1) {} }
+      return;
+    }
+    if (LB_NEWS.zhBusy){ try { lbToast('正在翻译中，请稍候…'); } catch (eBz) {} return; }
+    var blocks = lbNewsFullBlocks(v.mid, v.data.lines || []);
+    var cards = [];
+    for (var i = 0; i < blocks.length; i++){
+      var b = blocks[i];
+      if (!b.id) continue;
+      if (LB_NEWS.zh && LB_NEWS.zh[b.id]) continue;      /* 已译 */
+      /* v6875：只送文字行（图片占位送进 AI 只会浪费 token 且可能被当正文改写） */
+      var _tl = [];
+      for (var _j = 0; _j < b.length; _j++){
+        if (!/^\[\[IMG:\d+\]\]$/.test(b[_j])) _tl.push(b[_j]);
+      }
+      if (!_tl.length) continue;
+      cards.push({ type: 'markdown', mid: b.id, content: _tl.join('\n') });
+    }
+    if (!cards.length){ try { lbToast('本篇已全部译好'); } catch (e2) {} return; }
+    try { lbToast('AI 翻译全文（共 ' + cards.length + ' 段）…'); } catch (e3) {}
+    /* v6872：batch 由 1 改为 2（1500 字/段 × 2 = 3000 字，约 4500 tokens，仍在 max_tokens 8000 内）
+       ⇒ 段数减半、总耗时约减半；并接 onProgress 做实时反馈。 */
+    lbNewsTranslate(v.tab, cards, {
+      batch: 2,
+      onProgress: function(done, all, batchDone){
+        try {
+          if (!LB_NEWS.view) return;
+          LB_NEWS._fullProg = { done: done || 0, all: all || cards.length, batch: batchDone || 0 };
+          lbNewsFullRepaint();
+        } catch (ePG) {}
+      },
+      onDone: function(){
+        try {
+          LB_NEWS._fullProg = null;
+          if (LB_NEWS.view) lbNewsFullRepaint();
+        } catch (e4) {}
+      }
+    });
+  } catch (e) {}
+}
+/* 全文视图下的浮窗外壳调整：标题栏左侧「← 返回」+ 清空 TAB 条 */
+function lbNewsViewChrome(S){
+  try {
+    if (!S || !S.title || !S.title.parentNode) return;
+    var head = S.title.parentNode;
+    var old = head.querySelector('.lb-news-back');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+    /* v6881：返回列表时必须恢复一级 TAB 条（全文视图里被 display:none 掉了） */
+    if (!LB_NEWS.view){ if (S.tabs) S.tabs.style.display = ''; return; }
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'lb-news-back';
+    b.title = '返回列表';
+    b.setAttribute('aria-label', '返回');
+    b.innerHTML = '<i class="mdi mdi-chevron-left"></i>';
+    b.style.cssText = 'flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;'
+      + 'width:24px;height:24px;margin-right:6px;border:none;border-radius:6px;'
+      + 'background:#2a2a38;color:#cfd2dc;cursor:pointer;padding:0';
+    b.onclick = function(){ lbNewsFullClose(); };
+    head.insertBefore(b, head.firstChild);
+    /* v6881（用户口径「全文页 有一个空行」）：只清空内容不够 —— .lw-tabs 有 padding:8px 上下
+       + border-bottom ⇒ 会残留一条 16.6px 高、零内容、带底线的空横条。必须连容器一起隐藏。 */
+    if (S.tabs){ S.tabs.innerHTML = ''; S.tabs.style.display = 'none'; }
+    /* v6877：全文视图不需要二级 TAB 条（否则「更新于 xxx」会残留在上面一行） */
+    try {
+      var _sb = head.querySelector('.lb-news-sub');
+      if (_sb && _sb.parentNode) _sb.parentNode.removeChild(_sb);
+    } catch (eSB) {}
+    LB_NEWS._hasSub = false;
+  } catch (e) {}
 }
 /* v5934：展开当前 Tab 的全部条目（状态记在 LB_NEWS.expand，会话内保持） */
 function lbNewsExpandMore(){
@@ -6449,14 +6706,18 @@ function lbNewsAiStat(){
 }
 function lbNewsAiBoxHtml(){
   var s = lbNewsAiStat();
+  var _d = LB_NEWS.data || {};
   var st;
   if (LB_NEWS.zhBusy) st = 'AI 翻译中…';
   else if (!s.total) st = '当前 TAB 暂无可翻译内容';
   else if (!s.todo) st = '本 TAB 共 ' + s.total + ' 条，已全部译好';
   else st = '本 TAB 共 ' + s.total + ' 条 · 已译 ' + s.done + ' 条 · 待译 ' + s.todo + ' 条';
+  /* v6881（用户口径）：时间行放在第一行、状态行第二行（原来在顶部条里单独一行，已迁入翻译块） */
+  if (_d.updated) st = '更新于 ' + _d.updated + '\n' + st;
   return lbTipsAiBoxHtml({
     state: lbMdEsc(st),
-    style: 'margin-top:12px',
+    /* v6878：顶部条里不需要上间距；且此 style 是**内联**输出，会盖掉 CSS 的 margin:0 */
+    style: 'margin:0',
     disabled: (!s.todo) || !!LB_NEWS.zhBusy,
     btn: { txt: '翻译', fn: 'lbNewsAiTranslate()' }
   });
@@ -6539,18 +6800,42 @@ function lbNewsRender(){
     var pn = S.tabs.parentNode;
     var oldBar = pn ? pn.querySelector('.lb-news-sub') : null;
     if (oldBar && oldBar.parentNode) oldBar.parentNode.removeChild(oldBar);
+    LB_NEWS._hasSub = false;
     var g = LB_NEWS.tabs[LB_NEWS.tab];
-    if (pn && g && g.children && g.children.length){
+    if (!LB_NEWS.view && pn && g && g.children && g.children.length){
       var curLeaf = lbNewsLeaf() || {};
       var bar = document.createElement('div');
       bar.className = 'lb-news-sub';
+      /* v6881（用户口径）：时间已迁入翻译块左侧第一行 ⇒ 二级 TAB 条右端不再重复显示 */
       bar.innerHTML = g.children.map(function(c2){
         return '<button class="' + (c2.id === curLeaf.id ? 'on' : '') + '" onclick="lbNewsSub(' + LB_NEWS.tab + ',\'' + c2.id + '\')">'
              + lbMdEsc(c2.short || c2.name) + '</button>';
       }).join('');
       pn.insertBefore(bar, S.tabs.nextSibling);
+      LB_NEWS._hasSub = true;
     }
   } catch (eSub) {}
+  /* v6871：全文视图 —— 直接覆盖浮窗正文（不挂 TAB 条、不挂本机四件套、不挂底部来源链接） */
+  try { lbNewsViewChrome(S); } catch (eVC) {}
+  if (LB_NEWS.view){
+    var _v = LB_NEWS.view;
+    /* v6874（用户口径「新闻列表以及全文的翻译块 置顶并固定（更新于xxx，放到这行）」）：
+       翻译块从底部移到浮窗顶部，用 sticky 吸顶；右侧并排「状态文案」。 */
+    S.body.innerHTML = lbNewsFullBodyHtml(_v);
+    try {
+      if (_v.data && _v.data.ok){
+        var _tb = document.createElement('div');
+        _tb.className = 'lb-news-topbar';
+        /* v6881（用户口径）：不再单独出一行 meta —— 已迁入翻译块左侧第一行 */
+        _tb.innerHTML = '<div class="lb-news-topbar-ai">' + lbNewsFullAiBoxHtml() + '</div>';
+        S.body.insertBefore(_tb, S.body.firstChild);
+      }
+    } catch (eTB) {}
+    if (S.meta) { S.meta.innerHTML = ''; S.meta.style.display = 'none'; }
+    try { lbEnMark(S.body); } catch (eF0) {}
+    try { lbSheetLayoutFix(S.body); } catch (eF1) {}
+    return;
+  }
   var d = LB_NEWS.data || {};
   if (LB_NEWS.err){
     S.body.innerHTML = '<div class="tc-hintb">加载失败：' + lbMdEsc(String(LB_NEWS.err)) + '</div>';
@@ -6563,13 +6848,17 @@ function lbNewsRender(){
   }
   /* v6840（用户口径）：四件套宿主（汉化 TAB / 节日 TAB 才有） */
   try { lbNewsLocalBarMount(S.body); } catch (eLB) {}
-  /* v5959：AI 模块（复用 wiki 的 AI 盒子，按钮=翻译，增量补翻）——位于底部来源链接上方 */
+  /* v6874（用户口径）：翻译块置顶 + 吸顶固定，「更新于 xxx」并到同一行右侧。
+     注意插入时机 —— 必须在 lbNewsLocalBarMount 之后（它也会 insertBefore(firstChild)），
+     否则本机四件套会插到翻译块上面。 */
   try {
     /* v6843：节日 TAB 也显示 AI 盒（默认不自动翻，用户点「翻译」才翻） */
     if (d.cards && d.cards.length){
-      var _aiW = document.createElement('div');
-      _aiW.innerHTML = lbNewsAiBoxHtml();
-      if (_aiW.firstChild) S.body.appendChild(_aiW.firstChild);
+      var _top = document.createElement('div');
+      _top.className = 'lb-news-topbar';
+      /* v6881（用户口径）：meta 已迁入翻译块左侧第一行 ⇒ 顶部条只放翻译块 */
+      _top.innerHTML = '<div class="lb-news-topbar-ai">' + lbNewsAiBoxHtml() + '</div>';
+      S.body.insertBefore(_top, S.body.firstChild);
     }
   } catch (eAi) {}
   /* v5950：底部来源链接（对齐旧 HA 资讯广场的「底部链接图标」）——不管有无内容都显示 */
@@ -6590,7 +6879,10 @@ function lbNewsRender(){
       S.body.appendChild(_ld);
     }
   } catch (eLk) {}
-  S.meta.innerHTML = d.updated ? ('更新于 ' + lbMdEsc(d.updated)) : '';
+  /* v6878（用户口径「附件空行是啥？为啥会出现？」）：
+     #lbNewsMeta 是 .lw-meta（padding 6px + border-bottom）；v6874 只清空内容没隐藏元素
+     ⇒ 留一条**空行**。内容为空时直接 display:none。 */
+  if (S.meta) { S.meta.innerHTML = ''; S.meta.style.display = 'none'; }
   try { lbNewsEnhance(S.body); } catch (e0) {}   // v5938：主题 + 列表/表格 重组为分区子卡片
   try { lbEnMarkWatch('lbNewsBody'); } catch (e1) { try { lbEnMark(S.body); } catch (e2) {} }
   try { tcSyncNotes('lbNewsBody', 'lbNewsHelp'); } catch (e3) {}
@@ -6632,9 +6924,20 @@ function lbNewsFetch(){
       var _zm = (zj && zj.map) ? zj.map : {};
       /* v6844：原正则只放行 Discord 消息 id（纯数字 15~25 位）⇒ 节日卡的 ev_* 译文被整批删掉，
          表现为「后端已有译文，另一个客户端仍显示原文」。这里同时放行 ev_ 前缀。 */
+      /* v6882（用户报「翻译总是待译剩 2 段」根因 A）：白名单原来只认纯数字 Discord 消息 id，
+         把全文块键 `消息id#fN` 整批 delete ⇒ 后端存了也读不回来，每个客户端都要重翻全文。
+         这里放行 `数字(15~25 位)#fN`。 */
       Object.keys(_zm).forEach(function(k3){
-        if (!/^[0-9]{15,25}$/.test(k3) && !/^ev_/.test(k3)) delete _zm[k3];
+        if (!/^[0-9]{15,25}(#f[0-9]+)?$/.test(k3) && !/^ev_/.test(k3)) delete _zm[k3];
       });
+      /* v6882（根因 B）：整体替换引用会把「翻译进行中」已写入的批次抹掉（第一批最先完成 ⇒
+         稳定丢失最前面 2 段）。把内存里已有、服务端没有的键补回来再赋值（同后端 merge 语义）。 */
+      try {
+        var _prevZh = LB_NEWS.zh || {};
+        Object.keys(_prevZh).forEach(function(k4){
+          if (k4 && !_zm[k4] && _prevZh[k4]) _zm[k4] = _prevZh[k4];
+        });
+      } catch (eZh) {}
       LB_NEWS.zh = _zm;
       try { LB_NEWS.cache[t.id] = { data: j, zh: _zm }; } catch (eC) {}   // v5933：写会话缓存（zh 与 LB_NEWS.zh 同一引用，补翻后自动可见）
       lbNewsRender();
@@ -6685,7 +6988,7 @@ var LB_NEWS_ZH_SYS = '你是《方舟：生存飞升》(ARK: Survival Ascended) 
   + '7) 不要输出 Markdown 符号（** # - ` 等），不要加任何解释，不要出现「原文」「翻译」字样。\n\n'
   + '输出严格 JSON（不要代码块），键为 id，值为处理后的 HTML 串：\n'
   + '{"<id>": "<h3>标题</h3><p>...</p>", ...}';
-function lbNewsTranslate(tabId, cards){
+function lbNewsTranslate(tabId, cards, opts){
   try {
     var cfg = null; try { cfg = lbAiCfgGet(); } catch (e0) { cfg = null; }
     if (!cfg || !cfg.token){
@@ -6710,13 +7013,21 @@ function lbNewsTranslate(tabId, cards){
     });
     if (!todo.length) return;
     LB_NEWS.zhBusy = true;
-    var BATCH = 4, batches = [], bi;
+    /* v6872（用户实报「点翻译全文没反应，等好久突然好了」）：
+       旧版只在整个循环结束后才重绘一次 ⇒ 2~5 分钟内界面零变化，看着像按钮坏了。
+       这里立刻回调一次，让调用方马上把状态切成「翻译中 + 0/N」。 */
+    if (opts && typeof opts.onProgress === 'function'){ try { opts.onProgress(0, todo.length, 0); } catch (ePG0) {} }
+    /* v6871：全文正文一段就是 1500 字，一批放 4 段会顶到 max_tokens ⇒ 允许调用方指定 batch */
+    var BATCH = (opts && opts.batch) ? Math.max(1, Math.min(8, Number(opts.batch) || 4)) : 4;
+    var batches = [], bi;
     for (bi = 0; bi < todo.length; bi += BATCH) batches.push(todo.slice(bi, bi + BATCH));
     var _ep = String(cfg.base || LB_AI_BASE).replace(/\/+$/, '') + '/chat/completions';
     var _done = 0, _all = batches.length, _got = 0;
     function step(k){
       if (k >= _all){
         LB_NEWS.zhBusy = false;
+        /* v6871：全文翻译时由调用方决定怎么重绘（默认走 lbNewsRender） */
+        if (opts && typeof opts.onDone === 'function'){ try { opts.onDone(_got); } catch (eOD) {} return; }
         if (_got) { try { lbNewsRender(); } catch (eR) {} }
         return;
       }
@@ -6780,6 +7091,10 @@ function lbNewsTranslate(tabId, cards){
                 body: JSON.stringify({ tab: tabId, items: items })
               }).catch(function(){});
             } catch (eS) {}
+          }
+          /* v6872：每批完成就回报一次，调用方可实时重绘（已译段落变中文 + 进度前移） */
+          if (opts && typeof opts.onProgress === 'function'){
+            try { opts.onProgress(_got, todo.length, k + 1); } catch (ePG1) {}
           }
           step(k + 1);
         })

@@ -3993,15 +3993,31 @@ def _ark_flat_lines(seg, limit=40):
 
 
 def _ark_fetch(slug, timeout=30):
+    import ssl as _ssl
     import urllib.request as _u
-    url = ARK_ROOT + str(slug or '').strip().replace(' ', '_')
+    # v6869（资讯广场「阅读全文」）：传完整 http(s) URL 时直接抓该地址（survivetheark 文章页），
+    #   否则维持原行为（wiki slug 拼 ARK_ROOT）—— 一个抓取器两用，不重复造轮子。
+    _sl = str(slug or '').strip()
+    url = _sl if _sl.startswith('http') else (ARK_ROOT + _sl.replace(' ', '_'))
     req = _u.Request(url, headers={
         'User-Agent': WIKI_UA,
         'Accept': 'text/html,application/xhtml+xml',
         'Accept-Language': 'en-US,en;q=0.9',
     })
-    r = _u.urlopen(req, timeout=timeout)
-    return url, r.getcode(), r.read().decode('utf-8', 'replace')
+    # v6870（实测 survivetheark 报 CERTIFICATE_VERIFY_FAILED）：与 _offi_get 同款 ——
+    #   先正常校验证书，失败再降级为不校验；用 build_opener 确保 context 真正生效
+    #   （直接 urlopen(req, context=) 在部分环境会被忽略）。
+    _last = None
+    for _ctx in (None, _ssl._create_unverified_context()):
+        try:
+            _hd = (_u.HTTPSHandler(context=_ctx) if _ctx else _u.HTTPSHandler())
+            _op = _u.build_opener(_hd)
+            with _op.open(req, timeout=timeout) as r:
+                return url, r.getcode(), r.read().decode('utf-8', 'replace')
+        except Exception as _e:
+            _last = _e
+            continue
+    raise _last if _last else RuntimeError('ark_fetch failed')
 
 
 def _ark_probe(slug):
@@ -19563,6 +19579,14 @@ def _news_extract(m):
         iu = str(((e.get('image') or {}).get('url')) or ((e.get('thumbnail') or {}).get('url')) or '')
         if iu:
             imgs.append(iu)
+    # v6869（用户口径「点进去的详细内容也要放出来」）：Discord 正文只是摘要（实测 20 条最长 773 字），
+    #   完整公告在 embed.url 指向的 survivetheark 文章页。旧逻辑丢弃 embed.url ⇒ 前端拿不到原文入口。
+    src_url = ''
+    for e in (m.get('embeds') or []):
+        _eu = str(e.get('url') or '').strip()
+        if _eu.startswith('http'):
+            src_url = _eu
+            break
     # v6852（用户口径「所有带『已转发』的都被跳过了」）：
     #   Discord「已转发(Forwarded)」消息正文**不放在 content/embeds**，而在 message_snapshots[].message 里；
     #   旧逻辑 content/embeds/attachments 全空 ⇒ 提取为空 ⇒ _news_cards 产出 0 卡 ⇒ 整条静默消失
@@ -19582,9 +19606,11 @@ def _news_extract(m):
         if _st:
             parts.append(_st)
         imgs.extend(_sub.get('images') or [])
+        if not src_url and (_sub.get('source_url') or '').strip():
+            src_url = str(_sub.get('source_url')).strip()
     text = '\n'.join(parts).strip()
     yt = re.findall(r'https://www\.youtube\.com/watch\?v=([A-Za-z0-9_\-]{11})', text)
-    return {'text': text, 'images': imgs,
+    return {'text': text, 'images': imgs, 'source_url': src_url,
             'youtube_links': ['https://www.youtube.com/watch?v=' + v for v in yt]}
 
 
@@ -19608,10 +19634,12 @@ def _news_cards(content_list, ctype='patch'):
             text = item.get('text', '')
             images = item.get('images', []) or []
             youtube_links = item.get('youtube_links', []) or []
+            source_url = str(item.get('source_url') or '').strip()
         else:
             text = item
             images = []
             youtube_links = []
+            source_url = ''
         lines = text.splitlines() if text and text.strip() else []
         if lines:
             body_lines = ['<h3>%s</h3>' % lines[0]]
@@ -19627,7 +19655,10 @@ def _news_cards(content_list, ctype='patch'):
             content_links = []
         md = body.strip()
         if md:
-            cards.append({'type': 'markdown', 'content': md})
+            _card = {'type': 'markdown', 'content': md}
+            if source_url:                       # v6869：前端据此显示「阅读全文」
+                _card['source_url'] = source_url
+            cards.append(_card)
         imgs = [i for i in images if i and str(i).strip()]
         if content_links and imgs:
             for i, link in enumerate(content_links):
@@ -19727,6 +19758,24 @@ def _news_refresh(tab_id):
         msgs = data if isinstance(data, list) else []
         msgs = list(reversed(msgs))
         if not msgs:
+            # v6870：无新消息时，若旧 cards 缺 source_url（补丁前生成的缓存），用已存 messages 重建一次，
+            #   否则「阅读全文」入口永远不会出现（增量抓取没有新消息就不会重建 cards）。
+            try:
+                _c0 = cur.get('cards') or []
+                _need = any((c.get('type') == 'markdown') and (not c.get('source_url')) for c in _c0)
+                if _need and (cur.get('messages') or []):
+                    _cards2 = []
+                    for _m in (cur.get('messages') or []):
+                        if not _news_keep_msg(_m):
+                            continue
+                        _ex = _news_extract(_m)
+                        for _c in _news_cards([_ex], tab[2]):
+                            _c['mid'] = str(_m.get('id') or '')
+                            _cards2.append(_c)
+                    if _cards2:
+                        cur['cards'] = _cards2
+            except Exception:
+                pass
             cur['fetched_at'] = now
             _news_write(tab_id, cur)
             return cur, 1, None
@@ -19829,6 +19878,162 @@ def _news_zh_merge(tab_id, items):
     except Exception:
         pass
     return added, cur
+
+
+# ===== v6869（用户口径 2026-11-24「新闻详细内容也能放出来 + 独立翻译块」）=====
+#   为什么需要：Discord「@ARK News」发的是**摘要 + 原文链接**（实测 20 条 content 最长 773 字，
+#   13/20 条带 embed.url）。完整公告在 survivetheark.com 文章页（实测 HTTP 200、无 Cloudflare、
+#   <article> 正文约 17,679 字）。
+#   ⇒ 复用 wiki 抓取器 `_ark_fetch`（已改为支持完整 URL）+ 同款 CF 检测 + 同款缓存落盘模式，
+#     不在前端跳外站，直接抓回正文覆盖浮窗内容。
+NEWS_FULL_DIR = os.path.join(WIKI_CACHE_DIR, 'news_full')
+NEWS_FULL_TTL = 7 * 86400          # 公告内容不会变，缓存 7 天
+
+
+def _news_full_path(mid):
+    return os.path.join(NEWS_FULL_DIR, str(mid or '').strip() + '.json')
+
+
+def _news_full_read(mid):
+    try:
+        with open(_news_full_path(mid), 'r', encoding='utf-8') as f:
+            d = json.load(f)
+        return d if isinstance(d, dict) else None
+    except Exception:
+        return None
+
+
+def _news_full_write(mid, obj):
+    try:
+        os.makedirs(NEWS_FULL_DIR, exist_ok=True)
+        p = _news_full_path(mid)
+        tmp = p + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(obj, f, ensure_ascii=False)
+        os.replace(tmp, p)
+        return True
+    except Exception:
+        return False
+
+
+def _news_article_clean(seg):
+    """Invision <article> HTML → 行数组（保留段落/标题/列表/图片占位 [[IMG:url]]）"""
+    s = seg
+    s = re.sub(r'<(script|style|nav|header|footer)[\s\S]*?</\1>', ' ', s, flags=re.I)
+    s = re.sub(r'<div[^>]*class="[^"]*(ipsShare|ipsType_share|cShare)[^"]*"[\s\S]*?</div>', ' ', s, flags=re.I)
+    s = re.sub(r'<br\s*/?>', '\n', s, flags=re.I)
+    s = re.sub(r'</(p|div|li|h1|h2|h3|h4|h5|h6|tr|blockquote)>', '\n', s, flags=re.I)
+    s = re.sub(r'<(h1|h2)[^>]*>', '\n## ', s, flags=re.I)
+    s = re.sub(r'<(h3|h4|h5|h6)[^>]*>', '\n### ', s, flags=re.I)
+    s = re.sub(r'<li[^>]*>', '- ', s, flags=re.I)
+    s = re.sub(r'<img[^>]*src="([^"]+)"[^>]*>', r'\n[[IMG:\1]]\n', s, flags=re.I)
+    s = re.sub(r'<[^>]+>', ' ', s)
+    for _a, _b in (('&nbsp;', ' '), ('&amp;', '&'), ('&quot;', '"'), ('&#39;', "'"),
+                   ('&apos;', "'"), ('&middot;', '*'), ('&lt;', '<'), ('&gt;', '>'),
+                   ('&hellip;', '...'), ('&mdash;', '—'), ('&ndash;', '–')):
+        s = s.replace(_a, _b)
+    s = re.sub(r'[ \t\u00a0]+', ' ', s)
+    out = []
+    for _x in s.split('\n'):
+        _x = _x.strip()
+        if not _x:
+            continue
+        if re.fullmatch(r'[\d,\.\*]+', _x):       # 纯数字（点赞/阅读量/日期残渣）
+            continue
+        if len(_x) <= 1:
+            continue
+        out.append(_x)
+    return out
+
+
+def _news_article(url, timeout=40):
+    """抓 survivetheark 文章页 -> {ok,url,title,lines,images,err}（复用 _ark_fetch + CF 检测）"""
+    u = str(url or '').strip()
+    out = {'ok': False, 'url': u}
+    if not u.startswith('http'):
+        out['err'] = 'bad url'
+        return out
+    try:
+        _u, code, raw = _ark_fetch(u, timeout=timeout)
+    except Exception as e:
+        out['err'] = 'fetch: ' + type(e).__name__ + ': ' + str(e)[:160]
+        return out
+    out['httpStatus'] = code
+    out['bytes'] = len(raw) if raw else 0
+    if code != 200 or not raw:
+        out['err'] = 'HTTP %s' % code
+        return out
+    _hd = raw[:12000]
+    if 'Just a second' in _hd or 'cf-browser-verification' in _hd:
+        out['err'] = 'cloudflare challenge'
+        return out
+    _tm = re.search(r'<title[^>]*>([\s\S]*?)</title>', raw, re.I)
+    out['title'] = re.sub(r'\s+', ' ', _tm.group(1)).strip() if _tm else ''
+    _m = re.search(r'<article[^>]*>([\s\S]*?)</article>', raw, re.I)
+    seg = _m.group(1) if _m else ''
+    if not seg:
+        _m2 = re.search(r'<body[^>]*>([\s\S]*?)</body>', raw, re.I)
+        seg = _m2.group(1) if _m2 else raw
+    lines = _news_article_clean(seg)
+    imgs = []
+    keep = []
+    for _l in lines:
+        _mi = re.match(r'^\[\[IMG:(.+)\]\]$', _l)
+        if _mi:
+            _iu = _mi.group(1).strip()
+            if _iu.startswith('http'):
+                imgs.append(_iu)
+                keep.append('[[IMG:%d]]' % len(imgs))     # 位置占位，前端按序号取图
+            continue
+        keep.append(_l)
+    if not keep:
+        out['err'] = 'empty article'
+        return out
+    out.update({'ok': True, 'lines': keep, 'images': imgs,
+                'chars': sum(len(x) for x in keep), 'fetchedAt': int(time.time())})
+    return out
+
+
+def _news_msg_source(tab_id, mid):
+    """从 news_cache/<tab>.json 的原始 messages 里找该条消息的原文链接"""
+    cur = _news_read(tab_id) or {}
+    mid = str(mid or '').strip()
+    for _m in (cur.get('messages') or []):
+        if str(_m.get('id') or '') != mid:
+            continue
+        for _e in (_m.get('embeds') or []):
+            _u = str(_e.get('url') or '').strip()
+            if _u.startswith('http'):
+                return _u
+        _mm = re.search(r'(https://survivetheark\.com/[^\s\)\]]+)', str(_m.get('content') or ''))
+        if _mm:
+            return _mm.group(1)
+        return ''
+    return ''
+
+
+def _news_full_get(tab_id, mid):
+    """抓全文（带 7 天缓存）-> {ok,mid,url,title,lines,images,cached,err}"""
+    mid = str(mid or '').strip()
+    if not mid:
+        return {'ok': False, 'error': 'mid required'}
+    cached = _news_full_read(mid)
+    if cached and cached.get('ok') and cached.get('lines'):
+        cached['cached'] = True
+        return cached
+    try:
+        _news_refresh(tab_id)          # 确保 messages 是最新的（自带 60s 冷却，不会再抓）
+    except Exception:
+        pass
+    src = _news_msg_source(tab_id, mid)
+    if not src:
+        return {'ok': False, 'mid': mid, 'error': '本条消息没有可抓取的原文链接'}
+    r = _news_article(src)
+    r['mid'] = mid
+    r['cached'] = False
+    if r.get('ok'):
+        _news_full_write(mid, r)
+    return r
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -20917,6 +21122,10 @@ class Handler(BaseHTTPRequestHandler):
                 _zm = _news_zh_read(_tid) if (_news_tab(_tid) or _tid == 'festival') else {}
                 # v6843：节日 TAB 的 AI 译文也走这份持久缓存（前端按需翻）
                 self._send(200, {'ok': True, 'tab': _tid, 'map': _zm, 'count': len(_zm)})
+            elif _nrest == 'full':          # v6869：阅读全文（抓原文正文，不跳外站）
+                _ftab = (_nqs.get('tab') or [''])[0].strip()
+                _fmid = (_nqs.get('mid') or [''])[0].strip()
+                self._send(200, _news_full_get(_ftab, _fmid))
             else:
                 _cur, _fetched, _err = _news_refresh(_nrest)
                 if _err and not (_cur and _cur.get('cards')):

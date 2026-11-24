@@ -53480,6 +53480,7 @@ async function lbTrackClick(){
   try{
     // 1. 逐服查玩家位置（优先找玩家当前所在服）
     var pos = await lbFindPlayerPos();
+    if(pos && pos.posUnknown){ lbToast('玩家正在骑乘/飞行/传送，坐标暂时取不到，请 2 秒后重试'); return; }   // v6861
     if(!pos){ lbToast('未找到玩家位置（服务器可能未启动或不在线）'); return; }
     // v323：追踪最近总是先刷新玩家所在服该物种野生（保证最新）
     // v442：改为复用公共单服刷新（lbWildRefreshOne）——消除 3s 死等 + 无条件覆盖缓存两个 bug（用户 2026-08-29 反馈精英奥西顿追踪提示需刷新野生）
@@ -53613,6 +53614,7 @@ async function lbQueryPlayerPos(abbr, token, eos){
     // 2026-08-28：后端 RCON 已修复（快速返回 player not found / found），缩短轮询间隔与超时——
     // 玩家下线时串行查 10 服不再拖到 30s（原 700ms×3s/服 → 150ms×1.2s/服），快速判定"不在线"停止追踪
     var deadline = Date.now() + 4000; // v322+fix 原 1.2s；v531 后端 player_pos 异步化（RCON 后台线程执行），轮询窗口加长到 4s 等 RCON 写完状态文件
+    var _sawFound = false;   // v6861：本服见过 found=true（玩家确实在该服，只是坐标暂不可用）
     var sfPath = isNew
       ? (LB_STATUS + '/player_pos_status_' + abbr + '.json?cb=' + Date.now())
       : (LB_API + '/api/states/sensor.player_pos_status');
@@ -53636,12 +53638,19 @@ async function lbQueryPlayerPos(abbr, token, eos){
                 var _qz = Number(attrs.z);
                 return { server: abbr, x: _qpx, y: _qpy, z: isFinite(_qz) ? _qz : 0 };
               }
+              /* v6861（用户口径 2026-11-24「飞行坐骑起飞时，玩家坐标肯定取不到」）：
+                 found=true 但坐标近零 = Pawn 暂不可用（起飞/骑乘/传送瞬间），**不能当成"该服没找到"**。
+                 原实现这里 break ⇒ 放弃剩余 4s 轮询 ⇒ 上层误报「玩家可能已下线」。
+                 现在：标记 _sawFound 并**继续轮询**，等 Pawn 生成后拿真实坐标。 */
+              _sawFound = true;
             }
-            break; // 该服未找到玩家位置（或坐标无效：null/NaN/近零）
+            else { break; } // 只有明确 found!=true（真不在该服）才放弃该服
           }
         }
       }catch(e){}
     }
+    /* v6861：见过 found=true 但始终拿不到有效坐标 ⇒ 玩家在该服、坐标暂不可用（骑乘/飞行/传送） */
+    if(_sawFound) return { server: abbr, x: null, y: null, z: null, posUnknown: true };
   }catch(e){}
   return null;
 }
@@ -53677,11 +53686,15 @@ async function lbFindPlayerPosInner(){
   var results = await Promise.all(order.map(function(abbr){
     return lbQueryPlayerPos(abbr, token);
   }));
+  var _unk = null;   // v6861：坐标暂不可用的结果（玩家在该服，Pawn 暂不可用）
   for(var i=0;i<results.length;i++){
     var pos = results[i];
-    if(pos){ LB._posTs = Date.now(); try{ localStorage.setItem(_lkey, pos.server); }catch(e){} return pos; } // v806：记录玩家位置新鲜时间（供 LOST 复用判断）
+    if(!pos) continue;
+    try{ localStorage.setItem(_lkey, pos.server); }catch(e){}
+    if(pos.posUnknown){ if(!_unk) _unk = pos; continue; }   // 先记着，继续找有效坐标
+    LB._posTs = Date.now(); return pos; // v806：记录玩家位置新鲜时间（供 LOST 复用判断）
   }
-  return null;
+  return _unk;   // 全服都只拿到"暂不可用" ⇒ 交给上层给准确提示
 }
 // 找距离玩家最近的野生龙（欧氏距离 x/y/z；服务器维度加权：玩家所在服优先）
 async function lbNearestWild(pos, excludeId){
@@ -54019,6 +54032,12 @@ async function lbHandleTrackLost(st, reason){
       if(pos) lbDiag('LOST pos 全服重试成功 srv='+pos.server); else lbDiag('LOST pos 重试仍失败 → 判定下线停止'); // v781 埋点
     } else lbDiag('LOST pos 全服一次查到 srv='+pos.server); // v781 埋点
     if(pos){ LB._posTs = Date.now(); } // 记录玩家位置新鲜时间
+  }
+  /* v6861：坐标暂不可用（飞行坐骑起飞/传送）≠ 下线 ⇒ 不停止追踪、不下"已死亡"结论，等下一次轮询 */
+  if(pos && pos.posUnknown){
+    lbDiag('LOST pos 暂不可用（骑乘/飞行/传送）→ 不停止，等下次轮询');
+    LB._trackMiss = 0;
+    return;
   }
   if(!pos){ lbToast('未找到玩家位置（玩家可能已下线），已停止追踪'); lbTrackStop(true); return; }
   // v345：单追踪（卡片指定）目标丢失 → 直接停止，不自动切换（用户指定追踪这一只，死了就停）
@@ -54915,9 +54934,11 @@ function lbRenderBreedResult(){
   // 性别符号着色加粗：♂ 蓝 #60a5fa / ♀ 粉 #f472b6（括号冗余已去除）
   var tips = [];
   if(v6fail>0){ var vt = v6fail+'个v6球数据缺失'; if(v6failMy>0) vt += '（我的'+v6failMy+'）'; tips.push(vt); }
-  if(mySexM===0 && mySexF===0) tips.push('我的库存中没有该物种');
-  else if(mySexM===0) tips.push('我的库存缺少 <b style="color:#60a5fa">'+lbSexSvg('MALE',13,'#60a5fa')+'</b>'); // v648：性别 SVG
-  else if(mySexF===0) tips.push('我的库存缺少 <b style="color:#f472b6">'+lbSexSvg('FEMALE',13,'#f472b6')+'</b>'); // v648：性别 SVG
+  /* v6863（用户口径 2026-11-24「附件为啥还在？」+ 选 C）：
+     **「我的库存中没有该物种 / 缺少 ♂ / 缺少 ♀」三句整体删除**。
+     原因：v6861 用"变体前缀枚举"去筛，必然漏（骨架剑龙 Bone_Stego 就不在表里 ⇒ 提示照旧弹出）；
+     而用户口径是这类提示本身不需要（未来若要判变体，直接复用物种浮窗的分类结果，禁止再造枚举）。
+     现在只保留 v6 球数据缺失提示（那条有实际意义）。 */
   if(tips.length){
     h += '<div style="margin-top:8px;padding:6px 10px;border-radius:6px;background:#2a1a1a;color:#f87171;font-size:11px">'+tips.join(' · ')+'</div>';
   }
@@ -56048,6 +56069,7 @@ async function lbFacTrackNearest(ev, srv){
   var cur = LB._trackState;
   if(cur && cur.tracking && cur.pos) pos = cur.pos;
   if(!pos){ try{ pos = await lbPlayerSrvPos(); }catch(e0){ pos = null; } }
+  if(pos && pos.posUnknown){ lbToast('玩家正在骑乘/飞行/传送，坐标暂时取不到，请 2 秒后重试'); return; }   // v6861
   if(!pos){ lbToast('未找到玩家位置（玩家可能已下线），无法追踪'); return; }
   if(pos.server !== srv){ lbToast('您当前在 ' + LB.servName(pos.server) + '，该点位在 ' + LB.servName(srv) + '，无法追踪'); return; }
   // v4271（用户口径「完全对齐」）：顺路 route（最近邻+2-opt、≤20 个）→ 选首个目标 → 坐标追踪 → 地图绘制路径 + [切换]
@@ -61428,12 +61450,28 @@ function lbNoteBadge(kind, msg, host){
   try {
     var u = LB_NOTE_UI[kind] || LB_NOTE_UI.err;
     if (!host || !host.parentNode) return;
-    if (typeof host.__lbSavedHtml !== 'string') host.__lbSavedHtml = host.innerHTML;
-    if (typeof host.__lbSavedClick !== 'string') host.__lbSavedClick = String(host.getAttribute('onclick') || '');
+    /* v6867（用户口径「信息 查看 后面 叉叉 点了没反应」）：
+       只保存**非空**原件。旧逻辑在按钮还是空元素时就把 innerHTML='' 存成"原件"，
+       点 ✕ 还原成空 ⇒ 页面上看起来什么都没发生。 */
+    if (typeof host.__lbSavedHtml !== 'string' && host.innerHTML) host.__lbSavedHtml = host.innerHTML;
+    if (typeof host.__lbSavedClick !== 'string' && host.getAttribute('onclick')) host.__lbSavedClick = String(host.getAttribute('onclick'));
+    if (typeof host.__lbSavedStyle !== 'string' && host.getAttribute('style')) host.__lbSavedStyle = String(host.getAttribute('style'));
     host.removeAttribute('onclick');
     host.style.textDecoration = 'none';
     host.style.pointerEvents = 'auto';
     host.style.cursor = '';
+    /* v6866（用户口径「部署按钮 变成 信息 查看 叉叉 状态时，不要用按钮样式」）：
+       徽标是“提示”，不是可点按钮 ⇒ 去掉实心紫底/描边/圆角/阴影/固定高度与加粗，
+       只保留行内浮动布局；原 style 在 __lbSavedStyle，关闭时原样还回。 */
+    host.style.background = 'transparent';
+    host.style.border = 'none';
+    host.style.borderRadius = '0';
+    host.style.boxShadow = 'none';
+    host.style.padding = '0';
+    host.style.height = 'auto';
+    host.style.minHeight = '0';
+    host.style.fontWeight = '400';
+    host.style.color = 'inherit';
     host.innerHTML = '<span class="lb-notebadge" style="display:inline-flex;align-items:center;gap:5px;min-width:0">'
       + '<i class="mdi ' + u.ic + '" style="color:' + u.icf + ';font-size:13px;flex-shrink:0"></i>'
       + '<span style="font-size:11px;color:#8b8f9e;flex-shrink:0">' + u.tag + '</span>'
@@ -61445,14 +61483,31 @@ function lbNoteBadge(kind, msg, host){
     LB_NOTE_CUR = { kind: kind, msg: String(msg || ''), host: host };
   } catch (e) {}
 }
-function lbNoteBadgeClear(el){
+/* v6867：单个宿主的还原（style → innerHTML → 点击能力）。
+   · 有非空原件快照：原样还回
+   · 无快照（徽标当初挂在空元素上）：至少把徽标节点摘掉 + 清掉本函数设过的内联样式，
+     让元素回到 CSS 默认外观，不留残渣。 */
+function lbNoteHostRestore(h){
   try {
-    var host = (el && el.closest) ? el.closest('.lb-foot-left') : null;
-    var h = host || (LB_NOTE_CUR && LB_NOTE_CUR.host);
-    LB_NOTE_CUR = null;
-    lbNoteCardClose();
-    if (!h || typeof h.__lbSavedHtml !== 'string') return;
-    h.innerHTML = h.__lbSavedHtml;
+    if (!h) return;
+    if (typeof h.__lbSavedHtml === 'string' && h.__lbSavedHtml) {
+      /* v6866：先还原原 style（去按钮化的修改），再还原 HTML */
+      if (typeof h.__lbSavedStyle === 'string' && h.__lbSavedStyle) h.setAttribute('style', h.__lbSavedStyle);
+      else h.removeAttribute('style');
+      h.innerHTML = h.__lbSavedHtml;
+    } else {
+      var bad = h.querySelector ? h.querySelector('.lb-notebadge') : null;
+      if (bad && bad.parentNode) bad.parentNode.removeChild(bad);
+      h.style.background = '';
+      h.style.border = '';
+      h.style.borderRadius = '';
+      h.style.boxShadow = '';
+      h.style.padding = '';
+      h.style.height = '';
+      h.style.minHeight = '';
+      h.style.fontWeight = '';
+      h.style.color = '';
+    }
     h.style.pointerEvents = '';
     /* v6539 根因修复：徽标是 <a onclick="lbDeployLocal(...,this)"> 的**子元素**，
        点 ✕ 的事件会冒泡到 <a>。若此刻同步挂回 onclick，就会当场再触发一次部署
@@ -61461,6 +61516,35 @@ function lbNoteBadgeClear(el){
                ② 这里再延后一拍才挂回 onclick，确保本次点击彻底走完。 */
     var _clk = h.__lbSavedClick;
     if (_clk) setTimeout(function(){ try { h.setAttribute('onclick', _clk); } catch (e1) {} }, 0);
+    try { delete h.__lbSavedStyle; } catch (eS0) {}
+  } catch (e) {}
+}
+function lbNoteBadgeClear(el){
+  try {
+    /* v6867（用户口径「信息 查看 后面 叉叉 点了没反应」）根因：
+       旧逻辑写死 el.closest('.lb-foot-left') 定位宿主，但部署入口不止底栏一个
+       （新闻区是 <a class="lb-news-installbtn">）。找不到就回退 LB_NOTE_CUR.host，
+       而那个元素可能已被重渲染、**已脱离 DOM** ⇒ 清了个看不见的幽灵，页面上纹丝不动。
+       改为**多路收集 + 逐个还原**，并兜底扫页面所有还挂着徽标的元素。 */
+    var hosts = [];
+    var push = function(x){ try { if (x && hosts.indexOf(x) < 0) hosts.push(x); } catch (e0) {} };
+    /* ① 从点击的 ✕ 向上找徽标容器（最准确） */
+    try {
+      var sp = (el && el.closest) ? el.closest('.lb-notebadge') : null;
+      if (sp && sp.parentElement) push(sp.parentElement);
+    } catch (e1) {}
+    /* ② 底栏宿主（原有约定） */
+    try { push((el && el.closest) ? el.closest('.lb-foot-left') : null); } catch (e2) {}
+    /* ③ 上次记录的宿主（可能已脱离 DOM，改了也无害） */
+    if (LB_NOTE_CUR && LB_NOTE_CUR.host) push(LB_NOTE_CUR.host);
+    /* ④ 兜底：页面上所有仍挂着徽标的元素 —— 宿主判断再错也能真正关掉看得见的徽标 */
+    try {
+      var list = document.querySelectorAll('.lb-notebadge');
+      for (var i = 0; i < list.length; i++) push(list[i].parentElement);
+    } catch (e3) {}
+    LB_NOTE_CUR = null;
+    lbNoteCardClose();
+    for (var k = 0; k < hosts.length; k++) lbNoteHostRestore(hosts[k]);
   } catch (e) {}
 }
 /* 形态②：底部单行细条（原「整宽大框」压成一行，首行省略） */
@@ -62413,6 +62497,7 @@ function lbCfLibPatchPath(lib, pid, wantName, meta){
     lib.installedMods.push({
       iD: lbCfLibGuid(), dateInstalled: lbCfLibNow(), dateUpdated: lbCfLibNow(),
       status: 'Normal', pathOnDisk: want, enabled: true, unmanaged: false,
+      loadOrder: 2147483647, users: ['local'], dynamicContent: false,
       details: { iD: Number(p) || 0, gameId: 83374, name: String(md.name || ('MOD ' + p)) },
       installedFile: fo, latestFiles: [fo]
     });
@@ -62465,6 +62550,74 @@ function lbCfLibWrite(read){
   });
 }
 
+/* ===== v6864（用户口径 2026-11-24「面板装 Fear Ascended，游戏内该 MOD 可用空间显示 0B、
+   提示模组空间不足、进不去游戏；游戏内安装则正常」）=====
+   ⚠ 注意：当初写的根因**已于同日被实测证伪**，动这段代码前先读完下面三行。
+     真实根因 = 磁盘剩余被当成可用量。B 盘剩 30.47 GB（占 1.637%）时，进服 MOD 列表把
+     「可用空间」算出 470~510 MB（实测 ≈ free²/total，与 509.98 MB 只差 0.09%），
+     小于 Fear 的 zip 838 MB ⇒ 报「模组空间不足」被拦。
+     「游戏内装正常」不是因为它写了两处，而是**游戏内安装会先卸载、腾出额度**。
+     ⇒ 与 library.json / user_info.json 的内容**无关**；清空注册表也救不了（上限本身没变）。
+   因此本段 **不是 0B 的修复**，也**未经证实必需**：
+     实测 14:59 游戏启动时会自己重写整份 user_info.json（有自愈能力）。
+     保留它只为一件事 —— 面板装完当下游戏 UI 就能显示「已启用」，不必等游戏重启自愈。
+   （ASA 客户端模组确为两处登记：
+       ① ModsUserData\83374\library.json          → installedMods[]（详情/路径/大小/status）
+       ② ModsUserData\83374\local\user_info.json → installedMods[]（本机安装注册表：
+          {iD, modId, enabled, loadOrder, dynamicContent}，iD 与 ① 的记录级 iD 相同））
+   ⚠ iD 必须复用 ①/② 里已有的值：实测 8 组真实样本 × 多种哈希算法全部 0 命中，
+     iD 由游戏本机生成、**不可推导**；自造 iD 会让游戏认不出这条记录。
+   本函数：把 items=[{pid, libId}] 逐个登记进 ②（缺则新增；已有则只修 iD/enabled/loadOrder，
+   不覆盖用户手动设置），写前备份 .bak、保留 BOM、写后重读校验。 */
+async function lbCfUserSync(sg, items){
+  var out = { ok: false, added: 0, fixed: 0, msg: '' };
+  try {
+    if (!items || !items.length) { out.msg = '无条目'; return out; }
+    var mu = await lbLocalDir(sg, 'ModsUserData');
+    if (!mu) { out.msg = '无 ModsUserData 目录'; return out; }
+    var g2 = await lbLocalDir(mu, '83374');
+    if (!g2) { out.msg = '无 ModsUserData/83374'; return out; }
+    var loc = await lbLocalDir(g2, 'local');
+    if (!loc) { out.msg = '无 83374/local 目录'; return out; }
+    var fh = null;
+    try { fh = await loc.getFileHandle('user_info.json'); } catch (eF0) { out.msg = '无 local/user_info.json'; return out; }
+    var txt = await (await fh.getFile()).text();
+    var hasBom = txt.charCodeAt(0) === 0xFEFF;
+    var obj = null;
+    try { obj = JSON.parse(txt.replace(/^\ufeff/, '')); } catch (eJ) { out.msg = 'user_info.json 解析失败'; return out; }
+    if (!obj || typeof obj !== 'object') { out.msg = 'user_info 结构异常'; return out; }
+    var arr = Array.isArray(obj.installedMods) ? obj.installedMods : (obj.installedMods = []);
+    var changed = false;
+    for (var k = 0; k < items.length; k++) {
+      var pid = Number((items[k] || {}).pid) || 0;
+      if (!pid) continue;
+      var libId = String((items[k] || {}).libId || '');
+      var ex = null;
+      for (var i = 0; i < arr.length; i++) { if (Number(arr[i] && arr[i].modId) === pid) { ex = arr[i]; break; } }
+      if (!ex) {
+        arr.push({ iD: libId, modId: pid, enabled: true, loadOrder: 2147483647, dynamicContent: false });
+        out.added++; changed = true;
+        continue;
+      }
+      if (libId && String(ex.iD || '') !== libId) { ex.iD = libId; out.fixed++; changed = true; }
+      if (ex.enabled === undefined || ex.enabled === null) { ex.enabled = true; changed = true; }
+      if (typeof ex.loadOrder !== 'number') { ex.loadOrder = 2147483647; changed = true; }
+      if (ex.dynamicContent === undefined) { ex.dynamicContent = false; changed = true; }
+    }
+    if (!changed) { out.ok = true; out.msg = '已登记，无需修改'; return out; }
+    try {
+      var bfh = await loc.getFileHandle('user_info.json.bak', { create: true });
+      var bw = await bfh.createWritable(); await bw.write(txt); await bw.close();
+    } catch (eB) {}
+    var wtxt = (hasBom ? '\ufeff' : '') + JSON.stringify(obj);
+    var w = await fh.createWritable(); await w.write(wtxt); await w.close();
+    var back = JSON.parse((await (await fh.getFile()).text()).replace(/^\ufeff/, ''));
+    out.ok = !!(back && Array.isArray(back.installedMods));
+    out.msg = out.ok ? ('新增 ' + out.added + ' 项 / 修正 ' + out.fixed + ' 项') : '写回后重读校验失败';
+  } catch (e) { out.msg = String((e && e.message) || e); }
+  return out;
+}
+
 /* ===== v6519（用户口径「直接上 v6519」）=====
    为什么需要这一步：v6516 只把 pathOnDisk 补对（目录不会被删），但 CFCore 判定
    「是否已装最新版」看的是 installedFile.iD 是否 == 目录里的 fid。
@@ -62498,6 +62651,9 @@ function lbCfLibPatchInstalled(lib, pid, dn, meta, bytes){
   }
   /* status：文件已完整写入 ⇒ Normal（与游戏自己装完后的取值一致） */
   if (String(rec.status || '') !== 'Normal') { rec.status = 'Normal'; chg.push('status → Normal'); }
+  /* v6864：游戏内安装的记录还带 loadOrder / users，缺了会让游戏当成"未正常注册" */
+  if (typeof rec.loadOrder !== 'number') { rec.loadOrder = 2147483647; chg.push('loadOrder → 2147483647'); }
+  if (!Array.isArray(rec.users) || !rec.users.length) { rec.users = ['local']; chg.push('users → [local]'); }
   if (chg.length) rec.dateUpdated = lbCfLibNow();
   return { changed: chg.length > 0, msg: chg.join('；') };
 }
@@ -62942,6 +63098,22 @@ async function lbLocalDeployModsByCDN(g, say, base, hd){
   } else if (_needDeploy && !_libReady) {
     say('注意：读不到 CFCore 库，无法补全 registry（本次仍继续部署）');
   }
+  /* v6864：把「目录里已有文件」的 MOD 一并登记到 local\user_info.json ——
+     这是游戏判定「已装 / 占用空间」的真正来源；漏了它游戏界面就显示可用空间 0B。 */
+  if (_libReady && _cflib && _cflib.obj) {
+    try {
+      var _uis = [];
+      for (var _uI = 0; _uI < plan.length; _uI++) {
+        var _pI = plan[_uI];
+        var _ixI = lbCfLibFind(_cflib.obj, _pI.pid);
+        _uis.push({ pid: _pI.pid,
+                    libId: (_ixI >= 0) ? String((_cflib.obj.installedMods[_ixI] || {}).iD || '') : '' });
+      }
+      var _ur0 = await lbCfUserSync(g.sg, _uis);
+      if (_ur0.added || _ur0.fixed) say('已同步本机 MOD 注册表（local\\user_info.json）：' + _ur0.msg);
+      else if (!_ur0.ok) say('本机 MOD 注册表未同步：' + _ur0.msg);
+    } catch (_eU0) {}
+  }
 
   /* ===== ② 整批阻断：全部已是最新就不动任何文件 ===== */
   var allHave = plan.length > 0, allClean = true, allLibOk = true;
@@ -63135,6 +63307,18 @@ async function lbLocalDeployModsByCDN(g, say, base, hd){
         var _r = lbCfLibPatchInstalled(_lib2.obj, _pk, _it.dn, _it.meta, bytesByPid[_pk]);
         if (_r.changed) { _n2++; _chg2.push(_pk + '：' + _r.msg); }
       }
+      /* v6864：新装的项也要登记进 local\user_info.json（游戏按它算占用/可用空间） */
+      try {
+        var _uis2 = [];
+        for (var _pk9 in donePid) {
+          if (!Object.prototype.hasOwnProperty.call(donePid, _pk9)) continue;
+          var _ix9 = lbCfLibFind(_lib2.obj, _pk9);
+          _uis2.push({ pid: _pk9,
+                       libId: (_ix9 >= 0) ? String((_lib2.obj.installedMods[_ix9] || {}).iD || '') : '' });
+        }
+        var _ur2 = await lbCfUserSync(g.sg, _uis2);
+        if (_ur2.added || _ur2.fixed) say('已同步本机 MOD 注册表（local\\user_info.json）：' + _ur2.msg);
+      } catch (_eU2) {}
       if (_n2) {
         var _wr2 = await lbCfLibWrite(_lib2);
         if (_wr2.ok) {
@@ -63399,10 +63583,23 @@ async function lbCfSyncForPid(pid, dn, meta, bytes){
     var _ms = [];
     if (_p1 && _p1.msg) _ms.push(_p1.msg);
     if (_p2 && _p2.msg) _ms.push(_p2.msg);
+    /* v6865（用户口径「需要手动下载的 MOD 部署阶段也对应补了么？」）：
+       【手动 zip 路径】只走本函数 （lbModLocalFinalize → lbCfSyncForPid），
+       而 v6864 只在【自动 CDN 路径】的批量收尾里补了 user_info →→ 手动包又漏了（v6516~v6537 同一个坑）。
+       现在在【两条路径的唯一交汇点】补，以后再新增路径也不会漏。 */
+    var _libObj2 = _wr.obj || rd.obj;
+    var _ix2 = lbCfLibFind(_libObj2, p);
+    var _libId2 = (_ix2 >= 0) ? String((_libObj2.installedMods[_ix2] || {}).iD || '') : '';
+    var _ui = { ok: false, msg: '' };
+    try { _ui = await lbCfUserSync(g.sg, [{ pid: p, libId: _libId2 }]); }
+    catch (_eUI) { _ui = { ok: false, msg: String((_eUI && _eUI.message) || _eUI) }; }
     var _msg = _ms.join('；') || '记录已一致';
+    if (_ui && (_ui.added || _ui.fixed)) _msg += '；本机注册表已补：' + _ui.msg;
+    else if (!(_ui && _ui.ok)) _msg += '；⚠ 本机注册表（user_info.json）未同步：' + String((_ui && _ui.msg) || '未知');
     lbCfSetLast('ok-m', '已登记到 CFCore（' + dn2 + '）：' + _msg);
     try {
-      lbNoteBar('已把 ' + p + ' 登记到 CFCore 库（status=Normal）—— 游戏内不会再提示需更新、也不会被清理', 'info');
+      lbNoteBar('已把 ' + p + ' 登记到 CFCore 库（status=Normal）与本机注册表 —— '
+                + '游戏内不会再提示需更新、也不会被清理，且占用/可用空间正常', 'info');
     } catch (_eN) {}
     return { ok: true, msg: _msg };
   } catch (e) {
