@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"> <!-- v801：禁移动端整页缩放（分布地图已 touch-action:none） -->
+<!-- PWA 声明（2026-08-29）：移动端可安装为应用 -->
+<meta name="theme-color" content="#7c3aed">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+<title>粑粑服搞事系统</title>
+<!-- v978：MDI 字体本地化（原 jsDelivr 外链会阻塞渲染——链路抖动时整页 JS 不执行）；CDN 仅作兵底 -->
+<link rel="stylesheet" href="/mdi/materialdesignicons.min.css" onerror="(function(){var l=document.createElement('link');l.rel='stylesheet';l.href='https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css';document.head.appendChild(l);})()">
+<link rel="stylesheet" href="/app.css?v=v20261105-6100">
+<script>
+/* v6113：外链硬依赖失败兜底 —— app_data / app_core 任一加载失败时，不再显示「转 20s 后空白页」 */
+window.lbAssetFail = function(name){
+  try{
+    var b = document.getElementById('lbBoot');
+    if(!b){ b = document.createElement('div'); b.id = 'lbBoot'; document.body.appendChild(b); }
+    b.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:#0f0f13;color:#e5e7eb;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;font-family:system-ui,sans-serif;padding:24px;text-align:center';
+    b.innerHTML = '<div style="font-size:15px;color:#f87171">核心资源加载失败：' + String(name || '') + '</div>'
+      + '<div style="font-size:12px;color:#94a3b8;max-width:34em;line-height:1.6">可能是网络波动或正在更新版本。点下方按钮重试；多次失败请检查网络后重新打开页面。</div>'
+      + '<button onclick="location.reload()" style="margin-top:6px;padding:8px 18px;border-radius:8px;border:1px solid #7c3aed;background:#7c3aed;color:#fff;font-size:13px;cursor:pointer">重试</button>';
+  }catch(e){}
+};
+</script>
+<script src="/app_data.js?v=v20261105-6101" onerror="lbAssetFail('app_data.js')"></script>
+
+</head>
+<body>
+
+<!-- v1256（用户要求）：首屏加载动画——纯 CSS 内联（HTML 解析到此即渲染，覆盖 1MB HTML 下载期白屏）；JS 就绪后 lbBootHide() 淡出移除，另含 20s CSS 兜底自动淡出 -->
+<div id="lbBoot"><img id="lbBootIc" src="/icons/icon-192.png" alt="" style="width:64px;height:64px;border-radius:14px;box-shadow:0 4px 18px rgba(124,58,237,.35);visibility:hidden;opacity:0;transform:scale(.92);transition:opacity .45s ease,transform .45s ease"><script>(function(){var e=document.getElementById("lbBootIc");if(!e)return;function reveal(){e.classList.add("lb-img-ok");e.style.visibility="visible";requestAnimationFrame(function(){requestAnimationFrame(function(){e.style.opacity=1;e.style.transform="scale(1)";});});}e.addEventListener("error",function(){e.style.visibility="hidden";});if(e.complete&&e.naturalWidth)reveal();else e.addEventListener("load",reveal);})();</script><div class="lbd-wrap"><i class="lbd"></i><i class="lbd"></i><i class="lbd"></i></div><div class="lb-boot-t">正在加载粑粑服搞事系统…</div><div class="lb-boot-s">弱网/首次加载约需 1 分钟，请稍候</div></div>
+
+<!-- 登录引导条（无 token 无法自动识别账号时显示） -->
+<div id="lbLoginBar" style="display:none;margin-bottom:10px;padding:8px 12px;border-radius:8px;background:#1a1a24;border:1px solid #7c3aed55;color:#ccc;font-size:12px;align-items:center;flex-wrap:wrap"></div>
+
+<!-- 全原生认证：浏览器自动管理 HTTP Basic Auth -->
+<div id="mainUI" style="display:none">
+  <div id="leftCol">
+    <div class="card" id="fileCard">
+      <h2>📂 可用文件 <button onclick="refreshFiles()" style="float:right;background:none;border:none;color:#999;padding:2px 4px;border-radius:6px;cursor:pointer;font-size:12px;line-height:1"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg></button></h2>
+      <div class="file-list" id="fileList"><div style="text-align:center;padding:20px;color:#555">加载中...</div></div>
+    </div>
+  </div>
+  <div id="rightCol">
+    <div id="rightPlaceholder" style="flex:1;display:none;align-items:center;justify-content:center;opacity:0.06">
+      <svg width="96" height="96" viewBox="0 0 24 24" fill="currentColor" style="color:#fff"><path d="M13 2V3H12V9H11V10H9V11H8V12H7V13H5V12H4V11H3V9H2V15H3V16H4V17H5V18H6V22H8V21H7V20H8V19H9V18H10V19H11V22H13V21H12V17H13V16H14V15H15V12H16V13H17V11H15V9H20V8H17V7H22V3H21V2M14 3H15V4H14Z"/></svg>
+    </div>
+    <div id="statusArea"></div>
+    <div class="card" id="teCard" style="display:none">
+      <h2>⚙️ 驯服有效性 (TE)</h2>
+      <div id="teInputs" style="display:flex;gap:8px;align-items:center">
+        <div style="flex:1;display:flex;align-items:center;gap:6px;background:#111;border:1px solid #333;border-radius:8px;padding:8px 12px">
+          <span style="color:#666;font-size:12px">TE</span>
+          <input type="number" id="teMin" placeholder="最小" min="0" max="100" step="0.1" value="95" style="flex:1;background:none;border:none;color:#e0e0e0;font-size:14px;outline:none;-moz-appearance:textfield;text-align:center">
+          <span style="color:#555">%</span>
+        </div>
+        <span style="color:#666">~</span>
+        <div style="flex:1;display:flex;align-items:center;gap:6px;background:#111;border:1px solid #333;border-radius:8px;padding:8px 12px">
+          <span style="color:#666;font-size:12px">TE</span>
+          <input type="number" id="teMax" placeholder="最大" min="0" max="100" step="0.1" value="100" style="flex:1;background:none;border:none;color:#e0e0e0;font-size:14px;outline:none;-moz-appearance:textfield;text-align:center">
+          <span style="color:#555">%</span>
+        </div>
+      </div>
+      <div class="hint">已驯服生物用 TE 上限反推（属性由最终 TE 决定）。</div>
+    </div>
+    <div class="card" id="mutCard" style="display:none">
+      <h2 id="mutTitle">🧬 变异 (Mutations)</h2>
+      <div id="mutGrid" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center"></div>
+      <div class="hint">点击属性输入变异点数，游戏中 TEK 望远镜可查看</div>
+    </div>
+    <div class="card" id="candCard" style="display:none">
+      <h2>🎯 候选分配方案 <span id="candCount" style="font-size:11px;color:#999"></span>
+        <span style="float:right;font-size:11px;border:1px solid #333;border-radius:4px;overflow:hidden">
+          <span class="lb-tipb" id="btTamed" onclick="setBioType('tamed')" style="cursor:pointer;padding:1px 6px;display:inline-block" title="训（驯服）"><img id="btTamedIc" src="" style="width:11px;height:11px;object-fit:contain;vertical-align:-1px"></span>
+          <span class="lb-tipb" id="btBred" onclick="setBioType('bred')" style="cursor:pointer;padding:1px 6px;display:inline-block" title="繁（繁育）"><img id="btBredIc" src="" style="width:11px;height:11px;object-fit:contain;vertical-align:-1px"></span>
+        </span>
+      </h2>
+      <div id="candList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Tab② 最新生物 -->
+<div id="latestUI" style="display:flex;flex:1;flex-direction:column;min-height:0;gap:12px;overflow:hidden">
+  <div class="card" style="position:relative;margin-bottom:0">
+    <button class="lb-tipb" id="lbRefreshBtn2" onclick="lbConfirmRefresh()" title="刷新数据" style="position:absolute;top:10px;right:10px;background:none;border:none;color:#999;padding:2px 4px;border-radius:6px;cursor:pointer;font-size:12px;line-height:1;opacity:.65"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg></button>
+    <button class="lb-tipb" id="lbIdSearchBtn" onclick="lbSearchFromClipboard()" title="搜ID：自动读取剪贴板中的生物ID并显示卡片" style="position:absolute;bottom:8px;right:10px;width:22px;height:22px;background:none;border:none;color:#999;padding:0;border-radius:4px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;opacity:.65;z-index:30"><svg viewBox="2.5 2.5 17 17" width="14" height="14" style="fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round"><circle cx="10" cy="10" r="6.5"/><path d="M15.2 15.2 19 19"/></svg></button>
+    <div class="lb-filter-bar" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding-right:44px">
+      <button id="lbRoleBtn" class="lb-tipb lb-class-btn" onclick="lbOpenRolePicker()" title="生存者" style="display:none;margin-right:0;min-width:80px;padding:5px 10px;max-width:140px"><span class="lb-class-label">角色</span></button>
+      <button id="lbClassBtn" class="lb-tipb lb-class-btn" onclick="if(LB._classPressed){LB._classPressed=false;return;}lbOpenSpeciesPicker()" title="选择物种、物品（长按=切到全部）" style="margin-right:0"
+        onmousedown="lbClassPressStart(event)" onmouseup="lbClassPressEnd()" onmouseleave="lbClassPressEnd()"
+        ontouchstart="lbClassPressStart(event)" ontouchend="lbClassPressEnd()" ontouchmove="lbClassPressEnd()"><span class="lb-class-label">全部</span></button>
+      <!-- v4755（用户口径）：三个功能浮窗按钮包成一组 —— 窄屏整组换行，不被拆散 -->
+      <div id="lbFuncBtnGroup" style="display:flex;align-items:center;flex:0 0 auto;flex-wrap:nowrap;margin-left:0">
+      <button id="lbTaskPanelBtn" class="lb-tipb lb-class-btn" onclick="lbTaskPanelOpen()" title="服务器（状态总览 + 任务进度）" style="min-width:auto;width:auto;padding:5px 8px;margin-left:0;margin-right:8px;justify-content:center;text-align:center;color:#ffffff"><svg viewBox="0 0 24 24" width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><path d="M7,5H21V7H7V5M7,13V11H21V13H7M4,4.5A1.5,1.5 0 0,1 5.5,6A1.5,1.5 0 0,1 4,7.5A1.5,1.5 0 0,1 2.5,6A1.5,1.5 0 0,1 4,4.5M4,10.5A1.5,1.5 0 0,1 5.5,12A1.5,1.5 0 0,1 4,13.5A1.5,1.5 0 0,1 2.5,12A1.5,1.5 0 0,1 4,10.5M7,19V17H21V19H7M4,16.5A1.5,1.5 0 0,1 5.5,18A1.5,1.5 0 0,1 4,19.5A1.5,1.5 0 0,1 2.5,18A1.5,1.5 0 0,1 4,16.5Z"/></svg><span id="lbTaskCnt" style="font-size:9px;background:#ffffff22;border-radius:8px;padding:0 5px;color:#ffffff;margin-left:2px;font-weight:600;display:none"></span></button>
+      <button id="lbWatchBtn" class="lb-tipb lb-class-btn" onclick="lbWatchOpen()" title="关注未成年（自动刷成长）" style="min-width:auto;width:auto;padding:5px 8px;margin-left:0;margin-right:8px;justify-content:center;text-align:center;color:#a78bfa"><svg viewBox="0 0 24 24" width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><path d="M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5Z"/></svg><span id="lbWatchCnt" style="font-size:9px;background:#f59e0b22;border-radius:8px;padding:0 5px;color:#f59e0b;margin-left:2px"></span></button>
+      <button id="lbTodoBtn" class="lb-tipb lb-class-btn" onclick="lbTodoOpen()" title="待制作（蓝图材料汇总）" style="min-width:auto;width:auto;padding:5px 8px;margin-left:0;margin-right:8px;justify-content:center;text-align:center;color:#38bdf8"><svg viewBox="0 0 24 24" width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><path d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.67 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/></svg><span id="lbTodoCnt" style="font-size:9px;background:#38bdf822;border-radius:8px;padding:0 5px;color:#38bdf8;margin-left:2px;display:none"></span></button>
+      <button id="lbMaintBtn" class="lb-tipb lb-class-btn" onclick="lbMaintOpen()" title="维护列表（血/食不满生物 + 被关注设施）" style="min-width:auto;width:auto;padding:5px 8px;margin-left:0;margin-right:0;justify-content:center;text-align:center;color:#f59e0b"><svg viewBox="0 0 24 24" width="13" height="13" style="fill:currentColor;flex-shrink:0;vertical-align:-2px"><path d="M22.7,19L13.6,9.9C14.5,7.6 14,4.9 12.1,3C10.1,1 7.1,0.6 4.7,1.7L9,6L6,9L1.6,4.7C0.4,7.1 0.9,10.1 2.9,12.1C4.8,14 7.5,14.5 9.8,13.6L18.9,22.7C19.3,23.1 19.9,23.1 20.3,22.7L22.6,20.4C23.1,20 23.1,19.4 22.7,19Z"/></svg><span id="lbMaintCnt" style="font-size:9px;background:#f59e0b22;border-radius:8px;padding:0 5px;color:#f59e0b;margin-left:2px;display:none"></span></button>
+      </div>
+      <div id="lbTabs" style="display:flex;flex-wrap:wrap;gap:6px;flex:1 0 auto;min-width:0"></div>
+    </div>
+  </div>
+  <div id="lbStatus" style="display:none;padding:8px 12px;border-radius:8px;font-size:12px;background:#1a1a3a;color:#7c3aed"></div>
+  <div id="lbList" style="flex:1;overflow-y:auto;min-height:0;scrollbar-width:none;padding-bottom:12px"></div>
+</div>
+
+<div id="settingsUI" style="display:none;flex:1;flex-direction:column;min-height:0;gap:12px;overflow:hidden">
+  <div class="card">
+    <div style="text-align:center;color:#666;font-size:13px;padding:24px 0;line-height:1.8">
+      ⚙️ 刷新功能已移至<b style="color:#a78bfa">生物速查页右上角刷新按钮</b><br>
+      <span style="font-size:12px;color:#555">支持刷新低温仓数据（全部服务器）与刷新 tamed 放出生物（多选服务器）</span>
+    </div>
+  </div>
+  <!-- v359：清空缓存按钮已移至「自助配置」弹窗（settingsUI 无入口，原卡片移除） -->
+</div>
+
+<script>
+var LB_VERSION = 'v20261126-6906';   // v6648：角色 chip 去掉绿点，在线/离线只靠右下角地图图标着色区分
+var LB_DEBUG = /[?&]debug=1/.test(location.search);   // 2026-11-05 P2-4：诊断日志开关，默认关闭；需要排查时给页面加 ?debug=1
+</script>
+<script src="/app_core.min.js?v=v20261105-6104" onerror="lbAssetFail('app_core.min.js')"></script>
+<!-- 解析结果浮窗 -->
+<div id="previewOverlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.9)" onclick="if(event.target===this)closePreviewOverlay()">
+  <div id="previewPopup" style="position:absolute;inset:16px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:12px;display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 16px 0">
+      <h2 style="font-size:14px;color:#999;margin:0">📋 解析结果 <span id="parseStatus"></span> <span id="solverTag" style="font-size:11px;color:#7c3aed"></span></h2>
+      <svg onclick="closePreviewOverlay()" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" style="cursor:pointer;flex-shrink:0"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </div>
+    <div id="previewPopupContent" style="flex:1;overflow-y:auto;padding:12px 16px 16px;font-size:13px"></div>
+  </div>
+</div>
+<!-- 繁育结果遮罩：展开时覆盖其他区域（纯视觉），点击遮罩=取消（事件冒泡到 document 监听）；层级 996<结果997<繁育栏998<候选浮窗9999 -->
+<div id="lbBreedMask" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:996"></div>
+<!-- 繁育栏：选中具体物种时显示（底部固定单行；6 属性顺序选种） -->
+<div id="lbBreedBar" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#16161f;border-top:1px solid #2a2a3a;padding:10px 10px;z-index:998">
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <div id="lbBreedAttrs" style="display:flex;gap:4px;flex-shrink:0;flex-wrap:wrap"></div>
+    <span id="lbBreedGeneBtn" class="lb-tipb mut-chip" onclick="lbOpenGenePicker(event)" title="按基因筛选" style="font-size:11px;padding:4px 8px;cursor:pointer;flex-shrink:0">🧬基因</span>
+    <span style="flex:1"></span>
+    <!-- v166：操作按钮组（移动端另起一行居中） -->
+    <div id="lbBreedActions" style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+      <!-- v5401：四个主按钮统一 .lb-bar-btn（35px），不再用内联 padding/font-size -->
+      <!-- v5403（用户口径「追踪最近移到分布地图左边」）：该按钮已移入选种结果 #lbWildInline，底栏不再放 -->
+      <!-- v5405（用户口径）：物种「操作」键位入口（仅物种；完全复用键位配置浮窗） -->
+      <button class="lb-tipb lb-bar-btn" id="lbSpeciesOpsBtn" onclick="lbSpeciesOpsOpen()" style="display:none;background:#f59e0b" title="该物种 / 器械的操作键位（每个作用域从 0 配）"><i class="mdi mdi-gamepad-variant" style="font-size:15px"></i> 操作</button>
+      <!-- v72：该物种 Wiki 速查入口（复用「操作」按钮样式与 LB.curClass 逻辑） -->
+      <button class="lb-tipb lb-bar-btn" id="lbWikiBtn" onclick="lbWikiOpen()" style="display:none;background:#6366f1" title="该物种 Wiki 速查（概览/驯服/繁殖/采集/收割/技能/经验/技巧/生成）"><i class="mdi mdi-package-variant" style="font-size:17px"></i></button>
+      <!-- v161：物品 Wiki 入口（与物种入口完全同构，共用 lbWikiBtnPaint） -->
+      <button class="lb-tipb lb-bar-btn" id="lbWikiItemBtn" onclick="lbWikiItemOpen()" style="display:none;background:#6366f1" title="该物品 Wiki 速查"><i class="mdi mdi-package-variant" style="font-size:17px"></i></button>
+      <button class="lb-tipb lb-bar-btn" id="lbRouteBtn" onclick="lbRouteOpen()" style="background:#0ea5e9" title="繁育路线自动看板：自动拆线/配种计划/颜色繁育">🧬 路线</button>
+      <button class="lb-tipb lb-bar-btn" id="lbRankBtn" onclick="lbRankToggle()" title="装备榜：选中物种的鞍 / 图纸排行" style="background:#33333d;color:#ddd"></button>
+      <button class="lb-bar-btn" id="lbBreedBtn" onclick="event.stopPropagation();lbBreedToggle()" style="background:#7c3aed">选种</button>
+    </div>
+  </div>
+</div>
+<!-- v1096：底部功能条（与繁育条同尺寸/同款式；仅有功能的服才显示，无功能整条隐藏）上层阶：繁育条 998 / 功能条 997 -->
+<div id="lbFuncBar" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#16161f;border-top:1px solid #2a2a3a;padding:10px 10px;z-index:997">
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <span class="lb-tipb lb-bar-btn" id="lbFuncClock" onclick="lbWeatherClick()" style="display:none;margin-right:8px;color:#cbd5e1;background:transparent;font-variant-numeric:tabular-nums;padding:0 10px" onmouseenter="this.style.background='#23232f'" onmouseleave="this.style.background='transparent'"></span><!-- v4293：游戏内时间（左对齐直显）；v4304：点击弹「天气查询」浮窗；v5401：高度并入 35px -->
+    <span id="lbFuncTitle" style="font-size:11px;color:#888"></span>
+    <span style="flex:1"></span>
+    <div id="lbFuncActions" style="display:flex;align-items:center;gap:8px;flex-shrink:0"></div>
+    <button class="lb-tipb lb-bar-btn" id="lbMapWikiBtn" onclick="lbMapWikiOpen()" style="display:none;background:#6366f1" title="该地图 Wiki 速查"><i class="mdi mdi-package-variant" style="font-size:17px"></i></button><!-- v5874：地图 Wiki 入口（markup 与 #lbWikiBtn 逐字节同款；order:99 恒最右） -->
+  </div>
+</div>
+<!-- v331：追踪悬浮按钮（繁育栏上方右上角；追踪期间常驻，无繁育栏也在底部对应位置；来源=追踪最近→切换+停止，卡片追踪→仅停止）（v778 自 v767 删除恢复） -->
+<div id="lbTrackFloat" style="display:none;position:fixed;right:10px;bottom:12px;z-index:996;align-items:center;gap:8px">
+  <span id="lbFloatSrv" style="color:#e0e0e0;font-size:12px;background:#1a1a24;border:none;border-radius:6px;height:26px;display:inline-flex;align-items:center;padding:0 10px"></span> <!-- v344：固定高度 26px 与按钮对齐 -->
+  <button id="lbFloatSwitch" onclick="lbTrackNext()" style="display:none;background:#f59e0b;color:#fff;border:none;border-radius:6px;padding:5px 14px;font-size:12px;cursor:pointer">切换</button>
+  <button id="lbFloatStop" onclick="lbTrackStop(false)" style="background:#ef4444;color:#fff;border:none;border-radius:6px;padding:5px 14px;font-size:12px;cursor:pointer">停止追踪</button>
+</div>
+<!-- 繁育结果浮层（繁育栏上方） -->
+<div id="lbBreedResult" style="display:none;position:fixed;bottom:40px;left:0;right:0;max-height:60vh;overflow-y:auto;background:#16161f;border-top:1px solid #2a2a3a;z-index:997;padding:8px 10px"></div>
+<!-- v1278：装备榜（与选种「半屏遮罩」同款：遮罩 996 / 底部面板 997 / 60vh） -->
+<div id="lbRankMask" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:996" onclick="lbRankClose()"></div>
+<div id="lbRankResult" style="display:none;position:fixed;bottom:40px;left:0;right:0;max-height:60vh;overflow-y:auto;background:#16161f;border-top:1px solid #2a2a3a;z-index:997;padding:8px 10px"></div><!-- v354：左右 padding 12px→10px 与繁育栏对齐 -->
+<!-- 繁育候选详情浮窗（点击繁育卡片弹出，只显示完整生物卡片本体；点卡片外自动关闭） -->
+<div id="lbBreedOverlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.9);overflow-y:auto;padding:80px 20px 20px" onclick="lbBreedOverlayClick(event)">
+  <div id="lbBreedOverlayBody" style="max-width:520px;margin:0 auto"></div>
+</div>
+<!-- v658：繁育路线浮窗（🧬 路线按钮；结构照 预览快照 20260903；层级 99990，查看卡复用 #lbBreedOverlay 抬升 100000） --><div id="lbRouteOverlay" style="display:none;position:fixed;inset:0;z-index:99990;background:rgba(0,0,0,.7);align-items:center;justify-content:center"><!-- v6025（用户口径）：路线浮窗**只允许点右上角 ✕ 关闭**，已移除遮罩点击关闭 -->
+  <div id="lbRoutePanel" style="background:#17171f;border:1px solid #7c3aed66;border-radius:12px;width:940px;max-width:97vw;max-height:94vh;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,.65)">
+    <div id="lbRouteOverlayBody" style="flex:1;min-height:0;display:flex;flex-direction:column"></div>
+  </div>
+</div>
+<script>
+// v1299：诊断入口（iPad/Safari 无法执行 javascript: 书签时的替代方案）
+//   自动：数据就绪后检测「玩家携带 已装球 同 dinoId 重复」，有重复才弹框（无重复不打扰）
+//   手动：?diag=dup / ?diag=rec 强制弹框；?diag=off 关闭自动检测
+(function(){
+  try{
+    var q = '';
+    try{ q = String(location.search || ''); }catch(e){}
+    var mm = /[?&]diag=([a-z]+)/i.exec(q);
+    var mode = mm ? mm[1].toLowerCase() : 'auto';
+    if(mode === 'off') return;
+
+    var box = null;
+    function ensureBox(){
+      if(box && box.parentNode) return box;
+      box = document.createElement('div');
+      box.id = 'lbDiagBox';
+      box.style.cssText = 'position:fixed;left:8px;right:8px;top:8px;z-index:2147483647;background:#0b0b0b;color:#22ff88;border:1px solid #22ff88;border-radius:10px;padding:10px 12px;font-size:11px;line-height:1.5;white-space:pre-wrap;word-break:break-all;max-height:78vh;overflow:auto;font-family:ui-monospace,Menlo,monospace';
+      box.onclick = function(){ try{ box.remove(); box = null; }catch(e){} };
+      try{ document.body.appendChild(box); }catch(e){}
+      return box;
+    }
+
+    var t0 = Date.now();
+    var timer = setInterval(function(){
+      var d = (window.LB && LB._cache) ? LB._cache.data : null;
+      if(!d || !Array.isArray(d.recs) || !d.recs.length){
+        if(Date.now() - t0 > 180000){
+          clearInterval(timer);
+          if(mode !== 'auto'){ ensureBox().textContent = '诊断超时：数据未就绪'; }
+        }
+        return;
+      }
+      clearInterval(timer);
+
+      var all = d.recs || [];
+      var pl = all.filter(function(r){ return String(r.containerType || '') === 'player'; });
+      var pf = pl.filter(function(r){ return !r.isEmpty; });
+      var c = {}, order = [];
+      pf.forEach(function(r){
+        var k = String(r.dinoId1 == null ? '' : r.dinoId1) + '_' + String(r.dinoId2 == null ? '' : r.dinoId2);
+        if(!c[k]){ c[k] = []; order.push(k); }
+        c[k].push(r);
+      });
+      var dup = order.filter(function(k){ return c[k].length > 1; });
+
+      if(mode === 'auto' && !dup.length) return;   // 无重复不打扰
+
+      var out = [];
+      out.push('诊断 ver=' + (window.LB_VERSION || '?') + '  recs=' + all.length);
+      out.push('player 全部=' + pl.length + '  已装球=' + pf.length + '  空球=' + (pl.length - pf.length));
+      out.push('同 dinoId 重复组=' + dup.length + '  (0 = 无重复)');
+      dup.slice(0, 8).forEach(function(k){
+        out.push('■ ' + k + '  x' + c[k].length);
+        c[k].forEach(function(r, i){
+          out.push('   [' + i + '] src=' + (r.src || '?') + ' sv=' + (r.server || '?') + ' lv=' + (r.level || 0)
+            + ' w=' + (r.sortWorldSec || 0) + ' cid=' + String(r.containerId || '').slice(0, 12)
+            + ' cls=' + String(r.dinoClass || '').slice(0, 24) + ' pod=' + (r.podId || ''));
+        });
+      });
+      var c2 = {}, o2 = [];
+      pf.forEach(function(r){
+        var k2 = String(r.dinoClass || '') + '|' + String(r.level || 0) + '|' + String(r.podId || '');
+        if(!c2[k2]){ c2[k2] = []; o2.push(k2); }
+        c2[k2].push(r);
+      });
+      var dup2 = o2.filter(function(k){ return c2[k].length > 1; });
+      out.push('');
+      out.push('同(种|等级|pod) 重复组=' + dup2.length);
+      dup2.slice(0, 5).forEach(function(k){
+        out.push('□ ' + k + '  x' + c2[k].length + '  dinoIds=' + c2[k].map(function(r){ return r.dinoId1 + '_' + r.dinoId2; }).slice(0, 5).join(','));
+      });
+      if(mode === 'rec'){
+        var byType = {};
+        all.forEach(function(r){ var tt = String(r.containerType || '∅'); byType[tt] = (byType[tt] || 0) + 1; });
+        out.push('');
+        out.push('containerType 分布：');
+        Object.keys(byType).sort(function(a, b){ return byType[b] - byType[a]; }).slice(0, 12).forEach(function(k){ out.push('   ' + k + ' = ' + byType[k]); });
+      }
+      out.push('');
+      out.push('（点击本框关闭）');
+      ensureBox().textContent = out.join('\n');
+    }, 400);
+  }catch(e){}
+})();
+</script>
+<script>try{ window.LB_PERF && (window.LB_PERF.t_main1 = Date.now()); }catch(e){}</script>
+<!-- v155（用户口径）：只允许右上角按钮关闭 —— 已移除遮罩点击关闭 -->
+<div id="lbWikiOverlay">
+  <div class="lw-panel">
+    <div class="lw-head">
+      <span class="lw-title" id="lbWikiTitle">📖 Wiki</span>
+      <span class="lw-help lw-multi" id="lbWikiSrcHelp" hidden aria-label="数据来源"><i class="mdi mdi-database-outline"></i></span>
+      <span class="lw-help" id="lbWikiHelp" hidden aria-label="本页说明"><i class="mdi mdi-help-circle-outline"></i></span>
+      <button class="lw-x" onclick="lbWikiClose()" title="关闭" aria-label="关闭"><i class="mdi mdi-close"></i></button>
+    </div>
+    <div class="lw-tabs" id="lbWikiTabs"></div>
+    <div class="lw-meta" id="lbWikiMeta"></div>
+    <div class="lw-body" id="lbWikiBody"></div>
+  </div>
+</div>
+<!-- v161：物品 Wiki 浮窗（与物种浮窗完全同构，复用 .lw-* 样式；只允许右上角按钮关闭） -->
+<div id="lbWikiItemOverlay">
+  <div class="lw-panel">
+    <div class="lw-head">
+      <span class="lw-title" id="lbWikiItemTitle">📦 物品</span>
+      <span class="lw-help" id="lbWikiItemHelp" hidden aria-label="本页说明"><i class="mdi mdi-help-circle-outline"></i></span>
+      <button class="lw-x" id="lbWikiItemWatch" onclick="lbCraftWatchToggle()" style="display:none;width:auto;padding:0 9px;font-size:12px;color:#c4b5fd;border-color:#7c3aed66;background:#7c3aed1f" title="制作关注（加入待制作）"><i class="mdi mdi-eye"></i> 制作关注</button>
+      <button class="lw-x" onclick="lbWikiItemClose()" title="关闭" aria-label="关闭"><i class="mdi mdi-close"></i></button>
+    </div>
+    <div class="lw-tabs" id="lbWikiItemTabs"></div>
+    <div class="lw-meta" id="lbWikiItemMeta"></div>
+    <div class="lw-body" id="lbWikiItemBody"></div>
+  </div>
+</div>
+<!-- 2026-11-05 B2：app_ui（≈285 KB min / 95 KB br）改为**按需加载** —— 不再在此静态引入。
+     加载入口：app_core.js 的 lbUIEnsure()（首次点服务器控制/安全回档/资讯广场/Wiki 入口时注入）。
+     回滚：把下面这行注释放开即可恢复"首屏同步加载"行为（其余守卫与占位层留着无害）：
+     <script id="lbWikiJs" src="/app_ui.min.js?v=v20261105-6104"></script> -->
+</body>
+</html>

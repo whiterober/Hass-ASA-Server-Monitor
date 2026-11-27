@@ -446,6 +446,11 @@ function lbZhDeep(eng){
   }
   return '';
 }
+// v6887（用户口径「幽灵血蛛的图标用错了」）：**类名级**图标特例（精确类名 → 图标名）
+//   适用场景：ASB 无数据的变体，剥前缀后走「包含匹配」会撞上短词图标（如 BogSpider 撞上 Spider 蜘蛛）
+var LB_ICON_CLS = {
+  'Ghost_BogSpider_Character_BP_FE_C': 'Bloodstalker'   // 幽灵血蛛→血蛛（本体 BogSpider_Character_BP_C 有 ASB 数据，本身正确）
+};
 // 图标特例表：eng → 图标名（规范化匹配/包含匹配无法命中时的精确指定）
 var LB_ICON_SPECIAL = {
   'Train': 'Train_Engine',       // 火车→火车头（非车厢 HUD_Frontier_TrainCart_Icon）
@@ -6211,6 +6216,51 @@ var LB_UPD_CF = { open: false, sel: [], cb: null, data: null, news: null,
                      t0 记起点算耗时，chkAt/ms 让「检查过了」在界面上看得见。 */
                   t0: 0, chkAt: 0, ms: 0 };
 
+/* ===== v6928（用户口径 2026-11-27）：换 MOD 后「重启 ASM + 恢复开服」编排进度 =====
+   后端 v6926：POST /api/mods/deploy 带 resetAsm 时 → 写完磁盘 → 检查全服已停
+   → kill/start ASM → 后台等 API（用户点按钮）→ 自动把原本在跑的服开回来。
+   本函数每 5s 轮询 /api/asm/restart/status，阶段变化时 toast，结束自动停。 */
+var LB_ASM_RR = { timer: null, lastStage: '' };
+
+function lbAsmRrWatch(){
+  if (LB_ASM_RR.timer) return;
+  LB_ASM_RR.lastStage = '';
+  var api = (typeof lbSrvCtlApi === 'function') ? lbSrvCtlApi() : '';
+  var _tk = function(){ try { return (typeof lbSrvCtlToken === 'function') ? lbSrvCtlToken() : ''; } catch(e){ return ''; } };
+  LB_ASM_RR.timer = setInterval(function(){
+    var hd = { cache: 'no-store' };
+    var t = _tk();
+    if (t) hd['Authorization'] = 'Bearer ' + t;
+    fetch(api + '/api/asm/restart/status', { headers: hd, cache: 'no-store' })
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        var st = (j && j.status) || {};
+        var stage = String(st.stage || '');
+        if (stage && stage !== LB_ASM_RR.lastStage){
+          LB_ASM_RR.lastStage = stage;
+          var map = {
+            kill: '正在停止 ASM…',
+            start: '正在启动 ASM…',
+            wait_api: 'ASM 已启动 —— 请到 ASM 界面点「启动 API」，点完会自动恢复开服',
+            resume: 'API 已就绪，正在恢复开服…',
+            done: '已完成：ASM 已重启，服务器已恢复',
+            need_manual: '等待超时：请点「启动 API」后重新触发恢复',
+            abort: '已中止：' + (st.msg || ''),
+            fail: '失败：' + (st.msg || '')
+          };
+          var m = map[stage];
+          if (m && typeof lbToast === 'function') lbToast(m);
+        }
+        if (!st.running && (stage === 'done' || stage === 'fail' ||
+                            stage === 'need_manual' || stage === 'abort')){
+          clearInterval(LB_ASM_RR.timer);
+          LB_ASM_RR.timer = null;
+        }
+      })
+      .catch(function(){});
+  }, 5000);
+}
+
 /* ===== v6284（用户口径）：MOD / API 分发（独立接口，与本体/汉化分发并行） ===== */
 function lbUpdModsDeploy(servers){
   /* v6322（用户口径）：先 dry 预演 → 明细确认浮窗 → 再真跑
@@ -6234,7 +6284,10 @@ function lbUpdModsDeploy(servers){
     }).then(function(r){ return r.json().then(function(j){ return { s: r.status, j: j }; }); });
   }
   function _real(){
-    return _post({ servers: servers, dry: false, confirm: 'DEPLOY', username: u })
+    /* v6928（用户口径 2026-11-27）：换 MOD 必须重启 ASM 才生效（实测：ASM 只在自身启动时
+       扫描 MOD 清单，改 modInfos.json / CustomCommand 都无效）⇒ 真跑固定带 resetAsm，
+       后端会：写完磁盘 → 检查全服已停 → 重启 ASM → 等你点「启动 API」→ 自动恢复开服。 */
+    return _post({ servers: servers, dry: false, confirm: 'DEPLOY', username: u, resetAsm: true })
       .then(function(x){
         var j = x.j || {};
         if (j.ok){
@@ -6242,6 +6295,7 @@ function lbUpdModsDeploy(servers){
           if (typeof lbToast === 'function')
             lbToast('MOD 分发已开始 · 批次 ' + (j.batchId || '-') + (bad ? ('（' + bad + ' 项无源已跳过）') : ''));
           try { lbTaskSyncStart(); } catch (e0) { }
+          try { lbAsmRrWatch(); } catch (e_rr) { }
         } else if (j.noop){
           if (typeof lbToast === 'function') lbToast('所选服的 MOD 已符合策略，无需分发');
         } else {
@@ -6271,13 +6325,22 @@ function lbUpdModsDeploy(servers){
       lines.push('D:\\ARK Server\\_upd_cache\\_modbak\\<时间戳>\\<服务器>\\');
       lines.push('');
       lines.push('【说明】先把同 pid 的旧目录整目录移进备份，再复制新版本（不会残留旧文件）');
-      lines.push('仅运行中的服会停服，完成后按原状态起服');
       lines.push('自动跳过开场视频 LoadingScreen.bk2（服务端不需要）');
+      lines.push('');
+      lines.push('【换 MOD 必须重启 ASM】');
+      lines.push('ASM 只在自身启动时扫描 MOD 清单（实测改文件无效）⇒ 分发完成后会：');
+      lines.push('  1) 统一停止 ASM  2) 重新启动 ASM');
+      lines.push('  3) 等你在 ASM 界面点「启动 API」（它的自动启动功能失效）');
+      lines.push('  4) 自动把原本在跑的服重新开起来（带新 MOD）');
+      lines.push('');
+      lines.push('注意：重启 ASM 会中断所有正在运行的服 ⇒ 后端会先检查；');
+      lines.push('      若还有服在跑会直接拒绝并告诉你哪几台。');
       var ok = false;
       try {
         ok = lbAskCard({ tone: 'danger', badge: 'MOD 分发', title: '分发 MOD',
                          servers: sv,
-                         steps: ['停服(仅运行中)', '备份旧目录', '复制新版本', '校验', '起服'],
+                         steps: ['停服(仅运行中)', '备份旧目录', '复制新版本', '校验',
+                                 '重启ASM', '点启动API', '恢复开服'],
                          note: lines.join('\n'),
                          okText: '确认分发', cancelText: '取消', onOk: _real });
       } catch (e) { ok = false; }
@@ -6600,6 +6663,19 @@ function lbUpdConfirmHtml(){
         return fid0 ? (pid0 + '_' + fid0) : '';
       }).filter(Boolean);
       var _Mneed0 = Math.max(0, _Msc0 - _Mconf0);
+      /* v6891（用户口径）：安全清理并入分发 —— 确认浮窗里预告「将顺带清理哪些」 */
+      var _Mclean0 = 0, _McleanB0 = 0;
+      try {
+        var _MselM0 = {};
+        (LB_UPD_CF.sel || []).forEach(function(a0){ _MselM0[a0] = 1; });
+        (lbUpdModsExtraList() || []).forEach(function(x0){
+          var _hit0 = (x0.servers || []).filter(function(s0){ return _MselM0[s0]; });
+          if (!_hit0.length) return;
+          var _per0 = (x0.bytes || 0) / Math.max(1, x0.n || 1);
+          _Mclean0 += _hit0.length;
+          _McleanB0 += _per0 * _hit0.length;
+        });
+      } catch (e0) { }
     }
 
     /* 库偏移表段 */
@@ -6720,6 +6796,8 @@ function lbUpdConfirmHtml(){
                + (_tgMod2 ? ('MOD：' + (_Mneed0
                       ? ('<b style="color:#fbbf24">' + _Mneed0 + ' 服需分发</b>')
                       : '<span style="color:#4ade80">无待分发（所选服均已符合策略）</span>')
+                    + (_Mclean0 ? ('　<b style="color:#f87171">顺带清理 ' + _Mclean0 + ' 个多余 MOD（'
+                                   + lbUpdFmtSz(_McleanB0) + '）</b>') : '')
                     + '<br>') : '')
                + (_tgApi2 ? ('API：' + ((typeof lbUpdApiNeed === 'function' && lbUpdApiNeed() > 0)
                       ? '<span style="color:#4ade80">将补装非最新项</span>'
@@ -7395,6 +7473,10 @@ function lbUpdModsNeed(){
   Object.keys(M.servers || {}).forEach(function(sv){
     var si = M.servers[sv] || {};
     if ((si.missing || []).length){ n++; return; }
+    /* v6892（用户口径「安全清理并入 MOD 分发」）：
+       有多余 MOD（不在策略内）也算「需要处理」——
+       否则分发勾选会被置灰，清理永远触发不到 */
+    if ((si.extra || []).length){ n++; return; }
     var act = si.actual || {}, bad = false;
     Object.keys(act).forEach(function(pid){
       if (base[pid] && act[pid] !== base[pid]) bad = true;
@@ -7489,7 +7571,7 @@ function lbUpdModsPrefetch(btn){
 }
 function lbUpdModsCardHtml(_card){
   var M = LB_UPD.mods, _tg = lbUpdTgGet(), _tgU = lbUpdTgUsable();
-  var _mex = lbUpdModsExtraList();   /* v6310：多余 MOD 明细（无则底部不显示「安全清理」） */
+  /* v6891：安全清理已并入 MOD 分发 —— 此卡不再单独算多余明细（改在分发确认浮窗里预告） */
   var h = '<div class="lb-upd-mods" style="margin-top:8px;' + _card + 'line-height:1.8">'
         + '<div style="display:flex;align-items:center;gap:6px">'
         + '<i class="mdi mdi-package-variant-closed" style="font-size:15px;color:#f59e0b"></i>'
@@ -7584,7 +7666,20 @@ function lbUpdModsCardHtml(_card){
      + '<div id="lbPkgBar_mods"></div>';
   /* v6320（用户口径）：与 API 卡一致，区块之间用虚线分割 */
   h += '<div style="border-top:1px dashed #33334a;margin:7px 0 5px"></div>';
-  var g = M.groups || {}, pids = Object.keys(g).sort();
+  var g = M.groups || {};
+  /* v6893（用户口径「只有策略内的才诚实显示；策略外的都属于多余」）：
+     列表只列**策略内** ProjectId（各服 expect 并集）：
+       · 已装的 —— 照常显示覆盖色条
+       · 全服都未装的 —— 也要出一行（满格都是灰条，清楚看到「缺 N 服」）
+     策略外的 pid 不进列表，只汇总到底部「多余 MOD」卡片里 */
+  var _pidsIn = {}, _pidsAll = [];
+  Object.keys(M.servers || {}).forEach(function(_sv1){
+    (((M.servers || {})[_sv1] || {}).expect || []).forEach(function(_p1){
+      if (!_pidsIn[_p1]){ _pidsIn[_p1] = 1; _pidsAll.push(_p1); }
+    });
+  });
+  /* 兜底：策略读不到（expect 全空）时退回「磁盘实际」，避免列表整空 */
+  var pids = _pidsAll.length ? _pidsAll.sort() : Object.keys(g).sort();
   /* v6397（用户口径「不只加进面板，还要影响对于最新版的判断」）：
      MOD「最新版」基准改用 **CurseForge 线上最新 fid**（M.cfLatest），
      没有 CF 数据（未配 cf_key / 拉取失败）时回退原来的 baseFid（已装里 mtime 最新者）。
@@ -7671,24 +7766,73 @@ function lbUpdModsCardHtml(_card){
                         + (100 * _myel / _mexp) + '%;background:#fbbf24"></span>') : '')
             + '</span>';
     }
+    /* v6894（用户反馈「927083 927083」重复）：
+       策略内但全服未装、且无 CF 名的 MOD —— 名称位显示「MOD <pid>」，
+       不再单独重复列 pid；已装的照旧（名称 + pid 并列） */
+    /* v6895：名称优先用后端 policyNames（已装=插件友好名 / 未装=CurseForge 名） */
+    var _nmShown = String(it0 ? it0.name
+      : (((M.policyNames || {})[pid]) || ((_cfL[pid] && _cfL[pid].name) || '')));
+    var _nmUnknown = (!_nmShown || _nmShown === String(pid));
     h += '<div style="color:#9ca3af">'
-       + '<span style="color:#e5e7eb;font-weight:600">' + lbMdEsc(String(it0 ? it0.name : pid)) + '</span>'
-       + '　<span style="color:#6b7280">' + lbMdEsc(pid) + '</span>'
+       + '<span style="color:#e5e7eb;font-weight:600">'
+       + lbMdEsc(_nmUnknown ? ('MOD ' + pid) : _nmShown) + '</span>'
+       + (_nmUnknown ? '' : ('　<span style="color:#6b7280">' + lbMdEsc(pid) + '</span>'))
        /* v6377：「N 台」颜色判据由 total >= sc(11) 改为 total >= 策略应装台数，
           否则 Bob 专属 MOD（应装 1 台）会被误判成黄色 */
-       + '　<span style="color:' + (total >= _mexp ? '#4ade80' : '#fbbf24') + '">' + total + ' 服</span>'
+       + (total ? ('　<span style="color:' + (total >= _mexp ? '#4ade80' : '#fbbf24') + '">'
+                   + total + ' 服</span>') : '')
        /* v6445：行内不再单列 `CF xxxxxxx` —— 已并入右侧覆盖色条 tips（_cfTip） */
        + '　' + _mbar
        + (miss.length ? ('　<b style="color:#f87171">缺 ' + miss.length + ' 服</b>') : '')
        + '</div>';
   });
-  var extras = [];
+  /* v6893（用户口径「多出这一行也要设计一下，不要光秃秃的文字」）：
+     策略外 MOD 按 pid 聚合成一张警示卡片（左红边 + 淡红底），每个 MOD 一行：
+       名称 · pid · N 服 · 体积 · 具体哪些服 */
+  var _exAgg = {}, _exOrder = [];
   Object.keys(M.servers || {}).forEach(function(sv){
-    ((M.servers[sv] || {}).extra || []).forEach(function(pid){ extras.push(sv + ':' + pid); });
+    ((M.servers[sv] || {}).extra || []).forEach(function(pid){
+      if (!_exAgg[pid]){ _exAgg[pid] = { n: 0, bytes: 0, servers: [] }; _exOrder.push(pid); }
+      var a = _exAgg[pid];
+      a.n++;
+      a.servers.push(sv);
+      ((M.servers[sv] || {}).items || []).forEach(function(it){
+        if (String(it.pid) === String(pid)) a.bytes += (it.size || 0);
+      });
+    });
   });
-  if (extras.length){
-    h += '<div style="color:#f87171">多出（不在策略内）：' + lbMdEsc(extras.slice(0, 6).join('、'))
-       + (extras.length > 6 ? ('…+' + (extras.length - 6)) : '') + '</div>';
+  if (_exOrder.length){
+    var _exTot = 0, _exN = 0;
+    _exOrder.forEach(function(p3){ _exTot += _exAgg[p3].bytes; _exN += _exAgg[p3].n; });
+    var _exRows = _exOrder.sort().map(function(p3){
+      var a3 = _exAgg[p3];
+      var _svs = a3.servers.map(_nmOf).join('、');
+      return '<div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;'
+        + 'padding:2px 0;border-top:1px dashed rgba(248,113,113,.20)">'
+        + '<span style="color:#e5e7eb;font-weight:600">'
+        + lbMdEsc(String(_nmByPid[p3] || ((M.cfLatest || {})[p3] || {}).name || p3)) + '</span>'
+        + '<span style="color:#6b7280">' + lbMdEsc(String(p3)) + '</span>'
+        + '<span style="color:#f87171">' + a3.n + ' 服</span>'
+        + '<span style="color:#9ca3af">' + lbUpdFmtSz(a3.bytes) + '</span>'
+        + '<span style="flex:1;min-width:8px"></span>'
+        + '<span style="color:#6b7280;font-size:10.5px">' + lbMdEsc(_svs) + '</span>'
+        + '</div>';
+    }).join('');
+    h += '<div style="margin-top:9px;border-left:3px solid #f87171;background:rgba(248,113,113,.10);'
+       + 'border-radius:6px;padding:7px 10px">'
+       + '<div style="display:flex;align-items:center;gap:6px;color:#f87171;font-weight:600;font-size:12px">'
+       + '<i class="mdi mdi-package-variant-remove" style="font-size:14px"></i>'
+       + '<span>多余 MOD（不在策略内）</span>'
+       + '<span style="flex:1"></span>'
+       + '<span style="color:#9ca3af;font-weight:400;font-size:11px">'
+       + _exOrder.length + ' 项 · ' + _exN + ' 服 · ' + lbUpdFmtSz(_exTot) + '</span>'
+       + '</div>'
+       + '<div style="font-size:11.5px;line-height:1.75;margin-top:3px">' + _exRows + '</div>'
+       + '<div style="font-size:10.5px;color:#9ca3af;margin-top:5px">'
+       + '<i class="mdi mdi-information-outline" style="font-size:12px"></i> '
+       + '勾选「分发」后会顺带移入备份（停服时移动，不删文件、可移回）'
+       + '</div>'
+       + '</div>';
   }
   /* v6305（用户口径）：删除「可回收」行 —— 开场视频改为**无感回收**：
      分发/更新缓存时自动跳过 LoadingScreen.bk2，分发前把目标旧目录里已有的删掉，
@@ -7697,9 +7841,10 @@ function lbUpdModsCardHtml(_card){
   h += '<div class="lb-upd-foot">'
      /* v6293（用户口径）：MOD 也要有缓存系统 */
      /* v6294（用户口径）：去掉「更新 MOD」按钮，只留「更新缓存」 */
-     /* v6366（用户口径）：右下角「清空缓存」—— 未下载时置灰 */
+     /* v6366（用户口径）：右下角「清理缓存」—— 未下载时置灰 */
      + lbUpdPkgClearLink('mods', !!_mlp.count, false,
-          '【清空缓存】\n删除 _upd_cache\\_modpkg 与批次缓存 mb*\\mods\n'
+          '【清理缓存】\n删除 _upd_cache\\_modpkg 与批次缓存 mb*\\mods\n'
+          + '确认浮窗可选「只清非策略」（保留策略内的包）\n'
           + '当前 ' + (_mlp.count
               ? (String(_mlp.count) + ' 个版本 · ' + lbUpdFmtSz(_mlp.bytes) + '（已剔除开场视频）')
               : '未下载')
@@ -7707,92 +7852,9 @@ function lbUpdModsCardHtml(_card){
      + '<a id="lbPkgBtn_mods" class="lb-tipb lb-upd-link" onclick="lbUpdModsPrefetch(this)" '
      + 'title="【更新缓存】\n把策略最新版本的 MOD 复制进本批次缓存\n只写 D:\\ARK Server\\_upd_cache，不动任何服务器\n\n自动跳过开场视频 LoadingScreen.bk2（服务端不需要）">'
      + '<i class="mdi mdi-download" style="font-size:13px"></i><span class="lb-pkgbtn-txt">更新缓存</span></a>'
-     /* v6310（用户口径）：MOD 多余清理 —— 有待清理项才显示；tips 内列详细清单 */
-     + (_mex.length
-          ? ('<a class="lb-tipb lb-upd-link" style="color:#f87171" onclick="lbUpdModsCleanExtra(this)" '
-             + 'title="' + lbMdEsc(lbUpdExtraTip(_mex, 'mods',
-                                                 '最新版本与策略内的 MOD 一律不动；不停服（下次重启才不再加载）')) + '">'
-             + '安全清理</a>')
-          : '')
      + '</div>'
      + '</div>';
   return h;
-}
-function lbUpdModsCleanExtra(btn){
-  /* v6309（用户口径）：MOD 多余清理 = dry 预览 → lbAskCard 确认 → 真跑（移动不删除） */
-  var b = btn || null;
-  if (b){ if (b.getAttribute('data-busy') === '1') return; b.setAttribute('data-busy', '1'); }
-  var tk = (typeof lbSrvCtlToken === 'function') ? lbSrvCtlToken() : '';
-  var hd = { 'Content-Type': 'application/json' };
-  if (tk) hd['Authorization'] = 'Bearer ' + tk;
-  var base = lbUpdApiBase();
-  fetch(base + '/api/mods/cleanup-extra', {
-    method: 'POST', headers: hd, cache: 'no-store',
-    body: JSON.stringify({ dry: true, username: lbUpdUser(), tk: tk })
-  }).then(function(r){ return r.json(); })
-    .then(function(d){
-      if (b) b.removeAttribute('data-busy');
-      if (!d || !d.ok){
-        try { lbToast('读取清理清单失败：' + ((d && (d.error || d.code)) || '未知')); } catch (e0) { }
-        return;
-      }
-      var pl = d.plans || [];
-      if (!pl.length){
-        try { lbToast('没有需要清理的多余 MOD（全部符合策略）'); } catch (e1) { }
-        return;
-      }
-      var agg = {};
-      pl.forEach(function(x){
-        var a = agg[x.name] = agg[x.name] || { n: 0, b: 0 };
-        a.n++; a.b += (x.size || 0);
-      });
-      var det = Object.keys(agg).sort().map(function(nm){
-        return '· ' + nm + ' · ' + agg[nm].n + '台 · ' + lbUpdFmtSz(agg[nm].b);
-      });
-      var go = function(){
-        fetch(base + '/api/mods/cleanup-extra', {
-          method: 'POST', headers: hd, cache: 'no-store',
-          body: JSON.stringify({ dry: false, confirm: 'CLEANUP', username: lbUpdUser(), tk: tk })
-        }).then(function(r){ return r.json(); })
-          .then(function(d2){
-            if (d2 && d2.ok){
-              try { lbToast('安全清理已开始（进度见「任务进度」）'); } catch (e2) { }
-              try { lbTaskSyncStart(); } catch (e2b) { }
-            } else {
-              try { lbToast('清理失败：' + ((d2 && (d2.error || d2.code)) || '未知')); } catch (e3) { }
-            }
-            setTimeout(function(){ try { lbUpdFetch(); } catch (e4) { } }, 2000);
-          })
-          .catch(function(e){
-            try { lbToast('清理异常：' + String((e && e.message) || e)); } catch (e5) { }
-          });
-      };
-      var ok = false;
-      try {
-        ok = lbAskCard({
-          tone: 'danger', badge: '安全清理',
-          title: '清理多余 MOD',
-          servers: [],
-          steps: ['移入备份目录', '刷新 MOD 状态'],
-          note: '【待清理】' + pl.length + ' 个目录 · ' + lbUpdFmtSz(d.totalBytes || 0) + '\n'
-                + det.join('\n') + '\n\n'
-                + '【备份到】\n'
-                + '\\\\Tnas\\public\\备份\\ASA\\mods\\\n'
-                + '<时间戳> \\ <服务器> \\\n\n'
-                + '【说明】移动不是删除，随时可移回\n'
-                + '最新版本与策略内的 MOD 一律不动\n'
-                + '不停服，该服下次重启后不再加载',
-          okText: '确认清理',
-          cancelText: '取消',
-          onOk: go
-        });
-      } catch (e6) { ok = false; }
-      if (!ok) go();
-    })
-    .catch(function(e){
-      if (b) b.removeAttribute('data-busy');
-      try { lbToast('读取失败：' + String((e && e.message) || e)); } catch (e7) { }
-    });
 }
 function lbUpdApiOpenHome(){
   /* v6289：库与第三方插件走 AsaApi 官方资源页；自研插件走 \\Tnas\public\ServerOpsKitAPI（本地源，无网页） */
@@ -8301,9 +8363,9 @@ function lbUpdApiCardHtml(_card){
   h += '<div class="lb-upd-foot">'
      /* v6293（用户口径）：API 也要有缓存系统（官方包下载 + 自研源） */
      /* v6294（用户口径）：去掉「更新 API」按钮，只留「更新缓存」 */
-     /* v6366（用户口径）：右下角「清空缓存」—— 未下载时置灰 */
+     /* v6366（用户口径）：右下角「清理缓存」—— 未下载时置灰 */
      + lbUpdPkgClearLink('api', !!_alp.count, false,
-          '【清空缓存】\n删除 D:\\ARK Server\\_upd_cache\\_apipkg 下全部内容\n'
+          '【清理缓存】\n删除 D:\\ARK Server\\_upd_cache\\_apipkg 下全部内容\n'
           + '当前 ' + (_alp.count ? (String(_alp.count) + ' 个版本 · ' + lbUpdFmtSz(_alp.bytes)) : '未下载')
           + '\n\n不动 \\\\Tnas\\public\\ServerOpsKitAPI 自研源\n不可撤销，下次分发/更新需重新下载')
      + '<a id="lbPkgBtn_api" class="lb-tipb lb-upd-link" onclick="lbUpdApiPrefetch(this)" '
@@ -8688,9 +8750,9 @@ function lbUpdRender(){
      /* v6248（用户口径）：**更新缓存移到卡片右下角**（原在标题行，与「分发」挤在一起） */
      /* v6448：统一底栏 */
      + '<div class="lb-upd-foot">'
-     /* v6366（用户口径）：右下角「清空缓存」—— 参考「清空缓存」，未就绪/下载中置灰 */
+     /* v6366（用户口径）：右下角「清理缓存」—— 未就绪/下载中置灰 */
      + lbUpdPkgClearLink('zh', !!_zpkg.ready, _zprep.running,
-          '【清空缓存】\n删除 ' + String(_zpkg.cacheRoot || 'D:\\Cache-zh') + ' 下全部内容\n'
+          '【清理缓存】\n删除 ' + String(_zpkg.cacheRoot || 'D:\\Cache-zh') + ' 下全部内容\n'
           + '当前版本 ' + (String(_zpkg.ver || '') || '未下载') + '\n'
           + '含 backup 分发前备份目录（一并删除）\n\n不可撤销，下次分发需重新下载')
      + '<a id="lbPkgBtn_zh" class="lb-tipb lb-upd-link' + (_zprep.running ? ' dis' : '') + '" '
@@ -30623,6 +30685,12 @@ function lbAskCard(o){
     box.style.cssText = 'background:var(--card,#191922);border:1px solid var(--border,#2a2a3a);border-radius:11px;padding:15px 16px;max-width:360px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,.5)';
     box.innerHTML = h
       + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:15px">'
+      /* v6910（用户口径）：可选第三按钮（次级，排在「取消」左侧） */
+      + (o.extraText
+          ? ('<button class="lb-ask-extra" style="padding:8px 12px;border-radius:6px;border:1px solid #3a3a4a;'
+             + 'background:transparent;color:#a78bfa;cursor:pointer;font-size:13px;margin-right:auto">'
+             + esc(o.extraText) + '</button>')
+          : '')
       + '<button class="lb-ask-no" style="padding:8px 14px;border-radius:6px;border:1px solid #3a3a4a;background:transparent;color:#bbb;cursor:pointer;font-size:13px">'
       + esc(o.cancelText || '取消') + '</button>'
       + '<button class="lb-ask-ok" style="padding:8px 16px;border-radius:6px;border:none;background:'
@@ -30632,6 +30700,8 @@ function lbAskCard(o){
       + '</div>';
     ov.appendChild(box);
     ov.onclick = function(e){ if (e.target === ov) ov.remove(); };
+    var _exb = box.querySelector('.lb-ask-extra');
+    if (_exb) _exb.onclick = function(){ ov.remove(); try{ if (o.onExtra) o.onExtra(); }catch(err){} };
     box.querySelector('.lb-ask-no').onclick = function(){ ov.remove(); };
     box.querySelector('.lb-ask-ok').onclick = function(){ ov.remove(); try{ if (o.onOk) o.onOk(); }catch(err){} };
     document.body.appendChild(ov);
@@ -31770,13 +31840,26 @@ function lbLoadIconList(){
 }
 function lbIconForDinoClass(dinoClass){
   if(!dinoClass || !LB_ICON_BY_NAME) return '';
+  // v6887：精确类名特例优先（必须在 Ghost 递归之前，否则递归会先返回错误图标）
+  if(LB_ICON_CLS[dinoClass] && LB_ICON_BY_NAME[LB_ICON_CLS[dinoClass]]) return LB_ICON_BY_NAME[LB_ICON_CLS[dinoClass]];
   // v231：Ghost 系列映射基础生物图标（Ghost_Rex_Character_BP_C → Rex_Character_BP_C → 霸王龙图标）
   if(/^Ghost_/.test(dinoClass)){
     var _g = lbIconForDinoClass(dinoClass.replace(/^Ghost_/,''));
     if(_g) return _g;
+    // v6885（用户口径「Tidepup 2 种明明都有图标啊」）：事件生物类名带 _FE（Fear Event）与 _Small/_Large 变体后缀，
+    //   剥离 Ghost_ 后仍匹配不到 ⇒ 逐个去后缀再试，命中本体图标（Axolotl_Small_Character_BP_FE_C → Axolotl_Small_Character_BP_C）
+    var _gn = dinoClass.replace(/^Ghost_/,'');
+    var _g1 = _gn.replace(/_FE(?=_C$)/,'');
+    if(_g1 !== _gn){ _g = lbIconForDinoClass(_g1); if(_g) return _g; }
+    var _g2 = _g1.replace(/_(Small|Large)(?=_Character_BP)/,'');
+    if(_g2 !== _g1){ _g = lbIconForDinoClass(_g2); if(_g) return _g; }
   }
   var sp=findSpeciesByClass(dinoClass);
   var eng=(sp&&sp.name)?sp.name:dinoClass;
+  // v6886（用户口径「南方巨兽 的图标整体换掉」）：本体 + 全部变体（R-/腐化/Tek/骨/实验/闪电/STA）
+  //   统一用官方全身立绘 256px-Giganotosaurus.png（已压 webp96）；判定只看物种名，
+  //   不会误伤巨盗龙 Gigantoraptor / 巨猿 Gigantopithecus / Gigadesmodus
+  if(/Giganotosaurus/i.test(eng) && LB_ICON_BY_NAME['Giganotosaurus_Biology']) return LB_ICON_BY_NAME['Giganotosaurus_Biology'];
   // 特殊名（载具/新生物等显示名覆盖）：用特殊名里的英文匹配图标（如 Train_Character_C → Train → Train_Engine）
   if(LB_SPECIAL_NAMES[dinoClass]){
     var sm=LB_SPECIAL_NAMES[dinoClass].match(/\((.+)\)$/);
@@ -32456,6 +32539,8 @@ var LB_TEST_EXTRA = [
   // v453：圣羊移出（测试分隔标准=ASB 无数据；圣羊 ASB 有记录 Kirayli，恢复 LB_HIDDEN_SPECIAL/LB_EXTRA_FORCE 原处理）
   // v452：Lost Colony 恐龙丧尸（Revenant 系，2026-08-29 收容；v4667 移出至变体区）
   // v492：屈服复生镰刀龙移出预览组（用户 2026-08-30）
+  // v6886（用户口径「新幽灵都放到变体里面」）：2026 Fear Ascended 幽灵生物 ×7 移出「预览」组 ——
+  //   改靠 LB_SPECIAL_KEYWORDS 的 Ghost 关键词自动收进「变体」组（类名仍在 LB_SPECIAL_NAMES 中 ⇒ 仍在 keys 里，不会消失）
 ];
 // v239：强制隐藏（BOSS 不显示，用户确认）：冰原/沙漠/森林泰坦、贝拉；v240 加君王泰坦、恐熊LL
 // v264：IceKaiju/DesertKaiju/ForestKaiju 移出（玩家可拥有的泰坦 BOSS 归特殊，见 LB_HIDDEN_SPECIAL）；FirstFlock/Beyla/KingKaiju/Direbear_LL 保持隐藏
@@ -58932,7 +59017,7 @@ function lbRouteHelpClose(){
   if(ov) ov.style.display = 'none';
 }
 
-/* v6366（用户口径）：三卡右下角「清空缓存」—— 参考「清空缓存」的做法：
+/* v6366（用户口径）：三卡右下角「清理缓存」（v6910 由「清空」改名）—— 参考「清空缓存」的做法：
    同款 .lb-upd-link 链接 + 悬停 tips + 危险确认卡 → POST /api/pkg/clear → toast + 刷新卡片。
    三张卡（汉化包 / MOD / API）共用同一入口，kind 决定清哪个目录。
    ⚠ 缓存未就绪 / 正在下载时链接置灰（.dis，不带 onclick）。 */
@@ -58941,7 +59026,7 @@ function lbUpdPkgClearLink(kind, hasPkg, busy, tip){
   return '<a class="lb-tipb lb-upd-link' + (dis ? ' dis' : '') + '" '
        + (dis ? '' : ('onclick="lbUpdPkgClear(\'' + kind + '\')" '))
        + 'title="' + lbMdEsc(tip) + '">'
-       + '<i class="mdi mdi-delete-sweep-outline" style="font-size:13px"></i>清空缓存</a>';
+       + '<i class="mdi mdi-delete-sweep-outline" style="font-size:13px"></i>清理缓存</a>';
 }
 function lbUpdPkgClear(kind){
   var M = LB_UPD.mods || {}, A = LB_UPD.api || {};
@@ -58967,41 +59052,46 @@ function lbUpdPkgClear(kind){
   } else {
     return;
   }
-  var go = function(){
+  /* v6910：mode='nonpolicy' 时只删策略外的包 */
+  var go = function(mode){
     var tk = (typeof lbSrvCtlToken === 'function') ? lbSrvCtlToken() : '';
     var hd = { 'Content-Type': 'application/json' };
     if (tk) hd['Authorization'] = 'Bearer ' + tk;
     fetch(lbUpdApiBase() + '/api/pkg/clear', {
       method: 'POST', headers: hd, cache: 'no-store',
-      body: JSON.stringify({ kind: kind, confirm: 'CLEARPKG', username: lbUpdUser(), tk: tk })
+      body: JSON.stringify({ kind: kind, mode: (mode || ''), confirm: 'CLEARPKG', username: lbUpdUser(), tk: tk })
     }).then(function(r){ return r.json().then(function(j){ return { s: r.status, j: j }; }); })
       .then(function(x){
         var j = x.j || {};
         if (j.ok){
-          try { lbToast(j.msg || '缓存已清空'); } catch(e1){}
+          try { lbToast(j.msg || '缓存已清理'); } catch(e1){}
         } else {
-          try { lbToast('清空失败：' + (j.error || ('HTTP ' + x.s))); } catch(e2){}
+          try { lbToast('清理失败：' + (j.error || ('HTTP ' + x.s))); } catch(e2){}
         }
         /* 汉化走自身状态源（lbZhFetch），其余走更新面板统一刷新 */
         if (kind === 'zh'){ try { lbZhFetch(true); } catch(e3){} }
         try { lbUpdFetch(); } catch(e4){}
       })
       .catch(function(e){
-        try { lbToast('清空异常：' + String((e && e.message) || e)); } catch(e5){}
+        try { lbToast('清理异常：' + String((e && e.message) || e)); } catch(e5){}
       });
   };
   var ok = false;
   try {
+    /* v6910（用户口径）：MOD 卡确认浮窗多一个「只清非策略」—— 只删 pid 不在策略内的包 */
     ok = lbAskCard({
-      tone: 'danger', badge: '清空缓存',
-      title: '清空' + nm,
+      tone: 'danger', badge: '清理缓存',
+      title: '清理' + (/^[A-Za-z]/.test(String(nm)) ? ' ' : '') + nm,
       servers: [],
       steps: ['校验无进行中任务', '删除 ' + dir, '刷新卡片状态'],
-      note: '【清空目标】\n' + dir + '\n\n【当前】' + det + '\n' + (extra ? (extra + '\n') : '')
+      note: '【清理目标】\n' + dir + '\n\n【当前】' + det + '\n' + (extra ? (extra + '\n') : '')
+          + (kind === 'mods' ? '\n「只清非策略」= 仅删 pid 不在 MOD 策略内的包，策略内的保留。\n' : '')
           + '\n只写缓存目录，不改动任何服务器。删除后需重新「更新缓存」才能再次分发，此操作不可撤销。',
-      okText: '确认清空',
+      okText: '确认清理',
       cancelText: '取消',
-      onOk: go
+      extraText: (kind === 'mods' ? '只清非策略' : ''),
+      onExtra: (kind === 'mods' ? function(){ go('nonpolicy'); } : null),
+      onOk: function(){ go(); }
     });
   } catch (e6) { ok = false; }
   if (!ok) go();   /* 浮窗创建失败时降级直执行（与项目其它确认一致） */
@@ -59725,16 +59815,30 @@ function lbStartqAbort(){
     try { lbToast('启动队列里没有可终止的服'); } catch(e){}
     return;
   }
+  /* v6906（用户口径「明明有些服根本就是停服状态，却全部进入强制终止状态」）：
+     list 含 active + pending + queued；其中 pending/queued 是**排队等启动**的服（本来就是停服、没进程），
+     对它们发 kill 只会让 UI 全变「强制终止」。⇒ kill 只针对 active（真正启动中）。 */
+  var killList = [];
+  (q.active || []).forEach(function(x){
+    if (x && x.server && killList.indexOf(x.server) < 0) killList.push(x.server);
+  });
   var go = function(){
     /* v6437：必须先清启动队列（清 active/queue），否则任务条每 2 秒被重建 */
     lbStartqAbortPost(list, function(){
+      /* v6906：都是待启动（无进程）时只清队列，不发 kill */
+      if (!killList.length){
+        try { lbToast('已中止启动队列（' + list.length + ' 台，均为待启动、无进程需终止）'); } catch(e0){}
+        try { lbTaskSync(); } catch(e1){}
+        try { lbSrvCtlQueueLinePaint(); } catch(e2){}
+        return;
+      }
       var base = (typeof lbSrvCtlApi === 'function') ? lbSrvCtlApi() : '';
       var tk = (typeof lbSrvCtlToken === 'function') ? lbSrvCtlToken() : '';
       if (!base) return;
       lbSrvCtlFetchW(base + '/api/srvctl/action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tk },
-        body: JSON.stringify({ action: 'kill', servers: list, interrupt: true, src: 'agent' })
+        body: JSON.stringify({ action: 'kill', servers: killList, interrupt: true, src: 'agent' })
       }).then(function(r){ return r.json(); }).then(function(j){
         var okN = ((j && j.results) || []).filter(function(x){ return x && x.ok; }).length;
         try { lbToast(j && j.ok ? ('已强杀 ' + okN + ' 台进程') : ('强杀失败：' + ((j && (j.error || j.code)) || '未知'))); } catch(e){}
@@ -59743,8 +59847,11 @@ function lbStartqAbort(){
       }).catch(function(e){ try { lbToast('强杀失败：' + e); } catch(e2){} });
     });
   };
-  var msg = '确定中止启动队列吗？\n\n将强制终止：' + list.join('、')
-          + '\n（已在运行的不受影响）';
+  var msg = '确定中止启动队列吗？\n\n排队/启动中共 ' + list.length + ' 台：' + list.join('、')
+          + (killList.length
+              ? ('\n\n其中正在启动、将强制终止进程：' + killList.join('、'))
+              : '\n\n（都还没起进程，只清队列）')
+          + '\n已在运行的不受影响';
   if (typeof lbAsk === 'function' && lbAsk(msg, go, '确定中止队列')) return;
   try { if (window.confirm(msg)) go(); } catch(e){}
 }
@@ -59885,9 +59992,7 @@ var LB_DEPLOY_TIP = {
         + '· 之后自动记住，不用再选\n'
         + '· 换目录：按住 Shift 再点本按钮\n'
         + '· 记住的目录失效会自动重弹\n\n'
-        + '【注意】\n· 客户端包 ≠ 服务端包，体积大得多\n'
-        + '　Fear Ascended 约 800 MB\n'
-        + '　Club ARK 约 2.2 GB\n'
+        + '【注意】\n· 客户端包 ≠ 服务端包，体积大得多（几百 MB ~ 数 GB）\n'
         + '· 完整写入包内所有文件（含开场视频 LoadingScreen.bk2）\n'
         + '· 不做服务器回落：直连不了就报错\n'
         + '· 旧 <pid>_* 目录：部署结束后弹出干跑清单，\n'
@@ -62759,21 +62864,35 @@ function lbModsPruneOpen(list, gid, say, protect){
   (list || []).forEach(function(x){
     totB += Number(x.size || 0); totN += Number(x.files || 0);
   });
+  /* v6895：清单可能含两类 —— ① 同一 MOD 的旧版本（kind=old）
+     ② 不在当前策略内的整只 MOD（kind=policy）；分开计数并标签 */
+  var _nOld = 0, _nPol = 0;
+  (list || []).forEach(function(x){ if (x.kind === 'policy') _nPol++; else _nOld++; });
+  var _sub = [];
+  if (_nPol) _sub.push('<b style="color:#f87171">不在策略内 ' + _nPol + ' 个</b>');
+  if (_nOld) _sub.push('<b style="color:#fbbf24">同一 MOD 旧版本 ' + _nOld + ' 个</b>');
   var hh2 = '<div style="background:#1b1b22;border:1px solid #333;border-radius:14px;max-width:620px;'
           + 'width:100%;max-height:82vh;overflow:auto;padding:16px;box-shadow:0 18px 48px rgba(0,0,0,.55)">'
           + '<div style="font-size:15px;font-weight:700;color:#a78bfa;margin-bottom:6px">'
-          + '<i class="mdi mdi-broom"></i> 清理旧版 MOD 目录 · 干跑预演</div>'
+          + '<i class="mdi mdi-broom"></i> 清理本机多余 MOD 目录 · 干跑预演</div>'
           + '<div style="font-size:12px;color:#fbbf24;margin-bottom:10px">'
-          + '以下 ' + (list || []).length + ' 个目录将被<b>永久删除</b>（浏览器删除不进回收站）</div>'
+          + '以下 ' + (list || []).length + ' 个目录将被<b>永久删除</b>（浏览器删除不进回收站）'
+          + (_sub.length ? ('：' + _sub.join(' · ')) : '') + '</div>'
           + '<div style="font-size:12px;color:#9ca3af;line-height:1.7;margin-bottom:12px">'
-          + '这些是同一个 MOD 的旧版本目录，游戏只按最新版本加载，旧版留着白占空间。'
+          + '「不在策略内」= 当前 MOD 策略里没有它，游戏启动时仍会加载；「旧版本」= 同一 MOD 的历史目录。'
           + '注意：<b>.ini / .cfg / .dll</b> 这类文件被浏览器隐藏（连列举都禁止），'
           + '无法检测也无法自动搬运，<b>删除后不可恢复</b>。</div>';
   (list || []).forEach(function(it, idx){
     var warn = it.hasPak ? ''
       : '　<span style="color:#f87171">（目录内未见 .pak，执行时会自动跳过）</span>';
+    var _tag0 = (it.kind === 'policy')
+      ? '<span style="font-size:10.5px;color:#f87171;background:#3a1414;border:1px solid #5a1f1f;'
+        + 'border-radius:4px;padding:0 5px;margin-right:6px">不在策略内</span>'
+      : '<span style="font-size:10.5px;color:#fbbf24;background:#2a2108;border:1px solid #4a3a0d;'
+        + 'border-radius:4px;padding:0 5px;margin-right:6px">旧版本</span>';
     hh2 += '<div style="border:1px solid #2b2b33;border-radius:10px;padding:10px;margin-bottom:8px">'
-         + '<div style="font-size:13px;color:#e5e7eb">' + (idx + 1) + '. ' + lbMdEsc(it.name) + '</div>'
+         + '<div style="font-size:13px;color:#e5e7eb">' + (idx + 1) + '. ' + _tag0
+         + lbMdEsc(it.name) + '</div>'
          + '<div style="font-size:11px;color:#9ca3af;margin-top:3px">'
          + lbLocalFmt(it.size) + ' · ' + it.files + ' 个文件' + warn + '</div>'
          + '</div>';
@@ -62879,6 +62998,10 @@ async function lbLocalModsPolicyPids(base, hd){
   /* v6489：顺带抽出 pid -> MOD 名（items[].name = .uplugin 的 FriendlyName），
      供「本机状态」明细直接显示 MOD 名字而不是裸 pid。挂在数组属性上，不影响现有调用。 */
   var names = {};
+  /* v6895（用户口径「MOD 927083 为啥没显示MOD名」）：
+     后端 policyNames 已把「策略内但全服未装」的 pid 也补上名字 —— 先用它 */
+  var _pn = j.policyNames || {};
+  Object.keys(_pn).forEach(function(p){ if (_pn[p]) names[String(p)] = String(_pn[p]); });
   Object.keys(j.servers || {}).forEach(function(sv){
     ((j.servers[sv] || {}).items || []).forEach(function(it){
       if (it && it.pid && it.name && !names[String(it.pid)]) names[String(it.pid)] = String(it.name);
@@ -63388,9 +63511,43 @@ async function lbLocalDeployModsByCDN(g, say, base, hd){
   } else if (cdnN || skipN) {
     say('全部 MOD 已就绪（' + cdnN + ' 组新装 / ' + skipN + ' 组已是最新），重启游戏后生效');
   }
+  /* v6895（用户口径「点安装节日MOD 似乎没跟着策略走」）：
+     部署只会装策略内、只清同 pid 旧版 ⇒ 策略外的目录（如旧的 Fear Ascended）
+     一直留在本机、游戏里也还能看到 ⇒ 看起来像「没跟策略走」。
+     这里把它们一并列进干跑清单（仍需用户点「确认清理」）。 */
+  var _polCand = [];
+  try {
+    var _keepP = {};
+    pids.forEach(function(p){ _keepP[String(p)] = 1; });
+    var _itp = gid.entries();
+    while (true) {
+      var _rp = await _itp.next();
+      if (_rp.done) break;
+      var _np = String(_rp.value[0] || '');
+      var _hp2 = _rp.value[1];
+      if (!_hp2 || _hp2.kind !== 'directory') continue;
+      if (!/^\d+_\d+$/.test(_np)) continue;
+      var _pp = _np.split('_')[0];
+      if (_keepP[_pp]) continue;
+      if (_protect && _protect[_np]) continue;
+      var _stp = { n: 0, bytes: 0 }, _pakp = false;
+      try { _stp = await lbLocalDirStat(_hp2, 0); } catch (_eSp) {}
+      try { _pakp = await lbLocalAnyPak(_hp2, 0); } catch (_ePp) {}
+      _polCand.push({ name: _np, pid: _pp, size: _stp.bytes, files: _stp.n,
+                      hasPak: _pakp, kind: 'policy' });
+    }
+  } catch (_ePol) {}
+  if (_polCand.length) {
+    var _pb = 0;
+    _polCand.forEach(function(x){ _pb += Number(x.size || 0); });
+    say('发现 ' + _polCand.length + ' 个「不在策略内」的本机 MOD 目录（'
+        + lbLocalFmt(_pb) + '），已列入清理清单等你确认');
+  }
+  var _allCand = (pruneCand || []).concat(_polCand);
+  _allCand.forEach(function(x){ if (!x.kind) x.kind = 'old'; });
   /* v6481：干跑确认浮层（z-index 低于「需手动下载」浮层，用户先处理完那个再见这个） */
-  if (pruneCand.length) {
-    try { lbModsPruneOpen(pruneCand, gid, say, _protect); } catch (eP3) {
+  if (_allCand.length) {
+    try { lbModsPruneOpen(_allCand, gid, say, _protect); } catch (eP3) {
       try { console.error('[prune] open fail', eP3); } catch (eP4) {}
     }
   }
@@ -65786,3 +65943,58 @@ try {
     } catch (err) {}
   }, true);
 })();
+
+/* ===== v6925（用户口径 2026-11-27）：ASM API 失联主动提醒 =====
+   背景：ASM 的 HTTP API 是它**进程内**的 HttpListener（asa.whiterober.com -> :5050）。
+   kill/重启 ASM 之后 API 不会自启（AutoStartApi 已保存为 True 却失效，errors.log 无任何报错，
+   属 ASM 自身缺陷），且外部没有任何命令/动作可拉起（已扫 exe 参数、pdb 符号、文件副作用确认）
+   ==> 必须人工到 ASM 界面点一次「启动 API」。
+   数据源：后端 GET /api/health 的 asaApi{alive, code, downSince, hint}（v6923 起）
+   行为：每 120 秒静默探测；**同一次故障只弹一次**（用 downSince 去重）；恢复后自动解除。 */
+var LB_ASA_API_WARN = { key: '', lastAt: 0, timer: null };
+
+function lbAsaApiTick(){
+  try{
+    var base = (typeof LB_API === 'string') ? LB_API : '';
+    fetch(base + '/api/health?t=' + Date.now(), { cache: 'no-store' })
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        var a = (j && j.asaApi) || null;
+        if(!a || a.alive === null || typeof a.alive === 'undefined') return;
+        LB_ASA_API_WARN.lastAt = Date.now();
+        if(a.alive){ LB_ASA_API_WARN.key = ''; return; }
+        var key = String(a.downSince || a.checkedAt || 'down');
+        if(LB_ASA_API_WARN.key === key) return;
+        if(typeof lbAskCard !== 'function') return;
+        LB_ASA_API_WARN.key = key;
+        lbAskCard({
+          tone: 'danger',
+          badge: 'ASM API',
+          title: 'ASM API 未运行',
+          note: '后端探测结果：' + (a.code ? ('HTTP ' + a.code) : '连接失败') + '\n'
+              + '影响：服务器状态显示、启停、存档都会不可用。\n'
+              + '处理：到 ASM 界面点一次「启动 API」。\n'
+              + '（ASM 的自动启动 API 功能失效，属其自身缺陷，与后端无关）\n'
+              + (a.downSince ? ('开始时间：' + a.downSince) : ''),
+          chips: [
+            { label: '状态', val: '未运行', ic: 'mdi-close-circle', c: '#f87171' },
+            { sep: true },
+            { label: '探测码', val: (a.code ? String(a.code) : '无响应'), ic: 'mdi-access-point-off', c: '#fbbf24' }
+          ],
+          okText: '我已知晓',
+          cancelText: '关闭',
+          onOk: function(){}
+        });
+      })
+      .catch(function(){});
+  }catch(e){}
+}
+
+try{
+  var _asaApiBoot = function(){
+    setTimeout(lbAsaApiTick, 9000);
+    try{ LB_ASA_API_WARN.timer = setInterval(lbAsaApiTick, 120000); }catch(e0){}
+  };
+  if(document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', _asaApiBoot); }
+  else { _asaApiBoot(); }
+}catch(e){}

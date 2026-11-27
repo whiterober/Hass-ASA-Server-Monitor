@@ -5937,7 +5937,17 @@ def _health_payload():
                         'lastIp': _IPWATCH.get('lastIp') or '',
                         'lastCheckAt': _IPWATCH.get('lastCheckAt') or '',
                         'mode': _IPWATCH.get('mode') or 'notify'},
-            'restart': rq}
+            'restart': rq,
+            'asaApi': {'alive': ASA_API_WATCH.get('alive'),
+                       'code': ASA_API_WATCH.get('code') or 0,
+                       'fails': ASA_API_WATCH.get('fails') or 0,
+                       'downSince': ASA_API_WATCH.get('downSince') or '',
+                       'lastOkAt': ASA_API_WATCH.get('lastOkAt') or '',
+                       'checkedAt': (time.strftime('%Y-%m-%d %H:%M:%S',
+                                                   time.localtime(ASA_API_WATCH['at']))
+                                     if ASA_API_WATCH.get('at') else ''),
+                       'hint': (u'' if ASA_API_WATCH.get('alive') is not False else
+                                u'ASM 的 API 未运行（其 AutoStartApi 失效），请到 ASM 界面点「启动 API」')}}
 
 
 # ===== v6023（用户口径）：srvctl 会话 Token（HMAC 无状态签名）=====
@@ -12345,11 +12355,10 @@ def _restart_exec_sync(srv, src_root=None):
 #   共享公告→空置→存档→停服→复制→起服→校验 + 失败重试。
 #   计划由 /api/update/apply 预先算好存入 _RESTART['deployPlans']。
 def _deploy_mod_apply(srv, st=None):
-    """把该服待分发的 MOD 复制进服（备份旧目录 -> copytree -> 文件数校验）。
+    """把该服待分发的 MOD 复制进服（备份旧目录 -> copytree -> 文件数校验），
+       并在**同一停服窗口**内把「不在策略内」的多余 MOD 移入本次分发的 _modbak。
        计划元素：{srv, pid, want, src, cur}。返回 (ok, msg)。"""
     pl = [x for x in ((_RESTART.get('deployPlans') or {}).get('mod') or []) if x.get('srv') == srv]
-    if not pl:
-        return True, u'无待分发 MOD'
     ts = time.strftime('%Y%m%d_%H%M%S')
     bak_root = os.path.join(_upd_cache_dir(), '_modbak', ts, srv)
     tgt_base = _mods_dir_of(srv)
@@ -12385,11 +12394,125 @@ def _deploy_mod_apply(srv, st=None):
                 fails.append(u'%s：校验失败 %d/%d' % (nm, dst_n, src_n))
             else:
                 done += 1
+                # v6907（2026-11-27 Abe/Cen 实测）：**CFCore 安装记录必须同步** ——
+                #   只换目录不改 library.json，起服时 ASA 会把新目录当「未注册」删掉，
+                #   再按旧记录重下旧版（实测：14:37 Abe/Cen 重新出现 877752_9411569 10 文件）。
+                #   与独立接口 _mods_deploy_run(v6351) 同源。
+                try:
+                    _lok, _lmsg = _mods_lib_sync(srv, pid, p.get('srcSrv') or '', want)
+                except Exception as _e_ls:
+                    _lok, _lmsg = False, repr(_e_ls)[:120]
+                if not _lok:
+                    fails.append(u'%s：CFCore 记录未同步（%s）' % (nm, _lmsg))
+                # v6908：另两份状态文件同步（否则 ASA 不加载该 MOD）
+                for _fn_c, _nm_c in ((_mods_profile_sync, u'modInfos'), (_mods_userinfo_sync, u'user_info')):
+                    try:
+                        if _fn_c is _mods_profile_sync:
+                            _cok, _cmsg = _fn_c(srv, pid, want)
+                        else:
+                            _cok, _cmsg = _fn_c(srv, pid)
+                    except Exception as _e_c:
+                        _cok, _cmsg = False, repr(_e_c)[:120]
+                    if not _cok:
+                        fails.append(u'%s：%s 未同步（%s）' % (nm, _nm_c, _cmsg))
         except Exception as e:
             fails.append(u'%s：%s' % (nm, repr(e)[:120]))
+    # v6914（用户口径）：无论有无待装，都按策略对齐启用表（modInfos / user_info）
+    try:
+        _eaok, _eamsg = _mods_enable_align(srv)
+    except Exception as _e_ea:
+        _eaok, _eamsg = False, repr(_e_ea)[:120]
+    if not _eaok:
+        fails.append(u'启用对齐失败：%s' % _eamsg)
     if fails:
         return False, u'；'.join(fails[:3])
-    return True, (u'%d 个 MOD 已复制' % done)
+    # v6906（2026-11-27 14:10 事故修复）：名有计划项却一个都没复制成功 → 禁止清理
+    #   （否则会把旧 MOD 移走、新 MOD 却装不进来；当日各服 83374 被清空就是这么来的）。
+    # v6909（2026-11-27 15:2x）：**计划为空**（本服策略内 MOD 已齐全）不能等同「失败」——
+    #   否则「只是有多余 MOD」的服永远不会被清理（Cen 15:10 实测：pl 空 ⇒ done=0 ⇒ 直接 return
+    #   ⇒ 无 _modbak 产生、modInfos/user_info 从未除名 ⇒ 多余 MOD 永远归位）。
+    if not done and pl:
+        return False, u'MOD 计划 %d 项但无一成功（未执行清理）' % len(pl)
+    # v6891（用户口径「安全清理并入 MOD 分发」）：此刻已停服、无文件锁 —— 顺手清理多余 MOD
+    _cn, _cb, _cf = _deploy_mod_clean(srv, bak_root)
+    _msg = (u'%d 个 MOD 已复制' % done) if done else u'无待分发 MOD'
+    if _cn:
+        _msg += u' · 顺带清理多余 %d 个（%.1f MB）' % (_cn, _cb / 1048576.0)
+        # v6913（Cen/Abe 2026-11-27 15:31 实测）：启动器（ASM）会在起服时发 Request to Install 把 MOD 装回来
+        _msg += u' · 若起服后这些 MOD 又出现，说明服务器管理工具（ASM）的 MOD 清单仍挂着它，请到 ASM 取消'
+    if _cf:
+        _msg += u' · 清理失败 %d 个：%s' % (len(_cf), u'；'.join(_cf[:2]))
+    return True, _msg
+
+
+def _deploy_mod_clean(srv, bak_root):
+    """v6891：把该服「不在策略内」的多余 MOD 目录移到本次分发的 _modbak（已停服，无文件锁）。
+       只移动、不删除 ⇒ 随时可移回。返回 (ok_n, bytes, fails)。"""
+    tgt_base = _mods_dir_of(srv)
+    if not os.path.isdir(tgt_base):
+        return 0, 0, []
+    try:
+        exp = set(_mods_expect_of(srv))
+    except Exception:
+        _sexc('deploy_mod_clean_expect')
+        return 0, 0, []
+    # 安全闸：策略读不到（空集）时「所有 MOD 都算多余」—— 必须直接跳过，宁可不清也不能误清
+    if not exp:
+        _sexc('deploy_mod_clean_empty_expect')
+        return 0, 0, []
+    ok_n, tot, fails = 0, 0, []
+    _moved_pids = []
+    for x in list(os.scandir(tgt_base)):
+        try:
+            if not x.is_dir():
+                continue
+            if x.name.split('_')[0] in exp:
+                continue
+            sz = _dir_size(x.path)
+            try:
+                _mods_strip_ls(x.path)      # 服务端不读开场视频，省备份体积
+            except Exception:
+                pass
+            if not os.path.isdir(bak_root):
+                os.makedirs(bak_root)
+            dst = os.path.join(bak_root, x.name)
+            if os.path.exists(dst):
+                dst = dst + u'_' + str(int(time.time()))
+            shutil.move(x.path, dst)
+            ok_n += 1
+            tot += sz
+            _moved_pids.append(str(x.name).split('_')[0])
+        except Exception as e:
+            fails.append(u'%s：%s' % (x.name, repr(e)[:100]))
+    # v6907：被清理的 MOD 必须从 CFCore 库里除名，否则起服时按旧记录重下
+    if _moved_pids:
+        try:
+            _fok, _fmsg = _mods_lib_forget(srv, sorted(set(_moved_pids)))
+        except Exception as _e_lf:
+            _fok, _fmsg = False, repr(_e_lf)[:120]
+        if not _fok:
+            fails.append(u'CFCore 库记录未移除：%s' % _fmsg)
+        # v6908：另两份状态文件必须一并除名 —— modInfos 里还挂着就会被 CFCore 重新下载
+        for _fn_f, _nm_f in ((_mods_profile_forget, u'modInfos'), (_mods_userinfo_forget, u'user_info')):
+            try:
+                _xok, _xmsg = _fn_f(srv, sorted(set(_moved_pids)))
+            except Exception as _e_f:
+                _xok, _xmsg = False, repr(_e_f)[:120]
+            if not _xok:
+                fails.append(u'%s 记录未移除：%s' % (_nm_f, _xmsg))
+        # v6913：读回校验 —— 确认三处除名真的落盘（否则起服必被装回）
+        try:
+            _vok, _vmsg = _mods_state_verify(srv, sorted(set(_moved_pids)))
+        except Exception as _e_v:
+            _vok, _vmsg = False, repr(_e_v)[:120]
+        if not _vok:
+            fails.append(u'除名未落盘：%s' % _vmsg)
+    try:
+        if ok_n or fails:
+            mods_status_cache_clear()
+    except Exception:
+        pass
+    return ok_n, tot, fails
 
 
 def _deploy_api_apply(srv, st=None):
@@ -15092,10 +15215,17 @@ def _mod_infos_of(srv):
 
 
 def mods_status():
-    """MOD 卡数据：以磁盘 83374\\<pid>_<fid> 为唯一判定源（纯只读）"""
+    """MOD 卡数据：以磁盘 83374\\<pid>_<fid> 为唯一判定源。
+       v6915：重算前先把各服的启用表（modInfos / user_info）**自动对齐到策略**，
+       所以「哪些 MOD 被加载」完全由策略决定，不存在用户可见的「启用」概念。"""
     now = time.time()
     if _MODS_CACHE['data'] is not None and (now - _MODS_CACHE['at']) < MODS_TTL:
         return _MODS_CACHE['data']
+    # v6915：对齐必须在扫描之前（读到的 modInfos 才是对齐后的）
+    try:
+        _mods_enable_align_all()
+    except Exception:
+        _sexc('mods_status_align_all')
     t0 = time.time()
     servers, groups = {}, {}
     policy = _mods_policy()
@@ -15104,6 +15234,9 @@ def mods_status():
     for srv in SERVERS.keys():
         base = os.path.join(_srv_win64(srv), 'ShooterGame', 'Mods', MODS_GAMEID)
         infos = _mod_infos_of(srv)
+        # v6914（用户口径）：启用状态以 modInfos 的 IsSelected 为准（缺失视为启用，保守）
+        _sel_pids = set(k for k, v in (infos or {}).items()
+                        if (v or {}).get('IsSelected') is not False)
         items = []
         if os.path.isdir(base):
             try:
@@ -15145,6 +15278,7 @@ def mods_status():
                     ls_cnt += 1
                     ls_size = max(ls_size, lsb)
                 items.append({'dir': k, 'pid': pid, 'fid': fid, 'root': rt,
+                              'enabled': (str(pid) in _sel_pids),
                               'name': name, 'desc': desc[:200], 'url': murl,
                               'size': sz, 'mtime': _mt_str(kp), 'lsSize': lsb,
                               'summary': str(info.get('Summary') or '')[:200],
@@ -15163,6 +15297,7 @@ def mods_status():
         servers[srv] = {'exists': os.path.isdir(base), 'items': items,
                         'expect': expect, 'actual': actual,
                         'missing': missing, 'extra': extra,
+                        'disabled': [p for p in actual.keys() if str(p) not in _sel_pids],
                         'conform': (not missing) and (not extra)}
     reclaim = (ls_size * (ls_cnt - 1)) if (ls_cnt > 1 and ls_size) else 0
     # 基准版本（每个 pid 取「最新 fid」，判据=目录 mtime 最新者）——分发时用
@@ -15190,7 +15325,16 @@ def mods_status():
     #   ⇒ 另给一份 clientLatest（走 _mods_cf_client_file，复用同一份 _mods_cf_files 缓存，
     #     零额外 CurseForge API 调用），供「部署到本机」判「是否最新」。
     client_latest = {}
-    for _pid in groups.keys():
+    # v6895（用户口径「MOD 927083 为啥没显示MOD名」）：元信息/版本也要覆盖
+    #   「策略内但全服未装」的 pid —— 原来只遍历 groups（磁盘实际存在），
+    #   策略新加的 MOD 拿不到任何元信息 ⇒ 前端只能显示裸 pid、本机部署也判不出最新版。
+    #   CF 侧已有缓存（_mods_cf_files / _mods_cf_meta），只对新 pid 查一次。
+    _pids_meta = set(str(x) for x in groups.keys())
+    for _svx in servers.values():
+        for _px in (_svx.get('expect') or []):
+            if _px:
+                _pids_meta.add(str(_px))
+    for _pid in sorted(_pids_meta):
         try:
             _fl = _mods_cf_files(_pid)
             if _fl:
@@ -15207,9 +15351,26 @@ def mods_status():
                                        'name': str(_cfc.get('fileName') or '')}
         except Exception:
             _sexc('mods_cf_latest')
+    # v6895：策略 pid → 展示名（已装的取 .uplugin FriendlyName，未装的取 CurseForge 名称）
+    policy_names = {}
+    for _pid in sorted(_pids_meta):
+        _nm = u''
+        for _svy in servers.values():
+            for _ity in (_svy.get('items') or []):
+                if str(_ity.get('pid')) == _pid and _ity.get('name'):
+                    _nm = str(_ity.get('name'))
+                    break
+            if _nm:
+                break
+        if not _nm:
+            try:
+                _nm = str((_mods_cf_meta(_pid) or {}).get('name') or u'')
+            except Exception:
+                _nm = u''
+        policy_names[_pid] = _nm
     data = {'ok': True, 'gameId': MODS_GAMEID, 'servers': servers, 'groups': groups,
             'policy': policy, 'baseFid': base_fid, 'cfLatest': cf_latest,
-            'clientLatest': client_latest,
+            'clientLatest': client_latest, 'policyNames': policy_names,
             'localPack': _mods_local_pack(),
             'conformCount': conform_n, 'serverCount': len(SERVERS),
             'totalBytes': total, 'reclaimableBytes': reclaim,
@@ -16002,6 +16163,32 @@ def _mods_pkg_dir(pid, fid):
     return os.path.join(_upd_cache_dir(), MODS_PKG_ROOT_NAME, '%s_%s' % (pid, fid))
 
 
+def _mods_pkg_latest_fid(pid):
+    """v6906：_modpkg 缓存里该 pid 的最大 fid。
+       用于「全服都没装过」时确定分发目标版本（否则 want 为空 ⇒ 计划被丢）。"""
+    pid = str(pid or '')
+    if not pid:
+        return u''
+    root = os.path.join(_upd_cache_dir(), MODS_PKG_ROOT_NAME)
+    best = 0
+    try:
+        for x in os.scandir(root):
+            if not x.is_dir():
+                continue
+            p2, _, f2 = x.name.partition('_')
+            if p2 != pid or not f2.isdigit():
+                continue
+            try:
+                if not os.listdir(x.path):
+                    continue
+            except Exception:
+                continue
+            best = max(best, int(f2))
+    except Exception:
+        _sexc('mods_pkg_latest_fid')
+    return str(best) if best else u''
+
+
 # ===== v6452（用户口径「汉化包/MOD 底栏左侧加部署到本机」）=====
 #   浏览器用 File System Access API 直写用户 PC 的游戏目录，这里只负责**提供文件**。
 #   · zh   → D:\Cache-zh\<ver>\ 仅白名单 3 个文件（与服务端分发同源）
@@ -16268,6 +16455,12 @@ def _mods_deploy_plan(servers, policy=None):
         actual = info.get('actual') or {}
         for pid in _mods_expect_of(srv, po):
             want = str(base.get(pid) or '')
+            # v6906（事故修复）：**全新 MOD（全服都没装过）**时 baseFid 无从推导 ⇒ want 空
+            #   ⇒ ok=False ⇒ 计划被丢弃；可它其实已在 _modpkg 缓存里或 CF 有最新版。
+            #   兜底顺序：① 缓存里该 pid 的最大 fid ② CurseForge 服务端最新 fid。
+            if not want:
+                want = (_mods_pkg_latest_fid(pid)
+                        or str((((st.get('cfLatest') or {}).get(pid) or {}).get('fid')) or ''))
             cur = str(actual.get(pid) or '')
             if want and cur == want:
                 continue
@@ -16534,9 +16727,484 @@ def _mods_lib_sync(srv, pid, src_srv, fid=u''):
         return False, repr(e)[:200]
 
 
-def _mods_deploy_run(user, batch_id, plans):
-    """逐台执行：停服 → 备份旧目录 → 从批次缓存复制 → 校验 → 按原状态起服"""
+def _mods_lib_forget(srv, pids):
+    """v6907：从该服 CFCore library.json 移除指定 pid 的安装记录。
+       场景：清理策略外 MOD 后，若库里还指着不存在的目录，
+       CFCore 起服时会按旧记录**重新下载**（Abe/Cen 14:37 实测）。"""
+    gid = MODS_GAMEID
+    tp = os.path.join(_srv_win64(srv), 'ShooterGame', 'ModsUserData', gid, 'library.json')
+    want = set(str(x) for x in (pids or []) if x)
+    if not want:
+        return True, u'无需处理'
+    if not os.path.isfile(tp):
+        return True, u'无库文件'
+    try:
+        tj = json.loads(_read_text(tp) or '{}') or {}
+    except Exception as e:
+        return False, u'解析失败 %r' % (e,)
+    arr = tj.get('installedMods')
+    if not isinstance(arr, list):
+        return True, u'无记录'
+    keep, rm = [], []
+    for it in arr:
+        _p = str(((it or {}).get('details') or {}).get('iD') or '')
+        if _p and _p in want:
+            rm.append(_p)
+            continue
+        keep.append(it)
+    if not rm:
+        return True, u'无对应记录'
+    tj['installedMods'] = keep
+    try:
+        tmp = tp + '.tmp_' + str(int(time.time()))
+        with open(tmp, 'w', encoding='utf-8-sig', newline='') as f:
+            f.write(json.dumps(tj, ensure_ascii=False))
+        try:
+            os.chmod(tp, _stat.S_IWRITE)
+        except Exception:
+            pass
+        os.replace(tmp, tp)
+    except Exception as e:
+        return False, repr(e)[:150]
+    return True, u'已移除 %d 条（%s）' % (len(rm), u','.join(sorted(set(rm))))
+
+
+# ===== v6908：CFCore 另两份状态文件（modInfos / user_info）=====
+#   2026-11-27 实测：分发 Cen/Abe/Ast 后 877752（714MB 完整包）在 14:53~14:58 又回磁盘，
+#   而 library.json 里 877752 记录还在。真凶是 `Profile/modInfos.json` 的
+#   `{"ProjectId":"877752","IsSelected":true}` —— ASA 起服按它加载/下载，
+#   我们只动目录和 library.json ⇒ CFCore 认为「该装但没装」→ 自己重下。
+def _mods_profile_path(srv):
+    return os.path.join(CFG_SERVERS_DIR, srv, 'Profile', 'modInfos.json')
+
+
+def _mods_userinfo_path(srv):
+    return os.path.join(_srv_win64(srv), 'ShooterGame', 'ModsUserData', MODS_GAMEID,
+                        'local', 'user_info.json')
+
+
+def _json_write_atomic(p, obj, bom=True):
+    """原子写 JSON（可选 BOM，CFCore 两种都吃得下）"""
+    try:
+        d = os.path.dirname(p)
+        if d and not os.path.isdir(d):
+            os.makedirs(d)
+        tmp = p + '.tmp_' + str(int(time.time() * 1000))
+        with open(tmp, 'w', encoding=('utf-8-sig' if bom else 'utf-8'), newline='') as f:
+            f.write(json.dumps(obj, ensure_ascii=False))
+        try:
+            os.chmod(p, _stat.S_IWRITE)
+        except Exception:
+            pass
+        os.replace(tmp, p)
+        return True, u''
+    except Exception as e:
+        return False, repr(e)[:150]
+
+
+def _mods_profile_entry(pid, fid, tpl=None):
+    """构造 Profile/modInfos.json 的一个条目。
+       tpl = 同服已有条目 ⇒ 用它的**字段集**做模板（最安全，避免 ASA 缺字段拒绝加载）"""
+    pid, fid = str(pid or ''), str(fid or '')
+    if not pid:
+        return None
+    det, fcc = {}, {}
+    try:
+        _it = _mods_lib_entry_build(pid, fid) if fid else None
+    except Exception:
+        _it = None
+    if isinstance(_it, dict):
+        det = _it.get('details') or {}
+        fcc = _it.get('installedFile') or {}
+    if not det:
+        try:
+            _m = _mods_cf_meta(pid) or {}
+        except Exception:
+            _m = {}
+        det = {'name': _m.get('name') or u'', 'links': {'websiteUrl': _m.get('page') or u''}}
+    _au = (det.get('authors') or [])
+    e = dict(tpl) if isinstance(tpl, dict) else {}
+    e.update({
+        'IsSelected': True,
+        'IsPassiveMod': False,
+        'IsDevMod': False,
+        'ShowModId': True,
+        'IsRecentMod': True,
+        'IsFeatured': False,
+        'ModName': det.get('name') or (u'MOD %s' % pid),
+        'ProjectId': pid,
+        'DownloadUrl': fcc.get('downloadUrl') or u'',
+        'Summary': det.get('summary') or u'',
+        'ImageUrl': ((det.get('logo') or {}).get('thumbnailUrl')
+                     or (det.get('logo') or {}).get('url') or u''),
+        'Url': ((det.get('links') or {}).get('websiteUrl') or u''),
+        'AuthorName': (_au[0].get('name') if _au else u''),
+        'AuthorId': str(_au[0].get('iD') or '') if _au else u'',
+        'AuthorUrl': ((_au[0].get('uRL') or _au[0].get('url') or u'') if _au else u''),
+        'Authors': [{'id': a.get('iD'), 'name': a.get('name'),
+                     'url': (a.get('uRL') or a.get('url') or u'')} for a in _au],
+        'GameId': int(MODS_GAMEID),
+        'FileId': int(fid) if fid.isdigit() else 0,
+        'FileName': fcc.get('filename') or u'',
+        'Rating': u'',
+        'DownloadCount': det.get('downloadCount') or 0,
+        'FormattedDownloadCount': u'',
+        'LastUpdated': det.get('dateModified') or u'',
+        'FormattedLastUpdated': u'',
+        'LastUpdatedColor': u'',
+    })
+    return e
+
+
+def _mods_profile_sync(srv, pid, fid):
+    """把 pid 写入/选中到 Profile/modInfos.json —— 不列入 ⇒ 起服不加载该 MOD"""
+    p = _mods_profile_path(srv)
+    arr = []
+    if os.path.isfile(p):
+        try:
+            arr = json.loads(_read_text(p) or '[]')
+        except Exception as e:
+            return False, u'modInfos 解析失败 %r' % (e,)
+    if isinstance(arr, dict):
+        arr = arr.get('modInfos') or arr.get('items') or []
+    if not isinstance(arr, list):
+        arr = []
+    for it in arr:
+        if not isinstance(it, dict):
+            continue
+        if str(it.get('ProjectId') or '') == str(pid):
+            if it.get('IsSelected') is not True:
+                it['IsSelected'] = True
+                ok, em = _json_write_atomic(p, arr, bom=True)
+                if not ok:
+                    return False, em
+                return True, u'pid %s 已重新选中' % pid
+            return True, u'pid %s 已在清单内' % pid
+    tpl = None
+    for it in arr:
+        if isinstance(it, dict) and it.get('ProjectId'):
+            tpl = it
+            break
+    e = _mods_profile_entry(pid, fid, tpl)
+    if not e:
+        return False, u'构造条目失败 pid=%s' % pid
+    arr.append(e)
+    ok, em = _json_write_atomic(p, arr, bom=True)
+    if not ok:
+        return False, em
+    return True, u'pid %s 已加入清单' % pid
+
+
+def _mods_profile_forget(srv, pids):
+    """把 pid 从 Profile/modInfos.json 移出 —— 不移出 ⇒ CFCore 起服时按它**重新下载**"""
+    p = _mods_profile_path(srv)
+    want = set(str(x) for x in (pids or []) if x)
+    if not want or not os.path.isfile(p):
+        return True, u'无需处理'
+    try:
+        arr = json.loads(_read_text(p) or '[]')
+    except Exception as e:
+        return False, u'解析失败 %r' % (e,)
+    if not isinstance(arr, list):
+        return True, u'格式异常'
+    keep, rm = [], []
+    for it in arr:
+        _p = str((it or {}).get('ProjectId') or '') if isinstance(it, dict) else u''
+        if _p and _p in want:
+            rm.append(_p)
+            continue
+        keep.append(it)
+    if not rm:
+        return True, u'无对应条目'
+    ok, em = _json_write_atomic(p, keep, bom=True)
+    if not ok:
+        return False, em
+    return True, u'已移出清单 %d 条（%s）' % (len(rm), u','.join(sorted(set(rm))))
+
+
+def _mods_userinfo_sync(srv, pid):
+    """把 pid 写入 ModsUserData/<gid>/local/user_info.json 的 installedMods（enabled）"""
+    import hashlib as _h8
+    p = _mods_userinfo_path(srv)
+    obj = {}
+    if os.path.isfile(p):
+        try:
+            obj = json.loads(_read_text(p) or '{}') or {}
+        except Exception as e:
+            return False, u'user_info 解析失败 %r' % (e,)
+    if not isinstance(obj, dict):
+        obj = {}
+    obj.setdefault('authToken', u'')
+    obj.setdefault('subscribedToInstalledMods', False)
+    arr = obj.get('installedMods')
+    if not isinstance(arr, list):
+        arr = []
+    for it in arr:
+        if isinstance(it, dict) and str(it.get('modId') or '') == str(pid):
+            if it.get('enabled') is not True:
+                it['enabled'] = True
+                ok, em = _json_write_atomic(p, obj, bom=False)
+                if not ok:
+                    return False, em
+            return True, u'pid %s 已启用' % pid
+    _pod = u'%s/%s' % (MODS_GAMEID, pid)
+    arr.append({'iD': _h8.md5(_pod.encode('utf-8')).hexdigest().upper(),
+                'modId': int(pid) if str(pid).isdigit() else pid,
+                'enabled': True,
+                'loadOrder': len(arr),
+                'dynamicContent': False})
+    obj['installedMods'] = arr
+    ok, em = _json_write_atomic(p, obj, bom=False)
+    if not ok:
+        return False, em
+    return True, u'pid %s 已加入用户启用表' % pid
+
+
+def _mods_userinfo_forget(srv, pids):
+    """把 pid 从 user_info.json 的 installedMods 移除"""
+    p = _mods_userinfo_path(srv)
+    want = set(str(x) for x in (pids or []) if x)
+    if not want or not os.path.isfile(p):
+        return True, u'无需处理'
+    try:
+        obj = json.loads(_read_text(p) or '{}') or {}
+    except Exception as e:
+        return False, u'解析失败 %r' % (e,)
+    if not isinstance(obj, dict):
+        return True, u'格式异常'
+    arr = obj.get('installedMods')
+    if not isinstance(arr, list):
+        return True, u'无记录'
+    keep, rm = [], []
+    for it in arr:
+        _p = str((it or {}).get('modId') or '') if isinstance(it, dict) else u''
+        if _p and _p in want:
+            rm.append(_p)
+            continue
+        keep.append(it)
+    if not rm:
+        return True, u'无对应记录'
+    obj['installedMods'] = keep
+    ok, em = _json_write_atomic(p, obj, bom=False)
+    if not ok:
+        return False, em
+    return True, u'已从用户启用表移除（%s）' % u','.join(sorted(set(rm)))
+
+
+def _mods_state_verify(srv, pids):
+    """v6913：读回校验 —— pids 是否真的已从 library / modInfos / user_info 除名。
+       为什么要校验：写盘报成功 ≠ 磁盘真变（文件可能被进程占用/被启动器写回），
+       而一旦没除干净，起服就会被 CFCore / ASM 按旧记录重新安装（714 MB 白下）。"""
+    want = set(str(x) for x in (pids or []) if x)
+    if not want:
+        return True, u'无需校验'
+    bad = []
+    p = os.path.join(_srv_win64(srv), 'ShooterGame', 'ModsUserData', MODS_GAMEID, 'library.json')
+    try:
+        if os.path.isfile(p):
+            j = json.loads(_read_text(p) or '{}')
+            left = set(str(((x or {}).get('details') or {}).get('iD') or '') for x in (j.get('installedMods') or []))
+            if want & left:
+                bad.append(u'library 仍有 %s' % u','.join(sorted(want & left)))
+    except Exception as e:
+        bad.append(u'library 读取失败 %r' % (e,))
+    p = _mods_profile_path(srv)
+    try:
+        if os.path.isfile(p):
+            arr = json.loads(_read_text(p) or '[]')
+            if isinstance(arr, dict):
+                arr = arr.get('modInfos') or []
+            left = set(str((x or {}).get('ProjectId') or '') for x in (arr if isinstance(arr, list) else []))
+            if want & left:
+                bad.append(u'modInfos 仍有 %s' % u','.join(sorted(want & left)))
+    except Exception as e:
+        bad.append(u'modInfos 读取失败 %r' % (e,))
+    p = _mods_userinfo_path(srv)
+    try:
+        if os.path.isfile(p):
+            j = json.loads(_read_text(p) or '{}')
+            left = set(str((x or {}).get('modId') or '') for x in (j.get('installedMods') or []))
+            if want & left:
+                bad.append(u'user_info 仍有 %s' % u','.join(sorted(want & left)))
+    except Exception as e:
+        bad.append(u'user_info 读取失败 %r' % (e,))
+    if bad:
+        return False, u'；'.join(bad)
+    return True, u'三处已除名'
+
+
+def _mods_enable_align(srv):
+    """v6914（用户口径「启用完全只看我们的 MOD 策略」）：
+       以 mods_policy 为**唯一依据**对齐 ASA/CFCore 的启用表：
+         · 策略内 + 磁盘已装  → 写回 modInfos(IsSelected) + user_info(enabled)
+         · 策略外（磁盘有）  → 从 modInfos / user_info 除名
+       磁盘有没有文件不归这里管（那是分发/清理的职责）。
+       为什么要有它：ASM 一旦把 MOD 从它自己清单删掉，
+       `Profile/modInfos.json` 就变空 ⇒ ASA 起服**不加载**该 MOD，
+       而界面按磁盘仍显示「已安装」⇒ 假已安装。"""
+    try:
+        policy = _mods_policy()
+        exp = [str(x) for x in (_mods_expect_of(srv, policy) or []) if x]
+    except Exception:
+        _sexc('mods_enable_align_policy')
+        return False, u'策略读取失败'
+    base = os.path.join(_srv_win64(srv), 'ShooterGame', 'Mods', MODS_GAMEID)
+    on_disk = {}
+    try:
+        if os.path.isdir(base):
+            for x in os.scandir(base):
+                if not x.is_dir() or x.name.startswith(u'.'):
+                    continue
+                _p, _, _f = x.name.partition('_')
+                if not _p:
+                    continue
+                try:
+                    mt = _mt_epoch(x.path)
+                except Exception:
+                    mt = 0.0
+                if _p not in on_disk or mt > on_disk[_p][1]:
+                    on_disk[_p] = (_f, mt)
+    except Exception:
+        _sexc('mods_enable_align_scan')
+    up, off, bad = set(), set(), []
+    for pid in exp:
+        if pid not in on_disk:
+            continue
+        fid = on_disk[pid][0]
+        # v6917（Cen 2026-11-27 16:09 事故）：**library.json 必须同步** ——
+        #   CFCore 起服只认 library.json 里的安装记录，
+        #   缺记录的目录会被当「未注册残留」直接删除。
+        #   实测：Cen 目录有 927083、modInfos 也启用，但 library.json 不存在
+        #   ⇒ 16:07 分发后起服，目录被删空（840 B 日志 + Mods/83374 空）。
+        try:
+            ok, msg = _mods_lib_sync(srv, pid, '', fid)
+        except Exception as e:
+            ok, msg = False, repr(e)[:100]
+        if ok:
+            up.add(pid)
+        else:
+            bad.append(u'library/%s：%s' % (pid, msg))
+        try:
+            ok, msg = _mods_profile_sync(srv, pid, fid)
+        except Exception as e:
+            ok, msg = False, repr(e)[:100]
+        if ok:
+            up.add(pid)
+        else:
+            bad.append(u'modInfos/%s：%s' % (pid, msg))
+        try:
+            ok, msg = _mods_userinfo_sync(srv, pid)
+        except Exception as e:
+            ok, msg = False, repr(e)[:100]
+        if ok:
+            up.add(pid)
+        else:
+            bad.append(u'user_info/%s：%s' % (pid, msg))
+    # v6916：启用表里「策略外」的 pid 一律除名 —— **不要求磁盘存在**。
+    #   实测（Isl 2026-11-27 16:00）：目录已被清掉，但 user_info 里仍有 877752，
+    #   而 CFCore 起服就是按这张表发 Request to Install 重新下载（714 MB）。
+    _cur = set()
+    try:
+        _cur |= set(str(k) for k in (_mod_infos_of(srv) or {}).keys() if k)
+    except Exception:
+        pass
+    try:
+        _uij = json.loads(_read_text(_mods_userinfo_path(srv)) or '{}')
+        for _x in (_uij.get('installedMods') or []):
+            _mp = str((_x or {}).get('modId') or '')
+            if _mp:
+                _cur.add(_mp)
+    except Exception:
+        pass
+    out_pids = sorted((set(on_disk.keys()) | _cur) - set(exp))
+    if out_pids:
+        for _fn, _nm in ((_mods_profile_forget, u'modInfos'), (_mods_userinfo_forget, u'user_info')):
+            try:
+                ok, msg = _fn(srv, out_pids)
+            except Exception as e:
+                ok, msg = False, repr(e)[:100]
+            if ok:
+                off.update(out_pids)
+            else:
+                bad.append(u'%s 除名：%s' % (_nm, msg))
+    # v6918：同步启动参数 -mods=（只写「策略内 + 磁盘已装」，避免引擎去下载不存在的）
+    try:
+        _cm_ok, _cm_msg = _mods_sync_cmdline(srv, [p for p in exp if p in on_disk])
+    except Exception as _e_cm:
+        _cm_ok, _cm_msg = False, repr(_e_cm)[:120]
+    if not _cm_ok:
+        bad.append(u'cmdline：%s' % _cm_msg)
+    if bad:
+        return False, u'；'.join(bad[:3])
+    return True, u'启用对齐（策略内 %d 个已启用 %s）' % (
+        len(up), (u'，策略外 %d 个已除名' % len(off)) if off else u'')
+
+
+def _mods_sync_cmdline(srv, pids):
+    """v6918（用户口径「要加到分发流程里」）：把 `-mods=<ProjectId>[,<pid>]`
+       同步进该服 `Profile/serverProfil.json` 的 `CustomCommand`。
+       为什么：ASA 引擎只认启动参数 `-mods=` —— 缺它就是
+       `UShooterEngine::LoadGameMods with 0 mods`，服务器列表显示「无 MOD」。
+       （2026-11-27 实测：磁盘文件 + library/modInfos/user_info 四件套全齐，但引擎加载 0 个）
+       格式依据：Bob 历史日志 `-mods=1005639` → `LoadGameMods with 1 mods`"""
+    import re as _re8
+    p = os.path.join(CFG_SERVERS_DIR, srv, 'Profile', 'serverProfil.json')
+    if not os.path.isfile(p):
+        return False, u'serverProfil.json 不存在'
+    try:
+        j = json.loads(_read_text(p) or '{}')
+    except Exception as e:
+        return False, u'解析失败 %r' % (e,)
+    if not isinstance(j, dict):
+        return False, u'格式异常'
+    want = u','.join([str(x).strip() for x in (pids or []) if str(x).strip()])
+    cur = str(j.get('CustomCommand') or '')
+    body = _re8.sub(r'\s*-mods=[^\s]*', '', cur).strip()
+    if want:
+        body = (body + u' -mods=' + want) if body else (u'-mods=' + want)
+    newv = (u' ' + body) if body else u''
+    if cur == newv:
+        return True, u'已是最新'
+    j['CustomCommand'] = newv
+    ok, em = _json_write_atomic(p, j, bom=False)
+    if not ok:
+        return False, em
+    return True, u'CustomCommand → %s' % newv
+
+
+def _mods_enable_align_all():
+    """v6915（用户口径「不应该有启用这种概念，根据策略自动补删改 modInfos」）：
+       对**全部服**按策略对齐启用表。幂等：已一致则不写盘。
+       只写 `Profile/modInfos.json` 与 `ModsUserData/<gid>/local/user_info.json`，
+       **不动服务器、不需重启**（下次起服生效）。"""
+    try:
+        srvs = list(SERVERS.keys())
+    except Exception:
+        srvs = []
+    okn, bad = 0, []
+    for srv in srvs:
+        try:
+            ok, msg = _mods_enable_align(srv)
+        except Exception as e:
+            ok, msg = False, repr(e)[:120]
+        if ok:
+            okn += 1
+        else:
+            bad.append(u'%s：%s' % (srv, msg))
+    if bad:
+        try:
+            _admin_log('MODS enable-align %d/%d ok fails=%s' % (okn, len(srvs), u'; '.join(bad[:3])))
+        except Exception:
+            pass
+    return okn, bad
+
+
+def _mods_deploy_run(user, batch_id, plans, reset_asm=False):
+    """逐台执行：停服 → 备份旧目录 → 从批次缓存复制 → 校验 → 按原状态起服
+       v6926：reset_asm=True 时**不起服**，改为全部完成后统一「重启 ASM → 等 API → 恢复开服」
+              （换 MOD 必须让 ASM 重扫清单，否则起服带的还是旧 -mods）"""
     cfg = _srvctl_cfg()
+    _resume = []
     ts = time.strftime('%Y%m%d_%H%M%S')
     cache_base = os.path.join(_upd_cache_dir(), batch_id, 'mods')
     bak_root = os.path.join(_upd_cache_dir(), '_modbak', ts)
@@ -16585,6 +17253,8 @@ def _mods_deploy_run(user, batch_id, plans):
             was_run = bool(_cfg_proc_start(srv, force=True))
         except Exception:
             was_run = False
+        if was_run and srv not in _resume:
+            _resume.append(srv)
         # 停服
         if was_run:
             _t(u'停服中…', 10)
@@ -16677,7 +17347,9 @@ def _mods_deploy_run(user, batch_id, plans):
             _t(u'⚠ CFCore 安装记录未同步：%s' % _lib_msg, 82)
         # 起服
         _startErr = u''
-        if was_run:
+        if was_run and reset_asm:
+            _t(u'校验通过（%s），已就绪 —— 等待统一重启 ASM 后再起服' % detail, 92)
+        elif was_run:
             _t(u'校验通过（%s），起服中…' % detail, 90)
             # v6339：起服失败自动重试（最多 3 次）
             _ok2, _startErr = _deploy_start_retry(srv, user, 'moddeploy', lambda t: _t(t, 90))
@@ -16691,6 +17363,14 @@ def _mods_deploy_run(user, batch_id, plans):
         mods_status_cache_clear()
     except Exception:
         pass
+    # v6926：换 MOD 模式 —— 全部写完磁盘后统一重启 ASM 并恢复开服
+    if reset_asm:
+        try:
+            _r_rr = _asm_restart_resume_async(user, _resume, batch=batch_id)
+            if not _r_rr.get('ok'):
+                _admin_log('[asm-rr] deploy abort: %s' % (_r_rr.get('error') or ''))
+        except Exception:
+            _sexc('deploy_reset_asm')
 
 
 # ===== v6307（用户口径）：AsaApi 官方包（GitHub ArkServerApi/AsaApi）=====
@@ -17001,12 +17681,15 @@ def _asa_mv(src, dst):
 
 
 # ===== v6309（用户口径）：MOD 多余清理（不在策略内的 MOD）=====
-def _mods_cleanup_plan():
+def _mods_cleanup_plan(only_srv=None):
     """MOD 多余清理计划（只读）：[{srv, pid, fid, dir, path, size, name}]
-    只针对 servers[srv].extra（实际存在但不在策略 expect 内），基准/策略内一律不动。"""
+    只针对 servers[srv].extra（实际存在但不在策略 expect 内），基准/策略内一律不动。
+    v6891：only_srv 指定时只算该服（MOD 分发流程内联调用）。"""
     st = mods_status()
     out = []
     for srv, info in (st.get('servers') or {}).items():
+        if only_srv and srv != only_srv:
+            continue
         ex = info.get('extra') or []
         if not ex:
             continue
@@ -17021,63 +17704,6 @@ def _mods_cleanup_plan():
                         'size': int(it.get('size') or 0),
                         'name': it.get('name') or it.get('pid')})
     return out
-
-
-def _mods_cleanup_run(user, plans):
-    """安全清理：把多余 MOD 目录 **move** 到 _upd_cache/_modcleanbak/<ts>/<srv>/（可随时移回）"""
-    ts = time.strftime('%Y%m%d_%H%M%S')
-    bak_root, bak_src = _asa_bak_root(u'mods')
-    # v6324（用户口径）：key 不带时间戳 —— 同一功能复用同一条任务条
-    key = u'modcleanup|latest'
-    n = max(1, len(plans))
-
-    def _t(msg, pct, phase='run', err=''):
-        try:
-            _utask_put(key, '', 'update', user, label=u'安全清理 · 多余 MOD',
-                       msg=msg, pct=pct, phase=phase,
-                       steps=_steps_apply(STEP_3_CLEAN, pct, phase, msg, 'clean'), err=err,
-                       srv_name=u'%d 个目录' % n)
-        except Exception:
-            _sexc('mods_cleanup_utask')
-    _t(u'准备清理 %d 个多余 MOD 目录…' % n, 5)
-    ok_n, bad_n, tot = 0, 0, 0
-    moved = []
-    i = 0
-    for p in plans:
-        i += 1
-        tdir = os.path.join(bak_root, p['srv'])
-        try:
-            _t(u'第 %d/%d：%s · %s' % (i, n, p['srv'], p['dir']), 5 + int(85.0 * i / n))
-            if not os.path.isdir(tdir):
-                os.makedirs(tdir)
-            dst = os.path.join(tdir, p['dir'])
-            if os.path.exists(dst):
-                dst = dst + u'_' + str(int(time.time()))
-            _asa_mv(p['path'], dst)
-            ok_n += 1
-            tot += int(p.get('size') or 0)
-            moved.append({'srv': p['srv'], 'dir': p['dir'], 'to': dst})
-        except Exception:
-            _sexc('mods_cleanup_move')
-            bad_n += 1
-    try:
-        _admin_log('MODS cleanup-extra by %s ok=%d bad=%d bytes=%d bak=%s'
-                   % (user, ok_n, bad_n, tot, bak_root))
-    except Exception:
-        pass
-    try:
-        mods_status_cache_clear()
-    except Exception:
-        pass
-    try:
-        if bad_n:
-            _t(u'完成：移入备份 %d 个，失败 %d 个' % (ok_n, bad_n), 100, 'fail', u'部分失败')
-        else:
-            _t(u'完成：已把 %d 个多余 MOD 移入备份（%.1f MB）→ %s'
-               % (ok_n, tot / 1048576.0, bak_root), 100, 'ok')
-    except Exception:
-        pass
-    return {'ok': ok_n, 'bad': bad_n, 'bytes': tot, 'backupDir': bak_root, 'moved': moved[:60]}
 
 
 def _api_deploy_plan3(servers):
@@ -17488,6 +18114,481 @@ def _api_cleanup_run(user, plans):
         pass
     return {'ok': ok_n, 'bad': bad_n, 'bytes': tot,
             'backupDir': bak_root, 'moved': moved[:60]}
+
+
+def _srv_real_cmdline():
+    """v6919（只读诊断）：返回本机所有 ArkAscendedServer.exe 的完整命令行。
+       用途：确认 ASM翻译 起服时到底拼了什么（尤其是有没有 `-mods=`）。"""
+    out = []
+    try:
+        ps = (u"Get-CimInstance Win32_Process -Filter \"Name='ArkAscendedServer.exe'\" | "
+              u"ForEach-Object { $_.ProcessId.ToString() + '||' + $_.CommandLine }")
+        r = subprocess.run(['powershell', '-NoProfile', '-NonInteractive', '-Command', ps],
+                           capture_output=True, timeout=60)
+        txt = (r.stdout or b'').decode('utf-8', 'replace')
+        for line in txt.split('\n'):
+            line = line.strip()
+            if not line:
+                continue
+            _pid, _, _cmd = line.partition('||')
+            _mods = ''
+            for _p in (_cmd or '').split(' '):
+                if _p.lower().startswith('-mods='):
+                    _mods = _p
+                    break
+            out.append({'pid': _pid.strip(), 'mods': _mods,
+                        'hasQueryPort': ('-queryport=' in (_cmd or '').lower()),
+                        'cmdline': _cmd.strip()})
+    except Exception as e:
+        return {'ok': False, 'error': repr(e)[:200], 'procs': []}
+    return {'ok': True, 'count': len(out), 'procs': out}
+
+
+# ===== v6920（用户口径 2026-11-27「直接试 C」）：自接管启动 / 停止 =====
+#   背景（实测证据）：ASM 对 serverProfil.json 的 CustomCommand 有**参数白名单** ——
+#     Los 的 CustomCommand 写成 " -queryport=27028 -dinotest=1 -mods=927083"，
+#     重启后真实命令行只保留了 -queryport=27028，-dinotest=1 与 -mods=927083 都被剔除
+#     ⇒ 引擎永远 `UShooterEngine::LoadGameMods with 0 mods`，游戏内看不到 MOD。
+#   本通道做法（不猜 ASM 的拼装规则）：
+#     ① 回放该服 ShooterGame.log 里**最后一次 Commandline 行**＝ASM 上次真正执行的参数；
+#     ② 剥掉旧 -mods=，按 MOD 策略追加新的 -mods=<pids>；
+#     ③ 用 AsaApiLoader.exe（UseDllInsteadApiloader=False 时）直接启动，cwd=Win64。
+#   只读日志回放 ⇒ ASM 改了端口/地图等配置，下一次回放自动跟随。
+#   ⚠ 独立通道：不走 srvctl（ASM）队列与锁；ASM 界面是否识别本通道进程待实测。
+DIRECT_SRV_ROOT = r'D:\ARK Server\Servers'
+DIRECT_STATE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'direct_procs.json')
+DIRECT_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'direct_start.log')
+
+
+def _direct_log(line):
+    try:
+        with open(DIRECT_LOG, 'a', encoding='utf-8') as f:
+            f.write(u'[%s] %s\n' % (time.strftime('%Y-%m-%d %H:%M:%S'), line))
+    except Exception:
+        pass
+
+
+def _direct_state_read():
+    try:
+        with open(DIRECT_STATE, 'r', encoding='utf-8') as f:
+            _d = json.load(f)
+        return _d if isinstance(_d, dict) else {}
+    except Exception:
+        return {}
+
+
+def _direct_state_write(d):
+    try:
+        _t = DIRECT_STATE + '.tmp'
+        with open(_t, 'w', encoding='utf-8') as f:
+            json.dump(d, f, ensure_ascii=False, indent=1)
+        os.replace(_t, DIRECT_STATE)
+    except Exception:
+        pass
+
+
+def _pid_alive(pid):
+    try:
+        _r = subprocess.run(['tasklist', '/FI', 'PID eq %d' % int(pid), '/NH'],
+                            capture_output=True, timeout=20)
+        return str(int(pid)) in (_r.stdout or b'').decode('utf-8', 'replace')
+    except Exception:
+        return False
+
+
+def _srv_direct_plan(srv):
+    """拼出与 ASM 等价（多一个 -mods）的启动计划。返回 dict(ok, exe, cwd, cmdline, ...)"""
+    _sdir = os.path.join(DIRECT_SRV_ROOT, srv)
+    _win = os.path.join(_sdir, 'ShooterGame', 'Binaries', 'Win64')
+    _prof = os.path.join(_sdir, 'Profile', 'serverProfil.json')
+    _p = {}
+    try:
+        with open(_prof, 'r', encoding='utf-8-sig') as f:
+            _p = json.load(f) or {}
+    except Exception as _e:
+        return {'ok': False, 'error': u'profile 读取失败: %r' % (_e,)}
+    _use_dll = bool(_p.get('UseDllInsteadApiloader'))
+    _exe = os.path.join(_win, 'ArkAscendedServer.exe' if _use_dll else 'AsaApiLoader.exe')
+    if not os.path.isfile(_exe):
+        return {'ok': False, 'error': u'exe 不存在: %s' % _exe}
+    _lg = os.path.join(_sdir, 'ShooterGame', 'Saved', 'Logs', 'ShooterGame.log')
+    _arg = ''
+    if os.path.isfile(_lg):
+        try:
+            with open(_lg, 'r', encoding='utf-8', errors='replace') as f:
+                for _line in f:
+                    _i = _line.find('Commandline:')
+                    if _i >= 0:
+                        _arg = _line[_i + len('Commandline:'):].strip()
+        except Exception:
+            _arg = ''
+    if not _arg:
+        return {'ok': False, 'error': u'ShooterGame.log 里没有 Commandline 行（该服从未启动过？）'}
+    _toks = [t for t in _arg.split(' ') if t and not t.lower().startswith('-mods=')]
+    _arg2 = ' '.join(_toks)
+    try:
+        _pids = _mods_expect_of(srv, _mods_policy())
+    except Exception:
+        _pids = []
+    _mods = ','.join([str(x) for x in (_pids or [])])
+    if _mods:
+        _arg2 = _arg2 + ' -mods=' + _mods
+    return {'ok': True, 'exe': _exe, 'cwd': _win, 'mods': _mods,
+            'useDll': _use_dll, 'src': 'log',
+            'cmdline': u'"%s" %s' % (_exe, _arg2)}
+
+
+def _srv_direct_start(srv):
+    _plan = _srv_direct_plan(srv)
+    if not _plan.get('ok'):
+        return False, _plan
+    _st = _direct_state_read()
+    _cur = _st.get(srv) or {}
+    if _cur.get('pid') and _pid_alive(_cur.get('pid')):
+        _plan['already'] = True
+        _plan['note'] = u'已由本通道运行中（pid=%s）' % _cur.get('pid')
+        return True, _plan
+    # v6921：BREAKAWAY 在某些 Job 上下文会被拒（WinError 5 拒绝访问），
+    #   且 CREATE_NO_WINDOW 与 DETACHED_PROCESS 互斥 ⇒ 必须多档回退，不能一次定生死。
+    _DETACHED, _NEWGROUP, _BREAKAWAY, _NOWIN = 0x8, 0x200, 0x01000000, 0x08000000
+    _pr = None
+    _errs = []
+    for _flags in (_DETACHED | _NEWGROUP,
+                   _DETACHED | _NEWGROUP | _BREAKAWAY,
+                   _NEWGROUP | _NOWIN,
+                   0):
+        try:
+            _pr = subprocess.Popen(_plan['cmdline'], cwd=_plan['cwd'], close_fds=True,
+                                   creationflags=_flags,
+                                   stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                   stderr=subprocess.DEVNULL)
+            _plan['flags'] = _flags
+            break
+        except Exception as _e:
+            _errs.append('0x%x:%r' % (_flags, _e))
+    if _pr is None:
+        _plan['error'] = u'Popen 全部失败: ' + ' | '.join(_errs)
+        _direct_log('START_FAIL %s %s' % (srv, ' | '.join(_errs)))
+        return False, _plan
+    _plan['pid'] = _pr.pid
+    _st[srv] = {'pid': _pr.pid, 'at': int(time.time()), 'mods': _plan.get('mods'),
+                'cmdline': _plan['cmdline']}
+    _direct_state_write(_st)
+    _direct_log('START %s pid=%s mods=%s' % (srv, _pr.pid, _plan.get('mods')))
+    return True, _plan
+
+
+def _srv_direct_stop(srv):
+    _st = _direct_state_read()
+    _cur = _st.get(srv) or {}
+    _pid = _cur.get('pid')
+    _info = {'pid': _pid, 'killed': []}
+    if _pid and _pid_alive(_pid):
+        try:
+            subprocess.run(['taskkill', '/PID', str(int(_pid)), '/T', '/F'],
+                           capture_output=True, timeout=40)
+            _info['killed'].append(int(_pid))
+            _info['how'] = 'taskkill /T (recorded pid)'
+        except Exception as _e:
+            _info['error'] = repr(_e)
+    else:
+        try:
+            _port = str(SERVERS.get(srv) or '')
+            _ps = (u"Get-CimInstance Win32_Process -Filter \"Name='AsaApiLoader.exe' or "
+                   u"Name='ArkAscendedServer.exe'\" | "
+                   u"Where-Object { $_.CommandLine -like '*-RCONPort=%s*' } | "
+                   u"ForEach-Object { $_.ProcessId }" % _port)
+            _r = subprocess.run(['powershell', '-NoProfile', '-NonInteractive', '-Command', _ps],
+                                capture_output=True, timeout=60)
+            _pids = [x for x in (_r.stdout or b'').decode('utf-8', 'replace').split() if x.strip().isdigit()]
+            for _q in _pids:
+                subprocess.run(['taskkill', '/PID', _q, '/T', '/F'], capture_output=True, timeout=40)
+                _info['killed'].append(int(_q))
+            _info['how'] = 'powershell (by -RCONPort)'
+        except Exception as _e:
+            _info['error'] = repr(_e)
+    _st.pop(srv, None)
+    _direct_state_write(_st)
+    _direct_log('STOP %s %r' % (srv, _info))
+    return True, _info
+
+
+def _diag_self():
+    """返回后端自身 pid / Windows 会话 ID / 用户名（判断是否与桌面同会话）。"""
+    _sid = None
+    try:
+        import ctypes
+        _v = ctypes.c_ulong(0)
+        if ctypes.windll.kernel32.ProcessIdToSessionId(os.getpid(), ctypes.byref(_v)):
+            _sid = int(_v.value)
+    except Exception:
+        _sid = None
+    _login = ''
+    try:
+        _r = subprocess.run(['powershell', '-NoProfile', '-NonInteractive', '-Command',
+                             'query user'], capture_output=True, timeout=20)
+        _login = (_r.stdout or b'').decode('utf-8', 'replace')[:600]
+    except Exception:
+        _login = ''
+    return {'pid': os.getpid(), 'session': _sid,
+            'envUser': os.environ.get('USERNAME') or '',
+            'bootTs': int(_BOOT_TS), 'query_user': _login}
+
+
+def _asm_pids():
+    """列出 ASADedicatedManager.exe 的 PID（tasklist，不依赖 PowerShell）"""
+    _out = []
+    try:
+        _r = subprocess.run(['tasklist', '/FI', 'IMAGENAME eq ASADedicatedManager.exe', '/NH'],
+                            capture_output=True, timeout=25)
+        for _line in (_r.stdout or b'').decode('utf-8', 'replace').splitlines():
+            _p = _line.split()
+            if len(_p) >= 2 and _p[0].lower().startswith('asadedicatedmanager'):
+                try:
+                    _out.append(int(_p[1]))
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    return _out
+
+
+def _asm_api_alive():
+    """探测 ASA API 是否还通。判据：HTTP 401/2xx = 活着（API 活着只是没带对 token 也会 401）；
+       连不上 / 502 / 504 / 超时 = 已随 ASM 停（反代没有后端）。"""
+    try:
+        _c = _srvctl_cfg()
+        _code, _txt = _asa_http('GET', _c['base'] + '/server-status', _c['token'], None,
+                               timeout=12, verify=False)
+        return {'alive': (200 <= _code < 300) or _code == 401,
+                'code': _code, 'note': (_txt or '')[:160]}
+    except Exception as _e:
+        return {'alive': False, 'code': 0, 'note': repr(_e)[:240]}
+
+
+ASM_EXE = r'D:\ASADedicatedManager\ASADedicatedManager.exe'
+
+
+def _asm_ctl(action):
+    """action: status | kill | start 。kill **不带 /T**（只杀主进程，用于判断 API 是否残留）"""
+    _r = {'action': action, 'pids_before': _asm_pids()}
+    if action == 'status':
+        _r['api'] = _asm_api_alive()
+        return True, _r
+    if action == 'kill':
+        try:
+            _rr = subprocess.run(['taskkill', '/IM', 'ASADedicatedManager.exe', '/F'],
+                                 capture_output=True, timeout=60)
+            _r['kill_rc'] = _rr.returncode
+            _r['kill_out'] = ((_rr.stdout or b'') + (b'|' if _rr.stdout and _rr.stderr else b'')
+                              + (_rr.stderr or b'')).decode('utf-8', 'replace')[:400]
+        except Exception as _e:
+            _r['kill_err'] = repr(_e)[:200]
+        time.sleep(3)
+        _r['pids_after'] = _asm_pids()
+        _r['api_t3s'] = _asm_api_alive()
+        time.sleep(5)
+        _r['api_t8s'] = _asm_api_alive()
+        return True, _r
+    if action == 'start':
+        if not os.path.isfile(ASM_EXE):
+            return False, {'error': u'ASM 不存在: %s' % ASM_EXE}
+        _DETACHED, _NEWGROUP = 0x8, 0x200
+        _errs = []
+        for _flags in (_DETACHED | _NEWGROUP, _NEWGROUP, 0):
+            try:
+                _pr = subprocess.Popen([ASM_EXE], cwd=os.path.dirname(ASM_EXE), close_fds=True,
+                                       creationflags=_flags,
+                                       stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                       stderr=subprocess.DEVNULL)
+                _r['pid'] = _pr.pid
+                _r['flags'] = _flags
+                break
+            except Exception as _e:
+                _errs.append('0x%x:%r' % (_flags, _e))
+        if 'pid' not in _r:
+            _r['error'] = u'启动失败: ' + ' | '.join(_errs)
+            return False, _r
+        time.sleep(8)
+        _r['pids_after'] = _asm_pids()
+        _r['api'] = _asm_api_alive()
+        return True, _r
+    return False, {'error': u'action 仅支持 status/kill/start'}
+
+
+# ===== v6923（用户口径 2026-11-27）：ASA API 保活探测（只告警，不自动重启 ASM）=====
+#   背景（本次实测）：ASM 的 AutoStartApi=True 已正确落盘到 user.config，但 ASM 重启后
+#   **不会**自动起 API，且 errors.log 里没有任何 API 启动报错（说明启动时那段代码没执行，
+#   属 ASM 自身缺陷）。API 本体是 ASM 进程内 HttpListener（http://+:5050/），
+#   外部无任何命令/动作可拉起（已扫 exe 参数、pdb 符号、文件副作用确认）==> 只能人点按钮。
+#   本线程职责：探测 + 告警（写 admin.log / direct_start.log / 服务日志），
+#   **绝不自动重启 ASM**（重启会中断正在运行的服，代价远大于提醒人工点一下）。
+ASA_API_WATCH = {'at': 0.0, 'alive': None, 'code': 0, 'fails': 0,
+                 'downSince': '', 'lastOkAt': '', 'notified': False, 'interval': 120}
+
+
+def _asa_api_notify(text):
+    """把 ASM API 告警推到既有通知通道（Discord webhook：IPWATCH_WEBHOOK 或 ipwatch_webhook）。
+       未配置时静默跳过 —— 不因通知失败影响探测线程。"""
+    try:
+        _ipwatch_notify(text)
+    except Exception:
+        pass
+
+
+def _asa_api_watch_loop():
+    while True:
+        try:
+            _r = _asm_api_alive()
+            _now = time.strftime('%Y-%m-%d %H:%M:%S')
+            ASA_API_WATCH['at'] = time.time()
+            ASA_API_WATCH['alive'] = bool(_r.get('alive'))
+            ASA_API_WATCH['code'] = int(_r.get('code') or 0)
+            if _r.get('alive'):
+                if ASA_API_WATCH.get('notified'):
+                    _admin_log('[asa-api] RECOVERED code=%s' % _r.get('code'))
+                    _direct_log('ASA_API RECOVERED code=%s' % _r.get('code'))
+                    _sinfo('[asa-api] RECOVERED code=%s' % _r.get('code'))
+                    _asa_api_notify(u'\u2705 ASM API 已恢复（code=%s）' % _r.get('code'))
+                ASA_API_WATCH['fails'] = 0
+                ASA_API_WATCH['downSince'] = ''
+                ASA_API_WATCH['lastOkAt'] = _now
+                ASA_API_WATCH['notified'] = False
+            else:
+                ASA_API_WATCH['fails'] = int(ASA_API_WATCH.get('fails') or 0) + 1
+                if not ASA_API_WATCH.get('downSince'):
+                    ASA_API_WATCH['downSince'] = _now
+                if ASA_API_WATCH['fails'] >= 2:
+                    if not ASA_API_WATCH.get('notified'):
+                        ASA_API_WATCH['notified'] = True
+                        _msg = (u'[asa-api] DOWN code=%s since=%s —— ASM 的 AutoStartApi 失效，'
+                                u'请到 ASM 界面点「启动 API」' % (_r.get('code'), ASA_API_WATCH['downSince']))
+                        _admin_log(_msg)
+                        _direct_log(_msg)
+                        _sinfo(_msg)
+                        _asa_api_notify(u'\u26a0\ufe0f ASM API 未运行（%s）\n%s\n请到 ASM 界面点「启动 API」。'
+                                        % (_r.get('code'), ASA_API_WATCH['downSince']))
+                    else:
+                        _admin_log('[asa-api] still DOWN code=%s fails=%d'
+                                   % (_r.get('code'), ASA_API_WATCH['fails']))
+        except Exception:
+            _sexc('asa_api_watch')
+        try:
+            time.sleep(int(ASA_API_WATCH.get('interval') or 120))
+        except Exception:
+            time.sleep(120)
+
+
+# ===== v6926（用户口径 2026-11-27）：换 MOD 后自动重启 ASM 并恢复开服 =====
+#   实测结论：ASM 的 MOD 清单**只在 ASM 启动时构建**（改 modInfos.json 后无论是否重启 ASM
+#   都不生效；登记表里加假 MOD 9999999 重启后仍不进 -mods）⇒ 正确顺序只能是
+#   「分发（写盘）→ 重启 ASM → 点启动 API → 开服」。
+#   本编排把后三步自动化：检查全服已停 → kill/start ASM → 后台等 API（用户点按钮）
+#   → API 恢复后自动把「分发前在跑的服」重新启动。
+ASM_RR = {'running': False, 'at': '', 'stage': '', 'msg': '',
+          'resume': [], 'started': [], 'failed': [], 'asmPid': 0, 'apiAlive': None,
+          'waitSec': 0, 'batch': ''}
+
+
+def _asm_rr_status():
+    return dict(ASM_RR)
+
+
+def _srv_busy_list():
+    """当前在跑的服清单（先用 force=True 刷新一次全局缓存，再逐台读缓存）"""
+    try:
+        _cfg_proc_start('Isl', force=True)
+    except Exception:
+        pass
+    out = []
+    for s in SERVERS:
+        try:
+            if _cfg_proc_start(s):
+                out.append(s)
+        except Exception:
+            pass
+    return out
+
+
+def _asm_restart_resume_async(user, resume, batch='', wait_max=1800):
+    """启动后台编排线程；返回 {ok, busy, resume}（busy 非空 ⇒ 已拒绝）"""
+    resume = [s for s in (resume or []) if s in SERVERS]
+    busy = _srv_busy_list()
+    if busy:
+        ASM_RR.update({'running': False, 'at': time.strftime('%Y-%m-%d %H:%M:%S'),
+                       'stage': 'abort', 'batch': batch, 'resume': resume,
+                       'msg': u'还有 %d 台在运行，已中止重启 ASM：%s'
+                              % (len(busy), ', '.join(busy))})
+        _admin_log('[asm-rr] ABORT busy=%s' % ','.join(busy))
+        return {'ok': False, 'code': 'servers_running', 'busy': busy, 'resume': resume,
+                'error': u'还有 %d 台服务器在运行，请先全部停止再重启 ASM' % len(busy)}
+
+    def _job():
+        ASM_RR.update({'running': True, 'at': time.strftime('%Y-%m-%d %H:%M:%S'),
+                       'stage': 'kill', 'msg': u'正在停止 ASM…', 'resume': list(resume),
+                       'started': [], 'failed': [], 'asmPid': 0, 'apiAlive': None,
+                       'waitSec': 0, 'batch': batch})
+        try:
+            _ok, _info = _asm_ctl('kill')
+            if not _ok:
+                ASM_RR.update({'running': False, 'stage': 'fail',
+                               'msg': u'停止 ASM 失败：%r' % (_info,)})
+                return
+            ASM_RR.update({'stage': 'start', 'msg': u'正在启动 ASM…'})
+            _ok2, _info2 = _asm_ctl('start')
+            try:
+                ASM_RR['asmPid'] = int((_info2 or {}).get('pid') or 0)
+            except Exception:
+                ASM_RR['asmPid'] = 0
+            if not _ok2:
+                ASM_RR.update({'running': False, 'stage': 'fail',
+                               'msg': u'启动 ASM 失败：%r' % (_info2,)})
+                return
+            ASM_RR.update({'stage': 'wait_api',
+                           'msg': u'ASM 已启动，等待 API 就绪（需在 ASM 界面点「启动 API」）…'})
+            _t0 = time.time()
+            while time.time() - _t0 < wait_max:
+                _a = _asm_api_alive()
+                ASM_RR['waitSec'] = int(time.time() - _t0)
+                ASM_RR['apiAlive'] = bool(_a.get('alive'))
+                if _a.get('alive'):
+                    break
+                time.sleep(10)
+            if not ASM_RR.get('apiAlive'):
+                ASM_RR.update({'running': False, 'stage': 'need_manual',
+                               'msg': (u'等待 %d 秒后 API 仍未就绪 —— 请到 ASM 界面点「启动 API」，'
+                                       u'然后重新触发恢复开服') % int(time.time() - _t0)})
+                _admin_log('[asm-rr] NEED_MANUAL wait=%ds' % int(time.time() - _t0))
+                return
+            ASM_RR.update({'stage': 'resume', 'msg': u'API 已就绪，正在恢复开服…'})
+            for s in resume:
+                try:
+                    _srvctl_startq_new(user, [s], 'modsresume')
+                    ASM_RR['started'].append(s)
+                except Exception:
+                    ASM_RR['failed'].append(s)
+                time.sleep(2)
+            ASM_RR.update({'running': False, 'stage': 'done',
+                           'msg': u'已重启 ASM 并恢复开服 %d 台%s'
+                                  % (len(ASM_RR['started']),
+                                     (u'，失败 %d 台' % len(ASM_RR['failed'])) if ASM_RR['failed'] else u'')})
+            _admin_log('[asm-rr] DONE started=%s failed=%s'
+                       % (','.join(ASM_RR['started']), ','.join(ASM_RR['failed'])))
+        except Exception as _e:
+            ASM_RR.update({'running': False, 'stage': 'fail', 'msg': u'编排异常：%r' % (_e,)})
+            _sexc('asm_rr')
+
+    threading.Thread(target=_job, daemon=True, name='asm-rr').start()
+    return {'ok': True, 'busy': [], 'resume': resume,
+            'note': u'已开始：停止 ASM → 启动 ASM → 等待你点「启动 API」→ 自动恢复开服'}
+
+
+def _srv_direct_status(srv):
+    _st = _direct_state_read()
+    _cur = _st.get(srv) or {}
+    _pid = _cur.get('pid')
+    return {'server': srv, 'pid': _pid, 'alive': bool(_pid and _pid_alive(_pid)),
+            'at': _cur.get('at'), 'mods': _cur.get('mods')}
 
 
 def mods_status_cache_clear():
@@ -18516,8 +19617,10 @@ def _utask_busy_prefix(pref_list):
     return False
 
 
-def _pkg_clear(kind):
-    """v6366（用户口径）：清空缓存 —— 汉化包 / MOD / API 三卡右下角「清空缓存」。
+def _pkg_clear(kind, only_nonpolicy=False):
+    """v6910：多一个 only_nonpolicy（MOD 卡「只清非策略」）
+       v6366（用户口径）：清理缓存 —— 汉化包 / MOD / API 三卡右下角「清理缓存」。
+       v6910：MOD 卡「只清非策略」（only_nonpolicy）。
        · 只删缓存目录**内容**，保留目录本身；不碰任何服务器、不碰 \\\\Tnas 自研源
        · zh  = D:\\Cache-zh 全部内容（含 backup 分发前备份 —— 用户 2026-11-09 明确要求一并清）
        · mods= _upd_cache/_modpkg 全部内容
@@ -18560,13 +19663,30 @@ def _pkg_clear(kind):
                     'error': u'未知的缓存类型：%s' % kind}
     except Exception as e:
         return {'ok': False, 'code': 'err', 'error': repr(e)[:200]}
+    # v6910（用户口径）：MOD 卡「只清非策略」—— pid 在策略内的包一律保留
+    keep_pids = set()
+    if kind == 'mods' and only_nonpolicy:
+        try:
+            _po9 = _mods_policy() or {}
+            if _po9.get('bob'):
+                keep_pids.add(str(_po9.get('bob')).strip())
+            for _v9 in (_po9.get('common') or []):
+                _s9 = str(_v9).strip()
+                if _s9:
+                    keep_pids.add(_s9)
+        except Exception:
+            _sexc('pkg_clear_policy')
+        if not keep_pids:
+            return {'ok': False, 'code': 'no_policy',
+                    'error': u'MOD 策略为空，无法判断哪些是「非策略」；请先配置策略，或改用全量清理'}
     if extra_busy or _utask_busy_prefix(pref):
         return {'ok': False, 'code': 'busy',
-                'error': u'%s正在下载/解压中，等它结束再清空' % label}
+                'error': u'%s正在下载/解压中，等它结束再清理' % label}
     n = 0
     nbytes = 0
     errs = []
     seen = 0
+    kept = 0
     for root in roots:
         if not os.path.isdir(root):
             continue
@@ -18577,6 +19697,10 @@ def _pkg_clear(kind):
             errs.append(u'%s 列目录失败：%s' % (root, e))
             continue
         for name in names:
+            # v6910：名形如 <pid>_<fid>；pid 在策略内 ⇒ 保留（不删）
+            if keep_pids and str(name).split('_')[0] in keep_pids:
+                kept += 1
+                continue
             p = os.path.join(root, name)
             try:
                 if os.path.isdir(p) and not os.path.islink(p):
@@ -18613,8 +19737,10 @@ def _pkg_clear(kind):
             'code': ('partial' if errs else 'ok'),
             'kind': kind, 'label': label, 'roots': roots,
             'removed': n, 'bytes': nbytes, 'errors': errs[:10],
-            'msg': (u'已清空%s：%d 项 / %.1f MB%s'
+            'kept': kept, 'onlyNonPolicy': bool(keep_pids),
+            'msg': (u'已清理%s：%d 项 / %.1f MB%s%s'
                     % (label, n, nbytes / 1048576.0,
+                       (u'（保留策略内 %d 项）' % kept) if keep_pids else u'',
                        (u'（%d 项失败）' % len(errs)) if errs else u''))}
 
 
@@ -20814,6 +21940,14 @@ class Handler(BaseHTTPRequestHandler):
                 _r_z = {'ok': False, 'error': 'status_fail'}
             self._send(200, _r_z)
             return
+        elif path == '/api/asm/restart/status':
+            # v6927：换 MOD 后「重启 ASM + 恢复开服」编排状态（GET，前端轮询）
+            _qs_rs = parse_qs(parsed.query)
+            _u_rs = _srvctl_guard(self, _qs_rs, need_token=True)
+            if not _u_rs:
+                return
+            self._send(200, {'ok': True, 'status': _asm_rr_status()})
+            return
         elif path == '/api/srvctl/status':
             # P3：转发 ASA GET /server-status（仅读）；仅二级管理员可读
             _qs = parse_qs(parsed.query)
@@ -21014,6 +22148,16 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(400, {'ok': False, 'error': 'bad server', 'code': 'bad_server'})
                 return
             self._send(200, {'ok': True, 'check': _srv_ark_quickcheck(_srv)})
+            return
+        elif path == '/api/diag/cmdline':
+            # v6919：只读 —— 返回服务器上 ArkAscendedServer.exe 的真实命令行
+            _u_dc = _srvctl_guard(self, qs, need_token=True)
+            if not _u_dc:
+                return
+            if _role_level(_u_dc) < 2:
+                self._send(403, {'ok': False, 'code': 'admin_only', 'error': u'仅二级管理员可用'})
+                return
+            self._send(200, _srv_real_cmdline())
             return
         elif path == '/api/srvctl/startq':
             # v6004：多服启动队列状态（只读）
@@ -21539,8 +22683,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200 if _r_cc.get('ok') else 400, _r_cc)
             return
         if path == '/api/pkg/clear':
-            # v6366（用户口径）：清空缓存（汉化包 / MOD / API）
-            #   —— token + 二级管理员 + body confirm='CLEARPKG'，三卡右下角「清空缓存」共用
+            # v6366（用户口径）：清理缓存（汉化包 / MOD / API）
+            #   —— token + 二级管理员 + body confirm='CLEARPKG'，三卡右下角「清理缓存」共用
             _u_pc = _srvctl_guard(self, qs, need_token=True)
             if not _u_pc:
                 return
@@ -21549,9 +22693,10 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if str(body.get('confirm') or '') != 'CLEARPKG':
                 self._send(400, {'ok': False, 'code': 'need_confirm',
-                                 'error': u'清空缓存需在 body 里传 confirm="CLEARPKG"'})
+                                 'error': u'清理缓存需在 body 里传 confirm="CLEARPKG"'})
                 return
-            _r_pc = _pkg_clear(body.get('kind'))
+            _only_pc = str(body.get('mode') or '').strip().lower() == 'nonpolicy'
+            _r_pc = _pkg_clear(body.get('kind'), only_nonpolicy=_only_pc)
             self._send(200 if _r_pc.get('ok') else 400, _r_pc)
             return
         if path == '/api/mods/prefetch':
@@ -21750,36 +22895,6 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, {'ok': True, 'dry': False, 'started': True, 'plans': _pl_pk,
                              'note': u'已开始从 CurseForge 下载缓存（后台）；完成后分发会优先用它'})
             return
-        if path == '/api/mods/cleanup-extra':
-            # v6309（用户口径）：MOD 多余清理 —— dry 默认；confirm='CLEANUP' 才真跑
-            #   安全点：移动不是删除（-> _upd_cache/_modcleanbak/<ts>/<srv>/），可随时移回；不停服
-            _u_mc = _srvctl_guard(self, qs, need_token=True)
-            if not _u_mc:
-                return
-            if _role_level(_u_mc) < 2:
-                self._send(403, {'ok': False, 'code': 'admin_only', 'error': u'仅二级管理员可用'})
-                return
-            _pl_mc = _mods_cleanup_plan()
-            _tot_mc = sum(int(x.get('size') or 0) for x in _pl_mc)
-            _dry_mc = body.get('dry')
-            _dry_mc = True if _dry_mc is None else str(_dry_mc).lower() in ('1', 'true', 'yes', 'on')
-            if _dry_mc or str(body.get('confirm') or '') != 'CLEANUP':
-                self._send(200, {'ok': True, 'dry': True, 'plans': _pl_mc,
-                                 'totalBytes': _tot_mc, 'itemCount': len(_pl_mc),
-                                 'needConfirm': u"真跑需 body {'dry': false, 'confirm': 'CLEANUP'}",
-                                 'note': (u'预演：未改动任何文件。共 %d 个多余 MOD 目录待移入备份，可释放 %.1f MB'
-                                          % (len(_pl_mc), _tot_mc / 1048576.0))})
-                return
-            if not _pl_mc:
-                self._send(200, {'ok': True, 'noop': True, 'code': 'nothing_to_do',
-                                 'error': u'没有需要清理的多余 MOD（全部符合策略）'})
-                return
-            _res_mc = _mods_cleanup_run(_u_mc, _pl_mc)
-            self._send(200, {'ok': True, 'dry': False, 'result': _res_mc, 'plans': _pl_mc,
-                             'note': (u'已把 %d 个目录移入备份（%s），可随时移回回滚'
-                                      % (_res_mc.get('ok') or 0, _res_mc.get('backupDir') or u'-')),
-                             'backupSrc': 'UNC' if u'Tnas' in str(_res_mc.get('backupDir') or '') else 'local'})
-            return
         if path == '/api/mods/deploy':
             # v6284（用户口径）：MOD 分发 —— dry 默认；confirm='DEPLOY' 才真跑
             _u_md = _srvctl_guard(self, qs, need_token=True)
@@ -21829,15 +22944,19 @@ class Handler(BaseHTTPRequestHandler):
             _eff_md = [x for x in _plans_md if x.get('ok')]
             _admin_log('MODS deploy by %s batch=%s eff=%d bad=%d'
                        % (_u_md, _bid, len(_eff_md), len(_bad_md)))
+            _reset_asm = str(body.get('resetAsm') if body.get('resetAsm') is not None else '').strip().lower() in ('1', 'true', 'yes', 'on')
             try:
                 threading.Thread(target=_mods_deploy_run,
-                                 args=(_u_md, _bid, _eff_md), daemon=True).start()
+                                 args=(_u_md, _bid, _eff_md, _reset_asm), daemon=True).start()
             except Exception as e:
                 self._send(500, {'ok': False, 'error': repr(e)})
                 return
             self._send(200, {'ok': True, 'dry': False, 'started': True, 'batchId': _bid,
-                             'plans': _plans_md, 'skipped': _bad_md,
-                             'note': u'已开始分发：逐台 停服→备份→复制→校验→起服（原本停服的保持停服）'})
+                             'plans': _plans_md, 'skipped': _bad_md, 'resetAsm': bool(_reset_asm),
+                             'note': (u'已开始分发（换 MOD 模式）：逐台 停服→备份→复制→校验，'
+                                      u'全部完成后统一重启 ASM，等你点「启动 API」后自动恢复开服')
+                                     if _reset_asm else
+                                     u'已开始分发：逐台 停服→备份→复制→校验→起服（原本停服的保持停服）'})
             return
         if path == '/api/api/pkg/download':
             # v6307（用户口径）：更新缓存 = 从 GitHub 下载最新 AsaApi 官方包（库 + Permissions）
@@ -22133,6 +23252,14 @@ class Handler(BaseHTTPRequestHandler):
                         if _p10.get('srv') == _s6:
                             _need6 = True
                             break
+                    if not _need6:
+                        # v6891（用户口径）：MOD 已最新但有多余 MOD 也算需处理 —— 分发时一并清理
+                        try:
+                            _ex6 = ((mods_status().get('servers') or {}).get(_s6) or {}).get('extra') or []
+                        except Exception:
+                            _ex6 = []
+                        if _ex6:
+                            _need6 = True
                 if (not _need6) and _do_api_a:
                     for _p11 in _apiplans_a:
                         if _p11.get('srv') == _s6:
@@ -23290,6 +24417,81 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, {'ok': bool(_ok_rd), 'dry': True,
                              'reason': 'manual-dryrun by %s' % _u_rd})
             return
+        if path == '/api/diag/self':
+            _u_ds = _srvctl_guard(self, qs, need_token=True)
+            if not _u_ds:
+                return
+            self._send(200, {'ok': True, 'self': _diag_self()})
+            return
+        if path == '/api/asm/restart':
+            # v6926：手动触发「重启 ASM + 等 API + 恢复开服」（仅系统拥有者）
+            _u_rr = _srvctl_guard(self, qs, need_token=True)
+            if not _u_rr:
+                return
+            if _role_level(_u_rr) < 3:
+                self._send(403, {'ok': False, 'code': 'owner_only', 'error': u'仅系统拥有者可用'})
+                return
+            _arr_rr = body.get('servers')
+            if not isinstance(_arr_rr, list):
+                _arr_rr = [x.strip() for x in str(body.get('servers') or '').split(',') if x.strip()]
+            _sv_rr = [s for s in [str(x or '').strip() for x in _arr_rr] if s in SERVERS]
+            _r_rr = _asm_restart_resume_async(_u_rr, _sv_rr,
+                                             batch=str(body.get('batchId') or ''))
+            self._send(200 if _r_rr.get('ok') else 409, dict(_r_rr, by=_u_rr))
+            return
+        if path == '/api/asm/restart/status':
+            _u_rs = _srvctl_guard(self, qs, need_token=True)
+            if not _u_rs:
+                return
+            self._send(200, {'ok': True, 'status': _asm_rr_status()})
+            return
+        if path == '/api/asm/ctl':
+            # v6922：ASM 进程控制 + API 存活探测（仅系统拥有者）
+            _u_ac = _srvctl_guard(self, qs, need_token=True)
+            if not _u_ac:
+                return
+            if _role_level(_u_ac) < 3:
+                self._send(403, {'ok': False, 'code': 'owner_only', 'error': u'仅系统拥有者可用'})
+                return
+            _act_ac = str(body.get('action') or g('action') or 'status').strip().lower()
+            _ok_ac, _info_ac = _asm_ctl(_act_ac)
+            _info_ac['by'] = _u_ac
+            self._send(200 if _ok_ac else 500, {'ok': bool(_ok_ac), 'result': _info_ac})
+            return
+        if path == '/api/srvctl/direct':
+            # v6920：自接管启动/停止（绕开 ASM 的参数过滤）。仅三级管理员。
+            _u_dc = _srvctl_guard(self, qs, need_token=True)
+            if not _u_dc:
+                return
+            if _role_level(_u_dc) < 3:
+                self._send(403, {'ok': False, 'code': 'owner_only', 'error': u'仅系统拥有者可用'})
+                return
+            _act_dc = str(body.get('action') or g('action') or '').strip().lower()
+            _srv_dc = str(body.get('server') or g('server') or '').strip()
+            if _srv_dc not in SERVERS:
+                self._send(400, {'ok': False, 'code': 'bad_server', 'error': u'未知服务器',
+                                 'servers': sorted(SERVERS.keys())})
+                return
+            if _act_dc == 'plan':
+                _pl = _srv_direct_plan(_srv_dc)
+                self._send(200 if _pl.get('ok') else 400, {'ok': bool(_pl.get('ok')),
+                                                           'server': _srv_dc, 'plan': _pl})
+                return
+            if _act_dc == 'status':
+                self._send(200, {'ok': True, 'status': _srv_direct_status(_srv_dc)})
+                return
+            if _act_dc == 'start':
+                _ok_dc, _info_dc = _srv_direct_start(_srv_dc)
+            elif _act_dc == 'stop':
+                _ok_dc, _info_dc = _srv_direct_stop(_srv_dc)
+            else:
+                self._send(400, {'ok': False, 'code': 'bad_action',
+                                 'error': u'action 仅支持 plan/start/stop/status'})
+                return
+            self._send(200 if _ok_dc else 500, {'ok': bool(_ok_dc), 'server': _srv_dc,
+                                                'action': _act_dc, 'info': _info_dc,
+                                                'by': _u_dc})
+            return
         if path == '/api/srvctl/action' or path == '/api/srvctl/rcon':
             # v6023（用户口径）：写接口**强制** token —— 挡住「知道管理员用户名即可 curl 启停/清龙」
             _u = _srvctl_guard(self, None, need_token=True)
@@ -23967,6 +25169,12 @@ def main():
         _sinfo('steamdb-pair thread started: interval=%ss' % STEAMDB_PAIR_INTERVAL)
     except Exception:
         _sexc('steamdb_pair_start')
+    # v6923：ASA API 保活探测（ASM 重启后 API 不会自动起，只能人点按钮）
+    try:
+        threading.Thread(target=_asa_api_watch_loop, daemon=True, name='asa-api-watch').start()
+        _sinfo('asa-api-watch thread started: interval=%ss' % ASA_API_WATCH.get('interval'))
+    except Exception:
+        _sexc('asa_api_watch_start')
     print('dino_backend listening on :{}'.format(PORT))
     print('  RCON_HOST={}  DINO_DATA={}'.format(RCON_HOST, DINO_DATA))
     print('  ASA_DATA={}  ALLOW_ORIGIN={}'.format(ASA_DATA, ALLOW_ORIGIN))

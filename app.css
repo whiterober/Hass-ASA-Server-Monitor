@@ -1682,7 +1682,41 @@ html::-webkit-scrollbar-thumb:hover{background:#555}
 .lw-tabs{display:flex;gap:6px;overflow-x:auto;padding:8px 14px;border-bottom:1px solid #2a2a3a;flex-shrink:0;scrollbar-width:none}
 .lw-tabs::-webkit-scrollbar{display:none}
 .lw-tab{flex:0 0 auto;padding:5px 12px;border-radius:7px;font-size:12.5px;color:#9aa0b5;background:#22222c;border:1px solid transparent;cursor:pointer;white-space:nowrap}
+/* v6903（用户口径「要以 i 的 hover 效果框来计算右外边距和上下对齐」）：
+   baseline 对齐会让 17px 图标盒向下溢出（实测 top 8.12 / bottom 5.57）。
+   改 flex 居中 ⇒ 图标盒与文字一起垂直居中，上下留白自然相等。 */
+.lw-tabs .lw-tab{display:inline-flex;align-items:center;justify-content:center}
 .lw-tab.on{background:#7c3aed;color:#fff;font-weight:600}
+/* v6901（用户口径「外右边距为啥还是12？明明上下是5」）：
+   .lw-tab 原 padding:5px 12px（上下5 / 左右12）；刷新图标贴在右端时，
+   右侧会多出一大块12px 空白。这里只给「含图标的 TAB」把右 padding 收到 5px，与上下一致。 */
+/* v6904（实测：白框到上/下缘 6.93px，到右缘只有 5.57px）：
+   上下 = padding5 + (行高18.86 - 图标15)/2 = 6.93；右边要跟上 ⇒ padding-right = 6.93 - 0.57 ≈ 6.4px */
+.lw-tab:has(.lb-tabref){padding-right:6.4px}
+/* v6898（用户口径「图标相对文字偏下 1-2px，且没有 hover 反馈」）：
+   节日 TAB 内嵌的刷新图标 —— vertical-align 改 0（上提 2px），并补半透明背景的 hover 反馈。 */
+/* v6899（用户口径「右侧留的间距为啥和上下不一致」）：
+   原 padding:1px 3px（上下 1px / 左右 3px）⇒ hover 背景块右侧比上下宽。
+   改成固定 17×17 方框 + inline-flex 居中，四边等距（2px）。 */
+/* v6900：四边等距的关键在伪元素 —— .mdi:before 是 inline-block，字形 advance 与
+   盒子宽不一定相等；且 <i> 默认 font-style:italic 会把字形推偏。
+   这里把伪元素显式定死 13×13 + 居中 + 非斜体，再由 17×17 盒子四边各留 2px。 */
+/* v6902（实测：图标上方 7px / 下方 5.57px ⇒ 整体偏下 1.4px）：
+   vertical-align:0（=baseline）对齐的是字形基线，17px 盒子会向下溢出；
+   改 middle，以图标中心对齐行盒中线，上下留白趋一致。 */
+/* v6903：hover 白框改 15×15（= 文字行高）⇒ TAB 高度不变；
+   15 - 13（字形）= 四边各 1px 内留，配合 padding 5px ⇒ 上/下/右 均 5px。 */
+.lw-tab .lb-tabref{display:inline-flex;align-items:center;justify-content:center;
+  width:15px;height:15px;margin-left:4px;padding:0;box-sizing:border-box;
+  font-size:13px;font-style:normal;line-height:1;
+  cursor:pointer;border-radius:4px;transition:background .12s,color .12s}
+/* v6905（用户口径「mdi 图标在 hover 框内部偏上了，要下移 1px」）：
+   字形在 13px 行盒内的 ascent/descent 不对称 ⇒ 视觉偏上；用 relative+top 微调。 */
+.lw-tab .lb-tabref::before{display:block;width:13px;height:13px;line-height:13px;
+  text-align:center;font-size:13px;font-style:normal;margin:0;padding:0;
+  position:relative;top:1px}
+.lw-tab .lb-tabref:hover{background:rgba(255,255,255,.26);color:#fff}
+.lw-tab:not(.on) .lb-tabref:hover{background:rgba(255,255,255,.12);color:#e5e7eb}
 .lw-meta{padding:6px 14px;font-size:11px;color:#8b8b9a;border-bottom:1px solid #22222c;flex-shrink:0;line-height:1.7}
 /* v5635（用户口径「附件行不显示，无意义」）：物品浮窗顶部元信息行（名字·分类·印痕等级）与标题重复，整行隐藏 */
 #lbWikiItemMeta{display:none}

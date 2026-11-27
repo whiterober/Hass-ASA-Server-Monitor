@@ -3412,6 +3412,12 @@ function lbTipsAiBoxHtml(opt){
   h += '<span class="lb-hf-ai-fill"></span>'
     + '<span class="lb-hf-ai-meta">' + lbTipsEsc(metaTxt) + '</span>'
     + '<span class="lb-hf-ai-cfg" onclick="lbOpenConfigModal()">⚙ 配置</span>';
+  /* v6889：支持第二按钮（次要按钮排在主按钮左侧），用于「切换原文」等 */
+  if (opt.btn2){
+    h += '<button class="lb-hf-aibtn"'
+      + (opt.btn2.disabled ? ' disabled' : '')
+      + ' onclick="' + opt.btn2.fn + '">' + opt.btn2.txt + '</button>';
+  }
   if (opt.btn){
     h += '<button class="lb-hf-aibtn primary"'
       + (opt.disabled ? ' disabled' : '')
@@ -6096,7 +6102,9 @@ var LB_NEWS = {
        数据源：ark.wiki.gg/wiki/Events → 后端 /api/fest/（复用物种/地图 wiki 同一个抓取器 + wiki_cache 落盘） */
     { id: 'festival', name: '节日', short: '节日', links: [
         { href: 'https://ark.wiki.gg/wiki/Events', icon: 'mdi-calendar-star', text: 'wiki.gg', label: 'ARK 活动日历（wiki.gg）' },
-        { href: 'https://survivetheark.com/', icon: 'mdi-forum-outline', text: '官网', label: 'survivetheark 官网' }
+        { href: 'https://survivetheark.com/', icon: 'mdi-forum-outline', text: '官网', label: 'survivetheark 官网' },
+        /* v6890（用户口径「资讯节日TAB 下面加一个入口：curseforge」）：CurseForge ASA 游戏主页（内含 MOD 分区） */
+        { href: 'https://www.curseforge.com/ark-survival-ascended', icon: 'mdi-fire', text: 'CurseForge', label: 'CurseForge · ASAMOD' }
       ] },
     { id: 'grp_adm',  name: 'ADM', short: 'ADM', children: [
         /* v5956（用户口径）：二级 Tab 文字 ADM版本 ⇒ 版本（一级已标暂 ADM） */
@@ -6503,7 +6511,7 @@ function lbNewsFullBodyHtml(v){
     + lbMdEsc(String(d.title || '').replace(/\s*-\s*ARK News.*$/, '')) + '</div>');
   for (var i = 0; i < blocks.length; i++){
     var b = blocks[i];
-    var zh = (b.id && LB_NEWS.zh) ? String(LB_NEWS.zh[b.id] || '') : '';
+    var zh = (b.id && LB_NEWS.zh && !LB_NEWS.raw) ? String(LB_NEWS.zh[b.id] || '') : '';
     if (zh){
       /* 已译：整块走富文本白名单（保留表格/列表） */
       out.push('<div class="tc-intro" data-fid="' + lbMdEsc(b.id) + '">' + lbNewsRichHtml(zh) + '</div>');
@@ -6542,6 +6550,7 @@ function lbNewsFullAiBoxHtml(){
     /* v6878：同上 —— 内联 margin 会盖掉 CSS */
     style: 'margin:0',
     disabled: (!total) || (done >= total) || !!LB_NEWS.zhBusy,
+    btn2: { txt: (LB_NEWS.raw ? '看译文' : '看原文'), fn: 'lbNewsRawToggle()' },
     btn: { txt: '翻译全文', fn: 'lbNewsFullTranslate()' }
   });
 }
@@ -6704,6 +6713,77 @@ function lbNewsAiStat(){
   }
   return { total: total, done: done, todo: total - done };
 }
+/* ===== v6889（用户口径「附件1的翻译 明明物种页都能正常翻译，为啥这里翻译不对」）=====
+   根因：资讯翻译只给 AI 通用术语示例（金属锭/聚合物/神器），**没有物种名对照表** ⇒
+   AI 按字面直译（Gargantar Ghost → 「幽灵巨兽」、Tidepup Ghost → 「幽灵潮犬」），
+   与物种页（查 LB_SPECIAL_NAMES / icon_zh_map 权威表）不一致。
+   修法：送翻译前扫出原文命中的项目权威英文名，作为「必须原样使用」附给模型。 */
+var LB_NG_TBL = null;
+function lbNewsGlossTable(){
+  if (LB_NG_TBL) return LB_NG_TBL;
+  var t = {};
+  function add(en, zh){
+    en = String(en || '').trim(); zh = String(zh || '').trim();
+    // 形态后缀去掉（幽灵潮佑螈·小 → 幽灵潮佑螈），使 "Tidepup Ghost" 也能命中
+    zh = zh.replace(/[·・]\s*[小大]\s*$/, '');
+    if (!en || !zh || en.length < 3 || zh.length < 1) return;
+    var k = en.toLowerCase();
+    if (!t[k]) t[k] = zh;
+    var m = en.replace(/\s*\([^)]*\)\s*$/, '').trim();
+    if (m && m !== en && m.length >= 3 && !t[m.toLowerCase()]) t[m.toLowerCase()] = zh;
+  }
+  // ① 物种特殊名表（新生物/幽灵）：'幽灵伽甘塔尔 (Gargantar Ghost)'
+  try {
+    var SN = (typeof LB_SPECIAL_NAMES === 'object' && LB_SPECIAL_NAMES) || {};
+    Object.keys(SN).forEach(function(cls){
+      var str = String(SN[cls] || '');
+      var mm = str.match(/^(.+?)\s*\((.+)\)\s*$/);
+      if (mm) add(mm[2], mm[1].trim());
+    });
+  } catch (e1) {}
+  // ② 官方图标中文表：key=英文, value='中文(English)' 或纯中文
+  try {
+    var ZM = (typeof ZH_MAP === 'object' && ZH_MAP) || {};
+    Object.keys(ZM).forEach(function(en){
+      var v = String(ZM[en] || '');
+      var mm = v.match(/^(.+?)\s*[（(]([^）)]+)[）)]\s*$/);
+      if (mm) add(mm[2], mm[1].trim());
+      else add(en, v);
+    });
+  } catch (e2) {}
+  LB_NG_TBL = t;
+  return t;
+}
+/* 原文 → 命中的 [[英文, 权威中文]]（长名优先、命中区间抹掉避免子串重复） */
+function lbNewsGlossFor(text){
+  var t = lbNewsGlossTable(), out = [];
+  var buf = String(text || '').toLowerCase();
+  if (!buf) return out;
+  var keys = Object.keys(t).sort(function(a, b){ return b.length - a.length; });
+  for (var i = 0; i < keys.length; i++){
+    var k = keys[i];
+    if (k.length < 3) continue;
+    var idx = buf.indexOf(k);
+    if (idx < 0) continue;
+    var b1 = idx > 0 ? buf.charAt(idx - 1) : '', b2 = buf.charAt(idx + k.length);
+    if (/[a-z0-9]/.test(b1) || /[a-z0-9]/.test(b2)) continue;   // 词边界
+    out.push([k, t[k]]);
+    var pad = '';
+    for (var q = 0; q < k.length; q++) pad += ' ';
+    buf = buf.slice(0, idx) + pad + buf.slice(idx + k.length);
+    if (out.length >= 40) break;
+  }
+  return out;
+}
+/* 切换「原文 / 译文」——6 个 TAB + 全文视图通用 */
+function lbNewsRawToggle(){
+  LB_NEWS.raw = LB_NEWS.raw ? 0 : 1;
+  try { lbToast(LB_NEWS.raw ? '已切到英文原文' : '已切回中文译文'); } catch (e0) {}
+  try {
+    if (LB_NEWS.view) lbNewsFullRepaint();
+    else lbNewsRender();
+  } catch (e1) {}
+}
 function lbNewsAiBoxHtml(){
   var s = lbNewsAiStat();
   var _d = LB_NEWS.data || {};
@@ -6719,8 +6799,43 @@ function lbNewsAiBoxHtml(){
     /* v6878：顶部条里不需要上间距；且此 style 是**内联**输出，会盖掉 CSS 的 margin:0 */
     style: 'margin:0',
     disabled: (!s.todo) || !!LB_NEWS.zhBusy,
+    btn2: { txt: (LB_NEWS.raw ? '看译文' : '看原文'), fn: 'lbNewsRawToggle()' },
     btn: { txt: '翻译', fn: 'lbNewsAiTranslate()' }
   });
+}
+/* ===== v6896（用户口径）：节日 TAB 的「重新拉取」=====
+   后端 /api/fest/?force=1 会绕过磁盘缓存重抓 ark.wiki.gg 的 Events 页；
+   抓失败时后端返回 stale=true + 旧数据（边界不破坏现有内容）。 */
+function lbNewsFestRefresh(btn){
+  var b = btn || null;
+  if (b){
+    if (b.getAttribute('data-busy') === '1') return;
+    b.setAttribute('data-busy', '1');
+    b.style.opacity = '.55';
+    b.style.pointerEvents = 'none';
+  }
+  var base = lbNewsApiBase();
+  try { lbToast('正在从 wiki.gg 重新拉取节日数据…'); } catch (e0) {}
+  fetch(base + '/api/fest/?force=1&t=' + Date.now(), { cache: 'no-store' })
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      if (b){ b.removeAttribute('data-busy'); b.style.opacity = ''; b.style.pointerEvents = ''; }
+      if (!j || j.ok === false){
+        try { lbToast('拉取失败：' + String((j && (j.err || j.error)) || '未知')); } catch (e1) {}
+        return;
+      }
+      LB_NEWS.data = j;
+      LB_NEWS.loading = false; LB_NEWS.err = null;
+      try { LB_NEWS.cache['festival'] = { data: j, zh: LB_NEWS.zh || {} }; } catch (e2) {}
+      try { lbNewsRender(); } catch (e3) {}
+      var _tail = j.stale ? ('（wiki 抓取失败，沿用旧缓存：' + String(j.err || '') + '）')
+                          : ('：' + String(j.updated || ''));
+      try { lbToast('节日数据已更新' + _tail); } catch (e4) {}
+    })
+    .catch(function(e){
+      if (b){ b.removeAttribute('data-busy'); b.style.opacity = ''; b.style.pointerEvents = ''; }
+      try { lbToast('拉取异常：' + String((e && e.message) || e)); } catch (e5) {}
+    });
 }
 function lbNewsAiTranslate(){
   if (LB_NEWS.zhBusy) return;
@@ -6792,8 +6907,20 @@ function lbNewsRender(){
   S.title.innerHTML = '<i class="mdi mdi-newspaper-variant-outline"></i> 资讯广场';
   S.body.classList.add('tc-ai');
   S.tabs.innerHTML = LB_NEWS.tabs.map(function(t, i){
+    /* v6897（用户口径「刷新按钮应该放到 TAB 按钮内部」）：
+       节日 TAB **选中时**，在 TAB 名字右侧内嵌一个刷新图标（项目通用 mdi-refresh）。
+       图标在 button 里面 ⇒ 必须 stopPropagation，否则会先触发 lbNewsTab 重绘、
+       把正在跑的拉取状态丢掉。 */
+    var _isFestSel = (t.id === 'festival') && (i === LB_NEWS.tab);
+    var _lab = lbMdEsc(t.short || t.name);
+    if (_isFestSel){
+      _lab += '<i class="mdi mdi-refresh lb-tipb lb-tabref"'
+            + ' data-tip="' + lbMdEsc('重新拉取节日数据') + '"'
+            + ' title="' + lbMdEsc('重新拉取节日数据') + '"'
+            + ' onclick="event.stopPropagation();lbNewsFestRefresh(this)"></i>';
+    }
     return '<button class="lw-tab' + (i === LB_NEWS.tab ? ' on' : '') + '" onclick="lbNewsTab(' + i + ')" title="' + lbMdEsc(t.name) + '">'
-         + lbMdEsc(t.short || t.name) + '</button>';
+         + _lab + '</button>';
   }).join('');
   /* v5948：二级切换条（紧跟在一级 tab 栏下方，样式弱化）——只有当前一级有 children 才出现 */
   try {
@@ -6844,7 +6971,7 @@ function lbNewsRender(){
   } else if (!d.cards || !d.cards.length){
     S.body.innerHTML = '<div class="tc-hintb">暂无内容</div>';
   } else {
-    S.body.innerHTML = lbNewsCardsToTc(d.cards, d.tab || (lbNewsLeaf() || {}).id, LB_NEWS.zh);
+    S.body.innerHTML = lbNewsCardsToTc(d.cards, d.tab || (lbNewsLeaf() || {}).id, LB_NEWS.raw ? null : LB_NEWS.zh);
   }
   /* v6840（用户口径）：四件套宿主（汉化 TAB / 节日 TAB 才有） */
   try { lbNewsLocalBarMount(S.body); } catch (eLB) {}
@@ -6857,6 +6984,7 @@ function lbNewsRender(){
       var _top = document.createElement('div');
       _top.className = 'lb-news-topbar';
       /* v6881（用户口径）：meta 已迁入翻译块左侧第一行 ⇒ 顶部条只放翻译块 */
+      /* v6897（用户口径）：刷新按钮已从这里移到「节日」TAB 按钮内部 ⇒ 顶部条恢复原样 */
       _top.innerHTML = '<div class="lb-news-topbar-ai">' + lbNewsAiBoxHtml() + '</div>';
       S.body.insertBefore(_top, S.body.firstChild);
     }
@@ -7033,6 +7161,15 @@ function lbNewsTranslate(tabId, cards, opts){
       }
       var chunk = batches[k];
       var usr = chunk.map(function(x, n){ return '[' + (n + 1) + '] id=' + x.id + '\n' + x.text; }).join('\n\n');
+      /* v6889：术语表注入 —— 原文命中的项目权威英文名，要求模型原样使用（禁止直译/意译） */
+      try {
+        var _gl = lbNewsGlossFor(chunk.map(function(x){ return x.text; }).join('\n'));
+        if (_gl.length){
+          usr = '【术语表 · 下列英文必须原样使用对应中文译名，禁止改写或意译】\n'
+              + _gl.map(function(g){ return g[0] + ' = ' + g[1]; }).join('\n')
+              + '\n\n' + usr;
+        }
+      } catch (eGl) {}
       fetch(_ep, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.token },

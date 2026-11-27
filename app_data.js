@@ -93,6 +93,15 @@ var LB_SPECIAL_NAMES = {
   'Ghost_ShoulderDragon_Character_BP_Spring_C': '春日幽灵精灵龙 (Spring Drakeling Ghost)',
   'Ghost_ShoulderDragon_Character_BP_Summer_C': '夏日幽灵精灵龙 (Summer Drakeling Ghost)',
   'Ghost_ShoulderDragon_Character_BP_Winter_C': '冬日幽灵精灵龙 (Winter Drakeling Ghost)',
+  // v6884（newdino）：2026 Fear Ascended 新增幽灵生物 ×7 类名 —— 官方汉化导出(10-16)未含，
+  //   类名来自服务器存档实测(4 个) + 万圣节 MOD pak utoc 索引(2 个) + _FE_C 后缀规律
+  'Ghost_Axolotl_Small_Character_BP_FE_C': '幽灵潮佑螈·小 (Tidepup Ghost (Small))',
+  'Ghost_Axolotl_Large_Character_BP_FE_C': '幽灵潮佑螈·大 (Tidepup Ghost (Large))',
+  'Ghost_Jackalope_Character_BP_FE_C': '幽灵掘地鹿 (Burrowbuck Ghost)',
+  'Ghost_Gargantar_Character_BP_FE_C': '幽灵伽甘塔尔 (Gargantar Ghost)',
+  'Ghost_Therizino_Character_BP_FE_C': '幽灵镰刀龙 (Therizinosaur Ghost)',
+  'Ghost_BogSpider_Character_BP_FE_C': '幽灵血蛛 (Bloodstalker Ghost)',
+  'ValMegaraptor_Character_BP_Ghost_FE_C': '幽灵大盗龙 (Megaraptor Ghost)',
   // v264：星界翻译补全（ZH_MAP 无 T-Rex/Mosasaur 主体，直接指定）
   'AstralRex_Character_BP_C': '星界霸王龙 (Astral T-Rex)',
   'Astral_Mosa_Character_BP_C': '星界沧龙 (Astral Mosasaur)',
